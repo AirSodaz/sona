@@ -60,8 +60,9 @@ fn run_export_transcript(args: ExportTranscriptArgs) -> CliResult<CliOutput> {
         Some(value) => ExportFormat::parse(&value),
         None => ExportFormat::from_output_path(&args.output),
     }
-    .map_err(CliError::Validation)?;
-    let mode = ExportMode::parse(&args.mode).map_err(CliError::Validation)?;
+    .map_err(|error| CliError::Validation(error.to_string()))?;
+    let mode =
+        ExportMode::parse(&args.mode).map_err(|error| CliError::Validation(error.to_string()))?;
     let request = ExportTranscriptFileRequest {
         segments,
         format,
@@ -80,6 +81,9 @@ fn run_export_transcript(args: ExportTranscriptArgs) -> CliResult<CliOutput> {
 
 fn map_export_error(error: ExportError) -> CliError {
     match error {
+        validation_error @ (ExportError::InvalidFormat { .. }
+        | ExportError::MissingFormatExtension { .. }
+        | ExportError::InvalidMode { .. }) => CliError::Validation(validation_error.to_string()),
         ExportError::Render { reason } => CliError::Serialize(reason),
         ExportError::Repository { reason } => CliError::Io(reason),
     }

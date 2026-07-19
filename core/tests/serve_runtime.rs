@@ -70,7 +70,8 @@ fn resolve_serve_runtime_options_rejects_zero_max_concurrent() {
     )
     .unwrap_err();
 
-    assert_eq!(error, "max_concurrent must be greater than 0");
+    assert_eq!(error.subject, "max_concurrent");
+    assert_eq!(error.message, "max_concurrent must be greater than 0");
 }
 
 #[test]

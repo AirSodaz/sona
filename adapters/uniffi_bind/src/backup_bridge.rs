@@ -2,10 +2,14 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use sona_archive::FsBackupAdapter;
-use sona_core::backup::{BackupExportRequest, BackupImportRequest, BackupInspectRequest};
+use sona_core::backup::{
+    BackupApplyResult, BackupDataset, BackupError, BackupExportRequest, BackupImportRequest,
+    BackupInspectRequest, BackupRestoreDataset, BackupStateRepository,
+};
 use sona_runtime_fs::SystemClock;
-use sona_sqlite::LazySqliteBackupStateRepository;
+use sona_sqlite::{SqliteBackupStateRepository, validate_backup_restore_dataset};
 
+use crate::application_context::application_context;
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 
 pub(crate) async fn export_backup_archive_json(
@@ -24,7 +28,7 @@ pub(crate) async fn export_backup_archive_json(
             std::path::absolute(PathBuf::from(archive_path)).map_err(backup_error)?;
         let archive_path = utf8_path(&archive_path, "Backup export archive")?;
         let adapter = FsBackupAdapter::new(
-            LazySqliteBackupStateRepository::new(app_data_dir),
+            SharedContextBackupStateRepository::new(app_data_dir),
             SystemClock,
         );
         adapter
@@ -49,7 +53,7 @@ pub(crate) async fn inspect_backup_archive_json(
             std::path::absolute(PathBuf::from(archive_path)).map_err(backup_error)?;
         let archive_path = utf8_path(&archive_path, "Backup inspect archive")?;
         let adapter = FsBackupAdapter::new(
-            LazySqliteBackupStateRepository::new(PathBuf::new()),
+            SharedContextBackupStateRepository::new(PathBuf::new()),
             SystemClock,
         );
         adapter
@@ -78,7 +82,7 @@ pub(crate) async fn import_backup_archive_json(
             std::path::absolute(PathBuf::from(archive_path)).map_err(backup_error)?;
         let archive_path = utf8_path(&archive_path, "Backup import archive")?;
         let adapter = FsBackupAdapter::new(
-            LazySqliteBackupStateRepository::new(app_data_dir),
+            SharedContextBackupStateRepository::new(app_data_dir),
             SystemClock,
         );
         adapter
@@ -99,6 +103,40 @@ fn require_non_empty(value: &str, field: &str) -> SonaCoreBindingResult<()> {
         Err(backup_error(format!("Backup {field} is required.")))
     } else {
         Ok(())
+    }
+}
+
+#[derive(Clone, Debug)]
+struct SharedContextBackupStateRepository {
+    app_data_dir: PathBuf,
+}
+
+impl SharedContextBackupStateRepository {
+    fn new(app_data_dir: PathBuf) -> Self {
+        Self { app_data_dir }
+    }
+
+    fn repository(&self) -> Result<SqliteBackupStateRepository, BackupError> {
+        if !self.app_data_dir.is_dir() {
+            return Err(BackupError::State(format!(
+                "Application data directory does not exist or is not a directory: {}",
+                self.app_data_dir.display()
+            )));
+        }
+        application_context(&self.app_data_dir)
+            .map(|context| context.sqlite().backup_state_repository())
+            .map_err(|error| BackupError::State(error.to_string()))
+    }
+}
+
+impl BackupStateRepository for SharedContextBackupStateRepository {
+    fn snapshot(&self) -> Result<BackupDataset, BackupError> {
+        self.repository()?.snapshot()
+    }
+
+    fn replace_all(&self, dataset: BackupRestoreDataset) -> Result<BackupApplyResult, BackupError> {
+        validate_backup_restore_dataset(&dataset)?;
+        self.repository()?.replace_all(dataset)
     }
 }
 
@@ -146,6 +184,7 @@ mod tests {
     };
     use sona_core::history_store::HistoryStore;
     use sona_core::tag::{TagDefaults, TagRecord, TagStore};
+    use sona_runtime_fs::{SystemClock, UuidGenerator};
     use sona_sqlite::{
         Database, SqliteAutomationRepository, SqliteBackupStateRepository, SqliteConfigStore,
         SqliteHistoryStore, SqliteTagRepository, llm_usage,
@@ -274,8 +313,12 @@ mod tests {
             .replace_tags(vec![tag()])
             .unwrap();
 
-        let history_store =
-            SqliteHistoryStore::new(app_data_dir.to_path_buf(), Arc::clone(&database));
+        let history_store = SqliteHistoryStore::with_environment(
+            app_data_dir.to_path_buf(),
+            Arc::clone(&database),
+            Arc::new(SystemClock),
+            Arc::new(UuidGenerator),
+        );
         history_store.ensure_ready().unwrap();
         let history_item = history_store
             .save_recording(HistorySaveRecordingRequest {

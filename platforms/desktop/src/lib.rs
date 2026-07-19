@@ -5,6 +5,15 @@ pub mod platform;
 
 use tauri::{Emitter, Manager};
 
+#[derive(Debug, thiserror::Error)]
+pub enum DesktopTypescriptBindingError {
+    #[error(transparent)]
+    Binding(#[from] sona_ts_bind::TypescriptBindingError),
+
+    #[error("Failed to write TypeScript bindings: {0}")]
+    Write(#[from] std::io::Error),
+}
+
 /// Initializes and runs the Tauri application.
 ///
 /// Sets up the download state, plugins (opener, dialog, fs, shell, http),
@@ -17,7 +26,7 @@ pub fn run() {
 }
 
 #[cfg(debug_assertions)]
-fn export_typescript_bindings() -> Result<(), sona_ts_bind::TypescriptExportError> {
+fn export_typescript_bindings() -> Result<(), DesktopTypescriptBindingError> {
     let bindings_path = typescript_bindings_path();
     export_typescript_bindings_to(&bindings_path)?;
     Ok(())
@@ -25,7 +34,7 @@ fn export_typescript_bindings() -> Result<(), sona_ts_bind::TypescriptExportErro
 
 pub fn export_typescript_bindings_to(
     bindings_path: &std::path::Path,
-) -> Result<bool, sona_ts_bind::TypescriptExportError> {
+) -> Result<bool, DesktopTypescriptBindingError> {
     let generated_bindings = sona_ts_bind::render_desktop_typescript_bindings()?;
     write_bindings_if_changed(bindings_path, generated_bindings.as_bytes()).map_err(Into::into)
 }

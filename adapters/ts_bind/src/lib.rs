@@ -1,8 +1,17 @@
+#![allow(deprecated)]
+
 //! TypeScript-facing metadata for Sona core bindings.
 //!
 //! This adapter owns the transport-neutral core type registry, TypeScript rendering,
 //! numeric transport validation, and desktop output-path metadata. The Tauri host
 //! only writes the generated output and invokes validation at its IPC boundary.
+
+mod tauri_contracts;
+
+pub use tauri_contracts::{
+    TauriCommandContract, render_rust_tauri_command_contract_map,
+    rust_owned_tauri_command_contracts,
+};
 
 pub use sona_core::automation::repository::{
     AutomationProcessedInput, AutomationProcessedRecord, AutomationRepositoryInput,
@@ -135,28 +144,50 @@ pub use sona_core::transcription::transcript::{
 
 pub const DESKTOP_BINDINGS_OUTPUT: &str = "src/bindings.ts";
 pub const TYPESCRIPT_MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
-pub use specta_typescript::Error as TypescriptExportError;
+
+#[derive(Debug, thiserror::Error)]
+pub enum TypescriptBindingError {
+    #[error("Failed to render TypeScript bindings: {reason}")]
+    Render { reason: String },
+
+    #[error("Failed to inspect TypeScript transport value: {reason}")]
+    Serialize { reason: String },
+
+    #[error("Integer at {path} exceeds TypeScript's safe range: {value}")]
+    UnsafeInteger { path: String, value: String },
+
+    #[error("Number at {path} is not finite and cannot cross the TypeScript transport: {value}")]
+    NonFiniteNumber { path: String, value: String },
+}
 
 pub fn desktop_bindings_output(frontend_root: impl AsRef<std::path::Path>) -> std::path::PathBuf {
     frontend_root.as_ref().join(DESKTOP_BINDINGS_OUTPUT)
 }
 
-pub fn render_desktop_typescript_bindings() -> Result<String, TypescriptExportError> {
-    specta_typescript::Typescript::default().export(&desktop_types(), specta_serde::PhasesFormat)
+pub fn render_desktop_typescript_bindings() -> Result<String, TypescriptBindingError> {
+    let mut output = specta_typescript::Typescript::default()
+        .export(&desktop_types(), specta_serde::PhasesFormat)
+        .map_err(|error| TypescriptBindingError::Render {
+            reason: error.to_string(),
+        })?;
+    output.push('\n');
+    output.push_str(&render_rust_tauri_command_contract_map());
+    Ok(output)
 }
 
-pub fn validate_typescript_safe_integers<T>(value: &T) -> Result<(), String>
+pub fn validate_typescript_safe_integers<T>(value: &T) -> Result<(), TypescriptBindingError>
 where
     T: serde::Serialize + ?Sized,
 {
-    let value = serde_json::to_value(value)
-        .map_err(|error| format!("Failed to inspect TypeScript transport value: {error}"))?;
+    let value = serde_json::to_value(value).map_err(|error| TypescriptBindingError::Serialize {
+        reason: error.to_string(),
+    })?;
     validate_json_safe_integers(&value, "$")
 }
 
 pub fn validate_dashboard_snapshot_for_typescript(
     snapshot: &DashboardSnapshotDomainModel,
-) -> Result<(), String> {
+) -> Result<(), TypescriptBindingError> {
     validate_typescript_safe_integers(snapshot)?;
 
     let overview = &snapshot.content.overview;
@@ -219,7 +250,7 @@ pub fn validate_dashboard_snapshot_for_typescript(
 
 pub fn validate_export_transcript_request_for_typescript(
     request: &ExportTranscriptFileRequest,
-) -> Result<(), String> {
+) -> Result<(), TypescriptBindingError> {
     for (index, segment) in request.segments.iter().enumerate() {
         validate_transcript_segment_numbers(&format!("$.segments[{index}]"), segment)?;
     }
@@ -228,65 +259,77 @@ pub fn validate_export_transcript_request_for_typescript(
 
 pub fn validate_export_transcript_result_for_typescript(
     result: &ExportTranscriptFileResult,
-) -> Result<(), String> {
+) -> Result<(), TypescriptBindingError> {
     validate_typescript_safe_integers(result)
 }
 
 pub fn validate_diagnostics_input_for_typescript(
     input: &DiagnosticsCoreInput,
-) -> Result<(), String> {
+) -> Result<(), TypescriptBindingError> {
     validate_typescript_safe_integers(input)?;
     validate_asr_runtime_metric_numbers("$.asrRuntimeMetrics", &input.asr_runtime_metrics)
 }
 
 pub fn validate_diagnostics_snapshot_for_typescript(
     snapshot: &DiagnosticsCoreSnapshot,
-) -> Result<(), String> {
+) -> Result<(), TypescriptBindingError> {
     validate_typescript_safe_integers(snapshot)?;
     validate_asr_runtime_metric_numbers("$.asrRuntimeMetrics", &snapshot.asr_runtime_metrics)
 }
 
 pub fn validate_asr_runtime_metrics_for_typescript(
     metrics: &AsrRuntimeMetricsSnapshot,
-) -> Result<(), String> {
+) -> Result<(), TypescriptBindingError> {
     validate_typescript_safe_integers(metrics)?;
     validate_asr_runtime_metric_numbers("$", metrics)
 }
 
 pub fn validate_storage_usage_snapshot_for_typescript(
     snapshot: &StorageUsageSnapshot,
-) -> Result<(), String> {
+) -> Result<(), TypescriptBindingError> {
     validate_typescript_safe_integers(snapshot)
 }
 
 pub fn validate_webview_browsing_data_clear_result_for_typescript(
     result: &WebviewBrowsingDataClearResult,
-) -> Result<(), String> {
+) -> Result<(), TypescriptBindingError> {
     validate_typescript_safe_integers(result)
 }
 
-pub fn validate_task_ledger_record_for_typescript(record: &TaskLedgerRecord) -> Result<(), String> {
+pub fn validate_task_ledger_record_for_typescript(
+    record: &TaskLedgerRecord,
+) -> Result<(), TypescriptBindingError> {
     validate_typescript_safe_integers(record)?;
     validate_task_ledger_record_numbers("$", record)
 }
 
-pub fn validate_project_record_for_typescript(record: &ProjectRecord) -> Result<(), String> {
+pub fn validate_project_record_for_typescript(
+    record: &ProjectRecord,
+) -> Result<(), TypescriptBindingError> {
     validate_typescript_safe_integers(record)
 }
 
-pub fn validate_project_records_for_typescript(records: &[ProjectRecord]) -> Result<(), String> {
+pub fn validate_project_records_for_typescript(
+    records: &[ProjectRecord],
+) -> Result<(), TypescriptBindingError> {
     validate_typescript_safe_integers(records)
 }
 
-pub fn validate_tag_record_for_typescript(record: &TagRecord) -> Result<(), String> {
+pub fn validate_tag_record_for_typescript(
+    record: &TagRecord,
+) -> Result<(), TypescriptBindingError> {
     validate_typescript_safe_integers(record)
 }
 
-pub fn validate_tag_records_for_typescript(records: &[TagRecord]) -> Result<(), String> {
+pub fn validate_tag_records_for_typescript(
+    records: &[TagRecord],
+) -> Result<(), TypescriptBindingError> {
     validate_typescript_safe_integers(records)
 }
 
-pub fn validate_task_ledger_patch_for_typescript(patch: &TaskLedgerPatch) -> Result<(), String> {
+pub fn validate_task_ledger_patch_for_typescript(
+    patch: &TaskLedgerPatch,
+) -> Result<(), TypescriptBindingError> {
     validate_typescript_safe_integers(patch)?;
     if let Some(progress) = patch.progress {
         validate_finite_typescript_number("$.progress", progress)?;
@@ -296,7 +339,7 @@ pub fn validate_task_ledger_patch_for_typescript(patch: &TaskLedgerPatch) -> Res
 
 pub fn validate_task_ledger_snapshot_for_typescript(
     snapshot: &TaskLedgerSnapshot,
-) -> Result<(), String> {
+) -> Result<(), TypescriptBindingError> {
     validate_typescript_safe_integers(snapshot)?;
     for (index, record) in snapshot.tasks.iter().enumerate() {
         validate_task_ledger_record_numbers(&format!("$.tasks[{index}]"), record)?;
@@ -307,14 +350,14 @@ pub fn validate_task_ledger_snapshot_for_typescript(
 fn validate_task_ledger_record_numbers(
     path: &str,
     record: &TaskLedgerRecord,
-) -> Result<(), String> {
+) -> Result<(), TypescriptBindingError> {
     validate_finite_typescript_number(&format!("{path}.progress"), record.progress)
 }
 
 fn validate_asr_runtime_metric_numbers(
     path: &str,
     metrics: &AsrRuntimeMetricsSnapshot,
-) -> Result<(), String> {
+) -> Result<(), TypescriptBindingError> {
     if let Some(metric) = metrics.model_load.as_ref() {
         let metric_path = format!("{path}.modelLoad");
         validate_finite_typescript_number(&format!("{metric_path}.loadMs"), metric.load_ms)?;
@@ -362,7 +405,7 @@ fn validate_asr_runtime_metric_numbers(
 fn validate_transcript_segment_numbers(
     path: &str,
     segment: &TranscriptSegment,
-) -> Result<(), String> {
+) -> Result<(), TypescriptBindingError> {
     validate_finite_typescript_number(&format!("{path}.start"), segment.start)?;
     validate_finite_typescript_number(&format!("{path}.end"), segment.end)?;
 
@@ -401,7 +444,10 @@ fn validate_transcript_segment_numbers(
     Ok(())
 }
 
-fn validate_speaker_leaders(path: &str, speakers: &[SpeakerLeader]) -> Result<(), String> {
+fn validate_speaker_leaders(
+    path: &str,
+    speakers: &[SpeakerLeader],
+) -> Result<(), TypescriptBindingError> {
     for (index, speaker) in speakers.iter().enumerate() {
         validate_finite_typescript_number(
             &format!("{path}[{index}].durationSeconds"),
@@ -411,17 +457,21 @@ fn validate_speaker_leaders(path: &str, speakers: &[SpeakerLeader]) -> Result<()
     Ok(())
 }
 
-fn validate_finite_typescript_number(path: &str, value: f64) -> Result<(), String> {
+fn validate_finite_typescript_number(path: &str, value: f64) -> Result<(), TypescriptBindingError> {
     if value.is_finite() {
         Ok(())
     } else {
-        Err(format!(
-            "Number at {path} is not finite and cannot cross the TypeScript transport: {value}"
-        ))
+        Err(TypescriptBindingError::NonFiniteNumber {
+            path: path.to_string(),
+            value: value.to_string(),
+        })
     }
 }
 
-fn validate_json_safe_integers(value: &serde_json::Value, path: &str) -> Result<(), String> {
+fn validate_json_safe_integers(
+    value: &serde_json::Value,
+    path: &str,
+) -> Result<(), TypescriptBindingError> {
     match value {
         serde_json::Value::Array(values) => {
             for (index, value) in values.iter().enumerate() {
@@ -444,9 +494,10 @@ fn validate_json_safe_integers(value: &serde_json::Value, path: &str) -> Result<
                     value.fract() == 0.0 && value.abs() > TYPESCRIPT_MAX_SAFE_INTEGER as f64
                 });
             if is_unsafe {
-                return Err(format!(
-                    "Integer at {path} exceeds TypeScript's safe range: {number}"
-                ));
+                return Err(TypescriptBindingError::UnsafeInteger {
+                    path: path.to_string(),
+                    value: number.to_string(),
+                });
             }
         }
         _ => {}
@@ -976,6 +1027,20 @@ pub fn exported_core_type_names() -> &'static [&'static str] {
 mod tests {
     use super::*;
 
+    fn assert_unsafe_integer_path(error: TypescriptBindingError, expected_path: &str) {
+        let TypescriptBindingError::UnsafeInteger { path, .. } = error else {
+            panic!("expected unsafe-integer error");
+        };
+        assert_eq!(path, expected_path);
+    }
+
+    fn assert_non_finite_path(error: TypescriptBindingError, expected_path: &str) {
+        let TypescriptBindingError::NonFiniteNumber { path, .. } = error else {
+            panic!("expected non-finite-number error");
+        };
+        assert_eq!(path, expected_path);
+    }
+
     #[test]
     fn lists_core_types_owned_by_ts_bindings() {
         assert_eq!(exported_core_type_names(), EXPORTED_CORE_TYPE_NAMES);
@@ -1226,6 +1291,25 @@ mod tests {
     }
 
     #[test]
+    fn generated_desktop_bindings_include_rust_owned_tauri_command_contracts() {
+        let bindings = render_desktop_typescript_bindings().unwrap();
+
+        for expected in [
+            "export type RustTauriCommandContractMap = {",
+            "\"project_create\": {",
+            "\"tag_update\": {",
+            "\"task_ledger_patch_task\": {",
+            "\"recovery_save_snapshot\": {",
+            "\"automation_validate_rule_activation\": {",
+            "\"history_update_transcript\": {",
+            "args: HistoryUpdateTranscriptRequest_Deserialize;",
+            "result: HistoryItemRecord;",
+        ] {
+            assert!(bindings.contains(expected), "missing {expected}");
+        }
+    }
+
+    #[test]
     fn asr_types_keep_dynamic_json_unknown_and_required_floats_finite() {
         let bindings = render_desktop_typescript_bindings().unwrap();
         let speaker_profile_sample = bindings
@@ -1305,7 +1389,7 @@ mod tests {
         };
 
         let error = validate_typescript_safe_integers(&status).unwrap_err();
-        assert!(error.contains("$.lastSuccessAtMs"), "{error}");
+        assert_unsafe_integer_path(error, "$.lastSuccessAtMs");
     }
 
     #[test]
@@ -1339,16 +1423,22 @@ mod tests {
         });
         let error = validate_typescript_safe_integers(&unsafe_value).unwrap_err();
 
-        assert!(error.contains("$.nested[0]"), "{error}");
-        assert!(error.contains("exceeds TypeScript's safe range"), "{error}");
+        let TypescriptBindingError::UnsafeInteger { path, value } = error else {
+            panic!("expected unsafe-integer error");
+        };
+        assert_eq!(path, "$.nested[0]");
+        assert_eq!(value, (TYPESCRIPT_MAX_SAFE_INTEGER + 1).to_string());
     }
 
     #[test]
     fn typescript_number_validation_rejects_non_finite_values() {
         let error = validate_finite_typescript_number("$.duration", f64::NAN).unwrap_err();
 
-        assert!(error.contains("$.duration"), "{error}");
-        assert!(error.contains("is not finite"), "{error}");
+        let TypescriptBindingError::NonFiniteNumber { path, value } = error else {
+            panic!("expected non-finite-number error");
+        };
+        assert_eq!(path, "$.duration");
+        assert_eq!(value, "NaN");
     }
 
     #[test]
@@ -1359,15 +1449,14 @@ mod tests {
             tasks: Vec::new(),
         };
         let timestamp_error = validate_task_ledger_snapshot_for_typescript(&snapshot).unwrap_err();
-        assert!(timestamp_error.contains("$.updatedAt"), "{timestamp_error}");
+        assert_unsafe_integer_path(timestamp_error, "$.updatedAt");
 
         let patch = TaskLedgerPatch {
             progress: Some(f64::INFINITY),
             ..Default::default()
         };
         let progress_error = validate_task_ledger_patch_for_typescript(&patch).unwrap_err();
-        assert!(progress_error.contains("$.progress"), "{progress_error}");
-        assert!(progress_error.contains("is not finite"), "{progress_error}");
+        assert_non_finite_path(progress_error, "$.progress");
     }
 
     #[test]
@@ -1394,7 +1483,7 @@ mod tests {
         };
 
         let error = validate_project_record_for_typescript(&project).unwrap_err();
-        assert!(error.contains("$.createdAt"), "{error}");
+        assert_unsafe_integer_path(error, "$.createdAt");
     }
 
     #[test]
@@ -1418,7 +1507,7 @@ mod tests {
         };
 
         let error = validate_typescript_safe_integers(&item).unwrap_err();
-        assert!(error.contains("$.timestamp"), "{error}");
+        assert_unsafe_integer_path(error, "$.timestamp");
     }
 
     #[test]
@@ -1432,7 +1521,7 @@ mod tests {
         };
 
         let error = validate_typescript_safe_integers(&candidate).unwrap_err();
-        assert!(error.contains("$.size"), "{error}");
+        assert_unsafe_integer_path(error, "$.size");
     }
 
     #[test]
@@ -1442,14 +1531,14 @@ mod tests {
             items: Vec::new(),
         };
         let error = validate_typescript_safe_integers(&input).unwrap_err();
-        assert!(error.contains("$.updatedAt"), "{error}");
+        assert_unsafe_integer_path(error, "$.updatedAt");
 
         let file_stat = RecoveryFileStat {
             size: TYPESCRIPT_MAX_SAFE_INTEGER + 1,
             mtime_ms: 1,
         };
         let error = validate_typescript_safe_integers(&file_stat).unwrap_err();
-        assert!(error.contains("$.size"), "{error}");
+        assert_unsafe_integer_path(error, "$.size");
     }
 
     #[test]
@@ -1459,7 +1548,7 @@ mod tests {
             bytes_written: TYPESCRIPT_MAX_SAFE_INTEGER + 1,
         };
         let error = validate_export_transcript_result_for_typescript(&result).unwrap_err();
-        assert!(error.contains("$.bytesWritten"), "{error}");
+        assert_unsafe_integer_path(error, "$.bytesWritten");
 
         let mut request: sona_core::export::ExportTranscriptFileRequest =
             serde_json::from_value(serde_json::json!({
@@ -1478,8 +1567,7 @@ mod tests {
         request.segments[0].start = f64::INFINITY;
 
         let error = validate_export_transcript_request_for_typescript(&request).unwrap_err();
-        assert!(error.contains("$.segments[0].start"), "{error}");
-        assert!(error.contains("is not finite"), "{error}");
+        assert_non_finite_path(error, "$.segments[0].start");
     }
 
     #[test]
@@ -1493,10 +1581,7 @@ mod tests {
             }];
 
         let error = validate_storage_usage_snapshot_for_typescript(&snapshot).unwrap_err();
-        assert!(
-            error.contains("$.categories.database.sqlite.indexEntries[0].bytes"),
-            "{error}"
-        );
+        assert_unsafe_integer_path(error, "$.categories.database.sqlite.indexEntries[0].bytes");
 
         let clear_result = sona_core::storage_usage::WebviewBrowsingDataClearResult {
             before_bytes: Some(TYPESCRIPT_MAX_SAFE_INTEGER + 1),
@@ -1505,7 +1590,7 @@ mod tests {
         };
         let error =
             validate_webview_browsing_data_clear_result_for_typescript(&clear_result).unwrap_err();
-        assert!(error.contains("$.beforeBytes"), "{error}");
+        assert_unsafe_integer_path(error, "$.beforeBytes");
     }
 
     #[test]
@@ -1550,16 +1635,10 @@ mod tests {
             });
 
         let error = validate_diagnostics_input_for_typescript(&input).unwrap_err();
-        assert!(
-            error.contains("$.asrRuntimeMetrics.modelLoad.occurredAtMs"),
-            "{error}"
-        );
+        assert_unsafe_integer_path(error, "$.asrRuntimeMetrics.modelLoad.occurredAtMs");
         let metrics_error =
             validate_asr_runtime_metrics_for_typescript(&input.asr_runtime_metrics).unwrap_err();
-        assert!(
-            metrics_error.contains("$.modelLoad.occurredAtMs"),
-            "{metrics_error}"
-        );
+        assert_unsafe_integer_path(metrics_error, "$.modelLoad.occurredAtMs");
 
         input
             .asr_runtime_metrics
@@ -1574,11 +1653,7 @@ mod tests {
             .unwrap()
             .load_ms = f64::NAN;
         let error = validate_diagnostics_input_for_typescript(&input).unwrap_err();
-        assert!(
-            error.contains("$.asrRuntimeMetrics.modelLoad.loadMs"),
-            "{error}"
-        );
-        assert!(error.contains("is not finite"), "{error}");
+        assert_non_finite_path(error, "$.asrRuntimeMetrics.modelLoad.loadMs");
     }
 
     #[test]

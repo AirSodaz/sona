@@ -152,19 +152,19 @@ fn run_model_download(args: ModelDownloadArgs) -> CliResult<CliOutput> {
         let models_dir = resolve_models_dir(args.models_dir)?;
         let mut stderr_lines = Vec::new();
 
-        let resolved =
-            resolve_model_download(&args.model_id, &models_dir).map_err(CliError::Validation)?;
+        let resolved = resolve_model_download(&args.model_id, &models_dir)
+            .map_err(|error| CliError::Validation(error.to_string()))?;
         download_one_model(&resolved, yes, quiet, &mut stderr_lines).await?;
 
         let companions = required_companion_models(&resolved.model);
         if let Some(vad_model_id) = companions.vad_model_id {
-            let vad =
-                resolve_model_download(&vad_model_id, &models_dir).map_err(CliError::Validation)?;
+            let vad = resolve_model_download(&vad_model_id, &models_dir)
+                .map_err(|error| CliError::Validation(error.to_string()))?;
             download_one_model(&vad, yes, quiet, &mut stderr_lines).await?;
         }
         if let Some(punctuation_model_id) = companions.punctuation_model_id {
             let punctuation = resolve_model_download(&punctuation_model_id, &models_dir)
-                .map_err(CliError::Validation)?;
+                .map_err(|error| CliError::Validation(error.to_string()))?;
             download_one_model(&punctuation, yes, quiet, &mut stderr_lines).await?;
         }
 
@@ -183,7 +183,8 @@ fn run_model_delete(args: ModelDeleteArgs) -> CliResult<CliOutput> {
     let model = sona_core::models::preset_models::find_preset_model(&args.model_id)
         .ok_or_else(|| CliError::Validation(format!("Unknown model id: {}", args.model_id)))?;
     let install_path = model.resolve_install_path(&models_dir);
-    let install_path_exists = sona_runtime_fs::path_exists(&install_path).map_err(CliError::Io)?;
+    let install_path_exists = sona_runtime_fs::path_exists(&install_path)
+        .map_err(|error| CliError::Io(error.to_string()))?;
 
     if !is_preset_model_installed_at(model, &models_dir) && !install_path_exists {
         return Ok(CliOutput::stderr(format!(
@@ -193,7 +194,7 @@ fn run_model_delete(args: ModelDeleteArgs) -> CliResult<CliOutput> {
         )));
     }
 
-    remove_model_install_path(&install_path).map_err(CliError::Io)?;
+    remove_model_install_path(&install_path).map_err(map_download_error)?;
 
     Ok(CliOutput::stderr(format!(
         "Deleted {} from {}",
@@ -210,7 +211,7 @@ async fn download_one_model(
 ) -> CliResult<()> {
     if installed_model_is_valid(resolved)
         .await
-        .map_err(CliError::Io)?
+        .map_err(map_download_error)?
     {
         stderr_lines.push(format!(
             "Installed {} at {}",
@@ -220,8 +221,8 @@ async fn download_one_model(
         return Ok(());
     }
 
-    let install_path_exists =
-        sona_runtime_fs::path_exists(&resolved.install_path).map_err(CliError::Io)?;
+    let install_path_exists = sona_runtime_fs::path_exists(&resolved.install_path)
+        .map_err(|error| CliError::Io(error.to_string()))?;
     if install_path_exists
         && !yes
         && !confirm_model_overwrite(&resolved.model.id, &resolved.install_path)?
@@ -304,31 +305,21 @@ fn resolve_models_dir(configured: Option<PathBuf>) -> CliResult<PathBuf> {
         crate::desktop_paths::default_models_dir(),
         crate::desktop_paths::models_dir_status,
     )
-    .map_err(CliError::Validation)
+    .map_err(|error| CliError::Validation(error.to_string()))
 }
 
-fn map_download_error(error: String) -> CliError {
-    if error.contains("cancelled by user") {
-        CliError::Cancelled(error)
-    } else if error.contains("Unknown model id") {
-        CliError::Validation(error)
-    } else if error.contains("hash mismatch") {
-        CliError::Model(error)
-    } else if error.contains("Failed to create HTTP client")
-        || error.contains("Failed to download model")
-        || error.contains("Download failed with status")
-    {
-        CliError::Network(error)
-    } else if error.contains("Failed to create models directory")
-        || error.contains("Failed to calculate hash")
-        || error.contains("Failed to publish download")
-        || error.contains("Failed to remove archive")
-        || error.contains("Failed to open archive")
-        || error.contains("Failed to extract archive")
-    {
-        CliError::Io(error)
-    } else {
-        CliError::Other(error)
+fn map_download_error(error: sona_model_downloads::DownloadError) -> CliError {
+    let message = error.to_string();
+    match error {
+        sona_model_downloads::DownloadError::Cancelled => CliError::Cancelled(message),
+        sona_model_downloads::DownloadError::Network(_)
+        | sona_model_downloads::DownloadError::HttpStatus(_)
+        | sona_model_downloads::DownloadError::HttpClient { .. }
+        | sona_model_downloads::DownloadError::RangeNotSatisfiable => CliError::Network(message),
+        sona_model_downloads::DownloadError::Io(_)
+        | sona_model_downloads::DownloadError::FileSystem(_) => CliError::Io(message),
+        sona_model_downloads::DownloadError::HashMismatch { .. } => CliError::Model(message),
+        sona_model_downloads::DownloadError::AlreadyInProgress => CliError::Other(message),
     }
 }
 
@@ -438,5 +429,32 @@ mod tests {
         assert!(table.contains("yes"));
         assert!(table.contains("no"));
         assert!(!table.contains("install_path"));
+    }
+
+    #[test]
+    fn download_error_variants_preserve_cli_categories_and_exit_codes() {
+        let network = map_download_error(sona_model_downloads::DownloadError::HttpClient {
+            reason: "client unavailable".to_string(),
+        });
+        let filesystem = map_download_error(sona_model_downloads::DownloadError::file_system(
+            sona_model_downloads::DownloadFileOperation::InspectInstall,
+            "C:/models/test",
+            "access denied",
+        ));
+        let hash = map_download_error(sona_model_downloads::DownloadError::HashMismatch {
+            path: PathBuf::from("C:/models/test.download"),
+            expected: "expected".to_string(),
+            actual: "actual".to_string(),
+        });
+        let cancelled = map_download_error(sona_model_downloads::DownloadError::Cancelled);
+
+        assert!(matches!(network, CliError::Network(_)));
+        assert_eq!(network.exit_code(), 4);
+        assert!(matches!(filesystem, CliError::Io(_)));
+        assert_eq!(filesystem.exit_code(), 5);
+        assert!(matches!(hash, CliError::Model(_)));
+        assert_eq!(hash.exit_code(), 3);
+        assert!(matches!(cancelled, CliError::Cancelled(_)));
+        assert_eq!(cancelled.exit_code(), 130);
     }
 }

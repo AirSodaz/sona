@@ -5,6 +5,9 @@ description = "UniFFI-facing facade for Sona core"
 authors.workspace = true
 edition.workspace = true
 
+[package.metadata.sona]
+role = "host"
+
 [lib]
 name = "sona_uniffi_bind"
 crate-type = ["cdylib", "staticlib", "rlib"]

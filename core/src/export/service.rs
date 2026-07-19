@@ -19,8 +19,7 @@ where
         &self,
         request: ExportTranscriptFileRequest,
     ) -> Result<ExportTranscriptFileResult, ExportError> {
-        let content = export_segments_with_mode(&request.segments, request.format, request.mode)
-            .map_err(|reason| ExportError::Render { reason })?;
+        let content = export_segments_with_mode(&request.segments, request.format, request.mode)?;
         self.repository
             .write_export(&request.output_path, &content)?;
 

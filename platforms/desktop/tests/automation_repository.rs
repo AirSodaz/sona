@@ -92,7 +92,7 @@ fn path_normalization_matches_the_frontend_fingerprint_contract() {
 fn validation_uses_normalized_paths_for_same_directory_checks() {
     let rule = sample_rule(" C:/Watch ".to_string(), "c:\\watch\\".to_string(), |_| {});
 
-    let result = validate_rule_activation_inner(&rule, &json!({}), &valid_tags());
+    let result = validate_rule_activation_inner(&rule, &json!({}), &valid_tags()).unwrap();
 
     assert!(!result.valid);
     assert_eq!(result.code.as_deref(), Some("automation.same_directory"));
@@ -113,7 +113,7 @@ fn validation_creates_the_output_directory_for_valid_rules() {
     );
     let global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
 
-    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags());
+    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags()).unwrap();
 
     assert!(result.valid);
     assert!(export_dir.is_dir());
@@ -155,7 +155,7 @@ fn validation_accepts_configured_volcengine_batch_asr_without_local_model_path()
         }
     });
 
-    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags());
+    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags()).unwrap();
 
     assert!(result.valid);
     assert!(export_dir.is_dir());
@@ -193,7 +193,7 @@ fn validation_uses_volcengine_batch_defaults_when_only_api_key_is_saved() {
         }
     });
 
-    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags());
+    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags()).unwrap();
 
     assert!(result.valid);
     assert!(export_dir.is_dir());
@@ -235,7 +235,7 @@ fn validation_rejects_volcengine_local_batch_when_saved_endpoint_is_url_only_asy
         }
     });
 
-    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags());
+    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags()).unwrap();
 
     assert!(!result.valid);
     assert_eq!(
@@ -262,7 +262,7 @@ fn validation_accepts_rules_that_do_not_save_history_without_tags() {
     );
     let global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
 
-    let result = validate_rule_activation_inner(&rule, &global_config, &[]);
+    let result = validate_rule_activation_inner(&rule, &global_config, &[]).unwrap();
 
     assert!(result.valid);
 }
@@ -284,7 +284,7 @@ fn validation_rejects_missing_tag() {
     );
     let global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
 
-    let result = validate_rule_activation_inner(&rule, &global_config, &[]);
+    let result = validate_rule_activation_inner(&rule, &global_config, &[]).unwrap();
 
     assert!(!result.valid);
     assert_eq!(result.code.as_deref(), Some("automation.tag_missing"));
@@ -314,7 +314,7 @@ fn validation_requires_feature_models_when_auto_stages_are_enabled() {
         "selections": {}
     });
 
-    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags());
+    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags()).unwrap();
 
     assert!(!result.valid);
     assert_eq!(
@@ -341,7 +341,7 @@ fn validation_accepts_translation_with_google_translate_free_without_an_api_key(
     );
     let global_config = valid_global_config(batch_model_dir.to_string_lossy().as_ref());
 
-    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags());
+    let result = validate_rule_activation_inner(&rule, &global_config, &valid_tags()).unwrap();
 
     assert!(result.valid);
 }

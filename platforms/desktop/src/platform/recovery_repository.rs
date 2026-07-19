@@ -21,7 +21,8 @@ where
 
 pub async fn load_snapshot(provider: &dyn PathProvider) -> Result<RecoverySnapshot, String> {
     let snapshot = run_recovery_adapter_task(provider, |adapter| adapter.load_snapshot()).await?;
-    sona_ts_bind::validate_typescript_safe_integers(&snapshot)?;
+    sona_ts_bind::validate_typescript_safe_integers(&snapshot)
+        .map_err(|error| error.to_string())?;
     Ok(snapshot)
 }
 
@@ -36,10 +37,11 @@ pub async fn save_snapshot(
     provider: &dyn PathProvider,
     items: Vec<RecoveryItemInput>,
 ) -> Result<RecoverySnapshot, String> {
-    sona_ts_bind::validate_typescript_safe_integers(&items)?;
+    sona_ts_bind::validate_typescript_safe_integers(&items).map_err(|error| error.to_string())?;
     let snapshot =
         run_recovery_adapter_task(provider, move |adapter| adapter.save_snapshot(items)).await?;
-    sona_ts_bind::validate_typescript_safe_integers(&snapshot)?;
+    sona_ts_bind::validate_typescript_safe_integers(&snapshot)
+        .map_err(|error| error.to_string())?;
     Ok(snapshot)
 }
 
@@ -56,12 +58,13 @@ pub async fn persist_queue_snapshot(
     queue_items: Vec<RecoveryItemInput>,
     resolved_ids: Option<Vec<String>>,
 ) -> Result<(), String> {
-    sona_ts_bind::validate_typescript_safe_integers(&queue_items)?;
+    sona_ts_bind::validate_typescript_safe_integers(&queue_items)
+        .map_err(|error| error.to_string())?;
     let snapshot = run_recovery_adapter_task(provider, move |adapter| {
         adapter.persist_queue_snapshot(queue_items, resolved_ids.unwrap_or_default())
     })
     .await?;
-    sona_ts_bind::validate_typescript_safe_integers(&snapshot)
+    sona_ts_bind::validate_typescript_safe_integers(&snapshot).map_err(|error| error.to_string())
 }
 
 pub async fn persist_queue_snapshot_for_app<R: tauri::Runtime>(

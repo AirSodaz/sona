@@ -5,6 +5,9 @@ description = "Provider-neutral encrypted sync runtime for Sona"
 authors.workspace = true
 edition.workspace = true
 
+[package.metadata.sona]
+role = "application"
+
 [dependencies]
 async-trait = "0.1"
 argon2 = "0.5"

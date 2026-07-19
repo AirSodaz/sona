@@ -16,12 +16,14 @@ pub async fn export_transcript_file(
         mode,
         output_path,
     };
-    sona_ts_bind::validate_export_transcript_request_for_typescript(&request)?;
+    sona_ts_bind::validate_export_transcript_request_for_typescript(&request)
+        .map_err(|error| error.to_string())?;
     let result = tauri::async_runtime::spawn_blocking(move || {
         export_transcript_file_with_fs(request).map_err(|error| error.to_string())
     })
     .await
     .map_err(|error| error.to_string())??;
-    sona_ts_bind::validate_export_transcript_result_for_typescript(&result)?;
+    sona_ts_bind::validate_export_transcript_result_for_typescript(&result)
+        .map_err(|error| error.to_string())?;
     Ok(result)
 }

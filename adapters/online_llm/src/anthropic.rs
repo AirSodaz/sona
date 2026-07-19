@@ -7,10 +7,10 @@ use sona_core::llm::provider_protocol::{
     StandardLlmResponse, extract_anthropic_text_response, join_url,
 };
 use sona_core::llm::runtime::{LlmCompletionRequest, LlmPromptCachePolicy};
-use sona_core::ports::llm::LlmPortError;
+use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
 
 use crate::completion::{
-    LlmAdapter, build_rig_completion_request, completion_input, extract_text_response, port_result,
+    LlmAdapter, build_rig_completion_request, completion_input, extract_text_response,
     reasoning_budget_tokens, structured_schema, token_usage_from_rig_usage,
 };
 use crate::transport::{LlmApiUrl, classify_llm_port_error, post_json_request};
@@ -18,7 +18,7 @@ use crate::transport::{LlmApiUrl, classify_llm_port_error, post_json_request};
 pub fn build_anthropic_payload_for_request(
     request: &LlmCompletionRequest,
     stream: bool,
-) -> Result<Value, String> {
+) -> Result<Value, LlmPortError> {
     let max_tokens = request.options.max_output_tokens.unwrap_or(8192);
     let mut payload = json!({
         "model": request.config.model,
@@ -41,10 +41,10 @@ pub fn build_anthropic_payload_for_request(
     if request.effective_reasoning_enabled() {
         let max_budget = max_tokens.saturating_sub(1).min(u64::from(u32::MAX)) as u32;
         if max_budget < 1024 {
-            return Err(
-                "Anthropic reasoning requires max_output_tokens to be greater than 1024"
-                    .to_string(),
-            );
+            return Err(LlmPortError::new(
+                LlmPortErrorKind::InvalidRequest,
+                "Anthropic reasoning requires max_output_tokens to be greater than 1024",
+            ));
         }
         payload["thinking"] = json!({
             "type": "enabled",
@@ -84,11 +84,8 @@ impl LlmAdapter for AnthropicAdapter {
     ) -> Result<StandardLlmResponse, LlmPortError> {
         let config = &request.config;
         if request.effective_reasoning_enabled() {
-            let url = port_result(LlmApiUrl::parse(&join_url(
-                &config.base_url,
-                "/v1/messages",
-            )))?;
-            let payload = port_result(build_anthropic_payload_for_request(request, false))?;
+            let url = LlmApiUrl::parse(&join_url(&config.base_url, "/v1/messages"))?;
+            let payload = build_anthropic_payload_for_request(request, false)?;
 
             let response = post_json_request(
                 &url,
@@ -101,14 +98,12 @@ impl LlmAdapter for AnthropicAdapter {
             )
             .await?;
 
-            let (text, usage) = port_result(extract_anthropic_text_response(&response))?;
+            let (text, usage) = extract_anthropic_text_response(&response)?;
 
             return Ok(StandardLlmResponse { text, usage });
         }
 
-        let reqwest_client = port_result(LlmApiUrl::parse(&config.base_url))?
-            .client(config.timeout_seconds)
-            .map_err(classify_llm_port_error)?;
+        let reqwest_client = LlmApiUrl::parse(&config.base_url)?.client(config.timeout_seconds)?;
         let client = anthropic::Client::builder()
             .api_key(&config.api_key)
             .base_url(&config.base_url)
@@ -120,13 +115,13 @@ impl LlmAdapter for AnthropicAdapter {
         if request.options.prompt_cache == LlmPromptCachePolicy::Automatic {
             model = model.with_automatic_caching();
         }
-        let response = port_result(build_rig_completion_request(model, request))?
+        let response = build_rig_completion_request(model, request)?
             .send()
             .await
             .map_err(|error| classify_llm_port_error(error.to_string()))?;
 
         Ok(StandardLlmResponse {
-            text: port_result(extract_text_response(&response.choice))?,
+            text: extract_text_response(&response.choice)?,
             usage: token_usage_from_rig_usage(Some(response.usage)),
         })
     }

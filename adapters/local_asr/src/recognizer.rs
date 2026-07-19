@@ -4,6 +4,7 @@ use sherpa_onnx::{
     OfflineRecognizer, OfflineRecognizerConfig, OnlineRecognizer, OnlineRecognizerConfig,
 };
 use sona_core::models::config::ModelFileConfig;
+use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -101,15 +102,21 @@ pub fn build_model_config(
     enable_itn: bool,
     language: &str,
     hotwords: Option<String>,
-) -> Result<ModelType, String> {
-    let fc = file_config
-        .as_ref()
-        .ok_or("File configuration is missing for this model.")?;
+) -> Result<ModelType, AsrPortError> {
+    let fc = file_config.as_ref().ok_or_else(|| {
+        AsrPortError::new(
+            AsrPortErrorKind::Model,
+            "File configuration is missing for this model.",
+        )
+    })?;
 
-    let get_path = |filename: &Option<String>| -> Result<PathBuf, String> {
-        let name = filename
-            .as_ref()
-            .ok_or("Required file name not specified in config")?;
+    let get_path = |filename: &Option<String>| -> Result<PathBuf, AsrPortError> {
+        let name = filename.as_ref().ok_or_else(|| {
+            AsrPortError::new(
+                AsrPortErrorKind::Model,
+                "Required file name not specified in config",
+            )
+        })?;
         Ok(model_path.join(name))
     };
 
@@ -212,7 +219,10 @@ pub fn build_model_config(
                 hotwords,
             })
         }
-        _ => Err(format!("Unsupported model type: {}", model_type)),
+        _ => Err(AsrPortError::new(
+            AsrPortErrorKind::Unsupported,
+            format!("Unsupported model type: {model_type}"),
+        )),
     }
 }
 
@@ -223,9 +233,12 @@ pub fn build_offline_model_config(
     enable_itn: bool,
     language: &str,
     hotwords: Option<String>,
-) -> Result<ModelType, String> {
+) -> Result<ModelType, AsrPortError> {
     if !is_offline_model_type(model_type) {
-        return Err(format!("Unsupported offline model type: {model_type}"));
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::Unsupported,
+            format!("Unsupported offline model type: {model_type}"),
+        ));
     }
 
     build_model_config(
@@ -346,7 +359,7 @@ impl Recognizer {
         model_type: ModelType,
         num_threads: i32,
         provider: Option<String>,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, AsrPortError> {
         info!(
             "[Recognizer::new] start model_type={:?} num_threads={num_threads}",
             model_type
@@ -373,8 +386,9 @@ impl Recognizer {
                 }
 
                 debug!("Calling OnlineRecognizer::create from sherpa_onnx (OnlineTransducer)");
-                let recognizer =
-                    OnlineRecognizer::create(&config).ok_or("Failed to create OnlineRecognizer")?;
+                let recognizer = OnlineRecognizer::create(&config).ok_or_else(|| {
+                    AsrPortError::new(AsrPortErrorKind::Model, "Failed to create OnlineRecognizer")
+                })?;
                 debug!("Successfully created OnlineRecognizer (OnlineTransducer)");
                 RecognizerInner::Online(SafeOnlineRecognizer(recognizer))
             }
@@ -391,8 +405,9 @@ impl Recognizer {
                     Some(decoder.to_string_lossy().to_string());
 
                 debug!("Calling OnlineRecognizer::create from sherpa_onnx (OnlineParaformer)");
-                let recognizer =
-                    OnlineRecognizer::create(&config).ok_or("Failed to create OnlineRecognizer")?;
+                let recognizer = OnlineRecognizer::create(&config).ok_or_else(|| {
+                    AsrPortError::new(AsrPortErrorKind::Model, "Failed to create OnlineRecognizer")
+                })?;
                 debug!("Successfully created OnlineRecognizer (OnlineParaformer)");
                 RecognizerInner::Online(SafeOnlineRecognizer(recognizer))
             }
@@ -410,8 +425,12 @@ impl Recognizer {
                 config.model_config.sense_voice.use_itn = use_itn;
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineSenseVoice)");
-                let recognizer = OfflineRecognizer::create(&config)
-                    .ok_or("Failed to create OfflineRecognizer")?;
+                let recognizer = OfflineRecognizer::create(&config).ok_or_else(|| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Model,
+                        "Failed to create OfflineRecognizer",
+                    )
+                })?;
                 debug!("Successfully created OfflineRecognizer (OfflineSenseVoice)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
@@ -429,8 +448,12 @@ impl Recognizer {
                 config.model_config.whisper.language = Some(language);
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineWhisper)");
-                let recognizer = OfflineRecognizer::create(&config)
-                    .ok_or("Failed to create OfflineRecognizer")?;
+                let recognizer = OfflineRecognizer::create(&config).ok_or_else(|| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Model,
+                        "Failed to create OfflineRecognizer",
+                    )
+                })?;
                 debug!("Successfully created OfflineRecognizer (OfflineWhisper)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
@@ -455,8 +478,12 @@ impl Recognizer {
                 config.model_config.funasr_nano.language = Some(language);
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineFunASRNano)");
-                let recognizer = OfflineRecognizer::create(&config)
-                    .ok_or("Failed to create OfflineRecognizer")?;
+                let recognizer = OfflineRecognizer::create(&config).ok_or_else(|| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Model,
+                        "Failed to create OfflineRecognizer",
+                    )
+                })?;
                 debug!("Successfully created OfflineRecognizer (OfflineFunASRNano)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
@@ -474,8 +501,12 @@ impl Recognizer {
                     Some(decoder.to_string_lossy().to_string());
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineFireRedAsr)");
-                let recognizer = OfflineRecognizer::create(&config)
-                    .ok_or("Failed to create OfflineRecognizer")?;
+                let recognizer = OfflineRecognizer::create(&config).ok_or_else(|| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Model,
+                        "Failed to create OfflineRecognizer",
+                    )
+                })?;
                 debug!("Successfully created OfflineRecognizer (OfflineFireRedAsr)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
@@ -486,8 +517,12 @@ impl Recognizer {
                 config.model_config.dolphin.model = Some(model.to_string_lossy().to_string());
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineDolphin)");
-                let recognizer = OfflineRecognizer::create(&config)
-                    .ok_or("Failed to create OfflineRecognizer")?;
+                let recognizer = OfflineRecognizer::create(&config).ok_or_else(|| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Model,
+                        "Failed to create OfflineRecognizer",
+                    )
+                })?;
                 debug!("Successfully created OfflineRecognizer (OfflineDolphin)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
@@ -509,8 +544,12 @@ impl Recognizer {
                 config.model_config.qwen3_asr.hotwords = hotwords;
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineQwen3Asr)");
-                let recognizer = OfflineRecognizer::create(&config)
-                    .ok_or("Failed to create OfflineRecognizer")?;
+                let recognizer = OfflineRecognizer::create(&config).ok_or_else(|| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Model,
+                        "Failed to create OfflineRecognizer",
+                    )
+                })?;
                 debug!("Successfully created OfflineRecognizer (OfflineQwen3Asr)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
@@ -523,7 +562,7 @@ pub fn create_recognizer_with_gpu_plan(
     model_type: ModelType,
     num_threads: i32,
     plan: GpuAccelerationPlan,
-) -> Result<RecognizerCreateResult, String> {
+) -> Result<RecognizerCreateResult, AsrPortError> {
     let (recognizer, provider, fallback_notice) = create_value_with_gpu_plan(plan, |provider| {
         Recognizer::new(
             model_type.clone(),
@@ -543,11 +582,14 @@ pub fn create_offline_recognizer(
     model_type: ModelType,
     num_threads: i32,
     provider: Option<&str>,
-) -> Result<SafeOfflineRecognizer, String> {
+) -> Result<SafeOfflineRecognizer, AsrPortError> {
     if !model_type.is_offline() {
-        return Err(format!(
-            "Unsupported offline model type: {}",
-            model_type.model_type_name()
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::Unsupported,
+            format!(
+                "Unsupported offline model type: {}",
+                model_type.model_type_name()
+            ),
         ));
     }
 
@@ -559,7 +601,10 @@ pub fn create_offline_recognizer(
     .inner
     {
         RecognizerInner::Offline(recognizer) => Ok(recognizer),
-        RecognizerInner::Online(_) => Err("Unsupported offline model type".to_string()),
+        RecognizerInner::Online(_) => Err(AsrPortError::new(
+            AsrPortErrorKind::Unsupported,
+            "Unsupported offline model type",
+        )),
     }
 }
 
@@ -614,20 +659,23 @@ pub fn reset_online_stream(recognizer: &SafeOnlineRecognizer, stream: &SafeStrea
     recognizer.0.reset(&stream.0);
 }
 
-fn create_value_with_gpu_plan<T, F>(
+fn create_value_with_gpu_plan<T, F, E>(
     plan: GpuAccelerationPlan,
     mut create: F,
-) -> Result<(T, Option<String>, Option<GpuFallbackNotice>), String>
+) -> Result<(T, Option<String>, Option<GpuFallbackNotice>), E>
 where
-    F: FnMut(Option<&str>) -> Result<T, String>,
+    F: FnMut(Option<&str>) -> Result<T, E>,
+    E: std::fmt::Display,
 {
-    let mut last_error = None;
+    let mut last_error: Option<E> = None;
 
     for provider in plan.provider_options() {
         let provider_name = provider.as_deref();
         match create(provider_name) {
             Ok(value) => {
-                let fallback_notice = last_error.take().map(GpuFallbackNotice::directml_retry);
+                let fallback_notice = last_error
+                    .take()
+                    .map(|error| GpuFallbackNotice::directml_retry(error.to_string()));
                 return Ok((value, provider, fallback_notice));
             }
             Err(error)
@@ -641,7 +689,7 @@ where
         }
     }
 
-    Err(last_error.unwrap_or_else(|| "Recognizer creation failed.".to_string()))
+    Err(last_error.expect("GPU acceleration plan must include at least one provider"))
 }
 
 unsafe impl Send for Recognizer {}

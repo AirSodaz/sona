@@ -14,6 +14,7 @@ pub async fn extract_tar_bz2<R: tauri::Runtime>(
     })
     .await
     .map_err(|error| error.to_string())?
+    .map_err(|error| error.to_string())
 }
 
 pub async fn create_tar_bz2(source_dir: String, archive_path: String) -> Result<(), String> {
@@ -22,4 +23,5 @@ pub async fn create_tar_bz2(source_dir: String, archive_path: String) -> Result<
     })
     .await
     .map_err(|error| error.to_string())?
+    .map_err(|error| error.to_string())
 }

@@ -54,17 +54,23 @@ pub enum LlmTaskEvent {
     Completed(LlmTaskResult),
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("{reason}")]
+pub struct LlmTaskObserverError {
+    pub reason: String,
+}
+
 pub trait LlmTaskObserver: Send + Sync {
-    fn on_event(&self, event: LlmTaskEvent) -> Result<(), String>;
+    fn on_event(&self, event: LlmTaskEvent) -> Result<(), LlmTaskObserverError>;
 }
 
 impl LlmTaskObserver for () {
-    fn on_event(&self, _event: LlmTaskEvent) -> Result<(), String> {
+    fn on_event(&self, _event: LlmTaskEvent) -> Result<(), LlmTaskObserverError> {
         Ok(())
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum LlmTaskError {
     #[error("{reason}")]
     InvalidRequest { reason: String },
@@ -108,8 +114,11 @@ where
         request: PolishSegmentsRequest,
         observer: &dyn LlmTaskObserver,
     ) -> Result<Vec<super::PolishedSegment>, LlmTaskError> {
-        validate_polish_segments_request(&request)
-            .map_err(|reason| LlmTaskError::InvalidRequest { reason })?;
+        validate_polish_segments_request(&request).map_err(|error| {
+            LlmTaskError::InvalidRequest {
+                reason: error.reason,
+            }
+        })?;
         validate_segment_inputs(&request.segments)?;
         if request.segments.is_empty() {
             let result = Vec::new();
@@ -137,8 +146,7 @@ where
                     request.keywords.as_deref(),
                 )
             },
-        )
-        .map_err(|reason| LlmTaskError::InvalidRequest { reason })?;
+        )?;
         let total_chunks = chunks.len();
         let cache = task_cache_policy(total_chunks);
         let config = request.config.clone();
@@ -200,8 +208,11 @@ where
         request: TranslateSegmentsRequest,
         observer: &dyn LlmTaskObserver,
     ) -> Result<Vec<super::TranslatedSegment>, LlmTaskError> {
-        validate_translate_segments_request(&request)
-            .map_err(|reason| LlmTaskError::InvalidRequest { reason })?;
+        validate_translate_segments_request(&request).map_err(|error| {
+            LlmTaskError::InvalidRequest {
+                reason: error.reason,
+            }
+        })?;
         validate_segment_inputs(&request.segments)?;
         if request.segments.is_empty() {
             let result = Vec::new();
@@ -235,8 +246,7 @@ where
                     request.target_language_name.as_deref(),
                 )
             },
-        )
-        .map_err(|reason| LlmTaskError::InvalidRequest { reason })?;
+        )?;
         let total_chunks = chunks.len();
         let cache = task_cache_policy(total_chunks);
         let config = request.config.clone();
@@ -310,8 +320,11 @@ where
         request: SummarizeTranscriptRequest,
         observer: &dyn LlmTaskObserver,
     ) -> Result<super::TranscriptSummaryResult, LlmTaskError> {
-        validate_summarize_transcript_request(&request)
-            .map_err(|reason| LlmTaskError::InvalidRequest { reason })?;
+        validate_summarize_transcript_request(&request).map_err(|error| {
+            LlmTaskError::InvalidRequest {
+                reason: error.reason,
+            }
+        })?;
         if request.segments.is_empty() {
             return Err(LlmTaskError::InvalidRequest {
                 reason: "Transcript cannot be empty".to_string(),
@@ -482,7 +495,8 @@ where
         match self.complete_with_retry(request).await {
             Ok(response) => match parse_polish_response(&response, &expected, chunk_number) {
                 Ok(items) => Ok(items),
-                Err(reason) => {
+                Err(error) => {
+                    let reason = error.to_string();
                     let repair =
                         super::build_structured_repair_input(&input, &reason, Some(&response.text));
                     let response = self
@@ -497,7 +511,6 @@ where
                         .await
                         .map_err(|source| runtime_error("polish repair", source))?;
                     parse_polish_response(&response, &expected, chunk_number)
-                        .map_err(|reason| LlmTaskError::InvalidResponse { reason })
                 }
             },
             Err(LlmRuntimeError::InvalidResponse { reason }) => {
@@ -514,7 +527,6 @@ where
                     .await
                     .map_err(|source| runtime_error("polish repair", source))?;
                 parse_polish_response(&response, &expected, chunk_number)
-                    .map_err(|reason| LlmTaskError::InvalidResponse { reason })
             }
             Err(source) => Err(runtime_error(
                 &format!("polish chunk {chunk_number}"),
@@ -547,7 +559,8 @@ where
         match self.complete_with_retry(request).await {
             Ok(response) => match parse_translate_response(&response, &expected, chunk_number) {
                 Ok(items) => Ok(items),
-                Err(reason) => {
+                Err(error) => {
+                    let reason = error.to_string();
                     let repair =
                         super::build_structured_repair_input(&input, &reason, Some(&response.text));
                     let response = self
@@ -562,7 +575,6 @@ where
                         .await
                         .map_err(|source| runtime_error("translate repair", source))?;
                     parse_translate_response(&response, &expected, chunk_number)
-                        .map_err(|reason| LlmTaskError::InvalidResponse { reason })
                 }
             },
             Err(LlmRuntimeError::InvalidResponse { reason }) => {
@@ -579,7 +591,6 @@ where
                     .await
                     .map_err(|source| runtime_error("translate repair", source))?;
                 parse_translate_response(&response, &expected, chunk_number)
-                    .map_err(|reason| LlmTaskError::InvalidResponse { reason })
             }
             Err(source) => Err(runtime_error(
                 &format!("translate chunk {chunk_number}"),
@@ -797,7 +808,7 @@ where
                         delta: delta.delta,
                         reset: false,
                     }))
-                    .map_err(|message| LlmPortError::new(LlmPortErrorKind::Protocol, message))
+                    .map_err(|error| LlmPortError::new(LlmPortErrorKind::Protocol, error.reason))
             };
             let result = LlmRuntimeService::new(&self.runtime, self.runtime.clone())
                 .stream(request.clone(), &mut emit_delta)
@@ -821,10 +832,10 @@ where
                                 delta: String::new(),
                                 reset: true,
                             }))
-                            .map_err(|message| {
+                            .map_err(|error| {
                                 LlmRuntimeError::from(LlmPortError::new(
                                     LlmPortErrorKind::Protocol,
-                                    message,
+                                    error.reason,
                                 ))
                             })?;
                     }
@@ -967,11 +978,13 @@ fn parse_polish_response(
     response: &LlmCompletionResponse,
     expected: &[super::LlmSegmentInput],
     chunk_number: usize,
-) -> Result<Vec<super::PolishedSegment>, String> {
+) -> Result<Vec<super::PolishedSegment>, LlmTaskError> {
     let value = response
         .json
         .as_ref()
-        .ok_or_else(|| "structured response did not include parsed JSON".to_string())?;
+        .ok_or_else(|| LlmTaskError::InvalidResponse {
+            reason: "structured response did not include parsed JSON".to_string(),
+        })?;
     super::parse_polish_object(value, expected, chunk_number)
 }
 
@@ -979,11 +992,13 @@ fn parse_translate_response(
     response: &LlmCompletionResponse,
     expected: &[super::LlmSegmentInput],
     chunk_number: usize,
-) -> Result<Vec<super::TranslatedSegment>, String> {
+) -> Result<Vec<super::TranslatedSegment>, LlmTaskError> {
     let value = response
         .json
         .as_ref()
-        .ok_or_else(|| "structured response did not include parsed JSON".to_string())?;
+        .ok_or_else(|| LlmTaskError::InvalidResponse {
+            reason: "structured response did not include parsed JSON".to_string(),
+        })?;
     super::parse_translate_object(value, expected, chunk_number)
 }
 
@@ -997,7 +1012,9 @@ fn runtime_error(stage: &str, source: LlmRuntimeError) -> LlmTaskError {
 fn emit(observer: &dyn LlmTaskObserver, event: LlmTaskEvent) -> Result<(), LlmTaskError> {
     observer
         .on_event(event)
-        .map_err(|reason| LlmTaskError::Observer { reason })
+        .map_err(|error| LlmTaskError::Observer {
+            reason: error.reason,
+        })
 }
 
 fn emit_progress(

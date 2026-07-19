@@ -2,16 +2,18 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use chrono::NaiveDate;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use sona_core::dashboard::{DashboardServiceError, DashboardSnapshotTime};
-use sona_core::history::HistorySaveRecordingRequest;
 use sona_core::history::mutation_repository::HistoryMutationRepository;
 use sona_core::history::query_repository::HistoryQueryRepository;
+use sona_core::history::{HistoryIdGenerator, HistorySaveRecordingRequest};
 use sona_core::history_store::HistoryStore;
 use sona_core::llm::usage::{LlmUsageCategory, TokenUsage, UsageRecord};
+use sona_core::ports::time::{ClockError, UnixMillisClock};
 use sona_core::project::{
     DEFAULT_POLISH_PRESET_ID, DEFAULT_SUMMARY_TEMPLATE_ID, DEFAULT_TRANSLATION_LANGUAGE,
     ProjectDefaults, ProjectRecord, ProjectStore,
@@ -21,6 +23,35 @@ use sona_sqlite::{
     Database, SqliteHistoryStore, SqliteProjectRepository, create_dashboard_service,
     load_dashboard_snapshot,
 };
+
+struct HistoryClock;
+
+impl UnixMillisClock for HistoryClock {
+    fn now_ms(&self) -> Result<u64, ClockError> {
+        Ok(1_700_000_000_000)
+    }
+}
+
+struct HistoryIds;
+
+impl HistoryIdGenerator for HistoryIds {
+    fn generate_id(&self) -> String {
+        static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+        format!(
+            "dashboard-history-{}",
+            NEXT_ID.fetch_add(1, Ordering::Relaxed)
+        )
+    }
+}
+
+fn history_store(path: &Path, database: Arc<Database>) -> SqliteHistoryStore {
+    SqliteHistoryStore::with_environment(
+        path.to_path_buf(),
+        database,
+        Arc::new(HistoryClock),
+        Arc::new(HistoryIds),
+    )
+}
 
 fn project() -> ProjectRecord {
     ProjectRecord {
@@ -114,7 +145,7 @@ fn read_only_snapshot_includes_analytics_usage() {
 fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
     let dir = tempfile::tempdir().unwrap();
     let writer = Arc::new(Database::open(dir.path()).unwrap());
-    let history = SqliteHistoryStore::new(dir.path().to_path_buf(), Arc::clone(&writer));
+    let history = history_store(dir.path(), Arc::clone(&writer));
     history.ensure_ready().unwrap();
     let projects = SqliteProjectRepository::new(Arc::clone(&writer));
     ProjectStore::insert_project(&projects, project()).unwrap();
@@ -198,8 +229,7 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
     let before = file_hashes(dir.path());
 
     let read_only = Arc::new(Database::open_read_only_with_analytics(dir.path()).unwrap());
-    let read_only_history =
-        SqliteHistoryStore::new(dir.path().to_path_buf(), Arc::clone(&read_only));
+    let read_only_history = history_store(dir.path(), Arc::clone(&read_only));
     let read_only_items = HistoryQueryRepository::list_items(&read_only_history).unwrap();
     assert_eq!(
         read_only_items

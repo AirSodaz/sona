@@ -22,5 +22,6 @@ fn gpu_acceleration_defaults_and_normalizes_without_cli_runtime() {
 #[test]
 fn gpu_acceleration_rejects_unknown_values() {
     let error = resolve_gpu_acceleration(Some("metal".to_string())).unwrap_err();
-    assert!(error.contains("gpu_acceleration must be one of"));
+    assert_eq!(error.subject, "gpu_acceleration");
+    assert!(error.message.contains("gpu_acceleration must be one of"));
 }

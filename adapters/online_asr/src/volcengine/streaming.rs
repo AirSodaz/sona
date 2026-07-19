@@ -130,8 +130,7 @@ async fn start_streaming_recognizer_impl(
         true,
         &session.request.language,
         session.request.hotwords.as_deref(),
-    )
-    .map_err(SherpaError::Generic)?;
+    )?;
     writer
         .send(Message::Binary(init_frame))
         .await
@@ -147,7 +146,8 @@ async fn start_streaming_recognizer_impl(
     let instance_id_for_task = instance_id.to_string();
     let normalization_options = session.request.normalization_options;
     let postprocessor =
-        TranscriptPostprocessor::compile(session.request.postprocess_options.clone())?;
+        TranscriptPostprocessor::compile(session.request.postprocess_options.clone())
+            .map_err(|error| SherpaError::Generic(error.to_string()))?;
     let stopping = session.stopping.clone();
     let final_response_received = session.final_response_received.clone();
     let final_response_outcome = session.final_response_outcome.clone();
@@ -166,7 +166,6 @@ async fn start_streaming_recognizer_impl(
                                         &value,
                                         frame.is_final,
                                     )
-                                    .map_err(SherpaError::Generic)
                                 })
                                 .transpose()
                                 .map(|value| value.unwrap_or_default())

@@ -21,7 +21,8 @@ use crate::runtime::{
 use async_trait::async_trait;
 use log::{debug, info, trace};
 use sona_core::ports::asr::{
-    AsrRuntimeObserver, AsrStreamingSession, LocalSherpaStreamingRequest, SherpaError,
+    AsrPortError, AsrPortErrorKind, AsrRuntimeObserver, AsrStreamingSession,
+    LocalSherpaStreamingRequest, SherpaError,
 };
 use sona_core::transcription::asr_metrics::{
     AsrModelLoadMetric, calculate_rss_delta_mb, duration_to_ms,
@@ -159,7 +160,7 @@ pub async fn create_streaming_session(
     recognizer_pool: RecognizerPool,
     request: LocalSherpaStreamingRequest,
     observer: Arc<dyn AsrRuntimeObserver>,
-) -> Result<Arc<LocalSherpaSession>, String> {
+) -> Result<Arc<LocalSherpaSession>, AsrPortError> {
     let LocalSherpaStreamingRequest {
         instance_id,
         model_path,
@@ -245,7 +246,7 @@ pub async fn create_streaming_session(
                     .await;
             }
 
-            Ok::<Arc<Recognizer>, String>(r)
+            Ok::<Arc<Recognizer>, AsrPortError>(r)
         })
         .await?
         .clone();
@@ -274,7 +275,8 @@ pub async fn create_streaming_session(
     session_instance.set_punctuation(punctuation);
     session_instance.configure_vad(vad_model.clone(), vad_buffer);
     session_instance.normalization_options = normalization_options;
-    session_instance.postprocessor = TranscriptPostprocessor::compile(postprocess_options)?;
+    session_instance.postprocessor = TranscriptPostprocessor::compile(postprocess_options)
+        .map_err(|error| AsrPortError::new(AsrPortErrorKind::InvalidRequest, error.to_string()))?;
 
     let session = std::sync::Arc::new(LocalSherpaSession {
         instance_id,
@@ -1013,9 +1015,11 @@ mod tests {
         )
         .await;
 
+        let error = result.err().expect("missing file config should fail");
+        assert_eq!(error.kind, sona_core::ports::asr::AsrPortErrorKind::Model);
         assert_eq!(
-            result.err().as_deref(),
-            Some("File configuration is missing for this model.")
+            error.message,
+            "File configuration is missing for this model."
         );
     }
 

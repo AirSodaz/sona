@@ -10,12 +10,15 @@ use serde_json::{Value, json};
 use sona_core::llm::provider_protocol::{StandardLlmResponse, extract_text_from_json_response};
 use sona_core::llm::runtime::LlmCompletionRequest;
 use sona_core::llm::tasks::LlmProviderStrategy;
-use sona_core::ports::llm::LlmPortError;
+use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
 
-use crate::completion::{LlmAdapter, port_result};
+use crate::completion::LlmAdapter;
 use crate::openai_compatible::generate_with_openai_custom_path;
 use crate::responses::generate_with_openai_responses_api;
-use crate::transport::{LlmApiUrl, post_json_request};
+use crate::transport::{
+    LlmApiUrl, classify_llm_port_error, http_status_port_error, post_json_request,
+    reqwest_port_error,
+};
 
 const GOOGLE_TRANSLATE_FREE_MAX_RETRIES: usize = 2;
 const GOOGLE_TRANSLATE_FREE_MAX_RETRY_AFTER_SECS: u64 = 5;
@@ -50,7 +53,7 @@ pub async fn execute_google_translate_request(
     api_key: &str,
     texts: Vec<String>,
     target_language: String,
-) -> Result<String, String> {
+) -> Result<String, LlmPortError> {
     let payload = GoogleTranslateRequest {
         q: texts,
         target: target_language,
@@ -63,13 +66,14 @@ pub async fn execute_google_translate_request(
         .json(&payload)
         .send()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(reqwest_port_error)?;
 
     let status = response.status();
-    let text = response.text().await.unwrap_or_default();
+    let headers = response.headers().clone();
+    let text = response.text().await.map_err(reqwest_port_error)?;
 
     if !status.is_success() {
-        return Err(format!("Google Translate API Error: {} {}", status, text));
+        return Err(http_status_port_error(status, &headers, text));
     }
 
     Ok(text)
@@ -82,6 +86,7 @@ pub enum GoogleTranslateFreeAttemptError {
         retry_after: Option<Duration>,
     },
     Message(String),
+    Port(LlmPortError),
 }
 
 fn format_attempt_label(attempts: usize) -> &'static str {
@@ -145,19 +150,10 @@ fn google_translate_free_error_summary(error: &GoogleTranslateFreeAttemptError) 
         GoogleTranslateFreeAttemptError::Message(message) => {
             format!("Free translation request failed: {}", message)
         }
+        GoogleTranslateFreeAttemptError::Port(error) => {
+            format!("Free translation request failed: {}", error.message)
+        }
     }
-}
-
-fn google_translate_free_error_message(
-    error: &GoogleTranslateFreeAttemptError,
-    attempts: usize,
-) -> String {
-    format!(
-        "{} after {} {}",
-        google_translate_free_error_summary(error),
-        attempts,
-        format_attempt_label(attempts)
-    )
 }
 
 fn extract_google_translate_free_translation(
@@ -196,12 +192,13 @@ pub async fn fetch_google_translate_free_translation(
             target_language,
             urlencoding::encode(text)
         ))
-        .map_err(GoogleTranslateFreeAttemptError::Message)?;
+        .map_err(GoogleTranslateFreeAttemptError::Port)?;
     let response = client
         .get(url.reqwest_url())
         .send()
         .await
-        .map_err(|error| GoogleTranslateFreeAttemptError::Message(error.to_string()))?;
+        .map_err(reqwest_port_error)
+        .map_err(GoogleTranslateFreeAttemptError::Port)?;
 
     if !response.status().is_success() {
         return Err(GoogleTranslateFreeAttemptError::HttpStatus {
@@ -213,7 +210,8 @@ pub async fn fetch_google_translate_free_translation(
     let body: Value = response
         .json()
         .await
-        .map_err(|error| GoogleTranslateFreeAttemptError::Message(error.to_string()))?;
+        .map_err(reqwest_port_error)
+        .map_err(GoogleTranslateFreeAttemptError::Port)?;
     extract_google_translate_free_translation(&body)
 }
 
@@ -223,7 +221,7 @@ pub async fn execute_google_translate_free_request<FetchFn, FetchFuture, SleepFn
     target_language: String,
     mut fetch: FetchFn,
     mut sleep_fn: SleepFn,
-) -> Result<(usize, String), String>
+) -> Result<(usize, String), LlmPortError>
 where
     FetchFn: FnMut(String, String) -> FetchFuture,
     FetchFuture: Future<Output = Result<String, GoogleTranslateFreeAttemptError>>,
@@ -256,7 +254,15 @@ where
                     attempts,
                     google_translate_free_error_summary(&error)
                 );
-                return Err(google_translate_free_error_message(&error, attempts));
+                let summary = google_translate_free_error_summary(&error);
+                let mut port_error = google_translate_free_port_error(error);
+                port_error.message = format!(
+                    "{} after {} {}",
+                    summary,
+                    attempts,
+                    format_attempt_label(attempts)
+                );
+                return Err(port_error);
             }
         }
     }
@@ -266,10 +272,10 @@ pub async fn run_google_translate_free_requests_in_order<RunFn, RunFuture>(
     texts: Vec<String>,
     max_concurrency: usize,
     mut run_request: RunFn,
-) -> Result<Vec<String>, String>
+) -> Result<Vec<String>, LlmPortError>
 where
     RunFn: FnMut(usize, String) -> RunFuture,
-    RunFuture: Future<Output = Result<(usize, String), String>>,
+    RunFuture: Future<Output = Result<(usize, String), LlmPortError>>,
 {
     let mut indexed_translations = Vec::with_capacity(texts.len());
     let results = stream::iter(texts.into_iter().enumerate())
@@ -300,7 +306,7 @@ impl LlmAdapter for GoogleTranslateAdapter {
     ) -> Result<StandardLlmResponse, LlmPortError> {
         let config = &request.config;
         let input = request.input.clone();
-        let base_url = port_result(LlmApiUrl::parse(&config.base_url))?;
+        let base_url = LlmApiUrl::parse(&config.base_url)?;
 
         if config.strategy == LlmProviderStrategy::GoogleTranslateFree {
             let fetch_client = client.clone();
@@ -319,8 +325,7 @@ impl LlmAdapter for GoogleTranslateAdapter {
                 },
                 tokio::time::sleep,
             )
-            .await
-            .map_err(crate::transport::classify_llm_port_error)?;
+            .await?;
 
             return Ok(StandardLlmResponse { text, usage: None });
         }
@@ -338,9 +343,35 @@ impl LlmAdapter for GoogleTranslateAdapter {
             config.timeout_seconds,
         )
         .await?;
-        let text = port_result(extract_text_from_json_response(&response))?;
+        let text = extract_text_from_json_response(&response)?;
 
         Ok(StandardLlmResponse { text, usage: None })
+    }
+}
+
+pub(crate) fn google_translate_free_port_error(
+    error: GoogleTranslateFreeAttemptError,
+) -> LlmPortError {
+    match error {
+        GoogleTranslateFreeAttemptError::HttpStatus {
+            status,
+            retry_after,
+        } => {
+            let kind = match status {
+                StatusCode::UNAUTHORIZED => LlmPortErrorKind::Authentication,
+                StatusCode::FORBIDDEN => LlmPortErrorKind::Permission,
+                StatusCode::TOO_MANY_REQUESTS => LlmPortErrorKind::RateLimited,
+                status if status.is_server_error() => LlmPortErrorKind::Unavailable,
+                _ => LlmPortErrorKind::Protocol,
+            };
+            LlmPortError {
+                kind,
+                message: format!("Free API Error: {status}"),
+                retry_after_ms: retry_after.map(|duration| duration.as_millis() as u64),
+            }
+        }
+        GoogleTranslateFreeAttemptError::Message(message) => classify_llm_port_error(message),
+        GoogleTranslateFreeAttemptError::Port(error) => error,
     }
 }
 

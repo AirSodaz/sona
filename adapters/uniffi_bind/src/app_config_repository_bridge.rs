@@ -1,11 +1,10 @@
+use crate::application_context::application_context;
 use crate::json_bridge::parse_core_json;
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
 use sona_core::config::{ConfigError, validate_app_config};
 use sona_runtime_fs::SystemClock;
-use sona_sqlite::{Database, SqliteAppConfigAdapter};
-use std::path::Path;
-use std::sync::Arc;
+use sona_sqlite::SqliteAppConfigAdapter;
 
 pub(crate) fn load_app_config_json(app_data_dir: String) -> SonaCoreBindingResult<Option<String>> {
     with_app_config_adapter(&app_data_dir, |adapter| adapter.load_config())?
@@ -46,8 +45,10 @@ fn with_app_config_adapter<T, F>(app_data_dir: &str, operation: F) -> SonaCoreBi
 where
     F: FnOnce(&SqliteAppConfigAdapter) -> Result<T, ConfigError>,
 {
-    let database = Database::open(Path::new(app_data_dir)).map_err(config_repository_error)?;
-    let adapter = SqliteAppConfigAdapter::new(Arc::new(database), Arc::new(SystemClock));
+    let context = application_context(app_data_dir).map_err(config_repository_error)?;
+    let adapter = context
+        .sqlite()
+        .app_config_adapter(std::sync::Arc::new(SystemClock));
     operation(&adapter).map_err(config_repository_error)
 }
 

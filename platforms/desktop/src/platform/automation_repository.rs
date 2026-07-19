@@ -13,7 +13,7 @@ use tauri::{AppHandle, Runtime};
 pub use sona_sqlite::automation::AutomationRepositoryState;
 
 fn validate_automation_transport<T: Serialize>(value: T) -> Result<T, String> {
-    sona_ts_bind::validate_typescript_safe_integers(&value)?;
+    sona_ts_bind::validate_typescript_safe_integers(&value).map_err(|error| error.to_string())?;
     Ok(value)
 }
 
@@ -21,7 +21,7 @@ pub fn validate_rule_activation_inner(
     rule: &AutomationRule,
     global_config: &Value,
     tags: &[Value],
-) -> AutomationRuleValidationResult {
+) -> Result<AutomationRuleValidationResult, AutomationError> {
     validate_native_automation_rule_activation(rule, global_config, tags)
 }
 
@@ -34,6 +34,7 @@ pub async fn validate_rule_activation(
         validate_rule_activation_inner(&rule, &global_config, &tags)
     })
     .await
+    .map_err(|error| error.to_string())?
     .map_err(|error| error.to_string())
 }
 
@@ -43,9 +44,9 @@ where
     T: Send + Serialize + 'static,
     F: FnOnce(&SqliteAutomationAdapter) -> Result<T, AutomationError> + Send + 'static,
 {
-    let db = crate::platform::database::sqlite_database(app);
+    let context = crate::platform::database::sqlite_application_context(app);
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let adapter = SqliteAutomationAdapter::new(db, Arc::new(UuidGenerator));
+        let adapter = context.automation_adapter(Arc::new(UuidGenerator));
         task(&adapter).map_err(|error| error.to_string())
     })
     .await

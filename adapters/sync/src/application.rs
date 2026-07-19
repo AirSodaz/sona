@@ -62,7 +62,8 @@ impl SyncApplicationEnvironment for SystemSyncApplicationEnvironment {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncProviderInput {
     pub provider_id: String,
     pub configuration: Value,
@@ -927,6 +928,7 @@ pub fn sync_error_code(error: &SyncError) -> &'static str {
         SyncError::SecretStore(_) => "secret_store_error",
         SyncError::Protocol(_) => "protocol_error",
         SyncError::Crypto(_) => "crypto_error",
+        SyncError::Clock(_) => "local_repository_error",
     }
 }
 

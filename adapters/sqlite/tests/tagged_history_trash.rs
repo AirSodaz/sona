@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use sona_core::history::mutation_repository::{
     HistoryCreateTranscriptSnapshotRequest, HistoryDeleteItemsRequest, HistoryMutationRepository,
@@ -6,14 +7,42 @@ use sona_core::history::mutation_repository::{
 };
 use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history::{
-    HistoryCreateLiveDraftRequest, HistorySaveRecordingRequest, HistoryWorkspaceDateFilter,
-    HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,
-    HistoryWorkspaceScope, HistoryWorkspaceSortOrder, TranscriptSnapshotReason,
+    HistoryCreateLiveDraftRequest, HistoryIdGenerator, HistorySaveRecordingRequest,
+    HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest,
+    HistoryWorkspaceQueryResult, HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
+    TranscriptSnapshotReason,
 };
+use sona_core::ports::time::{ClockError, UnixMillisClock};
 use sona_core::sync::{SyncLocalRepository, SyncPresetV1};
 use sona_core::tag::{TagDefaults, TagRecord, TagStore};
 use sona_core::transcription::transcript::TranscriptSegment;
 use sona_sqlite::{Database, SqliteHistoryStore, SqliteSyncRepository, SqliteTagRepository};
+
+struct TestClock;
+
+impl UnixMillisClock for TestClock {
+    fn now_ms(&self) -> Result<u64, ClockError> {
+        Ok(1_700_000_000_000)
+    }
+}
+
+struct TestIds;
+
+impl HistoryIdGenerator for TestIds {
+    fn generate_id(&self) -> String {
+        static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+        format!("history-test-{}", NEXT_ID.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
+fn history_store(root: &std::path::Path, db: Arc<Database>) -> SqliteHistoryStore {
+    SqliteHistoryStore::with_environment(
+        root.to_path_buf(),
+        db,
+        Arc::new(TestClock),
+        Arc::new(TestIds),
+    )
+}
 
 fn tag(id: &str, sort_order: usize) -> TagRecord {
     TagRecord {
@@ -69,7 +98,7 @@ fn multi_tag_scopes_and_trash_lifecycle_preserve_then_purge_children_and_audio()
     SqliteTagRepository::new(Arc::clone(&db))
         .replace_tags(vec![tag("tag-priority", 0), tag("tag-secondary", 1)])
         .unwrap();
-    let store = SqliteHistoryStore::new(root.path().to_path_buf(), Arc::clone(&db));
+    let store = history_store(root.path(), Arc::clone(&db));
 
     let tagged = HistoryMutationRepository::save_recording(
         &store,
@@ -229,7 +258,7 @@ fn multi_tag_scopes_and_trash_lifecycle_preserve_then_purge_children_and_audio()
 fn purging_a_live_draft_removes_its_audio_without_purging_active_history() {
     let root = tempfile::tempdir().unwrap();
     let db = Arc::new(Database::open(root.path()).unwrap());
-    let store = SqliteHistoryStore::new(root.path().to_path_buf(), db);
+    let store = history_store(root.path(), db);
     let draft = HistoryMutationRepository::create_live_draft(
         &store,
         HistoryCreateLiveDraftRequest {
@@ -274,12 +303,13 @@ fn trashing_unknown_or_already_trashed_items_does_not_enqueue_sync() {
     let db = Arc::new(Database::open(root.path()).unwrap());
     let sync = SqliteSyncRepository::initialize(
         Arc::clone(&db),
+        Arc::new(TestClock),
         "vault-a",
         "device-a",
         SyncPresetV1::Standard,
     )
     .unwrap();
-    let store = SqliteHistoryStore::new(root.path().to_path_buf(), db);
+    let store = history_store(root.path(), db);
     let item = HistoryMutationRepository::save_recording(
         &store,
         HistorySaveRecordingRequest {
@@ -335,12 +365,13 @@ fn restoring_unknown_or_active_items_does_not_enqueue_sync() {
     let db = Arc::new(Database::open(root.path()).unwrap());
     let sync = SqliteSyncRepository::initialize(
         Arc::clone(&db),
+        Arc::new(TestClock),
         "vault-a",
         "device-a",
         SyncPresetV1::Standard,
     )
     .unwrap();
-    let store = SqliteHistoryStore::new(root.path().to_path_buf(), db);
+    let store = history_store(root.path(), db);
     let item = HistoryMutationRepository::save_recording(
         &store,
         HistorySaveRecordingRequest {
@@ -378,7 +409,7 @@ fn deleting_tags_keeps_history_and_moves_items_without_tags_to_untagged() {
     let tags = SqliteTagRepository::new(Arc::clone(&db));
     tags.replace_tags(vec![tag("tag-a", 0), tag("tag-b", 1)])
         .unwrap();
-    let store = SqliteHistoryStore::new(root.path().to_path_buf(), db);
+    let store = history_store(root.path(), db);
     let item = HistoryMutationRepository::save_recording(
         &store,
         HistorySaveRecordingRequest {

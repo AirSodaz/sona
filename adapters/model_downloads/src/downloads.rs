@@ -8,6 +8,36 @@ use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::Notify;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DownloadFileOperation {
+    CreateModelsDirectory,
+    InspectInstall,
+    RemoveInstallFile,
+    RemoveInstallDirectory,
+    HashFile,
+    Publish,
+    OpenArchive,
+    ExtractArchive,
+    RemoveArchive,
+}
+
+impl std::fmt::Display for DownloadFileOperation {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let value = match self {
+            Self::CreateModelsDirectory => "create models directory",
+            Self::InspectInstall => "inspect model install",
+            Self::RemoveInstallFile => "remove model file",
+            Self::RemoveInstallDirectory => "remove model directory",
+            Self::HashFile => "hash file",
+            Self::Publish => "publish download",
+            Self::OpenArchive => "open archive",
+            Self::ExtractArchive => "extract archive",
+            Self::RemoveArchive => "remove archive",
+        };
+        formatter.write_str(value)
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum DownloadError {
     #[error("Network error: {0}")]
@@ -20,10 +50,73 @@ pub enum DownloadError {
     RangeNotSatisfiable,
     #[error("Download failed with status: {0}")]
     HttpStatus(reqwest::StatusCode),
-    #[error("Downloaded file hash mismatch for {0}")]
-    HashMismatch(String),
+    #[error("Downloaded file hash mismatch for {path}: expected {expected}, got {actual}")]
+    HashMismatch {
+        path: PathBuf,
+        expected: String,
+        actual: String,
+    },
     #[error("Download already in progress by another process")]
     AlreadyInProgress,
+    #[error("Failed to create HTTP client: {reason}")]
+    HttpClient { reason: String },
+    #[error(transparent)]
+    FileSystem(DownloadFileSystemError),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DownloadFileSystemError {
+    pub operation: DownloadFileOperation,
+    pub path: PathBuf,
+    pub target: Option<PathBuf>,
+    pub reason: String,
+}
+
+impl std::fmt::Display for DownloadFileSystemError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "Failed to {} for {}",
+            self.operation,
+            self.path.display()
+        )?;
+        if let Some(target) = &self.target {
+            write!(formatter, " -> {}", target.display())?;
+        }
+        write!(formatter, ": {}", self.reason)
+    }
+}
+
+impl std::error::Error for DownloadFileSystemError {}
+
+impl DownloadError {
+    pub fn file_system(
+        operation: DownloadFileOperation,
+        path: impl Into<PathBuf>,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self::FileSystem(DownloadFileSystemError {
+            operation,
+            path: path.into(),
+            target: None,
+            reason: reason.into(),
+        })
+    }
+
+    pub fn file_system_with_target(
+        operation: DownloadFileOperation,
+        path: impl Into<PathBuf>,
+        target: impl Into<PathBuf>,
+        reason: impl Into<String>,
+    ) -> Self {
+        let target = target.into();
+        Self::FileSystem(DownloadFileSystemError {
+            operation,
+            path: path.into(),
+            target: Some(target.clone()),
+            reason: reason.into(),
+        })
+    }
 }
 
 pub fn temporary_download_path(path: &Path) -> PathBuf {
@@ -48,9 +141,14 @@ impl DownloadClient {
         Self::try_new().expect("failed to create Sona download HTTP client")
     }
 
-    pub fn try_new() -> Result<Self, reqwest::Error> {
+    pub fn try_new() -> Result<Self, DownloadError> {
         Ok(Self {
-            client: reqwest::Client::builder().user_agent("Sona/1.0").build()?,
+            client: reqwest::Client::builder()
+                .user_agent("Sona/1.0")
+                .build()
+                .map_err(|error| DownloadError::HttpClient {
+                    reason: error.to_string(),
+                })?,
         })
     }
 
@@ -96,19 +194,27 @@ pub async fn verify_download_file(
     if let Some(expected_hash) = expected_sha256 {
         let actual_hash = sha256_file(temp_path).await?;
         if !actual_hash.eq_ignore_ascii_case(expected_hash) {
-            return Err(DownloadError::HashMismatch(temp_path.display().to_string()));
+            return Err(DownloadError::HashMismatch {
+                path: temp_path.to_path_buf(),
+                expected: expected_hash.to_string(),
+                actual: actual_hash,
+            });
         }
     }
     Ok(())
 }
 
 pub async fn sha256_file(path: &Path) -> Result<String, DownloadError> {
-    let mut file = tokio::fs::File::open(path).await?;
+    let mut file = tokio::fs::File::open(path).await.map_err(|error| {
+        DownloadError::file_system(DownloadFileOperation::HashFile, path, error.to_string())
+    })?;
     let mut hasher = Sha256::new();
     let mut buffer = vec![0_u8; 16 * 1024];
 
     loop {
-        let read = file.read(&mut buffer).await?;
+        let read = file.read(&mut buffer).await.map_err(|error| {
+            DownloadError::file_system(DownloadFileOperation::HashFile, path, error.to_string())
+        })?;
         if read == 0 {
             break;
         }
@@ -122,10 +228,33 @@ pub async fn publish_download_file(
     temp_path: &Path,
     final_path: &Path,
 ) -> Result<(), DownloadError> {
-    if tokio::fs::try_exists(final_path).await? {
-        tokio::fs::remove_file(final_path).await?;
+    if tokio::fs::try_exists(final_path).await.map_err(|error| {
+        DownloadError::file_system_with_target(
+            DownloadFileOperation::Publish,
+            temp_path,
+            final_path,
+            error.to_string(),
+        )
+    })? {
+        tokio::fs::remove_file(final_path).await.map_err(|error| {
+            DownloadError::file_system_with_target(
+                DownloadFileOperation::Publish,
+                temp_path,
+                final_path,
+                error.to_string(),
+            )
+        })?;
     }
-    tokio::fs::rename(temp_path, final_path).await?;
+    tokio::fs::rename(temp_path, final_path)
+        .await
+        .map_err(|error| {
+            DownloadError::file_system_with_target(
+                DownloadFileOperation::Publish,
+                temp_path,
+                final_path,
+                error.to_string(),
+            )
+        })?;
     Ok(())
 }
 
@@ -347,7 +476,7 @@ mod tests {
         )
         .await;
 
-        assert!(matches!(result, Err(DownloadError::HashMismatch(_))));
+        assert!(matches!(result, Err(DownloadError::HashMismatch { .. })));
         assert_eq!(tokio::fs::read(&final_path).await.unwrap(), b"old-good");
         assert!(!temp_path.exists());
     }
@@ -381,7 +510,12 @@ mod tests {
 
         let result = complete_download_file(&temp_path, &final_path, None).await;
 
-        assert!(matches!(result, Err(DownloadError::Io(_))));
+        let DownloadError::FileSystem(context) = result.unwrap_err() else {
+            panic!("expected contextual publish failure");
+        };
+        assert_eq!(context.operation, DownloadFileOperation::Publish);
+        assert_eq!(context.path, temp_path);
+        assert_eq!(context.target.as_deref(), Some(final_path.as_path()));
         assert!(!temp_path.exists());
     }
 

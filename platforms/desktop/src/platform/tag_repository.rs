@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use std::future::Future;
 
 use serde_json::Value;
@@ -21,9 +23,9 @@ where
     T: Send + 'static,
     F: FnOnce(&SqliteTagAdapter) -> Result<T, TagError> + Send + 'static,
 {
-    let db = crate::platform::database::sqlite_database(app);
+    let context = crate::platform::database::sqlite_application_context(app);
     tauri::async_runtime::spawn_blocking(move || {
-        let adapter = SqliteTagAdapter::new(db, Arc::new(UuidGenerator), Arc::new(SystemClock));
+        let adapter = context.tag_adapter(Arc::new(UuidGenerator), Arc::new(SystemClock));
         task(&adapter).map_err(|error| error.to_string())
     })
     .await
@@ -44,7 +46,7 @@ pub async fn list_tags<R: Runtime>(
         })
     })
     .await?;
-    sona_ts_bind::validate_tag_records_for_typescript(&tags)?;
+    sona_ts_bind::validate_tag_records_for_typescript(&tags).map_err(|error| error.to_string())?;
     Ok(tags)
 }
 
@@ -52,7 +54,7 @@ pub async fn replace_tags<R: Runtime>(
     app: &AppHandle<R>,
     tags: Vec<TagRecord>,
 ) -> Result<(), String> {
-    sona_ts_bind::validate_tag_records_for_typescript(&tags)?;
+    sona_ts_bind::validate_tag_records_for_typescript(&tags).map_err(|error| error.to_string())?;
     run_tag_adapter(app, move |adapter| adapter.replace_tags(tags)).await
 }
 
@@ -74,7 +76,7 @@ pub async fn create_tag<R: Runtime>(
         })
     })
     .await?;
-    sona_ts_bind::validate_tag_record_for_typescript(&tag)?;
+    sona_ts_bind::validate_tag_record_for_typescript(&tag).map_err(|error| error.to_string())?;
     Ok(tag)
 }
 
@@ -85,7 +87,7 @@ pub async fn update_tag<R: Runtime>(
 ) -> Result<Option<TagRecord>, String> {
     let tag = run_tag_adapter(app, move |adapter| adapter.update_tag(&tag_id, updates)).await?;
     if let Some(tag) = tag.as_ref() {
-        sona_ts_bind::validate_tag_record_for_typescript(tag)?;
+        sona_ts_bind::validate_tag_record_for_typescript(tag).map_err(|error| error.to_string())?;
     }
     Ok(tag)
 }
@@ -99,7 +101,7 @@ pub async fn reorder_tags<R: Runtime>(
     tag_ids: Vec<String>,
 ) -> Result<Vec<TagRecord>, String> {
     let tags = run_tag_adapter(app, move |adapter| adapter.reorder_tags(tag_ids)).await?;
-    sona_ts_bind::validate_tag_records_for_typescript(&tags)?;
+    sona_ts_bind::validate_tag_records_for_typescript(&tags).map_err(|error| error.to_string())?;
     Ok(tags)
 }
 

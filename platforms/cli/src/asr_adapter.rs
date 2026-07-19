@@ -17,6 +17,7 @@ pub(crate) async fn local_streaming_session(
         plan.to_local_streaming_request(instance_id),
         observer,
     )
-    .await?;
+    .await
+    .map_err(|error| error.to_string())?;
     Ok(session)
 }

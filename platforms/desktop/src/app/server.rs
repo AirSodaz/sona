@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use sona_api_server::{
-    ApiServerDashboardSnapshot, ApiServerPlatform, ApiServerServiceParts,
+    ApiServerDashboardSnapshot, ApiServerPlatform, ApiServerPlatformError, ApiServerServiceParts,
     ONLINE_ASR_BATCH_UNAVAILABLE, OnlineBatchRequest, RunningApiServer, build_streaming_router,
     start_api_server_runtime,
 };
@@ -58,7 +58,10 @@ impl ApiServerController {
             .map(RunningApiServer::dashboard_handle)
             .ok_or_else(|| "API server is not running".to_string())?;
 
-        dashboard.snapshot().await
+        dashboard
+            .snapshot()
+            .await
+            .map_err(|error| error.to_string())
     }
 }
 
@@ -100,9 +103,12 @@ impl ApiServerPlatform for TauriApiServerPlatform {
     async fn transcribe_online_batch(
         &self,
         request: OnlineBatchRequest,
-    ) -> Result<Vec<sona_core::transcription::transcript::TranscriptSegment>, String> {
+    ) -> Result<Vec<sona_core::transcription::transcript::TranscriptSegment>, ApiServerPlatformError>
+    {
         let Some(app_handle) = self.streaming_context.app_handle() else {
-            return Err(ONLINE_ASR_BATCH_UNAVAILABLE.to_string());
+            return Err(ApiServerPlatformError::unavailable(
+                ONLINE_ASR_BATCH_UNAVAILABLE,
+            ));
         };
         if request.config.is_null()
             || request
@@ -111,7 +117,9 @@ impl ApiServerPlatform for TauriApiServerPlatform {
                 .and_then(serde_json::Value::as_str)
                 .is_none_or(str::is_empty)
         {
-            return Err(DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE.to_string());
+            return Err(ApiServerPlatformError::unavailable(
+                DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE,
+            ));
         }
 
         let inner_app_clone = app_handle.clone();
@@ -127,15 +135,7 @@ impl ApiServerPlatform for TauriApiServerPlatform {
             None,
         )
         .await
-        .map_err(|error| error.to_string())
-    }
-
-    async fn build_info_response(
-        &self,
-        models_dir: &std::path::Path,
-        online_asr_config: &HashMap<String, serde_json::Value>,
-    ) -> Result<sona_api_server::InfoResponse, String> {
-        sona_api_server::default_info_response(models_dir, online_asr_config).await
+        .map_err(|error| ApiServerPlatformError::transcription(error.to_string()))
     }
 
     fn streaming_context(&self) -> Option<Arc<dyn Any + Send + Sync>> {
@@ -188,7 +188,8 @@ pub async fn start_api_server(
             ..Default::default()
         },
         None,
-    )?;
+    )
+    .map_err(|error| error.to_string())?;
 
     let previous_server = controller.take_running_server().await;
     if let Some(server) = previous_server
@@ -207,6 +208,11 @@ pub async fn start_api_server(
         resolved,
         temp_dir,
         online_asr_config,
+        batch_transcriber: Arc::new(sona_local_asr::batch::LocalBatchAsrAdapter),
+        media_validator: Arc::new(sona_media_detector::MagicNumberMediaFileValidator),
+        gpu_availability: Arc::new(sona_local_asr::gpu::LocalGpuAvailabilityProvider),
+        model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),
+        batch_plan_resolver: Arc::new(sona_runtime_fs::RuntimeBatchTranscribePlanResolver),
         platform,
         streaming_router: Some(build_streaming_router(
             crate::integrations::streaming::handle_streaming,
@@ -225,7 +231,7 @@ pub async fn stop_api_server(
 ) -> Result<(), String> {
     let running_server = controller.take_running_server().await;
     if let Some(server) = running_server {
-        server.stop().await?;
+        server.stop().await.map_err(|error| error.to_string())?;
         log::info!("Sent shutdown signal to API server.");
     }
     Ok(())
@@ -278,6 +284,11 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                 resolved,
                 temp_dir,
                 online_asr_config,
+                batch_transcriber: Arc::new(sona_local_asr::batch::LocalBatchAsrAdapter),
+                media_validator: Arc::new(sona_media_detector::MagicNumberMediaFileValidator),
+                gpu_availability: Arc::new(sona_local_asr::gpu::LocalGpuAvailabilityProvider),
+                model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),
+                batch_plan_resolver: Arc::new(sona_runtime_fs::RuntimeBatchTranscribePlanResolver),
                 platform,
                 streaming_router: Some(build_streaming_router(
                     crate::integrations::streaming::handle_streaming,

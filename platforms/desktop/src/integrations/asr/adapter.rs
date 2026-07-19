@@ -21,7 +21,8 @@ impl AsrProviderAdapter for LocalSherpaAdapter {
         &self,
         request: &AsrTranscriptionRequest,
     ) -> Result<Option<std::sync::Arc<dyn AsrBatchProcessor>>, SherpaError> {
-        validate_local_sherpa_mode(request, AsrMode::Batch).map_err(SherpaError::Generic)?;
+        validate_local_sherpa_mode(request, AsrMode::Batch)
+            .map_err(|error| SherpaError::Generic(error.to_string()))?;
         Ok(Some(std::sync::Arc::new(LocalSherpaBatchProcessor)))
     }
 
@@ -36,7 +37,7 @@ impl AsrProviderAdapter for LocalSherpaAdapter {
             instance_id.to_string(),
             request.clone(),
         )
-        .map_err(SherpaError::Generic)?;
+        .map_err(|error| SherpaError::Generic(error.to_string()))?;
 
         let session = sona_local_asr::streaming::create_streaming_session(
             state.recognizer_pool(),
@@ -44,7 +45,7 @@ impl AsrProviderAdapter for LocalSherpaAdapter {
             observer,
         )
         .await
-        .map_err(SherpaError::Generic)?;
+        .map_err(|error| SherpaError::Generic(error.to_string()))?;
         Ok(Some(session))
     }
 }
@@ -70,7 +71,7 @@ impl AsrBatchProcessor for LocalSherpaBatchProcessor {
             speaker_processing,
             instance_id,
         )
-        .map_err(SherpaError::Generic)?;
+        .map_err(|error| SherpaError::Generic(error.to_string()))?;
 
         super::batch::process_batch_request_impl(emitter, state, config)
             .await

@@ -1,11 +1,10 @@
+use crate::transcription::SpeakerCorrectionError;
 use crate::transcription::speaker::SpeakerProfile;
 use crate::transcription::transcript::{
     SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-
-const EMPTY_GROUP_ERROR: &str = "Speaker correction requires a source speaker id.";
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -83,9 +82,9 @@ fn candidates(segment: &TranscriptSegment) -> Vec<SpeakerCandidate> {
         .unwrap_or_default()
 }
 
-fn ensure_group_id(group_id: &str) -> Result<(), String> {
+fn ensure_group_id(group_id: &str) -> Result<(), SpeakerCorrectionError> {
     if group_id.trim().is_empty() {
-        Err(EMPTY_GROUP_ERROR.to_string())
+        Err(SpeakerCorrectionError::MissingGroupId)
     } else {
         Ok(())
     }
@@ -111,14 +110,16 @@ fn ordered_enabled_speaker_profile_ids(
 
 pub fn apply_speaker_profile_to_group_impl(
     request: ApplySpeakerProfileToGroupRequest,
-) -> Result<SpeakerCorrectionResponse, String> {
+) -> Result<SpeakerCorrectionResponse, SpeakerCorrectionError> {
     ensure_group_id(&request.group_id)?;
 
     let target_profile = request
         .speaker_profiles
         .iter()
         .find(|profile| profile.id == request.target_profile_id)
-        .ok_or_else(|| format!("Speaker profile not found: {}", request.target_profile_id))?;
+        .ok_or_else(|| SpeakerCorrectionError::ProfileNotFound {
+            profile_id: request.target_profile_id.clone(),
+        })?;
 
     let next_speaker = SpeakerTag {
         id: target_profile.id.clone(),
@@ -161,7 +162,7 @@ pub fn apply_speaker_profile_to_group_impl(
 
 pub fn reset_speaker_group_to_anonymous_impl(
     request: SpeakerGroupRequest,
-) -> Result<SpeakerCorrectionResponse, String> {
+) -> Result<SpeakerCorrectionResponse, SpeakerCorrectionError> {
     ensure_group_id(&request.group_id)?;
 
     let segments = request
@@ -197,7 +198,7 @@ pub fn reset_speaker_group_to_anonymous_impl(
 
 pub fn confirm_speaker_group_review_impl(
     request: SpeakerGroupRequest,
-) -> Result<SpeakerCorrectionResponse, String> {
+) -> Result<SpeakerCorrectionResponse, SpeakerCorrectionError> {
     ensure_group_id(&request.group_id)?;
 
     let segments = request
@@ -236,19 +237,19 @@ pub fn confirm_speaker_group_review_impl(
 
 pub async fn apply_speaker_profile_to_group(
     request: ApplySpeakerProfileToGroupRequest,
-) -> Result<SpeakerCorrectionResponse, String> {
+) -> Result<SpeakerCorrectionResponse, SpeakerCorrectionError> {
     apply_speaker_profile_to_group_impl(request)
 }
 
 pub async fn reset_speaker_group_to_anonymous(
     request: SpeakerGroupRequest,
-) -> Result<SpeakerCorrectionResponse, String> {
+) -> Result<SpeakerCorrectionResponse, SpeakerCorrectionError> {
     reset_speaker_group_to_anonymous_impl(request)
 }
 
 pub async fn confirm_speaker_group_review(
     request: SpeakerGroupRequest,
-) -> Result<SpeakerCorrectionResponse, String> {
+) -> Result<SpeakerCorrectionResponse, SpeakerCorrectionError> {
     confirm_speaker_group_review_impl(request)
 }
 
@@ -448,7 +449,7 @@ mod tests {
             group_id: "  ".to_string(),
         })
         .unwrap_err();
-        assert_eq!(empty_group_error, EMPTY_GROUP_ERROR);
+        assert_eq!(empty_group_error, SpeakerCorrectionError::MissingGroupId);
 
         let missing_profile_error =
             apply_speaker_profile_to_group_impl(ApplySpeakerProfileToGroupRequest {
@@ -459,6 +460,11 @@ mod tests {
                 enabled_speaker_profile_ids: vec![],
             })
             .unwrap_err();
-        assert_eq!(missing_profile_error, "Speaker profile not found: missing");
+        assert_eq!(
+            missing_profile_error,
+            SpeakerCorrectionError::ProfileNotFound {
+                profile_id: "missing".to_string(),
+            }
+        );
     }
 }

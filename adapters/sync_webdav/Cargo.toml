@@ -5,6 +5,9 @@ description = "WebDAV SyncObjectStore adapter for Sona"
 authors.workspace = true
 edition.workspace = true
 
+[package.metadata.sona]
+role = "outbound-adapter"
+
 [dependencies]
 async-trait = "0.1"
 chrono = { version = "0.4.42", default-features = false, features = ["std"] }

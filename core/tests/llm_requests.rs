@@ -1,10 +1,10 @@
 use serde_json::json;
 use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
 use sona_core::llm::requests::{
-    HistorySummaryPayload, LlmConfig, PolishSegmentsRequest, SummarizeTranscriptRequest,
-    TranscriptLlmJobRequest, TranscriptSummaryRecordPayload, TranslateSegmentsRequest,
-    validate_llm_config, validate_llm_generate_request, validate_polish_segments_request,
-    validate_summarize_transcript_request, validate_task_request,
+    HistorySummaryPayload, LlmConfig, LlmRequestValidationError, PolishSegmentsRequest,
+    SummarizeTranscriptRequest, TranscriptLlmJobRequest, TranscriptSummaryRecordPayload,
+    TranslateSegmentsRequest, validate_llm_config, validate_llm_generate_request,
+    validate_polish_segments_request, validate_summarize_transcript_request, validate_task_request,
     validate_translate_segments_request,
 };
 use sona_core::llm::tasks::{
@@ -89,7 +89,13 @@ fn llm_config_validation_rejects_empty_model_names() {
 
     let error = validate_llm_config(&config).unwrap_err();
 
-    assert_eq!(error, "Model name cannot be empty");
+    assert_eq!(
+        error,
+        LlmRequestValidationError {
+            field: "model".to_string(),
+            reason: "Model name cannot be empty".to_string(),
+        }
+    );
 }
 
 #[test]
@@ -115,7 +121,8 @@ fn llm_config_validation_leaves_api_host_policy_to_online_adapter() {
 fn task_request_validation_requires_a_task_id() {
     let error = validate_task_request("  ", &sample_config()).unwrap_err();
 
-    assert_eq!(error, "Task ID cannot be empty");
+    assert_eq!(error.field, "task_id");
+    assert_eq!(error.reason, "Task ID cannot be empty");
 }
 
 #[test]
@@ -127,7 +134,8 @@ fn generate_request_validation_requires_input_text() {
     })
     .unwrap_err();
 
-    assert_eq!(error, "Input cannot be empty");
+    assert_eq!(error.field, "input");
+    assert_eq!(error.reason, "Input cannot be empty");
 }
 
 #[test]
@@ -145,8 +153,9 @@ fn polish_request_validation_rejects_google_translate_strategy() {
 
     let error = validate_polish_segments_request(&request).unwrap_err();
 
+    assert_eq!(error.field, "strategy");
     assert_eq!(
-        error,
+        error.reason,
         "Google Translate does not support transcript polishing"
     );
 }
@@ -164,7 +173,8 @@ fn translate_request_validation_requires_target_language() {
 
     let error = validate_translate_segments_request(&request).unwrap_err();
 
-    assert_eq!(error, "Target language cannot be empty");
+    assert_eq!(error.field, "target_language");
+    assert_eq!(error.reason, "Target language cannot be empty");
 }
 
 #[test]
@@ -185,8 +195,9 @@ fn summary_request_validation_rejects_google_translate_strategy() {
 
     let error = validate_summarize_transcript_request(&request).unwrap_err();
 
+    assert_eq!(error.field, "strategy");
     assert_eq!(
-        error,
+        error.reason,
         "Google Translate does not support transcript summaries"
     );
 }

@@ -16,7 +16,7 @@ use sona_core::llm::streaming_protocol::{
 };
 use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::llm::usage::TokenUsage;
-use sona_core::ports::llm::LlmPortError;
+use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
 
 use crate::anthropic::build_anthropic_payload_for_request;
 use crate::completion::{
@@ -32,50 +32,23 @@ use crate::transport::{
     LlmApiUrl, classify_llm_port_error, http_status_port_error, reqwest_port_error,
 };
 
-#[derive(Debug)]
-struct StreamingError(LlmPortError);
-
-impl From<String> for StreamingError {
-    fn from(error: String) -> Self {
-        Self(classify_llm_port_error(error))
-    }
-}
-
-impl From<LlmPortError> for StreamingError {
-    fn from(error: LlmPortError) -> Self {
-        Self(error)
-    }
-}
-
-impl From<reqwest::Error> for StreamingError {
-    fn from(error: reqwest::Error) -> Self {
-        Self(reqwest_port_error(error))
-    }
-}
-
-impl From<StreamingError> for LlmPortError {
-    fn from(error: StreamingError) -> Self {
-        error.0
-    }
-}
-
 async fn stream_rig_completion_model<M, EmitFn>(
     model: M,
     request: &LlmCompletionRequest,
-    accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
-) -> Result<StandardLlmResponse, StreamingError>
+    accumulator: &mut StreamTextAccumulator<'_, EmitFn, LlmPortError>,
+) -> Result<StandardLlmResponse, LlmPortError>
 where
     M: CompletionModel,
     M::StreamingResponse: Clone + Unpin + GetTokenUsage + 'static,
-    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
+    EmitFn: FnMut(&str, &str) -> Result<(), LlmPortError> + Send + ?Sized,
 {
     let mut stream = build_rig_completion_request(model, request)?
         .stream()
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| classify_llm_port_error(error.to_string()))?;
 
     while let Some(item) = stream.next().await {
-        match item.map_err(|error| error.to_string())? {
+        match item.map_err(|error| classify_llm_port_error(error.to_string()))? {
             StreamedAssistantContent::Text(text) => accumulator.push(&text.text)?,
             StreamedAssistantContent::Final(_) => {}
             _ => {}
@@ -109,10 +82,10 @@ fn openai_stream_url_config(config: &LlmConfig) -> OpenAiStreamUrlConfig<'_> {
 
 async fn stream_openai_chat_completion<EmitFn>(
     request: &LlmCompletionRequest,
-    accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
-) -> Result<StandardLlmResponse, StreamingError>
+    accumulator: &mut StreamTextAccumulator<'_, EmitFn, LlmPortError>,
+) -> Result<StandardLlmResponse, LlmPortError>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
+    EmitFn: FnMut(&str, &str) -> Result<(), LlmPortError> + Send + ?Sized,
 {
     let config = &request.config;
     let mut last_usage: Option<TokenUsage> = None;
@@ -139,13 +112,13 @@ where
         .json(&payload)
         .send()
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(reqwest_port_error)?;
 
     let status = response.status();
     if !status.is_success() {
         let headers = response.headers().clone();
         let text = response.text().await.unwrap_or_default();
-        return Err(http_status_port_error(status, &headers, text).into());
+        return Err(http_status_port_error(status, &headers, text));
     }
 
     let content_type = response
@@ -156,8 +129,9 @@ where
         .to_string();
 
     if !content_type.contains("text/event-stream") {
-        let body = response.text().await.map_err(|error| error.to_string())?;
-        let json = serde_json::from_str::<Value>(&body).map_err(|error| error.to_string())?;
+        let body = response.text().await.map_err(reqwest_port_error)?;
+        let json = serde_json::from_str::<Value>(&body)
+            .map_err(|error| LlmPortError::new(LlmPortErrorKind::Protocol, error.to_string()))?;
         return Ok(StandardLlmResponse {
             text: extract_text_from_json_response(&json)?,
             usage: extract_usage_from_json_response(&json),
@@ -168,14 +142,16 @@ where
     let mut byte_stream = response.bytes_stream();
 
     while let Some(item) = byte_stream.next().await {
-        let bytes = item.map_err(|error| error.to_string())?;
+        let bytes = item.map_err(reqwest_port_error)?;
         let chunk = String::from_utf8_lossy(&bytes);
         for data in sse.process(&chunk) {
             if data.trim() == "[DONE]" {
                 continue;
             }
 
-            let event = serde_json::from_str::<Value>(&data).map_err(|error| error.to_string())?;
+            let event = serde_json::from_str::<Value>(&data).map_err(|error| {
+                LlmPortError::new(LlmPortErrorKind::Protocol, error.to_string())
+            })?;
             if let Some(usage) = extract_usage_from_json_response(&event) {
                 last_usage = Some(usage);
             }
@@ -193,7 +169,8 @@ where
             continue;
         }
 
-        let event = serde_json::from_str::<Value>(&data).map_err(|error| error.to_string())?;
+        let event = serde_json::from_str::<Value>(&data)
+            .map_err(|error| LlmPortError::new(LlmPortErrorKind::Protocol, error.to_string()))?;
         if let Some(usage) = extract_usage_from_json_response(&event) {
             last_usage = Some(usage);
         }
@@ -206,9 +183,10 @@ where
     }
 
     if accumulator.is_empty() {
-        return Err("LLM response did not contain text output"
-            .to_string()
-            .into());
+        return Err(LlmPortError::new(
+            LlmPortErrorKind::Protocol,
+            "LLM response did not contain text output",
+        ));
     }
 
     Ok(StandardLlmResponse {
@@ -219,10 +197,10 @@ where
 
 async fn stream_anthropic_custom_completion<EmitFn>(
     request: &LlmCompletionRequest,
-    accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
-) -> Result<StandardLlmResponse, StreamingError>
+    accumulator: &mut StreamTextAccumulator<'_, EmitFn, LlmPortError>,
+) -> Result<StandardLlmResponse, LlmPortError>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
+    EmitFn: FnMut(&str, &str) -> Result<(), LlmPortError> + Send + ?Sized,
 {
     let config = &request.config;
     let mut usage = TokenUsage::default();
@@ -239,20 +217,20 @@ where
         .json(&payload)
         .send()
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(reqwest_port_error)?;
 
     let status = response.status();
     if !status.is_success() {
         let headers = response.headers().clone();
         let text = response.text().await.unwrap_or_default();
-        return Err(http_status_port_error(status, &headers, text).into());
+        return Err(http_status_port_error(status, &headers, text));
     }
 
     let mut sse = SseEventBuffer::default();
     let mut byte_stream = response.bytes_stream();
 
     while let Some(item) = byte_stream.next().await {
-        let bytes = item.map_err(|error| error.to_string())?;
+        let bytes = item.map_err(reqwest_port_error)?;
         let chunk = String::from_utf8_lossy(&bytes);
         for data in sse.process(&chunk) {
             if let Ok(event) = serde_json::from_str::<Value>(&data) {
@@ -281,10 +259,10 @@ where
 
 async fn stream_gemini_custom_completion<EmitFn>(
     request: &LlmCompletionRequest,
-    accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
-) -> Result<StandardLlmResponse, StreamingError>
+    accumulator: &mut StreamTextAccumulator<'_, EmitFn, LlmPortError>,
+) -> Result<StandardLlmResponse, LlmPortError>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
+    EmitFn: FnMut(&str, &str) -> Result<(), LlmPortError> + Send + ?Sized,
 {
     let config = &request.config;
     let mut last_usage: Option<TokenUsage> = None;
@@ -310,20 +288,20 @@ where
         .json(&payload)
         .send()
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(reqwest_port_error)?;
 
     let status = response.status();
     if !status.is_success() {
         let headers = response.headers().clone();
         let text = response.text().await.unwrap_or_default();
-        return Err(http_status_port_error(status, &headers, text).into());
+        return Err(http_status_port_error(status, &headers, text));
     }
 
     let mut sse = SseEventBuffer::default();
     let mut byte_stream = response.bytes_stream();
 
     while let Some(item) = byte_stream.next().await {
-        let bytes = item.map_err(|error| error.to_string())?;
+        let bytes = item.map_err(reqwest_port_error)?;
         let chunk = String::from_utf8_lossy(&bytes);
         for data in sse.process(&chunk) {
             if let Ok(event) = serde_json::from_str::<Value>(&data) {
@@ -356,10 +334,10 @@ where
 
 async fn stream_openai_responses_completion<EmitFn>(
     request: &LlmCompletionRequest,
-    accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
-) -> Result<StandardLlmResponse, StreamingError>
+    accumulator: &mut StreamTextAccumulator<'_, EmitFn, LlmPortError>,
+) -> Result<StandardLlmResponse, LlmPortError>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
+    EmitFn: FnMut(&str, &str) -> Result<(), LlmPortError> + Send + ?Sized,
 {
     let config = &request.config;
     let base_url = LlmApiUrl::parse(&config.base_url)?;
@@ -373,13 +351,13 @@ where
         .json(&build_openai_responses_payload(request, true))
         .send()
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(reqwest_port_error)?;
 
     let status = response.status();
     if !status.is_success() {
         let headers = response.headers().clone();
         let text = response.text().await.unwrap_or_default();
-        return Err(http_status_port_error(status, &headers, text).into());
+        return Err(http_status_port_error(status, &headers, text));
     }
 
     let content_type = response
@@ -390,8 +368,9 @@ where
         .to_string();
 
     if !content_type.contains("text/event-stream") {
-        let body = response.text().await.map_err(|error| error.to_string())?;
-        let json = serde_json::from_str::<Value>(&body).map_err(|error| error.to_string())?;
+        let body = response.text().await.map_err(reqwest_port_error)?;
+        let json = serde_json::from_str::<Value>(&body)
+            .map_err(|error| LlmPortError::new(LlmPortErrorKind::Protocol, error.to_string()))?;
         return Ok(StandardLlmResponse {
             text: extract_text_from_json_response(&json)?,
             usage: extract_usage_from_json_response(&json),
@@ -403,14 +382,16 @@ where
     let mut byte_stream = response.bytes_stream();
 
     while let Some(item) = byte_stream.next().await {
-        let bytes = item.map_err(|error| error.to_string())?;
+        let bytes = item.map_err(reqwest_port_error)?;
         let chunk = String::from_utf8_lossy(&bytes);
         for data in sse.process(&chunk) {
             if data.trim() == "[DONE]" {
                 continue;
             }
 
-            let event = serde_json::from_str::<Value>(&data).map_err(|error| error.to_string())?;
+            let event = serde_json::from_str::<Value>(&data).map_err(|error| {
+                LlmPortError::new(LlmPortErrorKind::Protocol, error.to_string())
+            })?;
             if let Some(usage) = extract_openai_responses_stream_usage(&event) {
                 last_usage = Some(usage);
             }
@@ -429,7 +410,8 @@ where
             continue;
         }
 
-        let event = serde_json::from_str::<Value>(&data).map_err(|error| error.to_string())?;
+        let event = serde_json::from_str::<Value>(&data)
+            .map_err(|error| LlmPortError::new(LlmPortErrorKind::Protocol, error.to_string()))?;
         if let Some(usage) = extract_openai_responses_stream_usage(&event) {
             last_usage = Some(usage);
         }
@@ -442,9 +424,10 @@ where
     }
 
     if accumulator.is_empty() {
-        return Err("LLM response did not contain text output"
-            .to_string()
-            .into());
+        return Err(LlmPortError::new(
+            LlmPortErrorKind::Protocol,
+            "LLM response did not contain text output",
+        ));
     }
 
     Ok(StandardLlmResponse {
@@ -507,10 +490,10 @@ pub fn extract_openai_responses_stream_usage(event: &Value) -> Option<TokenUsage
 
 async fn try_stream_completion_with_provider_inner<EmitFn>(
     request: &LlmCompletionRequest,
-    accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
-) -> Result<Option<StandardLlmResponse>, StreamingError>
+    accumulator: &mut StreamTextAccumulator<'_, EmitFn, LlmPortError>,
+) -> Result<Option<StandardLlmResponse>, LlmPortError>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
+    EmitFn: FnMut(&str, &str) -> Result<(), LlmPortError> + Send + ?Sized,
 {
     let response = match request.config.strategy {
         LlmProviderStrategy::Anthropic => {
@@ -524,7 +507,7 @@ where
                     .base_url(&request.config.base_url)
                     .http_client(reqwest_client)
                     .build()
-                    .map_err(|error| error.to_string())?;
+                    .map_err(|error| classify_llm_port_error(error.to_string()))?;
                 let mut model = client.completion_model(&request.config.model);
                 if request.options.prompt_cache == LlmPromptCachePolicy::Automatic {
                     model = model.with_automatic_caching();
@@ -543,7 +526,7 @@ where
                     .base_url(clean_gemini_base_url(&request.config.base_url))
                     .http_client(reqwest_client)
                     .build()
-                    .map_err(|error| error.to_string())?;
+                    .map_err(|error| classify_llm_port_error(error.to_string()))?;
                 Some(
                     stream_rig_completion_model(
                         client.completion_model(&request.config.model),
@@ -562,7 +545,7 @@ where
                 .base_url(request.config.base_url.trim_end_matches("/v1"))
                 .http_client(reqwest_client)
                 .build()
-                .map_err(|error| error.to_string())?;
+                .map_err(|error| classify_llm_port_error(error.to_string()))?;
             Some(
                 stream_rig_completion_model(
                     client.completion_model(&request.config.model),
@@ -583,7 +566,7 @@ where
                 .base_url(&request.config.base_url)
                 .http_client(reqwest_client)
                 .build()
-                .map_err(|error| error.to_string())?;
+                .map_err(|error| classify_llm_port_error(error.to_string()))?;
             Some(
                 stream_rig_completion_model(
                     client.completion_model(&request.config.model),
@@ -602,22 +585,20 @@ where
 
 pub async fn try_stream_completion_with_provider<EmitFn>(
     request: &LlmCompletionRequest,
-    accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
+    accumulator: &mut StreamTextAccumulator<'_, EmitFn, LlmPortError>,
 ) -> Result<Option<StandardLlmResponse>, LlmPortError>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
+    EmitFn: FnMut(&str, &str) -> Result<(), LlmPortError> + Send + ?Sized,
 {
-    try_stream_completion_with_provider_inner(request, accumulator)
-        .await
-        .map_err(Into::into)
+    try_stream_completion_with_provider_inner(request, accumulator).await
 }
 
 pub async fn try_stream_text_with_provider<EmitFn>(
     request: &LlmGenerateRequest,
-    accumulator: &mut StreamTextAccumulator<'_, EmitFn>,
+    accumulator: &mut StreamTextAccumulator<'_, EmitFn, LlmPortError>,
 ) -> Result<Option<StandardLlmResponse>, LlmPortError>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
+    EmitFn: FnMut(&str, &str) -> Result<(), LlmPortError> + Send + ?Sized,
 {
     let completion_request = request.clone().into();
     try_stream_completion_with_provider(&completion_request, accumulator).await

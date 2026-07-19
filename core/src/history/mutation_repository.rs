@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::ports::fs::FileSystemError;
+use crate::ports::time::ClockError;
+
 use crate::history::{
     HistoryAudioStatus, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
     HistoryItemRecord, HistoryItemStatus, HistorySaveImportedFileRequest,
@@ -24,6 +27,10 @@ pub enum HistoryMutationError {
     Internal(String),
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+    #[error(transparent)]
+    Clock(#[from] ClockError),
+    #[error(transparent)]
+    FileSystem(#[from] FileSystemError),
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]

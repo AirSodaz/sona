@@ -235,10 +235,64 @@ pub enum BatchSegmentationMode {
     Whole,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AsrPortErrorKind {
+    InvalidRequest,
+    FileSystem,
+    Model,
+    Authentication,
+    RateLimited,
+    Timeout,
+    Network,
+    Protocol,
+    Unsupported,
+    Unavailable,
+    Runtime,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[error("{message}")]
+pub struct AsrPortError {
+    pub kind: AsrPortErrorKind,
+    pub message: String,
+}
+
+impl AsrPortError {
+    pub fn new(kind: AsrPortErrorKind, message: impl Into<String>) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+        }
+    }
+
+    pub fn invalid_request(message: impl Into<String>) -> Self {
+        Self::new(AsrPortErrorKind::InvalidRequest, message)
+    }
+
+    pub fn runtime(message: impl Into<String>) -> Self {
+        Self::new(AsrPortErrorKind::Runtime, message)
+    }
+}
+
+impl From<String> for AsrPortError {
+    fn from(message: String) -> Self {
+        Self::runtime(message)
+    }
+}
+
+impl From<&str> for AsrPortError {
+    fn from(message: &str) -> Self {
+        Self::runtime(message)
+    }
+}
+
 #[async_trait]
 pub trait BatchTranscriber: Send + Sync {
-    async fn transcribe(&self, plan: BatchTranscribePlan)
-    -> Result<Vec<TranscriptSegment>, String>;
+    async fn transcribe(
+        &self,
+        plan: BatchTranscribePlan,
+    ) -> Result<Vec<TranscriptSegment>, AsrPortError>;
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -312,7 +366,7 @@ impl BatchTranscriptionRequest {
         request: AsrTranscriptionRequest,
         speaker_processing: Option<crate::transcription::speaker::SpeakerProcessingConfig>,
         instance_id: Option<String>,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, AsrPortError> {
         let AsrTranscriptionRequest {
             language,
             enable_itn,
@@ -352,10 +406,13 @@ impl BatchTranscriptionRequest {
                 hotwords,
                 speaker_processing,
                 normalization_options,
-                postprocessor: TranscriptPostprocessor::compile(postprocess_options)?,
+                postprocessor: TranscriptPostprocessor::compile(postprocess_options)
+                    .map_err(|error| AsrPortError::invalid_request(error.to_string()))?,
                 gpu_acceleration,
             }),
-            _ => Err("Expected LocalSherpa engine config".to_string()),
+            _ => Err(AsrPortError::invalid_request(
+                "Expected LocalSherpa engine config",
+            )),
         }
     }
 }
@@ -382,7 +439,7 @@ impl LocalSherpaStreamingRequest {
     pub fn from_local_sherpa_request(
         instance_id: String,
         request: AsrTranscriptionRequest,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, AsrPortError> {
         validate_local_sherpa_mode(&request, AsrMode::Streaming)?;
 
         let AsrTranscriptionRequest {
@@ -422,7 +479,9 @@ impl LocalSherpaStreamingRequest {
                 postprocess_options,
                 gpu_acceleration,
             }),
-            _ => Err("Expected LocalSherpa engine config".to_string()),
+            _ => Err(AsrPortError::invalid_request(
+                "Expected LocalSherpa engine config",
+            )),
         }
     }
 }
@@ -446,7 +505,7 @@ pub trait OnlineBatchTranscriber: Send + Sync {
     async fn transcribe(
         &self,
         request: OnlineBatchTranscriptionRequest,
-    ) -> Result<OnlineBatchTranscriptionOutput, String>;
+    ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError>;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -556,15 +615,18 @@ impl AsrTranscriptionRequest {
 pub fn validate_local_sherpa_mode(
     request: &AsrTranscriptionRequest,
     expected: AsrMode,
-) -> Result<(), String> {
+) -> Result<(), AsrPortError> {
     if request.engine() != AsrEngine::LocalSherpa {
-        return Err("Unsupported ASR engine for local Sherpa adapter".to_string());
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::Unsupported,
+            "Unsupported ASR engine for local Sherpa adapter",
+        ));
     }
     if request.mode != expected {
-        return Err(format!(
+        return Err(AsrPortError::invalid_request(format!(
             "ASR request mode mismatch: expected {:?}, got {:?}",
             expected, request.mode
-        ));
+        )));
     }
     Ok(())
 }

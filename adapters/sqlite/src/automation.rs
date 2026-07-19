@@ -12,8 +12,9 @@ use sona_core::sync::SyncEntityKind;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use crate::legacy_change_time;
 use crate::sync_repository::{
-    record_local_delete_in_transaction, record_local_field_change_in_transaction, sync_now_ms,
+    record_local_delete_in_transaction, record_local_field_change_in_transaction,
 };
 
 #[derive(Clone)]
@@ -206,7 +207,7 @@ fn record_automation_rules_sync(
         .iter()
         .map(|rule| rule.id.as_str())
         .collect::<BTreeSet<_>>();
-    let fallback_now_ms = sync_now_ms();
+    let fallback_now_ms = legacy_change_time::now_ms();
     for removed in previous
         .iter()
         .filter(|rule| !current_ids.contains(rule.id.as_str()))

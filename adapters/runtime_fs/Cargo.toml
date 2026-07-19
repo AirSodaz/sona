@@ -5,12 +5,16 @@ description = "Runtime filesystem and environment adapter for Sona"
 authors.workspace = true
 edition.workspace = true
 
+[package.metadata.sona]
+role = "outbound-adapter"
+
 [dependencies]
 chrono = { version = "0.4.42", default-features = false, features = ["clock", "std"] }
 glob = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sona-core = { path = "../../core" }
+thiserror = "2.0.18"
 uuid = { version = "1", features = ["v4"] }
 walkdir = "2.5.0"
 

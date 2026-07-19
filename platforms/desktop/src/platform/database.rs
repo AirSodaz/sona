@@ -13,8 +13,6 @@ pub fn open_and_migrate_sqlite_for_app<R: Runtime>(
         .map_err(std::io::Error::other)?;
 
     let db = Arc::new(sona_sqlite::Database::open(&app_local_data_dir)?);
-    sona_sqlite::Database::set_global(Arc::clone(&db))?;
-
     let migration_result =
         sona_sqlite::legacy_migration::migrate_legacy_to_sqlite(db.as_ref(), &app_local_data_dir)?;
     if migration_result.migrated {
@@ -46,5 +44,14 @@ pub fn open_and_migrate_sqlite_for_app<R: Runtime>(
 }
 
 pub fn sqlite_database<R: Runtime>(app: &AppHandle<R>) -> Arc<sona_sqlite::Database> {
-    Arc::clone(app.state::<Arc<sona_sqlite::Database>>().inner())
+    sqlite_application_context(app).database()
+}
+
+pub fn sqlite_application_context<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Arc<sona_sqlite::SqliteApplicationContext> {
+    Arc::clone(
+        app.state::<Arc<sona_sqlite::SqliteApplicationContext>>()
+            .inner(),
+    )
 }

@@ -5,6 +5,9 @@ description = "Reusable online ASR provider adapters for Sona"
 authors.workspace = true
 edition.workspace = true
 
+[package.metadata.sona]
+role = "outbound-adapter"
+
 [dependencies]
 async-trait = "0.1"
 base64 = "0.22"

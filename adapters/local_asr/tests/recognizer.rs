@@ -1,4 +1,5 @@
 use sona_core::models::config::ModelFileConfig;
+use sona_core::ports::asr::AsrPortErrorKind;
 use sona_local_asr::recognizer::{
     ModelType, OfflineDecodeResult, build_model_config, build_offline_model_config,
     create_offline_recognizer,
@@ -70,9 +71,12 @@ fn build_model_config_still_requires_tokens_for_sensevoice() {
         .expect_err("sensevoice should still require tokens.txt");
 
     assert!(
-        error.contains("Required file name not specified in config"),
+        error
+            .message
+            .contains("Required file name not specified in config"),
         "unexpected error: {error}"
     );
+    assert_eq!(error.kind, AsrPortErrorKind::Model);
 }
 
 #[test]
@@ -84,7 +88,8 @@ fn build_offline_model_config_rejects_online_model_type_before_file_validation()
         build_offline_model_config(model_path, "zipformer", &file_config, false, "auto", None)
             .expect_err("offline transcription should reject online model types");
 
-    assert_eq!(error, "Unsupported offline model type: zipformer");
+    assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
+    assert_eq!(error.message, "Unsupported offline model type: zipformer");
 }
 
 #[test]
@@ -100,7 +105,8 @@ fn create_offline_recognizer_rejects_online_model_type() {
         Ok(_) => panic!("online recognizer variants cannot be used for offline transcription"),
     };
 
-    assert_eq!(error, "Unsupported offline model type: paraformer");
+    assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
+    assert_eq!(error.message, "Unsupported offline model type: paraformer");
 }
 
 #[test]

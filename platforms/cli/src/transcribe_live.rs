@@ -217,7 +217,7 @@ fn load_config(path: Option<&PathBuf>) -> CliResult<Option<TranscribeLiveConfigS
     };
     sona_runtime_fs::load_transcribe_live_config_file(path)
         .map(Some)
-        .map_err(CliError::Validation)
+        .map_err(|error| CliError::Validation(error.to_string()))
 }
 
 fn resolve_live_command(
@@ -266,7 +266,7 @@ fn resolve_live_command(
         },
         Some(config),
     )
-    .map_err(CliError::Validation)?;
+    .map_err(crate::map_runtime_fs_error)?;
     Ok(ResolvedLiveCommand {
         input,
         device,
@@ -346,8 +346,9 @@ fn write_final_transcript(
         format,
         sona_core::export::ExportMode::Original,
     )
-    .map_err(CliError::Serialize)?;
-    sona_runtime_fs::write_transcript_output_file(path, &exported).map_err(CliError::Io)?;
+    .map_err(|error| CliError::Serialize(error.to_string()))?;
+    sona_runtime_fs::write_transcript_output_file(path, &exported)
+        .map_err(|error| CliError::Io(error.to_string()))?;
     Ok(format!("Wrote transcript to {}", path.display()))
 }
 

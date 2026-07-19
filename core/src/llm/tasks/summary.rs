@@ -237,13 +237,17 @@ pub fn split_summary_segments(
     chunks
 }
 
-pub fn validate_summary_strategy(strategy: super::LlmProviderStrategy) -> Result<(), String> {
+pub fn validate_summary_strategy(
+    strategy: super::LlmProviderStrategy,
+) -> Result<(), super::LlmTaskError> {
     if matches!(
         strategy,
         super::LlmProviderStrategy::GoogleTranslate
             | super::LlmProviderStrategy::GoogleTranslateFree
     ) {
-        return Err("Google Translate does not support transcript summaries".to_string());
+        return Err(super::LlmTaskError::InvalidRequest {
+            reason: "Google Translate does not support transcript summaries".to_string(),
+        });
     }
 
     Ok(())

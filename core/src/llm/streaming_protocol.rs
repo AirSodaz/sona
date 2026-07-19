@@ -5,18 +5,18 @@ use crate::llm::tasks::LlmProviderStrategy;
 
 /// Keeps progressively built streaming text and emits the complete accumulated
 /// text together with the latest delta for replacement-style consumers.
-pub struct StreamTextAccumulator<'a, EmitFn>
+pub struct StreamTextAccumulator<'a, EmitFn, EmitError>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
+    EmitFn: FnMut(&str, &str) -> Result<(), EmitError> + Send + ?Sized,
 {
     text: String,
     emitted_any: bool,
     emit_delta: &'a mut EmitFn,
 }
 
-impl<'a, EmitFn> StreamTextAccumulator<'a, EmitFn>
+impl<'a, EmitFn, EmitError> StreamTextAccumulator<'a, EmitFn, EmitError>
 where
-    EmitFn: FnMut(&str, &str) -> Result<(), String> + Send + ?Sized,
+    EmitFn: FnMut(&str, &str) -> Result<(), EmitError> + Send + ?Sized,
 {
     pub fn new(emit_delta: &'a mut EmitFn) -> Self {
         Self {
@@ -26,7 +26,7 @@ where
         }
     }
 
-    pub fn push(&mut self, delta: &str) -> Result<(), String> {
+    pub fn push(&mut self, delta: &str) -> Result<(), EmitError> {
         if delta.is_empty() {
             return Ok(());
         }

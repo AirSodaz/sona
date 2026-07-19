@@ -59,7 +59,7 @@ use sona_core::ports::llm::{
 };
 
 use crate::models_dev::default_models_dev_catalog;
-use crate::transport::classify_llm_port_error;
+use crate::providers::google_translate_free_port_error;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OnlineLlmAdapter;
@@ -69,8 +69,8 @@ impl LlmTextGenerator for OnlineLlmAdapter {
     async fn generate_text(
         &self,
         request: LlmGenerateRequest,
-    ) -> Result<StandardLlmResponse, String> {
-        generate_text_with_provider(request).await
+    ) -> Result<StandardLlmResponse, LlmPortError> {
+        complete_with_provider(request.into()).await
     }
 }
 
@@ -96,7 +96,6 @@ impl LlmStreamingPort for OnlineLlmAdapter {
                 text: text.to_string(),
                 delta: delta.to_string(),
             })
-            .map_err(|error| error.to_string())
         };
         let mut accumulator = StreamTextAccumulator::new(&mut bridge);
         let stream_result = try_stream_completion_with_provider(&request, &mut accumulator).await;
@@ -131,10 +130,8 @@ impl LlmTranslationPort for OnlineLlmAdapter {
     ) -> Result<Vec<String>, LlmPortError> {
         let config = request.config;
         let target_language = request.target_language;
-        let base_url = LlmApiUrl::parse(&config.base_url).map_err(classify_llm_port_error)?;
-        let client = base_url
-            .client(config.timeout_seconds)
-            .map_err(classify_llm_port_error)?;
+        let base_url = LlmApiUrl::parse(&config.base_url)?;
+        let client = base_url.client(config.timeout_seconds)?;
 
         match config.strategy {
             sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslate => {
@@ -190,42 +187,20 @@ impl LlmTranslationPort for OnlineLlmAdapter {
     }
 }
 
-fn google_translate_free_port_error(error: GoogleTranslateFreeAttemptError) -> LlmPortError {
-    match error {
-        GoogleTranslateFreeAttemptError::HttpStatus {
-            status,
-            retry_after,
-        } => {
-            let kind = if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                sona_core::ports::llm::LlmPortErrorKind::RateLimited
-            } else if status.is_server_error() {
-                sona_core::ports::llm::LlmPortErrorKind::Unavailable
-            } else {
-                sona_core::ports::llm::LlmPortErrorKind::Protocol
-            };
-            LlmPortError {
-                kind,
-                message: format!("Google Translate Free API Error: {status}"),
-                retry_after_ms: retry_after.map(|duration| duration.as_millis() as u64),
-            }
-        }
-        GoogleTranslateFreeAttemptError::Message(message) => classify_llm_port_error(message),
-    }
-}
-
 #[async_trait]
 impl LlmModelLister for OnlineLlmAdapter {
-    async fn list_models(&self, request: LlmModelsRequest) -> Result<Vec<LlmModelSummary>, String> {
+    async fn list_models(
+        &self,
+        request: LlmModelsRequest,
+    ) -> Result<Vec<LlmModelSummary>, LlmPortError> {
         list_models_with_provider(request).await
     }
 }
 
 pub async fn generate_text_with_provider(
     request: LlmGenerateRequest,
-) -> Result<StandardLlmResponse, String> {
-    complete_with_provider(request.into())
-        .await
-        .map_err(|error| error.to_string())
+) -> Result<StandardLlmResponse, LlmPortError> {
+    complete_with_provider(request.into()).await
 }
 
 #[async_trait]
@@ -234,9 +209,7 @@ impl LlmModelDiscoveryPort for OnlineLlmAdapter {
         &self,
         request: LlmModelsRequest,
     ) -> Result<Vec<LlmModelSummary>, LlmPortError> {
-        list_models_with_provider(request)
-            .await
-            .map_err(classify_llm_port_error)
+        list_models_with_provider(request).await
     }
 }
 

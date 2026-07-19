@@ -41,7 +41,8 @@ struct TauriAutomationRuntimeEventSink<R: Runtime> {
 
 impl<R: Runtime> AutomationRuntimeEventSink for TauriAutomationRuntimeEventSink<R> {
     fn emit_candidate(&self, payload: AutomationRuntimeCandidatePayload) -> Result<(), String> {
-        sona_ts_bind::validate_typescript_safe_integers(&payload)?;
+        sona_ts_bind::validate_typescript_safe_integers(&payload)
+            .map_err(|error| error.to_string())?;
         self.app
             .emit(AUTOMATION_RUNTIME_CANDIDATE_EVENT, payload)
             .map_err(|error| error.to_string())
@@ -144,6 +145,7 @@ pub async fn collect_rule_path_results(
 
 fn collect_candidate_paths(rule: &AutomationRuntimeRuleConfig) -> Result<Vec<String>, String> {
     sona_runtime_fs::collect_automation_runtime_candidate_paths(rule)
+        .map_err(|error| error.to_string())
 }
 
 fn schedule_candidate(

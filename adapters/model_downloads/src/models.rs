@@ -1,12 +1,15 @@
 use std::path::{Path, PathBuf};
 
 use crate::downloads::{
-    DownloadClient, DownloadError, publish_download_file, sha256_file, temporary_download_path,
+    DownloadClient, DownloadError, DownloadFileOperation, publish_download_file, sha256_file,
+    temporary_download_path,
 };
 use sona_core::models::downloads::ResolvedModelDownload;
 use sona_runtime_fs::is_preset_model_installed_at;
 
-pub async fn installed_model_is_valid(resolved: &ResolvedModelDownload) -> Result<bool, String> {
+pub async fn installed_model_is_valid(
+    resolved: &ResolvedModelDownload,
+) -> Result<bool, DownloadError> {
     if !is_preset_model_installed_at(&resolved.model, &resolved.models_dir) {
         return Ok(false);
     }
@@ -17,42 +20,40 @@ pub async fn installed_model_is_valid(resolved: &ResolvedModelDownload) -> Resul
 
     match &resolved.model.sha256 {
         Some(expected_sha) => {
-            let actual_sha = sha256_file(&resolved.install_path).await.map_err(|error| {
-                format!(
-                    "Failed to calculate hash of installed model {}: {error}",
-                    resolved.install_path.display()
-                )
-            })?;
+            let actual_sha = sha256_file(&resolved.install_path).await?;
             Ok(actual_sha.eq_ignore_ascii_case(expected_sha))
         }
         None => Ok(true),
     }
 }
 
-pub fn remove_model_install_path(install_path: &Path) -> Result<(), String> {
+pub fn remove_model_install_path(install_path: &Path) -> Result<(), DownloadError> {
     let metadata = match std::fs::symlink_metadata(install_path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
         Err(error) => {
-            return Err(format!(
-                "Failed to inspect model path {}: {error}",
-                install_path.display()
+            return Err(DownloadError::file_system(
+                DownloadFileOperation::InspectInstall,
+                install_path,
+                error.to_string(),
             ));
         }
     };
 
     if metadata.file_type().is_dir() {
         std::fs::remove_dir_all(install_path).map_err(|error| {
-            format!(
-                "Failed to delete model directory {}: {error}",
-                install_path.display()
+            DownloadError::file_system(
+                DownloadFileOperation::RemoveInstallDirectory,
+                install_path,
+                error.to_string(),
             )
         })
     } else {
         std::fs::remove_file(install_path).map_err(|error| {
-            format!(
-                "Failed to delete model file {}: {error}",
-                install_path.display()
+            DownloadError::file_system(
+                DownloadFileOperation::RemoveInstallFile,
+                install_path,
+                error.to_string(),
             )
         })
     }
@@ -61,16 +62,17 @@ pub fn remove_model_install_path(install_path: &Path) -> Result<(), String> {
 pub async fn download_model<F>(
     resolved: &ResolvedModelDownload,
     on_progress: F,
-) -> Result<PathBuf, String>
+) -> Result<PathBuf, DownloadError>
 where
     F: FnMut(u64, u64) + Send + 'static,
 {
     tokio::fs::create_dir_all(&resolved.models_dir)
         .await
         .map_err(|error| {
-            format!(
-                "Failed to create models directory {}: {error}",
-                resolved.models_dir.display()
+            DownloadError::file_system(
+                DownloadFileOperation::CreateModelsDirectory,
+                &resolved.models_dir,
+                error.to_string(),
             )
         })?;
 
@@ -83,8 +85,7 @@ where
         }
     });
 
-    let client = DownloadClient::try_new()
-        .map_err(|error| format!("Failed to create HTTP client: {error}"))?;
+    let client = DownloadClient::try_new()?;
     let result = client
         .download_file(
             &resolved.model.url,
@@ -96,47 +97,37 @@ where
 
     ctrl_c_task.abort();
 
-    result.map_err(map_download_error)?;
+    result?;
 
     if let Some(expected_sha) = &resolved.model.sha256 {
         let actual_sha = match sha256_file(&temp_download_path).await {
             Ok(sha) => sha,
             Err(error) => {
                 let _ = tokio::fs::remove_file(&temp_download_path).await;
-                return Err(format!(
-                    "Failed to calculate hash of downloaded file: {error}"
-                ));
+                return Err(error);
             }
         };
         if !actual_sha.eq_ignore_ascii_case(expected_sha) {
             let _ = tokio::fs::remove_file(&temp_download_path).await;
-            return Err(format!(
-                "Downloaded file hash mismatch for {}. Expected: {}, got: {}",
-                temp_download_path.display(),
-                expected_sha,
-                actual_sha
-            ));
+            return Err(DownloadError::HashMismatch {
+                path: temp_download_path,
+                expected: expected_sha.clone(),
+                actual: actual_sha,
+            });
         }
     }
 
-    publish_download_file(&temp_download_path, &resolved.download_path)
-        .await
-        .map_err(|error| {
-            format!(
-                "Failed to publish download {} to {}: {error}",
-                temp_download_path.display(),
-                resolved.download_path.display()
-            )
-        })?;
+    publish_download_file(&temp_download_path, &resolved.download_path).await?;
 
     if resolved.model.is_archive() {
         extract_tar_bz2_archive(&resolved.download_path, &resolved.models_dir).await?;
         tokio::fs::remove_file(&resolved.download_path)
             .await
             .map_err(|error| {
-                format!(
-                    "Failed to remove archive {}: {error}",
-                    resolved.download_path.display()
+                DownloadError::file_system(
+                    DownloadFileOperation::RemoveArchive,
+                    &resolved.download_path,
+                    error.to_string(),
                 )
             })?;
     }
@@ -144,21 +135,23 @@ where
     Ok(resolved.install_path.clone())
 }
 
-fn map_download_error(error: DownloadError) -> String {
-    match error {
-        DownloadError::Cancelled => "Download cancelled by user".to_string(),
-        DownloadError::HttpStatus(status) => format!("Download failed with status: {status}"),
-        other => format!("Failed to download model: {other}"),
-    }
-}
-
-async fn extract_tar_bz2_archive(archive_path: &Path, target_dir: &Path) -> Result<(), String> {
+async fn extract_tar_bz2_archive(
+    archive_path: &Path,
+    target_dir: &Path,
+) -> Result<(), DownloadError> {
     let archive_path = archive_path.to_path_buf();
     let target_dir = target_dir.to_path_buf();
+    let join_archive_path = archive_path.clone();
+    let join_target_dir = target_dir.clone();
 
     tokio::task::spawn_blocking(move || {
         let file = std::fs::File::open(&archive_path).map_err(|error| {
-            format!("Failed to open archive {}: {error}", archive_path.display())
+            DownloadError::file_system_with_target(
+                DownloadFileOperation::OpenArchive,
+                &archive_path,
+                &target_dir,
+                error.to_string(),
+            )
         })?;
         let buffered = std::io::BufReader::new(file);
         let tar = bzip2::read::BzDecoder::new(buffered);
@@ -166,12 +159,21 @@ async fn extract_tar_bz2_archive(archive_path: &Path, target_dir: &Path) -> Resu
         archive.set_preserve_permissions(false);
         archive.set_unpack_xattrs(false);
         archive.unpack(&target_dir).map_err(|error| {
-            format!(
-                "Failed to extract archive into {}: {error}",
-                target_dir.display()
+            DownloadError::file_system_with_target(
+                DownloadFileOperation::ExtractArchive,
+                &archive_path,
+                &target_dir,
+                error.to_string(),
             )
         })
     })
     .await
-    .map_err(|error| format!("Failed to join extraction task: {error}"))?
+    .map_err(|error| {
+        DownloadError::file_system_with_target(
+            DownloadFileOperation::ExtractArchive,
+            join_archive_path,
+            join_target_dir,
+            format!("Failed to join extraction task: {error}"),
+        )
+    })?
 }

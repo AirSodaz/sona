@@ -6,6 +6,7 @@ use sona_core::automation::repository::{
     AutomationRuleRecord, AutomationRuleRecordExportConfig, AutomationRuleRecordStageConfig,
     AutomationStore,
 };
+use sona_core::history::HistoryIdGenerator;
 use sona_core::history::mutation_repository::{
     HistoryMutationRepository, HistoryUpdateTranscriptRequest,
 };
@@ -18,8 +19,8 @@ use sona_core::sync::{
 };
 use sona_sqlite::{
     Database, DatabaseError, SqliteAppConfigAdapter, SqliteAutomationRepository,
-    SqliteHistoryStore, SqliteProjectRepository, SqliteSyncRepository, SqliteSyncRepositoryFactory,
-    record_sync_operation_in_transaction,
+    SqliteHistoryStore, SqliteProjectRepository, SqliteSyncRepository as RealSqliteSyncRepository,
+    SqliteSyncRepositoryFactory, record_sync_operation_in_transaction,
 };
 
 struct FixedClock;
@@ -27,6 +28,42 @@ struct FixedClock;
 impl UnixMillisClock for FixedClock {
     fn now_ms(&self) -> Result<u64, sona_core::ports::time::ClockError> {
         Ok(5_000)
+    }
+}
+
+struct SqliteSyncRepository;
+
+impl SqliteSyncRepository {
+    fn initialize(
+        database: Arc<Database>,
+        vault_id: &str,
+        device_id: &str,
+        preset: SyncPresetV1,
+    ) -> Result<RealSqliteSyncRepository, sona_core::sync::SyncError> {
+        RealSqliteSyncRepository::initialize(
+            database,
+            Arc::new(FixedClock),
+            vault_id,
+            device_id,
+            preset,
+        )
+    }
+
+    fn preview_join(
+        database: Arc<Database>,
+        vault_id: &str,
+        preview_device_id: &str,
+        preset: SyncPresetV1,
+        remote_segments: &[SyncRemoteSegment],
+    ) -> Result<sona_core::sync::SyncJoinPreview, sona_core::sync::SyncError> {
+        RealSqliteSyncRepository::preview_join(
+            database,
+            Arc::new(FixedClock),
+            vault_id,
+            preview_device_id,
+            preset,
+            remote_segments,
+        )
     }
 }
 
@@ -773,7 +810,12 @@ fn transcript_update_captures_a_whole_document_without_audio_fields() {
         Ok(())
     })
     .unwrap();
-    let history = SqliteHistoryStore::new(temp.path().to_path_buf(), Arc::clone(&db));
+    let history = SqliteHistoryStore::with_environment(
+        temp.path().to_path_buf(),
+        Arc::clone(&db),
+        Arc::new(FixedClock),
+        Arc::new(FixedHistoryIds),
+    );
     let document: Vec<sona_core::transcription::transcript::TranscriptSegment> =
         serde_json::from_value(json!([{
             "id": "segment-1",
@@ -1070,6 +1112,7 @@ fn shrinking_preset_requires_confirmation_and_publishes_removed_domain_tombstone
         operation.entity.kind == SyncEntityKind::AutomationRule
             && operation.entity.id == "rule-1"
             && matches!(operation.kind, SyncOperationKind::DeleteEntity)
+            && operation.version.clock.physical_ms == 5_000
     }));
     let rule_exists = db
         .with_connection(|connection| {
@@ -1088,10 +1131,18 @@ fn shrinking_preset_requires_confirmation_and_publishes_removed_domain_tombstone
     assert!(state.checkpoint_required);
 }
 
+struct FixedHistoryIds;
+
+impl HistoryIdGenerator for FixedHistoryIds {
+    fn generate_id(&self) -> String {
+        "sync-history-id".to_string()
+    }
+}
+
 #[test]
 fn sync_repository_factory_opens_initializes_previews_and_exposes_application_state() {
     let db = Arc::new(Database::open_in_memory().unwrap());
-    let factory = SqliteSyncRepositoryFactory::new(Arc::clone(&db));
+    let factory = SqliteSyncRepositoryFactory::new(Arc::clone(&db), Arc::new(FixedClock));
 
     assert!(factory.open().unwrap().is_none());
     let preview = factory

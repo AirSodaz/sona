@@ -6,6 +6,7 @@ use crate::llm::tasks::{
 use crate::llm::usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
 use crate::transcription::transcript::TranscriptSegment;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[cfg(feature = "specta")]
 use specta::Type;
@@ -75,40 +76,75 @@ impl<'de> Deserialize<'de> for LlmConfig {
     }
 }
 
-pub fn validate_llm_config(config: &LlmConfig) -> Result<(), String> {
+#[derive(Clone, Debug, Error, PartialEq, Eq)]
+#[error("{reason}")]
+pub struct LlmRequestValidationError {
+    pub field: String,
+    pub reason: String,
+}
+
+impl LlmRequestValidationError {
+    pub fn new(field: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self {
+            field: field.into(),
+            reason: reason.into(),
+        }
+    }
+}
+
+pub fn validate_llm_config(config: &LlmConfig) -> Result<(), LlmRequestValidationError> {
     if config.model.trim().is_empty() {
-        return Err("Model name cannot be empty".to_string());
+        return Err(LlmRequestValidationError::new(
+            "model",
+            "Model name cannot be empty",
+        ));
     }
 
     Ok(())
 }
 
-pub fn validate_task_request(task_id: &str, config: &LlmConfig) -> Result<(), String> {
+pub fn validate_task_request(
+    task_id: &str,
+    config: &LlmConfig,
+) -> Result<(), LlmRequestValidationError> {
     if task_id.trim().is_empty() {
-        return Err("Task ID cannot be empty".to_string());
+        return Err(LlmRequestValidationError::new(
+            "task_id",
+            "Task ID cannot be empty",
+        ));
     }
 
     validate_llm_config(config)
 }
 
-pub fn validate_llm_generate_request(request: &LlmGenerateRequest) -> Result<(), String> {
+pub fn validate_llm_generate_request(
+    request: &LlmGenerateRequest,
+) -> Result<(), LlmRequestValidationError> {
     validate_llm_config(&request.config)?;
 
     if request.input.trim().is_empty() {
-        return Err("Input cannot be empty".to_string());
+        return Err(LlmRequestValidationError::new(
+            "input",
+            "Input cannot be empty",
+        ));
     }
 
     Ok(())
 }
 
-pub fn validate_polish_segments_request(request: &PolishSegmentsRequest) -> Result<(), String> {
+pub fn validate_polish_segments_request(
+    request: &PolishSegmentsRequest,
+) -> Result<(), LlmRequestValidationError> {
     validate_task_request(&request.task_id, &request.config)?;
 
     if matches!(
         request.config.strategy,
         LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree
     ) {
-        return Err("Google Translate does not support transcript polishing".to_string());
+        return Err(LlmRequestValidationError::new(
+            "strategy",
+            "Google Translate does not support transcript polishing",
+        ));
     }
 
     Ok(())
@@ -116,11 +152,14 @@ pub fn validate_polish_segments_request(request: &PolishSegmentsRequest) -> Resu
 
 pub fn validate_translate_segments_request(
     request: &TranslateSegmentsRequest,
-) -> Result<(), String> {
+) -> Result<(), LlmRequestValidationError> {
     validate_task_request(&request.task_id, &request.config)?;
 
     if request.target_language.trim().is_empty() {
-        return Err("Target language cannot be empty".to_string());
+        return Err(LlmRequestValidationError::new(
+            "target_language",
+            "Target language cannot be empty",
+        ));
     }
 
     Ok(())
@@ -128,9 +167,10 @@ pub fn validate_translate_segments_request(
 
 pub fn validate_summarize_transcript_request(
     request: &SummarizeTranscriptRequest,
-) -> Result<(), String> {
+) -> Result<(), LlmRequestValidationError> {
     validate_task_request(&request.task_id, &request.config)?;
     crate::llm::tasks::validate_summary_strategy(request.config.strategy)
+        .map_err(|error| LlmRequestValidationError::new("strategy", error.to_string()))
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

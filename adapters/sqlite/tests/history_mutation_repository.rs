@@ -3,13 +3,33 @@ use std::sync::Arc;
 use sona_core::history::mutation_repository::{HistoryMutationError, HistoryMutationRepository};
 use sona_core::history::mutation_service::HistoryMutationService;
 use sona_core::history::{
-    HistoryCreateLiveDraftRequest, HistorySaveImportedFileRequest, HistorySaveRecordingRequest,
+    HistoryCreateLiveDraftRequest, HistoryIdGenerator, HistorySaveImportedFileRequest,
+    HistorySaveRecordingRequest,
 };
+use sona_core::ports::time::{ClockError, UnixMillisClock};
 use sona_sqlite::LazySqliteHistoryMutationRepository;
+
+struct TestClock;
+
+impl UnixMillisClock for TestClock {
+    fn now_ms(&self) -> Result<u64, ClockError> {
+        Ok(1_700_000_000_000)
+    }
+}
+
+struct TestIds;
+
+impl HistoryIdGenerator for TestIds {
+    fn generate_id(&self) -> String {
+        "generated-history-id".to_string()
+    }
+}
 
 fn service(app_data_dir: &std::path::Path) -> HistoryMutationService {
     HistoryMutationService::new(Arc::new(LazySqliteHistoryMutationRepository::new(
         app_data_dir.to_path_buf(),
+        Arc::new(TestClock),
+        Arc::new(TestIds),
     )))
 }
 

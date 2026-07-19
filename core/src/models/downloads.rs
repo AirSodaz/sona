@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::models::preset_models::{
     DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
 };
+use crate::runtime::error::RuntimeValidationError;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedModelDownload {
@@ -21,9 +22,11 @@ pub struct RequiredCompanionModels {
 pub fn resolve_model_download(
     model_id: &str,
     models_dir: &Path,
-) -> Result<ResolvedModelDownload, String> {
+) -> Result<ResolvedModelDownload, RuntimeValidationError> {
     let model = find_preset_model(model_id)
-        .ok_or_else(|| format!("Unknown model id: {model_id}"))?
+        .ok_or_else(|| {
+            RuntimeValidationError::new("model_id", format!("Unknown model id: {model_id}"))
+        })?
         .clone();
     let download_path = model.resolve_download_path(models_dir);
     let install_path = model.resolve_install_path(models_dir);

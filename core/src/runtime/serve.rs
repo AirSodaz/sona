@@ -1,6 +1,7 @@
 use crate::models::paths::ModelsDirStatus;
 use crate::models::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
 use crate::runtime::config::ServeConfigSection;
+use crate::runtime::error::RuntimeValidationError;
 use crate::runtime::gpu::resolve_gpu_acceleration;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -64,7 +65,7 @@ pub struct ResolvedServeRuntimeOptions {
 pub fn resolve_serve_runtime_options(
     args: ServeRuntimeArgs,
     config: Option<ServeConfigSection>,
-) -> Result<ResolvedServeRuntimeOptions, String> {
+) -> Result<ResolvedServeRuntimeOptions, RuntimeValidationError> {
     let config = config.unwrap_or_default();
     let gpu_acceleration =
         resolve_gpu_acceleration(args.gpu_acceleration.or(config.gpu_acceleration))?;
@@ -73,7 +74,10 @@ pub fn resolve_serve_runtime_options(
         .or(config.max_concurrent)
         .unwrap_or(DEFAULT_MAX_CONCURRENT);
     if max_concurrent == 0 {
-        return Err("max_concurrent must be greater than 0".to_string());
+        return Err(RuntimeValidationError::new(
+            "max_concurrent",
+            "max_concurrent must be greater than 0",
+        ));
     }
 
     Ok(ResolvedServeRuntimeOptions {

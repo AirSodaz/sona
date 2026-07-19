@@ -1,3 +1,6 @@
+#![allow(deprecated)]
+
+use crate::application_context::application_context;
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
 #[cfg(test)]
@@ -5,8 +8,7 @@ use sona_core::ports::time::ClockError;
 use sona_core::ports::time::UnixMillisClock;
 use sona_core::project::{ProjectCreateInput, ProjectError, ProjectIdGenerator};
 use sona_runtime_fs::{SystemClock, UuidGenerator};
-use sona_sqlite::{Database, SqliteProjectAdapter};
-use std::path::Path;
+use sona_sqlite::SqliteProjectAdapter;
 use std::sync::Arc;
 
 pub(crate) fn load_project_repository_state_json(
@@ -137,8 +139,8 @@ fn with_project_adapter<T, F>(
 where
     F: FnOnce(&SqliteProjectAdapter) -> Result<T, ProjectError>,
 {
-    let database = Database::open(Path::new(app_data_dir)).map_err(project_error)?;
-    let adapter = SqliteProjectAdapter::new(Arc::new(database), ids, clock);
+    let context = application_context(app_data_dir).map_err(project_error)?;
+    let adapter = context.sqlite().project_adapter(ids, clock);
     operation(&adapter).map_err(project_error)
 }
 
@@ -151,8 +153,8 @@ fn with_project_input_adapter<T, F>(
 where
     F: FnOnce(&SqliteProjectAdapter) -> Result<T, ProjectError>,
 {
-    let database = Database::open(Path::new(app_data_dir)).map_err(project_error)?;
-    let adapter = SqliteProjectAdapter::new(Arc::new(database), ids, clock);
+    let context = application_context(app_data_dir).map_err(project_error)?;
+    let adapter = context.sqlite().project_adapter(ids, clock);
     operation(&adapter).map_err(project_input_error)
 }
 

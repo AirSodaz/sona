@@ -1,6 +1,6 @@
 use hound::{SampleFormat, WavSpec, WavWriter};
 use sherpa_onnx::{SileroVadModelConfig, VadModelConfig, VoiceActivityDetector};
-use sona_core::ports::asr::BatchSegmentationMode;
+use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind, BatchSegmentationMode};
 use std::path::{Path, PathBuf};
 
 pub(crate) type VadConfig = VadModelConfig;
@@ -56,10 +56,13 @@ impl AudioSegment {
     }
 }
 
-pub fn resolve_ffmpeg_sidecar_path_from_exe(exe_path: &Path) -> Result<PathBuf, String> {
-    let exe_dir = exe_path
-        .parent()
-        .ok_or("Failed to get parent directory of executable")?;
+pub fn resolve_ffmpeg_sidecar_path_from_exe(exe_path: &Path) -> Result<PathBuf, AsrPortError> {
+    let exe_dir = exe_path.parent().ok_or_else(|| {
+        AsrPortError::new(
+            AsrPortErrorKind::FileSystem,
+            "Failed to get parent directory of executable",
+        )
+    })?;
 
     #[cfg(windows)]
     let ffmpeg_filename = "ffmpeg.exe";
@@ -69,28 +72,44 @@ pub fn resolve_ffmpeg_sidecar_path_from_exe(exe_path: &Path) -> Result<PathBuf, 
     Ok(exe_dir.join(ffmpeg_filename))
 }
 
-pub fn resolve_ffmpeg_sidecar_path() -> Result<PathBuf, String> {
-    let exe_path = std::env::current_exe()
-        .map_err(|error| format!("Failed to get current executable path: {error}"))?;
+pub fn resolve_ffmpeg_sidecar_path() -> Result<PathBuf, AsrPortError> {
+    let exe_path = std::env::current_exe().map_err(|error| {
+        AsrPortError::new(
+            AsrPortErrorKind::FileSystem,
+            format!("Failed to get current executable path: {error}"),
+        )
+    })?;
     resolve_ffmpeg_sidecar_path_from_exe(&exe_path)
 }
 
-pub fn resolve_model_onnx_path(path: &Path) -> Result<PathBuf, String> {
+pub fn resolve_model_onnx_path(path: &Path) -> Result<PathBuf, AsrPortError> {
     if !path.exists() {
-        return Err(format!("Model path does not exist: {}", path.display()));
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::Model,
+            format!("Model path does not exist: {}", path.display()),
+        ));
     }
 
     if path.is_file() {
         return Ok(path.to_path_buf());
     }
 
-    let entries = std::fs::read_dir(path)
-        .map_err(|error| format!("Failed to read model directory {}: {error}", path.display()))?;
+    let entries = std::fs::read_dir(path).map_err(|error| {
+        AsrPortError::new(
+            AsrPortErrorKind::FileSystem,
+            format!("Failed to read model directory {}: {error}", path.display()),
+        )
+    })?;
     entries
         .flatten()
         .find(|entry| entry.path().extension().is_some_and(|ext| ext == "onnx"))
         .map(|entry| entry.path())
-        .ok_or_else(|| format!("No .onnx file found in model directory {}", path.display()))
+        .ok_or_else(|| {
+            AsrPortError::new(
+                AsrPortErrorKind::Model,
+                format!("No .onnx file found in model directory {}", path.display()),
+            )
+        })
 }
 
 pub fn pcm_i16_to_f32(data: &[i16]) -> Vec<f32> {
@@ -168,7 +187,7 @@ pub fn save_wav_file(data: &[f32], sample_rate: u32, filepath: &Path) -> hound::
 pub async fn extract_and_resample_audio(
     filepath: &Path,
     target_sample_rate: u32,
-) -> Result<Vec<f32>, String> {
+) -> Result<Vec<f32>, AsrPortError> {
     let ffmpeg_path = resolve_ffmpeg_sidecar_path()?;
     let mut command = tokio::process::Command::new(ffmpeg_path);
 
@@ -195,11 +214,19 @@ pub async fn extract_and_resample_audio(
         .arg("-")
         .output()
         .await
-        .map_err(|error| format!("Failed to run ffmpeg command: {error}"))?;
+        .map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::FileSystem,
+                format!("Failed to run ffmpeg command: {error}"),
+            )
+        })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("FFmpeg exited with {:?}: {stderr}", output.status));
+        return Err(AsrPortError::runtime(format!(
+            "FFmpeg exited with {:?}: {stderr}",
+            output.status
+        )));
     }
 
     Ok(pcm_s16le_bytes_to_f32(&output.stdout))
@@ -271,7 +298,7 @@ pub fn segment_batch_audio(
 pub(crate) fn create_vad_config(
     vad_model: &Path,
     options: VadDetectorOptions,
-) -> Result<VadConfig, String> {
+) -> Result<VadConfig, AsrPortError> {
     let model_path = resolve_model_onnx_path(vad_model)?;
     let silero_vad = SileroVadModelConfig {
         model: Some(model_path.to_string_lossy().to_string()),
@@ -292,7 +319,7 @@ pub(crate) fn create_vad_config(
 pub(crate) fn create_vad_detector(
     vad_model: &Path,
     detector_capacity_seconds: f32,
-) -> Result<VadDetector, String> {
+) -> Result<VadDetector, AsrPortError> {
     let vad_config = create_vad_config(vad_model, VadDetectorOptions::default())?;
     let detector_capacity_seconds = if detector_capacity_seconds > 0.0 {
         detector_capacity_seconds
@@ -300,7 +327,7 @@ pub(crate) fn create_vad_detector(
         60.0
     };
     VoiceActivityDetector::create(&vad_config, detector_capacity_seconds)
-        .ok_or("Failed to create VoiceActivityDetector".to_string())
+        .ok_or_else(|| AsrPortError::runtime("Failed to create VoiceActivityDetector"))
 }
 
 pub fn load_vad(vad_model: Option<String>) -> Option<SafeVad> {
@@ -344,7 +371,7 @@ pub fn vad_segment_audio(
     sample_rate: u32,
     vad_config: &VadConfig,
     buffer_size_seconds: f32,
-) -> Result<Vec<AudioSegment>, String> {
+) -> Result<Vec<AudioSegment>, AsrPortError> {
     let detector_capacity_seconds = if buffer_size_seconds > 0.0 {
         buffer_size_seconds
     } else {
@@ -358,14 +385,14 @@ pub(crate) fn vad_segment_audio_with_capacity(
     sample_rate: u32,
     vad_config: &VadConfig,
     detector_capacity_seconds: f32,
-) -> Result<Vec<AudioSegment>, String> {
+) -> Result<Vec<AudioSegment>, AsrPortError> {
     let detector_capacity_seconds = if detector_capacity_seconds > 0.0 {
         detector_capacity_seconds
     } else {
         60.0
     };
     let mut vad = VoiceActivityDetector::create(vad_config, detector_capacity_seconds)
-        .ok_or("Failed to create VoiceActivityDetector")?;
+        .ok_or_else(|| AsrPortError::runtime("Failed to create VoiceActivityDetector"))?;
 
     let window_size = vad_config.silero_vad.window_size as usize;
     let chunk_size = if window_size > 0 { window_size } else { 512 };
@@ -525,10 +552,13 @@ mod tests {
 
     #[test]
     fn resolves_model_onnx_path_rejects_missing_path() {
+        use sona_core::ports::asr::AsrPortErrorKind;
+
         let missing = std::env::temp_dir().join(format!("sona-missing-{}", uuid::Uuid::new_v4()));
 
         let error = resolve_model_onnx_path(&missing).unwrap_err();
 
-        assert!(error.contains("Model path does not exist"));
+        assert_eq!(error.kind, AsrPortErrorKind::Model);
+        assert!(error.message.contains("Model path does not exist"));
     }
 }

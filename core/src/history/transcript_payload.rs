@@ -1,6 +1,6 @@
 use serde_json::{Map, Value, from_value};
 
-use crate::runtime::file_utils::ensure_json_array_value;
+use crate::history::error::HistoryTranscriptError;
 use crate::transcription::transcript::{TranscriptSegment, ensure_transcript_segment_timing};
 
 pub struct NormalizedHistoryTranscript {
@@ -11,11 +11,13 @@ pub struct NormalizedHistoryTranscript {
 
 pub fn normalize_history_transcript_segments(
     segments: Value,
-) -> Result<NormalizedHistoryTranscript, String> {
-    let segments = ensure_json_array_value(segments, "History transcript segments")?;
-    let parsed_segments = segments
-        .as_array()
-        .ok_or_else(|| "History transcript segments must be an array.".to_string())?;
+) -> Result<NormalizedHistoryTranscript, HistoryTranscriptError> {
+    let parsed_segments =
+        segments
+            .as_array()
+            .ok_or_else(|| HistoryTranscriptError::ExpectedArray {
+                subject: "History transcript segments".to_string(),
+            })?;
     let parsed_segments: Vec<TranscriptSegment> = parsed_segments
         .iter()
         .enumerate()
@@ -48,14 +50,15 @@ pub fn canonicalize_history_transcript_segments(
 fn parse_history_transcript_segment(
     segment: &Value,
     index: usize,
-) -> Result<TranscriptSegment, String> {
+) -> Result<TranscriptSegment, HistoryTranscriptError> {
     match from_value::<TranscriptSegment>(segment.clone()) {
         Ok(segment) => Ok(segment),
         Err(strict_error) => {
             let Some(source) = segment.as_object() else {
-                return Err(format!(
-                    "History transcript segment at index {index} must be an object: {strict_error}"
-                ));
+                return Err(HistoryTranscriptError::SegmentMustBeObject {
+                    index,
+                    reason: strict_error.to_string(),
+                });
             };
 
             let mut normalized = source.clone();
@@ -72,7 +75,10 @@ fn parse_history_transcript_segment(
             }
 
             from_value(Value::Object(normalized)).map_err(|error| {
-                format!("History transcript segment at index {index} must match transcript schema: {error}")
+                HistoryTranscriptError::InvalidSegmentSchema {
+                    index,
+                    reason: error.to_string(),
+                }
             })
         }
     }

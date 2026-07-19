@@ -4,8 +4,10 @@ use sona_core::export::ExportFormat;
 use sona_runtime_fs::resolve_runtime_path_status;
 
 pub(crate) fn normalize_export_format(value: String) -> SonaCoreBindingResult<String> {
-    let format = ExportFormat::parse(&value)
-        .map_err(|message| SonaCoreBindingError::InvalidInput { reason: message })?;
+    let format =
+        ExportFormat::parse(&value).map_err(|error| SonaCoreBindingError::InvalidInput {
+            reason: error.to_string(),
+        })?;
     Ok(match format {
         ExportFormat::Json => "json",
         ExportFormat::Txt => "txt",

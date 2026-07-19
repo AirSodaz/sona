@@ -12,7 +12,7 @@ pub async fn open_log_folder<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Res
         .app_log_dir()
         .map_err(|e: tauri::Error| e.to_string())?;
 
-    sona_runtime_fs::ensure_directory_exists(&log_dir)?;
+    sona_runtime_fs::ensure_directory_exists(&log_dir).map_err(|error| error.to_string())?;
 
     app.opener()
         .open_path(log_dir.to_string_lossy(), None::<&str>)
@@ -33,7 +33,8 @@ pub fn resolve_runtime_environment_status(
 pub fn resolve_runtime_environment_status_for_log_dir(
     log_dir: std::path::PathBuf,
 ) -> Result<RuntimeEnvironmentStatus, String> {
-    let ffmpeg_path = sona_local_asr::audio::resolve_ffmpeg_sidecar_path()?;
+    let ffmpeg_path =
+        sona_local_asr::audio::resolve_ffmpeg_sidecar_path().map_err(|error| error.to_string())?;
 
     Ok(RuntimeEnvironmentStatus {
         ffmpeg_path: ffmpeg_path.to_string_lossy().into_owned(),

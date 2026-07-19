@@ -267,8 +267,9 @@ where
         &self,
         mut request: LlmCompletionRequest,
     ) -> Result<PreparedRequest, LlmRuntimeError> {
-        validate_llm_config(&request.config)
-            .map_err(|reason| LlmRuntimeError::InvalidRequest { reason })?;
+        validate_llm_config(&request.config).map_err(|error| LlmRuntimeError::InvalidRequest {
+            reason: error.reason,
+        })?;
         if request.input.trim().is_empty() {
             return Err(LlmRuntimeError::InvalidRequest {
                 reason: "Input cannot be empty".to_string(),

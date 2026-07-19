@@ -5,6 +5,7 @@ use sona_core::export::ExportFormat;
 use sona_core::models::preset_models::PresetModel;
 use sona_core::models::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
 use sona_core::runtime::config::{TranscribeConfigSection, TranscribeLiveConfigSection};
+use sona_core::runtime::error::RuntimeValidationError;
 use sona_core::transcription::runtime::{
     BatchTranscribeOptions, DEFAULT_BATCH_JOBS, DEFAULT_LANGUAGE, DEFAULT_THREADS,
     DEFAULT_VAD_BUFFER_SIZE, LiveTranscribeOptions, OutputTarget, plan_batch_output_files,
@@ -58,10 +59,21 @@ fn export_format_and_output_target_follow_cli_defaults() {
 }
 
 #[test]
+fn invalid_export_format_preserves_validation_context() {
+    let error = resolve_export_format(Some("docx"), None).unwrap_err();
+
+    assert_eq!(error.subject, "export_format");
+    assert_eq!(error.message, "Unsupported export format: docx");
+}
+
+#[test]
 fn batch_jobs_default_to_one_and_reject_zero() {
     assert_eq!(resolve_batch_jobs(None).unwrap(), DEFAULT_BATCH_JOBS);
     assert_eq!(resolve_batch_jobs(Some(2)).unwrap(), 2);
-    assert!(resolve_batch_jobs(Some(0)).unwrap_err().contains("--jobs"));
+    assert_eq!(
+        resolve_batch_jobs(Some(0)).unwrap_err(),
+        RuntimeValidationError::new("batch_jobs", "--jobs must be greater than 0.")
+    );
 }
 
 #[test]
@@ -130,8 +142,9 @@ fn batch_output_plans_reject_duplicate_outputs_without_recursive_structure() {
     )
     .unwrap_err();
 
-    assert!(error.contains("would overwrite"));
-    assert!(error.contains("demo.json"));
+    assert_eq!(error.subject, "batch_output");
+    assert!(error.message.contains("would overwrite"));
+    assert!(error.message.contains("demo.json"));
 }
 
 fn temp_transcribe_options() -> BatchTranscribeOptions {
@@ -268,8 +281,9 @@ fn live_plan_rejects_batch_only_models() {
     let error = resolve_live_transcribe_plan_with_install_checker(cli, None, test_model_exists)
         .unwrap_err();
 
+    assert_eq!(error.subject, "model_id");
     assert_eq!(
-        error,
+        error.message,
         "Model 'sherpa-onnx-whisper-turbo' does not support streaming transcription."
     );
 }
@@ -282,7 +296,13 @@ fn live_plan_rejects_format_without_output_path() {
     let error = resolve_live_transcribe_plan_with_install_checker(cli, None, test_model_exists)
         .unwrap_err();
 
-    assert_eq!(error, "--format requires --output for live transcription.");
+    assert_eq!(
+        error,
+        RuntimeValidationError::new(
+            "live_transcribe",
+            "--format requires --output for live transcription.",
+        )
+    );
 }
 
 #[test]
@@ -393,8 +413,13 @@ fn batch_plan_config_can_override_required_companion_default() {
     )
     .unwrap_err();
 
-    assert!(error.contains("Unknown companion model id: custom-vad"));
-    assert!(!error.contains(DEFAULT_SILERO_VAD_MODEL_ID));
+    assert_eq!(error.subject, "batch_transcribe");
+    assert!(
+        error
+            .message
+            .contains("Unknown companion model id: custom-vad")
+    );
+    assert!(!error.message.contains(DEFAULT_SILERO_VAD_MODEL_ID));
 }
 
 #[test]
@@ -455,9 +480,10 @@ fn batch_plan_invalid_gpu_fails_before_model_resolution() {
     let error = resolve_batch_transcribe_plan_with_install_checker(cli, None, test_model_exists)
         .unwrap_err();
 
-    assert!(error.contains("gpu_acceleration"));
-    assert!(error.contains("auto, cpu, cuda, coreml, directml"));
-    assert!(!error.contains("Unknown model id"));
+    assert_eq!(error.subject, "gpu_acceleration");
+    assert!(error.message.contains("gpu_acceleration"));
+    assert!(error.message.contains("auto, cpu, cuda, coreml, directml"));
+    assert!(!error.message.contains("Unknown model id"));
 }
 
 #[test]

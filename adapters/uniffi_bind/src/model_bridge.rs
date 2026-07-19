@@ -67,8 +67,12 @@ pub(crate) fn resolve_model_download(
     model_id: String,
     models_dir: String,
 ) -> SonaCoreBindingResult<FfiResolvedModelDownload> {
-    let resolved = core_resolve_model_download(&model_id, Path::new(&models_dir))
-        .map_err(|message| SonaCoreBindingError::InvalidInput { reason: message })?;
+    let resolved =
+        core_resolve_model_download(&model_id, Path::new(&models_dir)).map_err(|error| {
+            SonaCoreBindingError::InvalidInput {
+                reason: error.to_string(),
+            }
+        })?;
     let required_companions = required_companion_models(&resolved.model);
 
     Ok(mapper::resolved_model_download_to_ffi(
@@ -80,6 +84,7 @@ pub(crate) fn resolve_model_download(
 pub(crate) fn resolve_gpu_acceleration(
     value: Option<String>,
 ) -> SonaCoreBindingResult<Option<String>> {
-    core_resolve_gpu_acceleration(value)
-        .map_err(|message| SonaCoreBindingError::InvalidInput { reason: message })
+    core_resolve_gpu_acceleration(value).map_err(|error| SonaCoreBindingError::InvalidInput {
+        reason: error.to_string(),
+    })
 }

@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::ports::time::ClockError;
+
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum SyncError {
     #[error("Invalid sync operation: {0}")]
@@ -16,4 +18,6 @@ pub enum SyncError {
     Protocol(String),
     #[error("Sync cryptography error: {0}")]
     Crypto(String),
+    #[error(transparent)]
+    Clock(#[from] ClockError),
 }

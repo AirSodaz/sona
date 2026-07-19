@@ -27,6 +27,11 @@ export interface WebDavObjectStoreConfig {
   password: string;
 }
 
+export interface SyncProviderTransportInput {
+  providerId: string;
+  configuration: unknown;
+}
+
 export interface LegacyRemoteBackupEntry {
   key: string;
   fileName: string;
@@ -46,6 +51,10 @@ export interface SyncCreateRequest {
   createRecoveryKey: boolean;
 }
 
+export type SyncCreateTransportRequest = Omit<SyncCreateRequest, 'provider'> & {
+  provider: SyncProviderTransportInput;
+};
+
 export interface SyncCreateResult {
   vaultId: string;
   deviceId: string;
@@ -60,6 +69,15 @@ export interface SyncPreviewJoinRequest {
 }
 
 export type SyncJoinRequest = SyncPreviewJoinRequest;
+
+export type SyncPreviewJoinTransportRequest = Omit<
+  SyncPreviewJoinRequest,
+  'provider'
+> & {
+  provider: SyncProviderTransportInput;
+};
+
+export type SyncJoinTransportRequest = SyncPreviewJoinTransportRequest;
 
 export interface SyncUnlockRequest {
   providerPassword: string;

@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use tauri::{AppHandle, Runtime};
 
 use crate::platform::project_repository::{

@@ -5990,10 +5990,8 @@ dependencies = [
  "serde_json",
  "sha2 0.11.0",
  "sona-core",
- "sona-local-asr",
- "sona-media-detector",
- "sona-runtime-fs",
  "tempfile",
+ "thiserror 2.0.18",
  "tokio",
  "tower",
  "tower-http",
@@ -6035,6 +6033,7 @@ dependencies = [
  "sona-core",
  "sona-export",
  "sona-local-asr",
+ "sona-media-detector",
  "sona-model-downloads",
  "sona-online-llm",
  "sona-recovery-fs",
@@ -6103,6 +6102,7 @@ dependencies = [
 name = "sona-media-detector"
 version = "0.8.0"
 dependencies = [
+ "async-trait",
  "sona-core",
  "tempfile",
  "tokio",
@@ -6181,6 +6181,7 @@ dependencies = [
  "serde_json",
  "sona-core",
  "tempfile",
+ "thiserror 2.0.18",
  "uuid",
  "walkdir",
 ]
@@ -6261,6 +6262,7 @@ dependencies = [
  "specta",
  "specta-serde",
  "specta-typescript",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

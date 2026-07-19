@@ -5,6 +5,9 @@ description = "Model download adapter for Sona"
 authors.workspace = true
 edition.workspace = true
 
+[package.metadata.sona]
+role = "outbound-adapter"
+
 [dependencies]
 bzip2 = "0.4"
 fs3 = "0.5"

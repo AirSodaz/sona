@@ -20,6 +20,7 @@ use sona_core::history::{
 };
 use sona_core::history_store::HistoryStore;
 use sona_core::project::{ProjectDefaults, ProjectRecord, ProjectStore};
+use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::{
     Database, SqliteAutomationRepository, SqliteBackupStateRepository, SqliteConfigStore,
     SqliteHistoryStore, SqliteProjectRepository, llm_usage,
@@ -155,7 +156,12 @@ fn seed_five_scopes(app_data_dir: &Path) -> sona_core::backup::BackupDataset {
         .replace_projects(vec![project()])
         .unwrap();
 
-    let history_store = SqliteHistoryStore::new(app_data_dir.to_path_buf(), Arc::clone(&database));
+    let history_store = SqliteHistoryStore::with_environment(
+        app_data_dir.to_path_buf(),
+        Arc::clone(&database),
+        Arc::new(SystemClock),
+        Arc::new(UuidGenerator),
+    );
     history_store.ensure_ready().unwrap();
     let history_item = history_store
         .save_recording(HistorySaveRecordingRequest {

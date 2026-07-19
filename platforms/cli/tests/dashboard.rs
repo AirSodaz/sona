@@ -8,6 +8,7 @@ use sona_core::project::{
     DEFAULT_POLISH_PRESET_ID, DEFAULT_SUMMARY_TEMPLATE_ID, DEFAULT_TRANSLATION_LANGUAGE,
     ProjectDefaults, ProjectRecord, ProjectStore,
 };
+use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::llm_usage::record_usage;
 use sona_sqlite::{Database, SqliteHistoryStore, SqliteProjectRepository};
 use std::collections::BTreeMap;
@@ -40,7 +41,12 @@ fn project() -> ProjectRecord {
 
 fn seed(app_data_dir: &Path, transcript_text: &str) -> Arc<Database> {
     let database = Arc::new(Database::open(app_data_dir).unwrap());
-    let history = SqliteHistoryStore::new(app_data_dir.to_path_buf(), Arc::clone(&database));
+    let history = SqliteHistoryStore::with_environment(
+        app_data_dir.to_path_buf(),
+        Arc::clone(&database),
+        Arc::new(SystemClock),
+        Arc::new(UuidGenerator),
+    );
     history.ensure_ready().unwrap();
     ProjectStore::insert_project(
         &SqliteProjectRepository::new(Arc::clone(&database)),

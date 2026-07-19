@@ -2,15 +2,24 @@ package com.sona.android.adapters.uniffi.recording
 
 import uniffi.sona_uniffi_bind.FfiAsrStreamingObserver
 import uniffi.sona_uniffi_bind.FfiAsrStreamingSession
+import uniffi.sona_uniffi_bind.FfiHistoryCompleteLiveDraftRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryCreateLiveDraftRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryDeleteItemsRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryItemRecordV1
+import uniffi.sona_uniffi_bind.FfiHistoryUpdateTranscriptRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceQueryRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceQueryResultV1
+import uniffi.sona_uniffi_bind.FfiLiveRecordingDraftResultV1
+import uniffi.sona_uniffi_bind.FfiTranscriptSegment
+import uniffi.sona_uniffi_bind.completeHistoryLiveDraftV1
 import uniffi.sona_uniffi_bind.createAsrStreamingSession
-import uniffi.sona_uniffi_bind.completeHistoryLiveDraftJson
-import uniffi.sona_uniffi_bind.createHistoryLiveDraftJson
-import uniffi.sona_uniffi_bind.purgeHistoryItemsJson
-import uniffi.sona_uniffi_bind.loadHistoryTranscriptJson
-import uniffi.sona_uniffi_bind.queryHistoryWorkspaceJson
+import uniffi.sona_uniffi_bind.createHistoryLiveDraftV1
 import uniffi.sona_uniffi_bind.findOnlineAsrProvider
+import uniffi.sona_uniffi_bind.loadHistoryTranscriptV1
 import uniffi.sona_uniffi_bind.onlineAsrProviderRequest
-import uniffi.sona_uniffi_bind.updateHistoryTranscriptJson
+import uniffi.sona_uniffi_bind.purgeHistoryItemsV1
+import uniffi.sona_uniffi_bind.queryHistoryWorkspaceV1
+import uniffi.sona_uniffi_bind.updateHistoryTranscriptV1
 import uniffi.sona_uniffi_bind.volcengineDoubaoAsrConfigFromJson
 
 internal data class UniffiStreamingProviderManifest(
@@ -118,30 +127,62 @@ private class GeneratedUniffiStreamingSessionHandle(
 }
 
 internal interface UniffiHistoryBindings {
-    suspend fun createLiveDraft(appDataDir: String, requestJson: String): String
-    suspend fun updateTranscript(appDataDir: String, requestJson: String): String
-    suspend fun completeLiveDraft(appDataDir: String, requestJson: String): String
-    suspend fun purgeItems(appDataDir: String, requestJson: String): String
-    suspend fun queryWorkspace(appDataDir: String, requestJson: String): String
-    suspend fun loadTranscript(appDataDir: String, historyId: String): String
+    suspend fun createLiveDraft(
+        appDataDir: String,
+        request: FfiHistoryCreateLiveDraftRequestV1,
+    ): FfiLiveRecordingDraftResultV1
+
+    suspend fun updateTranscript(
+        appDataDir: String,
+        request: FfiHistoryUpdateTranscriptRequestV1,
+    ): FfiHistoryItemRecordV1
+
+    suspend fun completeLiveDraft(
+        appDataDir: String,
+        request: FfiHistoryCompleteLiveDraftRequestV1,
+    ): FfiHistoryItemRecordV1
+
+    suspend fun purgeItems(appDataDir: String, request: FfiHistoryDeleteItemsRequestV1)
+
+    suspend fun queryWorkspace(
+        appDataDir: String,
+        request: FfiHistoryWorkspaceQueryRequestV1,
+    ): FfiHistoryWorkspaceQueryResultV1
+
+    suspend fun loadTranscript(
+        appDataDir: String,
+        historyId: String,
+    ): List<FfiTranscriptSegment>?
 }
 
 internal object GeneratedUniffiHistoryBindings : UniffiHistoryBindings {
-    override suspend fun createLiveDraft(appDataDir: String, requestJson: String): String =
-        createHistoryLiveDraftJson(appDataDir, requestJson)
+    override suspend fun createLiveDraft(
+        appDataDir: String,
+        request: FfiHistoryCreateLiveDraftRequestV1,
+    ): FfiLiveRecordingDraftResultV1 = createHistoryLiveDraftV1(appDataDir, request)
 
-    override suspend fun updateTranscript(appDataDir: String, requestJson: String): String =
-        updateHistoryTranscriptJson(appDataDir, requestJson)
+    override suspend fun updateTranscript(
+        appDataDir: String,
+        request: FfiHistoryUpdateTranscriptRequestV1,
+    ): FfiHistoryItemRecordV1 = updateHistoryTranscriptV1(appDataDir, request)
 
-    override suspend fun completeLiveDraft(appDataDir: String, requestJson: String): String =
-        completeHistoryLiveDraftJson(appDataDir, requestJson)
+    override suspend fun completeLiveDraft(
+        appDataDir: String,
+        request: FfiHistoryCompleteLiveDraftRequestV1,
+    ): FfiHistoryItemRecordV1 = completeHistoryLiveDraftV1(appDataDir, request)
 
-    override suspend fun purgeItems(appDataDir: String, requestJson: String): String =
-        purgeHistoryItemsJson(appDataDir, requestJson)
+    override suspend fun purgeItems(
+        appDataDir: String,
+        request: FfiHistoryDeleteItemsRequestV1,
+    ) = purgeHistoryItemsV1(appDataDir, request)
 
-    override suspend fun queryWorkspace(appDataDir: String, requestJson: String): String =
-        queryHistoryWorkspaceJson(appDataDir, requestJson)
+    override suspend fun queryWorkspace(
+        appDataDir: String,
+        request: FfiHistoryWorkspaceQueryRequestV1,
+    ): FfiHistoryWorkspaceQueryResultV1 = queryHistoryWorkspaceV1(appDataDir, request)
 
-    override suspend fun loadTranscript(appDataDir: String, historyId: String): String =
-        loadHistoryTranscriptJson(appDataDir, historyId)
+    override suspend fun loadTranscript(
+        appDataDir: String,
+        historyId: String,
+    ): List<FfiTranscriptSegment>? = loadHistoryTranscriptV1(appDataDir, historyId)
 }

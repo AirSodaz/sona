@@ -1,3 +1,9 @@
+//! Legacy Project compatibility API.
+//!
+//! Project data is persisted and synchronized as canonical Tags. New callers
+//! should use [`crate::tag`]; this module remains available while existing host
+//! and binding contracts migrate.
+
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 

@@ -1,5 +1,6 @@
+use crate::application_context::cached_application_context;
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
-use sona_sqlite::load_storage_usage_snapshot;
+use sona_sqlite::{load_storage_usage_snapshot, load_storage_usage_snapshot_with_database};
 use std::path::PathBuf;
 
 pub(crate) async fn load_storage_usage_snapshot_json(
@@ -13,10 +14,15 @@ pub(crate) async fn load_storage_usage_snapshot_json(
 fn build_storage_usage_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
     let app_data_dir =
         std::path::absolute(PathBuf::from(app_data_dir)).map_err(storage_usage_error)?;
-    let snapshot = load_storage_usage_snapshot(
-        app_data_dir,
-        sona_runtime_fs::storage_usage_generated_at_now(),
-    )
+    let generated_at = sona_runtime_fs::storage_usage_generated_at_now();
+    let snapshot = match cached_application_context(&app_data_dir).map_err(storage_usage_error)? {
+        Some(context) => load_storage_usage_snapshot_with_database(
+            app_data_dir,
+            context.sqlite().database(),
+            generated_at,
+        ),
+        None => load_storage_usage_snapshot(app_data_dir, generated_at),
+    }
     .map_err(storage_usage_error)?;
     let canonical = serde_json::to_value(snapshot).map_err(storage_usage_error)?;
     serde_json::to_string(&canonical).map_err(storage_usage_error)

@@ -10,6 +10,7 @@ use sona_core::history::mutation_repository::{
 };
 use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history_store::HistoryStore;
+use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::Database;
 use sona_sqlite::legacy_migration::migrate_legacy_to_sqlite;
 use tauri_appsona_lib::platform::history_repository::sqlite_store::SqliteHistoryStore;
@@ -429,7 +430,12 @@ fn test_migration_and_crud() {
     })
     .unwrap();
 
-    let store = SqliteHistoryStore::new(root.path().to_path_buf(), Arc::clone(&db));
+    let store = SqliteHistoryStore::with_environment(
+        root.path().to_path_buf(),
+        Arc::clone(&db),
+        Arc::new(SystemClock),
+        Arc::new(UuidGenerator),
+    );
     store.ensure_ready().unwrap();
 
     let items = store.list_items().unwrap();

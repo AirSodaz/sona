@@ -1,5 +1,6 @@
 use crate::{Database, DatabaseError};
 use rusqlite::Connection;
+use sona_core::ports::fs::{FileSystemError, FileSystemOperation};
 use sona_core::storage_usage::{
     DatabaseUsageCategory, FileUsageCategory, SQLiteIndexUsageEntry, SQLiteUsageSummary,
     StorageUsageError, StorageUsageMeasurements, StorageUsageRepository, WebviewCacheUsageCategory,
@@ -78,7 +79,7 @@ impl SqliteStorageUsageRepository {
         }
     }
 
-    fn collect(&self) -> Result<StorageUsageMeasurements, String> {
+    fn collect(&self) -> Result<StorageUsageMeasurements, StorageUsageError> {
         collect_storage_usage_measurements(
             &self.app_local_data_dir,
             self.db.as_ref(),
@@ -89,7 +90,7 @@ impl SqliteStorageUsageRepository {
 
 impl StorageUsageRepository for SqliteStorageUsageRepository {
     fn collect_measurements(&self) -> Result<StorageUsageMeasurements, StorageUsageError> {
-        self.collect().map_err(StorageUsageError::Repository)
+        self.collect()
     }
 }
 
@@ -97,7 +98,7 @@ fn collect_storage_usage_measurements(
     app_local_data_dir: &Path,
     db: &Database,
     webview_cache_path: Option<&Path>,
-) -> Result<StorageUsageMeasurements, String> {
+) -> Result<StorageUsageMeasurements, StorageUsageError> {
     let history_dir = app_local_data_dir.join(HISTORY_DIR_NAME);
     let speaker_profiles_dir = app_local_data_dir.join(SPEAKER_PROFILES_DIR_NAME);
     let models_dir = app_local_data_dir.join(MODELS_DIR_NAME);
@@ -173,16 +174,20 @@ pub fn default_webview_cache_path(app_local_data_dir: &Path) -> Option<PathBuf> 
     }
 }
 
-pub fn observable_webview_cache_bytes(app_local_data_dir: &Path) -> Result<Option<u64>, String> {
+pub fn observable_webview_cache_bytes(
+    app_local_data_dir: &Path,
+) -> Result<Option<u64>, StorageUsageError> {
     let Some(path) = default_webview_cache_path(app_local_data_dir) else {
         return Ok(None);
     };
     Ok(Some(scan_existing_path(&path)?.bytes))
 }
 
-pub fn collect_sqlite_usage_summary(db: &Database) -> Result<SQLiteUsageSummary, String> {
+pub fn collect_sqlite_usage_summary(
+    db: &Database,
+) -> Result<SQLiteUsageSummary, StorageUsageError> {
     db.with_connection(collect_sqlite_usage_summary_inner)
-        .map_err(|error| error.to_string())
+        .map_err(|error| StorageUsageError::Database(error.to_string()))
 }
 
 fn collect_sqlite_usage_summary_inner(
@@ -342,20 +347,22 @@ fn free_page_bytes(conn: &Connection) -> Result<u64, DatabaseError> {
     Ok(total)
 }
 
-fn file_size(path: PathBuf) -> Result<u64, String> {
+fn file_size(path: PathBuf) -> Result<u64, StorageUsageError> {
     match fs::metadata(&path) {
         Ok(metadata) if metadata.is_file() => Ok(metadata.len()),
         Ok(_) => Ok(0),
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(0),
-        Err(error) => Err(format!("Failed to inspect {}: {error}", path.display())),
+        Err(error) => {
+            Err(FileSystemError::new(FileSystemOperation::Metadata, path, error.to_string()).into())
+        }
     }
 }
 
-fn scan_optional_path(path: Option<&Path>) -> Result<Option<FileUsage>, String> {
+fn scan_optional_path(path: Option<&Path>) -> Result<Option<FileUsage>, StorageUsageError> {
     path.map(scan_existing_path).transpose()
 }
 
-fn scan_existing_path(path: &Path) -> Result<FileUsage, String> {
+fn scan_existing_path(path: &Path) -> Result<FileUsage, StorageUsageError> {
     match fs::metadata(path) {
         Ok(metadata) if metadata.is_file() => Ok(FileUsage {
             bytes: metadata.len(),
@@ -364,17 +371,25 @@ fn scan_existing_path(path: &Path) -> Result<FileUsage, String> {
         Ok(metadata) if metadata.is_dir() => scan_dir(path),
         Ok(_) => Ok(FileUsage::default()),
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(FileUsage::default()),
-        Err(error) => Err(format!("Failed to inspect {}: {error}", path.display())),
+        Err(error) => {
+            Err(FileSystemError::new(FileSystemOperation::Metadata, path, error.to_string()).into())
+        }
     }
 }
 
-fn scan_dir(path: &Path) -> Result<FileUsage, String> {
+fn scan_dir(path: &Path) -> Result<FileUsage, StorageUsageError> {
     let mut usage = FileUsage::default();
     for entry in WalkDir::new(path).into_iter().skip(1) {
-        let entry = entry.map_err(|error| format!("Failed to scan {}: {error}", path.display()))?;
-        let metadata = entry
-            .metadata()
-            .map_err(|error| format!("Failed to inspect {}: {error}", entry.path().display()))?;
+        let entry = entry.map_err(|error| {
+            FileSystemError::new(FileSystemOperation::ReadDirectory, path, error.to_string())
+        })?;
+        let metadata = entry.metadata().map_err(|error| {
+            FileSystemError::new(
+                FileSystemOperation::Metadata,
+                entry.path(),
+                error.to_string(),
+            )
+        })?;
         if metadata.is_file() {
             usage.bytes += metadata.len();
             usage.file_count += 1;
@@ -383,9 +398,22 @@ fn scan_dir(path: &Path) -> Result<FileUsage, String> {
     Ok(usage)
 }
 
-fn scan_dir_excluding(root: &Path, excluded_paths: &[PathBuf]) -> Result<FileUsage, String> {
-    if !root.exists() {
-        return Ok(FileUsage::default());
+fn scan_dir_excluding(
+    root: &Path,
+    excluded_paths: &[PathBuf],
+) -> Result<FileUsage, StorageUsageError> {
+    match fs::metadata(root) {
+        Ok(metadata) if metadata.is_dir() => {}
+        Ok(_) => return Ok(FileUsage::default()),
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(FileUsage::default()),
+        Err(error) => {
+            return Err(FileSystemError::new(
+                FileSystemOperation::Metadata,
+                root,
+                error.to_string(),
+            )
+            .into());
+        }
     }
 
     let mut usage = FileUsage::default();
@@ -393,13 +421,19 @@ fn scan_dir_excluding(root: &Path, excluded_paths: &[PathBuf]) -> Result<FileUsa
         entry.depth() == 0 || !is_excluded_path(entry.path(), excluded_paths)
     });
     for entry in walker.skip(1) {
-        let entry = entry.map_err(|error| format!("Failed to scan {}: {error}", root.display()))?;
+        let entry = entry.map_err(|error| {
+            FileSystemError::new(FileSystemOperation::ReadDirectory, root, error.to_string())
+        })?;
         if is_excluded_path(entry.path(), excluded_paths) {
             continue;
         }
-        let metadata = entry
-            .metadata()
-            .map_err(|error| format!("Failed to inspect {}: {error}", entry.path().display()))?;
+        let metadata = entry.metadata().map_err(|error| {
+            FileSystemError::new(
+                FileSystemOperation::Metadata,
+                entry.path(),
+                error.to_string(),
+            )
+        })?;
         if metadata.is_file() {
             usage.bytes += metadata.len();
             usage.file_count += 1;
@@ -492,6 +526,33 @@ mod tests {
                 && entry.name == "idx_dbstat_analytics_probe_value"
                 && entry.bytes > 0
         }));
+    }
+
+    #[test]
+    fn filesystem_failures_preserve_operation_and_path() {
+        let path = Path::new("\0");
+
+        let error = scan_existing_path(path).unwrap_err();
+
+        let StorageUsageError::FileSystem(error) = error else {
+            panic!("expected filesystem error");
+        };
+        assert_eq!(error.operation, FileSystemOperation::Metadata);
+        assert_eq!(error.path, path);
+    }
+
+    #[test]
+    fn sqlite_failures_preserve_database_category() {
+        let db = Database::open_in_memory().unwrap();
+        db.with_connection(|connection| {
+            connection.execute_batch("DETACH DATABASE analytics")?;
+            Ok(())
+        })
+        .unwrap();
+
+        let error = collect_sqlite_usage_summary(&db).unwrap_err();
+
+        assert!(matches!(error, StorageUsageError::Database(_)));
     }
 
     #[test]

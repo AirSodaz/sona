@@ -1,6 +1,8 @@
 use serde::Deserialize;
 use std::path::PathBuf;
 
+use super::error::RuntimeConfigError;
+
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct UnifiedConfigFile {
     #[serde(flatten)]
@@ -153,15 +155,17 @@ impl UnifiedConfigFile {
 pub fn parse_unified_config_file(
     contents: &str,
     source_label: &str,
-) -> Result<UnifiedConfigFile, String> {
-    toml::from_str(contents)
-        .map_err(|error| format!("Failed to parse config file {source_label}: {error}"))
+) -> Result<UnifiedConfigFile, RuntimeConfigError> {
+    toml::from_str(contents).map_err(|error| RuntimeConfigError::Parse {
+        source_label: source_label.to_string(),
+        reason: error.to_string(),
+    })
 }
 
 pub fn parse_transcribe_config_file(
     contents: &str,
     source_label: &str,
-) -> Result<TranscribeConfigSection, String> {
+) -> Result<TranscribeConfigSection, RuntimeConfigError> {
     let unified = parse_unified_config_file(contents, source_label)?;
     Ok(unified.into_transcribe_config())
 }
@@ -169,7 +173,7 @@ pub fn parse_transcribe_config_file(
 pub fn parse_transcribe_live_config_file(
     contents: &str,
     source_label: &str,
-) -> Result<TranscribeLiveConfigSection, String> {
+) -> Result<TranscribeLiveConfigSection, RuntimeConfigError> {
     let unified = parse_unified_config_file(contents, source_label)?;
     Ok(unified.into_transcribe_live_config())
 }
@@ -177,7 +181,7 @@ pub fn parse_transcribe_live_config_file(
 pub fn parse_serve_config_file(
     contents: &str,
     source_label: &str,
-) -> Result<ServeConfigSection, String> {
+) -> Result<ServeConfigSection, RuntimeConfigError> {
     let unified = parse_unified_config_file(contents, source_label)?;
     Ok(unified.into_serve_config())
 }

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use rusqlite::{OptionalExtension, Transaction, params};
 use serde_json::Value;
+use sona_core::ports::time::UnixMillisClock;
 use sona_core::sync::{
     HybridLogicalClock, SyncApplicationRepository, SyncCausalContext, SyncConflict,
     SyncConflictDetail, SyncConflictResolution, SyncConflictSummary, SyncDeviceCursor,
@@ -19,24 +20,29 @@ const DELETE_FIELD: &str = "__entity__";
 #[derive(Clone)]
 pub struct SqliteSyncRepository {
     db: Arc<Database>,
+    clock: Arc<dyn UnixMillisClock>,
 }
 
 #[derive(Clone)]
 pub struct SqliteSyncRepositoryFactory {
     db: Arc<Database>,
+    clock: Arc<dyn UnixMillisClock>,
 }
 
 impl SqliteSyncRepositoryFactory {
-    pub fn new(db: Arc<Database>) -> Self {
-        Self { db }
+    pub fn new(db: Arc<Database>, clock: Arc<dyn UnixMillisClock>) -> Self {
+        Self { db, clock }
     }
 }
 
 impl SyncRepositoryFactory for SqliteSyncRepositoryFactory {
     fn open(&self) -> Result<Option<Arc<dyn SyncApplicationRepository>>, SyncError> {
-        SqliteSyncRepository::open_existing(Arc::clone(&self.db)).map(|repository| {
-            repository.map(|repository| Arc::new(repository) as Arc<dyn SyncApplicationRepository>)
-        })
+        SqliteSyncRepository::open_existing(Arc::clone(&self.db), Arc::clone(&self.clock)).map(
+            |repository| {
+                repository
+                    .map(|repository| Arc::new(repository) as Arc<dyn SyncApplicationRepository>)
+            },
+        )
     }
 
     fn initialize(
@@ -45,8 +51,14 @@ impl SyncRepositoryFactory for SqliteSyncRepositoryFactory {
         device_id: &str,
         preset: SyncPresetV1,
     ) -> Result<Arc<dyn SyncApplicationRepository>, SyncError> {
-        SqliteSyncRepository::initialize(Arc::clone(&self.db), vault_id, device_id, preset)
-            .map(|repository| Arc::new(repository) as Arc<dyn SyncApplicationRepository>)
+        SqliteSyncRepository::initialize(
+            Arc::clone(&self.db),
+            Arc::clone(&self.clock),
+            vault_id,
+            device_id,
+            preset,
+        )
+        .map(|repository| Arc::new(repository) as Arc<dyn SyncApplicationRepository>)
     }
 
     fn preview(
@@ -58,6 +70,7 @@ impl SyncRepositoryFactory for SqliteSyncRepositoryFactory {
     ) -> Result<SyncJoinPreview, SyncError> {
         SqliteSyncRepository::preview_join(
             Arc::clone(&self.db),
+            Arc::clone(&self.clock),
             vault_id,
             preview_device_id,
             preset,
@@ -67,7 +80,10 @@ impl SyncRepositoryFactory for SqliteSyncRepositoryFactory {
 }
 
 impl SqliteSyncRepository {
-    pub fn open_existing(db: Arc<Database>) -> Result<Option<Self>, SyncError> {
+    pub fn open_existing(
+        db: Arc<Database>,
+        clock: Arc<dyn UnixMillisClock>,
+    ) -> Result<Option<Self>, SyncError> {
         let exists = db
             .with_connection(|connection| {
                 connection
@@ -79,17 +95,19 @@ impl SqliteSyncRepository {
                     .map_err(DatabaseError::QueryError)
             })
             .map_err(sync_database_error)?;
-        Ok(exists.then_some(Self { db }))
+        Ok(exists.then_some(Self { db, clock }))
     }
 
     pub fn initialize(
         db: Arc<Database>,
+        clock: Arc<dyn UnixMillisClock>,
         vault_id: &str,
         device_id: &str,
         preset: SyncPresetV1,
     ) -> Result<Self, SyncError> {
         validate_identifier(vault_id, "vault ID")?;
         validate_identifier(device_id, "device ID")?;
+        let now_ms = clock.now_ms()?;
         let preset_json = serde_json::to_string(&preset).map_err(sync_serialization_error)?;
         db.with_rw_transaction(|transaction| {
             let inserted = transaction.execute(
@@ -110,16 +128,17 @@ impl SqliteSyncRepository {
                 ));
             }
             if inserted == 1 {
-                seed_sync_baseline_in_transaction(transaction, preset)?;
+                seed_sync_baseline_in_transaction(transaction, preset, now_ms)?;
             }
             Ok(())
         })
         .map_err(sync_database_error)?;
-        Ok(Self { db })
+        Ok(Self { db, clock })
     }
 
     pub fn preview_join(
         db: Arc<Database>,
+        clock: Arc<dyn UnixMillisClock>,
         vault_id: &str,
         preview_device_id: &str,
         preset: SyncPresetV1,
@@ -127,6 +146,7 @@ impl SqliteSyncRepository {
     ) -> Result<SyncJoinPreview, SyncError> {
         validate_identifier(vault_id, "vault ID")?;
         validate_identifier(preview_device_id, "preview device ID")?;
+        let now_ms = clock.now_ms()?;
         let preset_json = serde_json::to_string(&preset).map_err(sync_serialization_error)?;
         db.with_write_connection(|connection| {
             let transaction = connection
@@ -138,7 +158,7 @@ impl SqliteSyncRepository {
                      VALUES (1, ?1, ?2, ?3)",
                     params![vault_id, preview_device_id, preset_json],
                 )?;
-                seed_sync_baseline_in_transaction(&transaction, preset)?;
+                seed_sync_baseline_in_transaction(&transaction, preset, now_ms)?;
                 let local_operation_count =
                     transaction.query_row("SELECT COUNT(*) FROM sync_outbox", [], |row| {
                         row.get::<_, i64>(0)
@@ -319,25 +339,46 @@ impl SqliteSyncRepository {
         next: SyncPresetV1,
         confirm_shrink: bool,
     ) -> Result<u64, SyncError> {
+        let current = self
+            .db
+            .with_connection(|connection| {
+                Ok(connection.query_row(
+                    "SELECT preset FROM sync_state WHERE id = 1",
+                    [],
+                    |row| parse_preset(row.get::<_, String>(0)?),
+                )?)
+            })
+            .map_err(sync_database_error)?;
+        if current == next {
+            return Ok(0);
+        }
+        validate_preset_transition(current, next, confirm_shrink).map_err(sync_database_error)?;
+        let shrinking = preset_rank(next) < preset_rank(current);
+        let now_ms = shrinking.then(|| self.clock.now_ms()).transpose()?;
+
         self.db
             .with_rw_transaction(|transaction| {
-                let current = transaction.query_row(
+                let persisted_current = transaction.query_row(
                     "SELECT preset FROM sync_state WHERE id = 1",
                     [],
                     |row| parse_preset(row.get::<_, String>(0)?),
                 )?;
-                if current == next {
-                    return Ok(0);
+                if persisted_current != current {
+                    return Err(DatabaseError::Internal(
+                        "SQLite sync preset changed concurrently; retry the operation.".to_string(),
+                    ));
                 }
-                validate_preset_transition(current, next, confirm_shrink)?;
-                let shrinking = preset_rank(next) < preset_rank(current);
 
                 let mut tombstone_count = 0_u64;
                 if shrinking {
                     let entities = sync_entities_excluded_by_preset(transaction, next)?;
-                    let now_ms = sync_now_ms();
                     for (kind, entity_id) in entities {
-                        record_local_delete_in_transaction(transaction, kind, &entity_id, now_ms)?;
+                        record_local_delete_in_transaction(
+                            transaction,
+                            kind,
+                            &entity_id,
+                            now_ms.expect("shrinking preset must have a timestamp"),
+                        )?;
                         tombstone_count += 1;
                     }
                 }
@@ -492,12 +533,13 @@ fn sync_entities_excluded_by_preset(
 fn seed_sync_baseline_in_transaction(
     transaction: &Transaction<'_>,
     preset: SyncPresetV1,
+    now_ms: u64,
 ) -> Result<(), DatabaseError> {
     for tag in crate::tag::load_tags_in_transaction(transaction)? {
         let sort_order = tag.sort_order;
         crate::tag::record_tag_sync_fields(transaction, &tag, Some(sort_order))?;
     }
-    seed_history_baseline_in_transaction(transaction)?;
+    seed_history_baseline_in_transaction(transaction, now_ms)?;
     if preset != SyncPresetV1::Content {
         crate::config_store::seed_sync_config_baseline_in_transaction(transaction)?;
     }
@@ -509,6 +551,7 @@ fn seed_sync_baseline_in_transaction(
 
 fn seed_history_baseline_in_transaction(
     transaction: &Transaction<'_>,
+    fallback_now_ms: u64,
 ) -> Result<(), DatabaseError> {
     let items = {
         let mut statement = transaction.prepare_cached(
@@ -586,7 +629,7 @@ fn seed_history_baseline_in_transaction(
             &history_id,
             "document",
             document,
-            sync_now_ms(),
+            fallback_now_ms,
         )?;
     }
     let summaries = load_json_documents(
@@ -604,7 +647,7 @@ fn seed_history_baseline_in_transaction(
             &history_id,
             "document",
             document,
-            sync_now_ms(),
+            fallback_now_ms,
         )?;
     }
 
@@ -843,14 +886,6 @@ pub(crate) fn record_local_delete_in_transaction(
         SyncOperationKind::DeleteEntity,
         now_ms,
     )
-}
-
-pub(crate) fn sync_now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |duration| {
-            u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
-        })
 }
 
 fn record_local_change_in_transaction(

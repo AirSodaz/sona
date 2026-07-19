@@ -8,6 +8,9 @@ use sona_core::domain::LlmProvider;
 use sona_core::llm::model_catalog::merge_model_metadata;
 use sona_core::llm::provider_protocol::{LlmModality, LlmModelMetadataSource, LlmModelSummary};
 use sona_core::llm::tasks::LlmProviderStrategy;
+use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
+
+use crate::transport::{http_status_port_error, reqwest_port_error};
 
 const MODELS_DEV_ENDPOINT: &str = "https://models.dev/api.json";
 const MODELS_DEV_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
@@ -84,11 +87,16 @@ impl ModelsDevCatalog {
             .next()
     }
 
-    async fn fetch(&self) -> Result<String, String> {
+    async fn fetch(&self) -> Result<String, LlmPortError> {
         if let Some(cached) = self
             .cache
             .read()
-            .map_err(|_| "models.dev cache lock is poisoned".to_string())?
+            .map_err(|_| {
+                LlmPortError::new(
+                    LlmPortErrorKind::Unavailable,
+                    "models.dev cache lock is poisoned",
+                )
+            })?
             .as_ref()
             .filter(|cached| cached.fetched_at.elapsed() < MODELS_DEV_CACHE_TTL)
         {
@@ -100,14 +108,19 @@ impl ModelsDevCatalog {
             .get(&self.endpoint)
             .send()
             .await
-            .map_err(|error| error.to_string())?
-            .error_for_status()
-            .map_err(|error| error.to_string())?;
-        let body = response.text().await.map_err(|error| error.to_string())?;
-        *self
-            .cache
-            .write()
-            .map_err(|_| "models.dev cache lock is poisoned".to_string())? = Some(CachedCatalog {
+            .map_err(reqwest_port_error)?;
+        let status = response.status();
+        let headers = response.headers().clone();
+        let body = response.text().await.map_err(reqwest_port_error)?;
+        if !status.is_success() {
+            return Err(http_status_port_error(status, &headers, body));
+        }
+        *self.cache.write().map_err(|_| {
+            LlmPortError::new(
+                LlmPortErrorKind::Unavailable,
+                "models.dev cache lock is poisoned",
+            )
+        })? = Some(CachedCatalog {
             fetched_at: Instant::now(),
             body: body.clone(),
         });
@@ -166,9 +179,14 @@ pub fn parse_models_dev_models(
     body: &str,
     provider_id: &str,
     model_ids: &[&str],
-) -> Result<Vec<LlmModelSummary>, String> {
-    let catalog = serde_json::from_str::<HashMap<String, ModelsDevProvider>>(body)
-        .map_err(|error| error.to_string())?;
+) -> Result<Vec<LlmModelSummary>, LlmPortError> {
+    let catalog =
+        serde_json::from_str::<HashMap<String, ModelsDevProvider>>(body).map_err(|error| {
+            LlmPortError::new(
+                LlmPortErrorKind::Protocol,
+                format!("expected a valid models.dev catalog response: {error}"),
+            )
+        })?;
     let Some(provider) = catalog.get(provider_id) else {
         return Ok(Vec::new());
     };

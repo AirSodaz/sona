@@ -1,3 +1,7 @@
+mod error;
+
+pub use error::*;
+
 use async_trait::async_trait;
 use axum::{
     Json, Router,
@@ -13,6 +17,11 @@ use ipnet::IpNet;
 use sha2::Sha256;
 use sona_core::ports::asr::{
     BatchTranscriber, OnlineAsrProviderRequest, find_online_asr_provider, online_asr_providers,
+};
+use sona_core::ports::fs::{FileSystemError, FileSystemOperation};
+use sona_core::ports::runtime::{
+    BatchTranscribePlanResolver, GpuAvailabilityProvider, MediaFileValidator, ModelCatalogProvider,
+    RuntimeCapabilityError,
 };
 use sona_core::runtime::gpu::DEFAULT_GPU_ACCELERATION;
 use sona_core::runtime::serve::ResolvedServeRuntimeOptions;
@@ -71,16 +80,10 @@ pub trait ApiServerPlatform: Send + Sync {
     async fn transcribe_online_batch(
         &self,
         _request: OnlineBatchRequest,
-    ) -> Result<Vec<TranscriptSegment>, String> {
-        Err(ONLINE_ASR_BATCH_UNAVAILABLE.to_string())
-    }
-
-    async fn build_info_response(
-        &self,
-        models_dir: &StdPath,
-        online_asr_config: &HashMap<String, serde_json::Value>,
-    ) -> Result<InfoResponse, String> {
-        default_info_response(models_dir, online_asr_config).await
+    ) -> Result<Vec<TranscriptSegment>, ApiServerPlatformError> {
+        Err(ApiServerPlatformError::unavailable(
+            ONLINE_ASR_BATCH_UNAVAILABLE,
+        ))
     }
 
     fn streaming_context(&self) -> Option<Arc<dyn Any + Send + Sync>> {
@@ -108,20 +111,34 @@ pub struct ApiServerRuntimeConfig {
     pub ip_whitelist: Arc<Vec<IpNet>>,
     pub online_asr_config: Arc<RwLock<HashMap<String, serde_json::Value>>>,
     pub transcription_defaults: ApiServerTranscriptionDefaults,
+    pub batch_transcriber: Arc<dyn BatchTranscriber>,
+    pub media_validator: Arc<dyn MediaFileValidator>,
+    pub gpu_availability: Arc<dyn GpuAvailabilityProvider>,
+    pub model_catalog: Arc<dyn ModelCatalogProvider>,
+    pub batch_plan_resolver: Arc<dyn BatchTranscribePlanResolver>,
     pub platform: Arc<dyn ApiServerPlatform>,
     pub streaming_router: Option<Router<ServerState>>,
     pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
-    pub bind_tx: Option<tokio::sync::oneshot::Sender<Result<ApiServerDashboardHandle, String>>>,
+    pub bind_tx: Option<
+        tokio::sync::oneshot::Sender<Result<ApiServerDashboardHandle, ApiServerRuntimeError>>,
+    >,
 }
 
 pub struct ApiServerRuntimeParts {
     pub resolved: ResolvedServeRuntimeOptions,
     pub temp_dir: PathBuf,
     pub online_asr_config: Arc<RwLock<HashMap<String, serde_json::Value>>>,
+    pub batch_transcriber: Arc<dyn BatchTranscriber>,
+    pub media_validator: Arc<dyn MediaFileValidator>,
+    pub gpu_availability: Arc<dyn GpuAvailabilityProvider>,
+    pub model_catalog: Arc<dyn ModelCatalogProvider>,
+    pub batch_plan_resolver: Arc<dyn BatchTranscribePlanResolver>,
     pub platform: Arc<dyn ApiServerPlatform>,
     pub streaming_router: Option<Router<ServerState>>,
     pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
-    pub bind_tx: Option<tokio::sync::oneshot::Sender<Result<ApiServerDashboardHandle, String>>>,
+    pub bind_tx: Option<
+        tokio::sync::oneshot::Sender<Result<ApiServerDashboardHandle, ApiServerRuntimeError>>,
+    >,
 }
 
 pub struct PreparedApiServerRuntime {
@@ -133,6 +150,11 @@ pub struct ApiServerServiceParts {
     pub resolved: ResolvedServeRuntimeOptions,
     pub temp_dir: PathBuf,
     pub online_asr_config: Arc<RwLock<HashMap<String, serde_json::Value>>>,
+    pub batch_transcriber: Arc<dyn BatchTranscriber>,
+    pub media_validator: Arc<dyn MediaFileValidator>,
+    pub gpu_availability: Arc<dyn GpuAvailabilityProvider>,
+    pub model_catalog: Arc<dyn ModelCatalogProvider>,
+    pub batch_plan_resolver: Arc<dyn BatchTranscribePlanResolver>,
     pub platform: Arc<dyn ApiServerPlatform>,
     pub streaming_router: Option<Router<ServerState>>,
 }
@@ -140,7 +162,7 @@ pub struct ApiServerServiceParts {
 pub struct RunningApiServer {
     pub normalized_ip_whitelist: String,
     pub shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
-    pub join_handle: tokio::task::JoinHandle<Result<(), String>>,
+    pub join_handle: tokio::task::JoinHandle<Result<(), ApiServerRuntimeError>>,
     dashboard: ApiServerDashboardHandle,
 }
 
@@ -157,24 +179,6 @@ pub struct ApiServerDashboardHandle {
     state: ServerState,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ApiServerStartError {
-    Configuration(String),
-    Runtime(String),
-}
-
-impl std::fmt::Display for ApiServerStartError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ApiServerStartError::Configuration(error) | ApiServerStartError::Runtime(error) => {
-                f.write_str(error)
-            }
-        }
-    }
-}
-
-impl std::error::Error for ApiServerStartError {}
-
 impl std::fmt::Debug for RunningApiServer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RunningApiServer")
@@ -184,7 +188,9 @@ impl std::fmt::Debug for RunningApiServer {
 }
 
 impl RunningApiServer {
-    pub async fn dashboard_snapshot(&self) -> Result<ApiServerDashboardSnapshot, String> {
+    pub async fn dashboard_snapshot(
+        &self,
+    ) -> Result<ApiServerDashboardSnapshot, ApiServerDashboardError> {
         self.dashboard.snapshot().await
     }
 
@@ -192,33 +198,46 @@ impl RunningApiServer {
         self.dashboard.clone()
     }
 
-    pub fn signal_shutdown(&mut self) {
+    pub fn signal_shutdown(&mut self) -> Result<(), ApiServerStopError> {
         if let Some(sender) = self.shutdown_tx.take() {
-            let _ = sender.send(());
+            sender
+                .send(())
+                .map_err(|_| ApiServerStopError::ShutdownSignalClosed)?;
         }
+        Ok(())
     }
 
-    pub async fn wait(self) -> Result<(), String> {
+    pub async fn wait(self) -> Result<(), ApiServerRuntimeError> {
         self.join_handle
             .await
-            .map_err(|error| format!("API server task failed: {error}"))?
+            .map_err(|error| ApiServerRuntimeError::TaskJoin {
+                reason: error.to_string(),
+            })?
     }
 
-    pub async fn stop(mut self) -> Result<(), String> {
-        self.signal_shutdown();
-        self.wait().await
+    pub async fn stop(mut self) -> Result<(), ApiServerStopError> {
+        let shutdown_result = self.signal_shutdown();
+        let wait_result = self.wait().await;
+        match (shutdown_result, wait_result) {
+            (_, Err(error)) => Err(ApiServerStopError::Runtime(error)),
+            (Err(error), Ok(())) => Err(error),
+            (Ok(()), Ok(())) => Ok(()),
+        }
     }
 }
 
 impl ApiServerDashboardHandle {
-    pub async fn snapshot(&self) -> Result<ApiServerDashboardSnapshot, String> {
+    pub async fn snapshot(&self) -> Result<ApiServerDashboardSnapshot, ApiServerDashboardError> {
         let health = build_health_response(&self.state).await;
         let configs = self.state.online_asr_config.read().await.clone();
-        let info = self
-            .state
-            .platform
-            .build_info_response(&self.state.models_dir, &configs)
-            .await?;
+        let info = build_info_response(
+            Arc::clone(&self.state.gpu_availability),
+            Arc::clone(&self.state.model_catalog),
+            &self.state.models_dir,
+            &configs,
+        )
+        .await
+        .map_err(ApiServerDashboardError::Platform)?;
         let jobs = self.state.job_manager.list_jobs().await;
 
         Ok(ApiServerDashboardSnapshot { health, info, jobs })
@@ -267,15 +286,20 @@ impl JobManager {
         }
     }
 
-    pub async fn submit_job(&self, job: TranscriptionJob) -> Result<(), String> {
+    pub async fn submit_job(&self, job: TranscriptionJob) -> Result<(), ApiServerJobError> {
+        let job_id = job.job_id.clone();
         self.jobs.write().await.insert(
-            job.job_id.clone(),
+            job_id.clone(),
             JobEntry {
                 status: JobStatus::Pending,
                 completed_at: None,
             },
         );
-        self.sender.send(job).await.map_err(|e| e.to_string())
+        if self.sender.send(job).await.is_err() {
+            self.jobs.write().await.remove(&job_id);
+            return Err(ApiServerJobError::QueueClosed { job_id });
+        }
+        Ok(())
     }
 
     pub async fn update_job(&self, job_id: &str, status: JobStatus) {
@@ -327,6 +351,10 @@ pub struct ServerState {
     pub ip_whitelist: Arc<Vec<IpNet>>,
     pub online_asr_config: Arc<RwLock<HashMap<String, serde_json::Value>>>,
     pub transcription_defaults: ApiServerTranscriptionDefaults,
+    pub media_validator: Arc<dyn MediaFileValidator>,
+    pub gpu_availability: Arc<dyn GpuAvailabilityProvider>,
+    pub model_catalog: Arc<dyn ModelCatalogProvider>,
+    pub batch_plan_resolver: Arc<dyn BatchTranscribePlanResolver>,
     pub platform: Arc<dyn ApiServerPlatform>,
 }
 
@@ -381,7 +409,7 @@ pub struct OnlineAsrProviderInfo {
     pub supports_streaming: bool,
 }
 
-#[derive(serde::Serialize)]
+#[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InfoResponse {
     pub platform: String,
@@ -392,19 +420,22 @@ pub struct InfoResponse {
     pub online_asr_providers: Vec<OnlineAsrProviderInfo>,
 }
 
-pub async fn default_info_response(
+pub async fn build_info_response(
+    gpu_availability: Arc<dyn GpuAvailabilityProvider>,
+    model_catalog: Arc<dyn ModelCatalogProvider>,
     models_dir: &StdPath,
     online_asr_config: &HashMap<String, serde_json::Value>,
-) -> Result<InfoResponse, String> {
-    let gpu_available = sona_local_asr::gpu::check_gpu_availability()
-        .await
-        .unwrap_or(false);
+) -> Result<InfoResponse, ApiServerPlatformError> {
+    let gpu_available = gpu_availability.is_gpu_available().await;
     let models_dir = models_dir.to_path_buf();
     let snapshot = tokio::task::spawn_blocking(move || {
-        sona_runtime_fs::build_model_catalog_snapshot(&models_dir)
+        model_catalog.build_model_catalog_snapshot(&models_dir)
     })
     .await
-    .map_err(|e| format!("Failed to build model snapshot: {e}"))?;
+    .map_err(|error| {
+        ApiServerPlatformError::information(format!("Failed to build model snapshot: {error}"))
+    })?
+    .map_err(|error| ApiServerPlatformError::information(error.to_string()))?;
 
     let installed_models = snapshot
         .models
@@ -446,7 +477,7 @@ pub async fn default_info_response(
     })
 }
 
-pub fn parse_ip_whitelist(whitelist_str: &str) -> Result<Vec<IpNet>, String> {
+pub fn parse_ip_whitelist(whitelist_str: &str) -> Result<Vec<IpNet>, ApiServerConfigurationError> {
     let rules = whitelist_str
         .split(',')
         .map(|s| s.trim())
@@ -488,12 +519,18 @@ pub fn parse_ip_whitelist(whitelist_str: &str) -> Result<Vec<IpNet>, String> {
                         continue;
                     }
                 }
-                return Err(format!("Invalid IP wildcard format: {}", rule));
+                return Err(ApiServerConfigurationError::InvalidIpWildcard {
+                    rule: rule.to_string(),
+                });
             } else {
-                return Err(format!("Invalid IP wildcard format: {}", rule));
+                return Err(ApiServerConfigurationError::InvalidIpWildcard {
+                    rule: rule.to_string(),
+                });
             }
         } else {
-            return Err(format!("Invalid IP rule format: {}", rule));
+            return Err(ApiServerConfigurationError::InvalidIpRule {
+                rule: rule.to_string(),
+            });
         }
     }
 
@@ -505,41 +542,22 @@ pub fn parse_ip_whitelist(whitelist_str: &str) -> Result<Vec<IpNet>, String> {
     Ok(nets)
 }
 
-pub fn format_bind_error(e: std::io::Error, addr: &str) -> String {
-    let raw_code = e.raw_os_error();
-    let os_err_suffix = match raw_code {
-        Some(code) => format!(" (os error {code})"),
-        None => "".to_string(),
-    };
-    match e.kind() {
-        std::io::ErrorKind::AddrInUse => {
-            format!(
-                "Address already in use: {addr}. Make sure the port is not being used by another process.{os_err_suffix}"
-            )
-        }
-        std::io::ErrorKind::AddrNotAvailable => {
-            format!("Address not available: {addr}.{os_err_suffix}")
-        }
-        std::io::ErrorKind::PermissionDenied => {
-            format!("Permission denied: Failed to bind to {addr}.{os_err_suffix}")
-        }
-        _ => {
-            if let Some(code) = raw_code {
-                format!("Failed to bind to {addr} (os error {code})")
-            } else {
-                format!("Failed to bind to {addr}: {e}")
-            }
-        }
-    }
+pub fn format_bind_error(error: std::io::Error, address: &str) -> ApiServerBindError {
+    ApiServerBindError::from_io(error, address)
 }
 
 pub fn prepare_runtime_config(
     parts: ApiServerRuntimeParts,
-) -> Result<PreparedApiServerRuntime, String> {
+) -> Result<PreparedApiServerRuntime, ApiServerConfigurationError> {
     let ApiServerRuntimeParts {
         resolved,
         temp_dir,
         online_asr_config,
+        batch_transcriber,
+        media_validator,
+        gpu_availability,
+        model_catalog,
+        batch_plan_resolver,
         platform,
         streaming_router,
         shutdown_rx,
@@ -571,6 +589,11 @@ pub fn prepare_runtime_config(
                 vad_model_id: resolved.transcription_defaults.vad_model_id,
                 punctuation_model_id: resolved.transcription_defaults.punctuation_model_id,
             },
+            batch_transcriber,
+            media_validator,
+            gpu_availability,
+            model_catalog,
+            batch_plan_resolver,
             platform,
             streaming_router,
             shutdown_rx,
@@ -589,6 +612,11 @@ pub async fn start_api_server_runtime(
         resolved: parts.resolved,
         temp_dir: parts.temp_dir,
         online_asr_config: parts.online_asr_config,
+        batch_transcriber: parts.batch_transcriber,
+        media_validator: parts.media_validator,
+        gpu_availability: parts.gpu_availability,
+        model_catalog: parts.model_catalog,
+        batch_plan_resolver: parts.batch_plan_resolver,
         platform: parts.platform,
         streaming_router: parts.streaming_router,
         shutdown_rx,
@@ -618,17 +646,23 @@ pub async fn start_api_server_runtime(
         }
         Err(_) => {
             let _ = shutdown_tx.send(());
-            let error = join_handle
-                .await
-                .map_err(|join_error| format!("API server task failed: {join_error}"))
-                .and_then(|result| result)
-                .err()
-                .unwrap_or_else(|| {
-                    "API server failed to start: task terminated prematurely".to_string()
-                });
+            let error = startup_channel_closed_error(join_handle).await;
             Err(ApiServerStartError::Runtime(error))
         }
     }
+}
+
+async fn startup_channel_closed_error(
+    join_handle: tokio::task::JoinHandle<Result<(), ApiServerRuntimeError>>,
+) -> ApiServerRuntimeError {
+    join_handle
+        .await
+        .map_err(|join_error| ApiServerRuntimeError::TaskJoin {
+            reason: join_error.to_string(),
+        })
+        .and_then(|result| result)
+        .err()
+        .unwrap_or(ApiServerRuntimeError::DashboardChannelClosed)
 }
 
 async fn ip_whitelist_middleware(
@@ -690,11 +724,14 @@ pub async fn handle_info(
     State(state): State<ServerState>,
 ) -> Result<Json<InfoResponse>, (StatusCode, String)> {
     let configs = state.online_asr_config.read().await.clone();
-    let info = state
-        .platform
-        .build_info_response(&state.models_dir, &configs)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let info = build_info_response(
+        Arc::clone(&state.gpu_availability),
+        Arc::clone(&state.model_catalog),
+        &state.models_dir,
+        &configs,
+    )
+    .await
+    .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
     Ok(Json(info))
 }
 
@@ -748,7 +785,7 @@ pub async fn handle_transcribe(
             temp_file_path = Some(file_path);
 
             if let Some(ref path) = temp_file_path
-                && !sona_media_detector::is_valid_media_file(path).await
+                && !state.media_validator.is_valid_media_file(path).await
             {
                 let _ = tokio::fs::remove_file(path).await;
                 return Err((
@@ -799,7 +836,7 @@ pub async fn handle_transcribe(
         .job_manager
         .submit_job(job)
         .await
-        .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e))?;
+        .map_err(|error| (StatusCode::SERVICE_UNAVAILABLE, error.to_string()))?;
 
     Ok(Json(serde_json::json!({ "job_id": job_id })))
 }
@@ -889,6 +926,8 @@ async fn start_worker_loop(
     models_dir: PathBuf,
     max_concurrent: usize,
     transcription_defaults: ApiServerTranscriptionDefaults,
+    batch_transcriber: Arc<dyn BatchTranscriber>,
+    batch_plan_resolver: Arc<dyn BatchTranscribePlanResolver>,
     platform: Arc<dyn ApiServerPlatform>,
 ) {
     let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));
@@ -898,6 +937,8 @@ async fn start_worker_loop(
         let models_dir = models_dir.clone();
         let semaphore = semaphore.clone();
         let defaults = transcription_defaults.clone();
+        let batch_transcriber = batch_transcriber.clone();
+        let batch_plan_resolver = batch_plan_resolver.clone();
         let platform = platform.clone();
 
         tokio::spawn(async move {
@@ -934,21 +975,20 @@ async fn start_worker_loop(
                     };
                     match platform.transcribe_online_batch(request).await {
                         Ok(segments) => JobStatus::Completed(segments),
-                        Err(e) => JobStatus::Failed(e),
+                        Err(error) => JobStatus::Failed(error.to_string()),
                     }
                 } else {
                     JobStatus::Failed("Missing online provider ID".to_string())
                 }
             } else {
-                match build_local_transcribe_plan(&job, &models_dir, &defaults) {
-                    Ok(plan) => {
-                        let transcriber = sona_local_asr::batch::LocalBatchAsrAdapter;
-                        match transcriber.transcribe(plan).await {
-                            Ok(segments) => JobStatus::Completed(segments),
-                            Err(e) => JobStatus::Failed(e),
-                        }
-                    }
-                    Err(e) => JobStatus::Failed(e),
+                let options = build_local_transcribe_options(&job, &models_dir, &defaults);
+                match batch_plan_resolver.resolve_batch_transcribe_plan(options) {
+                    Ok(plan) => match batch_transcriber.transcribe(plan).await {
+                        Ok(segments) => JobStatus::Completed(segments),
+                        Err(e) => JobStatus::Failed(e.to_string()),
+                    },
+                    Err(RuntimeCapabilityError::BatchPlan { reason }) => JobStatus::Failed(reason),
+                    Err(error) => JobStatus::Failed(error.to_string()),
                 }
             };
 
@@ -1001,19 +1041,6 @@ pub fn build_local_transcribe_options(
     }
 }
 
-pub fn build_local_transcribe_plan(
-    job: &TranscriptionJob,
-    models_dir: &StdPath,
-    defaults: &ApiServerTranscriptionDefaults,
-) -> Result<sona_core::transcription::runtime::BatchTranscribePlan, String> {
-    let options = build_local_transcribe_options(job, models_dir, defaults);
-    sona_runtime_fs::resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
-        options,
-        None,
-        sona_runtime_fs::models_dir_status,
-    )
-}
-
 fn companion_defaults_for_model(
     model_id: &str,
     defaults: &ApiServerTranscriptionDefaults,
@@ -1046,7 +1073,7 @@ fn companion_defaults_for_model(
     (vad_model_id, punctuation_model_id)
 }
 
-pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
+pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerRuntimeError> {
     let ApiServerRuntimeConfig {
         host,
         port,
@@ -1061,6 +1088,11 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
         ip_whitelist,
         online_asr_config,
         transcription_defaults,
+        batch_transcriber,
+        media_validator,
+        gpu_availability,
+        model_catalog,
+        batch_plan_resolver,
         platform,
         streaming_router,
         shutdown_rx,
@@ -1069,11 +1101,15 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
 
     let _ = tokio::fs::remove_dir_all(&temp_dir).await;
     if let Err(e) = tokio::fs::create_dir_all(&temp_dir).await {
-        let err_msg = e.to_string();
+        let error = ApiServerRuntimeError::FileSystem(FileSystemError::new(
+            FileSystemOperation::CreateDirectory,
+            &temp_dir,
+            e.to_string(),
+        ));
         if let Some(tx) = bind_tx {
-            let _ = tx.send(Err(err_msg.clone()));
+            let _ = tx.send(Err(error.clone()));
         }
-        return Err(err_msg);
+        return Err(error);
     }
 
     let actual_queue_size = if max_queue_size == 0 {
@@ -1086,6 +1122,8 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
     let job_manager_clone = job_manager.clone();
     let models_dir_clone = models_dir.clone();
     let worker_defaults = transcription_defaults.clone();
+    let worker_batch_transcriber = batch_transcriber.clone();
+    let worker_batch_plan_resolver = batch_plan_resolver.clone();
     let worker_platform = platform.clone();
 
     tokio::spawn(async move {
@@ -1095,6 +1133,8 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
             models_dir_clone,
             max_concurrent,
             worker_defaults,
+            worker_batch_transcriber,
+            worker_batch_plan_resolver,
             worker_platform,
         )
         .await;
@@ -1130,6 +1170,10 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
         ip_whitelist: ip_whitelist.clone(),
         online_asr_config,
         transcription_defaults,
+        media_validator,
+        gpu_availability,
+        model_catalog,
+        batch_plan_resolver,
         platform,
     };
 
@@ -1176,11 +1220,11 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
     let listener = match tokio::net::TcpListener::bind(&addr).await {
         Ok(l) => l,
         Err(e) => {
-            let err_msg = format_bind_error(e, &addr);
+            let error = ApiServerRuntimeError::Bind(format_bind_error(e, &addr));
             if let Some(tx) = bind_tx {
-                let _ = tx.send(Err(err_msg.clone()));
+                let _ = tx.send(Err(error.clone()));
             }
-            return Err(err_msg);
+            return Err(error);
         }
     };
     if let Some(tx) = bind_tx {
@@ -1201,7 +1245,9 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), String> {
         log::info!("HTTP API server shutting down gracefully");
     })
     .await
-    .map_err(|e| e.to_string());
+    .map_err(|error| ApiServerRuntimeError::Serve {
+        reason: error.to_string(),
+    });
 
     log::info!(
         "Cleaning up API server temporary directory: {:?}",
@@ -1246,16 +1292,327 @@ mod tests {
         body::Body,
         http::{Request, StatusCode},
     };
+    use sona_core::models::preset_models::{
+        DEFAULT_SILERO_VAD_MODEL_ID, ModelCatalogSnapshot,
+        build_model_catalog_snapshot_with_installed_ids,
+    };
+    use sona_core::ports::runtime::{
+        BatchTranscribePlanResolver, GpuAvailabilityProvider, MediaFileValidator,
+        ModelCatalogProvider, RuntimeCapabilityError,
+    };
+    use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
     use std::fs;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use tower::ServiceExt;
 
-    fn install_preset_model(models_dir: &StdPath, model_id: &str) {
-        let model = sona_core::models::preset_models::find_preset_model(model_id).unwrap();
-        let install_path = model.resolve_install_path(models_dir);
-        if let Some(parent) = install_path.parent() {
-            fs::create_dir_all(parent).unwrap();
+    struct RejectingMediaValidator;
+
+    #[async_trait]
+    impl MediaFileValidator for RejectingMediaValidator {
+        async fn is_valid_media_file(&self, _path: &StdPath) -> bool {
+            false
         }
-        fs::write(install_path, b"installed").unwrap();
+    }
+
+    struct AcceptingMediaValidator;
+
+    #[async_trait]
+    impl MediaFileValidator for AcceptingMediaValidator {
+        async fn is_valid_media_file(&self, _path: &StdPath) -> bool {
+            true
+        }
+    }
+
+    struct FixedGpuAvailability(bool);
+
+    #[async_trait]
+    impl GpuAvailabilityProvider for FixedGpuAvailability {
+        async fn is_gpu_available(&self) -> bool {
+            self.0
+        }
+    }
+
+    struct FixedModelCatalog {
+        snapshot: ModelCatalogSnapshot,
+    }
+
+    impl ModelCatalogProvider for FixedModelCatalog {
+        fn build_model_catalog_snapshot(
+            &self,
+            _models_dir: &StdPath,
+        ) -> Result<ModelCatalogSnapshot, RuntimeCapabilityError> {
+            Ok(self.snapshot.clone())
+        }
+    }
+
+    struct FailingModelCatalog;
+
+    impl ModelCatalogProvider for FailingModelCatalog {
+        fn build_model_catalog_snapshot(
+            &self,
+            _models_dir: &StdPath,
+        ) -> Result<ModelCatalogSnapshot, RuntimeCapabilityError> {
+            Err(RuntimeCapabilityError::ModelCatalog {
+                reason: "catalog unavailable".to_string(),
+            })
+        }
+    }
+
+    struct RecordingBatchPlanResolver {
+        calls: Arc<AtomicUsize>,
+        plan: BatchTranscribePlan,
+    }
+
+    impl BatchTranscribePlanResolver for RecordingBatchPlanResolver {
+        fn resolve_batch_transcribe_plan(
+            &self,
+            _options: BatchTranscribeOptions,
+        ) -> Result<BatchTranscribePlan, RuntimeCapabilityError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(self.plan.clone())
+        }
+    }
+
+    struct RecordingBatchTranscriber {
+        resolver_calls: Arc<AtomicUsize>,
+        calls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl BatchTranscriber for RecordingBatchTranscriber {
+        async fn transcribe(
+            &self,
+            _plan: BatchTranscribePlan,
+        ) -> Result<Vec<TranscriptSegment>, sona_core::ports::asr::AsrPortError> {
+            assert_eq!(self.resolver_calls.load(Ordering::SeqCst), 1);
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(vec![])
+        }
+    }
+
+    struct NoopBatchTranscriber;
+
+    #[async_trait]
+    impl BatchTranscriber for NoopBatchTranscriber {
+        async fn transcribe(
+            &self,
+            _plan: BatchTranscribePlan,
+        ) -> Result<Vec<TranscriptSegment>, sona_core::ports::asr::AsrPortError> {
+            Ok(vec![])
+        }
+    }
+
+    fn test_batch_plan(input_path: PathBuf) -> BatchTranscribePlan {
+        BatchTranscribePlan {
+            input_path,
+            save_to_path: None,
+            model_path: "C:/models/test".to_string(),
+            num_threads: 4,
+            enable_itn: false,
+            language: "auto".to_string(),
+            punctuation_model: None,
+            vad_model: None,
+            vad_buffer: 5.0,
+            model_type: "whisper".to_string(),
+            file_config: None,
+            hotwords: None,
+            gpu_acceleration: None,
+            export_format: sona_core::export::ExportFormat::Json,
+            output_target: OutputTarget::Stdout,
+            quiet: true,
+        }
+    }
+
+    fn test_batch_transcriber() -> Arc<dyn BatchTranscriber> {
+        Arc::new(NoopBatchTranscriber)
+    }
+
+    fn test_model_catalog() -> Arc<dyn ModelCatalogProvider> {
+        Arc::new(FixedModelCatalog {
+            snapshot: build_model_catalog_snapshot_with_installed_ids(
+                StdPath::new("models"),
+                &std::collections::HashSet::new(),
+            ),
+        })
+    }
+
+    fn test_batch_plan_resolver() -> Arc<dyn BatchTranscribePlanResolver> {
+        Arc::new(RecordingBatchPlanResolver {
+            calls: Arc::new(AtomicUsize::new(0)),
+            plan: test_batch_plan(PathBuf::from("sample.wav")),
+        })
+    }
+
+    #[tokio::test]
+    async fn injected_runtime_capability_rejects_invalid_media_and_removes_upload() {
+        let temp = tempfile::tempdir().unwrap();
+        let (tx, _rx) = mpsc::channel(1);
+        let state = ServerState {
+            job_manager: JobManager::new(tx),
+            temp_dir: temp.path().to_path_buf(),
+            models_dir: PathBuf::from("models"),
+            start_time: std::time::Instant::now(),
+            api_key: String::new(),
+            streaming_semaphore: Arc::new(tokio::sync::Semaphore::new(1)),
+            ip_whitelist: Arc::new(vec![]),
+            online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+            transcription_defaults: ApiServerTranscriptionDefaults::default(),
+            media_validator: Arc::new(RejectingMediaValidator),
+            gpu_availability: Arc::new(FixedGpuAvailability(false)),
+            model_catalog: Arc::new(FixedModelCatalog {
+                snapshot: build_model_catalog_snapshot_with_installed_ids(
+                    StdPath::new("models"),
+                    &std::collections::HashSet::new(),
+                ),
+            }),
+            batch_plan_resolver: Arc::new(RecordingBatchPlanResolver {
+                calls: Arc::new(AtomicUsize::new(0)),
+                plan: test_batch_plan(PathBuf::from("sample.wav")),
+            }),
+            platform: Arc::new(DefaultApiServerPlatform),
+        };
+        let boundary = "sona-test-boundary";
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"sample.wav\"\r\nContent-Type: audio/wav\r\n\r\ninvalid\r\n--{boundary}--\r\n"
+        );
+        let response = Router::new()
+            .route("/v1/transcriptions", post(handle_transcribe))
+            .with_state(state)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/transcriptions")
+                    .header(
+                        "content-type",
+                        format!("multipart/form-data; boundary={boundary}"),
+                    )
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
+    }
+
+    #[tokio::test]
+    async fn injected_runtime_capability_builds_info_from_gpu_and_catalog_ports() {
+        let mut installed = std::collections::HashSet::new();
+        installed.insert("sherpa-onnx-whisper-turbo".to_string());
+        installed.insert(DEFAULT_SILERO_VAD_MODEL_ID.to_string());
+        let snapshot = build_model_catalog_snapshot_with_installed_ids(
+            StdPath::new("injected-models"),
+            &installed,
+        );
+        let mut configs = HashMap::new();
+        configs.insert(
+            "groq-whisper".to_string(),
+            serde_json::json!({"apiKey": "configured"}),
+        );
+
+        let info = build_info_response(
+            Arc::new(FixedGpuAvailability(true)),
+            Arc::new(FixedModelCatalog { snapshot }),
+            StdPath::new("ignored-models"),
+            &configs,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(info.platform, std::env::consts::OS);
+        assert!(info.gpu_available);
+        assert_eq!(
+            info.models,
+            vec![
+                "sherpa-onnx-whisper-turbo".to_string(),
+                DEFAULT_SILERO_VAD_MODEL_ID.to_string(),
+            ]
+        );
+        assert!(info.vad_installed);
+        assert!(!info.punctuation_installed);
+        assert!(
+            info.online_asr_providers
+                .iter()
+                .any(|provider| provider.id == "groq-whisper" && provider.configured)
+        );
+    }
+
+    #[tokio::test]
+    async fn injected_runtime_capability_maps_catalog_failure() {
+        let error = build_info_response(
+            Arc::new(FixedGpuAvailability(false)),
+            Arc::new(FailingModelCatalog),
+            StdPath::new("models"),
+            &HashMap::new(),
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(
+            error,
+            ApiServerPlatformError::Information {
+                reason: "Model catalog discovery failed: catalog unavailable".to_string(),
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn injected_runtime_capability_resolves_local_plan_before_transcription() {
+        let temp = tempfile::tempdir().unwrap();
+        let input_path = temp.path().join("sample.wav");
+        fs::write(&input_path, b"audio").unwrap();
+        let resolver_calls = Arc::new(AtomicUsize::new(0));
+        let transcriber_calls = Arc::new(AtomicUsize::new(0));
+        let (tx, rx) = mpsc::channel(1);
+        let job_manager = JobManager::new(tx);
+        let worker = tokio::spawn(start_worker_loop(
+            rx,
+            job_manager.clone(),
+            PathBuf::from("models"),
+            1,
+            ApiServerTranscriptionDefaults::default(),
+            Arc::new(RecordingBatchTranscriber {
+                resolver_calls: Arc::clone(&resolver_calls),
+                calls: Arc::clone(&transcriber_calls),
+            }),
+            Arc::new(RecordingBatchPlanResolver {
+                calls: Arc::clone(&resolver_calls),
+                plan: test_batch_plan(input_path.clone()),
+            }),
+            Arc::new(DefaultApiServerPlatform),
+        ));
+        let job = TranscriptionJob {
+            job_id: "injected-plan-job".to_string(),
+            file_path: input_path,
+            model_id: "model".to_string(),
+            language: "auto".to_string(),
+            hotwords: None,
+            webhook_url: None,
+            webhook_secret: None,
+            engine: "LocalSherpa".to_string(),
+            online_provider_id: None,
+            online_provider_config: None,
+        };
+        job_manager.submit_job(job).await.unwrap();
+
+        tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                if matches!(
+                    job_manager.get_job("injected-plan-job").await,
+                    Some(JobStatus::Completed(_))
+                ) {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        worker.abort();
+
+        assert_eq!(resolver_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(transcriber_calls.load(Ordering::SeqCst), 1);
     }
 
     fn streaming_authorization_state(
@@ -1274,7 +1631,35 @@ mod tests {
             ip_whitelist: Arc::new(parse_ip_whitelist(ip_whitelist).unwrap()),
             online_asr_config: Arc::new(RwLock::new(HashMap::new())),
             transcription_defaults: ApiServerTranscriptionDefaults::default(),
+            media_validator: Arc::new(AcceptingMediaValidator),
+            gpu_availability: Arc::new(FixedGpuAvailability(false)),
+            model_catalog: test_model_catalog(),
+            batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
+        }
+    }
+
+    fn test_dashboard_handle(
+        model_catalog: Arc<dyn ModelCatalogProvider>,
+    ) -> ApiServerDashboardHandle {
+        let (tx, _rx) = mpsc::channel(1);
+        ApiServerDashboardHandle {
+            state: ServerState {
+                job_manager: JobManager::new(tx),
+                temp_dir: PathBuf::from("temp"),
+                models_dir: PathBuf::from("models"),
+                start_time: std::time::Instant::now(),
+                api_key: String::new(),
+                streaming_semaphore: Arc::new(tokio::sync::Semaphore::new(1)),
+                ip_whitelist: Arc::new(vec![]),
+                online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+                transcription_defaults: ApiServerTranscriptionDefaults::default(),
+                media_validator: Arc::new(AcceptingMediaValidator),
+                gpu_availability: Arc::new(FixedGpuAvailability(false)),
+                model_catalog,
+                batch_plan_resolver: test_batch_plan_resolver(),
+                platform: Arc::new(DefaultApiServerPlatform),
+            },
         }
     }
 
@@ -1316,6 +1701,95 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn submit_job_reports_closed_queue_without_leaving_pending_state() {
+        let (tx, rx) = mpsc::channel(1);
+        drop(rx);
+        let job_manager = JobManager::new(tx);
+        let job = TranscriptionJob {
+            job_id: "closed-queue-job".to_string(),
+            file_path: PathBuf::from("sample.wav"),
+            model_id: "model".to_string(),
+            language: "auto".to_string(),
+            hotwords: None,
+            webhook_url: None,
+            webhook_secret: None,
+            engine: "LocalSherpa".to_string(),
+            online_provider_id: None,
+            online_provider_config: None,
+        };
+
+        let error = job_manager.submit_job(job).await.unwrap_err();
+
+        assert_eq!(
+            error,
+            ApiServerJobError::QueueClosed {
+                job_id: "closed-queue-job".to_string(),
+            }
+        );
+        assert!(job_manager.get_job("closed-queue-job").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn dashboard_snapshot_preserves_catalog_failure_category() {
+        let dashboard = test_dashboard_handle(Arc::new(FailingModelCatalog));
+
+        let error = match dashboard.snapshot().await {
+            Ok(_) => panic!("failing info platform should reject dashboard snapshot"),
+            Err(error) => error,
+        };
+
+        assert_eq!(
+            error,
+            ApiServerDashboardError::Platform(ApiServerPlatformError::Information {
+                reason: "Model catalog discovery failed: catalog unavailable".to_string(),
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn stop_reports_closed_shutdown_channel() {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        drop(shutdown_rx);
+        let server = RunningApiServer {
+            normalized_ip_whitelist: "127.0.0.0/8".to_string(),
+            shutdown_tx: Some(shutdown_tx),
+            join_handle: tokio::spawn(async { Ok(()) }),
+            dashboard: test_dashboard_handle(test_model_catalog()),
+        };
+
+        let error = server.stop().await.unwrap_err();
+
+        assert_eq!(error, ApiServerStopError::ShutdownSignalClosed);
+    }
+
+    #[tokio::test]
+    async fn wait_reports_task_join_failure() {
+        let server = RunningApiServer {
+            normalized_ip_whitelist: "127.0.0.0/8".to_string(),
+            shutdown_tx: None,
+            join_handle: tokio::spawn(async {
+                panic!("test task failure");
+                #[allow(unreachable_code)]
+                Ok(())
+            }),
+            dashboard: test_dashboard_handle(test_model_catalog()),
+        };
+
+        let error = server.wait().await.unwrap_err();
+
+        assert!(matches!(error, ApiServerRuntimeError::TaskJoin { .. }));
+    }
+
+    #[tokio::test]
+    async fn startup_channel_closure_has_a_typed_runtime_error() {
+        let join_handle = tokio::spawn(async { Ok(()) });
+
+        let error = startup_channel_closed_error(join_handle).await;
+
+        assert_eq!(error, ApiServerRuntimeError::DashboardChannelClosed);
+    }
+
+    #[tokio::test]
     async fn health_endpoint_reports_stats() {
         let temp_dir = tempfile::tempdir().unwrap().path().to_path_buf();
         let models_dir = tempfile::tempdir().unwrap().path().to_path_buf();
@@ -1330,6 +1804,10 @@ mod tests {
             ip_whitelist: Arc::new(vec![]),
             online_asr_config: Arc::new(RwLock::new(HashMap::new())),
             transcription_defaults: ApiServerTranscriptionDefaults::default(),
+            media_validator: Arc::new(AcceptingMediaValidator),
+            gpu_availability: Arc::new(FixedGpuAvailability(false)),
+            model_catalog: test_model_catalog(),
+            batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
         };
 
@@ -1383,6 +1861,10 @@ mod tests {
             ip_whitelist: Arc::new(vec![]),
             online_asr_config: Arc::new(RwLock::new(HashMap::new())),
             transcription_defaults: ApiServerTranscriptionDefaults::default(),
+            media_validator: Arc::new(AcceptingMediaValidator),
+            gpu_availability: Arc::new(FixedGpuAvailability(false)),
+            model_catalog: test_model_catalog(),
+            batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
         };
 
@@ -1416,11 +1898,6 @@ mod tests {
         let models_dir = temp.path().to_path_buf();
         let input_path = temp.path().join("sample.wav");
         fs::write(&input_path, b"audio").unwrap();
-        install_preset_model(&models_dir, "sherpa-onnx-whisper-turbo");
-        install_preset_model(
-            &models_dir,
-            sona_core::models::preset_models::DEFAULT_SILERO_VAD_MODEL_ID,
-        );
         let job = TranscriptionJob {
             job_id: "job-1".to_string(),
             file_path: input_path.clone(),
@@ -1441,37 +1918,41 @@ mod tests {
             punctuation_model_id: None,
         };
 
-        let plan = build_local_transcribe_plan(&job, &models_dir, &defaults).unwrap();
+        let options = build_local_transcribe_options(&job, &models_dir, &defaults);
 
-        assert_eq!(plan.gpu_acceleration.as_deref(), Some("cuda"));
+        assert_eq!(options.gpu_acceleration.as_deref(), Some("cuda"));
         assert_eq!(
-            plan.vad_model.as_deref(),
-            Some(
-                models_dir
-                    .join("silero_vad.onnx")
-                    .display()
-                    .to_string()
-                    .as_str()
-            )
+            options.vad_model_id.as_deref(),
+            Some(sona_core::models::preset_models::DEFAULT_SILERO_VAD_MODEL_ID)
         );
-        assert!(plan.punctuation_model.is_none());
-        assert_eq!(plan.input_path, input_path);
-        assert_eq!(plan.hotwords.as_deref(), Some("Sona"));
+        assert!(options.punctuation_model_id.is_none());
+        assert_eq!(options.input, input_path);
+        assert_eq!(options.hotwords.as_deref(), Some("Sona"));
     }
 
     #[test]
     fn format_bind_error_describes_common_failures() {
         let addr = "127.0.0.1:14200";
         let in_use_err = std::io::Error::new(std::io::ErrorKind::AddrInUse, "address in use");
-        assert!(format_bind_error(in_use_err, addr).contains("Address already in use"));
+        let in_use = format_bind_error(in_use_err, addr);
+        assert_eq!(in_use.address, addr);
+        assert_eq!(in_use.kind, ApiServerBindErrorKind::AddressInUse);
+        assert!(in_use.to_string().contains("Address already in use"));
 
         let not_avail_err =
             std::io::Error::new(std::io::ErrorKind::AddrNotAvailable, "not available");
-        assert!(format_bind_error(not_avail_err, addr).contains("Address not available"));
+        let not_available = format_bind_error(not_avail_err, addr);
+        assert_eq!(
+            not_available.kind,
+            ApiServerBindErrorKind::AddressNotAvailable
+        );
+        assert!(not_available.to_string().contains("Address not available"));
 
         let permission_err =
             std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
-        assert!(format_bind_error(permission_err, addr).contains("Permission denied"));
+        let permission = format_bind_error(permission_err, addr);
+        assert_eq!(permission.kind, ApiServerBindErrorKind::PermissionDenied);
+        assert!(permission.to_string().contains("Permission denied"));
     }
 
     #[test]
@@ -1551,6 +2032,11 @@ mod tests {
             },
             temp_dir: temp_dir.clone(),
             online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+            batch_transcriber: test_batch_transcriber(),
+            media_validator: Arc::new(AcceptingMediaValidator),
+            gpu_availability: Arc::new(FixedGpuAvailability(false)),
+            model_catalog: test_model_catalog(),
+            batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
             shutdown_rx,
@@ -1617,6 +2103,11 @@ mod tests {
             },
             temp_dir: PathBuf::from("temp"),
             online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+            batch_transcriber: test_batch_transcriber(),
+            media_validator: Arc::new(AcceptingMediaValidator),
+            gpu_availability: Arc::new(FixedGpuAvailability(false)),
+            model_catalog: test_model_catalog(),
+            batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
             shutdown_rx,
@@ -1626,7 +2117,12 @@ mod tests {
             Err(error) => error,
         };
 
-        assert_eq!(error, "Invalid IP rule format: not-a-rule");
+        assert_eq!(
+            error,
+            ApiServerConfigurationError::InvalidIpRule {
+                rule: "not-a-rule".to_string(),
+            }
+        );
     }
 
     #[tokio::test]
@@ -1652,6 +2148,11 @@ mod tests {
             ip_whitelist: Arc::new(vec![]),
             online_asr_config: Arc::new(RwLock::new(HashMap::new())),
             transcription_defaults: ApiServerTranscriptionDefaults::default(),
+            batch_transcriber: test_batch_transcriber(),
+            media_validator: Arc::new(AcceptingMediaValidator),
+            gpu_availability: Arc::new(FixedGpuAvailability(false)),
+            model_catalog: test_model_catalog(),
+            batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
             shutdown_rx,
@@ -1663,7 +2164,14 @@ mod tests {
             Ok(_) => panic!("occupied port should fail to bind"),
             Err(error) => error,
         };
-        assert!(bind_error.contains("Address already in use"));
+        assert!(matches!(
+            bind_error,
+            ApiServerRuntimeError::Bind(ApiServerBindError {
+                ref address,
+                kind: ApiServerBindErrorKind::AddressInUse,
+                ..
+            }) if address == &format!("127.0.0.1:{port}")
+        ));
 
         let _ = shutdown_tx.send(());
         let _ = handle.await;
@@ -1692,13 +2200,24 @@ mod tests {
             },
             temp_dir,
             online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+            batch_transcriber: test_batch_transcriber(),
+            media_validator: Arc::new(AcceptingMediaValidator),
+            gpu_availability: Arc::new(FixedGpuAvailability(false)),
+            model_catalog: test_model_catalog(),
+            batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
         })
         .await;
 
         let error = result.expect_err("occupied port should fail to bind");
-        assert!(matches!(error, ApiServerStartError::Runtime(_)));
+        assert!(matches!(
+            error,
+            ApiServerStartError::Runtime(ApiServerRuntimeError::Bind(ApiServerBindError {
+                kind: ApiServerBindErrorKind::AddressInUse,
+                ..
+            }))
+        ));
         assert!(error.to_string().contains("Address already in use"));
     }
 
@@ -1723,6 +2242,11 @@ mod tests {
             },
             temp_dir,
             online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+            batch_transcriber: test_batch_transcriber(),
+            media_validator: Arc::new(AcceptingMediaValidator),
+            gpu_availability: Arc::new(FixedGpuAvailability(false)),
+            model_catalog: test_model_catalog(),
+            batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
         })
@@ -1731,7 +2255,9 @@ mod tests {
         let error = result.expect_err("invalid whitelist should fail before starting");
         assert_eq!(
             error,
-            ApiServerStartError::Configuration("Invalid IP rule format: not-a-rule".to_string())
+            ApiServerStartError::Configuration(ApiServerConfigurationError::InvalidIpRule {
+                rule: "not-a-rule".to_string(),
+            })
         );
     }
 
@@ -1759,6 +2285,11 @@ mod tests {
             },
             temp_dir,
             online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+            batch_transcriber: test_batch_transcriber(),
+            media_validator: Arc::new(AcceptingMediaValidator),
+            gpu_availability: Arc::new(FixedGpuAvailability(false)),
+            model_catalog: test_model_catalog(),
+            batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
         })

@@ -241,35 +241,39 @@ fn validate_segment_ids<T, GetId>(
     task_type: LlmTaskType,
     chunk_number: usize,
     get_id: GetId,
-) -> Result<(), String>
+) -> Result<(), LlmTaskError>
 where
     GetId: Fn(&T) -> &str,
 {
     if parsed.len() != expected.len() {
-        return Err(chunk_error(
-            task_type,
-            chunk_number,
-            format!(
-                "expected {} objects but received {}",
-                expected.len(),
-                parsed.len()
+        return Err(LlmTaskError::InvalidResponse {
+            reason: chunk_error(
+                task_type,
+                chunk_number,
+                format!(
+                    "expected {} objects but received {}",
+                    expected.len(),
+                    parsed.len()
+                ),
             ),
-        ));
+        });
     }
 
     for (index, (actual, expected_segment)) in parsed.iter().zip(expected.iter()).enumerate() {
         let actual_id = get_id(actual);
         if actual_id != expected_segment.id {
-            return Err(chunk_error(
-                task_type,
-                chunk_number,
-                format!(
-                    "segment {} expected id '{}' but received '{}'",
-                    index + 1,
-                    expected_segment.id,
-                    actual_id
+            return Err(LlmTaskError::InvalidResponse {
+                reason: chunk_error(
+                    task_type,
+                    chunk_number,
+                    format!(
+                        "segment {} expected id '{}' but received '{}'",
+                        index + 1,
+                        expected_segment.id,
+                        actual_id
+                    ),
                 ),
-            ));
+            });
         }
     }
 

@@ -1,4 +1,5 @@
 use log::{debug, info};
+use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 use sona_core::transcription::speaker::{
     SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample,
 };
@@ -94,7 +95,7 @@ pub async fn annotate_speaker_segments_from_file(
     file_path: String,
     segments: Vec<TranscriptSegment>,
     speaker_processing: Option<SpeakerProcessingConfig>,
-) -> Result<Vec<TranscriptSegment>, String> {
+) -> Result<Vec<TranscriptSegment>, AsrPortError> {
     if segments.is_empty() {
         return Ok(segments);
     }
@@ -112,7 +113,7 @@ pub async fn import_speaker_profile_sample(
     profile_id: String,
     source_path: String,
     source_name: Option<String>,
-) -> Result<SpeakerProfileSample, String> {
+) -> Result<SpeakerProfileSample, AsrPortError> {
     let samples = crate::audio::extract_and_resample_audio(
         std::path::Path::new(&source_path),
         SAMPLE_RATE as u32,
@@ -133,11 +134,26 @@ pub async fn import_speaker_profile_sample(
         .unwrap_or_else(|| "Sample".to_string());
 
     let profile_dir = app_data_dir.join("speaker-profiles").join(&profile_id);
-    std::fs::create_dir_all(&profile_dir).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&profile_dir).map_err(|error| {
+        AsrPortError::new(
+            AsrPortErrorKind::FileSystem,
+            format!(
+                "Failed to create speaker profile directory {}: {error}",
+                profile_dir.display()
+            ),
+        )
+    })?;
 
     let output_path = profile_dir.join(format!("{sample_id}.wav"));
-    crate::audio::save_wav_file(&samples, SAMPLE_RATE as u32, &output_path)
-        .map_err(|e| e.to_string())?;
+    crate::audio::save_wav_file(&samples, SAMPLE_RATE as u32, &output_path).map_err(|error| {
+        AsrPortError::new(
+            AsrPortErrorKind::FileSystem,
+            format!(
+                "Failed to save speaker profile sample {}: {error}",
+                output_path.display()
+            ),
+        )
+    })?;
 
     Ok(SpeakerProfileSample {
         id: sample_id,
@@ -151,7 +167,7 @@ pub fn annotate_segments_with_speakers(
     samples: &[f32],
     segments: &[TranscriptSegment],
     speaker_processing: Option<&SpeakerProcessingConfig>,
-) -> Result<Vec<TranscriptSegment>, String> {
+) -> Result<Vec<TranscriptSegment>, AsrPortError> {
     let total_started = Instant::now();
     let input_segment_count = segments.len();
     let audio_duration_ms = samples_to_duration_ms(samples.len());
@@ -209,14 +225,19 @@ pub fn annotate_segments_with_speakers(
     Ok(annotated_segments)
 }
 
-fn resolve_model_path(input: Option<&str>) -> Result<PathBuf, String> {
+fn resolve_model_path(input: Option<&str>) -> Result<PathBuf, AsrPortError> {
     let raw = input
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .ok_or_else(|| "Speaker processing models are not fully configured".to_string())?;
+        .ok_or_else(|| {
+            AsrPortError::invalid_request("Speaker processing models are not fully configured")
+        })?;
     let path = Path::new(raw);
     if !path.exists() {
-        return Err(format!("Speaker model path does not exist: {raw}"));
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::Model,
+            format!("Speaker model path does not exist: {raw}"),
+        ));
     }
 
     if path.is_file() {
@@ -224,7 +245,15 @@ fn resolve_model_path(input: Option<&str>) -> Result<PathBuf, String> {
     }
 
     let mut onnx_files = std::fs::read_dir(path)
-        .map_err(|e| e.to_string())?
+        .map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::FileSystem,
+                format!(
+                    "Failed to read speaker model directory {}: {error}",
+                    path.display()
+                ),
+            )
+        })?
         .filter_map(Result::ok)
         .filter_map(|entry| {
             let entry_path = entry.path();
@@ -238,10 +267,12 @@ fn resolve_model_path(input: Option<&str>) -> Result<PathBuf, String> {
         .collect::<Vec<_>>();
 
     onnx_files.sort();
-    onnx_files
-        .into_iter()
-        .next()
-        .ok_or_else(|| format!("No .onnx file found in {}", path.display()))
+    onnx_files.into_iter().next().ok_or_else(|| {
+        AsrPortError::new(
+            AsrPortErrorKind::Model,
+            format!("No .onnx file found in {}", path.display()),
+        )
+    })
 }
 
 fn elapsed_ms(started: Instant) -> f64 {
@@ -363,7 +394,7 @@ fn run_diarization(
     samples: &[f32],
     segmentation_model: &Path,
     embedding_model: &Path,
-) -> Result<Vec<SpeakerDiarizationSegment>, String> {
+) -> Result<Vec<SpeakerDiarizationSegment>, AsrPortError> {
     crate::speaker::run_speaker_diarization(samples, segmentation_model, embedding_model)
 }
 
@@ -417,7 +448,7 @@ fn build_cluster_speaker_assignments(
     clusters: &[ClusterInfo],
     config: &SpeakerProcessingConfig,
     embedding_model: &Path,
-) -> Result<HashMap<i32, ResolvedSpeakerAssignment>, String> {
+) -> Result<HashMap<i32, ResolvedSpeakerAssignment>, AsrPortError> {
     let default_assignments = clusters
         .iter()
         .map(|cluster| {
@@ -521,7 +552,7 @@ fn identify_cluster_candidates(
     cluster: &ClusterInfo,
     embedding_index: &crate::speaker::SpeakerEmbeddingIndex,
     profile_names: &HashMap<String, String>,
-) -> Result<Vec<ClusterCandidate>, String> {
+) -> Result<Vec<ClusterCandidate>, AsrPortError> {
     let mut candidate_spans = cluster
         .spans
         .iter()
@@ -1174,6 +1205,7 @@ fn speaker_assignments_equal(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sona_core::ports::asr::AsrPortErrorKind;
     use sona_core::transcription::text_alignment::lex_text_units;
 
     fn speaker(id: &str, label: &str, kind: &str, score: Option<f32>) -> SpeakerTag {
@@ -1254,6 +1286,21 @@ mod tests {
                 candidates: Vec::new(),
             },
         }
+    }
+
+    #[test]
+    fn configured_speaker_processing_requires_model_paths() {
+        let segments = vec![sample_segment(0.0, 1.0, "hello")];
+        let config = SpeakerProcessingConfig {
+            speaker_segmentation_model_path: None,
+            speaker_embedding_model_path: None,
+            speaker_profiles: None,
+        };
+
+        let error = annotate_segments_with_speakers(&[], &segments, Some(&config)).unwrap_err();
+
+        assert_eq!(error.kind, AsrPortErrorKind::InvalidRequest);
+        assert!(error.message.contains("not fully configured"));
     }
 
     #[test]

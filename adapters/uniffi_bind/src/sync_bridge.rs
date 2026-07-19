@@ -1,125 +1,51 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::Arc;
 
+#[cfg(test)]
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use sona_core::sync::{
-    SyncConflictResolution, SyncError, SyncPresetV1, SyncSecretStore, SyncStatusSnapshot,
-};
-use sona_sqlite::{Database, SqliteSyncRepositoryFactory};
+use sona_core::sync::{SyncConflictResolution, SyncPresetV1, SyncSecretStore, SyncStatusSnapshot};
+use sona_runtime_fs::SystemClock;
 use sona_sync::{
     JsonFileSyncConfigStore, SyncApplication, SyncProviderFactory, SyncProviderInput,
     SyncProviderRegistry, SystemSyncApplicationEnvironment,
 };
 use sona_sync_webdav::{WebDavObjectStoreConfig, WebDavSyncProviderFactory};
 
+use crate::application_context::{
+    application_context, register_default_sync_secret_store,
+    register_sync_secret_store_for_app_data_dir as register_context_sync_secret_store,
+};
 use crate::json_bridge::{parse_core_json, serialize_core_json};
+use crate::sync_secret_store_bridge::FfiSyncSecretStore;
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 
 const CONFIG_FILE: &str = "sync.json";
 
-#[uniffi::export(foreign)]
-#[async_trait]
-pub trait FfiSyncSecretStore: Send + Sync {
-    async fn get(&self, key: String) -> SonaCoreBindingResult<Option<Vec<u8>>>;
-    async fn set(&self, key: String, value: Vec<u8>) -> SonaCoreBindingResult<()>;
-    async fn delete(&self, key: String) -> SonaCoreBindingResult<()>;
-}
-
 pub(crate) fn register_sync_secret_store(store: Arc<dyn FfiSyncSecretStore>) {
-    *secret_store_registration()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(store);
+    register_default_sync_secret_store(store);
 }
 
-fn secret_store_registration() -> &'static RwLock<Option<Arc<dyn FfiSyncSecretStore>>> {
-    static STORE: OnceLock<RwLock<Option<Arc<dyn FfiSyncSecretStore>>>> = OnceLock::new();
-    STORE.get_or_init(|| RwLock::new(None))
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct ForeignSyncSecretStore;
-
-#[async_trait]
-impl SyncSecretStore for ForeignSyncSecretStore {
-    async fn read_secret(&self, key: &str) -> Result<Option<Vec<u8>>, SyncError> {
-        let callback = registered_secret_store();
-        match callback {
-            Some(callback) => callback
-                .get(key.to_string())
-                .await
-                .map_err(secret_store_error),
-            None => Ok(None),
-        }
-    }
-
-    async fn write_secret(&self, key: &str, value: &[u8]) -> Result<(), SyncError> {
-        let callback = registered_secret_store();
-        match callback {
-            Some(callback) => callback
-                .set(key.to_string(), value.to_vec())
-                .await
-                .map_err(secret_store_error),
-            None => Ok(()),
-        }
-    }
-
-    async fn delete_secret(&self, key: &str) -> Result<(), SyncError> {
-        let callback = registered_secret_store();
-        match callback {
-            Some(callback) => callback
-                .delete(key.to_string())
-                .await
-                .map_err(secret_store_error),
-            None => Ok(()),
-        }
-    }
-}
-
-fn registered_secret_store() -> Option<Arc<dyn FfiSyncSecretStore>> {
-    secret_store_registration()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .clone()
-}
-
-fn secret_store_error(error: SonaCoreBindingError) -> SyncError {
-    SyncError::SecretStore(error.to_string())
-}
-
-fn applications() -> &'static RwLock<HashMap<PathBuf, Arc<SyncApplication>>> {
-    static APPLICATIONS: OnceLock<RwLock<HashMap<PathBuf, Arc<SyncApplication>>>> = OnceLock::new();
-    APPLICATIONS.get_or_init(|| RwLock::new(HashMap::new()))
+pub(crate) fn register_sync_secret_store_for_app_data_dir(
+    app_data_dir: &str,
+    store: Arc<dyn FfiSyncSecretStore>,
+) -> SonaCoreBindingResult<()> {
+    register_context_sync_secret_store(app_data_dir, store).map_err(sync_error)
 }
 
 fn application(app_data_dir: &str) -> SonaCoreBindingResult<Arc<SyncApplication>> {
-    let path = PathBuf::from(app_data_dir);
-    if let Some(application) = applications()
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .get(&path)
-        .cloned()
-    {
-        return Ok(application);
-    }
-
-    std::fs::create_dir_all(&path).map_err(sync_error)?;
-    let database = Arc::new(Database::open(&path).map_err(sync_error)?);
-    let application = Arc::new(SyncApplication::new(
-        Arc::new(JsonFileSyncConfigStore::new(path.join(CONFIG_FILE))),
-        Arc::new(SqliteSyncRepositoryFactory::new(database)),
-        provider_registry(),
-        Arc::new(ForeignSyncSecretStore),
-        Arc::new(SystemSyncApplicationEnvironment),
-    ));
-
-    let mut cached = applications()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    Ok(Arc::clone(
-        cached.entry(path).or_insert_with(|| application),
-    ))
+    let context = application_context(app_data_dir).map_err(sync_error)?;
+    let secret_store: Arc<dyn SyncSecretStore> = context.sync_secret_store();
+    Ok(context.sync_application(|sqlite| {
+        Arc::new(SyncApplication::new(
+            Arc::new(JsonFileSyncConfigStore::new(
+                sqlite.app_data_dir().join(CONFIG_FILE),
+            )),
+            Arc::new(sqlite.sync_repository_factory(Arc::new(SystemClock))),
+            provider_registry(),
+            secret_store,
+            Arc::new(SystemSyncApplicationEnvironment),
+        ))
+    }))
 }
 
 fn provider_registry() -> SyncProviderRegistry {
@@ -127,9 +53,32 @@ fn provider_registry() -> SyncProviderRegistry {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+enum ProviderInputWire {
+    Canonical(SyncProviderInput),
+    LegacyWebDav(WebDavObjectStoreConfig),
+}
+
+impl ProviderInputWire {
+    fn into_provider_input(self) -> SonaCoreBindingResult<SyncProviderInput> {
+        match self {
+            Self::Canonical(provider) => Ok(provider),
+            Self::LegacyWebDav(config) => webdav_provider_input(config),
+        }
+    }
+}
+
+fn parse_provider_input_json(
+    input: &str,
+    context: &str,
+) -> SonaCoreBindingResult<SyncProviderInput> {
+    parse_core_json::<ProviderInputWire>(input, context)?.into_provider_input()
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CreateRequest {
-    provider: WebDavObjectStoreConfig,
+    provider: ProviderInputWire,
     preset: SyncPresetV1,
     master_password: String,
     create_recovery_key: bool,
@@ -138,7 +87,7 @@ struct CreateRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct JoinRequest {
-    provider: WebDavObjectStoreConfig,
+    provider: ProviderInputWire,
     vault_id: String,
     master_password: String,
 }
@@ -168,9 +117,9 @@ struct CreateResult {
 }
 
 pub(crate) async fn test_provider_json(config_json: String) -> SonaCoreBindingResult<String> {
-    let config: WebDavObjectStoreConfig = parse_core_json(&config_json, "sync provider")?;
+    let provider = parse_provider_input_json(&config_json, "sync provider")?;
     let descriptor = provider_registry()
-        .test_provider(provider_input(config)?)
+        .test_provider(provider)
         .await
         .map_err(sync_error)?;
     serialize_core_json(&descriptor, "sync provider descriptor")
@@ -191,7 +140,7 @@ pub(crate) async fn create_vault_json(
     let request: CreateRequest = parse_core_json(&request_json, "sync create request")?;
     let result = application(&app_data_dir)?
         .create(
-            provider_input(request.provider)?,
+            request.provider.into_provider_input()?,
             request.preset,
             &request.master_password,
             request.create_recovery_key,
@@ -216,7 +165,7 @@ pub(crate) async fn preview_join_json(
     let request: JoinRequest = parse_core_json(&request_json, "sync join preview request")?;
     let preview = application(&app_data_dir)?
         .preview_join(
-            provider_input(request.provider)?,
+            request.provider.into_provider_input()?,
             &request.vault_id,
             &request.master_password,
         )
@@ -232,7 +181,7 @@ pub(crate) async fn join_vault_json(
     let request: JoinRequest = parse_core_json(&request_json, "sync join request")?;
     let result = application(&app_data_dir)?
         .join(
-            provider_input(request.provider)?,
+            request.provider.into_provider_input()?,
             &request.vault_id,
             &request.master_password,
         )
@@ -372,7 +321,9 @@ pub(crate) fn resolve_conflict_json(
         .map_err(sync_error)
 }
 
-fn provider_input(config: WebDavObjectStoreConfig) -> SonaCoreBindingResult<SyncProviderInput> {
+fn webdav_provider_input(
+    config: WebDavObjectStoreConfig,
+) -> SonaCoreBindingResult<SyncProviderInput> {
     Ok(SyncProviderInput {
         provider_id: "webdav".to_string(),
         configuration: serde_json::to_value(config).map_err(sync_error)?,
@@ -403,24 +354,9 @@ fn sync_binding_error(reason: impl Into<String>) -> SonaCoreBindingError {
 }
 
 #[cfg(test)]
-fn clear_applications_for_tests() {
-    applications()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .clear();
-}
-
-#[cfg(test)]
-fn clear_sync_runtime_for_tests() {
-    clear_applications_for_tests();
-    *secret_store_registration()
-        .write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application_context::ApplicationContextRegistry;
     use sona_core::sync::SyncLifecycleState;
     use sona_sync::SyncApplicationError;
     use std::collections::BTreeMap;
@@ -448,28 +384,83 @@ mod tests {
         }
     }
 
+    #[test]
+    fn sync_provider_input_accepts_canonical_and_legacy_webdav_json() {
+        let webdav = serde_json::json!({
+            "serverUrl": "https://dav.example.com",
+            "remoteRoot": "sona",
+            "username": "alice",
+            "password": "secret"
+        });
+        let canonical = parse_provider_input_json(
+            &serde_json::json!({
+                "providerId": "webdav",
+                "configuration": webdav.clone()
+            })
+            .to_string(),
+            "sync provider",
+        )
+        .unwrap();
+        let legacy = parse_provider_input_json(&webdav.to_string(), "sync provider").unwrap();
+
+        assert_eq!(canonical, legacy);
+        assert_eq!(canonical.provider_id, "webdav");
+        assert_eq!(canonical.configuration, webdav);
+    }
+
+    #[test]
+    fn sync_lifecycle_requests_accept_both_provider_wire_shapes() {
+        let webdav = serde_json::json!({
+            "serverUrl": "https://dav.example.com",
+            "remoteRoot": "sona",
+            "username": "alice",
+            "password": "secret"
+        });
+        for provider in [
+            serde_json::json!({
+                "providerId": "webdav",
+                "configuration": webdav.clone()
+            }),
+            webdav.clone(),
+        ] {
+            let request: CreateRequest = serde_json::from_value(serde_json::json!({
+                "provider": provider,
+                "preset": "standard",
+                "masterPassword": "master-password",
+                "createRecoveryKey": true
+            }))
+            .unwrap();
+            assert_eq!(
+                request.provider.into_provider_input().unwrap().provider_id,
+                "webdav"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn unconfigured_status_uses_the_shared_disabled_contract() {
         let directory = tempfile::tempdir().unwrap();
-        let json = get_status_json(directory.path().to_string_lossy().into_owned())
-            .await
-            .unwrap();
+        let app_data_dir = directory.path().to_string_lossy().into_owned();
+        let json = get_status_json(app_data_dir.clone()).await.unwrap();
         let status: SyncStatusSnapshot = serde_json::from_str(&json).unwrap();
         assert_eq!(status.state, SyncLifecycleState::Disabled);
         assert_eq!(status.pending_operation_count, 0);
+        let _ = crate::application_context::release_application_context(&app_data_dir).unwrap();
     }
 
     #[tokio::test]
     async fn secret_store_proxy_is_noop_until_a_foreign_store_is_registered() {
-        clear_sync_runtime_for_tests();
-        let proxy = ForeignSyncSecretStore;
+        let directory = tempfile::tempdir().unwrap();
+        let mut registry = ApplicationContextRegistry::with_capacity(2);
+        let context = registry.get_or_open(directory.path()).unwrap();
+        let proxy = context.sync_secret_store();
 
         assert_eq!(proxy.read_secret("missing").await.unwrap(), None);
         proxy.write_secret("ephemeral", b"ignored").await.unwrap();
         proxy.delete_secret("ephemeral").await.unwrap();
 
         let store = Arc::new(MemoryFfiSyncSecretStore::default());
-        register_sync_secret_store(store.clone());
+        registry.register_default_sync_secret_store(store.clone());
         proxy.write_secret("provider", b"password").await.unwrap();
         assert_eq!(
             proxy.read_secret("provider").await.unwrap(),
@@ -477,12 +468,71 @@ mod tests {
         );
         proxy.delete_secret("provider").await.unwrap();
         assert_eq!(proxy.read_secret("provider").await.unwrap(), None);
-        clear_sync_runtime_for_tests();
+    }
+
+    #[tokio::test]
+    async fn secret_store_registration_is_isolated_per_application_context() {
+        let first_directory = tempfile::tempdir().unwrap();
+        let second_directory = tempfile::tempdir().unwrap();
+        let first_path = first_directory.path().to_string_lossy().into_owned();
+        let second_path = second_directory.path().to_string_lossy().into_owned();
+        let first_store = Arc::new(MemoryFfiSyncSecretStore::default());
+        let second_store = Arc::new(MemoryFfiSyncSecretStore::default());
+
+        register_sync_secret_store_for_app_data_dir(&first_path, first_store.clone()).unwrap();
+        register_sync_secret_store_for_app_data_dir(&second_path, second_store.clone()).unwrap();
+
+        let first_proxy = application_context(&first_path)
+            .unwrap()
+            .sync_secret_store();
+        let second_proxy = application_context(&second_path)
+            .unwrap()
+            .sync_secret_store();
+        first_proxy
+            .write_secret("provider", b"first")
+            .await
+            .unwrap();
+        second_proxy
+            .write_secret("provider", b"second")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            first_store.get("provider".to_string()).await.unwrap(),
+            Some(b"first".to_vec())
+        );
+        assert_eq!(
+            second_store.get("provider".to_string()).await.unwrap(),
+            Some(b"second".to_vec())
+        );
+        let _ = crate::application_context::release_application_context(&first_path).unwrap();
+        let _ = crate::application_context::release_application_context(&second_path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn path_registration_updates_an_existing_application_context() {
+        let directory = tempfile::tempdir().unwrap();
+        let app_data_dir = directory.path().to_string_lossy().into_owned();
+        let _application = application(&app_data_dir).unwrap();
+        let store = Arc::new(MemoryFfiSyncSecretStore::default());
+
+        register_sync_secret_store_for_app_data_dir(&app_data_dir, store.clone()).unwrap();
+        application_context(&app_data_dir)
+            .unwrap()
+            .sync_secret_store()
+            .write_secret("vault", b"key")
+            .await
+            .unwrap();
+
+        assert_eq!(
+            store.get("vault".to_string()).await.unwrap(),
+            Some(b"key".to_vec())
+        );
+        let _ = crate::application_context::release_application_context(&app_data_dir).unwrap();
     }
 
     #[tokio::test]
     async fn application_is_cached_per_data_directory_and_can_be_recreated() {
-        clear_sync_runtime_for_tests();
         let directory = tempfile::tempdir().unwrap();
         let app_data_dir = directory.path().to_string_lossy().into_owned();
 
@@ -490,14 +540,15 @@ mod tests {
         let second = application(&app_data_dir).unwrap();
         assert!(Arc::ptr_eq(&first, &second));
 
-        clear_applications_for_tests();
+        assert!(crate::application_context::release_application_context(&app_data_dir).unwrap());
+        assert!(!crate::application_context::release_application_context(&app_data_dir).unwrap());
         let restarted = application(&app_data_dir).unwrap();
         assert!(!Arc::ptr_eq(&first, &restarted));
         assert_eq!(
             restarted.status().await.unwrap().state,
             SyncLifecycleState::Disabled
         );
-        clear_sync_runtime_for_tests();
+        let _ = crate::application_context::release_application_context(&app_data_dir).unwrap();
     }
 
     #[test]

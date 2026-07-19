@@ -13,19 +13,27 @@ fn run_app_config_adapter<T>(
     operation(&adapter).map_err(|error| error.to_string())
 }
 
+fn run_app_config_context<T>(
+    context: Arc<sona_sqlite::SqliteApplicationContext>,
+    operation: impl FnOnce(&SqliteAppConfigAdapter) -> Result<T, ConfigError>,
+) -> Result<T, String> {
+    let adapter = context.app_config_adapter(Arc::new(SystemClock));
+    operation(&adapter).map_err(|error| error.to_string())
+}
+
 pub fn load_config<R: Runtime>(app: &AppHandle<R>) -> Result<Option<Value>, String> {
-    let db = crate::platform::database::sqlite_database(app);
-    run_app_config_adapter(db, |adapter| adapter.load_config())
+    let context = crate::platform::database::sqlite_application_context(app);
+    run_app_config_context(context, |adapter| adapter.load_config())
 }
 
 pub fn save_config<R: Runtime>(app: &AppHandle<R>, config: Value) -> Result<(), String> {
-    let db = crate::platform::database::sqlite_database(app);
-    run_app_config_adapter(db, |adapter| adapter.save_config(&config))
+    let context = crate::platform::database::sqlite_application_context(app);
+    run_app_config_context(context, |adapter| adapter.save_config(&config))
 }
 
 pub fn get_setting<R: Runtime>(app: &AppHandle<R>, key: String) -> Result<Option<Value>, String> {
-    let db = crate::platform::database::sqlite_database(app);
-    run_app_config_adapter(db, |adapter| adapter.get_setting(&key))
+    let context = crate::platform::database::sqlite_application_context(app);
+    run_app_config_context(context, |adapter| adapter.get_setting(&key))
 }
 
 pub fn set_setting<R: Runtime>(
@@ -33,8 +41,8 @@ pub fn set_setting<R: Runtime>(
     key: String,
     value: Value,
 ) -> Result<(), String> {
-    let db = crate::platform::database::sqlite_database(app);
-    run_app_config_adapter(db, |adapter| adapter.set_setting(&key, &value))
+    let context = crate::platform::database::sqlite_application_context(app);
+    run_app_config_context(context, |adapter| adapter.set_setting(&key, &value))
 }
 
 #[cfg(test)]

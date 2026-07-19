@@ -1,4 +1,6 @@
-use crate::{SonaCoreBindingError, SonaCoreBindingResult};
+use crate::{
+    FfiRecoveryItemInputV1, FfiRecoverySnapshotV1, SonaCoreBindingError, SonaCoreBindingResult,
+};
 use serde_json::Value;
 use sona_core::recovery::types::{RecoveryItemInput, RecoverySnapshot};
 use sona_recovery_fs::FsRecoveryAdapter;
@@ -9,6 +11,15 @@ pub(crate) fn load_recovery_snapshot_json(app_data_dir: String) -> SonaCoreBindi
         .load_snapshot()
         .map_err(recovery_error)?;
     serialize_snapshot(&snapshot)
+}
+
+pub(crate) fn load_recovery_snapshot_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<FfiRecoverySnapshotV1> {
+    let snapshot = FsRecoveryAdapter::new(PathBuf::from(app_data_dir))
+        .load_snapshot()
+        .map_err(recovery_error)?;
+    snapshot.try_into().map_err(recovery_error)
 }
 
 pub(crate) fn save_recovery_snapshot_json(
@@ -22,6 +33,17 @@ pub(crate) fn save_recovery_snapshot_json(
     serialize_snapshot(&snapshot)
 }
 
+pub(crate) fn save_recovery_snapshot_v1(
+    app_data_dir: String,
+    items: Vec<FfiRecoveryItemInputV1>,
+) -> SonaCoreBindingResult<FfiRecoverySnapshotV1> {
+    let items = parse_typed_items(items)?;
+    let snapshot = FsRecoveryAdapter::new(PathBuf::from(app_data_dir))
+        .save_snapshot(items)
+        .map_err(recovery_error)?;
+    snapshot.try_into().map_err(recovery_error)
+}
+
 pub(crate) fn persist_recovery_queue_snapshot_json(
     app_data_dir: String,
     queue_items_json: String,
@@ -32,6 +54,30 @@ pub(crate) fn persist_recovery_queue_snapshot_json(
         .persist_queue_snapshot(queue_items, resolved_ids)
         .map_err(recovery_error)?;
     serialize_snapshot(&snapshot)
+}
+
+pub(crate) fn persist_recovery_queue_snapshot_v1(
+    app_data_dir: String,
+    queue_items: Vec<FfiRecoveryItemInputV1>,
+    resolved_ids: Vec<String>,
+) -> SonaCoreBindingResult<FfiRecoverySnapshotV1> {
+    let queue_items = parse_typed_items(queue_items)?;
+    let snapshot = FsRecoveryAdapter::new(PathBuf::from(app_data_dir))
+        .persist_queue_snapshot(queue_items, resolved_ids)
+        .map_err(recovery_error)?;
+    snapshot.try_into().map_err(recovery_error)
+}
+
+fn parse_typed_items(
+    items: Vec<FfiRecoveryItemInputV1>,
+) -> SonaCoreBindingResult<Vec<RecoveryItemInput>> {
+    items
+        .into_iter()
+        .map(RecoveryItemInput::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| SonaCoreBindingError::InvalidInput {
+            reason: error.to_string(),
+        })
 }
 
 fn parse_json_array(label: &str, input: &str) -> SonaCoreBindingResult<Vec<RecoveryItemInput>> {

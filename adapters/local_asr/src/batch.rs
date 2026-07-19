@@ -11,7 +11,7 @@ use crate::recognizer::{
 use async_trait::async_trait;
 use sherpa_onnx::VadModelConfig;
 use sona_core::models::config::ModelFileConfig;
-use sona_core::ports::asr::BatchTranscriber;
+use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind, BatchTranscriber};
 use sona_core::transcription::runtime::BatchTranscribePlan;
 use sona_core::transcription::transcript::{
     TranscriptSegment, ensure_transcript_segment_timing, normalize_recognizer_text,
@@ -27,7 +27,7 @@ impl BatchTranscriber for LocalBatchAsrAdapter {
     async fn transcribe(
         &self,
         plan: BatchTranscribePlan,
-    ) -> Result<Vec<TranscriptSegment>, String> {
+    ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
         let job = BatchTranscriptionJob::from_plan(plan)?;
         job.transcribe().await
     }
@@ -52,11 +52,14 @@ struct BatchTranscriptionJob {
 }
 
 impl BatchTranscriptionJob {
-    fn from_plan(plan: BatchTranscribePlan) -> Result<Self, String> {
+    fn from_plan(plan: BatchTranscribePlan) -> Result<Self, AsrPortError> {
         if !plan.input_path.is_file() {
-            return Err(format!(
-                "Input file must be an existing file: {}",
-                plan.input_path.display()
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::InvalidRequest,
+                format!(
+                    "Input file must be an existing file: {}",
+                    plan.input_path.display()
+                ),
             ));
         }
 
@@ -78,7 +81,7 @@ impl BatchTranscriptionJob {
         })
     }
 
-    async fn transcribe(self) -> Result<Vec<TranscriptSegment>, String> {
+    async fn transcribe(self) -> Result<Vec<TranscriptSegment>, AsrPortError> {
         let gpu_plan = resolve_gpu_acceleration_plan(self.gpu_acceleration.as_deref()).await;
         let mut last_error = None;
         let mut fallback_notice: Option<GpuFallbackNotice> = None;
@@ -102,20 +105,20 @@ impl BatchTranscriptionJob {
                         .map(|provider| gpu_plan.should_retry_after_failure(provider))
                         .unwrap_or(false) =>
                 {
-                    fallback_notice = Some(GpuFallbackNotice::directml_retry(error.clone()));
+                    fallback_notice = Some(GpuFallbackNotice::directml_retry(error.to_string()));
                     last_error = Some(error);
                 }
                 Err(error) => return Err(error),
             }
         }
 
-        Err(last_error.unwrap_or_else(|| "Recognizer creation failed.".to_string()))
+        Err(last_error.unwrap_or_else(|| AsrPortError::runtime("Recognizer creation failed.")))
     }
 
     async fn transcribe_with_provider(
         &self,
         provider: Option<&str>,
-    ) -> Result<Vec<TranscriptSegment>, String> {
+    ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
         let model_type = build_offline_model_config(
             &self.model_path,
             &self.model_type,
@@ -131,7 +134,12 @@ impl BatchTranscriptionJob {
 
         let samples = extract_and_resample_audio(&self.input_path, 16000).await?;
         if let Some(path) = self.save_to_path.as_ref() {
-            save_wav_file(&samples, 16000, path).map_err(|error| error.to_string())?;
+            save_wav_file(&samples, 16000, path).map_err(|error| {
+                AsrPortError::new(
+                    AsrPortErrorKind::FileSystem,
+                    format!("Failed to save resampled audio {}: {error}", path.display()),
+                )
+            })?;
         }
 
         transcribe_samples(
@@ -144,7 +152,7 @@ impl BatchTranscriptionJob {
     }
 }
 
-fn load_vad_config(vad_model: Option<&Path>) -> Result<Option<VadModelConfig>, String> {
+fn load_vad_config(vad_model: Option<&Path>) -> Result<Option<VadModelConfig>, AsrPortError> {
     let Some(path) = vad_model else {
         return Ok(None);
     };
@@ -158,7 +166,7 @@ fn transcribe_samples(
     punctuation: Option<&Punctuation>,
     vad_config: Option<&VadModelConfig>,
     vad_buffer: f32,
-) -> Result<Vec<TranscriptSegment>, String> {
+) -> Result<Vec<TranscriptSegment>, AsrPortError> {
     let audio_segments = if let Some(vad_config) = vad_config {
         vad_segment_audio(samples, 16000, vad_config, vad_buffer)
             .unwrap_or_else(|_| fixed_chunk_audio(samples, 16000, 30.0))
@@ -255,6 +263,10 @@ mod tests {
         };
 
         let error = LocalBatchAsrAdapter.transcribe(plan).await.unwrap_err();
-        assert!(error.contains("existing file"));
+        assert_eq!(
+            error.kind,
+            sona_core::ports::asr::AsrPortErrorKind::InvalidRequest
+        );
+        assert!(error.message.contains("existing file"));
     }
 }

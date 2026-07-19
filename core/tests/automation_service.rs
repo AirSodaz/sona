@@ -10,6 +10,7 @@ use sona_core::automation::service::{
 use sona_core::automation::{
     AutomationError, AutomationRule, AutomationRuleExportConfig, AutomationRuleStageConfig,
 };
+use sona_core::ports::fs::{FileSystemError, FileSystemOperation};
 use std::sync::Mutex;
 
 #[derive(Default)]
@@ -64,21 +65,38 @@ struct FakeFileSystem {
     queried: Mutex<Vec<String>>,
     created: Mutex<Vec<String>>,
     create_succeeds: bool,
+    metadata_failure: Option<String>,
 }
 
 impl AutomationFileSystem for FakeFileSystem {
-    fn path_exists(&self, path: &str) -> bool {
+    fn path_exists(&self, path: &str) -> Result<bool, FileSystemError> {
         self.queried.lock().unwrap().push(path.to_string());
-        self.existing
+        if let Some(reason) = &self.metadata_failure {
+            return Err(FileSystemError::new(
+                FileSystemOperation::Metadata,
+                path,
+                reason,
+            ));
+        }
+        Ok(self
+            .existing
             .lock()
             .unwrap()
             .iter()
-            .any(|item| item == path)
+            .any(|item| item == path))
     }
 
-    fn create_dir_all(&self, path: &str) -> bool {
+    fn create_dir_all(&self, path: &str) -> Result<(), FileSystemError> {
         self.created.lock().unwrap().push(path.to_string());
-        self.create_succeeds
+        if self.create_succeeds {
+            Ok(())
+        } else {
+            Err(FileSystemError::new(
+                FileSystemOperation::CreateDirectory,
+                path,
+                "permission denied",
+            ))
+        }
     }
 }
 
@@ -281,14 +299,17 @@ fn validation_prepares_export_directory_only_after_safe_preconditions() {
         queried: Mutex::new(Vec::new()),
         created: Mutex::new(Vec::new()),
         create_succeeds: true,
+        metadata_failure: None,
     };
     let service = AutomationValidationService::new(&fs);
     let rule = sample_rule("C:\\watch", "C:\\exports");
-    let result = service.validate_rule_activation(
-        &rule,
-        &json!({"offlineModelPath":"C:\\models\\batch"}),
-        &[json!({"id":"tag-1"})],
-    );
+    let result = service
+        .validate_rule_activation(
+            &rule,
+            &json!({"offlineModelPath":"C:\\models\\batch"}),
+            &[json!({"id":"tag-1"})],
+        )
+        .unwrap();
     assert!(result.valid);
     assert_eq!(fs.created.lock().unwrap().as_slice(), ["C:\\exports"]);
 }
@@ -352,11 +373,13 @@ fn missing_watch_directory_does_not_create_export_directory() {
         create_succeeds: true,
         ..FakeFileSystem::default()
     };
-    let result = AutomationValidationService::new(&fs).validate_rule_activation(
-        &sample_rule("C:\\missing", "C:\\exports"),
-        &online_config(),
-        &[json!({"id":"tag-1"})],
-    );
+    let result = AutomationValidationService::new(&fs)
+        .validate_rule_activation(
+            &sample_rule("C:\\missing", "C:\\exports"),
+            &online_config(),
+            &[json!({"id":"tag-1"})],
+        )
+        .unwrap();
 
     assert_invalid(
         &result,
@@ -367,7 +390,7 @@ fn missing_watch_directory_does_not_create_export_directory() {
 }
 
 #[test]
-fn export_directory_creation_failure_preserves_validation_result() {
+fn export_directory_creation_failure_preserves_filesystem_error() {
     let fs = FakeFileSystem {
         existing: Mutex::new(vec!["C:\\watch".into()]),
         create_succeeds: false,
@@ -379,16 +402,12 @@ fn export_directory_creation_failure_preserves_validation_result() {
         &[json!({"id":"tag-1"})],
     );
 
-    assert_invalid(
-        &result,
-        "automation.output_directory_invalid",
-        "The output directory could not be created.",
-    );
+    assert!(matches!(result, Err(AutomationError::FileSystem(_))));
     assert_eq!(fs.created.lock().unwrap().as_slice(), ["C:\\exports"]);
 }
 
 #[test]
-fn existing_export_path_still_requires_successful_directory_creation() {
+fn existing_export_path_still_propagates_directory_creation_failure() {
     let fs = FakeFileSystem {
         existing: Mutex::new(vec!["C:\\watch".into(), "C:\\exports".into()]),
         create_succeeds: false,
@@ -400,11 +419,7 @@ fn existing_export_path_still_requires_successful_directory_creation() {
         &[json!({"id":"tag-1"})],
     );
 
-    assert_invalid(
-        &result,
-        "automation.output_directory_invalid",
-        "The output directory could not be created.",
-    );
+    assert!(matches!(result, Err(AutomationError::FileSystem(_))));
     assert_eq!(fs.created.lock().unwrap().as_slice(), ["C:\\exports"]);
 }
 
@@ -415,11 +430,13 @@ fn local_batch_model_path_existence_is_queried() {
         create_succeeds: true,
         ..FakeFileSystem::default()
     };
-    let result = AutomationValidationService::new(&fs).validate_rule_activation(
-        &sample_rule("C:\\watch", "C:\\exports"),
-        &json!({"offlineModelPath": " C:\\models\\missing "}),
-        &[json!({"id":"tag-1"})],
-    );
+    let result = AutomationValidationService::new(&fs)
+        .validate_rule_activation(
+            &sample_rule("C:\\watch", "C:\\exports"),
+            &json!({"offlineModelPath": " C:\\models\\missing "}),
+            &[json!({"id":"tag-1"})],
+        )
+        .unwrap();
 
     assert_invalid(
         &result,
@@ -435,17 +452,44 @@ fn local_batch_model_path_existence_is_queried() {
 }
 
 #[test]
+fn filesystem_metadata_failure_is_not_reported_as_a_missing_path() {
+    let fs = FakeFileSystem {
+        metadata_failure: Some("access denied".into()),
+        create_succeeds: true,
+        ..FakeFileSystem::default()
+    };
+
+    let error = AutomationValidationService::new(&fs)
+        .validate_rule_activation(
+            &sample_rule("C:\\watch", "C:\\exports"),
+            &online_config(),
+            &[json!({"id":"tag-1"})],
+        )
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        AutomationError::FileSystem(FileSystemError {
+            operation: FileSystemOperation::Metadata,
+            ..
+        })
+    ));
+}
+
+#[test]
 fn online_asr_does_not_require_a_local_model() {
     let fs = FakeFileSystem {
         existing: Mutex::new(vec!["C:\\watch".into(), "C:\\exports".into()]),
         create_succeeds: true,
         ..FakeFileSystem::default()
     };
-    let result = AutomationValidationService::new(&fs).validate_rule_activation(
-        &sample_rule("C:\\watch", "C:\\exports"),
-        &online_config(),
-        &[json!({"id":"tag-1"})],
-    );
+    let result = AutomationValidationService::new(&fs)
+        .validate_rule_activation(
+            &sample_rule("C:\\watch", "C:\\exports"),
+            &online_config(),
+            &[json!({"id":"tag-1"})],
+        )
+        .unwrap();
 
     assert!(result.valid, "{result:?}");
     assert!(
@@ -504,11 +548,9 @@ fn assert_precondition_invalid(
     mutate(&mut rule);
 
     let tags = tag.into_iter().collect::<Vec<_>>();
-    let result = AutomationValidationService::new(&fs).validate_rule_activation(
-        &rule,
-        &online_config(),
-        &tags,
-    );
+    let result = AutomationValidationService::new(&fs)
+        .validate_rule_activation(&rule, &online_config(), &tags)
+        .unwrap();
 
     assert_invalid(&result, code, message);
     assert!(fs.created.lock().unwrap().is_empty());

@@ -1,37 +1,11 @@
 import type { BackupManifestV1, PreparedBackupImport } from "../../types/backup";
 import type { DashboardSnapshot } from "../../types/dashboard";
 import type {
-  AutomationProcessedInput_Serialize,
-  AutomationRepositoryState_Serialize,
-  AutomationRule,
-  AutomationRuleInput_Serialize,
-  AutomationRuleValidationResult_Serialize,
-  AutomationRuntimePathCollectionResult,
-  AutomationRuntimeReplaceResult,
-  AutomationRuntimeRuleConfig,
   AsrTranscriptionRequest_Serialize as CoreAsrTranscriptionRequest,
   DiagnosticsCoreInput,
   DiagnosticsCoreSnapshot,
   ExportTranscriptFileRequest_Serialize,
   ExportTranscriptFileResult,
-  HistoryAudioCleanupReport,
-  HistoryAudioCleanupRequest_Serialize,
-  HistoryCompleteLiveDraftRequest_Serialize,
-  HistoryCreateLiveDraftRequest,
-  HistoryCreateTranscriptSnapshotRequest_Serialize,
-  HistoryDeleteItemsRequest,
-  HistoryItemRecord,
-  HistoryReplaceTagAssignmentsRequest,
-  HistorySaveImportedFileRequest_Serialize,
-  HistorySaveRecordingRequest_Serialize,
-  HistorySummaryPayload_Serialize,
-  HistoryTrashItemsRequest,
-  HistoryUpdateItemMetaRequest_Serialize,
-  HistoryUpdateTagAssignmentsRequest,
-  HistoryUpdateTranscriptRequest_Serialize,
-  HistoryWorkspaceQueryRequest,
-  HistoryWorkspaceQueryResult,
-  LiveRecordingDraftResult,
   LlmCompletionRequest_Serialize as CoreLlmCompletionRequest,
   LlmCompletionResponse_Serialize as CoreLlmCompletionResponse,
   LlmConfig_Serialize as CoreLlmConfig,
@@ -42,17 +16,11 @@ import type {
   ModelCatalogSnapshot as CoreModelCatalogSnapshot,
   ModelSelectionPaths as CoreModelSelectionPaths,
   PolishSegmentsRequest_Serialize as CorePolishSegmentsRequest,
-  RecoveryItemInput_Serialize,
-  RecoverySnapshot_Serialize,
+  RustTauriCommandContractMap,
   SpeakerProcessingConfig as CoreSpeakerProcessingConfig,
   StorageUsageSnapshot_Serialize,
   SummarizeTranscriptRequest_Serialize as CoreSummarizeTranscriptRequest,
-  TranscriptDiffResult_Serialize,
-  TranscriptDiffRow_Serialize,
   TranscriptLlmJobRequest_Serialize as CoreTranscriptLlmJobRequest,
-  TranscriptSegment_Serialize,
-  TranscriptSnapshotMetadata,
-  TranscriptSnapshotRecord_Serialize,
   TranslateSegmentsRequest_Serialize as CoreTranslateSegmentsRequest,
   WebviewBrowsingDataClearResult,
 } from "../../bindings";
@@ -66,38 +34,27 @@ import type {
   AppLogLevel,
 } from "../../types/config";
 import type {
-  ProjectCreateInput,
   ProjectRecord,
-  ProjectUpdateInput,
 } from "../../types/project";
-import type {
-  TagCreateInput,
-  TagRecord,
-  TagUpdateInput,
-} from "../../types/tag";
 import type {
   SpeakerProfileSample,
   SpeakerProcessingConfig,
 } from "../../types/speaker";
 import type { TranscriptSegment } from "../../types/transcript";
-import type {
-  TaskLedgerPatch,
-  TaskLedgerRecord,
-  TaskLedgerSnapshot,
-} from "../../types/taskLedger";
 import type { ApiServerDashboardSnapshot } from "../../types/apiServer";
 import type {
   SyncChangePasswordRequest,
   SyncConflictDetail,
   SyncConflictResolution,
   SyncConflictSummary,
-  SyncCreateRequest,
   SyncCreateResult,
+  SyncCreateTransportRequest,
   SyncJoinPreview,
-  SyncJoinRequest,
+  SyncJoinTransportRequest,
   SyncPresetV1,
-  SyncPreviewJoinRequest,
+  SyncPreviewJoinTransportRequest,
   SyncProviderDescriptor,
+  SyncProviderTransportInput,
   SyncRunResult,
   SyncStatusSnapshot,
   SyncUnlockRecoveryRequest,
@@ -158,38 +115,6 @@ type SetCapturePausedArgs = {
   paused: boolean;
 };
 
-type HistoryDraftTransportHandle = LiveRecordingDraftResult;
-
-type ProjectListArgs = {
-  fallbackEnabledPolishKeywordSetIds?: string[];
-  fallbackEnabledSpeakerProfileIds?: string[];
-};
-
-type TagListArgs = ProjectListArgs;
-
-type ProjectCreateArgs = ProjectCreateInput;
-
-type ProjectUpdateArgs = {
-  projectId: string;
-  updates: ProjectUpdateInput;
-};
-
-type HistoryUpdateProjectAssignmentsRequest = {
-  ids: string[];
-  projectId: string | null;
-};
-
-type HistoryReassignProjectRequest = {
-  currentProjectId: string;
-  nextProjectId: string | null;
-};
-
-type AutomationValidateActivationArgs = {
-  rule: AutomationRule;
-  globalConfig: AppConfig;
-  tags: TagRecord[];
-};
-
 type ExportBackupArchiveRequest = {
   archivePath: string;
   appVersion: string;
@@ -199,7 +124,7 @@ export type ModelSelectionPaths = CoreModelSelectionPaths;
 
 export type ModelCatalogSelectedIds = CoreModelCatalogSelectedIds;
 
-export type TauriCommandContractMap = {
+type ManualTauriCommandContractMap = {
   [TauriCommand.app.extractTarBz2]: {
     args: ExtractTarBz2Args;
     result: void;
@@ -338,136 +263,6 @@ export type TauriCommandContractMap = {
     args: SetCapturePausedArgs;
     result: void;
   };
-  [TauriCommand.history.listItems]: {
-    args: { limit?: number | null; offset?: number | null } | undefined;
-    result: HistoryItemRecord[];
-  };
-  [TauriCommand.history.createLiveDraft]: {
-    args: HistoryCreateLiveDraftRequest;
-    result: HistoryDraftTransportHandle;
-  };
-  [TauriCommand.history.completeLiveDraft]: {
-    args: HistoryCompleteLiveDraftRequest_Serialize;
-    result: HistoryItemRecord;
-  };
-  [TauriCommand.history.saveRecording]: {
-    args: HistorySaveRecordingRequest_Serialize;
-    result: HistoryItemRecord;
-  };
-  [TauriCommand.history.saveImportedFile]: {
-    args: HistorySaveImportedFileRequest_Serialize;
-    result: HistoryItemRecord;
-  };
-  [TauriCommand.history.deleteItems]: {
-    args: HistoryDeleteItemsRequest;
-    result: void;
-  };
-  [TauriCommand.history.trashItems]: {
-    args: HistoryTrashItemsRequest;
-    result: void;
-  };
-  [TauriCommand.history.restoreItems]: {
-    args: HistoryDeleteItemsRequest;
-    result: void;
-  };
-  [TauriCommand.history.purgeItems]: {
-    args: HistoryDeleteItemsRequest;
-    result: void;
-  };
-  [TauriCommand.history.loadTranscript]: {
-    args: { historyId: string };
-    result: TranscriptSegment_Serialize[] | null;
-  };
-  [TauriCommand.history.updateTranscript]: {
-    args: HistoryUpdateTranscriptRequest_Serialize;
-    result: HistoryItemRecord;
-  };
-  [TauriCommand.history.createTranscriptSnapshot]: {
-    args: HistoryCreateTranscriptSnapshotRequest_Serialize;
-    result: TranscriptSnapshotMetadata;
-  };
-  [TauriCommand.history.listTranscriptSnapshots]: {
-    args: {
-      historyId: string;
-    };
-    result: TranscriptSnapshotMetadata[];
-  };
-  [TauriCommand.history.loadTranscriptSnapshot]: {
-    args: {
-      historyId: string;
-      snapshotId: string;
-    };
-    result: TranscriptSnapshotRecord_Serialize | null;
-  };
-  [TauriCommand.history.buildTranscriptDiff]: {
-    args: {
-      snapshotSegments: TranscriptSegment_Serialize[];
-      currentSegments: TranscriptSegment_Serialize[];
-    };
-    result: TranscriptDiffResult_Serialize;
-  };
-  [TauriCommand.history.restoreTranscriptDiffRows]: {
-    args: {
-      rows: TranscriptDiffRow_Serialize[];
-      selectedRowIds: string[];
-    };
-    result: TranscriptSegment_Serialize[];
-  };
-  [TauriCommand.history.updateItemMeta]: {
-    args: HistoryUpdateItemMetaRequest_Serialize;
-    result: void;
-  };
-  [TauriCommand.history.updateProjectAssignments]: {
-    args: HistoryUpdateProjectAssignmentsRequest;
-    result: void;
-  };
-  [TauriCommand.history.reassignProject]: {
-    args: HistoryReassignProjectRequest;
-    result: void;
-  };
-  [TauriCommand.history.updateTagAssignments]: {
-    args: HistoryUpdateTagAssignmentsRequest;
-    result: void;
-  };
-  [TauriCommand.history.replaceTagAssignments]: {
-    args: HistoryReplaceTagAssignmentsRequest;
-    result: void;
-  };
-  [TauriCommand.history.loadSummary]: {
-    args: { historyId: string };
-    result: HistorySummaryPayload_Serialize | null;
-  };
-  [TauriCommand.history.saveSummary]: {
-    args: {
-      historyId: string;
-      summaryPayload: HistorySummaryPayload_Serialize;
-    };
-    result: void;
-  };
-  [TauriCommand.history.deleteSummary]: {
-    args: { historyId: string };
-    result: void;
-  };
-  [TauriCommand.history.resolveAudioPath]: {
-    args: { historyId: string };
-    result: string | null;
-  };
-  [TauriCommand.history.previewAudioCleanup]: {
-    args: HistoryAudioCleanupRequest_Serialize;
-    result: HistoryAudioCleanupReport;
-  };
-  [TauriCommand.history.cleanupAudio]: {
-    args: HistoryAudioCleanupRequest_Serialize;
-    result: HistoryAudioCleanupReport;
-  };
-  [TauriCommand.history.queryWorkspace]: {
-    args: HistoryWorkspaceQueryRequest;
-    result: HistoryWorkspaceQueryResult;
-  };
-  [TauriCommand.history.openFolder]: {
-    args: undefined;
-    result: void;
-  };
   [TauriCommand.storage.getUsageSnapshot]: {
     args: undefined;
     result: StorageUsageSnapshot_Serialize;
@@ -483,93 +278,6 @@ export type TauriCommandContractMap = {
   [TauriCommand.export.transcriptFile]: {
     args: ExportTranscriptFileRequest_Serialize;
     result: ExportTranscriptFileResult;
-  };
-  [TauriCommand.project.list]: {
-    args: ProjectListArgs;
-    result: ProjectRecord[];
-  };
-  [TauriCommand.project.saveAll]: {
-    args: { projects: ProjectRecord[] };
-    result: void;
-  };
-  [TauriCommand.project.create]: {
-    args: ProjectCreateArgs;
-    result: ProjectRecord;
-  };
-  [TauriCommand.project.update]: {
-    args: ProjectUpdateArgs;
-    result: ProjectRecord | null;
-  };
-  [TauriCommand.project.delete]: {
-    args: { projectId: string };
-    result: void;
-  };
-  [TauriCommand.project.reorder]: {
-    args: { projectIds: string[] };
-    result: ProjectRecord[];
-  };
-  [TauriCommand.project.getActiveId]: {
-    args: undefined;
-    result: string | null;
-  };
-  [TauriCommand.project.setActiveId]: {
-    args: { projectId: string | null };
-    result: void;
-  };
-  [TauriCommand.tag.list]: {
-    args: TagListArgs;
-    result: TagRecord[];
-  };
-  [TauriCommand.tag.saveAll]: {
-    args: { tags: TagRecord[] };
-    result: void;
-  };
-  [TauriCommand.tag.create]: {
-    args: TagCreateInput;
-    result: TagRecord;
-  };
-  [TauriCommand.tag.update]: {
-    args: { tagId: string; updates: TagUpdateInput };
-    result: TagRecord | null;
-  };
-  [TauriCommand.tag.delete]: {
-    args: { tagId: string };
-    result: void;
-  };
-  [TauriCommand.tag.reorder]: {
-    args: { tagIds: string[] };
-    result: TagRecord[];
-  };
-  [TauriCommand.tag.getActiveId]: {
-    args: undefined;
-    result: string | null;
-  };
-  [TauriCommand.tag.setActiveId]: {
-    args: { tagId: string | null };
-    result: void;
-  };
-  [TauriCommand.automationRepository.loadState]: {
-    args: undefined;
-    result: AutomationRepositoryState_Serialize;
-  };
-  [TauriCommand.automationRepository.persistRules]: {
-    args: { rules: AutomationRuleInput_Serialize[] };
-    result: void;
-  };
-  [TauriCommand.automationRepository.persistProcessedEntries]: {
-    args: { processedEntries: AutomationProcessedInput_Serialize[] };
-    result: void;
-  };
-  [TauriCommand.automationRepository.persistState]: {
-    args: {
-      rules: AutomationRuleInput_Serialize[];
-      processedEntries: AutomationProcessedInput_Serialize[];
-    };
-    result: void;
-  };
-  [TauriCommand.automationRepository.validateActivation]: {
-    args: AutomationValidateActivationArgs;
-    result: AutomationRuleValidationResult_Serialize;
   };
   [TauriCommand.llmUsage.ensureStorage]: {
     args: undefined;
@@ -651,53 +359,6 @@ export type TauriCommandContractMap = {
     };
     result: TranscriptSegment[];
   };
-  [TauriCommand.recovery.loadSnapshot]: {
-    args: undefined;
-    result: RecoverySnapshot_Serialize;
-  };
-  [TauriCommand.recovery.saveSnapshot]: {
-    args: { items: RecoveryItemInput_Serialize[] };
-    result: RecoverySnapshot_Serialize;
-  };
-  [TauriCommand.recovery.persistQueueSnapshot]: {
-    args: { queueItems: RecoveryItemInput_Serialize[]; resolvedIds?: string[] };
-    result: void;
-  };
-  [TauriCommand.taskLedger.loadSnapshot]: {
-    args: undefined;
-    result: TaskLedgerSnapshot;
-  };
-  [TauriCommand.taskLedger.upsertTask]: {
-    args: { record: TaskLedgerRecord };
-    result: TaskLedgerSnapshot;
-  };
-  [TauriCommand.taskLedger.patchTask]: {
-    args: { id: string; patch: TaskLedgerPatch };
-    result: TaskLedgerSnapshot;
-  };
-  [TauriCommand.taskLedger.removeTask]: {
-    args: { id: string };
-    result: TaskLedgerSnapshot;
-  };
-  [TauriCommand.taskLedger.clearResolved]: {
-    args: undefined;
-    result: TaskLedgerSnapshot;
-  };
-  [TauriCommand.automation.replaceRuntimeRules]: {
-    args: { rules: AutomationRuntimeRuleConfig[] };
-    result: AutomationRuntimeReplaceResult[];
-  };
-  [TauriCommand.automation.scanRuntimeRule]: {
-    args: { rule: AutomationRuntimeRuleConfig };
-    result: void;
-  };
-  [TauriCommand.automation.collectRuntimeRulePaths]: {
-    args: {
-      rule: AutomationRuntimeRuleConfig;
-      filePaths: string[];
-    };
-    result: AutomationRuntimePathCollectionResult[];
-  };
   [TauriCommand.backup.exportArchive]: {
     args: { request: ExportBackupArchiveRequest };
     result: BackupManifestV1;
@@ -718,6 +379,10 @@ export type TauriCommandContractMap = {
     args: undefined;
     result: SyncStatusSnapshot;
   };
+  [TauriCommand.sync.testProvider]: {
+    args: { provider: SyncProviderTransportInput };
+    result: SyncProviderDescriptor;
+  };
   [TauriCommand.sync.testWebDavProvider]: {
     args: { config: WebDavObjectStoreConfig };
     result: SyncProviderDescriptor;
@@ -731,15 +396,15 @@ export type TauriCommandContractMap = {
     result: PreparedBackupImport;
   };
   [TauriCommand.sync.createVault]: {
-    args: { request: SyncCreateRequest };
+    args: { request: SyncCreateTransportRequest };
     result: SyncCreateResult;
   };
   [TauriCommand.sync.previewJoin]: {
-    args: { request: SyncPreviewJoinRequest };
+    args: { request: SyncPreviewJoinTransportRequest };
     result: SyncJoinPreview;
   };
   [TauriCommand.sync.joinVault]: {
-    args: { request: SyncJoinRequest };
+    args: { request: SyncJoinTransportRequest };
     result: SyncRunResult;
   };
   [TauriCommand.sync.unlock]: {
@@ -879,6 +544,9 @@ export type TauriCommandContractMap = {
     result: ApiServerDashboardSnapshot;
   };
 };
+
+export type TauriCommandContractMap = RustTauriCommandContractMap &
+  ManualTauriCommandContractMap;
 
 type Assert<T extends true> = T;
 export type TauriAllCommandsCovered = Assert<

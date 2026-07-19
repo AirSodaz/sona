@@ -96,11 +96,12 @@ impl FsRecoverySnapshotStore {
 impl RecoverySnapshotStore for FsRecoverySnapshotStore {
     fn load_snapshot_input(&self) -> Result<RecoverySnapshotInput, RecoveryError> {
         let recovery_dir = self.recovery_dir();
-        ensure_directory_exists(&recovery_dir).map_err(RecoveryError::Repository)?;
+        ensure_directory_exists(&recovery_dir)
+            .map_err(|error| RecoveryError::Repository(error.to_string()))?;
         let recovery_path = self.queue_recovery_path();
         if !recovery_path.exists() {
             write_json_pretty_atomic(&recovery_path, &empty_snapshot())
-                .map_err(RecoveryError::Repository)?;
+                .map_err(|error| RecoveryError::Repository(error.to_string()))?;
         }
 
         let content = RealFileSystem
@@ -117,6 +118,6 @@ impl RecoverySnapshotStore for FsRecoverySnapshotStore {
 
     fn save_snapshot(&self, snapshot: &RecoverySnapshot) -> Result<(), RecoveryError> {
         write_json_pretty_atomic(&self.queue_recovery_path(), snapshot)
-            .map_err(RecoveryError::Repository)
+            .map_err(|error| RecoveryError::Repository(error.to_string()))
     }
 }

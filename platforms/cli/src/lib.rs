@@ -151,6 +151,17 @@ impl CliError {
 
 pub type CliResult<T> = Result<T, CliError>;
 
+pub(crate) fn map_runtime_fs_error(error: sona_runtime_fs::RuntimeFsError) -> CliError {
+    let message = error.to_string();
+    match error {
+        sona_runtime_fs::RuntimeFsError::FileSystem(_) => CliError::Io(message),
+        sona_runtime_fs::RuntimeFsError::Serialization { .. } => CliError::Serialize(message),
+        sona_runtime_fs::RuntimeFsError::Config(_)
+        | sona_runtime_fs::RuntimeFsError::Validation(_)
+        | sona_runtime_fs::RuntimeFsError::AlreadyExists { .. } => CliError::Validation(message),
+    }
+}
+
 /// Standalone Sona command line interface.
 #[derive(Debug, Parser)]
 #[command(
@@ -296,5 +307,30 @@ mod tests {
             CliError::Io("storage unavailable".to_string()).exit_code(),
             5
         );
+    }
+
+    #[test]
+    fn runtime_filesystem_errors_map_to_existing_cli_categories() {
+        let filesystem = map_runtime_fs_error(sona_runtime_fs::RuntimeFsError::FileSystem(
+            sona_core::ports::fs::FileSystemError::new(
+                sona_core::ports::fs::FileSystemOperation::ReadText,
+                "missing.toml",
+                "not found",
+            ),
+        ));
+        let serialization = map_runtime_fs_error(sona_runtime_fs::RuntimeFsError::Serialization {
+            path: "settings.json".into(),
+            reason: "invalid JSON".into(),
+        });
+        let validation = map_runtime_fs_error(sona_runtime_fs::RuntimeFsError::Validation(
+            sona_core::runtime::error::RuntimeValidationError::new("input", "invalid input"),
+        ));
+
+        assert!(matches!(filesystem, CliError::Io(_)));
+        assert_eq!(filesystem.exit_code(), 5);
+        assert!(matches!(serialization, CliError::Serialize(_)));
+        assert_eq!(serialization.exit_code(), 1);
+        assert!(matches!(validation, CliError::Validation(_)));
+        assert_eq!(validation.exit_code(), 2);
     }
 }

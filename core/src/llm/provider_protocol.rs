@@ -3,6 +3,7 @@ use serde_json::Value;
 
 use crate::llm::tasks::LlmProviderStrategy;
 use crate::llm::usage::TokenUsage;
+use crate::ports::llm::{LlmPortError, LlmPortErrorKind};
 
 #[cfg(feature = "specta")]
 use specta::Type;
@@ -218,11 +219,14 @@ pub fn build_gemini_generate_content_request_parts(
     model: &str,
     api_key: &str,
     stream: bool,
-) -> Result<GeminiGenerateContentRequestParts, String> {
+) -> Result<GeminiGenerateContentRequestParts, LlmPortError> {
     let cleaned_base = clean_gemini_base_url(base_url);
     let model = model.trim().trim_start_matches("models/");
     if model.is_empty() {
-        return Err("Gemini model cannot be empty".to_string());
+        return Err(LlmPortError::new(
+            LlmPortErrorKind::InvalidRequest,
+            "Gemini model cannot be empty",
+        ));
     }
 
     let action = if stream {
@@ -390,7 +394,7 @@ fn extract_text_parts(value: &Value, parts: &mut Vec<String>) {
     }
 }
 
-pub fn extract_text_from_json_response(response: &Value) -> Result<String, String> {
+pub fn extract_text_from_json_response(response: &Value) -> Result<String, LlmPortError> {
     let mut parts = Vec::new();
 
     if let Some(output_text) = response.get("output_text").and_then(Value::as_str)
@@ -421,7 +425,10 @@ pub fn extract_text_from_json_response(response: &Value) -> Result<String, Strin
         .join("\n");
 
     if text.is_empty() {
-        return Err("LLM response did not contain text output".to_string());
+        return Err(LlmPortError::new(
+            LlmPortErrorKind::Protocol,
+            "LLM response did not contain text output",
+        ));
     }
 
     Ok(text)
@@ -452,11 +459,16 @@ pub fn normalize_token_usage(
 
 pub fn extract_anthropic_text_response(
     response: &Value,
-) -> Result<(String, Option<TokenUsage>), String> {
+) -> Result<(String, Option<TokenUsage>), LlmPortError> {
     let content = response
         .get("content")
         .and_then(Value::as_array)
-        .ok_or_else(|| "Anthropic response missing content array".to_string())?;
+        .ok_or_else(|| {
+            LlmPortError::new(
+                LlmPortErrorKind::Protocol,
+                "Anthropic response missing content array",
+            )
+        })?;
 
     let text_parts: Vec<&str> = content
         .iter()
@@ -465,7 +477,10 @@ pub fn extract_anthropic_text_response(
         .collect();
 
     if text_parts.is_empty() {
-        return Err("Anthropic response did not contain text output".to_string());
+        return Err(LlmPortError::new(
+            LlmPortErrorKind::Protocol,
+            "Anthropic response did not contain text output",
+        ));
     }
 
     let usage = response.get("usage").and_then(|u| {

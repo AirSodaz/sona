@@ -1,4 +1,9 @@
-use crate::{SonaCoreBindingError, SonaCoreBindingResult};
+use crate::application_context::application_context;
+use crate::{
+    FfiAutomationProcessedInputV1, FfiAutomationRepositoryInputV1, FfiAutomationRepositoryStateV1,
+    FfiAutomationRuleInputV1, FfiAutomationRuleValidationResultV1, FfiAutomationTagReferenceV1,
+    FfiAutomationValidationRuleV1, SonaCoreBindingError, SonaCoreBindingResult,
+};
 use serde_json::Value;
 use sona_core::automation::repository::{
     AutomationProcessedInput, AutomationRepositoryInput, AutomationRuleInput,
@@ -6,8 +11,7 @@ use sona_core::automation::repository::{
 };
 use sona_core::automation::{AutomationError, AutomationRule};
 use sona_runtime_fs::{UuidGenerator, validate_native_automation_rule_activation};
-use sona_sqlite::{Database, SqliteAutomationAdapter};
-use std::path::Path;
+use sona_sqlite::SqliteAutomationAdapter;
 use std::sync::Arc;
 
 pub(crate) fn load_automation_repository_state_json(
@@ -15,6 +19,12 @@ pub(crate) fn load_automation_repository_state_json(
 ) -> SonaCoreBindingResult<String> {
     with_automation_adapter(&app_data_dir, |adapter| adapter.load_state())
         .and_then(serialize_automation)
+}
+
+pub(crate) fn load_automation_repository_state_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
+    with_automation_adapter(&app_data_dir, |adapter| adapter.load_state()).map(Into::into)
 }
 
 pub(crate) fn replace_automation_rules_json(
@@ -29,6 +39,18 @@ pub(crate) fn replace_automation_rules_json(
     .and_then(serialize_automation)
 }
 
+pub(crate) fn replace_automation_rules_v1(
+    app_data_dir: String,
+    rules: Vec<FfiAutomationRuleInputV1>,
+) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
+    let rules = rules.into_iter().map(Into::into).collect();
+    with_automation_adapter(&app_data_dir, |adapter| {
+        adapter.replace_rules(rules)?;
+        adapter.load_state()
+    })
+    .map(Into::into)
+}
+
 pub(crate) fn replace_automation_processed_entries_json(
     app_data_dir: String,
     entries_json: String,
@@ -39,6 +61,18 @@ pub(crate) fn replace_automation_processed_entries_json(
         adapter.load_state()
     })
     .and_then(serialize_automation)
+}
+
+pub(crate) fn replace_automation_processed_entries_v1(
+    app_data_dir: String,
+    entries: Vec<FfiAutomationProcessedInputV1>,
+) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
+    let entries = entries.into_iter().map(Into::into).collect();
+    with_automation_adapter(&app_data_dir, |adapter| {
+        adapter.replace_processed_entries(entries)?;
+        adapter.load_state()
+    })
+    .map(Into::into)
 }
 
 pub(crate) fn replace_automation_repository_state_json(
@@ -53,6 +87,17 @@ pub(crate) fn replace_automation_repository_state_json(
     .and_then(serialize_automation)
 }
 
+pub(crate) fn replace_automation_repository_state_v1(
+    app_data_dir: String,
+    input: FfiAutomationRepositoryInputV1,
+) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
+    with_automation_adapter(&app_data_dir, |adapter| {
+        adapter.replace_state(input.into())?;
+        adapter.load_state()
+    })
+    .map(Into::into)
+}
+
 pub(crate) fn validate_automation_rule_activation_json(
     rule_json: String,
     global_config_json: String,
@@ -65,16 +110,32 @@ pub(crate) fn validate_automation_rule_activation_json(
         .map(|json| parse_json_object("project", json))
         .transpose()?;
     let tags = project.into_iter().collect::<Vec<_>>();
-    let result = validate_native_automation_rule_activation(&rule, &global_config, &tags);
+    let result = validate_native_automation_rule_activation(&rule, &global_config, &tags)
+        .map_err(automation_error)?;
     serialize_automation(result)
+}
+
+pub(crate) fn validate_automation_rule_activation_v1(
+    rule: FfiAutomationValidationRuleV1,
+    global_config_json: String,
+    tags: Vec<FfiAutomationTagReferenceV1>,
+) -> SonaCoreBindingResult<FfiAutomationRuleValidationResultV1> {
+    let global_config = parse_json_object("global config", &global_config_json)?;
+    let tags = tags
+        .into_iter()
+        .map(|tag| serde_json::json!({ "id": tag.id }))
+        .collect::<Vec<_>>();
+    validate_native_automation_rule_activation(&rule.into(), &global_config, &tags)
+        .map(Into::into)
+        .map_err(automation_error)
 }
 
 fn with_automation_adapter<T, F>(app_data_dir: &str, operation: F) -> SonaCoreBindingResult<T>
 where
     F: FnOnce(&SqliteAutomationAdapter) -> Result<T, AutomationError>,
 {
-    let database = Database::open(Path::new(app_data_dir)).map_err(automation_error)?;
-    let adapter = SqliteAutomationAdapter::new(Arc::new(database), Arc::new(UuidGenerator));
+    let context = application_context(app_data_dir).map_err(automation_error)?;
+    let adapter = context.sqlite().automation_adapter(Arc::new(UuidGenerator));
     operation(&adapter).map_err(automation_error)
 }
 

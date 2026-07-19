@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "specta")]
 use specta::Type;
 
+use crate::transcription::TranscriptPostprocessError;
 use crate::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -70,20 +71,26 @@ pub struct TranscriptPostprocessor {
 }
 
 impl TranscriptPostprocessor {
-    pub fn compile(options: TranscriptPostprocessOptions) -> Result<Self, String> {
+    pub fn compile(
+        options: TranscriptPostprocessOptions,
+    ) -> Result<Self, TranscriptPostprocessError> {
         let rules = active_text_replacement_rules(&options.text_replacement_sets)
             .into_iter()
             .map(|rule| {
+                let pattern = rule.from.clone();
                 let regex = RegexBuilder::new(&regex::escape(&rule.from))
                     .case_insensitive(rule.ignore_case)
                     .build()
-                    .map_err(|error| error.to_string())?;
+                    .map_err(|error| TranscriptPostprocessError::RuleCompilation {
+                        pattern,
+                        reason: error.to_string(),
+                    })?;
                 Ok(CompiledTextReplacementRule {
                     regex,
                     replacement: rule.to,
                 })
             })
-            .collect::<Result<Vec<_>, String>>()?;
+            .collect::<Result<Vec<_>, TranscriptPostprocessError>>()?;
 
         Ok(Self {
             drop_final_dot_segments: options.drop_final_dot_segments,

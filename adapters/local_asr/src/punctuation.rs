@@ -1,5 +1,6 @@
 use crate::audio::resolve_model_onnx_path;
 use sherpa_onnx::{OfflinePunctuation, OfflinePunctuationConfig, OfflinePunctuationModelConfig};
+use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 use std::path::Path;
 
 pub struct Punctuation {
@@ -7,7 +8,7 @@ pub struct Punctuation {
 }
 
 impl Punctuation {
-    pub fn new(model_path: &str, num_threads: i32) -> Result<Self, String> {
+    pub fn new(model_path: &str, num_threads: i32) -> Result<Self, AsrPortError> {
         let config = OfflinePunctuationConfig {
             model: OfflinePunctuationModelConfig {
                 ct_transformer: Some(model_path.to_string()),
@@ -17,8 +18,12 @@ impl Punctuation {
             },
         };
 
-        let inner =
-            OfflinePunctuation::create(&config).ok_or("Failed to create OfflinePunctuation")?;
+        let inner = OfflinePunctuation::create(&config).ok_or_else(|| {
+            AsrPortError::new(
+                AsrPortErrorKind::Model,
+                "Failed to create OfflinePunctuation",
+            )
+        })?;
 
         Ok(Self { inner })
     }
@@ -46,7 +51,7 @@ pub fn load_punctuation(punctuation_model: Option<String>) -> Option<Punctuation
 
 pub fn load_punctuation_from_path(
     punctuation_model: Option<&Path>,
-) -> Result<Option<Punctuation>, String> {
+) -> Result<Option<Punctuation>, AsrPortError> {
     let Some(path) = punctuation_model else {
         return Ok(None);
     };

@@ -9,6 +9,7 @@ pub mod history_store;
 pub mod llm;
 pub mod models;
 pub mod ports;
+#[deprecated(note = "Project is a compatibility API; use the tag module for new code")]
 pub mod project;
 pub mod recovery;
 pub mod runtime;

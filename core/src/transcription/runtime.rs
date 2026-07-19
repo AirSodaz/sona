@@ -4,6 +4,7 @@ use crate::models::preset_models::{
     DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
 };
 use crate::runtime::config::{TranscribeConfigSection, TranscribeLiveConfigSection};
+use crate::runtime::error::RuntimeValidationError;
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 
@@ -140,13 +141,15 @@ impl LiveTranscribePlan {
 pub fn resolve_export_format(
     format: Option<&str>,
     output: Option<&Path>,
-) -> Result<ExportFormat, String> {
+) -> Result<ExportFormat, RuntimeValidationError> {
     if let Some(value) = format {
-        return ExportFormat::parse(value);
+        return ExportFormat::parse(value)
+            .map_err(|error| RuntimeValidationError::new("export_format", error.to_string()));
     }
 
     match output {
-        Some(path) => ExportFormat::from_output_path(path),
+        Some(path) => ExportFormat::from_output_path(path)
+            .map_err(|error| RuntimeValidationError::new("export_format", error.to_string())),
         None => Ok(ExportFormat::Json),
     }
 }
@@ -158,10 +161,13 @@ pub fn resolve_output_target(output: Option<PathBuf>) -> OutputTarget {
     }
 }
 
-pub fn resolve_batch_jobs(value: Option<usize>) -> Result<usize, String> {
+pub fn resolve_batch_jobs(value: Option<usize>) -> Result<usize, RuntimeValidationError> {
     let jobs = value.unwrap_or(DEFAULT_BATCH_JOBS);
     if jobs == 0 {
-        Err("--jobs must be greater than 0.".to_string())
+        Err(RuntimeValidationError::new(
+            "batch_jobs",
+            "--jobs must be greater than 0.",
+        ))
     } else {
         Ok(jobs)
     }
@@ -181,7 +187,7 @@ pub fn plan_batch_output_files(
     format: ExportFormat,
     preserve_relative_paths: bool,
     force: bool,
-) -> Result<Vec<BatchOutputPlan>, String> {
+) -> Result<Vec<BatchOutputPlan>, RuntimeValidationError> {
     let extension = export_format_name(format);
     let mut seen_outputs = HashSet::new();
     let mut plans = Vec::with_capacity(inputs.len());
@@ -192,9 +198,12 @@ pub fn plan_batch_output_files(
         let output_path = output_dir.join(relative_output);
         let output_key = output_path.to_string_lossy().to_ascii_lowercase();
         if !seen_outputs.insert(output_key) {
-            return Err(format!(
-                "Batch output path {} would overwrite another result. Use --recursive to preserve directories or remove duplicate input stems.",
-                output_path.display()
+            return Err(RuntimeValidationError::new(
+                "batch_output",
+                format!(
+                    "Batch output path {} would overwrite another result. Use --recursive to preserve directories or remove duplicate input stems.",
+                    output_path.display()
+                ),
             ));
         }
         let _ = force;
@@ -214,9 +223,12 @@ fn path_contains_glob_pattern(path: &Path) -> bool {
         .any(|character| GLOB_PATTERN_CHARS.contains(&character))
 }
 
-pub fn common_input_parent(inputs: &[PathBuf]) -> Result<PathBuf, String> {
+pub fn common_input_parent(inputs: &[PathBuf]) -> Result<PathBuf, RuntimeValidationError> {
     if inputs.is_empty() {
-        return Err("Missing input file path.".to_string());
+        return Err(RuntimeValidationError::new(
+            "batch_input",
+            "Missing input file path.",
+        ));
     }
 
     let mut common = match inputs[0].parent() {
@@ -224,13 +236,18 @@ pub fn common_input_parent(inputs: &[PathBuf]) -> Result<PathBuf, String> {
             .components()
             .filter(|component| !matches!(component, Component::CurDir))
             .collect::<PathBuf>(),
-        None => return Err("Input path has no parent directory.".to_string()),
+        None => {
+            return Err(RuntimeValidationError::new(
+                "batch_input",
+                "Input path has no parent directory.",
+            ));
+        }
     };
 
     for path in &inputs[1..] {
-        let parent = path
-            .parent()
-            .ok_or_else(|| "Input path has no parent directory.".to_string())?;
+        let parent = path.parent().ok_or_else(|| {
+            RuntimeValidationError::new("batch_input", "Input path has no parent directory.")
+        })?;
 
         let mut new_common = PathBuf::new();
         let mut common_components = common.components();
@@ -276,13 +293,16 @@ fn batch_relative_output_path(
     input_dir: &Path,
     extension: &str,
     preserve_relative_paths: bool,
-) -> Result<PathBuf, String> {
+) -> Result<PathBuf, RuntimeValidationError> {
     if preserve_relative_paths {
         let relative = input_path.strip_prefix(input_dir).map_err(|_| {
-            format!(
-                "Input file {} is not inside --input-dir {}.",
-                input_path.display(),
-                input_dir.display()
+            RuntimeValidationError::new(
+                "batch_output",
+                format!(
+                    "Input file {} is not inside --input-dir {}.",
+                    input_path.display(),
+                    input_dir.display()
+                ),
             )
         })?;
         let mut output = relative.to_path_buf();
@@ -291,9 +311,12 @@ fn batch_relative_output_path(
     }
 
     let stem = input_path.file_stem().ok_or_else(|| {
-        format!(
-            "Unable to derive output file name from {}.",
-            input_path.display()
+        RuntimeValidationError::new(
+            "batch_output",
+            format!(
+                "Unable to derive output file name from {}.",
+                input_path.display()
+            ),
         )
     })?;
     let mut output = PathBuf::from(stem);
@@ -305,7 +328,7 @@ pub fn resolve_batch_transcribe_plan_with_install_checker(
     options: BatchTranscribeOptions,
     config: Option<TranscribeConfigSection>,
     is_installed: fn(&PresetModel, &Path) -> bool,
-) -> Result<BatchTranscribePlan, String> {
+) -> Result<BatchTranscribePlan, RuntimeValidationError> {
     resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
         options,
         config,
@@ -318,7 +341,7 @@ pub fn resolve_live_transcribe_plan_with_install_checker(
     options: LiveTranscribeOptions,
     config: Option<TranscribeLiveConfigSection>,
     is_installed: fn(&PresetModel, &Path) -> bool,
-) -> Result<LiveTranscribePlan, String> {
+) -> Result<LiveTranscribePlan, RuntimeValidationError> {
     resolve_live_transcribe_plan_with_install_checker_and_models_dir_status(
         options,
         config,
@@ -332,10 +355,13 @@ pub fn resolve_live_transcribe_plan_with_install_checker_and_models_dir_status(
     config: Option<TranscribeLiveConfigSection>,
     is_installed: fn(&PresetModel, &Path) -> bool,
     models_dir_status: fn(&Path) -> ModelsDirStatus,
-) -> Result<LiveTranscribePlan, String> {
+) -> Result<LiveTranscribePlan, RuntimeValidationError> {
     let config = config.unwrap_or_default();
     if options.output.is_none() && options.format.is_some() {
-        return Err("--format requires --output for live transcription.".to_string());
+        return Err(RuntimeValidationError::new(
+            "live_transcribe",
+            "--format requires --output for live transcription.",
+        ));
     }
     let export_format = options
         .output
@@ -357,6 +383,7 @@ pub fn resolve_live_transcribe_plan_with_install_checker_and_models_dir_status(
             vad_buffer: options.vad_buffer.or(config.vad_buffer_size),
         },
         "streaming",
+        "live_transcribe",
         "Missing required streaming model. Pass --model-id or set model_id in --config.",
         is_installed,
         models_dir_status,
@@ -385,7 +412,7 @@ pub fn resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
     config: Option<TranscribeConfigSection>,
     is_installed: fn(&PresetModel, &Path) -> bool,
     models_dir_status: fn(&Path) -> ModelsDirStatus,
-) -> Result<BatchTranscribePlan, String> {
+) -> Result<BatchTranscribePlan, RuntimeValidationError> {
     let config = config.unwrap_or_default();
     let output_target = resolve_output_target(options.output.clone());
     let export_format = resolve_export_format(
@@ -410,6 +437,7 @@ pub fn resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
             vad_buffer: options.vad_buffer.or(config.vad_buffer_size),
         },
         "batch",
+        "batch_transcribe",
         "Missing required batch model. Pass --model-id or set model_id in --config.",
         is_installed,
         models_dir_status,
@@ -467,15 +495,16 @@ struct ResolvedLocalTranscribeSettings {
 fn resolve_local_transcribe_settings(
     settings: LocalTranscribeSettings,
     mode: &'static str,
+    validation_subject: &'static str,
     missing_model_error: &'static str,
     is_installed: fn(&PresetModel, &Path) -> bool,
     models_dir_status: fn(&Path) -> ModelsDirStatus,
-) -> Result<ResolvedLocalTranscribeSettings, String> {
+) -> Result<ResolvedLocalTranscribeSettings, RuntimeValidationError> {
     let gpu_acceleration =
         crate::runtime::gpu::resolve_gpu_acceleration(settings.gpu_acceleration)?;
     let model_id = settings
         .model_id
-        .ok_or_else(|| missing_model_error.to_string())?;
+        .ok_or_else(|| RuntimeValidationError::new("model_id", missing_model_error))?;
     let model = resolve_model_for_mode(&model_id, mode)?;
     let models_dir = crate::models::paths::resolve_models_dir(
         settings.models_dir,
@@ -484,11 +513,17 @@ fn resolve_local_transcribe_settings(
     )?;
     let threads = settings.threads.unwrap_or(DEFAULT_THREADS);
     if threads <= 0 {
-        return Err("threads must be greater than 0".to_string());
+        return Err(RuntimeValidationError::new(
+            validation_subject,
+            "threads must be greater than 0",
+        ));
     }
     let vad_buffer = settings.vad_buffer.unwrap_or(DEFAULT_VAD_BUFFER_SIZE);
     if vad_buffer <= 0.0 {
-        return Err("vad_buffer must be greater than 0".to_string());
+        return Err(RuntimeValidationError::new(
+            validation_subject,
+            "vad_buffer must be greater than 0",
+        ));
     }
     let rules = model.resolved_rules();
     let model_path = require_installed_model(model, &models_dir, is_installed)?;
@@ -500,9 +535,15 @@ fn resolve_local_transcribe_settings(
             &companion_id,
             &models_dir,
             is_installed,
+            validation_subject,
         )?)
     } else {
-        optional_installed_companion(settings.vad_model_id.as_deref(), &models_dir, is_installed)?
+        optional_installed_companion(
+            settings.vad_model_id.as_deref(),
+            &models_dir,
+            is_installed,
+            validation_subject,
+        )?
     };
     let punctuation_model = if rules.requires_punctuation {
         let companion_id = settings
@@ -512,12 +553,14 @@ fn resolve_local_transcribe_settings(
             &companion_id,
             &models_dir,
             is_installed,
+            validation_subject,
         )?)
     } else {
         optional_installed_companion(
             settings.punctuation_model_id.as_deref(),
             &models_dir,
             is_installed,
+            validation_subject,
         )?
     };
     Ok(ResolvedLocalTranscribeSettings {
@@ -541,12 +584,14 @@ fn resolve_local_transcribe_settings(
 fn resolve_model_for_mode(
     model_id: &str,
     mode: &'static str,
-) -> Result<&'static PresetModel, String> {
-    let model =
-        find_preset_model(model_id).ok_or_else(|| format!("Unknown model id: {model_id}"))?;
+) -> Result<&'static PresetModel, RuntimeValidationError> {
+    let model = find_preset_model(model_id).ok_or_else(|| {
+        RuntimeValidationError::new("model_id", format!("Unknown model id: {model_id}"))
+    })?;
     if !model.supports_mode(mode) {
-        return Err(format!(
-            "Model '{model_id}' does not support {mode} transcription."
+        return Err(RuntimeValidationError::new(
+            "model_id",
+            format!("Model '{model_id}' does not support {mode} transcription."),
         ));
     }
     Ok(model)
@@ -556,13 +601,16 @@ fn require_installed_model(
     model: &PresetModel,
     models_dir: &Path,
     is_installed: fn(&PresetModel, &Path) -> bool,
-) -> Result<String, String> {
+) -> Result<String, RuntimeValidationError> {
     let path = model.resolve_install_path(models_dir);
     if !is_installed(model, models_dir) {
-        return Err(format!(
-            "Model '{}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
-            model.id,
-            path.display()
+        return Err(RuntimeValidationError::new(
+            "model_id",
+            format!(
+                "Model '{}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
+                model.id,
+                path.display()
+            ),
         ));
     }
     Ok(path.to_string_lossy().to_string())
@@ -572,14 +620,22 @@ fn require_installed_companion(
     model_id: &str,
     models_dir: &Path,
     is_installed: fn(&PresetModel, &Path) -> bool,
-) -> Result<String, String> {
-    let model = find_preset_model(model_id)
-        .ok_or_else(|| format!("Unknown companion model id: {model_id}"))?;
+    validation_subject: &'static str,
+) -> Result<String, RuntimeValidationError> {
+    let model = find_preset_model(model_id).ok_or_else(|| {
+        RuntimeValidationError::new(
+            validation_subject,
+            format!("Unknown companion model id: {model_id}"),
+        )
+    })?;
     let path = model.resolve_install_path(models_dir);
     if !is_installed(model, models_dir) {
-        return Err(format!(
-            "Companion model '{model_id}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
-            path.display()
+        return Err(RuntimeValidationError::new(
+            validation_subject,
+            format!(
+                "Companion model '{model_id}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
+                path.display()
+            ),
         ));
     }
     Ok(path.to_string_lossy().to_string())
@@ -589,8 +645,9 @@ fn optional_installed_companion(
     model_id: Option<&str>,
     models_dir: &Path,
     is_installed: fn(&PresetModel, &Path) -> bool,
-) -> Result<Option<String>, String> {
+    validation_subject: &'static str,
+) -> Result<Option<String>, RuntimeValidationError> {
     model_id
-        .map(|id| require_installed_companion(id, models_dir, is_installed))
+        .map(|id| require_installed_companion(id, models_dir, is_installed, validation_subject))
         .transpose()
 }

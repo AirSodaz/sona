@@ -1,3 +1,4 @@
+use crate::application_context::cached_application_context;
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use sona_sqlite::load_dashboard_snapshot;
 use std::path::PathBuf;
@@ -19,13 +20,17 @@ fn build_dashboard_snapshot_json(
     let runtime = tokio::runtime::Builder::new_current_thread()
         .build()
         .map_err(dashboard_error)?;
-    let snapshot = runtime
-        .block_on(load_dashboard_snapshot(
-            app_data_dir,
-            deep,
-            sona_runtime_fs::dashboard_snapshot_time_now(),
-        ))
-        .map_err(dashboard_error)?;
+    let time = sona_runtime_fs::dashboard_snapshot_time_now();
+    let snapshot = match cached_application_context(&app_data_dir).map_err(dashboard_error)? {
+        Some(context) => runtime.block_on(
+            context
+                .sqlite()
+                .dashboard_service()
+                .build_snapshot_at(deep, time),
+        ),
+        None => runtime.block_on(load_dashboard_snapshot(app_data_dir, deep, time)),
+    }
+    .map_err(dashboard_error)?;
     let canonical = serde_json::to_value(snapshot).map_err(dashboard_error)?;
     serde_json::to_string(&canonical).map_err(dashboard_error)
 }
@@ -46,6 +51,7 @@ mod tests {
     use sona_core::history::mutation_repository::HistoryMutationRepository;
     use sona_core::history_store::HistoryStore;
     use sona_core::llm::usage::{LlmUsageCategory, TokenUsage, UsageRecord};
+    use sona_runtime_fs::{SystemClock, UuidGenerator};
     use sona_sqlite::llm_usage::record_usage;
     use sona_sqlite::{Database, SqliteHistoryStore};
     use std::collections::BTreeMap;
@@ -116,7 +122,12 @@ mod tests {
     async fn deep_snapshot_reads_unicode_active_wal_without_source_changes() {
         let dir = tempfile::tempdir().unwrap();
         let writer = Arc::new(Database::open(dir.path()).unwrap());
-        let history = SqliteHistoryStore::new(dir.path().to_path_buf(), Arc::clone(&writer));
+        let history = SqliteHistoryStore::with_environment(
+            dir.path().to_path_buf(),
+            Arc::clone(&writer),
+            Arc::new(SystemClock),
+            Arc::new(UuidGenerator),
+        );
         history.ensure_ready().unwrap();
         let text = "你好 UniFFI 🌍";
         history

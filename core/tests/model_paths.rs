@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use sona_core::models::paths::{ModelsDirStatus, resolve_models_dir, status_of};
+use sona_core::runtime::error::RuntimeValidationError;
 
 #[test]
 fn resolve_models_dir_accepts_explicit_directory() {
@@ -23,7 +24,21 @@ fn resolve_models_dir_rejects_existing_file() {
     let error =
         resolve_models_dir(Some(file_path), None, |_| ModelsDirStatus::NotDirectory).unwrap_err();
 
-    assert!(error.contains("exists but is not a directory"));
+    assert_eq!(error.subject, "models_dir");
+    assert!(error.message.contains("exists but is not a directory"));
+}
+
+#[test]
+fn resolve_models_dir_reports_missing_configuration_as_validation_error() {
+    let error = resolve_models_dir(None, None, |_| ModelsDirStatus::Missing).unwrap_err();
+
+    assert_eq!(
+        error,
+        RuntimeValidationError::new(
+            "models_dir",
+            "Unable to infer the models directory. Pass --models-dir explicitly.",
+        )
+    );
 }
 
 #[test]

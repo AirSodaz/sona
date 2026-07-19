@@ -20,6 +20,7 @@ pub async fn get_dashboard_snapshot(
         .build_snapshot_at(request.deep, time)
         .await
         .map_err(|error| error.to_string())?;
-    sona_ts_bind::validate_dashboard_snapshot_for_typescript(&snapshot)?;
+    sona_ts_bind::validate_dashboard_snapshot_for_typescript(&snapshot)
+        .map_err(|error| error.to_string())?;
     Ok(snapshot)
 }

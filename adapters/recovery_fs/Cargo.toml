@@ -5,6 +5,9 @@ description = "Filesystem adapter for Sona recovery snapshots"
 authors.workspace = true
 edition.workspace = true
 
+[package.metadata.sona]
+role = "outbound-adapter"
+
 [dependencies]
 log = "0.4"
 serde_json = "1"

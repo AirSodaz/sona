@@ -6,11 +6,14 @@ import type {
   SyncConflictSummary,
   SyncCreateRequest,
   SyncCreateResult,
+  SyncCreateTransportRequest,
   SyncJoinPreview,
   SyncJoinRequest,
   SyncPresetV1,
   SyncPreviewJoinRequest,
+  SyncPreviewJoinTransportRequest,
   SyncProviderDescriptor,
+  SyncProviderTransportInput,
   SyncRunResult,
   SyncStatusSnapshot,
   SyncUnlockRecoveryRequest,
@@ -24,10 +27,33 @@ import { invokeTauri } from './invoke';
 export const getSyncStatus = (): Promise<SyncStatusSnapshot> =>
   invokeTauri(TauriCommand.sync.getStatus);
 
+const webDavProviderInput = (
+  configuration: WebDavObjectStoreConfig,
+): SyncProviderTransportInput => ({
+  providerId: 'webdav',
+  configuration,
+});
+
+const createTransportRequest = (
+  request: SyncCreateRequest,
+): SyncCreateTransportRequest => ({
+  ...request,
+  provider: webDavProviderInput(request.provider),
+});
+
+const joinTransportRequest = (
+  request: SyncPreviewJoinRequest,
+): SyncPreviewJoinTransportRequest => ({
+  ...request,
+  provider: webDavProviderInput(request.provider),
+});
+
 export const testWebDavSyncProvider = (
   config: WebDavObjectStoreConfig,
 ): Promise<SyncProviderDescriptor> =>
-  invokeTauri(TauriCommand.sync.testWebDavProvider, { config });
+  invokeTauri(TauriCommand.sync.testProvider, {
+    provider: webDavProviderInput(config),
+  });
 
 export const listLegacyRemoteBackups = (
   config: WebDavObjectStoreConfig,
@@ -43,15 +69,21 @@ export const prepareLegacyRemoteBackupImport = (
 export const createSyncVault = (
   request: SyncCreateRequest,
 ): Promise<SyncCreateResult> =>
-  invokeTauri(TauriCommand.sync.createVault, { request });
+  invokeTauri(TauriCommand.sync.createVault, {
+    request: createTransportRequest(request),
+  });
 
 export const previewSyncJoin = (
   request: SyncPreviewJoinRequest,
 ): Promise<SyncJoinPreview> =>
-  invokeTauri(TauriCommand.sync.previewJoin, { request });
+  invokeTauri(TauriCommand.sync.previewJoin, {
+    request: joinTransportRequest(request),
+  });
 
 export const joinSyncVault = (request: SyncJoinRequest): Promise<SyncRunResult> =>
-  invokeTauri(TauriCommand.sync.joinVault, { request });
+  invokeTauri(TauriCommand.sync.joinVault, {
+    request: joinTransportRequest(request),
+  });
 
 export const unlockSyncVault = (
   request: SyncUnlockRequest,

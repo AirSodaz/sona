@@ -40,7 +40,7 @@ fn missing_directory_is_rejected_without_creation() {
 
     let error = repository.collect_measurements().unwrap_err();
 
-    assert!(matches!(error, StorageUsageError::Repository(_)));
+    assert!(matches!(error, StorageUsageError::Database(_)));
     assert!(!app_local_data_dir.exists());
 }
 

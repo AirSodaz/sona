@@ -1,5 +1,5 @@
 use sona_core::ports::asr::{
-    AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,
+    AsrEngineConfig, AsrMode, AsrPortErrorKind, AsrTranscriptionRequest, BatchSegmentationMode,
     BatchTranscriptionRequest, LocalSherpaStreamingRequest, OnlineAsrProviderRequest,
     TranscriptNormalizationOptions, TranscriptPostprocessOptions, validate_local_sherpa_mode,
 };
@@ -65,8 +65,9 @@ fn local_sherpa_mode_validation_is_a_core_owned_contract() {
     validate_local_sherpa_mode(&batch_request, AsrMode::Batch).unwrap();
 
     let mode_error = validate_local_sherpa_mode(&batch_request, AsrMode::Streaming).unwrap_err();
+    assert_eq!(mode_error.kind, AsrPortErrorKind::InvalidRequest);
     assert_eq!(
-        mode_error,
+        mode_error.message,
         "ASR request mode mismatch: expected Streaming, got Batch"
     );
 
@@ -88,8 +89,9 @@ fn local_sherpa_mode_validation_is_a_core_owned_contract() {
     };
 
     let engine_error = validate_local_sherpa_mode(&online_request, AsrMode::Batch).unwrap_err();
+    assert_eq!(engine_error.kind, AsrPortErrorKind::Unsupported);
     assert_eq!(
-        engine_error,
+        engine_error.message,
         "Unsupported ASR engine for local Sherpa adapter"
     );
 }
@@ -177,7 +179,8 @@ fn local_batch_request_mapping_rejects_online_engine() {
     )
     .unwrap_err();
 
-    assert_eq!(error, "Expected LocalSherpa engine config");
+    assert_eq!(error.kind, AsrPortErrorKind::InvalidRequest);
+    assert_eq!(error.message, "Expected LocalSherpa engine config");
 }
 
 #[test]
@@ -250,8 +253,9 @@ fn local_streaming_request_mapping_rejects_batch_mode() {
         LocalSherpaStreamingRequest::from_local_sherpa_request("live-2".to_string(), request)
             .unwrap_err();
 
+    assert_eq!(error.kind, AsrPortErrorKind::InvalidRequest);
     assert_eq!(
-        error,
+        error.message,
         "ASR request mode mismatch: expected Streaming, got Batch"
     );
 }

@@ -139,7 +139,7 @@ pub(crate) async fn create_asr_streaming_session(
         AsrEngine::LocalSherpa => {
             let request =
                 LocalSherpaStreamingRequest::from_local_sherpa_request(instance_id, request)
-                    .map_err(SherpaError::Generic)?;
+                    .map_err(|error| SherpaError::Generic(error.to_string()))?;
             sona_local_asr::streaming::create_streaming_session(
                 LOCAL_RECOGNIZER_POOL
                     .get_or_init(RecognizerPool::new)
@@ -148,7 +148,7 @@ pub(crate) async fn create_asr_streaming_session(
                 observer,
             )
             .await
-            .map_err(SherpaError::Generic)?
+            .map_err(|error| SherpaError::Generic(error.to_string()))?
         }
     };
 

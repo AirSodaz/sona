@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use sona_core::ports::time::{ClockError, UnixMillisClock};
 use sona_core::sync::{
     SyncDeleteResult, SyncError, SyncLifecycleState, SyncListPage, SyncLocalRepository,
     SyncLocalRuntimeState, SyncObject, SyncObjectKey, SyncObjectMetadata, SyncObjectPrefix,
@@ -10,7 +11,7 @@ use sona_core::sync::{
     SyncPublishedCheckpoint, SyncPublishedSegment, SyncPutResult, SyncRemoteApplyResult,
     SyncRemoteSegment, SyncRepositoryFactory, SyncRunResult, SyncSecretStore,
 };
-use sona_sqlite::{Database, SqliteSyncRepositoryFactory};
+use sona_sqlite::{Database, SqliteSyncRepositoryFactory as RealSqliteSyncRepositoryFactory};
 use sona_sync::{
     JsonFileSyncConfigStore, SyncApplication, SyncApplicationConfig, SyncApplicationEnvironment,
     SyncApplicationError, SyncConfigStore, SyncPresetChangeError, SyncProvider,
@@ -19,6 +20,22 @@ use sona_sync::{
     create_remote_vault, disabled_sync_status,
 };
 use tokio::sync::Notify;
+
+struct RepositoryClock;
+
+impl UnixMillisClock for RepositoryClock {
+    fn now_ms(&self) -> Result<u64, ClockError> {
+        Ok(1_000)
+    }
+}
+
+struct SqliteSyncRepositoryFactory;
+
+impl SqliteSyncRepositoryFactory {
+    fn new(database: Arc<Database>) -> RealSqliteSyncRepositoryFactory {
+        RealSqliteSyncRepositoryFactory::new(database, Arc::new(RepositoryClock))
+    }
+}
 
 #[derive(Default)]
 struct MemoryStore {
@@ -495,6 +512,25 @@ impl SyncProviderFactory for TestProviderFactory {
             credential,
         })
     }
+}
+
+#[test]
+fn provider_input_uses_the_provider_neutral_host_wire_shape() {
+    let value = serde_json::json!({
+        "providerId": "test",
+        "configuration": {
+            "account": "alice"
+        }
+    });
+
+    let input: SyncProviderInput = serde_json::from_value(value.clone()).unwrap();
+
+    assert_eq!(input.provider_id, "test");
+    assert_eq!(
+        input.configuration,
+        serde_json::json!({ "account": "alice" })
+    );
+    assert_eq!(serde_json::to_value(input).unwrap(), value);
 }
 
 #[tokio::test]

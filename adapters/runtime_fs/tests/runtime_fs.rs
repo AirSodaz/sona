@@ -8,6 +8,7 @@ use sona_core::automation::{
 use sona_core::export::ExportFormat;
 use sona_core::models::preset_models::{DEFAULT_SILERO_VAD_MODEL_ID, find_preset_model};
 use sona_core::ports::fs::{FileSystem, FileSystemError, FileSystemOperation};
+use sona_core::ports::runtime::{BatchTranscribePlanResolver, ModelCatalogProvider};
 use sona_core::ports::time::UnixMillisClock;
 use sona_core::project::ProjectIdGenerator;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
@@ -15,11 +16,15 @@ use sona_core::runtime::diagnostics::{
     DiagnosticsConfigInput, DiagnosticsCoreInput, DiagnosticsEnrichmentRepository, DiagnosticsError,
 };
 use sona_core::runtime::environment::RuntimePathKind;
+use sona_core::runtime::error::RuntimeConfigError;
 use sona_core::tag::TagIdGenerator;
-use sona_core::transcription::runtime::{BatchInputSource, LiveTranscribeOptions};
+use sona_core::transcription::runtime::{
+    BatchInputSource, BatchTranscribeOptions, LiveTranscribeOptions,
+};
 use sona_runtime_fs::{
     FsDiagnosticsEnrichmentRepository, FsSourcePathStatusProvider, NativeAutomationFileSystem,
-    RealFileSystem, SystemClock, UuidGenerator, build_diagnostics_snapshot,
+    RealFileSystem, RuntimeBatchTranscribePlanResolver, RuntimeFsError,
+    RuntimeModelCatalogProvider, SystemClock, UuidGenerator, build_diagnostics_snapshot,
     collect_automation_runtime_candidate_paths, ensure_directory_exists,
     is_preset_model_installed_at, load_legacy_settings_app_config, load_transcribe_config_file,
     load_transcribe_live_config_file, path_exists, plan_batch_output_files, remove_path_if_exists,
@@ -37,26 +42,68 @@ fn native_automation_file_system_probes_and_creates_directories() {
     let regular_file = dir.path().join("existing.json");
     std::fs::write(&regular_file, b"{}").unwrap();
     let fs = NativeAutomationFileSystem;
-    assert!(!AutomationFileSystem::path_exists(
-        &fs,
-        nested.to_string_lossy().as_ref()
-    ));
-    assert!(AutomationFileSystem::create_dir_all(
-        &fs,
-        nested.to_string_lossy().as_ref()
-    ));
-    assert!(AutomationFileSystem::path_exists(
-        &fs,
-        nested.to_string_lossy().as_ref()
-    ));
-    assert!(AutomationFileSystem::path_exists(
-        &fs,
-        regular_file.to_string_lossy().as_ref()
-    ));
-    assert!(!AutomationFileSystem::create_dir_all(
-        &fs,
-        regular_file.to_string_lossy().as_ref()
-    ));
+    assert!(!AutomationFileSystem::path_exists(&fs, nested.to_string_lossy().as_ref()).unwrap());
+    AutomationFileSystem::create_dir_all(&fs, nested.to_string_lossy().as_ref()).unwrap();
+    assert!(AutomationFileSystem::path_exists(&fs, nested.to_string_lossy().as_ref()).unwrap());
+    assert!(
+        AutomationFileSystem::path_exists(&fs, regular_file.to_string_lossy().as_ref()).unwrap()
+    );
+    let error = AutomationFileSystem::create_dir_all(&fs, regular_file.to_string_lossy().as_ref())
+        .unwrap_err();
+    assert_eq!(error.operation, FileSystemOperation::CreateDirectory);
+    assert_eq!(error.path, regular_file);
+}
+
+#[test]
+fn runtime_capability_model_catalog_provider_reports_installed_models() {
+    let directory = tempfile::tempdir().unwrap();
+    let model = find_preset_model(DEFAULT_SILERO_VAD_MODEL_ID).unwrap();
+    std::fs::write(model.resolve_install_path(directory.path()), b"model").unwrap();
+
+    let snapshot = RuntimeModelCatalogProvider
+        .build_model_catalog_snapshot(directory.path())
+        .unwrap();
+
+    assert!(
+        snapshot
+            .models
+            .iter()
+            .any(|entry| entry.id == DEFAULT_SILERO_VAD_MODEL_ID && entry.is_installed)
+    );
+}
+
+#[test]
+fn runtime_capability_batch_plan_resolver_preserves_resolution_errors() {
+    let directory = tempfile::tempdir().unwrap();
+    let missing_input = directory.path().join("missing.wav");
+
+    let error = RuntimeBatchTranscribePlanResolver
+        .resolve_batch_transcribe_plan(BatchTranscribeOptions {
+            input: missing_input.clone(),
+            output: None,
+            format: None,
+            language: None,
+            model_id: None,
+            models_dir: None,
+            default_models_dir: None,
+            vad_model_id: None,
+            punctuation_model_id: None,
+            threads: None,
+            enable_itn: None,
+            hotwords: None,
+            gpu_acceleration: None,
+            vad_buffer: None,
+            save_wav: None,
+            quiet: true,
+            force: true,
+        })
+        .unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains(&missing_input.to_string_lossy().to_string())
+    );
 }
 
 #[test]
@@ -84,7 +131,8 @@ fn native_automation_validation_entrypoint_probes_paths_and_prepares_export_dire
         &rule,
         &serde_json::json!({"offlineModelPath": model_path}),
         &[],
-    );
+    )
+    .unwrap();
 
     assert!(result.valid, "unexpected validation result: {result:?}");
     assert!(export_directory.is_dir());
@@ -172,8 +220,10 @@ fn live_plan_rejects_existing_output_before_model_resolution() {
     )
     .unwrap_err();
 
-    assert!(error.contains("Output file already exists"));
-    assert!(error.contains(output.to_string_lossy().as_ref()));
+    assert!(matches!(
+        error,
+        RuntimeFsError::AlreadyExists { path, .. } if path == output
+    ));
 }
 
 fn accepts_clock(_: &dyn UnixMillisClock) {}
@@ -213,7 +263,11 @@ fn write_cli_config_template_file_creates_parent_and_respects_force() {
     write_cli_config_template_file(&config_path, "first", false).unwrap();
     let error = write_cli_config_template_file(&config_path, "second", false).unwrap_err();
 
-    assert!(error.contains("--force"));
+    assert!(matches!(
+        error,
+        RuntimeFsError::AlreadyExists { path, hint, .. }
+            if path == config_path && hint.contains("--force")
+    ));
     assert_eq!(std::fs::read_to_string(&config_path).unwrap(), "first");
 
     write_cli_config_template_file(&config_path, "second", true).unwrap();
@@ -257,6 +311,40 @@ language = "ja"
     assert_eq!(config.gpu_acceleration.as_deref(), Some("cuda"));
     assert_eq!(config.model_id.as_deref(), Some("legacy-model"));
     assert_eq!(config.language.as_deref(), Some("ja"));
+}
+
+#[test]
+fn load_transcribe_config_file_preserves_parse_category_and_source_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("invalid.toml");
+    std::fs::write(&config_path, "[transcribe\nlanguage = 42").unwrap();
+
+    let error = load_transcribe_config_file(&config_path).unwrap_err();
+
+    assert!(matches!(
+        error,
+        RuntimeFsError::Config(RuntimeConfigError::Parse {
+            source_label,
+            reason,
+        }) if source_label == config_path.display().to_string() && !reason.is_empty()
+    ));
+}
+
+#[test]
+fn load_transcribe_config_file_preserves_filesystem_operation_and_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("missing.toml");
+
+    let error = load_transcribe_config_file(&config_path).unwrap_err();
+
+    assert!(matches!(
+        error,
+        RuntimeFsError::FileSystem(FileSystemError {
+            operation: FileSystemOperation::ReadText,
+            path,
+            ..
+        }) if path == config_path
+    ));
 }
 
 #[test]
@@ -351,8 +439,11 @@ fn batch_output_plans_reject_existing_outputs_without_force() {
     )
     .unwrap_err();
 
-    assert!(error.contains("Output file already exists"));
-    assert!(error.contains("meeting.srt"));
+    assert!(matches!(
+        error,
+        RuntimeFsError::AlreadyExists { path, .. }
+            if path.file_name().and_then(|name| name.to_str()) == Some("meeting.srt")
+    ));
 }
 
 #[test]

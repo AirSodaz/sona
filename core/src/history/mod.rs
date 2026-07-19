@@ -4,12 +4,18 @@ use std::collections::BTreeMap;
 
 use crate::transcription::transcript::TranscriptSegment;
 
+pub mod error;
+
 #[cfg(feature = "specta")]
 use specta::Type;
 
 pub use crate::backup::{
     BackupManifest, BackupManifestCounts, BackupManifestScopes, PreparedBackupImport,
 };
+
+pub trait HistoryIdGenerator: Send + Sync {
+    fn generate_id(&self) -> String;
+}
 
 #[derive(
     Clone, Copy, Debug, Deserialize, Serialize, PartialEq, strum::Display, strum::EnumString,

@@ -4,7 +4,7 @@ use sona_core::automation::{
     repository::{AutomationRepositoryState, AutomationRuleRecord},
 };
 use sona_runtime_fs::UuidGenerator;
-use sona_sqlite::{Database, SqliteAutomationAdapter};
+use sona_sqlite::SqliteApplicationContext;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -40,9 +40,10 @@ pub fn run_automation(args: AutomationArgs) -> CliResult<CliOutput> {
 }
 
 fn run_automation_list(args: AutomationListArgs) -> CliResult<CliOutput> {
-    let database = Database::open_read_only(&args.app_data_dir)
+    let context = SqliteApplicationContext::open_read_only(&args.app_data_dir)
         .map_err(|error| CliError::Io(error.to_string()))?;
-    let state = SqliteAutomationAdapter::new(Arc::new(database), Arc::new(UuidGenerator))
+    let state = context
+        .automation_adapter(Arc::new(UuidGenerator))
         .load_state()
         .map_err(map_automation_error)?;
     let output = if args.json {
@@ -58,7 +59,7 @@ fn run_automation_list(args: AutomationListArgs) -> CliResult<CliOutput> {
 fn map_automation_error(error: AutomationError) -> CliError {
     let message = error.to_string();
     match error {
-        AutomationError::Repository(_) => CliError::Io(message),
+        AutomationError::Repository(_) | AutomationError::FileSystem(_) => CliError::Io(message),
     }
 }
 

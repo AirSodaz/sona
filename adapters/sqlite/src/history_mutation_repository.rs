@@ -1,3 +1,4 @@
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -8,34 +9,83 @@ use sona_core::history::mutation_repository::{
     HistoryUpdateTagAssignmentsRequest, HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::{
-    HistoryCreateLiveDraftRequest, HistoryItemRecord, HistorySaveImportedFileRequest,
-    HistorySaveRecordingRequest, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
+    HistoryCreateLiveDraftRequest, HistoryIdGenerator, HistoryItemRecord,
+    HistorySaveImportedFileRequest, HistorySaveRecordingRequest, LiveRecordingDraftResult,
+    TranscriptSnapshotMetadata,
 };
+use sona_core::ports::time::UnixMillisClock;
 
-use crate::{Database, history_store::SqliteHistoryStore};
+use crate::{Database, DatabaseError, history_store::SqliteHistoryStore};
 
-#[derive(Clone, Debug)]
-pub struct LazySqliteHistoryMutationRepository {
+type DatabaseProvider =
+    dyn Fn(&Path) -> Result<Arc<Database>, DatabaseError> + Send + Sync + 'static;
+
+#[derive(Clone)]
+pub struct DeferredSqliteHistoryMutationRepository {
     app_local_data_dir: PathBuf,
+    database_provider: Option<Arc<DatabaseProvider>>,
+    clock: Arc<dyn UnixMillisClock>,
+    ids: Arc<dyn HistoryIdGenerator>,
 }
 
-impl LazySqliteHistoryMutationRepository {
-    pub fn new(app_local_data_dir: PathBuf) -> Self {
-        Self { app_local_data_dir }
+impl DeferredSqliteHistoryMutationRepository {
+    pub fn new(
+        app_local_data_dir: PathBuf,
+        clock: Arc<dyn UnixMillisClock>,
+        ids: Arc<dyn HistoryIdGenerator>,
+    ) -> Self {
+        Self {
+            app_local_data_dir,
+            database_provider: None,
+            clock,
+            ids,
+        }
+    }
+
+    pub fn with_database_provider(
+        app_local_data_dir: PathBuf,
+        clock: Arc<dyn UnixMillisClock>,
+        ids: Arc<dyn HistoryIdGenerator>,
+        provider: impl Fn(&Path) -> Result<Arc<Database>, DatabaseError> + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            app_local_data_dir,
+            database_provider: Some(Arc::new(provider)),
+            clock,
+            ids,
+        }
     }
 
     fn with_store<T>(
         &self,
         operation: impl FnOnce(&SqliteHistoryStore) -> Result<T, HistoryMutationError>,
     ) -> Result<T, HistoryMutationError> {
-        let database =
-            Database::open(&self.app_local_data_dir).map_err(HistoryMutationError::from)?;
-        let store = SqliteHistoryStore::new(self.app_local_data_dir.clone(), Arc::new(database));
+        let database = match &self.database_provider {
+            Some(provider) => provider(&self.app_local_data_dir),
+            None => Database::open(&self.app_local_data_dir).map(Arc::new),
+        }
+        .map_err(HistoryMutationError::from)?;
+        let store = SqliteHistoryStore::with_environment(
+            self.app_local_data_dir.clone(),
+            database,
+            Arc::clone(&self.clock),
+            Arc::clone(&self.ids),
+        );
         operation(&store)
     }
 }
 
-impl HistoryMutationRepository for LazySqliteHistoryMutationRepository {
+impl fmt::Debug for DeferredSqliteHistoryMutationRepository {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DeferredSqliteHistoryMutationRepository")
+            .field("app_local_data_dir", &self.app_local_data_dir)
+            .field("has_database_provider", &self.database_provider.is_some())
+            .finish()
+    }
+}
+
+impl HistoryMutationRepository for DeferredSqliteHistoryMutationRepository {
     fn create_live_draft(
         &self,
         request: HistoryCreateLiveDraftRequest,
@@ -124,6 +174,11 @@ impl HistoryMutationRepository for LazySqliteHistoryMutationRepository {
         self.with_store(|store| HistoryMutationRepository::replace_tag_assignments(store, request))
     }
 }
+
+#[deprecated(
+    note = "use DeferredSqliteHistoryMutationRepository to make deferred database ownership explicit"
+)]
+pub type LazySqliteHistoryMutationRepository = DeferredSqliteHistoryMutationRepository;
 
 fn validate_copy_source(label: &str, path: &str) -> Result<(), HistoryMutationError> {
     if Path::new(path).is_file() {

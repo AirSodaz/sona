@@ -150,7 +150,12 @@ fn custom_reasoning_payloads_preserve_options_and_visible_output() {
     );
 
     anthropic.options.max_output_tokens = Some(1024);
-    assert!(build_anthropic_payload_for_request(&anthropic, false).is_err());
+    assert_eq!(
+        build_anthropic_payload_for_request(&anthropic, false)
+            .unwrap_err()
+            .kind,
+        LlmPortErrorKind::InvalidRequest
+    );
     assert_eq!(
         extract_gemini_visible_text(&json!({
             "candidates": [{"content": {"parts": [
@@ -159,6 +164,24 @@ fn custom_reasoning_payloads_preserve_options_and_visible_output() {
         })),
         Some("answer".into())
     );
+}
+
+#[test]
+fn payload_builders_preserve_invalid_schema_category() {
+    let mut request = request();
+    request.options.response_format = LlmResponseFormat::JsonSchema {
+        name: "invalid".into(),
+        schema: json!(42),
+    };
+
+    for error in [
+        build_openai_chat_payload_for_request(&request, false, false).unwrap_err(),
+        build_anthropic_payload_for_request(&request, false).unwrap_err(),
+        build_gemini_payload_for_request(&request).unwrap_err(),
+    ] {
+        assert_eq!(error.kind, LlmPortErrorKind::InvalidRequest);
+        assert!(error.message.contains("JSON Schema"));
+    }
 }
 
 #[test]

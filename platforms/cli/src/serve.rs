@@ -83,7 +83,7 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
         },
         config,
     )
-    .map_err(CliError::Validation)?;
+    .map_err(|error| CliError::Validation(error.to_string()))?;
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -102,13 +102,20 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
             resolved,
             temp_dir,
             online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            batch_transcriber: Arc::new(sona_local_asr::batch::LocalBatchAsrAdapter),
+            media_validator: Arc::new(sona_media_detector::MagicNumberMediaFileValidator),
+            gpu_availability: Arc::new(sona_local_asr::gpu::LocalGpuAvailabilityProvider),
+            model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),
+            batch_plan_resolver: Arc::new(sona_runtime_fs::RuntimeBatchTranscribePlanResolver),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
         })
         .await
         .map_err(|error| match error {
-            ApiServerStartError::Configuration(error) => CliError::Validation(error),
-            ApiServerStartError::Runtime(error) => CliError::Network(error),
+            ApiServerStartError::Configuration(error) => {
+                CliError::Validation(error.to_string())
+            }
+            ApiServerStartError::Runtime(error) => CliError::Network(error.to_string()),
         })?;
 
         eprintln!(
@@ -125,13 +132,13 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
                 join_handle
                     .await
                     .map_err(|error| CliError::Other(format!("API server task failed: {error}")))?
-                    .map_err(CliError::Other)?;
+                    .map_err(|error| CliError::Other(error.to_string()))?;
                 Ok(CliOutput::stderr("Stopped Sona API server".to_string()))
             }
             result = &mut join_handle => {
                 result
                     .map_err(|error| CliError::Other(format!("API server task failed: {error}")))?
-                    .map_err(CliError::Other)?;
+                    .map_err(|error| CliError::Other(error.to_string()))?;
                 Ok(CliOutput::stderr("API server stopped".to_string()))
             }
         }
@@ -144,7 +151,7 @@ fn load_config(path: Option<&PathBuf>) -> CliResult<Option<ServeConfigSection>> 
     };
     sona_runtime_fs::load_serve_config_file(path)
         .map(Some)
-        .map_err(CliError::Validation)
+        .map_err(|error| CliError::Validation(error.to_string()))
 }
 
 fn default_temp_dir() -> PathBuf {

@@ -1,7 +1,7 @@
 use clap::Args;
 use std::path::PathBuf;
 
-use crate::{CliError, CliOutput, CliResult};
+use crate::{CliOutput, CliResult};
 
 const DEFAULT_CONFIG_PATH: &str = "sona-cli.toml";
 
@@ -28,7 +28,7 @@ pub fn run_init_config(args: InitConfigArgs) -> CliResult<CliOutput> {
         .unwrap_or_else(|| PathBuf::from(DEFAULT_CONFIG_PATH));
     let content = generate_config_content();
     sona_runtime_fs::write_cli_config_template_file(&path, &content, args.force)
-        .map_err(CliError::Io)?;
+        .map_err(|error| crate::CliError::Io(error.to_string()))?;
     Ok(CliOutput::stderr(format!(
         "Created config template at {}",
         path.display()

@@ -1,3 +1,4 @@
+use sona_core::ports::fs::FileSystemError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -13,6 +14,9 @@ pub enum DatabaseError {
 
     #[error("Not found: {0}")]
     NotFoundError(String),
+
+    #[error(transparent)]
+    FileSystem(#[from] FileSystemError),
 
     #[error("All database connections are busy")]
     PoolBusyError,

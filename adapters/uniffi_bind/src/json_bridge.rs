@@ -28,6 +28,13 @@ where
     })
 }
 
-pub(crate) fn map_core_validation_result(result: Result<(), String>) -> SonaCoreBindingResult<()> {
-    result.map_err(|message| SonaCoreBindingError::InvalidInput { reason: message })
+pub(crate) fn map_core_validation_result<Error>(
+    result: Result<(), Error>,
+) -> SonaCoreBindingResult<()>
+where
+    Error: ToString,
+{
+    result.map_err(|error| SonaCoreBindingError::InvalidInput {
+        reason: error.to_string(),
+    })
 }

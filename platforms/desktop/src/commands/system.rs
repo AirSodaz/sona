@@ -261,21 +261,27 @@ pub fn build_speaker_review_snapshot(
 pub async fn apply_speaker_profile_to_group(
     request: sona_core::transcription::speaker_correction::ApplySpeakerProfileToGroupRequest,
 ) -> Result<sona_core::transcription::speaker_correction::SpeakerCorrectionResponse, String> {
-    sona_core::transcription::speaker_correction::apply_speaker_profile_to_group(request).await
+    sona_core::transcription::speaker_correction::apply_speaker_profile_to_group(request)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 pub async fn reset_speaker_group_to_anonymous(
     request: sona_core::transcription::speaker_correction::SpeakerGroupRequest,
 ) -> Result<sona_core::transcription::speaker_correction::SpeakerCorrectionResponse, String> {
-    sona_core::transcription::speaker_correction::reset_speaker_group_to_anonymous(request).await
+    sona_core::transcription::speaker_correction::reset_speaker_group_to_anonymous(request)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
 pub async fn confirm_speaker_group_review(
     request: sona_core::transcription::speaker_correction::SpeakerGroupRequest,
 ) -> Result<sona_core::transcription::speaker_correction::SpeakerCorrectionResponse, String> {
-    sona_core::transcription::speaker_correction::confirm_speaker_group_review(request).await
+    sona_core::transcription::speaker_correction::confirm_speaker_group_review(request)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 // Wrapped API server commands

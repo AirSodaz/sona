@@ -9,14 +9,14 @@ use sona_core::llm::provider_protocol::{
 use sona_core::llm::runtime::{LlmCompletionRequest, LlmResponseFormat};
 use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::llm::usage::TokenUsage;
-use sona_core::ports::llm::LlmPortError;
+use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
 
 use crate::anthropic::AnthropicAdapter;
 use crate::gemini::GeminiAdapter;
 use crate::ollama::OllamaAdapter;
 use crate::openai_compatible::{AzureAdapter, CopilotAdapter, OpenAiAdapter, PerplexityAdapter};
 use crate::providers::{GenericHttpAdapter, GoogleTranslateAdapter};
-use crate::transport::{LlmApiUrl, classify_llm_port_error};
+use crate::transport::LlmApiUrl;
 
 #[async_trait]
 pub(crate) trait LlmAdapter: Send + Sync {
@@ -27,14 +27,10 @@ pub(crate) trait LlmAdapter: Send + Sync {
     ) -> Result<StandardLlmResponse, LlmPortError>;
 }
 
-pub(crate) fn port_result<T>(result: Result<T, String>) -> Result<T, LlmPortError> {
-    result.map_err(classify_llm_port_error)
-}
-
 pub(crate) fn build_rig_completion_request<M>(
     model: M,
     request: &LlmCompletionRequest,
-) -> Result<CompletionRequestBuilder<M>, String>
+) -> Result<CompletionRequestBuilder<M>, LlmPortError>
 where
     M: CompletionModel,
 {
@@ -66,10 +62,13 @@ where
                     .entry("title".to_string())
                     .or_insert_with(|| Value::String(name.clone()));
             }
-            builder = builder.output_schema(
-                schemars::Schema::try_from(schema)
-                    .map_err(|error| format!("Invalid JSON Schema: {error}"))?,
-            );
+            builder =
+                builder.output_schema(schemars::Schema::try_from(schema).map_err(|error| {
+                    LlmPortError::new(
+                        LlmPortErrorKind::InvalidRequest,
+                        format!("Invalid JSON Schema: {error}"),
+                    )
+                })?);
         }
     }
 
@@ -105,14 +104,19 @@ pub(crate) fn completion_input(request: &LlmCompletionRequest) -> String {
     }
 }
 
-pub(crate) fn structured_schema(request: &LlmCompletionRequest) -> Result<Option<Value>, String> {
+pub(crate) fn structured_schema(
+    request: &LlmCompletionRequest,
+) -> Result<Option<Value>, LlmPortError> {
     let schema = match &request.options.response_format {
         LlmResponseFormat::Text => return Ok(None),
         LlmResponseFormat::JsonObject => return Ok(None),
         LlmResponseFormat::JsonSchema { schema, .. } => schema.clone(),
     };
     if !schema.is_object() && !schema.is_boolean() {
-        return Err("JSON Schema must be an object or boolean".to_string());
+        return Err(LlmPortError::new(
+            LlmPortErrorKind::InvalidRequest,
+            "JSON Schema must be an object or boolean",
+        ));
     }
     Ok(Some(schema))
 }
@@ -135,7 +139,7 @@ pub(crate) fn reasoning_level_label(reasoning_level: Option<&str>) -> &'static s
 
 pub fn extract_text_response(
     choice: &rig_core::OneOrMany<rig_core::completion::AssistantContent>,
-) -> Result<String, String> {
+) -> Result<String, LlmPortError> {
     let parts = choice
         .iter()
         .filter_map(|content| match content {
@@ -145,7 +149,10 @@ pub fn extract_text_response(
         .collect::<Vec<_>>();
 
     if parts.is_empty() {
-        return Err("LLM response did not contain text output".to_string());
+        return Err(LlmPortError::new(
+            LlmPortErrorKind::Protocol,
+            "LLM response did not contain text output",
+        ));
     }
 
     Ok(parts.join("\n"))
@@ -203,8 +210,8 @@ pub async fn complete_with_provider(
     request: LlmCompletionRequest,
 ) -> Result<StandardLlmResponse, LlmPortError> {
     let adapter = AdapterFactory::create(request.config.strategy);
-    let url = port_result(LlmApiUrl::parse(&request.config.base_url))?;
-    let client = port_result(url.client(request.config.timeout_seconds))?;
+    let url = LlmApiUrl::parse(&request.config.base_url)?;
+    let client = url.client(request.config.timeout_seconds)?;
     adapter.generate(&client, &request).await
 }
 

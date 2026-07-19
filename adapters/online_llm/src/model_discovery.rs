@@ -6,20 +6,23 @@ use sona_core::llm::provider_protocol::{
 };
 use sona_core::llm::requests::LlmModelsRequest;
 use sona_core::llm::tasks::LlmProviderStrategy;
+use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
 
 use crate::models_dev::{
     default_models_dev_catalog, models_dev_provider_id, should_enrich_model_metadata,
 };
-use crate::transport::{LlmApiUrl, validate_llm_api_host};
+use crate::transport::{
+    LlmApiUrl, http_status_port_error, reqwest_port_error, validate_llm_api_host,
+};
 
-pub fn build_gemini_models_url(base_url: &LlmApiUrl) -> Result<LlmApiUrl, String> {
+pub fn build_gemini_models_url(base_url: &LlmApiUrl) -> Result<LlmApiUrl, LlmPortError> {
     LlmApiUrl::parse(&format_gemini_models_url(base_url.as_str()))
 }
 
 pub fn build_openai_models_urls(
     base_url: &LlmApiUrl,
     is_ollama: bool,
-) -> Result<Vec<LlmApiUrl>, String> {
+) -> Result<Vec<LlmApiUrl>, LlmPortError> {
     format_openai_models_urls(base_url.as_str(), is_ollama)
         .into_iter()
         .map(|url| LlmApiUrl::parse(&url))
@@ -30,7 +33,7 @@ pub async fn get_gemini_models(
     client: &Client,
     api_key: &str,
     base_url: &LlmApiUrl,
-) -> Result<Vec<LlmModelSummary>, String> {
+) -> Result<Vec<LlmModelSummary>, LlmPortError> {
     let url = build_gemini_models_url(base_url)?;
     let mut request = client
         .get(url.reqwest_url())
@@ -40,13 +43,16 @@ pub async fn get_gemini_models(
         request = request.header("x-goog-api-key", api_key);
     }
 
-    let res = request.send().await.map_err(|e| e.to_string())?;
+    let res = request.send().await.map_err(reqwest_port_error)?;
 
     if !res.status().is_success() {
-        return Err(format!("Gemini API Error: {}", res.status()));
+        let status = res.status();
+        let headers = res.headers().clone();
+        let body = res.text().await.unwrap_or_default();
+        return Err(http_status_port_error(status, &headers, body));
     }
 
-    let response_body: GeminiModelsResponse = res.json().await.map_err(|e| e.to_string())?;
+    let response_body: GeminiModelsResponse = res.json().await.map_err(reqwest_port_error)?;
 
     Ok(response_body
         .models
@@ -61,7 +67,8 @@ pub async fn get_openai_models(
     api_key: &str,
     base_url: &LlmApiUrl,
     is_ollama: bool,
-) -> Result<Vec<LlmModelSummary>, String> {
+) -> Result<Vec<LlmModelSummary>, LlmPortError> {
+    let mut last_error = None;
     for url in build_openai_models_urls(base_url, is_ollama)? {
         let mut req = client
             .get(url.reqwest_url())
@@ -71,35 +78,65 @@ pub async fn get_openai_models(
             req = req.header("Authorization", format!("Bearer {}", api_key));
         }
 
-        if let Ok(res) = req.send().await
-            && res.status().is_success()
-        {
-            let text = res.text().await.unwrap_or_default();
-
-            if let Ok(response_body) = serde_json::from_str::<OpenAiModelsResponse>(&text) {
-                return Ok(response_body
-                    .data
-                    .into_iter()
-                    .map(openai_model_to_summary)
-                    .collect());
+        let res = match req.send().await {
+            Ok(res) => res,
+            Err(error) => {
+                last_error = Some(reqwest_port_error(error));
+                continue;
             }
-
-            if let Ok(response_body) = serde_json::from_str::<OllamaTagsResponse>(&text) {
-                return Ok(response_body
-                    .models
-                    .into_iter()
-                    .map(ollama_model_to_summary)
-                    .collect());
-            }
+        };
+        if !res.status().is_success() {
+            let status = res.status();
+            let headers = res.headers().clone();
+            let body = res.text().await.unwrap_or_default();
+            last_error = Some(http_status_port_error(status, &headers, body));
+            continue;
         }
+
+        let text = match res.text().await {
+            Ok(text) => text,
+            Err(error) => {
+                last_error = Some(reqwest_port_error(error));
+                continue;
+            }
+        };
+
+        if let Ok(response_body) = serde_json::from_str::<OpenAiModelsResponse>(&text) {
+            return Ok(response_body
+                .data
+                .into_iter()
+                .map(openai_model_to_summary)
+                .collect());
+        }
+
+        if let Ok(response_body) = serde_json::from_str::<OllamaTagsResponse>(&text) {
+            return Ok(response_body
+                .models
+                .into_iter()
+                .map(ollama_model_to_summary)
+                .collect());
+        }
+
+        last_error = Some(LlmPortError::new(
+            LlmPortErrorKind::Protocol,
+            format!(
+                "model-list response from {} did not match a supported schema",
+                url.as_str()
+            ),
+        ));
     }
 
-    Err("Failed to fetch models from any known endpoint".to_string())
+    Err(last_error.unwrap_or_else(|| {
+        LlmPortError::new(
+            LlmPortErrorKind::InvalidRequest,
+            "no model-list endpoint could be derived from the LLM API host",
+        )
+    }))
 }
 
 pub async fn list_models_with_provider(
     request: LlmModelsRequest,
-) -> Result<Vec<LlmModelSummary>, String> {
+) -> Result<Vec<LlmModelSummary>, LlmPortError> {
     let strategy = request
         .strategy
         .unwrap_or_else(|| LlmProviderStrategy::from_provider(&request.provider));

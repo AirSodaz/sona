@@ -3,10 +3,11 @@ use base64::Engine;
 use reqwest::multipart;
 use serde_json::Value;
 use sona_core::ports::asr::{
-    AsrEngineConfig, AsrMode, AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest,
-    GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OnlineBatchTranscriber,
-    OnlineBatchTranscriptionOutput, OnlineBatchTranscriptionRequest, SherpaError,
-    VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
+    AsrEngineConfig, AsrMode, AsrPortError, AsrPortErrorKind, AsrRuntimeObserver,
+    AsrStreamingSession, AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID,
+    MISTRAL_VOXTRAL_PROVIDER_ID, OnlineBatchTranscriber, OnlineBatchTranscriptionOutput,
+    OnlineBatchTranscriptionRequest, SherpaError, VOLCENGINE_DOUBAO_PROVIDER_ID,
+    find_online_asr_provider,
 };
 use sona_core::transcription::provider_resolution::{
     AsrProviderCapability, resolve_asr_provider_id, resolve_asr_streaming_provider_id,
@@ -53,16 +54,18 @@ impl OnlineAsrAdapter {
                 VolcengineDoubaoBatchTranscriber::default()
                     .transcribe(input)
                     .await
-                    .map_err(|error| SherpaError::VolcengineBatchRequestFailed { error })
+                    .map_err(|error| SherpaError::VolcengineBatchRequestFailed {
+                        error: error.to_string(),
+                    })
             }
             GROQ_WHISPER_PROVIDER_ID => GroqWhisperBatchTranscriber::default()
                 .transcribe(input)
                 .await
-                .map_err(SherpaError::Generic),
+                .map_err(|error| SherpaError::Generic(error.to_string())),
             MISTRAL_VOXTRAL_PROVIDER_ID => MistralVoxtralBatchTranscriber::default()
                 .transcribe(input)
                 .await
-                .map_err(SherpaError::Generic),
+                .map_err(|error| SherpaError::Generic(error.to_string())),
             _ => Err(SherpaError::UnsupportedOnlineProvider {
                 provider_id: provider_id.to_string(),
             }),
@@ -93,10 +96,42 @@ impl OnlineBatchTranscriber for OnlineAsrAdapter {
     async fn transcribe(
         &self,
         request: OnlineBatchTranscriptionRequest,
-    ) -> Result<OnlineBatchTranscriptionOutput, String> {
-        self.transcribe_batch(request)
-            .await
-            .map_err(|error| error.to_string())
+    ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
+        let provider_id = resolve_online_asr_provider_id(&request.request).map_err(|error| {
+            let kind = match error {
+                SherpaError::UnsupportedOnlineProvider { .. } => AsrPortErrorKind::Unsupported,
+                SherpaError::OnlineProviderConfigMissing => AsrPortErrorKind::InvalidRequest,
+                _ => AsrPortErrorKind::Runtime,
+            };
+            AsrPortError::new(kind, error.to_string())
+        })?;
+
+        match provider_id {
+            VOLCENGINE_DOUBAO_PROVIDER_ID => {
+                if request.request.mode != AsrMode::Batch {
+                    return Err(AsrPortError::invalid_request(
+                        "Volcengine batch ASR can only be used in batch mode.",
+                    ));
+                }
+                VolcengineDoubaoBatchTranscriber::default()
+                    .transcribe(request)
+                    .await
+            }
+            GROQ_WHISPER_PROVIDER_ID => {
+                GroqWhisperBatchTranscriber::default()
+                    .transcribe(request)
+                    .await
+            }
+            MISTRAL_VOXTRAL_PROVIDER_ID => {
+                MistralVoxtralBatchTranscriber::default()
+                    .transcribe(request)
+                    .await
+            }
+            _ => Err(AsrPortError::new(
+                AsrPortErrorKind::Unsupported,
+                format!("Unsupported online ASR provider: {provider_id}"),
+            )),
+        }
     }
 }
 
@@ -183,6 +218,18 @@ impl WhisperCompatibleProvider {
             Self::MistralVoxtral => "mistral_batch_complete",
         }
     }
+}
+
+fn asr_http_status_error(status: reqwest::StatusCode, message: String) -> AsrPortError {
+    let kind = match status {
+        reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN => {
+            AsrPortErrorKind::Authentication
+        }
+        reqwest::StatusCode::TOO_MANY_REQUESTS => AsrPortErrorKind::RateLimited,
+        _ if status.is_server_error() => AsrPortErrorKind::Unavailable,
+        _ => AsrPortErrorKind::Protocol,
+    };
+    AsrPortError::new(kind, message)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -277,15 +324,21 @@ impl OnlineBatchTranscriber for VolcengineDoubaoBatchTranscriber {
     async fn transcribe(
         &self,
         input: OnlineBatchTranscriptionRequest,
-    ) -> Result<OnlineBatchTranscriptionOutput, String> {
+    ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
         if input.request.mode != AsrMode::Batch {
-            return Err("Volcengine batch ASR can only be used in batch mode.".to_string());
+            return Err(AsrPortError::invalid_request(
+                "Volcengine batch ASR can only be used in batch mode.",
+            ));
         }
 
-        let config = resolve_volcengine_config(&input.request, VolcengineMode::Batch)?;
-        let bytes = tokio::fs::read(&input.file_path)
-            .await
-            .map_err(|error| format!("Failed to read audio file: {error}"))?;
+        let config = resolve_volcengine_config(&input.request, VolcengineMode::Batch)
+            .map_err(|error| AsrPortError::invalid_request(error.to_string()))?;
+        let bytes = tokio::fs::read(&input.file_path).await.map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::FileSystem,
+                format!("Failed to read audio file: {error}"),
+            )
+        })?;
         let audio_data = base64::engine::general_purpose::STANDARD.encode(&bytes);
         let request_id = uuid::Uuid::new_v4().to_string();
         let body =
@@ -301,7 +354,12 @@ impl OnlineBatchTranscriber for VolcengineDoubaoBatchTranscriber {
             .json(&body)
             .send()
             .await
-            .map_err(|error| format!("Volcengine batch network request failed: {error}"))?;
+            .map_err(|error| {
+                AsrPortError::new(
+                    AsrPortErrorKind::Network,
+                    format!("Volcengine batch network request failed: {error}"),
+                )
+            })?;
 
         let status = response.status();
         let headers = response.headers().clone();
@@ -314,18 +372,24 @@ impl OnlineBatchTranscriber for VolcengineDoubaoBatchTranscriber {
             .and_then(|value| value.to_str().ok())
             .map(str::to_string);
         if !status.is_success() || api_code.as_deref().is_some_and(|code| code != "20000000") {
-            return Err(map_volcengine_status_error(
-                status.as_u16(),
-                api_code.as_deref(),
-                api_message.as_deref(),
+            return Err(asr_http_status_error(
+                status,
+                map_volcengine_status_error(
+                    status.as_u16(),
+                    api_code.as_deref(),
+                    api_message.as_deref(),
+                ),
             ));
         }
 
-        let response_value = response
-            .json::<Value>()
-            .await
-            .map_err(|error| format!("Volcengine batch response parsing failed: {error}"))?;
-        let segments = segments_from_volcengine_response(&response_value, true, "volc-batch")?;
+        let response_value = response.json::<Value>().await.map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::Protocol,
+                format!("Volcengine batch response parsing failed: {error}"),
+            )
+        })?;
+        let segments = segments_from_volcengine_response(&response_value, true, "volc-batch")
+            .map_err(|error| AsrPortError::new(AsrPortErrorKind::Protocol, error.to_string()))?;
         let audio_duration_ms = response_value
             .get("audio_info")
             .and_then(|value| value.get("duration"))
@@ -365,15 +429,21 @@ impl OnlineBatchTranscriber for WhisperCompatibleBatchTranscriber {
     async fn transcribe(
         &self,
         input: OnlineBatchTranscriptionRequest,
-    ) -> Result<OnlineBatchTranscriptionOutput, String> {
+    ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
         if input.request.mode != AsrMode::Batch {
-            return Err(self.provider.batch_only_error());
+            return Err(AsrPortError::invalid_request(
+                self.provider.batch_only_error(),
+            ));
         }
 
-        let config = resolve_whisper_config(&input.request, self.provider)?;
-        let bytes = tokio::fs::read(&input.file_path)
-            .await
-            .map_err(|error| format!("Failed to read audio file: {error}"))?;
+        let config = resolve_whisper_config(&input.request, self.provider)
+            .map_err(|error| AsrPortError::invalid_request(error.to_string()))?;
+        let bytes = tokio::fs::read(&input.file_path).await.map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::FileSystem,
+                format!("Failed to read audio file: {error}"),
+            )
+        })?;
 
         let file_name = input
             .file_path
@@ -385,7 +455,9 @@ impl OnlineBatchTranscriber for WhisperCompatibleBatchTranscriber {
         let part = multipart::Part::bytes(bytes.clone())
             .file_name(file_name)
             .mime_str("audio/wav")
-            .map_err(|error| format!("Failed to create multipart file: {error}"))?;
+            .map_err(|error| {
+                AsrPortError::invalid_request(format!("Failed to create multipart file: {error}"))
+            })?;
 
         let mut form = multipart::Form::new()
             .part("file", part)
@@ -408,20 +480,31 @@ impl OnlineBatchTranscriber for WhisperCompatibleBatchTranscriber {
             .multipart(form)
             .send()
             .await
-            .map_err(|error| self.provider.network_error(error))?;
+            .map_err(|error| {
+                AsrPortError::new(
+                    AsrPortErrorKind::Network,
+                    self.provider.network_error(error),
+                )
+            })?;
 
         let status = response.status();
         if !status.is_success() {
             let text = response.text().await.unwrap_or_default();
-            return Err(self.provider.status_error(status, text));
+            return Err(asr_http_status_error(
+                status,
+                self.provider.status_error(status, text),
+            ));
         }
 
-        let response_value = response
-            .json::<Value>()
-            .await
-            .map_err(|error| self.provider.response_parse_error(error))?;
+        let response_value = response.json::<Value>().await.map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::Protocol,
+                self.provider.response_parse_error(error),
+            )
+        })?;
 
-        let segments = segments_from_whisper_response(&response_value, self.provider)?;
+        let segments = segments_from_whisper_response(&response_value, self.provider)
+            .map_err(|error| AsrPortError::new(AsrPortErrorKind::Protocol, error.to_string()))?;
         let audio_duration_ms = response_value
             .get("duration")
             .and_then(Value::as_f64)
@@ -455,7 +538,7 @@ impl OnlineBatchTranscriber for GroqWhisperBatchTranscriber {
     async fn transcribe(
         &self,
         request: OnlineBatchTranscriptionRequest,
-    ) -> Result<OnlineBatchTranscriptionOutput, String> {
+    ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
         self.inner.transcribe(request).await
     }
 }
@@ -480,7 +563,7 @@ impl OnlineBatchTranscriber for MistralVoxtralBatchTranscriber {
     async fn transcribe(
         &self,
         request: OnlineBatchTranscriptionRequest,
-    ) -> Result<OnlineBatchTranscriptionOutput, String> {
+    ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
         self.inner.transcribe(request).await
     }
 }
@@ -488,11 +571,11 @@ impl OnlineBatchTranscriber for MistralVoxtralBatchTranscriber {
 pub fn resolve_whisper_config(
     request: &sona_core::ports::asr::AsrTranscriptionRequest,
     provider: WhisperCompatibleProvider,
-) -> Result<WhisperCompatibleConfigFields, String> {
+) -> Result<WhisperCompatibleConfigFields, SherpaError> {
     let provider_request = if let AsrEngineConfig::Online { provider } = &request.engine_config {
         provider
     } else {
-        return Err(provider.missing_request_error());
+        return Err(SherpaError::Generic(provider.missing_request_error()));
     };
 
     let get_string = |key: &str, default_val: &str| -> String {
@@ -507,12 +590,12 @@ pub fn resolve_whisper_config(
     };
 
     let manifest = find_online_asr_provider(provider.provider_id())
-        .ok_or_else(|| provider.missing_manifest_error())?;
+        .ok_or_else(|| SherpaError::Generic(provider.missing_manifest_error()))?;
     let defaults = manifest.defaults.as_object().ok_or_else(|| {
-        format!(
+        SherpaError::Generic(format!(
             "{} provider defaults should be an object",
             provider.provider_name()
-        )
+        ))
     })?;
 
     let fields = WhisperCompatibleConfigFields {
@@ -534,10 +617,10 @@ pub fn resolve_whisper_config(
     };
 
     if fields.api_key.is_empty() {
-        return Err(provider.api_key_error().to_string());
+        return Err(SherpaError::Generic(provider.api_key_error().to_string()));
     }
     if fields.batch_endpoint.is_empty() || fields.model.is_empty() {
-        return Err(provider.endpoint_error().to_string());
+        return Err(SherpaError::Generic(provider.endpoint_error().to_string()));
     }
 
     Ok(fields)
@@ -546,11 +629,11 @@ pub fn resolve_whisper_config(
 pub fn segments_from_whisper_response(
     response: &Value,
     provider: WhisperCompatibleProvider,
-) -> Result<Vec<TranscriptSegment>, String> {
+) -> Result<Vec<TranscriptSegment>, SherpaError> {
     let segments_array = response
         .get("segments")
         .and_then(Value::as_array)
-        .ok_or_else(|| provider.missing_segments_error())?;
+        .ok_or_else(|| SherpaError::Generic(provider.missing_segments_error()))?;
 
     let mut segments = Vec::with_capacity(segments_array.len());
     for segment in segments_array {
@@ -585,8 +668,8 @@ pub fn segments_from_whisper_response(
 pub fn resolve_volcengine_config(
     request: &sona_core::ports::asr::AsrTranscriptionRequest,
     mode: VolcengineMode,
-) -> Result<VolcengineDoubaoConfigFields, String> {
-    resolve_volcengine_config_checked(request, mode).map_err(|error| error.to_string())
+) -> Result<VolcengineDoubaoConfigFields, SherpaError> {
+    resolve_volcengine_config_checked(request, mode).map_err(SherpaError::from)
 }
 
 pub fn resolve_volcengine_config_checked(
@@ -611,9 +694,8 @@ pub fn resolve_volcengine_config_checked(
 pub fn resolve_volcengine_config_from_value(
     request_config: &Value,
     mode: VolcengineMode,
-) -> Result<VolcengineDoubaoConfigFields, String> {
-    resolve_volcengine_config_from_value_checked(request_config, mode)
-        .map_err(|error| error.to_string())
+) -> Result<VolcengineDoubaoConfigFields, SherpaError> {
+    resolve_volcengine_config_from_value_checked(request_config, mode).map_err(SherpaError::from)
 }
 
 pub fn resolve_volcengine_config_from_value_checked(
@@ -792,7 +874,7 @@ pub fn build_volcengine_full_client_request_frame(
     enable_punc: bool,
     language: &str,
     hotwords: Option<&str>,
-) -> Result<Vec<u8>, String> {
+) -> Result<Vec<u8>, SherpaError> {
     let mut request = serde_json::json!({
         "user": {
             "uid": "sona"
@@ -829,7 +911,8 @@ pub fn build_volcengine_full_client_request_frame(
         });
     }
 
-    let payload = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
+    let payload =
+        serde_json::to_vec(&request).map_err(|error| SherpaError::Generic(error.to_string()))?;
     Ok(build_volcengine_frame(0x10, 0x10, &payload))
 }
 
@@ -938,7 +1021,7 @@ pub fn parse_volcengine_server_response_frame(
 pub fn volcengine_streaming_segments_from_response(
     response: &Value,
     flush_final: bool,
-) -> Result<Vec<TranscriptSegment>, String> {
+) -> Result<Vec<TranscriptSegment>, SherpaError> {
     segments_from_volcengine_response(response, flush_final, "volc-live")
 }
 
@@ -956,7 +1039,7 @@ pub fn segments_from_volcengine_response(
     response: &Value,
     default_final: bool,
     id_prefix: &str,
-) -> Result<Vec<TranscriptSegment>, String> {
+) -> Result<Vec<TranscriptSegment>, SherpaError> {
     let result = response.get("result").unwrap_or(response);
     let utterances = result.get("utterances").and_then(Value::as_array);
     if let Some(utterances) = utterances {
@@ -1097,10 +1180,10 @@ pub fn map_volcengine_status_error(
 mod tests {
     use serde_json::json;
     use sona_core::ports::asr::{
-        AsrEngineConfig, AsrMode, AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID,
-        MISTRAL_VOXTRAL_PROVIDER_ID, NoopAsrRuntimeObserver, OnlineAsrProviderRequest,
-        OnlineBatchTranscriber, OnlineBatchTranscriptionRequest, SherpaError,
-        VOLCENGINE_DOUBAO_PROVIDER_ID,
+        AsrEngineConfig, AsrMode, AsrPortErrorKind, AsrTranscriptionRequest,
+        GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, NoopAsrRuntimeObserver,
+        OnlineAsrProviderRequest, OnlineBatchTranscriber, OnlineBatchTranscriptionRequest,
+        SherpaError, VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
     use sona_core::transcription::postprocess::{
         TranscriptNormalizationOptions, TranscriptPostprocessOptions,
@@ -1108,7 +1191,7 @@ mod tests {
 
     use crate::{
         ONLINE_ASR_PROVIDER_CAPABILITIES, OnlineAsrAdapter, VolcengineConfigError, VolcengineMode,
-        WhisperCompatibleProvider, build_volcengine_audio_frame,
+        WhisperCompatibleProvider, asr_http_status_error, build_volcengine_audio_frame,
         build_volcengine_flash_batch_request_body, build_volcengine_full_client_request_frame,
         detect_audio_format, f32_samples_to_i16_pcm_bytes, parse_volcengine_server_response_frame,
         resolve_online_asr_provider_id, resolve_volcengine_config,
@@ -1116,6 +1199,22 @@ mod tests {
         segments_from_volcengine_response, segments_from_whisper_response,
         volcengine_streaming_segments_from_response,
     };
+
+    #[test]
+    fn http_failures_preserve_authentication_rate_limit_and_availability_categories() {
+        assert_eq!(
+            asr_http_status_error(reqwest::StatusCode::UNAUTHORIZED, "unauthorized".into()).kind,
+            AsrPortErrorKind::Authentication
+        );
+        assert_eq!(
+            asr_http_status_error(reqwest::StatusCode::TOO_MANY_REQUESTS, "limited".into()).kind,
+            AsrPortErrorKind::RateLimited
+        );
+        assert_eq!(
+            asr_http_status_error(reqwest::StatusCode::BAD_GATEWAY, "unavailable".into()).kind,
+            AsrPortErrorKind::Unavailable
+        );
+    }
 
     fn online_request(provider_id: &str, config: serde_json::Value) -> AsrTranscriptionRequest {
         AsrTranscriptionRequest {
@@ -1237,6 +1336,36 @@ mod tests {
         ));
     }
 
+    #[tokio::test]
+    async fn core_batch_port_preserves_unsupported_and_filesystem_categories() {
+        let unsupported = OnlineBatchTranscriber::transcribe(
+            &OnlineAsrAdapter,
+            OnlineBatchTranscriptionRequest {
+                file_path: "missing.wav".into(),
+                request: online_request("custom-online-provider", json!({})),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(unsupported.kind, AsrPortErrorKind::Unsupported);
+
+        let missing_audio = OnlineBatchTranscriber::transcribe(
+            &OnlineAsrAdapter,
+            OnlineBatchTranscriptionRequest {
+                file_path: "missing.wav".into(),
+                request: online_request(
+                    GROQ_WHISPER_PROVIDER_ID,
+                    json!({
+                        "apiKey": "groq-key"
+                    }),
+                ),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(missing_audio.kind, AsrPortErrorKind::FileSystem);
+    }
+
     #[test]
     fn resolves_groq_config_from_request_with_manifest_defaults() {
         let request = online_request(
@@ -1276,6 +1405,29 @@ mod tests {
             config.batch_endpoint,
             "https://api.mistral.ai/v1/audio/transcriptions"
         );
+    }
+
+    #[test]
+    fn whisper_helpers_return_sherpa_errors() {
+        let request = online_request(
+            GROQ_WHISPER_PROVIDER_ID,
+            json!({
+                "apiKey": "  "
+            }),
+        );
+
+        let config_error =
+            resolve_whisper_config(&request, WhisperCompatibleProvider::GroqWhisper).unwrap_err();
+        assert!(matches!(config_error, SherpaError::Generic(_)));
+        assert!(config_error.to_string().contains("API Key"));
+
+        let response_error = segments_from_whisper_response(
+            &json!({"text": "missing verbose segments"}),
+            WhisperCompatibleProvider::GroqWhisper,
+        )
+        .unwrap_err();
+        assert!(matches!(response_error, SherpaError::Generic(_)));
+        assert!(response_error.to_string().contains("segments"));
     }
 
     #[test]
@@ -1331,6 +1483,10 @@ mod tests {
         let error =
             resolve_volcengine_config_checked(&missing_key, VolcengineMode::Batch).unwrap_err();
         assert_eq!(error, VolcengineConfigError::ApiKeyMissing);
+        assert!(matches!(
+            resolve_volcengine_config(&missing_key, VolcengineMode::Batch).unwrap_err(),
+            SherpaError::VolcengineApiKeyMissing
+        ));
 
         let unsupported_provider = online_request(
             "other-volcengine",

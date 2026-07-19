@@ -38,13 +38,18 @@ class UniffiSyncSecretStoreAdapterTest {
 
     @Test
     fun `registrar passes a working adapter to the generated binding`() = runTest {
+        var registeredAppDataDir: String? = null
         var registered: FfiSyncSecretStore? = null
-        val registrar = UniffiSyncSecretStoreRegistrar { registered = it }
+        val registrar = UniffiSyncSecretStoreRegistrar { appDataDir, store ->
+            registeredAppDataDir = appDataDir
+            registered = store
+        }
         val port = RecordingSyncSecretStore()
 
-        registrar.register(port)
+        registrar.register("/data/user/0/com.sona/files", port)
         checkNotNull(registered).set("vault-key:vault-a", byteArrayOf(9))
 
+        assertEquals("/data/user/0/com.sona/files", registeredAppDataDir)
         assertArrayEquals(byteArrayOf(9), port.get("vault-key:vault-a"))
     }
 

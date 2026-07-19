@@ -5,6 +5,9 @@ description = "Reusable HTTP API server adapter for Sona platforms"
 authors.workspace = true
 edition.workspace = true
 
+[package.metadata.sona]
+role = "inbound-adapter"
+
 [dependencies]
 async-trait = "0.1"
 axum = { version = "0.8", features = ["multipart", "macros", "ws"] }
@@ -18,11 +21,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.11.0"
 sona-core = { path = "../../core" }
-sona-local-asr = { path = "../local_asr" }
-sona-media-detector = { path = "../media_detector" }
-sona-runtime-fs = { path = "../runtime_fs" }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tower-http = { version = "0.6", features = ["cors", "auth", "fs"] }
+thiserror = "2.0.18"
 uuid = { version = "1", features = ["v4", "fast-rng"] }
 walkdir = "2.5.0"
 

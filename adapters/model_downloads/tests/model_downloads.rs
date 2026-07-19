@@ -3,7 +3,10 @@ use hex::encode;
 use sha2::{Digest, Sha256};
 use sona_core::models::downloads::ResolvedModelDownload;
 use sona_core::models::preset_models::find_preset_model;
-use sona_model_downloads::{download_model, installed_model_is_valid, remove_model_install_path};
+use sona_model_downloads::{
+    DownloadError, DownloadFileOperation, download_model, installed_model_is_valid,
+    remove_model_install_path, sha256_file,
+};
 use tokio::net::TcpListener;
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -28,6 +31,35 @@ fn remove_model_install_path_removes_files_and_directories() {
 
     assert!(!file_path.exists());
     assert!(!directory_path.exists());
+}
+
+#[test]
+fn remove_model_install_path_reports_inspection_context() {
+    let invalid_path = std::path::Path::new("invalid\0model");
+
+    let error = remove_model_install_path(invalid_path).unwrap_err();
+
+    let DownloadError::FileSystem(context) = error else {
+        panic!("expected filesystem error");
+    };
+    assert_eq!(context.operation, DownloadFileOperation::InspectInstall);
+    assert_eq!(context.path, invalid_path);
+    assert_eq!(context.target, None);
+}
+
+#[tokio::test]
+async fn model_hash_errors_preserve_install_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let install_path = dir.path().join("missing-model.onnx");
+
+    let error = sha256_file(&install_path).await.unwrap_err();
+
+    let DownloadError::FileSystem(context) = error else {
+        panic!("expected filesystem error");
+    };
+    assert_eq!(context.operation, DownloadFileOperation::HashFile);
+    assert_eq!(context.path, install_path);
+    assert_eq!(context.target, None);
 }
 
 #[tokio::test]

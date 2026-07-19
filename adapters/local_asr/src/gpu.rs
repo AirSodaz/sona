@@ -103,7 +103,7 @@ impl GpuAccelerationPlan {
     }
 }
 
-pub async fn check_gpu_availability() -> Result<bool, String> {
+pub async fn check_gpu_availability() -> Result<bool, sona_core::ports::asr::AsrPortError> {
     #[cfg(target_os = "macos")]
     {
         Ok(std::env::consts::ARCH == "aarch64")
@@ -131,7 +131,11 @@ pub fn directml_runtime_available() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{GpuAccelerationPlan, GpuFallbackNotice};
+    use super::{
+        GpuAccelerationPlan, GpuFallbackNotice, LocalGpuAvailabilityProvider,
+        check_gpu_availability,
+    };
+    use sona_core::ports::runtime::GpuAvailabilityProvider;
 
     #[test]
     fn windows_auto_gpu_plan_falls_back_to_cpu_after_directml() {
@@ -149,5 +153,25 @@ mod tests {
         assert_eq!(notice.from_provider, "directml");
         assert_eq!(notice.to_provider, "cpu");
         assert_eq!(notice.error, "init failed");
+    }
+
+    #[tokio::test]
+    async fn runtime_capability_gpu_provider_preserves_fallback_behavior() {
+        let expected = check_gpu_availability().await.unwrap_or(false);
+
+        assert_eq!(
+            LocalGpuAvailabilityProvider.is_gpu_available().await,
+            expected
+        );
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LocalGpuAvailabilityProvider;
+
+#[async_trait::async_trait]
+impl sona_core::ports::runtime::GpuAvailabilityProvider for LocalGpuAvailabilityProvider {
+    async fn is_gpu_available(&self) -> bool {
+        check_gpu_availability().await.unwrap_or(false)
     }
 }

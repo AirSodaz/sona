@@ -1,12 +1,25 @@
 use crate::{
-    FfiAsrStreamingObserver, FfiAsrStreamingSession, FfiBatchSegmentationMode,
-    FfiConfigMigrationResult, FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmModelSummary,
+    FfiAsrStreamingObserver, FfiAsrStreamingSession, FfiAutomationProcessedInputV1,
+    FfiAutomationRepositoryInputV1, FfiAutomationRepositoryStateV1, FfiAutomationRuleInputV1,
+    FfiAutomationRuleValidationResultV1, FfiAutomationTagReferenceV1,
+    FfiAutomationValidationRuleV1, FfiBatchSegmentationMode, FfiConfigMigrationResult,
+    FfiHistoryCompleteLiveDraftRequestV1, FfiHistoryCreateLiveDraftRequestV1,
+    FfiHistoryCreateTranscriptSnapshotRequestV1, FfiHistoryDeleteItemsRequestV1,
+    FfiHistoryItemRecordV1, FfiHistoryReplaceTagAssignmentsRequestV1,
+    FfiHistorySaveImportedFileRequestV1, FfiHistorySaveRecordingRequestV1,
+    FfiHistoryTrashItemsRequestV1, FfiHistoryUpdateItemMetaRequestV1,
+    FfiHistoryUpdateTagAssignmentsRequestV1, FfiHistoryUpdateTranscriptRequestV1,
+    FfiHistoryWorkspaceQueryRequestV1, FfiHistoryWorkspaceQueryResultV1,
+    FfiLiveRecordingDraftResultV1, FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmModelSummary,
     FfiLlmPromptChunk, FfiLlmProvider, FfiLlmSegmentInput, FfiLlmTaskFinal, FfiLlmTaskObserver,
     FfiModelCatalogSelectedIds, FfiModelCatalogSnapshot, FfiModelSelectionPaths,
     FfiOnlineAsrBatchRequest, FfiOnlineAsrBatchResult, FfiOnlineAsrProvider,
     FfiOnlineAsrProviderRequest, FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPresetModel,
-    FfiResolvedModelDownload, FfiRuntimePathStatus, FfiSummarizeTranscriptRequest,
-    FfiSummarySegmentInput, FfiTranslateSegmentsRequest, FfiTranslatedSegment,
+    FfiRecoveryItemInputV1, FfiRecoverySnapshotV1, FfiResolvedModelDownload, FfiRuntimePathStatus,
+    FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiTagCreateInputV1, FfiTagRecordV1,
+    FfiTagRepositorySnapshotV1, FfiTagUpdateInputV1, FfiTaskLedgerPatchV1, FfiTaskLedgerRecordV1,
+    FfiTaskLedgerSnapshotV1, FfiTranscriptSegment, FfiTranscriptSnapshotMetadataV1,
+    FfiTranscriptSnapshotRecordV1, FfiTranslateSegmentsRequest, FfiTranslatedSegment,
     FfiVolcengineDoubaoAsrConfig, SonaCoreBindingResult, app_config_repository_bridge,
     asr_batch_bridge, asr_bridge, asr_streaming_bridge, automation_bridge, backup_bridge,
     config_bridge, dashboard_bridge, diagnostics_bridge, export_bridge, history_mutation_bridge,
@@ -70,8 +83,21 @@ impl SonaCoreFacade {
         tag_bridge::load_tag_repository_state_json(app_data_dir)
     }
 
+    pub fn load_tag_repository_v1(
+        app_data_dir: String,
+    ) -> SonaCoreBindingResult<FfiTagRepositorySnapshotV1> {
+        tag_bridge::load_tag_repository_v1(app_data_dir)
+    }
+
     pub fn replace_tags_json(app_data_dir: String, tags_json: String) -> SonaCoreBindingResult<()> {
         tag_bridge::replace_tags_json(app_data_dir, tags_json)
+    }
+
+    pub fn replace_tags_v1(
+        app_data_dir: String,
+        tags: Vec<FfiTagRecordV1>,
+    ) -> SonaCoreBindingResult<()> {
+        tag_bridge::replace_tags_v1(app_data_dir, tags)
     }
 
     pub fn create_tag_json(
@@ -79,6 +105,13 @@ impl SonaCoreFacade {
         input_json: String,
     ) -> SonaCoreBindingResult<String> {
         tag_bridge::create_tag_json(app_data_dir, input_json)
+    }
+
+    pub fn create_tag_v1(
+        app_data_dir: String,
+        input: FfiTagCreateInputV1,
+    ) -> SonaCoreBindingResult<FfiTagRecordV1> {
+        tag_bridge::create_tag_v1(app_data_dir, input)
     }
 
     pub fn update_tag_json(
@@ -89,8 +122,20 @@ impl SonaCoreFacade {
         tag_bridge::update_tag_json(app_data_dir, tag_id, updates_json)
     }
 
+    pub fn update_tag_v1(
+        app_data_dir: String,
+        tag_id: String,
+        updates: FfiTagUpdateInputV1,
+    ) -> SonaCoreBindingResult<Option<FfiTagRecordV1>> {
+        tag_bridge::update_tag_v1(app_data_dir, tag_id, updates)
+    }
+
     pub fn delete_tag(app_data_dir: String, tag_id: String) -> SonaCoreBindingResult<()> {
         tag_bridge::delete_tag(app_data_dir, tag_id)
+    }
+
+    pub fn delete_tag_v1(app_data_dir: String, tag_id: String) -> SonaCoreBindingResult<()> {
+        tag_bridge::delete_tag_v1(app_data_dir, tag_id)
     }
 
     pub fn reorder_tags_json(
@@ -100,6 +145,13 @@ impl SonaCoreFacade {
         tag_bridge::reorder_tags_json(app_data_dir, tag_ids_json)
     }
 
+    pub fn reorder_tags_v1(
+        app_data_dir: String,
+        tag_ids: Vec<String>,
+    ) -> SonaCoreBindingResult<Vec<FfiTagRecordV1>> {
+        tag_bridge::reorder_tags_v1(app_data_dir, tag_ids)
+    }
+
     pub fn set_active_tag_id(
         app_data_dir: String,
         tag_id: Option<String>,
@@ -107,8 +159,21 @@ impl SonaCoreFacade {
         tag_bridge::set_active_tag_id(app_data_dir, tag_id)
     }
 
+    pub fn set_active_tag_id_v1(
+        app_data_dir: String,
+        tag_id: Option<String>,
+    ) -> SonaCoreBindingResult<()> {
+        tag_bridge::set_active_tag_id_v1(app_data_dir, tag_id)
+    }
+
     pub fn load_recovery_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
         recovery_bridge::load_recovery_snapshot_json(app_data_dir)
+    }
+
+    pub fn load_recovery_snapshot_v1(
+        app_data_dir: String,
+    ) -> SonaCoreBindingResult<FfiRecoverySnapshotV1> {
+        recovery_bridge::load_recovery_snapshot_v1(app_data_dir)
     }
 
     pub fn save_recovery_snapshot_json(
@@ -116,6 +181,13 @@ impl SonaCoreFacade {
         items_json: String,
     ) -> SonaCoreBindingResult<String> {
         recovery_bridge::save_recovery_snapshot_json(app_data_dir, items_json)
+    }
+
+    pub fn save_recovery_snapshot_v1(
+        app_data_dir: String,
+        items: Vec<FfiRecoveryItemInputV1>,
+    ) -> SonaCoreBindingResult<FfiRecoverySnapshotV1> {
+        recovery_bridge::save_recovery_snapshot_v1(app_data_dir, items)
     }
 
     pub fn persist_recovery_queue_snapshot_json(
@@ -130,8 +202,22 @@ impl SonaCoreFacade {
         )
     }
 
+    pub fn persist_recovery_queue_snapshot_v1(
+        app_data_dir: String,
+        queue_items: Vec<FfiRecoveryItemInputV1>,
+        resolved_ids: Vec<String>,
+    ) -> SonaCoreBindingResult<FfiRecoverySnapshotV1> {
+        recovery_bridge::persist_recovery_queue_snapshot_v1(app_data_dir, queue_items, resolved_ids)
+    }
+
     pub fn load_task_ledger_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
         task_ledger_bridge::load_task_ledger_snapshot_json(app_data_dir)
+    }
+
+    pub fn load_task_ledger_snapshot_v1(
+        app_data_dir: String,
+    ) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+        task_ledger_bridge::load_task_ledger_snapshot_v1(app_data_dir)
     }
 
     pub fn upsert_task_ledger_record_json(
@@ -139,6 +225,13 @@ impl SonaCoreFacade {
         record_json: String,
     ) -> SonaCoreBindingResult<String> {
         task_ledger_bridge::upsert_task_ledger_record_json(app_data_dir, record_json)
+    }
+
+    pub fn upsert_task_ledger_record_v1(
+        app_data_dir: String,
+        record: FfiTaskLedgerRecordV1,
+    ) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+        task_ledger_bridge::upsert_task_ledger_record_v1(app_data_dir, record)
     }
 
     pub fn patch_task_ledger_record_json(
@@ -149,11 +242,26 @@ impl SonaCoreFacade {
         task_ledger_bridge::patch_task_ledger_record_json(app_data_dir, id, patch_json)
     }
 
+    pub fn patch_task_ledger_record_v1(
+        app_data_dir: String,
+        id: String,
+        patch: FfiTaskLedgerPatchV1,
+    ) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+        task_ledger_bridge::patch_task_ledger_record_v1(app_data_dir, id, patch)
+    }
+
     pub fn remove_task_ledger_record_json(
         app_data_dir: String,
         id: String,
     ) -> SonaCoreBindingResult<String> {
         task_ledger_bridge::remove_task_ledger_record_json(app_data_dir, id)
+    }
+
+    pub fn remove_task_ledger_record_v1(
+        app_data_dir: String,
+        id: String,
+    ) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+        task_ledger_bridge::remove_task_ledger_record_v1(app_data_dir, id)
     }
 
     pub fn clear_resolved_task_ledger_records_json(
@@ -162,10 +270,22 @@ impl SonaCoreFacade {
         task_ledger_bridge::clear_resolved_task_ledger_records_json(app_data_dir)
     }
 
+    pub fn clear_resolved_task_ledger_records_v1(
+        app_data_dir: String,
+    ) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+        task_ledger_bridge::clear_resolved_task_ledger_records_v1(app_data_dir)
+    }
+
     pub fn load_automation_repository_state_json(
         app_data_dir: String,
     ) -> SonaCoreBindingResult<String> {
         automation_bridge::load_automation_repository_state_json(app_data_dir)
+    }
+
+    pub fn load_automation_repository_state_v1(
+        app_data_dir: String,
+    ) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
+        automation_bridge::load_automation_repository_state_v1(app_data_dir)
     }
 
     pub fn replace_automation_rules_json(
@@ -175,6 +295,13 @@ impl SonaCoreFacade {
         automation_bridge::replace_automation_rules_json(app_data_dir, rules_json)
     }
 
+    pub fn replace_automation_rules_v1(
+        app_data_dir: String,
+        rules: Vec<FfiAutomationRuleInputV1>,
+    ) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
+        automation_bridge::replace_automation_rules_v1(app_data_dir, rules)
+    }
+
     pub fn replace_automation_processed_entries_json(
         app_data_dir: String,
         entries_json: String,
@@ -182,11 +309,25 @@ impl SonaCoreFacade {
         automation_bridge::replace_automation_processed_entries_json(app_data_dir, entries_json)
     }
 
+    pub fn replace_automation_processed_entries_v1(
+        app_data_dir: String,
+        entries: Vec<FfiAutomationProcessedInputV1>,
+    ) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
+        automation_bridge::replace_automation_processed_entries_v1(app_data_dir, entries)
+    }
+
     pub fn replace_automation_repository_state_json(
         app_data_dir: String,
         state_json: String,
     ) -> SonaCoreBindingResult<String> {
         automation_bridge::replace_automation_repository_state_json(app_data_dir, state_json)
+    }
+
+    pub fn replace_automation_repository_state_v1(
+        app_data_dir: String,
+        input: FfiAutomationRepositoryInputV1,
+    ) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
+        automation_bridge::replace_automation_repository_state_v1(app_data_dir, input)
     }
 
     pub fn validate_automation_rule_activation_json(
@@ -199,6 +340,14 @@ impl SonaCoreFacade {
             global_config_json,
             project_json,
         )
+    }
+
+    pub fn validate_automation_rule_activation_v1(
+        rule: FfiAutomationValidationRuleV1,
+        global_config_json: String,
+        tags: Vec<FfiAutomationTagReferenceV1>,
+    ) -> SonaCoreBindingResult<FfiAutomationRuleValidationResultV1> {
+        automation_bridge::validate_automation_rule_activation_v1(rule, global_config_json, tags)
     }
 
     pub fn normalize_export_format(value: String) -> SonaCoreBindingResult<String> {
@@ -246,11 +395,26 @@ impl SonaCoreFacade {
         history_query_bridge::list_history_items_json(app_data_dir, limit, offset).await
     }
 
+    pub async fn list_history_items_v1(
+        app_data_dir: String,
+        limit: Option<u64>,
+        offset: Option<u64>,
+    ) -> SonaCoreBindingResult<Vec<FfiHistoryItemRecordV1>> {
+        history_query_bridge::list_history_items_v1(app_data_dir, limit, offset).await
+    }
+
     pub async fn query_history_workspace_json(
         app_data_dir: String,
         request_json: String,
     ) -> SonaCoreBindingResult<String> {
         history_query_bridge::query_history_workspace_json(app_data_dir, request_json).await
+    }
+
+    pub async fn query_history_workspace_v1(
+        app_data_dir: String,
+        request: FfiHistoryWorkspaceQueryRequestV1,
+    ) -> SonaCoreBindingResult<FfiHistoryWorkspaceQueryResultV1> {
+        history_query_bridge::query_history_workspace_v1(app_data_dir, request).await
     }
 
     pub async fn load_history_transcript_json(
@@ -260,11 +424,25 @@ impl SonaCoreFacade {
         history_query_bridge::load_history_transcript_json(app_data_dir, history_id).await
     }
 
+    pub async fn load_history_transcript_v1(
+        app_data_dir: String,
+        history_id: String,
+    ) -> SonaCoreBindingResult<Option<Vec<FfiTranscriptSegment>>> {
+        history_query_bridge::load_history_transcript_v1(app_data_dir, history_id).await
+    }
+
     pub async fn list_history_transcript_snapshots_json(
         app_data_dir: String,
         history_id: String,
     ) -> SonaCoreBindingResult<String> {
         history_query_bridge::list_history_transcript_snapshots_json(app_data_dir, history_id).await
+    }
+
+    pub async fn list_history_transcript_snapshots_v1(
+        app_data_dir: String,
+        history_id: String,
+    ) -> SonaCoreBindingResult<Vec<FfiTranscriptSnapshotMetadataV1>> {
+        history_query_bridge::list_history_transcript_snapshots_v1(app_data_dir, history_id).await
     }
 
     pub async fn load_history_transcript_snapshot_json(
@@ -280,6 +458,19 @@ impl SonaCoreFacade {
         .await
     }
 
+    pub async fn load_history_transcript_snapshot_v1(
+        app_data_dir: String,
+        history_id: String,
+        snapshot_id: String,
+    ) -> SonaCoreBindingResult<Option<FfiTranscriptSnapshotRecordV1>> {
+        history_query_bridge::load_history_transcript_snapshot_v1(
+            app_data_dir,
+            history_id,
+            snapshot_id,
+        )
+        .await
+    }
+
     pub async fn create_history_live_draft_json(
         app_data_dir: String,
         request_json: String,
@@ -287,11 +478,25 @@ impl SonaCoreFacade {
         history_mutation_bridge::create_history_live_draft_json(app_data_dir, request_json).await
     }
 
+    pub async fn create_history_live_draft_v1(
+        app_data_dir: String,
+        request: FfiHistoryCreateLiveDraftRequestV1,
+    ) -> SonaCoreBindingResult<FfiLiveRecordingDraftResultV1> {
+        history_mutation_bridge::create_history_live_draft_v1(app_data_dir, request).await
+    }
+
     pub async fn complete_history_live_draft_json(
         app_data_dir: String,
         request_json: String,
     ) -> SonaCoreBindingResult<String> {
         history_mutation_bridge::complete_history_live_draft_json(app_data_dir, request_json).await
+    }
+
+    pub async fn complete_history_live_draft_v1(
+        app_data_dir: String,
+        request: FfiHistoryCompleteLiveDraftRequestV1,
+    ) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
+        history_mutation_bridge::complete_history_live_draft_v1(app_data_dir, request).await
     }
 
     pub async fn save_history_recording_json(
@@ -309,11 +514,25 @@ impl SonaCoreFacade {
         .await
     }
 
+    pub async fn save_history_recording_v1(
+        app_data_dir: String,
+        request: FfiHistorySaveRecordingRequestV1,
+    ) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
+        history_mutation_bridge::save_history_recording_v1(app_data_dir, request).await
+    }
+
     pub async fn save_history_imported_file_json(
         app_data_dir: String,
         request_json: String,
     ) -> SonaCoreBindingResult<String> {
         history_mutation_bridge::save_history_imported_file_json(app_data_dir, request_json).await
+    }
+
+    pub async fn save_history_imported_file_v1(
+        app_data_dir: String,
+        request: FfiHistorySaveImportedFileRequestV1,
+    ) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
+        history_mutation_bridge::save_history_imported_file_v1(app_data_dir, request).await
     }
 
     pub async fn delete_history_items_json(
@@ -330,11 +549,25 @@ impl SonaCoreFacade {
         history_mutation_bridge::trash_history_items_json(app_data_dir, request_json).await
     }
 
+    pub async fn trash_history_items_v1(
+        app_data_dir: String,
+        request: FfiHistoryTrashItemsRequestV1,
+    ) -> SonaCoreBindingResult<()> {
+        history_mutation_bridge::trash_history_items_v1(app_data_dir, request).await
+    }
+
     pub async fn restore_history_items_json(
         app_data_dir: String,
         request_json: String,
     ) -> SonaCoreBindingResult<String> {
         history_mutation_bridge::restore_history_items_json(app_data_dir, request_json).await
+    }
+
+    pub async fn restore_history_items_v1(
+        app_data_dir: String,
+        request: FfiHistoryDeleteItemsRequestV1,
+    ) -> SonaCoreBindingResult<()> {
+        history_mutation_bridge::restore_history_items_v1(app_data_dir, request).await
     }
 
     pub async fn purge_history_items_json(
@@ -344,11 +577,25 @@ impl SonaCoreFacade {
         history_mutation_bridge::purge_history_items_json(app_data_dir, request_json).await
     }
 
+    pub async fn purge_history_items_v1(
+        app_data_dir: String,
+        request: FfiHistoryDeleteItemsRequestV1,
+    ) -> SonaCoreBindingResult<()> {
+        history_mutation_bridge::purge_history_items_v1(app_data_dir, request).await
+    }
+
     pub async fn update_history_transcript_json(
         app_data_dir: String,
         request_json: String,
     ) -> SonaCoreBindingResult<String> {
         history_mutation_bridge::update_history_transcript_json(app_data_dir, request_json).await
+    }
+
+    pub async fn update_history_transcript_v1(
+        app_data_dir: String,
+        request: FfiHistoryUpdateTranscriptRequestV1,
+    ) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
+        history_mutation_bridge::update_history_transcript_v1(app_data_dir, request).await
     }
 
     pub async fn create_history_transcript_snapshot_json(
@@ -359,11 +606,25 @@ impl SonaCoreFacade {
             .await
     }
 
+    pub async fn create_history_transcript_snapshot_v1(
+        app_data_dir: String,
+        request: FfiHistoryCreateTranscriptSnapshotRequestV1,
+    ) -> SonaCoreBindingResult<FfiTranscriptSnapshotMetadataV1> {
+        history_mutation_bridge::create_history_transcript_snapshot_v1(app_data_dir, request).await
+    }
+
     pub async fn update_history_item_meta_json(
         app_data_dir: String,
         request_json: String,
     ) -> SonaCoreBindingResult<String> {
         history_mutation_bridge::update_history_item_meta_json(app_data_dir, request_json).await
+    }
+
+    pub async fn update_history_item_meta_v1(
+        app_data_dir: String,
+        request: FfiHistoryUpdateItemMetaRequestV1,
+    ) -> SonaCoreBindingResult<()> {
+        history_mutation_bridge::update_history_item_meta_v1(app_data_dir, request).await
     }
 
     pub async fn update_history_project_assignments_json(
@@ -382,12 +643,26 @@ impl SonaCoreFacade {
             .await
     }
 
+    pub async fn update_history_tag_assignments_v1(
+        app_data_dir: String,
+        request: FfiHistoryUpdateTagAssignmentsRequestV1,
+    ) -> SonaCoreBindingResult<()> {
+        history_mutation_bridge::update_history_tag_assignments_v1(app_data_dir, request).await
+    }
+
     pub async fn replace_history_tag_assignments_json(
         app_data_dir: String,
         request_json: String,
     ) -> SonaCoreBindingResult<String> {
         history_mutation_bridge::replace_history_tag_assignments_json(app_data_dir, request_json)
             .await
+    }
+
+    pub async fn replace_history_tag_assignments_v1(
+        app_data_dir: String,
+        request: FfiHistoryReplaceTagAssignmentsRequestV1,
+    ) -> SonaCoreBindingResult<()> {
+        history_mutation_bridge::replace_history_tag_assignments_v1(app_data_dir, request).await
     }
 
     pub async fn reassign_history_project_json(

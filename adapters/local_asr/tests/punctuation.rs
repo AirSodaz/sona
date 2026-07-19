@@ -1,3 +1,4 @@
+use sona_core::ports::asr::AsrPortErrorKind;
 use sona_local_asr::punctuation::load_punctuation_from_path;
 
 #[test]
@@ -16,5 +17,6 @@ fn load_punctuation_from_path_rejects_missing_model_path() {
         Ok(_) => panic!("missing punctuation model path should be rejected"),
     };
 
-    assert!(error.contains("Model path does not exist"));
+    assert_eq!(error.kind, AsrPortErrorKind::Model);
+    assert!(error.message.contains("Model path does not exist"));
 }

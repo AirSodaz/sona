@@ -5,7 +5,11 @@ description = "Media file detection adapter for Sona"
 authors.workspace = true
 edition.workspace = true
 
+[package.metadata.sona]
+role = "outbound-adapter"
+
 [dependencies]
+async-trait = "0.1"
 sona-core = { path = "../../core" }
 tokio = { version = "1", features = ["fs", "io-util"] }
 

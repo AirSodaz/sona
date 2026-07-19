@@ -16,10 +16,13 @@ import {
 import { DEFAULT_SUMMARY_TEMPLATE_ID } from '../../types/transcript';
 import { coerceSummaryTemplateId } from '../../utils/summaryTemplates';
 
-type ProjectDefaultsInput = Partial<ProjectDefaults> & {
+type ProjectDefaultsInput = Omit<
+  Partial<ProjectDefaults>,
+  'polishScenario' | 'polishContext'
+> & {
   summaryTemplate?: string;
-  polishScenario?: string;
-  polishContext?: string;
+  polishScenario?: string | null;
+  polishContext?: string | null;
 };
 
 type ProjectRecordInput = Partial<Omit<ProjectRecord, 'defaults'>> & {
@@ -127,8 +130,8 @@ export function normalizeProjectRecord(input: ProjectRecordInput): ProjectRecord
       translationLanguage: defaults.translationLanguage || 'zh',
       polishPresetId: defaults.polishPresetId
         || ((defaults.polishScenario || defaults.polishContext) ? '' : DEFAULT_POLISH_PRESET_ID),
-      polishScenario: defaults.polishScenario,
-      polishContext: defaults.polishContext,
+      polishScenario: defaults.polishScenario ?? undefined,
+      polishContext: defaults.polishContext ?? undefined,
       exportFileNamePrefix: defaults.exportFileNamePrefix || '',
       enabledTextReplacementSetIds: defaults.enabledTextReplacementSetIds || [],
       enabledHotwordSetIds: defaults.enabledHotwordSetIds || [],

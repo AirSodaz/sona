@@ -76,6 +76,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::history::dispose_prepared_backup_import,
         crate::commands::downloads::download_file,
         crate::commands::sync::sync_get_status,
+        crate::commands::sync::sync_test_provider,
         crate::commands::sync::sync_test_webdav_provider,
         crate::commands::sync::sync_list_legacy_backups,
         crate::commands::sync::sync_prepare_legacy_backup_import,

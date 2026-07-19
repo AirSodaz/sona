@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
 use sona_core::llm::provider_protocol::{LlmModality, LlmModelMetadataSource, LlmModelSummary};
+use sona_core::ports::llm::LlmPortErrorKind;
 use sona_online_llm::{ModelsDevCatalog, parse_models_dev_models, should_enrich_model_metadata};
 
 const CATALOG: &str = r#"{
@@ -57,6 +58,14 @@ fn models_dev_parser_maps_exact_requested_models() {
         model.metadata_sources,
         vec![LlmModelMetadataSource::ModelsDev]
     );
+}
+
+#[test]
+fn models_dev_parser_classifies_invalid_catalog_as_protocol_error() {
+    let error = parse_models_dev_models("{broken", "openai", &["gpt-test"]).unwrap_err();
+
+    assert_eq!(error.kind, LlmPortErrorKind::Protocol);
+    assert!(error.message.contains("expected"));
 }
 
 #[tokio::test]

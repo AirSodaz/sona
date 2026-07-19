@@ -88,7 +88,8 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
 
         let mut segments =
             apply_timeline_normalization(output.segments, request.normalization_options);
-        segments = TranscriptPostprocessor::compile(request.postprocess_options)?
+        segments = TranscriptPostprocessor::compile(request.postprocess_options)
+            .map_err(|error| SherpaError::Generic(error.to_string()))?
             .process_segments(segments);
 
         let elapsed_ms = duration_to_ms(started.elapsed());

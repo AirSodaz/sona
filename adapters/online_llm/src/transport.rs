@@ -100,24 +100,43 @@ pub(crate) fn http_status_port_error(
     }
 }
 
-pub fn parse_llm_api_host(base_url: &str) -> Result<Url, String> {
+pub fn parse_llm_api_host(base_url: &str) -> Result<Url, LlmPortError> {
     let trimmed = base_url.trim();
     validate_llm_api_host(trimmed)?;
-    Url::parse(trimmed).map_err(|error| format!("LLM API host is invalid: {error}"))
+    Url::parse(trimmed).map_err(|error| {
+        LlmPortError::new(
+            LlmPortErrorKind::InvalidRequest,
+            format!("LLM API host is invalid: {error}"),
+        )
+    })
 }
 
-pub fn validate_llm_api_host(base_url: &str) -> Result<(), String> {
+pub fn validate_llm_api_host(base_url: &str) -> Result<(), LlmPortError> {
     let trimmed = base_url.trim();
     if trimmed.is_empty() {
-        return Err("LLM API host cannot be empty".to_string());
+        return Err(LlmPortError::new(
+            LlmPortErrorKind::InvalidRequest,
+            "LLM API host cannot be empty",
+        ));
     }
 
-    let url = Url::parse(trimmed).map_err(|error| format!("LLM API host is invalid: {error}"))?;
+    let url = Url::parse(trimmed).map_err(|error| {
+        LlmPortError::new(
+            LlmPortErrorKind::InvalidRequest,
+            format!("LLM API host is invalid: {error}"),
+        )
+    })?;
     match url.scheme() {
         "https" => Ok(()),
         "http" if is_loopback_host(&url) => Ok(()),
-        "http" => Err("LLM API host must use https:// unless it points to localhost.".to_string()),
-        _ => Err("LLM API host must start with https:// or localhost http://.".to_string()),
+        "http" => Err(LlmPortError::new(
+            LlmPortErrorKind::InvalidRequest,
+            "LLM API host must use https:// unless it points to localhost.",
+        )),
+        _ => Err(LlmPortError::new(
+            LlmPortErrorKind::InvalidRequest,
+            "LLM API host must start with https:// or localhost http://.",
+        )),
     }
 }
 
@@ -137,7 +156,7 @@ pub struct LlmApiUrl {
 }
 
 impl LlmApiUrl {
-    pub fn parse(value: &str) -> Result<Self, String> {
+    pub fn parse(value: &str) -> Result<Self, LlmPortError> {
         let url = parse_llm_api_host(value)?;
         let https_only = url.scheme() == "https";
         Ok(Self {
@@ -154,18 +173,18 @@ impl LlmApiUrl {
         self.value.clone()
     }
 
-    pub fn join(&self, path: &str) -> Result<Self, String> {
+    pub fn join(&self, path: &str) -> Result<Self, LlmPortError> {
         let joined = join_url(self.value.as_str(), path);
         Self::parse(&joined)
     }
 
-    pub fn with_query(&self, query: &str) -> Result<Self, String> {
+    pub fn with_query(&self, query: &str) -> Result<Self, LlmPortError> {
         let mut url = self.value.clone();
         url.set_query(Some(query));
         Self::parse(url.as_str())
     }
 
-    pub fn client(&self, timeout_seconds: Option<u64>) -> Result<Client, String> {
+    pub fn client(&self, timeout_seconds: Option<u64>) -> Result<Client, LlmPortError> {
         use std::collections::HashMap;
         use std::sync::{Mutex, OnceLock};
 
@@ -189,7 +208,7 @@ impl LlmApiUrl {
         if let Some(secs) = timeout_seconds {
             builder = builder.timeout(Duration::from_secs(secs));
         }
-        let client = builder.build().map_err(|error| error.to_string())?;
+        let client = builder.build().map_err(reqwest_port_error)?;
 
         let mut lock = map.lock().unwrap();
         lock.insert(key, client.clone());
@@ -203,9 +222,7 @@ pub async fn post_json_request(
     body: Value,
     timeout_seconds: Option<u64>,
 ) -> Result<Value, LlmPortError> {
-    let client = url
-        .client(timeout_seconds)
-        .map_err(classify_llm_port_error)?;
+    let client = url.client(timeout_seconds)?;
     let mut request = client
         .post(url.reqwest_url())
         .header("Content-Type", "application/json");

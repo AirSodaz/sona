@@ -97,8 +97,9 @@ where
 {
     let total_started = Instant::now();
     let audio_extract_started = Instant::now();
-    let samples =
-        sona_local_asr::audio::extract_and_resample_audio(&request.file_path, 16000).await?;
+    let samples = sona_local_asr::audio::extract_and_resample_audio(&request.file_path, 16000)
+        .await
+        .map_err(|error| error.to_string())?;
     let audio_extract_ms = duration_to_ms(audio_extract_started.elapsed());
 
     if let Some(path) = request.save_to_path.as_ref() {
@@ -118,13 +119,15 @@ where
             request.enable_itn,
             &request.language,
             request.hotwords.clone(),
-        )?;
+        )
+        .map_err(|error| error.to_string())?;
         let gpu_plan = crate::platform::hardware::resolve_gpu_acceleration_plan(
             request.gpu_acceleration.as_deref(),
         )
         .await;
         let recognizer_result =
-            create_recognizer_with_gpu_plan(config_type, request.num_threads, gpu_plan)?;
+            create_recognizer_with_gpu_plan(config_type, request.num_threads, gpu_plan)
+                .map_err(|error| error.to_string())?;
         if let Some(notice) = recognizer_result.fallback_notice.as_ref() {
             log::warn!(
                 "[batch] {} transcription failed, retrying with {}: {}",
@@ -201,7 +204,8 @@ where
         &samples,
         &segments,
         request.speaker_processing.as_ref(),
-    )?;
+    )
+    .map_err(|error| error.to_string())?;
 
     let normalized_segments =
         apply_timeline_normalization(annotated_segments, request.normalization_options);

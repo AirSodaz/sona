@@ -1,11 +1,13 @@
+use sona_core::ports::llm::LlmPortErrorKind;
 use sona_online_llm::{LlmApiUrl, validate_llm_api_host};
 
 #[test]
 fn api_host_validation_rejects_remote_http_hosts() {
     let error = validate_llm_api_host("http://api.example.com/v1").unwrap_err();
 
+    assert_eq!(error.kind, LlmPortErrorKind::InvalidRequest);
     assert_eq!(
-        error,
+        error.message,
         "LLM API host must use https:// unless it points to localhost."
     );
 }
@@ -37,8 +39,9 @@ fn llm_api_url_preserves_policy_after_join_and_query() {
     );
 
     let error = LlmApiUrl::parse("http://api.example.com/v1").unwrap_err();
+    assert_eq!(error.kind, LlmPortErrorKind::InvalidRequest);
     assert_eq!(
-        error,
+        error.message,
         "LLM API host must use https:// unless it points to localhost."
     );
 }

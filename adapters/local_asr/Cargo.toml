@@ -6,6 +6,9 @@ authors.workspace = true
 edition.workspace = true
 build = "build.rs"
 
+[package.metadata.sona]
+role = "outbound-adapter"
+
 [dependencies]
 async-trait = "0.1"
 glob = "0.3"

@@ -5,15 +5,15 @@ use sona_core::llm::provider_protocol::{
 use sona_core::llm::runtime::{LlmCompletionRequest, LlmResponseFormat};
 use sona_core::ports::llm::LlmPortError;
 
-use crate::completion::{completion_input, port_result};
+use crate::completion::completion_input;
 use crate::transport::{LlmApiUrl, post_json_request};
 
 pub async fn generate_with_openai_responses_api(
     request: &LlmCompletionRequest,
 ) -> Result<StandardLlmResponse, LlmPortError> {
     let config = &request.config;
-    let base_url = port_result(LlmApiUrl::parse(&config.base_url))?;
-    let url = port_result(base_url.join(config.api_path.as_deref().unwrap_or("/v1/responses")))?;
+    let base_url = LlmApiUrl::parse(&config.base_url)?;
+    let url = base_url.join(config.api_path.as_deref().unwrap_or("/v1/responses"))?;
     let payload = build_openai_responses_payload(request, false);
 
     let response = post_json_request(
@@ -25,7 +25,7 @@ pub async fn generate_with_openai_responses_api(
     .await?;
 
     Ok(StandardLlmResponse {
-        text: port_result(extract_text_from_json_response(&response))?,
+        text: extract_text_from_json_response(&response)?,
         usage: extract_usage_from_json_response(&response),
     })
 }

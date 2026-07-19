@@ -5,7 +5,7 @@ use sona_core::task_ledger::{
     types::{TaskLedgerRecord, TaskLedgerSnapshot},
 };
 use sona_runtime_fs::SystemClock;
-use sona_sqlite::{Database, SqliteTaskLedgerAdapter};
+use sona_sqlite::SqliteApplicationContext;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -41,9 +41,10 @@ pub fn run_task_ledger(args: TaskLedgerArgs) -> CliResult<CliOutput> {
 }
 
 fn run_task_ledger_list(args: TaskLedgerListArgs) -> CliResult<CliOutput> {
-    let database = Database::open_read_only(&args.app_data_dir)
+    let context = SqliteApplicationContext::open_read_only(&args.app_data_dir)
         .map_err(|error| CliError::Io(error.to_string()))?;
-    let snapshot = SqliteTaskLedgerAdapter::new(Arc::new(database), Arc::new(SystemClock))
+    let snapshot = context
+        .task_ledger_adapter(Arc::new(SystemClock))
         .load_snapshot()
         .map_err(map_task_ledger_error)?;
     let output = if args.json {

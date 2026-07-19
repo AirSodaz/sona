@@ -40,8 +40,7 @@ async fn check_media_formats_preserves_path_order() {
         text_path.display().to_string(),
         missing_path.display().to_string(),
     ])
-    .await
-    .unwrap();
+    .await;
 
     assert_eq!(result, vec![true, false, false]);
 }

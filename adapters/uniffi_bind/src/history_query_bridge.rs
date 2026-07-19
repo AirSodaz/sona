@@ -1,8 +1,14 @@
-use crate::{SonaCoreBindingError, SonaCoreBindingResult};
+use crate::application_context::application_context;
+use crate::mapper::{history_transcript_to_ffi, history_workspace_result_to_ffi};
+use crate::{
+    FfiHistoryItemRecordV1, FfiHistoryWorkspaceQueryRequestV1, FfiHistoryWorkspaceQueryResultV1,
+    FfiTranscriptSegment, FfiTranscriptSnapshotMetadataV1, FfiTranscriptSnapshotRecordV1,
+    SonaCoreBindingError, SonaCoreBindingResult,
+};
 use sona_core::history::query_repository::HistoryQueryError;
 use sona_core::history::query_service::HistoryQueryService;
+use sona_core::history::workspace_query::validate_workspace_query_request;
 use sona_core::history::{HistoryListOptions, HistoryWorkspaceQueryRequest};
-use sona_sqlite::LazySqliteHistoryQueryRepository;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -21,6 +27,22 @@ pub(crate) async fn list_history_items_json(
     .await
 }
 
+pub(crate) async fn list_history_items_v1(
+    app_data_dir: String,
+    limit: Option<u64>,
+    offset: Option<u64>,
+) -> SonaCoreBindingResult<Vec<FfiHistoryItemRecordV1>> {
+    let opts = HistoryListOptions {
+        limit: parse_typed_pagination_value("limit", limit)?,
+        offset: parse_typed_pagination_value("offset", offset)?,
+    };
+    run_blocking(move || {
+        with_typed_service(&app_data_dir, |service| service.list_items(opts))
+            .map(|items| items.into_iter().map(Into::into).collect())
+    })
+    .await
+}
+
 pub(crate) async fn query_history_workspace_json(
     app_data_dir: String,
     request_json: String,
@@ -34,6 +56,19 @@ pub(crate) async fn query_history_workspace_json(
     .await
 }
 
+pub(crate) async fn query_history_workspace_v1(
+    app_data_dir: String,
+    request: FfiHistoryWorkspaceQueryRequestV1,
+) -> SonaCoreBindingResult<FfiHistoryWorkspaceQueryResultV1> {
+    let request: HistoryWorkspaceQueryRequest = request.try_into().map_err(history_input_error)?;
+    validate_workspace_query_request(&request).map_err(history_typed_query_error)?;
+    run_blocking(move || {
+        with_typed_service(&app_data_dir, |service| service.query_workspace(request))
+            .and_then(|result| history_workspace_result_to_ffi(result).map_err(history_query_error))
+    })
+    .await
+}
+
 pub(crate) async fn load_history_transcript_json(
     app_data_dir: String,
     history_id: String,
@@ -43,6 +78,34 @@ pub(crate) async fn load_history_transcript_json(
             service.load_transcript(&history_id)
         })
         .and_then(canonical_json)
+    })
+    .await
+}
+
+pub(crate) async fn load_history_transcript_v1(
+    app_data_dir: String,
+    history_id: String,
+) -> SonaCoreBindingResult<Option<Vec<FfiTranscriptSegment>>> {
+    validate_nonblank_input("history ID", &history_id)?;
+    run_blocking(move || {
+        with_typed_service(&app_data_dir, |service| {
+            service.load_transcript(&history_id)
+        })
+        .map(history_transcript_to_ffi)
+    })
+    .await
+}
+
+pub(crate) async fn list_history_transcript_snapshots_v1(
+    app_data_dir: String,
+    history_id: String,
+) -> SonaCoreBindingResult<Vec<FfiTranscriptSnapshotMetadataV1>> {
+    validate_nonblank_input("history ID", &history_id)?;
+    run_blocking(move || {
+        with_typed_service(&app_data_dir, |service| {
+            service.list_transcript_snapshots(&history_id)
+        })
+        .map(|snapshots| snapshots.into_iter().map(Into::into).collect())
     })
     .await
 }
@@ -74,6 +137,22 @@ pub(crate) async fn load_history_transcript_snapshot_json(
     .await
 }
 
+pub(crate) async fn load_history_transcript_snapshot_v1(
+    app_data_dir: String,
+    history_id: String,
+    snapshot_id: String,
+) -> SonaCoreBindingResult<Option<FfiTranscriptSnapshotRecordV1>> {
+    validate_nonblank_input("history ID", &history_id)?;
+    validate_nonblank_input("snapshot ID", &snapshot_id)?;
+    run_blocking(move || {
+        with_typed_service(&app_data_dir, |service| {
+            service.load_transcript_snapshot(&history_id, &snapshot_id)
+        })
+        .map(|snapshot| snapshot.map(Into::into))
+    })
+    .await
+}
+
 async fn run_blocking<T, F>(operation: F) -> SonaCoreBindingResult<T>
 where
     T: Send + 'static,
@@ -91,8 +170,21 @@ fn with_service<T>(
     let app_data_dir =
         std::path::absolute(PathBuf::from(app_data_dir)).map_err(history_query_error)?;
     ensure_existing_directory(&app_data_dir)?;
-    let repository = LazySqliteHistoryQueryRepository::new(app_data_dir);
+    let context = application_context(&app_data_dir).map_err(history_query_error)?;
+    let repository = context.history_store();
     operation(HistoryQueryService::new(Arc::new(repository))).map_err(history_query_error)
+}
+
+fn with_typed_service<T>(
+    app_data_dir: &str,
+    operation: impl FnOnce(HistoryQueryService) -> Result<T, HistoryQueryError>,
+) -> SonaCoreBindingResult<T> {
+    let app_data_dir =
+        std::path::absolute(PathBuf::from(app_data_dir)).map_err(history_query_error)?;
+    ensure_existing_directory(&app_data_dir)?;
+    let context = application_context(&app_data_dir).map_err(history_query_error)?;
+    let repository = context.history_store();
+    operation(HistoryQueryService::new(Arc::new(repository))).map_err(history_typed_query_error)
 }
 
 fn ensure_existing_directory(path: &Path) -> SonaCoreBindingResult<()> {
@@ -119,6 +211,30 @@ fn parse_pagination_value(label: &str, value: Option<u64>) -> SonaCoreBindingRes
         .transpose()
 }
 
+fn parse_typed_pagination_value(
+    label: &str,
+    value: Option<u64>,
+) -> SonaCoreBindingResult<Option<usize>> {
+    value
+        .map(|value| {
+            if value > i64::MAX as u64 {
+                return Err(history_input_error(format!(
+                    "History {label} exceeds the supported range"
+                )));
+            }
+            usize::try_from(value).map_err(history_input_error)
+        })
+        .transpose()
+}
+
+fn validate_nonblank_input(label: &str, value: &str) -> SonaCoreBindingResult<()> {
+    if value.trim().is_empty() {
+        Err(history_input_error(format!("{label} must not be empty")))
+    } else {
+        Ok(())
+    }
+}
+
 fn canonical_json(value: impl serde::Serialize) -> SonaCoreBindingResult<String> {
     let canonical = serde_json::to_value(value).map_err(history_query_error)?;
     serde_json::to_string(&canonical).map_err(history_query_error)
@@ -127,6 +243,19 @@ fn canonical_json(value: impl serde::Serialize) -> SonaCoreBindingResult<String>
 fn history_query_error(reason: impl ToString) -> SonaCoreBindingError {
     SonaCoreBindingError::HistoryQuery {
         reason: reason.to_string(),
+    }
+}
+
+fn history_input_error(reason: impl ToString) -> SonaCoreBindingError {
+    SonaCoreBindingError::InvalidInput {
+        reason: reason.to_string(),
+    }
+}
+
+fn history_typed_query_error(error: HistoryQueryError) -> SonaCoreBindingError {
+    match error {
+        HistoryQueryError::InvalidRequest(reason) => history_input_error(reason),
+        error => history_query_error(error),
     }
 }
 
@@ -150,7 +279,12 @@ mod tests {
 
     fn create_fixture(app_data_dir: &Path) -> (String, String) {
         let database = Arc::new(Database::open(app_data_dir).unwrap());
-        let store = SqliteHistoryStore::new(app_data_dir.to_path_buf(), database);
+        let store = SqliteHistoryStore::with_environment(
+            app_data_dir.to_path_buf(),
+            database,
+            Arc::new(sona_runtime_fs::SystemClock),
+            Arc::new(sona_runtime_fs::UuidGenerator),
+        );
         store.ensure_ready().unwrap();
         let segments: Vec<sona_core::transcription::transcript::TranscriptSegment> =
             serde_json::from_value(json!([{
@@ -284,5 +418,6 @@ mod tests {
         let items = parse_canonical(&output);
 
         assert_eq!(items[0]["id"], history_id);
+        let _ = crate::application_context::release_application_context(&app_data_dir).unwrap();
     }
 }

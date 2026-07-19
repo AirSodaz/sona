@@ -11,7 +11,9 @@ use sona_core::llm::jobs::{
 use sona_core::llm::provider_protocol::StandardLlmResponse;
 use sona_core::llm::runtime::{LlmCompletionOptions, LlmCompletionRequest, LlmResponseFormat};
 use sona_core::llm::usage::TokenUsage;
-use sona_core::ports::llm::{LlmCompletionPort, LlmModelMetadataPort, LlmPortError};
+use sona_core::ports::llm::{
+    LlmCompletionPort, LlmModelMetadataPort, LlmPortError, LlmPortErrorKind,
+};
 use std::{
     sync::{
         Arc, Mutex,
@@ -170,8 +172,9 @@ fn llm_api_host_validation_rejects_remote_http_api_hosts() {
     let error =
         LlmApiUrl::parse(&sample_llm_config("http://api.example.com/v1").base_url).unwrap_err();
 
+    assert_eq!(error.kind, LlmPortErrorKind::InvalidRequest);
     assert_eq!(
-        error,
+        error.message,
         "LLM API host must use https:// unless it points to localhost."
     );
 }
@@ -202,8 +205,9 @@ fn llm_api_url_preserves_https_policy_when_joining_and_querying() {
 fn llm_api_url_rejects_remote_http_when_joining_and_querying() {
     let error = LlmApiUrl::parse("http://api.example.com/v1").unwrap_err();
 
+    assert_eq!(error.kind, LlmPortErrorKind::InvalidRequest);
     assert_eq!(
-        error,
+        error.message,
         "LLM API host must use https:// unless it points to localhost."
     );
 }
@@ -385,11 +389,12 @@ fn gemini_generate_content_request_errors_do_not_include_api_key() {
     )
     .expect_err("remote http should be rejected before request dispatch");
 
+    assert_eq!(error.kind, LlmPortErrorKind::InvalidRequest);
     assert_eq!(
-        error,
+        error.message,
         "LLM API host must use https:// unless it points to localhost."
     );
-    assert!(!error.contains("secret-gemini-key"));
+    assert!(!error.message.contains("secret-gemini-key"));
 }
 
 #[test]
@@ -598,8 +603,11 @@ fn parse_polish_chunk_rejects_length_mismatch() {
     let err = parse_polish_chunk(r#"[{"id":"1","text":"Hello"}]"#, &sample_segments()[..2], 1)
         .expect_err("length mismatch should fail");
 
-    assert!(err.contains("polish chunk 1 failed"));
-    assert!(err.contains("expected 2 objects but received 1"));
+    assert!(err.to_string().contains("polish chunk 1 failed"));
+    assert!(
+        err.to_string()
+            .contains("expected 2 objects but received 1")
+    );
 }
 
 #[test]
@@ -611,8 +619,8 @@ fn parse_translate_chunk_rejects_id_order_mismatch() {
     )
     .expect_err("id order mismatch should fail");
 
-    assert!(err.contains("translate chunk 2 failed"));
-    assert!(err.contains("expected id '1'"));
+    assert!(err.to_string().contains("translate chunk 2 failed"));
+    assert!(err.to_string().contains("expected id '1'"));
 }
 
 #[test]
@@ -780,7 +788,10 @@ fn summary_provider_rejects_google_translate() {
     let err = validate_summary_strategy(LlmProviderStrategy::GoogleTranslate)
         .expect_err("google translate should be rejected");
 
-    assert!(err.contains("does not support transcript summaries"));
+    assert!(
+        err.to_string()
+            .contains("does not support transcript summaries")
+    );
 }
 
 #[test]
@@ -1025,8 +1036,9 @@ async fn execute_google_translate_free_request_does_not_retry_non_429() {
 
     assert_eq!(attempts.load(Ordering::SeqCst), 1);
     assert_eq!(slept.load(Ordering::SeqCst), 0);
-    assert!(err.contains("500 Internal Server Error"));
-    assert!(err.contains("after 1 attempt"));
+    assert_eq!(err.kind, LlmPortErrorKind::Unavailable);
+    assert!(err.message.contains("500 Internal Server Error"));
+    assert!(err.message.contains("after 1 attempt"));
 }
 
 #[tokio::test]
@@ -1057,8 +1069,9 @@ async fn run_google_translate_free_requests_in_order_fails_chunk_when_retries_ex
     .await
     .expect_err("chunk should fail when a request exhausts retries");
 
-    assert!(err.contains("429 Too Many Requests"));
-    assert!(err.contains("after 3 attempts"));
+    assert_eq!(err.kind, LlmPortErrorKind::RateLimited);
+    assert!(err.message.contains("429 Too Many Requests"));
+    assert!(err.message.contains("after 3 attempts"));
 }
 
 #[test]

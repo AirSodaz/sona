@@ -21,7 +21,8 @@ impl DiagnosticsEnrichmentRepository for FsDiagnosticsEnrichmentRepository {
         &self,
         config: &DiagnosticsConfigInput,
     ) -> Result<DiagnosticsEnrichmentMeasurements, DiagnosticsError> {
-        crate::ensure_directory_exists(&self.models_dir).map_err(DiagnosticsError::Repository)?;
+        crate::ensure_directory_exists(&self.models_dir)
+            .map_err(|error| DiagnosticsError::Repository(error.to_string()))?;
 
         Ok(DiagnosticsEnrichmentMeasurements {
             model_catalog: crate::build_model_catalog_snapshot(&self.models_dir),

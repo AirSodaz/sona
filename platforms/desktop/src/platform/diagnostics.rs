@@ -11,10 +11,12 @@ use sona_runtime_fs::build_diagnostics_snapshot;
 
 fn validate_diagnostics_input(input: &DiagnosticsCoreInput) -> Result<(), String> {
     sona_ts_bind::validate_diagnostics_input_for_typescript(input)
+        .map_err(|error| error.to_string())
 }
 
 fn validate_diagnostics_snapshot(snapshot: &DiagnosticsCoreSnapshot) -> Result<(), String> {
     sona_ts_bind::validate_diagnostics_snapshot_for_typescript(snapshot)
+        .map_err(|error| error.to_string())
 }
 
 pub async fn get_diagnostics_core_snapshot(

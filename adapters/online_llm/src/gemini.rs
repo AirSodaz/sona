@@ -9,15 +9,17 @@ use sona_core::llm::provider_protocol::{
 };
 use sona_core::llm::runtime::LlmCompletionRequest;
 use sona_core::llm::usage::TokenUsage;
-use sona_core::ports::llm::LlmPortError;
+use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
 
 use crate::completion::{
-    LlmAdapter, build_rig_completion_request, completion_input, extract_text_response, port_result,
+    LlmAdapter, build_rig_completion_request, completion_input, extract_text_response,
     reasoning_budget_tokens, reasoning_level_label, structured_schema, token_usage_from_rig_usage,
 };
 use crate::transport::{LlmApiUrl, classify_llm_port_error, post_json_request};
 
-pub fn build_gemini_payload_for_request(request: &LlmCompletionRequest) -> Result<Value, String> {
+pub fn build_gemini_payload_for_request(
+    request: &LlmCompletionRequest,
+) -> Result<Value, LlmPortError> {
     let mut generation_config = json!({
         "temperature": request.effective_temperature().unwrap_or(0.7),
     });
@@ -88,7 +90,7 @@ pub fn build_gemini_generate_content_request_parts_for_reqwest(
     model: &str,
     api_key: &str,
     stream: bool,
-) -> Result<GeminiGenerateContentRequestParts, String> {
+) -> Result<GeminiGenerateContentRequestParts, LlmPortError> {
     let CoreGeminiGenerateContentRequestParts { url, headers } =
         build_gemini_generate_content_request_parts(base_url, model, api_key, stream)?;
     let url = LlmApiUrl::parse(&url)?;
@@ -139,15 +141,14 @@ impl LlmAdapter for GeminiAdapter {
     ) -> Result<StandardLlmResponse, LlmPortError> {
         let config = &request.config;
         if request.effective_reasoning_enabled() {
-            let request_parts =
-                port_result(build_gemini_generate_content_request_parts_for_reqwest(
-                    &config.base_url,
-                    &config.model,
-                    &config.api_key,
-                    false,
-                ))?;
+            let request_parts = build_gemini_generate_content_request_parts_for_reqwest(
+                &config.base_url,
+                &config.model,
+                &config.api_key,
+                false,
+            )?;
 
-            let payload = port_result(build_gemini_payload_for_request(request))?;
+            let payload = build_gemini_payload_for_request(request)?;
 
             let response = post_json_request(
                 &request_parts.url,
@@ -158,7 +159,10 @@ impl LlmAdapter for GeminiAdapter {
             .await?;
 
             let text = extract_gemini_visible_text(&response).ok_or_else(|| {
-                classify_llm_port_error("Gemini response did not contain text output".to_string())
+                LlmPortError::new(
+                    LlmPortErrorKind::Protocol,
+                    "Gemini response did not contain text output",
+                )
             })?;
 
             let usage = response.get("usageMetadata").and_then(extract_gemini_usage);
@@ -166,9 +170,7 @@ impl LlmAdapter for GeminiAdapter {
             return Ok(StandardLlmResponse { text, usage });
         }
 
-        let reqwest_client = port_result(LlmApiUrl::parse(&config.base_url))?
-            .client(config.timeout_seconds)
-            .map_err(classify_llm_port_error)?;
+        let reqwest_client = LlmApiUrl::parse(&config.base_url)?.client(config.timeout_seconds)?;
         let client = gemini::Client::builder()
             .api_key(&config.api_key)
             .base_url(clean_gemini_base_url(&config.base_url))
@@ -176,16 +178,14 @@ impl LlmAdapter for GeminiAdapter {
             .build()
             .map_err(|error| classify_llm_port_error(error.to_string()))?;
 
-        let response = port_result(build_rig_completion_request(
-            client.completion_model(&config.model),
-            request,
-        ))?
-        .send()
-        .await
-        .map_err(|error| classify_llm_port_error(error.to_string()))?;
+        let response =
+            build_rig_completion_request(client.completion_model(&config.model), request)?
+                .send()
+                .await
+                .map_err(|error| classify_llm_port_error(error.to_string()))?;
 
         Ok(StandardLlmResponse {
-            text: port_result(extract_text_response(&response.choice))?,
+            text: extract_text_response(&response.choice)?,
             usage: token_usage_from_rig_usage(Some(response.usage)),
         })
     }

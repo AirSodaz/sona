@@ -7,7 +7,7 @@ use sona_core::sync::{
     SyncObjectKey, SyncPresetV1, SyncProviderDescriptor, SyncRunResult, SyncSecretStore,
     SyncStatusSnapshot,
 };
-use sona_sqlite::SqliteSyncRepositoryFactory;
+use sona_runtime_fs::SystemClock;
 use sona_sync::{
     JsonFileSyncConfigStore, LegacyRemoteBackupEntry, LegacyRemoteBackupService, SyncApplication,
     SyncCreateResult as ApplicationCreateResult, SyncProviderFactory, SyncProviderInput,
@@ -24,7 +24,7 @@ const SYNC_CONFIG_FILE: &str = "sync.json";
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncCreateRequest {
-    pub provider: WebDavObjectStoreConfig,
+    pub provider: SyncProviderInput,
     pub preset: SyncPresetV1,
     pub master_password: String,
     pub create_recovery_key: bool,
@@ -53,7 +53,7 @@ impl From<ApplicationCreateResult> for SyncCreateResult {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncPreviewJoinRequest {
-    pub provider: WebDavObjectStoreConfig,
+    pub provider: SyncProviderInput,
     pub vault_id: String,
     pub master_password: String,
 }
@@ -61,7 +61,7 @@ pub struct SyncPreviewJoinRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncJoinRequest {
-    pub provider: WebDavObjectStoreConfig,
+    pub provider: SyncProviderInput,
     pub vault_id: String,
     pub master_password: String,
 }
@@ -110,9 +110,10 @@ impl DesktopSyncManager {
         }
         let application = Arc::new(SyncApplication::new(
             Arc::new(JsonFileSyncConfigStore::new(config_path(app)?)),
-            Arc::new(SqliteSyncRepositoryFactory::new(
-                crate::platform::database::sqlite_database(app),
-            )),
+            Arc::new(
+                crate::platform::database::sqlite_application_context(app)
+                    .sync_repository_factory(Arc::new(SystemClock)),
+            ),
             SyncProviderRegistry::new([
                 Arc::new(WebDavSyncProviderFactory) as Arc<dyn SyncProviderFactory>
             ]),
@@ -134,14 +135,14 @@ impl DesktopSyncManager {
             .map_err(sync_error)
     }
 
-    pub async fn test_webdav_provider<R: Runtime>(
+    pub async fn test_provider<R: Runtime>(
         &self,
         app: &AppHandle<R>,
-        config: WebDavObjectStoreConfig,
+        provider: SyncProviderInput,
     ) -> Result<SyncProviderDescriptor, String> {
         self.application(app)
             .await?
-            .test_provider(provider_input(config)?)
+            .test_provider(provider)
             .await
             .map_err(sync_error)
     }
@@ -154,7 +155,7 @@ impl DesktopSyncManager {
         self.application(app)
             .await?
             .create(
-                provider_input(request.provider)?,
+                request.provider,
                 request.preset,
                 &request.master_password,
                 request.create_recovery_key,
@@ -172,7 +173,7 @@ impl DesktopSyncManager {
         self.application(app)
             .await?
             .preview_join(
-                provider_input(request.provider)?,
+                request.provider,
                 &request.vault_id,
                 &request.master_password,
             )
@@ -188,7 +189,7 @@ impl DesktopSyncManager {
         self.application(app)
             .await?
             .join(
-                provider_input(request.provider)?,
+                request.provider,
                 &request.vault_id,
                 &request.master_password,
             )
@@ -376,7 +377,9 @@ impl DesktopSyncManager {
     }
 }
 
-fn provider_input(config: WebDavObjectStoreConfig) -> Result<SyncProviderInput, String> {
+pub(crate) fn webdav_provider_input(
+    config: WebDavObjectStoreConfig,
+) -> Result<SyncProviderInput, String> {
     Ok(SyncProviderInput {
         provider_id: "webdav".to_string(),
         configuration: serde_json::to_value(config).map_err(sync_error)?,

@@ -6,11 +6,14 @@ import {
 import type {
   HistoryItemMetaPatch_Serialize,
   HistoryItemRecord,
+  HistorySummaryPayload_Deserialize,
   HistoryWorkspaceQueryRequest as CoreHistoryWorkspaceQueryRequest,
   HistoryWorkspaceQueryResult as CoreHistoryWorkspaceQueryResult,
   HistoryWorkspaceScope,
   TranscriptDiffResult_Serialize,
+  TranscriptDiffRow_Deserialize,
   TranscriptDiffRow_Serialize,
+  TranscriptSegment_Deserialize,
   TranscriptSegment_Serialize,
   TranscriptSnapshotRecord_Serialize,
 } from "../../bindings";
@@ -43,11 +46,13 @@ type CoreHistorySaveRecordingRequest = TauriCommandArgs<
 type CoreHistorySaveImportedFileRequest = TauriCommandArgs<
   typeof TauriCommand.history.saveImportedFile
 >;
-type HistorySaveRecordingRequest = CoreHistorySaveRecordingRequest & {
+type HistorySaveRecordingRequest = Omit<CoreHistorySaveRecordingRequest, "segments"> & {
+  segments: TranscriptSegment[];
   /** @deprecated */
   projectId?: string | null;
 };
-type HistorySaveImportedFileRequest = CoreHistorySaveImportedFileRequest & {
+type HistorySaveImportedFileRequest = Omit<CoreHistorySaveImportedFileRequest, "segments"> & {
+  segments: TranscriptSegment[];
   /** @deprecated */
   projectId?: string | null;
 };
@@ -70,6 +75,51 @@ function normalizeTranscriptSegment(segment: TranscriptSegment_Serialize): Trans
     speaker: normalizeSpeakerTag(segment.speaker) ?? undefined,
     speakerAttribution:
       normalizeSpeakerAttribution(segment.speakerAttribution) ?? undefined,
+  };
+}
+
+function toTranscriptSegmentTransport(
+  segment: TranscriptSegment,
+): TranscriptSegment_Deserialize {
+  return {
+    id: segment.id,
+    text: segment.text,
+    start: segment.start,
+    end: segment.end,
+    isFinal: segment.isFinal,
+    timing: segment.timing ?? null,
+    tokens: segment.tokens ?? null,
+    timestamps: segment.timestamps ?? null,
+    durations: segment.durations ?? null,
+    translation: segment.translation ?? null,
+    speaker: segment.speaker ?? null,
+    speakerAttribution: segment.speakerAttribution ?? null,
+  };
+}
+
+function toTranscriptDiffRowTransport(
+  row: TranscriptDiffRow,
+): TranscriptDiffRow_Deserialize {
+  return {
+    id: row.id,
+    status: row.status,
+    snapshotSegment: row.snapshotSegment
+      ? toTranscriptSegmentTransport(row.snapshotSegment)
+      : null,
+    currentSegment: row.currentSegment
+      ? toTranscriptSegmentTransport(row.currentSegment)
+      : null,
+    snapshotIndex: row.snapshotIndex,
+    currentIndex: row.currentIndex,
+  };
+}
+
+function toHistorySummaryPayloadTransport(
+  payload: HistorySummaryPayload,
+): HistorySummaryPayload_Deserialize {
+  return {
+    activeTemplateId: payload.activeTemplateId,
+    record: payload.record ?? null,
   };
 }
 
@@ -142,7 +192,7 @@ export async function historyCompleteLiveDraft(
 ): Promise<HistoryItemRecord> {
   return invokeTauri(TauriCommand.history.completeLiveDraft, {
     historyId,
-    segments,
+    segments: segments.map(toTranscriptSegmentTransport),
     duration,
   });
 }
@@ -153,6 +203,7 @@ export async function historySaveRecording(
   const { projectId, ...rest } = request;
   return invokeTauri(TauriCommand.history.saveRecording, {
     ...rest,
+    segments: rest.segments.map(toTranscriptSegmentTransport),
     tagIds: rest.tagIds ?? (projectId ? [projectId] : []),
   });
 }
@@ -163,6 +214,7 @@ export async function historySaveImportedFile(
   const { projectId, ...rest } = request;
   return invokeTauri(TauriCommand.history.saveImportedFile, {
     ...rest,
+    segments: rest.segments.map(toTranscriptSegmentTransport),
     tagIds: rest.tagIds ?? (projectId ? [projectId] : []),
   });
 }
@@ -196,7 +248,7 @@ export async function historyUpdateTranscript(
 ): Promise<HistoryItemRecord> {
   return invokeTauri(TauriCommand.history.updateTranscript, {
     historyId,
-    segments,
+    segments: segments.map(toTranscriptSegmentTransport),
   });
 }
 
@@ -208,7 +260,7 @@ export async function historyCreateTranscriptSnapshot(
   return invokeTauri(TauriCommand.history.createTranscriptSnapshot, {
     historyId,
     reason,
-    segments,
+    segments: segments.map(toTranscriptSegmentTransport),
   });
 }
 
@@ -239,7 +291,10 @@ export async function historyBuildTranscriptDiff(
 ): Promise<{ rows: TranscriptDiffRow[]; changedCount: number }> {
   const result: TranscriptDiffResult_Serialize = await invokeTauri(
     TauriCommand.history.buildTranscriptDiff,
-    { snapshotSegments, currentSegments },
+    {
+      snapshotSegments: snapshotSegments.map(toTranscriptSegmentTransport),
+      currentSegments: currentSegments.map(toTranscriptSegmentTransport),
+    },
   );
   return {
     ...result,
@@ -252,7 +307,7 @@ export async function historyRestoreTranscriptDiffRows(
   selectedRowIds: Iterable<string>,
 ): Promise<TranscriptSegment[]> {
   const segments = await invokeTauri(TauriCommand.history.restoreTranscriptDiffRows, {
-    rows,
+    rows: rows.map(toTranscriptDiffRowTransport),
     selectedRowIds: Array.from(selectedRowIds),
   });
   return segments.map(normalizeTranscriptSegment);
@@ -319,7 +374,7 @@ export async function historySaveSummary(
 ): Promise<void> {
   await invokeTauri(TauriCommand.history.saveSummary, {
     historyId,
-    summaryPayload,
+    summaryPayload: toHistorySummaryPayloadTransport(summaryPayload),
   });
 }
 

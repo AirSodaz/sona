@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use std::future::Future;
 
 use serde_json::Value;
@@ -20,9 +22,9 @@ where
     T: Send + 'static,
     F: FnOnce(&SqliteProjectAdapter) -> Result<T, ProjectError> + Send + 'static,
 {
-    let db = crate::platform::database::sqlite_database(app);
+    let context = crate::platform::database::sqlite_application_context(app);
     tauri::async_runtime::spawn_blocking(move || {
-        let adapter = SqliteProjectAdapter::new(db, Arc::new(UuidGenerator), Arc::new(SystemClock));
+        let adapter = context.project_adapter(Arc::new(UuidGenerator), Arc::new(SystemClock));
         task(&adapter).map_err(|error| error.to_string())
     })
     .await
@@ -43,7 +45,8 @@ pub async fn list_projects<R: Runtime>(
         })
     })
     .await?;
-    sona_ts_bind::validate_project_records_for_typescript(&projects)?;
+    sona_ts_bind::validate_project_records_for_typescript(&projects)
+        .map_err(|error| error.to_string())?;
     Ok(projects)
 }
 
@@ -51,7 +54,8 @@ pub async fn replace_projects<R: Runtime>(
     app: &AppHandle<R>,
     projects: Vec<ProjectRecord>,
 ) -> Result<(), String> {
-    sona_ts_bind::validate_project_records_for_typescript(&projects)?;
+    sona_ts_bind::validate_project_records_for_typescript(&projects)
+        .map_err(|error| error.to_string())?;
     run_project_adapter(app, move |adapter| adapter.replace_projects(projects)).await
 }
 
@@ -71,7 +75,8 @@ pub async fn create_project<R: Runtime>(
         })
     })
     .await?;
-    sona_ts_bind::validate_project_record_for_typescript(&project)?;
+    sona_ts_bind::validate_project_record_for_typescript(&project)
+        .map_err(|error| error.to_string())?;
     Ok(project)
 }
 
@@ -85,7 +90,8 @@ pub async fn update_project<R: Runtime>(
     })
     .await?;
     if let Some(project) = project.as_ref() {
-        sona_ts_bind::validate_project_record_for_typescript(project)?;
+        sona_ts_bind::validate_project_record_for_typescript(project)
+            .map_err(|error| error.to_string())?;
     }
     Ok(project)
 }
@@ -103,7 +109,8 @@ pub async fn reorder_projects<R: Runtime>(
 ) -> Result<Vec<ProjectRecord>, String> {
     let projects =
         run_project_adapter(app, move |adapter| adapter.reorder_projects(project_ids)).await?;
-    sona_ts_bind::validate_project_records_for_typescript(&projects)?;
+    sona_ts_bind::validate_project_records_for_typescript(&projects)
+        .map_err(|error| error.to_string())?;
     Ok(projects)
 }
 

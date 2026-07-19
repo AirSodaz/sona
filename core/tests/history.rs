@@ -81,8 +81,7 @@ fn history_item_factory_uses_supplied_id_and_timestamp_for_recordings() {
         vec!["tag-1".to_string()],
         Some(".WEBM!"),
         None,
-    )
-    .unwrap();
+    );
 
     assert_eq!(item.id, "recording-1");
     assert_eq!(item.timestamp, 1_700_000_000_000);
@@ -107,8 +106,7 @@ fn history_item_factory_prefers_request_ids_over_generated_fallback_ids() {
             timestamp: 42,
             recording_title: "Draft Title From Adapter".to_string(),
         },
-    )
-    .unwrap();
+    );
 
     assert_eq!(draft.id, "draft-request-id");
     assert_eq!(draft.timestamp, 42);
@@ -128,8 +126,7 @@ fn history_item_factory_prefers_request_ids_over_generated_fallback_ids() {
             timestamp: 43,
             recording_title: "Unused Imported Recording Title".to_string(),
         },
-    )
-    .unwrap();
+    );
 
     assert_eq!(imported.item.id, "import-request-id");
     assert_eq!(imported.item.timestamp, 43);

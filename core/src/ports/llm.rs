@@ -120,10 +120,13 @@ pub trait LlmTextGenerator: Send + Sync {
     async fn generate_text(
         &self,
         request: LlmGenerateRequest,
-    ) -> Result<StandardLlmResponse, String>;
+    ) -> Result<StandardLlmResponse, LlmPortError>;
 }
 
 #[async_trait]
 pub trait LlmModelLister: Send + Sync {
-    async fn list_models(&self, request: LlmModelsRequest) -> Result<Vec<LlmModelSummary>, String>;
+    async fn list_models(
+        &self,
+        request: LlmModelsRequest,
+    ) -> Result<Vec<LlmModelSummary>, LlmPortError>;
 }

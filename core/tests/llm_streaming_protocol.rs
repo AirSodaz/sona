@@ -4,13 +4,14 @@ use sona_core::llm::streaming_protocol::{
     StreamingLineBuffer, build_openai_chat_payload, build_openai_stream_url,
 };
 use sona_core::llm::tasks::LlmProviderStrategy;
+use std::convert::Infallible;
 
 #[test]
 fn stream_text_accumulator_emits_full_text_and_delta() {
     let mut emitted = Vec::new();
     let mut emit_delta = |text: &str, delta: &str| {
         emitted.push((text.to_string(), delta.to_string()));
-        Ok(())
+        Ok::<(), Infallible>(())
     };
     let mut accumulator = StreamTextAccumulator::new(&mut emit_delta);
 
@@ -25,6 +26,20 @@ fn stream_text_accumulator_emits_full_text_and_delta() {
             ("Hel".to_string(), "Hel".to_string()),
             ("Hello".to_string(), "lo".to_string()),
         ]
+    );
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct EmitFailure(&'static str);
+
+#[test]
+fn stream_text_accumulator_preserves_callback_error_type() {
+    let mut emit_delta = |_text: &str, _delta: &str| Err(EmitFailure("observer closed"));
+    let mut accumulator = StreamTextAccumulator::new(&mut emit_delta);
+
+    assert_eq!(
+        accumulator.push("hello").unwrap_err(),
+        EmitFailure("observer closed")
     );
 }
 

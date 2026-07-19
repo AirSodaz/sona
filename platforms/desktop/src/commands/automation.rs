@@ -11,7 +11,7 @@ use sona_core::automation::{AutomationRule, AutomationRuleValidationResult};
 use tauri::{AppHandle, Runtime, State};
 
 fn validate_automation_input<T: serde::Serialize + ?Sized>(value: &T) -> Result<(), String> {
-    sona_ts_bind::validate_typescript_safe_integers(value)
+    sona_ts_bind::validate_typescript_safe_integers(value).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

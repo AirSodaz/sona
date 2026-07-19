@@ -61,6 +61,36 @@ fn export_format_parses_and_infers_without_adapter_dependencies() {
 }
 
 #[test]
+fn export_validation_errors_preserve_specific_variants() {
+    assert_eq!(
+        ExportFormat::parse("docx").unwrap_err(),
+        ExportError::InvalidFormat {
+            value: "docx".to_string(),
+        }
+    );
+    assert_eq!(
+        ExportFormat::from_output_path(std::path::Path::new("transcript")).unwrap_err(),
+        ExportError::MissingFormatExtension {
+            path: std::path::PathBuf::from("transcript"),
+        }
+    );
+    assert_eq!(
+        ExportMode::parse("translated").unwrap_err(),
+        ExportError::InvalidMode {
+            value: "translated".to_string(),
+        }
+    );
+    assert_eq!(
+        ExportError::Render {
+            reason: "json serialization failed".to_string(),
+        },
+        ExportError::Render {
+            reason: "json serialization failed".to_string(),
+        }
+    );
+}
+
+#[test]
 fn exports_plain_and_subtitle_formats_from_core_segments() {
     let segments = sample_segments();
 

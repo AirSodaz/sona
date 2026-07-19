@@ -2,6 +2,8 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
+use super::LlmTaskError;
+
 pub fn clean_json_response(response_text: &str) -> String {
     let mut cleaned = response_text.trim().to_string();
 
@@ -36,15 +38,17 @@ pub fn parse_json_array_or_ndjson<T: DeserializeOwned>(
     response_text: &str,
     task_type: super::LlmTaskType,
     chunk_number: usize,
-) -> Result<Vec<T>, String> {
+) -> Result<Vec<T>, LlmTaskError> {
     let cleaned = clean_json_response(response_text);
     if cleaned.starts_with('[') {
         return serde_json::from_str::<Vec<T>>(&cleaned).map_err(|error| {
-            super::chunk_error(
-                task_type,
-                chunk_number,
-                format!("invalid JSON response: {error}"),
-            )
+            LlmTaskError::InvalidResponse {
+                reason: super::chunk_error(
+                    task_type,
+                    chunk_number,
+                    format!("invalid JSON response: {error}"),
+                ),
+            }
         });
     }
 
@@ -52,22 +56,26 @@ pub fn parse_json_array_or_ndjson<T: DeserializeOwned>(
     for line in cleaned.lines() {
         if let Some(normalized) = normalize_incremental_json_line(line) {
             let parsed = serde_json::from_str::<T>(&normalized).map_err(|error| {
-                super::chunk_error(
-                    task_type,
-                    chunk_number,
-                    format!("invalid JSON response: {error}"),
-                )
+                LlmTaskError::InvalidResponse {
+                    reason: super::chunk_error(
+                        task_type,
+                        chunk_number,
+                        format!("invalid JSON response: {error}"),
+                    ),
+                }
             })?;
             items.push(parsed);
         }
     }
 
     if items.is_empty() {
-        return Err(super::chunk_error(
-            task_type,
-            chunk_number,
-            "invalid JSON response: expected NDJSON lines or a JSON array",
-        ));
+        return Err(LlmTaskError::InvalidResponse {
+            reason: super::chunk_error(
+                task_type,
+                chunk_number,
+                "invalid JSON response: expected NDJSON lines or a JSON array",
+            ),
+        });
     }
 
     Ok(items)
@@ -77,7 +85,7 @@ pub fn parse_polish_chunk(
     response_text: &str,
     expected: &[super::LlmSegmentInput],
     chunk_number: usize,
-) -> Result<Vec<super::PolishedSegment>, String> {
+) -> Result<Vec<super::PolishedSegment>, LlmTaskError> {
     let parsed = parse_json_array_or_ndjson::<super::PolishedSegment>(
         response_text,
         super::LlmTaskType::Polish,
@@ -97,7 +105,7 @@ pub fn parse_translate_chunk(
     response_text: &str,
     expected: &[super::LlmSegmentInput],
     chunk_number: usize,
-) -> Result<Vec<super::TranslatedSegment>, String> {
+) -> Result<Vec<super::TranslatedSegment>, LlmTaskError> {
     let parsed = parse_json_array_or_ndjson::<super::TranslatedSegment>(
         response_text,
         super::LlmTaskType::Translate,
@@ -150,17 +158,19 @@ pub fn translate_output_schema(count: usize) -> Value {
     items_schema(count, "translation")
 }
 
-fn parse_items<T: DeserializeOwned>(value: &Value) -> Result<Vec<T>, String> {
+fn parse_items<T: DeserializeOwned>(value: &Value) -> Result<Vec<T>, LlmTaskError> {
     serde_json::from_value::<StructuredItems<T>>(value.clone())
         .map(|payload| payload.items)
-        .map_err(|error| format!("invalid structured response: {error}"))
+        .map_err(|error| LlmTaskError::InvalidResponse {
+            reason: format!("invalid structured response: {error}"),
+        })
 }
 
 pub fn parse_polish_object(
     value: &Value,
     expected: &[super::LlmSegmentInput],
     chunk_number: usize,
-) -> Result<Vec<super::PolishedSegment>, String> {
+) -> Result<Vec<super::PolishedSegment>, LlmTaskError> {
     let items = parse_items::<super::PolishedSegment>(value)?;
     super::validate_segment_ids(
         &items,
@@ -176,7 +186,7 @@ pub fn parse_translate_object(
     value: &Value,
     expected: &[super::LlmSegmentInput],
     chunk_number: usize,
-) -> Result<Vec<super::TranslatedSegment>, String> {
+) -> Result<Vec<super::TranslatedSegment>, LlmTaskError> {
     let items = parse_items::<super::TranslatedSegment>(value)?;
     super::validate_segment_ids(
         &items,

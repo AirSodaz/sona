@@ -1,5 +1,5 @@
 /// Re-export the core trait so platform consumers can use either path.
-pub use sona_core::ports::event::EventEmitter;
+pub use sona_core::ports::event::{EventEmitter, EventError};
 
 use tauri::{AppHandle, Emitter, Runtime};
 
@@ -12,8 +12,9 @@ use tauri::{AppHandle, Emitter, Runtime};
 pub struct TauriEventEmitter<R: Runtime>(pub AppHandle<R>);
 
 impl<R: Runtime> EventEmitter for TauriEventEmitter<R> {
-    fn emit(&self, event: &str, payload: serde_json::Value) -> Result<(), String> {
-        Emitter::emit(&self.0, event, &payload).map_err(|error| error.to_string())
+    fn emit(&self, event: &str, payload: serde_json::Value) -> Result<(), EventError> {
+        Emitter::emit(&self.0, event, &payload)
+            .map_err(|error| EventError::new(event, error.to_string()))
     }
 }
 
@@ -40,7 +41,7 @@ impl MockEventEmitter {
 
 #[cfg(test)]
 impl EventEmitter for MockEventEmitter {
-    fn emit(&self, event: &str, payload: serde_json::Value) -> Result<(), String> {
+    fn emit(&self, event: &str, payload: serde_json::Value) -> Result<(), EventError> {
         let mut guard = self.emitted.lock().expect("emitted lock poisoned");
         guard.push((event.to_string(), payload));
         Ok(())

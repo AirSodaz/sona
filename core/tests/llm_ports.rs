@@ -3,7 +3,7 @@ use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
 use sona_core::llm::provider_protocol::{LlmModelSummary, StandardLlmResponse};
 use sona_core::llm::requests::{LlmConfig, LlmGenerateRequest, LlmModelsRequest};
 use sona_core::llm::tasks::LlmProviderStrategy;
-use sona_core::ports::llm::{LlmModelLister, LlmTextGenerator};
+use sona_core::ports::llm::{LlmModelLister, LlmPortError, LlmTextGenerator};
 
 fn sample_config() -> LlmConfig {
     LlmConfig {
@@ -28,7 +28,7 @@ impl LlmTextGenerator for EchoLlmAdapter {
     async fn generate_text(
         &self,
         request: LlmGenerateRequest,
-    ) -> Result<StandardLlmResponse, String> {
+    ) -> Result<StandardLlmResponse, LlmPortError> {
         Ok(StandardLlmResponse {
             text: request.input,
             usage: None,
@@ -38,7 +38,10 @@ impl LlmTextGenerator for EchoLlmAdapter {
 
 #[async_trait]
 impl LlmModelLister for EchoLlmAdapter {
-    async fn list_models(&self, request: LlmModelsRequest) -> Result<Vec<LlmModelSummary>, String> {
+    async fn list_models(
+        &self,
+        request: LlmModelsRequest,
+    ) -> Result<Vec<LlmModelSummary>, LlmPortError> {
         Ok(vec![LlmModelSummary {
             model: format!("{}:default", request.provider.as_str()),
             context_window: None,

@@ -93,7 +93,7 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
             config,
             crate::desktop_paths::models_dir_status,
         )
-        .map_err(CliError::Validation)?;
+        .map_err(crate::map_runtime_fs_error)?;
     let export_format = plan.export_format;
     let output_target = plan.output_target.clone();
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -103,19 +103,20 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
     let transcriber = crate::asr_adapter::local_batch_transcriber();
     let segments = runtime
         .block_on(transcriber.transcribe(plan))
-        .map_err(CliError::Other)?;
+        .map_err(|error| CliError::Other(error.to_string()))?;
 
     let output = sona_core::export::export_segments_with_mode(
         &segments,
         export_format,
         sona_core::export::ExportMode::Original,
     )
-    .map_err(CliError::Serialize)?;
+    .map_err(|error| CliError::Serialize(error.to_string()))?;
 
     match output_target {
         OutputTarget::Stdout => Ok(CliOutput::stdout(output)),
         OutputTarget::File(path) => {
-            sona_runtime_fs::write_transcript_output_file(&path, &output).map_err(CliError::Io)?;
+            sona_runtime_fs::write_transcript_output_file(&path, &output)
+                .map_err(|error| CliError::Io(error.to_string()))?;
             Ok(CliOutput::stderr(format!(
                 "Wrote transcript to {}",
                 path.display()
@@ -130,5 +131,5 @@ fn load_config(path: Option<&PathBuf>) -> CliResult<Option<TranscribeConfigSecti
     };
     sona_runtime_fs::load_transcribe_config_file(path)
         .map(Some)
-        .map_err(CliError::Validation)
+        .map_err(|error| CliError::Validation(error.to_string()))
 }

@@ -157,6 +157,7 @@ export const TauriCommand = {
   },
   sync: {
     getStatus: 'sync_get_status',
+    testProvider: 'sync_test_provider',
     testWebDavProvider: 'sync_test_webdav_provider',
     listLegacyBackups: 'sync_list_legacy_backups',
     prepareLegacyBackupImport: 'sync_prepare_legacy_backup_import',

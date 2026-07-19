@@ -23,7 +23,7 @@ impl LazySqliteStorageUsageRepository {
 impl StorageUsageRepository for LazySqliteStorageUsageRepository {
     fn collect_measurements(&self) -> Result<StorageUsageMeasurements, StorageUsageError> {
         let database = Database::open_read_only_with_analytics(&self.app_local_data_dir)
-            .map_err(|error| StorageUsageError::Repository(error.to_string()))?;
+            .map_err(|error| StorageUsageError::Database(error.to_string()))?;
         SqliteStorageUsageRepository::new(self.app_local_data_dir.clone(), Arc::new(database))
             .collect_measurements()
     }

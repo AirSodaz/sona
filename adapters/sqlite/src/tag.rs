@@ -14,8 +14,9 @@ use sona_core::tag::{
 };
 use std::sync::Arc;
 
+use crate::legacy_change_time;
 use crate::sync_repository::{
-    record_local_delete_in_transaction, record_local_field_change_in_transaction, sync_now_ms,
+    record_local_delete_in_transaction, record_local_field_change_in_transaction,
 };
 
 #[derive(Clone)]
@@ -400,7 +401,7 @@ where
                         tx,
                         SyncEntityKind::Tag,
                         tag_id,
-                        sync_now_ms(),
+                        legacy_change_time::now_ms(),
                     )?;
                     Ok(())
                 })
@@ -417,7 +418,7 @@ where
                         .map(|tag| tag.id)
                         .collect::<Vec<_>>();
                     replace_tags_in_transaction(tx, &tags)?;
-                    let now_ms = sync_now_ms();
+                    let now_ms = legacy_change_time::now_ms();
                     for existing_id in existing_ids
                         .iter()
                         .filter(|existing_id| !tags.iter().any(|tag| tag.id == **existing_id))
@@ -449,7 +450,7 @@ where
                     }
                     drop(stmt);
                     let tags = Self::list_tags(tx)?;
-                    let now_ms = sync_now_ms();
+                    let now_ms = legacy_change_time::now_ms();
                     for tag in &tags {
                         record_local_field_change_in_transaction(
                             tx,

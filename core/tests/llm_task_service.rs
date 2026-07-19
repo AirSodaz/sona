@@ -13,8 +13,9 @@ use sona_core::llm::runtime::{
     LlmCompletionRequest, LlmPromptCachePolicy, LlmResponseFormat, LlmRuntimeError, LlmStreamDelta,
 };
 use sona_core::llm::tasks::{
-    LlmProviderStrategy, LlmSegmentInput, LlmTaskBudget, LlmTaskEvent, LlmTaskObserver,
-    LlmTaskService, SummarySegmentInput, SummaryTemplateConfig, llm_task_retry_delay,
+    LlmProviderStrategy, LlmSegmentInput, LlmTaskBudget, LlmTaskError, LlmTaskEvent,
+    LlmTaskObserver, LlmTaskObserverError, LlmTaskService, SummarySegmentInput,
+    SummaryTemplateConfig, llm_task_retry_delay, parse_polish_chunk,
     plan_segment_chunks_with_budget, resolve_task_budget,
 };
 use sona_core::ports::llm::{
@@ -176,9 +177,19 @@ impl LlmTaskDelayPort for FakeRuntime {
 struct RecordingObserver(Mutex<Vec<LlmTaskEvent>>);
 
 impl LlmTaskObserver for RecordingObserver {
-    fn on_event(&self, event: LlmTaskEvent) -> Result<(), String> {
+    fn on_event(&self, event: LlmTaskEvent) -> Result<(), LlmTaskObserverError> {
         self.0.lock().unwrap().push(event);
         Ok(())
+    }
+}
+
+struct FailingObserver;
+
+impl LlmTaskObserver for FailingObserver {
+    fn on_event(&self, _event: LlmTaskEvent) -> Result<(), LlmTaskObserverError> {
+        Err(LlmTaskObserverError {
+            reason: "observer unavailable".to_string(),
+        })
     }
 }
 
@@ -262,18 +273,67 @@ fn budgets_and_retry_policy_use_model_limits() {
         id: "large".to_string(),
         text: "x".repeat(1000),
     }];
+    let error = plan_segment_chunks_with_budget(
+        &oversized,
+        None,
+        LlmTaskBudget {
+            prompt_char_budget: 10_000,
+            prompt_token_budget: Some(10_000),
+            max_output_tokens: Some(100),
+        },
+        |items| serde_json::to_string(items).unwrap(),
+    )
+    .unwrap_err();
+    assert!(matches!(error, LlmTaskError::InvalidRequest { .. }));
+    assert_eq!(
+        error.to_string(),
+        "Segment 'large' exceeds the model context or output budget"
+    );
+
+    let invalid_response = parse_polish_chunk(
+        "not-json",
+        &[LlmSegmentInput {
+            id: "s1".to_string(),
+            text: "hello".to_string(),
+        }],
+        2,
+    )
+    .unwrap_err();
+    assert!(matches!(
+        invalid_response,
+        LlmTaskError::InvalidResponse { .. }
+    ));
     assert!(
-        plan_segment_chunks_with_budget(
-            &oversized,
-            None,
-            LlmTaskBudget {
-                prompt_char_budget: 10_000,
-                prompt_token_budget: Some(10_000),
-                max_output_tokens: Some(100),
+        invalid_response
+            .to_string()
+            .contains("polish chunk 2 failed")
+    );
+}
+
+#[tokio::test]
+async fn observer_failure_preserves_reason_and_maps_to_task_error() {
+    let error = LlmTaskService::new(FakeRuntime::new(Vec::new()))
+        .polish(
+            PolishSegmentsRequest {
+                task_id: "observer-failure".to_string(),
+                config: config(),
+                segments: Vec::new(),
+                chunk_size: None,
+                context: None,
+                keywords: None,
             },
-            |items| serde_json::to_string(items).unwrap(),
+            &FailingObserver,
         )
-        .is_err()
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        LlmTaskError::Observer { ref reason } if reason == "observer unavailable"
+    ));
+    assert_eq!(
+        error.to_string(),
+        "LLM task observer failed: observer unavailable"
     );
 }
 

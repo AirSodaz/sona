@@ -32,7 +32,7 @@ class SonaAppContainer(context: Context) {
     private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository.create(appContext)
     private val syncSecretStore = AndroidSyncSecretStore.create(appContext)
     private val syncSecretStoreRegistration = UniffiSyncSecretStoreRegistrar().apply {
-        register(syncSecretStore)
+        register(appDataDir, syncSecretStore)
     }
     private val providerCatalog = UniffiStreamingProviderCatalogAdapter()
     private val microphoneCapture = AndroidMicrophoneCapturePort(

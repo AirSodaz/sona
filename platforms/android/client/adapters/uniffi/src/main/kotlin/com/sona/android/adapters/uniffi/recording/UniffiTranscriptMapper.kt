@@ -24,6 +24,21 @@ internal fun FfiTranscriptUpdate.toApplication(): TranscriptUpdate = TranscriptU
     upsertSegments = upsertSegments.map(FfiTranscriptSegment::toApplication),
 )
 
+internal fun TranscriptSegment.toFfi(): FfiTranscriptSegment = FfiTranscriptSegment(
+    id = id,
+    text = text,
+    start = startSeconds,
+    end = endSeconds,
+    isFinal = isFinal,
+    timing = timing?.toFfi(),
+    tokens = tokens,
+    timestamps = timestamps,
+    durations = durations,
+    translation = translation,
+    speaker = speaker?.toFfi(),
+    speakerAttribution = speakerAttribution?.toFfi(),
+)
+
 internal fun FfiTranscriptSegment.toApplication(): TranscriptSegment = TranscriptSegment(
     id = id,
     text = text,
@@ -51,13 +66,38 @@ private fun FfiTranscriptTiming.toApplication(): TranscriptTiming = TranscriptTi
     units = units.map(FfiTranscriptTimingUnit::toApplication),
 )
 
+private fun TranscriptTiming.toFfi(): FfiTranscriptTiming = FfiTranscriptTiming(
+    level = when (level) {
+        TranscriptTimingLevel.TOKEN -> FfiTranscriptTimingLevel.TOKEN
+        TranscriptTimingLevel.SEGMENT -> FfiTranscriptTimingLevel.SEGMENT
+    },
+    source = when (source) {
+        TranscriptTimingSource.MODEL -> FfiTranscriptTimingSource.MODEL
+        TranscriptTimingSource.DERIVED -> FfiTranscriptTimingSource.DERIVED
+    },
+    units = units.map(TranscriptTimingUnit::toFfi),
+)
+
 private fun FfiTranscriptTimingUnit.toApplication(): TranscriptTimingUnit = TranscriptTimingUnit(
     text = text,
     startSeconds = start,
     endSeconds = end,
 )
 
+private fun TranscriptTimingUnit.toFfi(): FfiTranscriptTimingUnit = FfiTranscriptTimingUnit(
+    text = text,
+    start = startSeconds,
+    end = endSeconds,
+)
+
 private fun FfiSpeakerTag.toApplication(): SpeakerTag = SpeakerTag(
+    id = id,
+    label = label,
+    kind = kind,
+    score = score,
+)
+
+private fun SpeakerTag.toFfi(): FfiSpeakerTag = FfiSpeakerTag(
     id = id,
     label = label,
     kind = kind,
@@ -71,6 +111,13 @@ private fun FfiSpeakerCandidate.toApplication(): SpeakerCandidate = SpeakerCandi
     rank = rank,
 )
 
+private fun SpeakerCandidate.toFfi(): FfiSpeakerCandidate = FfiSpeakerCandidate(
+    profileId = profileId,
+    profileName = profileName,
+    score = score,
+    rank = rank,
+)
+
 private fun FfiSpeakerAttribution.toApplication(): SpeakerAttribution = SpeakerAttribution(
     groupId = groupId,
     anonymousLabel = anonymousLabel,
@@ -78,4 +125,13 @@ private fun FfiSpeakerAttribution.toApplication(): SpeakerAttribution = SpeakerA
     source = source,
     confidence = confidence,
     candidates = candidates.map(FfiSpeakerCandidate::toApplication),
+)
+
+private fun SpeakerAttribution.toFfi(): FfiSpeakerAttribution = FfiSpeakerAttribution(
+    groupId = groupId,
+    anonymousLabel = anonymousLabel,
+    state = state,
+    source = source,
+    confidence = confidence,
+    candidates = candidates.map(SpeakerCandidate::toFfi),
 )

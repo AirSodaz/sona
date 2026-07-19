@@ -496,7 +496,8 @@ async fn load_recognizer(
         false, // enable_itn
         language,
         hotwords.clone(),
-    )?;
+    )
+    .map_err(|error| error.to_string())?;
 
     let gpu_plan = crate::platform::hardware::resolve_gpu_acceleration_plan(
         state.transcription_defaults.gpu_acceleration.as_deref(),
@@ -521,7 +522,8 @@ async fn load_recognizer(
     let recognizer = cell
         .get_or_try_init(|| async {
             let recognizer_result =
-                crate::integrations::asr::create_recognizer_with_gpu_plan(config, 2, gpu_plan)?;
+                crate::integrations::asr::create_recognizer_with_gpu_plan(config, 2, gpu_plan)
+                    .map_err(|error| error.to_string())?;
             if let Some(notice) = recognizer_result.fallback_notice.as_ref() {
                 log::warn!(
                     "[streaming] {} recognizer creation failed, retrying with {}: {}",

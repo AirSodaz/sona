@@ -5,6 +5,9 @@ description = "Pure Rust core domain types and logic for Sona"
 authors.workspace = true
 edition.workspace = true
 
+[package.metadata.sona]
+role = "core"
+
 [features]
 default = []
 specta = ["dep:specta", "dep:specta-typescript"]

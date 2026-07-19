@@ -15,7 +15,7 @@ pub struct HistoryItemGeneratedValues {
 pub fn create_live_draft_item(
     request: HistoryCreateLiveDraftRequest,
     generated: HistoryItemGeneratedValues,
-) -> Result<HistoryItemRecord, String> {
+) -> HistoryItemRecord {
     let id = request.id.unwrap_or(generated.fallback_id);
     let timestamp = generated.timestamp;
     let recording_title = generated.recording_title;
@@ -32,7 +32,7 @@ pub fn create_live_draft_item(
     );
     item.status = HistoryItemStatus::Draft;
     item.draft_source = Some(HistoryDraftSource::LiveRecord);
-    Ok(item)
+    item
 }
 
 pub fn create_recording_item(
@@ -41,7 +41,7 @@ pub fn create_recording_item(
     tag_ids: Vec<String>,
     audio_extension: Option<&str>,
     native_audio_path: Option<&str>,
-) -> Result<HistoryItemRecord, String> {
+) -> HistoryItemRecord {
     let timestamp = generated.timestamp;
     let id = generated.fallback_id;
     let recording_title = generated.recording_title;
@@ -50,7 +50,7 @@ pub fn create_recording_item(
         .or_else(|| native_audio_path.map(|path| extension_from_path(path, "wav")))
         .unwrap_or_else(|| "webm".to_string());
 
-    Ok(build_history_item_record(
+    build_history_item_record(
         id,
         timestamp,
         duration,
@@ -59,7 +59,7 @@ pub fn create_recording_item(
         HistoryItemKind::Recording,
         tag_ids,
         None,
-    ))
+    )
 }
 
 pub struct ImportedFileItem {
@@ -74,7 +74,7 @@ pub fn create_imported_file_item(
     duration: f64,
     tag_ids: Vec<String>,
     generated: HistoryItemGeneratedValues,
-) -> Result<ImportedFileItem, String> {
+) -> ImportedFileItem {
     let timestamp = generated.timestamp;
     let id = id.unwrap_or(generated.fallback_id);
     let title_file_name = file_name_from_path(&source_path, "Imported File");
@@ -90,10 +90,10 @@ pub fn create_imported_file_item(
         tag_ids,
         None,
     );
-    Ok(ImportedFileItem {
+    ImportedFileItem {
         item,
         copy_source_path,
-    })
+    }
 }
 
 fn sanitize_audio_extension(extension: &str, fallback: &str) -> String {

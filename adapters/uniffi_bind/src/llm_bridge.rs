@@ -287,7 +287,9 @@ pub(crate) fn parse_polish_chunk_json(
         &expected,
         u64_to_usize(chunk_number, "chunk number")?,
     )
-    .map_err(|message| SonaCoreBindingError::InvalidInput { reason: message })?
+    .map_err(|error| SonaCoreBindingError::InvalidInput {
+        reason: error.to_string(),
+    })?
     .into_iter()
     .map(mapper::polished_segment_to_ffi)
     .collect())
@@ -305,7 +307,9 @@ pub(crate) fn parse_translate_chunk_json(
         &expected,
         u64_to_usize(chunk_number, "chunk number")?,
     )
-    .map_err(|message| SonaCoreBindingError::InvalidInput { reason: message })?
+    .map_err(|error| SonaCoreBindingError::InvalidInput {
+        reason: error.to_string(),
+    })?
     .into_iter()
     .map(mapper::translated_segment_to_ffi)
     .collect())

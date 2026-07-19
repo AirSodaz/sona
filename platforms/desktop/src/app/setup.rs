@@ -11,9 +11,13 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         app_local_data_dir.clone(),
         Arc::clone(&db),
     );
+    let sqlite_context = Arc::new(sona_sqlite::SqliteApplicationContext::from_database(
+        app_local_data_dir,
+        db,
+    )?);
 
     app.manage(dashboard_service);
-    app.manage(db);
+    app.manage(sqlite_context);
 
     let listener_app_handle = app_handle_for_listener.clone();
     app.listen_any("asr-config-updated", move |_event| {

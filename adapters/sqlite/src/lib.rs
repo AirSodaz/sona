@@ -1,4 +1,5 @@
 pub mod analytics;
+mod application_context;
 pub mod automation;
 pub mod backup_state;
 pub mod backup_state_repository;
@@ -9,6 +10,7 @@ pub mod history_fs_utils;
 pub mod history_mutation_repository;
 pub mod history_query_repository;
 pub mod history_store;
+mod legacy_change_time;
 pub mod legacy_migration;
 pub mod llm_usage;
 pub mod ports;
@@ -20,6 +22,7 @@ pub mod sync_repository;
 pub mod tag;
 pub mod task_ledger;
 
+pub use application_context::SqliteApplicationContext;
 pub use automation::{
     AutomationRepositoryState, SqliteAutomationAdapter, SqliteAutomationRepository,
 };
@@ -30,9 +33,13 @@ pub use dashboard_repository::{
     SqliteDashboardService, create_dashboard_service, load_dashboard_snapshot,
 };
 pub use error::DatabaseError;
-pub use history_mutation_repository::LazySqliteHistoryMutationRepository;
+#[allow(deprecated)]
+pub use history_mutation_repository::{
+    DeferredSqliteHistoryMutationRepository, LazySqliteHistoryMutationRepository,
+};
 pub use history_query_repository::LazySqliteHistoryQueryRepository;
 pub use history_store::SqliteHistoryStore;
+#[allow(deprecated)]
 pub use project::{SqliteProjectAdapter, SqliteProjectRepository};
 pub use storage_usage_repository::{
     LazySqliteStorageUsageRepository, load_storage_usage_snapshot,
@@ -51,7 +58,7 @@ use std::io::Read;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 /// Number of read connections in the pool. With WAL mode, multiple readers can
@@ -62,8 +69,6 @@ const WRITE_POOL_SIZE: usize = 1;
 const POOL_ACQUIRE_TIMEOUT_MS: u64 = 5_000;
 const READ_ONLY_SNAPSHOT_ATTEMPTS: usize = 3;
 const FILE_COMPARE_BUFFER_SIZE: usize = 64 * 1024;
-
-static GLOBAL_DB: OnceLock<Arc<Database>> = OnceLock::new();
 
 #[cfg(test)]
 type WorkspaceMatchTestHook = Box<dyn FnOnce() + Send + 'static>;
@@ -325,7 +330,12 @@ impl std::fmt::Debug for Database {
 
 impl From<DatabaseError> for sona_core::history_store::HistoryStoreError {
     fn from(error: DatabaseError) -> Self {
-        sona_core::history_store::HistoryStoreError::Database(error.to_string())
+        match error {
+            DatabaseError::FileSystem(error) => {
+                sona_core::history_store::HistoryStoreError::FileSystem(error)
+            }
+            error => sona_core::history_store::HistoryStoreError::Database(error.to_string()),
+        }
     }
 }
 
@@ -336,6 +346,7 @@ impl From<DatabaseError> for sona_core::history::mutation_repository::HistoryMut
         match error {
             DatabaseError::NotFoundError(reason) => HistoryMutationError::NotFound(reason),
             DatabaseError::SerializationError(error) => HistoryMutationError::Serialization(error),
+            DatabaseError::FileSystem(error) => HistoryMutationError::FileSystem(error),
             DatabaseError::Internal(reason) => HistoryMutationError::Internal(reason),
             error => HistoryMutationError::Database(error.to_string()),
         }
@@ -343,26 +354,6 @@ impl From<DatabaseError> for sona_core::history::mutation_repository::HistoryMut
 }
 
 impl Database {
-    pub fn global_arc() -> Result<Arc<Database>, DatabaseError> {
-        GLOBAL_DB
-            .get()
-            .map(Arc::clone)
-            .ok_or_else(|| DatabaseError::Internal("Database not initialized".to_string()))
-    }
-
-    pub fn global() -> Result<&'static Database, DatabaseError> {
-        GLOBAL_DB
-            .get()
-            .map(Arc::as_ref)
-            .ok_or_else(|| DatabaseError::Internal("Database not initialized".to_string()))
-    }
-
-    pub fn set_global(db: Arc<Database>) -> Result<(), DatabaseError> {
-        GLOBAL_DB
-            .set(db)
-            .map_err(|_| DatabaseError::Internal("Database already initialized".to_string()))
-    }
-
     /// Opens (or creates) the main database at `{app_local_data_dir}/sona.db`,
     /// enables WAL mode and foreign keys, ATTACHes the analytics database,
     /// creates a pool of connections, and runs pending schema migrations.
@@ -558,7 +549,9 @@ impl Database {
     }
 
     pub fn is_for_app_local_data_dir(&self, app_local_data_dir: &Path) -> bool {
-        self.app_local_data_dir.as_deref() == Some(app_local_data_dir)
+        self.app_local_data_dir
+            .as_deref()
+            .is_some_and(|database_dir| same_directory(database_dir, app_local_data_dir))
     }
 
     fn open_connection(db_path: &Path) -> Result<Connection, DatabaseError> {
@@ -743,6 +736,16 @@ impl Database {
     {
         self.with_transaction_behavior(TransactionBehavior::Immediate, "with_rw_transaction", f)
     }
+}
+
+fn same_directory(left: &Path, right: &Path) -> bool {
+    fn identity(path: &Path) -> PathBuf {
+        path.canonicalize()
+            .or_else(|_| std::path::absolute(path))
+            .unwrap_or_else(|_| path.to_path_buf())
+    }
+
+    identity(left) == identity(right)
 }
 
 /// Times a single query or query batch and logs a warning if it exceeds
@@ -1485,19 +1488,5 @@ mod tests {
             .join()
             .expect("second writer panicked")
             .expect("concurrent writer should wait and then commit");
-    }
-
-    #[test]
-    fn set_global_accepts_shared_database_handle() {
-        let db = Arc::new(Database::open_in_memory().unwrap());
-        let _ = Database::set_global(Arc::clone(&db));
-
-        let global = Database::global().expect("global database should be initialized");
-        global
-            .with_connection(|conn| {
-                conn.execute_batch("SELECT 1")?;
-                Ok(())
-            })
-            .unwrap();
     }
 }

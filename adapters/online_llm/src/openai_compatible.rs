@@ -10,10 +10,10 @@ use sona_core::llm::provider_protocol::{
 use sona_core::llm::runtime::{LlmCompletionRequest, LlmResponseFormat};
 use sona_core::llm::streaming_protocol::{OpenAiChatPayloadConfig, build_openai_chat_payload};
 use sona_core::llm::tasks::LlmProviderStrategy;
-use sona_core::ports::llm::LlmPortError;
+use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
 
 use crate::completion::{
-    LlmAdapter, build_rig_completion_request, completion_input, extract_text_response, port_result,
+    LlmAdapter, build_rig_completion_request, completion_input, extract_text_response,
     token_usage_from_rig_usage,
 };
 use crate::transport::{LlmApiUrl, classify_llm_port_error, post_json_request};
@@ -28,9 +28,7 @@ impl LlmAdapter for OpenAiAdapter {
         request: &LlmCompletionRequest,
     ) -> Result<StandardLlmResponse, LlmPortError> {
         let config = &request.config;
-        let reqwest_client = port_result(LlmApiUrl::parse(&config.base_url))?
-            .client(config.timeout_seconds)
-            .map_err(classify_llm_port_error)?;
+        let reqwest_client = LlmApiUrl::parse(&config.base_url)?.client(config.timeout_seconds)?;
         let client = openai::Client::builder()
             .api_key(&config.api_key)
             .base_url(&config.base_url)
@@ -41,23 +39,20 @@ impl LlmAdapter for OpenAiAdapter {
         if request.effective_reasoning_enabled()
             && strategy_uses_openai_chat_payload(config.strategy)
         {
-            let base_url = port_result(LlmApiUrl::parse(&config.base_url))?;
-            let url = port_result(
-                base_url.join(config.api_path.as_deref().unwrap_or("/v1/chat/completions")),
-            )?;
+            let base_url = LlmApiUrl::parse(&config.base_url)?;
+            let url =
+                base_url.join(config.api_path.as_deref().unwrap_or("/v1/chat/completions"))?;
             return generate_with_openai_chat_api(&url, request, vec![]).await;
         }
 
-        let response = port_result(build_rig_completion_request(
-            client.completion_model(&config.model),
-            request,
-        ))?
-        .send()
-        .await
-        .map_err(|error| classify_llm_port_error(error.to_string()))?;
+        let response =
+            build_rig_completion_request(client.completion_model(&config.model), request)?
+                .send()
+                .await
+                .map_err(|error| classify_llm_port_error(error.to_string()))?;
 
         Ok(StandardLlmResponse {
-            text: port_result(extract_text_response(&response.choice))?,
+            text: extract_text_response(&response.choice)?,
             usage: token_usage_from_rig_usage(Some(response.usage)),
         })
     }
@@ -74,9 +69,7 @@ impl LlmAdapter for AzureAdapter {
     ) -> Result<StandardLlmResponse, LlmPortError> {
         let config = &request.config;
         let api_version = config.api_version.as_deref().unwrap_or("2024-10-21");
-        let reqwest_client = port_result(LlmApiUrl::parse(&config.base_url))?
-            .client(config.timeout_seconds)
-            .map_err(classify_llm_port_error)?;
+        let reqwest_client = LlmApiUrl::parse(&config.base_url)?.client(config.timeout_seconds)?;
         let client = azure::Client::builder()
             .api_key(azure::AzureOpenAIAuth::ApiKey(config.api_key.clone()))
             .azure_endpoint(config.base_url.clone())
@@ -85,16 +78,14 @@ impl LlmAdapter for AzureAdapter {
             .build()
             .map_err(|error| classify_llm_port_error(error.to_string()))?;
 
-        let response = port_result(build_rig_completion_request(
-            client.completion_model(&config.model),
-            request,
-        ))?
-        .send()
-        .await
-        .map_err(|error| classify_llm_port_error(error.to_string()))?;
+        let response =
+            build_rig_completion_request(client.completion_model(&config.model), request)?
+                .send()
+                .await
+                .map_err(|error| classify_llm_port_error(error.to_string()))?;
 
         Ok(StandardLlmResponse {
-            text: port_result(extract_text_response(&response.choice))?,
+            text: extract_text_response(&response.choice)?,
             usage: token_usage_from_rig_usage(Some(response.usage)),
         })
     }
@@ -110,9 +101,7 @@ impl LlmAdapter for CopilotAdapter {
         request: &LlmCompletionRequest,
     ) -> Result<StandardLlmResponse, LlmPortError> {
         let config = &request.config;
-        let reqwest_client = port_result(LlmApiUrl::parse(&config.base_url))?
-            .client(config.timeout_seconds)
-            .map_err(classify_llm_port_error)?;
+        let reqwest_client = LlmApiUrl::parse(&config.base_url)?.client(config.timeout_seconds)?;
         let client = copilot::Client::builder()
             .api_key(&config.api_key)
             .base_url(&config.base_url)
@@ -120,16 +109,14 @@ impl LlmAdapter for CopilotAdapter {
             .build()
             .map_err(|error| classify_llm_port_error(error.to_string()))?;
 
-        let response = port_result(build_rig_completion_request(
-            client.completion_model(&config.model),
-            request,
-        ))?
-        .send()
-        .await
-        .map_err(|error| classify_llm_port_error(error.to_string()))?;
+        let response =
+            build_rig_completion_request(client.completion_model(&config.model), request)?
+                .send()
+                .await
+                .map_err(|error| classify_llm_port_error(error.to_string()))?;
 
         Ok(StandardLlmResponse {
-            text: port_result(extract_text_response(&response.choice))?,
+            text: extract_text_response(&response.choice)?,
             usage: token_usage_from_rig_usage(Some(response.usage)),
         })
     }
@@ -145,9 +132,7 @@ impl LlmAdapter for PerplexityAdapter {
         request: &LlmCompletionRequest,
     ) -> Result<StandardLlmResponse, LlmPortError> {
         let config = &request.config;
-        let reqwest_client = port_result(LlmApiUrl::parse(&config.base_url))?
-            .client(config.timeout_seconds)
-            .map_err(classify_llm_port_error)?;
+        let reqwest_client = LlmApiUrl::parse(&config.base_url)?.client(config.timeout_seconds)?;
         let client = perplexity::Client::builder()
             .api_key(&config.api_key)
             .base_url(&config.base_url)
@@ -155,16 +140,14 @@ impl LlmAdapter for PerplexityAdapter {
             .build()
             .map_err(|error| classify_llm_port_error(error.to_string()))?;
 
-        let response = port_result(build_rig_completion_request(
-            client.completion_model(&config.model),
-            request,
-        ))?
-        .send()
-        .await
-        .map_err(|error| classify_llm_port_error(error.to_string()))?;
+        let response =
+            build_rig_completion_request(client.completion_model(&config.model), request)?
+                .send()
+                .await
+                .map_err(|error| classify_llm_port_error(error.to_string()))?;
 
         Ok(StandardLlmResponse {
-            text: port_result(extract_text_response(&response.choice))?,
+            text: extract_text_response(&response.choice)?,
             usage: token_usage_from_rig_usage(Some(response.usage)),
         })
     }
@@ -182,15 +165,15 @@ pub async fn generate_with_openai_chat_api(
     }
     headers.extend(extra_headers);
 
-    let payload = port_result(build_openai_chat_payload_for_request(
+    let payload = build_openai_chat_payload_for_request(
         request,
         false,
         config.strategy == LlmProviderStrategy::AzureOpenAi,
-    ))?;
+    )?;
 
     let response = post_json_request(url, headers, payload, config.timeout_seconds).await?;
     Ok(StandardLlmResponse {
-        text: port_result(extract_text_from_json_response(&response))?,
+        text: extract_text_from_json_response(&response)?,
         usage: extract_usage_from_json_response(&response),
     })
 }
@@ -199,7 +182,7 @@ pub fn build_openai_chat_payload_for_request(
     request: &LlmCompletionRequest,
     stream: bool,
     azure: bool,
-) -> Result<Value, String> {
+) -> Result<Value, LlmPortError> {
     let strategy = if azure {
         LlmProviderStrategy::AzureOpenAi
     } else {
@@ -242,7 +225,10 @@ pub fn build_openai_chat_payload_for_request(
         }
         LlmResponseFormat::JsonSchema { name, schema } => {
             if !schema.is_object() && !schema.is_boolean() {
-                return Err("JSON Schema must be an object or boolean".to_string());
+                return Err(LlmPortError::new(
+                    LlmPortErrorKind::InvalidRequest,
+                    "JSON Schema must be an object or boolean",
+                ));
             }
             payload["response_format"] = json!({
                 "type": "json_schema",
@@ -262,8 +248,7 @@ pub async fn generate_with_openai_custom_path(
     request: &LlmCompletionRequest,
 ) -> Result<StandardLlmResponse, LlmPortError> {
     let config = &request.config;
-    let base_url = port_result(LlmApiUrl::parse(&config.base_url))?;
-    let url =
-        port_result(base_url.join(config.api_path.as_deref().unwrap_or("/v1/chat/completions")))?;
+    let base_url = LlmApiUrl::parse(&config.base_url)?;
+    let url = base_url.join(config.api_path.as_deref().unwrap_or("/v1/chat/completions"))?;
     generate_with_openai_chat_api(&url, request, vec![]).await
 }

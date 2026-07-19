@@ -194,7 +194,7 @@ pub fn plan_segment_chunks_with_budget<BuildPrompt>(
     chunk_size: Option<usize>,
     budget: LlmTaskBudget,
     mut build_prompt: BuildPrompt,
-) -> Result<Vec<super::PlannedSegmentChunk>, String>
+) -> Result<Vec<super::PlannedSegmentChunk>, super::LlmTaskError>
 where
     BuildPrompt: FnMut(&[super::LlmSegmentInput]) -> String,
 {
@@ -228,10 +228,12 @@ where
         }
 
         let Some((end, prompt)) = accepted else {
-            return Err(format!(
-                "Segment '{}' exceeds the model context or output budget",
-                segments[start].id
-            ));
+            return Err(super::LlmTaskError::InvalidRequest {
+                reason: format!(
+                    "Segment '{}' exceeds the model context or output budget",
+                    segments[start].id
+                ),
+            });
         };
         chunks.push(super::PlannedSegmentChunk { start, end, prompt });
         start = end;

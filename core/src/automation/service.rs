@@ -10,13 +10,15 @@ use super::{
 };
 use serde_json::Value;
 
+use crate::ports::fs::FileSystemError;
+
 pub trait AutomationIdGenerator: Send + Sync {
     fn generate_id(&self) -> String;
 }
 
 pub trait AutomationFileSystem: Send + Sync {
-    fn path_exists(&self, path: &str) -> bool;
-    fn create_dir_all(&self, path: &str) -> bool;
+    fn path_exists(&self, path: &str) -> Result<bool, FileSystemError>;
+    fn create_dir_all(&self, path: &str) -> Result<(), FileSystemError>;
 }
 
 pub struct AutomationRepositoryService<'a> {
@@ -84,26 +86,32 @@ impl<'a> AutomationValidationService<'a> {
         rule: &AutomationRule,
         global_config: &Value,
         tags: &[Value],
-    ) -> AutomationRuleValidationResult {
+    ) -> Result<AutomationRuleValidationResult, AutomationError> {
         let safe_preconditions = has_safe_path_preconditions(rule, tags);
         let watch_directory = rule.watch_directory.trim();
-        let watch_directory_exists = safe_preconditions && self.fs.path_exists(watch_directory);
+        let watch_directory_exists = if safe_preconditions {
+            self.fs.path_exists(watch_directory)?
+        } else {
+            false
+        };
         let export_directory_ready =
             if should_prepare_export_directory(rule, tags, watch_directory_exists) {
                 let directory = rule.export_config.directory.trim();
-                self.fs.create_dir_all(directory)
+                self.fs.create_dir_all(directory)?;
+                true
             } else {
                 false
             };
         let batch_model_path_exists = if safe_preconditions && watch_directory_exists {
-            resolve_batch_model_path(global_config)
-                .map(|path| self.fs.path_exists(&path))
-                .unwrap_or(false)
+            match resolve_batch_model_path(global_config) {
+                Some(path) => self.fs.path_exists(&path)?,
+                None => false,
+            }
         } else {
             false
         };
 
-        validate_rule_activation(
+        Ok(validate_rule_activation(
             rule,
             global_config,
             tags,
@@ -112,7 +120,7 @@ impl<'a> AutomationValidationService<'a> {
                 export_directory_ready,
                 batch_model_path_exists,
             },
-        )
+        ))
     }
 }
 

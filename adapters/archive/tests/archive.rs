@@ -1,5 +1,7 @@
 use std::fs;
 
+use sona_archive::ArchiveOperation;
+
 #[test]
 fn creates_and_extracts_tar_bz2_archive() {
     let temp = tempfile::tempdir().unwrap();
@@ -33,13 +35,35 @@ fn creates_and_extracts_tar_bz2_archive() {
 #[test]
 fn rejects_missing_source_directory() {
     let temp = tempfile::tempdir().unwrap();
+    let missing_source = temp.path().join("missing");
     let archive_path = temp.path().join("archive.tar.bz2");
 
     let error = sona_archive::create_tar_bz2(
-        temp.path().join("missing").to_str().unwrap(),
+        missing_source.to_str().unwrap(),
         archive_path.to_str().unwrap(),
     )
     .unwrap_err();
 
-    assert!(error.contains("Source directory does not exist"));
+    assert_eq!(error.operation, ArchiveOperation::InspectSource);
+    assert_eq!(error.source, missing_source);
+    assert_eq!(error.target.as_deref(), Some(archive_path.as_path()));
+    assert!(error.reason.contains("Source directory does not exist"));
+}
+
+#[test]
+fn extraction_errors_preserve_archive_and_target_paths() {
+    let temp = tempfile::tempdir().unwrap();
+    let archive_path = temp.path().join("missing.tar.bz2");
+    let target_dir = temp.path().join("extract");
+
+    let error = sona_archive::extract_tar_bz2(
+        archive_path.to_str().unwrap(),
+        target_dir.to_str().unwrap(),
+        |_| {},
+    )
+    .unwrap_err();
+
+    assert_eq!(error.operation, ArchiveOperation::OpenArchive);
+    assert_eq!(error.source, archive_path);
+    assert_eq!(error.target.as_deref(), Some(target_dir.as_path()));
 }

@@ -10,6 +10,7 @@ use sona_core::history::{
     HistorySaveRecordingRequest, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
 };
 use sona_core::history_store::HistoryStore;
+use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::{Database, SqliteHistoryStore};
 
 struct HistoryFixture {
@@ -19,7 +20,12 @@ struct HistoryFixture {
 
 fn create_history_fixture(app_data_dir: &Path) -> HistoryFixture {
     let db = Arc::new(Database::open(app_data_dir).unwrap());
-    let store = SqliteHistoryStore::new(app_data_dir.to_path_buf(), db);
+    let store = SqliteHistoryStore::with_environment(
+        app_data_dir.to_path_buf(),
+        db,
+        Arc::new(SystemClock),
+        Arc::new(UuidGenerator),
+    );
     store.ensure_ready().unwrap();
     let segments: Vec<sona_core::transcription::transcript::TranscriptSegment> =
         serde_json::from_value(json!([{

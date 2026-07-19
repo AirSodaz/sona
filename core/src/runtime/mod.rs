@@ -1,6 +1,7 @@
 pub mod config;
 pub mod diagnostics;
 pub mod environment;
+pub mod error;
 pub mod file_utils;
 pub mod gpu;
 pub mod media_detector;

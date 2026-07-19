@@ -2738,3 +2738,250 @@ export type WebviewCacheUsageCategory_Serialize = {
 	clearSupported: boolean,
 	path?: string | null,
 };
+
+export type RustTauriCommandContractMap = {
+	"project_list": {
+		args: { fallbackEnabledPolishKeywordSetIds?: string[] | null; fallbackEnabledSpeakerProfileIds?: string[] | null };
+		result: ProjectRecord_Serialize[];
+	};
+	"project_save_all": {
+		args: { projects: ProjectRecord_Deserialize[] };
+		result: void;
+	};
+	"project_create": {
+		args: { name: string; description?: string | null; icon?: string | null; defaults: ProjectDefaultsInput };
+		result: ProjectRecord_Serialize;
+	};
+	"project_update": {
+		args: { projectId: string; updates: ProjectUpdateInput };
+		result: ProjectRecord_Serialize | null;
+	};
+	"project_delete": {
+		args: { projectId: string };
+		result: void;
+	};
+	"project_reorder": {
+		args: { projectIds: string[] };
+		result: ProjectRecord_Serialize[];
+	};
+	"project_get_active_id": {
+		args: undefined;
+		result: string | null;
+	};
+	"project_set_active_id": {
+		args: { projectId: string | null };
+		result: void;
+	};
+	"tag_list": {
+		args: { fallbackEnabledPolishKeywordSetIds?: string[] | null; fallbackEnabledSpeakerProfileIds?: string[] | null };
+		result: TagRecord_Serialize[];
+	};
+	"tag_save_all": {
+		args: { tags: TagRecord_Deserialize[] };
+		result: void;
+	};
+	"tag_create": {
+		args: { name: string; description?: string | null; icon?: string | null; color?: string | null; defaults: TagDefaultsInput };
+		result: TagRecord_Serialize;
+	};
+	"tag_update": {
+		args: { tagId: string; updates: TagUpdateInput };
+		result: TagRecord_Serialize | null;
+	};
+	"tag_delete": {
+		args: { tagId: string };
+		result: void;
+	};
+	"tag_reorder": {
+		args: { tagIds: string[] };
+		result: TagRecord_Serialize[];
+	};
+	"tag_get_active_id": {
+		args: undefined;
+		result: string | null;
+	};
+	"tag_set_active_id": {
+		args: { tagId: string | null };
+		result: void;
+	};
+	"task_ledger_load_snapshot": {
+		args: undefined;
+		result: TaskLedgerSnapshot_Serialize;
+	};
+	"task_ledger_upsert_task": {
+		args: { record: TaskLedgerRecord_Deserialize };
+		result: TaskLedgerSnapshot_Serialize;
+	};
+	"task_ledger_patch_task": {
+		args: { id: string; patch: TaskLedgerPatch_Deserialize };
+		result: TaskLedgerSnapshot_Serialize;
+	};
+	"task_ledger_remove_task": {
+		args: { id: string };
+		result: TaskLedgerSnapshot_Serialize;
+	};
+	"task_ledger_clear_resolved": {
+		args: undefined;
+		result: TaskLedgerSnapshot_Serialize;
+	};
+	"recovery_load_snapshot": {
+		args: undefined;
+		result: RecoverySnapshot_Serialize;
+	};
+	"recovery_save_snapshot": {
+		args: { items: RecoveryItemInput_Deserialize[] };
+		result: RecoverySnapshot_Serialize;
+	};
+	"recovery_persist_queue_snapshot": {
+		args: { queueItems: RecoveryItemInput_Deserialize[]; resolvedIds?: string[] | null };
+		result: void;
+	};
+	"automation_load_repository_state": {
+		args: undefined;
+		result: AutomationRepositoryState_Serialize;
+	};
+	"automation_persist_rules": {
+		args: { rules: AutomationRuleInput_Deserialize[] };
+		result: void;
+	};
+	"automation_persist_processed_entries": {
+		args: { processedEntries: AutomationProcessedInput_Deserialize[] };
+		result: void;
+	};
+	"automation_persist_repository_state": {
+		args: { rules: AutomationRuleInput_Deserialize[]; processedEntries: AutomationProcessedInput_Deserialize[] };
+		result: void;
+	};
+	"automation_validate_rule_activation": {
+		args: { rule: AutomationRule; globalConfig: unknown; tags: unknown[] };
+		result: AutomationRuleValidationResult_Serialize;
+	};
+	"replace_automation_runtime_rules": {
+		args: { rules: AutomationRuntimeRuleConfig[] };
+		result: AutomationRuntimeReplaceResult[];
+	};
+	"scan_automation_runtime_rule": {
+		args: { rule: AutomationRuntimeRuleConfig };
+		result: void;
+	};
+	"collect_automation_runtime_rule_paths": {
+		args: { rule: AutomationRuntimeRuleConfig; filePaths: string[] };
+		result: AutomationRuntimePathCollectionResult[];
+	};
+	"history_list_items": {
+		args: { limit?: number | null; offset?: number | null } | undefined;
+		result: HistoryItemRecord[];
+	};
+	"history_query_workspace": {
+		args: HistoryWorkspaceQueryRequest;
+		result: HistoryWorkspaceQueryResult;
+	};
+	"history_create_live_draft": {
+		args: HistoryCreateLiveDraftRequest;
+		result: LiveRecordingDraftResult;
+	};
+	"history_complete_live_draft": {
+		args: HistoryCompleteLiveDraftRequest_Deserialize;
+		result: HistoryItemRecord;
+	};
+	"history_save_recording": {
+		args: HistorySaveRecordingRequest_Deserialize;
+		result: HistoryItemRecord;
+	};
+	"history_save_imported_file": {
+		args: HistorySaveImportedFileRequest_Deserialize;
+		result: HistoryItemRecord;
+	};
+	"history_delete_items": {
+		args: HistoryDeleteItemsRequest;
+		result: void;
+	};
+	"history_trash_items": {
+		args: HistoryTrashItemsRequest;
+		result: void;
+	};
+	"history_restore_items": {
+		args: HistoryDeleteItemsRequest;
+		result: void;
+	};
+	"history_purge_items": {
+		args: HistoryDeleteItemsRequest;
+		result: void;
+	};
+	"history_load_transcript": {
+		args: { historyId: string };
+		result: TranscriptSegment_Serialize[] | null;
+	};
+	"history_update_transcript": {
+		args: HistoryUpdateTranscriptRequest_Deserialize;
+		result: HistoryItemRecord;
+	};
+	"history_create_transcript_snapshot": {
+		args: HistoryCreateTranscriptSnapshotRequest_Deserialize;
+		result: TranscriptSnapshotMetadata;
+	};
+	"history_list_transcript_snapshots": {
+		args: { historyId: string };
+		result: TranscriptSnapshotMetadata[];
+	};
+	"history_load_transcript_snapshot": {
+		args: { historyId: string; snapshotId: string };
+		result: TranscriptSnapshotRecord_Serialize | null;
+	};
+	"history_build_transcript_diff": {
+		args: { snapshotSegments: TranscriptSegment_Deserialize[]; currentSegments: TranscriptSegment_Deserialize[] };
+		result: TranscriptDiffResult_Serialize;
+	};
+	"history_restore_transcript_diff_rows": {
+		args: { rows: TranscriptDiffRow_Deserialize[]; selectedRowIds: string[] };
+		result: TranscriptSegment_Serialize[];
+	};
+	"history_update_item_meta": {
+		args: HistoryUpdateItemMetaRequest_Deserialize;
+		result: void;
+	};
+	"history_update_project_assignments": {
+		args: { ids: string[]; projectId: string | null };
+		result: void;
+	};
+	"history_reassign_project": {
+		args: { currentProjectId: string; nextProjectId: string | null };
+		result: void;
+	};
+	"history_update_tag_assignments": {
+		args: HistoryUpdateTagAssignmentsRequest;
+		result: void;
+	};
+	"history_replace_tag_assignments": {
+		args: HistoryReplaceTagAssignmentsRequest;
+		result: void;
+	};
+	"history_load_summary": {
+		args: { historyId: string };
+		result: HistorySummaryPayload_Serialize | null;
+	};
+	"history_save_summary": {
+		args: { historyId: string; summaryPayload: HistorySummaryPayload_Deserialize };
+		result: void;
+	};
+	"history_delete_summary": {
+		args: { historyId: string };
+		result: void;
+	};
+	"history_resolve_audio_path": {
+		args: { historyId: string };
+		result: string | null;
+	};
+	"history_preview_audio_cleanup": {
+		args: HistoryAudioCleanupRequest_Deserialize;
+		result: HistoryAudioCleanupReport;
+	};
+	"history_cleanup_audio": {
+		args: HistoryAudioCleanupRequest_Deserialize;
+		result: HistoryAudioCleanupReport;
+	};
+	"history_open_folder": {
+		args: undefined;
+		result: void;
+	};
+};

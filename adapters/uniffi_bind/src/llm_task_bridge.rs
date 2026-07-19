@@ -6,7 +6,8 @@ use sona_core::llm::requests::{
 };
 use sona_core::llm::runtime::LlmRuntimeError;
 use sona_core::llm::tasks::{
-    LlmTaskError, LlmTaskEvent, LlmTaskObserver, LlmTaskResult, LlmTaskService,
+    LlmTaskError, LlmTaskEvent, LlmTaskObserver, LlmTaskObserverError, LlmTaskResult,
+    LlmTaskService,
 };
 use sona_core::ports::llm::LlmTaskRuntimePort;
 use sona_online_llm::OnlineLlmAdapter;
@@ -38,27 +39,37 @@ impl FfiLlmTaskObserverAdapter {
         Self { task_id, observer }
     }
 
-    fn notify(&self, callback: impl FnOnce(&dyn FfiLlmTaskObserver)) -> Result<(), String> {
-        catch_unwind(AssertUnwindSafe(|| callback(self.observer.as_ref())))
-            .map_err(|_| "LLM task observer callback panicked".to_string())
+    fn notify(
+        &self,
+        callback: impl FnOnce(&dyn FfiLlmTaskObserver),
+    ) -> Result<(), LlmTaskObserverError> {
+        catch_unwind(AssertUnwindSafe(|| callback(self.observer.as_ref()))).map_err(|_| {
+            LlmTaskObserverError {
+                reason: "LLM task observer callback panicked".to_string(),
+            }
+        })
     }
 }
 
 impl LlmTaskObserver for FfiLlmTaskObserverAdapter {
-    fn on_event(&self, event: LlmTaskEvent) -> Result<(), String> {
+    fn on_event(&self, event: LlmTaskEvent) -> Result<(), LlmTaskObserverError> {
         match event {
             LlmTaskEvent::Progress(payload) => {
                 let event = llm_task_progress_to_ffi(payload);
                 self.notify(move |observer| observer.on_progress(event))
             }
             LlmTaskEvent::PolishChunk(payload) => {
-                let event = llm_task_items_chunk_to_ffi(payload)
-                    .map_err(|error| format!("Failed to serialize polish chunk: {error}"))?;
+                let event =
+                    llm_task_items_chunk_to_ffi(payload).map_err(|error| LlmTaskObserverError {
+                        reason: format!("Failed to serialize polish chunk: {error}"),
+                    })?;
                 self.notify(move |observer| observer.on_chunk(event))
             }
             LlmTaskEvent::TranslateChunk(payload) => {
-                let event = llm_task_items_chunk_to_ffi(payload)
-                    .map_err(|error| format!("Failed to serialize translation chunk: {error}"))?;
+                let event =
+                    llm_task_items_chunk_to_ffi(payload).map_err(|error| LlmTaskObserverError {
+                        reason: format!("Failed to serialize translation chunk: {error}"),
+                    })?;
                 self.notify(move |observer| observer.on_chunk(event))
             }
             LlmTaskEvent::SummaryChunk(payload) => {
@@ -70,8 +81,12 @@ impl LlmTaskObserver for FfiLlmTaskObserverAdapter {
                 self.notify(move |observer| observer.on_text(event))
             }
             LlmTaskEvent::Completed(result) => {
-                let event = llm_task_result_to_ffi(self.task_id.clone(), result)
-                    .map_err(|error| format!("Failed to serialize LLM task result: {error}"))?;
+                let event =
+                    llm_task_result_to_ffi(self.task_id.clone(), result).map_err(|error| {
+                        LlmTaskObserverError {
+                            reason: format!("Failed to serialize LLM task result: {error}"),
+                        }
+                    })?;
                 self.notify(move |observer| observer.on_final(event))
             }
         }

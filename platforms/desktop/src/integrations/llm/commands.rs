@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use serde::Serialize;
 use sona_core::llm::runtime::LlmRuntimeService;
 use sona_core::llm::runtime::LlmStreamDelta;
-use sona_core::llm::tasks::{LlmTaskEvent, LlmTaskObserver, LlmTaskService};
+use sona_core::llm::tasks::{LlmTaskEvent, LlmTaskObserver, LlmTaskObserverError, LlmTaskService};
 use sona_core::ports::llm::{
     LlmCompletionPort, LlmModelMetadataPort, LlmPortError, LlmStreamingPort, LlmTaskDelayPort,
     LlmTranslationPort, LlmTranslationRequest,
@@ -203,26 +203,29 @@ impl CommandTaskObserver {
 }
 
 impl LlmTaskObserver for CommandTaskObserver {
-    fn on_event(&self, event: LlmTaskEvent) -> Result<(), String> {
-        match event {
-            LlmTaskEvent::Progress(payload) => self.events.emit_progress(payload),
-            LlmTaskEvent::PolishChunk(payload) => {
-                if let Some(callback) = &self.polish_chunk {
-                    let mut callback = callback.lock().map_err(|error| error.to_string())?;
-                    callback(&payload.items)?;
+    fn on_event(&self, event: LlmTaskEvent) -> Result<(), LlmTaskObserverError> {
+        let result = (|| -> Result<(), String> {
+            match event {
+                LlmTaskEvent::Progress(payload) => self.events.emit_progress(payload),
+                LlmTaskEvent::PolishChunk(payload) => {
+                    if let Some(callback) = &self.polish_chunk {
+                        let mut callback = callback.lock().map_err(|error| error.to_string())?;
+                        callback(&payload.items)?;
+                    }
+                    self.events.emit_chunk(payload)
                 }
-                self.events.emit_chunk(payload)
-            }
-            LlmTaskEvent::TranslateChunk(payload) => {
-                if let Some(callback) = &self.translate_chunk {
-                    let mut callback = callback.lock().map_err(|error| error.to_string())?;
-                    callback(&payload.items)?;
+                LlmTaskEvent::TranslateChunk(payload) => {
+                    if let Some(callback) = &self.translate_chunk {
+                        let mut callback = callback.lock().map_err(|error| error.to_string())?;
+                        callback(&payload.items)?;
+                    }
+                    self.events.emit_chunk(payload)
                 }
-                self.events.emit_chunk(payload)
+                LlmTaskEvent::Text(payload) => self.events.emit_text(payload),
+                LlmTaskEvent::SummaryChunk(_) | LlmTaskEvent::Completed(_) => Ok(()),
             }
-            LlmTaskEvent::Text(payload) => self.events.emit_text(payload),
-            LlmTaskEvent::SummaryChunk(_) | LlmTaskEvent::Completed(_) => Ok(()),
-        }
+        })();
+        result.map_err(|reason| LlmTaskObserverError { reason })
     }
 }
 

@@ -1,14 +1,12 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use tauri::{AppHandle, Runtime};
 
 use super::{
     HistoryItemRecord, HistoryItemStatus, SqliteHistoryStore, TranscriptSnapshotMetadata,
-    TranscriptSnapshotReason,
+    TranscriptSnapshotReason, history_store,
 };
 use crate::integrations::asr::TranscriptSegment;
-use crate::platform::paths::PathProvider;
 use sona_core::history::HistorySummaryPayload;
 use sona_core::history::mutation_repository::{
     HistoryCreateTranscriptSnapshotRequest, HistoryMutationError, HistoryUpdateTranscriptRequest,
@@ -16,11 +14,10 @@ use sona_core::history::mutation_repository::{
 use sona_core::history::mutation_service::HistoryMutationService;
 use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
-use sona_sqlite::Database;
+use sona_sqlite::SqliteApplicationContext;
 
 pub(crate) async fn run_llm_db_task<T, F, E>(
-    app_local_data_dir: PathBuf,
-    db: Arc<Database>,
+    context: Arc<SqliteApplicationContext>,
     task: F,
 ) -> Result<T, String>
 where
@@ -29,7 +26,7 @@ where
     E: ToString,
 {
     tauri::async_runtime::spawn_blocking(move || {
-        task(SqliteHistoryStore::new(app_local_data_dir, db)).map_err(|e| e.to_string())
+        task(history_store(&context)).map_err(|e| e.to_string())
     })
     .await
     .map_err(|error| error.to_string())?
@@ -45,11 +42,8 @@ where
     F: FnOnce(SqliteHistoryStore) -> Result<T, E> + Send + 'static,
     E: ToString,
 {
-    let app_local_data_dir = crate::platform::paths::TauriPathProvider::from_app(app)
-        .resolve_path(crate::platform::paths::PathKind::AppLocalData)
-        .map_err(|error| error.to_string())?;
-    let db = crate::platform::database::sqlite_database(app);
-    run_llm_db_task(app_local_data_dir, db, task).await
+    let context = crate::platform::database::sqlite_application_context(app);
+    run_llm_db_task(context, task).await
 }
 
 pub(crate) fn create_llm_transcript_snapshot_record(
@@ -106,6 +100,8 @@ fn history_query_error_to_mutation(error: HistoryStoreError) -> HistoryMutationE
         HistoryStoreError::Database(reason) => HistoryMutationError::Database(reason),
         HistoryStoreError::Internal(reason) => HistoryMutationError::Internal(reason),
         HistoryStoreError::Serialization(error) => HistoryMutationError::Serialization(error),
+        HistoryStoreError::Clock(error) => HistoryMutationError::Clock(error),
+        HistoryStoreError::FileSystem(error) => HistoryMutationError::FileSystem(error),
     }
 }
 
@@ -153,9 +149,11 @@ mod tests {
     fn make_store() -> (tempfile::TempDir, Arc<SqliteHistoryStore>) {
         let root = tempdir().unwrap();
         let db = Database::open_in_memory().unwrap();
-        let store = Arc::new(SqliteHistoryStore::new(
+        let store = Arc::new(SqliteHistoryStore::with_environment(
             root.path().to_path_buf(),
             Arc::new(db),
+            Arc::new(sona_runtime_fs::SystemClock),
+            Arc::new(sona_runtime_fs::UuidGenerator),
         ));
         store.ensure_ready().unwrap();
         (root, store)
@@ -211,9 +209,11 @@ mod tests {
     fn llm_history_helpers_skip_current_jobs_without_writing() {
         let root = tempdir().unwrap();
         let db = Database::open_in_memory().unwrap();
-        let repository = Arc::new(SqliteHistoryStore::new(
+        let repository = Arc::new(SqliteHistoryStore::with_environment(
             root.path().to_path_buf(),
             Arc::new(db),
+            Arc::new(sona_runtime_fs::SystemClock),
+            Arc::new(sona_runtime_fs::UuidGenerator),
         ));
         let mutation_service = HistoryMutationService::new(repository.clone());
 

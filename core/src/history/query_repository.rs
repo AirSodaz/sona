@@ -5,6 +5,9 @@ use crate::history::{
 use crate::transcription::transcript::TranscriptSegment;
 use thiserror::Error;
 
+use crate::ports::fs::FileSystemError;
+use crate::ports::time::ClockError;
+
 #[derive(Debug, Error)]
 pub enum HistoryQueryError {
     #[error("Invalid history query: {0}")]
@@ -15,6 +18,10 @@ pub enum HistoryQueryError {
     Internal(String),
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+    #[error(transparent)]
+    Clock(#[from] ClockError),
+    #[error(transparent)]
+    FileSystem(#[from] FileSystemError),
 }
 
 pub trait HistoryQueryRepository: Send + Sync {

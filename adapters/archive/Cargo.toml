@@ -5,6 +5,9 @@ description = "Archive filesystem adapter for Sona"
 authors.workspace = true
 edition.workspace = true
 
+[package.metadata.sona]
+role = "outbound-adapter"
+
 [dependencies]
 bzip2 = "0.4"
 serde = { version = "1", features = ["derive"] }

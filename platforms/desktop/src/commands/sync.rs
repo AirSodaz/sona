@@ -4,13 +4,14 @@ use sona_core::sync::{
     SyncConflictDetail, SyncConflictResolution, SyncConflictSummary, SyncJoinPreview, SyncPresetV1,
     SyncProviderDescriptor, SyncRunResult, SyncStatusSnapshot,
 };
+use sona_sync::SyncProviderInput;
 use sona_sync_webdav::WebDavObjectStoreConfig;
 
 use crate::platform::history_repository::{PreparedBackupImport, PreparedBackupImportState};
 use crate::platform::sync::{
     DesktopSyncManager, LegacyRemoteBackupListResult, SyncChangePasswordRequest, SyncCreateRequest,
     SyncCreateResult, SyncJoinRequest, SyncPreviewJoinRequest, SyncUnlockRecoveryRequest,
-    SyncUnlockRequest,
+    SyncUnlockRequest, webdav_provider_input,
 };
 
 #[tauri::command]
@@ -22,12 +23,23 @@ pub async fn sync_get_status<R: Runtime>(
 }
 
 #[tauri::command]
+pub async fn sync_test_provider<R: Runtime>(
+    app: AppHandle<R>,
+    manager: State<'_, DesktopSyncManager>,
+    provider: SyncProviderInput,
+) -> Result<SyncProviderDescriptor, String> {
+    manager.test_provider(&app, provider).await
+}
+
+#[tauri::command]
 pub async fn sync_test_webdav_provider<R: Runtime>(
     app: AppHandle<R>,
     manager: State<'_, DesktopSyncManager>,
     config: WebDavObjectStoreConfig,
 ) -> Result<SyncProviderDescriptor, String> {
-    manager.test_webdav_provider(&app, config).await
+    manager
+        .test_provider(&app, webdav_provider_input(config)?)
+        .await
 }
 
 #[tauri::command]

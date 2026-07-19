@@ -1,5 +1,8 @@
 package com.sona.android.adapters.uniffi.recording
 
+import com.sona.android.application.library.RecordingLibraryItem
+import com.sona.android.application.library.RecordingLibraryItemStatus
+import com.sona.android.application.library.RecordingLibraryPage
 import com.sona.android.application.recording.CompleteLiveDraftRequest
 import com.sona.android.application.recording.CreateLiveDraftRequest
 import com.sona.android.application.recording.RecordingDestination
@@ -12,23 +15,35 @@ import com.sona.android.application.recording.TranscriptTiming
 import com.sona.android.application.recording.TranscriptTimingLevel
 import com.sona.android.application.recording.TranscriptTimingSource
 import com.sona.android.application.recording.TranscriptTimingUnit
-import com.sona.android.application.library.RecordingLibraryItem
-import com.sona.android.application.library.RecordingLibraryItemStatus
-import com.sona.android.application.library.RecordingLibraryPage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.double
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
+import uniffi.sona_uniffi_bind.FfiHistoryAudioStatusV1
+import uniffi.sona_uniffi_bind.FfiHistoryCompleteLiveDraftRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryCreateLiveDraftRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryDeleteItemsRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryDraftSourceV1
+import uniffi.sona_uniffi_bind.FfiHistoryItemKindV1
+import uniffi.sona_uniffi_bind.FfiHistoryItemRecordV1
+import uniffi.sona_uniffi_bind.FfiHistoryItemStatusV1
+import uniffi.sona_uniffi_bind.FfiHistoryUpdateTranscriptRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceDateFilterV1
+import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceFilterTypeV1
+import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceItemCountsV1
+import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceQueryRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceQueryResultV1
+import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceScopeV1
+import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceSortOrderV1
+import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceSummaryV1
+import uniffi.sona_uniffi_bind.FfiLiveRecordingDraftResultV1
+import uniffi.sona_uniffi_bind.FfiTranscriptSegment
 
 class UniffiRecordingHistoryAdapterTest {
     @Test
-    fun `maps recording library pages and transcripts across the UniFFI boundary`() = runTest {
+    fun `maps recording library pages and transcripts across the typed UniFFI boundary`() = runTest {
         val bindings = FakeHistoryBindings()
         val adapter = UniffiRecordingHistoryAdapter("C:/app-data", bindings)
 
@@ -54,17 +69,17 @@ class UniffiRecordingHistoryAdapterTest {
             page,
         )
         assertEquals(listOf(fullSegment()), transcript)
-        val request = parseJsonObject(checkNotNull(bindings.queryRequestJson), "query")
-        assertEquals("all", request.getValue("scope").jsonObject.getValue("kind").jsonPrimitive.content)
-        assertEquals("recording", request.getValue("filterType").jsonPrimitive.content)
-        assertEquals("newest", request.getValue("sortOrder").jsonPrimitive.content)
-        assertEquals("20", request.getValue("offset").jsonPrimitive.content)
-        assertEquals("30", request.getValue("limit").jsonPrimitive.content)
+        val request = checkNotNull(bindings.queryRequest)
+        assertEquals(FfiHistoryWorkspaceScopeV1.All, request.scope)
+        assertEquals(FfiHistoryWorkspaceFilterTypeV1.RECORDING, request.filterType)
+        assertEquals(FfiHistoryWorkspaceSortOrderV1.NEWEST, request.sortOrder)
+        assertEquals(20uL, request.offset)
+        assertEquals(30uL, request.limit)
         assertEquals("history-1", bindings.transcriptHistoryId)
     }
 
     @Test
-    fun `maps the history lifecycle across the UniFFI boundary`() = runTest {
+    fun `maps the history lifecycle across the typed UniFFI boundary`() = runTest {
         val bindings = FakeHistoryBindings()
         val adapter = UniffiRecordingHistoryAdapter("C:/app-data", bindings)
         val segment = fullSegment()
@@ -83,76 +98,32 @@ class UniffiRecordingHistoryAdapterTest {
             ),
             draft,
         )
-        val create = parseJsonObject(checkNotNull(bindings.createRequestJson), "create")
-        val checkpoint = parseJsonObject(checkNotNull(bindings.updateRequestJson), "checkpoint")
-        val checkpointSegment = checkpoint.getValue("segments").jsonArray.single().jsonObject
-        val complete = parseJsonObject(checkNotNull(bindings.completeRequestJson), "complete")
-        val delete = parseJsonObject(checkNotNull(bindings.deleteRequestJson), "delete")
-        assertEquals(
-            mapOf(
-                "create" to listOf("C:/app-data", "recording-1", "wav", emptyList<String>(), JsonNull),
-                "checkpoint" to listOf(
-                    "history-1",
-                    "segment-1",
-                    "token",
-                    listOf("he", "llo"),
-                    "\u4f60\u597d",
-                    "speaker-1",
-                    "1",
-                ),
-                "complete" to listOf("history-1", 2.5, 1),
-                "delete" to listOf("history-1"),
-            ),
-            mapOf(
-                "create" to listOf(
-                    bindings.createAppDataDir,
-                    create.getValue("id").jsonPrimitive.content,
-                    create.getValue("audioExtension").jsonPrimitive.content,
-                    create.getValue("tagIds").jsonArray.map { it.jsonPrimitive.content },
-                    create.getValue("icon"),
-                ),
-                "checkpoint" to listOf(
-                    checkpoint.getValue("historyId").jsonPrimitive.content,
-                    checkpointSegment.getValue("id").jsonPrimitive.content,
-                    checkpointSegment.getValue("timing").jsonObject
-                        .getValue("level").jsonPrimitive.content,
-                    checkpointSegment.getValue("tokens").jsonArray.map { it.jsonPrimitive.content },
-                    checkpointSegment.getValue("translation").jsonPrimitive.content,
-                    checkpointSegment.getValue("speaker").jsonObject
-                        .getValue("id").jsonPrimitive.content,
-                    checkpointSegment.getValue("speakerAttribution").jsonObject
-                        .getValue("candidates").jsonArray.single().jsonObject
-                        .getValue("rank").jsonPrimitive.content,
-                ),
-                "complete" to listOf(
-                    summary.historyId,
-                    complete.getValue("duration").jsonPrimitive.double,
-                    complete.getValue("segments").jsonArray.size,
-                ),
-                "delete" to delete.getValue("ids").jsonArray.map { it.jsonPrimitive.content },
-            ),
-        )
+        val create = checkNotNull(bindings.createRequest)
+        val checkpoint = checkNotNull(bindings.updateRequest)
+        val complete = checkNotNull(bindings.completeRequest)
+        val delete = checkNotNull(bindings.deleteRequest)
+        assertEquals("C:/app-data", bindings.createAppDataDir)
+        assertEquals("recording-1", create.id)
+        assertEquals("wav", create.audioExtension)
+        assertEquals(emptyList<String>(), create.tagIds)
+        assertNull(create.icon)
+        assertEquals("history-1", checkpoint.historyId)
+        assertEquals("segment-1", checkpoint.segments.single().id)
+        assertEquals("speaker-1", checkpoint.segments.single().speaker?.id)
+        assertEquals(1uL, checkpoint.segments.single().speakerAttribution?.candidates?.single()?.rank)
+        assertEquals("history-1", summary.historyId)
+        assertEquals(2.5, complete.duration, 0.0)
+        assertEquals(1, complete.segments.size)
+        assertEquals(listOf("history-1"), delete.ids)
     }
 
     @Test
-    fun `rejects malformed binding responses`() {
-        val bindings = FakeHistoryBindings().apply { createResponse = "{}" }
-
-        assertThrows(IllegalStateException::class.java) {
-            runTest {
-                UniffiRecordingHistoryAdapter("C:/app-data", bindings)
-                    .createLiveDraft(CreateLiveDraftRequest("recording-1", "wav"))
-            }
-        }
-    }
-
-    @Test
-    fun `rejects malformed library responses`() {
+    fun `rejects timestamps outside the Android Long range`() {
         val bindings = FakeHistoryBindings().apply {
-            queryResponse = "{\"filteredItems\":[{}],\"hasMore\":false}"
+            queryResponse = queryResult(itemRecord(timestamp = ULong.MAX_VALUE))
         }
 
-        assertThrows(IllegalStateException::class.java) {
+        assertThrows(IllegalArgumentException::class.java) {
             runTest {
                 UniffiRecordingHistoryAdapter("C:/app-data", bindings)
                     .loadPage(offset = 0, limit = 30)
@@ -162,7 +133,7 @@ class UniffiRecordingHistoryAdapterTest {
 
     @Test
     fun `maps an absent persisted transcript to an empty detail`() = runTest {
-        val bindings = FakeHistoryBindings().apply { transcriptResponse = "null" }
+        val bindings = FakeHistoryBindings().apply { transcriptResponse = null }
 
         assertEquals(
             emptyList<TranscriptSegment>(),
@@ -174,10 +145,7 @@ class UniffiRecordingHistoryAdapterTest {
     @Test
     fun `accepts a persisted recording with an empty title`() = runTest {
         val bindings = FakeHistoryBindings().apply {
-            queryResponse = queryResponse.replace(
-                "\"title\":\"Recording 1\"",
-                "\"title\":\"\"",
-            )
+            queryResponse = queryResult(itemRecord(title = ""))
         }
 
         val page = UniffiRecordingHistoryAdapter("C:/app-data", bindings)
@@ -226,53 +194,113 @@ class UniffiRecordingHistoryAdapterTest {
         ),
     )
 
-    private class FakeHistoryBindings : UniffiHistoryBindings {
+    private inner class FakeHistoryBindings : UniffiHistoryBindings {
         var createAppDataDir: String? = null
-        var createRequestJson: String? = null
-        var updateRequestJson: String? = null
-        var completeRequestJson: String? = null
-        var deleteRequestJson: String? = null
-        var queryRequestJson: String? = null
+        var createRequest: FfiHistoryCreateLiveDraftRequestV1? = null
+        var updateRequest: FfiHistoryUpdateTranscriptRequestV1? = null
+        var completeRequest: FfiHistoryCompleteLiveDraftRequestV1? = null
+        var deleteRequest: FfiHistoryDeleteItemsRequestV1? = null
+        var queryRequest: FfiHistoryWorkspaceQueryRequestV1? = null
         var transcriptHistoryId: String? = null
         var transcriptFailure: Throwable? = null
-        var createResponse =
-            "{\"item\":{\"id\":\"history-1\"}," +
-                "\"audioAbsolutePath\":\"C:/app-data/history/history-1.wav\"}"
-        var queryResponse =
-            """{"filteredItems":[{"id":"history-1","timestamp":1725000000000,"duration":2.5,"audioPath":"history-1.wav","audioStatus":"available","transcriptPath":"history-1.json","title":"Recording 1","previewText":"Hello mobile history","icon":null,"type":"recording","searchContent":"","tagIds":["tag-1"],"deletedAt":null,"status":"draft","draftSource":"live_record"}],"searchMatchByItemId":{},"filteredItemCount":1,"hasMore":true,"summary":{"totalItems":1,"totalDuration":2.5,"latestTimestamp":1725000000000,"recordingCount":1,"batchCount":0},"itemCounts":{"untagged":0,"trash":0,"byTagId":{"tag-1":1}}}"""
-        var transcriptResponse =
-            """[{"id":"segment-1","text":"hello","start":1.25,"end":2.5,"isFinal":true,"timing":{"level":"token","source":"model","units":[{"text":"he","start":1.25,"end":1.5}]},"tokens":["he","llo"],"timestamps":[1.25,1.75],"durations":[0.5,0.75],"translation":"你好","speaker":{"id":"speaker-1","label":"Speaker 1","kind":"known","score":0.8},"speakerAttribution":{"groupId":"group-1","anonymousLabel":"Speaker 1","state":"matched","source":"embedding","confidence":"high","candidates":[{"profileId":"profile-1","profileName":"Alice","score":0.9,"rank":1}]}}]"""
+        var createResponse = FfiLiveRecordingDraftResultV1(
+            item = itemRecord(),
+            audioAbsolutePath = "C:/app-data/history/history-1.wav",
+        )
+        var queryResponse = queryResult(itemRecord())
+        var transcriptResponse: List<FfiTranscriptSegment>? = listOf(fullSegment().toFfi())
 
-        override suspend fun createLiveDraft(appDataDir: String, requestJson: String): String {
+        override suspend fun createLiveDraft(
+            appDataDir: String,
+            request: FfiHistoryCreateLiveDraftRequestV1,
+        ): FfiLiveRecordingDraftResultV1 {
             createAppDataDir = appDataDir
-            createRequestJson = requestJson
+            createRequest = request
             return createResponse
         }
 
-        override suspend fun updateTranscript(appDataDir: String, requestJson: String): String {
-            updateRequestJson = requestJson
-            return "{\"id\":\"history-1\"}"
+        override suspend fun updateTranscript(
+            appDataDir: String,
+            request: FfiHistoryUpdateTranscriptRequestV1,
+        ): FfiHistoryItemRecordV1 {
+            updateRequest = request
+            return itemRecord()
         }
 
-        override suspend fun completeLiveDraft(appDataDir: String, requestJson: String): String {
-            completeRequestJson = requestJson
-            return "{\"id\":\"history-1\"}"
+        override suspend fun completeLiveDraft(
+            appDataDir: String,
+            request: FfiHistoryCompleteLiveDraftRequestV1,
+        ): FfiHistoryItemRecordV1 {
+            completeRequest = request
+            return itemRecord(status = FfiHistoryItemStatusV1.COMPLETE)
         }
 
-        override suspend fun purgeItems(appDataDir: String, requestJson: String): String {
-            deleteRequestJson = requestJson
-            return "null"
+        override suspend fun purgeItems(
+            appDataDir: String,
+            request: FfiHistoryDeleteItemsRequestV1,
+        ) {
+            deleteRequest = request
         }
 
-        override suspend fun queryWorkspace(appDataDir: String, requestJson: String): String {
-            queryRequestJson = requestJson
+        override suspend fun queryWorkspace(
+            appDataDir: String,
+            request: FfiHistoryWorkspaceQueryRequestV1,
+        ): FfiHistoryWorkspaceQueryResultV1 {
+            queryRequest = request
             return queryResponse
         }
 
-        override suspend fun loadTranscript(appDataDir: String, historyId: String): String {
+        override suspend fun loadTranscript(
+            appDataDir: String,
+            historyId: String,
+        ): List<FfiTranscriptSegment>? {
             transcriptHistoryId = historyId
             transcriptFailure?.let { throw it }
             return transcriptResponse
         }
+    }
+
+    companion object {
+        private fun itemRecord(
+            timestamp: ULong = 1_725_000_000_000uL,
+            title: String = "Recording 1",
+            status: FfiHistoryItemStatusV1 = FfiHistoryItemStatusV1.DRAFT,
+        ) = FfiHistoryItemRecordV1(
+            id = "history-1",
+            timestamp = timestamp,
+            duration = 2.5,
+            audioPath = "history-1.wav",
+            audioStatus = FfiHistoryAudioStatusV1.AVAILABLE,
+            transcriptPath = "history-1.json",
+            title = title,
+            previewText = "Hello mobile history",
+            icon = null,
+            kind = FfiHistoryItemKindV1.RECORDING,
+            searchContent = "",
+            tagIds = listOf("tag-1"),
+            deletedAt = null,
+            status = status,
+            draftSource = FfiHistoryDraftSourceV1.LIVE_RECORD,
+        )
+
+        private fun queryResult(item: FfiHistoryItemRecordV1) =
+            FfiHistoryWorkspaceQueryResultV1(
+                filteredItems = listOf(item),
+                searchMatches = emptyList(),
+                filteredItemCount = 1uL,
+                hasMore = true,
+                summary = FfiHistoryWorkspaceSummaryV1(
+                    totalItems = 1uL,
+                    totalDuration = item.duration,
+                    latestTimestamp = item.timestamp,
+                    recordingCount = 1uL,
+                    batchCount = 0uL,
+                ),
+                itemCounts = FfiHistoryWorkspaceItemCountsV1(
+                    untagged = 0uL,
+                    trash = 0uL,
+                    byTagId = emptyList(),
+                ),
+            )
     }
 }

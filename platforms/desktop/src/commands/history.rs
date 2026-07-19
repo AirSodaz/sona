@@ -21,7 +21,7 @@ use sona_core::history::mutation_repository::{
 use sona_core::history_store::HistoryStore;
 
 fn validate_history_input<T: serde::Serialize + ?Sized>(value: &T) -> Result<(), String> {
-    sona_ts_bind::validate_typescript_safe_integers(value)
+    sona_ts_bind::validate_typescript_safe_integers(value).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

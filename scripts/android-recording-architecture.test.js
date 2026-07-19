@@ -37,6 +37,11 @@ test('Android streaming adapters support online and local engines behind generat
     'kotlin', 'com', 'sona', 'android', 'adapters', 'uniffi', 'recording',
     'UniffiRecordingHistoryAdapter.kt',
   );
+  const transcriptMapper = clientSource(
+    path.join('adapters', 'uniffi'),
+    'kotlin', 'com', 'sona', 'android', 'adapters', 'uniffi', 'recording',
+    'UniffiTranscriptMapper.kt',
+  );
 
   assert.match(provider, /StreamingProviderCatalogPort/u);
   assert.match(streaming, /StreamingTranscriptionPort/u);
@@ -45,10 +50,22 @@ test('Android streaming adapters support online and local engines behind generat
   assert.match(history, /RecordingHistoryPort/u);
   assert.match(bindings, /createAsrStreamingSession/u);
   assert.match(streaming, /StreamingEngineConfig\.LocalSherpa/u);
-  assert.match(bindings, /createHistoryLiveDraftJson/u);
-  assert.match(bindings, /updateHistoryTranscriptJson/u);
-  assert.match(bindings, /completeHistoryLiveDraftJson/u);
-  assert.match(bindings, /purgeHistoryItemsJson/u);
+  for (const functionName of [
+    'createHistoryLiveDraftV1',
+    'updateHistoryTranscriptV1',
+    'completeHistoryLiveDraftV1',
+    'purgeHistoryItemsV1',
+    'queryHistoryWorkspaceV1',
+    'loadHistoryTranscriptV1',
+  ]) {
+    assert.match(bindings, new RegExp(`\\b${functionName}\\b`, 'u'));
+  }
+  assert.doesNotMatch(
+    bindings,
+    /(?:createHistoryLiveDraft|updateHistoryTranscript|completeHistoryLiveDraft|purgeHistoryItems|queryHistoryWorkspace|loadHistoryTranscript)Json/u,
+  );
+  assert.match(transcriptMapper, /internal fun TranscriptSegment\.toFfi/u);
+  assert.doesNotMatch(history, /kotlinx\.serialization\.json|buildJsonObject|parseJson/u);
 });
 
 test('Android online batch ASR stays behind an application port and Tokio UniFFI adapter', () => {

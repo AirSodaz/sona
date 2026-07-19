@@ -1,4 +1,7 @@
 mod app_config_repository_bridge;
+mod application_context;
+#[cfg(test)]
+mod application_context_tests;
 mod asr_batch_bridge;
 mod asr_bridge;
 mod asr_streaming_bridge;
@@ -22,6 +25,7 @@ mod recovery_bridge;
 mod runtime_bridge;
 mod storage_usage_bridge;
 mod sync_bridge;
+mod sync_secret_store_bridge;
 mod tag_bridge;
 mod task_ledger_bridge;
 pub use asr_batch_bridge::{
@@ -33,27 +37,54 @@ pub use facade::SonaCoreFacade;
 pub use llm_task_bridge::FfiLlmTaskObserver;
 pub use mapper::{
     FfiAsrEngine, FfiAsrInferenceMetric, FfiAsrMode, FfiAsrModelLoadMetric,
-    FfiAsrStreamingErrorEvent, FfiAsrTranscriptUpdateEvent, FfiBatchSegmentationMode,
-    FfiConfigMigrationResult, FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmExecutionMetadata,
-    FfiLlmModality, FfiLlmModelMetadataSource, FfiLlmModelSummary, FfiLlmPromptChunk,
-    FfiLlmProvider, FfiLlmProviderDefaults, FfiLlmProviderStrategy, FfiLlmResponseFormatKind,
-    FfiLlmSegmentInput, FfiLlmTaskChunk, FfiLlmTaskFinal, FfiLlmTaskProgress, FfiLlmTaskText,
-    FfiLlmTaskType, FfiLlmTokenUsage, FfiModelCatalogGroup, FfiModelCatalogModel,
-    FfiModelCatalogPathMatchToken, FfiModelCatalogRestoreDefaults, FfiModelCatalogSection,
-    FfiModelCatalogSectionType, FfiModelCatalogSelectedIds, FfiModelCatalogSelectionOptions,
-    FfiModelCatalogSnapshot, FfiModelDependencyConfigKey, FfiModelDependencyRequest,
-    FfiModelDependencyRequestsForModel, FfiModelIdByNormalizedPathEntry, FfiModelPathByIdEntry,
-    FfiModelRules, FfiModelSelectionOption, FfiModelSelectionPaths, FfiOnlineAsrBatchCapability,
-    FfiOnlineAsrCapability, FfiOnlineAsrLocalFileBatchMode, FfiOnlineAsrProvider,
-    FfiOnlineAsrProviderRequest, FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPresetModel,
-    FfiRequiredCompanionModels, FfiResolvedModelDownload, FfiRuntimePathKind, FfiRuntimePathStatus,
-    FfiSpeakerAttribution, FfiSpeakerCandidate, FfiSpeakerTag, FfiSummarizeTranscriptRequest,
-    FfiSummarySegmentInput, FfiSummaryTemplateConfig, FfiTimestampSupportHint,
-    FfiTranscriptSegment, FfiTranscriptTiming, FfiTranscriptTimingLevel, FfiTranscriptTimingSource,
+    FfiAsrStreamingErrorEvent, FfiAsrTranscriptUpdateEvent, FfiAutomationExportConfigV1,
+    FfiAutomationProcessedInputV1, FfiAutomationProcessedRecordV1, FfiAutomationRepositoryInputV1,
+    FfiAutomationRepositoryStateV1, FfiAutomationRuleInputV1, FfiAutomationRuleRecordV1,
+    FfiAutomationRuleValidationResultV1, FfiAutomationStageConfigV1, FfiAutomationTagReferenceV1,
+    FfiAutomationValidationExportConfigV1, FfiAutomationValidationRuleV1,
+    FfiAutomationValidationStageConfigV1, FfiBatchSegmentationMode, FfiConfigMigrationResult,
+    FfiHistoryAudioStatusV1, FfiHistoryCompleteLiveDraftRequestV1,
+    FfiHistoryCreateLiveDraftRequestV1, FfiHistoryCreateTranscriptSnapshotRequestV1,
+    FfiHistoryDeleteItemsRequestV1, FfiHistoryDraftSourcePatchV1, FfiHistoryDraftSourceV1,
+    FfiHistoryItemKindV1, FfiHistoryItemMetaPatchV1, FfiHistoryItemRecordV1,
+    FfiHistoryItemStatusV1, FfiHistoryReplaceTagAssignmentsRequestV1,
+    FfiHistorySaveImportedFileRequestV1, FfiHistorySaveRecordingRequestV1,
+    FfiHistorySearchMatchEntryV1, FfiHistoryTagCountEntryV1, FfiHistoryTrashItemsRequestV1,
+    FfiHistoryUpdateItemMetaRequestV1, FfiHistoryUpdateTagAssignmentsRequestV1,
+    FfiHistoryUpdateTranscriptRequestV1, FfiHistoryWorkspaceDateFilterV1,
+    FfiHistoryWorkspaceFilterTypeV1, FfiHistoryWorkspaceItemCountsV1,
+    FfiHistoryWorkspaceItemSearchMatchV1, FfiHistoryWorkspaceQueryRequestV1,
+    FfiHistoryWorkspaceQueryResultV1, FfiHistoryWorkspaceScopeV1, FfiHistoryWorkspaceSearchRangeV1,
+    FfiHistoryWorkspaceSearchSnippetV1, FfiHistoryWorkspaceSortOrderV1,
+    FfiHistoryWorkspaceSummaryV1, FfiLiveRecordingDraftResultV1, FfiLlmCompletionResponse,
+    FfiLlmConfig, FfiLlmExecutionMetadata, FfiLlmModality, FfiLlmModelMetadataSource,
+    FfiLlmModelSummary, FfiLlmPromptChunk, FfiLlmProvider, FfiLlmProviderDefaults,
+    FfiLlmProviderStrategy, FfiLlmResponseFormatKind, FfiLlmSegmentInput, FfiLlmTaskChunk,
+    FfiLlmTaskFinal, FfiLlmTaskProgress, FfiLlmTaskText, FfiLlmTaskType, FfiLlmTokenUsage,
+    FfiModelCatalogGroup, FfiModelCatalogModel, FfiModelCatalogPathMatchToken,
+    FfiModelCatalogRestoreDefaults, FfiModelCatalogSection, FfiModelCatalogSectionType,
+    FfiModelCatalogSelectedIds, FfiModelCatalogSelectionOptions, FfiModelCatalogSnapshot,
+    FfiModelDependencyConfigKey, FfiModelDependencyRequest, FfiModelDependencyRequestsForModel,
+    FfiModelIdByNormalizedPathEntry, FfiModelPathByIdEntry, FfiModelRules, FfiModelSelectionOption,
+    FfiModelSelectionPaths, FfiOnlineAsrBatchCapability, FfiOnlineAsrCapability,
+    FfiOnlineAsrLocalFileBatchMode, FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest,
+    FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPresetModel, FfiRecoveredQueueItemV1,
+    FfiRecoveredTranscriptSegmentV1, FfiRecoveredTranscriptTimingUnitV1,
+    FfiRecoveredTranscriptTimingV1, FfiRecoveryFileStatV1, FfiRecoveryItemInputV1,
+    FfiRecoveryItemStageV1, FfiRecoveryQueueStatusV1, FfiRecoveryResolutionV1,
+    FfiRecoverySnapshotV1, FfiRecoverySourceV1, FfiRequiredCompanionModels,
+    FfiResolvedModelDownload, FfiRuntimePathKind, FfiRuntimePathStatus, FfiSpeakerAttribution,
+    FfiSpeakerCandidate, FfiSpeakerTag, FfiStringPatchV1, FfiSummarizeTranscriptRequest,
+    FfiSummarySegmentInput, FfiSummaryTemplateConfig, FfiTagCreateInputV1, FfiTagDefaultsInputV1,
+    FfiTagDefaultsPatchV1, FfiTagDefaultsV1, FfiTagRecordV1, FfiTagRepositorySnapshotV1,
+    FfiTagUpdateInputV1, FfiTaskLedgerKindV1, FfiTaskLedgerPatchV1, FfiTaskLedgerRecordV1,
+    FfiTaskLedgerSnapshotV1, FfiTaskLedgerStatusV1, FfiTimestampSupportHint, FfiTranscriptSegment,
+    FfiTranscriptSnapshotMetadataV1, FfiTranscriptSnapshotReasonV1, FfiTranscriptSnapshotRecordV1,
+    FfiTranscriptTiming, FfiTranscriptTimingLevel, FfiTranscriptTimingSource,
     FfiTranscriptTimingUnit, FfiTranscriptUpdate, FfiTranslateSegmentsRequest,
     FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig,
 };
-pub use sync_bridge::FfiSyncSecretStore;
+pub use sync_secret_store_bridge::FfiSyncSecretStore;
 
 uniffi::setup_scaffolding!();
 
@@ -179,13 +210,36 @@ pub fn load_tag_repository_state_json(app_data_dir: String) -> SonaCoreBindingRe
 }
 
 #[uniffi::export]
+pub fn load_tag_repository_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<FfiTagRepositorySnapshotV1> {
+    SonaCoreFacade::load_tag_repository_v1(app_data_dir)
+}
+
+#[uniffi::export]
 pub fn replace_tags_json(app_data_dir: String, tags_json: String) -> SonaCoreBindingResult<()> {
     SonaCoreFacade::replace_tags_json(app_data_dir, tags_json)
 }
 
 #[uniffi::export]
+pub fn replace_tags_v1(
+    app_data_dir: String,
+    tags: Vec<FfiTagRecordV1>,
+) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::replace_tags_v1(app_data_dir, tags)
+}
+
+#[uniffi::export]
 pub fn create_tag_json(app_data_dir: String, input_json: String) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::create_tag_json(app_data_dir, input_json)
+}
+
+#[uniffi::export]
+pub fn create_tag_v1(
+    app_data_dir: String,
+    input: FfiTagCreateInputV1,
+) -> SonaCoreBindingResult<FfiTagRecordV1> {
+    SonaCoreFacade::create_tag_v1(app_data_dir, input)
 }
 
 #[uniffi::export]
@@ -198,8 +252,22 @@ pub fn update_tag_json(
 }
 
 #[uniffi::export]
+pub fn update_tag_v1(
+    app_data_dir: String,
+    tag_id: String,
+    updates: FfiTagUpdateInputV1,
+) -> SonaCoreBindingResult<Option<FfiTagRecordV1>> {
+    SonaCoreFacade::update_tag_v1(app_data_dir, tag_id, updates)
+}
+
+#[uniffi::export]
 pub fn delete_tag(app_data_dir: String, tag_id: String) -> SonaCoreBindingResult<()> {
     SonaCoreFacade::delete_tag(app_data_dir, tag_id)
+}
+
+#[uniffi::export]
+pub fn delete_tag_v1(app_data_dir: String, tag_id: String) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::delete_tag_v1(app_data_dir, tag_id)
 }
 
 #[uniffi::export]
@@ -211,6 +279,14 @@ pub fn reorder_tags_json(
 }
 
 #[uniffi::export]
+pub fn reorder_tags_v1(
+    app_data_dir: String,
+    tag_ids: Vec<String>,
+) -> SonaCoreBindingResult<Vec<FfiTagRecordV1>> {
+    SonaCoreFacade::reorder_tags_v1(app_data_dir, tag_ids)
+}
+
+#[uniffi::export]
 pub fn set_active_tag_id(
     app_data_dir: String,
     tag_id: Option<String>,
@@ -219,8 +295,23 @@ pub fn set_active_tag_id(
 }
 
 #[uniffi::export]
+pub fn set_active_tag_id_v1(
+    app_data_dir: String,
+    tag_id: Option<String>,
+) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::set_active_tag_id_v1(app_data_dir, tag_id)
+}
+
+#[uniffi::export]
 pub fn load_recovery_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::load_recovery_snapshot_json(app_data_dir)
+}
+
+#[uniffi::export]
+pub fn load_recovery_snapshot_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<FfiRecoverySnapshotV1> {
+    SonaCoreFacade::load_recovery_snapshot_v1(app_data_dir)
 }
 
 #[uniffi::export]
@@ -229,6 +320,14 @@ pub fn save_recovery_snapshot_json(
     items_json: String,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::save_recovery_snapshot_json(app_data_dir, items_json)
+}
+
+#[uniffi::export]
+pub fn save_recovery_snapshot_v1(
+    app_data_dir: String,
+    items: Vec<FfiRecoveryItemInputV1>,
+) -> SonaCoreBindingResult<FfiRecoverySnapshotV1> {
+    SonaCoreFacade::save_recovery_snapshot_v1(app_data_dir, items)
 }
 
 #[uniffi::export]
@@ -245,8 +344,24 @@ pub fn persist_recovery_queue_snapshot_json(
 }
 
 #[uniffi::export]
+pub fn persist_recovery_queue_snapshot_v1(
+    app_data_dir: String,
+    queue_items: Vec<FfiRecoveryItemInputV1>,
+    resolved_ids: Vec<String>,
+) -> SonaCoreBindingResult<FfiRecoverySnapshotV1> {
+    SonaCoreFacade::persist_recovery_queue_snapshot_v1(app_data_dir, queue_items, resolved_ids)
+}
+
+#[uniffi::export]
 pub fn load_task_ledger_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::load_task_ledger_snapshot_json(app_data_dir)
+}
+
+#[uniffi::export]
+pub fn load_task_ledger_snapshot_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+    SonaCoreFacade::load_task_ledger_snapshot_v1(app_data_dir)
 }
 
 #[uniffi::export]
@@ -255,6 +370,14 @@ pub fn upsert_task_ledger_record_json(
     record_json: String,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::upsert_task_ledger_record_json(app_data_dir, record_json)
+}
+
+#[uniffi::export]
+pub fn upsert_task_ledger_record_v1(
+    app_data_dir: String,
+    record: FfiTaskLedgerRecordV1,
+) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+    SonaCoreFacade::upsert_task_ledger_record_v1(app_data_dir, record)
 }
 
 #[uniffi::export]
@@ -267,11 +390,28 @@ pub fn patch_task_ledger_record_json(
 }
 
 #[uniffi::export]
+pub fn patch_task_ledger_record_v1(
+    app_data_dir: String,
+    id: String,
+    patch: FfiTaskLedgerPatchV1,
+) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+    SonaCoreFacade::patch_task_ledger_record_v1(app_data_dir, id, patch)
+}
+
+#[uniffi::export]
 pub fn remove_task_ledger_record_json(
     app_data_dir: String,
     id: String,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::remove_task_ledger_record_json(app_data_dir, id)
+}
+
+#[uniffi::export]
+pub fn remove_task_ledger_record_v1(
+    app_data_dir: String,
+    id: String,
+) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+    SonaCoreFacade::remove_task_ledger_record_v1(app_data_dir, id)
 }
 
 #[uniffi::export]
@@ -282,10 +422,24 @@ pub fn clear_resolved_task_ledger_records_json(
 }
 
 #[uniffi::export]
+pub fn clear_resolved_task_ledger_records_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+    SonaCoreFacade::clear_resolved_task_ledger_records_v1(app_data_dir)
+}
+
+#[uniffi::export]
 pub fn load_automation_repository_state_json(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::load_automation_repository_state_json(app_data_dir)
+}
+
+#[uniffi::export]
+pub fn load_automation_repository_state_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
+    SonaCoreFacade::load_automation_repository_state_v1(app_data_dir)
 }
 
 #[uniffi::export]
@@ -297,6 +451,14 @@ pub fn replace_automation_rules_json(
 }
 
 #[uniffi::export]
+pub fn replace_automation_rules_v1(
+    app_data_dir: String,
+    rules: Vec<FfiAutomationRuleInputV1>,
+) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
+    SonaCoreFacade::replace_automation_rules_v1(app_data_dir, rules)
+}
+
+#[uniffi::export]
 pub fn replace_automation_processed_entries_json(
     app_data_dir: String,
     entries_json: String,
@@ -305,11 +467,27 @@ pub fn replace_automation_processed_entries_json(
 }
 
 #[uniffi::export]
+pub fn replace_automation_processed_entries_v1(
+    app_data_dir: String,
+    entries: Vec<FfiAutomationProcessedInputV1>,
+) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
+    SonaCoreFacade::replace_automation_processed_entries_v1(app_data_dir, entries)
+}
+
+#[uniffi::export]
 pub fn replace_automation_repository_state_json(
     app_data_dir: String,
     state_json: String,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::replace_automation_repository_state_json(app_data_dir, state_json)
+}
+
+#[uniffi::export]
+pub fn replace_automation_repository_state_v1(
+    app_data_dir: String,
+    input: FfiAutomationRepositoryInputV1,
+) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
+    SonaCoreFacade::replace_automation_repository_state_v1(app_data_dir, input)
 }
 
 #[uniffi::export]
@@ -323,6 +501,15 @@ pub fn validate_automation_rule_activation_json(
         global_config_json,
         project_json,
     )
+}
+
+#[uniffi::export]
+pub fn validate_automation_rule_activation_v1(
+    rule: FfiAutomationValidationRuleV1,
+    global_config_json: String,
+    tags: Vec<FfiAutomationTagReferenceV1>,
+) -> SonaCoreBindingResult<FfiAutomationRuleValidationResultV1> {
+    SonaCoreFacade::validate_automation_rule_activation_v1(rule, global_config_json, tags)
 }
 
 #[uniffi::export]
@@ -373,6 +560,23 @@ pub async fn sync_test_provider_json(config_json: String) -> SonaCoreBindingResu
 #[uniffi::export]
 pub fn register_sync_secret_store(store: std::sync::Arc<dyn FfiSyncSecretStore>) {
     sync_bridge::register_sync_secret_store(store);
+}
+
+#[uniffi::export]
+pub fn register_sync_secret_store_for_app_data_dir(
+    app_data_dir: String,
+    store: std::sync::Arc<dyn FfiSyncSecretStore>,
+) -> SonaCoreBindingResult<()> {
+    sync_bridge::register_sync_secret_store_for_app_data_dir(&app_data_dir, store)
+}
+
+#[uniffi::export]
+pub fn release_application_context(app_data_dir: String) -> SonaCoreBindingResult<bool> {
+    application_context::release_application_context(app_data_dir).map_err(|error| {
+        SonaCoreBindingError::InvalidInput {
+            reason: error.to_string(),
+        }
+    })
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -497,11 +701,28 @@ pub async fn list_history_items_json(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+pub async fn list_history_items_v1(
+    app_data_dir: String,
+    limit: Option<u64>,
+    offset: Option<u64>,
+) -> SonaCoreBindingResult<Vec<FfiHistoryItemRecordV1>> {
+    SonaCoreFacade::list_history_items_v1(app_data_dir, limit, offset).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn query_history_workspace_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::query_history_workspace_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn query_history_workspace_v1(
+    app_data_dir: String,
+    request: FfiHistoryWorkspaceQueryRequestV1,
+) -> SonaCoreBindingResult<FfiHistoryWorkspaceQueryResultV1> {
+    SonaCoreFacade::query_history_workspace_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -513,11 +734,27 @@ pub async fn load_history_transcript_json(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+pub async fn load_history_transcript_v1(
+    app_data_dir: String,
+    history_id: String,
+) -> SonaCoreBindingResult<Option<Vec<FfiTranscriptSegment>>> {
+    SonaCoreFacade::load_history_transcript_v1(app_data_dir, history_id).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn list_history_transcript_snapshots_json(
     app_data_dir: String,
     history_id: String,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::list_history_transcript_snapshots_json(app_data_dir, history_id).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn list_history_transcript_snapshots_v1(
+    app_data_dir: String,
+    history_id: String,
+) -> SonaCoreBindingResult<Vec<FfiTranscriptSnapshotMetadataV1>> {
+    SonaCoreFacade::list_history_transcript_snapshots_v1(app_data_dir, history_id).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -531,6 +768,15 @@ pub async fn load_history_transcript_snapshot_json(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+pub async fn load_history_transcript_snapshot_v1(
+    app_data_dir: String,
+    history_id: String,
+    snapshot_id: String,
+) -> SonaCoreBindingResult<Option<FfiTranscriptSnapshotRecordV1>> {
+    SonaCoreFacade::load_history_transcript_snapshot_v1(app_data_dir, history_id, snapshot_id).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn create_history_live_draft_json(
     app_data_dir: String,
     request_json: String,
@@ -539,11 +785,27 @@ pub async fn create_history_live_draft_json(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+pub async fn create_history_live_draft_v1(
+    app_data_dir: String,
+    request: FfiHistoryCreateLiveDraftRequestV1,
+) -> SonaCoreBindingResult<FfiLiveRecordingDraftResultV1> {
+    SonaCoreFacade::create_history_live_draft_v1(app_data_dir, request).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn complete_history_live_draft_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::complete_history_live_draft_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn complete_history_live_draft_v1(
+    app_data_dir: String,
+    request: FfiHistoryCompleteLiveDraftRequestV1,
+) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
+    SonaCoreFacade::complete_history_live_draft_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -563,11 +825,27 @@ pub async fn save_history_recording_json(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+pub async fn save_history_recording_v1(
+    app_data_dir: String,
+    request: FfiHistorySaveRecordingRequestV1,
+) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
+    SonaCoreFacade::save_history_recording_v1(app_data_dir, request).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn save_history_imported_file_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::save_history_imported_file_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn save_history_imported_file_v1(
+    app_data_dir: String,
+    request: FfiHistorySaveImportedFileRequestV1,
+) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
+    SonaCoreFacade::save_history_imported_file_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -587,11 +865,27 @@ pub async fn trash_history_items_json(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+pub async fn trash_history_items_v1(
+    app_data_dir: String,
+    request: FfiHistoryTrashItemsRequestV1,
+) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::trash_history_items_v1(app_data_dir, request).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn restore_history_items_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::restore_history_items_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn restore_history_items_v1(
+    app_data_dir: String,
+    request: FfiHistoryDeleteItemsRequestV1,
+) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::restore_history_items_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -603,11 +897,27 @@ pub async fn purge_history_items_json(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+pub async fn purge_history_items_v1(
+    app_data_dir: String,
+    request: FfiHistoryDeleteItemsRequestV1,
+) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::purge_history_items_v1(app_data_dir, request).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn update_history_transcript_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::update_history_transcript_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn update_history_transcript_v1(
+    app_data_dir: String,
+    request: FfiHistoryUpdateTranscriptRequestV1,
+) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
+    SonaCoreFacade::update_history_transcript_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -619,11 +929,27 @@ pub async fn create_history_transcript_snapshot_json(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+pub async fn create_history_transcript_snapshot_v1(
+    app_data_dir: String,
+    request: FfiHistoryCreateTranscriptSnapshotRequestV1,
+) -> SonaCoreBindingResult<FfiTranscriptSnapshotMetadataV1> {
+    SonaCoreFacade::create_history_transcript_snapshot_v1(app_data_dir, request).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn update_history_item_meta_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::update_history_item_meta_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn update_history_item_meta_v1(
+    app_data_dir: String,
+    request: FfiHistoryUpdateItemMetaRequestV1,
+) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::update_history_item_meta_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -643,11 +969,27 @@ pub async fn update_history_tag_assignments_json(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+pub async fn update_history_tag_assignments_v1(
+    app_data_dir: String,
+    request: FfiHistoryUpdateTagAssignmentsRequestV1,
+) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::update_history_tag_assignments_v1(app_data_dir, request).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn replace_history_tag_assignments_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     SonaCoreFacade::replace_history_tag_assignments_json(app_data_dir, request_json).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn replace_history_tag_assignments_v1(
+    app_data_dir: String,
+    request: FfiHistoryReplaceTagAssignmentsRequestV1,
+) -> SonaCoreBindingResult<()> {
+    SonaCoreFacade::replace_history_tag_assignments_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]

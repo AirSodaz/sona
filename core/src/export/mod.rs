@@ -28,27 +28,26 @@ pub enum ExportFormat {
 
 impl ExportFormat {
     /// Parses a format string such as `json` or `srt`.
-    pub fn parse(value: &str) -> Result<Self, String> {
+    pub fn parse(value: &str) -> Result<Self, ExportError> {
         match value.trim().to_ascii_lowercase().as_str() {
             "json" => Ok(Self::Json),
             "txt" => Ok(Self::Txt),
             "srt" => Ok(Self::Srt),
             "vtt" => Ok(Self::Vtt),
             "md" => Ok(Self::Md),
-            other => Err(format!("Unsupported export format: {other}")),
+            other => Err(ExportError::InvalidFormat {
+                value: other.to_string(),
+            }),
         }
     }
 
     /// Infers an export format from a file extension.
-    pub fn from_output_path(path: &Path) -> Result<Self, String> {
+    pub fn from_output_path(path: &Path) -> Result<Self, ExportError> {
         let extension = path
             .extension()
             .and_then(|value| value.to_str())
-            .ok_or_else(|| {
-                format!(
-                    "Unable to infer export format from path: {}",
-                    path.display()
-                )
+            .ok_or_else(|| ExportError::MissingFormatExtension {
+                path: path.to_path_buf(),
             })?;
         Self::parse(extension)
     }
@@ -65,12 +64,14 @@ pub enum ExportMode {
 }
 
 impl ExportMode {
-    pub fn parse(value: &str) -> Result<Self, String> {
+    pub fn parse(value: &str) -> Result<Self, ExportError> {
         match value.trim().to_ascii_lowercase().as_str() {
             "original" => Ok(Self::Original),
             "translation" => Ok(Self::Translation),
             "bilingual" => Ok(Self::Bilingual),
-            other => Err(format!("Unsupported export mode: {other}")),
+            other => Err(ExportError::InvalidMode {
+                value: other.to_string(),
+            }),
         }
     }
 }
@@ -90,7 +91,7 @@ struct ExportJsonSegment<'a> {
 pub fn export_segments(
     segments: &[TranscriptSegment],
     format: ExportFormat,
-) -> Result<String, String> {
+) -> Result<String, ExportError> {
     export_segments_with_mode(segments, format, ExportMode::Original)
 }
 
@@ -98,9 +99,11 @@ pub fn export_segments_with_mode(
     segments: &[TranscriptSegment],
     format: ExportFormat,
     mode: ExportMode,
-) -> Result<String, String> {
+) -> Result<String, ExportError> {
     match format {
-        ExportFormat::Json => export_json(segments, mode).map_err(|error| error.to_string()),
+        ExportFormat::Json => export_json(segments, mode).map_err(|error| ExportError::Render {
+            reason: error.to_string(),
+        }),
         ExportFormat::Txt => Ok(export_txt(segments, mode)),
         ExportFormat::Srt => Ok(export_srt(segments, mode)),
         ExportFormat::Vtt => Ok(export_vtt(segments, mode)),

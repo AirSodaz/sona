@@ -24,15 +24,17 @@ use sona_core::history::workspace_query::{
 };
 use sona_core::history::{
     HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryAudioStatus,
-    HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
-    HistoryItemRecord, HistoryItemStatus, HistoryListOptions, HistorySaveImportedFileRequest,
-    HistorySaveRecordingRequest, HistorySummaryPayload, HistoryWorkspaceDateFilter,
-    HistoryWorkspaceFilterType, HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest,
-    HistoryWorkspaceQueryResult, HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
-    HistoryWorkspaceSummary, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
-    TranscriptSnapshotReason, TranscriptSnapshotRecord,
+    HistoryBackupSnapshot, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryIdGenerator,
+    HistoryItemKind, HistoryItemRecord, HistoryItemStatus, HistoryListOptions,
+    HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistorySummaryPayload,
+    HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceItemCounts,
+    HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult, HistoryWorkspaceScope,
+    HistoryWorkspaceSortOrder, HistoryWorkspaceSummary, LiveRecordingDraftResult,
+    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
+use sona_core::ports::fs::{FileSystemError, FileSystemOperation};
+use sona_core::ports::time::{ClockError, UnixMillisClock};
 use sona_core::sync::SyncEntityKind;
 use sona_core::transcription::transcript::TranscriptSegment;
 use std::cell::Cell;
@@ -43,16 +45,14 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::UNIX_EPOCH;
 
 use chrono::{Datelike, Duration, Local, LocalResult, TimeZone};
-use rusqlite::types::{ToSql, Type};
-use uuid::Uuid;
-
 use fs3::FileExt;
+use rusqlite::types::{ToSql, Type};
 
 use crate::sync_repository::{
-    record_local_delete_in_transaction, record_local_field_change_in_transaction, sync_now_ms,
+    record_local_delete_in_transaction, record_local_field_change_in_transaction,
 };
 
 const STAGED_AUDIO_MARKER: &str = ".sona-staging-";
@@ -69,31 +69,57 @@ pub(crate) struct HistoryFileLockGuard {
 pub(crate) fn acquire_history_file_lock(
     app_local_data_dir: &Path,
 ) -> Result<HistoryFileLockGuard, DatabaseError> {
-    fs::create_dir_all(app_local_data_dir)
-        .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+    fs::create_dir_all(app_local_data_dir).map_err(|error| {
+        db_file_system_error(
+            FileSystemOperation::CreateDirectory,
+            app_local_data_dir,
+            error,
+        )
+    })?;
+    let lock_path = app_local_data_dir.join(HISTORY_FILE_LOCK_NAME);
     let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(false)
-        .open(app_local_data_dir.join(HISTORY_FILE_LOCK_NAME))
-        .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+        .open(&lock_path)
+        .map_err(|error| db_file_system_error(FileSystemOperation::WriteFile, &lock_path, error))?;
     file.lock_exclusive()
-        .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+        .map_err(|error| db_file_system_error(FileSystemOperation::WriteFile, &lock_path, error))?;
     Ok(HistoryFileLockGuard { _file: file })
 }
 
-fn current_time_millis() -> Result<u64, String> {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis() as u64)
-        .map_err(|error| error.to_string())
+fn db_file_system_error(
+    operation: FileSystemOperation,
+    path: &Path,
+    error: std::io::Error,
+) -> DatabaseError {
+    DatabaseError::FileSystem(FileSystemError::new(operation, path, error.to_string()))
 }
 
-fn new_history_item_generated_values() -> Result<HistoryItemGeneratedValues, String> {
-    let timestamp = current_time_millis()?;
+fn require_history_source_file(
+    path: &Path,
+    missing_message: impl FnOnce() -> String,
+) -> Result<(), HistoryMutationError> {
+    match fs::metadata(path) {
+        Ok(metadata) if metadata.is_file() => Ok(()),
+        Ok(_) => Err(HistoryMutationError::Internal(missing_message())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Err(HistoryMutationError::Internal(missing_message()))
+        }
+        Err(error) => {
+            Err(FileSystemError::new(FileSystemOperation::Metadata, path, error.to_string()).into())
+        }
+    }
+}
+
+fn new_history_item_generated_values(
+    clock: &dyn UnixMillisClock,
+    ids: &dyn HistoryIdGenerator,
+) -> Result<HistoryItemGeneratedValues, ClockError> {
+    let timestamp = clock.now_ms()?;
     Ok(HistoryItemGeneratedValues {
-        fallback_id: Uuid::new_v4().to_string(),
+        fallback_id: ids.generate_id(),
         timestamp,
         recording_title: build_recording_title(timestamp),
     })
@@ -286,7 +312,8 @@ pub(crate) fn prepare_history_restore(
 ) -> Result<PreparedHistoryRestore, String> {
     let mut item_ids = HashSet::new();
     for item in &snapshot.items {
-        let safe_id = ensure_safe_file_name(&item.id, "History item ID")?;
+        let safe_id = ensure_safe_file_name(&item.id, "History item ID")
+            .map_err(|error| error.to_string())?;
         if safe_id != item.id || !item_ids.insert(item.id.clone()) {
             return Err(format!(
                 "History item ID is invalid or duplicated: {}",
@@ -305,7 +332,8 @@ pub(crate) fn prepare_history_restore(
 
     let mut transcripts = HashMap::new();
     for (file_name, value) in &snapshot.transcript_files {
-        let safe_name = ensure_safe_file_name(file_name, "Backup transcript file name")?;
+        let safe_name = ensure_safe_file_name(file_name, "Backup transcript file name")
+            .map_err(|error| error.to_string())?;
         if safe_name != *file_name {
             return Err("Backup transcript file name is invalid.".to_string());
         }
@@ -313,7 +341,8 @@ pub(crate) fn prepare_history_restore(
             .strip_suffix(".json")
             .filter(|id| item_ids.contains(*id))
             .ok_or_else(|| format!("Backup transcript is orphaned: {file_name}"))?;
-        let normalized = normalize_history_transcript_segments(value.clone())?;
+        let normalized = normalize_history_transcript_segments(value.clone())
+            .map_err(|error| error.to_string())?;
         let serialized =
             serde_json::to_string(&normalized.segments).map_err(|error| error.to_string())?;
         if transcripts
@@ -340,7 +369,8 @@ pub(crate) fn prepare_history_restore(
 
     let mut summaries_by_id = HashMap::new();
     for (history_id, value) in &snapshot.summary_files {
-        let safe_id = ensure_safe_file_name(history_id, "Backup summary history ID")?;
+        let safe_id = ensure_safe_file_name(history_id, "Backup summary history ID")
+            .map_err(|error| error.to_string())?;
         if safe_id != *history_id || !item_ids.contains(history_id) || !value.is_object() {
             return Err(format!("Backup summary is invalid: {history_id}"));
         }
@@ -372,7 +402,8 @@ pub(crate) fn prepare_history_restore(
             ));
         }
         let history_id = parts[1];
-        let safe_history_id = ensure_safe_file_name(history_id, "Snapshot history ID")?;
+        let safe_history_id = ensure_safe_file_name(history_id, "Snapshot history ID")
+            .map_err(|error| error.to_string())?;
         if safe_history_id != history_id {
             return Err(format!(
                 "Backup transcript snapshot path is invalid: {relative_path}"
@@ -390,7 +421,8 @@ pub(crate) fn prepare_history_restore(
         let snapshot_id = parts[2].strip_suffix(".json").ok_or_else(|| {
             format!("Backup transcript snapshot path is invalid: {relative_path}")
         })?;
-        let safe_snapshot_id = ensure_safe_file_name(snapshot_id, "Transcript snapshot ID")?;
+        let safe_snapshot_id = ensure_safe_file_name(snapshot_id, "Transcript snapshot ID")
+            .map_err(|error| error.to_string())?;
         if safe_snapshot_id != snapshot_id {
             return Err(format!(
                 "Backup transcript snapshot path is invalid: {relative_path}"
@@ -415,7 +447,8 @@ pub(crate) fn prepare_history_restore(
             continue;
         };
         for metadata in metadata_list {
-            let safe_id = ensure_safe_file_name(&metadata.id, "Transcript snapshot ID")?;
+            let safe_id = ensure_safe_file_name(&metadata.id, "Transcript snapshot ID")
+                .map_err(|error| error.to_string())?;
             let key = (item.id.clone(), metadata.id.clone());
             if safe_id != metadata.id
                 || metadata.history_id != item.id
@@ -440,7 +473,8 @@ pub(crate) fn prepare_history_restore(
             }
             let normalized = normalize_history_transcript_segments(
                 serde_json::to_value(&record.segments).map_err(|error| error.to_string())?,
-            )?;
+            )
+            .map_err(|error| error.to_string())?;
             if metadata.segment_count != normalized.segments.len() as u64 {
                 return Err(format!(
                     "Backup transcript snapshot segment count does not match: {}",
@@ -528,16 +562,26 @@ pub(crate) fn insert_history_in_transaction(
     Ok(())
 }
 
-fn current_workspace_date_filter_thresholds() -> HistoryWorkspaceDateFilterThresholds {
-    let now = Local::now();
+fn current_workspace_date_filter_thresholds(
+    now_millis: u64,
+) -> Result<HistoryWorkspaceDateFilterThresholds, ClockError> {
+    let now_millis = i64::try_from(now_millis).map_err(|_| {
+        ClockError::OutOfRange("History workspace timestamp exceeds chrono range".to_string())
+    })?;
+    let now = Local
+        .timestamp_millis_opt(now_millis)
+        .single()
+        .ok_or_else(|| {
+            ClockError::OutOfRange("History workspace timestamp exceeds chrono range".to_string())
+        })?;
     let today = local_day_start(now).unwrap_or(now);
     let month = month_threshold(today).unwrap_or_else(|| today - Duration::days(30));
 
-    HistoryWorkspaceDateFilterThresholds {
+    Ok(HistoryWorkspaceDateFilterThresholds {
         today_start_millis: millis_u64(today),
         week_start_millis: millis_u64(today - Duration::days(7)),
         month_start_millis: millis_u64(month),
-    }
+    })
 }
 
 fn local_day_start(value: chrono::DateTime<Local>) -> Option<chrono::DateTime<Local>> {
@@ -693,9 +737,102 @@ where
 {
     app_local_data_dir: PathBuf,
     db: Arc<D>,
+    clock: Option<Arc<dyn UnixMillisClock>>,
+    ids: Option<Arc<dyn HistoryIdGenerator>>,
 }
 
-crate::impl_db_repository!(SqliteHistoryStore, app_local_data_dir);
+impl<D> SqliteHistoryStore<D>
+where
+    D: DatabasePort,
+{
+    pub fn new(app_local_data_dir: PathBuf, db: Arc<D>) -> Self {
+        Self {
+            app_local_data_dir,
+            db,
+            clock: None,
+            ids: None,
+        }
+    }
+
+    pub fn with_environment(
+        app_local_data_dir: PathBuf,
+        db: Arc<D>,
+        clock: Arc<dyn UnixMillisClock>,
+        ids: Arc<dyn HistoryIdGenerator>,
+    ) -> Self {
+        Self {
+            app_local_data_dir,
+            db,
+            clock: Some(clock),
+            ids: Some(ids),
+        }
+    }
+
+    fn get_db(&self) -> Result<&D, DatabaseError> {
+        Ok(self.db.as_ref())
+    }
+
+    fn clock(&self) -> Result<&dyn UnixMillisClock, ClockError> {
+        self.clock
+            .as_deref()
+            .ok_or_else(|| ClockError::Unavailable("History clock is not configured".to_string()))
+    }
+
+    fn ids(&self) -> Result<&dyn HistoryIdGenerator, DatabaseError> {
+        self.ids.as_deref().ok_or_else(|| {
+            DatabaseError::Internal("History ID generator is not configured".to_string())
+        })
+    }
+
+    fn mutation_now_ms(&self) -> Result<u64, HistoryMutationError> {
+        Ok(self.clock()?.now_ms()?)
+    }
+
+    fn query_now_ms(&self) -> Result<u64, HistoryStoreError> {
+        Ok(self.clock()?.now_ms()?)
+    }
+
+    fn generated_values(&self) -> Result<HistoryItemGeneratedValues, HistoryMutationError> {
+        let clock = self.clock()?;
+        let ids = self.ids()?;
+        Ok(new_history_item_generated_values(clock, ids)?)
+    }
+}
+
+impl SqliteHistoryStore<crate::Database> {
+    #[cfg(test)]
+    pub(crate) fn with_db(app_local_data_dir: PathBuf, db: crate::Database) -> Self {
+        Self::with_environment(
+            app_local_data_dir,
+            Arc::new(db),
+            Arc::new(TestHistoryClock),
+            Arc::new(TestHistoryIds),
+        )
+    }
+}
+
+#[cfg(test)]
+struct TestHistoryClock;
+
+#[cfg(test)]
+impl UnixMillisClock for TestHistoryClock {
+    fn now_ms(&self) -> Result<u64, ClockError> {
+        std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis() as u64)
+            .map_err(|error| ClockError::BeforeUnixEpoch(error.to_string()))
+    }
+}
+
+#[cfg(test)]
+struct TestHistoryIds;
+
+#[cfg(test)]
+impl HistoryIdGenerator for TestHistoryIds {
+    fn generate_id(&self) -> String {
+        uuid::Uuid::new_v4().to_string()
+    }
+}
 
 struct StagedHistoryAudio {
     staging_path: PathBuf,
@@ -710,14 +847,30 @@ struct AudioCleanupCandidate {
 
 impl StagedHistoryAudio {
     fn promote(&self) -> Result<(), DatabaseError> {
-        if self.target_path.exists() {
-            return Err(DatabaseError::Internal(format!(
-                "History audio target already exists: {}",
-                self.target_path.to_string_lossy()
-            )));
+        match fs::metadata(&self.target_path) {
+            Ok(_) => {
+                return Err(DatabaseError::Internal(format!(
+                    "History audio target already exists: {}",
+                    self.target_path.to_string_lossy()
+                )));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(db_file_system_error(
+                    FileSystemOperation::Metadata,
+                    &self.target_path,
+                    error,
+                ));
+            }
         }
-        fs::rename(&self.staging_path, &self.target_path)
-            .map_err(|error| DatabaseError::Internal(error.to_string()))
+        fs::rename(&self.staging_path, &self.target_path).map_err(|error| {
+            DatabaseError::FileSystem(FileSystemError::with_target(
+                FileSystemOperation::Rename,
+                &self.staging_path,
+                &self.target_path,
+                error.to_string(),
+            ))
+        })
     }
 
     fn cleanup_staging(&self) {
@@ -738,7 +891,7 @@ where
         operation: impl FnOnce() -> Result<T, HistoryMutationError>,
     ) -> Result<T, HistoryMutationError> {
         let _guard = acquire_history_file_lock(&self.app_local_data_dir)
-            .map_err(|error| HistoryMutationError::Internal(error.to_string()))?;
+            .map_err(HistoryMutationError::from)?;
         operation()
     }
 
@@ -749,11 +902,11 @@ where
     fn audio_path(&self, file_name: &str) -> Result<PathBuf, DatabaseError> {
         Ok(self.history_dir().join(
             ensure_safe_file_name(file_name, "History audio path")
-                .map_err(DatabaseError::Internal)?,
+                .map_err(|error| DatabaseError::Internal(error.to_string()))?,
         ))
     }
 
-    fn staging_audio_path(target_path: &Path) -> Result<PathBuf, DatabaseError> {
+    fn staging_audio_path(&self, target_path: &Path) -> Result<PathBuf, DatabaseError> {
         let parent = target_path.parent().ok_or_else(|| {
             DatabaseError::Internal("History audio target has no parent directory.".to_string())
         })?;
@@ -765,7 +918,7 @@ where
             })?;
         Ok(parent.join(format!(
             "{file_name}{STAGED_AUDIO_MARKER}{}",
-            Uuid::new_v4()
+            self.ids()?.generate_id()
         )))
     }
 
@@ -775,20 +928,22 @@ where
         bytes: &[u8],
     ) -> Result<StagedHistoryAudio, DatabaseError> {
         if let Some(parent) = target_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+            fs::create_dir_all(parent).map_err(|error| {
+                db_file_system_error(FileSystemOperation::CreateDirectory, parent, error)
+            })?;
         }
-        let staging_path = Self::staging_audio_path(&target_path)?;
+        let staging_path = self.staging_audio_path(&target_path)?;
         let write_result = (|| -> Result<(), DatabaseError> {
-            let file = fs::File::create(&staging_path)
-                .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+            let file = fs::File::create(&staging_path).map_err(|error| {
+                db_file_system_error(FileSystemOperation::WriteFile, &staging_path, error)
+            })?;
             let mut writer = BufWriter::new(file);
-            writer
-                .write_all(bytes)
-                .map_err(|error| DatabaseError::Internal(error.to_string()))?;
-            writer
-                .flush()
-                .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+            writer.write_all(bytes).map_err(|error| {
+                db_file_system_error(FileSystemOperation::WriteFile, &staging_path, error)
+            })?;
+            writer.flush().map_err(|error| {
+                db_file_system_error(FileSystemOperation::WriteFile, &staging_path, error)
+            })?;
             Ok(())
         })();
         if write_result.is_err() {
@@ -807,13 +962,21 @@ where
         target_path: PathBuf,
     ) -> Result<StagedHistoryAudio, DatabaseError> {
         if let Some(parent) = target_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+            fs::create_dir_all(parent).map_err(|error| {
+                db_file_system_error(FileSystemOperation::CreateDirectory, parent, error)
+            })?;
         }
-        let staging_path = Self::staging_audio_path(&target_path)?;
+        let staging_path = self.staging_audio_path(&target_path)?;
         let copy_result = fs::copy(source_path, &staging_path)
             .map(|_| ())
-            .map_err(|error| DatabaseError::Internal(error.to_string()));
+            .map_err(|error| {
+                DatabaseError::FileSystem(FileSystemError::with_target(
+                    FileSystemOperation::Copy,
+                    source_path,
+                    &staging_path,
+                    error.to_string(),
+                ))
+            });
         if copy_result.is_err() {
             let _ = remove_path_if_exists(&staging_path);
         }
@@ -826,17 +989,27 @@ where
 
     fn cleanup_stale_staged_audio_files(&self) -> Result<(), DatabaseError> {
         let history_dir = self.history_dir();
-        if !history_dir.exists() {
-            return Ok(());
+        match fs::metadata(&history_dir) {
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => {
+                return Err(db_file_system_error(
+                    FileSystemOperation::Metadata,
+                    &history_dir,
+                    error,
+                ));
+            }
         }
 
-        for entry in
-            fs::read_dir(&history_dir).map_err(|e| DatabaseError::Internal(e.to_string()))?
-        {
-            let entry = entry.map_err(|e| DatabaseError::Internal(e.to_string()))?;
+        for entry in fs::read_dir(&history_dir).map_err(|error| {
+            db_file_system_error(FileSystemOperation::ReadDirectory, &history_dir, error)
+        })? {
+            let entry = entry.map_err(|error| {
+                db_file_system_error(FileSystemOperation::ReadDirectory, &history_dir, error)
+            })?;
             let file_name = entry.file_name();
             if file_name.to_string_lossy().contains(STAGED_AUDIO_MARKER) {
-                remove_path_if_exists(&entry.path()).map_err(DatabaseError::Internal)?;
+                remove_path_if_exists(&entry.path()).map_err(DatabaseError::FileSystem)?;
             }
         }
 
@@ -858,16 +1031,12 @@ where
         })
     }
 
-    fn audio_cleanup_cutoff(retention_days: Option<u64>) -> Option<i64> {
+    fn audio_cleanup_cutoff(now_millis: u64, retention_days: Option<u64>) -> Option<i64> {
         let retention_days = retention_days?;
         let retention_millis = retention_days
             .saturating_mul(MILLIS_PER_DAY)
             .min(i64::MAX as u64) as i64;
-        Some(
-            chrono::Utc::now()
-                .timestamp_millis()
-                .saturating_sub(retention_millis),
-        )
+        Some((now_millis.min(i64::MAX as u64) as i64).saturating_sub(retention_millis))
     }
 
     fn audio_cleanup_candidates(
@@ -901,11 +1070,12 @@ where
         &self,
         request: HistoryAudioCleanupRequest,
         apply: bool,
-    ) -> Result<HistoryAudioCleanupReport, DatabaseError> {
-        self.ensure_ready()
-            .map_err(|e| DatabaseError::Internal(e.to_string()))?;
+    ) -> Result<HistoryAudioCleanupReport, HistoryStoreError> {
+        self.ensure_ready()?;
 
-        let Some(cutoff_millis) = Self::audio_cleanup_cutoff(request.retention_days) else {
+        let now_millis = self.query_now_ms()?;
+        let Some(cutoff_millis) = Self::audio_cleanup_cutoff(now_millis, request.retention_days)
+        else {
             return Ok(HistoryAudioCleanupReport::default());
         };
 
@@ -1098,7 +1268,15 @@ where
             };
             let _metadata = match std::fs::metadata(&audio_path) {
                 Ok(m) if m.is_file() && m.len() > 0 => m,
-                _ => continue,
+                Ok(_) => continue,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => {
+                    return Err(db_file_system_error(
+                        FileSystemOperation::Metadata,
+                        &audio_path,
+                        error,
+                    ));
+                }
             };
 
             let Some(segments_val) = segments_val else {
@@ -1151,7 +1329,7 @@ where
 }
 
 fn validate_id(id: &str, label: &str) -> Result<(), String> {
-    ensure_safe_file_name(id, label)?;
+    ensure_safe_file_name(id, label).map_err(|error| error.to_string())?;
     Ok(())
 }
 
@@ -1160,6 +1338,8 @@ fn history_store_mutation_error(error: HistoryMutationError) -> HistoryStoreErro
         HistoryMutationError::InvalidRequest(reason) => HistoryStoreError::InvalidRequest(reason),
         HistoryMutationError::Database(reason) => HistoryStoreError::Database(reason),
         HistoryMutationError::Serialization(error) => HistoryStoreError::Serialization(error),
+        HistoryMutationError::Clock(error) => HistoryStoreError::Clock(error),
+        HistoryMutationError::FileSystem(error) => HistoryStoreError::FileSystem(error),
         HistoryMutationError::NotFound(reason) | HistoryMutationError::Internal(reason) => {
             HistoryStoreError::Internal(reason)
         }
@@ -1326,8 +1506,13 @@ where
     D: DatabasePort,
 {
     fn ensure_ready_inner(&self) -> Result<(), DatabaseError> {
-        fs::create_dir_all(self.history_dir())
-            .map_err(|e| DatabaseError::Internal(e.to_string()))?;
+        fs::create_dir_all(self.history_dir()).map_err(|error| {
+            db_file_system_error(
+                FileSystemOperation::CreateDirectory,
+                &self.history_dir(),
+                error,
+            )
+        })?;
         self.cleanup_stale_staged_audio_files()
     }
 
@@ -1414,6 +1599,8 @@ where
 
         self.ensure_ready()?;
         self.reconcile_live_drafts()?;
+        let date_filter_thresholds =
+            current_workspace_date_filter_thresholds(self.query_now_ms()?)?;
 
         Ok(self.get_db()?.with_connection(|conn| {
             let tx = conn.unchecked_transaction()?;
@@ -1451,8 +1638,6 @@ where
                     by_tag_id,
                 }
             };
-
-            let date_filter_thresholds = current_workspace_date_filter_thresholds();
 
             let summary = {
                 let mut conditions = Vec::new();
@@ -1565,9 +1750,8 @@ where
         request: HistoryCreateLiveDraftRequest,
     ) -> Result<LiveRecordingDraftResult, HistoryMutationError> {
         self.ensure_ready_inner()?;
-        let generated = new_history_item_generated_values().map_err(DatabaseError::Internal)?;
-        let item = sona_core::history::item_factory::create_live_draft_item(request, generated)
-            .map_err(DatabaseError::Internal)?;
+        let generated = self.generated_values()?;
+        let item = sona_core::history::item_factory::create_live_draft_item(request, generated);
         let audio_absolute_path = self
             .audio_path(&item.audio_path)?
             .to_string_lossy()
@@ -1593,6 +1777,7 @@ where
         let normalized_transcript = canonicalize_history_transcript_segments(segments);
         let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
+        let now_ms = self.mutation_now_ms()?;
         Ok(self.get_db()?.with_rw_transaction(|tx| {
             let rows_affected = tx.execute(
                 "UPDATE history_items
@@ -1621,7 +1806,6 @@ where
                 "SELECT {columns} FROM history_items WHERE id = ?1"
             ))?;
             let item = stmt.query_row([history_id], map_row_to_item)?;
-            let now_ms = sync_now_ms();
             Self::record_history_item_sync(tx, &item, now_ms)?;
             Self::record_transcript_sync(
                 tx,
@@ -1648,15 +1832,14 @@ where
         } = request;
 
         let normalized_transcript = canonicalize_history_transcript_segments(segments);
-        let generated = new_history_item_generated_values().map_err(DatabaseError::Internal)?;
+        let generated = self.generated_values()?;
         let mut item = sona_core::history::item_factory::create_recording_item(
             generated,
             duration,
             tag_ids,
             audio_extension.as_deref(),
             native_audio_path.as_deref(),
-        )
-        .map_err(DatabaseError::Internal)?;
+        );
         item.preview_text = normalized_transcript.preview_text;
         item.search_content = normalized_transcript.search_content;
 
@@ -1665,12 +1848,12 @@ where
             (Some(bytes), _) => self.stage_audio_bytes(target_path, &bytes)?,
             (None, Some(native_path)) => {
                 let source_path = PathBuf::from(&native_path);
-                if !source_path.is_file() {
-                    return Err(HistoryMutationError::Internal(format!(
+                require_history_source_file(&source_path, || {
+                    format!(
                         "Native recording source file does not exist: {}",
                         source_path.to_string_lossy()
-                    )));
-                }
+                    )
+                })?;
                 self.stage_audio_copy(&source_path, target_path)?
             }
             (None, None) => {
@@ -1728,7 +1911,7 @@ where
         } = request;
 
         let normalized_transcript = canonicalize_history_transcript_segments(segments);
-        let generated = new_history_item_generated_values().map_err(DatabaseError::Internal)?;
+        let generated = self.generated_values()?;
         let imported = sona_core::history::item_factory::create_imported_file_item(
             id,
             source_path,
@@ -1736,19 +1919,18 @@ where
             duration,
             tag_ids,
             generated,
-        )
-        .map_err(DatabaseError::Internal)?;
+        );
         let mut item = imported.item;
         item.preview_text = normalized_transcript.preview_text;
         item.search_content = normalized_transcript.search_content;
 
         let source = PathBuf::from(imported.copy_source_path);
-        if !source.is_file() {
-            return Err(HistoryMutationError::Internal(format!(
+        require_history_source_file(&source, || {
+            format!(
                 "Imported source file does not exist: {}",
                 source.to_string_lossy()
-            )));
-        }
+            )
+        })?;
 
         let target_path = self.audio_path(&item.audio_path)?;
         let staged_audio = self.stage_audio_copy(&source, target_path)?;
@@ -1792,11 +1974,11 @@ where
         let deleted_at = i64::try_from(deleted_at).map_err(|_| {
             HistoryMutationError::InvalidRequest("deletedAt exceeds SQLite range".to_string())
         })?;
+        let now_ms = self.mutation_now_ms()?;
         Ok(self.get_db()?.with_transaction(|tx| {
             let mut statement = tx.prepare_cached(
                 "UPDATE history_items SET deleted_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
             )?;
-            let now_ms = sync_now_ms();
             for id in ids {
                 if statement.execute(rusqlite::params![deleted_at, id])? > 0 {
                     record_local_field_change_in_transaction(
@@ -1817,11 +1999,11 @@ where
         if ids.is_empty() {
             return Ok(());
         }
+        let now_ms = self.mutation_now_ms()?;
         Ok(self.get_db()?.with_transaction(|tx| {
             let mut statement = tx.prepare_cached(
                 "UPDATE history_items SET deleted_at = NULL WHERE id = ?1 AND deleted_at IS NOT NULL",
             )?;
-            let now_ms = sync_now_ms();
             for id in ids {
                 if statement.execute([id])? > 0 {
                     record_local_field_change_in_transaction(
@@ -1843,6 +2025,7 @@ where
             return Ok(());
         }
 
+        let now_ms = self.mutation_now_ms()?;
         let audio_paths = self.get_db()?.with_rw_transaction(|tx| {
             let mut audio_paths = Vec::new();
             let mut existing_ids = Vec::new();
@@ -1879,7 +2062,6 @@ where
                     stmt.execute([id])?;
                 }
             }
-            let now_ms = sync_now_ms();
             for id in &existing_ids {
                 for kind in [
                     SyncEntityKind::HistoryItem,
@@ -1931,7 +2113,7 @@ where
                 let segments_str: String = row.get(0)?;
                 let parsed_val: Value = serde_json::from_str(&segments_str)?;
                 let normalized = normalize_history_transcript_segments(parsed_val)
-                    .map_err(DatabaseError::Internal)?;
+                    .map_err(|error| DatabaseError::Internal(error.to_string()))?;
                 Ok(Some(normalized.segments))
             } else {
                 let exists: bool = conn.query_row(
@@ -1957,6 +2139,7 @@ where
     ) -> Result<HistoryItemRecord, HistoryMutationError> {
         let normalized_transcript = canonicalize_history_transcript_segments(segments);
         let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
+        let now_ms = self.mutation_now_ms()?;
 
         Ok(self.get_db()?.with_rw_transaction(|tx| {
             let rows_affected = tx.execute(
@@ -1985,7 +2168,6 @@ where
                 "SELECT {columns} FROM history_items WHERE id = ?1"
             ))?;
             let item = stmt.query_row([history_id], map_row_to_item)?;
-            let now_ms = sync_now_ms();
             Self::record_history_item_sync(tx, &item, now_ms)?;
             Self::record_transcript_sync(
                 tx,
@@ -2007,9 +2189,9 @@ where
         let normalized_transcript = canonicalize_history_transcript_segments(segments);
         let parsed_segments = normalized_transcript.segments;
 
-        let created_at = current_time_millis().map_err(DatabaseError::Internal)?;
+        let created_at = self.mutation_now_ms()?;
         let metadata = TranscriptSnapshotMetadata {
-            id: format!("{created_at}-{}", Uuid::new_v4()),
+            id: format!("{created_at}-{}", self.ids()?.generate_id()),
             history_id: history_id.to_string(),
             reason,
             created_at,
@@ -2178,7 +2360,7 @@ where
                 let parsed_val: Value = serde_json::from_str(&segments_str)?;
 
                 let normalized = normalize_history_transcript_segments(parsed_val)
-                    .map_err(DatabaseError::Internal)?;
+                    .map_err(|error| DatabaseError::Internal(error.to_string()))?;
 
                 let metadata = TranscriptSnapshotMetadata {
                     id: snapshot_id.to_string(),
@@ -2203,6 +2385,7 @@ where
         history_id: &str,
         updates: HistoryItemMetaPatch,
     ) -> Result<(), HistoryMutationError> {
+        let now_ms = self.mutation_now_ms()?;
         Ok(self.get_db()?.with_rw_transaction(|tx| {
             let columns = history_select_columns(None, &[]);
             let mut stmt = tx.prepare_cached(
@@ -2256,7 +2439,7 @@ where
                 )));
             }
 
-            Self::record_history_item_sync(tx, &item, sync_now_ms())?;
+            Self::record_history_item_sync(tx, &item, now_ms)?;
             Ok(())
         })?)
     }
@@ -2271,6 +2454,7 @@ where
             return Ok(());
         }
 
+        let now_ms = self.mutation_now_ms()?;
         Ok(self.get_db()?.with_transaction(|tx| {
             let mut add = tx.prepare_cached(
                 "INSERT OR IGNORE INTO history_item_tags (history_id, tag_id) VALUES (?1, ?2)",
@@ -2288,7 +2472,6 @@ where
             }
             drop(add);
             drop(remove);
-            let now_ms = sync_now_ms();
             for id in ids {
                 let tag_ids = load_tag_ids(tx, id)?;
                 record_local_field_change_in_transaction(
@@ -2309,8 +2492,8 @@ where
         ids: &[String],
         tag_ids: &[String],
     ) -> Result<(), HistoryMutationError> {
+        let now_ms = self.mutation_now_ms()?;
         Ok(self.get_db()?.with_transaction(|tx| {
-            let now_ms = sync_now_ms();
             for id in ids {
                 replace_history_item_tags(tx, id, tag_ids)?;
                 record_local_field_change_in_transaction(
@@ -2353,6 +2536,7 @@ where
     ) -> Result<(), HistoryStoreError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
         let payload_str = serde_json::to_string(&summary_payload)?;
+        let now_ms = self.query_now_ms()?;
 
         Ok(self.get_db()?.with_rw_transaction(|tx| {
             tx.execute(
@@ -2365,7 +2549,7 @@ where
                 history_id,
                 "document",
                 serde_json::to_value(summary_payload)?,
-                sync_now_ms(),
+                now_ms,
             )?;
             Ok(())
         })?)
@@ -2373,6 +2557,7 @@ where
 
     fn delete_summary(&self, history_id: &str) -> Result<(), HistoryStoreError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
+        let now_ms = self.query_now_ms()?;
 
         Ok(self.get_db()?.with_rw_transaction(|tx| {
             tx.execute(
@@ -2383,7 +2568,7 @@ where
                 tx,
                 SyncEntityKind::HistorySummary,
                 history_id,
-                sync_now_ms(),
+                now_ms,
             )?;
             Ok(())
         })?)
@@ -2447,7 +2632,11 @@ where
                 }
                 Ok(None)
             }
-            Err(error) => Err(HistoryStoreError::Internal(error.to_string())),
+            Err(error) => Err(HistoryStoreError::FileSystem(FileSystemError::new(
+                FileSystemOperation::Metadata,
+                &audio_path,
+                error.to_string(),
+            ))),
         }
     }
 
@@ -2527,9 +2716,9 @@ pub(crate) fn load_history_backup_in_transaction(
             transcript,
             &format!("Transcript for history item {}", item.id),
         )
-        .map_err(DatabaseError::Internal)?;
-        let normalized =
-            normalize_history_transcript_segments(transcript).map_err(DatabaseError::Internal)?;
+        .map_err(|error| DatabaseError::Internal(error.to_string()))?;
+        let normalized = normalize_history_transcript_segments(transcript)
+            .map_err(|error| DatabaseError::Internal(error.to_string()))?;
         transcript_files.push((
             format!("{}.json", item.id),
             serde_json::to_value(normalized.segments)?,
@@ -2588,7 +2777,7 @@ pub(crate) fn load_history_backup_in_transaction(
             }
         };
         let normalized = normalize_history_transcript_segments(serde_json::from_str(&segments)?)
-            .map_err(DatabaseError::Internal)?;
+            .map_err(|error| DatabaseError::Internal(error.to_string()))?;
         let metadata = TranscriptSnapshotMetadata {
             id: snapshot_id,
             history_id: history_id.clone(),
@@ -3056,8 +3245,8 @@ mod tests {
     #[test]
     fn audio_cleanup_removes_only_eligible_audio_and_preserves_text() {
         let root = tempdir().unwrap();
-        let db = Arc::new(Database::open_in_memory().unwrap());
-        let store = SqliteHistoryStore::new(root.path().to_path_buf(), Arc::clone(&db));
+        let db = Database::open_in_memory().unwrap();
+        let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
         store.ensure_ready().unwrap();
 
         let old_item = store
@@ -3366,7 +3555,7 @@ mod tests {
     }
 
     #[test]
-    fn mutation_readiness_filesystem_failures_remain_internal_errors() {
+    fn mutation_readiness_filesystem_failures_preserve_operation_and_path() {
         let root = tempdir().unwrap();
         let blocked_app_data = root.path().join("app-data-file");
         std::fs::write(&blocked_app_data, [1]).unwrap();
@@ -3380,7 +3569,14 @@ mod tests {
             icon: None,
         });
 
-        assert!(matches!(result, Err(HistoryMutationError::Internal(_))));
+        assert!(matches!(
+            result,
+            Err(HistoryMutationError::FileSystem(FileSystemError {
+                operation: FileSystemOperation::CreateDirectory,
+                path,
+                ..
+            })) if path == root.path().join("app-data-file").join(HISTORY_DIR_NAME)
+        ));
     }
 
     #[test]

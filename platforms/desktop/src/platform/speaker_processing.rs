@@ -17,6 +17,7 @@ pub async fn annotate_speaker_segments_from_file(
         speaker_processing,
     )
     .await
+    .map_err(|error| error.to_string())
 }
 
 pub async fn import_speaker_profile_sample(
@@ -35,6 +36,7 @@ pub async fn import_speaker_profile_sample(
         source_name,
     )
     .await
+    .map_err(|error| error.to_string())
 }
 
 pub async fn import_speaker_profile_sample_for_app<R: tauri::Runtime>(

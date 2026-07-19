@@ -9,6 +9,7 @@ use sona_core::llm::provider_protocol::{
 };
 use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::llm::usage::TokenUsage;
+use sona_core::ports::llm::LlmPortErrorKind;
 
 #[test]
 fn provider_model_urls_accept_common_base_url_shapes() {
@@ -51,6 +52,33 @@ fn gemini_generate_content_request_keeps_api_key_in_headers() {
     assert_eq!(
         request.headers,
         vec![("x-goog-api-key", "secret-stream-key".to_string())]
+    );
+}
+
+#[test]
+fn provider_protocol_errors_preserve_invalid_request_and_protocol_kinds() {
+    let invalid_model = build_gemini_generate_content_request_parts(
+        "https://generativelanguage.googleapis.com",
+        "models/  ",
+        "secret-key",
+        false,
+    )
+    .unwrap_err();
+    assert_eq!(invalid_model.kind, LlmPortErrorKind::InvalidRequest);
+    assert_eq!(invalid_model.message, "Gemini model cannot be empty");
+
+    let missing_text = extract_text_from_json_response(&json!({"choices": []})).unwrap_err();
+    assert_eq!(missing_text.kind, LlmPortErrorKind::Protocol);
+    assert_eq!(
+        missing_text.message,
+        "LLM response did not contain text output"
+    );
+
+    let malformed_anthropic = extract_anthropic_text_response(&json!({})).unwrap_err();
+    assert_eq!(malformed_anthropic.kind, LlmPortErrorKind::Protocol);
+    assert_eq!(
+        malformed_anthropic.message,
+        "Anthropic response missing content array"
     );
 }
 

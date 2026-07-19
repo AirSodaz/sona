@@ -21,7 +21,8 @@ use sona_core::history::{
     LiveRecordingDraftResult, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
 };
 use sona_core::transcription::transcript::TranscriptSegment;
-use sona_sqlite::{LazySqliteHistoryMutationRepository, LazySqliteHistoryQueryRepository};
+use sona_runtime_fs::{SystemClock, UuidGenerator};
+use sona_sqlite::{DeferredSqliteHistoryMutationRepository, SqliteApplicationContext};
 
 use crate::table::{append_table_row, append_table_separator, column_widths, sanitize_table_cell};
 use crate::{CliError, CliOutput, CliResult};
@@ -540,7 +541,7 @@ fn read_legacy_segments(path: &PathBuf, label: &str) -> CliResult<Vec<Transcript
 fn normalize_legacy_segments(segments: Value) -> CliResult<Vec<TranscriptSegment>> {
     normalize_history_transcript_segments(segments)
         .map(|normalized| normalized.segments)
-        .map_err(CliError::Validation)
+        .map_err(|error| CliError::Validation(error.to_string()))
 }
 
 fn run_assign_project(args: HistoryAssignProjectArgs) -> CliResult<CliOutput> {
@@ -555,7 +556,8 @@ fn run_assign_project(args: HistoryAssignProjectArgs) -> CliResult<CliOutput> {
 }
 
 fn run_reassign_project(args: HistoryReassignProjectArgs) -> CliResult<CliOutput> {
-    let query = open_service(args.location.app_data_dir.clone())?;
+    let context = open_history_context(args.location.app_data_dir)?;
+    let query = HistoryQueryService::new(Arc::new(history_store(&context)));
     let ids = query
         .list_items(HistoryListOptions {
             limit: None,
@@ -566,7 +568,7 @@ fn run_reassign_project(args: HistoryReassignProjectArgs) -> CliResult<CliOutput
         .filter(|item| item.tag_ids.contains(&args.current_project_id))
         .map(|item| item.id)
         .collect();
-    let service = open_mutation_service(args.location.app_data_dir)?;
+    let service = HistoryMutationService::new(Arc::new(history_store(&context)));
     service
         .update_tag_assignments(HistoryUpdateTagAssignmentsRequest {
             ids,
@@ -596,17 +598,29 @@ fn unix_millis_now() -> CliResult<u64> {
 }
 
 fn open_service(app_data_dir: PathBuf) -> CliResult<HistoryQueryService> {
-    let app_data_dir = existing_app_data_dir(app_data_dir)?;
-    Ok(HistoryQueryService::new(Arc::new(
-        LazySqliteHistoryQueryRepository::new(app_data_dir),
-    )))
+    let context = open_history_context(app_data_dir)?;
+    Ok(HistoryQueryService::new(Arc::new(history_store(&context))))
 }
 
 fn open_mutation_service(app_data_dir: PathBuf) -> CliResult<HistoryMutationService> {
     let app_data_dir = existing_app_data_dir(app_data_dir)?;
     Ok(HistoryMutationService::new(Arc::new(
-        LazySqliteHistoryMutationRepository::new(app_data_dir),
+        DeferredSqliteHistoryMutationRepository::with_database_provider(
+            app_data_dir,
+            Arc::new(SystemClock),
+            Arc::new(UuidGenerator),
+            |path| SqliteApplicationContext::open(path).map(|context| context.database()),
+        ),
     )))
+}
+
+fn history_store(context: &SqliteApplicationContext) -> sona_sqlite::SqliteHistoryStore {
+    context.history_store(Arc::new(SystemClock), Arc::new(UuidGenerator))
+}
+
+fn open_history_context(app_data_dir: PathBuf) -> CliResult<SqliteApplicationContext> {
+    let app_data_dir = existing_app_data_dir(app_data_dir)?;
+    SqliteApplicationContext::open(app_data_dir).map_err(|error| CliError::Io(error.to_string()))
 }
 
 fn existing_app_data_dir(app_data_dir: PathBuf) -> CliResult<PathBuf> {
@@ -658,6 +672,8 @@ fn map_history_error(error: HistoryQueryError) -> CliError {
     match error {
         HistoryQueryError::InvalidRequest(reason) => CliError::Validation(reason),
         HistoryQueryError::Serialization(error) => CliError::Serialize(error.to_string()),
+        HistoryQueryError::Clock(error) => CliError::Io(error.to_string()),
+        HistoryQueryError::FileSystem(error) => CliError::Io(error.to_string()),
         HistoryQueryError::Database(reason) | HistoryQueryError::Internal(reason) => {
             CliError::Io(reason)
         }
@@ -668,6 +684,8 @@ fn map_history_mutation_error(error: HistoryMutationError) -> CliError {
     match error {
         HistoryMutationError::InvalidRequest(reason) => CliError::Validation(reason),
         HistoryMutationError::Serialization(error) => CliError::Serialize(error.to_string()),
+        HistoryMutationError::Clock(error) => CliError::Io(error.to_string()),
+        HistoryMutationError::FileSystem(error) => CliError::Io(error.to_string()),
         HistoryMutationError::NotFound(reason)
         | HistoryMutationError::Database(reason)
         | HistoryMutationError::Internal(reason) => CliError::Io(reason),

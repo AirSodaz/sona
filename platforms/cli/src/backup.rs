@@ -4,10 +4,11 @@ use clap::{Args, Subcommand};
 use serde::Serialize;
 use sona_archive::FsBackupAdapter;
 use sona_core::backup::{
-    BackupError, BackupExportRequest, BackupImportRequest, BackupInspectRequest,
+    BackupApplyResult, BackupDataset, BackupError, BackupExportRequest, BackupImportRequest,
+    BackupInspectRequest, BackupRestoreDataset, BackupStateRepository,
 };
 use sona_runtime_fs::SystemClock;
-use sona_sqlite::LazySqliteBackupStateRepository;
+use sona_sqlite::{SqliteApplicationContext, validate_backup_restore_dataset};
 
 use crate::{CliError, CliOutput, CliResult};
 
@@ -83,37 +84,57 @@ enum ValidatedBackupCommand {
     },
 }
 
-impl ValidatedBackupCommand {
-    fn app_data_dir(&self) -> PathBuf {
-        match self {
-            Self::Export { app_data_dir, .. } | Self::Import { app_data_dir, .. } => {
-                app_data_dir.clone()
-            }
-            Self::Inspect(_) => PathBuf::new(),
-        }
-    }
-}
-
 pub fn run_backup(args: BackupArgs) -> CliResult<CliOutput> {
-    let command = validate_command(args.command)?;
-    let adapter = FsBackupAdapter::new(
-        LazySqliteBackupStateRepository::new(command.app_data_dir()),
-        SystemClock,
-    );
-
-    match command {
-        ValidatedBackupCommand::Export { request, .. } => adapter
+    match validate_command(args.command)? {
+        ValidatedBackupCommand::Export {
+            app_data_dir,
+            request,
+        } => FsBackupAdapter::new(CliContextBackupStateRepository(app_data_dir), SystemClock)
             .export_archive(request)
             .map_err(map_backup_error)
             .and_then(canonical_json),
-        ValidatedBackupCommand::Inspect(request) => adapter
-            .inspect_archive(request)
-            .map_err(map_backup_error)
-            .and_then(canonical_json),
-        ValidatedBackupCommand::Import { request, .. } => adapter
+        ValidatedBackupCommand::Inspect(request) => {
+            FsBackupAdapter::new(CliContextBackupStateRepository(PathBuf::new()), SystemClock)
+                .inspect_archive(request)
+                .map_err(map_backup_error)
+                .and_then(canonical_json)
+        }
+        ValidatedBackupCommand::Import {
+            app_data_dir,
+            request,
+        } => FsBackupAdapter::new(CliContextBackupStateRepository(app_data_dir), SystemClock)
             .import_archive(request)
             .map_err(map_backup_error)
             .and_then(canonical_json),
+    }
+}
+
+#[derive(Clone, Debug)]
+struct CliContextBackupStateRepository(PathBuf);
+
+impl CliContextBackupStateRepository {
+    fn context(&self) -> Result<SqliteApplicationContext, BackupError> {
+        if !self.0.is_dir() {
+            return Err(BackupError::State(format!(
+                "Application data directory does not exist or is not a directory: {}",
+                self.0.display()
+            )));
+        }
+        SqliteApplicationContext::open(&self.0)
+            .map_err(|error| BackupError::State(error.to_string()))
+    }
+}
+
+impl BackupStateRepository for CliContextBackupStateRepository {
+    fn snapshot(&self) -> Result<BackupDataset, BackupError> {
+        self.context()?.backup_state_repository().snapshot()
+    }
+
+    fn replace_all(&self, dataset: BackupRestoreDataset) -> Result<BackupApplyResult, BackupError> {
+        validate_backup_restore_dataset(&dataset)?;
+        self.context()?
+            .backup_state_repository()
+            .replace_all(dataset)
     }
 }
 

@@ -1,4 +1,8 @@
-use crate::{SonaCoreBindingError, SonaCoreBindingResult};
+use crate::application_context::application_context;
+use crate::{
+    FfiTaskLedgerPatchV1, FfiTaskLedgerRecordV1, FfiTaskLedgerSnapshotV1, SonaCoreBindingError,
+    SonaCoreBindingResult,
+};
 #[cfg(test)]
 use sona_core::ports::time::ClockError;
 use sona_core::ports::time::UnixMillisClock;
@@ -7,8 +11,7 @@ use sona_core::task_ledger::{
     types::{TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot},
 };
 use sona_runtime_fs::SystemClock;
-use sona_sqlite::{Database, SqliteTaskLedgerAdapter};
-use std::path::Path;
+use sona_sqlite::SqliteTaskLedgerAdapter;
 use std::sync::Arc;
 
 pub(crate) fn load_task_ledger_snapshot_json(
@@ -17,11 +20,24 @@ pub(crate) fn load_task_ledger_snapshot_json(
     load_task_ledger_snapshot_json_with_clock(app_data_dir, Arc::new(SystemClock))
 }
 
+pub(crate) fn load_task_ledger_snapshot_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+    load_task_ledger_snapshot_v1_with_clock(app_data_dir, Arc::new(SystemClock))
+}
+
 pub(crate) fn upsert_task_ledger_record_json(
     app_data_dir: String,
     record_json: String,
 ) -> SonaCoreBindingResult<String> {
     upsert_task_ledger_record_json_with_clock(app_data_dir, record_json, Arc::new(SystemClock))
+}
+
+pub(crate) fn upsert_task_ledger_record_v1(
+    app_data_dir: String,
+    record: FfiTaskLedgerRecordV1,
+) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+    upsert_task_ledger_record_v1_with_clock(app_data_dir, record, Arc::new(SystemClock))
 }
 
 pub(crate) fn patch_task_ledger_record_json(
@@ -32,11 +48,26 @@ pub(crate) fn patch_task_ledger_record_json(
     patch_task_ledger_record_json_with_clock(app_data_dir, id, patch_json, Arc::new(SystemClock))
 }
 
+pub(crate) fn patch_task_ledger_record_v1(
+    app_data_dir: String,
+    id: String,
+    patch: FfiTaskLedgerPatchV1,
+) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+    patch_task_ledger_record_v1_with_clock(app_data_dir, id, patch, Arc::new(SystemClock))
+}
+
 pub(crate) fn remove_task_ledger_record_json(
     app_data_dir: String,
     id: String,
 ) -> SonaCoreBindingResult<String> {
     remove_task_ledger_record_json_with_clock(app_data_dir, id, Arc::new(SystemClock))
+}
+
+pub(crate) fn remove_task_ledger_record_v1(
+    app_data_dir: String,
+    id: String,
+) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+    remove_task_ledger_record_v1_with_clock(app_data_dir, id, Arc::new(SystemClock))
 }
 
 pub(crate) fn clear_resolved_task_ledger_records_json(
@@ -45,12 +76,26 @@ pub(crate) fn clear_resolved_task_ledger_records_json(
     clear_resolved_task_ledger_records_json_with_clock(app_data_dir, Arc::new(SystemClock))
 }
 
+pub(crate) fn clear_resolved_task_ledger_records_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+    clear_resolved_task_ledger_records_v1_with_clock(app_data_dir, Arc::new(SystemClock))
+}
+
 fn load_task_ledger_snapshot_json_with_clock(
     app_data_dir: String,
     clock: Arc<dyn UnixMillisClock>,
 ) -> SonaCoreBindingResult<String> {
     with_task_ledger_adapter(&app_data_dir, clock, |adapter| adapter.load_snapshot())
         .and_then(serialize_snapshot)
+}
+
+fn load_task_ledger_snapshot_v1_with_clock(
+    app_data_dir: String,
+    clock: Arc<dyn UnixMillisClock>,
+) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+    with_task_ledger_adapter(&app_data_dir, clock, |adapter| adapter.load_snapshot())
+        .map(Into::into)
 }
 
 fn upsert_task_ledger_record_json_with_clock(
@@ -65,6 +110,17 @@ fn upsert_task_ledger_record_json_with_clock(
     })?;
     with_task_ledger_adapter(&app_data_dir, clock, |adapter| adapter.upsert_task(record))
         .and_then(serialize_snapshot)
+}
+
+fn upsert_task_ledger_record_v1_with_clock(
+    app_data_dir: String,
+    record: FfiTaskLedgerRecordV1,
+    clock: Arc<dyn UnixMillisClock>,
+) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+    with_task_ledger_adapter(&app_data_dir, clock, |adapter| {
+        adapter.upsert_task(record.into())
+    })
+    .map(Into::into)
 }
 
 fn patch_task_ledger_record_json_with_clock(
@@ -84,6 +140,18 @@ fn patch_task_ledger_record_json_with_clock(
     .and_then(serialize_snapshot)
 }
 
+fn patch_task_ledger_record_v1_with_clock(
+    app_data_dir: String,
+    id: String,
+    patch: FfiTaskLedgerPatchV1,
+    clock: Arc<dyn UnixMillisClock>,
+) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+    with_task_ledger_adapter(&app_data_dir, clock, |adapter| {
+        adapter.patch_task(&id, patch.into())
+    })
+    .map(Into::into)
+}
+
 fn remove_task_ledger_record_json_with_clock(
     app_data_dir: String,
     id: String,
@@ -91,6 +159,15 @@ fn remove_task_ledger_record_json_with_clock(
 ) -> SonaCoreBindingResult<String> {
     with_task_ledger_adapter(&app_data_dir, clock, |adapter| adapter.remove_task(&id))
         .and_then(serialize_snapshot)
+}
+
+fn remove_task_ledger_record_v1_with_clock(
+    app_data_dir: String,
+    id: String,
+    clock: Arc<dyn UnixMillisClock>,
+) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+    with_task_ledger_adapter(&app_data_dir, clock, |adapter| adapter.remove_task(&id))
+        .map(Into::into)
 }
 
 fn clear_resolved_task_ledger_records_json_with_clock(
@@ -101,13 +178,21 @@ fn clear_resolved_task_ledger_records_json_with_clock(
         .and_then(serialize_snapshot)
 }
 
+fn clear_resolved_task_ledger_records_v1_with_clock(
+    app_data_dir: String,
+    clock: Arc<dyn UnixMillisClock>,
+) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
+    with_task_ledger_adapter(&app_data_dir, clock, |adapter| adapter.clear_resolved())
+        .map(Into::into)
+}
+
 fn with_task_ledger_adapter<T>(
     app_data_dir: &str,
     clock: Arc<dyn UnixMillisClock>,
     operation: impl FnOnce(&SqliteTaskLedgerAdapter) -> Result<T, TaskLedgerError>,
 ) -> SonaCoreBindingResult<T> {
-    let database = Database::open(Path::new(app_data_dir)).map_err(task_ledger_error)?;
-    let adapter = SqliteTaskLedgerAdapter::new(Arc::new(database), clock);
+    let context = application_context(app_data_dir).map_err(task_ledger_error)?;
+    let adapter = context.sqlite().task_ledger_adapter(clock);
     operation(&adapter).map_err(task_ledger_error)
 }
 
@@ -191,7 +276,9 @@ mod tests {
         patch_task_ledger_record_json_at, remove_task_ledger_record_json_at,
         upsert_task_ledger_record_json_at,
     };
-    use crate::SonaCoreBindingError;
+    use crate::{
+        FfiTaskLedgerKindV1, FfiTaskLedgerRecordV1, FfiTaskLedgerStatusV1, SonaCoreBindingError,
+    };
     use serde_json::{Value, json};
     use sona_core::ports::time::{ClockError, UnixMillisClock};
     use sona_core::task_ledger::repository::TaskLedgerStore;
@@ -233,6 +320,30 @@ mod tests {
         .to_string()
     }
 
+    fn record_v1(id: &str, status: FfiTaskLedgerStatusV1) -> FfiTaskLedgerRecordV1 {
+        FfiTaskLedgerRecordV1 {
+            id: id.to_string(),
+            kind: FfiTaskLedgerKindV1::LlmPolish,
+            status,
+            title: "  Polish transcript  ".to_string(),
+            progress: f64::NAN,
+            created_at: 0,
+            updated_at: 0,
+            retryable: false,
+            cancelable: true,
+            recoverable: false,
+            stage: None,
+            history_id: None,
+            tag_ids: Vec::new(),
+            file_path: None,
+            automation_rule_id: None,
+            source_fingerprint: None,
+            error_message: None,
+            template_id: None,
+            target_language: None,
+        }
+    }
+
     fn empty_snapshot_json() -> String {
         format!(r#"{{"version":{TASK_LEDGER_VERSION},"updatedAt":null,"tasks":[]}}"#)
     }
@@ -265,6 +376,25 @@ mod tests {
 
         let reloaded = load_task_ledger_snapshot_json_at(dir.app_data_dir(), 2_001).unwrap();
         assert_eq!(serde_json::from_str::<Value>(&reloaded).unwrap(), value);
+    }
+
+    #[test]
+    fn typed_v1_upsert_uses_injected_time_and_normalizes_non_finite_progress() {
+        let dir = TestDir::new();
+
+        let snapshot = super::upsert_task_ledger_record_v1_with_clock(
+            dir.app_data_dir(),
+            record_v1("  typed-task  ", FfiTaskLedgerStatusV1::Pending),
+            Arc::new(super::FixedClock(2_500)),
+        )
+        .unwrap();
+
+        assert_eq!(snapshot.updated_at, Some(2_500));
+        assert_eq!(snapshot.tasks[0].id, "typed-task");
+        assert_eq!(snapshot.tasks[0].title, "Polish transcript");
+        assert_eq!(snapshot.tasks[0].progress, 0.0);
+        assert_eq!(snapshot.tasks[0].created_at, 2_500);
+        assert_eq!(snapshot.tasks[0].updated_at, 2_500);
     }
 
     #[test]
@@ -398,5 +528,15 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(error, SonaCoreBindingError::TaskLedger { .. }));
+
+        let typed_error = super::load_task_ledger_snapshot_v1_with_clock(
+            dir.app_data_dir(),
+            Arc::new(FailingClock),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            typed_error,
+            SonaCoreBindingError::TaskLedger { .. }
+        ));
     }
 }

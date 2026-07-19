@@ -121,6 +121,7 @@ pub async fn get_asr_runtime_metrics(
     state: State<'_, AsrState>,
 ) -> Result<AsrRuntimeMetricsSnapshot, String> {
     let metrics = state.metrics_snapshot().await;
-    sona_ts_bind::validate_asr_runtime_metrics_for_typescript(&metrics)?;
+    sona_ts_bind::validate_asr_runtime_metrics_for_typescript(&metrics)
+        .map_err(|error| error.to_string())?;
     Ok(metrics)
 }

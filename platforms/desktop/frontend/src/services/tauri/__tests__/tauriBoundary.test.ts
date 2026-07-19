@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   RecoveredQueueItem_Serialize,
   RecoveryItemInput_Serialize,
+  RustTauriCommandContractMap,
 } from '../../../bindings';
 import { TauriCommand } from '../commands';
 import { TauriEvent, buildRecognizerOutputEvent } from '../events';
@@ -27,6 +28,7 @@ import {
 import { startMicrophoneCapture, stopSystemAudioCapture } from '../audio';
 import {
   historyCleanupAudio,
+  historyBuildTranscriptDiff,
   historyCreateLiveDraft,
   historyCreateTranscriptSnapshot,
   historyListTranscriptSnapshots,
@@ -34,8 +36,10 @@ import {
   historyLoadTranscriptSnapshot,
   historyPreviewAudioCleanup,
   historyQueryWorkspace,
+  historyRestoreTranscriptDiffRows,
   historySaveImportedFile,
   historySaveRecording,
+  historySaveSummary,
   historyUpdateTranscript,
 } from '../history';
 import {
@@ -93,16 +97,30 @@ import {
 } from '../speaker';
 import { getAuxWindowState, getMousePosition, injectText, setAuxWindowState } from '../system';
 import {
+  createSyncVault,
+  joinSyncVault,
+  previewSyncJoin,
+  testWebDavSyncProvider,
+} from '../sync';
+import {
   taskLedgerClearResolved,
   taskLedgerLoadSnapshot,
   taskLedgerPatchTask,
   taskLedgerRemoveTask,
   taskLedgerUpsertTask,
 } from '../taskLedger';
+import { tagList, tagSaveAll } from '../tag';
+import type { TaskLedgerRecord } from '../../../types/taskLedger';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
+
+const rustOwnedHistoryUpdateArgs: RustTauriCommandContractMap['history_update_transcript']['args'] = {
+  historyId: 'history-typed-contract',
+  segments: [],
+};
+void rustOwnedHistoryUpdateArgs;
 
 const uiLlmConfig = {
   provider: 'open_ai',
@@ -612,13 +630,83 @@ describe('tauri boundary wrappers', () => {
 
   it('history wrappers forward transcript persistence payloads', async () => {
     vi.mocked(invoke).mockResolvedValueOnce({ id: 'history-1' });
+    const segment = {
+      id: 'segment-1',
+      text: 'hello',
+      start: 0,
+      end: 1,
+      isFinal: true,
+    };
 
-    const result = await historyUpdateTranscript('history-1', []);
+    const result = await historyUpdateTranscript('history-1', [segment]);
 
     expect(result).toEqual({ id: 'history-1' });
     expect(invoke).toHaveBeenCalledWith(TauriCommand.history.updateTranscript, {
       historyId: 'history-1',
-      segments: [],
+      segments: [{
+        ...segment,
+        timing: null,
+        tokens: null,
+        timestamps: null,
+        durations: null,
+        translation: null,
+        speaker: null,
+        speakerAttribution: null,
+      }],
+    });
+  });
+
+  it('history wrappers normalize nested transcript and summary inputs for Rust', async () => {
+    const segment = {
+      id: 'segment-1',
+      text: 'hello',
+      start: 0,
+      end: 1,
+      isFinal: true,
+    };
+    vi.mocked(invoke)
+      .mockResolvedValueOnce({ rows: [], changedCount: 0 })
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(undefined);
+
+    await historyBuildTranscriptDiff([segment], []);
+    await historyRestoreTranscriptDiffRows([{
+      id: 'row-1',
+      status: 'removed',
+      snapshotSegment: segment,
+      snapshotIndex: 0,
+      currentIndex: null,
+    }], ['row-1']);
+    await historySaveSummary('history-1', { activeTemplateId: 'general' });
+
+    const wireSegment = {
+      ...segment,
+      timing: null,
+      tokens: null,
+      timestamps: null,
+      durations: null,
+      translation: null,
+      speaker: null,
+      speakerAttribution: null,
+    };
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.history.buildTranscriptDiff, {
+      snapshotSegments: [wireSegment],
+      currentSegments: [],
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.history.restoreTranscriptDiffRows, {
+      rows: [{
+        id: 'row-1',
+        status: 'removed',
+        snapshotSegment: wireSegment,
+        currentSegment: null,
+        snapshotIndex: 0,
+        currentIndex: null,
+      }],
+      selectedRowIds: ['row-1'],
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.history.saveSummary, {
+      historyId: 'history-1',
+      summaryPayload: { activeTemplateId: 'general', record: null },
     });
   });
 
@@ -1514,12 +1602,40 @@ describe('tauri boundary wrappers', () => {
       enabledPolishKeywordSetIds: [],
       enabledSpeakerProfileIds: [],
     };
+    const wireProject = {
+      id: 'project-1',
+      name: 'Research',
+      description: 'Notes',
+      icon: 'folder',
+      createdAt: 100,
+      updatedAt: 101,
+      defaults: {
+        ...defaults,
+        polishScenario: null,
+        polishContext: null,
+      },
+    };
+    const project = {
+      ...wireProject,
+      color: '#123456',
+      sortOrder: 4,
+      defaults,
+    };
+    vi.mocked(invoke)
+      .mockResolvedValueOnce([wireProject])
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(wireProject)
+      .mockResolvedValueOnce(wireProject)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce([wireProject])
+      .mockResolvedValueOnce('project-1')
+      .mockResolvedValueOnce(undefined);
 
-    await projectList({
+    const listed = await projectList({
       fallbackEnabledPolishKeywordSetIds: ['keywords'],
       fallbackEnabledSpeakerProfileIds: ['speaker'],
     });
-    await projectSaveAll([]);
+    await projectSaveAll([project]);
     await projectCreate({ name: 'Research', description: 'Notes', icon: 'folder', defaults });
     await projectUpdate('project-1', { name: 'Updated' });
     await projectDelete('project-1');
@@ -1527,12 +1643,19 @@ describe('tauri boundary wrappers', () => {
     await projectGetActiveId();
     await projectSetActiveId('project-2');
 
+    expect(listed).toEqual([{
+      ...wireProject,
+      color: '#64748b',
+      sortOrder: 0,
+      defaults,
+    }]);
+
     expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.project.list, {
       fallbackEnabledPolishKeywordSetIds: ['keywords'],
       fallbackEnabledSpeakerProfileIds: ['speaker'],
     });
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.project.saveAll, {
-      projects: [],
+      projects: [wireProject],
     });
     expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.project.create, {
       name: 'Research',
@@ -1553,6 +1676,104 @@ describe('tauri boundary wrappers', () => {
     expect(invoke).toHaveBeenNthCalledWith(7, TauriCommand.project.getActiveId);
     expect(invoke).toHaveBeenNthCalledWith(8, TauriCommand.project.setActiveId, {
       projectId: 'project-2',
+    });
+  });
+
+  it('tag repository wrappers normalize records at the Tauri boundary', async () => {
+    const defaults = {
+      summaryTemplateId: 'general',
+      translationLanguage: 'zh',
+      polishPresetId: 'general',
+      exportFileNamePrefix: '',
+      enabledTextReplacementSetIds: [],
+      enabledHotwordSetIds: [],
+      enabledPolishKeywordSetIds: [],
+      enabledSpeakerProfileIds: [],
+    };
+    const wireTag = {
+      id: 'tag-1',
+      name: 'Research',
+      description: 'Notes',
+      icon: 'folder',
+      color: '#123456',
+      sortOrder: 4,
+      createdAt: 100,
+      updatedAt: 101,
+      defaults: {
+        ...defaults,
+        polishScenario: null,
+        polishContext: null,
+      },
+    };
+    const tag = { ...wireTag, defaults };
+    vi.mocked(invoke)
+      .mockResolvedValueOnce([wireTag])
+      .mockResolvedValueOnce(undefined);
+
+    const listed = await tagList();
+    await tagSaveAll([tag]);
+
+    expect(listed).toEqual([tag]);
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.tag.saveAll, {
+      tags: [wireTag],
+    });
+  });
+
+  it('sync wrappers convert WebDAV UI inputs to provider-neutral lifecycle requests', async () => {
+    const webdav = {
+      serverUrl: 'https://dav.example.com',
+      remoteRoot: 'sona',
+      username: 'alice',
+      password: 'secret',
+    };
+    const provider = {
+      providerId: 'webdav',
+      configuration: webdav,
+    };
+    vi.mocked(invoke).mockResolvedValue({});
+
+    await testWebDavSyncProvider(webdav);
+    await createSyncVault({
+      provider: webdav,
+      preset: 'standard',
+      masterPassword: 'master-password',
+      createRecoveryKey: true,
+    });
+    await previewSyncJoin({
+      provider: webdav,
+      vaultId: 'vault-1',
+      masterPassword: 'master-password',
+    });
+    await joinSyncVault({
+      provider: webdav,
+      vaultId: 'vault-1',
+      masterPassword: 'master-password',
+    });
+
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.sync.testProvider, {
+      provider,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.sync.createVault, {
+      request: {
+        provider,
+        preset: 'standard',
+        masterPassword: 'master-password',
+        createRecoveryKey: true,
+      },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.sync.previewJoin, {
+      request: {
+        provider,
+        vaultId: 'vault-1',
+        masterPassword: 'master-password',
+      },
+    });
+    expect(invoke).toHaveBeenNthCalledWith(4, TauriCommand.sync.joinVault, {
+      request: {
+        provider,
+        vaultId: 'vault-1',
+        masterPassword: 'master-password',
+      },
     });
   });
 
@@ -1641,6 +1862,13 @@ describe('tauri boundary wrappers', () => {
   });
 
   it('recovery wrappers forward repository commands', async () => {
+    const segment = {
+      id: 'segment-1',
+      text: 'hello',
+      start: 0,
+      end: 1,
+      isFinal: true,
+    };
     const item: RecoveredQueueItem_Serialize = {
       id: 'recovery-1',
       filename: 'meeting.wav',
@@ -1648,7 +1876,7 @@ describe('tauri boundary wrappers', () => {
       source: 'batch_import',
       resolution: 'pending',
       progress: 10,
-      segments: [],
+      segments: [segment],
       tagIds: [],
       lastKnownStage: 'queued',
       updatedAt: 100,
@@ -1663,7 +1891,7 @@ describe('tauri boundary wrappers', () => {
       filePath: 'C:/watch/meeting.wav',
       status: 'pending',
       progress: 10,
-      segments: [],
+      segments: [segment],
       projectId: null,
     };
     vi.mocked(invoke).mockResolvedValueOnce({ version: 1, updatedAt: 100, items: [item] });
@@ -1675,15 +1903,37 @@ describe('tauri boundary wrappers', () => {
     expect(snapshot).toEqual({ version: 1, updatedAt: 100, items: [item] });
     expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.recovery.loadSnapshot);
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.recovery.saveSnapshot, {
-      items: [item],
+      items: [{
+        ...item,
+        segments: [{
+          ...segment,
+          tokens: null,
+          timestamps: null,
+          durations: null,
+          translation: null,
+          speaker: null,
+          speakerAttribution: null,
+        }],
+      }],
     });
     expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.recovery.persistQueueSnapshot, {
-      queueItems: [queueItem],
+      queueItems: [{
+        ...queueItem,
+        segments: [{
+          ...segment,
+          tokens: null,
+          timestamps: null,
+          durations: null,
+          translation: null,
+          speaker: null,
+          speakerAttribution: null,
+        }],
+      }],
     });
   });
 
   it('task ledger wrappers forward repository commands', async () => {
-    const record = {
+    const record: TaskLedgerRecord = {
       id: 'task-1',
       kind: 'batchImport',
       status: 'running',
@@ -1694,23 +1944,48 @@ describe('tauri boundary wrappers', () => {
       retryable: true,
       cancelable: true,
       recoverable: false,
+      projectId: 'tag-1',
     };
-    vi.mocked(invoke).mockResolvedValue({ version: 1, updatedAt: 101, tasks: [record] });
+    const { projectId, ...recordWithoutProjectId } = record;
+    const wireRecord = {
+      ...recordWithoutProjectId,
+      stage: null,
+      historyId: null,
+      tagIds: projectId ? [projectId] : [],
+      filePath: null,
+      automationRuleId: null,
+      sourceFingerprint: null,
+      errorMessage: null,
+      templateId: null,
+      targetLanguage: null,
+    };
+    vi.mocked(invoke).mockResolvedValue({ version: 1, updatedAt: 101, tasks: [wireRecord] });
 
     const snapshot = await taskLedgerLoadSnapshot();
-    await taskLedgerUpsertTask(record as any);
-    await taskLedgerPatchTask('task-1', { status: 'cancelRequested' });
+    await taskLedgerUpsertTask(record);
+    await taskLedgerPatchTask('task-1', {
+      status: 'cancelRequested',
+      projectId: 'tag-2',
+    });
     await taskLedgerRemoveTask('task-1');
     await taskLedgerClearResolved();
 
-    expect(snapshot).toEqual({ version: 1, updatedAt: 101, tasks: [record] });
+    expect(snapshot).toEqual({
+      version: 1,
+      updatedAt: 101,
+      tasks: [{
+        ...record,
+        projectId: undefined,
+        tagIds: ['tag-1'],
+      }],
+    });
     expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.taskLedger.loadSnapshot);
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.taskLedger.upsertTask, {
-      record,
+      record: wireRecord,
     });
     expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.taskLedger.patchTask, {
       id: 'task-1',
-      patch: { status: 'cancelRequested' },
+      patch: { status: 'cancelRequested', tagIds: ['tag-2'] },
     });
     expect(invoke).toHaveBeenNthCalledWith(4, TauriCommand.taskLedger.removeTask, {
       id: 'task-1',

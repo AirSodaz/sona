@@ -1,5 +1,6 @@
 use sona_core::models::downloads::{required_companion_models, resolve_model_download};
 use sona_core::models::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
+use sona_core::runtime::error::RuntimeValidationError;
 
 #[test]
 fn resolves_model_download_paths_and_required_companions() {
@@ -24,5 +25,16 @@ fn resolves_model_download_paths_and_required_companions() {
     assert_eq!(
         companions.punctuation_model_id.as_deref(),
         Some(DEFAULT_PUNCTUATION_MODEL_ID)
+    );
+}
+
+#[test]
+fn unknown_model_download_preserves_model_id_validation_context() {
+    let error =
+        resolve_model_download("missing-model", std::path::Path::new("C:/models")).unwrap_err();
+
+    assert_eq!(
+        error,
+        RuntimeValidationError::new("model_id", "Unknown model id: missing-model")
     );
 }
