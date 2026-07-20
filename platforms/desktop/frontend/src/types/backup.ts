@@ -2,11 +2,11 @@ import type {
   BackupManifest_Serialize as GeneratedBackupManifest,
   PreparedBackupImport_Serialize as GeneratedPreparedBackupImport,
 } from '../bindings';
-import type { AutomationProcessedEntry, AutomationRule } from './automation';
+import type { AutomationProcessedEntry, AutomationProfile, AutomationRule } from './automation';
 import type { AppConfig } from './config';
 import type { TagRecord } from './tag';
 
-export const BACKUP_SCHEMA_VERSION = 2 as const;
+export const BACKUP_SCHEMA_VERSION = 3 as const;
 export const BACKUP_HISTORY_MODE = 'light' as const;
 
 export type BackupManifest = GeneratedBackupManifest;
@@ -46,10 +46,11 @@ export interface UploadRemoteBackupResult {
 
 export type PreparedBackupImport = Omit<
   GeneratedPreparedBackupImport,
-  'config' | 'tags' | 'automationRules' | 'automationProcessedEntries'
+  'config' | 'tags' | 'automationProfiles' | 'automationRules' | 'automationProcessedEntries'
 > & {
   config: AppConfig;
   tags: TagRecord[];
+  automationProfiles: AutomationProfile[];
   automationRules: AutomationRule[];
   automationProcessedEntries: AutomationProcessedEntry[];
 };

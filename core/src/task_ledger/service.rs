@@ -153,6 +153,15 @@ fn apply_typed_patch_at(
     if let Some(value) = &patch.automation_rule_id {
         record.automation_rule_id.clone_from(value);
     }
+    if let Some(value) = &patch.tag_automation_rule_id {
+        record.tag_automation_rule_id.clone_from(value);
+    }
+    if let Some(value) = &patch.automation_profile_id {
+        record.automation_profile_id.clone_from(value);
+    }
+    if let Some(value) = &patch.automation_profile_source {
+        record.automation_profile_source.clone_from(value);
+    }
     if let Some(value) = &patch.source_fingerprint {
         record.source_fingerprint.clone_from(value);
     }

@@ -9,14 +9,17 @@ import {
 
 import type {
   AutomationProcessedEntry,
+  AutomationProfile,
   AutomationRule,
   AutomationRuntimeState,
 } from '../types/automation';
+import type { TagAutomationRunRequest } from '../services/automation/tagAutomationRun';
 import type { RecoveredQueueItem } from '../types/recovery';
 import { extractErrorMessage } from '../utils/errorUtils';
 import {
   loadAutomationRepositoryState,
   persistAutomationProcessedEntries,
+  persistAutomationProfiles,
   persistAutomationRepositoryState,
   persistAutomationRules,
   validateAutomationRuleActivation,
@@ -49,6 +52,8 @@ import {
   isAutomationRecoveryBlocked,
 } from '../services/recoveryService';
 import { historyService } from '../services/historyService';
+import { applyAutomationProfile } from '../services/automation/automationConfigResolver';
+import { useHistoryStore } from './historyStore';
 import { useBatchQueueStore } from './batchQueueStore';
 import { useConfigStore } from './configStore';
 import { useProjectStore } from './projectStore';
@@ -60,6 +65,10 @@ import {
 interface SaveRuleInput {
   id?: string;
   name: string;
+  kind?: AutomationRule['kind'];
+  priority?: number;
+  profileId?: string;
+  profileSource?: string;
   saveHistory?: boolean;
   tagIds?: string[];
   /** @deprecated */
@@ -70,26 +79,63 @@ interface SaveRuleInput {
   stageConfig: AutomationRule['stageConfig'];
   exportConfig: AutomationRule['exportConfig'];
   enabled?: boolean;
+  actions?: AutomationRule['actions'];
+  migrationNotice?: string;
 }
 
+interface SaveProfileInput extends Omit<AutomationProfile, 'id' | 'createdAt' | 'updatedAt'> {
+  id?: string;
+}
+
+type AutomationProfileDependencyKind =
+  | 'polishPreset'
+  | 'summaryTemplate'
+  | 'textReplacementSet'
+  | 'hotwordSet'
+  | 'polishKeywordSet'
+  | 'speakerProfile';
+
 interface AutomationState {
+  profiles: AutomationProfile[];
   rules: AutomationRule[];
   processedEntries: AutomationProcessedEntry[];
   runtimeStates: Record<string, AutomationRuntimeState>;
   notifications: AutomationSessionNotification[];
   isLoaded: boolean;
   error: string | null;
+  focusTagId: string | null;
+  setFocusTagId: (tagId: string | null) => void;
   loadAndStart: () => Promise<void>;
   saveRule: (input: SaveRuleInput) => Promise<AutomationRule>;
+  saveProfile: (input: SaveProfileInput) => Promise<AutomationProfile>;
+  deleteProfile: (profileId: string) => Promise<void>;
+  removeProfileDependency: (kind: AutomationProfileDependencyKind, dependencyId: string) => Promise<void>;
   deleteRule: (ruleId: string) => Promise<void>;
   toggleRuleEnabled: (ruleId: string, enabled: boolean) => Promise<void>;
   scanRuleNow: (ruleId: string) => Promise<void>;
   retryFailed: (ruleId: string) => Promise<void>;
   retryFailedFile: (ruleId: string, filePath: string) => Promise<void>;
+  applyTagRuleToExisting: (ruleId: string) => Promise<number>;
+  beginTagAutomationRun: (request: TagAutomationRunRequest) => Promise<boolean>;
+  finishTagAutomationRun: (args: {
+    ruleId: string;
+    historyId: string;
+    inputVersion: string;
+    status: 'complete' | 'error';
+    errorMessage?: string;
+  }) => Promise<void>;
   dismissNotification: (notificationId: string) => void;
   retryNotification: (notificationId: string) => Promise<void>;
   markRecoveryItemDiscarded: (item: RecoveredQueueItem) => Promise<void>;
   stopAll: () => Promise<void>;
+}
+
+let processedEntryMutationQueue = Promise.resolve();
+
+function serializeProcessedEntryMutation<T>(operation: () => Promise<T>): Promise<T> {
+  const next = processedEntryMutationQueue.then(operation, operation);
+  processedEntryMutationQueue = next.then(() => undefined, () => undefined);
+  return next;
 }
 
 async function validateRuleBeforeActivation(rule: AutomationRule): Promise<void> {
@@ -98,7 +144,7 @@ async function validateRuleBeforeActivation(rule: AutomationRule): Promise<void>
 
 async function syncAutomationRuntimeRules(options?: { throwForRuleId?: string }) {
   const state = useAutomationStore.getState();
-  const enabledRules = state.rules.filter((rule) => rule.enabled);
+  const enabledRules = state.rules.filter((rule) => rule.enabled && (rule.kind ?? 'file') === 'file');
 
   await automationRuntimeCoordinator.ensureRuntimeCandidateListener();
 
@@ -210,18 +256,23 @@ async function scanRule(ruleId: string) {
 
 export const useAutomationStore = create<AutomationState>((set, get) => ({
   rules: [],
+  profiles: [],
   processedEntries: [],
   runtimeStates: {},
   notifications: [],
   isLoaded: false,
   error: null,
+  focusTagId: null,
+
+  setFocusTagId: (tagId) => set({ focusTagId: tagId }),
 
   loadAndStart: async () => {
     await get().stopAll();
-    const { rules, processedEntries } = await loadAutomationRepositoryState();
+    const { profiles, rules, processedEntries } = await loadAutomationRepositoryState();
 
     set({
       rules,
+      profiles,
       processedEntries,
       runtimeStates: rebuildRuntimeStates(rules, processedEntries, {}),
       notifications: [],
@@ -241,6 +292,10 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     const nextRule: AutomationRule = {
       id: existing?.id || uuidv4(),
       name: input.name.trim(),
+      kind: input.kind ?? existing?.kind ?? 'file',
+      priority: input.priority ?? existing?.priority ?? 0,
+      profileId: input.profileId ?? existing?.profileId,
+      profileSource: input.profileSource ?? existing?.profileSource ?? 'tag_match',
       saveHistory: input.saveHistory ?? input.projectId !== 'none',
       tagIds: input.tagIds ?? (
         input.projectId && input.projectId !== 'inbox' && input.projectId !== 'none'
@@ -251,6 +306,11 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       watchDirectory: input.watchDirectory.trim(),
       recursive: input.recursive,
       enabled: input.enabled ?? existing?.enabled ?? false,
+      actions: input.actions ?? existing?.actions ?? {
+        autoPolish: input.stageConfig.autoPolish,
+        autoTranslate: input.stageConfig.autoTranslate,
+        autoSummary: false,
+      },
       stageConfig: {
         ...input.stageConfig,
       },
@@ -260,9 +320,10 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       },
       createdAt: existing?.createdAt || now,
       updatedAt: now,
+      migrationNotice: input.migrationNotice ?? existing?.migrationNotice,
     };
 
-    if (nextRule.enabled) {
+    if (nextRule.enabled && (nextRule.kind ?? 'file') === 'file') {
       await validateRuleBeforeActivation(nextRule);
     }
 
@@ -276,7 +337,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       runtimeStates: rebuildRuntimeStates(nextRules, current.processedEntries, current.runtimeStates),
     }));
 
-    if (nextRule.enabled) {
+    if (nextRule.enabled && (nextRule.kind ?? 'file') === 'file') {
       await syncAutomationRuntimeRules({ throwForRuleId: nextRule.id });
     } else {
       automationRuntimeCoordinator.clearRulePendingFingerprints(nextRule.id);
@@ -290,7 +351,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     const nextRules = get().rules.filter((rule) => rule.id !== ruleId);
     const nextProcessedEntries = get().processedEntries.filter((entry) => entry.ruleId !== ruleId);
 
-    await persistAutomationRepositoryState(nextRules, nextProcessedEntries);
+    await persistAutomationRepositoryState(get().profiles, nextRules, nextProcessedEntries);
     automationRuntimeCoordinator.clearRulePendingFingerprints(ruleId);
 
     set((current) => {
@@ -307,6 +368,90 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     await syncAutomationRuntimeRules();
   },
 
+  saveProfile: async (input) => {
+    const now = Date.now();
+    const existing = input.id ? get().profiles.find((profile) => profile.id === input.id) : undefined;
+    const profile: AutomationProfile = {
+      ...input,
+      id: existing?.id ?? input.id ?? uuidv4(),
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    const profiles = existing
+      ? get().profiles.map((item) => item.id === existing.id ? profile : item)
+      : [profile, ...get().profiles];
+    await persistAutomationProfiles(profiles);
+    set({ profiles });
+    return profile;
+  },
+
+  deleteProfile: async (profileId) => {
+    if (get().rules.some((rule) => rule.profileId === profileId)) {
+      throw new Error('This profile is still used by an automation rule.');
+    }
+    const profiles = get().profiles.filter((profile) => profile.id !== profileId);
+    await persistAutomationProfiles(profiles);
+    set({ profiles });
+  },
+
+  removeProfileDependency: async (kind, dependencyId) => {
+    const now = Date.now();
+    let changed = false;
+    const profiles = get().profiles.map((profile) => {
+      let next = profile;
+      switch (kind) {
+        case 'polishPreset':
+          if (profile.polishPresetId === dependencyId) {
+            next = { ...profile, polishPresetId: 'general' };
+          }
+          break;
+        case 'summaryTemplate':
+          if (profile.summaryTemplateId === dependencyId) {
+            next = { ...profile, summaryTemplateId: 'general' };
+          }
+          break;
+        case 'textReplacementSet':
+          if (profile.enabledTextReplacementSetIds.includes(dependencyId)) {
+            next = {
+              ...profile,
+              enabledTextReplacementSetIds: profile.enabledTextReplacementSetIds.filter((id) => id !== dependencyId),
+            };
+          }
+          break;
+        case 'hotwordSet':
+          if (profile.enabledHotwordSetIds.includes(dependencyId)) {
+            next = {
+              ...profile,
+              enabledHotwordSetIds: profile.enabledHotwordSetIds.filter((id) => id !== dependencyId),
+            };
+          }
+          break;
+        case 'polishKeywordSet':
+          if (profile.enabledPolishKeywordSetIds.includes(dependencyId)) {
+            next = {
+              ...profile,
+              enabledPolishKeywordSetIds: profile.enabledPolishKeywordSetIds.filter((id) => id !== dependencyId),
+            };
+          }
+          break;
+        case 'speakerProfile':
+          if (profile.enabledSpeakerProfileIds.includes(dependencyId)) {
+            next = {
+              ...profile,
+              enabledSpeakerProfileIds: profile.enabledSpeakerProfileIds.filter((id) => id !== dependencyId),
+            };
+          }
+          break;
+      }
+      if (next === profile) return profile;
+      changed = true;
+      return { ...next, updatedAt: now };
+    });
+    if (!changed) return;
+    await persistAutomationProfiles(profiles);
+    set({ profiles });
+  },
+
   toggleRuleEnabled: async (ruleId, enabled) => {
     const state = get();
     const targetRule = state.rules.find((rule) => rule.id === ruleId);
@@ -314,7 +459,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       return;
     }
 
-    if (enabled) {
+    if (enabled && (targetRule.kind ?? 'file') === 'file') {
       await validateRuleBeforeActivation({
         ...targetRule,
         enabled: true,
@@ -354,6 +499,104 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     await automationRuntimeCoordinator.retryFailedFile(ruleId, filePath);
   },
 
+  applyTagRuleToExisting: async (ruleId) => {
+    const state = get();
+    const rule = state.rules.find((item) => item.id === ruleId && item.kind === 'tag');
+    if (!rule) return 0;
+
+    const profile = rule.profileId
+      ? state.profiles.find((item) => item.id === rule.profileId)
+      : undefined;
+    const config = applyAutomationProfile(useConfigStore.getState().config, profile);
+    const matchedTagIds = new Set(rule.tagIds || []);
+    const historyItems = useHistoryStore.getState().items.filter((item) => (
+      item.deletedAt == null
+      && (item.tagIds || []).some((tagId) => matchedTagIds.has(tagId))
+    ));
+    let processed = 0;
+
+    for (const item of historyItems) {
+      const loaded = await historyService.loadTranscript(item.id);
+      if (!loaded?.length) continue;
+      const { processTagAutomationForHistory } = await import('../services/automation/tagAutomationProcessor');
+      await processTagAutomationForHistory({
+        actions: rule.actions ?? { autoPolish: false, autoTranslate: false, autoSummary: false },
+        config,
+        historyId: item.id,
+        segments: loaded,
+        ruleId: rule.id,
+        inputVersion: `existing:${rule.id}:${item.id}`,
+        force: true,
+      });
+      processed += 1;
+    }
+
+    await useHistoryStore.getState().refresh();
+    return processed;
+  },
+
+  beginTagAutomationRun: async (request) => serializeProcessedEntryMutation(async () => {
+    const currentEntries = get().processedEntries;
+    const existing = currentEntries.find((entry) => (
+      entry.kind === 'tag'
+      && entry.ruleId === request.ruleId
+      && entry.historyId === request.historyId
+      && entry.inputVersion === request.inputVersion
+    ));
+    if (existing?.status === 'complete' && !request.force) {
+      return false;
+    }
+
+    const nextEntry: AutomationProcessedEntry = {
+      id: existing?.id ?? uuidv4(),
+      ruleId: request.ruleId,
+      kind: 'tag',
+      inputVersion: request.inputVersion,
+      attempt: (existing?.attempt ?? 0) + 1,
+      filePath: existing?.filePath ?? '',
+      sourceFingerprint: existing?.sourceFingerprint ?? request.inputVersion,
+      size: existing?.size ?? 0,
+      mtimeMs: existing?.mtimeMs ?? 0,
+      status: 'pending',
+      processedAt: Date.now(),
+      historyId: request.historyId,
+      exportPath: existing?.exportPath,
+      errorMessage: undefined,
+    };
+    const nextEntries = [
+      ...currentEntries.filter((entry) => entry.id !== nextEntry.id),
+      nextEntry,
+    ].sort((left, right) => right.processedAt - left.processedAt);
+    await persistAutomationProcessedEntries(nextEntries);
+    set((current) => ({
+      processedEntries: nextEntries,
+      runtimeStates: rebuildRuntimeStates(current.rules, nextEntries, current.runtimeStates),
+    }));
+    return true;
+  }),
+
+  finishTagAutomationRun: async (args) => serializeProcessedEntryMutation(async () => {
+    const currentEntries = get().processedEntries;
+    const nextEntries = currentEntries.map((entry) => (
+      entry.kind === 'tag'
+      && entry.ruleId === args.ruleId
+      && entry.historyId === args.historyId
+      && entry.inputVersion === args.inputVersion
+        ? {
+          ...entry,
+          status: args.status,
+          processedAt: Date.now(),
+          errorMessage: args.errorMessage,
+        }
+        : entry
+    ));
+    await persistAutomationProcessedEntries(nextEntries);
+    set((current) => ({
+      processedEntries: nextEntries,
+      runtimeStates: rebuildRuntimeStates(current.rules, nextEntries, current.runtimeStates),
+    }));
+  }),
+
   dismissNotification: (notificationId) => {
     set((current) => ({
       notifications: current.notifications.filter((notification) => notification.id !== notificationId),
@@ -376,6 +619,13 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
 
     const nextEntry: AutomationProcessedEntry = {
       ruleId: item.automationRuleId,
+      kind: 'file',
+      inputVersion: item.sourceFingerprint,
+      attempt: (get().processedEntries.find((entry) => (
+        entry.kind !== 'tag'
+        && entry.ruleId === item.automationRuleId
+        && entry.sourceFingerprint === item.sourceFingerprint
+      ))?.attempt ?? 0) + 1,
       filePath: item.filePath,
       sourceFingerprint: item.sourceFingerprint,
       size: item.fileStat?.size || 0,
@@ -418,6 +668,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
 
 function getAutomationRuntimeCoordinatorState(state: AutomationState): AutomationRuntimeCoordinatorState {
   return {
+    profiles: state.profiles,
     rules: state.rules,
     processedEntries: state.processedEntries,
     runtimeStates: state.runtimeStates,

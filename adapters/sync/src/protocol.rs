@@ -147,7 +147,7 @@ fn object_key(
         return Err(protocol_error("Object sequence must be greater than zero."));
     }
     SyncObjectKey::parse(format!(
-        "sona-sync/v1/{vault_id}/devices/{device_id}/{collection}/{sequence:020}-{cipher_hash}.sync"
+        "sona-sync/v2/{vault_id}/devices/{device_id}/{collection}/{sequence:020}-{cipher_hash}.sync"
     ))
 }
 
@@ -156,7 +156,7 @@ fn validate_protocol_version(version: u64) -> Result<(), SyncError> {
         Ok(())
     } else {
         Err(protocol_error(format!(
-            "Unsupported sync protocol version: {version}."
+            "Sync protocol version {version} is incompatible with this client (version {SYNC_PROTOCOL_VERSION}). Upgrade every connected client before resuming sync."
         )))
     }
 }

@@ -15,17 +15,7 @@ import {
 import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
 
 vi.mock('../../services/tauri/app', () => ({
-  resolveEffectiveConfig: vi.fn(async (globalConfig: any, project: any) => {
-    if (!project) {
-      return globalConfig;
-    }
-    return {
-      ...globalConfig,
-      summaryTemplateId: project.defaults.summaryTemplateId || globalConfig.summaryTemplateId,
-      translationLanguage: project.defaults.translationLanguage || globalConfig.translationLanguage,
-      polishPresetId: project.defaults.polishPresetId || globalConfig.polishPresetId,
-    };
-  }),
+  resolveEffectiveConfig: vi.fn(async (globalConfig: any) => globalConfig),
 }));
 
 describe('Transcript Stores', () => {
@@ -243,7 +233,7 @@ describe('Transcript Stores', () => {
     }));
   });
 
-  it('effective config store resolves active-project overrides and exposes a synchronous snapshot getter', async () => {
+  it('effective config store falls back to global settings for metadata-only Tags', async () => {
     useConfigStore.setState((state) => ({
       ...state,
       config: {
@@ -263,16 +253,6 @@ describe('Transcript Stores', () => {
           icon: '',
           createdAt: 1,
           updatedAt: 1,
-          defaults: {
-            summaryTemplateId: 'meeting',
-            translationLanguage: 'ja',
-            polishPresetId: 'general',
-            exportFileNamePrefix: '',
-            enabledTextReplacementSetIds: [],
-            enabledHotwordSetIds: [],
-            enabledPolishKeywordSetIds: [],
-            enabledSpeakerProfileIds: [],
-          },
         },
       ],
     }));
@@ -280,12 +260,12 @@ describe('Transcript Stores', () => {
     await useEffectiveConfigStore.getState().syncConfig();
 
     expect(useEffectiveConfigStore.getState().config).toEqual(expect.objectContaining({
-      summaryTemplateId: 'meeting',
-      translationLanguage: 'ja',
+      summaryTemplateId: 'general',
+      translationLanguage: 'zh',
     }));
     expect(getEffectiveConfigSnapshot()).toEqual(expect.objectContaining({
-      summaryTemplateId: 'meeting',
-      translationLanguage: 'ja',
+      summaryTemplateId: 'general',
+      translationLanguage: 'zh',
     }));
   });
 });

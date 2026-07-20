@@ -474,7 +474,7 @@ describe('NotificationCenter task center', () => {
     });
 
     expect(batchQueueState.addFiles).toHaveBeenCalledWith(['C:\\audio\\failed.wav'], {
-      projectId: 'project-2',
+      tagIds: ['project-2'],
     });
     expect(taskLedgerState.removeTask).toHaveBeenCalledWith('batch-failed');
   });

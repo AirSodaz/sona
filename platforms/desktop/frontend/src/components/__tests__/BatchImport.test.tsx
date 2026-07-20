@@ -86,14 +86,22 @@ vi.mock('../../services/historyService', async () => {
 });
 
 vi.mock('../../stores/projectStore', () => ({
-    useProjectStore: {
-        getState: () => ({
+    useProjectStore: Object.assign(
+        (selector: (state: any) => unknown) => selector({
             activeProjectId: null,
             getActiveProject: vi.fn(() => null),
             getProjectById: vi.fn(() => null),
             setActiveProjectId: vi.fn().mockResolvedValue(undefined),
         }),
-    },
+        {
+            getState: () => ({
+                activeProjectId: null,
+                getActiveProject: vi.fn(() => null),
+                getProjectById: vi.fn(() => null),
+                setActiveProjectId: vi.fn().mockResolvedValue(undefined),
+            }),
+        },
+    ),
 }));
 
 vi.mock('react-i18next', async () => {
@@ -208,7 +216,7 @@ describe('BatchImport Integration', () => {
             [{ id: '1', start: 0, end: 1, text: 'Test', isFinal: true }],
             1,
             expect.stringMatching(/^\/tmp\/.+\.wav$/),
-            null,
+            [],
             expect.any(String),
         );
         expect(historyService.updateTranscript).toHaveBeenCalledWith(

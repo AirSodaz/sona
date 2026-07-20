@@ -38,6 +38,10 @@ interface CreateRecordingPersistenceArgs {
     upsertHistoryItem: (item: HistoryItem) => void;
     deleteHistoryItem: (id: string) => Promise<void>;
     persistSummary: (historyId: string) => Promise<void>;
+    postProcessSavedItem?: (
+        historyId: string,
+        segments: TranscriptSegment[],
+    ) => Promise<TranscriptSegment[]>;
     annotateSegmentsForFile: (
         filePath: string,
         segments: TranscriptSegment[],
@@ -59,13 +63,18 @@ export function createRecordingPersistence({
     upsertHistoryItem,
     deleteHistoryItem,
     persistSummary,
+    postProcessSavedItem,
     annotateSegmentsForFile,
     syncSavedRecordingMeta: syncMeta,
     writeFile,
     removeFile,
     fileSrcFromPath,
 }: CreateRecordingPersistenceArgs) {
-    async function persistSavedItem(newItem: HistoryItem, strategy: 'add' | 'upsert' = 'upsert'): Promise<void> {
+    async function persistSavedItem(
+        newItem: HistoryItem,
+        strategy: 'add' | 'upsert' = 'upsert',
+        completedSegments?: TranscriptSegment[],
+    ): Promise<void> {
         if (strategy === 'add') {
             addHistoryItem(newItem);
         } else {
@@ -73,6 +82,10 @@ export function createRecordingPersistence({
         }
         syncMeta(newItem.title, newItem.id, newItem.icon);
         void setActiveProjectId(newItem.tagIds?.[0] ?? newItem.projectId ?? null);
+        if (completedSegments?.length && postProcessSavedItem) {
+            const processedSegments = await postProcessSavedItem(newItem.id, completedSegments);
+            getTranscriptState().setSegments(processedSegments);
+        }
         await persistSummary(newItem.id);
     }
 
@@ -135,7 +148,7 @@ export function createRecordingPersistence({
                 segments,
                 duration,
             );
-            await persistSavedItem(newItem);
+            await persistSavedItem(newItem, 'upsert', segments);
         } catch (error) {
             logger.error('[useAudioRecorder] Failed to persist browser recording draft:', error);
             throw error;
@@ -164,7 +177,7 @@ export function createRecordingPersistence({
                 segments,
                 duration,
             );
-            await persistSavedItem(newItem);
+            await persistSavedItem(newItem, 'upsert', segments);
             return;
         }
 

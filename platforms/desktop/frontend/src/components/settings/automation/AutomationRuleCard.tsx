@@ -57,19 +57,24 @@ type Props = {
     failureCount?: number;
     isExpanded: boolean;
     onDelete?: () => void;
+    onApplyExisting?: () => void;
     onRetryFailed?: () => void;
     onScanNow?: () => void;
     onToggleEnabled?: (value: boolean) => void;
     onToggleExpand: () => void;
-    outputDirectory: string;
+    outputDirectory?: string;
     pendingCount?: number;
     processingCount?: number;
     projectLabel: string;
+    profileLabel?: string;
+    priorityLabel?: string;
+    migrationNotice?: string;
+    typeLabel?: string;
     resultLabel?: string;
     resultMessage?: string;
     statusLabel?: string;
     title: string;
-    watchDirectory: string;
+    watchDirectory?: string;
 };
 
 export function AutomationRuleCard({
@@ -80,6 +85,7 @@ export function AutomationRuleCard({
     failureCount,
     isExpanded,
     onDelete,
+    onApplyExisting,
     onRetryFailed,
     onScanNow,
     onToggleEnabled,
@@ -88,10 +94,14 @@ export function AutomationRuleCard({
     pendingCount,
     processingCount,
     projectLabel,
+    profileLabel,
+    priorityLabel,
+    migrationNotice,
     resultLabel,
     resultMessage,
     statusLabel,
     title,
+    typeLabel,
     watchDirectory,
 }: Props): React.JSX.Element {
     const { t } = useTranslation();
@@ -142,7 +152,10 @@ export function AutomationRuleCard({
                         <div className="settings-item-title">{title}</div>
 
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            {typeLabel && <SummaryChip label={typeLabel} tone="neutral" />}
                             <SummaryChip label={projectLabel} tone="neutral" />
+                            {profileLabel && <SummaryChip label={profileLabel} tone="neutral" />}
+                            {priorityLabel && <SummaryChip label={priorityLabel} tone="neutral" />}
                             {statusLabel && <SummaryChip label={statusLabel} tone="neutral" />}
                             {resultLabel && <SummaryChip label={resultLabel} tone={resultChipTone} />}
                             {typeof failureCount === 'number' && (
@@ -174,12 +187,16 @@ export function AutomationRuleCard({
                             )}
                         </div>
 
-                        <div className="settings-item-hint" style={{ wordBreak: 'break-all' }}>
-                            {t('automation.watch_directory', { defaultValue: 'Watch Directory' })}: {watchDirectory || t('automation.none', { defaultValue: 'None' })}
-                        </div>
-                        <div className="settings-item-hint" style={{ wordBreak: 'break-all' }}>
-                            {t('automation.output_directory', { defaultValue: 'Output Directory' })}: {outputDirectory || t('automation.none', { defaultValue: 'None' })}
-                        </div>
+                        {watchDirectory !== undefined && (
+                            <div className="settings-item-hint" style={{ wordBreak: 'break-all' }}>
+                                {t('automation.watch_directory', { defaultValue: 'Watch Directory' })}: {watchDirectory || t('automation.none', { defaultValue: 'None' })}
+                            </div>
+                        )}
+                        {outputDirectory !== undefined && (
+                            <div className="settings-item-hint" style={{ wordBreak: 'break-all' }}>
+                                {t('automation.output_directory', { defaultValue: 'Output Directory' })}: {outputDirectory || t('automation.none', { defaultValue: 'None' })}
+                            </div>
+                        )}
                         {resultMessage && (
                             <div className="settings-item-hint" style={{ wordBreak: 'break-word' }}>
                                 {resultMessage}
@@ -194,6 +211,11 @@ export function AutomationRuleCard({
                                 }}
                             >
                                 {blockedHint}
+                            </div>
+                        )}
+                        {migrationNotice && (
+                            <div className="settings-item-hint" style={{ color: 'var(--color-warning-text, #b7791f)' }}>
+                                {migrationNotice}
                             </div>
                         )}
                     </div>
@@ -222,6 +244,13 @@ export function AutomationRuleCard({
                         <button className="btn btn-secondary" onClick={onRetryFailed} disabled={!failureCount}>
                             <PauseIcon />
                             <span>{t('automation.retry_failed', { defaultValue: 'Retry Failed' })}</span>
+                        </button>
+                    )}
+
+                    {onApplyExisting && (
+                        <button className="btn btn-secondary" onClick={onApplyExisting}>
+                            <PlayIcon />
+                            <span>{t('automation.apply_existing', { defaultValue: 'Apply to existing' })}</span>
                         </button>
                     )}
 

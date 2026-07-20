@@ -15,7 +15,7 @@ import { preparedBackupImportActions } from './useBackupSettingsController';
 
 function buildManifest(): BackupManifestV1 {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     createdAt: '2026-05-01T00:00:00.000Z',
     appVersion: '0.6.4',
     historyMode: 'light',
@@ -31,6 +31,7 @@ function buildManifest(): BackupManifestV1 {
       historyItems: 5,
       transcriptFiles: 5,
       summaryFiles: 3,
+      automationProfiles: 0,
       automationRules: 1,
       automationProcessedEntries: 7,
       analyticsFiles: 1,
@@ -45,6 +46,7 @@ function buildPreparedImport(): PreparedBackupImport {
     manifest: buildManifest(),
     config: {} as unknown as PreparedBackupImport['config'],
     tags: [],
+    automationProfiles: [],
     automationRules: [],
     automationProcessedEntries: [],
     analyticsContent: '{}',

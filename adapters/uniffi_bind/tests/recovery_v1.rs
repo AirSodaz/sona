@@ -72,6 +72,9 @@ fn saved_item(id: &str) -> FfiRecoveryItemInputV1 {
         automation_rule_id: None,
         automation_rule_name: None,
         resolved_config_snapshot_json: Some(r#"{"z":1,"a":2}"#.to_string()),
+        automation_resolution_snapshot_json: Some(
+            r#"{"tagRuleId":"tag-rule-1","profileId":"profile-1"}"#.to_string(),
+        ),
         export_config_json: Some(r#"{"format":"txt"}"#.to_string()),
         stage_config_json: Some(r#"{"chunk":1}"#.to_string()),
         source_fingerprint: Some("fingerprint".to_string()),

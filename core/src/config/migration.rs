@@ -42,49 +42,19 @@ pub(crate) fn migrate_app_config_inner(
 
 pub(crate) fn resolve_effective_config_inner(
     global_config: Value,
-    project: Option<&Value>,
+    _project: Option<&Value>,
 ) -> Value {
     let mut config = as_object_clone(&global_config).unwrap_or_default();
     let global_summary_template_id = string_at(&Value::Object(config.clone()), "summaryTemplateId");
     let custom_templates = config.get("summaryCustomTemplates");
-
-    let Some(project) = project.and_then(Value::as_object) else {
-        config.insert(
-            "summaryTemplateId".to_string(),
-            Value::String(coerce_summary_template_id(
-                global_summary_template_id.as_deref(),
-                custom_templates,
-            )),
-        );
-        return Value::Object(config);
-    };
-    let defaults = project.get("defaults").and_then(Value::as_object);
-
     config.insert(
         "summaryTemplateId".to_string(),
         Value::String(coerce_summary_template_id(
-            defaults
-                .and_then(|value| value.get("summaryTemplateId"))
-                .and_then(Value::as_str)
-                .or(global_summary_template_id.as_deref()),
+            global_summary_template_id.as_deref(),
             custom_templates,
         )),
     );
-    config.insert(
-        "translationLanguage".to_string(),
-        Value::String(
-            defaults
-                .and_then(|value| value.get("translationLanguage"))
-                .and_then(non_empty_str)
-                .or_else(|| config.get("translationLanguage").and_then(non_empty_str))
-                .unwrap_or("zh")
-                .to_string(),
-        ),
-    );
-    let selected_polish_preset_id = defaults
-        .and_then(|value| value.get("polishPresetId"))
-        .and_then(flatten_id_value)
-        .or_else(|| config.get("polishPresetId").and_then(flatten_id_value));
+    let selected_polish_preset_id = config.get("polishPresetId").and_then(flatten_id_value);
     let polish_preset_id = coerce_polish_preset_id(
         selected_polish_preset_id.as_deref(),
         config.get("polishCustomPresets"),
@@ -93,20 +63,6 @@ pub(crate) fn resolve_effective_config_inner(
         "polishPresetId".to_string(),
         Value::String(polish_preset_id),
     );
-
-    for (field, defaults_field) in [
-        ("textReplacementSets", "enabledTextReplacementSetIds"),
-        ("hotwordSets", "enabledHotwordSetIds"),
-        ("polishKeywordSets", "enabledPolishKeywordSetIds"),
-        ("speakerProfiles", "enabledSpeakerProfileIds"),
-    ] {
-        let enabled_ids = defaults
-            .and_then(|value| value.get(defaults_field))
-            .and_then(array_strings)
-            .unwrap_or_default();
-        let sets = config.get(field).cloned().unwrap_or_else(|| json!([]));
-        config.insert(field.to_string(), set_enabled_by_ids(&sets, &enabled_ids));
-    }
 
     Value::Object(config)
 }
@@ -2911,7 +2867,7 @@ mod tests {
     }
 
     #[test]
-    fn config_core_resolves_project_effective_config() {
+    fn config_core_ignores_legacy_project_defaults_when_resolving_effective_config() {
         let global = json!({
             "summaryTemplateId": "missing",
             "summaryCustomTemplates": [
@@ -2950,17 +2906,17 @@ mod tests {
 
         let resolved = resolve_effective_config(global, Some(project));
 
-        assert_eq!(resolved["summaryTemplateId"], "custom-summary");
-        assert_eq!(resolved["translationLanguage"], "ja");
-        assert_eq!(resolved["polishPresetId"], "meeting");
+        assert_eq!(resolved["summaryTemplateId"], "general");
+        assert_eq!(resolved["translationLanguage"], "zh");
+        assert_eq!(resolved["polishPresetId"], "general");
         assert_eq!(resolved["textReplacementSets"][0]["id"], "tr-a");
-        assert_eq!(resolved["textReplacementSets"][0]["enabled"], false);
+        assert_eq!(resolved["textReplacementSets"][0]["enabled"], true);
         assert_eq!(resolved["textReplacementSets"][1]["enabled"], true);
-        assert_eq!(resolved["hotwordSets"][0]["enabled"], false);
-        assert_eq!(resolved["hotwordSets"][1]["enabled"], true);
+        assert_eq!(resolved["hotwordSets"][0]["enabled"], true);
+        assert_eq!(resolved["hotwordSets"][1]["enabled"], false);
         assert_eq!(resolved["polishKeywordSets"][0]["enabled"], true);
-        assert_eq!(resolved["polishKeywordSets"][1]["enabled"], false);
-        assert_eq!(resolved["speakerProfiles"][0]["enabled"], false);
+        assert_eq!(resolved["polishKeywordSets"][1]["enabled"], true);
+        assert_eq!(resolved["speakerProfiles"][0]["enabled"], true);
         assert_eq!(resolved["speakerProfiles"][1]["enabled"], true);
     }
 

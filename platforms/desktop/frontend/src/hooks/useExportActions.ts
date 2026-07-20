@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useHistoryStore } from '../stores/historyStore';
-import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useDialogStore } from '../stores/dialogStore';
 import type { ExportFormat, ExportMode } from '../utils/exportFormats';
@@ -22,7 +21,6 @@ export function useExportActions({ isOpen, onSuccess }: UseExportActionsProps) {
     const segments = useTranscriptSessionStore((state) => state.segments);
     const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
     const historyItems = useHistoryStore((state) => state.items);
-    const activeProject = useProjectStore((state) => state.projects.find((item) => item.id === state.activeProjectId) || null);
     
     const [fileName, setFileName] = useState('');
     const [directory, setDirectory] = useState(localStorage.getItem('sona_last_export_dir') || '');
@@ -34,16 +32,13 @@ export function useExportActions({ isOpen, onSuccess }: UseExportActionsProps) {
     
     const defaultFileName = useMemo(() => {
         const historyItem = historyItems.find(item => item.id === sourceHistoryId);
-        const prefix = (activeProject?.defaults.exportFileNamePrefix || '').trim();
-        const sanitizedPrefix = prefix.replace(/[\\/:*?"<>|]/g, '_').trim();
 
         if (historyItem) {
-            const sanitized = historyItem.title.replace(/[\\/:*?"<>|]/g, '_');
-            return sanitizedPrefix ? `${sanitizedPrefix} ${sanitized}`.trim() : sanitized;
+            return historyItem.title.replace(/[\\/:*?"<>|]/g, '_');
         }
 
-        return sanitizedPrefix;
-    }, [activeProject?.defaults.exportFileNamePrefix, historyItems, sourceHistoryId]);
+        return '';
+    }, [historyItems, sourceHistoryId]);
 
     // Initial value for filename from history title
     useEffect(() => {

@@ -8,16 +8,6 @@ const testContext = vi.hoisted(() => {
         description: '',
         createdAt: 1,
         updatedAt: 1,
-        defaults: {
-            summaryTemplateId: 'general',
-            translationLanguage: 'ja',
-            polishPresetId: 'general',
-            exportFileNamePrefix: 'TEAM',
-            enabledTextReplacementSetIds: [],
-            enabledHotwordSetIds: [],
-            enabledPolishKeywordSetIds: [],
-            enabledSpeakerProfileIds: [],
-        },
     };
 
     return {
@@ -34,10 +24,7 @@ const testContext = vi.hoisted(() => {
         collectAutomationRuntimeRulePathsMock: vi.fn(),
         isAutomationRecoveryBlockedMock: vi.fn(),
         listenToAutomationRuntimeCandidatesMock: vi.fn(),
-        resolveEffectiveConfigMock: vi.fn((config: any, project: any) => ({
-            ...config,
-            translationLanguage: project?.defaults.translationLanguage ?? config.translationLanguage,
-        })),
+        resolveEffectiveConfigMock: vi.fn((config: any) => ({ ...config })),
         runtimeCandidateHandler: null as ((payload: any) => void | Promise<void>) | null,
         replaceAutomationRuntimeRulesMock: vi.fn(),
         scanAutomationRuntimeRuleMock: vi.fn().mockResolvedValue(undefined),
@@ -185,14 +172,6 @@ function createRule(overrides: Partial<AutomationRule> = {}): AutomationRule {
     };
 }
 
-function createDeferred<T>() {
-    let resolve!: (value: T) => void;
-    const promise = new Promise<T>((next) => {
-        resolve = next;
-    });
-    return { promise, resolve };
-}
-
 describe('automationStore', () => {
     beforeEach(async () => {
         vi.useFakeTimers();
@@ -208,10 +187,7 @@ describe('automationStore', () => {
             translationLanguage: 'en',
             polishCustomPresets: [],
         };
-        resolveEffectiveConfigMock.mockImplementation((config: any, project: any) => ({
-            ...config,
-            translationLanguage: project?.defaults.translationLanguage ?? config.translationLanguage,
-        }));
+        resolveEffectiveConfigMock.mockImplementation((config: any) => ({ ...config }));
         batchQueueState.addFiles = addFilesMock;
         batchQueueState.queueItems = [];
 
@@ -255,6 +231,45 @@ describe('automationStore', () => {
     afterEach(async () => {
         await useAutomationStore.getState().stopAll();
         vi.useRealTimers();
+    });
+
+    it('deduplicates successful Tag runs and increments explicit retry attempts', async () => {
+        const request = {
+            ruleId: 'tag-rule-1',
+            historyId: 'history-1',
+            inputVersion: 'input-v1',
+            actions: { autoPolish: true, autoTranslate: false, autoSummary: false },
+        };
+
+        await expect(useAutomationStore.getState().beginTagAutomationRun(request)).resolves.toBe(true);
+        expect(useAutomationStore.getState().processedEntries).toEqual([
+            expect.objectContaining({
+                kind: 'tag',
+                status: 'pending',
+                attempt: 1,
+                ruleId: request.ruleId,
+                historyId: request.historyId,
+                inputVersion: request.inputVersion,
+            }),
+        ]);
+
+        await useAutomationStore.getState().finishTagAutomationRun({
+            ruleId: request.ruleId,
+            historyId: request.historyId,
+            inputVersion: request.inputVersion,
+            status: 'complete',
+        });
+        await expect(useAutomationStore.getState().beginTagAutomationRun(request)).resolves.toBe(false);
+        await expect(useAutomationStore.getState().beginTagAutomationRun({
+            ...request,
+            force: true,
+        })).resolves.toBe(true);
+
+        expect(useAutomationStore.getState().processedEntries[0]).toEqual(expect.objectContaining({
+            kind: 'tag',
+            status: 'pending',
+            attempt: 2,
+        }));
     });
 
     it('restores enabled rules and queues matching files on the initial scan', async () => {
@@ -513,7 +528,7 @@ describe('automationStore', () => {
         expect(useAutomationStore.getState().notifications).toEqual([]);
     });
 
-    it('starts retry candidate config resolution concurrently before awaiting the first candidate', async () => {
+    it('freezes retry candidate configuration without reading legacy project defaults', async () => {
         const rule = createRule({ enabled: false });
         const failedEntries = [
             {
@@ -537,17 +552,6 @@ describe('automationStore', () => {
                 errorMessage: 'Network error',
             },
         ];
-        const configResolutions: Array<ReturnType<typeof createDeferred<any>>> = [];
-
-        resolveEffectiveConfigMock.mockImplementation((config: any, project: any) => {
-            const deferred = createDeferred<any>();
-            configResolutions.push(deferred);
-            return deferred.promise.then(() => ({
-                ...config,
-                translationLanguage: project?.defaults.translationLanguage ?? config.translationLanguage,
-            }));
-        });
-
         useAutomationStore.setState({
             rules: [rule],
             processedEntries: failedEntries,
@@ -601,31 +605,17 @@ describe('automationStore', () => {
             },
         ]);
 
-        const retryPromise = useAutomationStore.getState().retryFailed(rule.id);
-        for (let index = 0; index < 10 && configResolutions.length === 0; index += 1) {
-            await Promise.resolve();
-        }
-        const startedBeforeFirstResolution = configResolutions.length;
+        await useAutomationStore.getState().retryFailed(rule.id);
 
-        configResolutions[0]?.resolve(undefined);
-        await Promise.resolve();
-        await Promise.resolve();
-        await Promise.resolve();
-        configResolutions[1]?.resolve(undefined);
-        if (configResolutions.length >= 2) {
-            await retryPromise;
-        }
-
-        expect(startedBeforeFirstResolution).toBe(2);
         expect(addFilesMock).toHaveBeenCalledTimes(2);
+        expect(resolveEffectiveConfigMock).not.toHaveBeenCalled();
     });
 
-    it('benchmarks retry candidate handling with delayed config resolution', async () => {
+    it('benchmarks retry candidate handling with synchronous snapshots', async () => {
         vi.useRealTimers();
 
         const rule = createRule({ enabled: false });
         const candidateCount = 8;
-        const configDelayMs = 25;
         const failedEntries = Array.from({ length: candidateCount }, (_, index) => ({
             ruleId: rule.id,
             filePath: `C:\\watch\\failed-${index}.wav`,
@@ -636,17 +626,6 @@ describe('automationStore', () => {
             processedAt: 20 + index,
             errorMessage: 'Network error',
         }));
-
-        resolveEffectiveConfigMock.mockImplementation((config: any, project: any) => (
-            new Promise((resolve) => {
-                setTimeout(() => {
-                    resolve({
-                        ...config,
-                        translationLanguage: project?.defaults.translationLanguage ?? config.translationLanguage,
-                    });
-                }, configDelayMs);
-            })
-        ));
 
         useAutomationStore.setState({
             rules: [rule],
@@ -696,7 +675,7 @@ describe('automationStore', () => {
             `retryFailed handled ${candidateCount} delayed candidates in ${elapsedMs.toFixed(1)}ms`,
         );
         expect(addFilesMock).toHaveBeenCalledTimes(candidateCount);
-        expect(resolveEffectiveConfigMock).toHaveBeenCalledTimes(candidateCount);
+        expect(resolveEffectiveConfigMock).not.toHaveBeenCalled();
     });
 
     it('retries failure notifications through the rule-level retry flow', async () => {

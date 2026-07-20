@@ -1,21 +1,15 @@
 import { create } from 'zustand';
-import type { AppConfig } from '../types/config';
-import type { ProjectDefaults, ProjectRecord, ProjectUpdateInput } from '../types/project';
-import { buildProjectDefaultsFromConfig } from '../types/project';
-import { useConfigStore } from './configStore';
+import type { ProjectRecord, ProjectUpdateInput } from '../types/project';
 import { historyService } from '../services/historyService';
 import { projectService } from '../services/projectService';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
-import { normalizePolishKeywordSets } from '../utils/polishKeywords';
-import { normalizeSpeakerProfiles } from '../types/speaker';
 
 interface CreateProjectInput {
   name: string;
   description?: string;
   icon?: string;
   color?: string;
-  defaults?: ProjectDefaults;
 }
 
 interface ProjectState {
@@ -24,9 +18,8 @@ interface ProjectState {
   isLoading: boolean;
   error: string | null;
   loadProjects: () => Promise<void>;
-  createProject: (input: CreateProjectInput, globalConfig: AppConfig) => Promise<ProjectRecord | null>;
+  createProject: (input: CreateProjectInput) => Promise<ProjectRecord | null>;
   updateProject: (id: string, updates: ProjectUpdateInput) => Promise<void>;
-  updateProjectDefaults: (id: string, updates: Partial<ProjectDefaults>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   setActiveProjectId: (projectId: string | null) => Promise<void>;
   assignHistoryItems: (historyIds: string[], projectId: string | null) => Promise<void>;
@@ -44,21 +37,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   loadProjects: async () => {
     set({ isLoading: true, error: null });
     try {
-      const fallbackEnabledPolishKeywordSetIds = normalizePolishKeywordSets(
-        useConfigStore.getState().config.polishKeywordSets,
-      )
-        .filter((set) => set.enabled)
-        .map((set) => set.id);
-      const fallbackEnabledSpeakerProfileIds = normalizeSpeakerProfiles(
-        useConfigStore.getState().config.speakerProfiles,
-      )
-        .filter((profile) => profile.enabled)
-        .map((profile) => profile.id);
       const [projects, activeProjectId] = await Promise.all([
-        projectService.getAll({
-          fallbackEnabledPolishKeywordSetIds,
-          fallbackEnabledSpeakerProfileIds,
-        }),
+        projectService.getAll(),
         projectService.getActiveProjectId(),
       ]);
 
@@ -82,14 +62,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
-  createProject: async (input, globalConfig) => {
-    const defaults = input.defaults || buildProjectDefaultsFromConfig(globalConfig);
+  createProject: async (input) => {
     const project = await projectService.create({
       name: input.name,
       description: input.description || '',
       icon: input.icon || '',
       color: input.color || '#64748b',
-      defaults,
     });
 
     set((state) => ({
@@ -107,20 +85,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set((state) => ({
       projects: state.projects.map((item) => (item.id === id ? updated : item)),
     }));
-  },
-
-  updateProjectDefaults: async (id, updates) => {
-    const project = get().projects.find((item) => id === item.id);
-    if (!project) {
-      return;
-    }
-
-    await get().updateProject(id, {
-      defaults: {
-        ...project.defaults,
-        ...updates,
-      },
-    });
   },
 
   deleteProject: async (id) => {

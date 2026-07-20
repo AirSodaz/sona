@@ -105,7 +105,7 @@ describe('App Title Logic', () => {
       { mode: 'live' },
       {
         activeProjectId: 'p1',
-        projects: [{ id: 'p1', name: 'My Project', defaults: { summaryTemplateId: 'general' } }],
+        projects: [{ id: 'p1', name: 'My Project' }],
       },
     );
 

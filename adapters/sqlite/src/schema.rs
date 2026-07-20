@@ -1,6 +1,6 @@
 use super::{Database, DatabaseError};
 
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 4;
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 7;
 type MigrationFn = fn(&rusqlite::Transaction) -> Result<(), rusqlite::Error>;
 
 const MIGRATIONS: &[(i64, &str, MigrationFn)] = &[
@@ -8,6 +8,21 @@ const MIGRATIONS: &[(i64, &str, MigrationFn)] = &[
     (2, "Preserve detailed LLM token usage", migrate_v2),
     (3, "Add provider-neutral sync state", migrate_v3),
     (4, "Replace projects with tags and add trash", migrate_v4),
+    (
+        5,
+        "Move tag defaults into typed automation profiles",
+        migrate_v5,
+    ),
+    (
+        6,
+        "Persist resolved automation metadata in task ledger",
+        migrate_v6,
+    ),
+    (
+        7,
+        "Track generic automation runs and Tag idempotency",
+        migrate_v7,
+    ),
 ];
 
 /// Runs pending schema migrations in version order.
@@ -484,6 +499,118 @@ fn migrate_v4(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     )
 }
 
+fn migrate_v5(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+    tx.execute_batch(
+        "CREATE TABLE automation_profiles (
+             id TEXT PRIMARY KEY,
+             name TEXT NOT NULL DEFAULT '',
+             translation_language TEXT NOT NULL DEFAULT 'zh',
+             polish_preset_id TEXT NOT NULL DEFAULT 'general',
+             summary_template_id TEXT NOT NULL DEFAULT 'general',
+             created_at INTEGER NOT NULL DEFAULT 0,
+             updated_at INTEGER NOT NULL DEFAULT 0
+         );
+         CREATE TABLE automation_profile_links (
+             profile_id TEXT NOT NULL REFERENCES automation_profiles(id) ON DELETE CASCADE,
+             kind TEXT NOT NULL,
+             target_id TEXT NOT NULL,
+             sort_order INTEGER NOT NULL DEFAULT 0,
+             PRIMARY KEY (profile_id, kind, target_id)
+         );
+         CREATE INDEX idx_automation_profile_links_kind_target
+             ON automation_profile_links(kind, target_id);
+
+         ALTER TABLE automation_rules ADD COLUMN kind TEXT NOT NULL DEFAULT 'file';
+         ALTER TABLE automation_rules ADD COLUMN priority INTEGER NOT NULL DEFAULT 0;
+         ALTER TABLE automation_rules ADD COLUMN profile_id TEXT;
+         ALTER TABLE automation_rules ADD COLUMN profile_source TEXT NOT NULL DEFAULT 'tag_match';
+         ALTER TABLE automation_rules ADD COLUMN action_auto_summary INTEGER NOT NULL DEFAULT 0;
+         ALTER TABLE automation_rules ADD COLUMN migration_notice TEXT;
+
+         INSERT INTO automation_profiles (
+             id, name, translation_language, polish_preset_id, summary_template_id,
+             created_at, updated_at
+         )
+         SELECT 'migrated-tag-profile:' || id, name, translation_language,
+                polish_preset_id, summary_template_id, created_at, updated_at
+         FROM tags;
+
+         INSERT INTO automation_profile_links (profile_id, kind, target_id, sort_order)
+         SELECT 'migrated-tag-profile:' || tag_id, kind, target_id, sort_order
+         FROM tag_default_links;
+
+         INSERT INTO automation_rules (
+             id, name, save_history, preset_id, watch_directory, recursive, enabled,
+             stage_auto_polish, stage_polish_preset_id, stage_auto_translate,
+             stage_translation_language, stage_export_enabled,
+             export_directory, export_format, export_mode, export_prefix,
+             created_at, updated_at, kind, priority, profile_id, profile_source,
+             action_auto_summary
+         )
+         SELECT 'migrated-tag-rule:' || id, name, 1, 'custom', '', 0, 1,
+                0, polish_preset_id, 0, translation_language, 0,
+                '', 'txt', 'original', '', created_at, updated_at,
+                'tag', sort_order, 'migrated-tag-profile:' || id, 'explicit', 0
+         FROM tags;
+
+         INSERT INTO automation_rule_tags (rule_id, tag_id)
+         SELECT 'migrated-tag-rule:' || id, id FROM tags;
+
+         UPDATE automation_rules
+            SET migration_notice = CASE
+                WHEN stage_auto_polish <> 0 OR stage_auto_translate <> 0
+                THEN 'Legacy automatic polish/translation was disabled during migration. Configure a Tag automation to enable it.'
+                ELSE NULL
+            END,
+                stage_auto_polish = 0,
+                stage_auto_translate = 0
+          WHERE kind = 'file';
+
+         INSERT INTO app_settings (key, value)
+         VALUES ('automation-migration-v5-report',
+                 json_object('legacyTagRules', (SELECT COUNT(*) FROM tags),
+                             'legacyFileRulesWithPostProcessing',
+                             (SELECT COUNT(*) FROM automation_rules
+                              WHERE kind = 'file' AND migration_notice IS NOT NULL),
+                             'legacyExportPrefixesDropped',
+                             (SELECT COUNT(*) FROM tags
+                              WHERE TRIM(export_file_name_prefix) <> '')))
+         ON CONFLICT(key) DO NOTHING;
+
+         DROP TABLE tag_default_links;
+         ALTER TABLE tags DROP COLUMN summary_template_id;
+         ALTER TABLE tags DROP COLUMN translation_language;
+         ALTER TABLE tags DROP COLUMN polish_preset_id;
+         ALTER TABLE tags DROP COLUMN polish_scenario;
+         ALTER TABLE tags DROP COLUMN polish_context;
+         ALTER TABLE tags DROP COLUMN export_file_name_prefix;",
+    )
+}
+
+fn migrate_v6(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+    tx.execute_batch(
+        "ALTER TABLE task_ledger ADD COLUMN tag_automation_rule_id TEXT;
+         ALTER TABLE task_ledger ADD COLUMN automation_profile_id TEXT;
+         ALTER TABLE task_ledger ADD COLUMN automation_profile_source TEXT;",
+    )
+}
+
+fn migrate_v7(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+    tx.execute_batch(
+        "ALTER TABLE automation_processed ADD COLUMN kind TEXT NOT NULL DEFAULT 'file';
+         ALTER TABLE automation_processed ADD COLUMN input_version TEXT NOT NULL DEFAULT '';
+         ALTER TABLE automation_processed ADD COLUMN attempt INTEGER NOT NULL DEFAULT 1;
+
+         UPDATE automation_processed
+            SET input_version = source_fingerprint
+          WHERE input_version = '' AND source_fingerprint <> '';
+
+         CREATE UNIQUE INDEX idx_automation_processed_tag_run
+             ON automation_processed(rule_id, history_id, input_version)
+          WHERE kind = 'tag' AND history_id IS NOT NULL AND input_version <> '';",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -559,7 +686,7 @@ mod tests {
         // Migrations already ran during open_in_memory. Running again should be a no-op.
         run_migrations(&db).unwrap();
 
-        assert_eq!(schema_versions(&db), vec![1, 2, 3, 4]);
+        assert_eq!(schema_versions(&db), vec![1, 2, 3, 4, 5, 6, 7]);
     }
 
     #[test]
@@ -578,12 +705,6 @@ mod tests {
                     "sort_order",
                     "created_at",
                     "updated_at",
-                    "summary_template_id",
-                    "translation_language",
-                    "polish_preset_id",
-                    "polish_scenario",
-                    "polish_context",
-                    "export_file_name_prefix",
                 ]
             );
             assert_eq!(
@@ -741,7 +862,7 @@ mod tests {
     fn test_future_schema_version_is_rejected() {
         let db = Database::open_in_memory().unwrap();
         db.with_connection(|conn| {
-            conn.execute("INSERT INTO schema_version (version) VALUES (5)", [])?;
+            conn.execute("INSERT INTO schema_version (version) VALUES (8)", [])?;
             Ok(())
         })
         .unwrap();
@@ -750,11 +871,11 @@ mod tests {
         assert!(matches!(
             err,
             DatabaseError::UnsupportedSchemaVersion {
-                found: 5,
-                current: 4
+                found: 8,
+                current: 7
             }
         ));
-        assert_eq!(schema_versions(&db), vec![1, 2, 3, 4, 5]);
+        assert_eq!(schema_versions(&db), vec![1, 2, 3, 4, 5, 6, 7, 8]);
     }
 
     #[test]
@@ -768,7 +889,7 @@ mod tests {
 
         run_migrations(&db).unwrap();
 
-        assert_eq!(schema_versions(&db), vec![0, 1, 2, 3, 4]);
+        assert_eq!(schema_versions(&db), vec![0, 1, 2, 3, 4, 5, 6, 7]);
     }
 
     #[test]
@@ -781,7 +902,6 @@ mod tests {
             "history_summaries",
             "transcript_snapshots",
             "tags",
-            "tag_default_links",
             "history_item_tags",
             "app_settings",
             "app_config",
@@ -791,6 +911,8 @@ mod tests {
             "vocabulary_rules",
             "speaker_profiles",
             "speaker_profile_samples",
+            "automation_profiles",
+            "automation_profile_links",
             "automation_rules",
             "automation_rule_tags",
             "automation_processed",
@@ -832,17 +954,11 @@ mod tests {
                     "sort_order",
                     "created_at",
                     "updated_at",
-                    "summary_template_id",
-                    "translation_language",
-                    "polish_preset_id",
-                    "polish_scenario",
-                    "polish_context",
-                    "export_file_name_prefix",
                 ]
             );
             assert_eq!(
-                table_columns(conn, "tag_default_links"),
-                vec!["tag_id", "kind", "target_id", "sort_order"]
+                table_columns(conn, "automation_profile_links"),
+                vec!["profile_id", "kind", "target_id", "sort_order"]
             );
             assert_eq!(
                 table_columns(conn, "automation_rules"),
@@ -865,6 +981,12 @@ mod tests {
                     "created_at",
                     "updated_at",
                     "save_history",
+                    "kind",
+                    "priority",
+                    "profile_id",
+                    "profile_source",
+                    "action_auto_summary",
+                    "migration_notice",
                 ]
             );
             assert_eq!(
@@ -881,6 +1003,9 @@ mod tests {
                     "history_id",
                     "export_path",
                     "error_message",
+                    "kind",
+                    "input_version",
+                    "attempt",
                 ]
             );
             assert_eq!(
@@ -906,6 +1031,9 @@ mod tests {
                     "target_language",
                     "version",
                     "tag_ids",
+                    "tag_automation_rule_id",
+                    "automation_profile_id",
+                    "automation_profile_source",
                 ]
             );
 
@@ -926,6 +1054,75 @@ mod tests {
             Ok(())
         })
         .unwrap();
+    }
+
+    #[test]
+    fn tag_automation_runs_are_unique_by_rule_history_and_input_version() {
+        let db = Database::open_in_memory().unwrap();
+        db.with_connection(|conn| {
+            conn.execute(
+                "INSERT INTO automation_processed (
+                    id, rule_id, kind, input_version, history_id, status, attempt
+                 ) VALUES ('run-1', 'rule-1', 'tag', 'input-1', 'history-1', 'complete', 1)",
+                [],
+            )?;
+            let duplicate = conn.execute(
+                "INSERT INTO automation_processed (
+                    id, rule_id, kind, input_version, history_id, status, attempt
+                 ) VALUES ('run-2', 'rule-1', 'tag', 'input-1', 'history-1', 'pending', 2)",
+                [],
+            );
+            assert!(duplicate.is_err());
+
+            conn.execute(
+                "INSERT INTO automation_processed (
+                    id, rule_id, kind, input_version, history_id, status, attempt
+                 ) VALUES ('run-3', 'rule-1', 'tag', 'input-2', 'history-1', 'complete', 1)",
+                [],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn schema_v7_backfills_file_run_input_versions() {
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("ATTACH DATABASE ':memory:' AS analytics; PRAGMA foreign_keys = ON;")
+            .unwrap();
+        let tx = connection.transaction().unwrap();
+        migrate_v1(&tx).unwrap();
+        migrate_v2(&tx).unwrap();
+        migrate_v3(&tx).unwrap();
+        migrate_v4(&tx).unwrap();
+        migrate_v5(&tx).unwrap();
+        migrate_v6(&tx).unwrap();
+        tx.execute(
+            "INSERT INTO automation_processed (id, rule_id, source_fingerprint)
+             VALUES ('legacy-run', 'file-rule', 'source-v1')",
+            [],
+        )
+        .unwrap();
+
+        migrate_v7(&tx).unwrap();
+
+        let migrated = tx
+            .query_row(
+                "SELECT kind, input_version, attempt
+                   FROM automation_processed WHERE id = 'legacy-run'",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, i64>(2)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(migrated, ("file".to_string(), "source-v1".to_string(), 1));
+        tx.commit().unwrap();
     }
 
     #[test]

@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use rusqlite::Transaction;
 use serde_json::Value;
-use sona_core::tag::{TagDefaults, TagListOptions, normalize_tag_value_with_timestamp};
+use sona_core::tag::normalize_tag_value_with_timestamp;
 use sona_core::task_ledger::types::TASK_LEDGER_VERSION;
 
 use crate::{Database, DatabaseError};
@@ -225,6 +225,20 @@ fn nested_bool_field(obj: &Value, parent: &str, key: &str) -> bool {
         .and_then(|value| value.get(key))
         .and_then(Value::as_bool)
         .unwrap_or(false)
+}
+
+fn nested_string_array_field(obj: &Value, parent: &str, key: &str) -> Vec<String> {
+    obj.get(parent)
+        .and_then(|value| value.get(key))
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn current_time_millis() -> Result<u64, String> {
@@ -503,11 +517,7 @@ fn migrate_projects(
     let fallback_timestamp = current_time_millis().unwrap_or(0);
 
     for (i, project_val) in projects.iter().enumerate() {
-        let mut project = normalize_tag_value_with_timestamp(
-            project_val,
-            &TagListOptions::default(),
-            fallback_timestamp,
-        );
+        let mut project = normalize_tag_value_with_timestamp(project_val, fallback_timestamp);
         if project.id.is_empty() {
             project.id = format!("_migrated_{i}");
         }
@@ -523,11 +533,8 @@ fn migrate_projects(
 
         if let Err(e) = tx.execute(
             "INSERT OR IGNORE INTO tags (
-                id, name, description, icon, color, sort_order, created_at, updated_at,
-                summary_template_id, translation_language, polish_preset_id,
-                polish_scenario, polish_context, export_file_name_prefix
-             )
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                id, name, description, icon, color, sort_order, created_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             rusqlite::params![
                 &id,
                 &project.name,
@@ -537,19 +544,13 @@ fn migrate_projects(
                 i as i64,
                 project.created_at as i64,
                 project.updated_at as i64,
-                &project.defaults.summary_template_id,
-                &project.defaults.translation_language,
-                &project.defaults.polish_preset_id,
-                &project.defaults.polish_scenario,
-                &project.defaults.polish_context,
-                &project.defaults.export_file_name_prefix,
             ],
         ) {
             errors.push(format!("Failed to insert project {id}: {e}"));
             continue;
         }
-        if let Err(e) = insert_project_default_links(tx, &id, &project.defaults) {
-            errors.push(format!("Failed to insert project defaults for {id}: {e}"));
+        if let Err(e) = insert_legacy_project_automation(tx, &id, &project.name, project_val) {
+            errors.push(format!("Failed to migrate project defaults for {id}: {e}"));
             continue;
         }
 
@@ -559,45 +560,75 @@ fn migrate_projects(
     Ok(())
 }
 
-fn insert_project_default_links(
+fn insert_legacy_project_automation(
     tx: &Transaction,
-    project_id: &str,
-    defaults: &TagDefaults,
+    tag_id: &str,
+    tag_name: &str,
+    source: &Value,
 ) -> Result<(), rusqlite::Error> {
-    insert_project_default_link_kind(
-        tx,
-        project_id,
-        "text_replacement",
-        &defaults.enabled_text_replacement_set_ids,
+    let profile_id = format!("migrated-tag-profile:{tag_id}");
+    let rule_id = format!("migrated-tag-rule:{tag_id}");
+    let created_at = i64_field(source, "createdAt");
+    let updated_at = i64_field(source, "updatedAt");
+    tx.execute(
+        "INSERT OR IGNORE INTO automation_profiles (
+            id, name, translation_language, polish_preset_id, summary_template_id,
+            created_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        rusqlite::params![
+            &profile_id,
+            tag_name,
+            nested_string_field(source, "defaults", "translationLanguage", "zh"),
+            nested_string_field(source, "defaults", "polishPresetId", "general"),
+            nested_string_field(source, "defaults", "summaryTemplateId", "general"),
+            created_at,
+            updated_at,
+        ],
     )?;
-    insert_project_default_link_kind(tx, project_id, "hotword", &defaults.enabled_hotword_set_ids)?;
-    insert_project_default_link_kind(
-        tx,
-        project_id,
-        "polish_keyword",
-        &defaults.enabled_polish_keyword_set_ids,
+    for (kind, key) in [
+        ("text_replacement", "enabledTextReplacementSetIds"),
+        ("hotword", "enabledHotwordSetIds"),
+        ("polish_keyword", "enabledPolishKeywordSetIds"),
+        ("speaker_profile", "enabledSpeakerProfileIds"),
+    ] {
+        insert_automation_profile_link_kind(
+            tx,
+            &profile_id,
+            kind,
+            &nested_string_array_field(source, "defaults", key),
+        )?;
+    }
+    tx.execute(
+        "INSERT OR IGNORE INTO automation_rules (
+            id, name, kind, priority, profile_id, profile_source, save_history,
+            preset_id, watch_directory, recursive, enabled, stage_auto_polish,
+            stage_polish_preset_id, stage_auto_translate, stage_translation_language,
+            stage_export_enabled, action_auto_summary, export_directory, export_format,
+            export_mode, export_prefix, created_at, updated_at
+         ) VALUES (?1, ?2, 'tag', 0, ?3, 'explicit', 1, 'custom', '', 0, 1, 0,
+                   'general', 0, 'zh', 0, 0, '', 'txt', 'original', '', ?4, ?5)",
+        rusqlite::params![&rule_id, tag_name, &profile_id, created_at, updated_at],
     )?;
-    insert_project_default_link_kind(
-        tx,
-        project_id,
-        "speaker_profile",
-        &defaults.enabled_speaker_profile_ids,
-    )
+    tx.execute(
+        "INSERT OR IGNORE INTO automation_rule_tags (rule_id, tag_id) VALUES (?1, ?2)",
+        rusqlite::params![&rule_id, tag_id],
+    )?;
+    Ok(())
 }
 
-fn insert_project_default_link_kind(
+fn insert_automation_profile_link_kind(
     tx: &Transaction,
-    project_id: &str,
+    profile_id: &str,
     kind: &str,
     target_ids: &[String],
 ) -> Result<(), rusqlite::Error> {
     let mut stmt = tx.prepare_cached(
-        "INSERT OR IGNORE INTO tag_default_links (tag_id, kind, target_id, sort_order)
+        "INSERT OR IGNORE INTO automation_profile_links (profile_id, kind, target_id, sort_order)
          VALUES (?1, ?2, ?3, ?4)",
     )?;
     for (sort_order, target_id) in target_ids.iter().enumerate() {
         stmt.execute(rusqlite::params![
-            project_id,
+            profile_id,
             kind,
             target_id,
             sort_order as i64
@@ -633,15 +664,26 @@ fn migrate_automation(
                     id
                 };
                 let project_id = string_field(&rule, "projectId").unwrap_or_default();
+                let legacy_auto_polish = nested_bool_field(&rule, "stageConfig", "autoPolish");
+                let legacy_auto_translate =
+                    nested_bool_field(&rule, "stageConfig", "autoTranslate");
+                let migration_notice = if legacy_auto_polish || legacy_auto_translate {
+                    Some(
+                        "Legacy automatic polish/translation was disabled during migration. Configure a Tag automation to enable it.",
+                    )
+                } else {
+                    None
+                };
                 if let Err(e) = tx.execute(
                     "INSERT OR IGNORE INTO automation_rules (
-                        id, name, save_history, preset_id, watch_directory, recursive, enabled,
-                        stage_auto_polish, stage_polish_preset_id, stage_auto_translate,
-                        stage_translation_language, stage_export_enabled,
-                        export_directory, export_format, export_mode, export_prefix,
-                        created_at, updated_at
+                        id, name, kind, priority, profile_id, profile_source, save_history,
+                        preset_id, watch_directory, recursive, enabled, stage_auto_polish,
+                        stage_polish_preset_id, stage_auto_translate, stage_translation_language,
+                        stage_export_enabled, action_auto_summary, export_directory, export_format,
+                        export_mode, export_prefix, created_at, updated_at, migration_notice
                     )
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+                    VALUES (?1, ?2, 'file', 0, NULL, 'tag_match', ?3, ?4, ?5, ?6, ?7,
+                            0, ?8, 0, ?9, ?10, 0, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
                     rusqlite::params![
                         &id,
                         string_field(&rule, "name").unwrap_or_default(),
@@ -650,9 +692,7 @@ fn migrate_automation(
                         string_field(&rule, "watchDirectory").unwrap_or_default(),
                         bool_field(&rule, "recursive") as i64,
                         bool_field(&rule, "enabled") as i64,
-                        nested_bool_field(&rule, "stageConfig", "autoPolish") as i64,
                         nested_string_field(&rule, "stageConfig", "polishPresetId", "general"),
-                        nested_bool_field(&rule, "stageConfig", "autoTranslate") as i64,
                         nested_string_field(&rule, "stageConfig", "translationLanguage", "en"),
                         nested_bool_field(&rule, "stageConfig", "exportEnabled") as i64,
                         nested_string_field(&rule, "exportConfig", "directory", ""),
@@ -661,6 +701,7 @@ fn migrate_automation(
                         nested_string_field(&rule, "exportConfig", "prefix", ""),
                         i64_field(&rule, "createdAt"),
                         i64_field(&rule, "updatedAt"),
+                        migration_notice,
                     ],
                 ) {
                     errors.push(format!("Failed to insert automation rule: {e}"));
@@ -1007,7 +1048,7 @@ fn verify_counts(
     verify("tags", project_count, "tags");
     verify(
         "automation_rules",
-        automation_rule_count,
+        automation_rule_count + project_count,
         "automation_rules",
     );
     verify(
@@ -1240,38 +1281,17 @@ mod tests {
                 .unwrap();
             assert_eq!(count, 2);
 
-            let project = conn
-                .query_row(
-                    "SELECT description, summary_template_id, translation_language,
-                            polish_preset_id, polish_scenario, polish_context,
-                            export_file_name_prefix
-                     FROM tags WHERE id = 'proj-1'",
-                    [],
-                    |r| {
-                        Ok((
-                            r.get::<_, String>(0)?,
-                            r.get::<_, String>(1)?,
-                            r.get::<_, String>(2)?,
-                            r.get::<_, String>(3)?,
-                            r.get::<_, Option<String>>(4)?,
-                            r.get::<_, Option<String>>(5)?,
-                            r.get::<_, String>(6)?,
-                        ))
-                    },
-                )
+            let project: String = conn
+                .query_row("SELECT description FROM tags WHERE id = 'proj-1'", [], |r| {
+                    r.get(0)
+                })
                 .unwrap();
-            assert_eq!(project.0, "A work project");
-            assert_eq!(project.1, "detailed");
-            assert_eq!(project.2, "en");
-            assert_eq!(project.3, "formal");
-            assert_eq!(project.4.as_deref(), Some("scenario1"));
-            assert_eq!(project.5.as_deref(), Some("context1"));
-            assert_eq!(project.6, "work-");
+            assert_eq!(project, "A work project");
 
             let links: Vec<(String, String)> = conn
                 .prepare(
-                    "SELECT kind, target_id FROM tag_default_links
-                     WHERE tag_id = 'proj-1'
+                    "SELECT kind, target_id FROM automation_profile_links
+                     WHERE profile_id = 'migrated-tag-profile:proj-1'
                      ORDER BY kind, sort_order",
                 )
                 .unwrap()
@@ -1293,7 +1313,7 @@ mod tests {
             // Check proj-2 defaults
             let tmpl: String = conn
                 .query_row(
-                    "SELECT summary_template_id FROM tags WHERE id = 'proj-2'",
+                    "SELECT summary_template_id FROM automation_profiles WHERE id = 'migrated-tag-profile:proj-2'",
                     [],
                     |r| r.get(0),
                 )
@@ -1417,9 +1437,9 @@ mod tests {
             assert_eq!(rule.3, "/docs");
             assert_eq!(rule.4, 1);
             assert_eq!(rule.5, 1);
-            assert_eq!(rule.6, 1);
+            assert_eq!(rule.6, 0);
             assert_eq!(rule.7, "formal");
-            assert_eq!(rule.8, 1);
+            assert_eq!(rule.8, 0);
             assert_eq!(rule.9, "ja");
             assert_eq!(rule.10, 1);
             assert_eq!(rule.11, "/exports");
@@ -1673,7 +1693,7 @@ mod tests {
                 conn.query_row("SELECT COUNT(*) FROM automation_rules", [], |r| r
                     .get::<_, i64>(0))
                     .unwrap(),
-                1
+                2
             );
             assert_eq!(
                 conn.query_row("SELECT COUNT(*) FROM automation_processed", [], |r| r
@@ -1766,7 +1786,7 @@ mod tests {
                 conn.query_row("SELECT COUNT(*) FROM automation_rules", [], |r| r
                     .get::<_, i64>(0))
                     .unwrap(),
-                1
+                2
             );
             assert_eq!(
                 conn.query_row("SELECT COUNT(*) FROM automation_processed", [], |r| r

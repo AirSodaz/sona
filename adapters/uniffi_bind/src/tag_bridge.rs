@@ -432,10 +432,7 @@ mod tests {
         replace_tags_json, replace_tags_v1, set_active_tag_id, set_active_tag_id_v1,
         update_tag_json_at, update_tag_v1_at,
     };
-    use crate::{
-        FfiTagCreateInputV1, FfiTagDefaultsInputV1, FfiTagDefaultsPatchV1, FfiTagUpdateInputV1,
-        SonaCoreBindingError,
-    };
+    use crate::{FfiTagCreateInputV1, FfiTagUpdateInputV1, SonaCoreBindingError};
     use serde_json::{Value, json};
     use sona_core::ports::time::{ClockError, UnixMillisClock};
     use sona_runtime_fs::UuidGenerator;
@@ -450,37 +447,6 @@ mod tests {
         serde_json::from_str(output).unwrap()
     }
 
-    fn empty_defaults_v1() -> FfiTagDefaultsInputV1 {
-        FfiTagDefaultsInputV1 {
-            summary_template_id: None,
-            summary_template: None,
-            translation_language: None,
-            polish_preset_id: None,
-            polish_scenario: None,
-            polish_context: None,
-            export_file_name_prefix: None,
-            enabled_text_replacement_set_ids: None,
-            enabled_hotword_set_ids: None,
-            enabled_polish_keyword_set_ids: None,
-            enabled_speaker_profile_ids: None,
-        }
-    }
-
-    fn empty_defaults_patch_v1() -> FfiTagDefaultsPatchV1 {
-        FfiTagDefaultsPatchV1 {
-            summary_template_id: None,
-            translation_language: None,
-            polish_preset_id: None,
-            polish_scenario: None,
-            polish_context: None,
-            export_file_name_prefix: None,
-            enabled_text_replacement_set_ids: None,
-            enabled_hotword_set_ids: None,
-            enabled_polish_keyword_set_ids: None,
-            enabled_speaker_profile_ids: None,
-        }
-    }
-
     #[test]
     fn load_returns_empty_canonical_state() {
         let dir = tempfile::tempdir().unwrap();
@@ -491,7 +457,7 @@ mod tests {
     }
 
     #[test]
-    fn replace_persists_canonical_defaults_and_order_and_returns_unit() {
+    fn replace_persists_metadata_and_order_and_returns_unit() {
         let dir = tempfile::tempdir().unwrap();
         let tags = json!([
             {"id":"second","name":"Second","createdAt":2,"updatedAt":3},
@@ -503,9 +469,8 @@ mod tests {
 
         assert_eq!(state["tags"][0]["id"], "second");
         assert_eq!(state["tags"][1]["id"], "first");
-        assert_eq!(state["tags"][0]["defaults"]["summaryTemplateId"], "general");
-        assert_eq!(state["tags"][0]["defaults"]["translationLanguage"], "zh");
-        assert_eq!(state["tags"][1]["defaults"]["translationLanguage"], "en");
+        assert!(state["tags"][0].get("defaults").is_none());
+        assert!(state["tags"][1].get("defaults").is_none());
     }
 
     #[test]
@@ -540,7 +505,6 @@ mod tests {
                 description: Some("Description".to_string()),
                 icon: Some("tag".to_string()),
                 color: Some("#123456".to_string()),
-                defaults: empty_defaults_v1(),
             },
             "typed-id",
             42,
@@ -550,7 +514,6 @@ mod tests {
         assert_eq!(created.id, "typed-id");
         assert_eq!(created.created_at, 42);
         assert_eq!(created.updated_at, 42);
-        assert_eq!(created.defaults.summary_template_id, "general");
 
         let updated = update_tag_v1_at(
             app_data_dir(&dir),
@@ -560,17 +523,12 @@ mod tests {
                 icon: None,
                 color: None,
                 description: None,
-                defaults: Some(FfiTagDefaultsPatchV1 {
-                    translation_language: Some("en".to_string()),
-                    ..empty_defaults_patch_v1()
-                }),
             },
             99,
         )
         .unwrap()
         .unwrap();
         assert_eq!(updated.updated_at, 99);
-        assert_eq!(updated.defaults.translation_language, "en");
 
         let replacement = crate::FfiTagRecordV1 {
             id: "replacement".to_string(),
@@ -757,7 +715,6 @@ mod tests {
                 description: None,
                 icon: None,
                 color: None,
-                defaults: empty_defaults_v1(),
             },
             Arc::new(UuidGenerator),
             Arc::new(FailingClock),

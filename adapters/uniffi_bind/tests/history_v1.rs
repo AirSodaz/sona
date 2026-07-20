@@ -9,10 +9,9 @@ use sona_uniffi_bind::{
     FfiHistoryWorkspaceDateFilterV1, FfiHistoryWorkspaceFilterTypeV1,
     FfiHistoryWorkspaceQueryRequestV1, FfiHistoryWorkspaceScopeV1, FfiHistoryWorkspaceSortOrderV1,
     FfiSpeakerAttribution, FfiSpeakerCandidate, FfiSpeakerTag, FfiStringPatchV1,
-    FfiTagCreateInputV1, FfiTagDefaultsInputV1, FfiTranscriptSegment,
-    FfiTranscriptSnapshotReasonV1, FfiTranscriptTiming, FfiTranscriptTimingLevel,
-    FfiTranscriptTimingSource, FfiTranscriptTimingUnit, SonaCoreBindingError,
-    complete_history_live_draft_v1, create_history_live_draft_v1,
+    FfiTagCreateInputV1, FfiTranscriptSegment, FfiTranscriptSnapshotReasonV1, FfiTranscriptTiming,
+    FfiTranscriptTimingLevel, FfiTranscriptTimingSource, FfiTranscriptTimingUnit,
+    SonaCoreBindingError, complete_history_live_draft_v1, create_history_live_draft_v1,
     create_history_transcript_snapshot_v1, create_tag_v1, list_history_items_v1,
     list_history_transcript_snapshots_v1, load_history_transcript_snapshot_v1,
     load_history_transcript_v1, purge_history_items_v1, query_history_workspace_v1,
@@ -98,19 +97,6 @@ fn tag_input(name: &str) -> FfiTagCreateInputV1 {
         description: None,
         icon: None,
         color: None,
-        defaults: FfiTagDefaultsInputV1 {
-            summary_template_id: None,
-            summary_template: None,
-            translation_language: None,
-            polish_preset_id: None,
-            polish_scenario: None,
-            polish_context: None,
-            export_file_name_prefix: None,
-            enabled_text_replacement_set_ids: None,
-            enabled_hotword_set_ids: None,
-            enabled_polish_keyword_set_ids: None,
-            enabled_speaker_profile_ids: None,
-        },
     }
 }
 

@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use sha2::{Digest, Sha256};
 use sona_core::sync::{
-    SyncCausalContext, SyncDeleteResult, SyncDeviceCursor, SyncError, SyncLocalRepository,
-    SyncLocalRuntimeState, SyncObjectKey, SyncObjectPrefix, SyncObjectStore,
+    SYNC_PROTOCOL_VERSION, SyncCausalContext, SyncDeleteResult, SyncDeviceCursor, SyncError,
+    SyncLocalRepository, SyncLocalRuntimeState, SyncObjectKey, SyncObjectPrefix, SyncObjectStore,
     SyncPublishedCheckpoint, SyncPublishedSegment, SyncPutResult, SyncRemoteSegment, SyncRunResult,
 };
 
@@ -21,7 +21,7 @@ pub async fn load_remote_state_for_join(
     vault_id: &str,
     vault_key: &[u8],
 ) -> Result<Vec<SyncRemoteSegment>, SyncError> {
-    let prefix = SyncObjectPrefix::parse(format!("sona-sync/v1/{vault_id}/devices"))?;
+    let prefix = SyncObjectPrefix::parse(format!("{}/devices", runtime_vault_prefix(vault_id)))?;
     let mut continuation = None;
     let mut checkpoints = BTreeMap::<String, Vec<(ParsedCheckpointKey, SyncObjectKey)>>::new();
     let mut segments = BTreeMap::<String, Vec<(ParsedSegmentKey, SyncObjectKey)>>::new();
@@ -200,7 +200,8 @@ impl<'a> SyncRuntime<'a> {
         state: &mut SyncLocalRuntimeState,
         result: &mut SyncRunResult,
     ) -> Result<(), SyncError> {
-        let prefix = SyncObjectPrefix::parse(format!("sona-sync/v1/{}/devices", state.vault_id))?;
+        let prefix =
+            SyncObjectPrefix::parse(format!("{}/devices", runtime_vault_prefix(&state.vault_id)))?;
         let mut continuation = None;
         let mut latest_by_device = BTreeMap::<String, (ParsedCheckpointKey, SyncObjectKey)>::new();
         loop {
@@ -279,7 +280,8 @@ impl<'a> SyncRuntime<'a> {
         state: &mut SyncLocalRuntimeState,
         result: &mut SyncRunResult,
     ) -> Result<(), SyncError> {
-        let prefix = SyncObjectPrefix::parse(format!("sona-sync/v1/{}/devices", state.vault_id))?;
+        let prefix =
+            SyncObjectPrefix::parse(format!("{}/devices", runtime_vault_prefix(&state.vault_id)))?;
         let mut continuation = None;
         let mut remote_segments = Vec::new();
         loop {
@@ -437,8 +439,9 @@ impl<'a> SyncRuntime<'a> {
         intended: &SyncSegmentV1,
     ) -> Result<Option<(String, u64)>, SyncError> {
         let prefix = SyncObjectPrefix::parse(format!(
-            "sona-sync/v1/{}/devices/{}/segments",
-            intended.vault_id, intended.device_id
+            "{}/devices/{}/segments",
+            runtime_vault_prefix(&intended.vault_id),
+            intended.device_id
         ))?;
         let mut continuation = None;
         let mut candidates = Vec::new();
@@ -608,8 +611,9 @@ impl<'a> SyncRuntime<'a> {
         intended: &SyncCheckpointV1,
     ) -> Result<Option<(String, u64, u64)>, SyncError> {
         let prefix = SyncObjectPrefix::parse(format!(
-            "sona-sync/v1/{}/devices/{}/checkpoints",
-            intended.vault_id, intended.device_id
+            "{}/devices/{}/checkpoints",
+            runtime_vault_prefix(&intended.vault_id),
+            intended.device_id
         ))?;
         let mut continuation = None;
         let mut candidates = Vec::new();
@@ -669,8 +673,9 @@ impl<'a> SyncRuntime<'a> {
         now_ms: u64,
     ) -> Result<(), SyncError> {
         let checkpoint_prefix = SyncObjectPrefix::parse(format!(
-            "sona-sync/v1/{}/devices/{}/checkpoints",
-            state.vault_id, state.device_id
+            "{}/devices/{}/checkpoints",
+            runtime_vault_prefix(&state.vault_id),
+            state.device_id
         ))?;
         let mut continuation = None;
         let mut checkpoints = Vec::new();
@@ -733,8 +738,9 @@ impl<'a> SyncRuntime<'a> {
         }
 
         let segment_prefix = SyncObjectPrefix::parse(format!(
-            "sona-sync/v1/{}/devices/{}/segments",
-            state.vault_id, state.device_id
+            "{}/devices/{}/segments",
+            runtime_vault_prefix(&state.vault_id),
+            state.device_id
         ))?;
         continuation = None;
         loop {
@@ -836,7 +842,7 @@ fn parse_segment_key(
     let parts = key.as_str().split('/').collect::<Vec<_>>();
     if parts.len() != 7
         || parts[0] != "sona-sync"
-        || parts[1] != "v1"
+        || parts[1] != protocol_version_component()
         || parts[2] != expected_vault_id
         || parts[3] != "devices"
         || parts[5] != "segments"
@@ -873,7 +879,7 @@ fn parse_checkpoint_key(
     let parts = key.as_str().split('/').collect::<Vec<_>>();
     if parts.len() != 7
         || parts[0] != "sona-sync"
-        || parts[1] != "v1"
+        || parts[1] != protocol_version_component()
         || parts[2] != expected_vault_id
         || parts[3] != "devices"
         || parts[5] != "checkpoints"
@@ -989,8 +995,10 @@ fn segment_aad_key_parts(
     sequence: u64,
 ) -> Result<SyncObjectKey, SyncError> {
     SyncObjectKey::parse(format!(
-        "sona-sync/v1/{}/devices/{}/segments/{:020}",
-        vault_id, device_id, sequence
+        "{}/devices/{}/segments/{:020}",
+        runtime_vault_prefix(vault_id),
+        device_id,
+        sequence
     ))
 }
 
@@ -1008,9 +1016,19 @@ fn checkpoint_aad_key_parts(
     sequence: u64,
 ) -> Result<SyncObjectKey, SyncError> {
     SyncObjectKey::parse(format!(
-        "sona-sync/v1/{}/devices/{}/checkpoints/{:020}",
-        vault_id, device_id, sequence
+        "{}/devices/{}/checkpoints/{:020}",
+        runtime_vault_prefix(vault_id),
+        device_id,
+        sequence
     ))
+}
+
+fn runtime_vault_prefix(vault_id: &str) -> String {
+    format!("sona-sync/v{SYNC_PROTOCOL_VERSION}/{vault_id}")
+}
+
+fn protocol_version_component() -> String {
+    format!("v{SYNC_PROTOCOL_VERSION}")
 }
 
 fn cipher_hash(bytes: &[u8]) -> String {

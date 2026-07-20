@@ -12,8 +12,9 @@ pub use tauri_contracts::{
 };
 
 pub use sona_core::automation::repository::{
-    AutomationProcessedInput, AutomationProcessedRecord, AutomationRepositoryInput,
-    AutomationRepositoryState, AutomationRuleInput, AutomationRuleInputExportConfig,
+    AutomationProcessedInput, AutomationProcessedRecord, AutomationProfileInput,
+    AutomationProfileRecord, AutomationRepositoryInput, AutomationRepositoryState,
+    AutomationRuleInput, AutomationRuleInputActions, AutomationRuleInputExportConfig,
     AutomationRuleInputStageConfig, AutomationRuleRecord, AutomationRuleRecordExportConfig,
     AutomationRuleRecordStageConfig,
 };
@@ -118,10 +119,7 @@ pub use sona_core::sync::{
     SyncJoinPreview, SyncLifecycleState, SyncOperation, SyncOperationKind, SyncPresetV1,
     SyncProviderDescriptor, SyncRunResult, SyncStatusSnapshot, SyncVersion,
 };
-pub use sona_core::tag::{
-    TagCreateInput, TagDefaults, TagDefaultsInput, TagDefaultsPatch, TagRecord,
-    TagRepositorySnapshot, TagUpdateInput,
-};
+pub use sona_core::tag::{TagCreateInput, TagRecord, TagRepositorySnapshot, TagUpdateInput};
 pub use sona_core::task_ledger::types::{
     TaskLedgerKind, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
 };
@@ -634,13 +632,13 @@ pub fn desktop_types() -> specta::Types {
         .register::<TaskLedgerRecord>()
         .register::<TaskLedgerPatch>()
         .register::<TaskLedgerSnapshot>()
-        .register::<TagDefaultsInput>()
         .register::<TagCreateInput>()
-        .register::<TagDefaults>()
-        .register::<TagDefaultsPatch>()
         .register::<TagUpdateInput>()
         .register::<TagRecord>()
         .register::<TagRepositorySnapshot>()
+        .register::<AutomationProfileInput>()
+        .register::<AutomationProfileRecord>()
+        .register::<AutomationRuleInputActions>()
         .register::<AutomationRuleInputStageConfig>()
         .register::<AutomationRuleInputExportConfig>()
         .register::<AutomationRuleInput>()
@@ -877,13 +875,13 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "TaskLedgerRecord",
     "TaskLedgerPatch",
     "TaskLedgerSnapshot",
-    "TagDefaultsInput",
     "TagCreateInput",
-    "TagDefaults",
-    "TagDefaultsPatch",
     "TagUpdateInput",
     "TagRecord",
     "TagRepositorySnapshot",
+    "AutomationProfileInput",
+    "AutomationProfileRecord",
+    "AutomationRuleInputActions",
     "AutomationRuleInputStageConfig",
     "AutomationRuleInputExportConfig",
     "AutomationRuleInput",
@@ -1688,13 +1686,13 @@ mod tests {
         assert_specta_type::<TaskLedgerRecord>();
         assert_specta_type::<TaskLedgerPatch>();
         assert_specta_type::<TaskLedgerSnapshot>();
-        assert_specta_type::<TagDefaultsInput>();
         assert_specta_type::<TagCreateInput>();
-        assert_specta_type::<TagDefaults>();
-        assert_specta_type::<TagDefaultsPatch>();
         assert_specta_type::<TagUpdateInput>();
         assert_specta_type::<TagRecord>();
         assert_specta_type::<TagRepositorySnapshot>();
+        assert_specta_type::<AutomationProfileInput>();
+        assert_specta_type::<AutomationProfileRecord>();
+        assert_specta_type::<AutomationRuleInputActions>();
         assert_specta_type::<AutomationRuleInputStageConfig>();
         assert_specta_type::<AutomationRuleInputExportConfig>();
         assert_specta_type::<AutomationRuleInput>();

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import { useTranslation } from 'react-i18next';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
-import { useProjectStore } from '../../stores/projectStore';
+import { useConfigStore } from '../../stores/configStore';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../../stores/transcriptSidecarStore';
 import { isSummaryLlmConfigComplete } from '../../services/llm/configUtils';
@@ -34,8 +34,7 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
   const config = useEffectiveConfigStore((state) => state.config);
   const summaryState = useTranscriptSidecarStore((state) => state.summaryStates[sourceHistoryId || 'current']);
-  const activeProjectId = useProjectStore((state) => state.activeProjectId);
-  const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
+  const setConfig = useConfigStore((state) => state.setConfig);
   const showError = useDialogStore((state) => state.showError);
 
   const [copied, setCopied] = useState(false);
@@ -185,9 +184,7 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
   const handleTemplateChange = async (templateId: string) => {
     await persistDraftIfNeeded();
     await summaryService.setActiveTemplate(templateId);
-    if (activeProjectId) {
-      await updateProjectDefaults(activeProjectId, { summaryTemplateId: templateId });
-    }
+    setConfig({ summaryTemplateId: templateId });
   };
 
   const handleGenerate = async () => {

@@ -1073,7 +1073,10 @@ mod automation_tests {
         )
         .unwrap();
 
-        assert_eq!(output, r#"{"rules":[],"processedEntries":[]}"#);
+        assert_eq!(
+            output,
+            r#"{"profiles":[],"rules":[],"processedEntries":[]}"#
+        );
     }
 
     #[test]

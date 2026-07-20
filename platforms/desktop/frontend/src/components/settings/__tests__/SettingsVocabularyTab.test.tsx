@@ -3,6 +3,16 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SettingsVocabularyTab } from '../SettingsVocabularyTab';
 import { useConfigStore } from '../../../stores/configStore';
 import { useProjectStore } from '../../../stores/projectStore';
+import { useAutomationStore } from '../../../stores/automationStore';
+
+vi.mock('../../../services/automation/automationRepository', () => ({
+  loadAutomationRepositoryState: vi.fn(),
+  persistAutomationProcessedEntries: vi.fn().mockResolvedValue(undefined),
+  persistAutomationProfiles: vi.fn().mockResolvedValue(undefined),
+  persistAutomationRepositoryState: vi.fn().mockResolvedValue(undefined),
+  persistAutomationRules: vi.fn().mockResolvedValue(undefined),
+  validateAutomationRuleActivation: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -30,17 +40,6 @@ vi.mock('../../../services/projectService', () => ({
       description: updates.description || '',
       createdAt: 1,
       updatedAt: 2,
-        defaults: {
-          summaryTemplateId: 'general',
-          translationLanguage: 'en',
-          polishPresetId: 'general',
-          exportFileNamePrefix: '',
-          enabledTextReplacementSetIds: [],
-          enabledHotwordSetIds: [],
-          enabledPolishKeywordSetIds: [],
-          enabledSpeakerProfileIds: [],
-          ...(updates.defaults || {}),
-        },
       })),
     delete: vi.fn(),
     setActiveProjectId: vi.fn(),
@@ -81,19 +80,24 @@ describe('SettingsVocabularyTab', () => {
           icon: '',
           createdAt: 1,
           updatedAt: 1,
-          defaults: {
-            summaryTemplateId: 'general',
-            translationLanguage: 'en',
-            polishPresetId: 'custom-team',
-            exportFileNamePrefix: '',
-            enabledTextReplacementSetIds: [],
-            enabledHotwordSetIds: [],
-            enabledPolishKeywordSetIds: ['kw-1'],
-            enabledSpeakerProfileIds: [],
-          },
         },
       ],
       activeProjectId: null,
+    });
+    useAutomationStore.setState({
+      profiles: [{
+        id: 'profile-1',
+        name: 'Team profile',
+        translationLanguage: 'en',
+        polishPresetId: 'custom-team',
+        summaryTemplateId: 'summary-team',
+        enabledTextReplacementSetIds: ['text-1'],
+        enabledHotwordSetIds: ['hot-1'],
+        enabledPolishKeywordSetIds: ['kw-1'],
+        enabledSpeakerProfileIds: ['speaker-1'],
+        createdAt: 1,
+        updatedAt: 1,
+      }],
     });
   });
 
@@ -134,19 +138,6 @@ describe('SettingsVocabularyTab', () => {
         ],
       },
     });
-    useProjectStore.setState({
-      ...useProjectStore.getState(),
-      projects: [
-        {
-          ...useProjectStore.getState().projects[0],
-          defaults: {
-            ...useProjectStore.getState().projects[0].defaults,
-            summaryTemplateId: 'summary-team',
-          },
-        },
-      ],
-    });
-
     render(<SettingsVocabularyTab />);
 
     fireEvent.change(screen.getByDisplayValue('Team Summary'), {
@@ -169,7 +160,7 @@ describe('SettingsVocabularyTab', () => {
     await waitFor(() => {
       expect(useConfigStore.getState().config.summaryCustomTemplates).toEqual([]);
       expect(useConfigStore.getState().config.summaryTemplateId).toBe('general');
-      expect(useProjectStore.getState().projects[0].defaults.summaryTemplateId).toBe('general');
+      expect(useAutomationStore.getState().profiles[0].summaryTemplateId).toBe('general');
     });
   });
 
@@ -201,7 +192,7 @@ describe('SettingsVocabularyTab', () => {
     ]);
   });
 
-  it('deletes global rule sets and removes their project-level references', async () => {
+  it('deletes global rule sets and removes their automation profile references', async () => {
     useConfigStore.setState({
       config: {
         ...useConfigStore.getState().config,
@@ -216,43 +207,28 @@ describe('SettingsVocabularyTab', () => {
         ],
       },
     });
-    useProjectStore.setState({
-      ...useProjectStore.getState(),
-      projects: [
-        {
-          ...useProjectStore.getState().projects[0],
-          defaults: {
-            ...useProjectStore.getState().projects[0].defaults,
-            enabledTextReplacementSetIds: ['text-1'],
-            enabledHotwordSetIds: ['hot-1'],
-            enabledPolishKeywordSetIds: ['kw-1'],
-          },
-        },
-      ],
-    });
-
     render(<SettingsVocabularyTab />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete Text Set' }));
     await waitFor(() => {
       expect(useConfigStore.getState().config.textReplacementSets).toEqual([]);
-      expect(useProjectStore.getState().projects[0].defaults.enabledTextReplacementSetIds).toEqual([]);
+      expect(useAutomationStore.getState().profiles[0].enabledTextReplacementSetIds).toEqual([]);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete Hot Set' }));
     await waitFor(() => {
       expect(useConfigStore.getState().config.hotwordSets).toEqual([]);
-      expect(useProjectStore.getState().projects[0].defaults.enabledHotwordSetIds).toEqual([]);
+      expect(useAutomationStore.getState().profiles[0].enabledHotwordSetIds).toEqual([]);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete Brand Terms' }));
     await waitFor(() => {
       expect(useConfigStore.getState().config.polishKeywordSets).toEqual([]);
-      expect(useProjectStore.getState().projects[0].defaults.enabledPolishKeywordSetIds).toEqual([]);
+      expect(useAutomationStore.getState().profiles[0].enabledPolishKeywordSetIds).toEqual([]);
     });
   });
 
-  it('updates and deletes custom presets while resetting affected project defaults', async () => {
+  it('updates and deletes custom presets while resetting affected automation profiles', async () => {
     useConfigStore.setState({
       config: {
         ...useConfigStore.getState().config,
@@ -285,11 +261,11 @@ describe('SettingsVocabularyTab', () => {
     await waitFor(() => {
       expect(useConfigStore.getState().config.polishCustomPresets).toEqual([]);
       expect(useConfigStore.getState().config.polishPresetId).toBe('general');
-      expect(useProjectStore.getState().projects[0].defaults.polishPresetId).toBe('general');
+      expect(useAutomationStore.getState().profiles[0].polishPresetId).toBe('general');
     });
   });
 
-  it('deletes speaker profiles and removes their project-level references', async () => {
+  it('deletes speaker profiles and removes their automation profile references', async () => {
     useConfigStore.setState({
       config: {
         ...useConfigStore.getState().config,
@@ -298,26 +274,13 @@ describe('SettingsVocabularyTab', () => {
         ],
       },
     });
-    useProjectStore.setState({
-      ...useProjectStore.getState(),
-      projects: [
-        {
-          ...useProjectStore.getState().projects[0],
-          defaults: {
-            ...useProjectStore.getState().projects[0].defaults,
-            enabledSpeakerProfileIds: ['speaker-1'],
-          },
-        },
-      ],
-    });
-
     render(<SettingsVocabularyTab />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete Alice' }));
 
     await waitFor(() => {
       expect(useConfigStore.getState().config.speakerProfiles).toEqual([]);
-      expect(useProjectStore.getState().projects[0].defaults.enabledSpeakerProfileIds).toEqual([]);
+      expect(useAutomationStore.getState().profiles[0].enabledSpeakerProfileIds).toEqual([]);
     });
   });
 

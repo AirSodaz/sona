@@ -23,6 +23,9 @@ fn task_ledger_transport_shape_lives_in_core() {
             tag_ids: Vec::new(),
             file_path: None,
             automation_rule_id: None,
+            tag_automation_rule_id: None,
+            automation_profile_id: None,
+            automation_profile_source: None,
             source_fingerprint: None,
             error_message: Some("network paused".to_string()),
             template_id: Some("general".to_string()),
@@ -32,7 +35,7 @@ fn task_ledger_transport_shape_lives_in_core() {
 
     let value = serde_json::to_value(snapshot).unwrap();
 
-    assert_eq!(value["version"], 2);
+    assert_eq!(value["version"], TASK_LEDGER_VERSION);
     assert_eq!(value["tasks"][0]["kind"], "llmSummary");
     assert_eq!(value["tasks"][0]["status"], "recoverable");
     assert_eq!(value["tasks"][0]["historyId"], "history-1");

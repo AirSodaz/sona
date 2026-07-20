@@ -47,6 +47,7 @@ describe('batchQueueHistorySync', () => {
       title: 'Batch meeting.wav',
       icon: 'system:file-audio',
       projectId: 'project-1',
+      tagIds: ['project-1'],
       audioUrl: 'asset:///history/history-1.wav',
     });
     expect(getAudioUrl).toHaveBeenCalledWith('history-1');

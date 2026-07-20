@@ -479,7 +479,7 @@ async fn published_operations_use_their_segment_sequence() {
     let (_, bytes) = store.object_with_path_fragment("/segments/");
     let segment: sona_sync::SyncSegmentV1 = sona_sync::open_json(
         created.vault_key.as_slice(),
-        b"sona-sync/v1/vault-a/devices/device-a/segments/00000000000000000001",
+        b"sona-sync/v2/vault-a/devices/device-a/segments/00000000000000000001",
         &bytes,
     )
     .unwrap();

@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use super::SyncError;
 
-pub const SYNC_PROTOCOL_VERSION: u64 = 1;
+pub const SYNC_PROTOCOL_VERSION: u64 = 2;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
@@ -214,6 +214,7 @@ pub enum SyncEntityKind {
     VocabularySet,
     VocabularyRule,
     SpeakerProfile,
+    AutomationProfile,
     AutomationRule,
     CredentialProfile,
 }

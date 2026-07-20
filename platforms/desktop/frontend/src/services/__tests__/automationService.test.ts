@@ -4,6 +4,7 @@ import type { AutomationProcessedEntry, AutomationRule } from '../../types/autom
 const testContext = vi.hoisted(() => ({
   automationLoadRepositoryStateMock: vi.fn(),
   automationPersistProcessedEntriesMock: vi.fn(),
+  automationPersistProfilesMock: vi.fn(),
   automationPersistRepositoryStateMock: vi.fn(),
   automationPersistRulesMock: vi.fn(),
   automationValidateRuleActivationMock: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock('@tauri-apps/plugin-fs', () => ({
 vi.mock('../tauri/automationRepository', () => ({
   automationLoadRepositoryState: testContext.automationLoadRepositoryStateMock,
   automationPersistProcessedEntries: testContext.automationPersistProcessedEntriesMock,
+  automationPersistProfiles: testContext.automationPersistProfilesMock,
   automationPersistRepositoryState: testContext.automationPersistRepositoryStateMock,
   automationPersistRules: testContext.automationPersistRulesMock,
   automationValidateRuleActivation: testContext.automationValidateRuleActivationMock,
@@ -113,7 +115,7 @@ describe('automationService repository persistence', () => {
 
     expect(testContext.automationPersistRulesMock).toHaveBeenCalledWith([rule]);
     expect(testContext.automationPersistProcessedEntriesMock).toHaveBeenCalledWith([processedEntry]);
-    expect(testContext.automationPersistRepositoryStateMock).toHaveBeenCalledWith([rule], [processedEntry]);
+    expect(testContext.automationPersistRepositoryStateMock).toHaveBeenCalledWith([rule], [processedEntry], undefined);
   });
 
   it('delegates activation validation to the native repository command', async () => {

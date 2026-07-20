@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import type { AppConfig } from '../types/config';
-import type { AutomationExportConfig, AutomationStageConfig } from '../types/automation';
+import type { AutomationExportConfig, AutomationResolutionSnapshot, AutomationStageConfig } from '../types/automation';
 import {
   BatchQueueItem,
   BatchQueueItemOrigin,
@@ -44,6 +44,7 @@ interface AddFilesOptions {
     resolvedConfigSnapshot?: AppConfig;
     exportConfig?: AutomationExportConfig | null;
     stageConfig?: AutomationStageConfig | null;
+    automationResolutionSnapshot?: AutomationResolutionSnapshot;
     sourceFingerprint?: string;
     projectId?: string | null;
     tagIds?: string[];
@@ -154,14 +155,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         const activeTagIds = options?.tagIds
             ?? (options?.projectId ? [options.projectId] : projectStore.activeProjectId ? [projectStore.activeProjectId] : []);
         const activeProjectId = activeTagIds[0] ?? null;
-        const activeProject = activeProjectId
-            ? (typeof projectStore.getProjectById === 'function' ? projectStore.getProjectById(activeProjectId) : null)
-            : (typeof projectStore.getActiveProject === 'function' ? projectStore.getActiveProject() : null);
         const resolvedConfigSnapshot = options?.resolvedConfigSnapshot
             ?? getEffectiveConfigSnapshot();
-        const exportFileNamePrefix = options?.exportFileNamePrefix
-            ?? activeProject?.defaults.exportFileNamePrefix
-            ?? '';
+        const exportFileNamePrefix = options?.exportFileNamePrefix ?? '';
 
         const newItems: BatchQueueItem[] = filePaths.map((filePath) => {
             const filename = filePath.split(/[/\\]/).pop() || filePath;
@@ -181,6 +177,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 resolvedConfigSnapshot,
                 exportConfig: options?.exportConfig || null,
                 stageConfig: options?.stageConfig || null,
+                automationResolutionSnapshot: options?.automationResolutionSnapshot,
                 sourceFingerprint: options?.sourceFingerprint,
                 fileStat: options?.fileStat,
                 exportFileNamePrefix,

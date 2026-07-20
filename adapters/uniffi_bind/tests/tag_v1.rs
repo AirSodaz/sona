@@ -1,38 +1,7 @@
 use sona_uniffi_bind::{
-    FfiTagCreateInputV1, FfiTagDefaultsInputV1, FfiTagDefaultsPatchV1, FfiTagUpdateInputV1,
-    create_tag_v1, load_tag_repository_v1, reorder_tags_v1, update_tag_v1,
+    FfiTagCreateInputV1, FfiTagUpdateInputV1, create_tag_v1, load_tag_repository_v1,
+    reorder_tags_v1, update_tag_v1,
 };
-
-fn empty_defaults() -> FfiTagDefaultsInputV1 {
-    FfiTagDefaultsInputV1 {
-        summary_template_id: None,
-        summary_template: None,
-        translation_language: None,
-        polish_preset_id: None,
-        polish_scenario: None,
-        polish_context: None,
-        export_file_name_prefix: None,
-        enabled_text_replacement_set_ids: None,
-        enabled_hotword_set_ids: None,
-        enabled_polish_keyword_set_ids: None,
-        enabled_speaker_profile_ids: None,
-    }
-}
-
-fn empty_defaults_patch() -> FfiTagDefaultsPatchV1 {
-    FfiTagDefaultsPatchV1 {
-        summary_template_id: None,
-        translation_language: None,
-        polish_preset_id: None,
-        polish_scenario: None,
-        polish_context: None,
-        export_file_name_prefix: None,
-        enabled_text_replacement_set_ids: None,
-        enabled_hotword_set_ids: None,
-        enabled_polish_keyword_set_ids: None,
-        enabled_speaker_profile_ids: None,
-    }
-}
 
 #[test]
 fn tag_v1_roundtrips_records_without_json_payloads() {
@@ -50,7 +19,6 @@ fn tag_v1_roundtrips_records_without_json_payloads() {
             description: Some("Description".to_string()),
             icon: Some("tag".to_string()),
             color: Some("#112233".to_string()),
-            defaults: empty_defaults(),
         },
     )
     .unwrap();
@@ -61,7 +29,6 @@ fn tag_v1_roundtrips_records_without_json_payloads() {
             description: None,
             icon: None,
             color: None,
-            defaults: empty_defaults(),
         },
     )
     .unwrap();
@@ -74,16 +41,11 @@ fn tag_v1_roundtrips_records_without_json_payloads() {
             icon: None,
             color: None,
             description: None,
-            defaults: Some(FfiTagDefaultsPatchV1 {
-                translation_language: Some("en".to_string()),
-                ..empty_defaults_patch()
-            }),
         },
     )
     .unwrap()
     .unwrap();
     assert_eq!(updated.name, "Updated");
-    assert_eq!(updated.defaults.translation_language, "en");
 
     let reordered = reorder_tags_v1(
         app_data_dir.clone(),

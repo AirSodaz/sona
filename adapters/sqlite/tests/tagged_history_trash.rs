@@ -14,7 +14,7 @@ use sona_core::history::{
 };
 use sona_core::ports::time::{ClockError, UnixMillisClock};
 use sona_core::sync::{SyncLocalRepository, SyncPresetV1};
-use sona_core::tag::{TagDefaults, TagRecord, TagStore};
+use sona_core::tag::{TagRecord, TagStore};
 use sona_core::transcription::transcript::TranscriptSegment;
 use sona_sqlite::{Database, SqliteHistoryStore, SqliteSyncRepository, SqliteTagRepository};
 
@@ -54,7 +54,6 @@ fn tag(id: &str, sort_order: usize) -> TagRecord {
         sort_order,
         created_at: 1,
         updated_at: 1,
-        defaults: TagDefaults::default(),
     }
 }
 

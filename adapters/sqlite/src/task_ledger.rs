@@ -14,12 +14,14 @@ use std::sync::Arc;
 
 const TASK_LEDGER_COLUMNS: &str = "id, kind, status, title, progress, created_at, updated_at,
     retryable, cancelable, recoverable, stage, history_id, tag_ids, file_path,
-    automation_rule_id, source_fingerprint, error_message, template_id, target_language, version";
+    automation_rule_id, tag_automation_rule_id, automation_profile_id, automation_profile_source,
+    source_fingerprint, error_message, template_id, target_language, version";
 const UPSERT_TASK_SQL: &str = "INSERT OR REPLACE INTO task_ledger (
     id, kind, status, title, progress, created_at, updated_at,
     retryable, cancelable, recoverable, stage, history_id, tag_ids, file_path,
-    automation_rule_id, source_fingerprint, error_message, template_id, target_language, version
-) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)";
+    automation_rule_id, tag_automation_rule_id, automation_profile_id, automation_profile_source,
+    source_fingerprint, error_message, template_id, target_language, version
+) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)";
 
 #[derive(Clone)]
 pub struct SqliteLedgerRepository<D = crate::Database>
@@ -216,6 +218,9 @@ fn map_row_to_record(row: &rusqlite::Row) -> Result<TaskLedgerRecord, DatabaseEr
         tag_ids: serde_json::from_str(&row.get::<_, String>("tag_ids")?)?,
         file_path: row.get("file_path")?,
         automation_rule_id: row.get("automation_rule_id")?,
+        tag_automation_rule_id: row.get("tag_automation_rule_id")?,
+        automation_profile_id: row.get("automation_profile_id")?,
+        automation_profile_source: row.get("automation_profile_source")?,
         source_fingerprint: row.get("source_fingerprint")?,
         error_message: row.get("error_message")?,
         template_id: row.get("template_id")?,
@@ -243,6 +248,9 @@ fn execute_upsert_task(
         serde_json::to_string(&record.tag_ids)?,
         record.file_path.as_deref(),
         record.automation_rule_id.as_deref(),
+        record.tag_automation_rule_id.as_deref(),
+        record.automation_profile_id.as_deref(),
+        record.automation_profile_source.as_deref(),
         record.source_fingerprint.as_deref(),
         record.error_message.as_deref(),
         record.template_id.as_deref(),
@@ -336,6 +344,9 @@ mod tests {
             tag_ids: Vec::new(),
             file_path: None,
             automation_rule_id: None,
+            tag_automation_rule_id: None,
+            automation_profile_id: None,
+            automation_profile_source: None,
             source_fingerprint: None,
             error_message: None,
             template_id: None,

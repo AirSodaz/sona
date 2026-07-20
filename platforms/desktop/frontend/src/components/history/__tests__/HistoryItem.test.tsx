@@ -49,16 +49,6 @@ describe('HistoryItem', () => {
           icon: '',
           createdAt: 1,
           updatedAt: 1,
-          defaults: {
-            summaryTemplateId: 'general',
-            translationLanguage: 'zh',
-            polishPresetId: 'general',
-            exportFileNamePrefix: '',
-            enabledTextReplacementSetIds: [],
-            enabledHotwordSetIds: [],
-            enabledPolishKeywordSetIds: [],
-            enabledSpeakerProfileIds: [],
-          },
         },
       ],
     });

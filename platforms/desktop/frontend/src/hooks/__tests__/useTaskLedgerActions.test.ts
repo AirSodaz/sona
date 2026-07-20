@@ -87,7 +87,7 @@ describe('createTaskCenterActionRegistry', () => {
     await getAction(actions, 'retry').run();
 
     expect(deps.addBatchFiles).toHaveBeenCalledWith(['C:\\audio\\meeting.wav'], {
-      projectId: 'project-1',
+      tagIds: ['project-1'],
     });
     expect(deps.removeTask).toHaveBeenCalledWith('task-1');
   });

@@ -4,8 +4,7 @@ import { ChevronDown, ChevronRight, Mic, Plus, Trash2, Upload } from 'lucide-rea
 import { v4 as uuidv4 } from 'uuid';
 import { useVocabularyConfig, useSetConfig } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
-import { useProjectStore } from '../../stores/projectStore';
-import { type ProjectDefaults } from '../../types/project';
+import { useAutomationStore } from '../../stores/automationStore';
 import {
   deriveSpeakerProfileReadiness,
   normalizeSpeakerProfiles,
@@ -37,8 +36,7 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
   const config = useVocabularyConfig();
   const updateConfig = useSetConfig();
   const showError = useDialogStore((state) => state.showError);
-  const projects = useProjectStore((state) => state.projects);
-  const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
+  const removeProfileDependency = useAutomationStore((state) => state.removeProfileDependency);
 
   const [newProfileName, setNewProfileName] = useState('');
   const [expandedProfileIds, setExpandedProfileIds] = useState<Set<string>>(new Set());
@@ -58,21 +56,6 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
       }
       return next;
     });
-  };
-
-  const removeProfileReferenceFromProjects = async (profileId: string) => {
-    const affectedProjects = projects.filter((project) => (
-      project.defaults.enabledSpeakerProfileIds.includes(profileId)
-    ));
-    if (affectedProjects.length === 0) {
-      return;
-    }
-
-    await Promise.all(affectedProjects.map((project) => (
-      updateProjectDefaults(project.id, {
-        enabledSpeakerProfileIds: project.defaults.enabledSpeakerProfileIds.filter((id) => id !== profileId),
-      } as Pick<ProjectDefaults, 'enabledSpeakerProfileIds'>)
-    )));
   };
 
   const handleAddProfile = () => {
@@ -110,7 +93,7 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
     });
 
     await Promise.allSettled(profile.samples.map((sample) => remove(sample.filePath)));
-    await removeProfileReferenceFromProjects(profile.id);
+    await removeProfileDependency('speakerProfile', profile.id);
   };
 
   const handleDeleteSample = async (profileId: string, sampleId: string) => {

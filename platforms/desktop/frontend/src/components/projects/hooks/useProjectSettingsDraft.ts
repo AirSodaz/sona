@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ProjectDefaults, ProjectRecord } from '../../../types/project';
-import { buildComparableProjectSettingsSnapshot } from '../utils';
+import type { ProjectRecord } from '../../../types/project';
 import type { TranslationFn } from '../types';
 import { useDialogStore } from '../../../stores/dialogStore';
 
@@ -22,7 +21,6 @@ export function useProjectSettingsDraft({
   const [draftDescription, setDraftDescription] = useState('');
   const [draftIcon, setDraftIcon] = useState('');
   const [draftColor, setDraftColor] = useState('#64748b');
-  const [draftDefaults, setDraftDefaults] = useState<ProjectDefaults | null>(null);
 
   const resetProjectSettingsDraft = useCallback((project: ProjectRecord | null = browseProject) => {
     if (!project) {
@@ -30,7 +28,6 @@ export function useProjectSettingsDraft({
       setDraftDescription('');
       setDraftIcon('');
       setDraftColor('#64748b');
-      setDraftDefaults(null);
       return;
     }
 
@@ -38,7 +35,6 @@ export function useProjectSettingsDraft({
     setDraftDescription(project.description);
     setDraftIcon(project.icon || '');
     setDraftColor(project.color || '#64748b');
-    setDraftDefaults(project.defaults);
   }, [browseProject]);
 
   useEffect(() => {
@@ -54,27 +50,25 @@ export function useProjectSettingsDraft({
   }, [browseProject, resetProjectSettingsDraft]);
 
   const isProjectSettingsDirty = useMemo(() => {
-    if (!browseProject || !draftDefaults) {
+    if (!browseProject) {
       return false;
     }
 
-    const currentDraft = buildComparableProjectSettingsSnapshot({
+    const currentDraft = {
       name: draftName.trim() || browseProject.name,
       description: draftDescription,
       icon: draftIcon,
-      color: draftColor,
-      defaults: draftDefaults,
-    });
-    const savedProject = buildComparableProjectSettingsSnapshot({
+      color: draftColor || '#64748b',
+    };
+    const savedProject = {
       name: browseProject.name,
       description: browseProject.description,
       icon: browseProject.icon || '',
-      color: browseProject.color,
-      defaults: browseProject.defaults,
-    });
+      color: browseProject.color || '#64748b',
+    };
 
     return JSON.stringify(currentDraft) !== JSON.stringify(savedProject);
-  }, [browseProject, draftColor, draftDefaults, draftDescription, draftIcon, draftName]);
+  }, [browseProject, draftColor, draftDescription, draftIcon, draftName]);
 
   const confirmDiscardProjectSettingsChanges = useCallback(async () => {
     if (!isSettingsOpen || !isProjectSettingsDirty) {
@@ -125,8 +119,6 @@ export function useProjectSettingsDraft({
     setDraftIcon,
     draftColor,
     setDraftColor,
-    draftDefaults,
-    setDraftDefaults,
     isProjectSettingsDirty,
     resetProjectSettingsDraft,
     confirmDiscardProjectSettingsChanges,

@@ -297,7 +297,7 @@ describe('SettingsLLMServiceTab', () => {
     await waitFor(() => {
       expect(vi.mocked(tauriApi.invoke)).toHaveBeenCalledWith('list_llm_models', expect.objectContaining({
         request: expect.objectContaining({
-          provider: 'open_ai',
+          provider: { Builtin: 'open_ai' },
           apiKey: 'test-key',
         }),
       }));
@@ -721,7 +721,7 @@ describe('SettingsLLMServiceTab', () => {
     expect(tauriApi.invoke).toHaveBeenCalledTimes(1);
     expect(tauriApi.invoke).toHaveBeenCalledWith('list_llm_models', expect.objectContaining({
       request: expect.objectContaining({
-        provider: 'open_ai',
+        provider: { Builtin: 'open_ai' },
         apiKey: 'test-key',
       }),
     }));
@@ -773,7 +773,7 @@ describe('SettingsLLMServiceTab', () => {
     await waitFor(() => {
       expect(tauriApi.invoke).toHaveBeenCalledWith('list_llm_models', expect.objectContaining({
         request: expect.objectContaining({
-          provider: 'open_ai',
+          provider: { Builtin: 'open_ai' },
           apiKey: 'test-key',
         }),
       }));

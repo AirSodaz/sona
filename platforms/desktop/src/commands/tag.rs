@@ -4,7 +4,7 @@ use crate::platform::tag_repository::{
     create_tag, delete_tag, get_active_tag_id, list_tags, reorder_tags, replace_tags,
     set_active_tag_id, update_tag,
 };
-use sona_core::tag::{TagDefaultsInput, TagRecord, TagUpdateInput};
+use sona_core::tag::{TagRecord, TagUpdateInput};
 
 #[tauri::command]
 pub async fn tag_list<R: Runtime>(
@@ -35,9 +35,8 @@ pub async fn tag_create<R: Runtime>(
     description: Option<String>,
     icon: Option<String>,
     color: Option<String>,
-    defaults: TagDefaultsInput,
 ) -> Result<TagRecord, String> {
-    create_tag(&app, name, description, icon, color, defaults).await
+    create_tag(&app, name, description, icon, color).await
 }
 
 #[tauri::command]

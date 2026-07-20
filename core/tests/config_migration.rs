@@ -95,10 +95,11 @@ fn migration_normalizes_llm_provider_aliases_from_core_manifest() {
 }
 
 #[test]
-fn effective_config_resolution_uses_core_config_types() {
+fn effective_config_resolution_ignores_legacy_project_defaults() {
     let global = json!({
         "summaryTemplateId": "meeting",
-        "summaryCustomTemplates": []
+        "summaryCustomTemplates": [],
+        "translationLanguage": "zh"
     });
     let project = json!({
         "defaults": {
@@ -110,5 +111,5 @@ fn effective_config_resolution_uses_core_config_types() {
 
     assert_eq!(resolved["summaryTemplateId"], "meeting");
     assert_eq!(resolved["polishPresetId"], "general");
-    assert_eq!(resolved["translationLanguage"], "ja");
+    assert_eq!(resolved["translationLanguage"], "zh");
 }

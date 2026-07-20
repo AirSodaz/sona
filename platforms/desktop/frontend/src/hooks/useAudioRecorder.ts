@@ -5,6 +5,7 @@ import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useProjectStore } from '../stores/projectStore';
+import { useAutomationStore } from '../stores/automationStore';
 import {
     clearTranscriptSegments,
     setTranscriptSegments,
@@ -36,6 +37,8 @@ import type {
 import type { LiveRecordingDraftHandle } from '../services/historyService';
 import { convertManagedAudioFileSrc } from '../services/tauri/platform/assets';
 import { remove, writeFile } from '../services/tauri/platform/fs';
+import { resolveAutomationQueueSnapshot } from '../services/automation/automationConfigResolver';
+import { processTagAutomationForHistory } from '../services/automation/tagAutomationProcessor';
 
 export type {
     RecordSegmentDeliveryMeta,
@@ -76,6 +79,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     const segmentTimeOffsetSecondsRef = useRef(0);
     const recordTimelineCursorSecondsRef = useRef(0);
     const liveDraftRef = useRef<LiveRecordingDraftHandle | null>(null);
+    const recordingAutomationSnapshotRef = useRef<ReturnType<typeof resolveAutomationQueueSnapshot> | null>(null);
 
     const [isInitializing, setIsInitializing] = useState(false);
     const [isTransitioning, setIsTransitioning] = useState(false);
@@ -158,7 +162,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             saveNativeRecording: (...args) => historyService.saveNativeRecording(...args),
         },
         getTranscriptState: () => ({
-            config: getEffectiveConfigSnapshot(),
+            config: recordingAutomationSnapshotRef.current?.config ?? getEffectiveConfigSnapshot(),
             segments: useTranscriptSessionStore.getState().segments,
             setAudioUrl: useTranscriptPlaybackStore.getState().setAudioUrl,
             setSegments: setTranscriptSegments,
@@ -169,6 +173,20 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         upsertHistoryItem: (item) => useHistoryStore.getState().upsertItem(item),
         deleteHistoryItem: (id) => useHistoryStore.getState().deleteItem(id),
         persistSummary: (historyId) => summaryService.persistSummary(historyId),
+        postProcessSavedItem: async (historyId, segments) => {
+            const snapshot = recordingAutomationSnapshotRef.current;
+            if (!snapshot) return segments;
+            return processTagAutomationForHistory({
+                actions: snapshot.resolution.actions,
+                config: snapshot.config,
+                historyId,
+                segments,
+                ruleId: snapshot.resolution.tagRuleId,
+                inputVersion: snapshot.resolution.resolvedAt
+                    ? `recording:${snapshot.resolution.resolvedAt}`
+                    : `recording:${historyId}`,
+            });
+        },
         annotateSegmentsForFile: (filePath, segments, transcriptConfig) => (
             speakerService.annotateSegmentsForFile(filePath, segments, transcriptConfig)
         ),
@@ -296,7 +314,16 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     }, [isPaused, isRecording, timing]);
 
     const startRecording = useCallback(async () => {
-        const effectiveConfig = getEffectiveConfigSnapshot();
+        const activeProjectId = useProjectStore.getState().activeProjectId;
+        const automation = useAutomationStore.getState();
+        const effectiveSnapshot = resolveAutomationQueueSnapshot({
+            globalConfig: useConfigStore.getState().config,
+            profiles: automation.profiles,
+            rules: automation.rules,
+            tagIds: activeProjectId ? [activeProjectId] : [],
+        });
+        recordingAutomationSnapshotRef.current = effectiveSnapshot;
+        const effectiveConfig = effectiveSnapshot.config;
         const asrRequest = resolveAsrTranscriptionRequest(effectiveConfig, 'live');
         if (!isAsrRequestConfigured(asrRequest)) {
             if (asrRequest.engine === 'online') {

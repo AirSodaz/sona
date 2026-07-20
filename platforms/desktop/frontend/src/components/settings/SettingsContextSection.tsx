@@ -4,7 +4,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { FileTextIcon } from '../Icons';
 import { useLlmAssistantConfig, useSetConfig } from '../../stores/configStore';
-import { useProjectStore } from '../../stores/projectStore';
+import { useAutomationStore } from '../../stores/automationStore';
 import { SettingsItem, SettingsSection } from './SettingsLayout';
 import {
   BUILTIN_POLISH_PRESETS,
@@ -18,8 +18,7 @@ export function SettingsContextSection(): React.JSX.Element {
     const { t } = useTranslation();
     const config = useLlmAssistantConfig();
     const updateConfig = useSetConfig();
-    const projects = useProjectStore((state) => state.projects);
-    const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
+    const removeProfileDependency = useAutomationStore((state) => state.removeProfileDependency);
 
     const [newPresetName, setNewPresetName] = useState('');
     const [newPresetContext, setNewPresetContext] = useState('');
@@ -86,10 +85,7 @@ export function SettingsContextSection(): React.JSX.Element {
             polishPresetId: nextPresetId,
         });
 
-        const affectedProjects = projects.filter((project) => project.defaults.polishPresetId === presetId);
-        await Promise.all(affectedProjects.map((project) => (
-            updateProjectDefaults(project.id, { polishPresetId: DEFAULT_POLISH_PRESET_ID })
-        )));
+        await removeProfileDependency('polishPreset', presetId);
     };
 
     return (
@@ -97,14 +93,14 @@ export function SettingsContextSection(): React.JSX.Element {
             <SettingsSection
                 title={t('settings.context_default_title', { defaultValue: 'Default Polish Preset' })}
                 description={t('settings.context_default_description', {
-                    defaultValue: 'Choose which preset text polishing should use by default outside project-specific overrides.',
+                    defaultValue: 'Choose which preset text polishing should use when no automation profile overrides it.',
                 })}
                 icon={<FileTextIcon width={20} height={20} />}
             >
                 <SettingsItem
                     title={t('projects.polish_preset', { defaultValue: 'Default Polish Preset' })}
                     hint={t('settings.context_default_hint', {
-                        defaultValue: 'Projects can still override this with their own preset selection.',
+                        defaultValue: 'Automation profiles can override this selection.',
                     })}
                 >
                     <div style={{ width: '280px', maxWidth: '100%' }}>

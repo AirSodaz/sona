@@ -22,29 +22,12 @@ pub struct TagRepositorySnapshot {
     pub active_tag_id: Option<String>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "specta", derive(specta::Type))]
-#[serde(default, rename_all = "camelCase")]
-pub struct TagDefaultsPatch {
-    pub summary_template_id: Option<String>,
-    pub translation_language: Option<String>,
-    pub polish_preset_id: Option<String>,
-    pub polish_scenario: Option<String>,
-    pub polish_context: Option<String>,
-    pub export_file_name_prefix: Option<String>,
-    pub enabled_text_replacement_set_ids: Option<Vec<String>>,
-    pub enabled_hotword_set_ids: Option<Vec<String>>,
-    pub enabled_polish_keyword_set_ids: Option<Vec<String>>,
-    pub enabled_speaker_profile_ids: Option<Vec<String>>,
-}
-
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TagPatch {
     pub name: Option<String>,
     pub icon: Option<String>,
     pub color: Option<String>,
     pub description: Option<String>,
-    pub defaults: TagDefaultsPatch,
 }
 
 pub trait TagStore: Send + Sync {

@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
 mod error;
 mod repository;
@@ -7,7 +7,7 @@ mod service;
 
 pub use error::TagError;
 pub use repository::{
-    ActiveTagSelection, TagDefaultsPatch, TagPatch, TagRepositorySnapshot, TagStore, TagStoredState,
+    ActiveTagSelection, TagPatch, TagRepositorySnapshot, TagStore, TagStoredState,
 };
 pub use service::{TagIdGenerator, TagRepositoryService};
 
@@ -15,23 +15,6 @@ pub use service::{TagIdGenerator, TagRepositoryService};
 pub struct TagListOptions {
     pub fallback_enabled_polish_keyword_set_ids: Vec<String>,
     pub fallback_enabled_speaker_profile_ids: Vec<String>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "specta", derive(specta::Type))]
-#[serde(default, rename_all = "camelCase")]
-pub struct TagDefaultsInput {
-    pub summary_template_id: Option<String>,
-    pub summary_template: Option<String>,
-    pub translation_language: Option<String>,
-    pub polish_preset_id: Option<String>,
-    pub polish_scenario: Option<String>,
-    pub polish_context: Option<String>,
-    pub export_file_name_prefix: Option<String>,
-    pub enabled_text_replacement_set_ids: Option<Vec<String>>,
-    pub enabled_hotword_set_ids: Option<Vec<String>>,
-    pub enabled_polish_keyword_set_ids: Option<Vec<String>>,
-    pub enabled_speaker_profile_ids: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -45,26 +28,6 @@ pub struct TagCreateInput {
     pub icon: Option<String>,
     #[serde(default)]
     pub color: Option<String>,
-    #[serde(default)]
-    pub defaults: TagDefaultsInput,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
-#[cfg_attr(feature = "specta", derive(specta::Type))]
-#[serde(rename_all = "camelCase")]
-pub struct TagDefaults {
-    pub summary_template_id: String,
-    pub translation_language: String,
-    pub polish_preset_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub polish_scenario: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub polish_context: Option<String>,
-    pub export_file_name_prefix: String,
-    pub enabled_text_replacement_set_ids: Vec<String>,
-    pub enabled_hotword_set_ids: Vec<String>,
-    pub enabled_polish_keyword_set_ids: Vec<String>,
-    pub enabled_speaker_profile_ids: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -82,7 +45,6 @@ pub struct TagRecord {
     pub created_at: u64,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub updated_at: u64,
-    pub defaults: TagDefaults,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
@@ -93,12 +55,7 @@ pub struct TagUpdateInput {
     pub icon: Option<String>,
     pub color: Option<String>,
     pub description: Option<String>,
-    pub defaults: Option<TagDefaultsPatch>,
 }
-
-pub const DEFAULT_SUMMARY_TEMPLATE_ID: &str = "general";
-pub const DEFAULT_TRANSLATION_LANGUAGE: &str = "zh";
-pub const DEFAULT_POLISH_PRESET_ID: &str = "general";
 
 pub fn normalize_tag_record_for_import(input: &Value) -> Result<Value, TagError> {
     normalize_tag_record_for_import_with_timestamp(input, 0)
@@ -108,24 +65,19 @@ pub fn normalize_tag_record_for_import_with_timestamp(
     input: &Value,
     fallback_timestamp: u64,
 ) -> Result<Value, TagError> {
-    let tag =
-        normalize_tag_value_with_timestamp(input, &TagListOptions::default(), fallback_timestamp);
-    serde_json::to_value(tag).map_err(TagError::Serialization)
+    serde_json::to_value(normalize_tag_value_with_timestamp(
+        input,
+        fallback_timestamp,
+    ))
+    .map_err(TagError::Serialization)
 }
 
-pub fn normalize_tag_value(input: &Value, options: &TagListOptions) -> TagRecord {
-    normalize_tag_value_with_timestamp(input, options, 0)
+pub fn normalize_tag_value(input: &Value) -> TagRecord {
+    normalize_tag_value_with_timestamp(input, 0)
 }
 
-pub fn normalize_tag_value_with_timestamp(
-    input: &Value,
-    options: &TagListOptions,
-    fallback_timestamp: u64,
-) -> TagRecord {
+pub fn normalize_tag_value_with_timestamp(input: &Value, fallback_timestamp: u64) -> TagRecord {
     let source = input.as_object();
-    let defaults = source
-        .and_then(|object| object.get("defaults"))
-        .and_then(Value::as_object);
     let created_at = positive_millis(source.and_then(|object| object.get("createdAt")))
         .unwrap_or(fallback_timestamp);
 
@@ -142,64 +94,6 @@ pub fn normalize_tag_value_with_timestamp(
         created_at,
         updated_at: positive_millis(source.and_then(|object| object.get("updatedAt")))
             .unwrap_or(created_at),
-        defaults: normalize_defaults(defaults, options),
-    }
-}
-
-pub fn normalize_defaults(
-    source: Option<&Map<String, Value>>,
-    options: &TagListOptions,
-) -> TagDefaults {
-    let polish_scenario = string_value(source.and_then(|object| object.get("polishScenario")));
-    let polish_context = string_value(source.and_then(|object| object.get("polishContext")));
-    let polish_preset_id = string_value(source.and_then(|object| object.get("polishPresetId")))
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| {
-            if polish_scenario.as_deref().unwrap_or_default().is_empty()
-                && polish_context.as_deref().unwrap_or_default().is_empty()
-            {
-                DEFAULT_POLISH_PRESET_ID.to_string()
-            } else {
-                String::new()
-            }
-        });
-
-    TagDefaults {
-        summary_template_id: non_empty_trimmed_string(
-            source.and_then(|object| object.get("summaryTemplateId")),
-        )
-        .or_else(|| {
-            non_empty_trimmed_string(source.and_then(|object| object.get("summaryTemplate")))
-        })
-        .unwrap_or_else(|| DEFAULT_SUMMARY_TEMPLATE_ID.to_string()),
-        translation_language: string_value(
-            source.and_then(|object| object.get("translationLanguage")),
-        )
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| DEFAULT_TRANSLATION_LANGUAGE.to_string()),
-        polish_preset_id,
-        polish_scenario,
-        polish_context,
-        export_file_name_prefix: string_value(
-            source.and_then(|object| object.get("exportFileNamePrefix")),
-        )
-        .unwrap_or_default(),
-        enabled_text_replacement_set_ids: string_array(
-            source.and_then(|object| object.get("enabledTextReplacementSetIds")),
-        )
-        .unwrap_or_default(),
-        enabled_hotword_set_ids: string_array(
-            source.and_then(|object| object.get("enabledHotwordSetIds")),
-        )
-        .unwrap_or_default(),
-        enabled_polish_keyword_set_ids: string_array(
-            source.and_then(|object| object.get("enabledPolishKeywordSetIds")),
-        )
-        .unwrap_or_else(|| options.fallback_enabled_polish_keyword_set_ids.clone()),
-        enabled_speaker_profile_ids: string_array(
-            source.and_then(|object| object.get("enabledSpeakerProfileIds")),
-        )
-        .unwrap_or_else(|| options.fallback_enabled_speaker_profile_ids.clone()),
     }
 }
 
@@ -246,15 +140,4 @@ pub fn active_tag_id_from_value(value: &Value) -> Option<String> {
         .map(str::trim)
         .map(ToOwned::to_owned)
         .filter(|value| !value.is_empty())
-}
-
-pub fn string_array(value: Option<&Value>) -> Option<Vec<String>> {
-    Some(
-        value?
-            .as_array()?
-            .iter()
-            .filter_map(Value::as_str)
-            .map(ToOwned::to_owned)
-            .collect(),
-    )
 }

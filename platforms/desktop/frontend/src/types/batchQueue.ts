@@ -1,6 +1,6 @@
 import type { AppConfig } from './config';
 import { TranscriptSegment } from './transcript';
-import type { AutomationExportConfig, AutomationStageConfig } from './automation';
+import type { AutomationExportConfig, AutomationResolutionSnapshot, AutomationStageConfig } from './automation';
 import type { RecoveryItemStage } from './recovery';
 
 /**
@@ -50,6 +50,8 @@ export interface BatchQueueItem {
     exportConfig?: AutomationExportConfig | null;
     /** Optional automation stage settings captured at queue time. */
     stageConfig?: AutomationStageConfig | null;
+    /** Immutable profile/rule selection made when this task entered the queue. */
+    automationResolutionSnapshot?: AutomationResolutionSnapshot;
     /** Persistent fingerprint for automation dedupe. */
     sourceFingerprint?: string;
     /** Original source file stat snapshot used for automation manifest writes. */
@@ -59,7 +61,7 @@ export interface BatchQueueItem {
     };
     /** Exported output path when automation export succeeds. */
     exportPath?: string;
-    /** Snapshot of the project export filename prefix used for automation exports. */
+    /** Snapshot of the file-automation export filename prefix. */
     exportFileNamePrefix?: string;
     /** Recovery snapshot identifier when this item was restored after an interrupted run. */
     recoveryId?: string;

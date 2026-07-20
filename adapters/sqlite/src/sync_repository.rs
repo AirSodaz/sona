@@ -1123,12 +1123,17 @@ impl SyncLocalRepository for SqliteSyncRepository {
     fn load_checkpoint_operations(&self) -> Result<Vec<SyncOperation>, SyncError> {
         self.db
             .with_connection(|connection| {
+                let preset = connection.query_row(
+                    "SELECT preset FROM sync_state WHERE id = 1",
+                    [],
+                    |row| parse_preset(row.get::<_, String>(0)?),
+                )?;
                 let mut statement = connection.prepare(
                     "SELECT operation_json
                      FROM sync_entity_versions
                      ORDER BY entity_kind, entity_id, field_name",
                 )?;
-                statement
+                let operations = statement
                     .query_map([], |row| row.get::<_, String>(0))?
                     .map(|row| {
                         let json = row?;
@@ -1136,7 +1141,14 @@ impl SyncLocalRepository for SqliteSyncRepository {
                             .map(|operation| canonicalize_operation(&operation))
                             .map_err(DatabaseError::SerializationError)
                     })
-                    .collect::<Result<Vec<_>, _>>()
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(operations
+                    .into_iter()
+                    .filter(|operation| {
+                        operation_allowed(preset, operation)
+                            || matches!(operation.kind, SyncOperationKind::DeleteEntity)
+                    })
+                    .collect())
             })
             .map_err(sync_database_error)
     }
@@ -1554,23 +1566,7 @@ fn operation_allowed(preset: SyncPresetV1, operation: &SyncOperation) -> bool {
     match operation.entity.kind {
         SyncEntityKind::Tag | SyncEntityKind::Project => matches!(
             field,
-            "name"
-                | "description"
-                | "icon"
-                | "color"
-                | "sortOrder"
-                | "createdAt"
-                | "updatedAt"
-                | "summaryTemplateId"
-                | "translationLanguage"
-                | "polishPresetId"
-                | "polishScenario"
-                | "polishContext"
-                | "exportFileNamePrefix"
-                | "enabledTextReplacementSetIds"
-                | "enabledHotwordSetIds"
-                | "enabledPolishKeywordSetIds"
-                | "enabledSpeakerProfileIds"
+            "name" | "description" | "icon" | "color" | "sortOrder" | "createdAt" | "updatedAt"
         ),
         SyncEntityKind::HistoryItem => matches!(
             field,
@@ -1616,10 +1612,27 @@ fn operation_allowed(preset: SyncPresetV1, operation: &SyncOperation) -> bool {
             field,
             "name" | "enabled" | "sortOrder" | "createdAt" | "updatedAt"
         ),
+        SyncEntityKind::AutomationProfile => matches!(
+            field,
+            "name"
+                | "translationLanguage"
+                | "polishPresetId"
+                | "summaryTemplateId"
+                | "enabledTextReplacementSetIds"
+                | "enabledHotwordSetIds"
+                | "enabledPolishKeywordSetIds"
+                | "enabledSpeakerProfileIds"
+                | "createdAt"
+                | "updatedAt"
+        ),
         SyncEntityKind::AutomationRule => matches!(
             field,
             "name"
                 | "projectId"
+                | "kind"
+                | "priority"
+                | "profileId"
+                | "profileSource"
                 | "saveHistory"
                 | "tagIds"
                 | "presetId"
@@ -1629,11 +1642,13 @@ fn operation_allowed(preset: SyncPresetV1, operation: &SyncOperation) -> bool {
                 | "stageAutoTranslate"
                 | "stageTranslationLanguage"
                 | "stageExportEnabled"
+                | "actionAutoSummary"
                 | "exportFormat"
                 | "exportMode"
                 | "exportPrefix"
                 | "createdAt"
                 | "updatedAt"
+                | "migrationNotice"
         ),
         SyncEntityKind::CredentialProfile => {
             matches!(
@@ -1715,6 +1730,9 @@ fn apply_domain_delete(
         }
         SyncEntityKind::SpeakerProfile => {
             execute_delete(transaction, "speaker_profiles", "id", entity_id)
+        }
+        SyncEntityKind::AutomationProfile => {
+            execute_delete(transaction, "automation_profiles", "id", entity_id)
         }
         SyncEntityKind::AutomationRule => {
             execute_delete(transaction, "automation_rules", "id", entity_id)
@@ -1809,6 +1827,9 @@ fn apply_domain_field(
                 ("updatedAt", "updated_at"),
             ],
         ),
+        SyncEntityKind::AutomationProfile => {
+            apply_automation_profile_field(transaction, entity_id, field, value)
+        }
         SyncEntityKind::AutomationRule => {
             apply_automation_rule_field(transaction, entity_id, field, value)
         }
@@ -1827,32 +1848,6 @@ fn apply_tag_field(
         "INSERT OR IGNORE INTO tags (id, created_at, updated_at) VALUES (?1, 0, 0)",
         [entity_id],
     )?;
-    if let Some(link_kind) = match field {
-        "enabledTextReplacementSetIds" => Some("text_replacement"),
-        "enabledHotwordSetIds" => Some("hotword"),
-        "enabledPolishKeywordSetIds" => Some("polish_keyword"),
-        "enabledSpeakerProfileIds" => Some("speaker_profile"),
-        _ => None,
-    } {
-        let targets = json_string_array(value, field)?;
-        transaction.execute(
-            "DELETE FROM tag_default_links WHERE tag_id = ?1 AND kind = ?2",
-            params![entity_id, link_kind],
-        )?;
-        for (sort_order, target_id) in targets.iter().enumerate() {
-            transaction.execute(
-                "INSERT INTO tag_default_links (tag_id, kind, target_id, sort_order)
-                 VALUES (?1, ?2, ?3, ?4)",
-                params![
-                    entity_id,
-                    link_kind,
-                    target_id,
-                    usize_to_i64(sort_order, "sort order")?
-                ],
-            )?;
-        }
-        return Ok(());
-    }
     let column = match field {
         "name" => "name",
         "description" => "description",
@@ -1861,12 +1856,6 @@ fn apply_tag_field(
         "sortOrder" => "sort_order",
         "createdAt" => "created_at",
         "updatedAt" => "updated_at",
-        "summaryTemplateId" => "summary_template_id",
-        "translationLanguage" => "translation_language",
-        "polishPresetId" => "polish_preset_id",
-        "polishScenario" => "polish_scenario",
-        "polishContext" => "polish_context",
-        "exportFileNamePrefix" => "export_file_name_prefix",
         _ => return unsupported_field(kind, field),
     };
     update_json_column(transaction, "tags", "id", entity_id, column, value)
@@ -2159,6 +2148,10 @@ fn apply_automation_rule_field(
     }
     let column = match field {
         "name" => "name",
+        "kind" => "kind",
+        "priority" => "priority",
+        "profileId" => "profile_id",
+        "profileSource" => "profile_source",
         "saveHistory" => "save_history",
         "presetId" => "preset_id",
         "recursive" => "recursive",
@@ -2167,16 +2160,73 @@ fn apply_automation_rule_field(
         "stageAutoTranslate" => "stage_auto_translate",
         "stageTranslationLanguage" => "stage_translation_language",
         "stageExportEnabled" => "stage_export_enabled",
+        "actionAutoSummary" => "action_auto_summary",
         "exportFormat" => "export_format",
         "exportMode" => "export_mode",
         "exportPrefix" => "export_prefix",
         "createdAt" => "created_at",
         "updatedAt" => "updated_at",
+        "migrationNotice" => "migration_notice",
         _ => return unsupported_field(SyncEntityKind::AutomationRule, field),
     };
     update_json_column(
         transaction,
         "automation_rules",
+        "id",
+        entity_id,
+        column,
+        value,
+    )
+}
+
+fn apply_automation_profile_field(
+    transaction: &Transaction<'_>,
+    entity_id: &str,
+    field: &str,
+    value: &Value,
+) -> Result<(), DatabaseError> {
+    transaction.execute(
+        "INSERT OR IGNORE INTO automation_profiles (id) VALUES (?1)",
+        [entity_id],
+    )?;
+    if let Some(link_kind) = match field {
+        "enabledTextReplacementSetIds" => Some("text_replacement"),
+        "enabledHotwordSetIds" => Some("hotword"),
+        "enabledPolishKeywordSetIds" => Some("polish_keyword"),
+        "enabledSpeakerProfileIds" => Some("speaker_profile"),
+        _ => None,
+    } {
+        let targets = json_string_array(value, field)?;
+        transaction.execute(
+            "DELETE FROM automation_profile_links WHERE profile_id = ?1 AND kind = ?2",
+            params![entity_id, link_kind],
+        )?;
+        for (sort_order, target_id) in targets.iter().enumerate() {
+            transaction.execute(
+                "INSERT INTO automation_profile_links (profile_id, kind, target_id, sort_order)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![
+                    entity_id,
+                    link_kind,
+                    target_id,
+                    usize_to_i64(sort_order, "sort order")?
+                ],
+            )?;
+        }
+        return Ok(());
+    }
+    let column = match field {
+        "name" => "name",
+        "translationLanguage" => "translation_language",
+        "polishPresetId" => "polish_preset_id",
+        "summaryTemplateId" => "summary_template_id",
+        "createdAt" => "created_at",
+        "updatedAt" => "updated_at",
+        _ => return unsupported_field(SyncEntityKind::AutomationProfile, field),
+    };
+    update_json_column(
+        transaction,
+        "automation_profiles",
         "id",
         entity_id,
         column,
@@ -2315,9 +2365,9 @@ fn preset_allows(preset: SyncPresetV1, kind: SyncEntityKind) -> bool {
         | SyncEntityKind::VocabularySet
         | SyncEntityKind::VocabularyRule
         | SyncEntityKind::SpeakerProfile => preset != SyncPresetV1::Content,
-        SyncEntityKind::AutomationRule | SyncEntityKind::CredentialProfile => {
-            preset == SyncPresetV1::Full
-        }
+        SyncEntityKind::AutomationProfile
+        | SyncEntityKind::AutomationRule
+        | SyncEntityKind::CredentialProfile => preset == SyncPresetV1::Full,
     }
 }
 

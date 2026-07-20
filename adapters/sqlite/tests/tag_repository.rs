@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use sona_core::tag::{TagDefaults, TagError, TagRecord, TagStore};
+use sona_core::tag::{TagError, TagRecord, TagStore};
 use sona_sqlite::{Database, SqliteTagRepository};
 
 fn tag(id: &str, name: &str, color: &str, sort_order: usize) -> TagRecord {
@@ -13,15 +13,11 @@ fn tag(id: &str, name: &str, color: &str, sort_order: usize) -> TagRecord {
         sort_order,
         created_at: 10,
         updated_at: 20,
-        defaults: TagDefaults {
-            export_file_name_prefix: format!("{name}-"),
-            ..TagDefaults::default()
-        },
     }
 }
 
 #[test]
-fn tag_repository_round_trips_color_sort_order_defaults_and_reordering() {
+fn tag_repository_round_trips_metadata_and_reordering() {
     let db = Arc::new(Database::open_in_memory().unwrap());
     let repository = SqliteTagRepository::new(db);
 
@@ -43,7 +39,6 @@ fn tag_repository_round_trips_color_sort_order_defaults_and_reordering() {
     );
     assert_eq!(state.tags[0].color, "#DC2626");
     assert_eq!(state.tags[0].sort_order, 0);
-    assert_eq!(state.tags[0].defaults.export_file_name_prefix, "Alpha-");
 
     let reordered = repository
         .reorder_tags(vec!["tag-b".to_string(), "tag-a".to_string()])

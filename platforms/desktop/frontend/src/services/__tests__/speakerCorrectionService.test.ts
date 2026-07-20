@@ -23,7 +23,6 @@ vi.mock('../tauri/invoke', () => ({
   invokeTauri: vi.fn(),
 }));
 
-import { projectService } from '../projectService';
 import { invokeTauri } from '../tauri/invoke';
 import { useConfigStore } from '../../stores/configStore';
 import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
@@ -48,14 +47,7 @@ describe('speakerCorrectionService', () => {
     vi.mocked(invokeTauri).mockImplementation(async (command: string, args?: any) => {
       if (command === 'resolve_effective_config') {
         const globalConfig = args?.globalConfig ?? useConfigStore.getState().config;
-        const enabledIds = new Set(args?.project?.defaults?.enabledSpeakerProfileIds ?? []);
-        return {
-          ...globalConfig,
-          speakerProfiles: globalConfig.speakerProfiles?.map((profile: any) => ({
-            ...profile,
-            enabled: enabledIds.has(profile.id),
-          })),
-        } as never;
+        return globalConfig as never;
       }
 
       return { segments: [] } as never;
@@ -84,40 +76,15 @@ describe('speakerCorrectionService', () => {
           icon: '',
           createdAt: 1,
           updatedAt: 1,
-          defaults: {
-            summaryTemplateId: 'general',
-            translationLanguage: 'zh',
-            polishPresetId: 'general',
-            exportFileNamePrefix: '',
-            enabledTextReplacementSetIds: [],
-            enabledHotwordSetIds: [],
-            enabledPolishKeywordSetIds: [],
-            enabledSpeakerProfileIds: ['speaker-1'],
-          },
         },
       ],
     }));
 
-    vi.mocked(projectService.update).mockImplementation(async (id, updates) => {
-      const existing = useProjectStore.getState().projects.find((project) => project.id === id);
-      if (!existing) {
-        return null;
-      }
-
-      return {
-        ...existing,
-        ...updates,
-        defaults: updates.defaults
-          ? { ...existing.defaults, ...updates.defaults }
-          : existing.defaults,
-      };
-    });
   });
 
-  it('groups current-project speaker profiles ahead of the remaining global profiles', () => {
+  it('groups enabled global speaker profiles ahead of disabled profiles', () => {
     const sections = buildSpeakerCorrectionProfileSections(
       useConfigStore.getState().config.speakerProfiles,
-      useProjectStore.getState().getActiveProject(),
     );
 
     expect(sections.primaryProfiles.map((profile) => profile.id)).toEqual(['speaker-1']);
@@ -127,7 +94,7 @@ describe('speakerCorrectionService', () => {
     ]);
   });
 
-  it('delegates profile assignment to Rust, writes returned segments, and syncs project defaults', async () => {
+  it('delegates profile assignment to Rust, writes returned segments, and updates global profile enablement', async () => {
     const initialSegments: TranscriptSegment[] = [
       {
         id: 'seg-1',
@@ -197,9 +164,8 @@ describe('speakerCorrectionService', () => {
         speakerAttribution: rewrittenSegments[0].speakerAttribution,
       }),
     ]);
-    expect(useProjectStore.getState().projects[0].defaults.enabledSpeakerProfileIds).toEqual([
-      'speaker-1',
-      'speaker-2',
+    expect(useConfigStore.getState().config.speakerProfiles?.filter((profile) => profile.enabled).map((profile) => profile.id)).toEqual([
+      'speaker-1', 'speaker-2',
     ]);
     expect(
       useEffectiveConfigStore.getState().config.speakerProfiles?.find((profile) => profile.id === 'speaker-2')
@@ -207,7 +173,7 @@ describe('speakerCorrectionService', () => {
     ).toBe(true);
   });
 
-  it('does not update project defaults when Rust omits enabled speaker ids', async () => {
+  it('does not update global profile enablement when Rust omits enabled speaker ids', async () => {
     const rewrittenSegments: TranscriptSegment[] = [
       {
         id: 'seg-1',
@@ -222,9 +188,7 @@ describe('speakerCorrectionService', () => {
 
     await speakerCorrectionService.assignProfileToSpeakerGroup('anonymous-1', 'speaker-1');
 
-    expect(useProjectStore.getState().projects[0].defaults.enabledSpeakerProfileIds).toEqual([
-      'speaker-1',
-    ]);
+    expect(useConfigStore.getState().config.speakerProfiles?.filter((profile) => profile.enabled).map((profile) => profile.id)).toEqual(['speaker-1']);
   });
 
   it('delegates reset group to anonymous to Rust and writes returned segments', async () => {

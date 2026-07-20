@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use sona_core::ports::time::{ClockError, UnixMillisClock};
-use sona_core::tag::{TagCreateInput, TagDefaultsInput, TagError, TagIdGenerator, TagListOptions};
+use sona_core::tag::{TagCreateInput, TagError, TagIdGenerator, TagListOptions};
 use sona_sqlite::{Database, SqliteApplicationContext};
 
 #[derive(Debug)]
@@ -45,7 +45,6 @@ fn adapters_created_by_one_context_share_the_same_database_state() {
             description: None,
             icon: None,
             color: Some("#2563EB".to_string()),
-            defaults: TagDefaultsInput::default(),
         })
         .unwrap();
 
@@ -69,7 +68,6 @@ fn read_only_context_reads_the_snapshot_and_rejects_writes() {
             description: None,
             icon: None,
             color: None,
-            defaults: TagDefaultsInput::default(),
         })
         .unwrap();
 
@@ -90,7 +88,6 @@ fn read_only_context_reads_the_snapshot_and_rejects_writes() {
             description: None,
             icon: None,
             color: None,
-            defaults: TagDefaultsInput::default(),
         })
         .unwrap_err();
     assert!(matches!(error, TagError::Repository(_)));

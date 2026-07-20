@@ -7,6 +7,12 @@ export const NEW_RULE_KEY = '__new__';
 export interface AutomationRuleDraft {
     id?: string;
     name: string;
+    kind: NonNullable<AutomationRule['kind']>;
+    priority: number;
+    profileId?: string;
+    profileSource?: string;
+    actions: NonNullable<AutomationRule['actions']>;
+    migrationNotice?: string;
     saveHistory: boolean;
     tagIds: string[];
     presetId: AutomationRule['presetId'];
@@ -19,7 +25,17 @@ export interface AutomationRuleDraft {
 
 export type AutomationDraftUpdate = (draft: AutomationRuleDraft) => AutomationRuleDraft;
 
-type DirectDraftField = 'enabled' | 'name' | 'saveHistory' | 'tagIds' | 'recursive' | 'watchDirectory';
+type DirectDraftField =
+    | 'enabled'
+    | 'name'
+    | 'kind'
+    | 'priority'
+    | 'profileId'
+    | 'profileSource'
+    | 'saveHistory'
+    | 'tagIds'
+    | 'recursive'
+    | 'watchDirectory';
 
 export function normalizeExportMode(autoTranslate: boolean, mode: ExportMode): ExportMode {
     if (!autoTranslate && (mode === 'translation' || mode === 'bilingual')) {
@@ -60,9 +76,17 @@ export function normalizeAutomationRuleDraft(draft: AutomationRuleDraft): Automa
     };
 }
 
-export function createRuleDraft(projectId: string): AutomationRuleDraft {
+export function createRuleDraft(projectId = 'inbox', kind: NonNullable<AutomationRule['kind']> = 'file'): AutomationRuleDraft {
     return normalizeAutomationRuleDraft({
         name: '',
+        kind,
+        priority: 0,
+        profileSource: kind === 'file' ? 'explicit' : 'tag_match',
+        actions: {
+            autoPolish: false,
+            autoTranslate: false,
+            autoSummary: false,
+        },
         saveHistory: projectId !== 'none',
         tagIds: projectId && projectId !== 'none' && projectId !== 'inbox' ? [projectId] : [],
         presetId: 'custom',
@@ -74,7 +98,7 @@ export function createRuleDraft(projectId: string): AutomationRuleDraft {
             polishPresetId: 'general',
             autoTranslate: false,
             translationLanguage: 'en',
-            exportEnabled: false,
+            exportEnabled: kind === 'file',
         },
         exportConfig: {
             directory: '',
@@ -89,6 +113,16 @@ export function createDraftFromRule(rule: AutomationRule): AutomationRuleDraft {
     return normalizeAutomationRuleDraft({
         id: rule.id,
         name: rule.name,
+        kind: rule.kind ?? 'file',
+        priority: rule.priority ?? 0,
+        profileId: rule.profileId,
+        profileSource: rule.profileSource ?? ((rule.kind ?? 'file') === 'file' ? 'explicit' : 'tag_match'),
+        actions: rule.actions ?? {
+            autoPolish: rule.stageConfig.autoPolish,
+            autoTranslate: rule.stageConfig.autoTranslate,
+            autoSummary: false,
+        },
+        migrationNotice: rule.migrationNotice,
         saveHistory: rule.saveHistory ?? rule.projectId !== 'none',
         tagIds: rule.tagIds ?? (
             rule.projectId && rule.projectId !== 'none' && rule.projectId !== 'inbox'
@@ -131,6 +165,24 @@ export function setStageConfigField<K extends keyof AutomationRuleDraft['stageCo
         stageConfig: {
             ...draft.stageConfig,
             [field]: value,
+        },
+    });
+}
+
+export function setActionField<K extends keyof AutomationRuleDraft['actions']>(
+    field: K,
+    value: AutomationRuleDraft['actions'][K],
+): AutomationDraftUpdate {
+    return (draft) => ({
+        ...draft,
+        actions: {
+            ...draft.actions,
+            [field]: value,
+        },
+        stageConfig: {
+            ...draft.stageConfig,
+            ...(field === 'autoPolish' ? { autoPolish: value } : {}),
+            ...(field === 'autoTranslate' ? { autoTranslate: value } : {}),
         },
     });
 }

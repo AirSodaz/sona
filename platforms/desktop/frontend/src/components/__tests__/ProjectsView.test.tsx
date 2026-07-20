@@ -35,14 +35,13 @@ vi.mock('../../services/projectService', () => ({
   projectService: {
     getAll: vi.fn().mockResolvedValue([]),
     getActiveProjectId: vi.fn().mockResolvedValue(null),
-    create: vi.fn().mockImplementation(async ({ name, description, icon, defaults }: any) => ({
+    create: vi.fn().mockImplementation(async ({ name, description, icon }: any) => ({
       id: 'project-new',
       name,
       description,
       icon: icon ?? '',
       createdAt: 1,
       updatedAt: 1,
-      defaults,
     })),
     update: vi.fn().mockImplementation(async (id: string, updates: any) => ({
       id,
@@ -51,7 +50,6 @@ vi.mock('../../services/projectService', () => ({
       icon: updates.icon ?? '🧪',
       createdAt: 1,
       updatedAt: 2,
-      defaults: updates.defaults,
     })),
     delete: vi.fn().mockResolvedValue(undefined),
     setActiveProjectId: vi.fn().mockResolvedValue(undefined),
@@ -443,16 +441,6 @@ describe('ProjectsView', () => {
           icon: '🧪',
           createdAt: 1,
           updatedAt: 1,
-          defaults: {
-            summaryTemplateId: 'general',
-            translationLanguage: 'zh',
-            polishPresetId: 'general',
-            exportFileNamePrefix: '',
-            enabledTextReplacementSetIds: [],
-            enabledHotwordSetIds: [],
-            enabledPolishKeywordSetIds: [],
-            enabledSpeakerProfileIds: [],
-          },
         },
       ],
       activeProjectId: null,
@@ -627,7 +615,7 @@ describe('ProjectsView', () => {
 
     await waitFor(() => {
       expect(projectService.setActiveProjectId).toHaveBeenCalledWith('project-1');
-      expect(screen.getByText('Edit Tag Defaults')).toBeDefined();
+      expect(screen.getByText('Tag settings')).toBeDefined();
     });
   });
 
@@ -1161,10 +1149,10 @@ describe('ProjectsView', () => {
       );
     });
 
-    expect(screen.queryByText('Edit Tag Defaults')).toBeNull();
+    expect(screen.queryByText('Tag settings')).toBeNull();
   });
 
-  it('lets project settings override enabled polish keyword sets', async () => {
+  it('keeps Tag settings metadata-only and does not write processing defaults', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
     const updateProjectSpy = vi.spyOn(useProjectStore.getState(), 'updateProject');
 
@@ -1174,19 +1162,21 @@ describe('ProjectsView', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Tag Settings' }));
       await Promise.resolve();
     });
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Brand Terms' }));
+    expect(screen.queryByRole('checkbox', { name: 'Brand Terms' })).toBeNull();
+    fireEvent.change(await screen.findByDisplayValue('Project alpha'), {
+      target: { value: 'Metadata only' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
       expect(updateProjectSpy).toHaveBeenCalledWith(
         'project-1',
         expect.objectContaining({
-          defaults: expect.objectContaining({
-            enabledPolishKeywordSetIds: ['kw-1'],
-          }),
+          description: 'Metadata only',
         }),
       );
     });
+    expect(updateProjectSpy.mock.calls[0]?.[1]).not.toHaveProperty('defaults');
   });
 
   it('guards switching to Inbox when project settings drafts are dirty', async () => {
@@ -1213,14 +1203,14 @@ describe('ProjectsView', () => {
       expect(confirmSpy).toHaveBeenCalledTimes(1);
     });
     expect(useProjectStore.getState().activeProjectId).toBe('project-1');
-    expect(screen.getByText('Edit Tag Defaults')).toBeDefined();
+    expect(screen.getByText('Tag settings')).toBeDefined();
 
     fireEvent.click(getButtonByContent('Untagged'));
     await waitFor(() => {
       expect(useProjectStore.getState().activeProjectId).toBeNull();
     });
     expect(confirmSpy).toHaveBeenCalledTimes(2);
-    expect(screen.queryByText('Edit Tag Defaults')).toBeNull();
+    expect(screen.queryByText('Tag settings')).toBeNull();
   });
 
   it('guards closing project settings when icon-only edits are dirty', async () => {
@@ -1246,11 +1236,11 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalledTimes(1);
     });
-    expect(screen.getByText('Edit Tag Defaults')).toBeDefined();
+    expect(screen.getByText('Tag settings')).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     await waitFor(() => {
-      expect(screen.queryByText('Edit Tag Defaults')).toBeNull();
+      expect(screen.queryByText('Tag settings')).toBeNull();
     });
     expect(confirmSpy).toHaveBeenCalledTimes(2);
   });
@@ -1265,16 +1255,6 @@ describe('ProjectsView', () => {
           icon: '🧪',
           createdAt: 1,
           updatedAt: 1,
-          defaults: {
-            summaryTemplateId: 'general',
-            translationLanguage: 'zh',
-            polishPresetId: 'general',
-            exportFileNamePrefix: '',
-            enabledTextReplacementSetIds: [],
-            enabledHotwordSetIds: [],
-            enabledPolishKeywordSetIds: [],
-            enabledSpeakerProfileIds: [],
-          },
         },
         {
           id: 'project-2',
@@ -1283,16 +1263,6 @@ describe('ProjectsView', () => {
           icon: '🎯',
           createdAt: 2,
           updatedAt: 2,
-          defaults: {
-            summaryTemplateId: 'meeting',
-            translationLanguage: 'en',
-            polishPresetId: 'lecture',
-            exportFileNamePrefix: '',
-            enabledTextReplacementSetIds: [],
-            enabledHotwordSetIds: [],
-            enabledPolishKeywordSetIds: [],
-            enabledSpeakerProfileIds: [],
-          },
         },
       ],
       activeProjectId: 'project-1',

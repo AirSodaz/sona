@@ -4,7 +4,6 @@ import { PolishSettingsModal } from '../PolishSettingsModal';
 import { useConfigStore } from '../../stores/configStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
-import { resolveEffectiveConfig } from '../../services/effectiveConfigService';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -18,22 +17,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('../../services/tauri/app', () => ({
-  resolveEffectiveConfig: vi.fn(async (globalConfig: any, project: any) => {
-    if (!project) {
-      return globalConfig;
-    }
-    const enabledKeywordIds = new Set(project.defaults.enabledPolishKeywordSetIds);
-    return {
-      ...globalConfig,
-      summaryTemplateId: project.defaults.summaryTemplateId || globalConfig.summaryTemplateId,
-      translationLanguage: project.defaults.translationLanguage || globalConfig.translationLanguage,
-      polishPresetId: project.defaults.polishPresetId || globalConfig.polishPresetId,
-      polishKeywordSets: globalConfig.polishKeywordSets?.map((set: any) => ({
-        ...set,
-        enabled: enabledKeywordIds.has(set.id),
-      })),
-    };
-  }),
+  resolveEffectiveConfig: vi.fn(async (globalConfig: any) => globalConfig),
 }));
 
 describe('PolishSettingsModal', () => {
@@ -77,7 +61,7 @@ describe('PolishSettingsModal', () => {
     });
   });
 
-  it('updates project keyword enablement without mutating the global defaults', async () => {
+  it('updates global keyword enablement when a Tag is active', async () => {
     const project = {
       id: 'project-1',
       name: 'Alpha',
@@ -85,43 +69,22 @@ describe('PolishSettingsModal', () => {
       icon: '',
       createdAt: 1,
       updatedAt: 1,
-      defaults: {
-        summaryTemplateId: 'general' as const,
-        translationLanguage: 'en',
-        polishPresetId: 'general',
-        exportFileNamePrefix: '',
-        enabledTextReplacementSetIds: [],
-        enabledHotwordSetIds: [],
-        enabledPolishKeywordSetIds: ['kw-1'],
-        enabledSpeakerProfileIds: [],
-      },
     };
-    const updateProjectDefaultsSpy = vi.spyOn(useProjectStore.getState(), 'updateProjectDefaults')
-      .mockResolvedValue(undefined);
 
     useProjectStore.setState({
       ...useProjectStore.getState(),
       projects: [project],
       activeProjectId: 'project-1',
     });
-    const effectiveConfig = await resolveEffectiveConfig(useConfigStore.getState().config, project);
-    useTranscriptStore.setState({
-      ...useTranscriptStore.getState(),
-      config: effectiveConfig,
-    });
-
     render(<PolishSettingsModal isOpen onClose={() => undefined} />);
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Style Guide' }));
 
     await waitFor(() => {
-      expect(updateProjectDefaultsSpy).toHaveBeenCalledWith('project-1', {
-        enabledPolishKeywordSetIds: ['kw-1', 'kw-2'],
-      });
+      expect(useConfigStore.getState().config.polishKeywordSets).toEqual([
+        expect.objectContaining({ id: 'kw-1', enabled: true }),
+        expect.objectContaining({ id: 'kw-2', enabled: true }),
+      ]);
     });
-    expect(useConfigStore.getState().config.polishKeywordSets).toEqual([
-      expect.objectContaining({ id: 'kw-1', enabled: true }),
-      expect.objectContaining({ id: 'kw-2', enabled: false }),
-    ]);
   });
 });

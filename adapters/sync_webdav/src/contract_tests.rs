@@ -50,6 +50,7 @@ impl Drop for TestServer {
 
 impl TestServer {
     async fn start() -> Self {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let certified = generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
         let tls = RustlsConfig::from_pem(
             certified.cert.pem().into_bytes(),
@@ -116,16 +117,19 @@ async fn webdav_handler(
         .await
         .unwrap()
         .to_vec();
-    let mut data = state.0.lock().unwrap();
-    data.requests.push(LoggedRequest {
-        method: method.clone(),
-        path: path.clone(),
-        if_match: header(&headers, "if-match"),
-        if_none_match: header(&headers, "if-none-match"),
-    });
+    let redirect_location = {
+        let mut data = state.0.lock().unwrap();
+        data.requests.push(LoggedRequest {
+            method: method.clone(),
+            path: path.clone(),
+            if_match: header(&headers, "if-match"),
+            if_none_match: header(&headers, "if-none-match"),
+        });
+        path.ends_with("redirect.sync")
+            .then(|| data.redirect_location.clone().unwrap())
+    };
 
-    if path.ends_with("redirect.sync") {
-        let location = data.redirect_location.clone().unwrap();
+    if let Some(location) = redirect_location {
         return response(
             StatusCode::FOUND,
             &[],
@@ -135,55 +139,65 @@ async fn webdav_handler(
     }
 
     match method.as_str() {
-        "PROPFIND" => propfind_response(&data, &path, header(&headers, "depth").as_deref()),
+        "PROPFIND" => {
+            let data = state.0.lock().unwrap();
+            propfind_response(&data, &path, header(&headers, "depth").as_deref())
+        }
         "MKCOL" => {
+            let mut data = state.0.lock().unwrap();
             data.collections.insert(collection_path(&path));
             response(StatusCode::CREATED, &[], Body::empty(), None)
         }
-        "GET" | "HEAD" => match data.objects.get(&path) {
-            Some((bytes, etag)) => {
-                let headers = if data.omit_get_etag {
-                    Vec::new()
-                } else {
-                    vec![("etag", etag.as_str())]
-                };
-                response(
-                    StatusCode::OK,
-                    &headers,
-                    if method == "HEAD" {
-                        Body::empty()
+        "GET" | "HEAD" => {
+            let data = state.0.lock().unwrap();
+            match data.objects.get(&path) {
+                Some((bytes, etag)) => {
+                    let headers = if data.omit_get_etag {
+                        Vec::new()
                     } else {
-                        Body::from(bytes.clone())
-                    },
-                    None,
-                )
+                        vec![("etag", etag.as_str())]
+                    };
+                    response(
+                        StatusCode::OK,
+                        &headers,
+                        if method == "HEAD" {
+                            Body::empty()
+                        } else {
+                            Body::from(bytes.clone())
+                        },
+                        None,
+                    )
+                }
+                None => response(StatusCode::NOT_FOUND, &[], Body::empty(), None),
             }
-            None => response(StatusCode::NOT_FOUND, &[], Body::empty(), None),
-        },
+        }
         "PUT" => {
-            let existing_etag = data.objects.get(&path).map(|(_, etag)| etag.clone());
-            if header(&headers, "if-none-match").as_deref() == Some("*") && existing_etag.is_some()
-            {
-                return response(
-                    StatusCode::PRECONDITION_FAILED,
-                    &[("etag", existing_etag.as_deref().unwrap())],
-                    Body::empty(),
-                    None,
-                );
-            }
-            if let Some(expected) = header(&headers, "if-match")
-                && existing_etag.as_deref() != Some(expected.as_str())
-            {
-                return response(StatusCode::PRECONDITION_FAILED, &[], Body::empty(), None);
-            }
-            data.next_etag += 1;
-            let etag = format!("\"etag-{}\"", data.next_etag);
-            data.objects.insert(path.clone(), (body, etag.clone()));
             let ambiguous = path.ends_with("ambiguous.sync");
-            let omit_put_etag = data.omit_put_etag;
-            drop(data);
+            let (etag, omit_put_etag) = {
+                let mut data = state.0.lock().unwrap();
+                let existing_etag = data.objects.get(&path).map(|(_, etag)| etag.clone());
+                if header(&headers, "if-none-match").as_deref() == Some("*")
+                    && existing_etag.is_some()
+                {
+                    return response(
+                        StatusCode::PRECONDITION_FAILED,
+                        &[("etag", existing_etag.as_deref().unwrap())],
+                        Body::empty(),
+                        None,
+                    );
+                }
+                if let Some(expected) = header(&headers, "if-match")
+                    && existing_etag.as_deref() != Some(expected.as_str())
+                {
+                    return response(StatusCode::PRECONDITION_FAILED, &[], Body::empty(), None);
+                }
+                data.next_etag += 1;
+                let etag = format!("\"etag-{}\"", data.next_etag);
+                data.objects.insert(path.clone(), (body, etag.clone()));
+                (etag, data.omit_put_etag)
+            };
             if ambiguous {
-                std::thread::sleep(Duration::from_millis(250));
+                tokio::time::sleep(Duration::from_secs(5)).await;
             }
             let headers = if omit_put_etag {
                 Vec::new()
@@ -193,6 +207,7 @@ async fn webdav_handler(
             response(StatusCode::CREATED, &headers, Body::empty(), None)
         }
         "DELETE" => {
+            let mut data = state.0.lock().unwrap();
             let Some((_, etag)) = data.objects.get(&path) else {
                 return response(StatusCode::NOT_FOUND, &[], Body::empty(), None);
             };
@@ -385,7 +400,7 @@ async fn probe_recovers_etags_from_propfind_when_object_responses_omit_them() {
 #[tokio::test]
 async fn ambiguous_put_timeout_is_recovered_by_reading_identical_bytes() {
     let server = TestServer::start().await;
-    let store = server.store(Duration::from_millis(100));
+    let store = server.store(Duration::from_secs(2));
     let key = SyncObjectKey::parse("sona-sync/v1/vault-a/ambiguous.sync").unwrap();
 
     let result = store

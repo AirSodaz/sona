@@ -2,7 +2,6 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
-import { useProjectStore } from '../stores/projectStore';
 import { Dropdown } from './Dropdown';
 import { Switch } from './Switch';
 import { Checkbox } from './Checkbox';
@@ -24,8 +23,6 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
     const globalConfig = useConfigStore((state) => state.config);
     const config = useEffectiveConfigStore((state) => state.config);
     const setConfig = useConfigStore((state) => state.setConfig);
-    const activeProjectId = useProjectStore((state) => state.activeProjectId);
-    const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
 
     const autoPolish = globalConfig.autoPolish ?? false;
     const autoPolishFrequency = globalConfig.autoPolishFrequency ?? 5;
@@ -38,16 +35,6 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
     const polishKeywordSets = normalizePolishKeywordSets(config.polishKeywordSets);
 
     const handleToggleKeywordSet = (setId: string, enabled: boolean) => {
-        if (activeProjectId) {
-            const nextEnabledIds = polishKeywordSets
-                .filter((set) => (set.id === setId ? enabled : set.enabled))
-                .map((set) => set.id);
-            void updateProjectDefaults(activeProjectId, {
-                enabledPolishKeywordSetIds: nextEnabledIds,
-            });
-            return;
-        }
-
         setConfig({
             polishKeywordSets: polishKeywordSets.map((set) => (
                 set.id === setId
@@ -164,13 +151,7 @@ export function PolishSettingsModal({ isOpen, onClose }: PolishSettingsModalProp
                     </label>
                     <Dropdown
                         value={config.polishPresetId || 'general'}
-                        onChange={(val) => {
-                            if (activeProjectId) {
-                                void updateProjectDefaults(activeProjectId, { polishPresetId: val });
-                                return;
-                            }
-                            setConfig({ polishPresetId: val });
-                        }}
+                        onChange={(val) => setConfig({ polishPresetId: val })}
                         options={presetOptions}
                         style={{ width: '100%' }}
                     />

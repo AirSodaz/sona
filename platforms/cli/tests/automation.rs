@@ -17,8 +17,18 @@ impl AutomationIdGenerator for SequenceIds {
 
 fn state_json(rule_name: &str, watch_directory: &str) -> AutomationRepositoryInput {
     serde_json::from_value(json!({
+        "profiles": [{
+            "id": "profile-1",
+            "name": "Default automation profile",
+            "translationLanguage": "en",
+            "polishPresetId": "polish-1",
+            "summaryTemplateId": "general"
+        }],
         "rules": [{
             "name": rule_name,
+            "kind": "file",
+            "profileId": "profile-1",
+            "profileSource": "explicit",
             "tagIds": [],
             "presetId": "preset-1",
             "watchDirectory": watch_directory,
@@ -125,10 +135,11 @@ fn automation_list_outputs_empty_canonical_json() {
 
     assert_eq!(output.stderr, "");
     assert!(state.rules.is_empty());
+    assert!(state.profiles.is_empty());
     assert!(state.processed_entries.is_empty());
     assert_eq!(
         output.stdout,
-        "{\n  \"rules\": [],\n  \"processedEntries\": []\n}"
+        "{\n  \"profiles\": [],\n  \"rules\": [],\n  \"processedEntries\": []\n}"
     );
     assert!(!output.stdout.contains("processed_entries"));
 }
@@ -142,6 +153,8 @@ fn automation_list_outputs_populated_canonical_json() {
     let state: AutomationRepositoryState = serde_json::from_str(&output.stdout).unwrap();
 
     assert_eq!(state.rules[0].id, "rule-1");
+    assert_eq!(state.rules[0].kind, "file");
+    assert_eq!(state.profiles[0].id, "profile-1");
     assert_eq!(state.rules[0].name, "Morning import");
     assert_eq!(state.processed_entries[0].id, "entry-1");
     assert_eq!(state.processed_entries[0].rule_id, "rule-1");
@@ -162,10 +175,19 @@ fn automation_list_outputs_rules_table_and_processed_summary() {
     let output = run_list(dir.path(), false);
 
     assert_eq!(output.stderr, "");
-    for header in ["ID", "NAME", "TAGS", "ENABLED", "WATCH"] {
+    for header in [
+        "PROFILES", "RULES", "ID", "KIND", "NAME", "PROFILE", "TAGS", "ENABLED", "WATCH",
+    ] {
         assert!(output.stdout.contains(header));
     }
-    for value in ["rule-1", "Morning import", "true", "C:\\watch"] {
+    for value in [
+        "profile-1",
+        "rule-1",
+        "file",
+        "Morning import",
+        "true",
+        "C:\\watch",
+    ] {
         assert!(output.stdout.contains(value));
     }
     assert!(output.stdout.ends_with("Processed entries: 1\n"));
@@ -178,7 +200,7 @@ fn automation_list_empty_table_has_processed_summary() {
 
     let output = run_list(dir.path(), false);
 
-    assert_eq!(output.stdout.lines().count(), 3);
+    assert_eq!(output.stdout.lines().count(), 8);
     assert!(output.stdout.ends_with("Processed entries: 0\n"));
 }
 
@@ -189,7 +211,7 @@ fn automation_table_escapes_control_characters() {
 
     let output = run_list(dir.path(), false);
 
-    assert_eq!(output.stdout.lines().count(), 4);
+    assert_eq!(output.stdout.lines().count(), 10);
     assert!(output.stdout.contains(r"row\nname\t\u{1b}"));
     assert!(output.stdout.contains(r"watch\rdir\u{7}"));
     assert!(
@@ -215,10 +237,11 @@ fn automation_table_aligns_unicode_names_by_display_width() {
         .unwrap();
 
     let output = run_list(dir.path(), false);
-    let tag_columns = output
-        .stdout
-        .lines()
-        .skip(2)
+    let lines = output.stdout.lines().collect::<Vec<_>>();
+    let rules_header = lines.iter().position(|line| *line == "RULES").unwrap();
+    let tag_columns = lines
+        .into_iter()
+        .skip(rules_header + 3)
         .take(2)
         .map(|line| UnicodeWidthStr::width(&line[..line.find("true").unwrap()]))
         .collect::<Vec<_>>();

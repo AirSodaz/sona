@@ -34,6 +34,7 @@ import type { ContextMenuOpenRequest } from './context-menu/trigger';
 
 interface ProjectsViewProps {
   isActive?: boolean;
+  onOpenAutomationSettings?: (tagId: string) => void;
 }
 
 interface LiveDraftLockState {
@@ -97,7 +98,7 @@ function createWorkspaceMenuRevision(
   });
 }
 
-export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.Element {
+export function ProjectsView({ isActive = true, onOpenAutomationSettings }: ProjectsViewProps): React.JSX.Element {
   const { t } = useTranslation();
   const { activeContextId, closeContextMenu, openContextMenu } = useContextMenu();
   const projects = useProjectStore((state) => state.projects);
@@ -699,14 +700,11 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return;
     }
 
-    const project = await createProject(
-      {
-        name: newProjectName.trim(),
-        description: newProjectDescription.trim(),
-        color: newProjectColor,
-      },
-      globalConfig,
-    );
+    const project = await createProject({
+      name: newProjectName.trim(),
+      description: newProjectDescription.trim(),
+      color: newProjectColor,
+    });
 
     if (!project) {
       return;
@@ -721,7 +719,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   };
 
   const handleSaveProject = async () => {
-    if (!browseState.browseProject || !projectSettingsDraft.draftDefaults) {
+    if (!browseState.browseProject) {
       return;
     }
 
@@ -730,7 +728,6 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       description: projectSettingsDraft.draftDescription,
       icon: projectSettingsDraft.draftIcon,
       color: projectSettingsDraft.draftColor,
-      defaults: projectSettingsDraft.draftDefaults,
     });
     projectSettingsDraft.setIsSettingsOpen(false);
   };
@@ -1017,8 +1014,6 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         draftDescription={projectSettingsDraft.draftDescription}
         draftIcon={projectSettingsDraft.draftIcon}
         draftColor={projectSettingsDraft.draftColor}
-        draftDefaults={projectSettingsDraft.draftDefaults}
-        globalConfig={globalConfig}
         onClose={projectSettingsDraft.handleRequestCloseProjectSettings}
         onSave={handleSaveProject}
         onDelete={handleDeleteProject}
@@ -1026,7 +1021,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         onDescriptionChange={projectSettingsDraft.setDraftDescription}
         onIconChange={projectSettingsDraft.setDraftIcon}
         onColorChange={projectSettingsDraft.setDraftColor}
-        onDefaultsChange={projectSettingsDraft.setDraftDefaults}
+        onOpenAutomation={onOpenAutomationSettings}
       />
 
       <RenameModal

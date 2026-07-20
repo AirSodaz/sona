@@ -54,6 +54,11 @@ fn recovery_snapshot_transport_shape_lives_in_core() {
             automation_rule_id: None,
             automation_rule_name: None,
             resolved_config_snapshot: Some(json!({"engine": "local"})),
+            automation_resolution_snapshot: Some(json!({
+                "tagRuleId": "tag-rule-1",
+                "profileId": "profile-1",
+                "profileSource": "tag"
+            })),
             export_config: json!({"format": "txt"}),
             stage_config: json!({"chunk": 1}),
             source_fingerprint: Some("fingerprint".to_string()),

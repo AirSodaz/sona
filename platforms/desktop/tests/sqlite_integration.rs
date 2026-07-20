@@ -30,10 +30,11 @@ fn clear_db(db: &Database) {
             "history_transcripts",
             "history_item_tags",
             "history_items",
-            "tag_default_links",
+            "automation_profile_links",
             "automation_rule_tags",
             "tags",
             "automation_rules",
+            "automation_profiles",
             "automation_processed",
             "task_ledger",
         ] {
@@ -250,7 +251,11 @@ fn test_migration_and_crud() {
         let ar: i64 = conn
             .query_row("SELECT COUNT(*) FROM automation_rules", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(ar, 2, "automation_rules count");
+        assert_eq!(ar, 4, "automation_rules count");
+        let profiles: i64 = conn
+            .query_row("SELECT COUNT(*) FROM automation_profiles", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(profiles, 2, "automation_profiles count");
         let ap: i64 = conn
             .query_row("SELECT COUNT(*) FROM automation_processed", [], |r| {
                 r.get(0)
@@ -268,9 +273,7 @@ fn test_migration_and_crud() {
 
         let tag = conn
             .query_row(
-                "SELECT description, summary_template_id, translation_language,
-                            polish_preset_id, polish_scenario, polish_context,
-                            export_file_name_prefix
+                "SELECT description, icon, color, sort_order
                      FROM tags WHERE id = 'proj-1'",
                 [],
                 |r| {
@@ -278,76 +281,123 @@ fn test_migration_and_crud() {
                         r.get::<_, String>(0)?,
                         r.get::<_, String>(1)?,
                         r.get::<_, String>(2)?,
-                        r.get::<_, String>(3)?,
-                        r.get::<_, Option<String>>(4)?,
-                        r.get::<_, Option<String>>(5)?,
-                        r.get::<_, String>(6)?,
+                        r.get::<_, i64>(3)?,
                     ))
                 },
             )
             .unwrap();
         assert_eq!(tag.0, "Work project");
-        assert_eq!(tag.1, "detailed");
-        assert_eq!(tag.2, "en");
-        assert_eq!(tag.3, "formal");
-        assert_eq!(tag.4.as_deref(), Some("meeting"));
-        assert_eq!(tag.5.as_deref(), Some("weekly sync"));
-        assert_eq!(tag.6, "work-");
+        assert_eq!(tag.1, "folder");
+        assert_eq!(tag.2, "#ff0000");
+        assert_eq!(tag.3, 0);
 
-        let link_count: i64 = conn
+        let profile = conn
             .query_row(
-                "SELECT COUNT(*) FROM tag_default_links WHERE tag_id = 'proj-1'",
-                [],
-                |r| r.get(0),
-            )
-            .unwrap();
-        assert_eq!(link_count, 4, "tag_default_links count");
-
-        let rule = conn
-            .query_row(
-                "SELECT save_history, preset_id, recursive, enabled, stage_auto_polish,
-                            stage_polish_preset_id, stage_auto_translate,
-                            stage_translation_language, stage_export_enabled,
-                            export_directory, export_format, export_mode, export_prefix,
-                            created_at, updated_at
-                     FROM automation_rules WHERE id = 'rule-1'",
+                "SELECT translation_language, polish_preset_id, summary_template_id
+                     FROM automation_profiles WHERE id = 'migrated-tag-profile:proj-1'",
                 [],
                 |r| {
                     Ok((
-                        r.get::<_, i64>(0)?,
+                        r.get::<_, String>(0)?,
                         r.get::<_, String>(1)?,
-                        r.get::<_, i64>(2)?,
-                        r.get::<_, i64>(3)?,
-                        r.get::<_, i64>(4)?,
-                        r.get::<_, String>(5)?,
-                        r.get::<_, i64>(6)?,
-                        r.get::<_, String>(7)?,
-                        r.get::<_, i64>(8)?,
-                        r.get::<_, String>(9)?,
-                        r.get::<_, String>(10)?,
-                        r.get::<_, String>(11)?,
-                        r.get::<_, String>(12)?,
-                        r.get::<_, i64>(13)?,
-                        r.get::<_, i64>(14)?,
+                        r.get::<_, String>(2)?,
                     ))
                 },
             )
             .unwrap();
-        assert_eq!(rule.0, 1);
-        assert_eq!(rule.1, "preset-1");
-        assert_eq!(rule.2, 1);
+        assert_eq!(profile.0, "en");
+        assert_eq!(profile.1, "formal");
+        assert_eq!(profile.2, "detailed");
+
+        let link_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM automation_profile_links
+                     WHERE profile_id = 'migrated-tag-profile:proj-1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(link_count, 4, "automation_profile_links count");
+
+        let tag_rule = conn
+            .query_row(
+                "SELECT kind, priority, profile_id, profile_source, stage_auto_polish,
+                            stage_auto_translate, stage_export_enabled, action_auto_summary
+                     FROM automation_rules WHERE id = 'migrated-tag-rule:proj-1'",
+                [],
+                |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, i64>(1)?,
+                        r.get::<_, Option<String>>(2)?,
+                        r.get::<_, String>(3)?,
+                        r.get::<_, i64>(4)?,
+                        r.get::<_, i64>(5)?,
+                        r.get::<_, i64>(6)?,
+                        r.get::<_, i64>(7)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(tag_rule.0, "tag");
+        assert_eq!(tag_rule.1, 0);
+        assert_eq!(tag_rule.2.as_deref(), Some("migrated-tag-profile:proj-1"));
+        assert_eq!(tag_rule.3, "explicit");
+        assert_eq!(
+            (tag_rule.4, tag_rule.5, tag_rule.6, tag_rule.7),
+            (0, 0, 0, 0)
+        );
+
+        let rule = conn
+            .query_row(
+                "SELECT kind, profile_id, profile_source, save_history, preset_id,
+                            watch_directory, recursive, enabled, stage_auto_polish,
+                            stage_auto_translate, stage_export_enabled, action_auto_summary,
+                            export_directory, export_format, export_mode, export_prefix,
+                            created_at, updated_at, migration_notice
+                     FROM automation_rules WHERE id = 'rule-1'",
+                [],
+                |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, Option<String>>(1)?,
+                        r.get::<_, String>(2)?,
+                        r.get::<_, i64>(3)?,
+                        r.get::<_, String>(4)?,
+                        r.get::<_, String>(5)?,
+                        r.get::<_, i64>(6)?,
+                        r.get::<_, i64>(7)?,
+                        r.get::<_, i64>(8)?,
+                        r.get::<_, i64>(9)?,
+                        r.get::<_, i64>(10)?,
+                        r.get::<_, i64>(11)?,
+                        r.get::<_, String>(12)?,
+                        r.get::<_, String>(13)?,
+                        r.get::<_, String>(14)?,
+                        r.get::<_, String>(15)?,
+                        r.get::<_, i64>(16)?,
+                        r.get::<_, i64>(17)?,
+                        r.get::<_, Option<String>>(18)?,
+                    ))
+                },
+            )
+            .unwrap();
+        assert_eq!(rule.0, "file");
+        assert_eq!(rule.1, None);
+        assert_eq!(rule.2, "tag_match");
         assert_eq!(rule.3, 1);
-        assert_eq!(rule.4, 1);
-        assert_eq!(rule.5, "formal");
+        assert_eq!(rule.4, "preset-1");
+        assert_eq!(rule.5, "/docs");
         assert_eq!(rule.6, 1);
-        assert_eq!(rule.7, "ja");
-        assert_eq!(rule.8, 1);
-        assert_eq!(rule.9, "/exports");
-        assert_eq!(rule.10, "md");
-        assert_eq!(rule.11, "translated");
-        assert_eq!(rule.12, "auto-");
-        assert_eq!(rule.13, 1000);
-        assert_eq!(rule.14, 2000);
+        assert_eq!(rule.7, 1);
+        assert_eq!((rule.8, rule.9, rule.10, rule.11), (0, 0, 1, 0));
+        assert_eq!(rule.12, "/exports");
+        assert_eq!(rule.13, "md");
+        assert_eq!(rule.14, "translated");
+        assert_eq!(rule.15, "auto-");
+        assert_eq!(rule.16, 1000);
+        assert_eq!(rule.17, 2000);
+        assert!(rule.18.is_some(), "legacy post-processing migration notice");
 
         let rule_tag: String = conn
             .query_row(

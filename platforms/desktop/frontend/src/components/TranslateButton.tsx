@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
-import { useProjectStore } from '../stores/projectStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
@@ -65,8 +64,6 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
 
     const config = useEffectiveConfigStore((state) => state.config);
     const setConfig = useConfigStore((state) => state.setConfig);
-    const activeProjectId = useProjectStore((state) => state.activeProjectId);
-    const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
     const segments = useTranscriptSessionStore((state) => state.segments);
 
     const hasTranslation = segments.some(seg => typeof seg.translation === 'string' && seg.translation.trim().length > 0);
@@ -195,11 +192,7 @@ export function TranslateButton({ className = '' }: TranslateButtonProps): React
             return updated;
         });
 
-        if (activeProjectId) {
-            await updateProjectDefaults(activeProjectId, { translationLanguage: langCode });
-        } else {
-            setConfig({ translationLanguage: langCode });
-        }
+        setConfig({ translationLanguage: langCode });
         // Don't close menu to allow quick translation start after selection?
         // Or close it to indicate selection made. Let's close it.
         closeMenu();

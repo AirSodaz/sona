@@ -36,8 +36,9 @@ pub use facade::SonaCoreFacade;
 pub use llm_task_bridge::FfiLlmTaskObserver;
 pub use mapper::{
     FfiAsrEngine, FfiAsrInferenceMetric, FfiAsrMode, FfiAsrModelLoadMetric,
-    FfiAsrStreamingErrorEvent, FfiAsrTranscriptUpdateEvent, FfiAutomationExportConfigV1,
-    FfiAutomationProcessedInputV1, FfiAutomationProcessedRecordV1, FfiAutomationRepositoryInputV1,
+    FfiAsrStreamingErrorEvent, FfiAsrTranscriptUpdateEvent, FfiAutomationActionsV1,
+    FfiAutomationExportConfigV1, FfiAutomationProcessedInputV1, FfiAutomationProcessedRecordV1,
+    FfiAutomationProfileInputV1, FfiAutomationProfileRecordV1, FfiAutomationRepositoryInputV1,
     FfiAutomationRepositoryStateV1, FfiAutomationRuleInputV1, FfiAutomationRuleRecordV1,
     FfiAutomationRuleValidationResultV1, FfiAutomationStageConfigV1, FfiAutomationTagReferenceV1,
     FfiAutomationValidationExportConfigV1, FfiAutomationValidationRuleV1,
@@ -74,14 +75,13 @@ pub use mapper::{
     FfiRecoverySnapshotV1, FfiRecoverySourceV1, FfiRequiredCompanionModels,
     FfiResolvedModelDownload, FfiRuntimePathKind, FfiRuntimePathStatus, FfiSpeakerAttribution,
     FfiSpeakerCandidate, FfiSpeakerTag, FfiStringPatchV1, FfiSummarizeTranscriptRequest,
-    FfiSummarySegmentInput, FfiSummaryTemplateConfig, FfiTagCreateInputV1, FfiTagDefaultsInputV1,
-    FfiTagDefaultsPatchV1, FfiTagDefaultsV1, FfiTagRecordV1, FfiTagRepositorySnapshotV1,
-    FfiTagUpdateInputV1, FfiTaskLedgerKindV1, FfiTaskLedgerPatchV1, FfiTaskLedgerRecordV1,
-    FfiTaskLedgerSnapshotV1, FfiTaskLedgerStatusV1, FfiTimestampSupportHint, FfiTranscriptSegment,
-    FfiTranscriptSnapshotMetadataV1, FfiTranscriptSnapshotReasonV1, FfiTranscriptSnapshotRecordV1,
-    FfiTranscriptTiming, FfiTranscriptTimingLevel, FfiTranscriptTimingSource,
-    FfiTranscriptTimingUnit, FfiTranscriptUpdate, FfiTranslateSegmentsRequest,
-    FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig,
+    FfiSummarySegmentInput, FfiSummaryTemplateConfig, FfiTagCreateInputV1, FfiTagRecordV1,
+    FfiTagRepositorySnapshotV1, FfiTagUpdateInputV1, FfiTaskLedgerKindV1, FfiTaskLedgerPatchV1,
+    FfiTaskLedgerRecordV1, FfiTaskLedgerSnapshotV1, FfiTaskLedgerStatusV1, FfiTimestampSupportHint,
+    FfiTranscriptSegment, FfiTranscriptSnapshotMetadataV1, FfiTranscriptSnapshotReasonV1,
+    FfiTranscriptSnapshotRecordV1, FfiTranscriptTiming, FfiTranscriptTimingLevel,
+    FfiTranscriptTimingSource, FfiTranscriptTimingUnit, FfiTranscriptUpdate,
+    FfiTranslateSegmentsRequest, FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig,
 };
 pub use sync_secret_store_bridge::FfiSyncSecretStore;
 
@@ -2201,7 +2201,7 @@ mod tests {
     }
 
     #[test]
-    fn facade_migrates_config_json_and_resolves_effective_config_json() {
+    fn facade_migrates_config_json_and_ignores_legacy_project_defaults() {
         let migrated = SonaCoreFacade::migrate_app_config_json(
             Some(
                 r#"{
@@ -2259,7 +2259,7 @@ mod tests {
         let effective_config: serde_json::Value = serde_json::from_str(&effective).unwrap();
 
         assert_eq!(effective_config["summaryTemplateId"], "meeting");
-        assert_eq!(effective_config["translationLanguage"], "ja");
+        assert_eq!(effective_config["translationLanguage"], "zh");
         assert_eq!(effective_config["polishPresetId"], "meeting");
     }
 

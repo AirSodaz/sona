@@ -5,7 +5,6 @@ import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import type { AppConfig } from '../../types/config';
-import { migrateProjectPolishDefaults } from '../../types/project';
 import type { OnboardingState } from '../../types/onboarding';
 import { logger } from '../../utils/logger';
 import {
@@ -14,7 +13,6 @@ import {
   ONBOARDING_STORAGE_KEY,
 } from '../../utils/onboarding';
 import { migrateConfig } from '../configMigrationService';
-import { projectService } from '../projectService';
 import { settingsStore, STORE_KEY_CONFIG, STORE_KEY_ONBOARDING } from '../storageService';
 
 const LEGACY_CONFIG_STORAGE_KEY = STORE_KEY_CONFIG;
@@ -134,45 +132,6 @@ async function persistHydratedState(plan: StartupPersistencePlan): Promise<void>
   }
 }
 
-async function maybeMigrateProjectPolishDefaults(config: AppConfig): Promise<{
-  config: AppConfig;
-  configChanged: boolean;
-}> {
-  const migration = migrateProjectPolishDefaults(
-    useProjectStore.getState().projects,
-    config.polishCustomPresets,
-  );
-
-  if (!migration.migrated) {
-    return {
-      config,
-      configChanged: false,
-    };
-  }
-
-  try {
-    await projectService.saveAll(migration.projects);
-    useProjectStore.setState({ projects: migration.projects });
-
-    const nextConfig: AppConfig = {
-      ...config,
-      polishCustomPresets: migration.customPresets,
-    };
-    useConfigStore.getState().setConfig({ polishCustomPresets: migration.customPresets });
-
-    return {
-      config: nextConfig,
-      configChanged: true,
-    };
-  } catch (error) {
-    logger.error('[Startup] Failed to persist migrated project polish defaults:', error);
-    return {
-      config,
-      configChanged: false,
-    };
-  }
-}
-
 export async function hydrateAppStartupState(): Promise<void> {
   try {
     const savedConfig = await settingsStore.get<AppConfig | null>(STORE_KEY_CONFIG);
@@ -190,11 +149,8 @@ export async function hydrateAppStartupState(): Promise<void> {
 
     await useProjectStore.getState().loadProjects();
 
-    const projectMigration = await maybeMigrateProjectPolishDefaults(loadedConfig);
-    const configToPersist = projectMigration.config;
-
     await persistHydratedState({
-      configToPersist: (configMigrated || projectMigration.configChanged) ? configToPersist : null,
+      configToPersist: configMigrated ? loadedConfig : null,
       onboardingToPersist: onboarding.migrated ? onboarding.state : null,
       configLegacyKeyToClear: Boolean(legacyConfigValue),
       onboardingLegacyKeyToClear: onboarding.clearLegacyOnboarding,

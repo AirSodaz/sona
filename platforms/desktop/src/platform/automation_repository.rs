@@ -2,7 +2,8 @@ use serde::Serialize;
 use serde_json::Value;
 use sona_core::automation::AutomationError;
 use sona_core::automation::repository::{
-    AutomationProcessedInput, AutomationRepositoryInput, AutomationRuleInput,
+    AutomationProcessedInput, AutomationProfileInput, AutomationRepositoryInput,
+    AutomationRuleInput,
 };
 use sona_core::automation::{AutomationRule, AutomationRuleValidationResult};
 use sona_runtime_fs::{UuidGenerator, validate_native_automation_rule_activation};
@@ -65,6 +66,13 @@ pub async fn persist_rules<R: Runtime>(
     rules: Vec<AutomationRuleInput>,
 ) -> Result<(), String> {
     run_automation_adapter_task(app, move |adapter| adapter.replace_rules(rules)).await
+}
+
+pub async fn persist_profiles<R: Runtime>(
+    app: &AppHandle<R>,
+    profiles: Vec<AutomationProfileInput>,
+) -> Result<(), String> {
+    run_automation_adapter_task(app, move |adapter| adapter.replace_profiles(profiles)).await
 }
 
 pub async fn persist_processed_entries<R: Runtime>(

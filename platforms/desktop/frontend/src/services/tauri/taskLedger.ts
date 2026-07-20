@@ -19,6 +19,9 @@ function toTaskLedgerRecordTransport(
     tagIds: current.tagIds ?? (projectId ? [projectId] : undefined),
     filePath: current.filePath ?? null,
     automationRuleId: current.automationRuleId ?? null,
+    tagAutomationRuleId: current.tagAutomationRuleId ?? null,
+    automationProfileId: current.automationProfileId ?? null,
+    automationProfileSource: current.automationProfileSource ?? null,
     sourceFingerprint: current.sourceFingerprint ?? null,
     errorMessage: current.errorMessage ?? null,
     templateId: current.templateId ?? null,
@@ -65,6 +68,15 @@ function normalizeTaskLedgerRecord(
     ...(record.filePath != null ? { filePath: record.filePath } : {}),
     ...(record.automationRuleId != null
       ? { automationRuleId: record.automationRuleId }
+      : {}),
+    ...(record.tagAutomationRuleId != null
+      ? { tagAutomationRuleId: record.tagAutomationRuleId }
+      : {}),
+    ...(record.automationProfileId != null
+      ? { automationProfileId: record.automationProfileId }
+      : {}),
+    ...(record.automationProfileSource != null
+      ? { automationProfileSource: record.automationProfileSource }
       : {}),
     ...(record.sourceFingerprint != null
       ? { sourceFingerprint: record.sourceFingerprint }

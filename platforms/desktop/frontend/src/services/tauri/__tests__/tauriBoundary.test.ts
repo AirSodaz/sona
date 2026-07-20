@@ -527,16 +527,6 @@ describe('tauri boundary wrappers', () => {
       icon: '',
       createdAt: 1,
       updatedAt: 1,
-      defaults: {
-        summaryTemplateId: 'general',
-        translationLanguage: 'ja',
-        polishPresetId: 'meeting',
-        exportFileNamePrefix: '',
-        enabledTextReplacementSetIds: [],
-        enabledHotwordSetIds: [],
-        enabledPolishKeywordSetIds: [],
-        enabledSpeakerProfileIds: [],
-      },
     };
     const migrationResult = { config: globalConfig, migrated: false };
     const effectiveConfig = {
@@ -1582,16 +1572,6 @@ describe('tauri boundary wrappers', () => {
   });
 
   it('tag repository wrappers normalize records at the Tauri boundary', async () => {
-    const defaults = {
-      summaryTemplateId: 'general',
-      translationLanguage: 'zh',
-      polishPresetId: 'general',
-      exportFileNamePrefix: '',
-      enabledTextReplacementSetIds: [],
-      enabledHotwordSetIds: [],
-      enabledPolishKeywordSetIds: [],
-      enabledSpeakerProfileIds: [],
-    };
     const wireTag = {
       id: 'tag-1',
       name: 'Research',
@@ -1601,13 +1581,8 @@ describe('tauri boundary wrappers', () => {
       sortOrder: 4,
       createdAt: 100,
       updatedAt: 101,
-      defaults: {
-        ...defaults,
-        polishScenario: null,
-        polishContext: null,
-      },
     };
-    const tag = { ...wireTag, defaults };
+    const tag = { ...wireTag };
     vi.mocked(invoke)
       .mockResolvedValueOnce([wireTag])
       .mockResolvedValueOnce(undefined);
@@ -1702,6 +1677,13 @@ describe('tauri boundary wrappers', () => {
       createdAt: 1,
       updatedAt: 2,
     };
+    const ruleInput = {
+      ...rule,
+      kind: 'file',
+      priority: 0,
+      profileSource: 'tag_match',
+      actions: { autoPolish: false, autoTranslate: false, autoSummary: false },
+    };
     const processedEntry = {
       id: 'entry-1',
       ruleId: 'rule-1',
@@ -1713,6 +1695,7 @@ describe('tauri boundary wrappers', () => {
       processedAt: 30,
     };
     vi.mocked(invoke).mockResolvedValueOnce({
+      profiles: [],
       rules: [{
         ...rule,
         stageConfig: {
@@ -1737,27 +1720,47 @@ describe('tauri boundary wrappers', () => {
     await automationValidateRuleActivation(rule as any, {} as any, null);
 
     expect(state).toEqual({
+      profiles: [],
       rules: [{
         ...rule,
-        stageConfig: rule.stageConfig,
-        exportConfig: rule.exportConfig,
+        kind: 'file',
+        priority: 0,
+        profileId: undefined,
+        profileSource: 'tag_match',
+        actions: { autoPolish: false, autoTranslate: false, autoSummary: false },
+        migrationNotice: undefined,
+        stageConfig: {
+          ...rule.stageConfig,
+          polishPresetId: undefined,
+          translationLanguage: undefined,
+        },
+        exportConfig: { ...rule.exportConfig, prefix: undefined },
       }],
-      processedEntries: [processedEntry],
+      processedEntries: [{
+        ...processedEntry,
+        kind: 'file',
+        inputVersion: 'fingerprint',
+        attempt: 1,
+        historyId: undefined,
+        exportPath: undefined,
+        errorMessage: undefined,
+      }],
     });
 
     expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.automationRepository.loadState);
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.automationRepository.persistRules, {
-      rules: [rule],
+      rules: [ruleInput],
     });
     expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.automationRepository.persistProcessedEntries, {
       processedEntries: [processedEntry],
     });
     expect(invoke).toHaveBeenNthCalledWith(4, TauriCommand.automationRepository.persistState, {
-      rules: [rule],
+      profiles: [],
+      rules: [ruleInput],
       processedEntries: [processedEntry],
     });
     expect(invoke).toHaveBeenNthCalledWith(5, TauriCommand.automationRepository.validateActivation, {
-      rule,
+      rule: ruleInput,
       globalConfig: {},
       tags: [],
     });
@@ -1856,6 +1859,9 @@ describe('tauri boundary wrappers', () => {
       tagIds: projectId ? [projectId] : [],
       filePath: null,
       automationRuleId: null,
+      tagAutomationRuleId: null,
+      automationProfileId: null,
+      automationProfileSource: null,
       sourceFingerprint: null,
       errorMessage: null,
       templateId: null,

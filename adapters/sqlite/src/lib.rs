@@ -1247,10 +1247,11 @@ mod tests {
                 let db = Arc::clone(&db);
                 std::thread::spawn(move || {
                     db.with_connection(|conn| {
-                        let count: i64 =
-                            conn.query_row("SELECT COUNT(*) FROM app_settings", [], |row| {
-                                row.get(0)
-                            })?;
+                        let count: i64 = conn.query_row(
+                            "SELECT COUNT(*) FROM app_settings WHERE key LIKE 'c%'",
+                            [],
+                            |row| row.get(0),
+                        )?;
                         assert_eq!(count, 3);
                         Ok(())
                     })

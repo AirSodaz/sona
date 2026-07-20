@@ -11,8 +11,7 @@ import type {
   TextReplacementRuleSet,
 } from '../../types/config';
 import { useVocabularyConfig, useSetConfig } from '../../stores/configStore';
-import { useProjectStore } from '../../stores/projectStore';
-import type { ProjectDefaults } from '../../types/project';
+import { useAutomationStore } from '../../stores/automationStore';
 import { SettingsTabContainer, SettingsPageHeader } from './SettingsLayout';
 import { Switch } from '../Switch';
 import { SettingsContextSection } from './SettingsContextSection';
@@ -21,10 +20,10 @@ import { SettingsSpeakerProfilesSection } from './SettingsSpeakerProfilesSection
 import { normalizePolishKeywordSets } from '../../utils/polishKeywords';
 import { RuleSetSection } from './vocabulary/RuleSetSection';
 
-type ProjectRuleSetDefaultsKey =
-  | 'enabledTextReplacementSetIds'
-  | 'enabledHotwordSetIds'
-  | 'enabledPolishKeywordSetIds';
+type AutomationRuleSetDependencyKind =
+  | 'textReplacementSet'
+  | 'hotwordSet'
+  | 'polishKeywordSet';
 
 interface RuleSetUiState {
   newSetName: string;
@@ -185,8 +184,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
   const { t } = useTranslation();
   const config = useVocabularyConfig();
   const updateConfig = useSetConfig();
-  const projects = useProjectStore((state) => state.projects);
-  const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
+  const removeProfileDependency = useAutomationStore((state) => state.removeProfileDependency);
 
   const textReplacementUi = useRuleSetUiState();
   const hotwordUi = useRuleSetUiState();
@@ -196,21 +194,10 @@ export function SettingsVocabularyTab(): React.JSX.Element {
   const hotwordSets = config.hotwordSets || [];
   const polishKeywordSets = normalizePolishKeywordSets(config.polishKeywordSets);
 
-  const removeRuleSetReferenceFromProjects = async (
-    key: ProjectRuleSetDefaultsKey,
+  const removeRuleSetReferenceFromProfiles = async (
+    kind: AutomationRuleSetDependencyKind,
     setId: string,
-  ) => {
-    const affectedProjects = projects.filter((project) => project.defaults[key].includes(setId));
-    if (affectedProjects.length === 0) {
-      return;
-    }
-
-    await Promise.all(affectedProjects.map((project) => (
-      updateProjectDefaults(project.id, {
-        [key]: project.defaults[key].filter((id) => id !== setId),
-      } as Pick<ProjectDefaults, typeof key>)
-    )));
-  };
+  ) => removeProfileDependency(kind, setId);
 
   const handleAddSet = () => {
     const setName = textReplacementUi.newSetName.trim();
@@ -235,7 +222,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
 
   const handleDeleteSet = async (id: string) => {
     updateConfig({ textReplacementSets: removeSetById(sets, id) });
-    await removeRuleSetReferenceFromProjects('enabledTextReplacementSetIds', id);
+    await removeRuleSetReferenceFromProfiles('textReplacementSet', id);
   };
 
   const handleAddRuleToSet = (setId: string) => {
@@ -289,7 +276,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
 
   const handleDeleteHotwordSet = async (id: string) => {
     updateConfig({ hotwordSets: removeSetById(hotwordSets, id) });
-    await removeRuleSetReferenceFromProjects('enabledHotwordSetIds', id);
+    await removeRuleSetReferenceFromProfiles('hotwordSet', id);
   };
 
   const handleAddHotwordToSet = (setId: string) => {
@@ -343,7 +330,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
 
   const handleDeletePolishKeywordSet = async (id: string) => {
     updateConfig({ polishKeywordSets: removeSetById(polishKeywordSets, id) });
-    await removeRuleSetReferenceFromProjects('enabledPolishKeywordSetIds', id);
+    await removeRuleSetReferenceFromProfiles('polishKeywordSet', id);
   };
 
   return (

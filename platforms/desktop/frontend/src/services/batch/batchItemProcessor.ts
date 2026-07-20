@@ -17,6 +17,7 @@ import { useHistoryStore } from '../../stores/historyStore';
 import { logger } from '../../utils/logger';
 import { remove } from '../tauri/platform/fs';
 import { join, tempDir } from '../tauri/platform/path';
+import { beginTagAutomationRun, finishTagAutomationRun } from '../automation/tagAutomationRun';
 
 export interface BatchItemProcessorCallbacks {
   updateStatus: (
@@ -71,6 +72,9 @@ export class BatchItemProcessor {
     let lastUpdateTime = 0;
     let tempWavPath: string | undefined;
     let savedHistoryId: string | null = item.historyId || null;
+    let tagRunKey: { ruleId: string; historyId: string; inputVersion: string } | null = null;
+    let tagRunStarted = false;
+    let tagRunFinished = false;
 
     const persistHistorySnapshot = async (): Promise<void> => {
       if (!savedHistoryId) {
@@ -142,7 +146,31 @@ export class BatchItemProcessor {
       await ensureHistorySaved();
       await persistHistorySnapshot();
 
-      if (stageConfig.autoPolish && currentSegments.length > 0) {
+      const tagRuleId = item.automationResolutionSnapshot?.tagRuleId;
+      const tagActions = item.automationResolutionSnapshot?.actions ?? {
+        autoPolish: stageConfig.autoPolish,
+        autoTranslate: stageConfig.autoTranslate,
+        autoSummary: stageConfig.autoSummary === true,
+      };
+      if (tagRuleId && savedHistoryId && (
+        tagActions.autoPolish || tagActions.autoTranslate || tagActions.autoSummary
+      )) {
+        tagRunKey = {
+          ruleId: tagRuleId,
+          historyId: savedHistoryId,
+          inputVersion: item.sourceFingerprint || `queue:${item.id}`,
+        };
+        tagRunStarted = await beginTagAutomationRun({
+          ...tagRunKey,
+          actions: tagActions,
+        });
+      }
+
+      const effectiveStageConfig = tagRunKey && !tagRunStarted
+        ? { ...stageConfig, autoPolish: false, autoTranslate: false, autoSummary: false }
+        : stageConfig;
+
+      if (effectiveStageConfig.autoPolish && currentSegments.length > 0) {
         this.throwIfCancelRequested(callbacks);
         const llm = getFeatureLlmConfig(config, 'polish');
         if (!isLlmConfigComplete(llm)) {
@@ -161,7 +189,7 @@ export class BatchItemProcessor {
         await persistHistorySnapshot();
       }
 
-      if (stageConfig.autoTranslate && currentSegments.length > 0) {
+      if (effectiveStageConfig.autoTranslate && currentSegments.length > 0) {
         this.throwIfCancelRequested(callbacks);
         const llm = getFeatureLlmConfig(config, 'translation');
         if (!isLlmConfigComplete(llm)) {
@@ -178,6 +206,23 @@ export class BatchItemProcessor {
           },
         );
         await persistHistorySnapshot();
+      }
+
+      if (effectiveStageConfig.autoSummary && currentSegments.length > 0 && savedHistoryId) {
+        this.throwIfCancelRequested(callbacks);
+        callbacks.updateStatus('processing', 99);
+        await this.ports.summaryService.retrySummaryTranscriptJob({
+          segments: currentSegments,
+          historyId: savedHistoryId,
+          templateId: config.summaryTemplateId,
+          config,
+        });
+        await this.ports.summaryService.persistSummary(savedHistoryId);
+      }
+
+      if (tagRunStarted && tagRunKey) {
+        await finishTagAutomationRun({ ...tagRunKey, status: 'complete' });
+        tagRunFinished = true;
       }
 
       if (item.exportConfig) {
@@ -197,6 +242,13 @@ export class BatchItemProcessor {
         await this.ports.summaryService.persistSummary(savedHistoryId);
       }
     } catch (error) {
+      if (tagRunStarted && !tagRunFinished && tagRunKey) {
+        await finishTagAutomationRun({
+          ...tagRunKey,
+          status: 'error',
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      }
       try {
         if (currentSegments.length > 0) {
           await ensureHistorySaved();

@@ -22,7 +22,7 @@ use sona_core::history::{
     HistoryItemStatus,
 };
 use sona_core::ports::time::{ClockError, UnixMillisClock};
-use sona_core::tag::{TagDefaults, TagRecord};
+use sona_core::tag::TagRecord;
 use tar::{EntryType, Header};
 use uuid::Uuid;
 
@@ -45,18 +45,6 @@ fn tag() -> TagRecord {
         sort_order: 0,
         created_at: 1,
         updated_at: 2,
-        defaults: TagDefaults {
-            summary_template_id: "general".to_string(),
-            translation_language: "en".to_string(),
-            polish_preset_id: "general".to_string(),
-            polish_scenario: None,
-            polish_context: None,
-            export_file_name_prefix: "sona".to_string(),
-            enabled_text_replacement_set_ids: vec![],
-            enabled_hotword_set_ids: vec![],
-            enabled_polish_keyword_set_ids: vec![],
-            enabled_speaker_profile_ids: vec![],
-        },
     }
 }
 
@@ -82,15 +70,25 @@ fn history_item() -> HistoryItemRecord {
 
 fn automation() -> AutomationRepositoryState {
     AutomationRepositoryState {
+        profiles: vec![],
         rules: vec![AutomationRuleRecord {
             id: "rule-1".to_string(),
             name: "Rule One".to_string(),
+            kind: "file".to_string(),
+            priority: 0,
+            profile_id: None,
+            profile_source: "tag_match".to_string(),
             save_history: true,
             tag_ids: vec!["tag-1".to_string()],
             preset_id: "general".to_string(),
             watch_directory: "C:/watch".to_string(),
             recursive: true,
             enabled: true,
+            actions: sona_core::automation::repository::AutomationRuleInputActions {
+                auto_polish: true,
+                auto_translate: false,
+                auto_summary: false,
+            },
             stage_config: AutomationRuleRecordStageConfig {
                 auto_polish: true,
                 polish_preset_id: "general".to_string(),
@@ -106,10 +104,14 @@ fn automation() -> AutomationRepositoryState {
             },
             created_at: 1,
             updated_at: 2,
+            migration_notice: None,
         }],
         processed_entries: vec![AutomationProcessedRecord {
             id: "processed-1".to_string(),
             rule_id: "rule-1".to_string(),
+            kind: "file".to_string(),
+            input_version: "fingerprint".to_string(),
+            attempt: 1,
             file_path: "C:/watch/input.wav".to_string(),
             source_fingerprint: "fingerprint".to_string(),
             size: 10,
@@ -164,7 +166,7 @@ fn dataset() -> BackupDataset {
 
 fn manifest() -> BackupManifest {
     BackupManifest {
-        schema_version: 2,
+        schema_version: 3,
         created_at: "2026-07-13T00:00:00.000Z".to_string(),
         app_version: "0.8.0".to_string(),
         history_mode: "light".to_string(),
@@ -180,6 +182,7 @@ fn manifest() -> BackupManifest {
             history_items: 1,
             transcript_files: 1,
             summary_files: 1,
+            automation_profiles: 0,
             automation_rules: 1,
             automation_processed_entries: 1,
             analytics_files: 1,
@@ -497,6 +500,7 @@ fn writes_prepares_loads_and_disposes_v2_archive_with_exact_layout() {
         vec![
             "analytics/llm-usage.json",
             "automation/processed.json",
+            "automation/profiles.json",
             "automation/rules.json",
             "config/sona-config.json",
             "history/history-1.json",
@@ -519,6 +523,7 @@ fn writes_prepares_loads_and_disposes_v2_archive_with_exact_layout() {
         preview.automation_rules,
         vec![serde_json::to_value(&source.automation.rules[0]).unwrap()]
     );
+    assert!(preview.automation_profiles.is_empty());
     assert_eq!(preview.analytics_content, source.analytics_content);
     assert_eq!(prepare_artifacts(&archive_path).len(), 1);
 
@@ -565,7 +570,7 @@ fn imports_v1_projects_and_single_assignments_as_tags() {
             &json!([{
                 "id": "tag-1", "name": "Tag One", "description": "Test tag",
                 "icon": "folder", "color": "#2563eb", "createdAt": 1, "updatedAt": 2,
-                "defaults": serde_json::to_value(tag().defaults).unwrap()
+                "defaults": {"summaryTemplateId": "general", "translationLanguage": "en", "polishPresetId": "general", "exportFileNamePrefix": "sona"}
             }]),
         ),
         json_entry(
@@ -821,7 +826,7 @@ fn rejects_unsupported_manifest_policy_and_count_mismatches() {
     let mut invalid_manifests = Vec::new();
 
     let mut unsupported_schema = manifest();
-    unsupported_schema.schema_version = 3;
+    unsupported_schema.schema_version = 4;
     invalid_manifests.push(unsupported_schema);
     let mut unsupported_mode = manifest();
     unsupported_mode.history_mode = "full".to_string();
@@ -837,15 +842,16 @@ fn rejects_unsupported_manifest_policy_and_count_mismatches() {
         }
         invalid_manifests.push(missing_scope);
     }
-    for count in 0..7 {
+    for count in 0..8 {
         let mut mismatched = manifest();
         match count {
             0 => mismatched.counts.tags += 1,
             1 => mismatched.counts.history_items += 1,
             2 => mismatched.counts.transcript_files += 1,
             3 => mismatched.counts.summary_files += 1,
-            4 => mismatched.counts.automation_rules += 1,
-            5 => mismatched.counts.automation_processed_entries += 1,
+            4 => mismatched.counts.automation_profiles += 1,
+            5 => mismatched.counts.automation_rules += 1,
+            6 => mismatched.counts.automation_processed_entries += 1,
             _ => mismatched.counts.analytics_files += 1,
         }
         invalid_manifests.push(mismatched);

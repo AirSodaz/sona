@@ -198,8 +198,9 @@ fn unlock_header_version(header: &VaultHeaderV1) -> Result<(), SyncError> {
         Ok(())
     } else {
         Err(protocol_error(format!(
-            "Unsupported sync protocol version: {}.",
-            header.protocol_version
+            "Sync protocol version {} is incompatible with this client (version {}). Upgrade every connected client before resuming sync.",
+            header.protocol_version,
+            sona_core::sync::SYNC_PROTOCOL_VERSION,
         )))
     }
 }

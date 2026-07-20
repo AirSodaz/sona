@@ -13,7 +13,16 @@ const tauriProjectMocks = vi.hoisted(() => ({
   projectUpdate: vi.fn(),
 }));
 
-vi.mock('../tauri/project', () => tauriProjectMocks);
+vi.mock('../tauri/tag', () => ({
+  tagCreate: tauriProjectMocks.projectCreate,
+  tagDelete: tauriProjectMocks.projectDelete,
+  tagGetActiveId: tauriProjectMocks.projectGetActiveId,
+  tagList: tauriProjectMocks.projectList,
+  tagReorder: tauriProjectMocks.projectReorder,
+  tagSaveAll: tauriProjectMocks.projectSaveAll,
+  tagSetActiveId: tauriProjectMocks.projectSetActiveId,
+  tagUpdate: tauriProjectMocks.projectUpdate,
+}));
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
   BaseDirectory: { AppLocalData: 3 },
@@ -40,16 +49,6 @@ describe('projectService', () => {
     icon: 'folder',
     createdAt: 1,
     updatedAt: 1,
-    defaults: {
-      summaryTemplateId: 'general',
-      translationLanguage: 'zh',
-      polishPresetId: 'general',
-      exportFileNamePrefix: '',
-      enabledTextReplacementSetIds: [],
-      enabledHotwordSetIds: [],
-      enabledPolishKeywordSetIds: ['keywords'],
-      enabledSpeakerProfileIds: ['speaker'],
-    },
   };
 
   beforeEach(() => {
@@ -71,16 +70,12 @@ describe('projectService', () => {
     tauriProjectMocks.projectGetActiveId.mockResolvedValueOnce('project-1');
 
     await projectService.init();
-    const projects = await projectService.getAll({
-      fallbackEnabledPolishKeywordSetIds: ['keywords'],
-      fallbackEnabledSpeakerProfileIds: ['speaker'],
-    });
+    const projects = await projectService.getAll();
     await projectService.saveAll([project]);
     const created = await projectService.create({
       name: 'Research',
       description: 'Notes',
       icon: 'folder',
-      defaults: project.defaults,
     });
     const updated = await projectService.update('project-1', { name: 'Updated' });
     await projectService.delete('project-1');
@@ -93,16 +88,12 @@ describe('projectService', () => {
     expect(updated).toEqual(project);
     expect(activeProjectId).toBe('project-1');
     expect(tauriProjectMocks.projectList.mock.calls[0]).toEqual([]);
-    expect(tauriProjectMocks.projectList).toHaveBeenNthCalledWith(2, {
-      fallbackEnabledPolishKeywordSetIds: ['keywords'],
-      fallbackEnabledSpeakerProfileIds: ['speaker'],
-    });
+    expect(tauriProjectMocks.projectList).toHaveBeenNthCalledWith(2);
     expect(tauriProjectMocks.projectSaveAll).toHaveBeenCalledWith([project]);
     expect(tauriProjectMocks.projectCreate).toHaveBeenCalledWith({
       name: 'Research',
       description: 'Notes',
       icon: 'folder',
-      defaults: project.defaults,
     });
     expect(tauriProjectMocks.projectUpdate).toHaveBeenCalledWith('project-1', { name: 'Updated' });
     expect(tauriProjectMocks.projectDelete).toHaveBeenCalledWith('project-1');

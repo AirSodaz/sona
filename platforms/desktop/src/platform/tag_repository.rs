@@ -4,8 +4,7 @@ use serde_json::Value;
 use sona_core::tag::TagError;
 use sona_core::tag::{
     ACTIVE_TAG_SETTINGS_KEY, ActiveTagSelection, LEGACY_ACTIVE_PROJECT_SETTINGS_KEY,
-    TagCreateInput, TagDefaultsInput, TagListOptions, TagRecord, TagUpdateInput,
-    active_tag_id_from_value,
+    TagCreateInput, TagListOptions, TagRecord, TagUpdateInput, active_tag_id_from_value,
 };
 use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::SqliteTagAdapter;
@@ -62,7 +61,6 @@ pub async fn create_tag<R: Runtime>(
     description: Option<String>,
     icon: Option<String>,
     color: Option<String>,
-    defaults: TagDefaultsInput,
 ) -> Result<TagRecord, String> {
     let tag = run_tag_adapter(app, move |adapter| {
         adapter.create_tag(TagCreateInput {
@@ -70,7 +68,6 @@ pub async fn create_tag<R: Runtime>(
             description,
             icon,
             color,
-            defaults,
         })
     })
     .await?;

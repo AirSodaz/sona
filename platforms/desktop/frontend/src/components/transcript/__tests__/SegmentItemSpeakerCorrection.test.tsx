@@ -48,7 +48,6 @@ vi.mock('../SegmentTimestamp', () => ({
   SegmentTimestamp: ({ start }: { start: number }) => <span className="segment-timestamp">{start}</span>,
 }));
 
-import { projectService } from '../../../services/projectService';
 import { applySpeakerProfileToGroup } from '../../../services/tauri/speaker';
 import { useConfigStore } from '../../../stores/configStore';
 import { useProjectStore } from '../../../stores/projectStore';
@@ -96,34 +95,9 @@ describe('SegmentItem speaker correction', () => {
           icon: '',
           createdAt: 1,
           updatedAt: 1,
-          defaults: {
-            summaryTemplateId: 'general',
-            translationLanguage: 'zh',
-            polishPresetId: 'general',
-            exportFileNamePrefix: '',
-            enabledTextReplacementSetIds: [],
-            enabledHotwordSetIds: [],
-            enabledPolishKeywordSetIds: [],
-            enabledSpeakerProfileIds: ['speaker-1'],
-          },
         },
       ],
     }));
-
-    vi.mocked(projectService.update).mockImplementation(async (id, updates) => {
-      const existing = useProjectStore.getState().projects.find((project) => project.id === id);
-      if (!existing) {
-        return null;
-      }
-
-      return {
-        ...existing,
-        ...updates,
-        defaults: updates.defaults
-          ? { ...existing.defaults, ...updates.defaults }
-          : existing.defaults,
-      };
-    });
 
     vi.mocked(applySpeakerProfileToGroup).mockImplementation(async (request) => {
       const profile = request.speakerProfiles.find((item) => item.id === request.targetProfileId);
@@ -231,7 +205,7 @@ describe('SegmentItem speaker correction', () => {
     expect(content?.contains(speakerBadge)).toBe(false);
   });
 
-  it('updates the full speaker group and project defaults when a global profile is chosen', async () => {
+  it('updates the full speaker group and global profile state when a profile is chosen', async () => {
     renderComponent();
 
     fireEvent.click(screen.getByTestId('speaker-badge-seg-1'));
@@ -253,9 +227,8 @@ describe('SegmentItem speaker correction', () => {
           speaker: { id: 'anonymous-2', label: 'Speaker 2', kind: 'anonymous' },
         }),
       ]);
-      expect(useProjectStore.getState().projects[0].defaults.enabledSpeakerProfileIds).toEqual([
-        'speaker-1',
-        'speaker-2',
+      expect(useConfigStore.getState().config.speakerProfiles?.filter((profile) => profile.enabled).map((profile) => profile.id)).toEqual([
+        'speaker-1', 'speaker-2',
       ]);
     });
   });

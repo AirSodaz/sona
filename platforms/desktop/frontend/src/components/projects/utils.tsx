@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 
 import React from 'react';
-import type { ProjectDefaults, ProjectRecord } from '../../types/project';
+import type { ProjectRecord } from '../../types/project';
 import { renderIcon } from '../IconPicker';
 import { FolderIcon, InboxIcon, SummaryIcon, TrashIcon } from '../Icons';
 import { ALL_ITEMS_SCOPE, TRASH_SCOPE, UNTAGGED_SCOPE } from './constants';
@@ -9,10 +9,6 @@ import type {
   ProjectBrowseScope,
   TranslationFn,
 } from './types';
-
-function sortRuleSetIds(ids: string[]): string[] {
-  return [...ids].sort();
-}
 
 export function formatTimestamp(timestamp: number): string {
   const date = new Date(timestamp);
@@ -46,21 +42,12 @@ export function buildComparableProjectSettingsSnapshot(input: {
   description: string;
   icon?: string;
   color?: string;
-  defaults: ProjectDefaults;
 }) {
   return {
     name: input.name.trim(),
     description: input.description,
     icon: input.icon || '',
     color: input.color || '#64748b',
-    summaryTemplateId: input.defaults.summaryTemplateId,
-    translationLanguage: input.defaults.translationLanguage,
-    polishPresetId: input.defaults.polishPresetId,
-    exportFileNamePrefix: input.defaults.exportFileNamePrefix,
-    enabledTextReplacementSetIds: sortRuleSetIds(input.defaults.enabledTextReplacementSetIds),
-    enabledHotwordSetIds: sortRuleSetIds(input.defaults.enabledHotwordSetIds),
-    enabledPolishKeywordSetIds: sortRuleSetIds(input.defaults.enabledPolishKeywordSetIds),
-    enabledSpeakerProfileIds: sortRuleSetIds(input.defaults.enabledSpeakerProfileIds),
   };
 }
 

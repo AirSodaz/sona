@@ -26,5 +26,6 @@ uuid = { version = "1", features = ["v4", "fast-rng"] }
 axum = { version = "0.8", features = ["macros"] }
 axum-server = { version = "0.7", features = ["tls-rustls"] }
 rcgen = "0.13"
+rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs"] }
 tempfile = "3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }

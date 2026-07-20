@@ -5,6 +5,7 @@ import {
   TranscriptSummaryRecord,
   TranscriptSummaryState,
 } from '../types/transcript';
+import type { AppConfig } from '../types/config';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
@@ -24,6 +25,7 @@ interface RetrySummaryTranscriptJobOptions {
   segments: TranscriptSegment[];
   historyId: string | null;
   templateId?: SummaryTemplateId;
+  config?: AppConfig;
 }
 
 export function isSummaryRecordStale(
@@ -128,9 +130,10 @@ export class SummaryService {
     segments,
     historyId,
     templateId,
+    config: configOverride,
   }: RetrySummaryTranscriptJobOptions): Promise<void> {
     const sidecarStore = this.ports.getTranscriptSidecarStore();
-    const config = this.ports.getEffectiveConfigSnapshot();
+    const config = configOverride ?? this.ports.getEffectiveConfigSnapshot();
 
     if (config.summaryEnabled === false) {
       throw new Error('Summary is disabled.');
@@ -178,7 +181,7 @@ export class SummaryService {
       },
       runTask: async (taskId, runningHistoryId) => {
         const result = await this.ports.runTranscriptLlmJob(
-          this.buildRequest(taskId, runningHistoryId, resolvedTemplate, segments),
+          this.buildRequest(taskId, runningHistoryId, resolvedTemplate, segments, config),
         );
         const summary = result.summary;
         const summaryRecord = summary?.record;
@@ -228,9 +231,8 @@ export class SummaryService {
     jobHistoryId: string,
     template: ResolvedSummaryTemplate,
     segments: TranscriptSegment[],
+    config: AppConfig,
   ): SummaryTranscriptLlmJobRequest {
-    const config = this.ports.getEffectiveConfigSnapshot();
-
     return {
       taskId,
       taskType: 'summary',

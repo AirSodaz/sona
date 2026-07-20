@@ -1,4 +1,4 @@
-use sona_core::tag::{TagDefaults, TagRecord, highest_priority_tag};
+use sona_core::tag::{TagRecord, highest_priority_tag};
 
 fn tag(id: &str, sort_order: usize) -> TagRecord {
     TagRecord {
@@ -10,7 +10,6 @@ fn tag(id: &str, sort_order: usize) -> TagRecord {
         sort_order,
         created_at: 1,
         updated_at: 1,
-        defaults: TagDefaults::default(),
     }
 }
 

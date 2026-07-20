@@ -21,25 +21,21 @@ const RUST_OWNED_TAURI_COMMAND_CONTRACTS: &[TauriCommandContract] = &[
     TauriCommandContract::new(
         "tag_list",
         "{ fallbackEnabledPolishKeywordSetIds?: string[] | null; fallbackEnabledSpeakerProfileIds?: string[] | null }",
-        "TagRecord_Serialize[]",
+        "TagRecord[]",
     ),
-    TauriCommandContract::new("tag_save_all", "{ tags: TagRecord_Deserialize[] }", "void"),
+    TauriCommandContract::new("tag_save_all", "{ tags: TagRecord[] }", "void"),
     TauriCommandContract::new(
         "tag_create",
-        "{ name: string; description?: string | null; icon?: string | null; color?: string | null; defaults: TagDefaultsInput }",
-        "TagRecord_Serialize",
+        "{ name: string; description?: string | null; icon?: string | null; color?: string | null }",
+        "TagRecord",
     ),
     TauriCommandContract::new(
         "tag_update",
         "{ tagId: string; updates: TagUpdateInput }",
-        "TagRecord_Serialize | null",
+        "TagRecord | null",
     ),
     TauriCommandContract::new("tag_delete", "{ tagId: string }", "void"),
-    TauriCommandContract::new(
-        "tag_reorder",
-        "{ tagIds: string[] }",
-        "TagRecord_Serialize[]",
-    ),
+    TauriCommandContract::new("tag_reorder", "{ tagIds: string[] }", "TagRecord[]"),
     TauriCommandContract::new("tag_get_active_id", "undefined", "string | null"),
     TauriCommandContract::new("tag_set_active_id", "{ tagId: string | null }", "void"),
     TauriCommandContract::new(
@@ -93,13 +89,18 @@ const RUST_OWNED_TAURI_COMMAND_CONTRACTS: &[TauriCommandContract] = &[
         "void",
     ),
     TauriCommandContract::new(
+        "automation_persist_profiles",
+        "{ profiles: AutomationProfileInput_Deserialize[] }",
+        "void",
+    ),
+    TauriCommandContract::new(
         "automation_persist_processed_entries",
         "{ processedEntries: AutomationProcessedInput_Deserialize[] }",
         "void",
     ),
     TauriCommandContract::new(
         "automation_persist_repository_state",
-        "{ rules: AutomationRuleInput_Deserialize[]; processedEntries: AutomationProcessedInput_Deserialize[] }",
+        "{ profiles: AutomationProfileInput_Deserialize[]; rules: AutomationRuleInput_Deserialize[]; processedEntries: AutomationProcessedInput_Deserialize[] }",
         "void",
     ),
     TauriCommandContract::new(
@@ -270,7 +271,7 @@ mod tests {
     #[test]
     fn tauri_command_contract_registry_is_unique_and_complete_for_the_slice() {
         let contracts = rust_owned_tauri_command_contracts();
-        assert_eq!(contracts.len(), 53);
+        assert_eq!(contracts.len(), 54);
         let names = contracts
             .iter()
             .map(|contract| contract.command)

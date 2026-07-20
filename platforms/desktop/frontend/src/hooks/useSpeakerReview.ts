@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDialogStore } from '../stores/dialogStore';
 import { useConfigStore } from '../stores/configStore';
-import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import {
@@ -70,15 +69,9 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
   const segments = useTranscriptSessionStore((state) => state.segments);
   const speakerProfiles = useConfigStore((state) => state.config.speakerProfiles);
   const requestSeek = useTranscriptPlaybackStore((state) => state.requestSeek);
-  const activeProject = useProjectStore((state) => (
-    state.activeProjectId
-      ? state.projects.find((project) => project.id === state.activeProjectId) || null
-      : null
-  ));
-  
   const profileSections = useMemo(
-    () => buildSpeakerCorrectionProfileSections(speakerProfiles, activeProject),
-    [activeProject, speakerProfiles],
+    () => buildSpeakerCorrectionProfileSections(speakerProfiles),
+    [speakerProfiles],
   );
   
   const [activeFilter, setActiveFilter] = useState<SpeakerReviewFilter>('pending');

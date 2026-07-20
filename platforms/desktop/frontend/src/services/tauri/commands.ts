@@ -94,6 +94,7 @@ export const TauriCommand = {
   },
   automationRepository: {
     loadState: 'automation_load_repository_state',
+    persistProfiles: 'automation_persist_profiles',
     persistRules: 'automation_persist_rules',
     persistProcessedEntries: 'automation_persist_processed_entries',
     persistState: 'automation_persist_repository_state',

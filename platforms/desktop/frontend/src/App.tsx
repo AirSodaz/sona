@@ -17,6 +17,7 @@ import { useTranscriptRuntimeStore } from './stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from './stores/transcriptSessionStore';
 import { useOnboardingStore } from './stores/onboardingStore';
 import { useBatchQueueStore } from './stores/batchQueueStore';
+import { useAutomationStore } from './stores/automationStore';
 import { AutomationIcon, SettingsIcon } from './components/Icons';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
@@ -199,6 +200,12 @@ function App(): React.JSX.Element {
   }, []);
 
   const openAutomationSettings = useCallback(() => {
+    useAutomationStore.getState().setFocusTagId(null);
+    openSettingsTab('automation');
+  }, [openSettingsTab]);
+
+  const openAutomationSettingsForTag = useCallback((tagId: string) => {
+    useAutomationStore.getState().setFocusTagId(tagId);
     openSettingsTab('automation');
   }, [openSettingsTab]);
 
@@ -274,7 +281,7 @@ function App(): React.JSX.Element {
       {/* Main Content */}
       <main id="main-content" className={appMainClassName}>
         <div className="projects-mode-shell" style={{ display: isProjectsMode ? undefined : 'none' }}>
-          <ProjectsView isActive={isProjectsMode} />
+          <ProjectsView isActive={isProjectsMode} onOpenAutomationSettings={openAutomationSettingsForTag} />
         </div>
         <div className="workspace-mode-shell" style={{ display: !isProjectsMode ? undefined : 'none' }}>
           <div className="panel-container">

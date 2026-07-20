@@ -1,5 +1,9 @@
 import type { AppConfig } from './config';
-import type { AutomationExportConfig, AutomationStageConfig } from './automation';
+import type {
+    AutomationExportConfig,
+    AutomationResolutionSnapshot,
+    AutomationStageConfig,
+} from './automation';
 import type { TranscriptSegment } from './transcript';
 import type {
     RecoveredQueueItem_Serialize as CoreRecoveredQueueItem,
@@ -16,6 +20,7 @@ export interface RecoveredQueueItem extends Omit<
     | 'automationRuleId'
     | 'automationRuleName'
     | 'resolvedConfigSnapshot'
+    | 'automationResolutionSnapshot'
     | 'exportConfig'
     | 'stageConfig'
     | 'sourceFingerprint'
@@ -32,6 +37,7 @@ export interface RecoveredQueueItem extends Omit<
     automationRuleId?: string;
     automationRuleName?: string;
     resolvedConfigSnapshot?: AppConfig;
+    automationResolutionSnapshot?: AutomationResolutionSnapshot;
     exportConfig?: AutomationExportConfig | null;
     stageConfig?: AutomationStageConfig | null;
     sourceFingerprint?: string;

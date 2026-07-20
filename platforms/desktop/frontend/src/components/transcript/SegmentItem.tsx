@@ -13,7 +13,6 @@ import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../../stores/transcriptSidecarStore';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
-import { useProjectStore } from '../../stores/projectStore';
 import {
     buildSpeakerCorrectionProfileSections,
     speakerCorrectionService,
@@ -71,11 +70,6 @@ function SegmentItemComponent({
     const llmState = useTranscriptSidecarStore((state) => state.llmStates[sourceHistoryId || 'current']);
     const isTranslationVisible = llmState ? llmState.isTranslationVisible : false;
     const speakerProfiles = useConfigStore((state) => state.config.speakerProfiles);
-    const activeProject = useProjectStore((state) => (
-        state.activeProjectId
-            ? state.projects.find((project) => project.id === state.activeProjectId) || null
-            : null
-    ));
 
     // Subscribe to store for hasNext to avoid passing unstable props
     const hasNext = useStore(uiStore, useCallback((state) => index < state.totalSegments - 1, [index]));
@@ -102,8 +96,8 @@ function SegmentItemComponent({
     const [isApplyingSpeakerProfile, setIsApplyingSpeakerProfile] = useState(false);
     const speakerMenuRef = useRef<HTMLDivElement>(null);
     const speakerProfileSections = useMemo(
-        () => buildSpeakerCorrectionProfileSections(speakerProfiles, activeProject),
-        [activeProject, speakerProfiles],
+        () => buildSpeakerCorrectionProfileSections(speakerProfiles),
+        [speakerProfiles],
     );
     const hasSecondarySpeakerProfiles = speakerProfileSections.secondaryProfiles.length > 0;
     const speakerGroupId = segment.speakerAttribution?.groupId || segment.speaker?.id || '';

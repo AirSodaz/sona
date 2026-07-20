@@ -7,7 +7,11 @@ import type {
     RecoverySnapshot_Serialize as CoreRecoverySnapshot,
 } from '../bindings';
 import type { AppConfig } from '../types/config';
-import type { AutomationExportConfig, AutomationStageConfig } from '../types/automation';
+import type {
+    AutomationExportConfig,
+    AutomationResolutionSnapshot,
+    AutomationStageConfig,
+} from '../types/automation';
 import type { TranscriptSegment } from '../types/transcript';
 import { normalizeSpeakerAttribution, normalizeSpeakerTag } from '../types/speaker';
 import { logger } from '../utils/logger';
@@ -93,6 +97,13 @@ function normalizeRecoveredItem(item: CoreRecoveredQueueItem): RecoveredQueueIte
                 } as unknown as AppConfig,
             }
             : {}),
+        ...(isRecord(item.automationResolutionSnapshot)
+            ? {
+                automationResolutionSnapshot: {
+                    ...item.automationResolutionSnapshot,
+                } as unknown as AutomationResolutionSnapshot,
+            }
+            : {}),
         exportConfig: isRecord(item.exportConfig)
             ? { ...item.exportConfig } as unknown as AutomationExportConfig
             : null,
@@ -139,6 +150,9 @@ function recoveredItemInput(item: RecoveredQueueItem): RecoveryItemInput_Seriali
         ...(item.resolvedConfigSnapshot != null
             ? { resolvedConfigSnapshot: item.resolvedConfigSnapshot }
             : {}),
+        ...(item.automationResolutionSnapshot != null
+            ? { automationResolutionSnapshot: item.automationResolutionSnapshot }
+            : {}),
         exportConfig: item.exportConfig ?? null,
         stageConfig: item.stageConfig ?? null,
         ...(item.sourceFingerprint != null
@@ -170,6 +184,9 @@ function queueItemInput(item: BatchQueueItem): RecoveryItemInput_Serialize {
         ...(item.automationRuleName != null ? { automationRuleName: item.automationRuleName } : {}),
         ...(item.resolvedConfigSnapshot != null
             ? { resolvedConfigSnapshot: item.resolvedConfigSnapshot }
+            : {}),
+        ...(item.automationResolutionSnapshot != null
+            ? { automationResolutionSnapshot: item.automationResolutionSnapshot }
             : {}),
         ...(item.exportConfig !== undefined ? { exportConfig: item.exportConfig } : {}),
         ...(item.stageConfig !== undefined ? { stageConfig: item.stageConfig } : {}),
@@ -282,6 +299,9 @@ export function toBatchQueueItem(item: RecoveredQueueItem): BatchQueueItem {
         automationRuleName: item.automationRuleName,
         resolvedConfigSnapshot: item.resolvedConfigSnapshot
             ? { ...item.resolvedConfigSnapshot }
+            : undefined,
+        automationResolutionSnapshot: item.automationResolutionSnapshot
+            ? { ...item.automationResolutionSnapshot }
             : undefined,
         exportConfig: item.exportConfig ? { ...item.exportConfig } : null,
         stageConfig: item.stageConfig ? { ...item.stageConfig } : null,

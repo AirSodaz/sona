@@ -1,8 +1,6 @@
 import { create } from 'zustand';
 import type { AppConfig } from '../types/config';
-import { resolveEffectiveConfig } from '../services/effectiveConfigService';
 import { useConfigStore, DEFAULT_CONFIG } from './configStore';
-import { useProjectStore } from './projectStore';
 
 interface EffectiveConfigState {
   config: AppConfig;
@@ -29,12 +27,7 @@ function shouldUseGlobalSnapshot(snapshot: AppConfig | undefined, globalConfig: 
 }
 
 async function computeEffectiveConfig(): Promise<AppConfig> {
-  const projectStore = useProjectStore.getState();
-  const activeProject = typeof projectStore.getActiveProject === 'function'
-    ? projectStore.getActiveProject()
-    : null;
-
-  return resolveEffectiveConfig(useConfigStore.getState().config, activeProject);
+  return useConfigStore.getState().config;
 }
 
 export const useEffectiveConfigStore = create<EffectiveConfigState>((set, get) => ({

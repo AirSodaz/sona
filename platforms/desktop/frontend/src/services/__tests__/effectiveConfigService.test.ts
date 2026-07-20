@@ -57,16 +57,6 @@ function createProject(): ProjectRecord {
     icon: '',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    defaults: {
-      summaryTemplateId: 'meeting',
-      translationLanguage: 'ja',
-      polishPresetId: 'meeting',
-      exportFileNamePrefix: 'TEAM',
-      enabledTextReplacementSetIds: ['set-b'],
-      enabledHotwordSetIds: ['hot-a'],
-      enabledPolishKeywordSetIds: ['kw-2'],
-      enabledSpeakerProfileIds: ['speaker-b'],
-    },
   };
 }
 
@@ -83,47 +73,14 @@ describe('effectiveConfigService', () => {
     expect(resolveEffectiveConfigInRust).toHaveBeenCalledWith(config, null);
   });
 
-  it('returns the Rust-resolved project overrides and filtered rule-set states', async () => {
+  it('passes Tag metadata to Rust without applying legacy Tag defaults', async () => {
     const config = createBaseConfig();
     const project = createProject();
-    const effectiveConfig = {
-      ...config,
-      summaryTemplateId: 'meeting',
-      translationLanguage: 'ja',
-      polishPresetId: 'meeting',
-      polishKeywordSets: config.polishKeywordSets?.map((set) => ({
-        ...set,
-        enabled: set.id === 'kw-2',
-      })),
-      textReplacementSets: config.textReplacementSets?.map((set) => ({
-        ...set,
-        enabled: set.id === 'set-b',
-      })),
-      hotwordSets: config.hotwordSets?.map((set) => ({
-        ...set,
-        enabled: set.id === 'hot-a',
-      })),
-      speakerProfiles: config.speakerProfiles?.map((profile) => ({
-        ...profile,
-        enabled: profile.id === 'speaker-b',
-      })),
-    };
-    vi.mocked(resolveEffectiveConfigInRust).mockResolvedValueOnce(effectiveConfig);
+    vi.mocked(resolveEffectiveConfigInRust).mockResolvedValueOnce(config);
 
     const effective = await resolveEffectiveConfig(config, project);
 
-    expect(effective.summaryTemplateId).toBe('meeting');
-    expect(effective.translationLanguage).toBe('ja');
-    expect(effective.polishPresetId).toBe('meeting');
-    expect(effective.polishKeywordSets?.[0].name).toBe('Brand');
-    expect(effective.polishKeywordSets?.find((set) => set.id === 'kw-1')?.enabled).toBe(false);
-    expect(effective.polishKeywordSets?.find((set) => set.id === 'kw-2')?.enabled).toBe(true);
-    expect(effective.textReplacementSets?.find((set) => set.id === 'set-a')?.enabled).toBe(false);
-    expect(effective.textReplacementSets?.find((set) => set.id === 'set-b')?.enabled).toBe(true);
-    expect(effective.hotwordSets?.find((set) => set.id === 'hot-a')?.enabled).toBe(true);
-    expect(effective.hotwordSets?.find((set) => set.id === 'hot-b')?.enabled).toBe(false);
-    expect(effective.speakerProfiles?.find((profile) => profile.id === 'speaker-a')?.enabled).toBe(false);
-    expect(effective.speakerProfiles?.find((profile) => profile.id === 'speaker-b')?.enabled).toBe(true);
+    expect(effective).toEqual(config);
     expect(resolveEffectiveConfigInRust).toHaveBeenCalledWith(config, project);
   });
 });

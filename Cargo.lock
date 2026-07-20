@@ -6241,6 +6241,7 @@ dependencies = [
  "rcgen",
  "reqwest 0.13.4",
  "roxmltree",
+ "rustls",
  "serde",
  "serde_json",
  "sona-core",

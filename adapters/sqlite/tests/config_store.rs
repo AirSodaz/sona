@@ -816,6 +816,15 @@ fn adapter_preserves_core_json_error_variant_for_invalid_setting_json() {
 fn read_only_open_keeps_future_schema_error_semantics() {
     let dir = tempfile::tempdir().unwrap();
     let db = Database::open(dir.path()).unwrap();
+    let current_version: i64 = db
+        .with_connection(|conn| {
+            Ok(
+                conn.query_row("SELECT MAX(version) FROM schema_version", [], |row| {
+                    row.get(0)
+                })?,
+            )
+        })
+        .unwrap();
     db.with_write_connection(|conn| {
         conn.execute("INSERT INTO schema_version (version) VALUES (99)", [])?;
         Ok(())
@@ -825,19 +834,28 @@ fn read_only_open_keeps_future_schema_error_semantics() {
 
     let error = Database::open_read_only(dir.path()).unwrap_err();
 
-    assert!(matches!(
-        error,
-        DatabaseError::UnsupportedSchemaVersion {
-            found: 99,
-            current: 4
+    match error {
+        DatabaseError::UnsupportedSchemaVersion { found, current } => {
+            assert_eq!(found, 99);
+            assert_eq!(current, current_version);
         }
-    ));
+        other => panic!("unexpected error: {other}"),
+    }
 }
 
 #[test]
 fn read_only_open_keeps_schema_migration_required_error_semantics() {
     let dir = tempfile::tempdir().unwrap();
     let db = Database::open(dir.path()).unwrap();
+    let current_version: i64 = db
+        .with_connection(|conn| {
+            Ok(
+                conn.query_row("SELECT MAX(version) FROM schema_version", [], |row| {
+                    row.get(0)
+                })?,
+            )
+        })
+        .unwrap();
     db.with_write_connection(|conn| {
         conn.execute("DELETE FROM schema_version", [])?;
         Ok(())
@@ -847,11 +865,11 @@ fn read_only_open_keeps_schema_migration_required_error_semantics() {
 
     let error = Database::open_read_only(dir.path()).unwrap_err();
 
-    assert!(matches!(
-        error,
-        DatabaseError::SchemaMigrationRequired {
-            found: 0,
-            current: 4
+    match error {
+        DatabaseError::SchemaMigrationRequired { found, current } => {
+            assert_eq!(found, 0);
+            assert_eq!(current, current_version);
         }
-    ));
+        other => panic!("unexpected error: {other}"),
+    }
 }

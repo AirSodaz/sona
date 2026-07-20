@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useConfigStore } from '../configStore';
 import { useProjectStore } from '../projectStore';
-import { createLlmSettings } from '../../services/llm/state';
 
 vi.mock('../../services/projectService', () => ({
   projectService: {
@@ -54,93 +53,30 @@ describe('projectStore', () => {
         description: '',
         createdAt: 1,
         updatedAt: 1,
-        defaults: {
-          summaryTemplateId: 'general',
-          translationLanguage: 'zh',
-          polishPresetId: 'general',
-          exportFileNamePrefix: '',
-          enabledTextReplacementSetIds: [],
-          enabledHotwordSetIds: [],
-          enabledPolishKeywordSetIds: ['kw-1'],
-          enabledSpeakerProfileIds: ['speaker-1'],
-        },
       },
     ]);
     (projectService.getActiveProjectId as any).mockResolvedValue('project-1');
 
     await useProjectStore.getState().loadProjects();
 
-    expect(projectService.getAll).toHaveBeenCalledWith({
-      fallbackEnabledPolishKeywordSetIds: ['kw-1'],
-      fallbackEnabledSpeakerProfileIds: ['speaker-1'],
-    });
+    expect(projectService.getAll).toHaveBeenCalledWith();
     expect(useProjectStore.getState().projects).toHaveLength(1);
     expect(useProjectStore.getState().activeProjectId).toBe('project-1');
   });
 
-  it('creates a project from global config defaults when custom defaults are omitted', async () => {
+  it('creates a metadata-only Tag without copying global config', async () => {
     const { projectService } = await import('../../services/projectService');
-    (projectService.create as any).mockImplementation(async ({ name, description, defaults }: any) => ({
+    (projectService.create as any).mockImplementation(async ({ name, description }: any) => ({
       id: 'project-1',
       name,
       description,
       createdAt: 1,
       updatedAt: 1,
-      defaults,
     }));
 
-    const project = await useProjectStore.getState().createProject(
-      { name: 'Alpha' },
-      {
-        configVersion: 3,
-        appLanguage: 'en',
-        theme: 'light',
-        font: 'system',
-        minimizeToTrayOnExit: true,
-        autoCheckUpdates: true,
-        liveRecordShortcut: 'Ctrl + Space',
-        microphoneId: 'default',
-        systemAudioDeviceId: 'default',
-        muteDuringRecording: false,
-        streamingModelPath: '/models/live',
-        batchModelPath: '/models/batch',
-        punctuationModelPath: '',
-        vadModelPath: '',
-        language: 'auto',
-        enableTimeline: false,
-        enableITN: true,
-        vadBufferSize: 5,
-        maxConcurrent: 2,
-        llmSettings: createLlmSettings(),
-        summaryEnabled: true,
-        translationLanguage: 'en',
-        polishPresetId: 'lecture',
-        polishCustomPresets: [],
-        polishKeywordSets: [
-          { id: 'kw-1', name: 'Brand', enabled: true, keywords: 'Sona' },
-          { id: 'kw-2', name: 'Style', enabled: false, keywords: 'Sentence case' },
-        ],
-        autoPolish: false,
-        autoPolishFrequency: 5,
-        voiceTypingEnabled: false,
-        voiceTypingShortcut: 'Alt+V',
-        voiceTypingMode: 'hold',
-        textReplacementSets: [{ id: 'set-1', name: 'Set', enabled: true, ignoreCase: false, rules: [] }],
-        hotwordSets: [{ id: 'hot-1', name: 'Hot', enabled: true, rules: [] }],
-        speakerProfiles: [
-          { id: 'speaker-1', name: 'Alice', enabled: true, samples: [] },
-          { id: 'speaker-2', name: 'Bob', enabled: false, samples: [] },
-        ],
-        hotwords: [],
-      },
-    );
+    const project = await useProjectStore.getState().createProject({ name: 'Alpha' });
 
-    expect(project?.defaults.translationLanguage).toBe('en');
-    expect(project?.defaults.polishPresetId).toBe('lecture');
-    expect(project?.defaults.enabledTextReplacementSetIds).toEqual(['set-1']);
-    expect(project?.defaults.enabledHotwordSetIds).toEqual(['hot-1']);
-    expect(project?.defaults.enabledPolishKeywordSetIds).toEqual(['kw-1']);
-    expect(project?.defaults.enabledSpeakerProfileIds).toEqual(['speaker-1']);
+    expect(project?.name).toBe('Alpha');
     expect(useProjectStore.getState().projects).toHaveLength(1);
   });
 
@@ -157,16 +93,6 @@ describe('projectStore', () => {
           icon: '',
           createdAt: 1,
           updatedAt: 1,
-          defaults: {
-            summaryTemplateId: 'general',
-            translationLanguage: 'zh',
-            polishPresetId: 'general',
-            exportFileNamePrefix: '',
-            enabledTextReplacementSetIds: [],
-            enabledHotwordSetIds: [],
-            enabledPolishKeywordSetIds: [],
-            enabledSpeakerProfileIds: [],
-          },
         },
       ],
       activeProjectId: 'project-1',

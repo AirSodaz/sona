@@ -28,11 +28,8 @@ export class ProjectService {
     await this.ports.projectList();
   }
 
-  async getAll(options?: {
-    fallbackEnabledPolishKeywordSetIds?: string[];
-    fallbackEnabledSpeakerProfileIds?: string[];
-  }): Promise<ProjectRecord[]> {
-    return this.ports.projectList(options);
+  async getAll(): Promise<ProjectRecord[]> {
+    return this.ports.projectList();
   }
 
   async saveAll(projects: ProjectRecord[]): Promise<void> {

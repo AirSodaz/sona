@@ -4,7 +4,7 @@ use sona_core::task_ledger::TaskLedgerError;
 use sona_core::task_ledger::repository::TaskLedgerStore;
 use sona_core::task_ledger::service::TaskLedgerService;
 use sona_core::task_ledger::types::{
-    TaskLedgerKind, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerStatus,
+    TASK_LEDGER_VERSION, TaskLedgerKind, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerStatus,
 };
 use std::sync::Mutex;
 
@@ -125,6 +125,9 @@ fn record(id: &str, status: TaskLedgerStatus) -> TaskLedgerRecord {
         tag_ids: Vec::new(),
         file_path: None,
         automation_rule_id: None,
+        tag_automation_rule_id: None,
+        automation_profile_id: None,
+        automation_profile_source: None,
         source_fingerprint: None,
         error_message: None,
         template_id: None,
@@ -368,7 +371,7 @@ fn empty_snapshot_has_no_update_time() {
         .load_snapshot_at(9_000)
         .unwrap();
 
-    assert_eq!(snapshot.version, 2);
+    assert_eq!(snapshot.version, TASK_LEDGER_VERSION);
     assert_eq!(snapshot.updated_at, None);
     assert!(snapshot.tasks.is_empty());
 }

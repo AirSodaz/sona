@@ -1,8 +1,11 @@
 import type {
   AutomationProcessedEntry,
+  AutomationProfile,
+  AutomationResolutionSnapshot,
   AutomationRule,
   AutomationRuntimeBlockReason,
   AutomationRuntimeState,
+  AutomationStageConfig,
 } from '../../types/automation';
 import type { AppConfig } from '../../types/config';
 import type {
@@ -16,6 +19,7 @@ import type {
   AutomationSessionNotification,
 } from './automationSessionState';
 import { resolveEffectiveConfig } from '../effectiveConfigService';
+import { resolveAutomationQueueSnapshot } from './automationConfigResolver';
 import { isPathInsideDirectory, normalizeAutomationPath } from '../automation/automationService';
 import {
   collectAutomationRuntimeRulePaths,
@@ -61,6 +65,7 @@ type AutomationRuntimeCandidateHandleResult =
   | { status: 'ignored' };
 
 export interface AutomationRuntimeCoordinatorState {
+  profiles: AutomationProfile[];
   rules: AutomationRule[];
   processedEntries: AutomationProcessedEntry[];
   runtimeStates: Record<string, AutomationRuntimeState>;
@@ -208,7 +213,6 @@ export class AutomationRuntimeCoordinator {
     const tags = tagIds
       .map((tagId) => projectStore.getProjectById(tagId))
       .filter((tag): tag is NonNullable<typeof tag> => !!tag);
-    const project = (projectStore.projects ?? []).find((tag) => tagIds.includes(tag.id)) ?? tags[0] ?? null;
     if (tags.length !== tagIds.length) {
       this.ports.setState((current) => {
         if (options?.suppressFailureNotification) {
@@ -271,12 +275,19 @@ export class AutomationRuntimeCoordinator {
 
     this.pendingFingerprints.add(pendingKey);
     let effectiveConfig: AppConfig;
+    let resolvedStageConfig: AutomationStageConfig;
+    let automationResolutionSnapshot: AutomationResolutionSnapshot;
     try {
-      effectiveConfig = {
-        ...await this.ports.resolveEffectiveConfig(this.ports.useConfigStore.getState().config, project),
-        translationLanguage: latestRule.stageConfig.translationLanguage || 'en',
-        polishPresetId: latestRule.stageConfig.polishPresetId || 'general',
-      };
+      const snapshot = resolveAutomationQueueSnapshot({
+        globalConfig: this.ports.useConfigStore.getState().config,
+        profiles: latestState.profiles,
+        rules: latestState.rules,
+        fileRule: latestRule,
+        tagIds,
+      });
+      effectiveConfig = snapshot.config;
+      resolvedStageConfig = snapshot.stageConfig;
+      automationResolutionSnapshot = snapshot.resolution;
     } catch (error) {
       this.pendingFingerprints.delete(pendingKey);
       throw error;
@@ -289,7 +300,8 @@ export class AutomationRuntimeCoordinator {
         automationRuleName: latestRule.name,
         resolvedConfigSnapshot: effectiveConfig,
         exportConfig: latestRule.stageConfig.exportEnabled ? latestRule.exportConfig : null,
-        stageConfig: latestRule.stageConfig,
+        stageConfig: resolvedStageConfig,
+        automationResolutionSnapshot,
         sourceFingerprint: payload.sourceFingerprint,
         tagIds,
         fileStat: {
@@ -612,10 +624,19 @@ export class AutomationRuntimeCoordinator {
 
     const nextEntries = [
       ...state.processedEntries.filter((entry) => !(
-        entry.ruleId === payload.ruleId && entry.sourceFingerprint === payload.sourceFingerprint
+        entry.kind !== 'tag'
+        && entry.ruleId === payload.ruleId
+        && entry.sourceFingerprint === payload.sourceFingerprint
       )),
       {
         ruleId: payload.ruleId,
+        kind: 'file' as const,
+        inputVersion: payload.sourceFingerprint,
+        attempt: (state.processedEntries.find((entry) => (
+          entry.kind !== 'tag'
+          && entry.ruleId === payload.ruleId
+          && entry.sourceFingerprint === payload.sourceFingerprint
+        ))?.attempt ?? 0) + 1,
         filePath: payload.filePath,
         sourceFingerprint: payload.sourceFingerprint,
         size: payload.size,

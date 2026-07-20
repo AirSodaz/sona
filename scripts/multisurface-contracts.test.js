@@ -66,9 +66,9 @@ const syncConflictCenter = read(
 );
 const prGuardrails = read('.github', 'workflows', 'pr-guardrails.yml');
 
-test('desktop backup contract follows Rust schema v2 and tags', () => {
-  assert.match(coreBackup, /BACKUP_SCHEMA_VERSION:\s*u64\s*=\s*2/u);
-  assert.match(frontendBackup, /BACKUP_SCHEMA_VERSION\s*=\s*2\s+as const/u);
+test('desktop backup contract follows Rust schema v3 and tags', () => {
+  assert.match(coreBackup, /BACKUP_SCHEMA_VERSION:\s*u64\s*=\s*3/u);
+  assert.match(frontendBackup, /BACKUP_SCHEMA_VERSION\s*=\s*3\s+as const/u);
   assert.match(
     desktopBindings,
     /export type BackupManifestCounts_Serialize = \{[\s\S]*?\btags: number,/u,
@@ -142,7 +142,7 @@ test('Rust-owned Tauri command contracts stay generated and complete', () => {
     rustRegistry.matchAll(/TauriCommandContract::new\(\s*"([^"]+)"/gu),
     (match) => match[1],
   );
-  assert.equal(registryCommands.length, 53);
+  assert.equal(registryCommands.length, 54);
   assert.equal(new Set(registryCommands).size, registryCommands.length);
 
   const commandGroups = [
@@ -195,10 +195,10 @@ test('Rust-owned Tauri command contracts stay generated and complete', () => {
   );
 
   for (const [command, args, result] of [
-    ['tag_update', '{ tagId: string; updates: TagUpdateInput }', 'TagRecord_Serialize | null'],
+    ['tag_update', '{ tagId: string; updates: TagUpdateInput }', 'TagRecord | null'],
     ['task_ledger_patch_task', '{ id: string; patch: TaskLedgerPatch_Deserialize }', 'TaskLedgerSnapshot_Serialize'],
     ['recovery_save_snapshot', '{ items: RecoveryItemInput_Deserialize[] }', 'RecoverySnapshot_Serialize'],
-    ['automation_persist_repository_state', '{ rules: AutomationRuleInput_Deserialize[]; processedEntries: AutomationProcessedInput_Deserialize[] }', 'void'],
+    ['automation_persist_repository_state', '{ profiles: AutomationProfileInput_Deserialize[]; rules: AutomationRuleInput_Deserialize[]; processedEntries: AutomationProcessedInput_Deserialize[] }', 'void'],
     ['history_update_transcript', 'HistoryUpdateTranscriptRequest_Deserialize', 'HistoryItemRecord'],
   ]) {
     const escapedCommand = command.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
@@ -726,15 +726,13 @@ test('UniFFI exposes versioned typed Tag contracts without extending legacy Proj
 
   for (const typeName of [
     'FfiTagCreateInputV1',
-    'FfiTagDefaultsInputV1',
-    'FfiTagDefaultsPatchV1',
-    'FfiTagDefaultsV1',
     'FfiTagRecordV1',
     'FfiTagRepositorySnapshotV1',
     'FfiTagUpdateInputV1',
   ]) {
     assert.match(tagMapper, new RegExp(`struct\\s+${typeName}\\b`, 'u'));
   }
+  assert.doesNotMatch(tagMapper, /\bFfiTagDefaults\w*V1\b|\bdefaults\s*:/u);
   assert.doesNotMatch(tagMapper, /serde_json|Value/u);
 
   for (const functionName of [

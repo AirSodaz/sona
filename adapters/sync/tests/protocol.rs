@@ -37,11 +37,11 @@ fn object_layout_is_stable_and_validated_by_core() {
 
     assert_eq!(
         segment.as_str(),
-        "sona-sync/v1/vault-a/devices/device-a/segments/00000000000000000042-deadbeef.sync"
+        "sona-sync/v2/vault-a/devices/device-a/segments/00000000000000000042-deadbeef.sync"
     );
     assert_eq!(
         checkpoint.as_str(),
-        "sona-sync/v1/vault-a/devices/device-a/checkpoints/00000000000000000042-cafebabe.sync"
+        "sona-sync/v2/vault-a/devices/device-a/checkpoints/00000000000000000042-cafebabe.sync"
     );
     assert!(segment_object_key("../vault", "device-a", 1, "hash").is_err());
 }
@@ -49,7 +49,7 @@ fn object_layout_is_stable_and_validated_by_core() {
 #[test]
 fn segment_validation_rejects_wrong_version_and_oversized_batches() {
     let valid = SyncSegmentV1 {
-        protocol_version: 1,
+        protocol_version: sona_core::sync::SYNC_PROTOCOL_VERSION,
         vault_id: "vault-a".to_string(),
         device_id: "device-a".to_string(),
         sequence: 1,
@@ -60,7 +60,7 @@ fn segment_validation_rejects_wrong_version_and_oversized_batches() {
     valid.validate().unwrap();
 
     let mut future = valid.clone();
-    future.protocol_version = 2;
+    future.protocol_version = 1;
     assert!(
         future
             .validate()

@@ -4,10 +4,7 @@ use sona_core::history::HistorySaveRecordingRequest;
 use sona_core::history::mutation_repository::HistoryMutationRepository;
 use sona_core::history_store::HistoryStore;
 use sona_core::llm::usage::{LlmUsageCategory, TokenUsage, UsageRecord};
-use sona_core::tag::{
-    DEFAULT_POLISH_PRESET_ID, DEFAULT_SUMMARY_TEMPLATE_ID, DEFAULT_TRANSLATION_LANGUAGE,
-    TagDefaults, TagRecord, TagStore,
-};
+use sona_core::tag::{TagRecord, TagStore};
 use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::llm_usage::record_usage;
 use sona_sqlite::{Database, SqliteHistoryStore, SqliteTagRepository};
@@ -26,18 +23,6 @@ fn tag() -> TagRecord {
         sort_order: 0,
         created_at: 1,
         updated_at: 1,
-        defaults: TagDefaults {
-            summary_template_id: DEFAULT_SUMMARY_TEMPLATE_ID.to_string(),
-            translation_language: DEFAULT_TRANSLATION_LANGUAGE.to_string(),
-            polish_preset_id: DEFAULT_POLISH_PRESET_ID.to_string(),
-            polish_scenario: None,
-            polish_context: None,
-            export_file_name_prefix: String::new(),
-            enabled_text_replacement_set_ids: Vec::new(),
-            enabled_hotword_set_ids: Vec::new(),
-            enabled_polish_keyword_set_ids: Vec::new(),
-            enabled_speaker_profile_ids: Vec::new(),
-        },
     }
 }
 

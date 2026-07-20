@@ -13,12 +13,21 @@ fn rule(id: Option<&str>, name: &str) -> FfiAutomationRuleInputV1 {
     FfiAutomationRuleInputV1 {
         id: id.map(str::to_string),
         name: name.to_string(),
+        kind: "file".to_string(),
+        priority: 0,
+        profile_id: None,
+        profile_source: "tag_match".to_string(),
         save_history: false,
         tag_ids: Vec::new(),
         preset_id: "custom".to_string(),
         watch_directory: "C:\\watch".to_string(),
         recursive: true,
         enabled: true,
+        actions: sona_uniffi_bind::FfiAutomationActionsV1 {
+            auto_polish: true,
+            auto_translate: true,
+            auto_summary: false,
+        },
         stage_config: FfiAutomationStageConfigV1 {
             auto_polish: true,
             polish_preset_id: "general".to_string(),
@@ -34,6 +43,7 @@ fn rule(id: Option<&str>, name: &str) -> FfiAutomationRuleInputV1 {
         },
         created_at: 100,
         updated_at: 200,
+        migration_notice: None,
     }
 }
 
@@ -41,6 +51,9 @@ fn processed(id: Option<&str>, rule_id: &str) -> FfiAutomationProcessedInputV1 {
     FfiAutomationProcessedInputV1 {
         id: id.map(str::to_string),
         rule_id: rule_id.to_string(),
+        kind: "file".to_string(),
+        input_version: "fingerprint".to_string(),
+        attempt: 1,
         file_path: "C:\\watch\\audio.wav".to_string(),
         source_fingerprint: "fingerprint".to_string(),
         size: 42,
@@ -61,6 +74,7 @@ fn automation_v1_round_trips_typed_repository_state_without_json() {
     let state = replace_automation_repository_state_v1(
         app_data_dir.clone(),
         FfiAutomationRepositoryInputV1 {
+            profiles: Vec::new(),
             rules: vec![rule(Some("rule-1"), "Rule")],
             processed_entries: vec![processed(Some("entry-1"), "rule-1")],
         },

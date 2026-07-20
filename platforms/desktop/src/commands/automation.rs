@@ -5,7 +5,8 @@ use crate::platform::automation_runtime::{
 };
 use serde_json::Value;
 use sona_core::automation::repository::{
-    AutomationProcessedInput, AutomationRepositoryInput, AutomationRuleInput,
+    AutomationProcessedInput, AutomationProfileInput, AutomationRepositoryInput,
+    AutomationRuleInput,
 };
 use sona_core::automation::{AutomationRule, AutomationRuleValidationResult};
 use tauri::{AppHandle, Runtime, State};
@@ -31,6 +32,15 @@ pub async fn automation_persist_rules<R: Runtime>(
 }
 
 #[tauri::command]
+pub async fn automation_persist_profiles<R: Runtime>(
+    app: AppHandle<R>,
+    profiles: Vec<AutomationProfileInput>,
+) -> Result<(), String> {
+    validate_automation_input(&profiles)?;
+    crate::platform::automation_repository::persist_profiles(&app, profiles).await
+}
+
+#[tauri::command]
 pub async fn automation_persist_processed_entries<R: Runtime>(
     app: AppHandle<R>,
     processed_entries: Vec<AutomationProcessedInput>,
@@ -42,10 +52,12 @@ pub async fn automation_persist_processed_entries<R: Runtime>(
 #[tauri::command]
 pub async fn automation_persist_repository_state<R: Runtime>(
     app: AppHandle<R>,
+    profiles: Vec<AutomationProfileInput>,
     rules: Vec<AutomationRuleInput>,
     processed_entries: Vec<AutomationProcessedInput>,
 ) -> Result<(), String> {
     let input = AutomationRepositoryInput {
+        profiles,
         rules,
         processed_entries,
     };

@@ -132,7 +132,7 @@ describe('PolishService', () => {
     await polishService.polishSegments(segments, onChunk);
 
     expect(invoke).toHaveBeenCalledWith('polish_transcript_segments', {
-      request: {
+      request: expect.objectContaining({
         taskId: 'polish-task-id',
         config: expect.objectContaining({ apiKey: 'test-key', temperature: 0.7 }),
         segments: [
@@ -141,7 +141,7 @@ describe('PolishService', () => {
         ],
         context: '',
         keywords: '',
-      },
+      }),
     });
     expect(onChunk).toHaveBeenCalledTimes(1);
     expect(onChunk).toHaveBeenCalledWith([

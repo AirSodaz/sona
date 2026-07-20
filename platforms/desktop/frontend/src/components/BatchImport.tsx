@@ -2,6 +2,8 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../stores/configStore';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
+import { useAutomationStore } from '../stores/automationStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { FileQueueSidebar } from './FileQueueSidebar';
@@ -15,6 +17,7 @@ import { openDialog } from '../services/tauri/platform/dialog';
 import type { Event } from '../services/tauri/platform/events';
 import { getCurrentWindow } from '../services/tauri/platform/windows';
 import { invokeTauri } from '../services/tauri/invoke';
+import { resolveAutomationQueueSnapshot } from '../services/automation/automationConfigResolver';
 
 /**
  * Displays the status of the currently processing or selected item in the queue.
@@ -122,6 +125,9 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
     // Transcript store
     const config = useConfigStore((state) => state.config);
+    const automationProfiles = useAutomationStore((state) => state.profiles);
+    const automationRules = useAutomationStore((state) => state.rules);
+    const activeProjectId = useProjectStore((state) => state.activeProjectId);
     const batchAsrConfigured = isAsrRequestConfigured(resolveAsrTranscriptionRequest(config, 'batch'));
 
     const queueFiles = useCallback((files: string[]) => {
@@ -143,8 +149,20 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
             return;
         }
 
-        addFiles(files);
-    }, [addFiles, batchAsrConfigured, config, showError]);
+        const tagIds = activeProjectId ? [activeProjectId] : [];
+        const snapshot = resolveAutomationQueueSnapshot({
+            globalConfig: config,
+            profiles: automationProfiles,
+            rules: automationRules,
+            tagIds,
+        });
+        addFiles(files, {
+            tagIds,
+            resolvedConfigSnapshot: snapshot.config,
+            stageConfig: snapshot.stageConfig,
+            automationResolutionSnapshot: snapshot.resolution,
+        });
+    }, [activeProjectId, addFiles, automationProfiles, automationRules, batchAsrConfigured, config, showError]);
 
     const handleTauriDrop = useCallback(async (payload: unknown): Promise<void> => {
         let files: string[] = [];

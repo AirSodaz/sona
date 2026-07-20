@@ -351,7 +351,7 @@ describe('TranscriptSpeakerReviewPanel', () => {
       speakerProfiles: [
         { id: 'alice', name: 'Alice', enabled: true, samples: [] },
         { id: 'bob', name: 'Bob', enabled: true, samples: [] },
-        { id: 'carol', name: 'Carol', enabled: true, samples: [] },
+        { id: 'carol', name: 'Carol', enabled: false, samples: [] },
       ],
     });
     useProjectStore.setState((state) => ({
@@ -362,9 +362,6 @@ describe('TranscriptSpeakerReviewPanel', () => {
           name: 'Project One',
           createdAt: '2026-05-01T00:00:00.000Z',
           updatedAt: '2026-05-01T00:00:00.000Z',
-          defaults: {
-            enabledSpeakerProfileIds: ['alice', 'bob'],
-          },
         } as any,
       ],
       activeProjectId: 'project-1',

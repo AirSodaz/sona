@@ -310,6 +310,9 @@ export type AutomationProcessedInput = AutomationProcessedInput_Serialize | Auto
 export type AutomationProcessedInput_Deserialize = {
 	id?: string | null,
 	ruleId?: string,
+	kind?: string,
+	inputVersion?: string,
+	attempt?: number,
 	filePath?: string,
 	sourceFingerprint?: string,
 	size?: number,
@@ -324,6 +327,9 @@ export type AutomationProcessedInput_Deserialize = {
 export type AutomationProcessedInput_Serialize = {
 	id?: string | null,
 	ruleId: string,
+	kind: string,
+	inputVersion: string,
+	attempt: number,
 	filePath: string,
 	sourceFingerprint: string,
 	size: number,
@@ -340,6 +346,9 @@ export type AutomationProcessedRecord = AutomationProcessedRecord_Serialize | Au
 export type AutomationProcessedRecord_Deserialize = {
 	id: string,
 	ruleId: string,
+	kind?: string,
+	inputVersion?: string,
+	attempt?: number,
 	filePath: string,
 	sourceFingerprint: string,
 	size: number,
@@ -354,6 +363,9 @@ export type AutomationProcessedRecord_Deserialize = {
 export type AutomationProcessedRecord_Serialize = {
 	id: string,
 	ruleId: string,
+	kind: string,
+	inputVersion: string,
+	attempt: number,
 	filePath: string,
 	sourceFingerprint: string,
 	size: number,
@@ -365,14 +377,60 @@ export type AutomationProcessedRecord_Serialize = {
 	errorMessage?: string | null,
 };
 
+export type AutomationProfileInput = AutomationProfileInput_Serialize | AutomationProfileInput_Deserialize;
+
+export type AutomationProfileInput_Deserialize = {
+	id?: string | null,
+	name?: string,
+	translationLanguage?: string,
+	polishPresetId?: string,
+	summaryTemplateId?: string,
+	enabledTextReplacementSetIds?: string[],
+	enabledHotwordSetIds?: string[],
+	enabledPolishKeywordSetIds?: string[],
+	enabledSpeakerProfileIds?: string[],
+	createdAt?: number,
+	updatedAt?: number,
+};
+
+export type AutomationProfileInput_Serialize = {
+	id?: string | null,
+	name: string,
+	translationLanguage: string,
+	polishPresetId: string,
+	summaryTemplateId: string,
+	enabledTextReplacementSetIds: string[],
+	enabledHotwordSetIds: string[],
+	enabledPolishKeywordSetIds: string[],
+	enabledSpeakerProfileIds: string[],
+	createdAt: number,
+	updatedAt: number,
+};
+
+export type AutomationProfileRecord = {
+	id: string,
+	name: string,
+	translationLanguage: string,
+	polishPresetId: string,
+	summaryTemplateId: string,
+	enabledTextReplacementSetIds: string[],
+	enabledHotwordSetIds: string[],
+	enabledPolishKeywordSetIds: string[],
+	enabledSpeakerProfileIds: string[],
+	createdAt: number,
+	updatedAt: number,
+};
+
 export type AutomationRepositoryInput = AutomationRepositoryInput_Serialize | AutomationRepositoryInput_Deserialize;
 
 export type AutomationRepositoryInput_Deserialize = {
+	profiles?: AutomationProfileInput_Deserialize[],
 	rules?: AutomationRuleInput_Deserialize[],
 	processedEntries?: AutomationProcessedInput_Deserialize[],
 };
 
 export type AutomationRepositoryInput_Serialize = {
+	profiles: AutomationProfileInput_Serialize[],
 	rules: AutomationRuleInput_Serialize[],
 	processedEntries: AutomationProcessedInput_Serialize[],
 };
@@ -380,12 +438,14 @@ export type AutomationRepositoryInput_Serialize = {
 export type AutomationRepositoryState = AutomationRepositoryState_Serialize | AutomationRepositoryState_Deserialize;
 
 export type AutomationRepositoryState_Deserialize = {
-	rules: AutomationRuleRecord[],
+	profiles: AutomationProfileRecord[],
+	rules: AutomationRuleRecord_Deserialize[],
 	processedEntries: AutomationProcessedRecord_Deserialize[],
 };
 
 export type AutomationRepositoryState_Serialize = {
-	rules: AutomationRuleRecord[],
+	profiles: AutomationProfileRecord[],
+	rules: AutomationRuleRecord_Serialize[],
 	processedEntries: AutomationProcessedRecord_Serialize[],
 };
 
@@ -405,6 +465,12 @@ export type AutomationRuleExportConfig = {
 
 export type AutomationRuleInput = AutomationRuleInput_Serialize | AutomationRuleInput_Deserialize;
 
+export type AutomationRuleInputActions = {
+	autoPolish?: boolean,
+	autoTranslate?: boolean,
+	autoSummary?: boolean,
+};
+
 export type AutomationRuleInputExportConfig = {
 	directory?: string,
 	format?: string,
@@ -423,47 +489,46 @@ export type AutomationRuleInputStageConfig = {
 export type AutomationRuleInput_Deserialize = {
 	id?: string | null,
 	name?: string,
+	kind?: string,
+	priority?: number,
+	profileId?: string | null,
+	profileSource?: string,
 	saveHistory?: boolean,
 	tagIds?: string[],
 	presetId?: string,
 	watchDirectory?: string,
 	recursive?: boolean,
 	enabled?: boolean,
+	actions?: AutomationRuleInputActions,
 	stageConfig?: AutomationRuleInputStageConfig,
 	exportConfig?: AutomationRuleInputExportConfig,
 	createdAt?: number,
 	updatedAt?: number,
+	migrationNotice?: string | null,
 };
 
 export type AutomationRuleInput_Serialize = {
 	id?: string | null,
 	name: string,
+	kind: string,
+	priority: number,
+	profileId?: string | null,
+	profileSource: string,
 	saveHistory: boolean,
 	tagIds: string[],
 	presetId: string,
 	watchDirectory: string,
 	recursive: boolean,
 	enabled: boolean,
+	actions: AutomationRuleInputActions,
 	stageConfig: AutomationRuleInputStageConfig,
 	exportConfig: AutomationRuleInputExportConfig,
 	createdAt: number,
 	updatedAt: number,
+	migrationNotice?: string | null,
 };
 
-export type AutomationRuleRecord = {
-	id: string,
-	name: string,
-	saveHistory: boolean,
-	tagIds: string[],
-	presetId: string,
-	watchDirectory: string,
-	recursive: boolean,
-	enabled: boolean,
-	stageConfig: AutomationRuleRecordStageConfig,
-	exportConfig: AutomationRuleRecordExportConfig,
-	createdAt: number,
-	updatedAt: number,
-};
+export type AutomationRuleRecord = AutomationRuleRecord_Serialize | AutomationRuleRecord_Deserialize;
 
 export type AutomationRuleRecordExportConfig = {
 	directory: string,
@@ -478,6 +543,48 @@ export type AutomationRuleRecordStageConfig = {
 	autoTranslate: boolean,
 	translationLanguage: string,
 	exportEnabled: boolean,
+};
+
+export type AutomationRuleRecord_Deserialize = {
+	id: string,
+	name: string,
+	kind: string,
+	priority: number,
+	profileId: string | null,
+	profileSource: string,
+	saveHistory: boolean,
+	tagIds: string[],
+	presetId: string,
+	watchDirectory: string,
+	recursive: boolean,
+	enabled: boolean,
+	actions: AutomationRuleInputActions,
+	stageConfig: AutomationRuleRecordStageConfig,
+	exportConfig: AutomationRuleRecordExportConfig,
+	createdAt: number,
+	updatedAt: number,
+	migrationNotice: string | null,
+};
+
+export type AutomationRuleRecord_Serialize = {
+	id: string,
+	name: string,
+	kind: string,
+	priority: number,
+	profileId?: string | null,
+	profileSource: string,
+	saveHistory: boolean,
+	tagIds: string[],
+	presetId: string,
+	watchDirectory: string,
+	recursive: boolean,
+	enabled: boolean,
+	actions: AutomationRuleInputActions,
+	stageConfig: AutomationRuleRecordStageConfig,
+	exportConfig: AutomationRuleRecordExportConfig,
+	createdAt: number,
+	updatedAt: number,
+	migrationNotice?: string | null,
 };
 
 export type AutomationRuleStageConfig = {
@@ -571,6 +678,7 @@ export type BackupManifestCounts_Deserialize = {
 	historyItems: number,
 	transcriptFiles: number,
 	summaryFiles: number,
+	automationProfiles?: number,
 	automationRules: number,
 	automationProcessedEntries: number,
 	analyticsFiles: number,
@@ -585,6 +693,7 @@ export type BackupManifestCounts_Serialize = {
 	historyItems: number,
 	transcriptFiles: number,
 	summaryFiles: number,
+	automationProfiles: number,
 	automationRules: number,
 	automationProcessedEntries: number,
 	analyticsFiles: number,
@@ -1637,6 +1746,7 @@ export type PreparedBackupImport_Deserialize = {
 	archivePath: string,
 	manifest: BackupManifest_Deserialize,
 	config: unknown,
+	automationProfiles?: unknown[],
 	automationRules: unknown[],
 	automationProcessedEntries: unknown[],
 	analyticsContent: string,
@@ -1652,6 +1762,7 @@ export type PreparedBackupImport_Serialize = {
 	manifest: BackupManifest_Serialize,
 	config: unknown,
 	tags: unknown[],
+	automationProfiles: unknown[],
 	automationRules: unknown[],
 	automationProcessedEntries: unknown[],
 	analyticsContent: string,
@@ -1679,6 +1790,7 @@ export type RecoveredQueueItem_Deserialize = {
 	automationRuleId: string | null,
 	automationRuleName: string | null,
 	resolvedConfigSnapshot: unknown | null,
+	automationResolutionSnapshot: unknown | null,
 	exportConfig: unknown,
 	stageConfig: unknown,
 	sourceFingerprint: string | null,
@@ -1704,6 +1816,7 @@ export type RecoveredQueueItem_Serialize = {
 	automationRuleId?: string | null,
 	automationRuleName?: string | null,
 	resolvedConfigSnapshot?: unknown | null,
+	automationResolutionSnapshot?: unknown | null,
 	exportConfig: unknown,
 	stageConfig: unknown,
 	sourceFingerprint?: string | null,
@@ -1784,6 +1897,7 @@ export type RecoveryItemInput_Deserialize = {
 	automationRuleId?: string | null,
 	automationRuleName?: string | null,
 	resolvedConfigSnapshot?: unknown | null,
+	automationResolutionSnapshot?: unknown | null,
 	exportConfig?: unknown | null,
 	stageConfig?: unknown | null,
 	sourceFingerprint?: string | null,
@@ -1813,6 +1927,7 @@ export type RecoveryItemInput_Serialize = {
 	automationRuleId?: string | null,
 	automationRuleName?: string | null,
 	resolvedConfigSnapshot?: unknown | null,
+	automationResolutionSnapshot?: unknown | null,
 	exportConfig?: unknown | null,
 	stageConfig?: unknown | null,
 	sourceFingerprint?: string | null,
@@ -2090,7 +2205,7 @@ export type SyncEntityKey = {
 	id: string,
 };
 
-export type SyncEntityKind = "tag" | "project" | "history_item" | "history_transcript" | "history_summary" | "transcript_snapshot" | "setting" | "summary_template" | "polish_preset" | "vocabulary_set" | "vocabulary_rule" | "speaker_profile" | "automation_rule" | "credential_profile";
+export type SyncEntityKind = "tag" | "project" | "history_item" | "history_transcript" | "history_summary" | "transcript_snapshot" | "setting" | "summary_template" | "polish_preset" | "vocabulary_set" | "vocabulary_rule" | "speaker_profile" | "automation_profile" | "automation_rule" | "credential_profile";
 
 export type SyncErrorSnapshot = {
 	code: string,
@@ -2158,67 +2273,9 @@ export type TagCreateInput = {
 	description?: string | null,
 	icon?: string | null,
 	color?: string | null,
-	defaults?: TagDefaultsInput,
 };
 
-export type TagDefaults = TagDefaults_Serialize | TagDefaults_Deserialize;
-
-export type TagDefaultsInput = {
-	summaryTemplateId?: string | null,
-	summaryTemplate?: string | null,
-	translationLanguage?: string | null,
-	polishPresetId?: string | null,
-	polishScenario?: string | null,
-	polishContext?: string | null,
-	exportFileNamePrefix?: string | null,
-	enabledTextReplacementSetIds?: string[] | null,
-	enabledHotwordSetIds?: string[] | null,
-	enabledPolishKeywordSetIds?: string[] | null,
-	enabledSpeakerProfileIds?: string[] | null,
-};
-
-export type TagDefaultsPatch = {
-	summaryTemplateId?: string | null,
-	translationLanguage?: string | null,
-	polishPresetId?: string | null,
-	polishScenario?: string | null,
-	polishContext?: string | null,
-	exportFileNamePrefix?: string | null,
-	enabledTextReplacementSetIds?: string[] | null,
-	enabledHotwordSetIds?: string[] | null,
-	enabledPolishKeywordSetIds?: string[] | null,
-	enabledSpeakerProfileIds?: string[] | null,
-};
-
-export type TagDefaults_Deserialize = {
-	summaryTemplateId: string,
-	translationLanguage: string,
-	polishPresetId: string,
-	polishScenario: string | null,
-	polishContext: string | null,
-	exportFileNamePrefix: string,
-	enabledTextReplacementSetIds: string[],
-	enabledHotwordSetIds: string[],
-	enabledPolishKeywordSetIds: string[],
-	enabledSpeakerProfileIds: string[],
-};
-
-export type TagDefaults_Serialize = {
-	summaryTemplateId: string,
-	translationLanguage: string,
-	polishPresetId: string,
-	polishScenario?: string | null,
-	polishContext?: string | null,
-	exportFileNamePrefix: string,
-	enabledTextReplacementSetIds: string[],
-	enabledHotwordSetIds: string[],
-	enabledPolishKeywordSetIds: string[],
-	enabledSpeakerProfileIds: string[],
-};
-
-export type TagRecord = TagRecord_Serialize | TagRecord_Deserialize;
-
-export type TagRecord_Deserialize = {
+export type TagRecord = {
 	id: string,
 	name: string,
 	description: string,
@@ -2227,30 +2284,10 @@ export type TagRecord_Deserialize = {
 	sortOrder: number,
 	createdAt: number,
 	updatedAt: number,
-	defaults: TagDefaults_Deserialize,
 };
 
-export type TagRecord_Serialize = {
-	id: string,
-	name: string,
-	description: string,
-	icon: string,
-	color: string,
-	sortOrder: number,
-	createdAt: number,
-	updatedAt: number,
-	defaults: TagDefaults_Serialize,
-};
-
-export type TagRepositorySnapshot = TagRepositorySnapshot_Serialize | TagRepositorySnapshot_Deserialize;
-
-export type TagRepositorySnapshot_Deserialize = {
-	tags: TagRecord_Deserialize[],
-	activeTagId: string | null,
-};
-
-export type TagRepositorySnapshot_Serialize = {
-	tags: TagRecord_Serialize[],
+export type TagRepositorySnapshot = {
+	tags: TagRecord[],
 	activeTagId: string | null,
 };
 
@@ -2259,7 +2296,6 @@ export type TagUpdateInput = {
 	icon?: string | null,
 	color?: string | null,
 	description?: string | null,
-	defaults?: TagDefaultsPatch | null,
 };
 
 export type TaskLedgerKind = "batchImport" | "automation" | "llmPolish" | "llmTranslate" | "llmSummary" | "recovery" | "update";
@@ -2281,6 +2317,9 @@ export type TaskLedgerPatch_Deserialize = {
 	tagIds?: string[] | null,
 	filePath?: string | null,
 	automationRuleId?: string | null,
+	tagAutomationRuleId?: string | null,
+	automationProfileId?: string | null,
+	automationProfileSource?: string | null,
 	sourceFingerprint?: string | null,
 	errorMessage?: string | null,
 	templateId?: string | null,
@@ -2302,6 +2341,9 @@ export type TaskLedgerPatch_Serialize = {
 	tagIds?: string[] | null,
 	filePath?: string | null,
 	automationRuleId?: string | null,
+	tagAutomationRuleId?: string | null,
+	automationProfileId?: string | null,
+	automationProfileSource?: string | null,
 	sourceFingerprint?: string | null,
 	errorMessage?: string | null,
 	templateId?: string | null,
@@ -2326,6 +2368,9 @@ export type TaskLedgerRecord_Deserialize = {
 	tagIds?: string[],
 	filePath: string | null,
 	automationRuleId: string | null,
+	tagAutomationRuleId: string | null,
+	automationProfileId: string | null,
+	automationProfileSource: string | null,
 	sourceFingerprint: string | null,
 	errorMessage: string | null,
 	templateId: string | null,
@@ -2348,6 +2393,9 @@ export type TaskLedgerRecord_Serialize = {
 	tagIds?: string[],
 	filePath?: string | null,
 	automationRuleId?: string | null,
+	tagAutomationRuleId?: string | null,
+	automationProfileId?: string | null,
+	automationProfileSource?: string | null,
 	sourceFingerprint?: string | null,
 	errorMessage?: string | null,
 	templateId?: string | null,
@@ -2639,19 +2687,19 @@ export type WebviewCacheUsageCategory_Serialize = {
 export type RustTauriCommandContractMap = {
 	"tag_list": {
 		args: { fallbackEnabledPolishKeywordSetIds?: string[] | null; fallbackEnabledSpeakerProfileIds?: string[] | null };
-		result: TagRecord_Serialize[];
+		result: TagRecord[];
 	};
 	"tag_save_all": {
-		args: { tags: TagRecord_Deserialize[] };
+		args: { tags: TagRecord[] };
 		result: void;
 	};
 	"tag_create": {
-		args: { name: string; description?: string | null; icon?: string | null; color?: string | null; defaults: TagDefaultsInput };
-		result: TagRecord_Serialize;
+		args: { name: string; description?: string | null; icon?: string | null; color?: string | null };
+		result: TagRecord;
 	};
 	"tag_update": {
 		args: { tagId: string; updates: TagUpdateInput };
-		result: TagRecord_Serialize | null;
+		result: TagRecord | null;
 	};
 	"tag_delete": {
 		args: { tagId: string };
@@ -2659,7 +2707,7 @@ export type RustTauriCommandContractMap = {
 	};
 	"tag_reorder": {
 		args: { tagIds: string[] };
-		result: TagRecord_Serialize[];
+		result: TagRecord[];
 	};
 	"tag_get_active_id": {
 		args: undefined;
@@ -2709,12 +2757,16 @@ export type RustTauriCommandContractMap = {
 		args: { rules: AutomationRuleInput_Deserialize[] };
 		result: void;
 	};
+	"automation_persist_profiles": {
+		args: { profiles: AutomationProfileInput_Deserialize[] };
+		result: void;
+	};
 	"automation_persist_processed_entries": {
 		args: { processedEntries: AutomationProcessedInput_Deserialize[] };
 		result: void;
 	};
 	"automation_persist_repository_state": {
-		args: { rules: AutomationRuleInput_Deserialize[]; processedEntries: AutomationProcessedInput_Deserialize[] };
+		args: { profiles: AutomationProfileInput_Deserialize[]; rules: AutomationRuleInput_Deserialize[]; processedEntries: AutomationProcessedInput_Deserialize[] };
 		result: void;
 	};
 	"automation_validate_rule_activation": {

@@ -1,8 +1,6 @@
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
-import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import type { ProjectRecord } from '../types/project';
 import type { SpeakerProfile } from '../types/speaker';
 import { normalizeSpeakerProfiles } from '../types/speaker';
 import type { TranscriptSegment } from '../types/transcript';
@@ -37,27 +35,17 @@ export interface SpeakerCorrectionResponse {
 
 export function buildSpeakerCorrectionProfileSections(
   inputProfiles: SpeakerProfile[] | undefined,
-  activeProject: ProjectRecord | null,
 ): SpeakerCorrectionProfileSections {
   const profiles = normalizeSpeakerProfiles(inputProfiles);
-  if (!activeProject) {
-    return {
-      primaryProfiles: profiles,
-      secondaryProfiles: [],
-    };
-  }
-
-  const enabledIdSet = new Set(activeProject.defaults.enabledSpeakerProfileIds);
   return {
-    primaryProfiles: profiles.filter((profile) => enabledIdSet.has(profile.id)),
-    secondaryProfiles: profiles.filter((profile) => !enabledIdSet.has(profile.id)),
+    primaryProfiles: profiles.filter((profile) => profile.enabled),
+    secondaryProfiles: profiles.filter((profile) => !profile.enabled),
   };
 }
 
 export interface SpeakerCorrectionServicePorts {
   getConfigStore: typeof useConfigStore.getState;
   getEffectiveConfigStore: typeof useEffectiveConfigStore.getState;
-  getProjectStore: typeof useProjectStore.getState;
   getTranscriptSessionStore: typeof useTranscriptSessionStore.getState;
   applySpeakerProfileToGroup: typeof applySpeakerProfileToGroup;
   confirmSpeakerGroupReview: typeof confirmSpeakerGroupReviewInRust;
@@ -71,24 +59,27 @@ export class SpeakerCorrectionService {
     sourceGroupId: string,
     targetProfileId: string,
   ): Promise<TranscriptSegment[]> {
-    const profiles = normalizeSpeakerProfiles(this.ports.getConfigStore().config.speakerProfiles);
+    const configStore = this.ports.getConfigStore();
+    const profiles = normalizeSpeakerProfiles(configStore.config.speakerProfiles);
     const sessionStore = this.ports.getTranscriptSessionStore();
-    const projectStore = this.ports.getProjectStore();
-    const activeProject = projectStore.getActiveProject();
 
     const response = await this.ports.applySpeakerProfileToGroup({
       segments: sessionStore.segments,
       groupId: sourceGroupId,
       targetProfileId,
       speakerProfiles: profiles,
-      enabledSpeakerProfileIds: activeProject?.defaults.enabledSpeakerProfileIds || [],
+      enabledSpeakerProfileIds: profiles.filter((profile) => profile.enabled).map((profile) => profile.id),
     });
 
     sessionStore.setSegments(response.segments);
 
-    if (activeProject && response.enabledSpeakerProfileIds) {
-      await projectStore.updateProjectDefaults(activeProject.id, {
-        enabledSpeakerProfileIds: response.enabledSpeakerProfileIds,
+    if (response.enabledSpeakerProfileIds) {
+      const enabledIds = new Set(response.enabledSpeakerProfileIds);
+      configStore.setConfig({
+        speakerProfiles: profiles.map((profile) => ({
+          ...profile,
+          enabled: enabledIds.has(profile.id),
+        })),
       });
     }
 
@@ -124,7 +115,6 @@ export function createSpeakerCorrectionService(ports: SpeakerCorrectionServicePo
 export const speakerCorrectionService = createSpeakerCorrectionService({
   getConfigStore: useConfigStore.getState,
   getEffectiveConfigStore: useEffectiveConfigStore.getState,
-  getProjectStore: useProjectStore.getState,
   getTranscriptSessionStore: useTranscriptSessionStore.getState,
   applySpeakerProfileToGroup,
   confirmSpeakerGroupReview: confirmSpeakerGroupReviewInRust,

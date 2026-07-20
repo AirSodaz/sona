@@ -4,7 +4,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { SummaryIcon } from '../Icons';
 import { useLlmAssistantConfig, useSetConfig } from '../../stores/configStore';
-import { useProjectStore } from '../../stores/projectStore';
+import { useAutomationStore } from '../../stores/automationStore';
 import { DEFAULT_SUMMARY_TEMPLATE_ID, SummaryCustomTemplate } from '../../types/transcript';
 import { SettingsItem, SettingsSection } from './SettingsLayout';
 import {
@@ -18,8 +18,7 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
   const { t } = useTranslation();
   const config = useLlmAssistantConfig();
   const updateConfig = useSetConfig();
-  const projects = useProjectStore((state) => state.projects);
-  const updateProjectDefaults = useProjectStore((state) => state.updateProjectDefaults);
+  const removeProfileDependency = useAutomationStore((state) => state.removeProfileDependency);
 
   const [newTemplateName, setNewTemplateName] = useState('');
   const [newTemplateInstructions, setNewTemplateInstructions] = useState('');
@@ -89,10 +88,7 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
       summaryTemplateId: nextTemplateId,
     });
 
-    const affectedProjects = projects.filter((project) => project.defaults.summaryTemplateId === templateId);
-    await Promise.all(affectedProjects.map((project) => (
-      updateProjectDefaults(project.id, { summaryTemplateId: DEFAULT_SUMMARY_TEMPLATE_ID })
-    )));
+    await removeProfileDependency('summaryTemplate', templateId);
   };
 
   return (
@@ -100,14 +96,14 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
       <SettingsSection
         title={t('settings.summary_templates_default_title', { defaultValue: 'Default Summary Template' })}
         description={t('settings.summary_templates_default_description', {
-          defaultValue: 'Choose which summary template should be selected by default outside project-specific overrides.',
+          defaultValue: 'Choose which summary template is used when no automation profile overrides it.',
         })}
         icon={<SummaryIcon width={20} height={20} />}
       >
         <SettingsItem
           title={t('projects.summary_template', { defaultValue: 'Default Summary Template' })}
           hint={t('settings.summary_templates_default_hint', {
-            defaultValue: 'Projects can still choose a different summary template in project settings.',
+            defaultValue: 'Automation profiles can override this selection.',
           })}
         >
           <div style={{ width: '280px', maxWidth: '100%' }}>

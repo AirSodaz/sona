@@ -29,6 +29,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::storage::storage_clear_webview_browsing_data,
         crate::commands::automation::automation_load_repository_state,
         crate::commands::automation::automation_persist_rules,
+        crate::commands::automation::automation_persist_profiles,
         crate::commands::automation::automation_persist_processed_entries,
         crate::commands::automation::automation_persist_repository_state,
         crate::commands::automation::automation_validate_rule_activation,

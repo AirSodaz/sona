@@ -6,8 +6,9 @@ use crate::{
 };
 use serde_json::Value;
 use sona_core::automation::repository::{
-    AutomationProcessedInput, AutomationRepositoryInput, AutomationRuleInput,
-    AutomationRuleInputExportConfig, AutomationRuleInputStageConfig,
+    AutomationProcessedInput, AutomationProfileInput, AutomationRepositoryInput,
+    AutomationRuleInput, AutomationRuleInputActions, AutomationRuleInputExportConfig,
+    AutomationRuleInputStageConfig,
 };
 use sona_core::automation::{AutomationError, AutomationRule};
 use sona_runtime_fs::{UuidGenerator, validate_native_automation_rule_activation};
@@ -150,8 +151,10 @@ fn parse_json_array(label: &str, input: &str) -> SonaCoreBindingResult<Vec<Value
 fn parse_repository_state(input: &str) -> SonaCoreBindingResult<AutomationRepositoryInput> {
     let value = parse_json_object("automation repository state", input)?;
     let rules = parse_state_array(&value, "rules")?;
+    let profiles = parse_state_array(&value, "profiles")?;
     let processed_entries = parse_state_array(&value, "processedEntries")?;
     Ok(AutomationRepositoryInput {
+        profiles: profiles.iter().map(legacy_profile_input).collect(),
         rules: rules.iter().map(legacy_rule_input).collect(),
         processed_entries: processed_entries
             .iter()
@@ -190,9 +193,14 @@ fn legacy_rule_input(value: &Value) -> AutomationRuleInput {
     let stage = value.get("stageConfig").unwrap_or(&Value::Null);
     let export = value.get("exportConfig").unwrap_or(&Value::Null);
     let legacy_project_id = string_field(value, "projectId", "");
+    let legacy_shape = value.get("kind").is_none();
     AutomationRuleInput {
         id: optional_string_field(value, "id"),
         name: string_field(value, "name", ""),
+        kind: string_field(value, "kind", "file"),
+        priority: integer_field(value, "priority"),
+        profile_id: optional_string_field(value, "profileId"),
+        profile_source: string_field(value, "profileSource", "tag_match"),
         save_history: value
             .get("saveHistory")
             .and_then(Value::as_bool)
@@ -209,12 +217,17 @@ fn legacy_rule_input(value: &Value) -> AutomationRuleInput {
         recursive: bool_field(value, "recursive"),
         enabled: bool_field(value, "enabled"),
         stage_config: AutomationRuleInputStageConfig {
-            auto_polish: bool_field(stage, "autoPolish"),
+            auto_polish: !legacy_shape && bool_field(stage, "autoPolish"),
             polish_preset_id: string_field(stage, "polishPresetId", "general"),
-            auto_translate: bool_field(stage, "autoTranslate"),
+            auto_translate: !legacy_shape && bool_field(stage, "autoTranslate"),
             translation_language: string_field(stage, "translationLanguage", "en"),
             export_enabled: bool_field(stage, "exportEnabled"),
         },
+        actions: value
+            .get("actions")
+            .cloned()
+            .and_then(|actions| serde_json::from_value(actions).ok())
+            .unwrap_or_else(AutomationRuleInputActions::default),
         export_config: AutomationRuleInputExportConfig {
             directory: string_field(export, "directory", ""),
             format: string_field(export, "format", "txt"),
@@ -223,15 +236,42 @@ fn legacy_rule_input(value: &Value) -> AutomationRuleInput {
         },
         created_at: integer_field(value, "createdAt"),
         updated_at: integer_field(value, "updatedAt"),
+        migration_notice: optional_string_field(value, "migrationNotice").or_else(|| {
+            legacy_shape.then(|| "Legacy automatic polish/translation was disabled during migration. Configure a Tag automation to enable it.".to_string())
+        }),
+    }
+}
+
+fn legacy_profile_input(value: &Value) -> AutomationProfileInput {
+    AutomationProfileInput {
+        id: optional_string_field(value, "id"),
+        name: string_field(value, "name", ""),
+        translation_language: string_field(value, "translationLanguage", "zh"),
+        polish_preset_id: string_field(value, "polishPresetId", "general"),
+        summary_template_id: string_field(value, "summaryTemplateId", "general"),
+        enabled_text_replacement_set_ids: string_array_field(value, "enabledTextReplacementSetIds")
+            .unwrap_or_default(),
+        enabled_hotword_set_ids: string_array_field(value, "enabledHotwordSetIds")
+            .unwrap_or_default(),
+        enabled_polish_keyword_set_ids: string_array_field(value, "enabledPolishKeywordSetIds")
+            .unwrap_or_default(),
+        enabled_speaker_profile_ids: string_array_field(value, "enabledSpeakerProfileIds")
+            .unwrap_or_default(),
+        created_at: integer_field(value, "createdAt"),
+        updated_at: integer_field(value, "updatedAt"),
     }
 }
 
 fn legacy_processed_input(value: &Value) -> AutomationProcessedInput {
+    let source_fingerprint = string_field(value, "sourceFingerprint", "");
     AutomationProcessedInput {
         id: optional_string_field(value, "id"),
         rule_id: string_field(value, "ruleId", ""),
+        kind: string_field(value, "kind", "file"),
+        input_version: string_field(value, "inputVersion", &source_fingerprint),
+        attempt: integer_field(value, "attempt").max(1),
         file_path: string_field(value, "filePath", ""),
-        source_fingerprint: string_field(value, "sourceFingerprint", ""),
+        source_fingerprint,
         size: integer_field(value, "size"),
         mtime_ms: integer_field(value, "mtimeMs"),
         status: string_field(value, "status", "complete"),
@@ -354,7 +394,10 @@ mod tests {
 
         let output = load_automation_repository_state_json(dir.app_data_dir()).unwrap();
 
-        assert_eq!(output, r#"{"rules":[],"processedEntries":[]}"#);
+        assert_eq!(
+            output,
+            r#"{"profiles":[],"rules":[],"processedEntries":[]}"#
+        );
     }
 
     #[test]

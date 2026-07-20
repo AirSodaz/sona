@@ -97,7 +97,7 @@ describe("historyService", () => {
       "history_save_recording",
       {
         segments: [
-          { id: "seg-1", text: "Hello", start: 0, end: 3, isFinal: true },
+          expect.objectContaining({ id: "seg-1", text: "Hello", start: 0, end: 3, isFinal: true }),
         ],
         duration: 3,
         tagIds: ["project-1"],
@@ -140,7 +140,7 @@ describe("historyService", () => {
       "history_save_recording",
       {
         segments: [
-          { id: "seg-1", text: "Native", start: 0, end: 4, isFinal: true },
+          expect.objectContaining({ id: "seg-1", text: "Native", start: 0, end: 4, isFinal: true }),
         ],
         duration: 4,
         tagIds: [],
@@ -179,7 +179,7 @@ describe("historyService", () => {
       {
         sourcePath: "D:\\audio\\meeting.mp3",
         segments: [
-          { id: "seg-1", text: "Imported", start: 0, end: 5, isFinal: true },
+          expect.objectContaining({ id: "seg-1", text: "Imported", start: 0, end: 5, isFinal: true }),
         ],
         duration: 5,
         tagIds: ["project-1"],
@@ -314,7 +314,7 @@ describe("historyService", () => {
         historyId: "history-1",
         reason: "polish",
         segments: [
-          { id: "seg-1", text: "你好", start: 0, end: 1, isFinal: true },
+          expect.objectContaining({ id: "seg-1", text: "你好", start: 0, end: 1, isFinal: true }),
         ],
       },
     );

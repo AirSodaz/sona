@@ -130,7 +130,7 @@ describe('summaryService', () => {
     await summaryService.generateSummary('meeting');
 
     expect(invoke).toHaveBeenCalledWith('run_transcript_llm_job', {
-      request: {
+      request: expect.objectContaining({
         taskId: 'summary-task-id',
         taskType: 'summary',
         jobHistoryId: 'history-a',
@@ -138,18 +138,14 @@ describe('summaryService', () => {
           id: 'meeting',
           name: 'Meeting',
           instructions: expect.stringContaining('Meeting overview.'),
-          builtIn: true,
         },
         config: expect.objectContaining({
           apiKey: 'test-key',
           model: 'gpt-4o-mini',
           temperature: 0.7,
         }),
-        segments: [
-          { id: '1', text: 'Hello world', start: 0, end: 2, isFinal: true },
-          { id: '2', text: 'Next point', start: 2, end: 4, isFinal: true },
-        ],
-      },
+        segments: segments.map((segment) => expect.objectContaining(segment)),
+      }),
     });
     expect(historyService.saveSummary).not.toHaveBeenCalled();
     expect(useTranscriptStore.getState().getSummaryState('history-a').record?.content).toBe('Meeting summary');
