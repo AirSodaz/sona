@@ -174,3 +174,15 @@ Run the complete crate-boundary script test when changing the package-role regis
 ```text
 rtk node --test scripts/crate-boundaries.test.js
 ```
+
+Run the host capability matrix contract when changing host dependencies or the matrix rows above:
+
+```text
+rtk node --test scripts/host-capability-matrix.test.js
+```
+
+Run the host wiring inventory when changing host composition roots or production wiring of matrix capabilities:
+
+```text
+rtk node --test scripts/host-wiring-inventory.test.js
+```

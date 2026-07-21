@@ -159,3 +159,15 @@ rtk node --test --test-name-pattern "stable architecture guides" scripts/crate-b
 ```text
 rtk node --test scripts/crate-boundaries.test.js
 ```
+
+修改 Host 依赖或上方能力矩阵行后，运行 Host 能力矩阵契约：
+
+```text
+rtk node --test scripts/host-capability-matrix.test.js
+```
+
+修改 Host 组合根或矩阵能力的生产接线后，运行 Host 接线清单契约：
+
+```text
+rtk node --test scripts/host-wiring-inventory.test.js
+```

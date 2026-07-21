@@ -43,6 +43,155 @@ export const REVIEWED_OUTBOUND_ADAPTER_EDGES = new Map();
 
 export const CURRENT_PUBLIC_STRING_ERROR_DEBT = new Map();
 
+/** Host package names that participate in the reviewed capability matrix. */
+export const HOST_PACKAGE_NAMES = ['sona', 'sona-cli', 'sona-uniffi-bind'];
+
+/**
+ * Reviewed three-host capability matrix.
+ *
+ * - status: `yes` means the host wires the capability today
+ * - status: `no` means a current host wiring limit (not a Core port gap)
+ * - status: `out of scope` means an intentional product boundary
+ * - packages: workspace crates tied to the capability
+ * - wiringPatterns: production-source markers required when status is `yes`,
+ *   and forbidden when status is `no` or `out of scope`
+ */
+export const HOST_CAPABILITY_MATRIX = [
+  {
+    id: 'sqlite-history-tag',
+    enLabel: 'SQLite / History / Tag',
+    zhLabel: 'SQLite / History / Tag',
+    status: {
+      sona: 'yes',
+      'sona-cli': 'yes',
+      'sona-uniffi-bind': 'yes',
+    },
+    packages: ['sona-sqlite'],
+    wiringPatterns: [
+      '\\bSqliteApplicationContext\\b',
+      '\\bHistoryMutationService\\b',
+    ],
+  },
+  {
+    id: 'local-asr',
+    enLabel: 'Local ASR',
+    zhLabel: 'Local ASR',
+    status: {
+      sona: 'yes',
+      'sona-cli': 'yes',
+      'sona-uniffi-bind': 'yes',
+    },
+    packages: ['sona-local-asr'],
+    wiringPatterns: ['\\bsona_local_asr\\b'],
+  },
+  {
+    id: 'online-asr',
+    enLabel: 'Online ASR',
+    zhLabel: 'Online ASR',
+    status: {
+      sona: 'yes',
+      'sona-cli': 'no',
+      'sona-uniffi-bind': 'yes',
+    },
+    packages: ['sona-online-asr'],
+    wiringPatterns: ['\\bsona_online_asr\\b'],
+  },
+  {
+    id: 'online-llm',
+    enLabel: 'Online LLM',
+    zhLabel: 'Online LLM',
+    status: {
+      sona: 'yes',
+      'sona-cli': 'yes',
+      'sona-uniffi-bind': 'yes',
+    },
+    packages: ['sona-online-llm'],
+    wiringPatterns: ['\\bsona_online_llm\\b'],
+  },
+  {
+    id: 'model-downloads',
+    enLabel: 'Model downloads',
+    zhLabel: 'Model downloads',
+    status: {
+      sona: 'yes',
+      'sona-cli': 'yes',
+      'sona-uniffi-bind': 'no',
+    },
+    packages: ['sona-model-downloads'],
+    wiringPatterns: ['\\bsona_model_downloads\\b'],
+  },
+  {
+    id: 'media-detector',
+    enLabel: 'Media detector',
+    zhLabel: 'Media detector',
+    status: {
+      sona: 'yes',
+      'sona-cli': 'yes',
+      'sona-uniffi-bind': 'no',
+    },
+    packages: ['sona-media-detector'],
+    wiringPatterns: ['\\bsona_media_detector\\b'],
+  },
+  {
+    id: 'api-server',
+    enLabel: 'API server',
+    zhLabel: 'API server',
+    status: {
+      sona: 'yes',
+      'sona-cli': 'yes',
+      'sona-uniffi-bind': 'no',
+    },
+    packages: ['sona-api-server'],
+    wiringPatterns: ['\\bsona_api_server\\b'],
+  },
+  {
+    id: 'sync',
+    enLabel: 'Sync (application + WebDAV)',
+    zhLabel: 'Sync（application + WebDAV）',
+    status: {
+      sona: 'yes',
+      'sona-cli': 'out of scope',
+      'sona-uniffi-bind': 'yes',
+    },
+    packages: ['sona-sync', 'sona-sync-webdav'],
+    wiringPatterns: ['\\bSyncApplication\\b', '\\bsona_sync\\b'],
+  },
+  {
+    id: 'ts-bind',
+    enLabel: 'TypeScript/Tauri contract bind',
+    zhLabel: 'TypeScript/Tauri 契约绑定',
+    status: {
+      sona: 'yes',
+      'sona-cli': 'no',
+      'sona-uniffi-bind': 'no',
+    },
+    packages: ['sona-ts-bind'],
+    wiringPatterns: ['\\bsona_ts_bind\\b'],
+  },
+  {
+    id: 'archive-export-recovery-runtime',
+    enLabel: 'Archive / export / recovery / runtime-fs',
+    zhLabel: 'Archive / export / recovery / runtime-fs',
+    status: {
+      sona: 'yes',
+      'sona-cli': 'yes',
+      'sona-uniffi-bind': 'yes',
+    },
+    packages: [
+      'sona-archive',
+      'sona-export',
+      'sona-recovery-fs',
+      'sona-runtime-fs',
+    ],
+    wiringPatterns: [
+      '\\bsona_archive\\b',
+      '\\bsona_export\\b',
+      '\\bsona_recovery_fs\\b',
+      '\\bsona_runtime_fs\\b',
+    ],
+  },
+];
+
 function read(...parts) {
   return fs.readFileSync(path.join(repoRoot, ...parts), 'utf8');
 }
@@ -113,6 +262,41 @@ export function workspacePackages() {
   const names = packages.map(({ packageName }) => packageName);
   assert.equal(new Set(names).size, names.length, 'workspace package names must be unique');
   return packages;
+}
+
+export function hostPackage(packageName) {
+  const pkg = workspacePackages().find((entry) => entry.packageName === packageName);
+  assert.ok(pkg, `host package ${packageName} must exist in the workspace`);
+  assert.equal(
+    pkg.role ?? EXPECTED_ROLES.get(packageName),
+    'host',
+    `${packageName} must be registered as a host`,
+  );
+  return pkg;
+}
+
+export function hostRuntimeDependencySet(packageName) {
+  return new Set(hostPackage(packageName).runtimeDependencies);
+}
+
+export function hostProductionSource(packageName) {
+  const pkg = hostPackage(packageName);
+  const sourceDirectory = path.join(repoRoot, pkg.memberPath, 'src');
+  assert.ok(
+    fs.existsSync(sourceDirectory),
+    `${packageName} must have a production src directory at ${pkg.memberPath}/src`,
+  );
+  return productionRustSourceFiles(sourceDirectory)
+    .map((filePath) => withoutCfgTestModules(fs.readFileSync(filePath, 'utf8')))
+    .join('\n');
+}
+
+export function hostCapabilityStatuses(capability) {
+  return HOST_PACKAGE_NAMES.map((packageName) => capability.status[packageName]);
+}
+
+export function capabilityIsWired(status) {
+  return status === 'yes';
 }
 
 function rustSourceFiles(directory) {

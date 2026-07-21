@@ -26,6 +26,14 @@ Agent-assisted branches can also use a `codex/...` prefix, for example `codex/fe
 
 Follow the [development guide](docs/development.md) for prerequisites, installation, development commands, and source builds.
 
+Package roles and host capability boundaries are reviewed contracts, not directory-name guesses. See the [architecture guide](docs/architecture.md). When you change workspace crate roles, host Cargo dependencies, or host production wiring for a matrix capability, run:
+
+```bash
+node --test scripts/crate-boundaries.test.js scripts/host-capability-matrix.test.js scripts/host-wiring-inventory.test.js
+```
+
+Do not add CLI Sync, or UniFFI model-downloads / media-detector / API-server wiring, without updating the reviewed host capability matrix and its tests.
+
 Run the smallest validation that covers your change. Common frontend and script checks are:
 
 ```bash
