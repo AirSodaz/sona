@@ -26,7 +26,23 @@ Agent-assisted branches can also use a `codex/...` prefix, for example `codex/fe
 
 Follow the [development guide](docs/development.md) for prerequisites, installation, development commands, and source builds.
 
-Package roles and host capability boundaries are reviewed contracts, not directory-name guesses. See the [architecture guide](docs/architecture.md). When you change workspace crate roles, host Cargo dependencies, or host production wiring for a matrix capability, run:
+Package roles and host capability boundaries are reviewed contracts. **Do not
+infer a crate’s architecture role from its folder name.** Read
+`[package.metadata.sona] role` in that package’s `Cargo.toml`, the registry in
+`scripts/architecture-policy.mjs`, and the [architecture guide](docs/architecture.md).
+
+Known historical mismatches (path still under `adapters/`, role is not an adapter):
+
+| Path | Package | Actual role |
+| --- | --- | --- |
+| `adapters/sync/` | `sona-sync` | application |
+| `adapters/uniffi_bind/` | `sona-uniffi-bind` | host |
+
+Each of those trees has a local `README.md` that restates the role. Physical
+relocation is out of scope unless a dedicated slice owns the move.
+
+When you change workspace crate roles, host Cargo dependencies, or host
+production wiring for a matrix capability, run:
 
 ```bash
 node --test scripts/crate-boundaries.test.js scripts/host-capability-matrix.test.js scripts/host-wiring-inventory.test.js

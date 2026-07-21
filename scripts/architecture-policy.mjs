@@ -5,6 +5,15 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+/**
+ * Reviewed architecture role for every workspace package.
+ *
+ * Roles are contracts from `[package.metadata.sona] role`, not guesses from
+ * directory names. Historical layout debt (do not infer role from path):
+ * - `adapters/sync` → application (`sona-sync`)
+ * - `adapters/uniffi_bind` → host (`sona-uniffi-bind`)
+ * Physical relocation of those paths is a dedicated later slice.
+ */
 export const EXPECTED_ROLES = new Map([
   ['sona-core', 'core'],
   ['sona-sync', 'application'],
@@ -40,6 +49,25 @@ export const ALLOWED_TARGET_ROLES = new Map([
 ]);
 
 export const REVIEWED_OUTBOUND_ADAPTER_EDGES = new Map();
+
+/**
+ * Historical package paths whose directory name does not match the reviewed role.
+ * Soft-migration READMEs under each path must keep role + architecture links current.
+ */
+export const HISTORICAL_PATH_ROLE_OVERRIDES = [
+  {
+    memberPath: 'adapters/sync',
+    packageName: 'sona-sync',
+    role: 'application',
+    readmeRelative: 'adapters/sync/README.md',
+  },
+  {
+    memberPath: 'adapters/uniffi_bind',
+    packageName: 'sona-uniffi-bind',
+    role: 'host',
+    readmeRelative: 'adapters/uniffi_bind/README.md',
+  },
+];
 
 export const CURRENT_PUBLIC_STRING_ERROR_DEBT = new Map();
 

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   ALLOWED_TARGET_ROLES,
   EXPECTED_ROLES,
+  HISTORICAL_PATH_ROLE_OVERRIDES,
   REVIEWED_OUTBOUND_ADAPTER_EDGES,
   workspacePackages,
 } from './architecture-policy.mjs';
@@ -184,4 +185,76 @@ test('crate role boundaries run in PR guardrails through the script-test glob', 
     read('.github', 'workflows', 'pr-guardrails.yml'),
     /- name: Run script tests[\s\S]*?run: pnpm run test:scripts/u,
   );
+});
+
+test('historical path role overrides keep soft-migration READMEs and metadata aligned', () => {
+  const packagesByName = new Map(
+    workspacePackages().map((pkg) => [pkg.packageName, pkg]),
+  );
+
+  assert.ok(
+    HISTORICAL_PATH_ROLE_OVERRIDES.length >= 2,
+    'reviewed historical path overrides must stay explicit',
+  );
+
+  for (const override of HISTORICAL_PATH_ROLE_OVERRIDES) {
+    assert.equal(
+      EXPECTED_ROLES.get(override.packageName),
+      override.role,
+      `${override.packageName} registry role must match historical override`,
+    );
+
+    const pkg = packagesByName.get(override.packageName);
+    assert.ok(pkg, `${override.packageName} must remain a workspace member`);
+    assert.equal(pkg.memberPath, override.memberPath);
+    assert.equal(pkg.roles[0], override.role);
+
+    const readmePath = path.join(repoRoot, ...override.readmeRelative.split('/'));
+    assert.ok(
+      fs.existsSync(readmePath),
+      `${override.readmeRelative} must document the historical path role mismatch`,
+    );
+    const readme = fs.readFileSync(readmePath, 'utf8').replace(/\r\n/gu, '\n');
+    assert.match(
+      readme,
+      new RegExp(`\\b${override.packageName}\\b`, 'u'),
+      `${override.readmeRelative} must name ${override.packageName}`,
+    );
+    assert.match(
+      readme,
+      new RegExp(`\\b${override.role}\\b`, 'u'),
+      `${override.readmeRelative} must state role ${override.role}`,
+    );
+    assert.match(
+      readme,
+      /historical/iu,
+      `${override.readmeRelative} must mark the path as historical`,
+    );
+    assert.match(
+      readme,
+      /docs\/architecture\.md/u,
+      `${override.readmeRelative} must link to the English architecture guide`,
+    );
+    assert.match(
+      readme,
+      /docs\/architecture\.zh-CN\.md/u,
+      `${override.readmeRelative} must link to the Chinese architecture guide`,
+    );
+  }
+
+  const contributing = read('CONTRIBUTING.md');
+  assert.match(
+    contributing,
+    /Do not\s+infer a crate.s architecture role from its folder name/iu,
+  );
+  for (const override of HISTORICAL_PATH_ROLE_OVERRIDES) {
+    assert.match(
+      contributing,
+      new RegExp(
+        `${override.memberPath.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}[\\s\\S]*?${override.packageName}[\\s\\S]*?${override.role}`,
+        'u',
+      ),
+      'CONTRIBUTING.md must inventory historical path role mismatches',
+    );
+  }
 });
