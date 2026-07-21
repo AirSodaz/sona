@@ -101,11 +101,14 @@ test('stable architecture guides publish the reviewed roles and exceptions', () 
   ];
   const anchors = [
     'architecture-roles',
+    'directory-vs-role',
     'dependency-direction',
     'composition-roots',
+    'host-capability-matrix',
     'error-boundaries',
     'compatibility-policy',
     'reviewed-exceptions',
+    'compatibility-debt',
     'verification',
   ];
 
@@ -127,6 +130,42 @@ test('stable architecture guides publish the reviewed roles and exceptions', () 
       assert.match(guide, new RegExp(edge, 'u'));
       assert.match(guide, new RegExp(reason, 'u'));
     }
+
+    assert.match(
+      guide,
+      /`adapters\/sync\/`[\s\S]*?`sona-sync`[\s\S]*?application/u,
+      `${title} must map adapters/sync to the application role`,
+    );
+    assert.match(
+      guide,
+      /`adapters\/uniffi_bind\/`[\s\S]*?`sona-uniffi-bind`[\s\S]*?host/u,
+      `${title} must map adapters/uniffi_bind to the host role`,
+    );
+    assert.match(
+      guide,
+      /SqliteApplicationContext/u,
+      `${title} must document the shared SqliteApplicationContext composition type`,
+    );
+    assert.match(
+      guide,
+      /\|\s*Sync[\s\S]*?\|\s*yes\s*\|\s*out of scope\s*\|\s*yes\s*\|/u,
+      `${title} must publish the three-host Sync capability matrix row`,
+    );
+    assert.match(
+      guide,
+      /core\/src\/project/u,
+      `${title} must record that the empty Project core module was removed`,
+    );
+    assert.match(
+      guide,
+      /history_update_project_assignments/u,
+      `${title} must inventory Project-named host compatibility leaves`,
+    );
+    assert.match(
+      guide,
+      /tempfile/u,
+      `${title} must document the intentional sona-sqlite tempfile production dependency`,
+    );
   }
 
   for (const readme of [read('README.md'), read('README.zh-CN.md')]) {
