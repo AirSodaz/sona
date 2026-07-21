@@ -116,12 +116,7 @@ CLI Sync 的产品范围尚未定义，在明确范围之前不得接入。UniFF
 <a id="reviewed-exceptions"></a>
 ## 已评审例外
 
-以下 outbound-adapter 依赖是当前已评审的例外。它们在策略测试中被显式命名，且在实现变化时必须重新评估。
-
-| 依赖边 | 原因 |
-| --- | --- |
-| `sona-model-downloads->sona-runtime-fs` | model installation completeness currently reuses the runtime filesystem probe |
-| `sona-recovery-fs->sona-runtime-fs` | the recovery adapter currently composes the shared real filesystem, path-status, clock, and atomic JSON helpers |
+当前没有已登记的 outbound-adapter 互依例外。每个 outbound adapter 只应依赖 Core（以及已评审的 Application，如 `sona-sync-webdav -> sona-sync`）。
 
 <a id="compatibility-debt"></a>
 ## 兼容债务清单
@@ -145,7 +140,7 @@ CLI Sync 的产品范围尚未定义，在明确范围之前不得接入。UniFF
 
 ### 其他已评审债务
 
-- [已评审例外](#reviewed-exceptions) 中列出的 outbound adapter 依赖边。
+- 已消除的 outbound 互依：`model-downloads` 与 `recovery-fs` 不再依赖 `runtime-fs`；完整性规则在 Core，I/O 由各适配器本地完成。
 - Sync 遗留 secret-store 注册与原始 WebDAV 线格式，作为面向旧调用方的 Host 委托。
 - `sona-sqlite` 在生产依赖中使用 `tempfile`，因为 `Database` 拥有只读快照 `TempDir` 生命周期；这不是误放的 dev-only 依赖。
 - CLI Sync 在产品范围定义前保持 out of scope。

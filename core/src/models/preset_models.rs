@@ -339,6 +339,26 @@ impl PresetModel {
         self.is_archive.unwrap_or(true)
     }
 
+    /// Pure completeness rule for a resolved install path.
+    ///
+    /// Callers supply filesystem facts so Core stays free of I/O. Archive presets
+    /// are complete when any install path exists; non-archive presets require a
+    /// non-empty regular file.
+    pub fn install_path_is_complete(
+        &self,
+        path_exists: bool,
+        is_file: bool,
+        file_len: u64,
+    ) -> bool {
+        if !path_exists {
+            return false;
+        }
+        if self.is_archive() {
+            return true;
+        }
+        is_file && file_len > 0
+    }
+
     /// Returns the effective rules for this preset model.
     pub fn resolved_rules(&self) -> ModelRules {
         self.rules.unwrap_or(DEFAULT_MODEL_RULES)

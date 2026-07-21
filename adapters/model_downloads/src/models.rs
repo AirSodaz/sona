@@ -5,12 +5,22 @@ use crate::downloads::{
     temporary_download_path,
 };
 use sona_core::models::downloads::ResolvedModelDownload;
-use sona_runtime_fs::is_preset_model_installed_at;
+
+fn is_resolved_model_install_complete(resolved: &ResolvedModelDownload) -> bool {
+    match std::fs::metadata(&resolved.install_path) {
+        Ok(metadata) => resolved.model.install_path_is_complete(
+            true,
+            metadata.is_file(),
+            metadata.len(),
+        ),
+        Err(_) => resolved.model.install_path_is_complete(false, false, 0),
+    }
+}
 
 pub async fn installed_model_is_valid(
     resolved: &ResolvedModelDownload,
 ) -> Result<bool, DownloadError> {
-    if !is_preset_model_installed_at(&resolved.model, &resolved.models_dir) {
+    if !is_resolved_model_install_complete(resolved) {
         return Ok(false);
     }
 

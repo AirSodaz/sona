@@ -123,12 +123,7 @@ Public caller contracts may require strings, status-and-string tuples, or langua
 <a id="reviewed-exceptions"></a>
 ## Reviewed exceptions
 
-The following outbound-adapter dependencies are currently reviewed exceptions. They are intentionally named in the policy test and must be reconsidered when their implementation changes.
-
-| Edge | Reason |
-| --- | --- |
-| `sona-model-downloads->sona-runtime-fs` | model installation completeness currently reuses the runtime filesystem probe |
-| `sona-recovery-fs->sona-runtime-fs` | the recovery adapter currently composes the shared real filesystem, path-status, clock, and atomic JSON helpers |
+There are currently no registered outbound-adapter-to-outbound-adapter exceptions. Each outbound adapter should depend only on Core (and reviewed Application edges such as `sona-sync-webdav -> sona-sync`).
 
 <a id="compatibility-debt"></a>
 ## Compatibility debt inventory
@@ -157,7 +152,7 @@ migration slice and contract tests.
 
 ### Other reviewed debt
 
-- Outbound adapter edges listed under [Reviewed exceptions](#reviewed-exceptions).
+- Resolved outbound edges: `model-downloads` and `recovery-fs` no longer depend on `runtime-fs`; completeness rules live in Core and I/O stays local to each adapter.
 - Sync legacy secret-store registration and raw WebDAV wire shapes as host
   delegates for older callers.
 - `sona-sqlite` depends on `tempfile` in production dependencies because

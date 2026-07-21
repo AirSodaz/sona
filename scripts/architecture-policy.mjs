@@ -39,16 +39,7 @@ export const ALLOWED_TARGET_ROLES = new Map([
   ['tool', new Set()],
 ]);
 
-export const REVIEWED_OUTBOUND_ADAPTER_EDGES = new Map([
-  [
-    'sona-model-downloads->sona-runtime-fs',
-    'model installation completeness currently reuses the runtime filesystem probe',
-  ],
-  [
-    'sona-recovery-fs->sona-runtime-fs',
-    'the recovery adapter currently composes the shared real filesystem, path-status, clock, and atomic JSON helpers',
-  ],
-]);
+export const REVIEWED_OUTBOUND_ADAPTER_EDGES = new Map();
 
 export const CURRENT_PUBLIC_STRING_ERROR_DEBT = new Map();
 
