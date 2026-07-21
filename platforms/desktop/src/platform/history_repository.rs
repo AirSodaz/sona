@@ -13,8 +13,13 @@ use sona_runtime_fs::{SystemClock, UuidGenerator};
 pub use sona_sqlite::history_store as sqlite_store;
 use sona_sqlite::{SqliteApplicationContext, SqliteBackupStateRepository};
 pub use sqlite_store::SqliteHistoryStore;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tauri::{AppHandle, Runtime};
+
+use crate::platform::blocking::{
+    map_err_string, spawn_blocking_map, with_sqlite_context_locked_transport,
+    with_sqlite_context_transport,
+};
 
 // Re-exports from history platform adapter modules
 pub use sona_core::history::transcript_diff::{
@@ -42,37 +47,13 @@ pub(crate) fn history_store(context: &SqliteApplicationContext) -> SqliteHistory
     context.history_store(Arc::new(SystemClock), Arc::new(UuidGenerator))
 }
 
-fn validate_history_transport<T: Serialize>(value: T) -> Result<T, String> {
-    sona_ts_bind::validate_typescript_safe_integers(&value).map_err(|error| error.to_string())?;
-    Ok(value)
-}
-
-async fn run_history_file_task_inner<T, F>(
-    context: Arc<SqliteApplicationContext>,
-    lock: Arc<Mutex<()>>,
-    task: F,
-) -> Result<T, String>
-where
-    T: Send + Serialize + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
-{
-    tauri::async_runtime::spawn_blocking(move || {
-        let _guard = lock.lock().map_err(|error| error.to_string())?;
-        task(history_store(&context)).map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|error| error.to_string())?
-}
-
 pub async fn run_history_db_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
 where
     R: Runtime,
     T: Send + Serialize + 'static,
     F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
 {
-    let context = crate::platform::database::sqlite_application_context(app);
-    let result = llm_helpers::run_llm_db_task(context, task).await?;
-    validate_history_transport(result)
+    with_sqlite_context_transport(app, move |context| task(history_store(&context))).await
 }
 
 pub async fn run_history_file_task<R, T, F>(
@@ -85,9 +66,10 @@ where
     T: Send + Serialize + 'static,
     F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
 {
-    let context = crate::platform::database::sqlite_application_context(app);
-    let result = run_history_file_task_inner(context, state.file_lock.clone(), task).await?;
-    validate_history_transport(result)
+    with_sqlite_context_locked_transport(app, state.file_lock.clone(), move |context| {
+        task(history_store(&context))
+    })
+    .await
 }
 
 pub async fn run_history_query_file_task<R, T, F>(
@@ -100,16 +82,11 @@ where
     T: Send + Serialize + 'static,
     F: FnOnce(HistoryQueryService) -> Result<T, HistoryStoreError> + Send + 'static,
 {
-    let context = crate::platform::database::sqlite_application_context(app);
-    let lock = state.file_lock.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let _guard = lock.lock().map_err(|error| error.to_string())?;
+    with_sqlite_context_locked_transport(app, state.file_lock.clone(), move |context| {
         let repository = Arc::new(history_store(&context));
-        task(HistoryQueryService::new(repository)).map_err(|error| error.to_string())
+        task(HistoryQueryService::new(repository))
     })
     .await
-    .map_err(|error| error.to_string())??;
-    validate_history_transport(result)
 }
 
 pub async fn run_history_query_db_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
@@ -118,14 +95,11 @@ where
     T: Send + Serialize + 'static,
     F: FnOnce(HistoryQueryService) -> Result<T, HistoryStoreError> + Send + 'static,
 {
-    let context = crate::platform::database::sqlite_application_context(app);
-    let result = tauri::async_runtime::spawn_blocking(move || {
+    with_sqlite_context_transport(app, move |context| {
         let repository = Arc::new(history_store(&context));
-        task(HistoryQueryService::new(repository)).map_err(|error| error.to_string())
+        task(HistoryQueryService::new(repository))
     })
     .await
-    .map_err(|error| error.to_string())??;
-    validate_history_transport(result)
 }
 
 pub async fn run_history_mutation_file_task<R, T, F>(
@@ -138,16 +112,11 @@ where
     T: Send + Serialize + 'static,
     F: FnOnce(HistoryMutationService) -> Result<T, HistoryMutationError> + Send + 'static,
 {
-    let context = crate::platform::database::sqlite_application_context(app);
-    let lock = state.file_lock.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || {
-        let _guard = lock.lock().map_err(|error| error.to_string())?;
+    with_sqlite_context_locked_transport(app, state.file_lock.clone(), move |context| {
         let repository = Arc::new(history_store(&context));
-        task(HistoryMutationService::new(repository)).map_err(|error| error.to_string())
+        task(HistoryMutationService::new(repository))
     })
     .await
-    .map_err(|error| error.to_string())??;
-    validate_history_transport(result)
 }
 
 pub async fn run_history_mutation_db_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
@@ -156,14 +125,11 @@ where
     T: Send + Serialize + 'static,
     F: FnOnce(HistoryMutationService) -> Result<T, HistoryMutationError> + Send + 'static,
 {
-    let context = crate::platform::database::sqlite_application_context(app);
-    let result = tauri::async_runtime::spawn_blocking(move || {
+    with_sqlite_context_transport(app, move |context| {
         let repository = Arc::new(history_store(&context));
-        task(HistoryMutationService::new(repository)).map_err(|error| error.to_string())
+        task(HistoryMutationService::new(repository))
     })
     .await
-    .map_err(|error| error.to_string())??;
-    validate_history_transport(result)
 }
 
 async fn run_backup_adapter_task<R, T, F>(
@@ -178,15 +144,14 @@ where
         + Send
         + 'static,
 {
-    let context = crate::platform::database::sqlite_application_context(app);
+    let context = crate::platform::blocking::sqlite_context(app);
     let archive = state.archive();
-    tauri::async_runtime::spawn_blocking(move || {
+    spawn_blocking_map(move || {
         let repository = context.backup_state_repository();
         let adapter = FsBackupAdapter::with_archive(archive, repository, SystemClock);
-        task(&adapter).map_err(|error| error.to_string())
+        task(&adapter)
     })
     .await
-    .map_err(|error| error.to_string())?
 }
 
 pub async fn export_backup_archive<R: Runtime>(
@@ -245,13 +210,13 @@ pub async fn open_history_folder<R: Runtime>(
     app: &AppHandle<R>,
     state: &HistoryRepositoryState,
 ) -> Result<(), String> {
-    let context = crate::platform::database::sqlite_application_context(app);
+    let context = crate::platform::blocking::sqlite_context(app);
     let app_local_data_dir = context.app_data_dir().to_path_buf();
     {
-        let _guard = state.file_lock.lock().map_err(|error| error.to_string())?;
+        let _guard = state.file_lock.lock().map_err(map_err_string)?;
         history_store(&context)
             .ensure_ready()
-            .map_err(|error| error.to_string())?;
+            .map_err(map_err_string)?;
     }
 
     use tauri_plugin_opener::OpenerExt;
@@ -260,5 +225,5 @@ pub async fn open_history_folder<R: Runtime>(
             app_local_data_dir.join(HISTORY_DIR_NAME).to_string_lossy(),
             None::<&str>,
         )
-        .map_err(|error| error.to_string())
+        .map_err(map_err_string)
 }

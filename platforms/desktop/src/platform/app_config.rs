@@ -5,12 +5,14 @@ use sona_sqlite::{Database, SqliteAppConfigAdapter};
 use std::sync::Arc;
 use tauri::{AppHandle, Runtime};
 
+use crate::platform::blocking::{map_err_string, sqlite_context};
+
 fn run_app_config_adapter<T>(
     db: Arc<Database>,
     operation: impl FnOnce(&SqliteAppConfigAdapter) -> Result<T, ConfigError>,
 ) -> Result<T, String> {
     let adapter = SqliteAppConfigAdapter::new(db, Arc::new(SystemClock));
-    operation(&adapter).map_err(|error| error.to_string())
+    operation(&adapter).map_err(map_err_string)
 }
 
 fn run_app_config_context<T>(
@@ -18,21 +20,21 @@ fn run_app_config_context<T>(
     operation: impl FnOnce(&SqliteAppConfigAdapter) -> Result<T, ConfigError>,
 ) -> Result<T, String> {
     let adapter = context.app_config_adapter(Arc::new(SystemClock));
-    operation(&adapter).map_err(|error| error.to_string())
+    operation(&adapter).map_err(map_err_string)
 }
 
 pub fn load_config<R: Runtime>(app: &AppHandle<R>) -> Result<Option<Value>, String> {
-    let context = crate::platform::database::sqlite_application_context(app);
+    let context = sqlite_context(app);
     run_app_config_context(context, |adapter| adapter.load_config())
 }
 
 pub fn save_config<R: Runtime>(app: &AppHandle<R>, config: Value) -> Result<(), String> {
-    let context = crate::platform::database::sqlite_application_context(app);
+    let context = sqlite_context(app);
     run_app_config_context(context, |adapter| adapter.save_config(&config))
 }
 
 pub fn get_setting<R: Runtime>(app: &AppHandle<R>, key: String) -> Result<Option<Value>, String> {
-    let context = crate::platform::database::sqlite_application_context(app);
+    let context = sqlite_context(app);
     run_app_config_context(context, |adapter| adapter.get_setting(&key))
 }
 
@@ -41,7 +43,7 @@ pub fn set_setting<R: Runtime>(
     key: String,
     value: Value,
 ) -> Result<(), String> {
-    let context = crate::platform::database::sqlite_application_context(app);
+    let context = sqlite_context(app);
     run_app_config_context(context, |adapter| adapter.set_setting(&key, &value))
 }
 

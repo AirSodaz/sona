@@ -1,4 +1,3 @@
-use serde::Serialize;
 use serde_json::Value;
 use sona_core::automation::AutomationError;
 use sona_core::automation::repository::{
@@ -11,12 +10,9 @@ use sona_sqlite::SqliteAutomationAdapter;
 use std::sync::Arc;
 use tauri::{AppHandle, Runtime};
 
-pub use sona_sqlite::automation::AutomationRepositoryState;
+use crate::platform::blocking::{spawn_blocking_map, with_sqlite_context_transport};
 
-fn validate_automation_transport<T: Serialize>(value: T) -> Result<T, String> {
-    sona_ts_bind::validate_typescript_safe_integers(&value).map_err(|error| error.to_string())?;
-    Ok(value)
-}
+pub use sona_sqlite::automation::AutomationRepositoryState;
 
 pub fn validate_rule_activation_inner(
     rule: &AutomationRule,
@@ -31,28 +27,20 @@ pub async fn validate_rule_activation(
     global_config: Value,
     tags: Vec<Value>,
 ) -> Result<AutomationRuleValidationResult, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        validate_rule_activation_inner(&rule, &global_config, &tags)
-    })
-    .await
-    .map_err(|error| error.to_string())?
-    .map_err(|error| error.to_string())
+    spawn_blocking_map(move || validate_rule_activation_inner(&rule, &global_config, &tags)).await
 }
 
 async fn run_automation_adapter_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
 where
     R: Runtime,
-    T: Send + Serialize + 'static,
+    T: Send + serde::Serialize + 'static,
     F: FnOnce(&SqliteAutomationAdapter) -> Result<T, AutomationError> + Send + 'static,
 {
-    let context = crate::platform::database::sqlite_application_context(app);
-    let result = tauri::async_runtime::spawn_blocking(move || {
+    with_sqlite_context_transport(app, move |context| {
         let adapter = context.automation_adapter(Arc::new(UuidGenerator));
-        task(&adapter).map_err(|error| error.to_string())
+        task(&adapter)
     })
     .await
-    .map_err(|error| error.to_string())??;
-    validate_automation_transport(result)
 }
 
 pub async fn load_repository_state<R: Runtime>(

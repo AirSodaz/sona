@@ -12,6 +12,8 @@ use std::sync::Arc;
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_store::StoreExt;
 
+use crate::platform::blocking::{map_err_string, with_sqlite_context};
+
 pub(crate) const SETTINGS_FILE_NAME: &str = "settings.json";
 
 async fn run_tag_adapter<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
@@ -20,13 +22,11 @@ where
     T: Send + 'static,
     F: FnOnce(&SqliteTagAdapter) -> Result<T, TagError> + Send + 'static,
 {
-    let context = crate::platform::database::sqlite_application_context(app);
-    tauri::async_runtime::spawn_blocking(move || {
+    with_sqlite_context(app, move |context| {
         let adapter = context.tag_adapter(Arc::new(UuidGenerator), Arc::new(SystemClock));
-        task(&adapter).map_err(|error| error.to_string())
+        task(&adapter)
     })
     .await
-    .map_err(|error| error.to_string())?
 }
 
 pub async fn list_tags<R: Runtime>(
@@ -43,7 +43,7 @@ pub async fn list_tags<R: Runtime>(
         })
     })
     .await?;
-    sona_ts_bind::validate_tag_records_for_typescript(&tags).map_err(|error| error.to_string())?;
+    sona_ts_bind::validate_tag_records_for_typescript(&tags).map_err(map_err_string)?;
     Ok(tags)
 }
 
@@ -51,7 +51,7 @@ pub async fn replace_tags<R: Runtime>(
     app: &AppHandle<R>,
     tags: Vec<TagRecord>,
 ) -> Result<(), String> {
-    sona_ts_bind::validate_tag_records_for_typescript(&tags).map_err(|error| error.to_string())?;
+    sona_ts_bind::validate_tag_records_for_typescript(&tags).map_err(map_err_string)?;
     run_tag_adapter(app, move |adapter| adapter.replace_tags(tags)).await
 }
 
@@ -71,7 +71,7 @@ pub async fn create_tag<R: Runtime>(
         })
     })
     .await?;
-    sona_ts_bind::validate_tag_record_for_typescript(&tag).map_err(|error| error.to_string())?;
+    sona_ts_bind::validate_tag_record_for_typescript(&tag).map_err(map_err_string)?;
     Ok(tag)
 }
 
@@ -82,7 +82,7 @@ pub async fn update_tag<R: Runtime>(
 ) -> Result<Option<TagRecord>, String> {
     let tag = run_tag_adapter(app, move |adapter| adapter.update_tag(&tag_id, updates)).await?;
     if let Some(tag) = tag.as_ref() {
-        sona_ts_bind::validate_tag_record_for_typescript(tag).map_err(|error| error.to_string())?;
+        sona_ts_bind::validate_tag_record_for_typescript(tag).map_err(map_err_string)?;
     }
     Ok(tag)
 }
@@ -96,7 +96,7 @@ pub async fn reorder_tags<R: Runtime>(
     tag_ids: Vec<String>,
 ) -> Result<Vec<TagRecord>, String> {
     let tags = run_tag_adapter(app, move |adapter| adapter.reorder_tags(tag_ids)).await?;
-    sona_ts_bind::validate_tag_records_for_typescript(&tags).map_err(|error| error.to_string())?;
+    sona_ts_bind::validate_tag_records_for_typescript(&tags).map_err(map_err_string)?;
     Ok(tags)
 }
 
@@ -106,9 +106,7 @@ pub async fn get_active_tag_id<R: Runtime>(app: &AppHandle<R>) -> Result<Option<
         return Ok(selection.tag_id);
     }
 
-    let legacy_store = app
-        .store(SETTINGS_FILE_NAME)
-        .map_err(|error| error.to_string())?;
+    let legacy_store = app.store(SETTINGS_FILE_NAME).map_err(map_err_string)?;
     resolve_active_tag_id(
         selection,
         || {

@@ -7,6 +7,7 @@ use sona_sqlite::SqliteTaskLedgerAdapter;
 use std::sync::Arc;
 use tauri::{AppHandle, Runtime};
 
+use crate::platform::blocking::{map_err_string, with_sqlite_context};
 use crate::platform::event::{EventEmitter, TauriEventEmitter};
 
 async fn run_task_ledger_adapter_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
@@ -15,13 +16,11 @@ where
     T: Send + 'static,
     F: FnOnce(&SqliteTaskLedgerAdapter) -> Result<T, TaskLedgerError> + Send + 'static,
 {
-    let context = crate::platform::database::sqlite_application_context(app);
-    tauri::async_runtime::spawn_blocking(move || {
+    with_sqlite_context(app, move |context| {
         let adapter = context.task_ledger_adapter(Arc::new(SystemClock));
-        task(&adapter).map_err(|error| error.to_string())
+        task(&adapter)
     })
     .await
-    .map_err(|error| error.to_string())?
 }
 
 fn emit_task_ledger_snapshot(
@@ -29,19 +28,19 @@ fn emit_task_ledger_snapshot(
     snapshot: &TaskLedgerSnapshot,
 ) -> Result<(), String> {
     sona_ts_bind::validate_task_ledger_snapshot_for_typescript(snapshot)
-        .map_err(|error| error.to_string())?;
+        .map_err(map_err_string)?;
     emitter
         .emit(
             TASK_LEDGER_UPDATED_EVENT,
-            serde_json::to_value(snapshot).map_err(|error| error.to_string())?,
+            serde_json::to_value(snapshot).map_err(map_err_string)?,
         )
-        .map_err(|error| error.to_string())
+        .map_err(map_err_string)
 }
 
 pub async fn load_snapshot<R: Runtime>(app: &AppHandle<R>) -> Result<TaskLedgerSnapshot, String> {
     let snapshot = run_task_ledger_adapter_task(app, |adapter| adapter.load_snapshot()).await?;
     sona_ts_bind::validate_task_ledger_snapshot_for_typescript(&snapshot)
-        .map_err(|error| error.to_string())?;
+        .map_err(map_err_string)?;
     Ok(snapshot)
 }
 
@@ -49,12 +48,11 @@ pub async fn upsert_task<R: Runtime>(
     app: &AppHandle<R>,
     record: TaskLedgerRecord,
 ) -> Result<TaskLedgerSnapshot, String> {
-    sona_ts_bind::validate_task_ledger_record_for_typescript(&record)
-        .map_err(|error| error.to_string())?;
+    sona_ts_bind::validate_task_ledger_record_for_typescript(&record).map_err(map_err_string)?;
     let snapshot =
         run_task_ledger_adapter_task(app, move |adapter| adapter.upsert_task(record)).await?;
     sona_ts_bind::validate_task_ledger_snapshot_for_typescript(&snapshot)
-        .map_err(|error| error.to_string())?;
+        .map_err(map_err_string)?;
     let emitter = TauriEventEmitter(app.clone());
     let _ = emit_task_ledger_snapshot(&emitter, &snapshot);
     Ok(snapshot)
@@ -65,12 +63,11 @@ pub async fn patch_task<R: Runtime>(
     id: String,
     patch: TaskLedgerPatch,
 ) -> Result<TaskLedgerSnapshot, String> {
-    sona_ts_bind::validate_task_ledger_patch_for_typescript(&patch)
-        .map_err(|error| error.to_string())?;
+    sona_ts_bind::validate_task_ledger_patch_for_typescript(&patch).map_err(map_err_string)?;
     let snapshot =
         run_task_ledger_adapter_task(app, move |adapter| adapter.patch_task(&id, patch)).await?;
     sona_ts_bind::validate_task_ledger_snapshot_for_typescript(&snapshot)
-        .map_err(|error| error.to_string())?;
+        .map_err(map_err_string)?;
     let emitter = TauriEventEmitter(app.clone());
     let _ = emit_task_ledger_snapshot(&emitter, &snapshot);
     Ok(snapshot)
@@ -83,7 +80,7 @@ pub async fn remove_task<R: Runtime>(
     let snapshot =
         run_task_ledger_adapter_task(app, move |adapter| adapter.remove_task(&id)).await?;
     sona_ts_bind::validate_task_ledger_snapshot_for_typescript(&snapshot)
-        .map_err(|error| error.to_string())?;
+        .map_err(map_err_string)?;
     let emitter = TauriEventEmitter(app.clone());
     let _ = emit_task_ledger_snapshot(&emitter, &snapshot);
     Ok(snapshot)
@@ -92,7 +89,7 @@ pub async fn remove_task<R: Runtime>(
 pub async fn clear_resolved<R: Runtime>(app: &AppHandle<R>) -> Result<TaskLedgerSnapshot, String> {
     let snapshot = run_task_ledger_adapter_task(app, |adapter| adapter.clear_resolved()).await?;
     sona_ts_bind::validate_task_ledger_snapshot_for_typescript(&snapshot)
-        .map_err(|error| error.to_string())?;
+        .map_err(map_err_string)?;
     let emitter = TauriEventEmitter(app.clone());
     let _ = emit_task_ledger_snapshot(&emitter, &snapshot);
     Ok(snapshot)

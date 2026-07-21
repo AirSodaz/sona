@@ -5,6 +5,7 @@ pub mod archive;
 pub mod audio_storage;
 pub mod automation_repository;
 pub mod automation_runtime;
+pub(crate) mod blocking;
 pub mod dashboard;
 pub mod database;
 pub mod diagnostics;
