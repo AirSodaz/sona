@@ -1,10 +1,9 @@
-use crate::history::mutation_repository::HistoryMutationRepository;
-pub use crate::history::query_repository::HistoryQueryError as HistoryStoreError;
-use crate::history::query_repository::HistoryQueryRepository;
-use crate::history::{
-    HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistorySummaryPayload,
-};
+use super::mutation_repository::HistoryMutationRepository;
+pub use super::query_repository::HistoryQueryError as HistoryStoreError;
+use super::query_repository::HistoryQueryRepository;
+use super::{HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistorySummaryPayload};
 
+/// Combined history query + mutation port used by hosts and composite repositories.
 pub trait HistoryStore: HistoryQueryRepository + HistoryMutationRepository {
     fn ensure_ready(&self) -> Result<(), HistoryStoreError>;
     fn load_summary(

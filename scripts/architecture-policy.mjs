@@ -597,7 +597,7 @@ function validateAxumHandlerExemptions() {
     observed.sort((left, right) => left.symbol.localeCompare(right.symbol)),
     [...expected.entries()].map(([symbol, signature]) => ({
       package: 'sona-api-server',
-      file: 'adapters/api_server/src/lib.rs',
+      file: 'adapters/api_server/src/handlers.rs',
       symbol,
       signature,
     })).sort((left, right) => left.symbol.localeCompare(right.symbol)),
@@ -608,7 +608,7 @@ function validateAxumHandlerExemptions() {
 export function excludeReviewedApiServerStringErrors(errors) {
   return errors.filter(({ package: packageName, file, symbol, signature }) => !(
     packageName === 'sona-api-server'
-    && file === 'adapters/api_server/src/lib.rs'
+    && file === 'adapters/api_server/src/handlers.rs'
     && ['handle_info', 'handle_job_status', 'handle_transcribe'].includes(symbol)
     && signature === 'pub async fn'
   ));

@@ -443,6 +443,9 @@ pub mod mutation_repository;
 pub mod mutation_service;
 pub mod query_repository;
 pub mod query_service;
+pub mod store;
 pub mod transcript_diff;
 pub mod transcript_payload;
 pub mod workspace_query;
+
+pub use store::{HistoryStore, HistoryStoreError};

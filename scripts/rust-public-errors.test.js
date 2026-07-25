@@ -46,7 +46,7 @@ test('exact API Server handlers are exempted, and only through their reviewed co
     'handle_transcribe',
   ].map((symbol) => ({
     package: 'sona-api-server',
-    file: 'adapters/api_server/src/lib.rs',
+    file: 'adapters/api_server/src/handlers.rs',
     symbol,
     signature: 'pub async fn',
   }));

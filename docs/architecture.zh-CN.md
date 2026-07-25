@@ -82,6 +82,23 @@ Core <- Outbound Adapter <------------- Host
 
 各 Host 共享 `sona-sqlite` 提供的 `SqliteApplicationContext`，但接线、生命周期与错误映射仍由各 Host 自行拥有。目前还没有单独的共享 application-composition crate。
 
+### 当前的 Application 归属
+
+多数用例服务（History、Tag、Automation、Backup、Recovery、LLM tasks 等）放在
+`sona-core` 内，与领域类型和由 Core 所有的端口放在一起。唯一独立的
+Application 角色包是 `sona-sync`（路径 `adapters/sync/`），因为 Sync 需要
+与具体网络/数据库适配器解耦的、提供商中立的 vault 与生命周期。不要在没有
+专门迁移切片的情况下为每个领域再造 Application crate；在引入共享 composition
+crate 之前，优先把 Core 内服务写清楚。
+
+### Core 模块导航
+
+- `core/src/domain/` 存放跨 LLM/自动化使用的**产品身份枚举**（例如
+  `LlmProvider`、润色预设、摘要模板）。它不是全部领域逻辑的入口；History、
+  Tag、Transcription 等各自在 `core/src/` 下的独立模块中。
+- `core/src/history/` 拥有历史记录、查询/变更服务，以及 `HistoryStore` trait
+  （`history/store.rs`，对外仍通过 `sona_core::history_store` 重导出）。
+
 <a id="host-capability-matrix"></a>
 ## Host 能力矩阵
 

@@ -86,6 +86,26 @@ Hosts share the SQLite composition type `SqliteApplicationContext` from
 `sona-sqlite`, but each host still owns its own wiring, lifecycle, and error
 mapping. There is no separate shared application-composition crate yet.
 
+### Application ownership today
+
+Most use-case services (History, Tag, Automation, Backup, Recovery, LLM tasks,
+and similar) live **inside** `sona-core` next to their domain types and
+Core-owned ports. The only standalone Application-role package is `sona-sync`
+(`adapters/sync/`), isolated because Sync needs a provider-neutral vault and
+lifecycle that must not pull concrete network or database adapters into Core.
+Do not invent a second Application crate for every domain without a dedicated
+migration slice; prefer documenting Core-owned services until a composition
+crate is introduced.
+
+### Core module map (orientation)
+
+- `core/src/domain/` holds shared **product identity enums** used across LLM and
+  automation (for example `LlmProvider`, polish presets, summary templates).
+  It is not the home of all domain logic; History, Tag, Transcription, and
+  other domains live in their own modules under `core/src/`.
+- `core/src/history/` owns history records, query/mutation services, and the
+  `HistoryStore` trait (`history/store.rs`, re-exported as `sona_core::history_store`).
+
 <a id="host-capability-matrix"></a>
 ## Host capability matrix
 

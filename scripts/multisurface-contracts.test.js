@@ -292,7 +292,8 @@ test('History uses structured failures and injected production time and IDs', ()
     );
   }
 
-  const historyStore = read('adapters', 'sqlite', 'src', 'history_store.rs');
+  // history_store is a directory module; production store lives in store.rs.
+  const historyStore = read('adapters', 'sqlite', 'src', 'history_store', 'store.rs');
   assert.doesNotMatch(
     historyStore,
     /(?:Utc|Local)::now\s*\(|\bsync_now_ms\s*\(|(?<!:)\bUuid::new_v4\s*\(/u,
@@ -328,9 +329,11 @@ test('SQLite Sync receives its clock through the repository factory', () => {
 });
 
 test('API server preserves typed failures and receives local ASR through the Core port', () => {
-  const apiServer = withoutInlineRustTests(
+  const apiServer = [
     read('adapters', 'api_server', 'src', 'lib.rs'),
-  );
+    read('adapters', 'api_server', 'src', 'state.rs'),
+    read('adapters', 'api_server', 'src', 'worker.rs'),
+  ].map(withoutInlineRustTests).join('\n');
 
   assert.doesNotMatch(
     apiServer,
@@ -390,9 +393,11 @@ test('API server consumes runtime capability ports from host composition roots',
 test('API server depends only on Core runtime capability ports', () => {
   const runtimePorts = read('core', 'src', 'ports', 'runtime.rs');
   const apiServerManifest = read('adapters', 'api_server', 'Cargo.toml');
-  const apiServerSource = withoutInlineRustTests(
+  const apiServerSource = [
     read('adapters', 'api_server', 'src', 'lib.rs'),
-  );
+    read('adapters', 'api_server', 'src', 'state.rs'),
+    read('adapters', 'api_server', 'src', 'worker.rs'),
+  ].map(withoutInlineRustTests).join('\n');
 
   for (const port of [
     'MediaFileValidator',

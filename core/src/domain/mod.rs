@@ -1,3 +1,9 @@
+//! Shared product-identity enums used across LLM, automation, and config surfaces.
+//!
+//! This module is **not** the root of all domain logic. History, Tag, Transcription,
+//! Recovery, and other domains live in their own `core` modules. Prefer those modules
+//! for domain behavior; use `domain` only for the shared identity/preset enums here.
+
 use serde::{Deserialize, Deserializer, Serialize, de};
 #[cfg(feature = "specta")]
 use specta::Type;
