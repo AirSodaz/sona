@@ -9,6 +9,7 @@ import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { repoRoot } from './test-support/repo-root.js';
 import { node } from './test-support/android-ndk-fixtures.js';
+import { selectArchiveTarCommand } from './android-sherpa-runtime.js';
 
 const androidSherpaRuntimePath = path.join(repoRoot, 'scripts', 'android-sherpa-runtime.js');
 
@@ -28,9 +29,14 @@ function createSherpaArchiveFixture({ abis = ['arm64-v8a'], omittedLibraries = [
     }
   }
 
-  const tarResult = spawnSync('tar', ['-cjf', archivePath, '-C', archiveRoot, '.'], {
-    encoding: 'utf8',
-  });
+  // Same tar resolution and same relative-archive rule as the production
+  // extractor: GNU tar reads an absolute `-f` path as `host:path`, so a bare
+  // `C:\...` makes it try to reach a host called `C`.
+  const tarResult = spawnSync(
+    selectArchiveTarCommand(),
+    ['-cjf', path.basename(archivePath), '-C', archiveRoot, '.'],
+    { cwd: path.dirname(archivePath), encoding: 'utf8' },
+  );
   assert.equal(tarResult.status, 0, tarResult.stderr || tarResult.stdout);
 
   const sha256 = createHash('sha256').update(fs.readFileSync(archivePath)).digest('hex');

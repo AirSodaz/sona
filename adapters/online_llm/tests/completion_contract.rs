@@ -299,7 +299,9 @@ async fn transport_preserves_retryable_error_metadata() {
         &LlmApiUrl::parse(&format!("http://{address}")).unwrap(),
         Vec::new(),
         json!({}),
-        Some(2),
+        // See the streaming twin below: a long budget keeps the assertion about
+        // status mapping rather than about timing.
+        Some(60),
     )
     .await
     .unwrap_err();
@@ -344,7 +346,12 @@ async fn streaming_transport_preserves_retryable_status_metadata() {
 
         let mut stream_request = request();
         stream_request.config.base_url = format!("http://{address}");
-        stream_request.config.timeout_seconds = Some(2);
+        // Generous on purpose. The subject here is the status-to-error-kind
+        // mapping, not the timeout: the local server answers immediately, so a
+        // long budget costs nothing on the passing path. A tight one made this
+        // test flaky, because under a loaded parallel run the client could time
+        // out first and report `Unavailable` instead of the mapped kind.
+        stream_request.config.timeout_seconds = Some(60);
         let mut emit = |_delta: LlmStreamDelta| Ok(());
         let error = OnlineLlmAdapter
             .stream_completion(stream_request, &mut emit)

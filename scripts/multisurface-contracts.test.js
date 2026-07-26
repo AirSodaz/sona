@@ -1202,9 +1202,6 @@ const UNIFFI_JSON_ONLY_EXPORTS = new Map([
   ['polish_segments_request_from_json', 'dynamic-leaf'],
   ['translate_segments_request_from_json', 'dynamic-leaf'],
   ['summarize_transcript_request_from_json', 'dynamic-leaf'],
-  // Reviewed debt: `LlmCompletionOptions` pulls in the response-format,
-  // prompt-cache, and capability policy trees, which is a separate slice.
-  ['complete_llm_json', 'pending-migration'],
 ]);
 
 function uniffiExports() {
@@ -1268,6 +1265,7 @@ test('UniFFI JSON-only exports stay on the reviewed typed-contract inventory', (
     'run_llm_polish',
     'list_llm_models',
     'describe_llm_model',
+    'complete_llm',
   ]) {
     assert.ok(
       exportedNames.has(`${migrated}_json`),

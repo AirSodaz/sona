@@ -83,9 +83,14 @@ function selectArchiveTarCommand({
 }
 
 function extractArchive(archivePath, destinationDir) {
-  const result = spawnSync(selectArchiveTarCommand(), ['-xjf', archivePath, '-C', destinationDir], {
-    encoding: 'utf8',
-  });
+  // The archive is named relative to its own directory. GNU tar parses the `-f`
+  // argument as `host:path`, so an absolute Windows path makes it try to reach a
+  // host called `C`. Only `-f` is parsed that way, so `-C` may stay absolute.
+  const result = spawnSync(
+    selectArchiveTarCommand(),
+    ['-xjf', path.basename(archivePath), '-C', destinationDir],
+    { cwd: path.dirname(archivePath), encoding: 'utf8' },
+  );
   if (result.error) {
     throw new Error(`Unable to extract sherpa-onnx Android archive: ${result.error.message}`);
   }

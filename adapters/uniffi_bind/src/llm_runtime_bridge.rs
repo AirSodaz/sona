@@ -10,9 +10,10 @@ use sona_online_llm::OnlineLlmAdapter;
 
 use crate::json_bridge::parse_core_json;
 use crate::mapper::{
-    FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmGenerateRequestV1, FfiLlmModelSummary,
-    FfiLlmModelsRequestV1, llm_completion_response_to_ffi, llm_config_from_ffi,
-    llm_generate_request_from_ffi, llm_model_summary_to_ffi, llm_models_request_from_ffi,
+    FfiLlmCompletionRequestV1, FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmGenerateRequestV1,
+    FfiLlmModelSummary, FfiLlmModelsRequestV1, llm_completion_request_from_ffi,
+    llm_completion_response_to_ffi, llm_config_from_ffi, llm_generate_request_from_ffi,
+    llm_model_summary_to_ffi, llm_models_request_from_ffi,
 };
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 
@@ -34,9 +35,25 @@ pub(crate) async fn describe_llm_model_json(
     describe_model_with_port(&config_json, OnlineLlmAdapter).await
 }
 
-// Typed twins. `complete_llm_json` has no `_v1` yet: `LlmCompletionOptions`
-// pulls in the response-format, prompt-cache, and capability policy trees,
-// which is a separate slice.
+// Typed twins.
+
+pub(crate) async fn complete_llm_v1(
+    request: FfiLlmCompletionRequestV1,
+) -> SonaCoreBindingResult<FfiLlmCompletionResponse> {
+    // The JSON Schema leaf is parsed before any network call, so a malformed
+    // document fails fast rather than after a request is issued.
+    let request = llm_completion_request_from_ffi(request).map_err(|error| {
+        SonaCoreBindingError::InvalidInput {
+            reason: error.to_string(),
+        }
+    })?;
+    let port = OnlineLlmAdapter;
+    let response = LlmRuntimeService::new(&port, port)
+        .complete(request)
+        .await
+        .map_err(map_runtime_error)?;
+    Ok(llm_completion_response_to_ffi(response))
+}
 
 pub(crate) fn validate_llm_generate_request_v1(
     request: FfiLlmGenerateRequestV1,

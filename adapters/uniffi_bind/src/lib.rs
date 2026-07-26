@@ -64,11 +64,13 @@ pub use mapper::{
     FfiHistoryWorkspaceScopeV1, FfiHistoryWorkspaceSearchRangeV1,
     FfiHistoryWorkspaceSearchSnippetV1, FfiHistoryWorkspaceSortOrderV1,
     FfiHistoryWorkspaceSummaryV1, FfiHybridLogicalClockV1, FfiLiveRecordingDraftResultV1,
+    FfiLlmCapabilityPolicyV1, FfiLlmCompletionOptionsV1, FfiLlmCompletionRequestV1,
     FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmExecutionMetadata, FfiLlmGenerateRequestV1,
     FfiLlmGenerateSourceV1, FfiLlmModality, FfiLlmModelMetadataSource, FfiLlmModelSummary,
-    FfiLlmModelsRequestV1, FfiLlmPromptChunk, FfiLlmProvider, FfiLlmProviderDefaults,
-    FfiLlmProviderStrategy, FfiLlmResponseFormatKind, FfiLlmSegmentInput, FfiLlmTaskChunk,
-    FfiLlmTaskFinal, FfiLlmTaskProgress, FfiLlmTaskText, FfiLlmTaskType, FfiLlmTokenUsage,
+    FfiLlmModelsRequestV1, FfiLlmPromptCachePolicyV1, FfiLlmPromptChunk, FfiLlmProvider,
+    FfiLlmProviderDefaults, FfiLlmProviderStrategy, FfiLlmResponseFormatKind,
+    FfiLlmResponseFormatV1, FfiLlmSegmentInput, FfiLlmTaskChunk, FfiLlmTaskFinal,
+    FfiLlmTaskProgress, FfiLlmTaskText, FfiLlmTaskType, FfiLlmTokenUsage,
     FfiLlmUsageDashboardStatsV1, FfiModelCatalogGroup, FfiModelCatalogModel,
     FfiModelCatalogPathMatchToken, FfiModelCatalogRestoreDefaults, FfiModelCatalogSection,
     FfiModelCatalogSectionType, FfiModelCatalogSelectedIds, FfiModelCatalogSelectionOptions,
@@ -1349,6 +1351,13 @@ pub async fn complete_llm_json(
     request_json: String,
 ) -> SonaCoreBindingResult<FfiLlmCompletionResponse> {
     llm_runtime_bridge::complete_llm_json(request_json).await
+}
+
+#[uniffi::export]
+pub async fn complete_llm_v1(
+    request: FfiLlmCompletionRequestV1,
+) -> SonaCoreBindingResult<FfiLlmCompletionResponse> {
+    llm_runtime_bridge::complete_llm_v1(request).await
 }
 
 #[uniffi::export]

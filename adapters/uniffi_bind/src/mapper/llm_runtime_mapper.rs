@@ -1,4 +1,9 @@
+use crate::{FfiLlmConfig, FfiLlmGenerateSourceV1};
 use sona_core::llm::provider_protocol::{LlmModality, LlmModelMetadataSource, LlmModelSummary};
+use sona_core::llm::runtime::{
+    LlmCapabilityPolicy, LlmCompletionOptions, LlmCompletionRequest, LlmPromptCachePolicy,
+    LlmResponseFormat,
+};
 use sona_core::llm::runtime::{LlmCompletionResponse, LlmExecutionMetadata, LlmResponseFormatKind};
 use sona_core::llm::usage::TokenUsage;
 
@@ -160,5 +165,178 @@ fn llm_metadata_source_to_ffi(source: LlmModelMetadataSource) -> FfiLlmModelMeta
     match source {
         LlmModelMetadataSource::Provider => FfiLlmModelMetadataSource::Provider,
         LlmModelMetadataSource::ModelsDev => FfiLlmModelMetadataSource::ModelsDev,
+    }
+}
+
+/// `schema_json` is the one dynamic leaf: a JSON Schema document whose shape is
+/// defined by the caller's structured-output contract, not by this binding.
+#[derive(Clone, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum FfiLlmResponseFormatV1 {
+    Text,
+    JsonObject,
+    JsonSchema { name: String, schema_json: String },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum FfiLlmPromptCachePolicyV1 {
+    Disabled,
+    Automatic,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum FfiLlmCapabilityPolicyV1 {
+    Strict,
+    Compatible,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct FfiLlmCompletionOptionsV1 {
+    pub temperature: Option<f32>,
+    pub max_output_tokens: Option<u64>,
+    pub reasoning_enabled: Option<bool>,
+    pub reasoning_level: Option<String>,
+    pub response_format: FfiLlmResponseFormatV1,
+    pub prompt_cache: FfiLlmPromptCachePolicyV1,
+    pub capability_policy: FfiLlmCapabilityPolicyV1,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct FfiLlmCompletionRequestV1 {
+    pub config: FfiLlmConfig,
+    pub system_prompt: Option<String>,
+    pub input: String,
+    pub options: FfiLlmCompletionOptionsV1,
+    pub source: Option<FfiLlmGenerateSourceV1>,
+}
+
+impl From<FfiLlmPromptCachePolicyV1> for LlmPromptCachePolicy {
+    fn from(value: FfiLlmPromptCachePolicyV1) -> Self {
+        match value {
+            FfiLlmPromptCachePolicyV1::Disabled => Self::Disabled,
+            FfiLlmPromptCachePolicyV1::Automatic => Self::Automatic,
+        }
+    }
+}
+
+impl From<FfiLlmCapabilityPolicyV1> for LlmCapabilityPolicy {
+    fn from(value: FfiLlmCapabilityPolicyV1) -> Self {
+        match value {
+            FfiLlmCapabilityPolicyV1::Strict => Self::Strict,
+            FfiLlmCapabilityPolicyV1::Compatible => Self::Compatible,
+        }
+    }
+}
+
+pub(crate) fn llm_completion_request_from_ffi(
+    request: FfiLlmCompletionRequestV1,
+) -> Result<LlmCompletionRequest, serde_json::Error> {
+    let response_format = match request.options.response_format {
+        FfiLlmResponseFormatV1::Text => LlmResponseFormat::Text,
+        FfiLlmResponseFormatV1::JsonObject => LlmResponseFormat::JsonObject,
+        FfiLlmResponseFormatV1::JsonSchema { name, schema_json } => LlmResponseFormat::JsonSchema {
+            name,
+            schema: serde_json::from_str(&schema_json)?,
+        },
+    };
+    Ok(LlmCompletionRequest {
+        config: crate::mapper::llm_config_from_ffi(request.config),
+        system_prompt: request.system_prompt,
+        input: request.input,
+        options: LlmCompletionOptions {
+            temperature: request.options.temperature,
+            max_output_tokens: request.options.max_output_tokens,
+            reasoning_enabled: request.options.reasoning_enabled,
+            reasoning_level: request.options.reasoning_level,
+            response_format,
+            prompt_cache: request.options.prompt_cache.into(),
+            capability_policy: request.options.capability_policy.into(),
+        },
+        source: request.source.map(Into::into),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::FfiSecret;
+    use crate::mapper::FfiLlmProviderStrategy;
+    use serde_json::json;
+
+    fn ffi_config() -> FfiLlmConfig {
+        FfiLlmConfig {
+            provider_id: "openai".to_string(),
+            strategy: FfiLlmProviderStrategy::OpenAi,
+            base_url: "https://api.example".to_string(),
+            api_key: FfiSecret::new("sk-secret".to_string()),
+            model: "gpt-test".to_string(),
+            api_path: None,
+            api_version: None,
+            temperature: None,
+            reasoning_enabled: None,
+            reasoning_level: None,
+            timeout_seconds: None,
+        }
+    }
+
+    fn request(response_format: FfiLlmResponseFormatV1) -> FfiLlmCompletionRequestV1 {
+        FfiLlmCompletionRequestV1 {
+            config: ffi_config(),
+            system_prompt: Some("be brief".to_string()),
+            input: "hello".to_string(),
+            options: FfiLlmCompletionOptionsV1 {
+                temperature: Some(0.2),
+                max_output_tokens: Some(256),
+                reasoning_enabled: Some(false),
+                reasoning_level: None,
+                response_format,
+                prompt_cache: FfiLlmPromptCachePolicyV1::Automatic,
+                capability_policy: FfiLlmCapabilityPolicyV1::Strict,
+            },
+            source: None,
+        }
+    }
+
+    #[test]
+    fn a_completion_request_carries_every_option_across_the_boundary() {
+        let core = llm_completion_request_from_ffi(request(FfiLlmResponseFormatV1::JsonObject))
+            .expect("core request");
+
+        assert_eq!(core.input, "hello");
+        assert_eq!(core.system_prompt.as_deref(), Some("be brief"));
+        assert_eq!(core.options.temperature, Some(0.2));
+        assert_eq!(core.options.max_output_tokens, Some(256));
+        assert_eq!(core.options.reasoning_enabled, Some(false));
+        assert_eq!(core.options.response_format, LlmResponseFormat::JsonObject);
+        assert_eq!(core.options.prompt_cache, LlmPromptCachePolicy::Automatic);
+        assert_eq!(core.options.capability_policy, LlmCapabilityPolicy::Strict);
+        assert_eq!(core.config.api_key, "sk-secret");
+    }
+
+    #[test]
+    fn a_json_schema_leaf_survives_as_a_parsed_document() {
+        let schema = json!({"type": "object", "properties": {"ok": {"type": "boolean"}}});
+        let core = llm_completion_request_from_ffi(request(FfiLlmResponseFormatV1::JsonSchema {
+            name: "result".to_string(),
+            schema_json: schema.to_string(),
+        }))
+        .expect("core request");
+
+        match core.options.response_format {
+            LlmResponseFormat::JsonSchema { name, schema: got } => {
+                assert_eq!(name, "result");
+                assert_eq!(got, schema);
+            }
+            other => panic!("expected JsonSchema, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_malformed_schema_is_rejected_before_any_request_is_issued() {
+        let error = llm_completion_request_from_ffi(request(FfiLlmResponseFormatV1::JsonSchema {
+            name: "result".to_string(),
+            schema_json: "{".to_string(),
+        }));
+
+        assert!(error.is_err());
     }
 }
