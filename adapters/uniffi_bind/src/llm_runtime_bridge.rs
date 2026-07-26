@@ -1,4 +1,7 @@
-use sona_core::llm::requests::{LlmConfig, LlmModelsRequest};
+use sona_core::llm::requests::{
+    LlmConfig, LlmModelsRequest,
+    validate_llm_generate_request as core_validate_llm_generate_request,
+};
 use sona_core::llm::runtime::{LlmCompletionRequest, LlmRuntimeError, LlmRuntimeService};
 use sona_core::ports::llm::{
     LlmCompletionPort, LlmModelDiscoveryPort, LlmModelMetadataPort, LlmPortErrorKind,
@@ -7,8 +10,9 @@ use sona_online_llm::OnlineLlmAdapter;
 
 use crate::json_bridge::parse_core_json;
 use crate::mapper::{
-    FfiLlmCompletionResponse, FfiLlmModelSummary, llm_completion_response_to_ffi,
-    llm_model_summary_to_ffi,
+    FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmGenerateRequestV1, FfiLlmModelSummary,
+    FfiLlmModelsRequestV1, llm_completion_response_to_ffi, llm_config_from_ffi,
+    llm_generate_request_from_ffi, llm_model_summary_to_ffi, llm_models_request_from_ffi,
 };
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 
@@ -28,6 +32,42 @@ pub(crate) async fn describe_llm_model_json(
     config_json: String,
 ) -> SonaCoreBindingResult<Option<FfiLlmModelSummary>> {
     describe_model_with_port(&config_json, OnlineLlmAdapter).await
+}
+
+// Typed twins. `complete_llm_json` has no `_v1` yet: `LlmCompletionOptions`
+// pulls in the response-format, prompt-cache, and capability policy trees,
+// which is a separate slice.
+
+pub(crate) fn validate_llm_generate_request_v1(
+    request: FfiLlmGenerateRequestV1,
+) -> SonaCoreBindingResult<()> {
+    crate::json_bridge::map_core_validation_result(core_validate_llm_generate_request(
+        &llm_generate_request_from_ffi(request),
+    ))
+}
+
+pub(crate) async fn list_llm_models_v1(
+    request: FfiLlmModelsRequestV1,
+) -> SonaCoreBindingResult<Vec<FfiLlmModelSummary>> {
+    let request = llm_models_request_from_ffi(request);
+    let port = OnlineLlmAdapter;
+    LlmRuntimeService::new(&port, port)
+        .list_models(request)
+        .await
+        .map_err(map_runtime_error)
+        .map(|models| models.into_iter().map(llm_model_summary_to_ffi).collect())
+}
+
+pub(crate) async fn describe_llm_model_v1(
+    config: FfiLlmConfig,
+) -> SonaCoreBindingResult<Option<FfiLlmModelSummary>> {
+    let config = llm_config_from_ffi(config);
+    let port = OnlineLlmAdapter;
+    LlmRuntimeService::new(&port, port)
+        .describe_model(&config)
+        .await
+        .map_err(map_runtime_error)
+        .map(|model| model.map(llm_model_summary_to_ffi))
 }
 
 async fn complete_with_port<P>(

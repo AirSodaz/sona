@@ -63,11 +63,12 @@ pub use mapper::{
     FfiHistoryWorkspaceScopeV1, FfiHistoryWorkspaceSearchRangeV1,
     FfiHistoryWorkspaceSearchSnippetV1, FfiHistoryWorkspaceSortOrderV1,
     FfiHistoryWorkspaceSummaryV1, FfiHybridLogicalClockV1, FfiLiveRecordingDraftResultV1,
-    FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmExecutionMetadata, FfiLlmModality,
-    FfiLlmModelMetadataSource, FfiLlmModelSummary, FfiLlmPromptChunk, FfiLlmProvider,
-    FfiLlmProviderDefaults, FfiLlmProviderStrategy, FfiLlmResponseFormatKind, FfiLlmSegmentInput,
-    FfiLlmTaskChunk, FfiLlmTaskFinal, FfiLlmTaskProgress, FfiLlmTaskText, FfiLlmTaskType,
-    FfiLlmTokenUsage, FfiLlmUsageDashboardStatsV1, FfiModelCatalogGroup, FfiModelCatalogModel,
+    FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmExecutionMetadata, FfiLlmGenerateRequestV1,
+    FfiLlmGenerateSourceV1, FfiLlmModality, FfiLlmModelMetadataSource, FfiLlmModelSummary,
+    FfiLlmModelsRequestV1, FfiLlmPromptChunk, FfiLlmProvider, FfiLlmProviderDefaults,
+    FfiLlmProviderStrategy, FfiLlmResponseFormatKind, FfiLlmSegmentInput, FfiLlmTaskChunk,
+    FfiLlmTaskFinal, FfiLlmTaskProgress, FfiLlmTaskText, FfiLlmTaskType, FfiLlmTokenUsage,
+    FfiLlmUsageDashboardStatsV1, FfiModelCatalogGroup, FfiModelCatalogModel,
     FfiModelCatalogPathMatchToken, FfiModelCatalogRestoreDefaults, FfiModelCatalogSection,
     FfiModelCatalogSectionType, FfiModelCatalogSelectedIds, FfiModelCatalogSelectionOptions,
     FfiModelCatalogSnapshot, FfiModelDependencyConfigKey, FfiModelDependencyRequest,
@@ -1363,6 +1364,27 @@ pub async fn describe_llm_model_json(
 }
 
 #[uniffi::export]
+pub fn validate_llm_generate_request_v1(
+    request: FfiLlmGenerateRequestV1,
+) -> SonaCoreBindingResult<()> {
+    llm_runtime_bridge::validate_llm_generate_request_v1(request)
+}
+
+#[uniffi::export]
+pub async fn list_llm_models_v1(
+    request: FfiLlmModelsRequestV1,
+) -> SonaCoreBindingResult<Vec<FfiLlmModelSummary>> {
+    llm_runtime_bridge::list_llm_models_v1(request).await
+}
+
+#[uniffi::export]
+pub async fn describe_llm_model_v1(
+    config: FfiLlmConfig,
+) -> SonaCoreBindingResult<Option<FfiLlmModelSummary>> {
+    llm_runtime_bridge::describe_llm_model_v1(config).await
+}
+
+#[uniffi::export]
 pub async fn run_llm_polish_json(
     request_json: String,
     observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
@@ -1384,6 +1406,30 @@ pub async fn run_llm_summary_json(
     observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
 ) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
     llm_task_bridge::run_llm_summary_json(request_json, observer).await
+}
+
+#[uniffi::export]
+pub async fn run_llm_polish_v1(
+    request: FfiPolishSegmentsRequest,
+    observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
+) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
+    llm_task_bridge::run_llm_polish_v1(request, observer).await
+}
+
+#[uniffi::export]
+pub async fn run_llm_translate_v1(
+    request: FfiTranslateSegmentsRequest,
+    observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
+) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
+    llm_task_bridge::run_llm_translate_v1(request, observer).await
+}
+
+#[uniffi::export]
+pub async fn run_llm_summary_v1(
+    request: FfiSummarizeTranscriptRequest,
+    observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
+) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
+    llm_task_bridge::run_llm_summary_v1(request, observer).await
 }
 
 #[uniffi::export]
@@ -1571,6 +1617,166 @@ pub fn summarize_transcript_request_from_json(
     request_json: String,
 ) -> SonaCoreBindingResult<FfiSummarizeTranscriptRequest> {
     llm_bridge::summarize_transcript_request_from_json(request_json)
+}
+
+#[uniffi::export]
+pub fn validate_llm_config_v1(config: FfiLlmConfig) -> SonaCoreBindingResult<()> {
+    llm_bridge::validate_llm_config_v1(config)
+}
+
+#[uniffi::export]
+pub fn validate_polish_segments_request_v1(
+    request: FfiPolishSegmentsRequest,
+) -> SonaCoreBindingResult<()> {
+    llm_bridge::validate_polish_segments_request_v1(request)
+}
+
+#[uniffi::export]
+pub fn validate_translate_segments_request_v1(
+    request: FfiTranslateSegmentsRequest,
+) -> SonaCoreBindingResult<()> {
+    llm_bridge::validate_translate_segments_request_v1(request)
+}
+
+#[uniffi::export]
+pub fn validate_summarize_transcript_request_v1(
+    request: FfiSummarizeTranscriptRequest,
+) -> SonaCoreBindingResult<()> {
+    llm_bridge::validate_summarize_transcript_request_v1(request)
+}
+
+#[uniffi::export]
+pub fn llm_segment_inputs_from_transcript_v1(
+    segments: Vec<FfiTranscriptSegment>,
+) -> SonaCoreBindingResult<Vec<FfiLlmSegmentInput>> {
+    llm_bridge::llm_segment_inputs_from_transcript_v1(segments)
+}
+
+#[uniffi::export]
+pub fn summary_segment_inputs_from_transcript_v1(
+    segments: Vec<FfiTranscriptSegment>,
+) -> SonaCoreBindingResult<Vec<FfiSummarySegmentInput>> {
+    llm_bridge::summary_segment_inputs_from_transcript_v1(segments)
+}
+
+#[uniffi::export]
+pub fn merge_translated_items_into_transcript_v1(
+    segments: Vec<FfiTranscriptSegment>,
+    items: Vec<FfiTranslatedSegment>,
+) -> SonaCoreBindingResult<Vec<FfiTranscriptSegment>> {
+    llm_bridge::merge_translated_items_into_transcript_v1(segments, items)
+}
+
+#[uniffi::export]
+pub fn merge_polished_items_into_transcript_v1(
+    segments: Vec<FfiTranscriptSegment>,
+    items: Vec<FfiPolishedSegment>,
+) -> SonaCoreBindingResult<Vec<FfiTranscriptSegment>> {
+    llm_bridge::merge_polished_items_into_transcript_v1(segments, items)
+}
+
+#[uniffi::export]
+pub fn summary_source_fingerprint_from_transcript_v1(
+    segments: Vec<FfiTranscriptSegment>,
+) -> SonaCoreBindingResult<String> {
+    llm_bridge::summary_source_fingerprint_from_transcript_v1(segments)
+}
+
+#[uniffi::export]
+pub fn build_polish_prompt_v1(
+    segments: Vec<FfiLlmSegmentInput>,
+    context: Option<String>,
+    keywords: Option<String>,
+) -> String {
+    llm_bridge::build_polish_prompt_v1(segments, context, keywords)
+}
+
+#[uniffi::export]
+pub fn build_translate_prompt_v1(
+    segments: Vec<FfiLlmSegmentInput>,
+    target_language: String,
+    target_language_name: Option<String>,
+) -> String {
+    llm_bridge::build_translate_prompt_v1(segments, target_language, target_language_name)
+}
+
+#[uniffi::export]
+pub fn build_summary_chunk_prompt_v1(
+    template: FfiSummaryTemplateConfig,
+    segments: Vec<FfiSummarySegmentInput>,
+    chunk_number: u64,
+    total_chunks: u64,
+) -> SonaCoreBindingResult<String> {
+    llm_bridge::build_summary_chunk_prompt_v1(template, segments, chunk_number, total_chunks)
+}
+
+#[uniffi::export]
+pub fn build_summary_finalize_prompt_v1(
+    template: FfiSummaryTemplateConfig,
+    partial_summaries: Vec<String>,
+) -> String {
+    llm_bridge::build_summary_finalize_prompt_v1(template, partial_summaries)
+}
+
+#[uniffi::export]
+pub fn plan_polish_prompt_chunks_v1(
+    segments: Vec<FfiLlmSegmentInput>,
+    context: Option<String>,
+    keywords: Option<String>,
+    chunk_size: Option<u64>,
+    prompt_char_budget: Option<u64>,
+) -> SonaCoreBindingResult<Vec<FfiLlmPromptChunk>> {
+    llm_bridge::plan_polish_prompt_chunks_v1(
+        segments,
+        context,
+        keywords,
+        chunk_size,
+        prompt_char_budget,
+    )
+}
+
+#[uniffi::export]
+pub fn plan_translate_prompt_chunks_v1(
+    segments: Vec<FfiLlmSegmentInput>,
+    target_language: String,
+    target_language_name: Option<String>,
+    chunk_size: Option<u64>,
+    prompt_char_budget: Option<u64>,
+) -> SonaCoreBindingResult<Vec<FfiLlmPromptChunk>> {
+    llm_bridge::plan_translate_prompt_chunks_v1(
+        segments,
+        target_language,
+        target_language_name,
+        chunk_size,
+        prompt_char_budget,
+    )
+}
+
+#[uniffi::export]
+pub fn plan_summary_prompt_chunks_v1(
+    template: FfiSummaryTemplateConfig,
+    segments: Vec<FfiSummarySegmentInput>,
+    chunk_char_budget: Option<u64>,
+) -> SonaCoreBindingResult<Vec<FfiLlmPromptChunk>> {
+    llm_bridge::plan_summary_prompt_chunks_v1(template, segments, chunk_char_budget)
+}
+
+#[uniffi::export]
+pub fn parse_polish_chunk_v1(
+    response_text: String,
+    expected_segments: Vec<FfiLlmSegmentInput>,
+    chunk_number: u64,
+) -> SonaCoreBindingResult<Vec<FfiPolishedSegment>> {
+    llm_bridge::parse_polish_chunk_v1(response_text, expected_segments, chunk_number)
+}
+
+#[uniffi::export]
+pub fn parse_translate_chunk_v1(
+    response_text: String,
+    expected_segments: Vec<FfiLlmSegmentInput>,
+    chunk_number: u64,
+) -> SonaCoreBindingResult<Vec<FfiTranslatedSegment>> {
+    llm_bridge::parse_translate_chunk_v1(response_text, expected_segments, chunk_number)
 }
 
 #[cfg(test)]

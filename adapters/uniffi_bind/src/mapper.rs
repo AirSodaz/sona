@@ -82,7 +82,10 @@ pub use history_mapper::{
     FfiHistoryWorkspaceSummaryV1, FfiLiveRecordingDraftResultV1, FfiTranscriptSnapshotMetadataV1,
     FfiTranscriptSnapshotReasonV1, FfiTranscriptSnapshotRecordV1,
 };
-pub(crate) use history_mapper::{history_transcript_to_ffi, history_workspace_result_to_ffi};
+pub(crate) use history_mapper::{
+    history_transcript_segments_from_ffi, history_transcript_segments_to_ffi,
+    history_transcript_to_ffi, history_workspace_result_to_ffi,
+};
 pub use llm_mapper::*;
 pub use llm_runtime_mapper::*;
 pub use llm_task_mapper::*;

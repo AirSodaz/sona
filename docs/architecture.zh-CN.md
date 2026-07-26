@@ -208,13 +208,18 @@ CLI Sync 的产品范围尚未定义，在明确范围之前不得接入。UniFF
 - **`dynamic-leaf`**（动态叶子）——永久允许。载荷是任意用户配置、提供商扩展
   文档，或遗留 Project 兼容面，其 schema 不由本绑定拥有。
 - **`pending-migration`**（待迁移）——已评审债务。该导出把完整的快照、记录、
-  请求或结果作为 JSON 字符串传输，必须补上类型化的 `_v1` 兄弟函数。当前仅剩
-  29 个 LLM 转写载荷函数。
+  请求或结果作为 JSON 字符串传输，必须补上类型化的 `_v1` 兄弟函数。目前仅剩
+  `complete_llm_json`：`LlmCompletionOptions` 会牵出 response-format、
+  prompt-cache 与 capability policy 三棵类型树，属于独立切片。
 
 已类型化的域保留两套接口：`_json` 作为兼容委托保留，`_v1` 承载类型化契约。
-目前已迁移：Tag、History、Task Ledger、Recovery、Automation、Storage Usage、
-Export、Backup、Dashboard、Diagnostics、Sync。已经没有完整的快照、状态或
-生命周期结果以 JSON 字符串形式跨越边界。
+所有域均已迁移：Tag、History、Task Ledger、Recovery、Automation、Storage
+Usage、Export、Backup、Dashboard、Diagnostics、Sync、LLM。
+
+部分 `*_json` 导出是设计使然而非债务。除了任意配置与遗留 Project 接口外，
+**解析入口**（`llm_config_from_json`、`polish_segments_request_from_json`
+及另两个兄弟函数）的存在意义正是把应用存储的 JSON 转成类型化记录——类型化
+形式是它们的**输出**，因此把入参改成类型化会让它们变成恒等函数。
 
 ### 凭据绝不以可打印字段跨界
 

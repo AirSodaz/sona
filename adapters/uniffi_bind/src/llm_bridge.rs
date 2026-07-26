@@ -2,9 +2,17 @@ use crate::json_bridge::{map_core_validation_result, parse_core_json, serialize_
 use crate::mapper::{
     self, FfiLlmConfig, FfiLlmPromptChunk, FfiLlmProvider, FfiLlmSegmentInput,
     FfiPolishSegmentsRequest, FfiPolishedSegment, FfiSummarizeTranscriptRequest,
-    FfiSummarySegmentInput, FfiTranslateSegmentsRequest, FfiTranslatedSegment,
+    FfiSummarySegmentInput, FfiSummaryTemplateConfig, FfiTranslateSegmentsRequest,
+    FfiTranslatedSegment,
 };
-use crate::{SonaCoreBindingError, SonaCoreBindingResult};
+use crate::mapper::{
+    history_transcript_segments_from_ffi, history_transcript_segments_to_ffi, llm_config_from_ffi,
+    llm_segment_input_from_ffi, polish_segments_request_from_ffi, polished_segment_from_ffi,
+    summarize_transcript_request_from_ffi, summary_segment_input_from_ffi,
+    summary_template_config_from_ffi, translate_segments_request_from_ffi,
+    translated_segment_from_ffi,
+};
+use crate::{FfiTranscriptSegment, SonaCoreBindingError, SonaCoreBindingResult};
 use sona_core::llm::jobs::{
     compute_summary_source_fingerprint as core_compute_summary_source_fingerprint,
     merge_polished_items_into_segments as core_merge_polished_items_into_segments,
@@ -336,6 +344,272 @@ pub(crate) fn summarize_transcript_request_from_json(
     let request: SummarizeTranscriptRequest =
         parse_core_json(&request_json, "summarize transcript request")?;
     Ok(mapper::summarize_transcript_request_to_ffi(request))
+}
+
+// -------------------------------------------------------------- typed V1 ---
+//
+// Each function below runs the same Core routine as its `_json` sibling; only
+// the payload changes. Prompts and fingerprints stay `String` because they are
+// scalars, not records.
+
+pub(crate) fn validate_llm_config_v1(config: FfiLlmConfig) -> SonaCoreBindingResult<()> {
+    map_core_validation_result(core_validate_llm_config(&llm_config_from_ffi(config)))
+}
+
+pub(crate) fn validate_polish_segments_request_v1(
+    request: FfiPolishSegmentsRequest,
+) -> SonaCoreBindingResult<()> {
+    let request = polish_segments_request_from_ffi(request)?;
+    map_core_validation_result(core_validate_polish_segments_request(&request))
+}
+
+pub(crate) fn validate_translate_segments_request_v1(
+    request: FfiTranslateSegmentsRequest,
+) -> SonaCoreBindingResult<()> {
+    let request = translate_segments_request_from_ffi(request)?;
+    map_core_validation_result(core_validate_translate_segments_request(&request))
+}
+
+pub(crate) fn validate_summarize_transcript_request_v1(
+    request: FfiSummarizeTranscriptRequest,
+) -> SonaCoreBindingResult<()> {
+    let request = summarize_transcript_request_from_ffi(request)?;
+    map_core_validation_result(core_validate_summarize_transcript_request(&request))
+}
+
+pub(crate) fn llm_segment_inputs_from_transcript_v1(
+    segments: Vec<FfiTranscriptSegment>,
+) -> SonaCoreBindingResult<Vec<FfiLlmSegmentInput>> {
+    let segments = transcript_segments_from_ffi(segments)?;
+    Ok(core_segment_inputs_from_transcript(&segments)
+        .into_iter()
+        .map(mapper::llm_segment_input_to_ffi)
+        .collect())
+}
+
+pub(crate) fn summary_segment_inputs_from_transcript_v1(
+    segments: Vec<FfiTranscriptSegment>,
+) -> SonaCoreBindingResult<Vec<FfiSummarySegmentInput>> {
+    let segments = transcript_segments_from_ffi(segments)?;
+    Ok(core_summary_inputs_from_transcript(&segments)
+        .into_iter()
+        .map(mapper::summary_segment_input_to_ffi)
+        .collect())
+}
+
+pub(crate) fn merge_translated_items_into_transcript_v1(
+    segments: Vec<FfiTranscriptSegment>,
+    items: Vec<FfiTranslatedSegment>,
+) -> SonaCoreBindingResult<Vec<FfiTranscriptSegment>> {
+    let segments = transcript_segments_from_ffi(segments)?;
+    let items: Vec<TranslatedSegment> =
+        items.into_iter().map(translated_segment_from_ffi).collect();
+    Ok(history_transcript_segments_to_ffi(
+        core_merge_translated_items_into_segments(segments, &items),
+    ))
+}
+
+pub(crate) fn merge_polished_items_into_transcript_v1(
+    segments: Vec<FfiTranscriptSegment>,
+    items: Vec<FfiPolishedSegment>,
+) -> SonaCoreBindingResult<Vec<FfiTranscriptSegment>> {
+    let segments = transcript_segments_from_ffi(segments)?;
+    let items: Vec<PolishedSegment> = items.into_iter().map(polished_segment_from_ffi).collect();
+    Ok(history_transcript_segments_to_ffi(
+        core_merge_polished_items_into_segments(segments, &items),
+    ))
+}
+
+pub(crate) fn summary_source_fingerprint_from_transcript_v1(
+    segments: Vec<FfiTranscriptSegment>,
+) -> SonaCoreBindingResult<String> {
+    let segments = transcript_segments_from_ffi(segments)?;
+    Ok(core_compute_summary_source_fingerprint(&segments))
+}
+
+pub(crate) fn build_polish_prompt_v1(
+    segments: Vec<FfiLlmSegmentInput>,
+    context: Option<String>,
+    keywords: Option<String>,
+) -> String {
+    let segments = llm_segment_inputs_from_ffi(segments);
+    core_build_polish_prompt(&segments, context.as_deref(), keywords.as_deref())
+}
+
+pub(crate) fn build_translate_prompt_v1(
+    segments: Vec<FfiLlmSegmentInput>,
+    target_language: String,
+    target_language_name: Option<String>,
+) -> String {
+    let segments = llm_segment_inputs_from_ffi(segments);
+    core_build_translate_prompt(&segments, &target_language, target_language_name.as_deref())
+}
+
+pub(crate) fn build_summary_chunk_prompt_v1(
+    template: FfiSummaryTemplateConfig,
+    segments: Vec<FfiSummarySegmentInput>,
+    chunk_number: u64,
+    total_chunks: u64,
+) -> SonaCoreBindingResult<String> {
+    let template = summary_template_config_from_ffi(template);
+    let segments = summary_segment_inputs_from_ffi(segments);
+    Ok(core_build_summary_chunk_prompt(
+        &template,
+        &segments,
+        u64_to_usize(chunk_number, "chunk number")?,
+        u64_to_usize(total_chunks, "total chunks")?,
+    ))
+}
+
+pub(crate) fn build_summary_finalize_prompt_v1(
+    template: FfiSummaryTemplateConfig,
+    partial_summaries: Vec<String>,
+) -> String {
+    core_build_summary_finalize_prompt(
+        &summary_template_config_from_ffi(template),
+        &partial_summaries,
+    )
+}
+
+pub(crate) fn plan_polish_prompt_chunks_v1(
+    segments: Vec<FfiLlmSegmentInput>,
+    context: Option<String>,
+    keywords: Option<String>,
+    chunk_size: Option<u64>,
+    prompt_char_budget: Option<u64>,
+) -> SonaCoreBindingResult<Vec<FfiLlmPromptChunk>> {
+    let segments = llm_segment_inputs_from_ffi(segments);
+    let chunk_size = optional_u64_to_usize(chunk_size, "chunk size")?;
+    let prompt_char_budget = optional_u64_to_usize(prompt_char_budget, "prompt char budget")?
+        .unwrap_or(DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET);
+    let mut build_prompt = |chunk: &[LlmSegmentInput]| {
+        core_build_polish_prompt(chunk, context.as_deref(), keywords.as_deref())
+    };
+    Ok(map_planned_prompt_chunks(core_plan_segment_task_chunks(
+        "mobile-polish",
+        LlmTaskType::Polish,
+        &segments,
+        chunk_size,
+        prompt_char_budget,
+        &mut build_prompt,
+    )))
+}
+
+pub(crate) fn plan_translate_prompt_chunks_v1(
+    segments: Vec<FfiLlmSegmentInput>,
+    target_language: String,
+    target_language_name: Option<String>,
+    chunk_size: Option<u64>,
+    prompt_char_budget: Option<u64>,
+) -> SonaCoreBindingResult<Vec<FfiLlmPromptChunk>> {
+    let segments = llm_segment_inputs_from_ffi(segments);
+    let chunk_size = optional_u64_to_usize(chunk_size, "chunk size")?;
+    let prompt_char_budget = optional_u64_to_usize(prompt_char_budget, "prompt char budget")?
+        .unwrap_or(DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET);
+    let mut build_prompt = |chunk: &[LlmSegmentInput]| {
+        core_build_translate_prompt(chunk, &target_language, target_language_name.as_deref())
+    };
+    Ok(map_planned_prompt_chunks(core_plan_segment_task_chunks(
+        "mobile-translate",
+        LlmTaskType::Translate,
+        &segments,
+        chunk_size,
+        prompt_char_budget,
+        &mut build_prompt,
+    )))
+}
+
+pub(crate) fn plan_summary_prompt_chunks_v1(
+    template: FfiSummaryTemplateConfig,
+    segments: Vec<FfiSummarySegmentInput>,
+    chunk_char_budget: Option<u64>,
+) -> SonaCoreBindingResult<Vec<FfiLlmPromptChunk>> {
+    let template = summary_template_config_from_ffi(template);
+    let segments = summary_segment_inputs_from_ffi(segments);
+    let chunk_char_budget = optional_u64_to_usize(chunk_char_budget, "chunk char budget")?
+        .unwrap_or(DEFAULT_SUMMARY_CHUNK_CHAR_BUDGET)
+        .max(MIN_SUMMARY_CHUNK_CHAR_BUDGET);
+    let chunks = core_split_summary_segments(&segments, chunk_char_budget);
+    let total_chunks = chunks.len();
+    let mut start = 0usize;
+
+    Ok(chunks
+        .into_iter()
+        .enumerate()
+        .map(|(index, chunk)| {
+            let end = start + chunk.len();
+            let prompt =
+                core_build_summary_chunk_prompt(&template, &chunk, index + 1, total_chunks);
+            let ffi_chunk =
+                mapper::llm_prompt_chunk_to_ffi(start, end, index + 1, total_chunks, prompt);
+            start = end;
+            ffi_chunk
+        })
+        .collect())
+}
+
+pub(crate) fn parse_polish_chunk_v1(
+    response_text: String,
+    expected_segments: Vec<FfiLlmSegmentInput>,
+    chunk_number: u64,
+) -> SonaCoreBindingResult<Vec<FfiPolishedSegment>> {
+    let expected = llm_segment_inputs_from_ffi(expected_segments);
+    Ok(core_parse_polish_chunk(
+        &response_text,
+        &expected,
+        u64_to_usize(chunk_number, "chunk number")?,
+    )
+    .map_err(|error| SonaCoreBindingError::InvalidInput {
+        reason: error.to_string(),
+    })?
+    .into_iter()
+    .map(mapper::polished_segment_to_ffi)
+    .collect())
+}
+
+pub(crate) fn parse_translate_chunk_v1(
+    response_text: String,
+    expected_segments: Vec<FfiLlmSegmentInput>,
+    chunk_number: u64,
+) -> SonaCoreBindingResult<Vec<FfiTranslatedSegment>> {
+    let expected = llm_segment_inputs_from_ffi(expected_segments);
+    Ok(core_parse_translate_chunk(
+        &response_text,
+        &expected,
+        u64_to_usize(chunk_number, "chunk number")?,
+    )
+    .map_err(|error| SonaCoreBindingError::InvalidInput {
+        reason: error.to_string(),
+    })?
+    .into_iter()
+    .map(mapper::translated_segment_to_ffi)
+    .collect())
+}
+
+fn transcript_segments_from_ffi(
+    segments: Vec<FfiTranscriptSegment>,
+) -> SonaCoreBindingResult<Vec<TranscriptSegment>> {
+    history_transcript_segments_from_ffi(segments).map_err(|error| {
+        SonaCoreBindingError::InvalidInput {
+            reason: error.to_string(),
+        }
+    })
+}
+
+fn llm_segment_inputs_from_ffi(segments: Vec<FfiLlmSegmentInput>) -> Vec<LlmSegmentInput> {
+    segments
+        .into_iter()
+        .map(llm_segment_input_from_ffi)
+        .collect()
+}
+
+fn summary_segment_inputs_from_ffi(
+    segments: Vec<FfiSummarySegmentInput>,
+) -> Vec<SummarySegmentInput> {
+    segments
+        .into_iter()
+        .map(summary_segment_input_from_ffi)
+        .collect()
 }
 
 fn u64_to_usize(value: u64, label: &str) -> SonaCoreBindingResult<usize> {

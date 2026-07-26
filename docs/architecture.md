@@ -232,13 +232,21 @@ Every `*_json` UniFFI export is classified in
   surface, so this binding does not own its schema.
 - **`pending-migration`** — reviewed debt. The export transports a complete
   snapshot, record, request, or result as a JSON string and must gain a typed
-  `_v1` sibling. Currently only the 29 LLM transcript-payload functions.
+  `_v1` sibling. Only `complete_llm_json` remains: `LlmCompletionOptions` pulls
+  in the response-format, prompt-cache, and capability policy trees, which is a
+  separate slice.
 
 Typed domains keep both surfaces: `_json` stays as a compatibility delegate and
-`_v1` carries the typed contract. Migrated so far: Tag, History, Task Ledger,
-Recovery, Automation, Storage Usage, Export, Backup, Dashboard, Diagnostics, and
-Sync. No complete snapshot, status, or lifecycle result crosses the boundary as
-a JSON string any more.
+`_v1` carries the typed contract. Every domain is migrated: Tag, History, Task
+Ledger, Recovery, Automation, Storage Usage, Export, Backup, Dashboard,
+Diagnostics, Sync, and LLM.
+
+Some `*_json` exports are permanent by design rather than debt. Besides
+arbitrary config and the legacy Project surface, the **parser entry points**
+(`llm_config_from_json`, `polish_segments_request_from_json`, and their two
+siblings) exist precisely to turn the app's stored JSON into a typed record —
+the typed form is their *output*, so a typed input would make them identity
+functions.
 
 ### Credentials never cross as printable fields
 

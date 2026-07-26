@@ -19,6 +19,11 @@ use crate::mapper::{
     llm_task_items_chunk_to_ffi, llm_task_progress_to_ffi, llm_task_result_to_ffi,
     llm_task_summary_chunk_to_ffi, llm_task_text_to_ffi,
 };
+use crate::mapper::{
+    FfiPolishSegmentsRequest, FfiSummarizeTranscriptRequest, FfiTranslateSegmentsRequest,
+    polish_segments_request_from_ffi, summarize_transcript_request_from_ffi,
+    translate_segments_request_from_ffi,
+};
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 
 #[uniffi::export(foreign)]
@@ -97,32 +102,62 @@ pub(crate) async fn run_llm_polish_json(
     request_json: String,
     observer: Arc<dyn FfiLlmTaskObserver>,
 ) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
-    run_polish_with_runtime(&request_json, OnlineLlmAdapter, observer).await
+    let request: PolishSegmentsRequest = parse_core_json(&request_json, "polish segments request")?;
+    run_polish_with_runtime(request, OnlineLlmAdapter, observer).await
 }
 
 pub(crate) async fn run_llm_translate_json(
     request_json: String,
     observer: Arc<dyn FfiLlmTaskObserver>,
 ) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
-    run_translate_with_runtime(&request_json, OnlineLlmAdapter, observer).await
+    let request: TranslateSegmentsRequest =
+        parse_core_json(&request_json, "translate segments request")?;
+    run_translate_with_runtime(request, OnlineLlmAdapter, observer).await
 }
 
 pub(crate) async fn run_llm_summary_json(
     request_json: String,
     observer: Arc<dyn FfiLlmTaskObserver>,
 ) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
-    run_summary_with_runtime(&request_json, OnlineLlmAdapter, observer).await
+    let request: SummarizeTranscriptRequest =
+        parse_core_json(&request_json, "summarize transcript request")?;
+    run_summary_with_runtime(request, OnlineLlmAdapter, observer).await
+}
+
+// The typed twins convert instead of parsing, then share the same runtime path.
+
+pub(crate) async fn run_llm_polish_v1(
+    request: FfiPolishSegmentsRequest,
+    observer: Arc<dyn FfiLlmTaskObserver>,
+) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
+    let request = polish_segments_request_from_ffi(request)?;
+    run_polish_with_runtime(request, OnlineLlmAdapter, observer).await
+}
+
+pub(crate) async fn run_llm_translate_v1(
+    request: FfiTranslateSegmentsRequest,
+    observer: Arc<dyn FfiLlmTaskObserver>,
+) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
+    let request = translate_segments_request_from_ffi(request)?;
+    run_translate_with_runtime(request, OnlineLlmAdapter, observer).await
+}
+
+pub(crate) async fn run_llm_summary_v1(
+    request: FfiSummarizeTranscriptRequest,
+    observer: Arc<dyn FfiLlmTaskObserver>,
+) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
+    let request = summarize_transcript_request_from_ffi(request)?;
+    run_summary_with_runtime(request, OnlineLlmAdapter, observer).await
 }
 
 async fn run_polish_with_runtime<Runtime>(
-    request_json: &str,
+    request: PolishSegmentsRequest,
     runtime: Runtime,
     observer: Arc<dyn FfiLlmTaskObserver>,
 ) -> SonaCoreBindingResult<FfiLlmTaskFinal>
 where
     Runtime: LlmTaskRuntimePort,
 {
-    let request: PolishSegmentsRequest = parse_core_json(request_json, "polish segments request")?;
     let task_id = request.task_id.clone();
     let observer = FfiLlmTaskObserverAdapter::new(task_id.clone(), observer);
     let result = LlmTaskService::new(runtime)
@@ -133,15 +168,13 @@ where
 }
 
 async fn run_translate_with_runtime<Runtime>(
-    request_json: &str,
+    request: TranslateSegmentsRequest,
     runtime: Runtime,
     observer: Arc<dyn FfiLlmTaskObserver>,
 ) -> SonaCoreBindingResult<FfiLlmTaskFinal>
 where
     Runtime: LlmTaskRuntimePort,
 {
-    let request: TranslateSegmentsRequest =
-        parse_core_json(request_json, "translate segments request")?;
     let task_id = request.task_id.clone();
     let observer = FfiLlmTaskObserverAdapter::new(task_id.clone(), observer);
     let result = LlmTaskService::new(runtime)
@@ -152,15 +185,13 @@ where
 }
 
 async fn run_summary_with_runtime<Runtime>(
-    request_json: &str,
+    request: SummarizeTranscriptRequest,
     runtime: Runtime,
     observer: Arc<dyn FfiLlmTaskObserver>,
 ) -> SonaCoreBindingResult<FfiLlmTaskFinal>
 where
     Runtime: LlmTaskRuntimePort,
 {
-    let request: SummarizeTranscriptRequest =
-        parse_core_json(request_json, "summarize transcript request")?;
     let task_id = request.task_id.clone();
     let observer = FfiLlmTaskObserverAdapter::new(task_id.clone(), observer);
     let result = LlmTaskService::new(runtime)
@@ -340,13 +371,9 @@ mod tests {
             keywords: None,
         };
 
-        let result = run_polish_with_runtime(
-            &serde_json::to_string(&request).unwrap(),
-            runtime.clone(),
-            observer.clone(),
-        )
-        .await
-        .unwrap();
+        let result = run_polish_with_runtime(request, runtime.clone(), observer.clone())
+            .await
+            .unwrap();
 
         let items: Vec<PolishedSegment> = serde_json::from_str(&result.result_json).unwrap();
         let mapped = runtime.request.lock().unwrap().clone().unwrap();

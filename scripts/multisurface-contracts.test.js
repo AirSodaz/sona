@@ -1193,38 +1193,16 @@ const UNIFFI_JSON_ONLY_EXPORTS = new Map([
   ['update_history_project_assignments_json', 'dynamic-leaf'],
   ['reassign_history_project_json', 'dynamic-leaf'],
   ['load_tag_repository_state_json', 'dynamic-leaf'],
-  // Reviewed debt: transcript segment payloads crossing as JSON strings.
-  ...[
-    'llm_config_from_json',
-    'validate_llm_config_json',
-    'validate_llm_generate_request_json',
-    'validate_polish_segments_request_json',
-    'validate_translate_segments_request_json',
-    'validate_summarize_transcript_request_json',
-    'llm_segment_inputs_from_transcript_json',
-    'summary_segment_inputs_from_transcript_json',
-    'merge_translated_items_into_transcript_json',
-    'merge_polished_items_into_transcript_json',
-    'summary_source_fingerprint_from_transcript_json',
-    'build_polish_prompt_json',
-    'build_translate_prompt_json',
-    'build_summary_chunk_prompt_json',
-    'build_summary_finalize_prompt_json',
-    'plan_polish_prompt_chunks_json',
-    'plan_translate_prompt_chunks_json',
-    'plan_summary_prompt_chunks_json',
-    'parse_polish_chunk_json',
-    'parse_translate_chunk_json',
-    'polish_segments_request_from_json',
-    'translate_segments_request_from_json',
-    'summarize_transcript_request_from_json',
-    'complete_llm_json',
-    'list_llm_models_json',
-    'describe_llm_model_json',
-    'run_llm_polish_json',
-    'run_llm_translate_json',
-    'run_llm_summary_json',
-  ].map((name) => [name, 'pending-migration']),
+  // Parser entry points: their whole purpose is turning the app's stored JSON
+  // into the typed record, which is the *output*. A typed input would make them
+  // identity functions, so they stay JSON by design.
+  ['llm_config_from_json', 'dynamic-leaf'],
+  ['polish_segments_request_from_json', 'dynamic-leaf'],
+  ['translate_segments_request_from_json', 'dynamic-leaf'],
+  ['summarize_transcript_request_from_json', 'dynamic-leaf'],
+  // Reviewed debt: `LlmCompletionOptions` pulls in the response-format,
+  // prompt-cache, and capability policy trees, which is a separate slice.
+  ['complete_llm_json', 'pending-migration'],
 ]);
 
 function uniffiExports() {
@@ -1280,6 +1258,14 @@ test('UniFFI JSON-only exports stay on the reviewed typed-contract inventory', (
     'sync_run_now',
     'sync_list_conflicts',
     'sync_resolve_conflict',
+    'llm_segment_inputs_from_transcript',
+    'merge_translated_items_into_transcript',
+    'merge_polished_items_into_transcript',
+    'plan_summary_prompt_chunks',
+    'parse_polish_chunk',
+    'run_llm_polish',
+    'list_llm_models',
+    'describe_llm_model',
   ]) {
     assert.ok(
       exportedNames.has(`${migrated}_json`),
