@@ -865,11 +865,7 @@ fn installed_model_ids_for_models_dir(models_dir: &Path) -> HashSet<String> {
 
 fn is_preset_model_install_path_complete(model: &PresetModel, install_path: &Path) -> bool {
     match install_path.metadata() {
-        Ok(metadata) => model.install_path_is_complete(
-            true,
-            metadata.is_file(),
-            metadata.len(),
-        ),
+        Ok(metadata) => model.install_path_is_complete(true, metadata.is_file(), metadata.len()),
         Err(_) => model.install_path_is_complete(false, false, 0),
     }
 }

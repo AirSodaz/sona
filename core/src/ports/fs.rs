@@ -137,7 +137,7 @@ impl FileSystem for MockFileSystem {
         // Simulate parent directory creation like the runtime filesystem adapter does.
         if let Some(parent) = path.parent() {
             let parent_key = parent.to_string_lossy().to_string();
-            files.entry(parent_key).or_insert_with(Vec::new);
+            files.entry(parent_key).or_default();
         }
         files.insert(key, contents.to_vec());
         Ok(())

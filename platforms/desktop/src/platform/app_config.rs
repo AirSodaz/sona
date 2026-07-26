@@ -1,12 +1,18 @@
 use serde_json::Value;
 use sona_core::config::ConfigError;
 use sona_runtime_fs::SystemClock;
-use sona_sqlite::{Database, SqliteAppConfigAdapter};
+#[cfg(test)]
+use sona_sqlite::Database;
+use sona_sqlite::SqliteAppConfigAdapter;
 use std::sync::Arc;
 use tauri::{AppHandle, Runtime};
 
 use crate::platform::blocking::{map_err_string, sqlite_context};
 
+/// Test-only runner over a bare `Database`. Production paths go through
+/// `run_app_config_context`; these tests need direct connection access to
+/// corrupt rows and drop tables, which an `SqliteApplicationContext` hides.
+#[cfg(test)]
 fn run_app_config_adapter<T>(
     db: Arc<Database>,
     operation: impl FnOnce(&SqliteAppConfigAdapter) -> Result<T, ConfigError>,

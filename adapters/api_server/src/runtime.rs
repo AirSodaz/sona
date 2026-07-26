@@ -35,7 +35,7 @@ use crate::ip_whitelist::parse_ip_whitelist;
 use crate::jobs::{JobManager, JobStatus};
 use crate::platform::{ApiServerPlatform, ApiServerTranscriptionDefaults};
 use crate::state::ServerState;
-use crate::worker::start_worker_loop;
+use crate::worker::{TranscriptionWorkerDeps, start_worker_loop};
 
 pub struct ApiServerRuntimeConfig {
     pub host: String,
@@ -183,7 +183,6 @@ impl ApiServerDashboardHandle {
         Ok(ApiServerDashboardSnapshot { health, info, jobs })
     }
 }
-
 
 pub fn format_bind_error(error: std::io::Error, address: &str) -> ApiServerBindError {
     ApiServerBindError::from_io(error, address)
@@ -364,13 +363,15 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
     tokio::spawn(async move {
         start_worker_loop(
             rx,
-            job_manager_clone,
-            models_dir_clone,
-            max_concurrent,
-            worker_defaults,
-            worker_batch_transcriber,
-            worker_batch_plan_resolver,
-            worker_platform,
+            TranscriptionWorkerDeps {
+                job_manager: job_manager_clone,
+                models_dir: models_dir_clone,
+                max_concurrent,
+                transcription_defaults: worker_defaults,
+                batch_transcriber: worker_batch_transcriber,
+                batch_plan_resolver: worker_batch_plan_resolver,
+                platform: worker_platform,
+            },
         )
         .await;
     });

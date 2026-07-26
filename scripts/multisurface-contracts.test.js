@@ -37,6 +37,21 @@ function withoutInlineRustTests(source) {
   return testModule < 0 ? source : source.slice(0, testModule);
 }
 
+// The UniFFI binding is a two-layer surface: `#[uniffi::export]` in lib.rs
+// delegates straight into a `*_bridge` module. There is no intermediate facade
+// type; see the "no intermediate facade layer" test below.
+function assertBindingDelegatesToBridge(binding, functionName, bridgeModule) {
+  const delegation = new RegExp(
+    `#\\[uniffi::export[^\\]]*\\]\\s*pub\\s+(?:async\\s+)?fn\\s+${functionName}\\s*\\([^{]*\\{\\s*${bridgeModule}::`,
+    'u',
+  );
+  assert.match(
+    binding,
+    delegation,
+    `#[uniffi::export] ${functionName} must delegate directly to ${bridgeModule}`,
+  );
+}
+
 const coreBackup = read('core', 'src', 'backup', 'model.rs');
 const coreSync = read('core', 'src', 'sync', 'model.rs');
 const desktopBindings = read(
@@ -715,9 +730,62 @@ test('hosts reuse the shared SQLite application context', () => {
   }
 });
 
+test('per-call reopening SQLite repositories stay behind the test-support feature', () => {
+  // `LazySqlite*` repositories run a full `Database::open` (connection pool,
+  // migrations, optimize) on every method call. They exist for focused port
+  // tests only; hosts must inject a shared Database/SqliteApplicationContext.
+  // The feature gate makes host misuse a compile error rather than a review
+  // catch, so guard the gate itself.
+  const sqliteManifest = read('adapters', 'sqlite', 'Cargo.toml');
+  assert.match(
+    sqliteManifest,
+    /^\[features\]$/mu,
+    'sona-sqlite must declare a [features] table',
+  );
+  assert.match(
+    sqliteManifest,
+    /^test-support = \[\]$/mu,
+    'sona-sqlite must declare the test-support feature',
+  );
+
+  const sqliteLib = read('adapters', 'sqlite', 'src', 'lib.rs');
+  const libLines = sqliteLib.split('\n');
+  const gate = /#\[cfg\(any\(test, feature = "test-support"\)\)\]/u;
+  let gatedLazyDeclarations = 0;
+  libLines.forEach((line, index) => {
+    if (!/\bLazySqlite\w+\b/u.test(line)) {
+      return;
+    }
+    gatedLazyDeclarations += 1;
+    assert.match(
+      libLines[index - 1] ?? '',
+      gate,
+      `LazySqlite export must be feature-gated: ${line.trim()}`,
+    );
+  });
+  assert.ok(
+    gatedLazyDeclarations > 0,
+    'expected at least one gated LazySqlite export to guard',
+  );
+
+  // No host may turn the feature on, directly or transitively.
+  for (const host of [
+    ['platforms', 'desktop'],
+    ['platforms', 'cli'],
+    ['adapters', 'uniffi_bind'],
+  ]) {
+    const manifest = read(...host, 'Cargo.toml');
+    const production = manifest.split(/^\[dev-dependencies\]$/mu)[0];
+    assert.doesNotMatch(
+      production,
+      /test-support/u,
+      `${host.join('/')} must not enable sona-sqlite test-support in production dependencies`,
+    );
+  }
+});
+
 test('UniFFI exposes versioned typed Tag contracts without extending legacy Project', () => {
   const binding = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
-  const facade = read('adapters', 'uniffi_bind', 'src', 'facade.rs');
   const tagBridge = withoutInlineRustTests(
     read('adapters', 'uniffi_bind', 'src', 'tag_bridge.rs'),
   );
@@ -754,17 +822,15 @@ test('UniFFI exposes versioned typed Tag contracts without extending legacy Proj
       'u',
     );
     assert.match(binding, exportedFunction);
-    assert.match(facade, new RegExp(`pub\\s+fn\\s+${functionName}\\b`, 'u'));
+    assertBindingDelegatesToBridge(binding, functionName, 'tag_bridge');
     assert.match(tagBridge, new RegExp(`pub\\(crate\\)\\s+fn\\s+${functionName}\\b`, 'u'));
   }
 
-  const projectSurface = `${binding}\n${facade}`;
-  assert.doesNotMatch(projectSurface, /FfiProject\w*V1|\b\w*project\w*_v1\b/iu);
+  assert.doesNotMatch(binding, /FfiProject\w*V1|\b\w*project\w*_v1\b/iu);
 });
 
 test('UniFFI exposes typed History V1 contracts and Android consumes them without JSON', () => {
   const binding = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
-  const facade = read('adapters', 'uniffi_bind', 'src', 'facade.rs');
   const queryBridge = withoutInlineRustTests(
     read('adapters', 'uniffi_bind', 'src', 'history_query_bridge.rs'),
   );
@@ -884,15 +950,16 @@ test('UniFFI exposes typed History V1 contracts and Android consumes them withou
       binding,
       new RegExp(`#\\[uniffi::export[^\\]]*\\]\\s*pub\\s+async\\s+fn\\s+${functionName}\\b`, 'u'),
     );
-    assert.match(facade, new RegExp(`pub\\s+async\\s+fn\\s+${functionName}\\b`, 'u'));
   }
   for (const functionName of queryFunctions) {
+    assertBindingDelegatesToBridge(binding, functionName, 'history_query_bridge');
     assert.match(
       queryBridge,
       new RegExp(`pub\\(crate\\)\\s+async\\s+fn\\s+${functionName}\\b`, 'u'),
     );
   }
   for (const functionName of mutationFunctions) {
+    assertBindingDelegatesToBridge(binding, functionName, 'history_mutation_bridge');
     assert.match(
       mutationBridge,
       new RegExp(`pub\\(crate\\)\\s+async\\s+fn\\s+${functionName}\\b`, 'u'),
@@ -915,14 +982,13 @@ test('UniFFI exposes typed History V1 contracts and Android consumes them withou
   );
   assert.doesNotMatch(androidHistory, /kotlinx\.serialization\.json|buildJsonObject|parseJson/u);
   assert.doesNotMatch(
-    `${binding}\n${facade}\n${historyMapper}`,
+    `${binding}\n${historyMapper}`,
     /FfiProject\w*V1|\b\w*project\w*_v1\b|\bdelete_history_items_v1\b/iu,
   );
 });
 
 test('UniFFI exposes versioned typed Task Ledger contracts with tri-state patches', () => {
   const binding = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
-  const facade = read('adapters', 'uniffi_bind', 'src', 'facade.rs');
   const taskLedgerBridge = withoutInlineRustTests(
     read('adapters', 'uniffi_bind', 'src', 'task_ledger_bridge.rs'),
   );
@@ -966,7 +1032,7 @@ test('UniFFI exposes versioned typed Task Ledger contracts with tri-state patche
       'u',
     );
     assert.match(binding, exportedFunction);
-    assert.match(facade, new RegExp(`pub\\s+fn\\s+${functionName}\\b`, 'u'));
+    assertBindingDelegatesToBridge(binding, functionName, 'task_ledger_bridge');
     assert.match(
       taskLedgerBridge,
       new RegExp(`pub\\(crate\\)\\s+fn\\s+${functionName}\\b`, 'u'),
@@ -976,7 +1042,6 @@ test('UniFFI exposes versioned typed Task Ledger contracts with tri-state patche
 
 test('UniFFI exposes typed Recovery V1 records with JSON limited to dynamic leaves', () => {
   const binding = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
-  const facade = read('adapters', 'uniffi_bind', 'src', 'facade.rs');
   const recoveryBridge = withoutInlineRustTests(
     read('adapters', 'uniffi_bind', 'src', 'recovery_bridge.rs'),
   );
@@ -1030,7 +1095,7 @@ test('UniFFI exposes typed Recovery V1 records with JSON limited to dynamic leav
       'u',
     );
     assert.match(binding, exportedFunction);
-    assert.match(facade, new RegExp(`pub\\s+fn\\s+${functionName}\\b`, 'u'));
+    assertBindingDelegatesToBridge(binding, functionName, 'recovery_bridge');
     assert.match(
       recoveryBridge,
       new RegExp(`pub\\(crate\\)\\s+fn\\s+${functionName}\\b`, 'u'),
@@ -1048,7 +1113,6 @@ test('UniFFI exposes typed Recovery V1 records with JSON limited to dynamic leav
 
 test('UniFFI exposes typed Automation V1 repository and Tag-based validation contracts', () => {
   const binding = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
-  const facade = read('adapters', 'uniffi_bind', 'src', 'facade.rs');
   const automationBridge = withoutInlineRustTests(
     read('adapters', 'uniffi_bind', 'src', 'automation_bridge.rs'),
   );
@@ -1091,7 +1155,7 @@ test('UniFFI exposes typed Automation V1 repository and Tag-based validation con
       'u',
     );
     assert.match(binding, exportedFunction);
-    assert.match(facade, new RegExp(`pub\\s+fn\\s+${functionName}\\b`, 'u'));
+    assertBindingDelegatesToBridge(binding, functionName, 'automation_bridge');
     assert.match(
       automationBridge,
       new RegExp(`pub\\(crate\\)\\s+fn\\s+${functionName}\\b`, 'u'),
@@ -1101,8 +1165,198 @@ test('UniFFI exposes typed Automation V1 repository and Tag-based validation con
     binding,
     /pub\s+fn\s+validate_automation_rule_activation_v1\s*\([^)]*rule:\s*FfiAutomationValidationRuleV1[^)]*global_config_json:\s*String[^)]*tags:\s*Vec<FfiAutomationTagReferenceV1>/su,
   );
-  assert.doesNotMatch(
-    `${binding}\n${facade}`,
-    /FfiProject\w*V1|\b\w*project\w*_v1\b/iu,
+  assert.doesNotMatch(binding, /FfiProject\w*V1|\b\w*project\w*_v1\b/iu);
+});
+
+// Every `*_json` UniFFI export without a `*_v1` sibling, and why it is still
+// JSON. `dynamic-leaf` entries satisfy the typed-contract policy permanently:
+// their payload is arbitrary user config or provider extension data whose
+// schema this binding does not own. `pending-migration` entries are reviewed
+// debt: they transport a complete snapshot, record, request, or result as a
+// JSON string and must gain a typed `_v1` sibling.
+//
+// Adding a new `*_json` export without a `*_v1` sibling fails this test until
+// it is classified here. Migrating one means deleting its row.
+const UNIFFI_JSON_ONLY_EXPORTS = new Map([
+  // Arbitrary application config and settings values.
+  ['load_app_config_json', 'dynamic-leaf'],
+  ['save_app_config_json', 'dynamic-leaf'],
+  ['get_app_setting_json', 'dynamic-leaf'],
+  ['set_app_setting_json', 'dynamic-leaf'],
+  ['default_config_json', 'dynamic-leaf'],
+  ['migrate_app_config_json', 'dynamic-leaf'],
+  ['resolve_effective_config_json', 'dynamic-leaf'],
+  // Provider-specific ASR configuration; parses into a typed record.
+  ['volcengine_doubao_asr_config_from_json', 'dynamic-leaf'],
+  // Legacy Project compatibility surface; deliberately gains no typed V1 API.
+  ['delete_history_items_json', 'dynamic-leaf'],
+  ['update_history_project_assignments_json', 'dynamic-leaf'],
+  ['reassign_history_project_json', 'dynamic-leaf'],
+  ['load_tag_repository_state_json', 'dynamic-leaf'],
+  // Reviewed debt: complete snapshots and results still crossing as JSON.
+  ['load_dashboard_snapshot_json', 'pending-migration'],
+  ['load_diagnostics_snapshot_json', 'pending-migration'],
+  // Reviewed debt: Sync status, lifecycle results, and conflict records.
+  ...[
+    'sync_test_provider_json',
+    'sync_get_status_json',
+    'sync_create_vault_json',
+    'sync_preview_join_json',
+    'sync_join_vault_json',
+    'sync_unlock_json',
+    'sync_unlock_with_recovery_json',
+    'sync_set_paused_json',
+    'sync_disconnect_json',
+    'sync_run_now_json',
+    'sync_change_preset_json',
+    'sync_change_master_password_json',
+    'sync_list_conflicts_json',
+    'sync_get_conflict_json',
+    'sync_resolve_conflict_json',
+  ].map((name) => [name, 'pending-migration']),
+  // Reviewed debt: transcript segment payloads crossing as JSON strings.
+  ...[
+    'llm_config_from_json',
+    'validate_llm_config_json',
+    'validate_llm_generate_request_json',
+    'validate_polish_segments_request_json',
+    'validate_translate_segments_request_json',
+    'validate_summarize_transcript_request_json',
+    'llm_segment_inputs_from_transcript_json',
+    'summary_segment_inputs_from_transcript_json',
+    'merge_translated_items_into_transcript_json',
+    'merge_polished_items_into_transcript_json',
+    'summary_source_fingerprint_from_transcript_json',
+    'build_polish_prompt_json',
+    'build_translate_prompt_json',
+    'build_summary_chunk_prompt_json',
+    'build_summary_finalize_prompt_json',
+    'plan_polish_prompt_chunks_json',
+    'plan_translate_prompt_chunks_json',
+    'plan_summary_prompt_chunks_json',
+    'parse_polish_chunk_json',
+    'parse_translate_chunk_json',
+    'polish_segments_request_from_json',
+    'translate_segments_request_from_json',
+    'summarize_transcript_request_from_json',
+    'complete_llm_json',
+    'list_llm_models_json',
+    'describe_llm_model_json',
+    'run_llm_polish_json',
+    'run_llm_translate_json',
+    'run_llm_summary_json',
+  ].map((name) => [name, 'pending-migration']),
+]);
+
+function uniffiExports() {
+  const binding = withoutInlineRustTests(
+    read('adapters', 'uniffi_bind', 'src', 'lib.rs'),
+  );
+  return [
+    ...binding.matchAll(
+      /#\[uniffi::export[^\]]*\]\s*pub\s+(?:async\s+)?fn\s+(\w+)\s*\(/gu,
+    ),
+  ].map(([, name]) => name);
+}
+
+test('UniFFI JSON-only exports stay on the reviewed typed-contract inventory', () => {
+  const exported = uniffiExports();
+  assert.ok(
+    exported.length > 100,
+    `expected the full exported UniFFI surface, found ${exported.length} functions`,
+  );
+
+  const exportedNames = new Set(exported);
+  const jsonOnly = exported.filter(
+    (name) => /_json\b/u.test(name) && !exportedNames.has(name.replace(/_json\b/u, '_v1')),
+  );
+
+  assert.deepEqual(
+    [...jsonOnly].sort(),
+    [...UNIFFI_JSON_ONLY_EXPORTS.keys()].sort(),
+    'every JSON-only UniFFI export must be classified as dynamic-leaf or pending-migration; ' +
+      'add a typed _v1 sibling or record the reason here',
+  );
+
+  for (const [name, classification] of UNIFFI_JSON_ONLY_EXPORTS) {
+    assert.ok(
+      ['dynamic-leaf', 'pending-migration'].includes(classification),
+      `${name} has an unsupported classification ${classification}`,
+    );
+  }
+
+  // Domains already migrated must keep both surfaces so existing Kotlin callers
+  // keep compiling while new callers use the typed one.
+  for (const migrated of [
+    'load_storage_usage_snapshot',
+    'export_transcript_file',
+    'export_backup_archive',
+    'inspect_backup_archive',
+    'import_backup_archive',
+  ]) {
+    assert.ok(
+      exportedNames.has(`${migrated}_json`),
+      `${migrated}_json must remain as a compatibility delegate`,
+    );
+    assert.ok(
+      exportedNames.has(`${migrated}_v1`),
+      `${migrated}_v1 must expose the typed contract`,
+    );
+  }
+});
+
+test('UniFFI binding delegates to bridges without an intermediate facade layer', () => {
+  assert.ok(
+    !fs.existsSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'facade.rs')),
+    'the SonaCoreFacade forwarding layer was merged into lib.rs; do not reintroduce facade.rs',
+  );
+
+  const uniffiSources = rustSources('adapters/uniffi_bind/src');
+  for (const { relativePath, source } of uniffiSources) {
+    assert.doesNotMatch(
+      source,
+      /SonaCoreFacade/u,
+      `${relativePath} must call the *_bridge modules directly, not through a facade type`,
+    );
+  }
+
+  // The exported surface must stay a thin delegation layer: every
+  // #[uniffi::export] free function body starts with a `*_bridge::` call.
+  // `release_application_context` is the reviewed exception because it drives
+  // the host composition root itself rather than a domain bridge.
+  const compositionRootExports = new Set(['release_application_context']);
+  const binding = withoutInlineRustTests(
+    read('adapters', 'uniffi_bind', 'src', 'lib.rs'),
+  );
+  const exports = [
+    ...binding.matchAll(
+      /#\[uniffi::export[^\]]*\]\s*pub\s+(?:async\s+)?fn\s+(\w+)\s*\([^{]*\{\s*([\w:]+)/gu,
+    ),
+  ];
+  assert.ok(
+    exports.length > 100,
+    `expected the full exported UniFFI surface, found ${exports.length} functions`,
+  );
+  const observedCompositionRootExports = new Set();
+  for (const [, functionName, firstCall] of exports) {
+    if (compositionRootExports.has(functionName)) {
+      observedCompositionRootExports.add(functionName);
+      assert.match(
+        firstCall,
+        /^application_context::/u,
+        `${functionName} must delegate to the host composition root`,
+      );
+      continue;
+    }
+    assert.match(
+      firstCall,
+      /^\w+_bridge::/u,
+      `#[uniffi::export] ${functionName} must delegate to a *_bridge module, found ${firstCall}`,
+    );
+  }
+  assert.deepEqual(
+    [...observedCompositionRootExports].sort(),
+    [...compositionRootExports].sort(),
+    'composition-root export exceptions must stay explicit and must not become stale',
   );
 });

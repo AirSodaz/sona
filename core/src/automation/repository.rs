@@ -123,6 +123,7 @@ pub struct AutomationProfileRecord {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
+#[derive(Default)]
 pub struct AutomationRuleInputActions {
     #[serde(default)]
     pub auto_polish: bool,
@@ -130,16 +131,6 @@ pub struct AutomationRuleInputActions {
     pub auto_translate: bool,
     #[serde(default)]
     pub auto_summary: bool,
-}
-
-impl Default for AutomationRuleInputActions {
-    fn default() -> Self {
-        Self {
-            auto_polish: false,
-            auto_translate: false,
-            auto_summary: false,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

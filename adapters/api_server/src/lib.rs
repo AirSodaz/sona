@@ -32,6 +32,8 @@ pub use worker::build_local_transcribe_options;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::startup_channel_closed_error;
+    use crate::worker::{TranscriptionWorkerDeps, start_worker_loop};
     use async_trait::async_trait;
     use axum::{
         Router,
@@ -48,7 +50,9 @@ mod tests {
         BatchTranscribePlanResolver, GpuAvailabilityProvider, MediaFileValidator,
         ModelCatalogProvider, RuntimeCapabilityError,
     };
-    use sona_core::transcription::runtime::{BatchTranscribeOptions, BatchTranscribePlan, OutputTarget};
+    use sona_core::transcription::runtime::{
+        BatchTranscribeOptions, BatchTranscribePlan, OutputTarget,
+    };
     use sona_core::transcription::transcript::TranscriptSegment;
     use std::collections::HashMap;
     use std::fs;
@@ -57,8 +61,6 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tokio::sync::{RwLock, mpsc};
     use tower::ServiceExt;
-    use crate::runtime::startup_channel_closed_error;
-    use crate::worker::start_worker_loop;
 
     struct RejectingMediaValidator;
 
@@ -323,19 +325,21 @@ mod tests {
         let job_manager = JobManager::new(tx);
         let worker = tokio::spawn(start_worker_loop(
             rx,
-            job_manager.clone(),
-            PathBuf::from("models"),
-            1,
-            ApiServerTranscriptionDefaults::default(),
-            Arc::new(RecordingBatchTranscriber {
-                resolver_calls: Arc::clone(&resolver_calls),
-                calls: Arc::clone(&transcriber_calls),
-            }),
-            Arc::new(RecordingBatchPlanResolver {
-                calls: Arc::clone(&resolver_calls),
-                plan: test_batch_plan(input_path.clone()),
-            }),
-            Arc::new(DefaultApiServerPlatform),
+            TranscriptionWorkerDeps {
+                job_manager: job_manager.clone(),
+                models_dir: PathBuf::from("models"),
+                max_concurrent: 1,
+                transcription_defaults: ApiServerTranscriptionDefaults::default(),
+                batch_transcriber: Arc::new(RecordingBatchTranscriber {
+                    resolver_calls: Arc::clone(&resolver_calls),
+                    calls: Arc::clone(&transcriber_calls),
+                }),
+                batch_plan_resolver: Arc::new(RecordingBatchPlanResolver {
+                    calls: Arc::clone(&resolver_calls),
+                    plan: test_batch_plan(input_path.clone()),
+                }),
+                platform: Arc::new(DefaultApiServerPlatform),
+            },
         ));
         let job = TranscriptionJob {
             job_id: "injected-plan-job".to_string(),

@@ -80,11 +80,25 @@ owns the move.
 
 - Desktop: `platforms/desktop/src/app/setup.rs` plus `platforms/desktop/src/platform/` compose the desktop runtime.
 - CLI: `platforms/cli/src/lib.rs` and individual command modules compose CLI commands.
-- UniFFI/mobile: `adapters/uniffi_bind/src/application_context.rs` and `adapters/uniffi_bind/src/facade.rs` compose the mobile-facing surface. The `adapters/uniffi_bind` directory name is historical: `sona-uniffi-bind` has the host role, not an adapter role.
+- UniFFI/mobile: `adapters/uniffi_bind/src/application_context.rs` composes the mobile-facing runtime, and `adapters/uniffi_bind/src/lib.rs` publishes the exported surface. The `adapters/uniffi_bind` directory name is historical: `sona-uniffi-bind` has the host role, not an adapter role.
+
+The UniFFI surface is exactly two layers: an `#[uniffi::export]` free function in
+`lib.rs` delegates straight into the matching `*_bridge` module. The former
+`SonaCoreFacade` type in `facade.rs` forwarded every call a second time without
+adding behaviour and has been merged into `lib.rs`. Do not reintroduce an
+intermediate forwarding type; `scripts/multisurface-contracts.test.js` enforces
+this, allowing only `release_application_context` to call the composition root
+directly.
 
 Hosts share the SQLite composition type `SqliteApplicationContext` from
 `sona-sqlite`, but each host still owns its own wiring, lifecycle, and error
 mapping. There is no separate shared application-composition crate yet.
+
+**One context per application-data directory.** The UniFFI registry caches
+contexts by normalized path, and its capacity is a *soft* limit: an entry a
+caller still holds is never evicted, because reopening that path would create a
+second connection pool, migration run, and service graph for one directory.
+The cache may exceed capacity until its callers release.
 
 ### Application ownership today
 
@@ -105,6 +119,43 @@ crate is introduced.
   other domains live in their own modules under `core/src/`.
 - `core/src/history/` owns history records, query/mutation services, and the
   `HistoryStore` trait (`history/store.rs`, re-exported as `sona_core::history_store`).
+
+<a id="port-placement"></a>
+## Port placement
+
+Core owns every port, but not in one directory. Two placements exist and the
+distinction is the reviewed contract, not a stylistic preference.
+
+| Kind | Home | Test |
+| --- | --- | --- |
+| Capability port | `core/src/ports/<capability>.rs` | Domain-agnostic; more than one domain could use it |
+| Domain-owned port | `core/src/<domain>/` | Only that domain's use cases call it |
+
+**Capability ports** name an infrastructure capability, never a domain
+aggregate: `FileSystem`, `PathProvider`, `UnixMillisClock`, `EventEmitter`,
+`BatchTranscriber`, `LlmCompletionPort`, `GpuAvailabilityProvider`. A trait
+belongs here only if moving it into a single domain would be wrong.
+
+**Domain-owned ports** are the stores, repositories, and collaborators that
+belong to one domain: `HistoryStore`, `TagStore`, `AutomationStore`,
+`BackupStateRepository`, `RecoverySnapshotStore`, `SyncObjectStore`. They live
+under their domain module so the domain stays self-describing.
+
+Two rules follow, and both are enforced by
+`scripts/core-port-placement.test.js`:
+
+1. No `*Store` or `*Repository` trait may be declared in `core/src/ports/`.
+   A persistence-shaped trait is by definition owned by a domain.
+2. No trait in `core/src/ports/` may be named after a domain aggregate
+   (History, Tag, Automation, Backup, Recovery, TaskLedger, Dashboard,
+   StorageUsage, AppConfig).
+
+New domain ports should use `core/src/<domain>/ports.rs`, the form already used
+by `backup`, `dashboard`, `export`, `storage_usage`, and `sync`. Existing
+`repository.rs` / `store.rs` / `service.rs` placements in `automation`,
+`config`, `history`, `recovery`, `tag`, and `task_ledger` are grandfathered:
+they satisfy both rules above, and consolidating their file names is a separate
+slice, not a free cleanup.
 
 <a id="host-capability-matrix"></a>
 ## Host capability matrix
@@ -170,6 +221,25 @@ migration slice and contract tests.
 - **Policy:** keep public Project names during the compatibility window; physical
   frontend/API renames are a later slice.
 
+### UniFFI typed-contract inventory
+
+Every `*_json` UniFFI export is classified in
+`scripts/multisurface-contracts.test.js` (`UNIFFI_JSON_ONLY_EXPORTS`). A new
+`*_json` export without a `*_v1` sibling fails that test until it is classified.
+
+- **`dynamic-leaf`** — permanently allowed. The payload is arbitrary user
+  config, a provider extension document, or the legacy Project compatibility
+  surface, so this binding does not own its schema.
+- **`pending-migration`** — reviewed debt. The export transports a complete
+  snapshot, record, request, or result as a JSON string and must gain a typed
+  `_v1` sibling. Currently: Dashboard and Diagnostics snapshots, the 15 Sync
+  lifecycle/status/conflict functions, and the 29 LLM transcript-payload
+  functions.
+
+Typed domains keep both surfaces: `_json` stays as a compatibility delegate and
+`_v1` carries the typed contract. Migrated so far: Tag, History, Task Ledger,
+Recovery, Automation, Storage Usage, Export, and Backup.
+
 ### Other reviewed debt
 
 - Resolved outbound edges: `model-downloads` and `recovery-fs` no longer depend on `runtime-fs`; completeness rules live in Core and I/O stays local to each adapter.
@@ -205,4 +275,10 @@ Run the host wiring inventory when changing host composition roots or production
 
 ```text
 rtk node --test scripts/host-wiring-inventory.test.js
+```
+
+Run the port placement contract after adding or moving a port trait in Core:
+
+```text
+rtk node --test scripts/core-port-placement.test.js
 ```

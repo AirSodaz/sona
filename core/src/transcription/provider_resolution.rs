@@ -68,13 +68,11 @@ fn resolve_asr_provider_id_for_mode<'a>(
         })?;
 
     if mode == AsrMode::Streaming && !capability.supports_streaming {
-        return Err(
-            AsrPortError::new(
-                AsrPortErrorKind::Unsupported,
-                format!("provider {provider_id} 不支持流式识别"),
-            )
-            .with_code("STREAMING_NOT_SUPPORTED"),
-        );
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::Unsupported,
+            format!("provider {provider_id} 不支持流式识别"),
+        )
+        .with_code("STREAMING_NOT_SUPPORTED"));
     }
 
     Ok(capability.provider_id)

@@ -4,8 +4,12 @@ mod asr_mapper;
 mod asr_streaming_mapper;
 #[path = "mapper/automation_mapper.rs"]
 mod automation_mapper;
+#[path = "mapper/backup_mapper.rs"]
+mod backup_mapper;
 #[path = "mapper/config_mapper.rs"]
 mod config_mapper;
+#[path = "mapper/export_mapper.rs"]
+mod export_mapper;
 #[path = "mapper/history_mapper.rs"]
 mod history_mapper;
 #[path = "mapper/llm_mapper.rs"]
@@ -20,6 +24,8 @@ mod model_mapper;
 mod recovery_mapper;
 #[path = "mapper/runtime_mapper.rs"]
 mod runtime_mapper;
+#[path = "mapper/storage_usage_mapper.rs"]
+mod storage_usage_mapper;
 #[path = "mapper/tag_mapper.rs"]
 mod tag_mapper;
 #[path = "mapper/task_ledger_mapper.rs"]
@@ -28,7 +34,17 @@ mod task_ledger_mapper;
 pub use asr_mapper::*;
 pub use asr_streaming_mapper::*;
 pub use automation_mapper::*;
+pub(crate) use backup_mapper::prepared_backup_import_to_ffi;
+pub use backup_mapper::{
+    FfiBackupApplyResultV1, FfiBackupManifestCountsV1, FfiBackupManifestScopesV1,
+    FfiBackupManifestV1, FfiPreparedBackupImportV1,
+};
 pub use config_mapper::*;
+pub(crate) use export_mapper::export_request_from_ffi;
+pub use export_mapper::{
+    FfiExportFormatV1, FfiExportModeV1, FfiExportTranscriptFileRequestV1,
+    FfiExportTranscriptFileResultV1,
+};
 pub use history_mapper::{
     FfiHistoryAudioStatusV1, FfiHistoryCompleteLiveDraftRequestV1,
     FfiHistoryCreateLiveDraftRequestV1, FfiHistoryCreateTranscriptSnapshotRequestV1,
@@ -58,5 +74,10 @@ pub use recovery_mapper::{
     FfiRecoverySnapshotV1, FfiRecoverySourceV1,
 };
 pub use runtime_mapper::*;
+pub use storage_usage_mapper::{
+    FfiAudioUsageCategoryV1, FfiDatabaseUsageCategoryV1, FfiFileUsageCategoryV1,
+    FfiSqliteIndexUsageEntryV1, FfiSqliteUsageSummaryV1, FfiStorageUsageCategoriesV1,
+    FfiStorageUsageSnapshotV1, FfiWebviewCacheUsageCategoryV1,
+};
 pub use tag_mapper::*;
 pub use task_ledger_mapper::*;

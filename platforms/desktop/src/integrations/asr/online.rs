@@ -88,8 +88,7 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
                 file_path: file_path.clone(),
                 request: request.clone(),
             })
-            .await
-            .map_err(AsrPortError::from)?;
+            .await?;
 
         let mut segments =
             apply_timeline_normalization(output.segments, request.normalization_options);

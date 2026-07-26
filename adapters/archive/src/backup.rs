@@ -694,12 +694,13 @@ fn parse_prepared_session(
         .map(ToOwned::to_owned)
         .collect::<HashSet<_>>();
     expected_paths.insert(workspace_path.to_string());
-    if manifest.schema_version >= 3 && manifest.counts.automation_profiles > 0 {
-        if !paths.contains(AUTOMATION_PROFILES_PATH) {
-            return Err(invalid_backup(format!(
-                "Backup is missing required entry: {AUTOMATION_PROFILES_PATH}"
-            )));
-        }
+    if manifest.schema_version >= 3
+        && manifest.counts.automation_profiles > 0
+        && !paths.contains(AUTOMATION_PROFILES_PATH)
+    {
+        return Err(invalid_backup(format!(
+            "Backup is missing required entry: {AUTOMATION_PROFILES_PATH}"
+        )));
     }
     if manifest.schema_version >= 3 && paths.contains(AUTOMATION_PROFILES_PATH) {
         expected_paths.insert(AUTOMATION_PROFILES_PATH.to_string());
@@ -967,9 +968,9 @@ fn read_backup_automation_rules(
         object.insert("actions".to_string(), serde_json::json!({}));
         object.insert(
             "migrationNotice".to_string(),
-            had_legacy_actions.then(|| Value::String(
+            if had_legacy_actions { Value::String(
                 "Legacy automatic polish/translation was disabled during migration. Configure a Tag automation to enable it.".to_string(),
-            )).unwrap_or(Value::Null),
+            ) } else { Value::Null },
         );
     }
     serde_json::from_value(Value::Array(rules))

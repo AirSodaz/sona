@@ -4,19 +4,58 @@ use serde::Serialize;
 use sona_archive::FsBackupAdapter;
 use sona_core::backup::{
     BackupApplyResult, BackupDataset, BackupError, BackupExportRequest, BackupImportRequest,
-    BackupInspectRequest, BackupRestoreDataset, BackupStateRepository,
+    BackupInspectRequest, BackupManifest, BackupRestoreDataset, BackupStateRepository,
+    PreparedBackupImport,
 };
 use sona_runtime_fs::SystemClock;
 use sona_sqlite::{SqliteBackupStateRepository, validate_backup_restore_dataset};
 
 use crate::application_context::application_context;
-use crate::{SonaCoreBindingError, SonaCoreBindingResult};
+use crate::mapper::prepared_backup_import_to_ffi;
+use crate::{
+    FfiBackupApplyResultV1, FfiBackupManifestV1, FfiPreparedBackupImportV1, SonaCoreBindingError,
+    SonaCoreBindingResult,
+};
 
 pub(crate) async fn export_backup_archive_json(
     app_data_dir: String,
     archive_path: String,
     app_version: String,
 ) -> SonaCoreBindingResult<String> {
+    run_export_archive(app_data_dir, archive_path, app_version)
+        .await
+        .and_then(canonical_json)
+}
+
+pub(crate) async fn inspect_backup_archive_json(
+    archive_path: String,
+) -> SonaCoreBindingResult<String> {
+    run_inspect_archive(archive_path)
+        .await
+        .and_then(canonical_json)
+}
+
+pub(crate) async fn import_backup_archive_json(
+    app_data_dir: String,
+    archive_path: String,
+    default_rule_set_name: String,
+    confirm_replace: bool,
+) -> SonaCoreBindingResult<String> {
+    run_import_archive(
+        app_data_dir,
+        archive_path,
+        default_rule_set_name,
+        confirm_replace,
+    )
+    .await
+    .and_then(canonical_json)
+}
+
+async fn run_export_archive(
+    app_data_dir: String,
+    archive_path: String,
+    app_version: String,
+) -> SonaCoreBindingResult<BackupManifest> {
     require_non_empty(&app_data_dir, "export app_data_dir")?;
     require_non_empty(&archive_path, "export archive_path")?;
     require_non_empty(&app_version, "export app_version")?;
@@ -37,15 +76,12 @@ pub(crate) async fn export_backup_archive_json(
                 app_version,
             })
             .map_err(backup_error)
-            .and_then(canonical_json)
     })
     .await
     .map_err(backup_error)?
 }
 
-pub(crate) async fn inspect_backup_archive_json(
-    archive_path: String,
-) -> SonaCoreBindingResult<String> {
+async fn run_inspect_archive(archive_path: String) -> SonaCoreBindingResult<PreparedBackupImport> {
     require_non_empty(&archive_path, "inspect archive_path")?;
 
     tokio::task::spawn_blocking(move || {
@@ -59,18 +95,17 @@ pub(crate) async fn inspect_backup_archive_json(
         adapter
             .inspect_archive(BackupInspectRequest { archive_path })
             .map_err(backup_error)
-            .and_then(canonical_json)
     })
     .await
     .map_err(backup_error)?
 }
 
-pub(crate) async fn import_backup_archive_json(
+async fn run_import_archive(
     app_data_dir: String,
     archive_path: String,
     default_rule_set_name: String,
     confirm_replace: bool,
-) -> SonaCoreBindingResult<String> {
+) -> SonaCoreBindingResult<BackupApplyResult> {
     require_non_empty(&app_data_dir, "import app_data_dir")?;
     require_non_empty(&archive_path, "import archive_path")?;
     require_non_empty(&default_rule_set_name, "import default_rule_set_name")?;
@@ -92,10 +127,42 @@ pub(crate) async fn import_backup_archive_json(
                 confirm_replace,
             })
             .map_err(backup_error)
-            .and_then(canonical_json)
     })
     .await
     .map_err(backup_error)?
+}
+
+pub(crate) async fn export_backup_archive_v1(
+    app_data_dir: String,
+    archive_path: String,
+    app_version: String,
+) -> SonaCoreBindingResult<FfiBackupManifestV1> {
+    run_export_archive(app_data_dir, archive_path, app_version)
+        .await
+        .map(Into::into)
+}
+
+pub(crate) async fn inspect_backup_archive_v1(
+    archive_path: String,
+) -> SonaCoreBindingResult<FfiPreparedBackupImportV1> {
+    let prepared = run_inspect_archive(archive_path).await?;
+    prepared_backup_import_to_ffi(prepared).map_err(backup_error)
+}
+
+pub(crate) async fn import_backup_archive_v1(
+    app_data_dir: String,
+    archive_path: String,
+    default_rule_set_name: String,
+    confirm_replace: bool,
+) -> SonaCoreBindingResult<FfiBackupApplyResultV1> {
+    run_import_archive(
+        app_data_dir,
+        archive_path,
+        default_rule_set_name,
+        confirm_replace,
+    )
+    .await
+    .map(Into::into)
 }
 
 fn require_non_empty(value: &str, field: &str) -> SonaCoreBindingResult<()> {
@@ -191,8 +258,9 @@ mod tests {
     };
 
     use super::{
-        canonical_json, export_backup_archive_json, import_backup_archive_json,
-        inspect_backup_archive_json,
+        canonical_json, export_backup_archive_json, export_backup_archive_v1,
+        import_backup_archive_json, import_backup_archive_v1, inspect_backup_archive_json,
+        inspect_backup_archive_v1,
     };
     use crate::SonaCoreBindingError;
 
@@ -523,6 +591,76 @@ mod tests {
             restored.config["textReplacementSets"][0]["name"],
             "Imported Rules"
         );
+    }
+
+    #[tokio::test]
+    async fn typed_v1_archive_roundtrip_matches_the_json_surface() {
+        let root = tempfile::tempdir().unwrap();
+        let source_dir = root.path().join("source");
+        let destination_dir = root.path().join("destination");
+        let archive = root.path().join("typed.sona-backup");
+        fs::create_dir_all(&source_dir).unwrap();
+        fs::create_dir_all(&destination_dir).unwrap();
+        seed_five_scopes(&source_dir);
+
+        let typed_manifest = export_backup_archive_v1(
+            path_arg(&source_dir),
+            path_arg(&archive),
+            "0.8.0".to_string(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(typed_manifest.app_version, "0.8.0");
+        assert_eq!(typed_manifest.counts.tags, 1);
+        assert_eq!(typed_manifest.counts.history_items, 1);
+        assert!(typed_manifest.scopes.config && typed_manifest.scopes.analytics);
+
+        let typed_preview = inspect_backup_archive_v1(path_arg(&archive)).await.unwrap();
+        let json_preview: PreparedBackupImport = canonical_output(
+            &inspect_backup_archive_json(path_arg(&archive))
+                .await
+                .unwrap(),
+        );
+        assert_eq!(typed_preview.manifest, typed_manifest);
+        assert_eq!(typed_preview.tags_json.len(), json_preview.tags.len());
+        assert_eq!(
+            typed_preview.automation_rules_json.len(),
+            json_preview.automation_rules.len()
+        );
+        // The dynamic leaves must stay parseable JSON documents.
+        assert_eq!(
+            serde_json::from_str::<Value>(&typed_preview.config_json).unwrap(),
+            json_preview.config
+        );
+        for (typed, expected) in typed_preview.tags_json.iter().zip(&json_preview.tags) {
+            assert_eq!(&serde_json::from_str::<Value>(typed).unwrap(), expected);
+        }
+
+        let typed_result = import_backup_archive_v1(
+            path_arg(&destination_dir),
+            path_arg(&archive),
+            "Imported Rules".to_string(),
+            true,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(typed_result.manifest, typed_manifest);
+        assert!(!typed_result.import_id.is_empty());
+    }
+
+    #[tokio::test]
+    async fn typed_v1_rejects_blank_arguments_before_touching_the_filesystem() {
+        let root = tempfile::tempdir().unwrap();
+        let archive = root.path().join("never-created.sona-backup");
+
+        let error =
+            export_backup_archive_v1("   ".to_string(), path_arg(&archive), "0.8.0".to_string())
+                .await
+                .unwrap_err();
+
+        assert!(matches!(error, SonaCoreBindingError::Backup { .. }));
+        assert!(!archive.exists());
     }
 
     #[tokio::test]

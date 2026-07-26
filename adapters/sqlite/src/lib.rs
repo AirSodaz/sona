@@ -2,13 +2,15 @@ pub mod analytics;
 mod application_context;
 pub mod automation;
 pub mod backup_state;
-pub mod backup_state_repository;
+#[cfg(any(test, feature = "test-support"))]
+mod backup_state_repository;
 pub mod config_store;
 pub mod dashboard_repository;
 pub mod error;
 pub mod history_fs_utils;
 pub mod history_mutation_repository;
-pub mod history_query_repository;
+#[cfg(any(test, feature = "test-support"))]
+mod history_query_repository;
 pub mod history_store;
 mod legacy_change_time;
 pub mod legacy_migration;
@@ -16,7 +18,7 @@ pub mod llm_usage;
 pub mod ports;
 pub mod schema;
 pub mod storage_usage;
-pub mod storage_usage_repository;
+mod storage_usage_repository;
 pub mod sync_repository;
 pub mod tag;
 pub mod task_ledger;
@@ -26,21 +28,21 @@ pub use automation::{
     AutomationRepositoryState, SqliteAutomationAdapter, SqliteAutomationRepository,
 };
 pub use backup_state::{SqliteBackupStateRepository, validate_backup_restore_dataset};
+#[cfg(any(test, feature = "test-support"))]
 pub use backup_state_repository::LazySqliteBackupStateRepository;
 pub use config_store::{SqliteAppConfigAdapter, SqliteConfigStore};
 pub use dashboard_repository::{
     SqliteDashboardService, create_dashboard_service, load_dashboard_snapshot,
 };
 pub use error::DatabaseError;
-#[allow(deprecated)]
-pub use history_mutation_repository::{
-    DeferredSqliteHistoryMutationRepository, LazySqliteHistoryMutationRepository,
-};
+pub use history_mutation_repository::DeferredSqliteHistoryMutationRepository;
+#[cfg(any(test, feature = "test-support"))]
 pub use history_query_repository::LazySqliteHistoryQueryRepository;
 pub use history_store::SqliteHistoryStore;
+#[cfg(any(test, feature = "test-support"))]
+pub use storage_usage_repository::LazySqliteStorageUsageRepository;
 pub use storage_usage_repository::{
-    LazySqliteStorageUsageRepository, load_storage_usage_snapshot,
-    load_storage_usage_snapshot_with_database,
+    load_storage_usage_snapshot, load_storage_usage_snapshot_with_database,
 };
 pub use sync_repository::{
     SqliteSyncRepository, SqliteSyncRepositoryFactory, record_sync_operation_in_transaction,

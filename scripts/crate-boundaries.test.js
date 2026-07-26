@@ -105,6 +105,7 @@ test('stable architecture guides publish the reviewed roles and exceptions', () 
     'directory-vs-role',
     'dependency-direction',
     'composition-roots',
+    'port-placement',
     'host-capability-matrix',
     'error-boundaries',
     'compatibility-policy',

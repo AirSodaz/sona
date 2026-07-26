@@ -1,13 +1,12 @@
+use rusqlite::types::Type;
 use sona_core::history::mutation_repository::{HistoryItemMetaPatch, HistoryMutationError};
 use sona_core::history::{
     HistoryAudioStatus, HistoryDraftSource, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
 };
 use sona_core::history_store::HistoryStoreError;
-use rusqlite::types::Type;
 use std::str::FromStr;
 
 use crate::history_fs_utils::ensure_safe_file_name;
-
 
 pub(super) fn validate_id(id: &str, label: &str) -> Result<(), String> {
     ensure_safe_file_name(id, label).map_err(|error| error.to_string())?;
@@ -143,7 +142,10 @@ pub(super) fn invalid_history_column(
     )
 }
 
-pub(super) fn apply_history_item_updates(item: &mut HistoryItemRecord, updates: &HistoryItemMetaPatch) {
+pub(super) fn apply_history_item_updates(
+    item: &mut HistoryItemRecord,
+    updates: &HistoryItemMetaPatch,
+) {
     if let Some(timestamp) = updates.timestamp {
         item.timestamp = timestamp;
     }

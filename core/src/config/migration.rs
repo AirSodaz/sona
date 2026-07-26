@@ -55,10 +55,8 @@ pub(crate) fn resolve_effective_config_inner(
         )),
     );
     let selected_polish_preset_id = config.get("polishPresetId").and_then(flatten_id_value);
-    let polish_preset_id = coerce_polish_preset_id(
-        selected_polish_preset_id.as_deref(),
-        config.get("polishCustomPresets"),
-    );
+    let polish_preset_id =
+        coerce_polish_preset_id(selected_polish_preset_id, config.get("polishCustomPresets"));
     config.insert(
         "polishPresetId".to_string(),
         Value::String(polish_preset_id),
@@ -771,7 +769,7 @@ fn repair_field_type(
     key: &str,
     is_valid: impl Fn(&Value) -> bool,
 ) {
-    if !config.get(key).is_some_and(|value| !is_valid(value)) {
+    if config.get(key).is_none_or(is_valid) {
         return;
     }
     if let Some(default) = defaults.get(key) {
@@ -2089,25 +2087,6 @@ fn ensure_summary_model_selection(mut settings: Value) -> Value {
     settings
 }
 
-fn set_enabled_by_ids(sets: &Value, enabled_ids: &[String]) -> Value {
-    let enabled: HashSet<&str> = enabled_ids.iter().map(String::as_str).collect();
-    Value::Array(
-        sets.as_array()
-            .unwrap_or(&Vec::new())
-            .iter()
-            .filter_map(|set| {
-                let mut object = set.as_object()?.clone();
-                let is_enabled = object
-                    .get("id")
-                    .and_then(Value::as_str)
-                    .is_some_and(|id| enabled.contains(id));
-                object.insert("enabled".to_string(), json!(is_enabled));
-                Some(Value::Object(object))
-            })
-            .collect(),
-    )
-}
-
 fn hash_string(value: &str) -> String {
     let mut hash: u32 = 5381;
     for unit in value.encode_utf16() {
@@ -2219,17 +2198,6 @@ fn normalize_temperature(value: Option<&Value>) -> Option<f64> {
     value
         .and_then(Value::as_f64)
         .filter(|temperature| *temperature >= 0.0 && *temperature <= 2.0)
-}
-
-fn array_strings(value: &Value) -> Option<Vec<String>> {
-    Some(
-        value
-            .as_array()?
-            .iter()
-            .filter_map(Value::as_str)
-            .map(str::to_string)
-            .collect(),
-    )
 }
 
 fn as_object_clone(value: &Value) -> Option<Map<String, Value>> {

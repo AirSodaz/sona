@@ -7,6 +7,15 @@ use sona_core::backup::{
 
 use crate::{Database, SqliteBackupStateRepository, validate_backup_restore_dataset};
 
+/// Test-only backup-state repository that opens a fresh [`Database`] per call.
+///
+/// Every method pays a full `Database::open`: directory creation, a five
+/// connection pool, an analytics attach, `run_migrations`, and `run_optimize`.
+/// That is acceptable for focused port tests and unacceptable in a host.
+/// Production code injects a shared `Database` / `SqliteApplicationContext`
+/// instead — see `DeferredSqliteHistoryMutationRepository` for the pattern.
+///
+/// Gated behind the `test-support` feature so it cannot leak into a host build.
 #[derive(Clone, Debug)]
 pub struct LazySqliteBackupStateRepository {
     app_local_data_dir: PathBuf,

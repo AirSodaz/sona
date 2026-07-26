@@ -73,6 +73,52 @@ fn application_context_cache_evicts_the_least_recently_used_entry() {
 }
 
 #[test]
+fn application_context_in_use_by_a_caller_is_never_evicted() {
+    let root = tempfile::tempdir().unwrap();
+    let held_path = root.path().join("held");
+    let mut registry = ApplicationContextRegistry::with_capacity(1);
+
+    // The caller keeps this handle for the whole test, standing in for an
+    // operation still in flight.
+    let held = registry.get_or_open(&held_path).unwrap();
+    for index in 0..4 {
+        registry
+            .get_or_open(&root.path().join(format!("other-{index}")))
+            .unwrap();
+    }
+
+    // Evicting `held` would make the next lookup open a second database for the
+    // same directory, so the cache must exceed its soft capacity instead.
+    assert!(registry.contains(&held_path));
+    let reopened = registry.get_or_open(&held_path).unwrap();
+    assert!(
+        Arc::ptr_eq(&held, &reopened),
+        "an in-use application context must not be reopened as a second instance"
+    );
+}
+
+#[test]
+fn application_context_becomes_evictable_once_its_callers_release_it() {
+    let root = tempfile::tempdir().unwrap();
+    let first_path = root.path().join("first");
+    let second_path = root.path().join("second");
+    let third_path = root.path().join("third");
+    let mut registry = ApplicationContextRegistry::with_capacity(2);
+
+    let first = registry.get_or_open(&first_path).unwrap();
+    registry.get_or_open(&second_path).unwrap();
+    // While held, `first` survives even though it is least recently used.
+    registry.get_or_open(&third_path).unwrap();
+    assert!(registry.contains(&first_path));
+
+    drop(first);
+    registry.get_or_open(&root.path().join("fourth")).unwrap();
+
+    assert!(!registry.contains(&first_path));
+    assert_eq!(registry.len(), 2);
+}
+
+#[test]
 fn failed_application_context_open_is_not_cached_and_can_recover() {
     let root = tempfile::tempdir().unwrap();
     let app_data_dir = root.path().join("app-data");

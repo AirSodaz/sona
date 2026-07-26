@@ -63,7 +63,7 @@ mod tests {
     use super::{
         get_app_setting_json, load_app_config_json, save_app_config_json, set_app_setting_json,
     };
-    use crate::{SonaCoreBindingError, SonaCoreFacade};
+    use crate::SonaCoreBindingError;
     use serde_json::{Value, json};
     use std::collections::HashSet;
     use std::fs;
@@ -251,26 +251,27 @@ mod tests {
         }
     }
 
+    /// Guards the exported UniFFI surface, not this module: the `crate::`
+    /// functions are the binding boundary that must keep delegating here.
     #[test]
-    fn facade_delegates_all_repository_operations() {
+    fn exported_binding_delegates_all_repository_operations() {
         let dir = TestDir::new();
         let app_data_dir = dir.app_data_dir();
 
-        SonaCoreFacade::save_app_config_json(app_data_dir.clone(), full_config().to_string())
-            .unwrap();
+        crate::save_app_config_json(app_data_dir.clone(), full_config().to_string()).unwrap();
         assert!(
-            SonaCoreFacade::load_app_config_json(app_data_dir.clone())
+            crate::load_app_config_json(app_data_dir.clone())
                 .unwrap()
                 .is_some()
         );
-        SonaCoreFacade::set_app_setting_json(
+        crate::set_app_setting_json(
             app_data_dir.clone(),
             "facade".into(),
             json!({"ok": true}).to_string(),
         )
         .unwrap();
         assert_eq!(
-            SonaCoreFacade::get_app_setting_json(app_data_dir, "facade".into()).unwrap(),
+            crate::get_app_setting_json(app_data_dir, "facade".into()).unwrap(),
             Some(json!({"ok": true}).to_string())
         );
     }

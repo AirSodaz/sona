@@ -11,12 +11,17 @@
 
 The UniFFI-facing **host**: it owns context lifecycle, wires concrete outbound
 adapters and the Sync application, maps typed domain errors to binding results,
-and exports the mobile surface (`facade`, bridges, mappers).
+and exports the mobile surface (bridges and mappers).
 
 Primary composition entry points:
 
 - `src/application_context.rs` — per application-data-dir host context / registry
-- `src/facade.rs` — UniFFI-facing API surface
+- `src/lib.rs` — UniFFI-facing API surface
+
+The surface is two layers deep: an `#[uniffi::export]` free function in
+`src/lib.rs` delegates straight into its `*_bridge` module. Do not add an
+intermediate forwarding type between them (a `SonaCoreFacade` used to exist and
+was merged away); `scripts/multisurface-contracts.test.js` enforces this.
 
 ## What this crate is not
 

@@ -44,7 +44,9 @@ pub fn create_volcengine_streaming_session(
     observer: Arc<dyn AsrRuntimeObserver>,
 ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
     if request.mode != AsrMode::Streaming {
-        return Err(AsrPortError::from(SherpaError::VolcengineRealtimeOnlyForStreaming));
+        return Err(AsrPortError::from(
+            SherpaError::VolcengineRealtimeOnlyForStreaming,
+        ));
     }
     crate::resolve_volcengine_config_checked(&request, crate::VolcengineMode::Streaming)
         .map_err(|e| AsrPortError::from(SherpaError::from(e)))?;
@@ -69,19 +71,27 @@ impl AsrStreamingSession for VolcengineStreamingSession {
     }
 
     async fn stop(&self) -> Result<(), AsrPortError> {
-        stop_streaming_recognizer_impl(self).await.map_err(AsrPortError::from)
+        stop_streaming_recognizer_impl(self)
+            .await
+            .map_err(AsrPortError::from)
     }
 
     async fn flush(&self) -> Result<(), AsrPortError> {
-        flush_streaming_recognizer_impl(self).await.map_err(AsrPortError::from)
+        flush_streaming_recognizer_impl(self)
+            .await
+            .map_err(AsrPortError::from)
     }
 
     async fn feed_audio_chunk(&self, samples: Vec<u8>) -> Result<(), AsrPortError> {
-        feed_audio_chunk_impl(self, samples).await.map_err(AsrPortError::from)
+        feed_audio_chunk_impl(self, samples)
+            .await
+            .map_err(AsrPortError::from)
     }
 
     async fn feed_audio_samples(&self, samples: &[f32]) -> Result<(), AsrPortError> {
-        feed_audio_samples_impl(self, samples).await.map_err(AsrPortError::from)
+        feed_audio_samples_impl(self, samples)
+            .await
+            .map_err(AsrPortError::from)
     }
 }
 
@@ -551,6 +561,8 @@ mod tests {
             request,
             Arc::new(RecordingObserver::default()),
         );
+        // `expect_err` needs `T: Debug`, and the Ok type is a `dyn` session.
+        #[allow(clippy::err_expect)]
         let err = result.err().expect("batch mode should be rejected");
         assert_eq!(err.code(), "VOLCENGINE_REALTIME_ONLY_FOR_STREAMING");
     }
@@ -567,8 +579,7 @@ mod tests {
         let err = session
             .feed_audio_chunk(vec![1, 2])
             .await
-            .err()
-            .expect("feed before connect should fail");
+            .expect_err("feed before connect should fail");
         assert_eq!(err.code(), "VOLCENGINE_WEB_SOCKET_NOT_CONNECTED");
     }
 

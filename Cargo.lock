@@ -6200,6 +6200,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "sona-core",
+ "sona-sqlite",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -6272,6 +6273,7 @@ name = "sona-uniffi-bind"
 version = "0.8.0"
 dependencies = [
  "async-trait",
+ "log",
  "serde",
  "serde_json",
  "sha2 0.10.9",

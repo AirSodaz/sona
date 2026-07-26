@@ -8,11 +8,11 @@ use sona_core::models::downloads::ResolvedModelDownload;
 
 fn is_resolved_model_install_complete(resolved: &ResolvedModelDownload) -> bool {
     match std::fs::metadata(&resolved.install_path) {
-        Ok(metadata) => resolved.model.install_path_is_complete(
-            true,
-            metadata.is_file(),
-            metadata.len(),
-        ),
+        Ok(metadata) => {
+            resolved
+                .model
+                .install_path_is_complete(true, metadata.is_file(), metadata.len())
+        }
         Err(_) => resolved.model.install_path_is_complete(false, false, 0),
     }
 }

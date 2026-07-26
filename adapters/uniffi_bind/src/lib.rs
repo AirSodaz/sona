@@ -11,7 +11,6 @@ mod config_bridge;
 mod dashboard_bridge;
 mod diagnostics_bridge;
 mod export_bridge;
-mod facade;
 mod history_mutation_bridge;
 mod history_query_bridge;
 mod json_bridge;
@@ -32,29 +31,32 @@ pub use asr_batch_bridge::{
     FfiOnlineAsrBatchResult,
 };
 pub use asr_streaming_bridge::{FfiAsrStreamingObserver, FfiAsrStreamingSession};
-pub use facade::SonaCoreFacade;
 pub use llm_task_bridge::FfiLlmTaskObserver;
 pub use mapper::{
     FfiAsrEngine, FfiAsrInferenceMetric, FfiAsrMode, FfiAsrModelLoadMetric,
-    FfiAsrStreamingErrorEvent, FfiAsrTranscriptUpdateEvent, FfiAutomationActionsV1,
-    FfiAutomationExportConfigV1, FfiAutomationProcessedInputV1, FfiAutomationProcessedRecordV1,
-    FfiAutomationProfileInputV1, FfiAutomationProfileRecordV1, FfiAutomationRepositoryInputV1,
-    FfiAutomationRepositoryStateV1, FfiAutomationRuleInputV1, FfiAutomationRuleRecordV1,
-    FfiAutomationRuleValidationResultV1, FfiAutomationStageConfigV1, FfiAutomationTagReferenceV1,
-    FfiAutomationValidationExportConfigV1, FfiAutomationValidationRuleV1,
-    FfiAutomationValidationStageConfigV1, FfiBatchSegmentationMode, FfiConfigMigrationResult,
-    FfiHistoryAudioStatusV1, FfiHistoryCompleteLiveDraftRequestV1,
-    FfiHistoryCreateLiveDraftRequestV1, FfiHistoryCreateTranscriptSnapshotRequestV1,
-    FfiHistoryDeleteItemsRequestV1, FfiHistoryDraftSourcePatchV1, FfiHistoryDraftSourceV1,
-    FfiHistoryItemKindV1, FfiHistoryItemMetaPatchV1, FfiHistoryItemRecordV1,
-    FfiHistoryItemStatusV1, FfiHistoryReplaceTagAssignmentsRequestV1,
-    FfiHistorySaveImportedFileRequestV1, FfiHistorySaveRecordingRequestV1,
-    FfiHistorySearchMatchEntryV1, FfiHistoryTagCountEntryV1, FfiHistoryTrashItemsRequestV1,
-    FfiHistoryUpdateItemMetaRequestV1, FfiHistoryUpdateTagAssignmentsRequestV1,
-    FfiHistoryUpdateTranscriptRequestV1, FfiHistoryWorkspaceDateFilterV1,
-    FfiHistoryWorkspaceFilterTypeV1, FfiHistoryWorkspaceItemCountsV1,
-    FfiHistoryWorkspaceItemSearchMatchV1, FfiHistoryWorkspaceQueryRequestV1,
-    FfiHistoryWorkspaceQueryResultV1, FfiHistoryWorkspaceScopeV1, FfiHistoryWorkspaceSearchRangeV1,
+    FfiAsrStreamingErrorEvent, FfiAsrTranscriptUpdateEvent, FfiAudioUsageCategoryV1,
+    FfiAutomationActionsV1, FfiAutomationExportConfigV1, FfiAutomationProcessedInputV1,
+    FfiAutomationProcessedRecordV1, FfiAutomationProfileInputV1, FfiAutomationProfileRecordV1,
+    FfiAutomationRepositoryInputV1, FfiAutomationRepositoryStateV1, FfiAutomationRuleInputV1,
+    FfiAutomationRuleRecordV1, FfiAutomationRuleValidationResultV1, FfiAutomationStageConfigV1,
+    FfiAutomationTagReferenceV1, FfiAutomationValidationExportConfigV1,
+    FfiAutomationValidationRuleV1, FfiAutomationValidationStageConfigV1, FfiBackupApplyResultV1,
+    FfiBackupManifestCountsV1, FfiBackupManifestScopesV1, FfiBackupManifestV1,
+    FfiBatchSegmentationMode, FfiConfigMigrationResult, FfiDatabaseUsageCategoryV1,
+    FfiExportFormatV1, FfiExportModeV1, FfiExportTranscriptFileRequestV1,
+    FfiExportTranscriptFileResultV1, FfiFileUsageCategoryV1, FfiHistoryAudioStatusV1,
+    FfiHistoryCompleteLiveDraftRequestV1, FfiHistoryCreateLiveDraftRequestV1,
+    FfiHistoryCreateTranscriptSnapshotRequestV1, FfiHistoryDeleteItemsRequestV1,
+    FfiHistoryDraftSourcePatchV1, FfiHistoryDraftSourceV1, FfiHistoryItemKindV1,
+    FfiHistoryItemMetaPatchV1, FfiHistoryItemRecordV1, FfiHistoryItemStatusV1,
+    FfiHistoryReplaceTagAssignmentsRequestV1, FfiHistorySaveImportedFileRequestV1,
+    FfiHistorySaveRecordingRequestV1, FfiHistorySearchMatchEntryV1, FfiHistoryTagCountEntryV1,
+    FfiHistoryTrashItemsRequestV1, FfiHistoryUpdateItemMetaRequestV1,
+    FfiHistoryUpdateTagAssignmentsRequestV1, FfiHistoryUpdateTranscriptRequestV1,
+    FfiHistoryWorkspaceDateFilterV1, FfiHistoryWorkspaceFilterTypeV1,
+    FfiHistoryWorkspaceItemCountsV1, FfiHistoryWorkspaceItemSearchMatchV1,
+    FfiHistoryWorkspaceQueryRequestV1, FfiHistoryWorkspaceQueryResultV1,
+    FfiHistoryWorkspaceScopeV1, FfiHistoryWorkspaceSearchRangeV1,
     FfiHistoryWorkspaceSearchSnippetV1, FfiHistoryWorkspaceSortOrderV1,
     FfiHistoryWorkspaceSummaryV1, FfiLiveRecordingDraftResultV1, FfiLlmCompletionResponse,
     FfiLlmConfig, FfiLlmExecutionMetadata, FfiLlmModality, FfiLlmModelMetadataSource,
@@ -68,20 +70,22 @@ pub use mapper::{
     FfiModelIdByNormalizedPathEntry, FfiModelPathByIdEntry, FfiModelRules, FfiModelSelectionOption,
     FfiModelSelectionPaths, FfiOnlineAsrBatchCapability, FfiOnlineAsrCapability,
     FfiOnlineAsrLocalFileBatchMode, FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest,
-    FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPresetModel, FfiRecoveredQueueItemV1,
-    FfiRecoveredTranscriptSegmentV1, FfiRecoveredTranscriptTimingUnitV1,
+    FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPreparedBackupImportV1, FfiPresetModel,
+    FfiRecoveredQueueItemV1, FfiRecoveredTranscriptSegmentV1, FfiRecoveredTranscriptTimingUnitV1,
     FfiRecoveredTranscriptTimingV1, FfiRecoveryFileStatV1, FfiRecoveryItemInputV1,
     FfiRecoveryItemStageV1, FfiRecoveryQueueStatusV1, FfiRecoveryResolutionV1,
     FfiRecoverySnapshotV1, FfiRecoverySourceV1, FfiRequiredCompanionModels,
     FfiResolvedModelDownload, FfiRuntimePathKind, FfiRuntimePathStatus, FfiSpeakerAttribution,
-    FfiSpeakerCandidate, FfiSpeakerTag, FfiStringPatchV1, FfiSummarizeTranscriptRequest,
-    FfiSummarySegmentInput, FfiSummaryTemplateConfig, FfiTagCreateInputV1, FfiTagRecordV1,
-    FfiTagRepositorySnapshotV1, FfiTagUpdateInputV1, FfiTaskLedgerKindV1, FfiTaskLedgerPatchV1,
-    FfiTaskLedgerRecordV1, FfiTaskLedgerSnapshotV1, FfiTaskLedgerStatusV1, FfiTimestampSupportHint,
-    FfiTranscriptSegment, FfiTranscriptSnapshotMetadataV1, FfiTranscriptSnapshotReasonV1,
-    FfiTranscriptSnapshotRecordV1, FfiTranscriptTiming, FfiTranscriptTimingLevel,
-    FfiTranscriptTimingSource, FfiTranscriptTimingUnit, FfiTranscriptUpdate,
-    FfiTranslateSegmentsRequest, FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig,
+    FfiSpeakerCandidate, FfiSpeakerTag, FfiSqliteIndexUsageEntryV1, FfiSqliteUsageSummaryV1,
+    FfiStorageUsageCategoriesV1, FfiStorageUsageSnapshotV1, FfiStringPatchV1,
+    FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiSummaryTemplateConfig,
+    FfiTagCreateInputV1, FfiTagRecordV1, FfiTagRepositorySnapshotV1, FfiTagUpdateInputV1,
+    FfiTaskLedgerKindV1, FfiTaskLedgerPatchV1, FfiTaskLedgerRecordV1, FfiTaskLedgerSnapshotV1,
+    FfiTaskLedgerStatusV1, FfiTimestampSupportHint, FfiTranscriptSegment,
+    FfiTranscriptSnapshotMetadataV1, FfiTranscriptSnapshotReasonV1, FfiTranscriptSnapshotRecordV1,
+    FfiTranscriptTiming, FfiTranscriptTimingLevel, FfiTranscriptTimingSource,
+    FfiTranscriptTimingUnit, FfiTranscriptUpdate, FfiTranslateSegmentsRequest,
+    FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, FfiWebviewCacheUsageCategoryV1,
 };
 pub use sync_secret_store_bridge::FfiSyncSecretStore;
 
@@ -140,19 +144,19 @@ impl From<sona_core::ports::asr::AsrPortError> for SonaCoreBindingError {
 
 #[uniffi::export]
 pub fn load_tag_repository_state_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::load_tag_repository_state_json(app_data_dir)
+    tag_bridge::load_tag_repository_state_json(app_data_dir)
 }
 
 #[uniffi::export]
 pub fn load_tag_repository_v1(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<FfiTagRepositorySnapshotV1> {
-    SonaCoreFacade::load_tag_repository_v1(app_data_dir)
+    tag_bridge::load_tag_repository_v1(app_data_dir)
 }
 
 #[uniffi::export]
 pub fn replace_tags_json(app_data_dir: String, tags_json: String) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::replace_tags_json(app_data_dir, tags_json)
+    tag_bridge::replace_tags_json(app_data_dir, tags_json)
 }
 
 #[uniffi::export]
@@ -160,12 +164,12 @@ pub fn replace_tags_v1(
     app_data_dir: String,
     tags: Vec<FfiTagRecordV1>,
 ) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::replace_tags_v1(app_data_dir, tags)
+    tag_bridge::replace_tags_v1(app_data_dir, tags)
 }
 
 #[uniffi::export]
 pub fn create_tag_json(app_data_dir: String, input_json: String) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::create_tag_json(app_data_dir, input_json)
+    tag_bridge::create_tag_json(app_data_dir, input_json)
 }
 
 #[uniffi::export]
@@ -173,7 +177,7 @@ pub fn create_tag_v1(
     app_data_dir: String,
     input: FfiTagCreateInputV1,
 ) -> SonaCoreBindingResult<FfiTagRecordV1> {
-    SonaCoreFacade::create_tag_v1(app_data_dir, input)
+    tag_bridge::create_tag_v1(app_data_dir, input)
 }
 
 #[uniffi::export]
@@ -182,7 +186,7 @@ pub fn update_tag_json(
     tag_id: String,
     updates_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::update_tag_json(app_data_dir, tag_id, updates_json)
+    tag_bridge::update_tag_json(app_data_dir, tag_id, updates_json)
 }
 
 #[uniffi::export]
@@ -191,17 +195,17 @@ pub fn update_tag_v1(
     tag_id: String,
     updates: FfiTagUpdateInputV1,
 ) -> SonaCoreBindingResult<Option<FfiTagRecordV1>> {
-    SonaCoreFacade::update_tag_v1(app_data_dir, tag_id, updates)
+    tag_bridge::update_tag_v1(app_data_dir, tag_id, updates)
 }
 
 #[uniffi::export]
 pub fn delete_tag(app_data_dir: String, tag_id: String) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::delete_tag(app_data_dir, tag_id)
+    tag_bridge::delete_tag(app_data_dir, tag_id)
 }
 
 #[uniffi::export]
 pub fn delete_tag_v1(app_data_dir: String, tag_id: String) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::delete_tag_v1(app_data_dir, tag_id)
+    tag_bridge::delete_tag_v1(app_data_dir, tag_id)
 }
 
 #[uniffi::export]
@@ -209,7 +213,7 @@ pub fn reorder_tags_json(
     app_data_dir: String,
     tag_ids_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::reorder_tags_json(app_data_dir, tag_ids_json)
+    tag_bridge::reorder_tags_json(app_data_dir, tag_ids_json)
 }
 
 #[uniffi::export]
@@ -217,7 +221,7 @@ pub fn reorder_tags_v1(
     app_data_dir: String,
     tag_ids: Vec<String>,
 ) -> SonaCoreBindingResult<Vec<FfiTagRecordV1>> {
-    SonaCoreFacade::reorder_tags_v1(app_data_dir, tag_ids)
+    tag_bridge::reorder_tags_v1(app_data_dir, tag_ids)
 }
 
 #[uniffi::export]
@@ -225,7 +229,7 @@ pub fn set_active_tag_id(
     app_data_dir: String,
     tag_id: Option<String>,
 ) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::set_active_tag_id(app_data_dir, tag_id)
+    tag_bridge::set_active_tag_id(app_data_dir, tag_id)
 }
 
 #[uniffi::export]
@@ -233,19 +237,19 @@ pub fn set_active_tag_id_v1(
     app_data_dir: String,
     tag_id: Option<String>,
 ) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::set_active_tag_id_v1(app_data_dir, tag_id)
+    tag_bridge::set_active_tag_id_v1(app_data_dir, tag_id)
 }
 
 #[uniffi::export]
 pub fn load_recovery_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::load_recovery_snapshot_json(app_data_dir)
+    recovery_bridge::load_recovery_snapshot_json(app_data_dir)
 }
 
 #[uniffi::export]
 pub fn load_recovery_snapshot_v1(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<FfiRecoverySnapshotV1> {
-    SonaCoreFacade::load_recovery_snapshot_v1(app_data_dir)
+    recovery_bridge::load_recovery_snapshot_v1(app_data_dir)
 }
 
 #[uniffi::export]
@@ -253,7 +257,7 @@ pub fn save_recovery_snapshot_json(
     app_data_dir: String,
     items_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::save_recovery_snapshot_json(app_data_dir, items_json)
+    recovery_bridge::save_recovery_snapshot_json(app_data_dir, items_json)
 }
 
 #[uniffi::export]
@@ -261,7 +265,7 @@ pub fn save_recovery_snapshot_v1(
     app_data_dir: String,
     items: Vec<FfiRecoveryItemInputV1>,
 ) -> SonaCoreBindingResult<FfiRecoverySnapshotV1> {
-    SonaCoreFacade::save_recovery_snapshot_v1(app_data_dir, items)
+    recovery_bridge::save_recovery_snapshot_v1(app_data_dir, items)
 }
 
 #[uniffi::export]
@@ -270,7 +274,7 @@ pub fn persist_recovery_queue_snapshot_json(
     queue_items_json: String,
     resolved_ids: Vec<String>,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::persist_recovery_queue_snapshot_json(
+    recovery_bridge::persist_recovery_queue_snapshot_json(
         app_data_dir,
         queue_items_json,
         resolved_ids,
@@ -283,19 +287,19 @@ pub fn persist_recovery_queue_snapshot_v1(
     queue_items: Vec<FfiRecoveryItemInputV1>,
     resolved_ids: Vec<String>,
 ) -> SonaCoreBindingResult<FfiRecoverySnapshotV1> {
-    SonaCoreFacade::persist_recovery_queue_snapshot_v1(app_data_dir, queue_items, resolved_ids)
+    recovery_bridge::persist_recovery_queue_snapshot_v1(app_data_dir, queue_items, resolved_ids)
 }
 
 #[uniffi::export]
 pub fn load_task_ledger_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::load_task_ledger_snapshot_json(app_data_dir)
+    task_ledger_bridge::load_task_ledger_snapshot_json(app_data_dir)
 }
 
 #[uniffi::export]
 pub fn load_task_ledger_snapshot_v1(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
-    SonaCoreFacade::load_task_ledger_snapshot_v1(app_data_dir)
+    task_ledger_bridge::load_task_ledger_snapshot_v1(app_data_dir)
 }
 
 #[uniffi::export]
@@ -303,7 +307,7 @@ pub fn upsert_task_ledger_record_json(
     app_data_dir: String,
     record_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::upsert_task_ledger_record_json(app_data_dir, record_json)
+    task_ledger_bridge::upsert_task_ledger_record_json(app_data_dir, record_json)
 }
 
 #[uniffi::export]
@@ -311,7 +315,7 @@ pub fn upsert_task_ledger_record_v1(
     app_data_dir: String,
     record: FfiTaskLedgerRecordV1,
 ) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
-    SonaCoreFacade::upsert_task_ledger_record_v1(app_data_dir, record)
+    task_ledger_bridge::upsert_task_ledger_record_v1(app_data_dir, record)
 }
 
 #[uniffi::export]
@@ -320,7 +324,7 @@ pub fn patch_task_ledger_record_json(
     id: String,
     patch_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::patch_task_ledger_record_json(app_data_dir, id, patch_json)
+    task_ledger_bridge::patch_task_ledger_record_json(app_data_dir, id, patch_json)
 }
 
 #[uniffi::export]
@@ -329,7 +333,7 @@ pub fn patch_task_ledger_record_v1(
     id: String,
     patch: FfiTaskLedgerPatchV1,
 ) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
-    SonaCoreFacade::patch_task_ledger_record_v1(app_data_dir, id, patch)
+    task_ledger_bridge::patch_task_ledger_record_v1(app_data_dir, id, patch)
 }
 
 #[uniffi::export]
@@ -337,7 +341,7 @@ pub fn remove_task_ledger_record_json(
     app_data_dir: String,
     id: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::remove_task_ledger_record_json(app_data_dir, id)
+    task_ledger_bridge::remove_task_ledger_record_json(app_data_dir, id)
 }
 
 #[uniffi::export]
@@ -345,35 +349,35 @@ pub fn remove_task_ledger_record_v1(
     app_data_dir: String,
     id: String,
 ) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
-    SonaCoreFacade::remove_task_ledger_record_v1(app_data_dir, id)
+    task_ledger_bridge::remove_task_ledger_record_v1(app_data_dir, id)
 }
 
 #[uniffi::export]
 pub fn clear_resolved_task_ledger_records_json(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::clear_resolved_task_ledger_records_json(app_data_dir)
+    task_ledger_bridge::clear_resolved_task_ledger_records_json(app_data_dir)
 }
 
 #[uniffi::export]
 pub fn clear_resolved_task_ledger_records_v1(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
-    SonaCoreFacade::clear_resolved_task_ledger_records_v1(app_data_dir)
+    task_ledger_bridge::clear_resolved_task_ledger_records_v1(app_data_dir)
 }
 
 #[uniffi::export]
 pub fn load_automation_repository_state_json(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::load_automation_repository_state_json(app_data_dir)
+    automation_bridge::load_automation_repository_state_json(app_data_dir)
 }
 
 #[uniffi::export]
 pub fn load_automation_repository_state_v1(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
-    SonaCoreFacade::load_automation_repository_state_v1(app_data_dir)
+    automation_bridge::load_automation_repository_state_v1(app_data_dir)
 }
 
 #[uniffi::export]
@@ -381,7 +385,7 @@ pub fn replace_automation_rules_json(
     app_data_dir: String,
     rules_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::replace_automation_rules_json(app_data_dir, rules_json)
+    automation_bridge::replace_automation_rules_json(app_data_dir, rules_json)
 }
 
 #[uniffi::export]
@@ -389,7 +393,7 @@ pub fn replace_automation_rules_v1(
     app_data_dir: String,
     rules: Vec<FfiAutomationRuleInputV1>,
 ) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
-    SonaCoreFacade::replace_automation_rules_v1(app_data_dir, rules)
+    automation_bridge::replace_automation_rules_v1(app_data_dir, rules)
 }
 
 #[uniffi::export]
@@ -397,7 +401,7 @@ pub fn replace_automation_processed_entries_json(
     app_data_dir: String,
     entries_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::replace_automation_processed_entries_json(app_data_dir, entries_json)
+    automation_bridge::replace_automation_processed_entries_json(app_data_dir, entries_json)
 }
 
 #[uniffi::export]
@@ -405,7 +409,7 @@ pub fn replace_automation_processed_entries_v1(
     app_data_dir: String,
     entries: Vec<FfiAutomationProcessedInputV1>,
 ) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
-    SonaCoreFacade::replace_automation_processed_entries_v1(app_data_dir, entries)
+    automation_bridge::replace_automation_processed_entries_v1(app_data_dir, entries)
 }
 
 #[uniffi::export]
@@ -413,7 +417,7 @@ pub fn replace_automation_repository_state_json(
     app_data_dir: String,
     state_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::replace_automation_repository_state_json(app_data_dir, state_json)
+    automation_bridge::replace_automation_repository_state_json(app_data_dir, state_json)
 }
 
 #[uniffi::export]
@@ -421,7 +425,7 @@ pub fn replace_automation_repository_state_v1(
     app_data_dir: String,
     input: FfiAutomationRepositoryInputV1,
 ) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
-    SonaCoreFacade::replace_automation_repository_state_v1(app_data_dir, input)
+    automation_bridge::replace_automation_repository_state_v1(app_data_dir, input)
 }
 
 #[uniffi::export]
@@ -430,7 +434,7 @@ pub fn validate_automation_rule_activation_json(
     global_config_json: String,
     project_json: Option<String>,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::validate_automation_rule_activation_json(
+    automation_bridge::validate_automation_rule_activation_json(
         rule_json,
         global_config_json,
         project_json,
@@ -443,17 +447,24 @@ pub fn validate_automation_rule_activation_v1(
     global_config_json: String,
     tags: Vec<FfiAutomationTagReferenceV1>,
 ) -> SonaCoreBindingResult<FfiAutomationRuleValidationResultV1> {
-    SonaCoreFacade::validate_automation_rule_activation_v1(rule, global_config_json, tags)
+    automation_bridge::validate_automation_rule_activation_v1(rule, global_config_json, tags)
 }
 
 #[uniffi::export]
 pub fn normalize_export_format(value: String) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::normalize_export_format(value)
+    runtime_bridge::normalize_export_format(value)
 }
 
 #[uniffi::export]
 pub async fn export_transcript_file_json(input_json: String) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::export_transcript_file_json(input_json).await
+    export_bridge::export_transcript_file_json(input_json).await
+}
+
+#[uniffi::export]
+pub async fn export_transcript_file_v1(
+    request: FfiExportTranscriptFileRequestV1,
+) -> SonaCoreBindingResult<FfiExportTranscriptFileResultV1> {
+    export_bridge::export_transcript_file_v1(request).await
 }
 
 #[uniffi::export]
@@ -462,12 +473,12 @@ pub async fn export_backup_archive_json(
     archive_path: String,
     app_version: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::export_backup_archive_json(app_data_dir, archive_path, app_version).await
+    backup_bridge::export_backup_archive_json(app_data_dir, archive_path, app_version).await
 }
 
 #[uniffi::export]
 pub async fn inspect_backup_archive_json(archive_path: String) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::inspect_backup_archive_json(archive_path).await
+    backup_bridge::inspect_backup_archive_json(archive_path).await
 }
 
 #[uniffi::export]
@@ -477,7 +488,39 @@ pub async fn import_backup_archive_json(
     default_rule_set_name: String,
     confirm_replace: bool,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::import_backup_archive_json(
+    backup_bridge::import_backup_archive_json(
+        app_data_dir,
+        archive_path,
+        default_rule_set_name,
+        confirm_replace,
+    )
+    .await
+}
+
+#[uniffi::export]
+pub async fn export_backup_archive_v1(
+    app_data_dir: String,
+    archive_path: String,
+    app_version: String,
+) -> SonaCoreBindingResult<FfiBackupManifestV1> {
+    backup_bridge::export_backup_archive_v1(app_data_dir, archive_path, app_version).await
+}
+
+#[uniffi::export]
+pub async fn inspect_backup_archive_v1(
+    archive_path: String,
+) -> SonaCoreBindingResult<FfiPreparedBackupImportV1> {
+    backup_bridge::inspect_backup_archive_v1(archive_path).await
+}
+
+#[uniffi::export]
+pub async fn import_backup_archive_v1(
+    app_data_dir: String,
+    archive_path: String,
+    default_rule_set_name: String,
+    confirm_replace: bool,
+) -> SonaCoreBindingResult<FfiBackupApplyResultV1> {
+    backup_bridge::import_backup_archive_v1(
         app_data_dir,
         archive_path,
         default_rule_set_name,
@@ -631,7 +674,7 @@ pub async fn list_history_items_json(
     limit: Option<u64>,
     offset: Option<u64>,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::list_history_items_json(app_data_dir, limit, offset).await
+    history_query_bridge::list_history_items_json(app_data_dir, limit, offset).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -640,7 +683,7 @@ pub async fn list_history_items_v1(
     limit: Option<u64>,
     offset: Option<u64>,
 ) -> SonaCoreBindingResult<Vec<FfiHistoryItemRecordV1>> {
-    SonaCoreFacade::list_history_items_v1(app_data_dir, limit, offset).await
+    history_query_bridge::list_history_items_v1(app_data_dir, limit, offset).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -648,7 +691,7 @@ pub async fn query_history_workspace_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::query_history_workspace_json(app_data_dir, request_json).await
+    history_query_bridge::query_history_workspace_json(app_data_dir, request_json).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -656,7 +699,7 @@ pub async fn query_history_workspace_v1(
     app_data_dir: String,
     request: FfiHistoryWorkspaceQueryRequestV1,
 ) -> SonaCoreBindingResult<FfiHistoryWorkspaceQueryResultV1> {
-    SonaCoreFacade::query_history_workspace_v1(app_data_dir, request).await
+    history_query_bridge::query_history_workspace_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -664,7 +707,7 @@ pub async fn load_history_transcript_json(
     app_data_dir: String,
     history_id: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::load_history_transcript_json(app_data_dir, history_id).await
+    history_query_bridge::load_history_transcript_json(app_data_dir, history_id).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -672,7 +715,7 @@ pub async fn load_history_transcript_v1(
     app_data_dir: String,
     history_id: String,
 ) -> SonaCoreBindingResult<Option<Vec<FfiTranscriptSegment>>> {
-    SonaCoreFacade::load_history_transcript_v1(app_data_dir, history_id).await
+    history_query_bridge::load_history_transcript_v1(app_data_dir, history_id).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -680,7 +723,7 @@ pub async fn list_history_transcript_snapshots_json(
     app_data_dir: String,
     history_id: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::list_history_transcript_snapshots_json(app_data_dir, history_id).await
+    history_query_bridge::list_history_transcript_snapshots_json(app_data_dir, history_id).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -688,7 +731,7 @@ pub async fn list_history_transcript_snapshots_v1(
     app_data_dir: String,
     history_id: String,
 ) -> SonaCoreBindingResult<Vec<FfiTranscriptSnapshotMetadataV1>> {
-    SonaCoreFacade::list_history_transcript_snapshots_v1(app_data_dir, history_id).await
+    history_query_bridge::list_history_transcript_snapshots_v1(app_data_dir, history_id).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -697,8 +740,12 @@ pub async fn load_history_transcript_snapshot_json(
     history_id: String,
     snapshot_id: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::load_history_transcript_snapshot_json(app_data_dir, history_id, snapshot_id)
-        .await
+    history_query_bridge::load_history_transcript_snapshot_json(
+        app_data_dir,
+        history_id,
+        snapshot_id,
+    )
+    .await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -707,7 +754,8 @@ pub async fn load_history_transcript_snapshot_v1(
     history_id: String,
     snapshot_id: String,
 ) -> SonaCoreBindingResult<Option<FfiTranscriptSnapshotRecordV1>> {
-    SonaCoreFacade::load_history_transcript_snapshot_v1(app_data_dir, history_id, snapshot_id).await
+    history_query_bridge::load_history_transcript_snapshot_v1(app_data_dir, history_id, snapshot_id)
+        .await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -715,7 +763,7 @@ pub async fn create_history_live_draft_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::create_history_live_draft_json(app_data_dir, request_json).await
+    history_mutation_bridge::create_history_live_draft_json(app_data_dir, request_json).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -723,7 +771,7 @@ pub async fn create_history_live_draft_v1(
     app_data_dir: String,
     request: FfiHistoryCreateLiveDraftRequestV1,
 ) -> SonaCoreBindingResult<FfiLiveRecordingDraftResultV1> {
-    SonaCoreFacade::create_history_live_draft_v1(app_data_dir, request).await
+    history_mutation_bridge::create_history_live_draft_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -731,7 +779,7 @@ pub async fn complete_history_live_draft_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::complete_history_live_draft_json(app_data_dir, request_json).await
+    history_mutation_bridge::complete_history_live_draft_json(app_data_dir, request_json).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -739,7 +787,7 @@ pub async fn complete_history_live_draft_v1(
     app_data_dir: String,
     request: FfiHistoryCompleteLiveDraftRequestV1,
 ) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
-    SonaCoreFacade::complete_history_live_draft_v1(app_data_dir, request).await
+    history_mutation_bridge::complete_history_live_draft_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -749,7 +797,7 @@ pub async fn save_history_recording_json(
     audio_bytes: Option<Vec<u8>>,
     native_audio_path: Option<String>,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::save_history_recording_json(
+    history_mutation_bridge::save_history_recording_json(
         app_data_dir,
         request_json,
         audio_bytes,
@@ -763,7 +811,7 @@ pub async fn save_history_recording_v1(
     app_data_dir: String,
     request: FfiHistorySaveRecordingRequestV1,
 ) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
-    SonaCoreFacade::save_history_recording_v1(app_data_dir, request).await
+    history_mutation_bridge::save_history_recording_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -771,7 +819,7 @@ pub async fn save_history_imported_file_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::save_history_imported_file_json(app_data_dir, request_json).await
+    history_mutation_bridge::save_history_imported_file_json(app_data_dir, request_json).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -779,7 +827,7 @@ pub async fn save_history_imported_file_v1(
     app_data_dir: String,
     request: FfiHistorySaveImportedFileRequestV1,
 ) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
-    SonaCoreFacade::save_history_imported_file_v1(app_data_dir, request).await
+    history_mutation_bridge::save_history_imported_file_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -787,7 +835,7 @@ pub async fn delete_history_items_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::delete_history_items_json(app_data_dir, request_json).await
+    history_mutation_bridge::delete_history_items_json(app_data_dir, request_json).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -795,7 +843,7 @@ pub async fn trash_history_items_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::trash_history_items_json(app_data_dir, request_json).await
+    history_mutation_bridge::trash_history_items_json(app_data_dir, request_json).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -803,7 +851,7 @@ pub async fn trash_history_items_v1(
     app_data_dir: String,
     request: FfiHistoryTrashItemsRequestV1,
 ) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::trash_history_items_v1(app_data_dir, request).await
+    history_mutation_bridge::trash_history_items_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -811,7 +859,7 @@ pub async fn restore_history_items_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::restore_history_items_json(app_data_dir, request_json).await
+    history_mutation_bridge::restore_history_items_json(app_data_dir, request_json).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -819,7 +867,7 @@ pub async fn restore_history_items_v1(
     app_data_dir: String,
     request: FfiHistoryDeleteItemsRequestV1,
 ) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::restore_history_items_v1(app_data_dir, request).await
+    history_mutation_bridge::restore_history_items_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -827,7 +875,7 @@ pub async fn purge_history_items_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::purge_history_items_json(app_data_dir, request_json).await
+    history_mutation_bridge::purge_history_items_json(app_data_dir, request_json).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -835,7 +883,7 @@ pub async fn purge_history_items_v1(
     app_data_dir: String,
     request: FfiHistoryDeleteItemsRequestV1,
 ) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::purge_history_items_v1(app_data_dir, request).await
+    history_mutation_bridge::purge_history_items_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -843,7 +891,7 @@ pub async fn update_history_transcript_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::update_history_transcript_json(app_data_dir, request_json).await
+    history_mutation_bridge::update_history_transcript_json(app_data_dir, request_json).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -851,7 +899,7 @@ pub async fn update_history_transcript_v1(
     app_data_dir: String,
     request: FfiHistoryUpdateTranscriptRequestV1,
 ) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
-    SonaCoreFacade::update_history_transcript_v1(app_data_dir, request).await
+    history_mutation_bridge::update_history_transcript_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -859,7 +907,8 @@ pub async fn create_history_transcript_snapshot_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::create_history_transcript_snapshot_json(app_data_dir, request_json).await
+    history_mutation_bridge::create_history_transcript_snapshot_json(app_data_dir, request_json)
+        .await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -867,7 +916,7 @@ pub async fn create_history_transcript_snapshot_v1(
     app_data_dir: String,
     request: FfiHistoryCreateTranscriptSnapshotRequestV1,
 ) -> SonaCoreBindingResult<FfiTranscriptSnapshotMetadataV1> {
-    SonaCoreFacade::create_history_transcript_snapshot_v1(app_data_dir, request).await
+    history_mutation_bridge::create_history_transcript_snapshot_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -875,7 +924,7 @@ pub async fn update_history_item_meta_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::update_history_item_meta_json(app_data_dir, request_json).await
+    history_mutation_bridge::update_history_item_meta_json(app_data_dir, request_json).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -883,7 +932,7 @@ pub async fn update_history_item_meta_v1(
     app_data_dir: String,
     request: FfiHistoryUpdateItemMetaRequestV1,
 ) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::update_history_item_meta_v1(app_data_dir, request).await
+    history_mutation_bridge::update_history_item_meta_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -891,7 +940,8 @@ pub async fn update_history_project_assignments_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::update_history_project_assignments_json(app_data_dir, request_json).await
+    history_mutation_bridge::update_history_project_assignments_json(app_data_dir, request_json)
+        .await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -899,7 +949,7 @@ pub async fn update_history_tag_assignments_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::update_history_tag_assignments_json(app_data_dir, request_json).await
+    history_mutation_bridge::update_history_tag_assignments_json(app_data_dir, request_json).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -907,7 +957,7 @@ pub async fn update_history_tag_assignments_v1(
     app_data_dir: String,
     request: FfiHistoryUpdateTagAssignmentsRequestV1,
 ) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::update_history_tag_assignments_v1(app_data_dir, request).await
+    history_mutation_bridge::update_history_tag_assignments_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -915,7 +965,7 @@ pub async fn replace_history_tag_assignments_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::replace_history_tag_assignments_json(app_data_dir, request_json).await
+    history_mutation_bridge::replace_history_tag_assignments_json(app_data_dir, request_json).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -923,7 +973,7 @@ pub async fn replace_history_tag_assignments_v1(
     app_data_dir: String,
     request: FfiHistoryReplaceTagAssignmentsRequestV1,
 ) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::replace_history_tag_assignments_v1(app_data_dir, request).await
+    history_mutation_bridge::replace_history_tag_assignments_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -931,27 +981,27 @@ pub async fn reassign_history_project_json(
     app_data_dir: String,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::reassign_history_project_json(app_data_dir, request_json).await
+    history_mutation_bridge::reassign_history_project_json(app_data_dir, request_json).await
 }
 
 #[uniffi::export]
 pub fn default_vad_model_id() -> String {
-    SonaCoreFacade::default_vad_model_id()
+    model_bridge::default_vad_model_id()
 }
 
 #[uniffi::export]
 pub fn default_punctuation_model_id() -> String {
-    SonaCoreFacade::default_punctuation_model_id()
+    model_bridge::default_punctuation_model_id()
 }
 
 #[uniffi::export]
 pub fn preset_model_name(model_id: String) -> Option<String> {
-    SonaCoreFacade::preset_model_name(model_id)
+    model_bridge::preset_model_name(model_id)
 }
 
 #[uniffi::export]
 pub fn preset_models() -> Vec<FfiPresetModel> {
-    SonaCoreFacade::preset_models()
+    model_bridge::preset_models()
 }
 
 #[uniffi::export]
@@ -959,7 +1009,7 @@ pub fn model_catalog_snapshot(
     models_dir: String,
     installed_model_ids: Vec<String>,
 ) -> FfiModelCatalogSnapshot {
-    SonaCoreFacade::model_catalog_snapshot(models_dir, installed_model_ids)
+    model_bridge::model_catalog_snapshot(models_dir, installed_model_ids)
 }
 
 #[uniffi::export]
@@ -968,7 +1018,7 @@ pub fn model_catalog_selected_ids(
     installed_model_ids: Vec<String>,
     paths: FfiModelSelectionPaths,
 ) -> FfiModelCatalogSelectedIds {
-    SonaCoreFacade::model_catalog_selected_ids(models_dir, installed_model_ids, paths)
+    model_bridge::model_catalog_selected_ids(models_dir, installed_model_ids, paths)
 }
 
 #[uniffi::export]
@@ -976,17 +1026,17 @@ pub fn resolve_model_download(
     model_id: String,
     models_dir: String,
 ) -> SonaCoreBindingResult<FfiResolvedModelDownload> {
-    SonaCoreFacade::resolve_model_download(model_id, models_dir)
+    model_bridge::resolve_model_download(model_id, models_dir)
 }
 
 #[uniffi::export]
 pub fn resolve_gpu_acceleration(value: Option<String>) -> SonaCoreBindingResult<Option<String>> {
-    SonaCoreFacade::resolve_gpu_acceleration(value)
+    model_bridge::resolve_gpu_acceleration(value)
 }
 
 #[uniffi::export]
 pub fn default_config_json() -> String {
-    SonaCoreFacade::default_config_json()
+    config_bridge::default_config_json()
 }
 
 #[uniffi::export]
@@ -995,7 +1045,7 @@ pub fn migrate_app_config_json(
     legacy_config_json: Option<String>,
     default_rule_set_name: String,
 ) -> SonaCoreBindingResult<FfiConfigMigrationResult> {
-    SonaCoreFacade::migrate_app_config_json(
+    config_bridge::migrate_app_config_json(
         saved_config_json,
         legacy_config_json,
         default_rule_set_name,
@@ -1007,12 +1057,12 @@ pub fn resolve_effective_config_json(
     global_config_json: String,
     project_json: Option<String>,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::resolve_effective_config_json(global_config_json, project_json)
+    config_bridge::resolve_effective_config_json(global_config_json, project_json)
 }
 
 #[uniffi::export]
 pub fn load_app_config_json(app_data_dir: String) -> SonaCoreBindingResult<Option<String>> {
-    SonaCoreFacade::load_app_config_json(app_data_dir)
+    app_config_repository_bridge::load_app_config_json(app_data_dir)
 }
 
 #[uniffi::export]
@@ -1020,7 +1070,7 @@ pub fn save_app_config_json(
     app_data_dir: String,
     config_json: String,
 ) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::save_app_config_json(app_data_dir, config_json)
+    app_config_repository_bridge::save_app_config_json(app_data_dir, config_json)
 }
 
 #[uniffi::export]
@@ -1028,7 +1078,7 @@ pub fn get_app_setting_json(
     app_data_dir: String,
     key: String,
 ) -> SonaCoreBindingResult<Option<String>> {
-    SonaCoreFacade::get_app_setting_json(app_data_dir, key)
+    app_config_repository_bridge::get_app_setting_json(app_data_dir, key)
 }
 
 #[uniffi::export]
@@ -1037,7 +1087,7 @@ pub fn set_app_setting_json(
     key: String,
     value_json: String,
 ) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::set_app_setting_json(app_data_dir, key, value_json)
+    app_config_repository_bridge::set_app_setting_json(app_data_dir, key, value_json)
 }
 
 #[uniffi::export]
@@ -1045,7 +1095,7 @@ pub async fn load_dashboard_snapshot_json(
     app_data_dir: String,
     deep: bool,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::load_dashboard_snapshot_json(app_data_dir, deep).await
+    dashboard_bridge::load_dashboard_snapshot_json(app_data_dir, deep).await
 }
 
 #[uniffi::export]
@@ -1053,19 +1103,26 @@ pub async fn load_diagnostics_snapshot_json(
     app_data_dir: String,
     input_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::load_diagnostics_snapshot_json(app_data_dir, input_json).await
+    diagnostics_bridge::load_diagnostics_snapshot_json(app_data_dir, input_json).await
 }
 
 #[uniffi::export]
 pub async fn load_storage_usage_snapshot_json(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::load_storage_usage_snapshot_json(app_data_dir).await
+    storage_usage_bridge::load_storage_usage_snapshot_json(app_data_dir).await
+}
+
+#[uniffi::export]
+pub async fn load_storage_usage_snapshot_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<FfiStorageUsageSnapshotV1> {
+    storage_usage_bridge::load_storage_usage_snapshot_v1(app_data_dir).await
 }
 
 #[uniffi::export]
 pub fn runtime_path_status(path: String) -> FfiRuntimePathStatus {
-    SonaCoreFacade::runtime_path_status(path)
+    runtime_bridge::runtime_path_status(path)
 }
 
 #[uniffi::export]
@@ -1074,7 +1131,7 @@ pub fn create_online_asr_streaming_session(
     request_json: String,
     observer: std::sync::Arc<dyn FfiAsrStreamingObserver>,
 ) -> SonaCoreBindingResult<std::sync::Arc<FfiAsrStreamingSession>> {
-    SonaCoreFacade::create_online_asr_streaming_session(instance_id, request_json, observer)
+    asr_streaming_bridge::create_online_asr_streaming_session(instance_id, request_json, observer)
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -1083,29 +1140,29 @@ pub async fn create_asr_streaming_session(
     request_json: String,
     observer: std::sync::Arc<dyn FfiAsrStreamingObserver>,
 ) -> SonaCoreBindingResult<std::sync::Arc<FfiAsrStreamingSession>> {
-    SonaCoreFacade::create_asr_streaming_session(instance_id, request_json, observer).await
+    asr_streaming_bridge::create_asr_streaming_session(instance_id, request_json, observer).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn transcribe_online_asr_batch(
     request: FfiOnlineAsrBatchRequest,
 ) -> SonaCoreBindingResult<FfiOnlineAsrBatchResult> {
-    SonaCoreFacade::transcribe_online_asr_batch(request).await
+    asr_batch_bridge::transcribe_online_asr_batch(request).await
 }
 
 #[uniffi::export]
 pub fn default_batch_segmentation_mode() -> FfiBatchSegmentationMode {
-    SonaCoreFacade::default_batch_segmentation_mode()
+    asr_bridge::default_batch_segmentation_mode()
 }
 
 #[uniffi::export]
 pub fn online_asr_providers() -> Vec<FfiOnlineAsrProvider> {
-    SonaCoreFacade::online_asr_providers()
+    asr_bridge::online_asr_providers()
 }
 
 #[uniffi::export]
 pub fn find_online_asr_provider(provider_id: String) -> Option<FfiOnlineAsrProvider> {
-    SonaCoreFacade::find_online_asr_provider(provider_id)
+    asr_bridge::find_online_asr_provider(provider_id)
 }
 
 #[uniffi::export]
@@ -1114,50 +1171,50 @@ pub fn online_asr_provider_request(
     profile_id: String,
     config_json: String,
 ) -> SonaCoreBindingResult<FfiOnlineAsrProviderRequest> {
-    SonaCoreFacade::online_asr_provider_request(provider_id, profile_id, config_json)
+    asr_bridge::online_asr_provider_request(provider_id, profile_id, config_json)
 }
 
 #[uniffi::export]
 pub fn volcengine_doubao_asr_config_from_json(
     config_json: String,
 ) -> SonaCoreBindingResult<FfiVolcengineDoubaoAsrConfig> {
-    SonaCoreFacade::volcengine_doubao_asr_config_from_json(config_json)
+    asr_bridge::volcengine_doubao_asr_config_from_json(config_json)
 }
 
 #[uniffi::export]
 pub fn llm_providers() -> Vec<FfiLlmProvider> {
-    SonaCoreFacade::llm_providers()
+    llm_bridge::llm_providers()
 }
 
 #[uniffi::export]
 pub fn find_llm_provider_by_id_or_alias(id_or_alias: String) -> Option<FfiLlmProvider> {
-    SonaCoreFacade::find_llm_provider_by_id_or_alias(id_or_alias)
+    llm_bridge::find_llm_provider_by_id_or_alias(id_or_alias)
 }
 
 #[uniffi::export]
 pub fn llm_config_from_json(config_json: String) -> SonaCoreBindingResult<FfiLlmConfig> {
-    SonaCoreFacade::llm_config_from_json(config_json)
+    llm_bridge::llm_config_from_json(config_json)
 }
 
 #[uniffi::export]
 pub async fn complete_llm_json(
     request_json: String,
 ) -> SonaCoreBindingResult<FfiLlmCompletionResponse> {
-    SonaCoreFacade::complete_llm_json(request_json).await
+    llm_runtime_bridge::complete_llm_json(request_json).await
 }
 
 #[uniffi::export]
 pub async fn list_llm_models_json(
     request_json: String,
 ) -> SonaCoreBindingResult<Vec<FfiLlmModelSummary>> {
-    SonaCoreFacade::list_llm_models_json(request_json).await
+    llm_runtime_bridge::list_llm_models_json(request_json).await
 }
 
 #[uniffi::export]
 pub async fn describe_llm_model_json(
     config_json: String,
 ) -> SonaCoreBindingResult<Option<FfiLlmModelSummary>> {
-    SonaCoreFacade::describe_llm_model_json(config_json).await
+    llm_runtime_bridge::describe_llm_model_json(config_json).await
 }
 
 #[uniffi::export]
@@ -1165,7 +1222,7 @@ pub async fn run_llm_polish_json(
     request_json: String,
     observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
 ) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
-    SonaCoreFacade::run_llm_polish_json(request_json, observer).await
+    llm_task_bridge::run_llm_polish_json(request_json, observer).await
 }
 
 #[uniffi::export]
@@ -1173,7 +1230,7 @@ pub async fn run_llm_translate_json(
     request_json: String,
     observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
 ) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
-    SonaCoreFacade::run_llm_translate_json(request_json, observer).await
+    llm_task_bridge::run_llm_translate_json(request_json, observer).await
 }
 
 #[uniffi::export]
@@ -1181,48 +1238,48 @@ pub async fn run_llm_summary_json(
     request_json: String,
     observer: std::sync::Arc<dyn FfiLlmTaskObserver>,
 ) -> SonaCoreBindingResult<FfiLlmTaskFinal> {
-    SonaCoreFacade::run_llm_summary_json(request_json, observer).await
+    llm_task_bridge::run_llm_summary_json(request_json, observer).await
 }
 
 #[uniffi::export]
 pub fn validate_llm_config_json(config_json: String) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::validate_llm_config_json(config_json)
+    llm_bridge::validate_llm_config_json(config_json)
 }
 
 #[uniffi::export]
 pub fn validate_llm_generate_request_json(request_json: String) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::validate_llm_generate_request_json(request_json)
+    llm_bridge::validate_llm_generate_request_json(request_json)
 }
 
 #[uniffi::export]
 pub fn validate_polish_segments_request_json(request_json: String) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::validate_polish_segments_request_json(request_json)
+    llm_bridge::validate_polish_segments_request_json(request_json)
 }
 
 #[uniffi::export]
 pub fn validate_translate_segments_request_json(request_json: String) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::validate_translate_segments_request_json(request_json)
+    llm_bridge::validate_translate_segments_request_json(request_json)
 }
 
 #[uniffi::export]
 pub fn validate_summarize_transcript_request_json(
     request_json: String,
 ) -> SonaCoreBindingResult<()> {
-    SonaCoreFacade::validate_summarize_transcript_request_json(request_json)
+    llm_bridge::validate_summarize_transcript_request_json(request_json)
 }
 
 #[uniffi::export]
 pub fn llm_segment_inputs_from_transcript_json(
     segments_json: String,
 ) -> SonaCoreBindingResult<Vec<FfiLlmSegmentInput>> {
-    SonaCoreFacade::llm_segment_inputs_from_transcript_json(segments_json)
+    llm_bridge::llm_segment_inputs_from_transcript_json(segments_json)
 }
 
 #[uniffi::export]
 pub fn summary_segment_inputs_from_transcript_json(
     segments_json: String,
 ) -> SonaCoreBindingResult<Vec<FfiSummarySegmentInput>> {
-    SonaCoreFacade::summary_segment_inputs_from_transcript_json(segments_json)
+    llm_bridge::summary_segment_inputs_from_transcript_json(segments_json)
 }
 
 #[uniffi::export]
@@ -1230,7 +1287,7 @@ pub fn merge_translated_items_into_transcript_json(
     segments_json: String,
     items_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::merge_translated_items_into_transcript_json(segments_json, items_json)
+    llm_bridge::merge_translated_items_into_transcript_json(segments_json, items_json)
 }
 
 #[uniffi::export]
@@ -1238,14 +1295,14 @@ pub fn merge_polished_items_into_transcript_json(
     segments_json: String,
     items_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::merge_polished_items_into_transcript_json(segments_json, items_json)
+    llm_bridge::merge_polished_items_into_transcript_json(segments_json, items_json)
 }
 
 #[uniffi::export]
 pub fn summary_source_fingerprint_from_transcript_json(
     segments_json: String,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::summary_source_fingerprint_from_transcript_json(segments_json)
+    llm_bridge::summary_source_fingerprint_from_transcript_json(segments_json)
 }
 
 #[uniffi::export]
@@ -1254,7 +1311,7 @@ pub fn build_polish_prompt_json(
     context: Option<String>,
     keywords: Option<String>,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::build_polish_prompt_json(segments_json, context, keywords)
+    llm_bridge::build_polish_prompt_json(segments_json, context, keywords)
 }
 
 #[uniffi::export]
@@ -1263,11 +1320,7 @@ pub fn build_translate_prompt_json(
     target_language: String,
     target_language_name: Option<String>,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::build_translate_prompt_json(
-        segments_json,
-        target_language,
-        target_language_name,
-    )
+    llm_bridge::build_translate_prompt_json(segments_json, target_language, target_language_name)
 }
 
 #[uniffi::export]
@@ -1277,7 +1330,7 @@ pub fn build_summary_chunk_prompt_json(
     chunk_number: u64,
     total_chunks: u64,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::build_summary_chunk_prompt_json(
+    llm_bridge::build_summary_chunk_prompt_json(
         template_json,
         segments_json,
         chunk_number,
@@ -1290,7 +1343,7 @@ pub fn build_summary_finalize_prompt_json(
     template_json: String,
     partial_summaries: Vec<String>,
 ) -> SonaCoreBindingResult<String> {
-    SonaCoreFacade::build_summary_finalize_prompt_json(template_json, partial_summaries)
+    llm_bridge::build_summary_finalize_prompt_json(template_json, partial_summaries)
 }
 
 #[uniffi::export]
@@ -1301,7 +1354,7 @@ pub fn plan_polish_prompt_chunks_json(
     chunk_size: Option<u64>,
     prompt_char_budget: Option<u64>,
 ) -> SonaCoreBindingResult<Vec<FfiLlmPromptChunk>> {
-    SonaCoreFacade::plan_polish_prompt_chunks_json(
+    llm_bridge::plan_polish_prompt_chunks_json(
         segments_json,
         context,
         keywords,
@@ -1318,7 +1371,7 @@ pub fn plan_translate_prompt_chunks_json(
     chunk_size: Option<u64>,
     prompt_char_budget: Option<u64>,
 ) -> SonaCoreBindingResult<Vec<FfiLlmPromptChunk>> {
-    SonaCoreFacade::plan_translate_prompt_chunks_json(
+    llm_bridge::plan_translate_prompt_chunks_json(
         segments_json,
         target_language,
         target_language_name,
@@ -1333,7 +1386,7 @@ pub fn plan_summary_prompt_chunks_json(
     segments_json: String,
     chunk_char_budget: Option<u64>,
 ) -> SonaCoreBindingResult<Vec<FfiLlmPromptChunk>> {
-    SonaCoreFacade::plan_summary_prompt_chunks_json(template_json, segments_json, chunk_char_budget)
+    llm_bridge::plan_summary_prompt_chunks_json(template_json, segments_json, chunk_char_budget)
 }
 
 #[uniffi::export]
@@ -1342,7 +1395,7 @@ pub fn parse_polish_chunk_json(
     expected_segments_json: String,
     chunk_number: u64,
 ) -> SonaCoreBindingResult<Vec<FfiPolishedSegment>> {
-    SonaCoreFacade::parse_polish_chunk_json(response_text, expected_segments_json, chunk_number)
+    llm_bridge::parse_polish_chunk_json(response_text, expected_segments_json, chunk_number)
 }
 
 #[uniffi::export]
@@ -1351,28 +1404,28 @@ pub fn parse_translate_chunk_json(
     expected_segments_json: String,
     chunk_number: u64,
 ) -> SonaCoreBindingResult<Vec<FfiTranslatedSegment>> {
-    SonaCoreFacade::parse_translate_chunk_json(response_text, expected_segments_json, chunk_number)
+    llm_bridge::parse_translate_chunk_json(response_text, expected_segments_json, chunk_number)
 }
 
 #[uniffi::export]
 pub fn polish_segments_request_from_json(
     request_json: String,
 ) -> SonaCoreBindingResult<FfiPolishSegmentsRequest> {
-    SonaCoreFacade::polish_segments_request_from_json(request_json)
+    llm_bridge::polish_segments_request_from_json(request_json)
 }
 
 #[uniffi::export]
 pub fn translate_segments_request_from_json(
     request_json: String,
 ) -> SonaCoreBindingResult<FfiTranslateSegmentsRequest> {
-    SonaCoreFacade::translate_segments_request_from_json(request_json)
+    llm_bridge::translate_segments_request_from_json(request_json)
 }
 
 #[uniffi::export]
 pub fn summarize_transcript_request_from_json(
     request_json: String,
 ) -> SonaCoreBindingResult<FfiSummarizeTranscriptRequest> {
-    SonaCoreFacade::summarize_transcript_request_from_json(request_json)
+    llm_bridge::summarize_transcript_request_from_json(request_json)
 }
 
 #[cfg(test)]
@@ -1384,41 +1437,40 @@ mod tests {
     use sona_core::ports::asr::VOLCENGINE_DOUBAO_PROVIDER_ID;
 
     #[test]
-    fn facade_returns_owned_binding_safe_values_from_core() {
+    fn binding_returns_owned_binding_safe_values_from_core() {
         assert_eq!(
-            SonaCoreFacade::normalize_export_format("SRT".to_string()).unwrap(),
+            runtime_bridge::normalize_export_format("SRT".to_string()).unwrap(),
             "srt"
         );
-        assert_eq!(SonaCoreFacade::default_vad_model_id(), "silero-vad");
+        assert_eq!(model_bridge::default_vad_model_id(), "silero-vad");
         assert_eq!(
-            SonaCoreFacade::preset_model_name("silero-vad".to_string()).as_deref(),
+            model_bridge::preset_model_name("silero-vad".to_string()).as_deref(),
             find_preset_model("silero-vad").map(|model| model.name.as_str())
         );
     }
 
     #[test]
-    fn facade_maps_core_errors_to_binding_errors() {
-        let error = SonaCoreFacade::normalize_export_format("docx".to_string()).unwrap_err();
+    fn binding_maps_core_errors_to_binding_errors() {
+        let error = runtime_bridge::normalize_export_format("docx".to_string()).unwrap_err();
         assert_eq!(error.to_string(), "Unsupported export format: docx");
     }
 
     #[test]
-    fn facade_resolves_gpu_acceleration_config_values() {
+    fn binding_resolves_gpu_acceleration_config_values() {
         assert_eq!(
-            SonaCoreFacade::resolve_gpu_acceleration(None)
+            model_bridge::resolve_gpu_acceleration(None)
                 .unwrap()
                 .as_deref(),
             Some("auto")
         );
         assert_eq!(
-            SonaCoreFacade::resolve_gpu_acceleration(Some(" CUDA ".to_string()))
+            model_bridge::resolve_gpu_acceleration(Some(" CUDA ".to_string()))
                 .unwrap()
                 .as_deref(),
             Some("cuda")
         );
 
-        let error =
-            SonaCoreFacade::resolve_gpu_acceleration(Some("metal".to_string())).unwrap_err();
+        let error = model_bridge::resolve_gpu_acceleration(Some("metal".to_string())).unwrap_err();
         assert!(
             error
                 .to_string()
@@ -1427,8 +1479,8 @@ mod tests {
     }
 
     #[test]
-    fn facade_exposes_llm_provider_manifest_for_mobile() {
-        let providers = SonaCoreFacade::llm_providers();
+    fn binding_exposes_llm_provider_manifest_for_mobile() {
+        let providers = llm_bridge::llm_providers();
         let open_ai = providers
             .iter()
             .find(|provider| provider.id == "open_ai")
@@ -1439,22 +1491,21 @@ mod tests {
         assert_eq!(open_ai.defaults.api_path, None);
         assert_eq!(open_ai.defaults.api_version, None);
 
-        let by_alias = SonaCoreFacade::find_llm_provider_by_id_or_alias("openai".to_string())
+        let by_alias = llm_bridge::find_llm_provider_by_id_or_alias("openai".to_string())
             .expect("OpenAI provider should be found by alias");
         assert_eq!(by_alias.id, open_ai.id);
 
-        let azure = SonaCoreFacade::find_llm_provider_by_id_or_alias("azure_openai".to_string())
+        let azure = llm_bridge::find_llm_provider_by_id_or_alias("azure_openai".to_string())
             .expect("Azure OpenAI provider should be found by id");
         assert_eq!(azure.defaults.api_host, "");
         assert_eq!(azure.defaults.api_version.as_deref(), Some("2024-10-21"));
         assert!(
-            SonaCoreFacade::find_llm_provider_by_id_or_alias("missing-provider".to_string())
-                .is_none()
+            llm_bridge::find_llm_provider_by_id_or_alias("missing-provider".to_string()).is_none()
         );
     }
 
     #[test]
-    fn top_level_exports_delegate_to_core_facade() {
+    fn top_level_exports_delegate_to_bridges() {
         assert_eq!(normalize_export_format("VTT".to_string()).unwrap(), "vtt");
         assert_eq!(default_punctuation_model_id(), DEFAULT_PUNCTUATION_MODEL_ID);
         assert_eq!(
@@ -1470,7 +1521,7 @@ mod tests {
             .to_string_lossy()
             .into_owned();
 
-        let status = SonaCoreFacade::runtime_path_status(missing_path.clone());
+        let status = runtime_bridge::runtime_path_status(missing_path.clone());
 
         assert_eq!(status.path, missing_path);
         assert_eq!(status.kind, FfiRuntimePathKind::Missing);
@@ -1478,13 +1529,13 @@ mod tests {
     }
 
     #[test]
-    fn facade_maps_asr_contract_values_to_binding_safe_records() {
+    fn binding_maps_asr_contract_values_to_binding_safe_records() {
         assert_eq!(
-            SonaCoreFacade::default_batch_segmentation_mode(),
+            asr_bridge::default_batch_segmentation_mode(),
             FfiBatchSegmentationMode::Vad
         );
 
-        let provider = SonaCoreFacade::online_asr_provider_request(
+        let provider = asr_bridge::online_asr_provider_request(
             "volcengine".to_string(),
             "default".to_string(),
             r#"{"apiKey":"secret"}"#.to_string(),
@@ -1497,8 +1548,8 @@ mod tests {
     }
 
     #[test]
-    fn facade_exposes_online_asr_provider_manifest_for_mobile() {
-        let providers = SonaCoreFacade::online_asr_providers();
+    fn binding_exposes_online_asr_provider_manifest_for_mobile() {
+        let providers = asr_bridge::online_asr_providers();
         let volcengine = providers
             .iter()
             .find(|provider| provider.id == VOLCENGINE_DOUBAO_PROVIDER_ID)
@@ -1526,16 +1577,16 @@ mod tests {
             "volc.bigasr.auc_turbo"
         );
 
-        let found = SonaCoreFacade::find_online_asr_provider(VOLCENGINE_DOUBAO_PROVIDER_ID.into())
+        let found = asr_bridge::find_online_asr_provider(VOLCENGINE_DOUBAO_PROVIDER_ID.into())
             .expect("Volcengine Doubao provider should be found by id");
         assert_eq!(found.id, volcengine.id);
         assert_eq!(found.defaults_json, volcengine.defaults_json);
-        assert!(SonaCoreFacade::find_online_asr_provider("missing".to_string()).is_none());
+        assert!(asr_bridge::find_online_asr_provider("missing".to_string()).is_none());
     }
 
     #[test]
-    fn facade_maps_volcengine_asr_config_from_json() {
-        let config = SonaCoreFacade::volcengine_doubao_asr_config_from_json(
+    fn binding_maps_volcengine_asr_config_from_json() {
+        let config = asr_bridge::volcengine_doubao_asr_config_from_json(
             r#"{
                 "apiKey": "secret",
                 "streamingEndpoint": "wss://stream",
@@ -1555,8 +1606,8 @@ mod tests {
     }
 
     #[test]
-    fn facade_rejects_invalid_asr_provider_config_json() {
-        let error = SonaCoreFacade::online_asr_provider_request(
+    fn binding_rejects_invalid_asr_provider_config_json() {
+        let error = asr_bridge::online_asr_provider_request(
             "volcengine".to_string(),
             "default".to_string(),
             "{bad-json".to_string(),
@@ -1571,8 +1622,8 @@ mod tests {
     }
 
     #[test]
-    fn facade_maps_llm_config_and_segment_task_requests_from_json() {
-        let config = SonaCoreFacade::llm_config_from_json(
+    fn binding_maps_llm_config_and_segment_task_requests_from_json() {
+        let config = llm_bridge::llm_config_from_json(
             r#"{
                 "provider": "open_ai",
                 "baseUrl": "https://api.openai.com",
@@ -1591,7 +1642,7 @@ mod tests {
         assert_eq!(config.temperature, Some(0.2));
         assert_eq!(config.timeout_seconds, Some(30));
 
-        let polish = SonaCoreFacade::polish_segments_request_from_json(
+        let polish = llm_bridge::polish_segments_request_from_json(
             r#"{
                 "taskId": "polish-1",
                 "config": {
@@ -1614,7 +1665,7 @@ mod tests {
         assert_eq!(polish.chunk_size, Some(4));
         assert_eq!(polish.context.as_deref(), Some("meeting"));
 
-        let translate = SonaCoreFacade::translate_segments_request_from_json(
+        let translate = llm_bridge::translate_segments_request_from_json(
             r#"{
                 "taskId": "translate-1",
                 "config": {
@@ -1638,7 +1689,7 @@ mod tests {
         assert_eq!(translate.target_language, "ja");
         assert_eq!(translate.target_language_name.as_deref(), Some("Japanese"));
 
-        let summary = SonaCoreFacade::summarize_transcript_request_from_json(
+        let summary = llm_bridge::summarize_transcript_request_from_json(
             r#"{
                 "taskId": "summary-1",
                 "config": {
@@ -1671,8 +1722,8 @@ mod tests {
     }
 
     #[test]
-    fn facade_validates_llm_request_json_with_core_rules() {
-        let config_error = SonaCoreFacade::validate_llm_config_json(
+    fn binding_validates_llm_request_json_with_core_rules() {
+        let config_error = llm_bridge::validate_llm_config_json(
             r#"{
                 "provider": "open_ai",
                 "baseUrl": "https://api.openai.com",
@@ -1684,7 +1735,7 @@ mod tests {
         .unwrap_err();
         assert_eq!(config_error.to_string(), "Model name cannot be empty");
 
-        let generate_error = SonaCoreFacade::validate_llm_generate_request_json(
+        let generate_error = llm_bridge::validate_llm_generate_request_json(
             r#"{
                 "config": {
                     "provider": "open_ai",
@@ -1699,7 +1750,7 @@ mod tests {
         .unwrap_err();
         assert_eq!(generate_error.to_string(), "Input cannot be empty");
 
-        let polish_error = SonaCoreFacade::validate_polish_segments_request_json(
+        let polish_error = llm_bridge::validate_polish_segments_request_json(
             r#"{
                 "taskId": "polish-1",
                 "config": {
@@ -1718,7 +1769,7 @@ mod tests {
             "Google Translate does not support transcript polishing"
         );
 
-        let translate_error = SonaCoreFacade::validate_translate_segments_request_json(
+        let translate_error = llm_bridge::validate_translate_segments_request_json(
             r#"{
                 "taskId": "translate-1",
                 "config": {
@@ -1738,7 +1789,7 @@ mod tests {
             "Target language cannot be empty"
         );
 
-        let summary_error = SonaCoreFacade::validate_summarize_transcript_request_json(
+        let summary_error = llm_bridge::validate_summarize_transcript_request_json(
             r#"{
                 "taskId": "summary-1",
                 "config": {
@@ -1762,7 +1813,7 @@ mod tests {
             "Google Translate does not support transcript summaries"
         );
 
-        SonaCoreFacade::validate_translate_segments_request_json(
+        llm_bridge::validate_translate_segments_request_json(
             r#"{
                 "taskId": "translate-ok",
                 "config": {
@@ -1780,7 +1831,7 @@ mod tests {
     }
 
     #[test]
-    fn facade_exposes_transcript_llm_job_helpers_for_mobile() {
+    fn binding_exposes_transcript_llm_job_helpers_for_mobile() {
         let segments_json = r#"[
             {
                 "id": "s1",
@@ -1807,19 +1858,18 @@ mod tests {
         .to_string();
 
         let segment_inputs =
-            SonaCoreFacade::llm_segment_inputs_from_transcript_json(segments_json.clone()).unwrap();
+            llm_bridge::llm_segment_inputs_from_transcript_json(segments_json.clone()).unwrap();
         assert_eq!(segment_inputs[0].id, "s1");
         assert_eq!(segment_inputs[0].text, "Hello");
 
         let summary_inputs =
-            SonaCoreFacade::summary_segment_inputs_from_transcript_json(segments_json.clone())
-                .unwrap();
+            llm_bridge::summary_segment_inputs_from_transcript_json(segments_json.clone()).unwrap();
         assert_eq!(summary_inputs[0].text, "Alice: Hello");
         assert_eq!(summary_inputs[0].start, 0.0);
         assert_eq!(summary_inputs[0].end, 1.5);
         assert!(summary_inputs[0].is_final);
 
-        let translated_json = SonaCoreFacade::merge_translated_items_into_transcript_json(
+        let translated_json = llm_bridge::merge_translated_items_into_transcript_json(
             segments_json.clone(),
             r#"[{"id":"s1","translation":"konnichiwa"}]"#.to_string(),
         )
@@ -1835,7 +1885,7 @@ mod tests {
         );
         assert_eq!(translated[1]["translation"], serde_json::json!("old"));
 
-        let polished_json = SonaCoreFacade::merge_polished_items_into_transcript_json(
+        let polished_json = llm_bridge::merge_polished_items_into_transcript_json(
             segments_json.clone(),
             r#"[{"id":"s2","text":"World."}]"#.to_string(),
         )
@@ -1845,20 +1895,20 @@ mod tests {
         assert_eq!(polished[1]["translation"], serde_json::json!("old"));
 
         assert_eq!(
-            SonaCoreFacade::summary_source_fingerprint_from_transcript_json(segments_json).unwrap(),
+            llm_bridge::summary_source_fingerprint_from_transcript_json(segments_json).unwrap(),
             "s1:Hello:0:1.5:true:speaker-a:Alice:identified:0.91|s2:world:1.5:2:true::::"
         );
     }
 
     #[test]
-    fn facade_exposes_llm_prompt_and_chunk_parsing_helpers_for_mobile() {
+    fn binding_exposes_llm_prompt_and_chunk_parsing_helpers_for_mobile() {
         let segment_inputs_json = r#"[
             {"id":"s1","text":"hello world"},
             {"id":"s2","text":"next step"}
         ]"#
         .to_string();
 
-        let polish_prompt = SonaCoreFacade::build_polish_prompt_json(
+        let polish_prompt = llm_bridge::build_polish_prompt_json(
             segment_inputs_json.clone(),
             Some("product review".to_string()),
             Some("Sona".to_string()),
@@ -1871,7 +1921,7 @@ mod tests {
         assert!(polish_prompt.contains("\"id\":\"s1\""));
         assert!(polish_prompt.contains("Output newline-delimited JSON"));
 
-        let translate_prompt = SonaCoreFacade::build_translate_prompt_json(
+        let translate_prompt = llm_bridge::build_translate_prompt_json(
             segment_inputs_json.clone(),
             "es".to_string(),
             Some("Spanish".to_string()),
@@ -1881,7 +1931,7 @@ mod tests {
         assert!(translate_prompt.contains("\"id\":\"s2\""));
         assert!(translate_prompt.contains("replace 'text' with 'translation'"));
 
-        let summary_prompt = SonaCoreFacade::build_summary_chunk_prompt_json(
+        let summary_prompt = llm_bridge::build_summary_chunk_prompt_json(
             r#"{
                 "id":"meeting",
                 "name":"Meeting",
@@ -1906,7 +1956,7 @@ mod tests {
         assert!(summary_prompt.contains("chunk 2 of 3"));
         assert!(summary_prompt.contains("[00:00:01 - 00:00:03] Alice: hello"));
 
-        let finalize_prompt = SonaCoreFacade::build_summary_finalize_prompt_json(
+        let finalize_prompt = llm_bridge::build_summary_finalize_prompt_json(
             r#"{
                 "id":"meeting",
                 "name":"Meeting",
@@ -1920,7 +1970,7 @@ mod tests {
         assert!(finalize_prompt.contains("First summary"));
         assert!(finalize_prompt.contains("[Chunk 2]"));
 
-        let polished = SonaCoreFacade::parse_polish_chunk_json(
+        let polished = llm_bridge::parse_polish_chunk_json(
             "{\"id\":\"s1\",\"text\":\"Hello world.\"}\n{\"id\":\"s2\",\"text\":\"Next step.\"}"
                 .to_string(),
             segment_inputs_json.clone(),
@@ -1941,7 +1991,7 @@ mod tests {
             ]
         );
 
-        let translated = SonaCoreFacade::parse_translate_chunk_json(
+        let translated = llm_bridge::parse_translate_chunk_json(
             r#"[
                 {"id":"s1","translation":"Hola mundo."},
                 {"id":"s2","translation":"Siguiente paso."}
@@ -1954,7 +2004,7 @@ mod tests {
         assert_eq!(translated[0].id, "s1");
         assert_eq!(translated[0].translation, "Hola mundo.");
 
-        let error = SonaCoreFacade::parse_translate_chunk_json(
+        let error = llm_bridge::parse_translate_chunk_json(
             r#"[{"id":"wrong","translation":"Hola"}]"#.to_string(),
             r#"[{"id":"s1","text":"hello"}]"#.to_string(),
             7,
@@ -1967,7 +2017,7 @@ mod tests {
     }
 
     #[test]
-    fn facade_exposes_llm_prompt_chunk_planning_helpers_for_mobile() {
+    fn binding_exposes_llm_prompt_chunk_planning_helpers_for_mobile() {
         let segment_inputs_json = r#"[
             {"id":"s1","text":"first"},
             {"id":"s2","text":"second"},
@@ -1975,7 +2025,7 @@ mod tests {
         ]"#
         .to_string();
 
-        let polish_chunks = SonaCoreFacade::plan_polish_prompt_chunks_json(
+        let polish_chunks = llm_bridge::plan_polish_prompt_chunks_json(
             segment_inputs_json.clone(),
             Some("planning context".to_string()),
             None,
@@ -1995,7 +2045,7 @@ mod tests {
         assert_eq!(polish_chunks[1].start, 2);
         assert_eq!(polish_chunks[1].end, 3);
 
-        let translate_chunks = SonaCoreFacade::plan_translate_prompt_chunks_json(
+        let translate_chunks = llm_bridge::plan_translate_prompt_chunks_json(
             segment_inputs_json,
             "es".to_string(),
             Some("Spanish".to_string()),
@@ -2030,7 +2080,7 @@ mod tests {
             long_text, long_text
         );
 
-        let summary_chunks = SonaCoreFacade::plan_summary_prompt_chunks_json(
+        let summary_chunks = llm_bridge::plan_summary_prompt_chunks_json(
             r#"{
                 "id":"meeting",
                 "name":"Meeting",
@@ -2053,8 +2103,8 @@ mod tests {
     }
 
     #[test]
-    fn facade_exposes_binding_safe_preset_model_records() {
-        let models = SonaCoreFacade::preset_models();
+    fn binding_exposes_binding_safe_preset_model_records() {
+        let models = model_bridge::preset_models();
 
         let vad = models
             .iter()
@@ -2075,8 +2125,8 @@ mod tests {
     }
 
     #[test]
-    fn facade_exposes_binding_safe_model_catalog_snapshot() {
-        let snapshot = SonaCoreFacade::model_catalog_snapshot(
+    fn binding_exposes_binding_safe_model_catalog_snapshot() {
+        let snapshot = model_bridge::model_catalog_snapshot(
             "C:/models".to_string(),
             vec![
                 "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17".to_string(),
@@ -2173,9 +2223,9 @@ mod tests {
     }
 
     #[test]
-    fn facade_exposes_default_config_json_for_mobile_bootstrap() {
+    fn binding_exposes_default_config_json_for_mobile_bootstrap() {
         let config: serde_json::Value =
-            serde_json::from_str(&SonaCoreFacade::default_config_json()).unwrap();
+            serde_json::from_str(&config_bridge::default_config_json()).unwrap();
 
         assert_eq!(config["configVersion"], 7);
         assert_eq!(
@@ -2189,8 +2239,8 @@ mod tests {
     }
 
     #[test]
-    fn facade_migrates_config_json_and_ignores_legacy_project_defaults() {
-        let migrated = SonaCoreFacade::migrate_app_config_json(
+    fn binding_migrates_config_json_and_ignores_legacy_project_defaults() {
+        let migrated = config_bridge::migrate_app_config_json(
             Some(
                 r#"{
                     "configVersion": 6,
@@ -2230,7 +2280,7 @@ mod tests {
         assert_eq!(migrated_config["configVersion"], 7);
         assert_eq!(migrated_config["summaryEnabled"], true);
 
-        let effective = SonaCoreFacade::resolve_effective_config_json(
+        let effective = config_bridge::resolve_effective_config_json(
             migrated.config_json,
             Some(
                 r#"{
@@ -2252,8 +2302,8 @@ mod tests {
     }
 
     #[test]
-    fn facade_rejects_invalid_config_json() {
-        let error = SonaCoreFacade::migrate_app_config_json(
+    fn binding_rejects_invalid_config_json() {
+        let error = config_bridge::migrate_app_config_json(
             Some("{bad-json".to_string()),
             None,
             "Default Rules".to_string(),
@@ -2264,8 +2314,8 @@ mod tests {
     }
 
     #[test]
-    fn facade_resolves_model_catalog_selected_ids_for_mobile_paths() {
-        let selected = SonaCoreFacade::model_catalog_selected_ids(
+    fn binding_resolves_model_catalog_selected_ids_for_mobile_paths() {
+        let selected = model_bridge::model_catalog_selected_ids(
             "C:/models".to_string(),
             vec![
                 "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17".to_string(),
@@ -2299,8 +2349,8 @@ mod tests {
     }
 
     #[test]
-    fn facade_resolves_model_download_plan_for_mobile() {
-        let download = SonaCoreFacade::resolve_model_download(
+    fn binding_resolves_model_download_plan_for_mobile() {
+        let download = model_bridge::resolve_model_download(
             "sherpa-onnx-funasr-nano-int8-2025-12-30".to_string(),
             "C:/models".to_string(),
         )
@@ -2329,13 +2379,104 @@ mod tests {
     }
 
     #[test]
-    fn facade_rejects_unknown_model_download_id() {
-        let error = SonaCoreFacade::resolve_model_download(
+    fn binding_rejects_unknown_model_download_id() {
+        let error = model_bridge::resolve_model_download(
             "missing-model".to_string(),
             "C:/models".to_string(),
         )
         .unwrap_err();
 
         assert_eq!(error.to_string(), "Unknown model id: missing-model");
+    }
+}
+
+#[cfg(test)]
+mod task_ledger_tests {
+    use crate::task_ledger_bridge;
+    use serde_json::{Value, json};
+    use sona_core::task_ledger::types::TASK_LEDGER_VERSION;
+
+    #[test]
+    fn binding_loads_and_upserts_task_ledger_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let app_data_dir = dir.path().to_string_lossy().into_owned();
+
+        let empty =
+            task_ledger_bridge::load_task_ledger_snapshot_json(app_data_dir.clone()).unwrap();
+        assert_eq!(
+            empty,
+            format!(r#"{{"version":{TASK_LEDGER_VERSION},"updatedAt":null,"tasks":[]}}"#)
+        );
+
+        let record = json!({
+            "id": "facade-task",
+            "kind": "llmPolish",
+            "status": "pending",
+            "title": "Facade task",
+            "progress": 0.0,
+            "createdAt": 1,
+            "updatedAt": 1,
+            "retryable": false,
+            "cancelable": true,
+            "recoverable": false
+        });
+        let output =
+            task_ledger_bridge::upsert_task_ledger_record_json(app_data_dir, record.to_string())
+                .unwrap();
+        let output: Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(output["tasks"][0]["id"], "facade-task");
+    }
+}
+
+#[cfg(test)]
+mod automation_tests {
+    use crate::automation_bridge;
+    use serde_json::{Value, json};
+    use std::fs;
+
+    #[test]
+    fn binding_delegates_automation_repository_load() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let output = automation_bridge::load_automation_repository_state_json(
+            dir.path().to_string_lossy().into_owned(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            output,
+            r#"{"profiles":[],"rules":[],"processedEntries":[]}"#
+        );
+    }
+
+    #[test]
+    fn binding_delegates_automation_validation() {
+        let dir = tempfile::tempdir().unwrap();
+        let watch_directory = dir.path().join("watch");
+        let output_directory = dir.path().join("output");
+        let model_path = dir.path().join("model.onnx");
+        fs::create_dir(&watch_directory).unwrap();
+        fs::write(&model_path, b"model").unwrap();
+
+        let output = automation_bridge::validate_automation_rule_activation_json(
+            json!({
+                "name": "Rule",
+                "projectId": "inbox",
+                "watchDirectory": watch_directory,
+                "exportConfig": {
+                    "directory": output_directory,
+                    "mode": "original"
+                }
+            })
+            .to_string(),
+            json!({"offlineModelPath": model_path}).to_string(),
+            None,
+        )
+        .unwrap();
+        let result: Value = serde_json::from_str(&output).unwrap();
+
+        assert_eq!(result["valid"], true);
+        assert!(output_directory.is_dir());
     }
 }

@@ -8,6 +8,14 @@ edition.workspace = true
 [package.metadata.sona]
 role = "outbound-adapter"
 
+[features]
+# Test-only repositories that reopen a `Database` (full connection pool,
+# migrations, and optimize) on every call. Never enable in production builds:
+# production code injects a shared `Database`/`SqliteApplicationContext`
+# instead. See `DeferredSqliteHistoryMutationRepository` for the pattern
+# production callers use.
+test-support = []
+
 [dependencies]
 async-trait = "0.1"
 chrono = { version = "0.4.42", default-features = false, features = ["clock", "std"] }
@@ -24,4 +32,5 @@ walkdir = "2.5.0"
 
 [dev-dependencies]
 sha2 = "0.10"
+sona-sqlite = { path = ".", features = ["test-support"] }
 tokio = { version = "1", features = ["rt"] }

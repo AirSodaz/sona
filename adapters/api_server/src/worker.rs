@@ -92,26 +92,41 @@ pub(crate) async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
     }
 }
 
+/// Everything the transcription worker loop needs besides its job channel.
+/// Bundled so the loop keeps one dependency parameter instead of seven.
+pub(crate) struct TranscriptionWorkerDeps {
+    pub job_manager: JobManager,
+    pub models_dir: PathBuf,
+    pub max_concurrent: usize,
+    pub transcription_defaults: ApiServerTranscriptionDefaults,
+    pub batch_transcriber: Arc<dyn BatchTranscriber>,
+    pub batch_plan_resolver: Arc<dyn BatchTranscribePlanResolver>,
+    pub platform: Arc<dyn ApiServerPlatform>,
+}
+
 pub(crate) async fn start_worker_loop(
     mut receiver: mpsc::Receiver<TranscriptionJob>,
-    job_manager: JobManager,
-    models_dir: PathBuf,
-    max_concurrent: usize,
-    transcription_defaults: ApiServerTranscriptionDefaults,
-    batch_transcriber: Arc<dyn BatchTranscriber>,
-    batch_plan_resolver: Arc<dyn BatchTranscribePlanResolver>,
-    platform: Arc<dyn ApiServerPlatform>,
+    deps: TranscriptionWorkerDeps,
 ) {
+    let TranscriptionWorkerDeps {
+        job_manager: shared_job_manager,
+        models_dir: shared_models_dir,
+        max_concurrent,
+        transcription_defaults,
+        batch_transcriber: shared_batch_transcriber,
+        batch_plan_resolver: shared_batch_plan_resolver,
+        platform: shared_platform,
+    } = deps;
     let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));
 
     while let Some(job) = receiver.recv().await {
-        let job_manager = job_manager.clone();
-        let models_dir = models_dir.clone();
+        let job_manager = shared_job_manager.clone();
+        let models_dir = shared_models_dir.clone();
         let semaphore = semaphore.clone();
         let defaults = transcription_defaults.clone();
-        let batch_transcriber = batch_transcriber.clone();
-        let batch_plan_resolver = batch_plan_resolver.clone();
-        let platform = platform.clone();
+        let batch_transcriber = shared_batch_transcriber.clone();
+        let batch_plan_resolver = shared_batch_plan_resolver.clone();
+        let platform = shared_platform.clone();
 
         tokio::spawn(async move {
             let _permit = match semaphore.acquire().await {

@@ -175,11 +175,6 @@ impl HistoryMutationRepository for DeferredSqliteHistoryMutationRepository {
     }
 }
 
-#[deprecated(
-    note = "use DeferredSqliteHistoryMutationRepository to make deferred database ownership explicit"
-)]
-pub type LazySqliteHistoryMutationRepository = DeferredSqliteHistoryMutationRepository;
-
 fn validate_copy_source(label: &str, path: &str) -> Result<(), HistoryMutationError> {
     if Path::new(path).is_file() {
         Ok(())

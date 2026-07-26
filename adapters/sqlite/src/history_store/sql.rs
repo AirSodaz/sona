@@ -10,7 +10,6 @@ use std::time::UNIX_EPOCH;
 
 use crate::DatabaseError;
 
-
 pub(super) fn require_history_source_file(
     path: &Path,
     missing_message: impl FnOnce() -> String,

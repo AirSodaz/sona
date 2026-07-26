@@ -6,8 +6,7 @@ use sona_core::ports::asr::{
     AsrEngineConfig, AsrMode, AsrPortError, AsrPortErrorKind, AsrRuntimeObserver,
     AsrStreamingSession, AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID,
     MISTRAL_VOXTRAL_PROVIDER_ID, OnlineBatchTranscriber, OnlineBatchTranscriptionOutput,
-    OnlineBatchTranscriptionRequest, find_online_asr_provider,
-    VOLCENGINE_DOUBAO_PROVIDER_ID,
+    OnlineBatchTranscriptionRequest, VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
 };
 use sona_core::transcription::provider_resolution::{
     AsrProviderCapability, resolve_asr_provider_id, resolve_asr_streaming_provider_id,
@@ -49,9 +48,7 @@ impl OnlineAsrAdapter {
         match provider_id {
             VOLCENGINE_DOUBAO_PROVIDER_ID => {
                 if input.request.mode != AsrMode::Batch {
-                    return Err(
-                        AsrPortError::from(SherpaError::VolcengineBatchModeMismatch)
-                    );
+                    return Err(AsrPortError::from(SherpaError::VolcengineBatchModeMismatch));
                 }
                 resolve_volcengine_config_checked(&input.request, VolcengineMode::Batch)
                     .map_err(|e| AsrPortError::from(SherpaError::from(e)))?;
@@ -59,12 +56,16 @@ impl OnlineAsrAdapter {
                     .transcribe(input)
                     .await
             }
-            GROQ_WHISPER_PROVIDER_ID => GroqWhisperBatchTranscriber::default()
-                .transcribe(input)
-                .await,
-            MISTRAL_VOXTRAL_PROVIDER_ID => MistralVoxtralBatchTranscriber::default()
-                .transcribe(input)
-                .await,
+            GROQ_WHISPER_PROVIDER_ID => {
+                GroqWhisperBatchTranscriber::default()
+                    .transcribe(input)
+                    .await
+            }
+            MISTRAL_VOXTRAL_PROVIDER_ID => {
+                MistralVoxtralBatchTranscriber::default()
+                    .transcribe(input)
+                    .await
+            }
             _ => Err(AsrPortError::new(
                 AsrPortErrorKind::Unsupported,
                 format!("不支持的在线 ASR provider：{provider_id}"),
@@ -1174,6 +1175,7 @@ pub fn map_volcengine_status_error(
 
 #[cfg(test)]
 mod tests {
+    use crate::SherpaError;
     use serde_json::json;
     use sona_core::ports::asr::{
         AsrEngineConfig, AsrMode, AsrPortErrorKind, AsrTranscriptionRequest,
@@ -1181,7 +1183,6 @@ mod tests {
         OnlineAsrProviderRequest, OnlineBatchTranscriber, OnlineBatchTranscriptionRequest,
         VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
-    use crate::SherpaError;
     use sona_core::transcription::postprocess::{
         TranscriptNormalizationOptions, TranscriptPostprocessOptions,
     };

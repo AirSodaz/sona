@@ -36,8 +36,7 @@ impl AsrProviderAdapter for LocalSherpaAdapter {
         let request = LocalSherpaStreamingRequest::from_local_sherpa_request(
             instance_id.to_string(),
             request.clone(),
-        )
-        .map_err(AsrPortError::from)?;
+        )?;
 
         let session = sona_local_asr::streaming::create_streaming_session(
             state.recognizer_pool(),
@@ -69,8 +68,7 @@ impl AsrBatchProcessor for LocalSherpaBatchProcessor {
             request,
             speaker_processing,
             instance_id,
-        )
-        .map_err(AsrPortError::from)?;
+        )?;
 
         super::batch::process_batch_request_impl(emitter, state, config)
             .await

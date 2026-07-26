@@ -1,21 +1,36 @@
 use crate::application_context::cached_application_context;
-use crate::{SonaCoreBindingError, SonaCoreBindingResult};
+use crate::{FfiStorageUsageSnapshotV1, SonaCoreBindingError, SonaCoreBindingResult};
+use sona_core::storage_usage::StorageUsageSnapshot;
 use sona_sqlite::{load_storage_usage_snapshot, load_storage_usage_snapshot_with_database};
 use std::path::PathBuf;
 
 pub(crate) async fn load_storage_usage_snapshot_json(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<String> {
-    tokio::task::spawn_blocking(move || build_storage_usage_snapshot_json(app_data_dir))
+    let snapshot = load_snapshot(app_data_dir).await?;
+    let canonical = serde_json::to_value(snapshot).map_err(storage_usage_error)?;
+    serde_json::to_string(&canonical).map_err(storage_usage_error)
+}
+
+pub(crate) async fn load_storage_usage_snapshot_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<FfiStorageUsageSnapshotV1> {
+    load_snapshot(app_data_dir).await.map(Into::into)
+}
+
+async fn load_snapshot(app_data_dir: String) -> SonaCoreBindingResult<StorageUsageSnapshot> {
+    tokio::task::spawn_blocking(move || build_storage_usage_snapshot(app_data_dir))
         .await
         .map_err(storage_usage_error)?
 }
 
-fn build_storage_usage_snapshot_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
+fn build_storage_usage_snapshot(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<StorageUsageSnapshot> {
     let app_data_dir =
         std::path::absolute(PathBuf::from(app_data_dir)).map_err(storage_usage_error)?;
     let generated_at = sona_runtime_fs::storage_usage_generated_at_now();
-    let snapshot = match cached_application_context(&app_data_dir).map_err(storage_usage_error)? {
+    match cached_application_context(&app_data_dir).map_err(storage_usage_error)? {
         Some(context) => load_storage_usage_snapshot_with_database(
             app_data_dir,
             context.sqlite().database(),
@@ -23,9 +38,7 @@ fn build_storage_usage_snapshot_json(app_data_dir: String) -> SonaCoreBindingRes
         ),
         None => load_storage_usage_snapshot(app_data_dir, generated_at),
     }
-    .map_err(storage_usage_error)?;
-    let canonical = serde_json::to_value(snapshot).map_err(storage_usage_error)?;
-    serde_json::to_string(&canonical).map_err(storage_usage_error)
+    .map_err(storage_usage_error)
 }
 
 fn storage_usage_error(reason: impl ToString) -> SonaCoreBindingError {
@@ -36,7 +49,7 @@ fn storage_usage_error(reason: impl ToString) -> SonaCoreBindingError {
 
 #[cfg(test)]
 mod tests {
-    use super::load_storage_usage_snapshot_json;
+    use super::{load_storage_usage_snapshot_json, load_storage_usage_snapshot_v1};
     use crate::SonaCoreBindingError;
     use serde_json::Value;
     use sha2::{Digest, Sha256};
@@ -127,6 +140,69 @@ mod tests {
         assert!(snapshot.total_bytes >= 9);
         assert_eq!(file_hashes(dir.path()), before);
         drop(writer);
+    }
+
+    #[tokio::test]
+    async fn typed_snapshot_matches_the_legacy_json_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let writer = Database::open(dir.path()).unwrap();
+        writer
+            .with_write_connection(|connection| {
+                connection.execute_batch(
+                    "CREATE TABLE storage_probe (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+                     CREATE INDEX idx_storage_probe_value ON storage_probe(value);
+                     INSERT INTO storage_probe (value) VALUES ('typed');",
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        drop(writer);
+        fs::create_dir_all(dir.path().join("history")).unwrap();
+        fs::write(dir.path().join("history").join("recording.wav"), [1_u8; 9]).unwrap();
+        let app_data_dir = dir.path().to_string_lossy().into_owned();
+
+        let typed = load_storage_usage_snapshot_v1(app_data_dir.clone())
+            .await
+            .unwrap();
+        let json = load_storage_usage_snapshot_json(app_data_dir)
+            .await
+            .unwrap();
+        let parsed: StorageUsageSnapshot = serde_json::from_str(&json).unwrap();
+
+        // Both surfaces must describe the same measurement, so every field the
+        // typed record exposes has to agree with the JSON one.
+        assert_eq!(typed.total_bytes, parsed.total_bytes);
+        assert_eq!(
+            typed.categories.audio.history_audio_bytes,
+            parsed.categories.audio.history_audio_bytes
+        );
+        assert_eq!(typed.categories.audio.history_audio_bytes, 9);
+        assert_eq!(
+            typed.categories.database.sqlite.index_bytes,
+            parsed.categories.database.sqlite.index_bytes
+        );
+        assert_eq!(
+            typed.categories.database.sqlite.index_entries.len(),
+            parsed.categories.database.sqlite.index_entries.len()
+        );
+        assert_eq!(
+            typed.categories.webview_cache.clear_supported,
+            parsed.categories.webview_cache.clear_supported
+        );
+        assert!(typed.generated_at.contains('T'));
+    }
+
+    #[tokio::test]
+    async fn typed_snapshot_rejects_a_missing_directory() {
+        let root = tempfile::tempdir().unwrap();
+        let missing = root.path().join("missing");
+
+        let error = load_storage_usage_snapshot_v1(missing.to_string_lossy().into_owned())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(error, SonaCoreBindingError::StorageUsage { .. }));
+        assert!(!missing.exists());
     }
 
     #[tokio::test]

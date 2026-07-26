@@ -78,9 +78,20 @@ Core <- Outbound Adapter <------------- Host
 
 - 桌面端：`platforms/desktop/src/app/setup.rs` 与 `platforms/desktop/src/platform/` 组合桌面运行时。
 - CLI：`platforms/cli/src/lib.rs` 与各个命令模块组合 CLI 命令。
-- UniFFI/移动端：`adapters/uniffi_bind/src/application_context.rs` 与 `adapters/uniffi_bind/src/facade.rs` 组合面向移动端的接口。目录名 `adapters/uniffi_bind` 是历史遗留名称：`sona-uniffi-bind` 的角色是 host，而不是适配器角色。
+- UniFFI/移动端：`adapters/uniffi_bind/src/application_context.rs` 组合面向移动端的运行时，`adapters/uniffi_bind/src/lib.rs` 发布对外导出面。目录名 `adapters/uniffi_bind` 是历史遗留名称：`sona-uniffi-bind` 的角色是 host，而不是适配器角色。
+
+UniFFI 导出面只有两层：`lib.rs` 中的 `#[uniffi::export]` 自由函数直接委托到对应的
+`*_bridge` 模块。原先 `facade.rs` 中的 `SonaCoreFacade` 类型只是把每个调用再转发一次、
+不附加任何行为，现已合并进 `lib.rs`。不要重新引入中间转发类型；
+`scripts/multisurface-contracts.test.js` 会强制这一约束，仅允许
+`release_application_context` 直接调用组合根。
 
 各 Host 共享 `sona-sqlite` 提供的 `SqliteApplicationContext`，但接线、生命周期与错误映射仍由各 Host 自行拥有。目前还没有单独的共享 application-composition crate。
+
+**每个应用数据目录只有一个 context。** UniFFI registry 按规范化路径缓存 context，
+其容量是**软**上限：仍被调用方持有的条目永不驱逐，因为重新打开该路径会为同一个
+目录创建第二套连接池、第二次迁移和第二个服务图。在调用方释放之前，缓存允许超出
+容量。
 
 ### 当前的 Application 归属
 
@@ -98,6 +109,39 @@ crate 之前，优先把 Core 内服务写清楚。
   Tag、Transcription 等各自在 `core/src/` 下的独立模块中。
 - `core/src/history/` 拥有历史记录、查询/变更服务，以及 `HistoryStore` trait
   （`history/store.rs`，对外仍通过 `sona_core::history_store` 重导出）。
+
+<a id="port-placement"></a>
+## 端口放置规则
+
+端口全部由 Core 拥有，但不集中在一个目录。存在两种放置方式，这个区分是已评审
+的契约，不是风格偏好。
+
+| 类别 | 位置 | 判定 |
+| --- | --- | --- |
+| 能力端口 | `core/src/ports/<capability>.rs` | 领域无关；可能被多个领域使用 |
+| 领域自有端口 | `core/src/<domain>/` | 只有该领域的用例会调用 |
+
+**能力端口**以基础设施能力命名，绝不以领域聚合命名：`FileSystem`、
+`PathProvider`、`UnixMillisClock`、`EventEmitter`、`BatchTranscriber`、
+`LlmCompletionPort`、`GpuAvailabilityProvider`。只有当"把它移进某一个领域"是错的
+时候，这个 trait 才属于这里。
+
+**领域自有端口**是归属单一领域的 store、repository 与协作者：`HistoryStore`、
+`TagStore`、`AutomationStore`、`BackupStateRepository`、`RecoverySnapshotStore`、
+`SyncObjectStore`。它们放在各自领域模块下，使领域保持自描述。
+
+由此得出两条规则，均由 `scripts/core-port-placement.test.js` 强制执行：
+
+1. `core/src/ports/` 中不得声明任何 `*Store` 或 `*Repository` trait。
+   持久化形态的 trait 按定义就归属某个领域。
+2. `core/src/ports/` 中的 trait 不得以领域聚合命名（History、Tag、Automation、
+   Backup、Recovery、TaskLedger、Dashboard、StorageUsage、AppConfig）。
+
+新增领域端口应使用 `core/src/<domain>/ports.rs`——`backup`、`dashboard`、
+`export`、`storage_usage`、`sync` 已采用该形式。`automation`、`config`、
+`history`、`recovery`、`tag`、`task_ledger` 中现有的 `repository.rs` /
+`store.rs` / `service.rs` 放置属于历史沿用：它们满足上述两条规则，统一文件命名
+是独立的迁移切片，不是顺手可做的清理。
 
 <a id="host-capability-matrix"></a>
 ## Host 能力矩阵
@@ -155,6 +199,23 @@ CLI Sync 的产品范围尚未定义，在明确范围之前不得接入。UniFF
     `components/projects/*`、以及 `components/ProjectsView.tsx`。
 - **策略：** 兼容窗口内保留公开 Project 名称；前端/API 物理重命名属于后续切片。
 
+### UniFFI 类型化契约清单
+
+每个 `*_json` UniFFI 导出都在 `scripts/multisurface-contracts.test.js` 的
+`UNIFFI_JSON_ONLY_EXPORTS` 中分类。新增没有 `*_v1` 兄弟函数的 `*_json` 导出会让
+该测试失败，直到它被分类为止。
+
+- **`dynamic-leaf`**（动态叶子）——永久允许。载荷是任意用户配置、提供商扩展
+  文档，或遗留 Project 兼容面，其 schema 不由本绑定拥有。
+- **`pending-migration`**（待迁移）——已评审债务。该导出把完整的快照、记录、
+  请求或结果作为 JSON 字符串传输，必须补上类型化的 `_v1` 兄弟函数。当前包括：
+  Dashboard 与 Diagnostics 快照、15 个 Sync 生命周期/状态/冲突函数，以及 29 个
+  LLM 转写载荷函数。
+
+已类型化的域保留两套接口：`_json` 作为兼容委托保留，`_v1` 承载类型化契约。
+目前已迁移：Tag、History、Task Ledger、Recovery、Automation、Storage Usage、
+Export、Backup。
+
 ### 其他已评审债务
 
 - 已消除的 outbound 互依：`model-downloads` 与 `recovery-fs` 不再依赖 `runtime-fs`；完整性规则在 Core，I/O 由各适配器本地完成。
@@ -187,4 +248,10 @@ rtk node --test scripts/host-capability-matrix.test.js
 
 ```text
 rtk node --test scripts/host-wiring-inventory.test.js
+```
+
+在 Core 中新增或移动端口 trait 后，运行端口放置契约：
+
+```text
+rtk node --test scripts/core-port-placement.test.js
 ```

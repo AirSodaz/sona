@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use tauri::{AppHandle, Runtime};
 
 use super::{
@@ -7,7 +5,7 @@ use super::{
     TranscriptSnapshotReason, history_store,
 };
 use crate::integrations::asr::TranscriptSegment;
-use crate::platform::blocking::{spawn_blocking_map, with_sqlite_context};
+use crate::platform::blocking::with_sqlite_context;
 use sona_core::history::HistorySummaryPayload;
 use sona_core::history::mutation_repository::{
     HistoryCreateTranscriptSnapshotRequest, HistoryMutationError, HistoryUpdateTranscriptRequest,
@@ -15,19 +13,6 @@ use sona_core::history::mutation_repository::{
 use sona_core::history::mutation_service::HistoryMutationService;
 use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
-use sona_sqlite::SqliteApplicationContext;
-
-pub(crate) async fn run_llm_db_task<T, F, E>(
-    context: Arc<SqliteApplicationContext>,
-    task: F,
-) -> Result<T, String>
-where
-    T: Send + 'static,
-    F: FnOnce(SqliteHistoryStore) -> Result<T, E> + Send + 'static,
-    E: ToString + Send + 'static,
-{
-    spawn_blocking_map(move || task(history_store(&context))).await
-}
 
 pub(crate) async fn run_llm_db_task_with_app<R, T, F, E>(
     app: &AppHandle<R>,
@@ -123,6 +108,7 @@ mod tests {
     use sona_core::history::mutation_repository::HistoryMutationRepository;
     use sona_core::history::query_repository::HistoryQueryRepository;
     use sona_sqlite::Database;
+    use std::sync::Arc;
     use tempfile::tempdir;
 
     fn segment(id: &str, text: &str) -> TranscriptSegment {

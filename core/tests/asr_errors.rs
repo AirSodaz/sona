@@ -63,10 +63,11 @@ fn all_error_kinds_produce_stable_codes() {
     ];
     for (kind, expected_code) in cases {
         let error = AsrPortError::new(kind, "test");
-        assert_eq!(error.code(), expected_code, "kind {kind:?} should map to {expected_code}");
         assert_eq!(
-            serde_json::to_value(&error).unwrap()["code"],
+            error.code(),
             expected_code,
+            "kind {kind:?} should map to {expected_code}"
         );
+        assert_eq!(serde_json::to_value(&error).unwrap()["code"], expected_code,);
     }
 }

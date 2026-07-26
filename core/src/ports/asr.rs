@@ -23,7 +23,6 @@ pub const VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY: &str = "volcengineDoubao";
 pub const GROQ_WHISPER_PROVIDER_ID: &str = "groq-whisper";
 pub const MISTRAL_VOXTRAL_PROVIDER_ID: &str = "mistral-voxtral";
 
-
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "kebab-case")]

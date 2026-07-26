@@ -75,16 +75,13 @@ pub(crate) fn ensure_adapter(
         AsrEngine::LocalSherpa => LOCAL_SHERPA_PROVIDER_ID,
         AsrEngine::Online => sona_online_asr::resolve_online_asr_provider_id(request)?,
     };
-    asr_adapters()
-        .get(provider_id)
-        .cloned()
-        .ok_or_else(|| {
-            AsrPortError::new(
-                sona_core::ports::asr::AsrPortErrorKind::Unsupported,
-                format!("不支持的在线 ASR provider：{provider_id}"),
-            )
-            .with_code("UNSUPPORTED_ONLINE_PROVIDER")
-        })
+    asr_adapters().get(provider_id).cloned().ok_or_else(|| {
+        AsrPortError::new(
+            sona_core::ports::asr::AsrPortErrorKind::Unsupported,
+            format!("不支持的在线 ASR provider：{provider_id}"),
+        )
+        .with_code("UNSUPPORTED_ONLINE_PROVIDER")
+    })
 }
 
 pub(crate) fn recognizer_pool_for_app(app: Option<&AppHandle>) -> RecognizerPool {

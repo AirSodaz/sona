@@ -29,12 +29,8 @@ impl UnixMillisClock for RepositoryClock {
     }
 }
 
-struct SqliteSyncRepositoryFactory;
-
-impl SqliteSyncRepositoryFactory {
-    fn new(database: Arc<Database>) -> RealSqliteSyncRepositoryFactory {
-        RealSqliteSyncRepositoryFactory::new(database, Arc::new(RepositoryClock))
-    }
+fn sqlite_sync_repository_factory(database: Arc<Database>) -> RealSqliteSyncRepositoryFactory {
+    RealSqliteSyncRepositoryFactory::new(database, Arc::new(RepositoryClock))
 }
 
 #[derive(Default)]
@@ -663,7 +659,7 @@ impl SyncApplicationEnvironment for FixedEnvironment {
 async fn application_manual_lock_suppresses_restore_until_restart() {
     let config = Arc::new(MemoryConfigStore::default());
     let secrets = Arc::new(MemorySecretStore::default());
-    let factory = Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+    let factory = Arc::new(sqlite_sync_repository_factory(Arc::new(
         Database::open_in_memory().unwrap(),
     )));
     let providers = SyncProviderRegistry::new([
@@ -740,7 +736,7 @@ async fn application_owns_join_unlock_pause_and_disconnect_lifecycle() {
         SyncProviderRegistry::new([provider_factory.clone() as Arc<dyn SyncProviderFactory>]);
     let source = SyncApplication::new(
         Arc::new(MemoryConfigStore::default()),
-        Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+        Arc::new(sqlite_sync_repository_factory(Arc::new(
             Database::open_in_memory().unwrap(),
         ))),
         providers.clone(),
@@ -765,7 +761,7 @@ async fn application_owns_join_unlock_pause_and_disconnect_lifecycle() {
 
     let config = Arc::new(MemoryConfigStore::default());
     let secrets = Arc::new(MemorySecretStore::default());
-    let repository_factory = Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+    let repository_factory = Arc::new(sqlite_sync_repository_factory(Arc::new(
         Database::open_in_memory().unwrap(),
     )));
     let joining = SyncApplication::new(
@@ -854,7 +850,7 @@ async fn application_owns_join_unlock_pause_and_disconnect_lifecycle() {
 async fn application_changes_preset_and_delegates_conflicts() {
     let application = SyncApplication::new(
         Arc::new(MemoryConfigStore::default()),
-        Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+        Arc::new(sqlite_sync_repository_factory(Arc::new(
             Database::open_in_memory().unwrap(),
         ))),
         SyncProviderRegistry::new([
@@ -916,7 +912,7 @@ impl SyncSecretStore for FailingSecretStore {
 #[tokio::test]
 async fn secret_write_is_best_effort_but_delete_failure_stops_disconnect() {
     let config = Arc::new(MemoryConfigStore::default());
-    let repository_factory = Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+    let repository_factory = Arc::new(sqlite_sync_repository_factory(Arc::new(
         Database::open_in_memory().unwrap(),
     )));
     let application = SyncApplication::new(
@@ -971,7 +967,7 @@ impl SyncConfigStore for FailingSaveConfigStore {
 
 #[tokio::test]
 async fn config_failure_does_not_roll_back_remote_or_local_vault_creation() {
-    let repository_factory = Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+    let repository_factory = Arc::new(sqlite_sync_repository_factory(Arc::new(
         Database::open_in_memory().unwrap(),
     )));
     let application = SyncApplication::new(
@@ -1065,7 +1061,7 @@ async fn concurrent_run_reports_syncing_and_rejects_the_second_run() {
     let store = Arc::new(BlockingStore::default());
     let application = Arc::new(SyncApplication::new(
         Arc::new(MemoryConfigStore::default()),
-        Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+        Arc::new(sqlite_sync_repository_factory(Arc::new(
             Database::open_in_memory().unwrap(),
         ))),
         SyncProviderRegistry::new([Arc::new(TestProviderFactory {
@@ -1115,7 +1111,7 @@ async fn disconnect_waits_for_an_active_run_and_cannot_be_undone_by_retry_persis
     let config = Arc::new(MemoryConfigStore::default());
     let application = Arc::new(SyncApplication::new(
         config.clone(),
-        Arc::new(SqliteSyncRepositoryFactory::new(Arc::new(
+        Arc::new(sqlite_sync_repository_factory(Arc::new(
             Database::open_in_memory().unwrap(),
         ))),
         SyncProviderRegistry::new([Arc::new(TestProviderFactory {

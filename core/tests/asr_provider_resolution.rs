@@ -7,7 +7,7 @@ use sona_core::transcription::postprocess::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions,
 };
 use sona_core::transcription::provider_resolution::{
-    AsrProviderCapability, resolve_asr_provider_id, resolve_asr_streaming_provider_id,
+    AsrProviderCapability, resolve_asr_provider_id,
 };
 
 const DESKTOP_CAPABILITIES: [AsrProviderCapability<'static>; 4] = [

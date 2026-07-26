@@ -27,8 +27,7 @@ fn emit_task_ledger_snapshot(
     emitter: &dyn EventEmitter,
     snapshot: &TaskLedgerSnapshot,
 ) -> Result<(), String> {
-    sona_ts_bind::validate_task_ledger_snapshot_for_typescript(snapshot)
-        .map_err(map_err_string)?;
+    sona_ts_bind::validate_task_ledger_snapshot_for_typescript(snapshot).map_err(map_err_string)?;
     emitter
         .emit(
             TASK_LEDGER_UPDATED_EVENT,

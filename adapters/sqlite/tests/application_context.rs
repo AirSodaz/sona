@@ -100,8 +100,7 @@ fn injected_database_must_belong_to_the_context_directory() {
     let database = Arc::new(Database::open(database_root.path()).unwrap());
 
     let error =
-        SqliteApplicationContext::from_database(requested_root.path().to_path_buf(), database)
-            .unwrap_err();
+        SqliteApplicationContext::from_database(requested_root.path(), database).unwrap_err();
 
     assert!(error.to_string().contains("does not belong"));
 }

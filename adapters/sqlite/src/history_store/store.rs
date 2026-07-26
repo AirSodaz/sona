@@ -1,12 +1,12 @@
 use crate::DatabaseError;
 use crate::history_fs_utils::{
-    ensure_safe_file_name, optional_history_child_path,
-    remove_path_if_exists,
+    ensure_safe_file_name, optional_history_child_path, remove_path_if_exists,
 };
 use crate::ports::Database as DatabasePort;
 use crate::sync_repository::{
     record_local_delete_in_transaction, record_local_field_change_in_transaction,
 };
+use rusqlite::types::ToSql;
 use serde_json::Value;
 use sona_core::dashboard::error::DashboardServiceError;
 use sona_core::history::item_factory::HistoryItemGeneratedValues;
@@ -26,20 +26,17 @@ use sona_core::history::workspace_query::{
 };
 use sona_core::history::{
     HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryAudioStatus,
-    HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryIdGenerator, HistoryItemKind,
-    HistoryItemRecord, HistoryItemStatus, HistoryListOptions, HistorySaveImportedFileRequest,
-    HistorySaveRecordingRequest, HistorySummaryPayload, HistoryWorkspaceDateFilter,
-    HistoryWorkspaceFilterType, HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest,
-    HistoryWorkspaceQueryResult, HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
-    HistoryWorkspaceSummary, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
-    TranscriptSnapshotReason, TranscriptSnapshotRecord,
+    HistoryCreateLiveDraftRequest, HistoryIdGenerator, HistoryItemRecord, HistoryItemStatus,
+    HistoryListOptions, HistorySaveImportedFileRequest, HistorySaveRecordingRequest,
+    HistorySummaryPayload, HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest,
+    HistoryWorkspaceQueryResult, HistoryWorkspaceSummary, LiveRecordingDraftResult,
+    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
 use sona_core::ports::fs::{FileSystemError, FileSystemOperation};
 use sona_core::ports::time::{ClockError, UnixMillisClock};
 use sona_core::sync::SyncEntityKind;
 use sona_core::transcription::transcript::TranscriptSegment;
-use rusqlite::types::ToSql;
 use std::cell::Cell;
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
@@ -47,17 +44,16 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+#[cfg(test)]
 use std::time::UNIX_EPOCH;
 
 use super::lock::acquire_history_file_lock;
 use super::row_map::{
     apply_history_item_updates, history_store_mutation_error, map_row_to_item, validate_id,
 };
-pub(super) use super::sql::{HISTORY_ITEM_ROW_COLUMNS, history_insert_sql};
 use super::sql::{
-    history_select_columns, insert_history_item_row,
-    load_tag_ids, new_history_item_generated_values, replace_history_item_tags,
-    require_history_source_file,
+    history_select_columns, insert_history_item_row, load_tag_ids,
+    new_history_item_generated_values, replace_history_item_tags, require_history_source_file,
 };
 use super::util::{
     HISTORY_DIR_NAME, MILLIS_PER_DAY, STAGED_AUDIO_MARKER, TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT,
@@ -664,7 +660,6 @@ where
         Ok(())
     }
 }
-
 
 impl<D> SqliteHistoryStore<D>
 where
@@ -1809,14 +1804,14 @@ where
         &self,
         request: HistoryAudioCleanupRequest,
     ) -> Result<HistoryAudioCleanupReport, HistoryStoreError> {
-        Ok(self.run_audio_cleanup(request, false)?)
+        self.run_audio_cleanup(request, false)
     }
 
     fn cleanup_audio(
         &self,
         request: HistoryAudioCleanupRequest,
     ) -> Result<HistoryAudioCleanupReport, HistoryStoreError> {
-        Ok(self.run_audio_cleanup(request, true)?)
+        self.run_audio_cleanup(request, true)
     }
 }
 

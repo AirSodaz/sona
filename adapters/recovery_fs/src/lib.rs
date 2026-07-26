@@ -2,7 +2,9 @@ use serde::Serialize;
 use sona_core::ports::fs::{FileMetadata, FileSystem, FileSystemError, FileSystemOperation};
 use sona_core::ports::time::{ClockError, UnixMillisClock};
 use sona_core::recovery::RecoveryError;
-use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider, empty_snapshot};
+use sona_core::recovery::normalization::{
+    SourcePathStatus, SourcePathStatusProvider, empty_snapshot,
+};
 use sona_core::recovery::repository::RecoverySnapshotStore;
 use sona_core::recovery::service::RecoveryService;
 use sona_core::recovery::types::{
@@ -41,7 +43,8 @@ impl FileSystem for RealFileSystem {
     }
 
     fn read_file(&self, path: &Path) -> Result<Vec<u8>, FileSystemError> {
-        fs::read(path).map_err(|error| file_system_error(FileSystemOperation::ReadFile, path, error))
+        fs::read(path)
+            .map_err(|error| file_system_error(FileSystemOperation::ReadFile, path, error))
     }
 
     fn read_to_string(&self, path: &Path) -> Result<String, FileSystemError> {
@@ -72,7 +75,11 @@ impl FileSystem for RealFileSystem {
                 is_dir: metadata.is_dir(),
             })),
             Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(file_system_error(FileSystemOperation::Metadata, path, error)),
+            Err(error) => Err(file_system_error(
+                FileSystemOperation::Metadata,
+                path,
+                error,
+            )),
         }
     }
 }
@@ -82,7 +89,8 @@ impl UnixMillisClock for SystemClock {
         let duration = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|error| ClockError::BeforeUnixEpoch(error.to_string()))?;
-        u64::try_from(duration.as_millis()).map_err(|error| ClockError::OutOfRange(error.to_string()))
+        u64::try_from(duration.as_millis())
+            .map_err(|error| ClockError::OutOfRange(error.to_string()))
     }
 }
 
