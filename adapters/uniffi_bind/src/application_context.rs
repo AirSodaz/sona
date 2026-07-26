@@ -197,46 +197,47 @@ fn registry() -> &'static Mutex<ApplicationContextRegistry> {
     REGISTRY.get_or_init(|| Mutex::new(ApplicationContextRegistry::new()))
 }
 
+/// Acquire the registry lock, recovering silently from a poisoned state.
+///
+/// A poisoned Mutex means a panic occurred while the lock was held.  The
+/// registry is a cache of open database handles; an interrupted operation
+/// may leave a stale entry, but the state is not otherwise corrupted.
+/// Propagating the poison to FFI callers as a hard error would produce
+/// a misleading `DatabaseError::Internal` where none of the usual remedies
+/// (retrying, checking the path) would help.  Recovering silently is the
+/// safer and more consistent choice across all call sites, including
+/// `register_default_sync_secret_store` which cannot return an error.
+fn lock_registry() -> std::sync::MutexGuard<'static, ApplicationContextRegistry> {
+    registry()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 pub(crate) fn application_context(
     app_data_dir: impl AsRef<Path>,
 ) -> Result<Arc<HostApplicationContext>, DatabaseError> {
-    registry()
-        .lock()
-        .map_err(|_| DatabaseError::Internal("Application context registry is poisoned".into()))?
-        .get_or_open(app_data_dir.as_ref())
+    lock_registry().get_or_open(app_data_dir.as_ref())
 }
 
 pub(crate) fn cached_application_context(
     app_data_dir: impl AsRef<Path>,
 ) -> Result<Option<Arc<HostApplicationContext>>, DatabaseError> {
-    Ok(registry()
-        .lock()
-        .map_err(|_| DatabaseError::Internal("Application context registry is poisoned".into()))?
-        .get_cached(app_data_dir.as_ref()))
+    Ok(lock_registry().get_cached(app_data_dir.as_ref()))
 }
 
 pub(crate) fn register_default_sync_secret_store(store: Arc<dyn FfiSyncSecretStore>) {
-    registry()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .register_default_sync_secret_store(store);
+    lock_registry().register_default_sync_secret_store(store);
 }
 
 pub(crate) fn register_sync_secret_store_for_app_data_dir(
     app_data_dir: impl AsRef<Path>,
     store: Arc<dyn FfiSyncSecretStore>,
 ) -> Result<(), DatabaseError> {
-    registry()
-        .lock()
-        .map_err(|_| DatabaseError::Internal("Application context registry is poisoned".into()))?
-        .register_sync_secret_store(app_data_dir.as_ref(), store)
+    lock_registry().register_sync_secret_store(app_data_dir.as_ref(), store)
 }
 
 pub(crate) fn release_application_context(
     app_data_dir: impl AsRef<Path>,
 ) -> Result<bool, DatabaseError> {
-    registry()
-        .lock()
-        .map_err(|_| DatabaseError::Internal("Application context registry is poisoned".into()))?
-        .release(app_data_dir.as_ref())
+    lock_registry().release(app_data_dir.as_ref())
 }
