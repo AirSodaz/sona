@@ -7,7 +7,7 @@ use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 
 #[uniffi::export(foreign)]
 #[async_trait]
-pub trait FfiSyncSecretStore: Send + Sync {
+pub trait FfiSecretStore: Send + Sync {
     async fn get(&self, key: String) -> SonaCoreBindingResult<Option<Vec<u8>>>;
     async fn set(&self, key: String, value: Vec<u8>) -> SonaCoreBindingResult<()>;
     async fn delete(&self, key: String) -> SonaCoreBindingResult<()>;
@@ -15,24 +15,24 @@ pub trait FfiSyncSecretStore: Send + Sync {
 
 #[derive(Default)]
 pub(crate) struct HostSyncSecretStore {
-    registration: RwLock<Option<Arc<dyn FfiSyncSecretStore>>>,
+    registration: RwLock<Option<Arc<dyn FfiSecretStore>>>,
 }
 
 impl HostSyncSecretStore {
-    pub(crate) fn new(registration: Option<Arc<dyn FfiSyncSecretStore>>) -> Self {
+    pub(crate) fn new(registration: Option<Arc<dyn FfiSecretStore>>) -> Self {
         Self {
             registration: RwLock::new(registration),
         }
     }
 
-    pub(crate) fn register(&self, store: Arc<dyn FfiSyncSecretStore>) {
+    pub(crate) fn register(&self, store: Arc<dyn FfiSecretStore>) {
         *self
             .registration
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(store);
     }
 
-    fn registered(&self) -> Option<Arc<dyn FfiSyncSecretStore>> {
+    fn registered(&self) -> Option<Arc<dyn FfiSecretStore>> {
         self.registration
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())

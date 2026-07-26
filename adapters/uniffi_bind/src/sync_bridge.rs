@@ -16,18 +16,26 @@ use crate::application_context::{
     register_sync_secret_store_for_app_data_dir as register_context_sync_secret_store,
 };
 use crate::json_bridge::{parse_core_json, serialize_core_json};
-use crate::sync_secret_store_bridge::FfiSyncSecretStore;
+use crate::mapper::{provider_configuration_from_ffi, sync_conflict_detail_to_ffi};
+use crate::sync_secret_store_bridge::FfiSecretStore;
+use crate::{
+    FfiSecret, FfiSyncChangePasswordRequestV1, FfiSyncConflictDetailV1,
+    FfiSyncConflictResolutionV1, FfiSyncConflictSummaryV1, FfiSyncCreateRequestV1,
+    FfiSyncCreateResultV1, FfiSyncJoinPreviewV1, FfiSyncJoinRequestV1, FfiSyncPresetV1,
+    FfiSyncProviderDescriptorV1, FfiSyncProviderInputV1, FfiSyncRunResultV1,
+    FfiSyncStatusSnapshotV1, FfiSyncUnlockRequestV1,
+};
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 
 const CONFIG_FILE: &str = "sync.json";
 
-pub(crate) fn register_sync_secret_store(store: Arc<dyn FfiSyncSecretStore>) {
+pub(crate) fn register_sync_secret_store(store: Arc<dyn FfiSecretStore>) {
     register_default_sync_secret_store(store);
 }
 
 pub(crate) fn register_sync_secret_store_for_app_data_dir(
     app_data_dir: &str,
-    store: Arc<dyn FfiSyncSecretStore>,
+    store: Arc<dyn FfiSecretStore>,
 ) -> SonaCoreBindingResult<()> {
     register_context_sync_secret_store(app_data_dir, store).map_err(sync_error)
 }
@@ -321,6 +329,212 @@ pub(crate) fn resolve_conflict_json(
         .map_err(sync_error)
 }
 
+// ------------------------------------------------------------ typed V1 ---
+//
+// Every function below drives the same `SyncApplication` method as its `_json`
+// sibling. Credentials arrive as `FfiSecret` handles so they never reach a
+// generated Kotlin `toString()`; only the provider `configuration` stays a
+// JSON leaf, because Sync is provider-neutral by design.
+
+fn provider_input_from_ffi(
+    provider: &FfiSyncProviderInputV1,
+) -> SonaCoreBindingResult<SyncProviderInput> {
+    Ok(SyncProviderInput {
+        provider_id: provider.provider_id.clone(),
+        configuration: provider_configuration_from_ffi(provider).map_err(sync_error)?,
+    })
+}
+
+pub(crate) async fn test_provider_v1(
+    provider: FfiSyncProviderInputV1,
+) -> SonaCoreBindingResult<FfiSyncProviderDescriptorV1> {
+    let provider = provider_input_from_ffi(&provider)?;
+    provider_registry()
+        .test_provider(provider)
+        .await
+        .map(Into::into)
+        .map_err(sync_error)
+}
+
+pub(crate) async fn get_status_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
+    application(&app_data_dir)?
+        .status()
+        .await
+        .map(Into::into)
+        .map_err(sync_error)
+}
+
+pub(crate) async fn create_vault_v1(
+    app_data_dir: String,
+    request: FfiSyncCreateRequestV1,
+) -> SonaCoreBindingResult<FfiSyncCreateResultV1> {
+    let provider = provider_input_from_ffi(&request.provider)?;
+    let result = application(&app_data_dir)?
+        .create(
+            provider,
+            request.preset.into(),
+            request.master_password.expose(),
+            request.create_recovery_key,
+        )
+        .await
+        .map_err(sync_error)?;
+    Ok(FfiSyncCreateResultV1 {
+        vault_id: result.vault_id,
+        device_id: result.device_id,
+        recovery_key: result.recovery_key.map(FfiSecret::new),
+        status: result.status.into(),
+    })
+}
+
+pub(crate) async fn preview_join_v1(
+    app_data_dir: String,
+    request: FfiSyncJoinRequestV1,
+) -> SonaCoreBindingResult<FfiSyncJoinPreviewV1> {
+    let provider = provider_input_from_ffi(&request.provider)?;
+    application(&app_data_dir)?
+        .preview_join(
+            provider,
+            &request.vault_id,
+            request.master_password.expose(),
+        )
+        .await
+        .map(Into::into)
+        .map_err(sync_error)
+}
+
+pub(crate) async fn join_vault_v1(
+    app_data_dir: String,
+    request: FfiSyncJoinRequestV1,
+) -> SonaCoreBindingResult<FfiSyncRunResultV1> {
+    let provider = provider_input_from_ffi(&request.provider)?;
+    application(&app_data_dir)?
+        .join(
+            provider,
+            &request.vault_id,
+            request.master_password.expose(),
+        )
+        .await
+        .map(Into::into)
+        .map_err(sync_error)
+}
+
+pub(crate) async fn unlock_v1(
+    app_data_dir: String,
+    request: FfiSyncUnlockRequestV1,
+    recovery: bool,
+) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
+    let application = application(&app_data_dir)?;
+    let provider_password = request.provider_password.expose().as_bytes().to_vec();
+    let status = if recovery {
+        let recovery_key = request
+            .recovery_key
+            .as_ref()
+            .ok_or_else(|| sync_binding_error("Recovery key is required."))?;
+        application
+            .unlock_with_recovery_key(provider_password, recovery_key.expose())
+            .await
+    } else {
+        let master_password = request
+            .master_password
+            .as_ref()
+            .ok_or_else(|| sync_binding_error("Master password is required."))?;
+        application
+            .unlock_with_password(provider_password, master_password.expose())
+            .await
+    }
+    .map_err(sync_error)?;
+    Ok(status.into())
+}
+
+pub(crate) async fn set_paused_v1(
+    app_data_dir: String,
+    paused: bool,
+) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
+    application(&app_data_dir)?
+        .set_paused(paused)
+        .await
+        .map(Into::into)
+        .map_err(sync_error)
+}
+
+pub(crate) async fn disconnect_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
+    application(&app_data_dir)?
+        .disconnect()
+        .await
+        .map(Into::into)
+        .map_err(sync_error)
+}
+
+pub(crate) async fn run_now_v1(app_data_dir: String) -> SonaCoreBindingResult<FfiSyncRunResultV1> {
+    application(&app_data_dir)?
+        .run()
+        .await
+        .map(Into::into)
+        .map_err(sync_error)
+}
+
+pub(crate) async fn change_preset_v1(
+    app_data_dir: String,
+    preset: FfiSyncPresetV1,
+    confirm_shrink: bool,
+) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
+    application(&app_data_dir)?
+        .change_preset(preset.into(), confirm_shrink)
+        .await
+        .map(Into::into)
+        .map_err(sync_error)
+}
+
+pub(crate) async fn change_master_password_v1(
+    app_data_dir: String,
+    request: FfiSyncChangePasswordRequestV1,
+) -> SonaCoreBindingResult<()> {
+    application(&app_data_dir)?
+        .change_master_password(
+            request.current_master_password.expose(),
+            request.next_master_password.expose(),
+        )
+        .await
+        .map_err(sync_error)
+}
+
+pub(crate) fn list_conflicts_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<Vec<FfiSyncConflictSummaryV1>> {
+    Ok(application(&app_data_dir)?
+        .list_conflicts()
+        .map_err(sync_error)?
+        .into_iter()
+        .map(Into::into)
+        .collect())
+}
+
+pub(crate) fn get_conflict_v1(
+    app_data_dir: String,
+    conflict_id: String,
+) -> SonaCoreBindingResult<Option<FfiSyncConflictDetailV1>> {
+    application(&app_data_dir)?
+        .get_conflict(&conflict_id)
+        .map_err(sync_error)?
+        .map(sync_conflict_detail_to_ffi)
+        .transpose()
+        .map_err(sync_error)
+}
+
+pub(crate) fn resolve_conflict_v1(
+    app_data_dir: String,
+    conflict_id: String,
+    resolution: FfiSyncConflictResolutionV1,
+) -> SonaCoreBindingResult<()> {
+    application(&app_data_dir)?
+        .resolve_conflict(&conflict_id, resolution.into())
+        .map_err(sync_error)
+}
+
 fn webdav_provider_input(
     config: WebDavObjectStoreConfig,
 ) -> SonaCoreBindingResult<SyncProviderInput> {
@@ -363,12 +577,12 @@ mod tests {
     use std::sync::Mutex as StdMutex;
 
     #[derive(Default)]
-    struct MemoryFfiSyncSecretStore {
+    struct MemoryFfiSecretStore {
         values: StdMutex<BTreeMap<String, Vec<u8>>>,
     }
 
     #[async_trait]
-    impl FfiSyncSecretStore for MemoryFfiSyncSecretStore {
+    impl FfiSecretStore for MemoryFfiSecretStore {
         async fn get(&self, key: String) -> SonaCoreBindingResult<Option<Vec<u8>>> {
             Ok(self.values.lock().unwrap().get(&key).cloned())
         }
@@ -459,7 +673,7 @@ mod tests {
         proxy.write_secret("ephemeral", b"ignored").await.unwrap();
         proxy.delete_secret("ephemeral").await.unwrap();
 
-        let store = Arc::new(MemoryFfiSyncSecretStore::default());
+        let store = Arc::new(MemoryFfiSecretStore::default());
         registry.register_default_sync_secret_store(store.clone());
         proxy.write_secret("provider", b"password").await.unwrap();
         assert_eq!(
@@ -476,8 +690,8 @@ mod tests {
         let second_directory = tempfile::tempdir().unwrap();
         let first_path = first_directory.path().to_string_lossy().into_owned();
         let second_path = second_directory.path().to_string_lossy().into_owned();
-        let first_store = Arc::new(MemoryFfiSyncSecretStore::default());
-        let second_store = Arc::new(MemoryFfiSyncSecretStore::default());
+        let first_store = Arc::new(MemoryFfiSecretStore::default());
+        let second_store = Arc::new(MemoryFfiSecretStore::default());
 
         register_sync_secret_store_for_app_data_dir(&first_path, first_store.clone()).unwrap();
         register_sync_secret_store_for_app_data_dir(&second_path, second_store.clone()).unwrap();
@@ -514,7 +728,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let app_data_dir = directory.path().to_string_lossy().into_owned();
         let _application = application(&app_data_dir).unwrap();
-        let store = Arc::new(MemoryFfiSyncSecretStore::default());
+        let store = Arc::new(MemoryFfiSecretStore::default());
 
         register_sync_secret_store_for_app_data_dir(&app_data_dir, store.clone()).unwrap();
         application_context(&app_data_dir)

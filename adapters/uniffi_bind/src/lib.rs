@@ -34,16 +34,20 @@ pub use asr_streaming_bridge::{FfiAsrStreamingObserver, FfiAsrStreamingSession};
 pub use llm_task_bridge::FfiLlmTaskObserver;
 pub use mapper::{
     FfiAsrEngine, FfiAsrInferenceMetric, FfiAsrMode, FfiAsrModelLoadMetric,
-    FfiAsrStreamingErrorEvent, FfiAsrTranscriptUpdateEvent, FfiAudioUsageCategoryV1,
-    FfiAutomationActionsV1, FfiAutomationExportConfigV1, FfiAutomationProcessedInputV1,
-    FfiAutomationProcessedRecordV1, FfiAutomationProfileInputV1, FfiAutomationProfileRecordV1,
-    FfiAutomationRepositoryInputV1, FfiAutomationRepositoryStateV1, FfiAutomationRuleInputV1,
-    FfiAutomationRuleRecordV1, FfiAutomationRuleValidationResultV1, FfiAutomationStageConfigV1,
-    FfiAutomationTagReferenceV1, FfiAutomationValidationExportConfigV1,
+    FfiAsrRuntimeMetricsSnapshotV1, FfiAsrStreamingErrorEvent, FfiAsrTranscriptUpdateEvent,
+    FfiAudioUsageCategoryV1, FfiAutomationActionsV1, FfiAutomationExportConfigV1,
+    FfiAutomationProcessedInputV1, FfiAutomationProcessedRecordV1, FfiAutomationProfileInputV1,
+    FfiAutomationProfileRecordV1, FfiAutomationRepositoryInputV1, FfiAutomationRepositoryStateV1,
+    FfiAutomationRuleInputV1, FfiAutomationRuleRecordV1, FfiAutomationRuleValidationResultV1,
+    FfiAutomationStageConfigV1, FfiAutomationTagReferenceV1, FfiAutomationValidationExportConfigV1,
     FfiAutomationValidationRuleV1, FfiAutomationValidationStageConfigV1, FfiBackupApplyResultV1,
     FfiBackupManifestCountsV1, FfiBackupManifestScopesV1, FfiBackupManifestV1,
-    FfiBatchSegmentationMode, FfiConfigMigrationResult, FfiDatabaseUsageCategoryV1,
-    FfiExportFormatV1, FfiExportModeV1, FfiExportTranscriptFileRequestV1,
+    FfiBatchSegmentationMode, FfiConfigMigrationResult, FfiContentStatsV1, FfiContentTrendPointV1,
+    FfiDashboardSnapshotV1, FfiDashboardUsageBucketV1, FfiDatabaseUsageCategoryV1,
+    FfiDiagnosticsConfigV1, FfiDiagnosticsDeviceOptionV1, FfiDiagnosticsDeviceProbeV1,
+    FfiDiagnosticsInputV1, FfiDiagnosticsModelRuleV1, FfiDiagnosticsModelRulesV1,
+    FfiDiagnosticsModelSummaryV1, FfiDiagnosticsPathStatusesV1, FfiDiagnosticsSelectedModelsV1,
+    FfiDiagnosticsSnapshotV1, FfiExportFormatV1, FfiExportModeV1, FfiExportTranscriptFileRequestV1,
     FfiExportTranscriptFileResultV1, FfiFileUsageCategoryV1, FfiHistoryAudioStatusV1,
     FfiHistoryCompleteLiveDraftRequestV1, FfiHistoryCreateLiveDraftRequestV1,
     FfiHistoryCreateTranscriptSnapshotRequestV1, FfiHistoryDeleteItemsRequestV1,
@@ -58,36 +62,46 @@ pub use mapper::{
     FfiHistoryWorkspaceQueryRequestV1, FfiHistoryWorkspaceQueryResultV1,
     FfiHistoryWorkspaceScopeV1, FfiHistoryWorkspaceSearchRangeV1,
     FfiHistoryWorkspaceSearchSnippetV1, FfiHistoryWorkspaceSortOrderV1,
-    FfiHistoryWorkspaceSummaryV1, FfiLiveRecordingDraftResultV1, FfiLlmCompletionResponse,
-    FfiLlmConfig, FfiLlmExecutionMetadata, FfiLlmModality, FfiLlmModelMetadataSource,
-    FfiLlmModelSummary, FfiLlmPromptChunk, FfiLlmProvider, FfiLlmProviderDefaults,
-    FfiLlmProviderStrategy, FfiLlmResponseFormatKind, FfiLlmSegmentInput, FfiLlmTaskChunk,
-    FfiLlmTaskFinal, FfiLlmTaskProgress, FfiLlmTaskText, FfiLlmTaskType, FfiLlmTokenUsage,
-    FfiModelCatalogGroup, FfiModelCatalogModel, FfiModelCatalogPathMatchToken,
-    FfiModelCatalogRestoreDefaults, FfiModelCatalogSection, FfiModelCatalogSectionType,
-    FfiModelCatalogSelectedIds, FfiModelCatalogSelectionOptions, FfiModelCatalogSnapshot,
-    FfiModelDependencyConfigKey, FfiModelDependencyRequest, FfiModelDependencyRequestsForModel,
-    FfiModelIdByNormalizedPathEntry, FfiModelPathByIdEntry, FfiModelRules, FfiModelSelectionOption,
-    FfiModelSelectionPaths, FfiOnlineAsrBatchCapability, FfiOnlineAsrCapability,
-    FfiOnlineAsrLocalFileBatchMode, FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest,
-    FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPreparedBackupImportV1, FfiPresetModel,
-    FfiRecoveredQueueItemV1, FfiRecoveredTranscriptSegmentV1, FfiRecoveredTranscriptTimingUnitV1,
+    FfiHistoryWorkspaceSummaryV1, FfiHybridLogicalClockV1, FfiLiveRecordingDraftResultV1,
+    FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmExecutionMetadata, FfiLlmModality,
+    FfiLlmModelMetadataSource, FfiLlmModelSummary, FfiLlmPromptChunk, FfiLlmProvider,
+    FfiLlmProviderDefaults, FfiLlmProviderStrategy, FfiLlmResponseFormatKind, FfiLlmSegmentInput,
+    FfiLlmTaskChunk, FfiLlmTaskFinal, FfiLlmTaskProgress, FfiLlmTaskText, FfiLlmTaskType,
+    FfiLlmTokenUsage, FfiLlmUsageDashboardStatsV1, FfiModelCatalogGroup, FfiModelCatalogModel,
+    FfiModelCatalogPathMatchToken, FfiModelCatalogRestoreDefaults, FfiModelCatalogSection,
+    FfiModelCatalogSectionType, FfiModelCatalogSelectedIds, FfiModelCatalogSelectionOptions,
+    FfiModelCatalogSnapshot, FfiModelDependencyConfigKey, FfiModelDependencyRequest,
+    FfiModelDependencyRequestsForModel, FfiModelIdByNormalizedPathEntry, FfiModelPathByIdEntry,
+    FfiModelRules, FfiModelSelectionOption, FfiModelSelectionPaths, FfiOnlineAsrBatchCapability,
+    FfiOnlineAsrCapability, FfiOnlineAsrLocalFileBatchMode, FfiOnlineAsrProvider,
+    FfiOnlineAsrProviderRequest, FfiOverviewStatsV1, FfiPolishSegmentsRequest, FfiPolishedSegment,
+    FfiPreparedBackupImportV1, FfiPresetModel, FfiRecoveredQueueItemV1,
+    FfiRecoveredTranscriptSegmentV1, FfiRecoveredTranscriptTimingUnitV1,
     FfiRecoveredTranscriptTimingV1, FfiRecoveryFileStatV1, FfiRecoveryItemInputV1,
     FfiRecoveryItemStageV1, FfiRecoveryQueueStatusV1, FfiRecoveryResolutionV1,
     FfiRecoverySnapshotV1, FfiRecoverySourceV1, FfiRequiredCompanionModels,
-    FfiResolvedModelDownload, FfiRuntimePathKind, FfiRuntimePathStatus, FfiSpeakerAttribution,
-    FfiSpeakerCandidate, FfiSpeakerTag, FfiSqliteIndexUsageEntryV1, FfiSqliteUsageSummaryV1,
-    FfiStorageUsageCategoriesV1, FfiStorageUsageSnapshotV1, FfiStringPatchV1,
-    FfiSummarizeTranscriptRequest, FfiSummarySegmentInput, FfiSummaryTemplateConfig,
-    FfiTagCreateInputV1, FfiTagRecordV1, FfiTagRepositorySnapshotV1, FfiTagUpdateInputV1,
-    FfiTaskLedgerKindV1, FfiTaskLedgerPatchV1, FfiTaskLedgerRecordV1, FfiTaskLedgerSnapshotV1,
-    FfiTaskLedgerStatusV1, FfiTimestampSupportHint, FfiTranscriptSegment,
-    FfiTranscriptSnapshotMetadataV1, FfiTranscriptSnapshotReasonV1, FfiTranscriptSnapshotRecordV1,
-    FfiTranscriptTiming, FfiTranscriptTimingLevel, FfiTranscriptTimingSource,
-    FfiTranscriptTimingUnit, FfiTranscriptUpdate, FfiTranslateSegmentsRequest,
-    FfiTranslatedSegment, FfiVolcengineDoubaoAsrConfig, FfiWebviewCacheUsageCategoryV1,
+    FfiResolvedModelDownload, FfiRuntimeEnvironmentStatusV1, FfiRuntimePathKind,
+    FfiRuntimePathStatus, FfiSecret, FfiSpeakerAttribution, FfiSpeakerCandidate,
+    FfiSpeakerLeaderV1, FfiSpeakerStatsV1, FfiSpeakerTag, FfiSqliteIndexUsageEntryV1,
+    FfiSqliteUsageSummaryV1, FfiStorageUsageCategoriesV1, FfiStorageUsageSnapshotV1,
+    FfiStringPatchV1, FfiSummarizeTranscriptRequest, FfiSummarySegmentInput,
+    FfiSummaryTemplateConfig, FfiSyncCausalContextV1, FfiSyncChangePasswordRequestV1,
+    FfiSyncConflictDetailV1, FfiSyncConflictKindV1, FfiSyncConflictResolutionV1,
+    FfiSyncConflictSummaryV1, FfiSyncCreateRequestV1, FfiSyncCreateResultV1, FfiSyncEntityKeyV1,
+    FfiSyncEntityKindV1, FfiSyncErrorSnapshotV1, FfiSyncJoinPreviewV1, FfiSyncJoinRequestV1,
+    FfiSyncLifecycleStateV1, FfiSyncOperationKindV1, FfiSyncOperationV1, FfiSyncPresetV1,
+    FfiSyncProviderDescriptorV1, FfiSyncProviderInputV1, FfiSyncRunResultV1,
+    FfiSyncStatusSnapshotV1, FfiSyncUnlockRequestV1, FfiSyncVersionV1, FfiTagCreateInputV1,
+    FfiTagRecordV1, FfiTagRepositorySnapshotV1, FfiTagUpdateInputV1, FfiTaskLedgerKindV1,
+    FfiTaskLedgerPatchV1, FfiTaskLedgerRecordV1, FfiTaskLedgerSnapshotV1, FfiTaskLedgerStatusV1,
+    FfiTimestampSupportHint, FfiTranscriptSegment, FfiTranscriptSnapshotMetadataV1,
+    FfiTranscriptSnapshotReasonV1, FfiTranscriptSnapshotRecordV1, FfiTranscriptTiming,
+    FfiTranscriptTimingLevel, FfiTranscriptTimingSource, FfiTranscriptTimingUnit,
+    FfiTranscriptUpdate, FfiTranslateSegmentsRequest, FfiTranslatedSegment, FfiUsageBreakdownV1,
+    FfiUsageTrendPointV1, FfiVoiceTypingReadinessV1, FfiVolcengineDoubaoAsrConfig,
+    FfiWebviewCacheUsageCategoryV1,
 };
-pub use sync_secret_store_bridge::FfiSyncSecretStore;
+pub use sync_secret_store_bridge::FfiSecretStore;
 
 uniffi::setup_scaffolding!();
 
@@ -535,14 +549,14 @@ pub async fn sync_test_provider_json(config_json: String) -> SonaCoreBindingResu
 }
 
 #[uniffi::export]
-pub fn register_sync_secret_store(store: std::sync::Arc<dyn FfiSyncSecretStore>) {
+pub fn register_sync_secret_store(store: std::sync::Arc<dyn FfiSecretStore>) {
     sync_bridge::register_sync_secret_store(store);
 }
 
 #[uniffi::export]
 pub fn register_sync_secret_store_for_app_data_dir(
     app_data_dir: String,
-    store: std::sync::Arc<dyn FfiSyncSecretStore>,
+    store: std::sync::Arc<dyn FfiSecretStore>,
 ) -> SonaCoreBindingResult<()> {
     sync_bridge::register_sync_secret_store_for_app_data_dir(&app_data_dir, store)
 }
@@ -666,6 +680,121 @@ pub fn sync_resolve_conflict_json(
     resolution_json: String,
 ) -> SonaCoreBindingResult<()> {
     sync_bridge::resolve_conflict_json(app_data_dir, conflict_id, resolution_json)
+}
+
+#[uniffi::export]
+pub async fn sync_test_provider_v1(
+    provider: FfiSyncProviderInputV1,
+) -> SonaCoreBindingResult<FfiSyncProviderDescriptorV1> {
+    sync_bridge::test_provider_v1(provider).await
+}
+
+#[uniffi::export]
+pub async fn sync_get_status_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
+    sync_bridge::get_status_v1(app_data_dir).await
+}
+
+#[uniffi::export]
+pub async fn sync_create_vault_v1(
+    app_data_dir: String,
+    request: FfiSyncCreateRequestV1,
+) -> SonaCoreBindingResult<FfiSyncCreateResultV1> {
+    sync_bridge::create_vault_v1(app_data_dir, request).await
+}
+
+#[uniffi::export]
+pub async fn sync_preview_join_v1(
+    app_data_dir: String,
+    request: FfiSyncJoinRequestV1,
+) -> SonaCoreBindingResult<FfiSyncJoinPreviewV1> {
+    sync_bridge::preview_join_v1(app_data_dir, request).await
+}
+
+#[uniffi::export]
+pub async fn sync_join_vault_v1(
+    app_data_dir: String,
+    request: FfiSyncJoinRequestV1,
+) -> SonaCoreBindingResult<FfiSyncRunResultV1> {
+    sync_bridge::join_vault_v1(app_data_dir, request).await
+}
+
+#[uniffi::export]
+pub async fn sync_unlock_v1(
+    app_data_dir: String,
+    request: FfiSyncUnlockRequestV1,
+) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
+    sync_bridge::unlock_v1(app_data_dir, request, false).await
+}
+
+#[uniffi::export]
+pub async fn sync_unlock_with_recovery_v1(
+    app_data_dir: String,
+    request: FfiSyncUnlockRequestV1,
+) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
+    sync_bridge::unlock_v1(app_data_dir, request, true).await
+}
+
+#[uniffi::export]
+pub async fn sync_set_paused_v1(
+    app_data_dir: String,
+    paused: bool,
+) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
+    sync_bridge::set_paused_v1(app_data_dir, paused).await
+}
+
+#[uniffi::export]
+pub async fn sync_disconnect_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
+    sync_bridge::disconnect_v1(app_data_dir).await
+}
+
+#[uniffi::export]
+pub async fn sync_run_now_v1(app_data_dir: String) -> SonaCoreBindingResult<FfiSyncRunResultV1> {
+    sync_bridge::run_now_v1(app_data_dir).await
+}
+
+#[uniffi::export]
+pub async fn sync_change_preset_v1(
+    app_data_dir: String,
+    preset: FfiSyncPresetV1,
+    confirm_shrink: bool,
+) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
+    sync_bridge::change_preset_v1(app_data_dir, preset, confirm_shrink).await
+}
+
+#[uniffi::export]
+pub async fn sync_change_master_password_v1(
+    app_data_dir: String,
+    request: FfiSyncChangePasswordRequestV1,
+) -> SonaCoreBindingResult<()> {
+    sync_bridge::change_master_password_v1(app_data_dir, request).await
+}
+
+#[uniffi::export]
+pub fn sync_list_conflicts_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<Vec<FfiSyncConflictSummaryV1>> {
+    sync_bridge::list_conflicts_v1(app_data_dir)
+}
+
+#[uniffi::export]
+pub fn sync_get_conflict_v1(
+    app_data_dir: String,
+    conflict_id: String,
+) -> SonaCoreBindingResult<Option<FfiSyncConflictDetailV1>> {
+    sync_bridge::get_conflict_v1(app_data_dir, conflict_id)
+}
+
+#[uniffi::export]
+pub fn sync_resolve_conflict_v1(
+    app_data_dir: String,
+    conflict_id: String,
+    resolution: FfiSyncConflictResolutionV1,
+) -> SonaCoreBindingResult<()> {
+    sync_bridge::resolve_conflict_v1(app_data_dir, conflict_id, resolution)
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -1099,11 +1228,27 @@ pub async fn load_dashboard_snapshot_json(
 }
 
 #[uniffi::export]
+pub async fn load_dashboard_snapshot_v1(
+    app_data_dir: String,
+    deep: bool,
+) -> SonaCoreBindingResult<FfiDashboardSnapshotV1> {
+    dashboard_bridge::load_dashboard_snapshot_v1(app_data_dir, deep).await
+}
+
+#[uniffi::export]
 pub async fn load_diagnostics_snapshot_json(
     app_data_dir: String,
     input_json: String,
 ) -> SonaCoreBindingResult<String> {
     diagnostics_bridge::load_diagnostics_snapshot_json(app_data_dir, input_json).await
+}
+
+#[uniffi::export]
+pub async fn load_diagnostics_snapshot_v1(
+    app_data_dir: String,
+    input: FfiDiagnosticsInputV1,
+) -> SonaCoreBindingResult<FfiDiagnosticsSnapshotV1> {
+    diagnostics_bridge::load_diagnostics_snapshot_v1(app_data_dir, input).await
 }
 
 #[uniffi::export]
@@ -1598,7 +1743,9 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(config.api_key, "secret");
+        assert_eq!(config.api_key.expose(), "secret");
+        // The handle must not print the secret when a record is formatted.
+        assert!(!format!("{config:?}").contains("secret"));
         assert_eq!(config.streaming_endpoint, "wss://stream");
         assert_eq!(config.streaming_resource_id, "stream-resource");
         assert_eq!(config.batch_endpoint, "https://batch");

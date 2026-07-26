@@ -35,6 +35,16 @@ pub struct FfiOnlineAsrApiKey {
     value: String,
 }
 
+/// Value equality so records embedding the key keep deriving `PartialEq`.
+/// Not constant-time; must not be used to verify a credential.
+impl PartialEq for FfiOnlineAsrApiKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl Eq for FfiOnlineAsrApiKey {}
+
 impl fmt::Debug for FfiOnlineAsrApiKey {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -49,6 +59,14 @@ impl FfiOnlineAsrApiKey {
     #[uniffi::constructor]
     pub fn new(value: String) -> Arc<Self> {
         Arc::new(Self { value })
+    }
+}
+
+impl FfiOnlineAsrApiKey {
+    /// Reads the secret. Deliberately not exported: the value must never become
+    /// a readable property on the generated Kotlin handle.
+    pub(crate) fn expose(&self) -> &str {
+        &self.value
     }
 }
 
@@ -75,7 +93,7 @@ pub(crate) fn validate_request(request: &FfiOnlineAsrBatchRequest) -> SonaCoreBi
     if request.language.trim().is_empty() {
         return Err(invalid_input("Online ASR language must not be empty."));
     }
-    if request.api_key.value.trim().is_empty() {
+    if request.api_key.expose().trim().is_empty() {
         return Err(invalid_input("Online ASR API Key must not be empty."));
     }
     Ok(())
@@ -100,7 +118,7 @@ pub(crate) fn build_core_request(
     })?;
     config_object.insert(
         "apiKey".to_string(),
-        Value::String(request.api_key.value.trim().to_string()),
+        Value::String(request.api_key.expose().trim().to_string()),
     );
 
     Ok(OnlineBatchTranscriptionRequest {

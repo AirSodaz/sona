@@ -232,13 +232,26 @@ Every `*_json` UniFFI export is classified in
   surface, so this binding does not own its schema.
 - **`pending-migration`** — reviewed debt. The export transports a complete
   snapshot, record, request, or result as a JSON string and must gain a typed
-  `_v1` sibling. Currently: Dashboard and Diagnostics snapshots, the 15 Sync
-  lifecycle/status/conflict functions, and the 29 LLM transcript-payload
-  functions.
+  `_v1` sibling. Currently only the 29 LLM transcript-payload functions.
 
 Typed domains keep both surfaces: `_json` stays as a compatibility delegate and
 `_v1` carries the typed contract. Migrated so far: Tag, History, Task Ledger,
-Recovery, Automation, Storage Usage, Export, and Backup.
+Recovery, Automation, Storage Usage, Export, Backup, Dashboard, Diagnostics, and
+Sync. No complete snapshot, status, or lifecycle result crosses the boundary as
+a JSON string any more.
+
+### Credentials never cross as printable fields
+
+UniFFI renders a `Record` as a Kotlin `data class`, and its generated
+`toString()` prints every field. A credential held as a plain `String` would
+therefore leak into any log line that formats the record. Credentials cross as
+object handles instead — `FfiSecret`, `FfiOnlineAsrApiKey` — whose Kotlin
+`toString()` is their identity and whose Rust `Debug` redacts the value. Their
+`expose()` reader is deliberately not `#[uniffi::export]`ed, so the secret never
+becomes a readable property on the generated handle.
+
+`scripts/multisurface-contracts.test.js` enforces this: any `uniffi::Record`
+field whose name looks like a credential must be an opaque handle.
 
 ### Other reviewed debt
 

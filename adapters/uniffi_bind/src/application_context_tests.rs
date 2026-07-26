@@ -9,7 +9,7 @@ use sona_sync::{
 };
 
 use crate::application_context::ApplicationContextRegistry;
-use crate::{FfiSyncSecretStore, SonaCoreBindingResult};
+use crate::{FfiSecretStore, SonaCoreBindingResult};
 
 #[derive(Default)]
 struct RecordingSecretStore {
@@ -23,7 +23,7 @@ impl RecordingSecretStore {
 }
 
 #[async_trait]
-impl FfiSyncSecretStore for RecordingSecretStore {
+impl FfiSecretStore for RecordingSecretStore {
     async fn get(&self, _key: String) -> SonaCoreBindingResult<Option<Vec<u8>>> {
         Ok(None)
     }

@@ -616,7 +616,7 @@ test('UniFFI owns Sync secrets and cache lifetime per canonical application cont
   );
   assert.match(
     applicationContext,
-    /sync_secret_store_overrides: HashMap<PathBuf, Arc<dyn FfiSyncSecretStore>>/u,
+    /sync_secret_store_overrides: HashMap<PathBuf, Arc<dyn FfiSecretStore>>/u,
   );
   assert.match(
     applicationContext,
@@ -646,7 +646,7 @@ test('UniFFI owns Sync secrets and cache lifetime per canonical application cont
     applicationContext,
     /!cached\.context\.has_active_sync_handle\(\)/u,
   );
-  assert.match(secretStoreBridge, /registration: RwLock<Option<Arc<dyn FfiSyncSecretStore>>>/u);
+  assert.match(secretStoreBridge, /registration: RwLock<Option<Arc<dyn FfiSecretStore>>>/u);
   assert.doesNotMatch(secretStoreBridge, /\b(?:static|OnceLock)\b/u);
   assert.match(syncBridge, /let secret_store: Arc<dyn SyncSecretStore> = context\.sync_secret_store\(\)/u);
   assert.ok(syncApplicationFactory, 'canonical Sync application factory must remain explicit');
@@ -1193,27 +1193,6 @@ const UNIFFI_JSON_ONLY_EXPORTS = new Map([
   ['update_history_project_assignments_json', 'dynamic-leaf'],
   ['reassign_history_project_json', 'dynamic-leaf'],
   ['load_tag_repository_state_json', 'dynamic-leaf'],
-  // Reviewed debt: complete snapshots and results still crossing as JSON.
-  ['load_dashboard_snapshot_json', 'pending-migration'],
-  ['load_diagnostics_snapshot_json', 'pending-migration'],
-  // Reviewed debt: Sync status, lifecycle results, and conflict records.
-  ...[
-    'sync_test_provider_json',
-    'sync_get_status_json',
-    'sync_create_vault_json',
-    'sync_preview_join_json',
-    'sync_join_vault_json',
-    'sync_unlock_json',
-    'sync_unlock_with_recovery_json',
-    'sync_set_paused_json',
-    'sync_disconnect_json',
-    'sync_run_now_json',
-    'sync_change_preset_json',
-    'sync_change_master_password_json',
-    'sync_list_conflicts_json',
-    'sync_get_conflict_json',
-    'sync_resolve_conflict_json',
-  ].map((name) => [name, 'pending-migration']),
   // Reviewed debt: transcript segment payloads crossing as JSON strings.
   ...[
     'llm_config_from_json',
@@ -1293,6 +1272,14 @@ test('UniFFI JSON-only exports stay on the reviewed typed-contract inventory', (
     'export_backup_archive',
     'inspect_backup_archive',
     'import_backup_archive',
+    'load_dashboard_snapshot',
+    'load_diagnostics_snapshot',
+    'sync_get_status',
+    'sync_create_vault',
+    'sync_join_vault',
+    'sync_run_now',
+    'sync_list_conflicts',
+    'sync_resolve_conflict',
   ]) {
     assert.ok(
       exportedNames.has(`${migrated}_json`),
@@ -1301,6 +1288,91 @@ test('UniFFI JSON-only exports stay on the reviewed typed-contract inventory', (
     assert.ok(
       exportedNames.has(`${migrated}_v1`),
       `${migrated}_v1 must expose the typed contract`,
+    );
+  }
+});
+
+// Field names that carry a secret. UniFFI renders a `Record` as a Kotlin
+// `data class` whose generated `toString()` prints every field, so a credential
+// held as a plain `String` leaks into any log line that formats the record.
+// Credentials must be object handles (`FfiSecret`, `FfiOnlineAsrApiKey`),
+// whose Kotlin `toString()` is their identity.
+// `.` excludes newlines without the `s` flag, so a field type never spans rows.
+const CREDENTIAL_FIELD_PATTERN =
+  /(\w*(?:password|api_key|recovery_key|secret|token|credential))\s*:\s*(.+)/giu;
+const OPAQUE_SECRET_TYPES = /Arc<Ffi\w*(?:Secret|ApiKey)>/u;
+// `requires_api_key: bool` and `create_recovery_key: bool` name a credential but
+// carry a flag, and a bool cannot leak one.
+const NON_SECRET_FIELD_TYPES = /^bool\b/u;
+// Fields whose name matches the credential pattern but hold no secret. Keep
+// this list narrow and fully qualified; broadening the pattern instead would
+// silently drop coverage for real credentials.
+const NON_CREDENTIAL_FIELDS = new Set([
+  // A filename token used to match model paths, not an auth token.
+  'FfiModelCatalogPathMatchToken.token',
+]);
+
+test('UniFFI records carry credentials as opaque handles, never printable fields', () => {
+  const sources = rustSources('adapters/uniffi_bind/src').filter(({ relativePath }) =>
+    relativePath.includes('/mapper/'),
+  );
+  assert.ok(sources.length > 5, `expected the mapper modules, found ${sources.length}`);
+
+  let checkedFields = 0;
+  for (const { relativePath, source } of sources) {
+    // Only look inside `uniffi::Record` bodies; enums and helpers are exempt.
+    for (const record of source.matchAll(
+      /#\[derive\([^)]*uniffi::Record[^)]*\)\]\s*pub struct (\w+)\s*\{([^}]*)\}/gu,
+    )) {
+      const [, recordName, body] = record;
+      for (const field of body.matchAll(CREDENTIAL_FIELD_PATTERN)) {
+        const [, fieldName, fieldType] = field;
+        if (
+          NON_SECRET_FIELD_TYPES.test(fieldType.trim()) ||
+          NON_CREDENTIAL_FIELDS.has(`${recordName}.${fieldName}`)
+        ) {
+          continue;
+        }
+        checkedFields += 1;
+        assert.match(
+          fieldType,
+          OPAQUE_SECRET_TYPES,
+          `${relativePath}: ${recordName}.${fieldName} carries a credential and must be an ` +
+            `opaque handle (found \`${fieldType.trim()}\`), or Kotlin's generated toString() ` +
+            'will print it',
+        );
+      }
+    }
+  }
+
+  assert.ok(
+    checkedFields > 0,
+    'expected at least one credential-bearing record field to guard',
+  );
+
+  // The secret holders themselves must redact in Rust logs too, and must never
+  // expose the value as an exported getter on the generated Kotlin handle.
+  for (const [name, ...filePath] of [
+    ['FfiSecret', 'adapters', 'uniffi_bind', 'src', 'mapper', 'secret_mapper.rs'],
+    ['FfiOnlineAsrApiKey', 'adapters', 'uniffi_bind', 'src', 'asr_batch_bridge.rs'],
+  ]) {
+    const source = read(...filePath);
+    assert.match(
+      source,
+      new RegExp(`impl fmt::Debug for ${name}[\\s\\S]*?<redacted>`, 'u'),
+      `${name} must implement a redacting Debug so Rust logs cannot print the secret`,
+    );
+    // `expose()` reads the secret and must stay unexported: an exported method
+    // would become a readable property on the Kotlin handle.
+    const exportedBlock = new RegExp(
+      `#\\[uniffi::export\\]\\s*impl ${name}\\s*\\{([\\s\\S]*?)\\n\\}`,
+      'u',
+    ).exec(source);
+    assert.ok(exportedBlock, `${name} must have an exported impl block`);
+    assert.doesNotMatch(
+      exportedBlock[1],
+      /fn\s+expose\b/u,
+      `${name}::expose must not be exported across the FFI boundary`,
     );
   }
 });

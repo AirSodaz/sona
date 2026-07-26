@@ -8,6 +8,10 @@ mod automation_mapper;
 mod backup_mapper;
 #[path = "mapper/config_mapper.rs"]
 mod config_mapper;
+#[path = "mapper/dashboard_mapper.rs"]
+mod dashboard_mapper;
+#[path = "mapper/diagnostics_mapper.rs"]
+mod diagnostics_mapper;
 #[path = "mapper/export_mapper.rs"]
 mod export_mapper;
 #[path = "mapper/history_mapper.rs"]
@@ -24,8 +28,12 @@ mod model_mapper;
 mod recovery_mapper;
 #[path = "mapper/runtime_mapper.rs"]
 mod runtime_mapper;
+#[path = "mapper/secret_mapper.rs"]
+mod secret_mapper;
 #[path = "mapper/storage_usage_mapper.rs"]
 mod storage_usage_mapper;
+#[path = "mapper/sync_mapper.rs"]
+mod sync_mapper;
 #[path = "mapper/tag_mapper.rs"]
 mod tag_mapper;
 #[path = "mapper/task_ledger_mapper.rs"]
@@ -40,6 +48,18 @@ pub use backup_mapper::{
     FfiBackupManifestV1, FfiPreparedBackupImportV1,
 };
 pub use config_mapper::*;
+pub use dashboard_mapper::{
+    FfiContentStatsV1, FfiContentTrendPointV1, FfiDashboardSnapshotV1, FfiDashboardUsageBucketV1,
+    FfiLlmUsageDashboardStatsV1, FfiOverviewStatsV1, FfiSpeakerLeaderV1, FfiSpeakerStatsV1,
+    FfiUsageBreakdownV1, FfiUsageTrendPointV1,
+};
+pub use diagnostics_mapper::{
+    FfiAsrRuntimeMetricsSnapshotV1, FfiDiagnosticsConfigV1, FfiDiagnosticsDeviceOptionV1,
+    FfiDiagnosticsDeviceProbeV1, FfiDiagnosticsInputV1, FfiDiagnosticsModelRuleV1,
+    FfiDiagnosticsModelRulesV1, FfiDiagnosticsModelSummaryV1, FfiDiagnosticsPathStatusesV1,
+    FfiDiagnosticsSelectedModelsV1, FfiDiagnosticsSnapshotV1, FfiRuntimeEnvironmentStatusV1,
+    FfiVoiceTypingReadinessV1,
+};
 pub(crate) use export_mapper::export_request_from_ffi;
 pub use export_mapper::{
     FfiExportFormatV1, FfiExportModeV1, FfiExportTranscriptFileRequestV1,
@@ -74,10 +94,21 @@ pub use recovery_mapper::{
     FfiRecoverySnapshotV1, FfiRecoverySourceV1,
 };
 pub use runtime_mapper::*;
+pub use secret_mapper::FfiSecret;
 pub use storage_usage_mapper::{
     FfiAudioUsageCategoryV1, FfiDatabaseUsageCategoryV1, FfiFileUsageCategoryV1,
     FfiSqliteIndexUsageEntryV1, FfiSqliteUsageSummaryV1, FfiStorageUsageCategoriesV1,
     FfiStorageUsageSnapshotV1, FfiWebviewCacheUsageCategoryV1,
 };
+pub use sync_mapper::{
+    FfiHybridLogicalClockV1, FfiSyncCausalContextV1, FfiSyncChangePasswordRequestV1,
+    FfiSyncConflictDetailV1, FfiSyncConflictKindV1, FfiSyncConflictResolutionV1,
+    FfiSyncConflictSummaryV1, FfiSyncCreateRequestV1, FfiSyncCreateResultV1, FfiSyncEntityKeyV1,
+    FfiSyncEntityKindV1, FfiSyncErrorSnapshotV1, FfiSyncJoinPreviewV1, FfiSyncJoinRequestV1,
+    FfiSyncLifecycleStateV1, FfiSyncOperationKindV1, FfiSyncOperationV1, FfiSyncPresetV1,
+    FfiSyncProviderDescriptorV1, FfiSyncProviderInputV1, FfiSyncRunResultV1,
+    FfiSyncStatusSnapshotV1, FfiSyncUnlockRequestV1, FfiSyncVersionV1,
+};
+pub(crate) use sync_mapper::{provider_configuration_from_ffi, sync_conflict_detail_to_ffi};
 pub use tag_mapper::*;
 pub use task_ledger_mapper::*;

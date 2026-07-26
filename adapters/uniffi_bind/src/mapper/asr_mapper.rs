@@ -1,8 +1,10 @@
+use crate::FfiOnlineAsrApiKey;
 use sona_core::ports::asr::{
     AsrEngine, AsrMode, BatchSegmentationMode, OnlineAsrBatchCapability, OnlineAsrCapability,
     OnlineAsrLocalFileBatchMode, OnlineAsrProvider, OnlineAsrProviderRequest,
     VolcengineDoubaoAsrConfig,
 };
+use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Enum)]
 pub enum FfiAsrEngine {
@@ -60,9 +62,12 @@ pub struct FfiOnlineAsrProvider {
     pub batch: FfiOnlineAsrBatchCapability,
 }
 
+/// `api_key` is an opaque handle rather than a `String` so the generated Kotlin
+/// `data class`'s `toString()` cannot print it. See the credential-opacity
+/// contract in `scripts/multisurface-contracts.test.js`.
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
 pub struct FfiVolcengineDoubaoAsrConfig {
-    pub api_key: String,
+    pub api_key: Arc<FfiOnlineAsrApiKey>,
     pub streaming_endpoint: String,
     pub streaming_resource_id: String,
     pub batch_endpoint: String,
@@ -145,7 +150,7 @@ pub fn volcengine_doubao_asr_config_to_ffi(
     config: VolcengineDoubaoAsrConfig,
 ) -> FfiVolcengineDoubaoAsrConfig {
     FfiVolcengineDoubaoAsrConfig {
-        api_key: config.api_key,
+        api_key: FfiOnlineAsrApiKey::new(config.api_key),
         streaming_endpoint: config.streaming_endpoint,
         streaming_resource_id: config.streaming_resource_id,
         batch_endpoint: config.batch_endpoint,

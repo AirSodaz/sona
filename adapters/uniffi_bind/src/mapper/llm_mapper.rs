@@ -1,3 +1,4 @@
+use crate::FfiSecret;
 use sona_core::llm::providers::{LlmProvider, LlmProviderDefaults};
 use sona_core::llm::requests::{
     LlmConfig, PolishSegmentsRequest, SummarizeTranscriptRequest, TranslateSegmentsRequest,
@@ -6,6 +7,7 @@ use sona_core::llm::tasks::{
     LlmProviderStrategy, LlmSegmentInput, PolishedSegment, SummarySegmentInput,
     SummaryTemplateConfig, TranslatedSegment,
 };
+use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
 pub struct FfiLlmProviderDefaults {
@@ -54,12 +56,14 @@ pub enum FfiLlmProviderStrategy {
     OpenAiCompatibleCustomPath,
 }
 
+/// `api_key` is an opaque handle so the generated Kotlin `data class`
+/// `toString()` cannot print it.
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct FfiLlmConfig {
     pub provider_id: String,
     pub strategy: FfiLlmProviderStrategy,
     pub base_url: String,
-    pub api_key: String,
+    pub api_key: Arc<FfiSecret>,
     pub model: String,
     pub api_path: Option<String>,
     pub api_version: Option<String>,
@@ -198,7 +202,7 @@ pub fn llm_config_to_ffi(config: LlmConfig) -> FfiLlmConfig {
         provider_id: config.provider.as_str(),
         strategy: llm_provider_strategy_to_ffi(config.strategy),
         base_url: config.base_url,
-        api_key: config.api_key,
+        api_key: FfiSecret::new(config.api_key),
         model: config.model,
         api_path: config.api_path,
         api_version: config.api_version,

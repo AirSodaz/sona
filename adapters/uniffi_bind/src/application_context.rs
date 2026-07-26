@@ -6,7 +6,7 @@ use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::{DatabaseError, SqliteApplicationContext, SqliteHistoryStore};
 use sona_sync::SyncApplication;
 
-use crate::sync_secret_store_bridge::{FfiSyncSecretStore, HostSyncSecretStore};
+use crate::sync_secret_store_bridge::{FfiSecretStore, HostSyncSecretStore};
 
 const DEFAULT_CONTEXT_CACHE_CAPACITY: usize = 8;
 
@@ -19,7 +19,7 @@ pub(crate) struct HostApplicationContext {
 impl HostApplicationContext {
     fn open(
         app_data_dir: &Path,
-        sync_secret_store: Option<Arc<dyn FfiSyncSecretStore>>,
+        sync_secret_store: Option<Arc<dyn FfiSecretStore>>,
     ) -> Result<Self, DatabaseError> {
         Ok(Self {
             sqlite: Arc::new(SqliteApplicationContext::open(app_data_dir)?),
@@ -48,7 +48,7 @@ impl HostApplicationContext {
         Arc::clone(&self.sync_secret_store)
     }
 
-    fn register_sync_secret_store(&self, store: Arc<dyn FfiSyncSecretStore>) {
+    fn register_sync_secret_store(&self, store: Arc<dyn FfiSecretStore>) {
         self.sync_secret_store.register(store);
     }
 
@@ -68,8 +68,8 @@ pub(crate) struct ApplicationContextRegistry {
     capacity: usize,
     access_sequence: u64,
     entries: HashMap<PathBuf, CachedContext>,
-    default_sync_secret_store: Option<Arc<dyn FfiSyncSecretStore>>,
-    sync_secret_store_overrides: HashMap<PathBuf, Arc<dyn FfiSyncSecretStore>>,
+    default_sync_secret_store: Option<Arc<dyn FfiSecretStore>>,
+    sync_secret_store_overrides: HashMap<PathBuf, Arc<dyn FfiSecretStore>>,
 }
 
 impl ApplicationContextRegistry {
@@ -164,10 +164,7 @@ impl ApplicationContextRegistry {
         Some(Arc::clone(&cached.context))
     }
 
-    pub(crate) fn register_default_sync_secret_store(
-        &mut self,
-        store: Arc<dyn FfiSyncSecretStore>,
-    ) {
+    pub(crate) fn register_default_sync_secret_store(&mut self, store: Arc<dyn FfiSecretStore>) {
         self.default_sync_secret_store = Some(Arc::clone(&store));
         for (path, cached) in &self.entries {
             if !self.sync_secret_store_overrides.contains_key(path) {
@@ -181,7 +178,7 @@ impl ApplicationContextRegistry {
     pub(crate) fn register_sync_secret_store(
         &mut self,
         app_data_dir: &Path,
-        store: Arc<dyn FfiSyncSecretStore>,
+        store: Arc<dyn FfiSecretStore>,
     ) -> Result<(), DatabaseError> {
         let context = self.get_or_open(app_data_dir)?;
         let key = context.sqlite().app_data_dir().to_path_buf();
@@ -252,13 +249,13 @@ pub(crate) fn cached_application_context(
     Ok(lock_registry().get_cached(app_data_dir.as_ref()))
 }
 
-pub(crate) fn register_default_sync_secret_store(store: Arc<dyn FfiSyncSecretStore>) {
+pub(crate) fn register_default_sync_secret_store(store: Arc<dyn FfiSecretStore>) {
     lock_registry().register_default_sync_secret_store(store);
 }
 
 pub(crate) fn register_sync_secret_store_for_app_data_dir(
     app_data_dir: impl AsRef<Path>,
-    store: Arc<dyn FfiSyncSecretStore>,
+    store: Arc<dyn FfiSecretStore>,
 ) -> Result<(), DatabaseError> {
     lock_registry().register_sync_secret_store(app_data_dir.as_ref(), store)
 }

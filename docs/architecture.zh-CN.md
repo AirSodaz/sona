@@ -208,13 +208,24 @@ CLI Sync 的产品范围尚未定义，在明确范围之前不得接入。UniFF
 - **`dynamic-leaf`**（动态叶子）——永久允许。载荷是任意用户配置、提供商扩展
   文档，或遗留 Project 兼容面，其 schema 不由本绑定拥有。
 - **`pending-migration`**（待迁移）——已评审债务。该导出把完整的快照、记录、
-  请求或结果作为 JSON 字符串传输，必须补上类型化的 `_v1` 兄弟函数。当前包括：
-  Dashboard 与 Diagnostics 快照、15 个 Sync 生命周期/状态/冲突函数，以及 29 个
-  LLM 转写载荷函数。
+  请求或结果作为 JSON 字符串传输，必须补上类型化的 `_v1` 兄弟函数。当前仅剩
+  29 个 LLM 转写载荷函数。
 
 已类型化的域保留两套接口：`_json` 作为兼容委托保留，`_v1` 承载类型化契约。
 目前已迁移：Tag、History、Task Ledger、Recovery、Automation、Storage Usage、
-Export、Backup。
+Export、Backup、Dashboard、Diagnostics、Sync。已经没有完整的快照、状态或
+生命周期结果以 JSON 字符串形式跨越边界。
+
+### 凭据绝不以可打印字段跨界
+
+UniFFI 把 `Record` 生成为 Kotlin `data class`，其自动派生的 `toString()` 会打印
+每一个字段。因此以普通 `String` 承载的凭据会泄漏进任何格式化该记录的日志。凭据
+改为以对象句柄跨界——`FfiSecret`、`FfiOnlineAsrApiKey`——它们的 Kotlin
+`toString()` 是身份标识，Rust 侧 `Debug` 则把值替换为 `<redacted>`。读取值的
+`expose()` 刻意不加 `#[uniffi::export]`，所以密钥不会变成生成句柄上的可读属性。
+
+`scripts/multisurface-contracts.test.js` 强制这一约束：`uniffi::Record` 中任何
+名字看起来像凭据的字段都必须是不透明句柄。
 
 ### 其他已评审债务
 
