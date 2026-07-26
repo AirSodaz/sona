@@ -6,8 +6,8 @@ use sona_core::ports::asr::{
     AsrEngineConfig, AsrMode, AsrPortError, AsrPortErrorKind, AsrRuntimeObserver,
     AsrStreamingSession, AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID,
     MISTRAL_VOXTRAL_PROVIDER_ID, OnlineBatchTranscriber, OnlineBatchTranscriptionOutput,
-    OnlineBatchTranscriptionRequest, SherpaError, VOLCENGINE_DOUBAO_PROVIDER_ID,
-    find_online_asr_provider,
+    OnlineBatchTranscriptionRequest, find_online_asr_provider,
+    VOLCENGINE_DOUBAO_PROVIDER_ID,
 };
 use sona_core::transcription::provider_resolution::{
     AsrProviderCapability, resolve_asr_provider_id, resolve_asr_streaming_provider_id,
@@ -19,8 +19,10 @@ use sona_core::transcription::transcript::{
 use std::fmt;
 use std::sync::Arc;
 
+mod error;
 mod volcengine;
 
+pub use error::SherpaError;
 pub use volcengine::streaming::create_volcengine_streaming_session;
 
 pub const ONLINE_ASR_PROVIDER_CAPABILITIES: [AsrProviderCapability<'static>; 3] = [
@@ -31,7 +33,7 @@ pub const ONLINE_ASR_PROVIDER_CAPABILITIES: [AsrProviderCapability<'static>; 3] 
 
 pub fn resolve_online_asr_provider_id(
     request: &AsrTranscriptionRequest,
-) -> Result<&'static str, SherpaError> {
+) -> Result<&'static str, AsrPortError> {
     resolve_asr_provider_id(request, &ONLINE_ASR_PROVIDER_CAPABILITIES)
 }
 
@@ -42,33 +44,32 @@ impl OnlineAsrAdapter {
     pub async fn transcribe_batch(
         &self,
         input: OnlineBatchTranscriptionRequest,
-    ) -> Result<OnlineBatchTranscriptionOutput, SherpaError> {
+    ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
         let provider_id = resolve_online_asr_provider_id(&input.request)?;
         match provider_id {
             VOLCENGINE_DOUBAO_PROVIDER_ID => {
                 if input.request.mode != AsrMode::Batch {
-                    return Err(SherpaError::VolcengineBatchModeMismatch);
+                    return Err(
+                        AsrPortError::from(SherpaError::VolcengineBatchModeMismatch)
+                    );
                 }
                 resolve_volcengine_config_checked(&input.request, VolcengineMode::Batch)
-                    .map_err(SherpaError::from)?;
+                    .map_err(|e| AsrPortError::from(SherpaError::from(e)))?;
                 VolcengineDoubaoBatchTranscriber::default()
                     .transcribe(input)
                     .await
-                    .map_err(|error| SherpaError::VolcengineBatchRequestFailed {
-                        error: error.to_string(),
-                    })
             }
             GROQ_WHISPER_PROVIDER_ID => GroqWhisperBatchTranscriber::default()
                 .transcribe(input)
-                .await
-                .map_err(|error| SherpaError::Generic(error.to_string())),
+                .await,
             MISTRAL_VOXTRAL_PROVIDER_ID => MistralVoxtralBatchTranscriber::default()
                 .transcribe(input)
-                .await
-                .map_err(|error| SherpaError::Generic(error.to_string())),
-            _ => Err(SherpaError::UnsupportedOnlineProvider {
-                provider_id: provider_id.to_string(),
-            }),
+                .await,
+            _ => Err(AsrPortError::new(
+                AsrPortErrorKind::Unsupported,
+                format!("不支持的在线 ASR provider：{provider_id}"),
+            )
+            .with_code("UNSUPPORTED_ONLINE_PROVIDER")),
         }
     }
 
@@ -77,16 +78,18 @@ impl OnlineAsrAdapter {
         instance_id: String,
         request: AsrTranscriptionRequest,
         observer: Arc<dyn AsrRuntimeObserver>,
-    ) -> Result<Arc<dyn AsrStreamingSession>, SherpaError> {
+    ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
         let provider_id =
             resolve_asr_streaming_provider_id(&request, &ONLINE_ASR_PROVIDER_CAPABILITIES)?;
         match provider_id {
             VOLCENGINE_DOUBAO_PROVIDER_ID => {
                 create_volcengine_streaming_session(instance_id, request, observer)
             }
-            _ => Err(SherpaError::UnsupportedOnlineProvider {
-                provider_id: provider_id.to_string(),
-            }),
+            _ => Err(AsrPortError::new(
+                AsrPortErrorKind::Unsupported,
+                format!("不支持的在线 ASR provider：{provider_id}"),
+            )
+            .with_code("UNSUPPORTED_ONLINE_PROVIDER")),
         }
     }
 }
@@ -97,14 +100,7 @@ impl OnlineBatchTranscriber for OnlineAsrAdapter {
         &self,
         request: OnlineBatchTranscriptionRequest,
     ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
-        let provider_id = resolve_online_asr_provider_id(&request.request).map_err(|error| {
-            let kind = match error {
-                SherpaError::UnsupportedOnlineProvider { .. } => AsrPortErrorKind::Unsupported,
-                SherpaError::OnlineProviderConfigMissing => AsrPortErrorKind::InvalidRequest,
-                _ => AsrPortErrorKind::Runtime,
-            };
-            AsrPortError::new(kind, error.to_string())
-        })?;
+        let provider_id = resolve_online_asr_provider_id(&request.request)?;
 
         match provider_id {
             VOLCENGINE_DOUBAO_PROVIDER_ID => {
@@ -1183,8 +1179,9 @@ mod tests {
         AsrEngineConfig, AsrMode, AsrPortErrorKind, AsrTranscriptionRequest,
         GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, NoopAsrRuntimeObserver,
         OnlineAsrProviderRequest, OnlineBatchTranscriber, OnlineBatchTranscriptionRequest,
-        SherpaError, VOLCENGINE_DOUBAO_PROVIDER_ID,
+        VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
+    use crate::SherpaError;
     use sona_core::transcription::postprocess::{
         TranscriptNormalizationOptions, TranscriptPostprocessOptions,
     };
@@ -1276,7 +1273,7 @@ mod tests {
             .await
             .expect_err("invalid provider config should fail before reading the audio file");
 
-        assert!(matches!(error, SherpaError::VolcengineApiKeyMissing));
+        assert_eq!(error.code(), "VOLCENGINE_API_KEY_MISSING");
     }
 
     #[test]
@@ -1297,11 +1294,8 @@ mod tests {
             )
             .err()
             .expect("batch-only providers must be rejected before network access");
-        assert!(matches!(
-            error,
-            SherpaError::StreamingNotSupported { provider_id }
-                if provider_id == GROQ_WHISPER_PROVIDER_ID
-        ));
+        assert_eq!(error.code(), "STREAMING_NOT_SUPPORTED");
+        assert!(error.message.contains(GROQ_WHISPER_PROVIDER_ID));
 
         let mut volcengine = online_request(
             VOLCENGINE_DOUBAO_PROVIDER_ID,
@@ -1319,7 +1313,7 @@ mod tests {
             )
             .err()
             .expect("invalid provider config should fail before network access");
-        assert!(matches!(error, SherpaError::VolcengineApiKeyMissing));
+        assert_eq!(error.code(), "VOLCENGINE_API_KEY_MISSING");
     }
 
     #[test]
@@ -1329,11 +1323,8 @@ mod tests {
         let error = resolve_online_asr_provider_id(&request)
             .expect_err("unregistered providers must not cross the adapter boundary");
 
-        assert!(matches!(
-            error,
-            SherpaError::UnsupportedOnlineProvider { provider_id }
-                if provider_id == "custom-online-provider"
-        ));
+        assert_eq!(error.code(), "UNSUPPORTED_ONLINE_PROVIDER");
+        assert!(error.message.contains("custom-online-provider"));
     }
 
     #[tokio::test]

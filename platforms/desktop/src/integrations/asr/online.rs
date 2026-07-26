@@ -4,10 +4,10 @@ use super::metrics::{
 };
 use super::transcript::apply_timeline_normalization;
 use super::types::{AsrTranscriptionRequest, TranscriptSegment};
-use super::{AsrBatchProcessor, AsrProviderAdapter, AsrState, SherpaError};
+use super::{AsrBatchProcessor, AsrPortError, AsrProviderAdapter, AsrState};
 use async_trait::async_trait;
 use sona_core::ports::asr::{
-    AsrRuntimeObserver, AsrStreamingSession, OnlineBatchTranscriptionRequest,
+    AsrPortErrorKind, AsrRuntimeObserver, AsrStreamingSession, OnlineBatchTranscriptionRequest,
 };
 use sona_core::transcription::postprocess::TranscriptPostprocessor;
 use std::sync::Arc;
@@ -32,12 +32,14 @@ impl AsrProviderAdapter for DesktopOnlineAsrAdapter {
     fn create_batch_processor(
         &self,
         request: &AsrTranscriptionRequest,
-    ) -> Result<Option<Arc<dyn AsrBatchProcessor>>, SherpaError> {
+    ) -> Result<Option<Arc<dyn AsrBatchProcessor>>, AsrPortError> {
         let provider_id = sona_online_asr::resolve_online_asr_provider_id(request)?;
         if provider_id != self.provider_id {
-            return Err(SherpaError::UnsupportedOnlineProvider {
-                provider_id: provider_id.to_string(),
-            });
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::Unsupported,
+                format!("不支持的在线 ASR provider：{provider_id}"),
+            )
+            .with_code("UNSUPPORTED_ONLINE_PROVIDER"));
         }
         Ok(Some(Arc::new(OnlineBatchProcessor)))
     }
@@ -48,12 +50,14 @@ impl AsrProviderAdapter for DesktopOnlineAsrAdapter {
         instance_id: &str,
         request: &AsrTranscriptionRequest,
         observer: Arc<dyn AsrRuntimeObserver>,
-    ) -> Result<Option<Arc<dyn AsrStreamingSession>>, SherpaError> {
+    ) -> Result<Option<Arc<dyn AsrStreamingSession>>, AsrPortError> {
         let provider_id = sona_online_asr::resolve_online_asr_provider_id(request)?;
         if provider_id != self.provider_id {
-            return Err(SherpaError::UnsupportedOnlineProvider {
-                provider_id: provider_id.to_string(),
-            });
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::Unsupported,
+                format!("不支持的在线 ASR provider：{provider_id}"),
+            )
+            .with_code("UNSUPPORTED_ONLINE_PROVIDER"));
         }
         let session = sona_online_asr::OnlineAsrAdapter.create_streaming_session(
             instance_id.to_string(),
@@ -77,19 +81,20 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
         request: AsrTranscriptionRequest,
         _speaker_processing: Option<sona_core::transcription::speaker::SpeakerProcessingConfig>,
         _instance_id: Option<String>,
-    ) -> Result<Vec<TranscriptSegment>, SherpaError> {
+    ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
         let started = Instant::now();
         let output = sona_online_asr::OnlineAsrAdapter
             .transcribe_batch(OnlineBatchTranscriptionRequest {
                 file_path: file_path.clone(),
                 request: request.clone(),
             })
-            .await?;
+            .await
+            .map_err(AsrPortError::from)?;
 
         let mut segments =
             apply_timeline_normalization(output.segments, request.normalization_options);
         segments = TranscriptPostprocessor::compile(request.postprocess_options)
-            .map_err(|error| SherpaError::Generic(error.to_string()))?
+            .map_err(|error| AsrPortError::invalid_request(error.to_string()))?
             .process_segments(segments);
 
         let elapsed_ms = duration_to_ms(started.elapsed());

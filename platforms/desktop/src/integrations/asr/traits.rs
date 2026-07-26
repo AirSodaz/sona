@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use sona_core::ports::asr::{AsrRuntimeObserver, AsrStreamingSession};
+use sona_core::ports::asr::{AsrPortError, AsrRuntimeObserver, AsrStreamingSession};
 use std::sync::Arc;
 
-use super::{AsrState, AsrTranscriptionRequest, SherpaError, TranscriptSegment};
+use super::{AsrState, AsrTranscriptionRequest, TranscriptSegment};
 
 #[async_trait]
 pub trait AsrBatchProcessor: Send + Sync {
@@ -16,7 +16,7 @@ pub trait AsrBatchProcessor: Send + Sync {
         request: AsrTranscriptionRequest,
         speaker_processing: Option<sona_core::transcription::speaker::SpeakerProcessingConfig>,
         instance_id: Option<String>,
-    ) -> Result<Vec<TranscriptSegment>, SherpaError>;
+    ) -> Result<Vec<TranscriptSegment>, AsrPortError>;
 }
 
 #[async_trait]
@@ -26,7 +26,7 @@ pub trait AsrProviderAdapter: Send + Sync {
     fn create_batch_processor(
         &self,
         request: &AsrTranscriptionRequest,
-    ) -> Result<Option<std::sync::Arc<dyn AsrBatchProcessor>>, SherpaError>;
+    ) -> Result<Option<std::sync::Arc<dyn AsrBatchProcessor>>, AsrPortError>;
 
     async fn create_streaming_session(
         &self,
@@ -34,5 +34,5 @@ pub trait AsrProviderAdapter: Send + Sync {
         instance_id: &str,
         request: &AsrTranscriptionRequest,
         observer: Arc<dyn AsrRuntimeObserver>,
-    ) -> Result<Option<Arc<dyn AsrStreamingSession>>, SherpaError>;
+    ) -> Result<Option<Arc<dyn AsrStreamingSession>>, AsrPortError>;
 }

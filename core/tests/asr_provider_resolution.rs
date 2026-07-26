@@ -1,6 +1,6 @@
 use sona_core::ports::asr::{
     AsrEngineConfig, AsrMode, AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID,
-    LOCAL_SHERPA_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest, SherpaError,
+    LOCAL_SHERPA_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest,
     VOLCENGINE_DOUBAO_PROVIDER_ID,
 };
 use sona_core::transcription::postprocess::{
@@ -84,10 +84,7 @@ fn rejects_unknown_online_provider() {
         &DESKTOP_CAPABILITIES,
     )
     .unwrap_err();
-    assert!(matches!(
-        unknown,
-        SherpaError::UnsupportedOnlineProvider { .. }
-    ));
+    assert_eq!(unknown.code(), "UNSUPPORTED_ONLINE_PROVIDER");
 }
 
 #[test]
@@ -97,10 +94,7 @@ fn rejects_missing_host_provider() {
         &DESKTOP_CAPABILITIES[1..],
     )
     .unwrap_err();
-    assert!(matches!(
-        missing,
-        SherpaError::UnsupportedOnlineProvider { .. }
-    ));
+    assert_eq!(missing.code(), "UNSUPPORTED_ONLINE_PROVIDER");
 }
 
 #[test]
@@ -110,10 +104,7 @@ fn rejects_catalog_disabled_streaming() {
         &DESKTOP_CAPABILITIES,
     )
     .unwrap_err();
-    assert!(matches!(
-        catalog_disabled,
-        SherpaError::StreamingNotSupported { .. }
-    ));
+    assert_eq!(catalog_disabled.code(), "STREAMING_NOT_SUPPORTED");
 }
 
 #[test]
@@ -127,10 +118,7 @@ fn rejects_host_disabled_streaming() {
         &host_capabilities,
     )
     .unwrap_err();
-    assert!(matches!(
-        host_disabled,
-        SherpaError::StreamingNotSupported { .. }
-    ));
+    assert_eq!(host_disabled.code(), "STREAMING_NOT_SUPPORTED");
 }
 
 #[test]
@@ -142,27 +130,5 @@ fn leaves_batch_validation_to_selected_adapter() {
         )
         .unwrap(),
         GROQ_WHISPER_PROVIDER_ID,
-    );
-}
-
-#[test]
-fn streaming_resolution_rejects_batch_request_for_streaming_disabled_provider() {
-    let error = resolve_asr_streaming_provider_id(
-        &online_request(GROQ_WHISPER_PROVIDER_ID, AsrMode::Batch),
-        &DESKTOP_CAPABILITIES,
-    )
-    .unwrap_err();
-    assert!(matches!(error, SherpaError::StreamingNotSupported { .. }));
-}
-
-#[test]
-fn streaming_resolution_leaves_supported_provider_mode_validation_to_adapter() {
-    assert_eq!(
-        resolve_asr_streaming_provider_id(
-            &online_request(VOLCENGINE_DOUBAO_PROVIDER_ID, AsrMode::Batch),
-            &DESKTOP_CAPABILITIES,
-        )
-        .unwrap(),
-        VOLCENGINE_DOUBAO_PROVIDER_ID,
     );
 }

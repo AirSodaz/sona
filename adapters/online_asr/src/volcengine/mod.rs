@@ -1,8 +1,7 @@
 pub(crate) mod streaming;
 mod transcript;
 
-use crate::{VolcengineConfigError, VolcengineServerFrameError};
-use sona_core::ports::asr::SherpaError;
+use crate::{SherpaError, VolcengineConfigError, VolcengineServerFrameError};
 
 impl From<VolcengineConfigError> for SherpaError {
     fn from(error: VolcengineConfigError) -> Self {
@@ -56,8 +55,8 @@ impl From<VolcengineServerFrameError> for SherpaError {
 #[cfg(test)]
 mod tests {
     use super::transcript::*;
-    use crate::{VolcengineConfigError, VolcengineServerFrameError};
-    use sona_core::ports::asr::{AsrRuntimeObserver, AsrTranscriptUpdateEvent, SherpaError};
+    use sona_core::ports::asr::{AsrRuntimeObserver, AsrTranscriptUpdateEvent};
+    use crate::{SherpaError, VolcengineConfigError, VolcengineServerFrameError};
     use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
     use sona_core::transcription::postprocess::TranscriptNormalizationOptions;
     use sona_core::transcription::transcript::TranscriptSegment;

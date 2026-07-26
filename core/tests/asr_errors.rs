@@ -1,12 +1,15 @@
 use serde_json::json;
-use sona_core::ports::asr::SherpaError;
+use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 
 #[test]
-fn serializes_asr_runtime_errors_as_stable_code_and_message() {
-    let value = serde_json::to_value(SherpaError::UnsupportedOnlineProvider {
-        provider_id: "future-provider".to_string(),
-    })
-    .unwrap();
+fn serializes_asr_port_errors_as_stable_code_and_message() {
+    let error = AsrPortError::new(
+        AsrPortErrorKind::Unsupported,
+        "不支持的在线 ASR provider：future-provider",
+    )
+    .with_code("UNSUPPORTED_ONLINE_PROVIDER");
+
+    let value = serde_json::to_value(&error).unwrap();
 
     assert_eq!(value["code"], "UNSUPPORTED_ONLINE_PROVIDER");
     assert!(
@@ -18,39 +21,52 @@ fn serializes_asr_runtime_errors_as_stable_code_and_message() {
 }
 
 #[test]
-fn string_errors_serialize_as_generic_asr_runtime_errors() {
-    let value = serde_json::to_value(SherpaError::from("plain adapter failure")).unwrap();
+fn asr_port_error_code_falls_back_to_kind_when_no_override() {
+    let error = AsrPortError::new(AsrPortErrorKind::Network, "connection failed");
+    let value = serde_json::to_value(&error).unwrap();
+    assert_eq!(value["code"], "NETWORK");
+    assert_eq!(value["message"], "connection failed");
+}
+
+#[test]
+fn asr_port_error_serializes_with_override_code() {
+    let value = serde_json::to_value(
+        AsrPortError::new(AsrPortErrorKind::Unsupported, "provider foo 不支持流式识别")
+            .with_code("STREAMING_NOT_SUPPORTED"),
+    )
+    .unwrap();
 
     assert_eq!(
         value,
         json!({
-            "code": "GENERIC_ERROR",
-            "message": "plain adapter failure"
+            "code": "STREAMING_NOT_SUPPORTED",
+            "message": "provider foo 不支持流式识别"
         })
     );
 }
 
 #[test]
-fn streaming_transport_errors_expose_stable_codes() {
+fn all_error_kinds_produce_stable_codes() {
+    use AsrPortErrorKind::*;
     let cases = [
-        (
-            SherpaError::VolcengineWebSocketReadFailed {
-                error: "connection reset".to_string(),
-            },
-            "VOLCENGINE_WEB_SOCKET_READ_FAILED",
-        ),
-        (
-            SherpaError::VolcengineWebSocketClosed,
-            "VOLCENGINE_WEB_SOCKET_CLOSED",
-        ),
-        (
-            SherpaError::VolcengineFinalResponseTimeout,
-            "VOLCENGINE_FINAL_RESPONSE_TIMEOUT",
-        ),
+        (InvalidRequest, "INVALID_REQUEST"),
+        (FileSystem, "FILE_SYSTEM"),
+        (Model, "MODEL_ERROR"),
+        (Authentication, "AUTHENTICATION"),
+        (RateLimited, "RATE_LIMITED"),
+        (Timeout, "TIMEOUT"),
+        (Network, "NETWORK"),
+        (Protocol, "PROTOCOL"),
+        (Unsupported, "UNSUPPORTED"),
+        (Unavailable, "UNAVAILABLE"),
+        (Runtime, "RUNTIME"),
     ];
-
-    for (error, expected_code) in cases {
-        assert_eq!(error.code(), expected_code);
-        assert_eq!(serde_json::to_value(error).unwrap()["code"], expected_code);
+    for (kind, expected_code) in cases {
+        let error = AsrPortError::new(kind, "test");
+        assert_eq!(error.code(), expected_code, "kind {kind:?} should map to {expected_code}");
+        assert_eq!(
+            serde_json::to_value(&error).unwrap()["code"],
+            expected_code,
+        );
     }
 }

@@ -23,8 +23,8 @@ pub use adapter::LocalSherpaAdapter;
 pub use batch::transcribe_batch_with_progress;
 pub(crate) use observer::TauriAsrRuntimeObserver;
 pub use sona_core::models::config::ModelFileConfig;
+pub use sona_core::ports::asr::AsrPortError;
 pub use sona_core::ports::asr::AsrStreamingSession;
-pub use sona_core::ports::asr::SherpaError;
 pub use sona_core::transcription::asr_metrics::{
     AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
 };
@@ -64,13 +64,13 @@ fn asr_adapters() -> &'static HashMap<&'static str, Arc<dyn AsrProviderAdapter>>
     })
 }
 
-pub(crate) fn get_provider_id(request: &AsrTranscriptionRequest) -> Result<&str, SherpaError> {
+pub(crate) fn get_provider_id(request: &AsrTranscriptionRequest) -> Result<&str, AsrPortError> {
     Ok(request.provider_id())
 }
 
 pub(crate) fn ensure_adapter(
     request: &AsrTranscriptionRequest,
-) -> Result<Arc<dyn AsrProviderAdapter>, SherpaError> {
+) -> Result<Arc<dyn AsrProviderAdapter>, AsrPortError> {
     let provider_id = match request.engine() {
         AsrEngine::LocalSherpa => LOCAL_SHERPA_PROVIDER_ID,
         AsrEngine::Online => sona_online_asr::resolve_online_asr_provider_id(request)?,
@@ -78,8 +78,12 @@ pub(crate) fn ensure_adapter(
     asr_adapters()
         .get(provider_id)
         .cloned()
-        .ok_or_else(|| SherpaError::UnsupportedOnlineProvider {
-            provider_id: provider_id.to_string(),
+        .ok_or_else(|| {
+            AsrPortError::new(
+                sona_core::ports::asr::AsrPortErrorKind::Unsupported,
+                format!("不支持的在线 ASR provider：{provider_id}"),
+            )
+            .with_code("UNSUPPORTED_ONLINE_PROVIDER")
         })
 }
 
@@ -96,11 +100,11 @@ pub async fn feed_audio_samples(
     state: &AsrState,
     instance_id: &str,
     samples: &[f32],
-) -> Result<(), SherpaError> {
+) -> Result<(), AsrPortError> {
     let session = state
         .session(instance_id)
         .await
-        .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
+        .ok_or_else(|| AsrPortError::runtime(format!("ASR instance {} not found", instance_id)))?;
     session.feed_audio_samples(samples).await
 }
 
@@ -182,6 +186,6 @@ mod tests {
         ))
         .err()
         .expect("batch-only provider must not receive a streaming session");
-        assert!(matches!(error, SherpaError::StreamingNotSupported { .. }));
+        assert_eq!(error.code(), "STREAMING_NOT_SUPPORTED");
     }
 }

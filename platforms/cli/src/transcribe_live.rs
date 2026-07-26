@@ -494,7 +494,7 @@ async fn feed_audio(session: &dyn AsrStreamingSession, chunk: LiveAudioChunk) ->
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use sona_core::ports::asr::{AsrStreamingSession, AsrTranscriptUpdateEvent, SherpaError};
+    use sona_core::ports::asr::{AsrPortError, AsrStreamingSession, AsrTranscriptUpdateEvent};
     use sona_core::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
     use std::sync::{Arc, Mutex};
 
@@ -507,39 +507,39 @@ mod tests {
 
     #[async_trait]
     impl AsrStreamingSession for RecordingSession {
-        async fn start(&self) -> Result<(), SherpaError> {
+        async fn start(&self) -> Result<(), AsrPortError> {
             self.calls.lock().unwrap().push("start");
             if self.fail_start {
-                return Err(SherpaError::Generic("model start failed".to_string()));
+                return Err(AsrPortError::runtime("model start failed"));
             }
             Ok(())
         }
 
-        async fn stop(&self) -> Result<(), SherpaError> {
+        async fn stop(&self) -> Result<(), AsrPortError> {
             self.calls.lock().unwrap().push("stop");
             Ok(())
         }
 
-        async fn flush(&self) -> Result<(), SherpaError> {
+        async fn flush(&self) -> Result<(), AsrPortError> {
             self.calls.lock().unwrap().push("flush");
             self.updates
                 .send(update_event("final", true))
-                .map_err(|error| SherpaError::Generic(error.to_string()))?;
+                .map_err(|error| AsrPortError::runtime(error.to_string()))?;
             Ok(())
         }
 
-        async fn feed_audio_chunk(&self, _samples: Vec<u8>) -> Result<(), SherpaError> {
+        async fn feed_audio_chunk(&self, _samples: Vec<u8>) -> Result<(), AsrPortError> {
             self.calls.lock().unwrap().push("feed-bytes");
             if self.fail_feed {
-                return Err(SherpaError::Generic("decode failed".to_string()));
+                return Err(AsrPortError::runtime("decode failed"));
             }
             self.updates
                 .send(update_event("partial", false))
-                .map_err(|error| SherpaError::Generic(error.to_string()))?;
+                .map_err(|error| AsrPortError::runtime(error.to_string()))?;
             Ok(())
         }
 
-        async fn feed_audio_samples(&self, _samples: &[f32]) -> Result<(), SherpaError> {
+        async fn feed_audio_samples(&self, _samples: &[f32]) -> Result<(), AsrPortError> {
             self.calls.lock().unwrap().push("feed-samples");
             Ok(())
         }
@@ -569,15 +569,15 @@ mod tests {
 
     #[async_trait]
     impl AsrStreamingSession for DelayedFinalSession {
-        async fn start(&self) -> Result<(), SherpaError> {
+        async fn start(&self) -> Result<(), AsrPortError> {
             Ok(())
         }
 
-        async fn stop(&self) -> Result<(), SherpaError> {
+        async fn stop(&self) -> Result<(), AsrPortError> {
             Ok(())
         }
 
-        async fn flush(&self) -> Result<(), SherpaError> {
+        async fn flush(&self) -> Result<(), AsrPortError> {
             let sender = self
                 .updates
                 .lock()
@@ -591,11 +591,11 @@ mod tests {
             Ok(())
         }
 
-        async fn feed_audio_chunk(&self, _samples: Vec<u8>) -> Result<(), SherpaError> {
+        async fn feed_audio_chunk(&self, _samples: Vec<u8>) -> Result<(), AsrPortError> {
             Ok(())
         }
 
-        async fn feed_audio_samples(&self, _samples: &[f32]) -> Result<(), SherpaError> {
+        async fn feed_audio_samples(&self, _samples: &[f32]) -> Result<(), AsrPortError> {
             Ok(())
         }
     }

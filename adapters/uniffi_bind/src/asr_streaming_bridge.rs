@@ -8,8 +8,9 @@ use crate::{
     FfiAsrTranscriptUpdateEvent, SonaCoreBindingResult,
 };
 use sona_core::ports::asr::{
-    AsrEngine, AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession,
-    AsrTranscriptUpdateEvent, AsrTranscriptionRequest, LocalSherpaStreamingRequest, SherpaError,
+    AsrEngine, AsrPortError, AsrPortErrorKind, AsrRuntimeObserver, AsrStreamingErrorEvent,
+    AsrStreamingSession, AsrTranscriptUpdateEvent, AsrTranscriptionRequest,
+    LocalSherpaStreamingRequest,
 };
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 use sona_local_asr::runtime::RecognizerPool;
@@ -108,9 +109,11 @@ pub(crate) fn create_online_asr_streaming_session(
     let request: AsrTranscriptionRequest =
         parse_core_json(&request_json, "ASR transcription request")?;
     if request.engine() != AsrEngine::Online {
-        return Err(SherpaError::StreamingNotSupported {
-            provider_id: request.provider_id().to_owned(),
-        }
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::Unsupported,
+            format!("provider {} 不支持流式识别", request.provider_id()),
+        )
+        .with_code("STREAMING_NOT_SUPPORTED")
         .into());
     }
     let inner = sona_online_asr::OnlineAsrAdapter.create_streaming_session(
@@ -139,7 +142,7 @@ pub(crate) async fn create_asr_streaming_session(
         AsrEngine::LocalSherpa => {
             let request =
                 LocalSherpaStreamingRequest::from_local_sherpa_request(instance_id, request)
-                    .map_err(|error| SherpaError::Generic(error.to_string()))?;
+                    .map_err(AsrPortError::from)?;
             sona_local_asr::streaming::create_streaming_session(
                 LOCAL_RECOGNIZER_POOL
                     .get_or_init(RecognizerPool::new)
@@ -147,8 +150,7 @@ pub(crate) async fn create_asr_streaming_session(
                 request,
                 observer,
             )
-            .await
-            .map_err(|error| SherpaError::Generic(error.to_string()))?
+            .await?
         }
     };
 
@@ -160,9 +162,9 @@ mod tests {
     use super::*;
     use crate::SonaCoreBindingError;
     use sona_core::ports::asr::{
-        AsrEngineConfig, AsrMode, AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession,
-        AsrTranscriptUpdateEvent, AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID,
-        MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest, SherpaError,
+        AsrEngineConfig, AsrMode, AsrPortError, AsrRuntimeObserver, AsrStreamingErrorEvent,
+        AsrStreamingSession, AsrTranscriptUpdateEvent, AsrTranscriptionRequest,
+        GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest,
         VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
     use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
@@ -227,7 +229,7 @@ mod tests {
     impl AsrStreamingSession for RecordingCoreSession {
         fn start<'life0, 'async_trait>(
             &'life0 self,
-        ) -> Pin<Box<dyn Future<Output = Result<(), SherpaError>> + Send + 'async_trait>>
+        ) -> Pin<Box<dyn Future<Output = Result<(), AsrPortError>> + Send + 'async_trait>>
         where
             'life0: 'async_trait,
             Self: 'async_trait,
@@ -240,7 +242,7 @@ mod tests {
 
         fn stop<'life0, 'async_trait>(
             &'life0 self,
-        ) -> Pin<Box<dyn Future<Output = Result<(), SherpaError>> + Send + 'async_trait>>
+        ) -> Pin<Box<dyn Future<Output = Result<(), AsrPortError>> + Send + 'async_trait>>
         where
             'life0: 'async_trait,
             Self: 'async_trait,
@@ -253,7 +255,7 @@ mod tests {
 
         fn flush<'life0, 'async_trait>(
             &'life0 self,
-        ) -> Pin<Box<dyn Future<Output = Result<(), SherpaError>> + Send + 'async_trait>>
+        ) -> Pin<Box<dyn Future<Output = Result<(), AsrPortError>> + Send + 'async_trait>>
         where
             'life0: 'async_trait,
             Self: 'async_trait,
@@ -267,7 +269,7 @@ mod tests {
         fn feed_audio_chunk<'life0, 'async_trait>(
             &'life0 self,
             _samples: Vec<u8>,
-        ) -> Pin<Box<dyn Future<Output = Result<(), SherpaError>> + Send + 'async_trait>>
+        ) -> Pin<Box<dyn Future<Output = Result<(), AsrPortError>> + Send + 'async_trait>>
         where
             'life0: 'async_trait,
             Self: 'async_trait,
@@ -281,7 +283,7 @@ mod tests {
         fn feed_audio_samples<'life0, 'life1, 'async_trait>(
             &'life0 self,
             _samples: &'life1 [f32],
-        ) -> Pin<Box<dyn Future<Output = Result<(), SherpaError>> + Send + 'async_trait>>
+        ) -> Pin<Box<dyn Future<Output = Result<(), AsrPortError>> + Send + 'async_trait>>
         where
             'life0: 'async_trait,
             'life1: 'async_trait,
@@ -502,7 +504,7 @@ mod tests {
         assert!(matches!(
             error,
             SonaCoreBindingError::AsrRuntime { code, .. }
-                if code == "GENERIC_ERROR"
+                if code == "MODEL_ERROR"
         ));
     }
 

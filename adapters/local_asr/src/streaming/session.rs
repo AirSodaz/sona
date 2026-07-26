@@ -22,7 +22,7 @@ use async_trait::async_trait;
 use log::{debug, info, trace};
 use sona_core::ports::asr::{
     AsrPortError, AsrPortErrorKind, AsrRuntimeObserver, AsrStreamingSession,
-    LocalSherpaStreamingRequest, SherpaError,
+    LocalSherpaStreamingRequest,
 };
 use sona_core::transcription::asr_metrics::{
     AsrModelLoadMetric, calculate_rss_delta_mb, duration_to_ms,
@@ -79,36 +79,36 @@ async fn prepare_partial_inference_slot(
 
 #[async_trait]
 impl AsrStreamingSession for LocalSherpaSession {
-    async fn start(&self) -> Result<(), SherpaError> {
+    async fn start(&self) -> Result<(), AsrPortError> {
         let mut instance = self.instance.lock().await;
         start_recognizer_impl_inner(&self.instance_id, &mut instance)
             .await
-            .map_err(SherpaError::Generic)
+            .map_err(AsrPortError::runtime)
     }
 
-    async fn stop(&self) -> Result<(), SherpaError> {
+    async fn stop(&self) -> Result<(), AsrPortError> {
         let mut instance = self.instance.lock().await;
         let mut pending = self.pending_inference.lock().await;
         wait_for_inference_task(&mut pending)
             .await
-            .map_err(SherpaError::Generic)?;
+            .map_err(AsrPortError::runtime)?;
         stop_recognizer_impl_inner(&self.instance_id, &mut instance)
             .await
-            .map_err(SherpaError::Generic)
+            .map_err(AsrPortError::runtime)
     }
 
-    async fn flush(&self) -> Result<(), SherpaError> {
+    async fn flush(&self) -> Result<(), AsrPortError> {
         let mut instance = self.instance.lock().await;
         let mut pending = self.pending_inference.lock().await;
         wait_for_inference_task(&mut pending)
             .await
-            .map_err(SherpaError::Generic)?;
+            .map_err(AsrPortError::runtime)?;
         flush_recognizer_impl_inner(self.observer.clone(), &self.instance_id, &mut instance)
             .await
-            .map_err(SherpaError::Generic)
+            .map_err(AsrPortError::runtime)
     }
 
-    async fn feed_audio_chunk(&self, samples: Vec<u8>) -> Result<(), SherpaError> {
+    async fn feed_audio_chunk(&self, samples: Vec<u8>) -> Result<(), AsrPortError> {
         let mut instance = self.instance.lock().await;
         let mut pending = self.pending_inference.lock().await;
         feed_audio_chunk_impl_inner(
@@ -119,10 +119,10 @@ impl AsrStreamingSession for LocalSherpaSession {
             samples,
         )
         .await
-        .map_err(SherpaError::Generic)
+        .map_err(AsrPortError::runtime)
     }
 
-    async fn feed_audio_samples(&self, samples: &[f32]) -> Result<(), SherpaError> {
+    async fn feed_audio_samples(&self, samples: &[f32]) -> Result<(), AsrPortError> {
         let mut instance = self.instance.lock().await;
         let mut pending = self.pending_inference.lock().await;
         feed_audio_samples_inner(
@@ -133,7 +133,7 @@ impl AsrStreamingSession for LocalSherpaSession {
             samples,
         )
         .await
-        .map_err(SherpaError::Generic)
+        .map_err(AsrPortError::runtime)
     }
 }
 

@@ -129,23 +129,11 @@ pub enum SonaCoreBindingError {
 
 pub type SonaCoreBindingResult<T> = Result<T, SonaCoreBindingError>;
 
-impl From<sona_core::ports::asr::SherpaError> for SonaCoreBindingError {
-    fn from(error: sona_core::ports::asr::SherpaError) -> Self {
-        let fallback_reason = error.to_string();
-        let serialized = serde_json::to_value(&error).ok();
-        let fields = serialized.as_ref().and_then(|value| {
-            Some((
-                value.get("code")?.as_str()?.to_string(),
-                value.get("message")?.as_str()?.to_string(),
-            ))
-        });
-
-        match fields {
-            Some((code, reason)) => Self::AsrRuntime { code, reason },
-            None => Self::AsrRuntime {
-                code: "GENERIC_ERROR".to_string(),
-                reason: fallback_reason,
-            },
+impl From<sona_core::ports::asr::AsrPortError> for SonaCoreBindingError {
+    fn from(error: sona_core::ports::asr::AsrPortError) -> Self {
+        Self::AsrRuntime {
+            code: error.code().to_string(),
+            reason: error.message.clone(),
         }
     }
 }

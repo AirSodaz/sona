@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use log::{info, warn};
 use sona_core::ports::asr::{
-    AsrMode, AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession,
-    AsrTranscriptionRequest, SherpaError,
+    AsrMode, AsrPortError, AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession,
+    AsrTranscriptionRequest,
 };
 use sona_core::transcription::postprocess::TranscriptPostprocessor;
 use std::sync::{
@@ -17,6 +17,8 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::header::{HeaderName, HeaderValue};
 use tokio_tungstenite::tungstenite::protocol::Message;
 
+use crate::SherpaError;
+
 #[derive(Clone)]
 struct VolcengineStreamingSession {
     instance_id: String,
@@ -25,6 +27,8 @@ struct VolcengineStreamingSession {
     writer: Arc<Mutex<Option<VolcengineWriter>>>,
     stopping: Arc<AtomicBool>,
     final_response_received: Arc<Notify>,
+    // Internal state keeps SherpaError for Volcengine-specific context.
+    // Converted to AsrPortError at the AsrStreamingSession trait boundary.
     final_response_outcome: Arc<Mutex<Option<Result<(), SherpaError>>>>,
     reader_task: Arc<Mutex<Option<JoinHandle<()>>>>,
 }
@@ -38,12 +42,12 @@ pub fn create_volcengine_streaming_session(
     instance_id: String,
     request: AsrTranscriptionRequest,
     observer: Arc<dyn AsrRuntimeObserver>,
-) -> Result<Arc<dyn AsrStreamingSession>, SherpaError> {
+) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
     if request.mode != AsrMode::Streaming {
-        return Err(SherpaError::VolcengineRealtimeOnlyForStreaming);
+        return Err(AsrPortError::from(SherpaError::VolcengineRealtimeOnlyForStreaming));
     }
     crate::resolve_volcengine_config_checked(&request, crate::VolcengineMode::Streaming)
-        .map_err(SherpaError::from)?;
+        .map_err(|e| AsrPortError::from(SherpaError::from(e)))?;
     Ok(Arc::new(VolcengineStreamingSession {
         instance_id,
         observer,
@@ -58,24 +62,26 @@ pub fn create_volcengine_streaming_session(
 
 #[async_trait]
 impl AsrStreamingSession for VolcengineStreamingSession {
-    async fn start(&self) -> Result<(), SherpaError> {
-        start_streaming_recognizer_impl(self.observer.clone(), self, &self.instance_id).await
+    async fn start(&self) -> Result<(), AsrPortError> {
+        start_streaming_recognizer_impl(self.observer.clone(), self, &self.instance_id)
+            .await
+            .map_err(AsrPortError::from)
     }
 
-    async fn stop(&self) -> Result<(), SherpaError> {
-        stop_streaming_recognizer_impl(self).await
+    async fn stop(&self) -> Result<(), AsrPortError> {
+        stop_streaming_recognizer_impl(self).await.map_err(AsrPortError::from)
     }
 
-    async fn flush(&self) -> Result<(), SherpaError> {
-        flush_streaming_recognizer_impl(self).await
+    async fn flush(&self) -> Result<(), AsrPortError> {
+        flush_streaming_recognizer_impl(self).await.map_err(AsrPortError::from)
     }
 
-    async fn feed_audio_chunk(&self, samples: Vec<u8>) -> Result<(), SherpaError> {
-        feed_audio_chunk_impl(self, samples).await
+    async fn feed_audio_chunk(&self, samples: Vec<u8>) -> Result<(), AsrPortError> {
+        feed_audio_chunk_impl(self, samples).await.map_err(AsrPortError::from)
     }
 
-    async fn feed_audio_samples(&self, samples: &[f32]) -> Result<(), SherpaError> {
-        feed_audio_samples_impl(self, samples).await
+    async fn feed_audio_samples(&self, samples: &[f32]) -> Result<(), AsrPortError> {
+        feed_audio_samples_impl(self, samples).await.map_err(AsrPortError::from)
     }
 }
 
@@ -435,7 +441,7 @@ mod tests {
     use futures_util::{SinkExt, StreamExt};
     use sona_core::ports::asr::{
         AsrEngineConfig, AsrMode, AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession,
-        AsrTranscriptUpdateEvent, AsrTranscriptionRequest, OnlineAsrProviderRequest, SherpaError,
+        AsrTranscriptUpdateEvent, AsrTranscriptionRequest, OnlineAsrProviderRequest,
         VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
     use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
@@ -545,10 +551,8 @@ mod tests {
             request,
             Arc::new(RecordingObserver::default()),
         );
-        assert!(matches!(
-            result.err(),
-            Some(SherpaError::VolcengineRealtimeOnlyForStreaming)
-        ));
+        let err = result.err().expect("batch mode should be rejected");
+        assert_eq!(err.code(), "VOLCENGINE_REALTIME_ONLY_FOR_STREAMING");
     }
 
     #[tokio::test]
@@ -560,10 +564,12 @@ mod tests {
         )
         .unwrap();
 
-        assert!(matches!(
-            session.feed_audio_chunk(vec![1, 2]).await,
-            Err(SherpaError::VolcengineWebSocketNotConnected)
-        ));
+        let err = session
+            .feed_audio_chunk(vec![1, 2])
+            .await
+            .err()
+            .expect("feed before connect should fail");
+        assert_eq!(err.code(), "VOLCENGINE_WEB_SOCKET_NOT_CONNECTED");
     }
 
     #[tokio::test]

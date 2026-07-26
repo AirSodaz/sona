@@ -99,25 +99,25 @@ mod tests {
 
     #[async_trait::async_trait]
     impl AsrStreamingSession for DummySession {
-        async fn start(&self) -> Result<(), crate::integrations::asr::SherpaError> {
+        async fn start(&self) -> Result<(), sona_core::ports::asr::AsrPortError> {
             Ok(())
         }
-        async fn stop(&self) -> Result<(), crate::integrations::asr::SherpaError> {
+        async fn stop(&self) -> Result<(), sona_core::ports::asr::AsrPortError> {
             Ok(())
         }
-        async fn flush(&self) -> Result<(), crate::integrations::asr::SherpaError> {
+        async fn flush(&self) -> Result<(), sona_core::ports::asr::AsrPortError> {
             Ok(())
         }
         async fn feed_audio_chunk(
             &self,
             _samples: Vec<u8>,
-        ) -> Result<(), crate::integrations::asr::SherpaError> {
+        ) -> Result<(), sona_core::ports::asr::AsrPortError> {
             Ok(())
         }
         async fn feed_audio_samples(
             &self,
             _samples: &[f32],
-        ) -> Result<(), crate::integrations::asr::SherpaError> {
+        ) -> Result<(), sona_core::ports::asr::AsrPortError> {
             Ok(())
         }
     }

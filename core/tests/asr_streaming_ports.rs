@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use sona_core::ports::asr::{
-    AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession, AsrTranscriptUpdateEvent,
-    NoopAsrRuntimeObserver, SherpaError,
+    AsrPortError, AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession,
+    AsrTranscriptUpdateEvent, NoopAsrRuntimeObserver,
 };
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 use sona_core::transcription::transcript::TranscriptUpdate;
@@ -37,23 +37,23 @@ struct DummySession;
 
 #[async_trait]
 impl AsrStreamingSession for DummySession {
-    async fn start(&self) -> Result<(), SherpaError> {
+    async fn start(&self) -> Result<(), AsrPortError> {
         Ok(())
     }
 
-    async fn stop(&self) -> Result<(), SherpaError> {
+    async fn stop(&self) -> Result<(), AsrPortError> {
         Ok(())
     }
 
-    async fn flush(&self) -> Result<(), SherpaError> {
+    async fn flush(&self) -> Result<(), AsrPortError> {
         Ok(())
     }
 
-    async fn feed_audio_chunk(&self, _samples: Vec<u8>) -> Result<(), SherpaError> {
+    async fn feed_audio_chunk(&self, _samples: Vec<u8>) -> Result<(), AsrPortError> {
         Ok(())
     }
 
-    async fn feed_audio_samples(&self, _samples: &[f32]) -> Result<(), SherpaError> {
+    async fn feed_audio_samples(&self, _samples: &[f32]) -> Result<(), AsrPortError> {
         Ok(())
     }
 }

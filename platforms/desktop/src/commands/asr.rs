@@ -1,9 +1,9 @@
 use crate::integrations::asr::{
-    AsrRuntimeMetricsSnapshot, AsrState, AsrTranscriptionRequest, SherpaError,
+    AsrPortError, AsrRuntimeMetricsSnapshot, AsrState, AsrTranscriptionRequest,
     TauriAsrRuntimeObserver, TranscriptSegment, ensure_adapter, get_provider_id,
 };
 use crate::platform::event::{EventEmitter, TauriEventEmitter};
-use sona_core::ports::asr::AsrRuntimeObserver;
+use sona_core::ports::asr::{AsrPortErrorKind, AsrRuntimeObserver};
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 
@@ -13,7 +13,7 @@ pub async fn init_recognizer(
     state: State<'_, AsrState>,
     instance_id: String,
     asr_request: AsrTranscriptionRequest,
-) -> Result<(), SherpaError> {
+) -> Result<(), AsrPortError> {
     let adapter = ensure_adapter(&asr_request)?;
     let emitter = Arc::new(TauriEventEmitter(app)) as Arc<dyn EventEmitter>;
     let observer = Arc::new(TauriAsrRuntimeObserver::new(emitter, state.metrics_store()))
@@ -28,9 +28,11 @@ pub async fn init_recognizer(
             .await;
         Ok(())
     } else {
-        Err(SherpaError::StreamingNotSupported {
-            provider_id: get_provider_id(&asr_request)?.to_string(),
-        })
+        Err(AsrPortError::new(
+            AsrPortErrorKind::Unsupported,
+            format!("provider {} 不支持流式识别", get_provider_id(&asr_request)?),
+        )
+        .with_code("STREAMING_NOT_SUPPORTED"))
     }
 }
 
@@ -38,11 +40,11 @@ pub async fn init_recognizer(
 pub async fn start_recognizer(
     state: State<'_, AsrState>,
     instance_id: String,
-) -> Result<(), SherpaError> {
+) -> Result<(), AsrPortError> {
     let session = state
         .session(&instance_id)
         .await
-        .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
+        .ok_or_else(|| AsrPortError::runtime(format!("ASR instance {} not found", instance_id)))?;
     session.start().await
 }
 
@@ -50,11 +52,11 @@ pub async fn start_recognizer(
 pub async fn stop_recognizer(
     state: State<'_, AsrState>,
     instance_id: String,
-) -> Result<(), SherpaError> {
+) -> Result<(), AsrPortError> {
     let session = state
         .remove_session(&instance_id)
         .await
-        .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
+        .ok_or_else(|| AsrPortError::runtime(format!("ASR instance {} not found", instance_id)))?;
     session.stop().await
 }
 
@@ -62,11 +64,11 @@ pub async fn stop_recognizer(
 pub async fn flush_recognizer(
     state: State<'_, AsrState>,
     instance_id: String,
-) -> Result<(), SherpaError> {
+) -> Result<(), AsrPortError> {
     let session = state
         .session(&instance_id)
         .await
-        .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
+        .ok_or_else(|| AsrPortError::runtime(format!("ASR instance {} not found", instance_id)))?;
     session.flush().await
 }
 
@@ -75,11 +77,11 @@ pub async fn feed_audio_chunk(
     state: State<'_, AsrState>,
     instance_id: String,
     samples: Vec<u8>,
-) -> Result<(), SherpaError> {
+) -> Result<(), AsrPortError> {
     let session = state
         .session(&instance_id)
         .await
-        .ok_or_else(|| SherpaError::Generic(format!("ASR instance {} not found", instance_id)))?;
+        .ok_or_else(|| AsrPortError::runtime(format!("ASR instance {} not found", instance_id)))?;
     session.feed_audio_chunk(samples).await
 }
 
@@ -92,12 +94,12 @@ pub async fn process_batch_file(
     speaker_processing: Option<sona_core::transcription::speaker::SpeakerProcessingConfig>,
     asr_request: AsrTranscriptionRequest,
     instance_id: Option<String>,
-) -> Result<Vec<TranscriptSegment>, SherpaError> {
+) -> Result<Vec<TranscriptSegment>, AsrPortError> {
     let adapter = ensure_adapter(&asr_request)?;
     let processor = adapter
         .create_batch_processor(&asr_request)?
         .ok_or_else(|| {
-            SherpaError::Generic(format!(
+            AsrPortError::runtime(format!(
                 "Batch mode not supported for provider {}",
                 get_provider_id(&asr_request).unwrap_or("unknown")
             ))
