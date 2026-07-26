@@ -605,8 +605,10 @@ test('UniFFI owns Sync secrets and cache lifetime per canonical application cont
     'sync',
     'UniffiSyncSecretStoreAdapter.kt',
   );
+  // The factory takes a `ContextSource` rather than a directory string: bridges
+  // resolve an explicit context instead of reaching into the registry.
   const syncApplicationFactory = syncBridge.match(
-    /fn application\(app_data_dir: &str\)[\s\S]*?(?=\nfn provider_registry)/u,
+    /fn application\(context: impl Into<ContextSource>\)[\s\S]*?(?=\nfn provider_registry)/u,
   )?.[0];
 
   assert.match(applicationContext, /const DEFAULT_CONTEXT_CACHE_CAPACITY: usize = 8/u);
@@ -1361,6 +1363,53 @@ test('UniFFI records carry credentials as opaque handles, never printable fields
       `${name}::expose must not be exported across the FFI boundary`,
     );
   }
+});
+
+test('SonaContext exposes every directory-scoped operation the free functions do', () => {
+  const binding = withoutInlineRustTests(read('adapters', 'uniffi_bind', 'src', 'lib.rs'));
+  const context = withoutInlineRustTests(
+    read('adapters', 'uniffi_bind', 'src', 'sona_context.rs'),
+  );
+
+  // Free functions that take an application-data directory are exactly the ones
+  // an explicit context can serve, so the handle must cover all of them or the
+  // two surfaces drift.
+  const directoryScoped = [
+    ...binding.matchAll(
+      /#\[uniffi::export[^\]]*\]\s*pub\s+(?:async\s+)?fn\s+(\w+)\(\s*app_data_dir: String/gu,
+    ),
+  ].map(([, name]) => name);
+  assert.ok(
+    directoryScoped.length > 100,
+    `expected the directory-scoped surface, found ${directoryScoped.length}`,
+  );
+
+  const methods = new Set(
+    [...context.matchAll(/pub\s+(?:async\s+)?fn\s+(\w+)\(\s*&self/gu)].map(([, name]) => name),
+  );
+
+  // `release_application_context` frees a directory rather than operating on one,
+  // and secret-store registration is a lifecycle concern the handle does not own.
+  const lifecycleOnly = new Set([
+    'release_application_context',
+    'register_sync_secret_store_for_app_data_dir',
+  ]);
+  const missing = directoryScoped.filter(
+    (name) => !methods.has(name) && !lifecycleOnly.has(name),
+  );
+  assert.deepEqual(missing, [], 'SonaContext must cover every directory-scoped operation');
+
+  // The generated operations must hand over the context the handle already
+  // holds, never rebuild a source from a directory string.
+  const operations = /#\[uniffi::export\(async_runtime = "tokio"\)\]\s*impl SonaContext \{([\s\S]*)$/u
+    .exec(context)?.[1];
+  assert.ok(operations, 'SonaContext must expose a generated operations block');
+  assert.doesNotMatch(
+    operations,
+    /ContextSource::from\(/u,
+    'SonaContext operations must hand over the context it already holds',
+  );
+  assert.match(operations, /self\.source\(\)/u);
 });
 
 test('UniFFI binding delegates to bridges without an intermediate facade layer', () => {

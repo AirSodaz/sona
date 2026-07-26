@@ -21,6 +21,7 @@ mod mapper;
 mod model_bridge;
 mod recovery_bridge;
 mod runtime_bridge;
+mod sona_context;
 mod storage_usage_bridge;
 mod sync_bridge;
 mod sync_secret_store_bridge;
@@ -102,6 +103,7 @@ pub use mapper::{
     FfiUsageTrendPointV1, FfiVoiceTypingReadinessV1, FfiVolcengineDoubaoAsrConfig,
     FfiWebviewCacheUsageCategoryV1,
 };
+pub use sona_context::SonaContext;
 pub use sync_secret_store_bridge::FfiSecretStore;
 
 uniffi::setup_scaffolding!();

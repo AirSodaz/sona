@@ -1,4 +1,4 @@
-use crate::application_context::application_context;
+use crate::application_context::ContextSource;
 use crate::json_bridge::parse_core_json;
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
@@ -6,46 +6,51 @@ use sona_core::config::{ConfigError, validate_app_config};
 use sona_runtime_fs::SystemClock;
 use sona_sqlite::SqliteAppConfigAdapter;
 
-pub(crate) fn load_app_config_json(app_data_dir: String) -> SonaCoreBindingResult<Option<String>> {
-    with_app_config_adapter(&app_data_dir, |adapter| adapter.load_config())?
+pub(crate) fn load_app_config_json(
+    context: impl Into<ContextSource>,
+) -> SonaCoreBindingResult<Option<String>> {
+    with_app_config_adapter(context, |adapter| adapter.load_config())?
         .map(|config| serde_json::to_string(&config).map_err(config_repository_error))
         .transpose()
 }
 
 pub(crate) fn save_app_config_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     config_json: String,
 ) -> SonaCoreBindingResult<()> {
     let config: Value = parse_core_json(&config_json, "app config")?;
     validate_app_config(&config).map_err(|error| SonaCoreBindingError::InvalidInput {
         reason: format!("Invalid app config: {error}"),
     })?;
-    with_app_config_adapter(&app_data_dir, |adapter| adapter.save_config(&config))
+    with_app_config_adapter(context, |adapter| adapter.save_config(&config))
 }
 
 pub(crate) fn get_app_setting_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     key: String,
 ) -> SonaCoreBindingResult<Option<String>> {
-    with_app_config_adapter(&app_data_dir, |adapter| adapter.get_setting(&key))?
+    with_app_config_adapter(context, |adapter| adapter.get_setting(&key))?
         .map(|value| serde_json::to_string(&value).map_err(config_repository_error))
         .transpose()
 }
 
 pub(crate) fn set_app_setting_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     key: String,
     value_json: String,
 ) -> SonaCoreBindingResult<()> {
     let value: Value = parse_core_json(&value_json, "app setting")?;
-    with_app_config_adapter(&app_data_dir, |adapter| adapter.set_setting(&key, &value))
+    with_app_config_adapter(context, |adapter| adapter.set_setting(&key, &value))
 }
 
-fn with_app_config_adapter<T, F>(app_data_dir: &str, operation: F) -> SonaCoreBindingResult<T>
+fn with_app_config_adapter<T, F>(
+    context: impl Into<ContextSource>,
+    operation: F,
+) -> SonaCoreBindingResult<T>
 where
     F: FnOnce(&SqliteAppConfigAdapter) -> Result<T, ConfigError>,
 {
-    let context = application_context(app_data_dir).map_err(config_repository_error)?;
+    let context = context.into().resolve().map_err(config_repository_error)?;
     let adapter = context
         .sqlite()
         .app_config_adapter(std::sync::Arc::new(SystemClock));
@@ -75,7 +80,7 @@ mod tests {
             Self(tempfile::tempdir().unwrap())
         }
 
-        fn app_data_dir(&self) -> String {
+        fn context(&self) -> String {
             self.0.path().to_string_lossy().into_owned()
         }
 
@@ -136,17 +141,16 @@ mod tests {
     fn empty_repository_loads_none() {
         let dir = TestDir::new();
 
-        assert_eq!(load_app_config_json(dir.app_data_dir()).unwrap(), None);
+        assert_eq!(load_app_config_json(dir.context()).unwrap(), None);
     }
 
     #[test]
     fn save_and_load_round_trip_complete_config_and_repair_ids() {
         let dir = TestDir::new();
 
-        save_app_config_json(dir.app_data_dir(), full_config().to_string()).unwrap();
+        save_app_config_json(dir.context(), full_config().to_string()).unwrap();
         let loaded: Value =
-            serde_json::from_str(&load_app_config_json(dir.app_data_dir()).unwrap().unwrap())
-                .unwrap();
+            serde_json::from_str(&load_app_config_json(dir.context()).unwrap().unwrap()).unwrap();
         let config = &loaded["sona-config"];
 
         assert_eq!(config["theme"], json!("dark"));
@@ -198,13 +202,11 @@ mod tests {
         {
             let key = format!("setting-{index}");
             assert_eq!(
-                get_app_setting_json(dir.app_data_dir(), key.clone()).unwrap(),
+                get_app_setting_json(dir.context(), key.clone()).unwrap(),
                 None
             );
-            set_app_setting_json(dir.app_data_dir(), key.clone(), value.to_string()).unwrap();
-            let loaded = get_app_setting_json(dir.app_data_dir(), key)
-                .unwrap()
-                .unwrap();
+            set_app_setting_json(dir.context(), key.clone(), value.to_string()).unwrap();
+            let loaded = get_app_setting_json(dir.context(), key).unwrap().unwrap();
             assert_eq!(serde_json::from_str::<Value>(&loaded).unwrap(), value);
         }
     }
@@ -227,10 +229,10 @@ mod tests {
         let dir = TestDir::new();
         let invalid = json!({"appLanguage": 42});
 
-        let error = save_app_config_json(dir.app_data_dir(), invalid.to_string()).unwrap_err();
+        let error = save_app_config_json(dir.context(), invalid.to_string()).unwrap_err();
 
         assert!(matches!(error, SonaCoreBindingError::InvalidInput { .. }));
-        assert_eq!(load_app_config_json(dir.app_data_dir()).unwrap(), None);
+        assert_eq!(load_app_config_json(dir.context()).unwrap(), None);
     }
 
     #[test]
@@ -256,22 +258,22 @@ mod tests {
     #[test]
     fn exported_binding_delegates_all_repository_operations() {
         let dir = TestDir::new();
-        let app_data_dir = dir.app_data_dir();
+        let context = dir.context();
 
-        crate::save_app_config_json(app_data_dir.clone(), full_config().to_string()).unwrap();
+        crate::save_app_config_json(context.clone(), full_config().to_string()).unwrap();
         assert!(
-            crate::load_app_config_json(app_data_dir.clone())
+            crate::load_app_config_json(context.clone())
                 .unwrap()
                 .is_some()
         );
         crate::set_app_setting_json(
-            app_data_dir.clone(),
+            context.clone(),
             "facade".into(),
             json!({"ok": true}).to_string(),
         )
         .unwrap();
         assert_eq!(
-            crate::get_app_setting_json(app_data_dir, "facade".into()).unwrap(),
+            crate::get_app_setting_json(context, "facade".into()).unwrap(),
             Some(json!({"ok": true}).to_string())
         );
     }

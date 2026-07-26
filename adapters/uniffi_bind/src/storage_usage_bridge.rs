@@ -1,36 +1,37 @@
-use crate::application_context::cached_application_context;
+use crate::application_context::ContextSource;
 use crate::{FfiStorageUsageSnapshotV1, SonaCoreBindingError, SonaCoreBindingResult};
 use sona_core::storage_usage::StorageUsageSnapshot;
 use sona_sqlite::{load_storage_usage_snapshot, load_storage_usage_snapshot_with_database};
-use std::path::PathBuf;
 
 pub(crate) async fn load_storage_usage_snapshot_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
 ) -> SonaCoreBindingResult<String> {
-    let snapshot = load_snapshot(app_data_dir).await?;
+    let snapshot = load_snapshot(context).await?;
     let canonical = serde_json::to_value(snapshot).map_err(storage_usage_error)?;
     serde_json::to_string(&canonical).map_err(storage_usage_error)
 }
 
 pub(crate) async fn load_storage_usage_snapshot_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
 ) -> SonaCoreBindingResult<FfiStorageUsageSnapshotV1> {
-    load_snapshot(app_data_dir).await.map(Into::into)
+    load_snapshot(context).await.map(Into::into)
 }
 
-async fn load_snapshot(app_data_dir: String) -> SonaCoreBindingResult<StorageUsageSnapshot> {
-    tokio::task::spawn_blocking(move || build_storage_usage_snapshot(app_data_dir))
+async fn load_snapshot(
+    context: impl Into<ContextSource>,
+) -> SonaCoreBindingResult<StorageUsageSnapshot> {
+    let context = context.into();
+    tokio::task::spawn_blocking(move || build_storage_usage_snapshot(context))
         .await
         .map_err(storage_usage_error)?
 }
 
 fn build_storage_usage_snapshot(
-    app_data_dir: String,
+    context: ContextSource,
 ) -> SonaCoreBindingResult<StorageUsageSnapshot> {
-    let app_data_dir =
-        std::path::absolute(PathBuf::from(app_data_dir)).map_err(storage_usage_error)?;
+    let app_data_dir = context.app_data_dir().map_err(storage_usage_error)?;
     let generated_at = sona_runtime_fs::storage_usage_generated_at_now();
-    match cached_application_context(&app_data_dir).map_err(storage_usage_error)? {
+    match context.resolve_cached().map_err(storage_usage_error)? {
         Some(context) => load_storage_usage_snapshot_with_database(
             app_data_dir,
             context.sqlite().database(),

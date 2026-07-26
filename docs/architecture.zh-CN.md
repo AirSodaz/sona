@@ -93,6 +93,19 @@ UniFFI 导出面只有两层：`lib.rs` 中的 `#[uniffi::export]` 自由函数�
 目录创建第二套连接池、第二次迁移和第二个服务图。在调用方释放之前，缓存允许超出
 容量。
 
+**两个入口，一份实现。** UniFFI bridge 接收 `ContextSource` 而非目录字符串，
+因此 registry 查表发生在**单一边界**上，而不是散落在领域代码里。一个 source
+要么是路径（走 registry，即遗留自由函数传入的形式），要么是已持有的 context
+（解析为自身，完全不碰 registry）。
+
+`SonaContext` 就是建立在此之上的显式组合根：构造时解析一次并持有结果，把目录
+相关的操作以方法形式暴露。持有它同时会**钉住** registry 条目，因此只要句柄存活，
+它的 context 就始终是该目录的唯一 context。它的方法由导出的自由函数生成，
+`scripts/multisurface-contracts.test.js` 断言句柄覆盖了每一个目录相关操作，
+两套接口无法漂移。
+
+自由函数保留：本次改动是**增量的**，导出 ABI 保留了全部既有入口。
+
 ### 当前的 Application 归属
 
 多数用例服务（History、Tag、Automation、Backup、Recovery、LLM tasks 等）放在

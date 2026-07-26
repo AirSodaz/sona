@@ -1,4 +1,4 @@
-use crate::application_context::application_context;
+use crate::application_context::ContextSource;
 use crate::{
     FfiAutomationProcessedInputV1, FfiAutomationRepositoryInputV1, FfiAutomationRepositoryStateV1,
     FfiAutomationRuleInputV1, FfiAutomationRuleValidationResultV1, FfiAutomationTagReferenceV1,
@@ -16,24 +16,23 @@ use sona_sqlite::SqliteAutomationAdapter;
 use std::sync::Arc;
 
 pub(crate) fn load_automation_repository_state_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
 ) -> SonaCoreBindingResult<String> {
-    with_automation_adapter(&app_data_dir, |adapter| adapter.load_state())
-        .and_then(serialize_automation)
+    with_automation_adapter(context, |adapter| adapter.load_state()).and_then(serialize_automation)
 }
 
 pub(crate) fn load_automation_repository_state_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
 ) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
-    with_automation_adapter(&app_data_dir, |adapter| adapter.load_state()).map(Into::into)
+    with_automation_adapter(context, |adapter| adapter.load_state()).map(Into::into)
 }
 
 pub(crate) fn replace_automation_rules_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     rules_json: String,
 ) -> SonaCoreBindingResult<String> {
     let rules = parse_legacy_rules(&rules_json)?;
-    with_automation_adapter(&app_data_dir, |adapter| {
+    with_automation_adapter(context, |adapter| {
         adapter.replace_rules(rules)?;
         adapter.load_state()
     })
@@ -41,11 +40,11 @@ pub(crate) fn replace_automation_rules_json(
 }
 
 pub(crate) fn replace_automation_rules_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     rules: Vec<FfiAutomationRuleInputV1>,
 ) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
     let rules = rules.into_iter().map(Into::into).collect();
-    with_automation_adapter(&app_data_dir, |adapter| {
+    with_automation_adapter(context, |adapter| {
         adapter.replace_rules(rules)?;
         adapter.load_state()
     })
@@ -53,11 +52,11 @@ pub(crate) fn replace_automation_rules_v1(
 }
 
 pub(crate) fn replace_automation_processed_entries_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     entries_json: String,
 ) -> SonaCoreBindingResult<String> {
     let entries = parse_legacy_processed_entries(&entries_json)?;
-    with_automation_adapter(&app_data_dir, |adapter| {
+    with_automation_adapter(context, |adapter| {
         adapter.replace_processed_entries(entries)?;
         adapter.load_state()
     })
@@ -65,11 +64,11 @@ pub(crate) fn replace_automation_processed_entries_json(
 }
 
 pub(crate) fn replace_automation_processed_entries_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     entries: Vec<FfiAutomationProcessedInputV1>,
 ) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
     let entries = entries.into_iter().map(Into::into).collect();
-    with_automation_adapter(&app_data_dir, |adapter| {
+    with_automation_adapter(context, |adapter| {
         adapter.replace_processed_entries(entries)?;
         adapter.load_state()
     })
@@ -77,11 +76,11 @@ pub(crate) fn replace_automation_processed_entries_v1(
 }
 
 pub(crate) fn replace_automation_repository_state_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     state_json: String,
 ) -> SonaCoreBindingResult<String> {
     let input = parse_repository_state(&state_json)?;
-    with_automation_adapter(&app_data_dir, |adapter| {
+    with_automation_adapter(context, |adapter| {
         adapter.replace_state(input)?;
         adapter.load_state()
     })
@@ -89,10 +88,10 @@ pub(crate) fn replace_automation_repository_state_json(
 }
 
 pub(crate) fn replace_automation_repository_state_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     input: FfiAutomationRepositoryInputV1,
 ) -> SonaCoreBindingResult<FfiAutomationRepositoryStateV1> {
-    with_automation_adapter(&app_data_dir, |adapter| {
+    with_automation_adapter(context, |adapter| {
         adapter.replace_state(input.into())?;
         adapter.load_state()
     })
@@ -131,11 +130,14 @@ pub(crate) fn validate_automation_rule_activation_v1(
         .map_err(automation_error)
 }
 
-fn with_automation_adapter<T, F>(app_data_dir: &str, operation: F) -> SonaCoreBindingResult<T>
+fn with_automation_adapter<T, F>(
+    context: impl Into<ContextSource>,
+    operation: F,
+) -> SonaCoreBindingResult<T>
 where
     F: FnOnce(&SqliteAutomationAdapter) -> Result<T, AutomationError>,
 {
-    let context = application_context(app_data_dir).map_err(automation_error)?;
+    let context = context.into().resolve().map_err(automation_error)?;
     let adapter = context.sqlite().automation_adapter(Arc::new(UuidGenerator));
     operation(&adapter).map_err(automation_error)
 }
@@ -379,7 +381,7 @@ mod tests {
             self.0.path()
         }
 
-        fn app_data_dir(&self) -> String {
+        fn context(&self) -> String {
             self.path().to_string_lossy().into_owned()
         }
     }
@@ -392,7 +394,7 @@ mod tests {
     fn load_returns_empty_canonical_state_json() {
         let dir = TestDir::new();
 
-        let output = load_automation_repository_state_json(dir.app_data_dir()).unwrap();
+        let output = load_automation_repository_state_json(dir.context()).unwrap();
 
         assert_eq!(
             output,
@@ -404,7 +406,7 @@ mod tests {
     fn replace_state_generates_ids_persists_and_returns_canonical_json() {
         let dir = TestDir::new();
         let output = replace_automation_repository_state_json(
-            dir.app_data_dir(),
+            dir.context(),
             json!({
                 "rules": [{"id":7,"name":"Rule"}],
                 "processedEntries": [{"filePath":"C:\\audio.wav"}]
@@ -422,7 +424,7 @@ mod tests {
         assert_eq!(state["rules"][0]["presetId"], "custom");
         assert!(state["processedEntries"][0]["id"].as_str().is_some());
         assert_eq!(
-            parse_state(&load_automation_repository_state_json(dir.app_data_dir()).unwrap()),
+            parse_state(&load_automation_repository_state_json(dir.context()).unwrap()),
             state
         );
     }
@@ -431,13 +433,13 @@ mod tests {
     fn rules_only_replacement_preserves_processed_entries() {
         let dir = TestDir::new();
         replace_automation_processed_entries_json(
-            dir.app_data_dir(),
+            dir.context(),
             json!([{"id":"entry-1","filePath":"C:\\audio.wav"}]).to_string(),
         )
         .unwrap();
 
         let output = replace_automation_rules_json(
-            dir.app_data_dir(),
+            dir.context(),
             json!([{"id":"rule-1","name":"Rule"}]).to_string(),
         )
         .unwrap();
@@ -451,13 +453,13 @@ mod tests {
     fn processed_only_replacement_preserves_rules() {
         let dir = TestDir::new();
         replace_automation_rules_json(
-            dir.app_data_dir(),
+            dir.context(),
             json!([{"id":"rule-1","name":"Rule"}]).to_string(),
         )
         .unwrap();
 
         let output = replace_automation_processed_entries_json(
-            dir.app_data_dir(),
+            dir.context(),
             json!([{"id":"entry-1","filePath":"C:\\audio.wav"}]).to_string(),
         )
         .unwrap();
@@ -491,12 +493,12 @@ mod tests {
     fn malformed_json_and_incorrect_top_levels_are_invalid_input() {
         let dir = TestDir::new();
         let invalid_calls = [
-            replace_automation_rules_json(dir.app_data_dir(), "{".to_string()),
-            replace_automation_rules_json(dir.app_data_dir(), "{}".to_string()),
-            replace_automation_processed_entries_json(dir.app_data_dir(), "[".to_string()),
-            replace_automation_processed_entries_json(dir.app_data_dir(), "{}".to_string()),
-            replace_automation_repository_state_json(dir.app_data_dir(), "{".to_string()),
-            replace_automation_repository_state_json(dir.app_data_dir(), "[]".to_string()),
+            replace_automation_rules_json(dir.context(), "{".to_string()),
+            replace_automation_rules_json(dir.context(), "{}".to_string()),
+            replace_automation_processed_entries_json(dir.context(), "[".to_string()),
+            replace_automation_processed_entries_json(dir.context(), "{}".to_string()),
+            replace_automation_repository_state_json(dir.context(), "{".to_string()),
+            replace_automation_repository_state_json(dir.context(), "[]".to_string()),
             validate_automation_rule_activation_json("{".to_string(), "{}".to_string(), None),
             validate_automation_rule_activation_json("[]".to_string(), "{}".to_string(), None),
             validate_automation_rule_activation_json("{}".to_string(), "{".to_string(), None),

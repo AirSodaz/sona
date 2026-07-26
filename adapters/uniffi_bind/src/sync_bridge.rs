@@ -12,7 +12,7 @@ use sona_sync::{
 use sona_sync_webdav::{WebDavObjectStoreConfig, WebDavSyncProviderFactory};
 
 use crate::application_context::{
-    application_context, register_default_sync_secret_store,
+    ContextSource, register_default_sync_secret_store,
     register_sync_secret_store_for_app_data_dir as register_context_sync_secret_store,
 };
 use crate::json_bridge::{parse_core_json, serialize_core_json};
@@ -40,8 +40,8 @@ pub(crate) fn register_sync_secret_store_for_app_data_dir(
     register_context_sync_secret_store(app_data_dir, store).map_err(sync_error)
 }
 
-fn application(app_data_dir: &str) -> SonaCoreBindingResult<Arc<SyncApplication>> {
-    let context = application_context(app_data_dir).map_err(sync_error)?;
+fn application(context: impl Into<ContextSource>) -> SonaCoreBindingResult<Arc<SyncApplication>> {
+    let context = context.into().resolve().map_err(sync_error)?;
     let secret_store: Arc<dyn SyncSecretStore> = context.sync_secret_store();
     Ok(context.sync_application(|sqlite| {
         Arc::new(SyncApplication::new(
@@ -133,20 +133,19 @@ pub(crate) async fn test_provider_json(config_json: String) -> SonaCoreBindingRe
     serialize_core_json(&descriptor, "sync provider descriptor")
 }
 
-pub(crate) async fn get_status_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
-    let status = application(&app_data_dir)?
-        .status()
-        .await
-        .map_err(sync_error)?;
+pub(crate) async fn get_status_json(
+    context: impl Into<ContextSource>,
+) -> SonaCoreBindingResult<String> {
+    let status = application(context)?.status().await.map_err(sync_error)?;
     serialize_core_json(&status, "sync status")
 }
 
 pub(crate) async fn create_vault_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: CreateRequest = parse_core_json(&request_json, "sync create request")?;
-    let result = application(&app_data_dir)?
+    let result = application(context)?
         .create(
             request.provider.into_provider_input()?,
             request.preset,
@@ -167,11 +166,11 @@ pub(crate) async fn create_vault_json(
 }
 
 pub(crate) async fn preview_join_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: JoinRequest = parse_core_json(&request_json, "sync join preview request")?;
-    let preview = application(&app_data_dir)?
+    let preview = application(context)?
         .preview_join(
             request.provider.into_provider_input()?,
             &request.vault_id,
@@ -183,11 +182,11 @@ pub(crate) async fn preview_join_json(
 }
 
 pub(crate) async fn join_vault_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: JoinRequest = parse_core_json(&request_json, "sync join request")?;
-    let result = application(&app_data_dir)?
+    let result = application(context)?
         .join(
             request.provider.into_provider_input()?,
             &request.vault_id,
@@ -199,12 +198,12 @@ pub(crate) async fn join_vault_json(
 }
 
 pub(crate) async fn unlock_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
     recovery: bool,
 ) -> SonaCoreBindingResult<String> {
     let request: UnlockRequest = parse_core_json(&request_json, "sync unlock request")?;
-    let application = application(&app_data_dir)?;
+    let application = application(context)?;
     let status = if recovery {
         application
             .unlock_with_recovery_key(
@@ -230,8 +229,8 @@ pub(crate) async fn unlock_json(
     serialize_core_json(&status, "sync status")
 }
 
-pub(crate) async fn lock(app_data_dir: String) -> SonaCoreBindingResult<()> {
-    application(&app_data_dir)?
+pub(crate) async fn lock(context: impl Into<ContextSource>) -> SonaCoreBindingResult<()> {
+    application(context)?
         .lock()
         .await
         .map(|_| ())
@@ -239,39 +238,40 @@ pub(crate) async fn lock(app_data_dir: String) -> SonaCoreBindingResult<()> {
 }
 
 pub(crate) async fn set_paused_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     paused: bool,
 ) -> SonaCoreBindingResult<String> {
-    let status = application(&app_data_dir)?
+    let status = application(context)?
         .set_paused(paused)
         .await
         .map_err(sync_error)?;
     serialize_core_json(&status, "sync status")
 }
 
-pub(crate) async fn disconnect_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
-    let status = application(&app_data_dir)?
+pub(crate) async fn disconnect_json(
+    context: impl Into<ContextSource>,
+) -> SonaCoreBindingResult<String> {
+    let status = application(context)?
         .disconnect()
         .await
         .map_err(sync_error)?;
     serialize_core_json(&status, "sync status")
 }
 
-pub(crate) async fn run_now_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
-    let result = application(&app_data_dir)?
-        .run()
-        .await
-        .map_err(sync_error)?;
+pub(crate) async fn run_now_json(
+    context: impl Into<ContextSource>,
+) -> SonaCoreBindingResult<String> {
+    let result = application(context)?.run().await.map_err(sync_error)?;
     serialize_core_json(&result, "sync run result")
 }
 
 pub(crate) async fn change_preset_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     preset_json: String,
     confirm_shrink: bool,
 ) -> SonaCoreBindingResult<String> {
     let preset: SyncPresetV1 = parse_core_json(&preset_json, "sync preset")?;
-    let status = application(&app_data_dir)?
+    let status = application(context)?
         .change_preset(preset, confirm_shrink)
         .await
         .map_err(sync_error)?;
@@ -279,12 +279,12 @@ pub(crate) async fn change_preset_json(
 }
 
 pub(crate) async fn change_master_password_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<()> {
     let request: ChangePasswordRequest =
         parse_core_json(&request_json, "sync password change request")?;
-    application(&app_data_dir)?
+    application(context)?
         .change_master_password(
             &request.current_master_password,
             &request.next_master_password,
@@ -293,38 +293,40 @@ pub(crate) async fn change_master_password_json(
         .map_err(sync_error)
 }
 
-pub(crate) async fn generate_recovery_key(app_data_dir: String) -> SonaCoreBindingResult<String> {
-    application(&app_data_dir)?
+pub(crate) async fn generate_recovery_key(
+    context: impl Into<ContextSource>,
+) -> SonaCoreBindingResult<String> {
+    application(context)?
         .generate_recovery_key()
         .await
         .map_err(sync_error)
 }
 
-pub(crate) fn list_conflicts_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
-    let conflicts = application(&app_data_dir)?
-        .list_conflicts()
-        .map_err(sync_error)?;
+pub(crate) fn list_conflicts_json(
+    context: impl Into<ContextSource>,
+) -> SonaCoreBindingResult<String> {
+    let conflicts = application(context)?.list_conflicts().map_err(sync_error)?;
     serialize_core_json(&conflicts, "sync conflicts")
 }
 
 pub(crate) fn get_conflict_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     conflict_id: String,
 ) -> SonaCoreBindingResult<String> {
-    let conflict = application(&app_data_dir)?
+    let conflict = application(context)?
         .get_conflict(&conflict_id)
         .map_err(sync_error)?;
     serialize_core_json(&conflict, "sync conflict")
 }
 
 pub(crate) fn resolve_conflict_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     conflict_id: String,
     resolution_json: String,
 ) -> SonaCoreBindingResult<()> {
     let resolution: SyncConflictResolution =
         parse_core_json(&resolution_json, "sync conflict resolution")?;
-    application(&app_data_dir)?
+    application(context)?
         .resolve_conflict(&conflict_id, resolution)
         .map_err(sync_error)
 }
@@ -357,9 +359,9 @@ pub(crate) async fn test_provider_v1(
 }
 
 pub(crate) async fn get_status_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
 ) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
-    application(&app_data_dir)?
+    application(context)?
         .status()
         .await
         .map(Into::into)
@@ -367,11 +369,11 @@ pub(crate) async fn get_status_v1(
 }
 
 pub(crate) async fn create_vault_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiSyncCreateRequestV1,
 ) -> SonaCoreBindingResult<FfiSyncCreateResultV1> {
     let provider = provider_input_from_ffi(&request.provider)?;
-    let result = application(&app_data_dir)?
+    let result = application(context)?
         .create(
             provider,
             request.preset.into(),
@@ -389,11 +391,11 @@ pub(crate) async fn create_vault_v1(
 }
 
 pub(crate) async fn preview_join_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiSyncJoinRequestV1,
 ) -> SonaCoreBindingResult<FfiSyncJoinPreviewV1> {
     let provider = provider_input_from_ffi(&request.provider)?;
-    application(&app_data_dir)?
+    application(context)?
         .preview_join(
             provider,
             &request.vault_id,
@@ -405,11 +407,11 @@ pub(crate) async fn preview_join_v1(
 }
 
 pub(crate) async fn join_vault_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiSyncJoinRequestV1,
 ) -> SonaCoreBindingResult<FfiSyncRunResultV1> {
     let provider = provider_input_from_ffi(&request.provider)?;
-    application(&app_data_dir)?
+    application(context)?
         .join(
             provider,
             &request.vault_id,
@@ -421,11 +423,11 @@ pub(crate) async fn join_vault_v1(
 }
 
 pub(crate) async fn unlock_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiSyncUnlockRequestV1,
     recovery: bool,
 ) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
-    let application = application(&app_data_dir)?;
+    let application = application(context)?;
     let provider_password = request.provider_password.expose().as_bytes().to_vec();
     let status = if recovery {
         let recovery_key = request
@@ -449,10 +451,10 @@ pub(crate) async fn unlock_v1(
 }
 
 pub(crate) async fn set_paused_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     paused: bool,
 ) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
-    application(&app_data_dir)?
+    application(context)?
         .set_paused(paused)
         .await
         .map(Into::into)
@@ -460,17 +462,19 @@ pub(crate) async fn set_paused_v1(
 }
 
 pub(crate) async fn disconnect_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
 ) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
-    application(&app_data_dir)?
+    application(context)?
         .disconnect()
         .await
         .map(Into::into)
         .map_err(sync_error)
 }
 
-pub(crate) async fn run_now_v1(app_data_dir: String) -> SonaCoreBindingResult<FfiSyncRunResultV1> {
-    application(&app_data_dir)?
+pub(crate) async fn run_now_v1(
+    context: impl Into<ContextSource>,
+) -> SonaCoreBindingResult<FfiSyncRunResultV1> {
+    application(context)?
         .run()
         .await
         .map(Into::into)
@@ -478,11 +482,11 @@ pub(crate) async fn run_now_v1(app_data_dir: String) -> SonaCoreBindingResult<Ff
 }
 
 pub(crate) async fn change_preset_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     preset: FfiSyncPresetV1,
     confirm_shrink: bool,
 ) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
-    application(&app_data_dir)?
+    application(context)?
         .change_preset(preset.into(), confirm_shrink)
         .await
         .map(Into::into)
@@ -490,10 +494,10 @@ pub(crate) async fn change_preset_v1(
 }
 
 pub(crate) async fn change_master_password_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiSyncChangePasswordRequestV1,
 ) -> SonaCoreBindingResult<()> {
-    application(&app_data_dir)?
+    application(context)?
         .change_master_password(
             request.current_master_password.expose(),
             request.next_master_password.expose(),
@@ -503,9 +507,9 @@ pub(crate) async fn change_master_password_v1(
 }
 
 pub(crate) fn list_conflicts_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
 ) -> SonaCoreBindingResult<Vec<FfiSyncConflictSummaryV1>> {
-    Ok(application(&app_data_dir)?
+    Ok(application(context)?
         .list_conflicts()
         .map_err(sync_error)?
         .into_iter()
@@ -514,10 +518,10 @@ pub(crate) fn list_conflicts_v1(
 }
 
 pub(crate) fn get_conflict_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     conflict_id: String,
 ) -> SonaCoreBindingResult<Option<FfiSyncConflictDetailV1>> {
-    application(&app_data_dir)?
+    application(context)?
         .get_conflict(&conflict_id)
         .map_err(sync_error)?
         .map(sync_conflict_detail_to_ffi)
@@ -526,11 +530,11 @@ pub(crate) fn get_conflict_v1(
 }
 
 pub(crate) fn resolve_conflict_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     conflict_id: String,
     resolution: FfiSyncConflictResolutionV1,
 ) -> SonaCoreBindingResult<()> {
-    application(&app_data_dir)?
+    application(context)?
         .resolve_conflict(&conflict_id, resolution.into())
         .map_err(sync_error)
 }
@@ -696,10 +700,10 @@ mod tests {
         register_sync_secret_store_for_app_data_dir(&first_path, first_store.clone()).unwrap();
         register_sync_secret_store_for_app_data_dir(&second_path, second_store.clone()).unwrap();
 
-        let first_proxy = application_context(&first_path)
+        let first_proxy = crate::application_context::application_context(&first_path)
             .unwrap()
             .sync_secret_store();
-        let second_proxy = application_context(&second_path)
+        let second_proxy = crate::application_context::application_context(&second_path)
             .unwrap()
             .sync_secret_store();
         first_proxy
@@ -727,11 +731,11 @@ mod tests {
     async fn path_registration_updates_an_existing_application_context() {
         let directory = tempfile::tempdir().unwrap();
         let app_data_dir = directory.path().to_string_lossy().into_owned();
-        let _application = application(&app_data_dir).unwrap();
+        let _application = application(app_data_dir.as_str()).unwrap();
         let store = Arc::new(MemoryFfiSecretStore::default());
 
         register_sync_secret_store_for_app_data_dir(&app_data_dir, store.clone()).unwrap();
-        application_context(&app_data_dir)
+        crate::application_context::application_context(&app_data_dir)
             .unwrap()
             .sync_secret_store()
             .write_secret("vault", b"key")
@@ -750,13 +754,13 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let app_data_dir = directory.path().to_string_lossy().into_owned();
 
-        let first = application(&app_data_dir).unwrap();
-        let second = application(&app_data_dir).unwrap();
+        let first = application(app_data_dir.as_str()).unwrap();
+        let second = application(app_data_dir.as_str()).unwrap();
         assert!(Arc::ptr_eq(&first, &second));
 
         assert!(crate::application_context::release_application_context(&app_data_dir).unwrap());
         assert!(!crate::application_context::release_application_context(&app_data_dir).unwrap());
-        let restarted = application(&app_data_dir).unwrap();
+        let restarted = application(app_data_dir.as_str()).unwrap();
         assert!(!Arc::ptr_eq(&first, &restarted));
         assert_eq!(
             restarted.status().await.unwrap().state,

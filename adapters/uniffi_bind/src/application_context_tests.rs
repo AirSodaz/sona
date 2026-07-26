@@ -263,3 +263,44 @@ fn application_context_cache_protects_active_sync_handles_from_lru_eviction() {
     assert!(registry.contains(&third_path));
     assert!(registry.contains(&fourth_path));
 }
+
+#[test]
+fn a_bridge_reaches_the_same_context_from_a_path_or_from_an_owned_handle() {
+    use crate::application_context::{ContextSource, application_context};
+
+    let root = tempfile::tempdir().unwrap();
+    let app_data_dir = root.path().join("app-data");
+    std::fs::create_dir_all(&app_data_dir).unwrap();
+
+    // The legacy surface carries a path and resolves it through the registry.
+    let from_path = ContextSource::from(app_data_dir.to_string_lossy().as_ref())
+        .resolve()
+        .unwrap();
+    // An explicit handle already owns a context and never consults the registry.
+    let handle = application_context(&app_data_dir).unwrap();
+    let from_handle = ContextSource::from(&handle).resolve().unwrap();
+
+    assert!(
+        Arc::ptr_eq(&from_path, &from_handle),
+        "both sources must reach one context per application-data directory"
+    );
+}
+
+#[test]
+fn an_owned_context_source_resolves_without_touching_the_registry() {
+    use crate::application_context::{ContextSource, HostApplicationContext};
+
+    let root = tempfile::tempdir().unwrap();
+    let app_data_dir = root.path().join("standalone");
+    std::fs::create_dir_all(&app_data_dir).unwrap();
+
+    // Built outside the registry on purpose: resolving it must not consult or
+    // populate the global cache.
+    let mut registry = ApplicationContextRegistry::with_capacity(2);
+    let standalone: Arc<HostApplicationContext> = registry.get_or_open(&app_data_dir).unwrap();
+    drop(registry);
+
+    let resolved = ContextSource::from(&standalone).resolve().unwrap();
+
+    assert!(Arc::ptr_eq(&standalone, &resolved));
+}

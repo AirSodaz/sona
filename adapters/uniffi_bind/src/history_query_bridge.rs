@@ -1,4 +1,4 @@
-use crate::application_context::application_context;
+use crate::application_context::ContextSource;
 use crate::mapper::{history_transcript_to_ffi, history_workspace_result_to_ffi};
 use crate::{
     FfiHistoryItemRecordV1, FfiHistoryWorkspaceQueryRequestV1, FfiHistoryWorkspaceQueryResultV1,
@@ -9,11 +9,11 @@ use sona_core::history::query_repository::HistoryQueryError;
 use sona_core::history::query_service::HistoryQueryService;
 use sona_core::history::workspace_query::validate_workspace_query_request;
 use sona_core::history::{HistoryListOptions, HistoryWorkspaceQueryRequest};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 pub(crate) async fn list_history_items_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     limit: Option<u64>,
     offset: Option<u64>,
 ) -> SonaCoreBindingResult<String> {
@@ -21,14 +21,15 @@ pub(crate) async fn list_history_items_json(
         limit: parse_pagination_value("limit", limit)?,
         offset: parse_pagination_value("offset", offset)?,
     };
+    let context = context.into();
     run_blocking(move || {
-        with_service(&app_data_dir, |service| service.list_items(opts)).and_then(canonical_json)
+        with_service(context, |service| service.list_items(opts)).and_then(canonical_json)
     })
     .await
 }
 
 pub(crate) async fn list_history_items_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     limit: Option<u64>,
     offset: Option<u64>,
 ) -> SonaCoreBindingResult<Vec<FfiHistoryItemRecordV1>> {
@@ -36,73 +37,74 @@ pub(crate) async fn list_history_items_v1(
         limit: parse_typed_pagination_value("limit", limit)?,
         offset: parse_typed_pagination_value("offset", offset)?,
     };
+    let context = context.into();
     run_blocking(move || {
-        with_typed_service(&app_data_dir, |service| service.list_items(opts))
+        with_typed_service(context, |service| service.list_items(opts))
             .map(|items| items.into_iter().map(Into::into).collect())
     })
     .await
 }
 
 pub(crate) async fn query_history_workspace_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
+    let context = context.into();
     run_blocking(move || {
         let request: HistoryWorkspaceQueryRequest =
             serde_json::from_str(&request_json).map_err(history_query_error)?;
-        with_service(&app_data_dir, |service| service.query_workspace(request))
-            .and_then(canonical_json)
+        with_service(context, |service| service.query_workspace(request)).and_then(canonical_json)
     })
     .await
 }
 
 pub(crate) async fn query_history_workspace_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiHistoryWorkspaceQueryRequestV1,
 ) -> SonaCoreBindingResult<FfiHistoryWorkspaceQueryResultV1> {
     let request: HistoryWorkspaceQueryRequest = request.try_into().map_err(history_input_error)?;
     validate_workspace_query_request(&request).map_err(history_typed_query_error)?;
+    let context = context.into();
     run_blocking(move || {
-        with_typed_service(&app_data_dir, |service| service.query_workspace(request))
+        with_typed_service(context, |service| service.query_workspace(request))
             .and_then(|result| history_workspace_result_to_ffi(result).map_err(history_query_error))
     })
     .await
 }
 
 pub(crate) async fn load_history_transcript_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     history_id: String,
 ) -> SonaCoreBindingResult<String> {
+    let context = context.into();
     run_blocking(move || {
-        with_service(&app_data_dir, |service| {
-            service.load_transcript(&history_id)
-        })
-        .and_then(canonical_json)
+        with_service(context, |service| service.load_transcript(&history_id))
+            .and_then(canonical_json)
     })
     .await
 }
 
 pub(crate) async fn load_history_transcript_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     history_id: String,
 ) -> SonaCoreBindingResult<Option<Vec<FfiTranscriptSegment>>> {
     validate_nonblank_input("history ID", &history_id)?;
+    let context = context.into();
     run_blocking(move || {
-        with_typed_service(&app_data_dir, |service| {
-            service.load_transcript(&history_id)
-        })
-        .map(history_transcript_to_ffi)
+        with_typed_service(context, |service| service.load_transcript(&history_id))
+            .map(history_transcript_to_ffi)
     })
     .await
 }
 
 pub(crate) async fn list_history_transcript_snapshots_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     history_id: String,
 ) -> SonaCoreBindingResult<Vec<FfiTranscriptSnapshotMetadataV1>> {
     validate_nonblank_input("history ID", &history_id)?;
+    let context = context.into();
     run_blocking(move || {
-        with_typed_service(&app_data_dir, |service| {
+        with_typed_service(context, |service| {
             service.list_transcript_snapshots(&history_id)
         })
         .map(|snapshots| snapshots.into_iter().map(Into::into).collect())
@@ -111,11 +113,12 @@ pub(crate) async fn list_history_transcript_snapshots_v1(
 }
 
 pub(crate) async fn list_history_transcript_snapshots_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     history_id: String,
 ) -> SonaCoreBindingResult<String> {
+    let context = context.into();
     run_blocking(move || {
-        with_service(&app_data_dir, |service| {
+        with_service(context, |service| {
             service.list_transcript_snapshots(&history_id)
         })
         .and_then(canonical_json)
@@ -124,12 +127,13 @@ pub(crate) async fn list_history_transcript_snapshots_json(
 }
 
 pub(crate) async fn load_history_transcript_snapshot_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     history_id: String,
     snapshot_id: String,
 ) -> SonaCoreBindingResult<String> {
+    let context = context.into();
     run_blocking(move || {
-        with_service(&app_data_dir, |service| {
+        with_service(context, |service| {
             service.load_transcript_snapshot(&history_id, &snapshot_id)
         })
         .and_then(canonical_json)
@@ -138,14 +142,15 @@ pub(crate) async fn load_history_transcript_snapshot_json(
 }
 
 pub(crate) async fn load_history_transcript_snapshot_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     history_id: String,
     snapshot_id: String,
 ) -> SonaCoreBindingResult<Option<FfiTranscriptSnapshotRecordV1>> {
     validate_nonblank_input("history ID", &history_id)?;
     validate_nonblank_input("snapshot ID", &snapshot_id)?;
+    let context = context.into();
     run_blocking(move || {
-        with_typed_service(&app_data_dir, |service| {
+        with_typed_service(context, |service| {
             service.load_transcript_snapshot(&history_id, &snapshot_id)
         })
         .map(|snapshot| snapshot.map(Into::into))
@@ -164,25 +169,23 @@ where
 }
 
 fn with_service<T>(
-    app_data_dir: &str,
+    context: ContextSource,
     operation: impl FnOnce(HistoryQueryService) -> Result<T, HistoryQueryError>,
 ) -> SonaCoreBindingResult<T> {
-    let app_data_dir =
-        std::path::absolute(PathBuf::from(app_data_dir)).map_err(history_query_error)?;
+    let app_data_dir = context.app_data_dir().map_err(history_query_error)?;
     ensure_existing_directory(&app_data_dir)?;
-    let context = application_context(&app_data_dir).map_err(history_query_error)?;
+    let context = context.resolve().map_err(history_query_error)?;
     let repository = context.history_store();
     operation(HistoryQueryService::new(Arc::new(repository))).map_err(history_query_error)
 }
 
 fn with_typed_service<T>(
-    app_data_dir: &str,
+    context: ContextSource,
     operation: impl FnOnce(HistoryQueryService) -> Result<T, HistoryQueryError>,
 ) -> SonaCoreBindingResult<T> {
-    let app_data_dir =
-        std::path::absolute(PathBuf::from(app_data_dir)).map_err(history_query_error)?;
+    let app_data_dir = context.app_data_dir().map_err(history_query_error)?;
     ensure_existing_directory(&app_data_dir)?;
-    let context = application_context(&app_data_dir).map_err(history_query_error)?;
+    let context = context.resolve().map_err(history_query_error)?;
     let repository = context.history_store();
     operation(HistoryQueryService::new(Arc::new(repository))).map_err(history_typed_query_error)
 }

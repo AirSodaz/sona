@@ -100,6 +100,23 @@ caller still holds is never evicted, because reopening that path would create a
 second connection pool, migration run, and service graph for one directory.
 The cache may exceed capacity until its callers release.
 
+**Two ways in, one implementation.** UniFFI bridges take a `ContextSource`
+rather than a directory string, so the registry lookup happens at one edge
+instead of inside domain code. A source is either a path — resolved through the
+registry, which is what the legacy free functions pass — or an owned context,
+which resolves to itself and never touches the registry.
+
+`SonaContext` is the explicit composition root built on that: it resolves once
+at construction, holds the result, and exposes the directory-scoped operations
+as methods. Holding it also pins the registry entry, so the handle's context
+stays the one context for its directory for as long as it lives. Its methods are
+generated from the exported free functions, and
+`scripts/multisurface-contracts.test.js` asserts the handle covers every
+directory-scoped operation, so the two surfaces cannot drift.
+
+The free functions remain: this is additive, and the exported ABI kept every
+existing entry point.
+
 ### Application ownership today
 
 Most use-case services (History, Tag, Automation, Backup, Recovery, LLM tasks,

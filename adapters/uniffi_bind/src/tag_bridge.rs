@@ -1,4 +1,4 @@
-use crate::application_context::application_context;
+use crate::application_context::ContextSource;
 use crate::{
     FfiTagCreateInputV1, FfiTagRecordV1, FfiTagRepositorySnapshotV1, FfiTagUpdateInputV1,
     SonaCoreBindingError, SonaCoreBindingResult,
@@ -13,10 +13,10 @@ use sona_sqlite::SqliteTagAdapter;
 use std::sync::Arc;
 
 pub(crate) fn load_tag_repository_state_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
 ) -> SonaCoreBindingResult<String> {
     with_tag_adapter(
-        &app_data_dir,
+        context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
         |adapter| adapter.load_state(),
@@ -25,10 +25,10 @@ pub(crate) fn load_tag_repository_state_json(
 }
 
 pub(crate) fn load_tag_repository_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
 ) -> SonaCoreBindingResult<FfiTagRepositorySnapshotV1> {
     with_tag_adapter(
-        &app_data_dir,
+        context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
         |adapter| adapter.load_state(),
@@ -37,12 +37,12 @@ pub(crate) fn load_tag_repository_v1(
 }
 
 pub(crate) fn replace_tags_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     tags_json: String,
 ) -> SonaCoreBindingResult<()> {
     let tags = parse_json_array("tags", &tags_json)?;
     with_tag_input_adapter(
-        &app_data_dir,
+        context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
         |adapter| adapter.replace_tags_json(tags),
@@ -50,7 +50,7 @@ pub(crate) fn replace_tags_json(
 }
 
 pub(crate) fn replace_tags_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     tags: Vec<FfiTagRecordV1>,
 ) -> SonaCoreBindingResult<()> {
     let tags = tags
@@ -63,7 +63,7 @@ pub(crate) fn replace_tags_v1(
         })
         .collect::<SonaCoreBindingResult<Vec<_>>>()?;
     with_tag_adapter(
-        &app_data_dir,
+        context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
         |adapter| adapter.replace_tags(tags),
@@ -71,11 +71,11 @@ pub(crate) fn replace_tags_v1(
 }
 
 pub(crate) fn create_tag_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     input_json: String,
 ) -> SonaCoreBindingResult<String> {
     create_tag_json_with_runtime(
-        app_data_dir,
+        context,
         input_json,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
@@ -83,11 +83,11 @@ pub(crate) fn create_tag_json(
 }
 
 pub(crate) fn create_tag_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     input: FfiTagCreateInputV1,
 ) -> SonaCoreBindingResult<FfiTagRecordV1> {
     create_tag_v1_with_runtime(
-        app_data_dir,
+        context,
         input,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
@@ -95,42 +95,48 @@ pub(crate) fn create_tag_v1(
 }
 
 pub(crate) fn update_tag_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     tag_id: String,
     updates_json: String,
 ) -> SonaCoreBindingResult<String> {
-    update_tag_json_with_clock(app_data_dir, tag_id, updates_json, Arc::new(SystemClock))
+    update_tag_json_with_clock(context, tag_id, updates_json, Arc::new(SystemClock))
 }
 
 pub(crate) fn update_tag_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     tag_id: String,
     updates: FfiTagUpdateInputV1,
 ) -> SonaCoreBindingResult<Option<FfiTagRecordV1>> {
-    update_tag_v1_with_clock(app_data_dir, tag_id, updates, Arc::new(SystemClock))
+    update_tag_v1_with_clock(context, tag_id, updates, Arc::new(SystemClock))
 }
 
-pub(crate) fn delete_tag(app_data_dir: String, tag_id: String) -> SonaCoreBindingResult<()> {
+pub(crate) fn delete_tag(
+    context: impl Into<ContextSource>,
+    tag_id: String,
+) -> SonaCoreBindingResult<()> {
     let tag_id = parse_tag_id("tag ID", &tag_id)?;
     with_tag_adapter(
-        &app_data_dir,
+        context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
         |adapter| adapter.delete_tag(&tag_id),
     )
 }
 
-pub(crate) fn delete_tag_v1(app_data_dir: String, tag_id: String) -> SonaCoreBindingResult<()> {
-    delete_tag(app_data_dir, tag_id)
+pub(crate) fn delete_tag_v1(
+    context: impl Into<ContextSource>,
+    tag_id: String,
+) -> SonaCoreBindingResult<()> {
+    delete_tag(context, tag_id)
 }
 
 pub(crate) fn reorder_tags_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     tag_ids_json: String,
 ) -> SonaCoreBindingResult<String> {
     let tag_ids = parse_tag_ids(&tag_ids_json)?;
     with_tag_adapter(
-        &app_data_dir,
+        context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
         |adapter| adapter.reorder_tags(tag_ids),
@@ -139,12 +145,12 @@ pub(crate) fn reorder_tags_json(
 }
 
 pub(crate) fn reorder_tags_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     tag_ids: Vec<String>,
 ) -> SonaCoreBindingResult<Vec<FfiTagRecordV1>> {
     let tag_ids = normalize_tag_ids(tag_ids)?;
     with_tag_adapter(
-        &app_data_dir,
+        context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
         |adapter| adapter.reorder_tags(tag_ids),
@@ -153,14 +159,14 @@ pub(crate) fn reorder_tags_v1(
 }
 
 pub(crate) fn set_active_tag_id(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     tag_id: Option<String>,
 ) -> SonaCoreBindingResult<()> {
     let tag_id = tag_id
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty());
     with_tag_adapter(
-        &app_data_dir,
+        context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
         |adapter| adapter.set_active_tag_id(tag_id),
@@ -168,66 +174,64 @@ pub(crate) fn set_active_tag_id(
 }
 
 pub(crate) fn set_active_tag_id_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     tag_id: Option<String>,
 ) -> SonaCoreBindingResult<()> {
-    set_active_tag_id(app_data_dir, tag_id)
+    set_active_tag_id(context, tag_id)
 }
 
 fn create_tag_json_with_runtime(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     input_json: String,
     ids: Arc<dyn TagIdGenerator>,
     clock: Arc<dyn UnixMillisClock>,
 ) -> SonaCoreBindingResult<String> {
     let input = parse_json_object_as::<TagCreateInput>("tag input", &input_json)?;
-    with_tag_adapter(&app_data_dir, ids, clock, |adapter| {
-        adapter.create_tag(input)
-    })
-    .and_then(serialize_tag)
+    with_tag_adapter(context, ids, clock, |adapter| adapter.create_tag(input))
+        .and_then(serialize_tag)
 }
 
 fn create_tag_v1_with_runtime(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     input: FfiTagCreateInputV1,
     ids: Arc<dyn TagIdGenerator>,
     clock: Arc<dyn UnixMillisClock>,
 ) -> SonaCoreBindingResult<FfiTagRecordV1> {
-    with_tag_adapter(&app_data_dir, ids, clock, |adapter| {
+    with_tag_adapter(context, ids, clock, |adapter| {
         adapter.create_tag(input.into())
     })
     .map(Into::into)
 }
 
 fn update_tag_json_with_clock(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     tag_id: String,
     updates_json: String,
     clock: Arc<dyn UnixMillisClock>,
 ) -> SonaCoreBindingResult<String> {
     let tag_id = parse_tag_id("tag ID", &tag_id)?;
     let updates = parse_json_object("tag updates", &updates_json)?;
-    with_tag_input_adapter(&app_data_dir, Arc::new(UuidGenerator), clock, |adapter| {
+    with_tag_input_adapter(context, Arc::new(UuidGenerator), clock, |adapter| {
         adapter.update_tag_json(&tag_id, updates)
     })
     .and_then(serialize_tag)
 }
 
 fn update_tag_v1_with_clock(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     tag_id: String,
     updates: FfiTagUpdateInputV1,
     clock: Arc<dyn UnixMillisClock>,
 ) -> SonaCoreBindingResult<Option<FfiTagRecordV1>> {
     let tag_id = parse_tag_id("tag ID", &tag_id)?;
-    with_tag_adapter(&app_data_dir, Arc::new(UuidGenerator), clock, |adapter| {
+    with_tag_adapter(context, Arc::new(UuidGenerator), clock, |adapter| {
         adapter.update_tag(&tag_id, updates.into())
     })
     .map(|tag| tag.map(Into::into))
 }
 
 fn with_tag_adapter<T, F>(
-    app_data_dir: &str,
+    context: impl Into<ContextSource>,
     ids: Arc<dyn TagIdGenerator>,
     clock: Arc<dyn UnixMillisClock>,
     operation: F,
@@ -235,13 +239,13 @@ fn with_tag_adapter<T, F>(
 where
     F: FnOnce(&SqliteTagAdapter) -> Result<T, TagError>,
 {
-    let context = application_context(app_data_dir).map_err(tag_error)?;
+    let context = context.into().resolve().map_err(tag_error)?;
     let adapter = context.sqlite().tag_adapter(ids, clock);
     operation(&adapter).map_err(tag_error)
 }
 
 fn with_tag_input_adapter<T, F>(
-    app_data_dir: &str,
+    context: impl Into<ContextSource>,
     ids: Arc<dyn TagIdGenerator>,
     clock: Arc<dyn UnixMillisClock>,
     operation: F,
@@ -249,7 +253,7 @@ fn with_tag_input_adapter<T, F>(
 where
     F: FnOnce(&SqliteTagAdapter) -> Result<T, TagError>,
 {
-    let context = application_context(app_data_dir).map_err(tag_error)?;
+    let context = context.into().resolve().map_err(tag_error)?;
     let adapter = context.sqlite().tag_adapter(ids, clock);
     operation(&adapter).map_err(tag_input_error)
 }
@@ -347,7 +351,7 @@ fn tag_input_error(error: TagError) -> SonaCoreBindingError {
 
 #[cfg(test)]
 fn create_tag_json_at(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     input_json: String,
     id: &'static str,
     now_ms: u64,
@@ -360,7 +364,7 @@ fn create_tag_json_at(
     }
 
     create_tag_json_with_runtime(
-        app_data_dir,
+        context,
         input_json,
         Arc::new(FixedId(id)),
         Arc::new(FixedClock(now_ms)),
@@ -369,7 +373,7 @@ fn create_tag_json_at(
 
 #[cfg(test)]
 fn create_tag_v1_at(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     input: FfiTagCreateInputV1,
     id: &'static str,
     now_ms: u64,
@@ -382,7 +386,7 @@ fn create_tag_v1_at(
     }
 
     create_tag_v1_with_runtime(
-        app_data_dir,
+        context,
         input,
         Arc::new(FixedId(id)),
         Arc::new(FixedClock(now_ms)),
@@ -391,27 +395,22 @@ fn create_tag_v1_at(
 
 #[cfg(test)]
 fn update_tag_json_at(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     tag_id: String,
     updates_json: String,
     now_ms: u64,
 ) -> SonaCoreBindingResult<String> {
-    update_tag_json_with_clock(
-        app_data_dir,
-        tag_id,
-        updates_json,
-        Arc::new(FixedClock(now_ms)),
-    )
+    update_tag_json_with_clock(context, tag_id, updates_json, Arc::new(FixedClock(now_ms)))
 }
 
 #[cfg(test)]
 fn update_tag_v1_at(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     tag_id: String,
     updates: FfiTagUpdateInputV1,
     now_ms: u64,
 ) -> SonaCoreBindingResult<Option<FfiTagRecordV1>> {
-    update_tag_v1_with_clock(app_data_dir, tag_id, updates, Arc::new(FixedClock(now_ms)))
+    update_tag_v1_with_clock(context, tag_id, updates, Arc::new(FixedClock(now_ms)))
 }
 
 #[cfg(test)]
@@ -439,7 +438,7 @@ mod tests {
     use std::fs;
     use std::sync::Arc;
 
-    fn app_data_dir(dir: &tempfile::TempDir) -> String {
+    fn context(dir: &tempfile::TempDir) -> String {
         dir.path().to_string_lossy().into_owned()
     }
 
@@ -451,7 +450,7 @@ mod tests {
     fn load_returns_empty_canonical_state() {
         let dir = tempfile::tempdir().unwrap();
 
-        let output = load_tag_repository_state_json(app_data_dir(&dir)).unwrap();
+        let output = load_tag_repository_state_json(context(&dir)).unwrap();
 
         assert_eq!(output, r#"{"tags":[],"activeTagId":null}"#);
     }
@@ -464,8 +463,8 @@ mod tests {
             {"id":"first","name":"First","defaults":{"translationLanguage":"en"}}
         ]);
 
-        replace_tags_json(app_data_dir(&dir), tags.to_string()).unwrap();
-        let state = parse_json(&load_tag_repository_state_json(app_data_dir(&dir)).unwrap());
+        replace_tags_json(context(&dir), tags.to_string()).unwrap();
+        let state = parse_json(&load_tag_repository_state_json(context(&dir)).unwrap());
 
         assert_eq!(state["tags"][0]["id"], "second");
         assert_eq!(state["tags"][1]["id"], "first");
@@ -478,7 +477,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
 
         let output = create_tag_json_at(
-            app_data_dir(&dir),
+            context(&dir),
             json!({"name":"New","defaults":{}}).to_string(),
             "generated-id",
             42,
@@ -490,7 +489,7 @@ mod tests {
         assert_eq!(tag["createdAt"], 42);
         assert_eq!(tag["updatedAt"], 42);
         assert_eq!(
-            parse_json(&load_tag_repository_state_json(app_data_dir(&dir)).unwrap())["tags"][0],
+            parse_json(&load_tag_repository_state_json(context(&dir)).unwrap())["tags"][0],
             tag
         );
     }
@@ -499,7 +498,7 @@ mod tests {
     fn typed_v1_create_update_replace_and_selection_preserve_records() {
         let dir = tempfile::tempdir().unwrap();
         let created = create_tag_v1_at(
-            app_data_dir(&dir),
+            context(&dir),
             FfiTagCreateInputV1 {
                 name: "Typed".to_string(),
                 description: Some("Description".to_string()),
@@ -516,7 +515,7 @@ mod tests {
         assert_eq!(created.updated_at, 42);
 
         let updated = update_tag_v1_at(
-            app_data_dir(&dir),
+            context(&dir),
             " typed-id ".to_string(),
             FfiTagUpdateInputV1 {
                 name: Some("Updated".to_string()),
@@ -538,16 +537,16 @@ mod tests {
             updated_at: 13,
             ..updated
         };
-        replace_tags_v1(app_data_dir(&dir), vec![replacement.clone()]).unwrap();
-        set_active_tag_id_v1(app_data_dir(&dir), Some(" replacement ".to_string())).unwrap();
+        replace_tags_v1(context(&dir), vec![replacement.clone()]).unwrap();
+        set_active_tag_id_v1(context(&dir), Some(" replacement ".to_string())).unwrap();
 
-        let snapshot = load_tag_repository_v1(app_data_dir(&dir)).unwrap();
+        let snapshot = load_tag_repository_v1(context(&dir)).unwrap();
         assert_eq!(snapshot.tags, vec![replacement]);
         assert_eq!(snapshot.active_tag_id.as_deref(), Some("replacement"));
 
-        delete_tag_v1(app_data_dir(&dir), " replacement ".to_string()).unwrap();
+        delete_tag_v1(context(&dir), " replacement ".to_string()).unwrap();
         assert!(
-            load_tag_repository_v1(app_data_dir(&dir))
+            load_tag_repository_v1(context(&dir))
                 .unwrap()
                 .tags
                 .is_empty()
@@ -558,20 +557,20 @@ mod tests {
     fn update_returns_canonical_nullable_record_json() {
         let dir = tempfile::tempdir().unwrap();
         replace_tags_json(
-            app_data_dir(&dir),
+            context(&dir),
             json!([{"id":"tag-1","name":"Before"}]).to_string(),
         )
         .unwrap();
 
         let updated = update_tag_json_at(
-            app_data_dir(&dir),
+            context(&dir),
             " tag-1 ".to_string(),
             json!({"name":"After"}).to_string(),
             99,
         )
         .unwrap();
         let missing = update_tag_json_at(
-            app_data_dir(&dir),
+            context(&dir),
             "missing".to_string(),
             json!({"name":"Ignored"}).to_string(),
             100,
@@ -587,15 +586,15 @@ mod tests {
     fn delete_returns_unit_and_removes_tag() {
         let dir = tempfile::tempdir().unwrap();
         replace_tags_json(
-            app_data_dir(&dir),
+            context(&dir),
             json!([{"id":"tag-1","name":"Tag"}]).to_string(),
         )
         .unwrap();
 
-        delete_tag(app_data_dir(&dir), " tag-1 ".to_string()).unwrap();
+        delete_tag(context(&dir), " tag-1 ".to_string()).unwrap();
 
         assert_eq!(
-            load_tag_repository_state_json(app_data_dir(&dir)).unwrap(),
+            load_tag_repository_state_json(context(&dir)).unwrap(),
             r#"{"tags":[],"activeTagId":null}"#
         );
     }
@@ -604,7 +603,7 @@ mod tests {
     fn reorder_returns_canonical_ordered_array() {
         let dir = tempfile::tempdir().unwrap();
         replace_tags_json(
-            app_data_dir(&dir),
+            context(&dir),
             json!([
                 {"id":"first","name":"First"},
                 {"id":"second","name":"Second"}
@@ -614,8 +613,7 @@ mod tests {
         .unwrap();
 
         let output =
-            reorder_tags_json(app_data_dir(&dir), json!([" second ", "first"]).to_string())
-                .unwrap();
+            reorder_tags_json(context(&dir), json!([" second ", "first"]).to_string()).unwrap();
 
         assert_eq!(parse_json(&output)[0]["id"], "second");
         assert_eq!(parse_json(&output)[1]["id"], "first");
@@ -625,10 +623,10 @@ mod tests {
     fn set_active_trims_ids_and_persists_null() {
         let dir = tempfile::tempdir().unwrap();
 
-        set_active_tag_id(app_data_dir(&dir), Some(" tag-1 ".to_string())).unwrap();
-        let active = parse_json(&load_tag_repository_state_json(app_data_dir(&dir)).unwrap());
-        set_active_tag_id(app_data_dir(&dir), Some("   ".to_string())).unwrap();
-        let cleared = parse_json(&load_tag_repository_state_json(app_data_dir(&dir)).unwrap());
+        set_active_tag_id(context(&dir), Some(" tag-1 ".to_string())).unwrap();
+        let active = parse_json(&load_tag_repository_state_json(context(&dir)).unwrap());
+        set_active_tag_id(context(&dir), Some("   ".to_string())).unwrap();
+        let cleared = parse_json(&load_tag_repository_state_json(context(&dir)).unwrap());
 
         assert_eq!(active["activeTagId"], "tag-1");
         assert_eq!(cleared["activeTagId"], Value::Null);
@@ -638,17 +636,16 @@ mod tests {
     fn malformed_payloads_are_invalid_input() {
         let dir = tempfile::tempdir().unwrap();
         let calls = [
-            replace_tags_json(app_data_dir(&dir), "{".to_string()),
-            replace_tags_json(app_data_dir(&dir), "{}".to_string()),
-            create_tag_json_at(app_data_dir(&dir), "[]".to_string(), "id", 1).map(drop),
-            create_tag_json_at(app_data_dir(&dir), "{}".to_string(), "id", 1).map(drop),
-            update_tag_json_at(app_data_dir(&dir), "id".to_string(), "[]".to_string(), 1).map(drop),
-            update_tag_json_at(app_data_dir(&dir), "   ".to_string(), "{}".to_string(), 1)
-                .map(drop),
-            delete_tag(app_data_dir(&dir), "".to_string()),
-            reorder_tags_json(app_data_dir(&dir), "{}".to_string()).map(drop),
-            reorder_tags_json(app_data_dir(&dir), json!(["ok", 2]).to_string()).map(drop),
-            reorder_tags_json(app_data_dir(&dir), json!([" "]).to_string()).map(drop),
+            replace_tags_json(context(&dir), "{".to_string()),
+            replace_tags_json(context(&dir), "{}".to_string()),
+            create_tag_json_at(context(&dir), "[]".to_string(), "id", 1).map(drop),
+            create_tag_json_at(context(&dir), "{}".to_string(), "id", 1).map(drop),
+            update_tag_json_at(context(&dir), "id".to_string(), "[]".to_string(), 1).map(drop),
+            update_tag_json_at(context(&dir), "   ".to_string(), "{}".to_string(), 1).map(drop),
+            delete_tag(context(&dir), "".to_string()),
+            reorder_tags_json(context(&dir), "{}".to_string()).map(drop),
+            reorder_tags_json(context(&dir), json!(["ok", 2]).to_string()).map(drop),
+            reorder_tags_json(context(&dir), json!([" "]).to_string()).map(drop),
         ];
 
         for result in calls {
@@ -659,7 +656,7 @@ mod tests {
         }
 
         assert!(matches!(
-            reorder_tags_v1(app_data_dir(&dir), vec![" ".to_string()]).unwrap_err(),
+            reorder_tags_v1(context(&dir), vec![" ".to_string()]).unwrap_err(),
             SonaCoreBindingError::InvalidInput { .. }
         ));
     }
@@ -699,7 +696,7 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let error = super::create_tag_json_with_runtime(
-            app_data_dir(&dir),
+            context(&dir),
             json!({"name":"New", "defaults":{}}).to_string(),
             Arc::new(UuidGenerator),
             Arc::new(FailingClock),
@@ -709,7 +706,7 @@ mod tests {
         assert!(matches!(error, SonaCoreBindingError::Tag { .. }));
 
         let typed_error = super::create_tag_v1_with_runtime(
-            app_data_dir(&dir),
+            context(&dir),
             FfiTagCreateInputV1 {
                 name: "New".to_string(),
                 description: None,

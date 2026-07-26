@@ -1,4 +1,4 @@
-use crate::application_context::application_context;
+use crate::application_context::ContextSource;
 use crate::{
     FfiHistoryCompleteLiveDraftRequestV1, FfiHistoryCreateLiveDraftRequestV1,
     FfiHistoryCreateTranscriptSnapshotRequestV1, FfiHistoryDeleteItemsRequestV1,
@@ -27,7 +27,7 @@ use sona_core::history::{
 };
 use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::{DatabaseError, DeferredSqliteHistoryMutationRepository};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 #[derive(Debug, Deserialize)]
@@ -94,21 +94,18 @@ struct LegacyHistoryReassignProjectRequest {
 }
 
 pub(crate) async fn create_history_live_draft_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request = parse_request(&request_json)?;
-    run_mutation(app_data_dir, move |service| {
-        service.create_live_draft(request)
-    })
-    .await
+    run_mutation(context, move |service| service.create_live_draft(request)).await
 }
 
 pub(crate) async fn create_history_live_draft_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiHistoryCreateLiveDraftRequestV1,
 ) -> SonaCoreBindingResult<FfiLiveRecordingDraftResultV1> {
-    run_typed_mutation(app_data_dir, move |service| {
+    run_typed_mutation(context, move |service| {
         service.create_live_draft(request.into())
     })
     .await
@@ -116,7 +113,7 @@ pub(crate) async fn create_history_live_draft_v1(
 }
 
 pub(crate) async fn complete_history_live_draft_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: HistoryCompleteLiveDraftJsonRequest = parse_request(&request_json)?;
@@ -125,26 +122,21 @@ pub(crate) async fn complete_history_live_draft_json(
         segments: parse_legacy_segments(request.segments)?,
         duration: request.duration,
     };
-    run_mutation(app_data_dir, move |service| {
-        service.complete_live_draft(request)
-    })
-    .await
+    run_mutation(context, move |service| service.complete_live_draft(request)).await
 }
 
 pub(crate) async fn complete_history_live_draft_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiHistoryCompleteLiveDraftRequestV1,
 ) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
     let request = request.try_into().map_err(history_input_error)?;
-    run_typed_mutation(app_data_dir, move |service| {
-        service.complete_live_draft(request)
-    })
-    .await
-    .map(Into::into)
+    run_typed_mutation(context, move |service| service.complete_live_draft(request))
+        .await
+        .map(Into::into)
 }
 
 pub(crate) async fn save_history_recording_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
     audio_bytes: Option<Vec<u8>>,
     native_audio_path: Option<String>,
@@ -158,21 +150,21 @@ pub(crate) async fn save_history_recording_json(
         native_audio_path,
         audio_extension: metadata.audio_extension,
     };
-    run_mutation(app_data_dir, move |service| service.save_recording(request)).await
+    run_mutation(context, move |service| service.save_recording(request)).await
 }
 
 pub(crate) async fn save_history_recording_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiHistorySaveRecordingRequestV1,
 ) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
     let request = request.try_into().map_err(history_input_error)?;
-    run_typed_mutation(app_data_dir, move |service| service.save_recording(request))
+    run_typed_mutation(context, move |service| service.save_recording(request))
         .await
         .map(Into::into)
 }
 
 pub(crate) async fn save_history_imported_file_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: HistorySaveImportedFileJsonRequest = parse_request(&request_json)?;
@@ -184,26 +176,21 @@ pub(crate) async fn save_history_imported_file_json(
         tag_ids: normalized_tag_ids(request.tag_ids, request.project_id),
         converted_source_path: request.converted_source_path,
     };
-    run_mutation(app_data_dir, move |service| {
-        service.save_imported_file(request)
-    })
-    .await
+    run_mutation(context, move |service| service.save_imported_file(request)).await
 }
 
 pub(crate) async fn save_history_imported_file_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiHistorySaveImportedFileRequestV1,
 ) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
     let request = request.try_into().map_err(history_input_error)?;
-    run_typed_mutation(app_data_dir, move |service| {
-        service.save_imported_file(request)
-    })
-    .await
-    .map(Into::into)
+    run_typed_mutation(context, move |service| service.save_imported_file(request))
+        .await
+        .map(Into::into)
 }
 
 pub(crate) async fn delete_history_items_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: HistoryDeleteItemsRequest = parse_request(&request_json)?;
@@ -214,7 +201,7 @@ pub(crate) async fn delete_history_items_json(
             .as_millis(),
     )
     .map_err(history_mutation_error)?;
-    run_mutation(app_data_dir, move |service| {
+    run_mutation(context, move |service| {
         service.trash_items(HistoryTrashItemsRequest {
             ids: request.ids,
             deleted_at,
@@ -224,61 +211,55 @@ pub(crate) async fn delete_history_items_json(
 }
 
 pub(crate) async fn trash_history_items_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: HistoryTrashItemsRequest = parse_request(&request_json)?;
-    run_mutation(app_data_dir, move |service| service.trash_items(request)).await
+    run_mutation(context, move |service| service.trash_items(request)).await
 }
 
 pub(crate) async fn trash_history_items_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiHistoryTrashItemsRequestV1,
 ) -> SonaCoreBindingResult<()> {
-    run_typed_mutation(app_data_dir, move |service| {
-        service.trash_items(request.into())
-    })
-    .await
+    run_typed_mutation(context, move |service| service.trash_items(request.into())).await
 }
 
 pub(crate) async fn restore_history_items_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: HistoryDeleteItemsRequest = parse_request(&request_json)?;
-    run_mutation(app_data_dir, move |service| service.restore_items(request)).await
+    run_mutation(context, move |service| service.restore_items(request)).await
 }
 
 pub(crate) async fn restore_history_items_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiHistoryDeleteItemsRequestV1,
 ) -> SonaCoreBindingResult<()> {
-    run_typed_mutation(app_data_dir, move |service| {
+    run_typed_mutation(context, move |service| {
         service.restore_items(request.into())
     })
     .await
 }
 
 pub(crate) async fn purge_history_items_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: HistoryDeleteItemsRequest = parse_request(&request_json)?;
-    run_mutation(app_data_dir, move |service| service.purge_items(request)).await
+    run_mutation(context, move |service| service.purge_items(request)).await
 }
 
 pub(crate) async fn purge_history_items_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiHistoryDeleteItemsRequestV1,
 ) -> SonaCoreBindingResult<()> {
-    run_typed_mutation(app_data_dir, move |service| {
-        service.purge_items(request.into())
-    })
-    .await
+    run_typed_mutation(context, move |service| service.purge_items(request.into())).await
 }
 
 pub(crate) async fn update_history_transcript_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: HistoryUpdateTranscriptJsonRequest = parse_request(&request_json)?;
@@ -286,26 +267,21 @@ pub(crate) async fn update_history_transcript_json(
         history_id: request.history_id,
         segments: parse_legacy_segments(request.segments)?,
     };
-    run_mutation(app_data_dir, move |service| {
-        service.update_transcript(request)
-    })
-    .await
+    run_mutation(context, move |service| service.update_transcript(request)).await
 }
 
 pub(crate) async fn update_history_transcript_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiHistoryUpdateTranscriptRequestV1,
 ) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
     let request = request.try_into().map_err(history_input_error)?;
-    run_typed_mutation(app_data_dir, move |service| {
-        service.update_transcript(request)
-    })
-    .await
-    .map(Into::into)
+    run_typed_mutation(context, move |service| service.update_transcript(request))
+        .await
+        .map(Into::into)
 }
 
 pub(crate) async fn create_history_transcript_snapshot_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: HistoryCreateTranscriptSnapshotJsonRequest = parse_request(&request_json)?;
@@ -314,18 +290,18 @@ pub(crate) async fn create_history_transcript_snapshot_json(
         reason: request.reason,
         segments: parse_legacy_segments(request.segments)?,
     };
-    run_mutation(app_data_dir, move |service| {
+    run_mutation(context, move |service| {
         service.create_transcript_snapshot(request)
     })
     .await
 }
 
 pub(crate) async fn create_history_transcript_snapshot_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiHistoryCreateTranscriptSnapshotRequestV1,
 ) -> SonaCoreBindingResult<FfiTranscriptSnapshotMetadataV1> {
     let request = request.try_into().map_err(history_input_error)?;
-    run_typed_mutation(app_data_dir, move |service| {
+    run_typed_mutation(context, move |service| {
         service.create_transcript_snapshot(request)
     })
     .await
@@ -333,32 +309,29 @@ pub(crate) async fn create_history_transcript_snapshot_v1(
 }
 
 pub(crate) async fn update_history_item_meta_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request = parse_request(&request_json)?;
-    run_mutation(app_data_dir, move |service| {
-        service.update_item_meta(request)
-    })
-    .await
+    run_mutation(context, move |service| service.update_item_meta(request)).await
 }
 
 pub(crate) async fn update_history_item_meta_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiHistoryUpdateItemMetaRequestV1,
 ) -> SonaCoreBindingResult<()> {
-    run_typed_mutation(app_data_dir, move |service| {
+    run_typed_mutation(context, move |service| {
         service.update_item_meta(request.into())
     })
     .await
 }
 
 pub(crate) async fn update_history_project_assignments_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: LegacyHistoryProjectAssignmentsRequest = parse_request(&request_json)?;
-    run_mutation(app_data_dir, move |service| {
+    run_mutation(context, move |service| {
         service.replace_tag_assignments(HistoryReplaceTagAssignmentsRequest {
             ids: request.ids,
             tag_ids: request.project_id.into_iter().collect(),
@@ -368,64 +341,64 @@ pub(crate) async fn update_history_project_assignments_json(
 }
 
 pub(crate) async fn reassign_history_project_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: LegacyHistoryReassignProjectRequest = parse_request(&request_json)?;
-    reassign_history_tag_compat(app_data_dir, request).await
+    reassign_history_tag_compat(context, request).await
 }
 
 pub(crate) async fn update_history_tag_assignments_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: HistoryUpdateTagAssignmentsRequest = parse_request(&request_json)?;
-    run_mutation(app_data_dir, move |service| {
+    run_mutation(context, move |service| {
         service.update_tag_assignments(request)
     })
     .await
 }
 
 pub(crate) async fn update_history_tag_assignments_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiHistoryUpdateTagAssignmentsRequestV1,
 ) -> SonaCoreBindingResult<()> {
-    run_typed_mutation(app_data_dir, move |service| {
+    run_typed_mutation(context, move |service| {
         service.update_tag_assignments(request.into())
     })
     .await
 }
 
 pub(crate) async fn replace_history_tag_assignments_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: HistoryReplaceTagAssignmentsRequest = parse_request(&request_json)?;
-    run_mutation(app_data_dir, move |service| {
+    run_mutation(context, move |service| {
         service.replace_tag_assignments(request)
     })
     .await
 }
 
 pub(crate) async fn replace_history_tag_assignments_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: FfiHistoryReplaceTagAssignmentsRequestV1,
 ) -> SonaCoreBindingResult<()> {
-    run_typed_mutation(app_data_dir, move |service| {
+    run_typed_mutation(context, move |service| {
         service.replace_tag_assignments(request.into())
     })
     .await
 }
 
 async fn reassign_history_tag_compat(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     request: LegacyHistoryReassignProjectRequest,
 ) -> SonaCoreBindingResult<String> {
+    let context = context.into();
     tokio::task::spawn_blocking(move || {
-        let app_data_dir =
-            std::path::absolute(PathBuf::from(app_data_dir)).map_err(history_mutation_error)?;
+        let app_data_dir = context.app_data_dir().map_err(history_mutation_error)?;
         ensure_existing_directory(&app_data_dir)?;
-        let context = application_context(&app_data_dir).map_err(history_mutation_error)?;
+        let context = context.resolve().map_err(history_mutation_error)?;
         let query = HistoryQueryService::new(Arc::new(context.history_store()));
         let mut ids = Vec::new();
         for scope in [HistoryWorkspaceScope::All, HistoryWorkspaceScope::Trash] {
@@ -491,26 +464,32 @@ fn parse_legacy_segments(
         .map_err(history_mutation_error)
 }
 
-async fn run_mutation<T, F>(app_data_dir: String, operation: F) -> SonaCoreBindingResult<String>
+async fn run_mutation<T, F>(
+    context: impl Into<ContextSource>,
+    operation: F,
+) -> SonaCoreBindingResult<String>
 where
     T: serde::Serialize + Send + 'static,
     F: FnOnce(HistoryMutationService) -> Result<T, HistoryMutationError> + Send + 'static,
 {
-    run_mutation_operation(app_data_dir, operation, false)
+    run_mutation_operation(context, operation, false)
         .await
         .and_then(canonical_json)
 }
 
-async fn run_typed_mutation<T, F>(app_data_dir: String, operation: F) -> SonaCoreBindingResult<T>
+async fn run_typed_mutation<T, F>(
+    context: impl Into<ContextSource>,
+    operation: F,
+) -> SonaCoreBindingResult<T>
 where
     T: Send + 'static,
     F: FnOnce(HistoryMutationService) -> Result<T, HistoryMutationError> + Send + 'static,
 {
-    run_mutation_operation(app_data_dir, operation, true).await
+    run_mutation_operation(context, operation, true).await
 }
 
 async fn run_mutation_operation<T, F>(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     operation: F,
     typed_input_errors: bool,
 ) -> SonaCoreBindingResult<T>
@@ -518,22 +497,28 @@ where
     T: Send + 'static,
     F: FnOnce(HistoryMutationService) -> Result<T, HistoryMutationError> + Send + 'static,
 {
+    let context = context.into();
     tokio::task::spawn_blocking(move || {
-        let app_data_dir =
-            std::path::absolute(PathBuf::from(app_data_dir)).map_err(history_mutation_error)?;
+        let app_data_dir = context.app_data_dir().map_err(history_mutation_error)?;
+        // The deferred repository opens lazily, so the source is captured and
+        // resolved only when a database is actually needed.
+        let database_source = context.clone();
         let repository = Arc::new(
             DeferredSqliteHistoryMutationRepository::with_database_provider(
                 app_data_dir,
                 Arc::new(SystemClock),
                 Arc::new(UuidGenerator),
-                |path| {
+                move |path| {
                     if !path.is_dir() {
                         return Err(DatabaseError::ConnectionError(format!(
                             "History app data directory does not exist: {}",
                             path.display()
                         )));
                     }
-                    application_context(path).map(|context| context.sqlite().database())
+                    database_source
+                        .clone()
+                        .resolve()
+                        .map(|context| context.sqlite().database())
                 },
             ),
         );

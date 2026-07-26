@@ -1,44 +1,44 @@
-use crate::application_context::cached_application_context;
+use crate::application_context::ContextSource;
 use crate::{FfiDashboardSnapshotV1, SonaCoreBindingError, SonaCoreBindingResult};
 use sona_core::dashboard::models::DashboardSnapshotDomainModel;
 use sona_sqlite::load_dashboard_snapshot;
-use std::path::PathBuf;
 
 pub(crate) async fn load_dashboard_snapshot_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     deep: bool,
 ) -> SonaCoreBindingResult<String> {
-    let snapshot = load_snapshot(app_data_dir, deep).await?;
+    let snapshot = load_snapshot(context, deep).await?;
     let canonical = serde_json::to_value(snapshot).map_err(dashboard_error)?;
     serde_json::to_string(&canonical).map_err(dashboard_error)
 }
 
 pub(crate) async fn load_dashboard_snapshot_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     deep: bool,
 ) -> SonaCoreBindingResult<FfiDashboardSnapshotV1> {
-    load_snapshot(app_data_dir, deep).await.map(Into::into)
+    load_snapshot(context, deep).await.map(Into::into)
 }
 
 async fn load_snapshot(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     deep: bool,
 ) -> SonaCoreBindingResult<DashboardSnapshotDomainModel> {
-    tokio::task::spawn_blocking(move || build_dashboard_snapshot(app_data_dir, deep))
+    let context = context.into();
+    tokio::task::spawn_blocking(move || build_dashboard_snapshot(context, deep))
         .await
         .map_err(dashboard_error)?
 }
 
 fn build_dashboard_snapshot(
-    app_data_dir: String,
+    context: ContextSource,
     deep: bool,
 ) -> SonaCoreBindingResult<DashboardSnapshotDomainModel> {
-    let app_data_dir = std::path::absolute(PathBuf::from(app_data_dir)).map_err(dashboard_error)?;
+    let app_data_dir = context.app_data_dir().map_err(dashboard_error)?;
     let runtime = tokio::runtime::Builder::new_current_thread()
         .build()
         .map_err(dashboard_error)?;
     let time = sona_runtime_fs::dashboard_snapshot_time_now();
-    match cached_application_context(&app_data_dir).map_err(dashboard_error)? {
+    match context.resolve_cached().map_err(dashboard_error)? {
         Some(context) => runtime.block_on(
             context
                 .sqlite()

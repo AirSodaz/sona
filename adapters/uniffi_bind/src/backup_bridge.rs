@@ -10,7 +10,7 @@ use sona_core::backup::{
 use sona_runtime_fs::SystemClock;
 use sona_sqlite::{SqliteBackupStateRepository, validate_backup_restore_dataset};
 
-use crate::application_context::application_context;
+use crate::application_context::ContextSource;
 use crate::mapper::prepared_backup_import_to_ffi;
 use crate::{
     FfiBackupApplyResultV1, FfiBackupManifestV1, FfiPreparedBackupImportV1, SonaCoreBindingError,
@@ -18,11 +18,11 @@ use crate::{
 };
 
 pub(crate) async fn export_backup_archive_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     archive_path: String,
     app_version: String,
 ) -> SonaCoreBindingResult<String> {
-    run_export_archive(app_data_dir, archive_path, app_version)
+    run_export_archive(context, archive_path, app_version)
         .await
         .and_then(canonical_json)
 }
@@ -36,13 +36,13 @@ pub(crate) async fn inspect_backup_archive_json(
 }
 
 pub(crate) async fn import_backup_archive_json(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     archive_path: String,
     default_rule_set_name: String,
     confirm_replace: bool,
 ) -> SonaCoreBindingResult<String> {
     run_import_archive(
-        app_data_dir,
+        context,
         archive_path,
         default_rule_set_name,
         confirm_replace,
@@ -52,22 +52,22 @@ pub(crate) async fn import_backup_archive_json(
 }
 
 async fn run_export_archive(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     archive_path: String,
     app_version: String,
 ) -> SonaCoreBindingResult<BackupManifest> {
-    require_non_empty(&app_data_dir, "export app_data_dir")?;
     require_non_empty(&archive_path, "export archive_path")?;
     require_non_empty(&app_version, "export app_version")?;
+    let context = context.into();
+    let app_data_dir = context.app_data_dir().map_err(backup_error)?;
+    require_non_empty(&app_data_dir.to_string_lossy(), "export app_data_dir")?;
 
     tokio::task::spawn_blocking(move || {
-        let app_data_dir =
-            std::path::absolute(PathBuf::from(app_data_dir)).map_err(backup_error)?;
         let archive_path =
             std::path::absolute(PathBuf::from(archive_path)).map_err(backup_error)?;
         let archive_path = utf8_path(&archive_path, "Backup export archive")?;
         let adapter = FsBackupAdapter::new(
-            SharedContextBackupStateRepository::new(app_data_dir),
+            SharedContextBackupStateRepository::new(context),
             SystemClock,
         );
         adapter
@@ -101,23 +101,23 @@ async fn run_inspect_archive(archive_path: String) -> SonaCoreBindingResult<Prep
 }
 
 async fn run_import_archive(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     archive_path: String,
     default_rule_set_name: String,
     confirm_replace: bool,
 ) -> SonaCoreBindingResult<BackupApplyResult> {
-    require_non_empty(&app_data_dir, "import app_data_dir")?;
     require_non_empty(&archive_path, "import archive_path")?;
     require_non_empty(&default_rule_set_name, "import default_rule_set_name")?;
+    let context = context.into();
+    let app_data_dir = context.app_data_dir().map_err(backup_error)?;
+    require_non_empty(&app_data_dir.to_string_lossy(), "import app_data_dir")?;
 
     tokio::task::spawn_blocking(move || {
-        let app_data_dir =
-            std::path::absolute(PathBuf::from(app_data_dir)).map_err(backup_error)?;
         let archive_path =
             std::path::absolute(PathBuf::from(archive_path)).map_err(backup_error)?;
         let archive_path = utf8_path(&archive_path, "Backup import archive")?;
         let adapter = FsBackupAdapter::new(
-            SharedContextBackupStateRepository::new(app_data_dir),
+            SharedContextBackupStateRepository::new(context),
             SystemClock,
         );
         adapter
@@ -133,11 +133,11 @@ async fn run_import_archive(
 }
 
 pub(crate) async fn export_backup_archive_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     archive_path: String,
     app_version: String,
 ) -> SonaCoreBindingResult<FfiBackupManifestV1> {
-    run_export_archive(app_data_dir, archive_path, app_version)
+    run_export_archive(context, archive_path, app_version)
         .await
         .map(Into::into)
 }
@@ -150,13 +150,13 @@ pub(crate) async fn inspect_backup_archive_v1(
 }
 
 pub(crate) async fn import_backup_archive_v1(
-    app_data_dir: String,
+    context: impl Into<ContextSource>,
     archive_path: String,
     default_rule_set_name: String,
     confirm_replace: bool,
 ) -> SonaCoreBindingResult<FfiBackupApplyResultV1> {
     run_import_archive(
-        app_data_dir,
+        context,
         archive_path,
         default_rule_set_name,
         confirm_replace,
@@ -173,24 +173,32 @@ fn require_non_empty(value: &str, field: &str) -> SonaCoreBindingResult<()> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct SharedContextBackupStateRepository {
-    app_data_dir: PathBuf,
+    context: ContextSource,
 }
 
 impl SharedContextBackupStateRepository {
-    fn new(app_data_dir: PathBuf) -> Self {
-        Self { app_data_dir }
+    fn new(context: impl Into<ContextSource>) -> Self {
+        Self {
+            context: context.into(),
+        }
     }
 
     fn repository(&self) -> Result<SqliteBackupStateRepository, BackupError> {
-        if !self.app_data_dir.is_dir() {
+        let app_data_dir = self
+            .context
+            .app_data_dir()
+            .map_err(|error| BackupError::State(error.to_string()))?;
+        if !app_data_dir.is_dir() {
             return Err(BackupError::State(format!(
                 "Application data directory does not exist or is not a directory: {}",
-                self.app_data_dir.display()
+                app_data_dir.display()
             )));
         }
-        application_context(&self.app_data_dir)
+        self.context
+            .clone()
+            .resolve()
             .map(|context| context.sqlite().backup_state_repository())
             .map_err(|error| BackupError::State(error.to_string()))
     }

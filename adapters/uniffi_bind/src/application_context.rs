@@ -237,16 +237,99 @@ fn lock_registry() -> std::sync::MutexGuard<'static, ApplicationContextRegistry>
     })
 }
 
+/// Where a bridge gets its application context.
+///
+/// The legacy free functions carry an application-data directory and resolve it
+/// through the registry on every call. An explicit context handle already owns
+/// one, so it hands the context over directly and never touches the registry.
+/// Bridges are generic over this, which keeps one implementation serving both
+/// surfaces instead of duplicating each operation.
+/// Owned rather than borrowed so `impl Into<ContextSource>` works in `async fn`
+/// signatures too. The extra `PathBuf` allocation on the legacy path is
+/// negligible beside the database work that follows it.
+#[derive(Clone)]
+pub(crate) enum ContextSource {
+    Path(PathBuf),
+    Owned(Arc<HostApplicationContext>),
+}
+
+impl ContextSource {
+    pub(crate) fn resolve(self) -> Result<Arc<HostApplicationContext>, DatabaseError> {
+        match self {
+            Self::Path(path) => lock_registry().get_or_open(&path),
+            Self::Owned(context) => Ok(context),
+        }
+    }
+
+    /// Resolves without opening: `None` when nothing is cached for a path. An
+    /// owned context is always present.
+    pub(crate) fn resolve_cached(
+        self,
+    ) -> Result<Option<Arc<HostApplicationContext>>, DatabaseError> {
+        match self {
+            Self::Path(path) => Ok(lock_registry().get_cached(&path)),
+            Self::Owned(context) => Ok(Some(context)),
+        }
+    }
+
+    /// The absolute application-data directory this source refers to.
+    ///
+    /// Several bridges need the directory itself — to scan storage, to measure
+    /// files, to check a history directory — as well as the context. A path
+    /// source is made absolute exactly as those bridges did themselves; an
+    /// owned context reports the directory the registry already normalized when
+    /// it opened, so both sources agree on one directory.
+    pub(crate) fn app_data_dir(&self) -> std::io::Result<PathBuf> {
+        match self {
+            Self::Path(path) => std::path::absolute(path),
+            Self::Owned(context) => Ok(context.sqlite().app_data_dir().to_path_buf()),
+        }
+    }
+}
+
+impl From<&str> for ContextSource {
+    fn from(value: &str) -> Self {
+        Self::Path(PathBuf::from(value))
+    }
+}
+
+impl From<String> for ContextSource {
+    fn from(value: String) -> Self {
+        Self::Path(PathBuf::from(value))
+    }
+}
+
+impl From<&Path> for ContextSource {
+    fn from(value: &Path) -> Self {
+        Self::Path(value.to_path_buf())
+    }
+}
+
+impl From<PathBuf> for ContextSource {
+    fn from(value: PathBuf) -> Self {
+        Self::Path(value)
+    }
+}
+
+impl From<&Arc<HostApplicationContext>> for ContextSource {
+    fn from(value: &Arc<HostApplicationContext>) -> Self {
+        Self::Owned(Arc::clone(value))
+    }
+}
+
+impl From<Arc<HostApplicationContext>> for ContextSource {
+    fn from(value: Arc<HostApplicationContext>) -> Self {
+        Self::Owned(value)
+    }
+}
+
+/// Test-only shorthand. Production code goes through `ContextSource` so the
+/// registry lookup stays at one edge instead of being reachable from anywhere.
+#[cfg(test)]
 pub(crate) fn application_context(
     app_data_dir: impl AsRef<Path>,
 ) -> Result<Arc<HostApplicationContext>, DatabaseError> {
     lock_registry().get_or_open(app_data_dir.as_ref())
-}
-
-pub(crate) fn cached_application_context(
-    app_data_dir: impl AsRef<Path>,
-) -> Result<Option<Arc<HostApplicationContext>>, DatabaseError> {
-    Ok(lock_registry().get_cached(app_data_dir.as_ref()))
 }
 
 pub(crate) fn register_default_sync_secret_store(store: Arc<dyn FfiSecretStore>) {
