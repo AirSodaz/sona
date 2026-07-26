@@ -10,6 +10,7 @@
     "build": "pnpm --filter sona-desktop-frontend run build",
     "build:sona-cli": "cargo build -p sona-cli --release",
     "generate:desktop-bindings": "cargo run -p sona-ts-bind --example export_desktop_bindings",
+    "generate:sona-context": "node scripts/generate-sona-context.js && cargo fmt -p sona-uniffi-bind",
     "lint": "pnpm --filter sona-desktop-frontend run lint",
     "lint:ci": "pnpm --filter sona-desktop-frontend run lint:ci",
     "lint:staged": "node scripts/check-staged.js",

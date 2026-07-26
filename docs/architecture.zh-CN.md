@@ -100,9 +100,17 @@ UniFFI 导出面只有两层：`lib.rs` 中的 `#[uniffi::export]` 自由函数�
 
 `SonaContext` 就是建立在此之上的显式组合根：构造时解析一次并持有结果，把目录
 相关的操作以方法形式暴露。持有它同时会**钉住** registry 条目，因此只要句柄存活，
-它的 context 就始终是该目录的唯一 context。它的方法由导出的自由函数生成，
-`scripts/multisurface-contracts.test.js` 断言句柄覆盖了每一个目录相关操作，
-两套接口无法漂移。
+它的 context 就始终是该目录的唯一 context。
+
+它的操作是**生成的**。新增或修改目录相关导出后，请运行：
+
+```text
+pnpm run generate:sona-context
+```
+
+当签入文件与生成器输出不一致时 `scripts/sona-context-generated.test.js` 会失败；
+`scripts/multisurface-contracts.test.js` 断言句柄覆盖了每一个目录相关操作——
+故意不提供的操作必须在 `LIFECYCLE_ONLY` 里写明理由。
 
 自由函数保留：本次改动是**增量的**，导出 ABI 保留了全部既有入口。
 

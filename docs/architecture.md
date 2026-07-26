@@ -109,10 +109,19 @@ which resolves to itself and never touches the registry.
 `SonaContext` is the explicit composition root built on that: it resolves once
 at construction, holds the result, and exposes the directory-scoped operations
 as methods. Holding it also pins the registry entry, so the handle's context
-stays the one context for its directory for as long as it lives. Its methods are
-generated from the exported free functions, and
+stays the one context for its directory for as long as it lives.
+
+Its operations are generated. After adding or changing a directory-scoped
+export, run:
+
+```text
+pnpm run generate:sona-context
+```
+
+`scripts/sona-context-generated.test.js` fails when the checked-in file no
+longer matches the generator, and
 `scripts/multisurface-contracts.test.js` asserts the handle covers every
-directory-scoped operation, so the two surfaces cannot drift.
+directory-scoped operation — omissions must be justified in `LIFECYCLE_ONLY`.
 
 The free functions remain: this is additive, and the exported ABI kept every
 existing entry point.
