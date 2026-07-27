@@ -76,6 +76,9 @@ internal fun SonaApp(
     onRetryLibrary: () -> Unit,
     onLoadLibraryTranscript: (String) -> Unit,
     onTranscribeWithCloud: (RecordingLibraryItem) -> Unit,
+    onImportAudio: (String) -> Unit,
+    onCancelAudioImport: () -> Unit,
+    onTranscribeWithCurrentEngine: (RecordingLibraryItem) -> Unit,
     onCredentialInputChanged: (String) -> Unit,
     onSaveCredential: () -> Unit,
     onClearCredential: () -> Unit,
@@ -213,6 +216,8 @@ internal fun SonaApp(
                             onOpenItem = { historyId ->
                                 navController.navigate(libraryDetailRoute(historyId))
                             },
+                            onImportAudio = onImportAudio,
+                            onCancelAudioImport = onCancelAudioImport,
                         )
                     }
                     composable(
@@ -236,6 +241,7 @@ internal fun SonaApp(
                             cloudTranscription = libraryState.cloudTranscription,
                             onRetry = { onLoadLibraryTranscript(historyId) },
                             onTranscribeWithCloud = onTranscribeWithCloud,
+                            onTranscribeWithCurrentEngine = onTranscribeWithCurrentEngine,
                         )
                     }
                     composable(

@@ -41,6 +41,9 @@ class MainActivity : AppCompatActivity() {
                 factory = LibraryViewModel.factory(
                     library = container.recordingLibrary,
                     transcribeRecordingWithCloud = container.transcribeRecordingWithCloud,
+                    scheduleAudioImport = container.scheduleAudioImport,
+                    scheduleAudioRetranscription = container.scheduleAudioRetranscription,
+                    audioImportJobs = container.audioImportJobsController,
                 ),
             )
             val appearanceSettingsViewModel: AppearanceSettingsViewModel = viewModel(
@@ -95,6 +98,9 @@ class MainActivity : AppCompatActivity() {
                 onRetryLibrary = libraryViewModel::retryList,
                 onLoadLibraryTranscript = libraryViewModel::loadTranscript,
                 onTranscribeWithCloud = libraryViewModel::transcribeWithCloud,
+                onImportAudio = libraryViewModel::importAudio,
+                onCancelAudioImport = libraryViewModel::cancelAudioImport,
+                onTranscribeWithCurrentEngine = libraryViewModel::transcribeWithCurrentEngine,
                 onCredentialInputChanged = credentialViewModel::onCredentialInputChanged,
                 onSaveCredential = credentialViewModel::saveCredential,
                 onClearCredential = credentialViewModel::clearCredential,

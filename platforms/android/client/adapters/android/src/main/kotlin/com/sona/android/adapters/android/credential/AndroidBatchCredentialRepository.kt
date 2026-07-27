@@ -99,6 +99,19 @@ class AndroidBatchCredentialRepository internal constructor(
     override suspend fun loadActive(): ActiveBatchCredential? = operations.withLock {
         val records = readRecords()
         val provider = selectedProvider(records)
+        loadCredential(provider, records)
+            ?.let { ActiveBatchCredential(provider = provider, credential = it) }
+    }
+
+    override suspend fun load(provider: OnlineBatchProvider): OnlineBatchCredential? =
+        operations.withLock {
+            loadCredential(provider, readRecords())
+        }
+
+    private suspend fun loadCredential(
+        provider: OnlineBatchProvider,
+        records: BatchCredentialRecords,
+    ): OnlineBatchCredential? {
         val slot = records.slotFor(provider.storageId)
         val credential = when (val state = CredentialEnvelope.inspect(slot)) {
             CredentialEnvelopeState.Empty -> null
@@ -111,7 +124,7 @@ class AndroidBatchCredentialRepository internal constructor(
             }
             is CredentialEnvelopeState.Supported -> loadSupported(provider, state.envelope)
         }
-        credential?.let { ActiveBatchCredential(provider = provider, credential = it) }
+        return credential
     }
 
     private fun projectConfiguration(records: BatchCredentialRecords) = BatchCredentialConfiguration(

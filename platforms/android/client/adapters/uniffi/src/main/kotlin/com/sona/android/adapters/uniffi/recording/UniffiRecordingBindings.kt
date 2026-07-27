@@ -6,6 +6,7 @@ import uniffi.sona_uniffi_bind.FfiHistoryCompleteLiveDraftRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryCreateLiveDraftRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryDeleteItemsRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryItemRecordV1
+import uniffi.sona_uniffi_bind.FfiHistorySaveImportedFileRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryUpdateTranscriptRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceQueryRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceQueryResultV1
@@ -19,6 +20,7 @@ import uniffi.sona_uniffi_bind.loadHistoryTranscriptV1
 import uniffi.sona_uniffi_bind.onlineAsrProviderRequest
 import uniffi.sona_uniffi_bind.purgeHistoryItemsV1
 import uniffi.sona_uniffi_bind.queryHistoryWorkspaceV1
+import uniffi.sona_uniffi_bind.saveHistoryImportedFileV1
 import uniffi.sona_uniffi_bind.updateHistoryTranscriptV1
 import uniffi.sona_uniffi_bind.volcengineDoubaoAsrConfigFromJson
 
@@ -153,6 +155,11 @@ internal interface UniffiHistoryBindings {
         appDataDir: String,
         historyId: String,
     ): List<FfiTranscriptSegment>?
+
+    suspend fun saveImported(
+        appDataDir: String,
+        request: FfiHistorySaveImportedFileRequestV1,
+    ): FfiHistoryItemRecordV1 = throw UnsupportedOperationException("Imported history is unavailable.")
 }
 
 internal object GeneratedUniffiHistoryBindings : UniffiHistoryBindings {
@@ -185,4 +192,9 @@ internal object GeneratedUniffiHistoryBindings : UniffiHistoryBindings {
         appDataDir: String,
         historyId: String,
     ): List<FfiTranscriptSegment>? = loadHistoryTranscriptV1(appDataDir, historyId)
+
+    override suspend fun saveImported(
+        appDataDir: String,
+        request: FfiHistorySaveImportedFileRequestV1,
+    ): FfiHistoryItemRecordV1 = saveHistoryImportedFileV1(appDataDir, request)
 }

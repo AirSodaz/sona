@@ -3,6 +3,10 @@ package com.sona.android.app.composition
 import android.annotation.SuppressLint
 import android.content.Context
 import com.sona.android.adapters.android.audio.AndroidMicrophoneCapturePort
+import com.sona.android.adapters.android.audio.AndroidAudioImportJobAdapter
+import com.sona.android.adapters.android.audio.AndroidAudioTranscoder
+import com.sona.android.adapters.android.audio.AndroidPcmAudioReader
+import com.sona.android.adapters.android.audio.AudioImportWorkerFactory
 import com.sona.android.adapters.android.audio.FrameworkAudioRecordBackend
 import com.sona.android.adapters.android.credential.AndroidBatchCredentialRepository
 import com.sona.android.adapters.android.credential.AndroidStreamingCredentialRepository
@@ -24,6 +28,9 @@ import com.sona.android.application.library.RecordingLibraryPort
 import com.sona.android.application.recording.BatchCredentialSettingsPort
 import com.sona.android.application.recording.LiveRecordingController
 import com.sona.android.application.recording.LiveRecordingCoordinator
+import com.sona.android.application.recording.RunAudioImport
+import com.sona.android.application.recording.ScheduleAudioImport
+import com.sona.android.application.recording.ScheduleAudioRetranscription
 import com.sona.android.application.recording.StreamingCredentialSettingsPort
 import com.sona.android.application.recording.TranscribeRecordingWithCloud
 import com.sona.android.application.settings.AppearanceSettingsPort
@@ -54,6 +61,9 @@ class SonaAppContainer(context: Context) {
     private val batchCredentialRepository = AndroidBatchCredentialRepository.create(appContext)
     private val batchTranscription = UniffiOnlineBatchTranscriptionAdapter()
     private val history = UniffiRecordingHistoryAdapter(appDataDir)
+    private val audioImportJobs = AndroidAudioImportJobAdapter.create(appContext)
+    private val audioTranscoder = AndroidAudioTranscoder.create(appContext)
+    private val pcmAudioReader = AndroidPcmAudioReader()
     private val monotonicClock = AndroidMonotonicClock()
     private val recordingIds = UuidRecordingIdPort()
 
@@ -71,6 +81,30 @@ class SonaAppContainer(context: Context) {
         transcription = batchTranscription,
         history = history,
     )
+    private val runAudioImport = RunAudioImport(
+        transcoder = audioTranscoder,
+        pcmReader = pcmAudioReader,
+        recognitionSettings = recognitionSettingsRepository,
+        batchCredentials = batchCredentialRepository,
+        localTranscription = streamingTranscription,
+        onlineTranscription = batchTranscription,
+        history = history,
+    )
+    val scheduleAudioImport = ScheduleAudioImport(
+        recognitionSettings = recognitionSettingsRepository,
+        batchCredentials = batchCredentialRepository,
+        recordingIds = recordingIds,
+        jobs = audioImportJobs,
+    )
+    val scheduleAudioRetranscription = ScheduleAudioRetranscription(
+        recognitionSettings = recognitionSettingsRepository,
+        batchCredentials = batchCredentialRepository,
+        recordingIds = recordingIds,
+        jobs = audioImportJobs,
+    )
+    val audioImportJobState = audioImportJobs.state
+    val audioImportJobsController = audioImportJobs
+    val audioImportWorkerFactory = AudioImportWorkerFactory(runAudioImport)
 
     fun createLiveRecording(scope: CoroutineScope): LiveRecordingController =
         LiveRecordingCoordinator(

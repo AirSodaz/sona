@@ -9,6 +9,13 @@ import com.sona.android.application.library.RecordingLibraryPort
 import com.sona.android.application.recording.CloudTranscriptionFailure
 import com.sona.android.application.recording.CloudTranscriptionOutcome
 import com.sona.android.application.recording.CloudTranscriptionRequest
+import com.sona.android.application.recording.AudioImportFailure
+import com.sona.android.application.recording.AudioImportJobPort
+import com.sona.android.application.recording.AudioImportJobState
+import com.sona.android.application.recording.AudioImportSource
+import com.sona.android.application.recording.ScheduleAudioImport
+import com.sona.android.application.recording.ScheduleAudioImportOutcome
+import com.sona.android.application.recording.ScheduleAudioRetranscription
 import com.sona.android.application.recording.TranscribeRecordingWithCloud
 import com.sona.android.application.recording.TranscriptSegment
 import kotlinx.coroutines.CancellationException
@@ -16,6 +23,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -66,11 +75,15 @@ data class LibraryUiState(
     val listError: LibraryListError? = null,
     val detail: LibraryDetailUiState = LibraryDetailUiState.None,
     val cloudTranscription: CloudTranscriptionUiState = CloudTranscriptionUiState.Idle,
+    val audioImport: AudioImportJobState = AudioImportJobState.Idle,
 )
 
 class LibraryViewModel(
     private val library: RecordingLibraryPort,
     private val transcribeRecordingWithCloud: TranscribeRecordingWithCloud,
+    private val scheduleAudioImport: ScheduleAudioImport? = null,
+    private val scheduleAudioRetranscription: ScheduleAudioRetranscription? = null,
+    private val audioImportJobs: AudioImportJobPort = IdleAudioImportJobPort,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(LibraryUiState())
     val state: StateFlow<LibraryUiState> = mutableState.asStateFlow()
@@ -81,6 +94,86 @@ class LibraryViewModel(
     private var nextOffset: Int = 0
     private var listGeneration: Int = 0
     private var detailGeneration: Int = 0
+
+    init {
+        viewModelScope.launch {
+            audioImportJobs.state.distinctUntilChanged().collect { importState ->
+                val previous = mutableState.value.audioImport
+                mutableState.update { it.copy(audioImport = importState) }
+                if (
+                    importState is AudioImportJobState.Completed &&
+                    importState != previous
+                ) {
+                    refresh()
+                }
+            }
+        }
+    }
+
+    fun importAudio(sourceLocator: String) {
+        if (sourceLocator.isBlank() || mutableState.value.audioImport is AudioImportJobState.Running) {
+            return
+        }
+        val schedule = scheduleAudioImport ?: run {
+            mutableState.update {
+                it.copy(audioImport = AudioImportJobState.Failed(null, AudioImportFailure.CONFIGURATION))
+            }
+            return
+        }
+        viewModelScope.launch {
+            when (schedule(AudioImportSource(sourceLocator))) {
+                is ScheduleAudioImportOutcome.Scheduled -> Unit
+                ScheduleAudioImportOutcome.NeedsConfiguration -> mutableState.update {
+                    it.copy(
+                        audioImport = AudioImportJobState.Failed(
+                            jobId = null,
+                            reason = AudioImportFailure.CONFIGURATION,
+                        ),
+                    )
+                }
+                ScheduleAudioImportOutcome.Failed -> mutableState.update {
+                    it.copy(
+                        audioImport = AudioImportJobState.Failed(
+                            jobId = null,
+                            reason = AudioImportFailure.INVALID_SOURCE,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun cancelAudioImport() {
+        val running = mutableState.value.audioImport as? AudioImportJobState.Running ?: return
+        viewModelScope.launch { audioImportJobs.cancel(running.jobId) }
+    }
+
+    fun transcribeWithCurrentEngine(item: RecordingLibraryItem) {
+        if (
+            !item.audioAvailable ||
+            item.audioPath.isBlank() ||
+            mutableState.value.audioImport is AudioImportJobState.Running
+        ) return
+        val schedule = scheduleAudioRetranscription ?: return
+        viewModelScope.launch {
+            when (
+                schedule(
+                    historyId = item.historyId,
+                    audioPath = item.audioPath,
+                    displayName = item.title,
+                    durationMillis = item.durationMillis,
+                )
+            ) {
+                is ScheduleAudioImportOutcome.Scheduled -> Unit
+                ScheduleAudioImportOutcome.NeedsConfiguration -> mutableState.update {
+                    it.copy(audioImport = AudioImportJobState.Failed(null, AudioImportFailure.CONFIGURATION))
+                }
+                ScheduleAudioImportOutcome.Failed -> mutableState.update {
+                    it.copy(audioImport = AudioImportJobState.Failed(null, AudioImportFailure.INVALID_SOURCE))
+                }
+            }
+        }
+    }
 
     fun refresh() {
         val generation = ++listGeneration
@@ -282,12 +375,21 @@ class LibraryViewModel(
         fun factory(
             library: RecordingLibraryPort,
             transcribeRecordingWithCloud: TranscribeRecordingWithCloud,
+            scheduleAudioImport: ScheduleAudioImport? = null,
+            scheduleAudioRetranscription: ScheduleAudioRetranscription? = null,
+            audioImportJobs: AudioImportJobPort = IdleAudioImportJobPort,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     require(modelClass.isAssignableFrom(LibraryViewModel::class.java))
-                    return LibraryViewModel(library, transcribeRecordingWithCloud) as T
+                    return LibraryViewModel(
+                        library,
+                        transcribeRecordingWithCloud,
+                        scheduleAudioImport,
+                        scheduleAudioRetranscription,
+                        audioImportJobs,
+                    ) as T
                 }
             }
     }
@@ -296,6 +398,14 @@ class LibraryViewModel(
         REFRESH,
         LOAD_MORE,
     }
+}
+
+private object IdleAudioImportJobPort : AudioImportJobPort {
+    override val state = flowOf<AudioImportJobState>(AudioImportJobState.Idle)
+
+    override suspend fun enqueue(job: com.sona.android.application.recording.AudioImportJob) = Unit
+
+    override suspend fun cancel(jobId: String) = Unit
 }
 
 /**

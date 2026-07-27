@@ -42,4 +42,7 @@ interface BatchCredentialSettingsPort {
 
 fun interface BatchCredentialResolverPort {
     suspend fun loadActive(): ActiveBatchCredential?
+
+    suspend fun load(provider: OnlineBatchProvider): OnlineBatchCredential? =
+        loadActive()?.takeIf { it.provider == provider }?.credential
 }

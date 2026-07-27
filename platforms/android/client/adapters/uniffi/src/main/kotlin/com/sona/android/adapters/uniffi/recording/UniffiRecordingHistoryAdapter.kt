@@ -7,9 +7,11 @@ import com.sona.android.application.library.RecordingLibraryPort
 import com.sona.android.application.recording.CompleteLiveDraftRequest
 import com.sona.android.application.recording.CreateLiveDraftRequest
 import com.sona.android.application.recording.HistoryRecordingSummary
+import com.sona.android.application.recording.ImportedRecordingHistoryPort
 import com.sona.android.application.recording.RecordingDestination
 import com.sona.android.application.recording.RecordingDraft
 import com.sona.android.application.recording.RecordingHistoryPort
+import com.sona.android.application.recording.SaveImportedRecordingRequest
 import com.sona.android.application.recording.TranscriptSegment
 import uniffi.sona_uniffi_bind.FfiHistoryAudioStatusV1
 import uniffi.sona_uniffi_bind.FfiHistoryCompleteLiveDraftRequestV1
@@ -17,6 +19,7 @@ import uniffi.sona_uniffi_bind.FfiHistoryCreateLiveDraftRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryDeleteItemsRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryItemRecordV1
 import uniffi.sona_uniffi_bind.FfiHistoryItemStatusV1
+import uniffi.sona_uniffi_bind.FfiHistorySaveImportedFileRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryUpdateTranscriptRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceDateFilterV1
 import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceFilterTypeV1
@@ -29,7 +32,7 @@ import kotlin.math.roundToLong
 class UniffiRecordingHistoryAdapter internal constructor(
     private val appDataDir: String,
     private val bindings: UniffiHistoryBindings,
-) : RecordingHistoryPort, RecordingLibraryPort {
+) : RecordingHistoryPort, RecordingLibraryPort, ImportedRecordingHistoryPort {
     constructor(appDataDir: String) : this(appDataDir, GeneratedUniffiHistoryBindings)
 
     init {
@@ -114,6 +117,41 @@ class UniffiRecordingHistoryAdapter internal constructor(
         return bindings.loadTranscript(appDataDir, historyId)
             .orEmpty()
             .map(FfiTranscriptSegment::toApplication)
+    }
+
+    override suspend fun contains(historyId: String): Boolean {
+        require(historyId.isNotBlank()) { "History ID must not be blank." }
+        return bindings.loadTranscript(appDataDir, historyId) != null
+    }
+
+    override suspend fun saveImported(
+        request: SaveImportedRecordingRequest,
+    ): HistoryRecordingSummary {
+        require(request.historyId.isNotBlank()) { "History ID must not be blank." }
+        require(request.normalizedWavPath.isNotBlank()) { "Imported WAV path must not be blank." }
+        val sourceName = request.displayName
+            .substringAfterLast('/')
+            .substringAfterLast('\\')
+            .ifBlank { "Imported audio.wav" }
+        val response = bindings.saveImported(
+            appDataDir,
+            FfiHistorySaveImportedFileRequestV1(
+                id = request.historyId,
+                sourcePath = sourceName,
+                segments = request.segments.map(TranscriptSegment::toFfi),
+                duration = request.durationMillis.coerceAtLeast(0L) / 1_000.0,
+                tagIds = emptyList(),
+                convertedSourcePath = request.normalizedWavPath,
+            ),
+        )
+        return HistoryRecordingSummary(response.id)
+    }
+
+    override suspend fun updateTranscript(
+        historyId: String,
+        segments: List<TranscriptSegment>,
+    ) {
+        checkpointTranscript(historyId, segments)
     }
 }
 

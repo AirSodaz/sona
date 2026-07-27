@@ -22,12 +22,15 @@ android {
 dependencies {
     implementation(project(":application"))
     implementation("androidx.datastore:datastore-preferences:1.2.1")
+    implementation("androidx.media3:media3-common:1.8.0")
+    implementation("androidx.work:work-runtime-ktx:2.11.0")
     implementation("org.apache.commons:commons-compress:1.28.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     compileOnly("androidx.annotation:annotation:1.10.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    testImplementation("androidx.work:work-testing:2.11.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:core:1.6.1")
     androidTestImplementation("androidx.test:runner:1.6.2")

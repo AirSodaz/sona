@@ -7,6 +7,7 @@ import com.sona.android.application.recording.CompleteLiveDraftRequest
 import com.sona.android.application.recording.CreateLiveDraftRequest
 import com.sona.android.application.recording.RecordingDestination
 import com.sona.android.application.recording.RecordingDraft
+import com.sona.android.application.recording.SaveImportedRecordingRequest
 import com.sona.android.application.recording.SpeakerAttribution
 import com.sona.android.application.recording.SpeakerCandidate
 import com.sona.android.application.recording.SpeakerTag
@@ -30,6 +31,7 @@ import uniffi.sona_uniffi_bind.FfiHistoryDraftSourceV1
 import uniffi.sona_uniffi_bind.FfiHistoryItemKindV1
 import uniffi.sona_uniffi_bind.FfiHistoryItemRecordV1
 import uniffi.sona_uniffi_bind.FfiHistoryItemStatusV1
+import uniffi.sona_uniffi_bind.FfiHistorySaveImportedFileRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryUpdateTranscriptRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceDateFilterV1
 import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceFilterTypeV1
@@ -191,6 +193,31 @@ class UniffiRecordingHistoryAdapterTest {
         }
     }
 
+    @Test
+    fun `saves normalized imports and uses transcript presence for idempotency`() = runTest {
+        val bindings = FakeHistoryBindings()
+        val adapter = UniffiRecordingHistoryAdapter("C:/app-data", bindings)
+
+        assertEquals(true, adapter.contains("history-1"))
+        val summary = adapter.saveImported(
+            SaveImportedRecordingRequest(
+                historyId = "import-1",
+                displayName = "folder/Meeting.m4a",
+                normalizedWavPath = "C:/jobs/normalized.wav",
+                durationMillis = 2_500,
+                segments = listOf(fullSegment()),
+            ),
+        )
+
+        assertEquals("history-1", summary.historyId)
+        val request = checkNotNull(bindings.saveImportedRequest)
+        assertEquals("import-1", request.id)
+        assertEquals("Meeting.m4a", request.sourcePath)
+        assertEquals("C:/jobs/normalized.wav", request.convertedSourcePath)
+        assertEquals(2.5, request.duration, 0.0)
+        assertEquals("segment-1", request.segments.single().id)
+    }
+
     private fun fullSegment() = TranscriptSegment(
         id = "segment-1",
         text = "hello",
@@ -225,6 +252,7 @@ class UniffiRecordingHistoryAdapterTest {
         var deleteRequest: FfiHistoryDeleteItemsRequestV1? = null
         var queryRequest: FfiHistoryWorkspaceQueryRequestV1? = null
         var transcriptHistoryId: String? = null
+        var saveImportedRequest: FfiHistorySaveImportedFileRequestV1? = null
         var transcriptFailure: Throwable? = null
         var createResponse = FfiLiveRecordingDraftResultV1(
             item = itemRecord(),
@@ -280,6 +308,14 @@ class UniffiRecordingHistoryAdapterTest {
             transcriptHistoryId = historyId
             transcriptFailure?.let { throw it }
             return transcriptResponse
+        }
+
+        override suspend fun saveImported(
+            appDataDir: String,
+            request: FfiHistorySaveImportedFileRequestV1,
+        ): FfiHistoryItemRecordV1 {
+            saveImportedRequest = request
+            return itemRecord(status = FfiHistoryItemStatusV1.COMPLETE)
         }
     }
 

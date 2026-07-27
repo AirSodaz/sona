@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloudSync
+import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,6 +49,7 @@ internal fun LibraryDetailScreen(
     cloudTranscription: CloudTranscriptionUiState,
     onRetry: () -> Unit,
     onTranscribeWithCloud: (RecordingLibraryItem) -> Unit,
+    onTranscribeWithCurrentEngine: (RecordingLibraryItem) -> Unit,
 ) {
     val resolvedDetail = detail.forHistory(historyId)
     val fallbackTitle = stringResource(R.string.library_detail_heading)
@@ -95,22 +96,36 @@ internal fun LibraryDetailScreen(
             Spacer(Modifier.height(16.dp))
             HorizontalDivider()
             Spacer(Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = stringResource(R.string.library_transcript_heading),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (item != null) {
+            Text(
+                text = stringResource(R.string.library_transcript_heading),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (item != null) {
+                Spacer(Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilledTonalButton(
+                        onClick = { onTranscribeWithCurrentEngine(item) },
+                        enabled = item.audioAvailable,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Replay,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.action_transcribe_current_engine))
+                    }
                     CloudTranscriptionAction(
                         item = item,
                         cloudTranscription = cloudTranscription,
                         onTranscribeWithCloud = onTranscribeWithCloud,
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
@@ -138,11 +153,13 @@ private fun CloudTranscriptionAction(
     item: RecordingLibraryItem,
     cloudTranscription: CloudTranscriptionUiState,
     onTranscribeWithCloud: (RecordingLibraryItem) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val running = cloudTranscription is CloudTranscriptionUiState.Running
     FilledTonalButton(
         onClick = { onTranscribeWithCloud(item) },
         enabled = item.audioAvailable && !running,
+        modifier = modifier,
     ) {
         if (running) {
             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
