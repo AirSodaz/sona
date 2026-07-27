@@ -11,7 +11,6 @@
     <string name="record_stop_description">停止錄音</string>
     <string name="transcript_waiting">等待轉寫</string>
     <string name="status_loading">初始化中</string>
-    <string name="status_ready">已就緒</string>
     <string name="status_error">初始化失敗</string>
     <string name="action_retry">重試</string>
     <string name="action_back">返回</string>
@@ -77,7 +76,6 @@
     <string name="cloud_transcription_failed">雲端轉寫失敗</string>
     <string name="cloud_transcription_empty">雲端服務供應商未回傳任何語音內容</string>
     <string name="cloud_transcription_persist_failed">新的轉寫結果儲存失敗</string>
-    <string name="online_recognition_heading">線上辨識</string>
     <string name="credential_configured">憑據已設定</string>
     <string name="credential_not_configured">尚未設定憑據</string>
     <string name="credential_api_key">API Key</string>
@@ -98,7 +96,6 @@
     <string name="appearance_settings_error">無法儲存外觀設定</string>
     <string name="credential_status_label">狀態</string>
     <string name="runtime_heading">本機執行階段</string>
-    <string name="local_runtime_ready">已就緒</string>
     <string name="local_runtime_unavailable">無法使用</string>
     <string name="local_recognition_heading">本機辨識模型</string>
     <string name="local_model_installed">已安裝：%1$s</string>

@@ -4,6 +4,7 @@ import com.sona.android.application.recording.ActiveBatchCredential
 import com.sona.android.application.recording.CredentialStatus
 import com.sona.android.application.recording.OnlineBatchCredential
 import com.sona.android.application.recording.OnlineBatchProvider
+import com.sona.android.application.recording.StreamingCredential
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +18,179 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AndroidBatchCredentialRepositoryTest {
+    @Test
+    fun `legacy streaming key migrates into an empty Volcengine slot`() = runBlocking {
+        val legacy = FakeLegacyStreamingCredentialSource(StreamingCredential("legacy-secret"))
+        val repository = AndroidBatchCredentialRepository(
+            FakeBatchStore(),
+            FakeSlotCipherFactory(),
+            legacy,
+        )
+
+        val configuration = repository.configuration.first()
+
+        assertTrue(
+            OnlineBatchProvider.VOLCENGINE_DOUBAO in configuration.configuredProviders,
+        )
+        assertEquals(
+            OnlineBatchCredential("legacy-secret"),
+            repository.load(OnlineBatchProvider.VOLCENGINE_DOUBAO),
+        )
+        assertEquals(1, legacy.loadCalls)
+        assertEquals(1, legacy.clearCalls)
+        assertNull(legacy.credential)
+    }
+
+    @Test
+    fun `existing Volcengine key wins and legacy key is cleared without reading`() = runBlocking {
+        val legacy = FakeLegacyStreamingCredentialSource(StreamingCredential("legacy-secret"))
+        val store = FakeBatchStore(
+            BatchCredentialRecords(
+                slots = mapOf(
+                    "volcengine-doubao" to supportedRecord("provider-secret"),
+                ),
+            ),
+        )
+        val repository = AndroidBatchCredentialRepository(
+            store,
+            FakeSlotCipherFactory(),
+            legacy,
+        )
+
+        assertEquals(
+            OnlineBatchCredential("provider-secret"),
+            repository.load(OnlineBatchProvider.VOLCENGINE_DOUBAO),
+        )
+        assertEquals(0, legacy.loadCalls)
+        assertEquals(1, legacy.clearCalls)
+        assertNull(legacy.credential)
+    }
+
+    @Test
+    fun `existing Volcengine key remains usable while legacy cleanup retries`() = runBlocking {
+        val legacy = FakeLegacyStreamingCredentialSource(
+            StreamingCredential("legacy-secret"),
+        ).apply {
+            clearFailure = IllegalStateException("keystore unavailable")
+        }
+        val repository = AndroidBatchCredentialRepository(
+            FakeBatchStore(
+                BatchCredentialRecords(
+                    slots = mapOf(
+                        "volcengine-doubao" to supportedRecord("provider-secret"),
+                    ),
+                ),
+            ),
+            FakeSlotCipherFactory(),
+            legacy,
+        )
+
+        assertEquals(
+            OnlineBatchCredential("provider-secret"),
+            repository.load(OnlineBatchProvider.VOLCENGINE_DOUBAO),
+        )
+        assertEquals(1, legacy.clearCalls)
+        assertEquals(StreamingCredential("legacy-secret"), legacy.credential)
+
+        legacy.clearFailure = null
+        assertEquals(
+            OnlineBatchCredential("provider-secret"),
+            repository.load(OnlineBatchProvider.VOLCENGINE_DOUBAO),
+        )
+        assertEquals(2, legacy.clearCalls)
+        assertNull(legacy.credential)
+    }
+
+    @Test
+    fun `clearing Volcengine preserves the provider key when legacy cleanup fails`() = runBlocking {
+        val legacy = FakeLegacyStreamingCredentialSource(
+            StreamingCredential("legacy-secret"),
+        ).apply {
+            clearFailure = IllegalStateException("keystore unavailable")
+        }
+        val original = supportedRecord("provider-secret")
+        val store = FakeBatchStore(
+            BatchCredentialRecords(
+                slots = mapOf("volcengine-doubao" to original),
+            ),
+        )
+        val ciphers = FakeSlotCipherFactory()
+        val repository = AndroidBatchCredentialRepository(store, ciphers, legacy)
+
+        val error = captureError {
+            repository.clear(OnlineBatchProvider.VOLCENGINE_DOUBAO)
+        }
+
+        assertEquals(CredentialErrorCode.STORAGE_UNAVAILABLE, error.code)
+        assertEquals(original, store.current.slots["volcengine-doubao"])
+        assertEquals(
+            0,
+            ciphers.cipherFor(OnlineBatchProvider.VOLCENGINE_DOUBAO).deleteCalls,
+        )
+    }
+
+    @Test
+    fun `failed migration write preserves the legacy key for retry`() = runBlocking {
+        val legacy = FakeLegacyStreamingCredentialSource(StreamingCredential("legacy-secret"))
+        val store = FakeBatchStore().apply {
+            writeFailure = IllegalStateException("write failed")
+        }
+        val repository = AndroidBatchCredentialRepository(
+            store,
+            FakeSlotCipherFactory(),
+            legacy,
+        )
+
+        val error = captureError {
+            repository.load(OnlineBatchProvider.VOLCENGINE_DOUBAO)
+        }
+
+        assertEquals(CredentialErrorCode.STORAGE_UNAVAILABLE, error.code)
+        assertEquals(StreamingCredential("legacy-secret"), legacy.credential)
+        assertEquals(0, legacy.clearCalls)
+        assertEquals(BatchCredentialRecords(), store.current)
+    }
+
+    @Test
+    fun `settings remain usable and later resolution retries a failed migration`() = runBlocking {
+        val legacy = FakeLegacyStreamingCredentialSource(StreamingCredential("legacy-secret"))
+        val store = FakeBatchStore().apply {
+            writeFailure = IllegalStateException("write failed")
+        }
+        val repository = AndroidBatchCredentialRepository(
+            store,
+            FakeSlotCipherFactory(),
+            legacy,
+        )
+
+        assertEquals(emptySet<OnlineBatchProvider>(), repository.configuration.first().configuredProviders)
+        assertEquals(StreamingCredential("legacy-secret"), legacy.credential)
+
+        store.writeFailure = null
+        assertEquals(
+            OnlineBatchCredential("legacy-secret"),
+            repository.load(OnlineBatchProvider.VOLCENGINE_DOUBAO),
+        )
+        assertNull(legacy.credential)
+    }
+
+    @Test
+    fun `migration is checked only once per repository instance`() = runBlocking {
+        val legacy = FakeLegacyStreamingCredentialSource(null)
+        val repository = AndroidBatchCredentialRepository(
+            FakeBatchStore(),
+            FakeSlotCipherFactory(),
+            legacy,
+        )
+
+        repository.configuration.first()
+        repository.load(OnlineBatchProvider.VOLCENGINE_DOUBAO)
+        repository.selectProvider(OnlineBatchProvider.GROQ_WHISPER)
+
+        assertEquals(1, legacy.loadCalls)
+        assertEquals(1, legacy.clearCalls)
+    }
+
     @Test
     fun `configuration reports every configured provider without decrypting`() = runBlocking {
         val ciphers = FakeSlotCipherFactory().apply {
@@ -322,6 +496,25 @@ class AndroidBatchCredentialRepositoryTest {
                 ciphertext = ByteArray(16) + plaintext,
             ).toRecord()
         }
+    }
+}
+
+private class FakeLegacyStreamingCredentialSource(
+    var credential: StreamingCredential?,
+) : LegacyStreamingCredentialSource {
+    var loadCalls = 0
+    var clearCalls = 0
+    var clearFailure: Throwable? = null
+
+    override suspend fun load(): StreamingCredential? {
+        loadCalls += 1
+        return credential
+    }
+
+    override suspend fun clear() {
+        clearCalls += 1
+        clearFailure?.let { throw it }
+        credential = null
     }
 }
 

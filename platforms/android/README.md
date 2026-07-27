@@ -167,19 +167,20 @@ write the complete WAV recording. Android 7.0 and later use recording callbacks
 for input monitoring, Android 10 and later report client silencing, and Android
 11 and later mark the capture as privacy-sensitive.
 
-Streaming credentials are encrypted with a non-exportable Android Keystore
-AES-256-GCM key and provider-generated IVs. DataStore persists only the versioned
-encrypted envelope under `noBackupFilesDir`; it never stores plaintext and the
-file is excluded from device backup. Settings consumers receive only configured
-status plus save/clear capabilities. Plaintext resolution is available only to
-the live-recording coordinator when a session starts.
+Online ASR credentials are encrypted per provider with non-exportable Android
+Keystore AES-256-GCM keys and provider-generated IVs. DataStore persists only
+versioned encrypted envelopes under `noBackupFilesDir`; it never stores
+plaintext and the file is excluded from device backup. Settings consumers see
+only configured status plus save/clear capabilities. Plaintext resolution is
+available only when transcription starts.
 
-The settings screen masks credential input by default and supports explicit
-show, hide, save, and clear actions. Plaintext input remains only in the
-settings `ViewModel`; it is never written to saved instance state, Compose
-saveable state, logs, or user-visible errors, and is cleared after a successful
-save or clear. Starting a recording without configured credentials opens the
-settings screen and focuses the API key field.
+The settings screen masks each provider credential by default and supports
+explicit show, hide, save, and clear actions. Plaintext input remains only in
+the cloud-transcription settings `ViewModel`; it is never written to saved
+instance state, Compose saveable state, logs, or user-visible errors, and is
+cleared after a successful save or clear. Starting an online recording without
+credentials opens settings, selects Volcengine Doubao, and focuses that
+provider's API key field.
 
 The production online-recording path resolves the Volcengine provider manifest,
 opens the typed UniFFI streaming session, writes draft/checkpoint/complete history
@@ -239,8 +240,11 @@ transcription starts. Typed keys stay inside the settings `ViewModel`, are
 cleared after a save, a clear, or a provider switch, and are never written to
 saved instance state, Compose saveable state, logs, or user-visible errors.
 
-These cloud batch keys are independent of the live streaming credential. Live
-transcription keeps using its own key and its own Keystore alias.
+The Volcengine Doubao key is shared by cloud batch and live streaming
+transcription. Upgrades migrate the former standalone streaming key into the
+Volcengine provider slot only when that slot is empty. An existing provider key
+wins, and the legacy encrypted record and Keystore key are removed only after a
+successful migration or after the provider slot is confirmed configured.
 
 The client compiles and targets Android API 37 with min SDK 23. Install
 `platforms;android-37.0` through `sdkmanager`, then run the complete client

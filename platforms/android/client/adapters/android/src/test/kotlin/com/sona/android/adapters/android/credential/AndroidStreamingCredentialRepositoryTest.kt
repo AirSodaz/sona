@@ -1,6 +1,5 @@
 package com.sona.android.adapters.android.credential
 
-import com.sona.android.application.recording.CredentialStatus
 import com.sona.android.application.recording.StreamingCredential
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
@@ -10,7 +9,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
@@ -21,27 +19,17 @@ import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class AndroidStreamingCredentialRepositoryTest {
-    @Test
-    fun `status projects a complete record without decrypting`() = runBlocking {
-        val store = FakeCredentialStore(supportedRecord("secret"))
-        val cipher = FakeCredentialCipher().apply { decryptFailure = AssertionError("must not decrypt") }
-        val repository = AndroidStreamingCredentialRepository(store, cipher)
-
-        assertEquals(CredentialStatus.CONFIGURED, repository.status.first())
-        assertEquals(0, cipher.decryptCalls)
-    }
-
+class LegacyStreamingCredentialRepositoryTest {
     @Test
     fun `load returns a valid credential and clears decrypted bytes`() = runBlocking {
         val cipher = FakeCredentialCipher()
         val envelope = cipher.encrypt("valid-key".encodeToByteArray())
-        val repository = AndroidStreamingCredentialRepository(
+        val repository = LegacyStreamingCredentialRepository(
             store = FakeCredentialStore(envelope.toRecord()),
             cipher = cipher,
         )
 
-        val loaded = repository.loadForStart()
+        val loaded = repository.load()
 
         assertEquals(StreamingCredential("valid-key"), loaded)
         assertTrue(cipher.lastReturnedPlaintext!!.all { it == 0.toByte() })
@@ -51,7 +39,7 @@ class AndroidStreamingCredentialRepositoryTest {
     fun `ordinary overwrite reuses key and writes a fresh iv`() = runBlocking {
         val store = FakeCredentialStore()
         val cipher = FakeCredentialCipher()
-        val repository = AndroidStreamingCredentialRepository(store, cipher)
+        val repository = LegacyStreamingCredentialRepository(store, cipher)
 
         repository.save(StreamingCredential("same-key"))
         val first = store.current
@@ -65,7 +53,7 @@ class AndroidStreamingCredentialRepositoryTest {
 
     @Test
     fun `blank and oversized credentials are rejected with a fixed public error`() = runBlocking {
-        val repository = AndroidStreamingCredentialRepository(FakeCredentialStore(), FakeCredentialCipher())
+        val repository = LegacyStreamingCredentialRepository(FakeCredentialStore(), FakeCredentialCipher())
 
         listOf("", " \t\n", "a".repeat(16_385)).forEach { apiKey ->
             val error = captureCredentialError { repository.save(StreamingCredential(apiKey)) }
@@ -78,7 +66,7 @@ class AndroidStreamingCredentialRepositoryTest {
     @Test
     fun `maximum utf8 credential size is accepted and source bytes are cleared`() = runBlocking {
         val cipher = FakeCredentialCipher()
-        val repository = AndroidStreamingCredentialRepository(FakeCredentialStore(), cipher)
+        val repository = LegacyStreamingCredentialRepository(FakeCredentialStore(), cipher)
 
         repository.save(StreamingCredential("a".repeat(16_384)))
 
@@ -91,7 +79,7 @@ class AndroidStreamingCredentialRepositoryTest {
         val operations = mutableListOf<String>()
         val store = FakeCredentialStore(supportedRecord("secret"), operations)
         val cipher = FakeCredentialCipher(operations)
-        val repository = AndroidStreamingCredentialRepository(store, cipher)
+        val repository = LegacyStreamingCredentialRepository(store, cipher)
 
         repository.clear()
         repository.clear()
@@ -105,10 +93,9 @@ class AndroidStreamingCredentialRepositoryTest {
         val unknown = CredentialRecord(formatVersion = 7)
         val store = FakeCredentialStore(unknown)
         val cipher = FakeCredentialCipher()
-        val repository = AndroidStreamingCredentialRepository(store, cipher)
+        val repository = LegacyStreamingCredentialRepository(store, cipher)
 
-        assertEquals(CredentialStatus.CONFIGURED, repository.status.first())
-        val loadError = captureCredentialError { repository.loadForStart() }
+        val loadError = captureCredentialError { repository.load() }
         val saveError = captureCredentialError { repository.save(StreamingCredential("replacement")) }
 
         assertEquals(CredentialErrorCode.UNSUPPORTED_FORMAT, loadError.code)
@@ -126,9 +113,9 @@ class AndroidStreamingCredentialRepositoryTest {
         val invalid = CredentialRecord(0, "corrupt-iv", "corrupt-ciphertext")
         val store = FakeCredentialStore(invalid, operations)
         val cipher = FakeCredentialCipher(operations)
-        val repository = AndroidStreamingCredentialRepository(store, cipher)
+        val repository = LegacyStreamingCredentialRepository(store, cipher)
 
-        assertNull(repository.loadForStart())
+        assertNull(repository.load())
 
         assertEquals(listOf("store.read", "store.clear", "cipher.delete"), operations)
         assertEquals(CredentialRecord(), store.current)
@@ -140,7 +127,7 @@ class AndroidStreamingCredentialRepositoryTest {
         val malformed = CredentialRecord(formatVersion = 1, ivBase64 = "partial")
         val store = FakeCredentialStore(malformed, operations)
         val cipher = FakeCredentialCipher(operations)
-        val repository = AndroidStreamingCredentialRepository(store, cipher)
+        val repository = LegacyStreamingCredentialRepository(store, cipher)
 
         repository.save(StreamingCredential("replacement"))
 
@@ -158,9 +145,9 @@ class AndroidStreamingCredentialRepositoryTest {
         val cipher = FakeCredentialCipher(operations).apply {
             decryptFailure = CredentialCipherException(CredentialCipherFailureKind.PERMANENT)
         }
-        val repository = AndroidStreamingCredentialRepository(store, cipher)
+        val repository = LegacyStreamingCredentialRepository(store, cipher)
 
-        val loaded = repository.loadForStart()
+        val loaded = repository.load()
 
         assertNull(loaded)
         assertEquals(listOf("store.read", "cipher.decrypt", "store.clear", "cipher.delete"), operations)
@@ -174,15 +161,15 @@ class AndroidStreamingCredentialRepositoryTest {
         val cipher = FakeCredentialCipher(operations).apply {
             decryptFailure = CredentialCipherException(CredentialCipherFailureKind.PERMANENT)
         }
-        val repository = AndroidStreamingCredentialRepository(store, cipher)
+        val repository = LegacyStreamingCredentialRepository(store, cipher)
 
-        assertNull(repository.loadForStart())
+        assertNull(repository.load())
         repository.save(StreamingCredential("replacement"))
         cipher.decryptFailure = null
 
         assertEquals(2, cipher.deleteCalls)
         assertTrue(operations.indexOfLast { it == "cipher.delete" } < operations.indexOf("cipher.encrypt"))
-        assertEquals(StreamingCredential("replacement"), repository.loadForStart())
+        assertEquals(StreamingCredential("replacement"), repository.load())
     }
 
     @Test
@@ -192,9 +179,9 @@ class AndroidStreamingCredentialRepositoryTest {
         val cipher = FakeCredentialCipher().apply {
             decryptFailure = CredentialCipherException(CredentialCipherFailureKind.TEMPORARY)
         }
-        val repository = AndroidStreamingCredentialRepository(store, cipher)
+        val repository = LegacyStreamingCredentialRepository(store, cipher)
 
-        val error = captureCredentialError { repository.loadForStart() }
+        val error = captureCredentialError { repository.load() }
 
         assertEquals(CredentialErrorCode.STORAGE_UNAVAILABLE, error.code)
         assertEquals(original, store.current)
@@ -209,7 +196,7 @@ class AndroidStreamingCredentialRepositoryTest {
         val cipher = FakeCredentialCipher().apply {
             encryptFailure = CredentialCipherException(CredentialCipherFailureKind.TEMPORARY)
         }
-        val repository = AndroidStreamingCredentialRepository(store, cipher)
+        val repository = LegacyStreamingCredentialRepository(store, cipher)
 
         val error = captureCredentialError { repository.save(StreamingCredential("replacement")) }
 
@@ -226,7 +213,7 @@ class AndroidStreamingCredentialRepositoryTest {
         val cipher = FakeCredentialCipher(operations).apply {
             encryptFailure = CredentialCipherException(CredentialCipherFailureKind.PERMANENT)
         }
-        val repository = AndroidStreamingCredentialRepository(store, cipher)
+        val repository = LegacyStreamingCredentialRepository(store, cipher)
 
         val error = captureCredentialError { repository.save(StreamingCredential("replacement")) }
 
@@ -243,9 +230,9 @@ class AndroidStreamingCredentialRepositoryTest {
         val sentinel = "sentinel-secret /private/path alias-value iv-value ciphertext-value"
         val original = supportedRecord("secret")
         val store = FakeCredentialStore(original).apply { readFailure = IllegalStateException(sentinel) }
-        val repository = AndroidStreamingCredentialRepository(store, FakeCredentialCipher())
+        val repository = LegacyStreamingCredentialRepository(store, FakeCredentialCipher())
 
-        val error = captureCredentialError { repository.loadForStart() }
+        val error = captureCredentialError { repository.load() }
 
         assertEquals(CredentialErrorCode.STORAGE_UNAVAILABLE, error.code)
         assertEquals("Streaming credential storage is unavailable.", error.message)
@@ -262,7 +249,7 @@ class AndroidStreamingCredentialRepositoryTest {
             writeFailure = IllegalStateException("write-path-and-secret")
         }
         val cipher = FakeCredentialCipher()
-        val repository = AndroidStreamingCredentialRepository(store, cipher)
+        val repository = LegacyStreamingCredentialRepository(store, cipher)
 
         val error = captureCredentialError { repository.save(StreamingCredential("replacement")) }
 
@@ -279,7 +266,7 @@ class AndroidStreamingCredentialRepositoryTest {
             clearFailure = IllegalStateException("clear-path-and-secret")
         }
         val cipher = FakeCredentialCipher()
-        val repository = AndroidStreamingCredentialRepository(store, cipher)
+        val repository = LegacyStreamingCredentialRepository(store, cipher)
 
         val error = captureCredentialError { repository.clear() }
 
@@ -289,13 +276,13 @@ class AndroidStreamingCredentialRepositoryTest {
     }
 
     @Test
-    fun `cancellation is rethrown by save load clear and status without mutation`() = runBlocking {
+    fun `cancellation is rethrown by save load and clear without mutation`() = runBlocking {
         val original = supportedRecord("secret")
 
         val saveCancellation = CancellationException("save-cancelled")
         val saveStore = FakeCredentialStore(original).apply { writeFailure = saveCancellation }
         val saveCipher = FakeCredentialCipher()
-        val saveRepository = AndroidStreamingCredentialRepository(saveStore, saveCipher)
+        val saveRepository = LegacyStreamingCredentialRepository(saveStore, saveCipher)
         assertTrue(
             captureCancellation { saveRepository.save(StreamingCredential("replacement")) } ===
                 saveCancellation,
@@ -306,24 +293,19 @@ class AndroidStreamingCredentialRepositoryTest {
         val loadCancellation = CancellationException("load-cancelled")
         val loadStore = FakeCredentialStore(original).apply { readFailure = loadCancellation }
         val loadCipher = FakeCredentialCipher()
-        val loadRepository = AndroidStreamingCredentialRepository(loadStore, loadCipher)
-        assertTrue(captureCancellation { loadRepository.loadForStart() } === loadCancellation)
+        val loadRepository = LegacyStreamingCredentialRepository(loadStore, loadCipher)
+        assertTrue(captureCancellation { loadRepository.load() } === loadCancellation)
         assertEquals(original, loadStore.current)
         assertEquals(0, loadCipher.deleteCalls)
 
         val clearCancellation = CancellationException("clear-cancelled")
         val clearStore = FakeCredentialStore(original).apply { clearFailure = clearCancellation }
         val clearCipher = FakeCredentialCipher()
-        val clearRepository = AndroidStreamingCredentialRepository(clearStore, clearCipher)
+        val clearRepository = LegacyStreamingCredentialRepository(clearStore, clearCipher)
         assertTrue(captureCancellation { clearRepository.clear() } === clearCancellation)
         assertEquals(original, clearStore.current)
         assertEquals(0, clearCipher.deleteCalls)
 
-        val statusCancellation = CancellationException("status-cancelled")
-        val statusStore = FakeCredentialStore(original).apply { recordsFailure = statusCancellation }
-        val statusRepository = AndroidStreamingCredentialRepository(statusStore, FakeCredentialCipher())
-        assertTrue(captureCancellation { statusRepository.status.first() } === statusCancellation)
-        assertEquals(original, statusStore.current)
     }
 
     @Test
@@ -337,14 +319,14 @@ class AndroidStreamingCredentialRepositoryTest {
             }
             operationDelayMillis = 1
         }
-        val repository = AndroidStreamingCredentialRepository(store, FakeCredentialCipher())
+        val repository = LegacyStreamingCredentialRepository(store, FakeCredentialCipher())
 
         val save = launch(start = CoroutineStart.UNDISPATCHED) {
             repository.save(StreamingCredential("queued"))
         }
         firstReadEntered.await()
         val clear = launch(start = CoroutineStart.UNDISPATCHED) { repository.clear() }
-        val load = async(start = CoroutineStart.UNDISPATCHED) { repository.loadForStart() }
+        val load = async(start = CoroutineStart.UNDISPATCHED) { repository.load() }
         releaseFirstRead.complete(Unit)
 
         save.join()
@@ -352,19 +334,6 @@ class AndroidStreamingCredentialRepositoryTest {
         assertNull(load.await())
         assertEquals(1, store.maxConcurrentOperations.get())
         assertEquals(CredentialRecord(), store.current)
-    }
-
-    @Test
-    fun `repository exposes only capability port methods to each consumer`() {
-        val repository = AndroidStreamingCredentialRepository(FakeCredentialStore(), FakeCredentialCipher())
-
-        val settings: com.sona.android.application.recording.StreamingCredentialSettingsPort = repository
-        val resolver: com.sona.android.application.recording.StreamingCredentialResolverPort = repository
-
-        assertEquals(setOf("getStatus", "save", "clear"), settings.javaClass.interfaces
-            .single { it.simpleName == "StreamingCredentialSettingsPort" }
-            .declaredMethods.map { it.name }.toSet())
-        assertTrue(resolver is com.sona.android.application.recording.StreamingCredentialResolverPort)
     }
 
     private suspend fun captureCredentialError(block: suspend () -> Unit): CredentialPersistenceException =

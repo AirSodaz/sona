@@ -77,7 +77,6 @@ import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import com.sona.android.app.feature.settings.RecognitionSettingsUiState
 import com.sona.android.app.ui.theme.LocalSonaRecordingColor
 import com.sona.android.application.recording.AudioInputStatus
-import com.sona.android.application.recording.CredentialStatus
 import com.sona.android.application.recording.LiveRecordingState
 import com.sona.android.application.recording.RecognitionEngine
 import com.sona.android.application.recording.StreamingStatus
@@ -88,7 +87,7 @@ import com.sona.android.application.recording.TranscriptSegment
 internal fun RecordScreen(
     bootstrapState: SonaBootstrapUiState,
     recordingState: LiveRecordingState,
-    credentialStatus: CredentialStatus,
+    onlineCredentialConfigured: Boolean,
     recognitionSettings: RecognitionSettingsUiState,
     onRetryBootstrap: () -> Unit,
     onStartRecording: () -> Unit,
@@ -167,7 +166,7 @@ internal fun RecordScreen(
 
     val requestRecording = {
         val configurationMissing = when (recognitionSettings.engine) {
-            RecognitionEngine.ONLINE -> credentialStatus == CredentialStatus.NOT_CONFIGURED
+            RecognitionEngine.ONLINE -> !onlineCredentialConfigured
             RecognitionEngine.LOCAL -> recognitionSettings.localModel == null
         }
         if (configurationMissing || recordingState is LiveRecordingState.NeedsConfiguration) {
@@ -648,6 +647,8 @@ private fun BootstrapStatus(
     bootstrapState: SonaBootstrapUiState,
     onRetryBootstrap: () -> Unit,
 ) {
+    if (!shouldShowBootstrapStatus(bootstrapState)) return
+
     Card(
         shape = MaterialTheme.shapes.small,
         colors = CardDefaults.cardColors(
@@ -675,20 +676,7 @@ private fun BootstrapStatus(
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
-                is SonaBootstrapUiState.Ready -> {
-                    Icon(
-                        imageVector = Icons.Rounded.CheckCircle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = stringResource(R.string.status_ready),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                is SonaBootstrapUiState.Ready -> Unit
                 is SonaBootstrapUiState.Error -> {
                     Text(
                         text = stringResource(R.string.status_error),
@@ -711,6 +699,9 @@ private fun BootstrapStatus(
         }
     }
 }
+
+internal fun shouldShowBootstrapStatus(bootstrapState: SonaBootstrapUiState): Boolean =
+    bootstrapState !is SonaBootstrapUiState.Ready
 
 @StringRes
 private fun RecordingStatusCategory.labelRes(): Int = when (this) {

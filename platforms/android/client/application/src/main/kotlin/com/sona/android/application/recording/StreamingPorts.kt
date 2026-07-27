@@ -9,6 +9,17 @@ data class StreamingProviderProfile(
     val streamingResourceId: String,
 )
 
+class StreamingCredential(
+    val apiKey: String,
+) {
+    override fun equals(other: Any?): Boolean =
+        other is StreamingCredential && apiKey == other.apiKey
+
+    override fun hashCode(): Int = apiKey.hashCode()
+
+    override fun toString(): String = "StreamingCredential(apiKey=<redacted>)"
+}
+
 data class LocalSherpaStreamingConfig(
     val modelPath: String,
     val numThreads: Int,

@@ -11,7 +11,6 @@
     <string name="record_stop_description">停止录音</string>
     <string name="transcript_waiting">等待转写</string>
     <string name="status_loading">正在初始化</string>
-    <string name="status_ready">已就绪</string>
     <string name="status_error">初始化失败</string>
     <string name="action_retry">重试</string>
     <string name="action_back">返回</string>
@@ -77,7 +76,6 @@
     <string name="cloud_transcription_failed">云端转写失败</string>
     <string name="cloud_transcription_empty">云服务商未返回任何语音内容</string>
     <string name="cloud_transcription_persist_failed">新的转写结果保存失败</string>
-    <string name="online_recognition_heading">在线识别</string>
     <string name="credential_configured">凭据已配置</string>
     <string name="credential_not_configured">尚未配置凭据</string>
     <string name="credential_api_key">API Key</string>
@@ -98,7 +96,6 @@
     <string name="appearance_settings_error">无法保存外观设置</string>
     <string name="credential_status_label">状态</string>
     <string name="runtime_heading">本地运行库</string>
-    <string name="local_runtime_ready">已就绪</string>
     <string name="local_runtime_unavailable">不可用</string>
     <string name="local_recognition_heading">本地识别模型</string>
     <string name="local_model_installed">已安装：%1$s</string>

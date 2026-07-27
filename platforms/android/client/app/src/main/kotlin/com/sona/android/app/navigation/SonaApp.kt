@@ -42,7 +42,6 @@ import com.sona.android.app.feature.recording.RecordScreen
 import com.sona.android.app.feature.settings.AppLanguage
 import com.sona.android.app.feature.settings.AppearanceSettingsUiState
 import com.sona.android.app.feature.settings.CloudTranscriptionSettingsUiState
-import com.sona.android.app.feature.settings.CredentialSettingsUiState
 import com.sona.android.app.feature.settings.RecognitionSettingsUiState
 import com.sona.android.app.feature.settings.SettingsScreen
 import com.sona.android.app.feature.settings.SettingsSection
@@ -61,7 +60,6 @@ internal fun SonaApp(
     recordingState: LiveRecordingState,
     libraryState: LibraryUiState,
     appearanceState: AppearanceSettingsUiState,
-    credentialState: CredentialSettingsUiState,
     cloudTranscriptionState: CloudTranscriptionSettingsUiState,
     recognitionSettingsState: RecognitionSettingsUiState,
     appLanguage: AppLanguage,
@@ -79,9 +77,6 @@ internal fun SonaApp(
     onImportAudio: (String) -> Unit,
     onCancelAudioImport: () -> Unit,
     onTranscribeWithCurrentEngine: (RecordingLibraryItem) -> Unit,
-    onCredentialInputChanged: (String) -> Unit,
-    onSaveCredential: () -> Unit,
-    onClearCredential: () -> Unit,
     onCloudProviderSelected: (OnlineBatchProvider) -> Unit,
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
@@ -93,7 +88,7 @@ internal fun SonaApp(
     onDeleteLocalModel: (String) -> Unit,
     onRefreshRecognitionCatalog: () -> Unit,
 ) {
-    var credentialFocusRequested by remember { mutableStateOf(false) }
+    var cloudCredentialFocusRequested by remember { mutableStateOf(false) }
 
     ForegroundRecordingLifecycleEffect(onAppBackground)
 
@@ -105,7 +100,8 @@ internal fun SonaApp(
             ?: SonaDestination.RECORD
         val isLibraryDetail = currentRoute == LIBRARY_DETAIL_ROUTE
         val onConfigureCredential = {
-            credentialFocusRequested = true
+            onCloudProviderSelected(OnlineBatchProvider.VOLCENGINE_DOUBAO)
+            cloudCredentialFocusRequested = true
             navController.navigate(settingsRoute(SettingsSection.RECOGNITION)) {
                 popUpTo(SonaDestination.RECORD.route) { saveState = true }
                 launchSingleTop = true
@@ -113,7 +109,7 @@ internal fun SonaApp(
             }
         }
         val onConfigureRecognition = {
-            credentialFocusRequested = false
+            cloudCredentialFocusRequested = false
             navController.navigate(settingsRoute(SettingsSection.RECOGNITION)) {
                 popUpTo(SonaDestination.RECORD.route) { saveState = true }
                 launchSingleTop = true
@@ -196,7 +192,9 @@ internal fun SonaApp(
                         RecordScreen(
                             bootstrapState = bootstrapState,
                             recordingState = recordingState,
-                            credentialStatus = credentialState.status,
+                            onlineCredentialConfigured =
+                                OnlineBatchProvider.VOLCENGINE_DOUBAO in
+                                    cloudTranscriptionState.configuredProviders,
                             recognitionSettings = recognitionSettingsState,
                             onRetryBootstrap = onRetryBootstrap,
                             onStartRecording = onStartRecording,
@@ -260,16 +258,12 @@ internal fun SonaApp(
                             ),
                             bootstrapState = bootstrapState,
                             appearanceState = appearanceState,
-                            credentialState = credentialState,
                             cloudTranscriptionState = cloudTranscriptionState,
                             recognitionSettingsState = recognitionSettingsState,
                             appLanguage = appLanguage,
-                            requestCredentialFocus = credentialFocusRequested,
+                            requestCloudCredentialFocus = cloudCredentialFocusRequested,
                             onAppLanguageChanged = onAppLanguageChanged,
                             onDynamicColorChanged = onDynamicColorChanged,
-                            onCredentialInputChanged = onCredentialInputChanged,
-                            onSaveCredential = onSaveCredential,
-                            onClearCredential = onClearCredential,
                             onCloudProviderSelected = onCloudProviderSelected,
                             onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                             onSaveCloudApiKey = onSaveCloudApiKey,
@@ -279,8 +273,8 @@ internal fun SonaApp(
                             onValidateLocalModel = onValidateLocalModel,
                             onDeleteLocalModel = onDeleteLocalModel,
                             onRefreshRecognitionCatalog = onRefreshRecognitionCatalog,
-                            onCredentialFocusConsumed = {
-                                credentialFocusRequested = false
+                            onCloudCredentialFocusConsumed = {
+                                cloudCredentialFocusRequested = false
                             },
                         )
                     }

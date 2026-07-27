@@ -1,17 +1,10 @@
 package com.sona.android.adapters.android.credential
 
 import android.content.Context
-import com.sona.android.application.recording.CredentialStatus
 import com.sona.android.application.recording.StreamingCredential
-import com.sona.android.application.recording.StreamingCredentialResolverPort
-import com.sona.android.application.recording.StreamingCredentialSettingsPort
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -31,22 +24,18 @@ class CredentialPersistenceException internal constructor(
     },
 )
 
-class AndroidStreamingCredentialRepository internal constructor(
+internal interface LegacyStreamingCredentialSource {
+    suspend fun load(): StreamingCredential?
+    suspend fun clear()
+}
+
+internal class LegacyStreamingCredentialRepository internal constructor(
     private val store: CredentialStore,
     private val cipher: CredentialCipher,
-) : StreamingCredentialSettingsPort, StreamingCredentialResolverPort {
+) : LegacyStreamingCredentialSource {
     private val operations = Mutex()
 
-    override val status: Flow<CredentialStatus> = store.records
-        .map(CredentialEnvelope::projectStatus)
-        .distinctUntilChanged()
-        .catch { error ->
-            if (error is CancellationException) throw error
-            if (error is CredentialPersistenceException) throw error
-            throw failure(CredentialErrorCode.STORAGE_UNAVAILABLE)
-        }
-
-    override suspend fun save(credential: StreamingCredential) {
+    internal suspend fun save(credential: StreamingCredential) {
         val plaintext = credential.apiKey.encodeToByteArray()
         try {
             if (credential.apiKey.isBlank() || plaintext.size > MAX_API_KEY_UTF8_BYTES) {
@@ -70,7 +59,7 @@ class AndroidStreamingCredentialRepository internal constructor(
         }
     }
 
-    override suspend fun loadForStart(): StreamingCredential? = operations.withLock {
+    override suspend fun load(): StreamingCredential? = operations.withLock {
         when (val state = CredentialEnvelope.inspect(readRecord())) {
             CredentialEnvelopeState.Empty -> null
             CredentialEnvelopeState.Malformed -> {
@@ -182,8 +171,8 @@ class AndroidStreamingCredentialRepository internal constructor(
         private const val MAX_API_KEY_UTF8_BYTES = 16_384
 
         @JvmStatic
-        fun create(context: Context): AndroidStreamingCredentialRepository = try {
-            AndroidStreamingCredentialRepository(
+        internal fun create(context: Context): LegacyStreamingCredentialRepository = try {
+            LegacyStreamingCredentialRepository(
                 store = CredentialDataStore.create(context.applicationContext),
                 cipher = AndroidKeyStoreCredentialCipher(),
             )
@@ -191,6 +180,15 @@ class AndroidStreamingCredentialRepository internal constructor(
             throw error
         } catch (_: Exception) {
             throw failure(CredentialErrorCode.STORAGE_UNAVAILABLE)
+        }
+
+        internal fun createIfPresent(context: Context): LegacyStreamingCredentialRepository? {
+            val appContext = context.applicationContext
+            return if (CredentialDataStore.defaultFile(appContext).exists()) {
+                create(appContext)
+            } else {
+                null
+            }
         }
 
         private fun failure(code: CredentialErrorCode) = CredentialPersistenceException(code)

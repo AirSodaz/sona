@@ -2,6 +2,11 @@ package com.sona.android.application.recording
 
 import kotlinx.coroutines.flow.Flow
 
+enum class CredentialStatus {
+    NOT_CONFIGURED,
+    CONFIGURED,
+}
+
 /**
  * The provider that cloud batch transcription runs against, together with the
  * secret it needs. Resolved only when a transcription actually starts.

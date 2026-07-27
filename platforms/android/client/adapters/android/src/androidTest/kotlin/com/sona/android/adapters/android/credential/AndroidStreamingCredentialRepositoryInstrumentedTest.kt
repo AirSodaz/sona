@@ -3,13 +3,11 @@ package com.sona.android.adapters.android.credential
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.sona.android.application.recording.CredentialStatus
 import com.sona.android.application.recording.StreamingCredential
 import java.io.File
 import java.security.KeyStore
 import java.util.UUID
 import javax.crypto.SecretKey
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -23,7 +21,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-class AndroidStreamingCredentialRepositoryInstrumentedTest {
+class LegacyStreamingCredentialRepositoryInstrumentedTest {
     private lateinit var context: Context
     private lateinit var alias: String
     private lateinit var fileName: String
@@ -57,7 +55,7 @@ class AndroidStreamingCredentialRepositoryInstrumentedTest {
         val key = keyStore().getKey(alias, null) as SecretKey
 
         assertNull(key.encoded)
-        assertEquals(StreamingCredential("device-secret"), repository.loadForStart())
+        assertEquals(StreamingCredential("device-secret"), repository.load())
         repository.save(StreamingCredential("device-secret"))
         val secondRecord = store.read()
         assertNotEquals(firstRecord.ivBase64, secondRecord.ivBase64)
@@ -66,8 +64,7 @@ class AndroidStreamingCredentialRepositoryInstrumentedTest {
         repository.clear()
         repository.clear()
 
-        assertNull(repository.loadForStart())
-        assertEquals(CredentialStatus.NOT_CONFIGURED, repository.status.first())
+        assertNull(repository.load())
         assertEquals(CredentialRecord(), store.read())
         assertFalse(keyStore().containsAlias(alias))
     }
@@ -79,11 +76,11 @@ class AndroidStreamingCredentialRepositoryInstrumentedTest {
         repository.save(StreamingCredential("before-loss"))
         deleteAlias(alias)
 
-        assertNull(repository.loadForStart())
+        assertNull(repository.load())
         assertEquals(CredentialRecord(), store.read())
         repository.save(StreamingCredential("after-loss"))
 
-        assertEquals(StreamingCredential("after-loss"), repository.loadForStart())
+        assertEquals(StreamingCredential("after-loss"), repository.load())
         assertTrue(keyStore().containsAlias(alias))
     }
 
@@ -98,7 +95,7 @@ class AndroidStreamingCredentialRepositoryInstrumentedTest {
         }
         store.write(CredentialEnvelope(supported.envelope.iv, tamperedCiphertext).toRecord())
 
-        assertNull(repository.loadForStart())
+        assertNull(repository.load())
 
         assertEquals(CredentialRecord(), store.read())
         assertFalse(keyStore().containsAlias(alias))
@@ -140,8 +137,8 @@ class AndroidStreamingCredentialRepositoryInstrumentedTest {
     private fun openStore(): CredentialDataStore =
         CredentialDataStore.createForTesting(context, fileName).also { activeStore = it }
 
-    private fun repository(store: CredentialDataStore): AndroidStreamingCredentialRepository =
-        AndroidStreamingCredentialRepository(
+    private fun repository(store: CredentialDataStore): LegacyStreamingCredentialRepository =
+        LegacyStreamingCredentialRepository(
             store = store,
             cipher = AndroidKeyStoreCredentialCipher(
                 AndroidKeyStoreCredentialPolicy.production.copy(alias = alias),

@@ -31,12 +31,17 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -58,12 +63,33 @@ internal val OnlineBatchProvider.labelRes: Int
 @Composable
 internal fun CloudTranscriptionSettings(
     state: CloudTranscriptionSettingsUiState,
+    requestApiKeyFocus: Boolean,
     onProviderSelected: (OnlineBatchProvider) -> Unit,
     onApiKeyInputChanged: (String) -> Unit,
     onSave: () -> Unit,
     onClear: () -> Unit,
 ) {
     var apiKeyVisible by remember { mutableStateOf(false) }
+    var apiKeyFieldPlaced by remember { mutableStateOf(false) }
+    val apiKeyFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(
+        requestApiKeyFocus,
+        apiKeyFieldPlaced,
+        state.selectedProvider,
+        state.operationInProgress,
+    ) {
+        if (
+            requestApiKeyFocus &&
+            apiKeyFieldPlaced &&
+            state.selectedProvider == OnlineBatchProvider.VOLCENGINE_DOUBAO &&
+            !state.operationInProgress
+        ) {
+            apiKeyFocusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
 
     Text(
         text = stringResource(R.string.cloud_transcription_heading),
@@ -142,7 +168,10 @@ internal fun CloudTranscriptionSettings(
         value = state.apiKeyInput,
         onValueChange = onApiKeyInputChanged,
         enabled = !state.operationInProgress,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusRequester(apiKeyFocusRequester)
+            .onGloballyPositioned { apiKeyFieldPlaced = true },
         label = { Text(stringResource(R.string.credential_api_key)) },
         singleLine = true,
         shape = MaterialTheme.shapes.medium,

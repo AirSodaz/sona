@@ -11,7 +11,6 @@
     <string name="record_stop_description">Stop recording</string>
     <string name="transcript_waiting">Waiting for transcription</string>
     <string name="status_loading">Initializing</string>
-    <string name="status_ready">Ready</string>
     <string name="status_error">Initialization failed</string>
     <string name="action_retry">Retry</string>
     <string name="action_back">Back</string>
@@ -80,7 +79,6 @@
     <string name="batch_provider_volcengine_doubao" translatable="false">Volcengine Doubao</string>
     <string name="batch_provider_groq_whisper" translatable="false">Groq Whisper</string>
     <string name="batch_provider_mistral_voxtral" translatable="false">Mistral Voxtral</string>
-    <string name="online_recognition_heading">Online recognition</string>
     <string name="credential_configured">Credentials configured</string>
     <string name="credential_not_configured">Credentials not configured</string>
     <string name="credential_api_key">API Key</string>
@@ -106,7 +104,6 @@
     <string name="appearance_settings_error">Appearance setting could not be saved</string>
     <string name="credential_status_label">Status</string>
     <string name="runtime_heading">Local runtime</string>
-    <string name="local_runtime_ready">Ready</string>
     <string name="local_runtime_unavailable">Unavailable</string>
     <string name="local_recognition_heading">Local recognition model</string>
     <string name="local_model_installed">Installed: %1$s</string>

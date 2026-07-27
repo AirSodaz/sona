@@ -22,7 +22,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 class LiveRecordingCoordinator(
-    private val credentialResolver: StreamingCredentialResolverPort,
+    private val credentialResolver: BatchCredentialResolverPort,
     private val providerCatalog: StreamingProviderCatalogPort,
     private val microphoneCapture: MicrophoneCapturePort,
     private val streamingTranscription: StreamingTranscriptionPort,
@@ -373,7 +373,7 @@ class LiveRecordingCoordinator(
 
             RecognitionEngine.ONLINE -> {
                 val credential = try {
-                    credentialResolver.loadForStart()
+                    credentialResolver.load(OnlineBatchProvider.VOLCENGINE_DOUBAO)
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) {
@@ -416,7 +416,10 @@ class LiveRecordingCoordinator(
                         )
                         null
                     } else {
-                        StreamingEngineConfig.Online(credential, profile)
+                        StreamingEngineConfig.Online(
+                            StreamingCredential(credential.apiKey),
+                            profile,
+                        )
                     }
                 }
             }

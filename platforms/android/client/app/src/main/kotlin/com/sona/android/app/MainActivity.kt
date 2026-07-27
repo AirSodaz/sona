@@ -17,7 +17,6 @@ import com.sona.android.app.feature.recording.RecordingViewModel
 import com.sona.android.app.feature.settings.AppLanguage
 import com.sona.android.app.feature.settings.AppearanceSettingsViewModel
 import com.sona.android.app.feature.settings.CloudTranscriptionSettingsViewModel
-import com.sona.android.app.feature.settings.CredentialSettingsViewModel
 import com.sona.android.app.feature.settings.RecognitionSettingsViewModel
 import com.sona.android.app.navigation.SonaApp
 import com.sona.android.application.recording.LiveRecordingState
@@ -49,9 +48,6 @@ class MainActivity : AppCompatActivity() {
             val appearanceSettingsViewModel: AppearanceSettingsViewModel = viewModel(
                 factory = AppearanceSettingsViewModel.factory(container.appearanceSettings),
             )
-            val credentialViewModel: CredentialSettingsViewModel = viewModel(
-                factory = CredentialSettingsViewModel.factory(container.credentialSettings),
-            )
             val cloudTranscriptionViewModel: CloudTranscriptionSettingsViewModel = viewModel(
                 factory = CloudTranscriptionSettingsViewModel.factory(
                     container.batchCredentialSettings,
@@ -68,7 +64,6 @@ class MainActivity : AppCompatActivity() {
             val recordingState by recordingViewModel.state.collectAsStateWithLifecycle()
             val libraryState by libraryViewModel.state.collectAsStateWithLifecycle()
             val appearanceState by appearanceSettingsViewModel.state.collectAsStateWithLifecycle()
-            val credentialState by credentialViewModel.uiState.collectAsStateWithLifecycle()
             val cloudTranscriptionState by cloudTranscriptionViewModel.uiState
                 .collectAsStateWithLifecycle()
             val recognitionSettingsState by recognitionSettingsViewModel.uiState
@@ -83,7 +78,6 @@ class MainActivity : AppCompatActivity() {
                 recordingState = recordingState,
                 libraryState = libraryState,
                 appearanceState = appearanceState,
-                credentialState = credentialState,
                 cloudTranscriptionState = cloudTranscriptionState,
                 recognitionSettingsState = recognitionSettingsState,
                 appLanguage = currentAppLanguage(),
@@ -101,9 +95,6 @@ class MainActivity : AppCompatActivity() {
                 onImportAudio = libraryViewModel::importAudio,
                 onCancelAudioImport = libraryViewModel::cancelAudioImport,
                 onTranscribeWithCurrentEngine = libraryViewModel::transcribeWithCurrentEngine,
-                onCredentialInputChanged = credentialViewModel::onCredentialInputChanged,
-                onSaveCredential = credentialViewModel::saveCredential,
-                onClearCredential = credentialViewModel::clearCredential,
                 onCloudProviderSelected = cloudTranscriptionViewModel::selectProvider,
                 onCloudApiKeyInputChanged = cloudTranscriptionViewModel::onApiKeyInputChanged,
                 onSaveCloudApiKey = cloudTranscriptionViewModel::saveApiKey,

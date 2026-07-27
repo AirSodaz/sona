@@ -241,6 +241,9 @@ test('Android cloud batch transcription is wired end to end behind its own crede
   assert.match(keystoreCipher, /sona\/android\/batch-credential\/v1\/\$providerStorageId/u);
   assert.match(repository, /BatchCredentialSettingsPort, BatchCredentialResolverPort/u);
   assert.match(repository, /noBackupFilesDir|BatchCredentialDataStore\.create/u);
+  assert.match(repository, /LegacyStreamingCredentialRepository\.createIfPresent/u);
+  assert.match(repository, /slotFor\(DEFAULT_PROVIDER\.storageId\)/u);
+  assert.match(repository, /tryClearLegacyCredential/u);
   assert.doesNotMatch(repository, /Log\.|println\(/u);
 
   // Composition and surfaces stay wired to the ports rather than the adapters.
@@ -292,7 +295,11 @@ test('Android recording composition preserves lifecycle, permission, and credent
   );
   const settingsViewModel = clientSource(
     'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'settings',
-    'CredentialSettingsViewModel.kt',
+    'CloudTranscriptionSettingsViewModel.kt',
+  );
+  const cloudSettingsCard = clientSource(
+    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'settings',
+    'CloudTranscriptionSettingsCard.kt',
   );
   const settingsScreen = clientSource(
     'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'settings',
@@ -309,13 +316,19 @@ test('Android recording composition preserves lifecycle, permission, and credent
   assert.match(manifest, /android:name="\.SonaApplication"/u);
   assert.match(manifest, /android\.permission\.INTERNET/u);
   assert.match(application, /SonaAppContainer\(this\)/u);
-  assert.match(container, /AndroidStreamingCredentialRepository\.create\(appContext\)/u);
+  assert.match(container, /AndroidBatchCredentialRepository\.create\(appContext\)/u);
+  assert.doesNotMatch(container, /AndroidStreamingCredentialRepository/u);
   assert.match(container, /appContext\.filesDir\.absolutePath/u);
   assert.match(container, /UniffiStreamingProviderCatalogAdapter\(\)/u);
   assert.match(container, /UniffiStreamingTranscriptionAdapter\(\)/u);
   assert.match(container, /UniffiRecordingHistoryAdapter\(appDataDir\)/u);
   assert.match(container, /createLiveRecording\(scope: CoroutineScope\): LiveRecordingController/u);
   assert.match(coordinator, /:\s*LiveRecordingController/u);
+  assert.match(coordinator, /credentialResolver:\s*BatchCredentialResolverPort/u);
+  assert.match(
+    coordinator,
+    /credentialResolver\.load\(OnlineBatchProvider\.VOLCENGINE_DOUBAO\)/u,
+  );
   assert.match(recordingViewModel, /controllerFactory\.create\(viewModelScope\)/u);
   assert.match(activity, /\(application as SonaApplication\)\.container/u);
   assert.doesNotMatch(activity, /Manifest\.permission\.RECORD_AUDIO/u);
@@ -330,22 +343,37 @@ test('Android recording composition preserves lifecycle, permission, and credent
 
   assert.match(settingsScreen, /NavigableListDetailPaneScaffold/u);
   assert.match(settingsScreen, /initialDestinationHistory/u);
-  assert.match(settingsScreen, /requestCredentialFocus/u);
-  assert.match(settingsScreen, /credentialFocusSessionActive/u);
+  assert.match(settingsScreen, /requestCloudCredentialFocus/u);
+  assert.match(settingsScreen, /cloudCredentialFocusSessionActive/u);
   assert.match(settingsScreen, /DisposableEffect/u);
   assert.doesNotMatch(
     settingsScreen,
     /initialSection\s*==\s*SettingsSection\.RECOGNITION/u,
   );
-  assert.match(recognitionSettingsPane, /PasswordVisualTransformation/u);
-  assert.match(recognitionSettingsPane, /value = state\.credentialInput/u);
-  assert.match(recognitionSettingsPane, /onGloballyPositioned/u);
-  assert.doesNotMatch(recognitionSettingsPane, /else if \(!focusInitialized\)/u);
+  assert.doesNotMatch(recognitionSettingsPane, /CredentialSettingsUiState|credentialInput/u);
+  assert.match(recognitionSettingsPane, /initialFocusRequester/u);
+  assert.match(recognitionSettingsPane, /keyboardController\?\.hide\(\)/u);
   assert.doesNotMatch(recognitionSettingsPane, /rememberSaveable/u);
-  assert.match(settingsViewModel, /credentialInput=<redacted>/u);
+  assert.match(cloudSettingsCard, /PasswordVisualTransformation/u);
+  assert.match(cloudSettingsCard, /value = state\.apiKeyInput/u);
+  assert.match(cloudSettingsCard, /onGloballyPositioned/u);
+  assert.match(settingsViewModel, /apiKeyInput=<redacted>/u);
   assert.doesNotMatch(settingsViewModel, /SavedStateHandle/u);
-  assert.match(navigation, /credentialFocusRequested/u);
-  assert.doesNotMatch(navigation, /credentialFocusRequested by rememberSaveable/u);
+  assert.match(navigation, /cloudCredentialFocusRequested/u);
+  assert.match(
+    navigation,
+    /onCloudProviderSelected\(OnlineBatchProvider\.VOLCENGINE_DOUBAO\)/u,
+  );
+  assert.doesNotMatch(navigation, /cloudCredentialFocusRequested by rememberSaveable/u);
+  assert.equal(
+    fs.existsSync(path.join(
+      repoRoot,
+      'platforms', 'android', 'client', 'app', 'src', 'main', 'kotlin',
+      'com', 'sona', 'android', 'app', 'feature', 'settings',
+      'CredentialSettingsViewModel.kt',
+    )),
+    false,
+  );
 });
 
 test('Android verification runs all recording tests in one serial Gradle invocation', () => {

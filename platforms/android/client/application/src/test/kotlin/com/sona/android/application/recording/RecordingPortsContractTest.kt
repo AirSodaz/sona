@@ -1,7 +1,6 @@
 package com.sona.android.application.recording
 
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
@@ -16,18 +15,8 @@ import org.junit.Test
 class RecordingPortsContractTest {
     @Test
     fun `recording adapters can satisfy every port without platform types`() = runTest {
-        val credentialSettings = MemoryCredentialSettings()
         val credential = StreamingCredential(apiKey = "secret")
         assertFalse(credential.toString().contains("secret"))
-        credentialSettings.save(credential)
-        assertEquals(CredentialStatus.CONFIGURED, credentialSettings.status.first())
-        assertEquals(
-            setOf("clear", "getStatus", "save"),
-            StreamingCredentialSettingsPort::class.java.declaredMethods.map { it.name }.toSet(),
-        )
-
-        val credentialResolver = StreamingCredentialResolverPort { credential }
-        assertEquals(credential, credentialResolver.loadForStart())
 
         val profile = StreamingProviderProfile(
             providerId = "volcengine-doubao",
@@ -99,21 +88,6 @@ class RecordingPortsContractTest {
         assertEquals(125, MonotonicClockPort { 125 }.elapsedRealtimeMillis())
         assertEquals("live-2", RecordingIdPort { "live-2" }.nextRecordingId())
 
-        credentialSettings.clear()
-        assertEquals(CredentialStatus.NOT_CONFIGURED, credentialSettings.status.first())
-    }
-
-    private class MemoryCredentialSettings : StreamingCredentialSettingsPort {
-        private val mutableStatus = MutableStateFlow(CredentialStatus.NOT_CONFIGURED)
-        override val status: Flow<CredentialStatus> = mutableStatus
-
-        override suspend fun save(credential: StreamingCredential) {
-            mutableStatus.value = CredentialStatus.CONFIGURED
-        }
-
-        override suspend fun clear() {
-            mutableStatus.value = CredentialStatus.NOT_CONFIGURED
-        }
     }
 
     private class MemoryHistoryPort(

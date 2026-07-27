@@ -60,17 +60,13 @@ internal fun SettingsScreen(
     initialSection: SettingsSection?,
     bootstrapState: SonaBootstrapUiState,
     appearanceState: AppearanceSettingsUiState,
-    credentialState: CredentialSettingsUiState,
     cloudTranscriptionState: CloudTranscriptionSettingsUiState,
     recognitionSettingsState: RecognitionSettingsUiState,
     appLanguage: AppLanguage,
-    requestCredentialFocus: Boolean,
-    onCredentialFocusConsumed: () -> Unit,
+    requestCloudCredentialFocus: Boolean,
+    onCloudCredentialFocusConsumed: () -> Unit,
     onAppLanguageChanged: (AppLanguage) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
-    onCredentialInputChanged: (String) -> Unit,
-    onSaveCredential: () -> Unit,
-    onClearCredential: () -> Unit,
     onCloudProviderSelected: (OnlineBatchProvider) -> Unit,
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
@@ -91,10 +87,12 @@ internal fun SettingsScreen(
     var selectedSectionRoute by rememberSaveable {
         mutableStateOf(initialSection?.route ?: SettingsSection.APPEARANCE.route)
     }
-    var credentialFocusSessionActive by remember {
-        mutableStateOf(requestCredentialFocus)
+    var cloudCredentialFocusSessionActive by remember {
+        mutableStateOf(requestCloudCredentialFocus)
     }
-    val currentOnCredentialFocusConsumed by rememberUpdatedState(onCredentialFocusConsumed)
+    val currentOnCloudCredentialFocusConsumed by rememberUpdatedState(
+        onCloudCredentialFocusConsumed,
+    )
     val selectedSection = SettingsSection.fromRoute(selectedSectionRoute)
         ?: SettingsSection.APPEARANCE
     val listPaneVisible = navigator.scaffoldValue[ListDetailPaneScaffoldRole.List] ==
@@ -103,24 +101,24 @@ internal fun SettingsScreen(
         PaneAdaptedValue.Expanded
     val isTwoPane = listPaneVisible && detailPaneVisible
     val canNavigateBack = !listPaneVisible && navigator.canNavigateBack()
-    val consumeCredentialFocusSession = {
-        if (credentialFocusSessionActive) {
-            credentialFocusSessionActive = false
-            onCredentialFocusConsumed()
+    val consumeCloudCredentialFocusSession = {
+        if (cloudCredentialFocusSessionActive) {
+            cloudCredentialFocusSessionActive = false
+            onCloudCredentialFocusConsumed()
         }
     }
     val navigateBack: () -> Unit = {
-        consumeCredentialFocusSession()
+        consumeCloudCredentialFocusSession()
         scope.launch { navigator.navigateBack() }
     }
 
-    LaunchedEffect(requestCredentialFocus) {
-        if (requestCredentialFocus) {
-            credentialFocusSessionActive = true
+    LaunchedEffect(requestCloudCredentialFocus) {
+        if (requestCloudCredentialFocus) {
+            cloudCredentialFocusSessionActive = true
         }
     }
     DisposableEffect(Unit) {
-        onDispose { currentOnCredentialFocusConsumed() }
+        onDispose { currentOnCloudCredentialFocusConsumed() }
     }
     LaunchedEffect(initialSection) {
         initialSection?.let { section ->
@@ -147,7 +145,7 @@ internal fun SettingsScreen(
                     showSelection = isTwoPane,
                     onSectionSelected = { section ->
                         if (section != SettingsSection.RECOGNITION) {
-                            consumeCredentialFocusSession()
+                            consumeCloudCredentialFocusSession()
                         }
                         selectedSectionRoute = section.route
                         scope.launch {
@@ -164,17 +162,13 @@ internal fun SettingsScreen(
                     showBack = canNavigateBack,
                     bootstrapState = bootstrapState,
                     appearanceState = appearanceState,
-                    credentialState = credentialState,
                     cloudTranscriptionState = cloudTranscriptionState,
                     recognitionSettingsState = recognitionSettingsState,
                     appLanguage = appLanguage,
-                    requestCredentialFocus = credentialFocusSessionActive,
+                    requestCloudCredentialFocus = cloudCredentialFocusSessionActive,
                     onBack = navigateBack,
                     onAppLanguageChanged = onAppLanguageChanged,
                     onDynamicColorChanged = onDynamicColorChanged,
-                    onCredentialInputChanged = onCredentialInputChanged,
-                    onSaveCredential = onSaveCredential,
-                    onClearCredential = onClearCredential,
                     onCloudProviderSelected = onCloudProviderSelected,
                     onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                     onSaveCloudApiKey = onSaveCloudApiKey,
@@ -329,17 +323,13 @@ private fun SettingsDetailPane(
     showBack: Boolean,
     bootstrapState: SonaBootstrapUiState,
     appearanceState: AppearanceSettingsUiState,
-    credentialState: CredentialSettingsUiState,
     cloudTranscriptionState: CloudTranscriptionSettingsUiState,
     recognitionSettingsState: RecognitionSettingsUiState,
     appLanguage: AppLanguage,
-    requestCredentialFocus: Boolean,
+    requestCloudCredentialFocus: Boolean,
     onBack: () -> Unit,
     onAppLanguageChanged: (AppLanguage) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
-    onCredentialInputChanged: (String) -> Unit,
-    onSaveCredential: () -> Unit,
-    onClearCredential: () -> Unit,
     onCloudProviderSelected: (OnlineBatchProvider) -> Unit,
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
@@ -381,13 +371,9 @@ private fun SettingsDetailPane(
             )
             SettingsSection.RECOGNITION -> RecognitionSettingsPane(
                 bootstrapState = bootstrapState,
-                credentialState = credentialState,
                 cloudTranscriptionState = cloudTranscriptionState,
                 recognitionSettingsState = recognitionSettingsState,
-                requestCredentialFocus = requestCredentialFocus,
-                onCredentialInputChanged = onCredentialInputChanged,
-                onSaveCredential = onSaveCredential,
-                onClearCredential = onClearCredential,
+                requestCloudCredentialFocus = requestCloudCredentialFocus,
                 onCloudProviderSelected = onCloudProviderSelected,
                 onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                 onSaveCloudApiKey = onSaveCloudApiKey,

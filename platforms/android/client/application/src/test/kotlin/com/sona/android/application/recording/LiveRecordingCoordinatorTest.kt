@@ -48,7 +48,7 @@ class LiveRecordingCoordinatorTest {
 
         val engine = fakes.transcription.openedRequests.single().engine
         assertEquals(StreamingEngineConfig.LocalSherpa(localConfig), engine)
-        assertFalse(fakes.calls.contains("credential.loadForStart"))
+        assertFalse(fakes.calls.contains("credential.load.VOLCENGINE_DOUBAO"))
         assertFalse(fakes.calls.contains("provider.load"))
         coordinator.stop()
     }
@@ -515,7 +515,7 @@ class LiveRecordingCoordinatorTest {
         assertEquals("cancel start", cancellation?.message)
         assertEquals(LiveRecordingState.Idle, coordinator.state.value)
         assertEquals(
-            listOf("credential.loadForStart", "provider.load", "id.next", "history.create"),
+            listOf("credential.load.VOLCENGINE_DOUBAO", "provider.load", "id.next", "history.create"),
             fakes.calls,
         )
     }
@@ -1022,7 +1022,7 @@ class LiveRecordingCoordinatorTest {
     @Test
     fun `blank stored credential is treated as not configured`() = runTest {
         val fakes = RecordingFakes()
-        fakes.credentialResolver.credential = StreamingCredential("   ")
+        fakes.credentialResolver.credential = OnlineBatchCredential("   ")
         val coordinator = LiveRecordingCoordinator(
             credentialResolver = fakes.credentialResolver,
             providerCatalog = fakes.providerCatalog,
@@ -1037,7 +1037,7 @@ class LiveRecordingCoordinatorTest {
         coordinator.start()
 
         assertEquals(LiveRecordingState.NeedsConfiguration, coordinator.state.value)
-        assertEquals(listOf("credential.loadForStart"), fakes.calls)
+        assertEquals(listOf("credential.load.VOLCENGINE_DOUBAO"), fakes.calls)
     }
 
     @Test
@@ -1201,7 +1201,7 @@ class LiveRecordingCoordinatorTest {
         )
         assertEquals(
             listOf(
-                "credential.loadForStart",
+                "credential.load.VOLCENGINE_DOUBAO",
                 "provider.load",
                 "id.next",
                 "history.create",
@@ -1244,7 +1244,7 @@ class LiveRecordingCoordinatorTest {
             ),
             coordinator.state.value,
         )
-        assertEquals(listOf("credential.loadForStart", "provider.load"), fakes.calls)
+        assertEquals(listOf("credential.load.VOLCENGINE_DOUBAO", "provider.load"), fakes.calls)
     }
 
     @Test
@@ -1265,7 +1265,7 @@ class LiveRecordingCoordinatorTest {
         coordinator.start()
 
         assertEquals(LiveRecordingState.NeedsConfiguration, coordinator.state.value)
-        assertEquals(listOf("credential.loadForStart"), fakes.calls)
+        assertEquals(listOf("credential.load.VOLCENGINE_DOUBAO"), fakes.calls)
     }
 
     @Test
@@ -1284,6 +1284,10 @@ class LiveRecordingCoordinatorTest {
 
         coordinator.start()
         assertTrue(coordinator.state.value is LiveRecordingState.Recording)
+        assertEquals(
+            listOf(OnlineBatchProvider.VOLCENGINE_DOUBAO),
+            fakes.credentialResolver.requestedProviders,
+        )
 
         val frame = Pcm16Frame(byteArrayOf(1, 2))
         fakes.microphone.emitFrame(frame)
@@ -1307,7 +1311,7 @@ class LiveRecordingCoordinatorTest {
         assertEquals(LiveRecordingState.Completed("live-1"), coordinator.state.value)
         assertEquals(
             listOf(
-                "credential.loadForStart",
+                "credential.load.VOLCENGINE_DOUBAO",
                 "provider.load",
                 "id.next",
                 "history.create",
@@ -1349,7 +1353,7 @@ class LiveRecordingCoordinatorTest {
         assertEquals(RecordingFailureCategory.STARTUP, failure.category)
         assertEquals("Unable to start live transcription.", failure.message)
         assertFalse(failure.message.contains("keystore alias and plaintext detail"))
-        assertEquals(listOf("credential.loadForStart"), fakes.calls)
+        assertEquals(listOf("credential.load.VOLCENGINE_DOUBAO"), fakes.calls)
     }
 
     @Test

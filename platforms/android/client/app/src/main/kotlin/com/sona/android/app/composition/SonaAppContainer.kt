@@ -9,7 +9,6 @@ import com.sona.android.adapters.android.audio.AndroidPcmAudioReader
 import com.sona.android.adapters.android.audio.AudioImportWorkerFactory
 import com.sona.android.adapters.android.audio.FrameworkAudioRecordBackend
 import com.sona.android.adapters.android.credential.AndroidBatchCredentialRepository
-import com.sona.android.adapters.android.credential.AndroidStreamingCredentialRepository
 import com.sona.android.adapters.android.settings.AndroidAppearanceSettingsRepository
 import com.sona.android.adapters.android.settings.AndroidLocalAsrDeviceCapabilities
 import com.sona.android.adapters.android.settings.AndroidRecognitionSettingsRepository
@@ -31,7 +30,6 @@ import com.sona.android.application.recording.LiveRecordingCoordinator
 import com.sona.android.application.recording.RunAudioImport
 import com.sona.android.application.recording.ScheduleAudioImport
 import com.sona.android.application.recording.ScheduleAudioRetranscription
-import com.sona.android.application.recording.StreamingCredentialSettingsPort
 import com.sona.android.application.recording.TranscribeRecordingWithCloud
 import com.sona.android.application.settings.AppearanceSettingsPort
 import com.sona.android.application.sync.SyncSecretStorePort
@@ -42,7 +40,6 @@ class SonaAppContainer(context: Context) {
     private val appContext = context.applicationContext
     private val appDataDir = appContext.filesDir.absolutePath
     private val bootstrapPort = UniffiSonaBootstrapAdapter()
-    private val credentialRepository = AndroidStreamingCredentialRepository.create(appContext)
     private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository.create(appContext)
     private val localAsrDeviceCapabilities = AndroidLocalAsrDeviceCapabilities.create(appContext)
     private val localAsrModelCatalog = UniffiLocalAsrModelCatalogAdapter()
@@ -69,7 +66,6 @@ class SonaAppContainer(context: Context) {
 
     val loadSonaBootstrap = LoadSonaBootstrap(bootstrapPort)
     val appearanceSettings: AppearanceSettingsPort = appearanceSettingsRepository
-    val credentialSettings: StreamingCredentialSettingsPort = credentialRepository
     val recognitionSettings = recognitionSettingsRepository
     val recognitionModelCatalog = localAsrModelCatalog
     val recognitionDeviceCapabilities = localAsrDeviceCapabilities
@@ -108,7 +104,7 @@ class SonaAppContainer(context: Context) {
 
     fun createLiveRecording(scope: CoroutineScope): LiveRecordingController =
         LiveRecordingCoordinator(
-            credentialResolver = credentialRepository,
+            credentialResolver = batchCredentialRepository,
             providerCatalog = providerCatalog,
             microphoneCapture = microphoneCapture,
             streamingTranscription = streamingTranscription,

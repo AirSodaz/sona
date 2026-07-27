@@ -1,5 +1,6 @@
 package com.sona.android.app.feature.settings
 
+import com.sona.android.app.MainDispatcherRule
 import com.sona.android.application.recording.BatchCredentialConfiguration
 import com.sona.android.application.recording.BatchCredentialSettingsPort
 import com.sona.android.application.recording.CredentialStatus

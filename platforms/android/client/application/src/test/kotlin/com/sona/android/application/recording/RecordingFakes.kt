@@ -19,13 +19,17 @@ class RecordingFakes {
 
     class FakeCredentialResolver(
         private val calls: MutableList<String>,
-    ) : StreamingCredentialResolverPort {
-        var credential: StreamingCredential? = StreamingCredential("secret")
+    ) : BatchCredentialResolverPort {
+        var credential: OnlineBatchCredential? = OnlineBatchCredential("secret")
+        var requestedProviders = mutableListOf<OnlineBatchProvider>()
         var loadFailure: Throwable? = null
         var loadBarrier: Pair<CompletableDeferred<Unit>, CompletableDeferred<Unit>>? = null
 
-        override suspend fun loadForStart(): StreamingCredential? {
-            calls += "credential.loadForStart"
+        override suspend fun loadActive(): ActiveBatchCredential? = null
+
+        override suspend fun load(provider: OnlineBatchProvider): OnlineBatchCredential? {
+            calls += "credential.load.${provider.name}"
+            requestedProviders += provider
             loadBarrier?.let { (started, release) ->
                 started.complete(Unit)
                 release.await()

@@ -11,7 +11,6 @@
     <string name="record_stop_description">録音を停止</string>
     <string name="transcript_waiting">文字起こしを待機中</string>
     <string name="status_loading">初期化中</string>
-    <string name="status_ready">準備完了</string>
     <string name="status_error">初期化に失敗しました</string>
     <string name="action_retry">再試行</string>
     <string name="action_back">戻る</string>
@@ -77,7 +76,6 @@
     <string name="cloud_transcription_failed">クラウド文字起こしに失敗しました</string>
     <string name="cloud_transcription_empty">クラウドプロバイダーから音声が返されませんでした</string>
     <string name="cloud_transcription_persist_failed">新しい文字起こしを保存できませんでした</string>
-    <string name="online_recognition_heading">オンライン認識</string>
     <string name="credential_configured">認証情報を設定済み</string>
     <string name="credential_not_configured">認証情報が未設定です</string>
     <string name="credential_api_key">API Key</string>
@@ -98,7 +96,6 @@
     <string name="appearance_settings_error">外観設定を保存できませんでした</string>
     <string name="credential_status_label">状態</string>
     <string name="runtime_heading">ローカルランタイム</string>
-    <string name="local_runtime_ready">準備完了</string>
     <string name="local_runtime_unavailable">利用できません</string>
     <string name="local_recognition_heading">ローカル認識モデル</string>
     <string name="local_model_installed">インストール済み：%1$s</string>
