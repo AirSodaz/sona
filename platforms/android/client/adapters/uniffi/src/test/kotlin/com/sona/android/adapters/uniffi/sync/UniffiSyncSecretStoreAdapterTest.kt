@@ -8,7 +8,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
-import uniffi.sona_uniffi_bind.FfiSyncSecretStore
+import uniffi.sona_uniffi_bind.FfiSecretStore
 import uniffi.sona_uniffi_bind.SonaCoreBindingException
 
 class UniffiSyncSecretStoreAdapterTest {
@@ -39,7 +39,7 @@ class UniffiSyncSecretStoreAdapterTest {
     @Test
     fun `registrar passes a working adapter to the generated binding`() = runTest {
         var registeredAppDataDir: String? = null
-        var registered: FfiSyncSecretStore? = null
+        var registered: FfiSecretStore? = null
         val registrar = UniffiSyncSecretStoreRegistrar { appDataDir, store ->
             registeredAppDataDir = appDataDir
             registered = store

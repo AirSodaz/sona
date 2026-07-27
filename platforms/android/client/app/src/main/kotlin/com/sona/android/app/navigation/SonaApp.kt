@@ -41,11 +41,14 @@ import com.sona.android.app.feature.recording.ForegroundRecordingLifecycleEffect
 import com.sona.android.app.feature.recording.RecordScreen
 import com.sona.android.app.feature.settings.AppLanguage
 import com.sona.android.app.feature.settings.AppearanceSettingsUiState
+import com.sona.android.app.feature.settings.CloudTranscriptionSettingsUiState
 import com.sona.android.app.feature.settings.CredentialSettingsUiState
 import com.sona.android.app.feature.settings.SettingsScreen
 import com.sona.android.app.feature.settings.SettingsSection
 import com.sona.android.app.ui.theme.SonaTheme
+import com.sona.android.application.library.RecordingLibraryItem
 import com.sona.android.application.recording.LiveRecordingState
+import com.sona.android.application.recording.OnlineBatchProvider
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -57,6 +60,7 @@ internal fun SonaApp(
     libraryState: LibraryUiState,
     appearanceState: AppearanceSettingsUiState,
     credentialState: CredentialSettingsUiState,
+    cloudTranscriptionState: CloudTranscriptionSettingsUiState,
     appLanguage: AppLanguage,
     onAppLanguageChanged: (AppLanguage) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
@@ -68,9 +72,14 @@ internal fun SonaApp(
     onLoadMoreLibrary: () -> Unit,
     onRetryLibrary: () -> Unit,
     onLoadLibraryTranscript: (String) -> Unit,
+    onTranscribeWithCloud: (RecordingLibraryItem) -> Unit,
     onCredentialInputChanged: (String) -> Unit,
     onSaveCredential: () -> Unit,
     onClearCredential: () -> Unit,
+    onCloudProviderSelected: (OnlineBatchProvider) -> Unit,
+    onCloudApiKeyInputChanged: (String) -> Unit,
+    onSaveCloudApiKey: () -> Unit,
+    onClearCloudApiKey: () -> Unit,
 ) {
     var credentialFocusRequested by remember { mutableStateOf(false) }
 
@@ -204,7 +213,9 @@ internal fun SonaApp(
                             historyId = historyId,
                             item = libraryState.items.firstOrNull { it.historyId == historyId },
                             detail = libraryState.detail,
+                            cloudTranscription = libraryState.cloudTranscription,
                             onRetry = { onLoadLibraryTranscript(historyId) },
+                            onTranscribeWithCloud = onTranscribeWithCloud,
                         )
                     }
                     composable(
@@ -224,6 +235,7 @@ internal fun SonaApp(
                             bootstrapState = bootstrapState,
                             appearanceState = appearanceState,
                             credentialState = credentialState,
+                            cloudTranscriptionState = cloudTranscriptionState,
                             appLanguage = appLanguage,
                             requestCredentialFocus = credentialFocusRequested,
                             onAppLanguageChanged = onAppLanguageChanged,
@@ -231,6 +243,10 @@ internal fun SonaApp(
                             onCredentialInputChanged = onCredentialInputChanged,
                             onSaveCredential = onSaveCredential,
                             onClearCredential = onClearCredential,
+                            onCloudProviderSelected = onCloudProviderSelected,
+                            onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
+                            onSaveCloudApiKey = onSaveCloudApiKey,
+                            onClearCloudApiKey = onClearCloudApiKey,
                             onCredentialFocusConsumed = {
                                 credentialFocusRequested = false
                             },

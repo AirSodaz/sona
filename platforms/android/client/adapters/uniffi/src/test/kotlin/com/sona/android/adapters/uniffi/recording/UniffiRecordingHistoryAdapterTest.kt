@@ -18,6 +18,7 @@ import com.sona.android.application.recording.TranscriptTimingUnit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
@@ -62,6 +63,8 @@ class UniffiRecordingHistoryAdapterTest {
                         status = RecordingLibraryItemStatus.DRAFT,
                         tagIds = listOf("tag-1"),
                         deletedAtEpochMillis = null,
+                        audioPath = "history-1.wav",
+                        audioAvailable = true,
                     ),
                 ),
                 hasMore = true,
@@ -140,6 +143,26 @@ class UniffiRecordingHistoryAdapterTest {
             UniffiRecordingHistoryAdapter("C:/app-data", bindings)
                 .loadTranscript("history-1"),
         )
+    }
+
+    @Test
+    fun `only an available audio file is offered for cloud transcription`() = runTest {
+        val unavailable = listOf(
+            itemRecord(audioStatus = FfiHistoryAudioStatusV1.MISSING),
+            itemRecord(audioStatus = FfiHistoryAudioStatusV1.REMOVED),
+            itemRecord(audioPath = "   "),
+        )
+
+        unavailable.forEach { record ->
+            val bindings = FakeHistoryBindings().apply { queryResponse = queryResult(record) }
+
+            val item = UniffiRecordingHistoryAdapter("C:/app-data", bindings)
+                .loadPage(offset = 0, limit = 30)
+                .items
+                .single()
+
+            assertFalse(item.audioAvailable)
+        }
     }
 
     @Test
@@ -265,12 +288,14 @@ class UniffiRecordingHistoryAdapterTest {
             timestamp: ULong = 1_725_000_000_000uL,
             title: String = "Recording 1",
             status: FfiHistoryItemStatusV1 = FfiHistoryItemStatusV1.DRAFT,
+            audioPath: String = "history-1.wav",
+            audioStatus: FfiHistoryAudioStatusV1 = FfiHistoryAudioStatusV1.AVAILABLE,
         ) = FfiHistoryItemRecordV1(
             id = "history-1",
             timestamp = timestamp,
             duration = 2.5,
-            audioPath = "history-1.wav",
-            audioStatus = FfiHistoryAudioStatusV1.AVAILABLE,
+            audioPath = audioPath,
+            audioStatus = audioStatus,
             transcriptPath = "history-1.json",
             title = title,
             previewText = "Hello mobile history",

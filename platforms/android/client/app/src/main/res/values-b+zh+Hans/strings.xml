@@ -50,6 +50,16 @@
     <string name="library_transcript_heading">转写文本</string>
     <string name="library_transcript_empty">暂无转写文本</string>
     <string name="library_transcript_load_failed">无法加载转写文本</string>
+    <string name="action_cloud_transcribe">云端转写</string>
+    <string name="cloud_transcription_heading">云端转写</string>
+    <string name="cloud_transcription_summary">使用云服务商重新转写已保存的录音。</string>
+    <string name="cloud_transcription_running">转写中</string>
+    <string name="cloud_transcription_completed">转写结果已更新</string>
+    <string name="cloud_transcription_missing_credential">请先在设置中填写云服务商 API Key</string>
+    <string name="cloud_transcription_missing_audio">该录音没有音频文件</string>
+    <string name="cloud_transcription_failed">云端转写失败</string>
+    <string name="cloud_transcription_empty">云服务商未返回任何语音内容</string>
+    <string name="cloud_transcription_persist_failed">新的转写结果保存失败</string>
     <string name="online_recognition_heading">在线识别</string>
     <string name="credential_configured">凭据已配置</string>
     <string name="credential_not_configured">尚未配置凭据</string>

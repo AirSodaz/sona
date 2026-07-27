@@ -50,6 +50,16 @@
     <string name="microphone_device_changed_unknown">麥克風輸入裝置已變更</string>
     <string name="microphone_permission_rationale">錄音需要麥克風權限</string>
     <string name="microphone_permission_settings">請在系統設定中允許麥克風權限</string>
+    <string name="action_cloud_transcribe">雲端轉寫</string>
+    <string name="cloud_transcription_heading">雲端轉寫</string>
+    <string name="cloud_transcription_summary">使用雲端服務供應商重新轉寫已儲存的錄音。</string>
+    <string name="cloud_transcription_running">轉寫中</string>
+    <string name="cloud_transcription_completed">轉寫結果已更新</string>
+    <string name="cloud_transcription_missing_credential">請先在設定中填寫雲端服務供應商 API Key</string>
+    <string name="cloud_transcription_missing_audio">此錄音沒有音訊檔案</string>
+    <string name="cloud_transcription_failed">雲端轉寫失敗</string>
+    <string name="cloud_transcription_empty">雲端服務供應商未回傳任何語音內容</string>
+    <string name="cloud_transcription_persist_failed">新的轉寫結果儲存失敗</string>
     <string name="online_recognition_heading">線上辨識</string>
     <string name="credential_configured">憑據已設定</string>
     <string name="credential_not_configured">尚未設定憑據</string>

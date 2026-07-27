@@ -50,6 +50,19 @@
     <string name="library_transcript_heading">Transcript</string>
     <string name="library_transcript_empty">No transcript yet</string>
     <string name="library_transcript_load_failed">Transcript could not be loaded</string>
+    <string name="action_cloud_transcribe">Cloud transcribe</string>
+    <string name="cloud_transcription_heading">Cloud transcription</string>
+    <string name="cloud_transcription_summary">Re-transcribe a saved recording with a cloud provider.</string>
+    <string name="cloud_transcription_running">Transcribing</string>
+    <string name="cloud_transcription_completed">Transcript updated</string>
+    <string name="cloud_transcription_missing_credential">Add a cloud provider API key in settings first</string>
+    <string name="cloud_transcription_missing_audio">This recording has no audio file</string>
+    <string name="cloud_transcription_failed">Cloud transcription failed</string>
+    <string name="cloud_transcription_empty">The cloud provider returned no speech</string>
+    <string name="cloud_transcription_persist_failed">The new transcript could not be saved</string>
+    <string name="batch_provider_volcengine_doubao" translatable="false">Volcengine Doubao</string>
+    <string name="batch_provider_groq_whisper" translatable="false">Groq Whisper</string>
+    <string name="batch_provider_mistral_voxtral" translatable="false">Mistral Voxtral</string>
     <string name="online_recognition_heading">Online recognition</string>
     <string name="credential_configured">Credentials configured</string>
     <string name="credential_not_configured">Credentials not configured</string>

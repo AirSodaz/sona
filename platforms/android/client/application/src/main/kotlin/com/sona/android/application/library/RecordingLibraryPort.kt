@@ -16,6 +16,8 @@ data class RecordingLibraryItem(
     val status: RecordingLibraryItemStatus,
     val tagIds: List<String> = emptyList(),
     val deletedAtEpochMillis: Long? = null,
+    val audioPath: String = "",
+    val audioAvailable: Boolean = false,
 )
 
 data class RecordingLibraryPage(

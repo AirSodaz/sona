@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
+import com.sona.android.application.recording.OnlineBatchProvider
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
@@ -60,6 +61,7 @@ internal fun SettingsScreen(
     bootstrapState: SonaBootstrapUiState,
     appearanceState: AppearanceSettingsUiState,
     credentialState: CredentialSettingsUiState,
+    cloudTranscriptionState: CloudTranscriptionSettingsUiState,
     appLanguage: AppLanguage,
     requestCredentialFocus: Boolean,
     onCredentialFocusConsumed: () -> Unit,
@@ -68,6 +70,10 @@ internal fun SettingsScreen(
     onCredentialInputChanged: (String) -> Unit,
     onSaveCredential: () -> Unit,
     onClearCredential: () -> Unit,
+    onCloudProviderSelected: (OnlineBatchProvider) -> Unit,
+    onCloudApiKeyInputChanged: (String) -> Unit,
+    onSaveCloudApiKey: () -> Unit,
+    onClearCloudApiKey: () -> Unit,
 ) {
     val initialDestinationHistory = remember(initialSection) {
         settingsDestinationHistory(initialSection)
@@ -153,6 +159,7 @@ internal fun SettingsScreen(
                     bootstrapState = bootstrapState,
                     appearanceState = appearanceState,
                     credentialState = credentialState,
+                    cloudTranscriptionState = cloudTranscriptionState,
                     appLanguage = appLanguage,
                     requestCredentialFocus = credentialFocusSessionActive,
                     onBack = navigateBack,
@@ -161,6 +168,10 @@ internal fun SettingsScreen(
                     onCredentialInputChanged = onCredentialInputChanged,
                     onSaveCredential = onSaveCredential,
                     onClearCredential = onClearCredential,
+                    onCloudProviderSelected = onCloudProviderSelected,
+                    onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
+                    onSaveCloudApiKey = onSaveCloudApiKey,
+                    onClearCloudApiKey = onClearCloudApiKey,
                 )
             }
         },
@@ -307,6 +318,7 @@ private fun SettingsDetailPane(
     bootstrapState: SonaBootstrapUiState,
     appearanceState: AppearanceSettingsUiState,
     credentialState: CredentialSettingsUiState,
+    cloudTranscriptionState: CloudTranscriptionSettingsUiState,
     appLanguage: AppLanguage,
     requestCredentialFocus: Boolean,
     onBack: () -> Unit,
@@ -315,6 +327,10 @@ private fun SettingsDetailPane(
     onCredentialInputChanged: (String) -> Unit,
     onSaveCredential: () -> Unit,
     onClearCredential: () -> Unit,
+    onCloudProviderSelected: (OnlineBatchProvider) -> Unit,
+    onCloudApiKeyInputChanged: (String) -> Unit,
+    onSaveCloudApiKey: () -> Unit,
+    onClearCloudApiKey: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -348,10 +364,15 @@ private fun SettingsDetailPane(
             SettingsSection.RECOGNITION -> RecognitionSettingsPane(
                 bootstrapState = bootstrapState,
                 credentialState = credentialState,
+                cloudTranscriptionState = cloudTranscriptionState,
                 requestCredentialFocus = requestCredentialFocus,
                 onCredentialInputChanged = onCredentialInputChanged,
                 onSaveCredential = onSaveCredential,
                 onClearCredential = onClearCredential,
+                onCloudProviderSelected = onCloudProviderSelected,
+                onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
+                onSaveCloudApiKey = onSaveCloudApiKey,
+                onClearCloudApiKey = onClearCloudApiKey,
                 modifier = Modifier.weight(1f),
             )
         }

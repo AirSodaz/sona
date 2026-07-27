@@ -2,13 +2,13 @@ package com.sona.android.adapters.uniffi.sync
 
 import com.sona.android.application.sync.SyncSecretStorePort
 import kotlinx.coroutines.CancellationException
-import uniffi.sona_uniffi_bind.FfiSyncSecretStore
+import uniffi.sona_uniffi_bind.FfiSecretStore
 import uniffi.sona_uniffi_bind.SonaCoreBindingException
 import uniffi.sona_uniffi_bind.registerSyncSecretStoreForAppDataDir
 
 internal class UniffiSyncSecretStoreAdapter(
     private val delegate: SyncSecretStorePort,
-) : FfiSyncSecretStore {
+) : FfiSecretStore {
     override suspend fun get(key: String): ByteArray? = mapFailure {
         delegate.get(key)
     }
@@ -33,7 +33,7 @@ internal class UniffiSyncSecretStoreAdapter(
 }
 
 class UniffiSyncSecretStoreRegistrar internal constructor(
-    private val registerBinding: (String, FfiSyncSecretStore) -> Unit,
+    private val registerBinding: (String, FfiSecretStore) -> Unit,
 ) {
     constructor() : this(::registerSyncSecretStoreForAppDataDir)
 

@@ -108,6 +108,92 @@ test('Android online batch ASR stays behind an application port and Tokio UniFFI
   );
 });
 
+test('Android cloud batch transcription is wired end to end behind its own credential slot', () => {
+  const useCase = clientSource(
+    'application', 'kotlin', 'com', 'sona', 'android', 'application', 'recording',
+    'TranscribeRecordingWithCloud.kt',
+  );
+  const credentialPorts = clientSource(
+    'application', 'kotlin', 'com', 'sona', 'android', 'application', 'recording',
+    'BatchCredentialPorts.kt',
+  );
+  const libraryPort = clientSource(
+    'application', 'kotlin', 'com', 'sona', 'android', 'application', 'library',
+    'RecordingLibraryPort.kt',
+  );
+  const historyAdapter = clientSource(
+    path.join('adapters', 'uniffi'),
+    'kotlin', 'com', 'sona', 'android', 'adapters', 'uniffi', 'recording',
+    'UniffiRecordingHistoryAdapter.kt',
+  );
+  const repository = clientSource(
+    path.join('adapters', 'android'),
+    'kotlin', 'com', 'sona', 'android', 'adapters', 'android', 'credential',
+    'AndroidBatchCredentialRepository.kt',
+  );
+  const keystoreCipher = clientSource(
+    path.join('adapters', 'android'),
+    'kotlin', 'com', 'sona', 'android', 'adapters', 'android', 'credential',
+    'AndroidKeyStoreCredentialCipher.kt',
+  );
+  const container = clientSource(
+    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'composition', 'SonaAppContainer.kt',
+  );
+  const libraryViewModel = clientSource(
+    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'library',
+    'LibraryViewModel.kt',
+  );
+  const settingsViewModel = clientSource(
+    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'settings',
+    'CloudTranscriptionSettingsViewModel.kt',
+  );
+  const settingsCard = clientSource(
+    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'settings',
+    'CloudTranscriptionSettingsCard.kt',
+  );
+  const detailScreen = clientSource(
+    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'library',
+    'LibraryDetailScreen.kt',
+  );
+
+  // The use case owns the persistence rules the surfaces must not re-decide.
+  assert.match(useCase, /class TranscribeRecordingWithCloud/u);
+  assert.match(useCase, /OnlineBatchTranscriptionPort/u);
+  assert.match(useCase, /if \(result\.segments\.isEmpty\(\)\)[\s\S]*EMPTY_TRANSCRIPT/u);
+  assert.match(useCase, /if \(request\.isDraft\)[\s\S]*completeLiveDraft/u);
+  assert.doesNotMatch(useCase, /^import (?:android|androidx|uniffi)\./mu);
+  assert.doesNotMatch(credentialPorts, /^import (?:android|androidx|uniffi)\./mu);
+  assert.match(credentialPorts, /interface BatchCredentialSettingsPort/u);
+  assert.match(credentialPorts, /interface BatchCredentialResolverPort/u);
+
+  // The audio file a re-transcription needs travels through the library port.
+  assert.match(libraryPort, /val audioPath: String/u);
+  assert.match(libraryPort, /val audioAvailable: Boolean/u);
+  assert.match(historyAdapter, /FfiHistoryAudioStatusV1\.AVAILABLE/u);
+
+  // Each provider key is isolated by its own Keystore alias and AAD binding.
+  assert.match(keystoreCipher, /fun batch\(providerStorageId: String\)/u);
+  assert.match(keystoreCipher, /sona\.batch_credential\.\$providerStorageId\.aes_gcm\.v1/u);
+  assert.match(keystoreCipher, /sona\/android\/batch-credential\/v1\/\$providerStorageId/u);
+  assert.match(repository, /BatchCredentialSettingsPort, BatchCredentialResolverPort/u);
+  assert.match(repository, /noBackupFilesDir|BatchCredentialDataStore\.create/u);
+  assert.doesNotMatch(repository, /Log\.|println\(/u);
+
+  // Composition and surfaces stay wired to the ports rather than the adapters.
+  assert.match(container, /AndroidBatchCredentialRepository\.create\(appContext\)/u);
+  assert.match(container, /UniffiOnlineBatchTranscriptionAdapter\(\)/u);
+  assert.match(container, /val transcribeRecordingWithCloud = TranscribeRecordingWithCloud\(/u);
+  assert.match(container, /val batchCredentialSettings: BatchCredentialSettingsPort/u);
+  assert.match(libraryViewModel, /fun transcribeWithCloud\(item: RecordingLibraryItem\)/u);
+  assert.match(libraryViewModel, /CloudTranscriptionUiState\.Running/u);
+  assert.match(settingsViewModel, /apiKeyInput=<redacted>/u);
+  assert.doesNotMatch(settingsViewModel, /SavedStateHandle/u);
+  assert.match(settingsCard, /PasswordVisualTransformation/u);
+  assert.doesNotMatch(settingsCard, /rememberSaveable/u);
+  assert.match(detailScreen, /onTranscribeWithCloud/u);
+  assert.match(detailScreen, /enabled = item\.audioAvailable/u);
+});
+
 test('Android recording composition preserves lifecycle, permission, and credential boundaries', () => {
   const manifest = clientSource('app', 'AndroidManifest.xml');
   const application = clientSource(

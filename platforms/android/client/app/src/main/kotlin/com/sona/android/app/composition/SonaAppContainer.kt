@@ -4,21 +4,25 @@ import android.annotation.SuppressLint
 import android.content.Context
 import com.sona.android.adapters.android.audio.AndroidMicrophoneCapturePort
 import com.sona.android.adapters.android.audio.FrameworkAudioRecordBackend
+import com.sona.android.adapters.android.credential.AndroidBatchCredentialRepository
 import com.sona.android.adapters.android.credential.AndroidStreamingCredentialRepository
 import com.sona.android.adapters.android.settings.AndroidAppearanceSettingsRepository
 import com.sona.android.adapters.android.sync.AndroidSyncSecretStore
 import com.sona.android.adapters.android.system.AndroidMonotonicClock
 import com.sona.android.adapters.android.system.UuidRecordingIdPort
 import com.sona.android.adapters.uniffi.bootstrap.UniffiSonaBootstrapAdapter
+import com.sona.android.adapters.uniffi.recording.UniffiOnlineBatchTranscriptionAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiRecordingHistoryAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingProviderCatalogAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingTranscriptionAdapter
 import com.sona.android.adapters.uniffi.sync.UniffiSyncSecretStoreRegistrar
 import com.sona.android.application.bootstrap.LoadSonaBootstrap
 import com.sona.android.application.library.RecordingLibraryPort
+import com.sona.android.application.recording.BatchCredentialSettingsPort
 import com.sona.android.application.recording.LiveRecordingController
 import com.sona.android.application.recording.LiveRecordingCoordinator
 import com.sona.android.application.recording.StreamingCredentialSettingsPort
+import com.sona.android.application.recording.TranscribeRecordingWithCloud
 import com.sona.android.application.settings.AppearanceSettingsPort
 import com.sona.android.application.sync.SyncSecretStorePort
 import kotlinx.coroutines.CoroutineScope
@@ -40,6 +44,8 @@ class SonaAppContainer(context: Context) {
         readerDispatcher = Dispatchers.IO,
     )
     private val streamingTranscription = UniffiStreamingTranscriptionAdapter()
+    private val batchCredentialRepository = AndroidBatchCredentialRepository.create(appContext)
+    private val batchTranscription = UniffiOnlineBatchTranscriptionAdapter()
     private val history = UniffiRecordingHistoryAdapter(appDataDir)
     private val monotonicClock = AndroidMonotonicClock()
     private val recordingIds = UuidRecordingIdPort()
@@ -47,8 +53,14 @@ class SonaAppContainer(context: Context) {
     val loadSonaBootstrap = LoadSonaBootstrap(bootstrapPort)
     val appearanceSettings: AppearanceSettingsPort = appearanceSettingsRepository
     val credentialSettings: StreamingCredentialSettingsPort = credentialRepository
+    val batchCredentialSettings: BatchCredentialSettingsPort = batchCredentialRepository
     val syncSecrets: SyncSecretStorePort = syncSecretStore
     val recordingLibrary: RecordingLibraryPort = history
+    val transcribeRecordingWithCloud = TranscribeRecordingWithCloud(
+        credentials = batchCredentialRepository,
+        transcription = batchTranscription,
+        history = history,
+    )
 
     fun createLiveRecording(scope: CoroutineScope): LiveRecordingController =
         LiveRecordingCoordinator(

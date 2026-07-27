@@ -49,6 +49,22 @@ internal data class AndroidKeyStoreCredentialPolicy(
             exportable = false,
             aadValue = "sona/android/streaming-credential/v1".encodeToByteArray(),
         )
+
+        /**
+         * Every cloud batch provider owns a key alias and an AAD binding of its
+         * own, so clearing one provider can never rotate or read another one.
+         */
+        fun batch(providerStorageId: String): AndroidKeyStoreCredentialPolicy {
+            require(providerStorageId.matches(SAFE_STORAGE_ID)) {
+                "Batch credential provider storage ID is invalid."
+            }
+            return production.copy(
+                alias = "sona.batch_credential.$providerStorageId.aes_gcm.v1",
+                aadValue = "sona/android/batch-credential/v1/$providerStorageId".encodeToByteArray(),
+            )
+        }
+
+        private val SAFE_STORAGE_ID = Regex("[a-z0-9]+(?:-[a-z0-9]+)*")
     }
 }
 

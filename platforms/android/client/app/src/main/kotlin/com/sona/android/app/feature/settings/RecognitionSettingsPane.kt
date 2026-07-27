@@ -55,15 +55,21 @@ import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import com.sona.android.application.recording.CredentialStatus
+import com.sona.android.application.recording.OnlineBatchProvider
 
 @Composable
 internal fun RecognitionSettingsPane(
     bootstrapState: SonaBootstrapUiState,
     credentialState: CredentialSettingsUiState,
+    cloudTranscriptionState: CloudTranscriptionSettingsUiState,
     requestCredentialFocus: Boolean,
     onCredentialInputChanged: (String) -> Unit,
     onSaveCredential: () -> Unit,
     onClearCredential: () -> Unit,
+    onCloudProviderSelected: (OnlineBatchProvider) -> Unit,
+    onCloudApiKeyInputChanged: (String) -> Unit,
+    onSaveCloudApiKey: () -> Unit,
+    onClearCloudApiKey: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val initialFocusRequester = remember { FocusRequester() }
@@ -118,6 +124,27 @@ internal fun RecognitionSettingsPane(
                         onCredentialInputChanged = onCredentialInputChanged,
                         onSave = onSaveCredential,
                         onClear = onClearCredential,
+                    )
+                }
+            }
+
+            Card(
+                shape = MaterialTheme.shapes.medium,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    CloudTranscriptionSettings(
+                        state = cloudTranscriptionState,
+                        onProviderSelected = onCloudProviderSelected,
+                        onApiKeyInputChanged = onCloudApiKeyInputChanged,
+                        onSave = onSaveCloudApiKey,
+                        onClear = onClearCloudApiKey,
                     )
                 }
             }

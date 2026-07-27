@@ -50,6 +50,16 @@
     <string name="library_transcript_heading">文字起こし</string>
     <string name="library_transcript_empty">文字起こしはまだありません</string>
     <string name="library_transcript_load_failed">文字起こしを読み込めません</string>
+    <string name="action_cloud_transcribe">クラウド文字起こし</string>
+    <string name="cloud_transcription_heading">クラウド文字起こし</string>
+    <string name="cloud_transcription_summary">保存済みの録音をクラウドプロバイダーで文字起こしし直します。</string>
+    <string name="cloud_transcription_running">文字起こし中</string>
+    <string name="cloud_transcription_completed">文字起こしを更新しました</string>
+    <string name="cloud_transcription_missing_credential">先に設定でクラウドプロバイダーの API キーを登録してください</string>
+    <string name="cloud_transcription_missing_audio">この録音には音声ファイルがありません</string>
+    <string name="cloud_transcription_failed">クラウド文字起こしに失敗しました</string>
+    <string name="cloud_transcription_empty">クラウドプロバイダーから音声が返されませんでした</string>
+    <string name="cloud_transcription_persist_failed">新しい文字起こしを保存できませんでした</string>
     <string name="online_recognition_heading">オンライン認識</string>
     <string name="credential_configured">認証情報を設定済み</string>
     <string name="credential_not_configured">認証情報が未設定です</string>

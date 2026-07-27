@@ -204,6 +204,30 @@ row opens a transcript detail destination that loads the canonical persisted
 segments and presents a localized loading, empty, or retry state without
 exposing binding or database error text.
 
+A recording detail can be re-transcribed through a cloud batch provider. The
+recording's persisted audio file is sent to the provider selected in settings,
+and the returned transcript replaces the stored one: a draft is completed with
+the provider-reported audio duration, while an already saved recording keeps its
+duration and only exchanges its transcript. The action is offered only when the
+history record still reports an available audio file. An empty provider result
+never overwrites an existing transcript, and every failure — missing key,
+missing audio, provider error, empty result, failed write — is reported as a
+localized category without provider, binding, or database error text.
+
+Cloud batch credentials are stored per provider. Volcengine Doubao, Groq
+Whisper, and Mistral Voxtral each own an Android Keystore AES-256-GCM key alias
+and an AAD binding of their own, so saving or clearing one provider can neither
+read nor rotate another. DataStore persists only the versioned encrypted
+envelopes under `noBackupFilesDir`, next to the non-secret active-provider
+marker. The settings surface receives configured status per provider and the
+active selection, never a stored key; plaintext leaves storage only when a
+transcription starts. Typed keys stay inside the settings `ViewModel`, are
+cleared after a save, a clear, or a provider switch, and are never written to
+saved instance state, Compose saveable state, logs, or user-visible errors.
+
+These cloud batch keys are independent of the live streaming credential. Live
+transcription keeps using its own key and its own Keystore alias.
+
 The client compiles and targets Android API 37 with min SDK 23. Install
 `platforms;android-37.0` through `sdkmanager`, then run the complete client
 unit-test and APK gate from the repository root:

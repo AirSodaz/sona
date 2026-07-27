@@ -1,5 +1,6 @@
 package com.sona.android.app.feature.library
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,11 +17,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 import com.sona.android.application.library.RecordingLibraryItem
 import com.sona.android.application.library.RecordingLibraryItemStatus
+import com.sona.android.application.recording.CloudTranscriptionFailure
 import com.sona.android.application.recording.TranscriptSegment
 
 @Composable
@@ -41,7 +46,9 @@ internal fun LibraryDetailScreen(
     historyId: String,
     item: RecordingLibraryItem?,
     detail: LibraryDetailUiState,
+    cloudTranscription: CloudTranscriptionUiState,
     onRetry: () -> Unit,
+    onTranscribeWithCloud: (RecordingLibraryItem) -> Unit,
 ) {
     val resolvedDetail = detail.forHistory(historyId)
     val fallbackTitle = stringResource(R.string.library_detail_heading)
@@ -88,12 +95,26 @@ internal fun LibraryDetailScreen(
             Spacer(Modifier.height(16.dp))
             HorizontalDivider()
             Spacer(Modifier.height(16.dp))
-            Text(
-                text = stringResource(R.string.library_transcript_heading),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = stringResource(R.string.library_transcript_heading),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (item != null) {
+                    CloudTranscriptionAction(
+                        item = item,
+                        cloudTranscription = cloudTranscription,
+                        onTranscribeWithCloud = onTranscribeWithCloud,
+                    )
+                }
+            }
+            CloudTranscriptionStatus(historyId = historyId, state = cloudTranscription)
             Spacer(Modifier.height(8.dp))
 
             when (resolvedDetail) {
@@ -111,6 +132,100 @@ internal fun LibraryDetailScreen(
         }
     }
 }
+
+@Composable
+private fun CloudTranscriptionAction(
+    item: RecordingLibraryItem,
+    cloudTranscription: CloudTranscriptionUiState,
+    onTranscribeWithCloud: (RecordingLibraryItem) -> Unit,
+) {
+    val running = cloudTranscription is CloudTranscriptionUiState.Running
+    FilledTonalButton(
+        onClick = { onTranscribeWithCloud(item) },
+        enabled = item.audioAvailable && !running,
+    ) {
+        if (running) {
+            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+            Spacer(Modifier.width(8.dp))
+        } else {
+            Icon(
+                imageVector = Icons.Rounded.CloudSync,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(
+            text = stringResource(
+                if (running) {
+                    R.string.cloud_transcription_running
+                } else {
+                    R.string.action_cloud_transcribe
+                },
+            ),
+        )
+    }
+}
+
+@Composable
+private fun CloudTranscriptionStatus(
+    historyId: String,
+    state: CloudTranscriptionUiState,
+) {
+    val message = when (state) {
+        CloudTranscriptionUiState.Idle -> null
+        is CloudTranscriptionUiState.Running -> null
+        is CloudTranscriptionUiState.Completed ->
+            state.takeIf { it.historyId == historyId }?.let {
+                CloudTranscriptionMessage(R.string.cloud_transcription_completed, isError = false)
+            }
+        is CloudTranscriptionUiState.Failed ->
+            state.takeIf { it.historyId == historyId }?.let {
+                CloudTranscriptionMessage(it.reason.messageRes, isError = true)
+            }
+    } ?: return
+
+    Spacer(Modifier.height(8.dp))
+    Card(
+        shape = MaterialTheme.shapes.small,
+        colors = CardDefaults.cardColors(
+            containerColor = if (message.isError) {
+                MaterialTheme.colorScheme.errorContainer
+            } else {
+                MaterialTheme.colorScheme.secondaryContainer
+            },
+            contentColor = if (message.isError) {
+                MaterialTheme.colorScheme.onErrorContainer
+            } else {
+                MaterialTheme.colorScheme.onSecondaryContainer
+            },
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = stringResource(message.textRes),
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+        )
+    }
+}
+
+private data class CloudTranscriptionMessage(
+    @param:StringRes val textRes: Int,
+    val isError: Boolean,
+)
+
+@get:StringRes
+private val CloudTranscriptionFailure.messageRes: Int
+    get() = when (this) {
+        CloudTranscriptionFailure.MISSING_CREDENTIAL ->
+            R.string.cloud_transcription_missing_credential
+        CloudTranscriptionFailure.MISSING_AUDIO -> R.string.cloud_transcription_missing_audio
+        CloudTranscriptionFailure.TRANSCRIPTION_FAILED -> R.string.cloud_transcription_failed
+        CloudTranscriptionFailure.EMPTY_TRANSCRIPT -> R.string.cloud_transcription_empty
+        CloudTranscriptionFailure.PERSISTENCE_FAILED ->
+            R.string.cloud_transcription_persist_failed
+    }
 
 private fun LibraryDetailUiState.forHistory(historyId: String): LibraryDetailUiState = when (this) {
     is LibraryDetailUiState.Ready -> if (this.historyId == historyId) {

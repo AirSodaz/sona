@@ -11,6 +11,7 @@ import com.sona.android.application.recording.RecordingDestination
 import com.sona.android.application.recording.RecordingDraft
 import com.sona.android.application.recording.RecordingHistoryPort
 import com.sona.android.application.recording.TranscriptSegment
+import uniffi.sona_uniffi_bind.FfiHistoryAudioStatusV1
 import uniffi.sona_uniffi_bind.FfiHistoryCompleteLiveDraftRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryCreateLiveDraftRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryDeleteItemsRequestV1
@@ -130,6 +131,8 @@ private fun FfiHistoryItemRecordV1.toApplication(): RecordingLibraryItem = Recor
     },
     tagIds = tagIds,
     deletedAtEpochMillis = deletedAt?.toLongChecked("History deleted timestamp"),
+    audioPath = audioPath,
+    audioAvailable = audioStatus == FfiHistoryAudioStatusV1.AVAILABLE && audioPath.isNotBlank(),
 )
 
 private fun ULong.toLongChecked(label: String): Long {

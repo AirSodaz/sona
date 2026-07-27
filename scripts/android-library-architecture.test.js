@@ -78,7 +78,7 @@ test('Android composition owns library loading and detail navigation', () => {
   );
 
   assert.match(container, /val recordingLibrary: RecordingLibraryPort = history/u);
-  assert.match(activity, /LibraryViewModel\.factory\(container\.recordingLibrary\)/u);
+  assert.match(activity, /LibraryViewModel\.factory\(\s*library = container\.recordingLibrary,/u);
   assert.match(navigation, /LIBRARY_DETAIL_ROUTE/u);
   assert.match(navigation, /LibraryDetailScreen/u);
   assert.match(viewModel, /LibraryListError\.LOAD_FAILED/u);

@@ -50,6 +50,16 @@
     <string name="microphone_device_changed_unknown">마이크 입력 장치가 변경됨</string>
     <string name="microphone_permission_rationale">녹음하려면 마이크 권한이 필요함</string>
     <string name="microphone_permission_settings">시스템 설정에서 마이크 권한을 허용하세요.</string>
+    <string name="action_cloud_transcribe">클라우드 받아쓰기</string>
+    <string name="cloud_transcription_heading">클라우드 받아쓰기</string>
+    <string name="cloud_transcription_summary">저장된 녹음을 클라우드 제공업체로 다시 받아씁니다.</string>
+    <string name="cloud_transcription_running">받아쓰는 중</string>
+    <string name="cloud_transcription_completed">받아쓰기가 업데이트됨</string>
+    <string name="cloud_transcription_missing_credential">설정에서 클라우드 제공업체 API 키를 먼저 등록하세요</string>
+    <string name="cloud_transcription_missing_audio">이 녹음에는 오디오 파일이 없습니다</string>
+    <string name="cloud_transcription_failed">클라우드 받아쓰기에 실패했습니다</string>
+    <string name="cloud_transcription_empty">클라우드 제공업체가 음성을 반환하지 않았습니다</string>
+    <string name="cloud_transcription_persist_failed">새 받아쓰기를 저장하지 못했습니다</string>
     <string name="online_recognition_heading">온라인 인식</string>
     <string name="credential_configured">자격 증명 구성됨</string>
     <string name="credential_not_configured">자격 증명이 구성되지 않음</string>

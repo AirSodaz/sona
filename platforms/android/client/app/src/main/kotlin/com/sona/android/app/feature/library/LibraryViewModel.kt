@@ -4,7 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.sona.android.application.library.RecordingLibraryItem
+import com.sona.android.application.library.RecordingLibraryItemStatus
 import com.sona.android.application.library.RecordingLibraryPort
+import com.sona.android.application.recording.CloudTranscriptionFailure
+import com.sona.android.application.recording.CloudTranscriptionOutcome
+import com.sona.android.application.recording.CloudTranscriptionRequest
+import com.sona.android.application.recording.TranscribeRecordingWithCloud
 import com.sona.android.application.recording.TranscriptSegment
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -35,6 +40,23 @@ sealed interface LibraryDetailUiState {
     ) : LibraryDetailUiState
 }
 
+sealed interface CloudTranscriptionUiState {
+    data object Idle : CloudTranscriptionUiState
+
+    data class Running(
+        val historyId: String,
+    ) : CloudTranscriptionUiState
+
+    data class Completed(
+        val historyId: String,
+    ) : CloudTranscriptionUiState
+
+    data class Failed(
+        val historyId: String,
+        val reason: CloudTranscriptionFailure,
+    ) : CloudTranscriptionUiState
+}
+
 data class LibraryUiState(
     val items: List<RecordingLibraryItem> = emptyList(),
     val hasMore: Boolean = false,
@@ -43,10 +65,12 @@ data class LibraryUiState(
     val isLoadingMore: Boolean = false,
     val listError: LibraryListError? = null,
     val detail: LibraryDetailUiState = LibraryDetailUiState.None,
+    val cloudTranscription: CloudTranscriptionUiState = CloudTranscriptionUiState.Idle,
 )
 
 class LibraryViewModel(
     private val library: RecordingLibraryPort,
+    private val transcribeRecordingWithCloud: TranscribeRecordingWithCloud,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(LibraryUiState())
     val state: StateFlow<LibraryUiState> = mutableState.asStateFlow()
@@ -169,7 +193,10 @@ class LibraryViewModel(
         val generation = ++detailGeneration
         detailJob?.cancel()
         mutableState.update {
-            it.copy(detail = LibraryDetailUiState.Loading(historyId))
+            it.copy(
+                detail = LibraryDetailUiState.Loading(historyId),
+                cloudTranscription = it.cloudTranscription.clearedOnReload(),
+            )
         }
         detailJob = viewModelScope.launch {
             try {
@@ -189,15 +216,78 @@ class LibraryViewModel(
         }
     }
 
+    /**
+     * Re-transcribes an existing recording through the configured cloud batch
+     * provider and republishes the persisted transcript.
+     */
+    fun transcribeWithCloud(item: RecordingLibraryItem) {
+        if (mutableState.value.cloudTranscription is CloudTranscriptionUiState.Running) {
+            return
+        }
+        if (item.historyId.isBlank()) return
+        mutableState.update {
+            it.copy(cloudTranscription = CloudTranscriptionUiState.Running(item.historyId))
+        }
+        viewModelScope.launch {
+            val outcome = try {
+                transcribeRecordingWithCloud(
+                    CloudTranscriptionRequest(
+                        historyId = item.historyId,
+                        audioPath = item.audioPath,
+                        audioAvailable = item.audioAvailable,
+                        isDraft = item.status == RecordingLibraryItemStatus.DRAFT,
+                    ),
+                )
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                CloudTranscriptionOutcome.Failed(
+                    historyId = item.historyId,
+                    reason = CloudTranscriptionFailure.TRANSCRIPTION_FAILED,
+                )
+            }
+            when (outcome) {
+                is CloudTranscriptionOutcome.Completed -> {
+                    detailGeneration += 1
+                    detailJob?.cancel()
+                    mutableState.update {
+                        it.copy(
+                            detail = LibraryDetailUiState.Ready(
+                                historyId = outcome.historyId,
+                                segments = outcome.segments,
+                            ),
+                            cloudTranscription = CloudTranscriptionUiState.Completed(
+                                outcome.historyId,
+                            ),
+                        )
+                    }
+                    refresh()
+                }
+
+                is CloudTranscriptionOutcome.Failed -> mutableState.update {
+                    it.copy(
+                        cloudTranscription = CloudTranscriptionUiState.Failed(
+                            historyId = outcome.historyId,
+                            reason = outcome.reason,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
     companion object {
         internal const val PAGE_SIZE = 30
 
-        fun factory(library: RecordingLibraryPort): ViewModelProvider.Factory =
+        fun factory(
+            library: RecordingLibraryPort,
+            transcribeRecordingWithCloud: TranscribeRecordingWithCloud,
+        ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     require(modelClass.isAssignableFrom(LibraryViewModel::class.java))
-                    return LibraryViewModel(library) as T
+                    return LibraryViewModel(library, transcribeRecordingWithCloud) as T
                 }
             }
     }
@@ -207,3 +297,11 @@ class LibraryViewModel(
         LOAD_MORE,
     }
 }
+
+/**
+ * A cloud transcription result belongs to the load that produced it; opening a
+ * recording detail again must not inherit an earlier banner. A run in flight
+ * keeps reporting itself.
+ */
+private fun CloudTranscriptionUiState.clearedOnReload(): CloudTranscriptionUiState =
+    if (this is CloudTranscriptionUiState.Running) this else CloudTranscriptionUiState.Idle
