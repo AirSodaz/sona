@@ -84,7 +84,11 @@ internal fun SonaApp(
     onSaveCloudApiKey: () -> Unit,
     onClearCloudApiKey: () -> Unit,
     onRecognitionEngineSelected: (RecognitionEngine) -> Unit,
-    onImportLocalModel: (String) -> Unit,
+    onSelectLocalModel: (String) -> Unit,
+    onDownloadLocalModel: (String) -> Unit,
+    onValidateLocalModel: (String) -> Unit,
+    onDeleteLocalModel: (String) -> Unit,
+    onRefreshRecognitionCatalog: () -> Unit,
 ) {
     var credentialFocusRequested by remember { mutableStateOf(false) }
 
@@ -264,7 +268,11 @@ internal fun SonaApp(
                             onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                             onSaveCloudApiKey = onSaveCloudApiKey,
                             onClearCloudApiKey = onClearCloudApiKey,
-                            onImportLocalModel = onImportLocalModel,
+                            onSelectLocalModel = onSelectLocalModel,
+                            onDownloadLocalModel = onDownloadLocalModel,
+                            onValidateLocalModel = onValidateLocalModel,
+                            onDeleteLocalModel = onDeleteLocalModel,
+                            onRefreshRecognitionCatalog = onRefreshRecognitionCatalog,
                             onCredentialFocusConsumed = {
                                 credentialFocusRequested = false
                             },

@@ -67,12 +67,11 @@ The caller supplies an application data directory for every operation.
 canonical camelCase version-1 recovery snapshot format. These operations
 perform filesystem I/O and can fail with `SonaCoreBindingException`.
 
-This AAR includes the native local Sherpa runtime. The Android client can import
-a Sherpa-ONNX model directory into app-private storage and select local
-recognition from the Record screen. SenseVoice and other offline models must be
-imported with `silero_vad.onnx`; streaming Paraformer and Zipformer directories
-do not require a separate VAD model. The imported directory must contain the
-model's ONNX files and `tokens.txt`.
+This AAR includes the native local Sherpa runtime. The Android client reads the
+shared preset catalog through UniFFI and downloads supported streaming models
+into app-private storage. SenseVoice and Dolphin downloads automatically include
+the required `silero_vad.onnx`; streaming Paraformer and Zipformer do not need a
+separate VAD model. The client does not expose arbitrary model-directory import.
 
 The Android build downloads the locked sherpa-onnx 1.13.4 archive into
 `target/android-sherpa`. For offline builds, set
@@ -146,7 +145,8 @@ host boundary explicit:
 
 - `:application` owns platform-neutral models, ports, and use cases.
 - `:adapters:android` owns Android framework integration for microphone capture,
-  WAV persistence, input monitoring, secure credential storage, clocks, and IDs.
+  WAV persistence, input monitoring, secure credential storage, managed model
+  downloads, device capability probing, clocks, and IDs.
 - `:adapters:uniffi` is the only module that imports generated UniFFI APIs.
 - `:app` owns Android lifecycle, adaptive Compose navigation, and dependency
   composition.
@@ -187,8 +187,18 @@ mutations through the shared SQLite binding, and maps remote streaming failures
 back to the application coordinator. The app requests microphone permission at
 the recording boundary and keeps the credential repository at `Application`
 scope, while each live-recording coordinator is owned by its recording
-`ViewModel`. The local engine remains disabled because the UniFFI surface does
-not yet export a local streaming session factory.
+`ViewModel`. The local engine uses the same typed UniFFI session with an active
+managed Sherpa model and bypasses cloud credential resolution.
+
+Local models are installed under the app-private `files/models` directory using
+versioned install folders. Downloads require HTTPS, resume partial files, verify
+SHA-256 when the shared preset supplies one, reject unsafe archive entries, and
+perform a Sherpa file-layout check before publishing the install. Settings list
+all managed installs and support selection, re-validation, and confirmed deletion.
+Deleting the active model returns recognition to the online engine. Device ABI,
+CPU count, total memory, and free app storage determine local-runtime support and
+the recommended inference thread count; downloads are disabled below the minimum
+capability threshold.
 
 Recording is foreground-only. The first start requests microphone permission;
 a denial can be retried after the rationale, while a permanent denial offers a

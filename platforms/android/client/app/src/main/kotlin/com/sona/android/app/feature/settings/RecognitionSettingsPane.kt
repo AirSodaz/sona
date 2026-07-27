@@ -1,8 +1,5 @@
 package com.sona.android.app.feature.settings
 
-import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,22 +18,28 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.WarningAmber
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -50,7 +53,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -60,7 +62,10 @@ import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import com.sona.android.application.recording.CredentialStatus
+import com.sona.android.application.recording.LocalAsrDeviceTier
+import com.sona.android.application.recording.LocalAsrDownloadStage
 import com.sona.android.application.recording.OnlineBatchProvider
+import java.util.Locale
 
 @Composable
 internal fun RecognitionSettingsPane(
@@ -76,26 +81,16 @@ internal fun RecognitionSettingsPane(
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
     onClearCloudApiKey: () -> Unit,
-    onImportLocalModel: (String) -> Unit,
+    onSelectLocalModel: (String) -> Unit,
+    onDownloadLocalModel: (String) -> Unit,
+    onValidateLocalModel: (String) -> Unit,
+    onDeleteLocalModel: (String) -> Unit,
+    onRefreshRecognitionCatalog: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val initialFocusRequester = remember { FocusRequester() }
     val credentialFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
-    val context = LocalContext.current
-    val modelFolderLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocumentTree(),
-    ) { uri ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                )
-            }
-            onImportLocalModel(uri.toString())
-        }
-    }
     var focusInitialized by remember { mutableStateOf(false) }
     var credentialFieldPlaced by remember { mutableStateOf(false) }
     val onCredentialFieldPlaced = remember {
@@ -158,7 +153,11 @@ internal fun RecognitionSettingsPane(
             ) {
                 LocalRecognitionSettings(
                     state = recognitionSettingsState,
-                    onChooseFolder = { modelFolderLauncher.launch(null) },
+                    onSelectModel = onSelectLocalModel,
+                    onDownloadModel = onDownloadLocalModel,
+                    onValidateModel = onValidateLocalModel,
+                    onDeleteModel = onDeleteLocalModel,
+                    onRefreshCatalog = onRefreshRecognitionCatalog,
                     modifier = Modifier.padding(16.dp),
                 )
             }
@@ -211,19 +210,98 @@ internal fun RecognitionSettingsPane(
 @Composable
 private fun LocalRecognitionSettings(
     state: RecognitionSettingsUiState,
-    onChooseFolder: () -> Unit,
+    onSelectModel: (String) -> Unit,
+    onDownloadModel: (String) -> Unit,
+    onValidateModel: (String) -> Unit,
+    onDeleteModel: (String) -> Unit,
+    onRefreshCatalog: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var pendingDeleteModelId by remember { mutableStateOf<String?>(null) }
+    val busy = state.operationModelId != null
+
+    pendingDeleteModelId?.let { modelId ->
+        val modelName = state.installedModels.firstOrNull { it.id == modelId }?.displayName.orEmpty()
+        AlertDialog(
+            onDismissRequest = { pendingDeleteModelId = null },
+            title = { Text(stringResource(R.string.local_model_delete_title)) },
+            text = { Text(stringResource(R.string.local_model_delete_message, modelName)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingDeleteModelId = null
+                        onDeleteModel(modelId)
+                    },
+                ) {
+                    Text(stringResource(R.string.action_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteModelId = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            text = stringResource(R.string.local_recognition_heading),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.local_recognition_heading),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onRefreshCatalog, enabled = !busy && !state.catalogLoading) {
+                Icon(
+                    Icons.Rounded.Refresh,
+                    contentDescription = stringResource(R.string.action_refresh_model_catalog),
+                )
+            }
+        }
+
+        state.deviceCapabilities?.let { capabilities ->
+            val tier = stringResource(
+                when (capabilities.tier) {
+                    LocalAsrDeviceTier.LIMITED -> R.string.local_device_tier_limited
+                    LocalAsrDeviceTier.STANDARD -> R.string.local_device_tier_standard
+                    LocalAsrDeviceTier.HIGH -> R.string.local_device_tier_high
+                },
+            )
+            Text(
+                text = stringResource(
+                    R.string.local_device_summary,
+                    tier,
+                    capabilities.cpuCores.toString(),
+                    formatBytes(capabilities.totalMemoryBytes),
+                    formatBytes(capabilities.availableStorageBytes),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (!capabilities.supported) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(
+                        Icons.Rounded.WarningAmber,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                    Text(
+                        text = stringResource(R.string.local_device_unsupported),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
+
         Text(
             text = state.localModel?.let { model ->
                 stringResource(R.string.local_model_installed, model.displayName)
@@ -231,39 +309,169 @@ private fun LocalRecognitionSettings(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(
-            text = stringResource(R.string.local_model_import_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (state.importError) {
+        if (state.operationError) {
             Text(
-                text = stringResource(R.string.local_model_import_failed),
+                text = stringResource(R.string.local_model_operation_failed),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )
         }
-        Button(
-            onClick = onChooseFolder,
-            enabled = !state.importInProgress,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            if (state.importInProgress) {
-                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-            } else {
-                Icon(Icons.Rounded.FolderOpen, contentDescription = null)
-            }
-            Spacer(Modifier.width(8.dp))
+
+        Text(
+            text = stringResource(R.string.local_model_installed_heading),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+        if (state.installedModels.isEmpty()) {
             Text(
-                stringResource(
-                    if (state.importInProgress) {
-                        R.string.local_model_importing
-                    } else {
-                        R.string.action_import_local_model
-                    },
-                ),
+                text = stringResource(R.string.local_model_not_installed),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        state.installedModels.forEachIndexed { index, model ->
+            if (index > 0) HorizontalDivider()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(
+                    selected = state.localModel?.id == model.id,
+                    onClick = { onSelectModel(model.id) },
+                    enabled = !busy,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(model.displayName, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = stringResource(
+                            R.string.local_model_details,
+                            model.config.modelType,
+                            formatBytes(model.sizeBytes),
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                state.validationByModelId[model.id]?.let { valid ->
+                    Icon(
+                        imageVector = if (valid) Icons.Rounded.CheckCircle else Icons.Rounded.WarningAmber,
+                        contentDescription = stringResource(
+                            if (valid) R.string.local_model_valid else R.string.local_model_invalid,
+                        ),
+                        tint = if (valid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                IconButton(
+                    onClick = { onValidateModel(model.id) },
+                    enabled = !busy,
+                ) {
+                    Icon(
+                        Icons.Rounded.CheckCircle,
+                        contentDescription = stringResource(R.string.action_validate_model),
+                    )
+                }
+                IconButton(
+                    onClick = { pendingDeleteModelId = model.id },
+                    enabled = !busy,
+                ) {
+                    Icon(
+                        Icons.Rounded.DeleteOutline,
+                        contentDescription = stringResource(R.string.action_delete_model),
+                    )
+                }
+            }
+        }
+
+        HorizontalDivider()
+        Text(
+            text = stringResource(R.string.local_model_catalog_heading),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+        if (state.catalogLoading) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+            }
+        }
+        state.catalogModels.forEachIndexed { index, model ->
+            if (index > 0) HorizontalDivider()
+            val installed = state.installedModels.any { it.id == model.id }
+            val downloading = state.operationModelId == model.id && state.downloadProgress != null
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(model.displayName, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = stringResource(
+                                R.string.local_catalog_model_details,
+                                model.language,
+                                model.sizeLabel,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Button(
+                        onClick = { onDownloadModel(model.id) },
+                        enabled = !busy && !installed &&
+                            state.deviceCapabilities?.supported != false,
+                    ) {
+                        Icon(Icons.Rounded.Download, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(
+                                if (installed) R.string.local_model_downloaded
+                                else R.string.action_download_model,
+                            ),
+                        )
+                    }
+                }
+                if (downloading) {
+                    val progress = checkNotNull(state.downloadProgress)
+                    val fraction = if (progress.totalBytes > 0) {
+                        (progress.downloadedBytes.toFloat() / progress.totalBytes).coerceIn(0f, 1f)
+                    } else {
+                        null
+                    }
+                    if (fraction == null) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    } else {
+                        LinearProgressIndicator(
+                            progress = { fraction },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    Text(
+                        text = stringResource(
+                            when (progress.stage) {
+                                LocalAsrDownloadStage.DOWNLOADING -> R.string.local_model_downloading
+                                LocalAsrDownloadStage.VERIFYING -> R.string.local_model_verifying
+                                LocalAsrDownloadStage.INSTALLING -> R.string.local_model_installing
+                            },
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes <= 0) return "--"
+    val gib = bytes.toDouble() / (1_024 * 1_024 * 1_024)
+    return if (gib >= 1) {
+        String.format(Locale.getDefault(), "%.1f GB", gib)
+    } else {
+        String.format(Locale.getDefault(), "%.0f MB", bytes.toDouble() / (1_024 * 1_024))
     }
 }
 

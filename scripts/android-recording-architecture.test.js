@@ -68,7 +68,7 @@ test('Android streaming adapters support online and local engines behind generat
   assert.doesNotMatch(history, /kotlinx\.serialization\.json|buildJsonObject|parseJson/u);
 });
 
-test('Android local ASR selection, model import, and recording startup are wired end to end', () => {
+test('Android local ASR catalog, managed downloads, and recording startup are wired end to end', () => {
   const settingsPort = clientSource(
     'application', 'kotlin', 'com', 'sona', 'android', 'application', 'recording',
     'RecognitionSettings.kt',
@@ -82,6 +82,25 @@ test('Android local ASR selection, model import, and recording startup are wired
     'kotlin', 'com', 'sona', 'android', 'adapters', 'android', 'settings',
     'AndroidRecognitionSettingsRepository.kt',
   );
+  const storage = clientSource(
+    path.join('adapters', 'android'),
+    'kotlin', 'com', 'sona', 'android', 'adapters', 'android', 'settings',
+    'AndroidLocalAsrModelStorage.kt',
+  );
+  const capabilities = clientSource(
+    path.join('adapters', 'android'),
+    'kotlin', 'com', 'sona', 'android', 'adapters', 'android', 'settings',
+    'AndroidLocalAsrDeviceCapabilities.kt',
+  );
+  const catalog = clientSource(
+    path.join('adapters', 'uniffi'),
+    'kotlin', 'com', 'sona', 'android', 'adapters', 'uniffi', 'recording',
+    'UniffiLocalAsrModelCatalogAdapter.kt',
+  );
+  const settingsPane = clientSource(
+    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'settings',
+    'RecognitionSettingsPane.kt',
+  );
   const recordScreen = clientSource(
     'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'recording',
     'RecordScreen.kt',
@@ -94,10 +113,21 @@ test('Android local ASR selection, model import, and recording startup are wired
   assert.doesNotMatch(settingsPort, /^import (?:android|androidx|uniffi)\./mu);
   assert.match(settingsPort, /enum class RecognitionEngine/u);
   assert.match(settingsPort, /interface RecognitionSettingsPort/u);
+  assert.match(settingsPort, /downloadLocalModel/u);
+  assert.match(settingsPort, /validateLocalModel/u);
+  assert.match(settingsPort, /deleteLocalModel/u);
   assert.match(coordinator, /RecognitionEngine\.LOCAL[\s\S]*StreamingEngineConfig\.LocalSherpa/u);
-  assert.match(repository, /DocumentFile\.fromTreeUri/u);
-  assert.match(repository, /filesDir, "models"/u);
-  assert.match(repository, /silero_vad\.onnx/u);
+  assert.match(repository, /AndroidLocalAsrModelStorage/u);
+  assert.match(storage, /filesDir, "models"/u);
+  assert.match(storage, /verifySha256/u);
+  assert.match(storage, /extractTarBz2/u);
+  assert.match(storage, /safeArchiveDestination/u);
+  assert.match(storage, /silero_vad\.onnx/u);
+  assert.match(capabilities, /ActivityManager\.MemoryInfo/u);
+  assert.match(capabilities, /StatFs/u);
+  assert.match(catalog, /presetModels/u);
+  assert.match(catalog, /"streaming" in it\.modes/u);
+  assert.doesNotMatch(settingsPane, /OpenDocumentTree|DocumentFile|FolderOpen/u);
   assert.match(recordScreen, /onEngineSelected\(RecognitionEngine\.LOCAL\)/u);
   assert.match(container, /AndroidRecognitionSettingsRepository/u);
 });

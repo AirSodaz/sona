@@ -39,7 +39,7 @@ class LiveRecordingCoordinatorTest {
             recognitionSettings = {
                 RecognitionSettings(
                     engine = RecognitionEngine.LOCAL,
-                    localModel = LocalAsrModel("SenseVoice", localConfig),
+                    localModel = LocalAsrModel("sensevoice", "SenseVoice", localConfig),
                 )
             },
         )

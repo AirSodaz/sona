@@ -55,7 +55,11 @@ class MainActivity : AppCompatActivity() {
                 ),
             )
             val recognitionSettingsViewModel: RecognitionSettingsViewModel = viewModel(
-                factory = RecognitionSettingsViewModel.factory(container.recognitionSettings),
+                factory = RecognitionSettingsViewModel.factory(
+                    container.recognitionSettings,
+                    container.recognitionModelCatalog,
+                    container.recognitionDeviceCapabilities,
+                ),
             )
             val bootstrapState by bootstrapViewModel.bootstrapState.collectAsStateWithLifecycle()
             val recordingState by recordingViewModel.state.collectAsStateWithLifecycle()
@@ -99,7 +103,11 @@ class MainActivity : AppCompatActivity() {
                 onSaveCloudApiKey = cloudTranscriptionViewModel::saveApiKey,
                 onClearCloudApiKey = cloudTranscriptionViewModel::clearApiKey,
                 onRecognitionEngineSelected = recognitionSettingsViewModel::selectEngine,
-                onImportLocalModel = recognitionSettingsViewModel::importLocalModel,
+                onSelectLocalModel = recognitionSettingsViewModel::selectLocalModel,
+                onDownloadLocalModel = recognitionSettingsViewModel::downloadLocalModel,
+                onValidateLocalModel = recognitionSettingsViewModel::validateLocalModel,
+                onDeleteLocalModel = recognitionSettingsViewModel::deleteLocalModel,
+                onRefreshRecognitionCatalog = recognitionSettingsViewModel::refreshCatalog,
             )
         }
     }

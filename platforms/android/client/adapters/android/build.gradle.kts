@@ -22,7 +22,7 @@ android {
 dependencies {
     implementation(project(":application"))
     implementation("androidx.datastore:datastore-preferences:1.2.1")
-    implementation("androidx.documentfile:documentfile:1.1.0")
+    implementation("org.apache.commons:commons-compress:1.28.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     compileOnly("androidx.annotation:annotation:1.10.0")
 

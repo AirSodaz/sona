@@ -75,7 +75,11 @@ internal fun SettingsScreen(
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
     onClearCloudApiKey: () -> Unit,
-    onImportLocalModel: (String) -> Unit,
+    onSelectLocalModel: (String) -> Unit,
+    onDownloadLocalModel: (String) -> Unit,
+    onValidateLocalModel: (String) -> Unit,
+    onDeleteLocalModel: (String) -> Unit,
+    onRefreshRecognitionCatalog: () -> Unit,
 ) {
     val initialDestinationHistory = remember(initialSection) {
         settingsDestinationHistory(initialSection)
@@ -175,7 +179,11 @@ internal fun SettingsScreen(
                     onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                     onSaveCloudApiKey = onSaveCloudApiKey,
                     onClearCloudApiKey = onClearCloudApiKey,
-                    onImportLocalModel = onImportLocalModel,
+                    onSelectLocalModel = onSelectLocalModel,
+                    onDownloadLocalModel = onDownloadLocalModel,
+                    onValidateLocalModel = onValidateLocalModel,
+                    onDeleteLocalModel = onDeleteLocalModel,
+                    onRefreshRecognitionCatalog = onRefreshRecognitionCatalog,
                 )
             }
         },
@@ -336,7 +344,11 @@ private fun SettingsDetailPane(
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
     onClearCloudApiKey: () -> Unit,
-    onImportLocalModel: (String) -> Unit,
+    onSelectLocalModel: (String) -> Unit,
+    onDownloadLocalModel: (String) -> Unit,
+    onValidateLocalModel: (String) -> Unit,
+    onDeleteLocalModel: (String) -> Unit,
+    onRefreshRecognitionCatalog: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -380,7 +392,11 @@ private fun SettingsDetailPane(
                 onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                 onSaveCloudApiKey = onSaveCloudApiKey,
                 onClearCloudApiKey = onClearCloudApiKey,
-                onImportLocalModel = onImportLocalModel,
+                onSelectLocalModel = onSelectLocalModel,
+                onDownloadLocalModel = onDownloadLocalModel,
+                onValidateLocalModel = onValidateLocalModel,
+                onDeleteLocalModel = onDeleteLocalModel,
+                onRefreshRecognitionCatalog = onRefreshRecognitionCatalog,
                 modifier = Modifier.weight(1f),
             )
         }

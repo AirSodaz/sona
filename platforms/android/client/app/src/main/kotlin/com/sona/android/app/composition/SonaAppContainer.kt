@@ -7,12 +7,14 @@ import com.sona.android.adapters.android.audio.FrameworkAudioRecordBackend
 import com.sona.android.adapters.android.credential.AndroidBatchCredentialRepository
 import com.sona.android.adapters.android.credential.AndroidStreamingCredentialRepository
 import com.sona.android.adapters.android.settings.AndroidAppearanceSettingsRepository
+import com.sona.android.adapters.android.settings.AndroidLocalAsrDeviceCapabilities
 import com.sona.android.adapters.android.settings.AndroidRecognitionSettingsRepository
 import com.sona.android.adapters.android.sync.AndroidSyncSecretStore
 import com.sona.android.adapters.android.system.AndroidMonotonicClock
 import com.sona.android.adapters.android.system.UuidRecordingIdPort
 import com.sona.android.adapters.uniffi.bootstrap.UniffiSonaBootstrapAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiOnlineBatchTranscriptionAdapter
+import com.sona.android.adapters.uniffi.recording.UniffiLocalAsrModelCatalogAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiRecordingHistoryAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingProviderCatalogAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingTranscriptionAdapter
@@ -35,8 +37,10 @@ class SonaAppContainer(context: Context) {
     private val bootstrapPort = UniffiSonaBootstrapAdapter()
     private val credentialRepository = AndroidStreamingCredentialRepository.create(appContext)
     private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository.create(appContext)
+    private val localAsrDeviceCapabilities = AndroidLocalAsrDeviceCapabilities.create(appContext)
+    private val localAsrModelCatalog = UniffiLocalAsrModelCatalogAdapter()
     private val recognitionSettingsRepository =
-        AndroidRecognitionSettingsRepository.create(appContext)
+        AndroidRecognitionSettingsRepository.create(appContext, localAsrDeviceCapabilities)
     private val syncSecretStore = AndroidSyncSecretStore.create(appContext)
     private val syncSecretStoreRegistration = UniffiSyncSecretStoreRegistrar().apply {
         register(appDataDir, syncSecretStore)
@@ -57,6 +61,8 @@ class SonaAppContainer(context: Context) {
     val appearanceSettings: AppearanceSettingsPort = appearanceSettingsRepository
     val credentialSettings: StreamingCredentialSettingsPort = credentialRepository
     val recognitionSettings = recognitionSettingsRepository
+    val recognitionModelCatalog = localAsrModelCatalog
+    val recognitionDeviceCapabilities = localAsrDeviceCapabilities
     val batchCredentialSettings: BatchCredentialSettingsPort = batchCredentialRepository
     val syncSecrets: SyncSecretStorePort = syncSecretStore
     val recordingLibrary: RecordingLibraryPort = history

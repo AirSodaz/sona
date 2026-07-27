@@ -1,7 +1,17 @@
 package com.sona.android.app.feature.settings
 
 import com.sona.android.app.MainDispatcherRule
+import com.sona.android.application.recording.LocalAsrCatalogModel
+import com.sona.android.application.recording.LocalAsrDeviceCapabilities
+import com.sona.android.application.recording.LocalAsrDeviceCapabilitiesPort
+import com.sona.android.application.recording.LocalAsrDeviceTier
+import com.sona.android.application.recording.LocalAsrDownloadFile
+import com.sona.android.application.recording.LocalAsrDownloadProgress
+import com.sona.android.application.recording.LocalAsrDownloadProgressListener
+import com.sona.android.application.recording.LocalAsrDownloadStage
 import com.sona.android.application.recording.LocalAsrModel
+import com.sona.android.application.recording.LocalAsrModelCatalogPort
+import com.sona.android.application.recording.LocalAsrModelValidation
 import com.sona.android.application.recording.LocalSherpaStreamingConfig
 import com.sona.android.application.recording.RecognitionEngine
 import com.sona.android.application.recording.RecognitionSettings
@@ -19,33 +29,56 @@ class RecognitionSettingsViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
-    fun `selecting an engine is persisted through the settings port`() =
+    fun `catalog and device capabilities load with settings`() =
         runTest(mainDispatcherRule.dispatcher) {
-            val port = FakeRecognitionSettingsPort()
-            val viewModel = RecognitionSettingsViewModel(port)
+            val viewModel = createViewModel()
+
             advanceUntilIdle()
 
-            viewModel.selectEngine(RecognitionEngine.LOCAL)
-            advanceUntilIdle()
-
-            assertEquals(RecognitionEngine.LOCAL, viewModel.uiState.value.engine)
+            assertEquals("sensevoice", viewModel.uiState.value.catalogModels.single().id)
+            assertEquals(LocalAsrDeviceTier.STANDARD, viewModel.uiState.value.deviceCapabilities?.tier)
+            assertEquals(false, viewModel.uiState.value.catalogLoading)
         }
 
     @Test
-    fun `successful model import publishes the model and selects local recognition`() =
+    fun `download publishes installed model and selects local recognition`() =
         runTest(mainDispatcherRule.dispatcher) {
-            val port = FakeRecognitionSettingsPort()
-            val viewModel = RecognitionSettingsViewModel(port)
+            val viewModel = createViewModel()
             advanceUntilIdle()
 
-            viewModel.importLocalModel("content://models/tree")
+            viewModel.downloadLocalModel("sensevoice")
             advanceUntilIdle()
 
             assertEquals("SenseVoice", viewModel.uiState.value.localModel?.displayName)
             assertEquals(RecognitionEngine.LOCAL, viewModel.uiState.value.engine)
-            assertEquals(false, viewModel.uiState.value.importInProgress)
-            assertEquals(false, viewModel.uiState.value.importError)
+            assertEquals(1, viewModel.uiState.value.installedModels.size)
+            assertEquals(null, viewModel.uiState.value.operationModelId)
         }
+
+    @Test
+    fun `validation and deletion update model directory state`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val port = FakeRecognitionSettingsPort().apply { installModel() }
+            val viewModel = createViewModel(port)
+            advanceUntilIdle()
+
+            viewModel.validateLocalModel("sensevoice")
+            advanceUntilIdle()
+            assertEquals(true, viewModel.uiState.value.validationByModelId["sensevoice"])
+
+            viewModel.deleteLocalModel("sensevoice")
+            advanceUntilIdle()
+            assertEquals(emptyList<LocalAsrModel>(), viewModel.uiState.value.installedModels)
+            assertEquals(RecognitionEngine.ONLINE, viewModel.uiState.value.engine)
+        }
+
+    private fun createViewModel(
+        port: FakeRecognitionSettingsPort = FakeRecognitionSettingsPort(),
+    ): RecognitionSettingsViewModel = RecognitionSettingsViewModel(
+        settingsPort = port,
+        catalogPort = LocalAsrModelCatalogPort { listOf(catalogModel()) },
+        deviceCapabilitiesPort = LocalAsrDeviceCapabilitiesPort { deviceCapabilities() },
+    )
 }
 
 private class FakeRecognitionSettingsPort : RecognitionSettingsPort {
@@ -58,8 +91,34 @@ private class FakeRecognitionSettingsPort : RecognitionSettingsPort {
         mutableSettings.value = mutableSettings.value.copy(engine = engine)
     }
 
-    override suspend fun importLocalModel(sourceLocation: String): LocalAsrModel {
+    override suspend fun selectLocalModel(modelId: String) {
+        val model = mutableSettings.value.installedModels.first { it.id == modelId }
+        mutableSettings.value = mutableSettings.value.copy(
+            engine = RecognitionEngine.LOCAL,
+            localModel = model,
+        )
+    }
+
+    override suspend fun downloadLocalModel(
+        model: LocalAsrCatalogModel,
+        progress: LocalAsrDownloadProgressListener,
+    ): LocalAsrModel {
+        progress.onProgress(
+            LocalAsrDownloadProgress(model.id, LocalAsrDownloadStage.DOWNLOADING, 5, 10),
+        )
+        return installModel()
+    }
+
+    override suspend fun validateLocalModel(modelId: String): LocalAsrModelValidation =
+        LocalAsrModelValidation(modelId, valid = true)
+
+    override suspend fun deleteLocalModel(modelId: String) {
+        mutableSettings.value = RecognitionSettings()
+    }
+
+    fun installModel(): LocalAsrModel {
         val model = LocalAsrModel(
+            id = "sensevoice",
             displayName = "SenseVoice",
             config = LocalSherpaStreamingConfig(
                 modelPath = "/models/sensevoice",
@@ -67,7 +126,37 @@ private class FakeRecognitionSettingsPort : RecognitionSettingsPort {
                 modelType = "sensevoice",
             ),
         )
-        mutableSettings.value = RecognitionSettings(RecognitionEngine.LOCAL, model)
+        mutableSettings.value = RecognitionSettings(
+            engine = RecognitionEngine.LOCAL,
+            localModel = model,
+            installedModels = listOf(model),
+        )
         return model
     }
 }
+
+private fun catalogModel() = LocalAsrCatalogModel(
+    id = "sensevoice",
+    displayName = "SenseVoice",
+    modelType = "sensevoice",
+    language = "zh,en",
+    sizeLabel = "155 MB",
+    estimatedSizeBytes = 155L * 1_024 * 1_024,
+    isRecommended = true,
+    download = LocalAsrDownloadFile(
+        url = "https://example.com/sensevoice.tar.bz2",
+        sha256 = null,
+        archive = true,
+        fileName = "sensevoice.tar.bz2",
+    ),
+)
+
+private fun deviceCapabilities() = LocalAsrDeviceCapabilities(
+    supported = true,
+    tier = LocalAsrDeviceTier.STANDARD,
+    cpuCores = 8,
+    totalMemoryBytes = 8L * 1_024 * 1_024 * 1_024,
+    availableStorageBytes = 4L * 1_024 * 1_024 * 1_024,
+    primaryAbi = "arm64-v8a",
+    recommendedThreads = 2,
+)
