@@ -43,12 +43,14 @@ import com.sona.android.app.feature.settings.AppLanguage
 import com.sona.android.app.feature.settings.AppearanceSettingsUiState
 import com.sona.android.app.feature.settings.CloudTranscriptionSettingsUiState
 import com.sona.android.app.feature.settings.CredentialSettingsUiState
+import com.sona.android.app.feature.settings.RecognitionSettingsUiState
 import com.sona.android.app.feature.settings.SettingsScreen
 import com.sona.android.app.feature.settings.SettingsSection
 import com.sona.android.app.ui.theme.SonaTheme
 import com.sona.android.application.library.RecordingLibraryItem
 import com.sona.android.application.recording.LiveRecordingState
 import com.sona.android.application.recording.OnlineBatchProvider
+import com.sona.android.application.recording.RecognitionEngine
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -61,6 +63,7 @@ internal fun SonaApp(
     appearanceState: AppearanceSettingsUiState,
     credentialState: CredentialSettingsUiState,
     cloudTranscriptionState: CloudTranscriptionSettingsUiState,
+    recognitionSettingsState: RecognitionSettingsUiState,
     appLanguage: AppLanguage,
     onAppLanguageChanged: (AppLanguage) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
@@ -80,6 +83,8 @@ internal fun SonaApp(
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
     onClearCloudApiKey: () -> Unit,
+    onRecognitionEngineSelected: (RecognitionEngine) -> Unit,
+    onImportLocalModel: (String) -> Unit,
 ) {
     var credentialFocusRequested by remember { mutableStateOf(false) }
 
@@ -94,6 +99,14 @@ internal fun SonaApp(
         val isLibraryDetail = currentRoute == LIBRARY_DETAIL_ROUTE
         val onConfigureCredential = {
             credentialFocusRequested = true
+            navController.navigate(settingsRoute(SettingsSection.RECOGNITION)) {
+                popUpTo(SonaDestination.RECORD.route) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+        val onConfigureRecognition = {
+            credentialFocusRequested = false
             navController.navigate(settingsRoute(SettingsSection.RECOGNITION)) {
                 popUpTo(SonaDestination.RECORD.route) { saveState = true }
                 launchSingleTop = true
@@ -177,10 +190,13 @@ internal fun SonaApp(
                             bootstrapState = bootstrapState,
                             recordingState = recordingState,
                             credentialStatus = credentialState.status,
+                            recognitionSettings = recognitionSettingsState,
                             onRetryBootstrap = onRetryBootstrap,
                             onStartRecording = onStartRecording,
                             onStopRecording = onStopRecording,
                             onConfigureCredential = onConfigureCredential,
+                            onConfigureRecognition = onConfigureRecognition,
+                            onEngineSelected = onRecognitionEngineSelected,
                         )
                     }
                     composable(SonaDestination.LIBRARY.route) {
@@ -236,6 +252,7 @@ internal fun SonaApp(
                             appearanceState = appearanceState,
                             credentialState = credentialState,
                             cloudTranscriptionState = cloudTranscriptionState,
+                            recognitionSettingsState = recognitionSettingsState,
                             appLanguage = appLanguage,
                             requestCredentialFocus = credentialFocusRequested,
                             onAppLanguageChanged = onAppLanguageChanged,
@@ -247,6 +264,7 @@ internal fun SonaApp(
                             onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                             onSaveCloudApiKey = onSaveCloudApiKey,
                             onClearCloudApiKey = onClearCloudApiKey,
+                            onImportLocalModel = onImportLocalModel,
                             onCredentialFocusConsumed = {
                                 credentialFocusRequested = false
                             },

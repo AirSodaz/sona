@@ -32,13 +32,13 @@
     <string name="action_grant_permission">권한 다시 허용</string>
     <string name="action_open_app_settings">앱 설정 열기</string>
     <string name="recording_idle">녹음 준비됨</string>
-    <string name="recording_needs_configuration">온라인 인식 자격 증명이 필요함</string>
+    <string name="recording_needs_configuration">음성 인식 설정 필요</string>
     <string name="recording_preparing">녹음 준비 중</string>
     <string name="recording_active">녹음 중</string>
     <string name="recording_stopping">저장 중</string>
     <string name="recording_completed">녹음이 저장됨</string>
     <string name="recording_completed_warning">녹음은 저장되었지만 일부 처리가 완료되지 않음</string>
-    <string name="recording_invalid_configuration">온라인 인식 설정을 사용할 수 없음</string>
+    <string name="recording_invalid_configuration">음성 인식 설정을 사용할 수 없음</string>
     <string name="recording_startup_failed">녹음을 시작할 수 없음</string>
     <string name="recording_audio_failed">마이크 입력 오류</string>
     <string name="recording_streaming_failed">실시간 받아쓰기를 사용할 수 없음</string>
@@ -83,4 +83,11 @@
     <string name="runtime_heading">로컬 런타임</string>
     <string name="local_runtime_ready">준비됨</string>
     <string name="local_runtime_unavailable">사용할 수 없음</string>
+    <string name="local_recognition_heading">로컬 인식 모델</string>
+    <string name="local_model_installed">설치됨: %1$s</string>
+    <string name="local_model_not_installed">설치된 로컬 모델 없음</string>
+    <string name="local_model_import_hint">Sherpa-ONNX 모델 폴더를 선택하세요. 오프라인 모델에는 silero_vad.onnx도 필요합니다.</string>
+    <string name="local_model_import_failed">선택한 폴더는 지원되는 로컬 모델이 아닙니다.</string>
+    <string name="local_model_importing">모델 가져오는 중</string>
+    <string name="action_import_local_model">모델 폴더 선택</string>
 </resources>

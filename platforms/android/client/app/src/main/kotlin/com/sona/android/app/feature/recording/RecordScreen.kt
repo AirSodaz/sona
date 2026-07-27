@@ -74,10 +74,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.sona.android.app.R
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
+import com.sona.android.app.feature.settings.RecognitionSettingsUiState
 import com.sona.android.app.ui.theme.LocalSonaRecordingColor
 import com.sona.android.application.recording.AudioInputStatus
 import com.sona.android.application.recording.CredentialStatus
 import com.sona.android.application.recording.LiveRecordingState
+import com.sona.android.application.recording.RecognitionEngine
 import com.sona.android.application.recording.StreamingStatus
 import com.sona.android.application.recording.TranscriptSegment
 
@@ -87,10 +89,13 @@ internal fun RecordScreen(
     bootstrapState: SonaBootstrapUiState,
     recordingState: LiveRecordingState,
     credentialStatus: CredentialStatus,
+    recognitionSettings: RecognitionSettingsUiState,
     onRetryBootstrap: () -> Unit,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
     onConfigureCredential: () -> Unit,
+    onConfigureRecognition: () -> Unit,
+    onEngineSelected: (RecognitionEngine) -> Unit,
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -152,16 +157,25 @@ internal fun RecordScreen(
     }
 
     val presentation = recordingState.toRecordingPresentation()
-    val bootstrapReady = bootstrapState is SonaBootstrapUiState.Ready &&
-        bootstrapState.snapshot.onlineStreamingAvailable
+    val bootstrapReady = bootstrapState is SonaBootstrapUiState.Ready && when (
+        recognitionSettings.engine
+    ) {
+        RecognitionEngine.ONLINE -> bootstrapState.snapshot.onlineStreamingAvailable
+        RecognitionEngine.LOCAL -> bootstrapState.snapshot.localStreamingSessionAvailable
+    }
     val elapsedMillis = (recordingState as? LiveRecordingState.Recording)?.elapsedMillis ?: 0
 
     val requestRecording = {
-        if (
-            credentialStatus == CredentialStatus.NOT_CONFIGURED ||
-            recordingState is LiveRecordingState.NeedsConfiguration
-        ) {
-            onConfigureCredential()
+        val configurationMissing = when (recognitionSettings.engine) {
+            RecognitionEngine.ONLINE -> credentialStatus == CredentialStatus.NOT_CONFIGURED
+            RecognitionEngine.LOCAL -> recognitionSettings.localModel == null
+        }
+        if (configurationMissing || recordingState is LiveRecordingState.NeedsConfiguration) {
+            if (recognitionSettings.engine == RecognitionEngine.ONLINE) {
+                onConfigureCredential()
+            } else {
+                onConfigureRecognition()
+            }
         } else {
             when (
                 MicrophonePermissionPolicy.decide(
@@ -207,15 +221,18 @@ internal fun RecordScreen(
             )
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 SegmentedButton(
-                    selected = true,
-                    onClick = {},
+                    selected = recognitionSettings.engine == RecognitionEngine.ONLINE,
+                    onClick = { onEngineSelected(RecognitionEngine.ONLINE) },
+                    enabled = presentation.isStartAvailable,
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
                     label = { Text(stringResource(R.string.engine_online)) },
                 )
                 SegmentedButton(
-                    selected = false,
-                    onClick = {},
-                    enabled = false,
+                    selected = recognitionSettings.engine == RecognitionEngine.LOCAL,
+                    onClick = { onEngineSelected(RecognitionEngine.LOCAL) },
+                    enabled = presentation.isStartAvailable &&
+                        (bootstrapState as? SonaBootstrapUiState.Ready)
+                            ?.snapshot?.localStreamingSessionAvailable == true,
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                     label = { Text(stringResource(R.string.engine_local)) },
                 )
@@ -230,7 +247,13 @@ internal fun RecordScreen(
                 permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             },
             onOpenAppSettings = { context.openAppSettings() },
-            onConfigureCredential = onConfigureCredential,
+            onConfigureCredential = if (
+                recognitionSettings.engine == RecognitionEngine.ONLINE
+            ) {
+                onConfigureCredential
+            } else {
+                onConfigureRecognition
+            },
         )
 
         TranscriptList(

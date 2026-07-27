@@ -9,6 +9,6 @@ class UniffiSonaBootstrapAdapter : SonaBootstrapPort {
         defaultConfigJson = defaultConfigJson(),
         onlineStreamingAvailable = true,
         localRuntimePackaged = true,
-        localStreamingSessionAvailable = false,
+        localStreamingSessionAvailable = true,
     )
 }

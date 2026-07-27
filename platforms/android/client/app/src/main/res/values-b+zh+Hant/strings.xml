@@ -32,13 +32,13 @@
     <string name="action_grant_permission">重新授權</string>
     <string name="action_open_app_settings">開啟系統設定</string>
     <string name="recording_idle">準備錄音</string>
-    <string name="recording_needs_configuration">需要設定線上辨識憑據</string>
+    <string name="recording_needs_configuration">需要設定語音辨識</string>
     <string name="recording_preparing">正在準備錄音</string>
     <string name="recording_active">正在錄音</string>
     <string name="recording_stopping">正在儲存</string>
     <string name="recording_completed">錄音已儲存</string>
     <string name="recording_completed_warning">錄音已儲存，部分處理未完成</string>
-    <string name="recording_invalid_configuration">線上辨識設定無法使用</string>
+    <string name="recording_invalid_configuration">語音辨識設定無法使用</string>
     <string name="recording_startup_failed">無法開始錄音</string>
     <string name="recording_audio_failed">麥克風輸入異常</string>
     <string name="recording_streaming_failed">即時轉寫無法使用</string>
@@ -83,4 +83,11 @@
     <string name="runtime_heading">本機執行階段</string>
     <string name="local_runtime_ready">已就緒</string>
     <string name="local_runtime_unavailable">無法使用</string>
+    <string name="local_recognition_heading">本機辨識模型</string>
+    <string name="local_model_installed">已安裝：%1$s</string>
+    <string name="local_model_not_installed">尚未安裝本機模型</string>
+    <string name="local_model_import_hint">選擇 Sherpa-ONNX 模型資料夾。離線模型需同時包含 silero_vad.onnx。</string>
+    <string name="local_model_import_failed">所選資料夾不是支援的本機模型。</string>
+    <string name="local_model_importing">正在匯入模型</string>
+    <string name="action_import_local_model">選擇模型資料夾</string>
 </resources>

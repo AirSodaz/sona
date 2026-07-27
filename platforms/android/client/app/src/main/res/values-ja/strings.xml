@@ -19,13 +19,13 @@
     <string name="action_grant_permission">権限を再度許可</string>
     <string name="action_open_app_settings">アプリ設定を開く</string>
     <string name="recording_idle">録音の準備ができました</string>
-    <string name="recording_needs_configuration">オンライン認識の認証情報が必要です</string>
+    <string name="recording_needs_configuration">音声認識の設定が必要です</string>
     <string name="recording_preparing">録音を準備中</string>
     <string name="recording_active">録音中</string>
     <string name="recording_stopping">保存中</string>
     <string name="recording_completed">録音を保存しました</string>
     <string name="recording_completed_warning">録音は保存されましたが、一部の処理が完了していません</string>
-    <string name="recording_invalid_configuration">オンライン認識の設定を利用できません</string>
+    <string name="recording_invalid_configuration">音声認識の設定を利用できません</string>
     <string name="recording_startup_failed">録音を開始できません</string>
     <string name="recording_audio_failed">マイク入力でエラーが発生しました</string>
     <string name="recording_streaming_failed">リアルタイム文字起こしを利用できません</string>
@@ -83,4 +83,11 @@
     <string name="runtime_heading">ローカルランタイム</string>
     <string name="local_runtime_ready">準備完了</string>
     <string name="local_runtime_unavailable">利用できません</string>
+    <string name="local_recognition_heading">ローカル認識モデル</string>
+    <string name="local_model_installed">インストール済み：%1$s</string>
+    <string name="local_model_not_installed">ローカルモデルがありません</string>
+    <string name="local_model_import_hint">Sherpa-ONNX モデルフォルダーを選択します。オフラインモデルには silero_vad.onnx も必要です。</string>
+    <string name="local_model_import_failed">選択したフォルダーは対応するローカルモデルではありません。</string>
+    <string name="local_model_importing">モデルをインポート中</string>
+    <string name="action_import_local_model">モデルフォルダーを選択</string>
 </resources>

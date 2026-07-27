@@ -62,6 +62,7 @@ internal fun SettingsScreen(
     appearanceState: AppearanceSettingsUiState,
     credentialState: CredentialSettingsUiState,
     cloudTranscriptionState: CloudTranscriptionSettingsUiState,
+    recognitionSettingsState: RecognitionSettingsUiState,
     appLanguage: AppLanguage,
     requestCredentialFocus: Boolean,
     onCredentialFocusConsumed: () -> Unit,
@@ -74,6 +75,7 @@ internal fun SettingsScreen(
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
     onClearCloudApiKey: () -> Unit,
+    onImportLocalModel: (String) -> Unit,
 ) {
     val initialDestinationHistory = remember(initialSection) {
         settingsDestinationHistory(initialSection)
@@ -160,6 +162,7 @@ internal fun SettingsScreen(
                     appearanceState = appearanceState,
                     credentialState = credentialState,
                     cloudTranscriptionState = cloudTranscriptionState,
+                    recognitionSettingsState = recognitionSettingsState,
                     appLanguage = appLanguage,
                     requestCredentialFocus = credentialFocusSessionActive,
                     onBack = navigateBack,
@@ -172,6 +175,7 @@ internal fun SettingsScreen(
                     onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                     onSaveCloudApiKey = onSaveCloudApiKey,
                     onClearCloudApiKey = onClearCloudApiKey,
+                    onImportLocalModel = onImportLocalModel,
                 )
             }
         },
@@ -319,6 +323,7 @@ private fun SettingsDetailPane(
     appearanceState: AppearanceSettingsUiState,
     credentialState: CredentialSettingsUiState,
     cloudTranscriptionState: CloudTranscriptionSettingsUiState,
+    recognitionSettingsState: RecognitionSettingsUiState,
     appLanguage: AppLanguage,
     requestCredentialFocus: Boolean,
     onBack: () -> Unit,
@@ -331,6 +336,7 @@ private fun SettingsDetailPane(
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
     onClearCloudApiKey: () -> Unit,
+    onImportLocalModel: (String) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -365,6 +371,7 @@ private fun SettingsDetailPane(
                 bootstrapState = bootstrapState,
                 credentialState = credentialState,
                 cloudTranscriptionState = cloudTranscriptionState,
+                recognitionSettingsState = recognitionSettingsState,
                 requestCredentialFocus = requestCredentialFocus,
                 onCredentialInputChanged = onCredentialInputChanged,
                 onSaveCredential = onSaveCredential,
@@ -373,6 +380,7 @@ private fun SettingsDetailPane(
                 onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                 onSaveCloudApiKey = onSaveCloudApiKey,
                 onClearCloudApiKey = onClearCloudApiKey,
+                onImportLocalModel = onImportLocalModel,
                 modifier = Modifier.weight(1f),
             )
         }

@@ -68,6 +68,40 @@ test('Android streaming adapters support online and local engines behind generat
   assert.doesNotMatch(history, /kotlinx\.serialization\.json|buildJsonObject|parseJson/u);
 });
 
+test('Android local ASR selection, model import, and recording startup are wired end to end', () => {
+  const settingsPort = clientSource(
+    'application', 'kotlin', 'com', 'sona', 'android', 'application', 'recording',
+    'RecognitionSettings.kt',
+  );
+  const coordinator = clientSource(
+    'application', 'kotlin', 'com', 'sona', 'android', 'application', 'recording',
+    'LiveRecordingCoordinator.kt',
+  );
+  const repository = clientSource(
+    path.join('adapters', 'android'),
+    'kotlin', 'com', 'sona', 'android', 'adapters', 'android', 'settings',
+    'AndroidRecognitionSettingsRepository.kt',
+  );
+  const recordScreen = clientSource(
+    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'recording',
+    'RecordScreen.kt',
+  );
+  const container = clientSource(
+    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'composition',
+    'SonaAppContainer.kt',
+  );
+
+  assert.doesNotMatch(settingsPort, /^import (?:android|androidx|uniffi)\./mu);
+  assert.match(settingsPort, /enum class RecognitionEngine/u);
+  assert.match(settingsPort, /interface RecognitionSettingsPort/u);
+  assert.match(coordinator, /RecognitionEngine\.LOCAL[\s\S]*StreamingEngineConfig\.LocalSherpa/u);
+  assert.match(repository, /DocumentFile\.fromTreeUri/u);
+  assert.match(repository, /filesDir, "models"/u);
+  assert.match(repository, /silero_vad\.onnx/u);
+  assert.match(recordScreen, /onEngineSelected\(RecognitionEngine\.LOCAL\)/u);
+  assert.match(container, /AndroidRecognitionSettingsRepository/u);
+});
+
 test('Android online batch ASR stays behind an application port and Tokio UniFFI adapter', () => {
   const port = clientSource(
     'application', 'kotlin', 'com', 'sona', 'android', 'application', 'recording',

@@ -200,6 +200,7 @@ class RecordingFakes {
     ) : StreamingTranscriptionPort {
         private val eventChannel = Channel<StreamingTranscriptionEvent>(Channel.UNLIMITED)
         val fedFrames = mutableListOf<Pcm16Frame>()
+        val openedRequests = mutableListOf<StreamingTranscriptionRequest>()
         var startFailure: Throwable? = null
         var successfulFeedsBeforeFailure: Int? = null
         var flushFailure: Throwable? = null
@@ -215,6 +216,7 @@ class RecordingFakes {
             request: StreamingTranscriptionRequest,
         ): StreamingTranscriptionSession {
             calls += "asr.open"
+            openedRequests += request
             return object : StreamingTranscriptionSession {
                 override val events: Flow<StreamingTranscriptionEvent> =
                     eventChannel.receiveAsFlow().onCompletion {

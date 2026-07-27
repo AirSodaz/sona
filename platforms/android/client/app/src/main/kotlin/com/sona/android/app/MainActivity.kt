@@ -18,6 +18,7 @@ import com.sona.android.app.feature.settings.AppLanguage
 import com.sona.android.app.feature.settings.AppearanceSettingsViewModel
 import com.sona.android.app.feature.settings.CloudTranscriptionSettingsViewModel
 import com.sona.android.app.feature.settings.CredentialSettingsViewModel
+import com.sona.android.app.feature.settings.RecognitionSettingsViewModel
 import com.sona.android.app.navigation.SonaApp
 import com.sona.android.application.recording.LiveRecordingState
 
@@ -53,12 +54,17 @@ class MainActivity : AppCompatActivity() {
                     container.batchCredentialSettings,
                 ),
             )
+            val recognitionSettingsViewModel: RecognitionSettingsViewModel = viewModel(
+                factory = RecognitionSettingsViewModel.factory(container.recognitionSettings),
+            )
             val bootstrapState by bootstrapViewModel.bootstrapState.collectAsStateWithLifecycle()
             val recordingState by recordingViewModel.state.collectAsStateWithLifecycle()
             val libraryState by libraryViewModel.state.collectAsStateWithLifecycle()
             val appearanceState by appearanceSettingsViewModel.state.collectAsStateWithLifecycle()
             val credentialState by credentialViewModel.uiState.collectAsStateWithLifecycle()
             val cloudTranscriptionState by cloudTranscriptionViewModel.uiState
+                .collectAsStateWithLifecycle()
+            val recognitionSettingsState by recognitionSettingsViewModel.uiState
                 .collectAsStateWithLifecycle()
             LaunchedEffect(recordingState) {
                 if (recordingState is LiveRecordingState.Completed) {
@@ -72,6 +78,7 @@ class MainActivity : AppCompatActivity() {
                 appearanceState = appearanceState,
                 credentialState = credentialState,
                 cloudTranscriptionState = cloudTranscriptionState,
+                recognitionSettingsState = recognitionSettingsState,
                 appLanguage = currentAppLanguage(),
                 onAppLanguageChanged = ::setAppLanguage,
                 onDynamicColorChanged = appearanceSettingsViewModel::setDynamicColorEnabled,
@@ -91,6 +98,8 @@ class MainActivity : AppCompatActivity() {
                 onCloudApiKeyInputChanged = cloudTranscriptionViewModel::onApiKeyInputChanged,
                 onSaveCloudApiKey = cloudTranscriptionViewModel::saveApiKey,
                 onClearCloudApiKey = cloudTranscriptionViewModel::clearApiKey,
+                onRecognitionEngineSelected = recognitionSettingsViewModel::selectEngine,
+                onImportLocalModel = recognitionSettingsViewModel::importLocalModel,
             )
         }
     }

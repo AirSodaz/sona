@@ -18,6 +18,66 @@ import org.junit.Test
 
 class LiveRecordingCoordinatorTest {
     @Test
+    fun `local engine starts without reading cloud credentials or provider metadata`() = runTest {
+        val fakes = RecordingFakes()
+        val localConfig = LocalSherpaStreamingConfig(
+            modelPath = "/data/user/0/com.sona.android/files/models/sensevoice",
+            numThreads = 2,
+            modelType = "sensevoice",
+            vadModel = "/data/user/0/com.sona.android/files/models/silero_vad.onnx",
+            fileConfig = LocalSherpaModelFiles(model = "model.int8.onnx", tokens = "tokens.txt"),
+        )
+        val coordinator = LiveRecordingCoordinator(
+            credentialResolver = fakes.credentialResolver,
+            providerCatalog = fakes.providerCatalog,
+            microphoneCapture = fakes.microphone,
+            streamingTranscription = fakes.transcription,
+            history = fakes.history,
+            monotonicClock = fakes.monotonicClock,
+            recordingIds = fakes.recordingIds,
+            scope = backgroundScope,
+            recognitionSettings = {
+                RecognitionSettings(
+                    engine = RecognitionEngine.LOCAL,
+                    localModel = LocalAsrModel("SenseVoice", localConfig),
+                )
+            },
+        )
+
+        coordinator.start()
+
+        val engine = fakes.transcription.openedRequests.single().engine
+        assertEquals(StreamingEngineConfig.LocalSherpa(localConfig), engine)
+        assertFalse(fakes.calls.contains("credential.loadForStart"))
+        assertFalse(fakes.calls.contains("provider.load"))
+        coordinator.stop()
+    }
+
+    @Test
+    fun `local engine without an installed model requests configuration before allocating resources`() =
+        runTest {
+            val fakes = RecordingFakes()
+            val coordinator = LiveRecordingCoordinator(
+                credentialResolver = fakes.credentialResolver,
+                providerCatalog = fakes.providerCatalog,
+                microphoneCapture = fakes.microphone,
+                streamingTranscription = fakes.transcription,
+                history = fakes.history,
+                monotonicClock = fakes.monotonicClock,
+                recordingIds = fakes.recordingIds,
+                scope = backgroundScope,
+                recognitionSettings = {
+                    RecognitionSettings(engine = RecognitionEngine.LOCAL)
+                },
+            )
+
+            coordinator.start()
+
+            assertEquals(LiveRecordingState.NeedsConfiguration, coordinator.state.value)
+            assertEquals(emptyList<String>(), fakes.calls)
+        }
+
+    @Test
     fun `transcript buffered before microphone start appears in initial recording state`() = runTest {
         val fakes = RecordingFakes()
         fakes.transcription.emit(transcriptEvent(id = "early", text = "already here"))

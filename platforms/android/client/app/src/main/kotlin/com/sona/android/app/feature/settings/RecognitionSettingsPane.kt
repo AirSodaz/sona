@@ -1,5 +1,8 @@
 package com.sona.android.app.feature.settings
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
@@ -46,6 +50,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -62,6 +67,7 @@ internal fun RecognitionSettingsPane(
     bootstrapState: SonaBootstrapUiState,
     credentialState: CredentialSettingsUiState,
     cloudTranscriptionState: CloudTranscriptionSettingsUiState,
+    recognitionSettingsState: RecognitionSettingsUiState,
     requestCredentialFocus: Boolean,
     onCredentialInputChanged: (String) -> Unit,
     onSaveCredential: () -> Unit,
@@ -70,11 +76,26 @@ internal fun RecognitionSettingsPane(
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
     onClearCloudApiKey: () -> Unit,
+    onImportLocalModel: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val initialFocusRequester = remember { FocusRequester() }
     val credentialFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val context = LocalContext.current
+    val modelFolderLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            onImportLocalModel(uri.toString())
+        }
+    }
     var focusInitialized by remember { mutableStateOf(false) }
     var credentialFieldPlaced by remember { mutableStateOf(false) }
     val onCredentialFieldPlaced = remember {
@@ -135,6 +156,20 @@ internal fun RecognitionSettingsPane(
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {
+                LocalRecognitionSettings(
+                    state = recognitionSettingsState,
+                    onChooseFolder = { modelFolderLauncher.launch(null) },
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
+
+            Card(
+                shape = MaterialTheme.shapes.medium,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -169,6 +204,65 @@ internal fun RecognitionSettingsPane(
                     RuntimeStatus(bootstrapState)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LocalRecognitionSettings(
+    state: RecognitionSettingsUiState,
+    onChooseFolder: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.local_recognition_heading),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = state.localModel?.let { model ->
+                stringResource(R.string.local_model_installed, model.displayName)
+            } ?: stringResource(R.string.local_model_not_installed),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = stringResource(R.string.local_model_import_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (state.importError) {
+            Text(
+                text = stringResource(R.string.local_model_import_failed),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        Button(
+            onClick = onChooseFolder,
+            enabled = !state.importInProgress,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (state.importInProgress) {
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(Icons.Rounded.FolderOpen, contentDescription = null)
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                stringResource(
+                    if (state.importInProgress) {
+                        R.string.local_model_importing
+                    } else {
+                        R.string.action_import_local_model
+                    },
+                ),
+            )
         }
     }
 }

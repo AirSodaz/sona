@@ -22,7 +22,8 @@ Android `main` source set, and stages ABI-specific `libsona_uniffi_bind.so`,
 `jniLibs`.
 
 The generated streaming surface is typed. Implement
-`FfiAsrStreamingObserver`, then pass it to `createOnlineAsrStreamingSession`:
+`FfiAsrStreamingObserver`, then pass it to `createAsrStreamingSession` for
+either an online or local Sherpa request:
 
 ```kotlin
 import uniffi.sona_uniffi_bind.FfiAsrInferenceMetric
@@ -31,9 +32,9 @@ import uniffi.sona_uniffi_bind.FfiAsrStreamingErrorEvent
 import uniffi.sona_uniffi_bind.FfiAsrStreamingObserver
 import uniffi.sona_uniffi_bind.FfiAsrStreamingSession
 import uniffi.sona_uniffi_bind.FfiAsrTranscriptUpdateEvent
-import uniffi.sona_uniffi_bind.createOnlineAsrStreamingSession
+import uniffi.sona_uniffi_bind.createAsrStreamingSession
 
-fun createStreamingSession(requestJson: String): FfiAsrStreamingSession {
+suspend fun createStreamingSession(requestJson: String): FfiAsrStreamingSession {
     val observer: FfiAsrStreamingObserver = object : FfiAsrStreamingObserver {
         override fun onTranscriptUpdate(event: FfiAsrTranscriptUpdateEvent) = Unit
         override fun onModelLoad(metric: FfiAsrModelLoadMetric) = Unit
@@ -41,7 +42,7 @@ fun createStreamingSession(requestJson: String): FfiAsrStreamingSession {
         override fun onStreamingError(event: FfiAsrStreamingErrorEvent) = Unit
     }
 
-    return createOnlineAsrStreamingSession(
+    return createAsrStreamingSession(
         instanceId = "android-live-1",
         requestJson = requestJson,
         observer = observer,
@@ -66,9 +67,12 @@ The caller supplies an application data directory for every operation.
 canonical camelCase version-1 recovery snapshot format. These operations
 perform filesystem I/O and can fail with `SonaCoreBindingException`.
 
-This AAR includes the native local Sherpa runtime needed for later Android
-local ASR integration. The generated Kotlin surface remains online-only until
-a local streaming session factory is explicitly added to the UniFFI API.
+This AAR includes the native local Sherpa runtime. The Android client can import
+a Sherpa-ONNX model directory into app-private storage and select local
+recognition from the Record screen. SenseVoice and other offline models must be
+imported with `silero_vad.onnx`; streaming Paraformer and Zipformer directories
+do not require a separate VAD model. The imported directory must contain the
+model's ONNX files and `tokens.txt`.
 
 The Android build downloads the locked sherpa-onnx 1.13.4 archive into
 `target/android-sherpa`. For offline builds, set

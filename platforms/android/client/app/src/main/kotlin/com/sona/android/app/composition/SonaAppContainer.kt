@@ -7,6 +7,7 @@ import com.sona.android.adapters.android.audio.FrameworkAudioRecordBackend
 import com.sona.android.adapters.android.credential.AndroidBatchCredentialRepository
 import com.sona.android.adapters.android.credential.AndroidStreamingCredentialRepository
 import com.sona.android.adapters.android.settings.AndroidAppearanceSettingsRepository
+import com.sona.android.adapters.android.settings.AndroidRecognitionSettingsRepository
 import com.sona.android.adapters.android.sync.AndroidSyncSecretStore
 import com.sona.android.adapters.android.system.AndroidMonotonicClock
 import com.sona.android.adapters.android.system.UuidRecordingIdPort
@@ -34,6 +35,8 @@ class SonaAppContainer(context: Context) {
     private val bootstrapPort = UniffiSonaBootstrapAdapter()
     private val credentialRepository = AndroidStreamingCredentialRepository.create(appContext)
     private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository.create(appContext)
+    private val recognitionSettingsRepository =
+        AndroidRecognitionSettingsRepository.create(appContext)
     private val syncSecretStore = AndroidSyncSecretStore.create(appContext)
     private val syncSecretStoreRegistration = UniffiSyncSecretStoreRegistrar().apply {
         register(appDataDir, syncSecretStore)
@@ -53,6 +56,7 @@ class SonaAppContainer(context: Context) {
     val loadSonaBootstrap = LoadSonaBootstrap(bootstrapPort)
     val appearanceSettings: AppearanceSettingsPort = appearanceSettingsRepository
     val credentialSettings: StreamingCredentialSettingsPort = credentialRepository
+    val recognitionSettings = recognitionSettingsRepository
     val batchCredentialSettings: BatchCredentialSettingsPort = batchCredentialRepository
     val syncSecrets: SyncSecretStorePort = syncSecretStore
     val recordingLibrary: RecordingLibraryPort = history
@@ -72,6 +76,7 @@ class SonaAppContainer(context: Context) {
             monotonicClock = monotonicClock,
             recordingIds = recordingIds,
             scope = scope,
+            recognitionSettings = { recognitionSettingsRepository.load() },
         )
 
     @SuppressLint("MissingPermission")

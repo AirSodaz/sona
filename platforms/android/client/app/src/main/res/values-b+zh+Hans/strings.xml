@@ -19,13 +19,13 @@
     <string name="action_grant_permission">重新授权</string>
     <string name="action_open_app_settings">打开系统设置</string>
     <string name="recording_idle">准备录音</string>
-    <string name="recording_needs_configuration">需要配置在线识别凭据</string>
+    <string name="recording_needs_configuration">需要配置语音识别</string>
     <string name="recording_preparing">正在准备录音</string>
     <string name="recording_active">正在录音</string>
     <string name="recording_stopping">正在保存</string>
     <string name="recording_completed">录音已保存</string>
     <string name="recording_completed_warning">录音已保存，部分处理未完成</string>
-    <string name="recording_invalid_configuration">在线识别配置不可用</string>
+    <string name="recording_invalid_configuration">语音识别配置不可用</string>
     <string name="recording_startup_failed">无法开始录音</string>
     <string name="recording_audio_failed">麦克风输入异常</string>
     <string name="recording_streaming_failed">实时转写不可用</string>
@@ -83,4 +83,11 @@
     <string name="runtime_heading">本地运行库</string>
     <string name="local_runtime_ready">已就绪</string>
     <string name="local_runtime_unavailable">不可用</string>
+    <string name="local_recognition_heading">本地识别模型</string>
+    <string name="local_model_installed">已安装：%1$s</string>
+    <string name="local_model_not_installed">尚未安装本地模型</string>
+    <string name="local_model_import_hint">选择 Sherpa-ONNX 模型文件夹。离线模型需同时包含 silero_vad.onnx。</string>
+    <string name="local_model_import_failed">所选文件夹不是受支持的本地模型。</string>
+    <string name="local_model_importing">正在导入模型</string>
+    <string name="action_import_local_model">选择模型文件夹</string>
 </resources>

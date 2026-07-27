@@ -32,6 +32,8 @@ class LiveRecordingCoordinator(
     private val scope: CoroutineScope,
     private val checkpointIntervalMillis: Long = 2_000,
     private val elapsedUpdateIntervalMillis: Long = 1_000,
+    private val recognitionSettings: RecognitionSettingsResolverPort =
+        OnlineRecognitionSettingsResolver,
 ) : LiveRecordingController {
     private val commandMutex = Mutex()
     private val mutableState = MutableStateFlow<LiveRecordingState>(LiveRecordingState.Idle)
@@ -60,8 +62,8 @@ class LiveRecordingCoordinator(
                 return
             }
 
-            val credential = try {
-                credentialResolver.loadForStart()
+            val settings = try {
+                recognitionSettings.loadForStart()
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
@@ -73,37 +75,7 @@ class LiveRecordingCoordinator(
                 )
                 return
             }
-            if (credential == null || credential.apiKey.isBlank()) {
-                mutableState.value = LiveRecordingState.NeedsConfiguration
-                return
-            }
-            val profile = try {
-                providerCatalog.loadVolcengineStreamingProfile()
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                mutableState.value = LiveRecordingState.Failed(
-                    RecordingFailure(
-                        category = RecordingFailureCategory.STARTUP,
-                        message = "Unable to load streaming provider configuration.",
-                    ),
-                )
-                return
-            }
-            if (
-                profile.providerId.isBlank() ||
-                profile.profileId.isBlank() ||
-                profile.streamingEndpoint.isBlank() ||
-                profile.streamingResourceId.isBlank()
-            ) {
-                mutableState.value = LiveRecordingState.Failed(
-                    RecordingFailure(
-                        category = RecordingFailureCategory.INVALID_CONFIGURATION,
-                        message = "Streaming provider configuration is incomplete.",
-                    ),
-                )
-                return
-            }
+            val engine = resolveEngine(settings) ?: return
             val recordingId = try {
                 recordingIds.nextRecordingId()
             } catch (_: Exception) {
@@ -139,10 +111,7 @@ class LiveRecordingCoordinator(
                 transcription = streamingTranscription.open(
                     StreamingTranscriptionRequest(
                         recordingId = recordingId,
-                        engine = StreamingEngineConfig.Online(
-                            credential = credential,
-                            profile = profile,
-                        ),
+                        engine = engine,
                         language = "auto",
                         enableItn = true,
                     ),
@@ -380,6 +349,74 @@ class LiveRecordingCoordinator(
                         } else {
                             current
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun resolveEngine(settings: RecognitionSettings): StreamingEngineConfig? {
+        return when (settings.engine) {
+            RecognitionEngine.LOCAL -> {
+                val model = settings.localModel
+                if (
+                    model == null ||
+                    model.config.modelPath.isBlank() ||
+                    model.config.modelType.isBlank()
+                ) {
+                    mutableState.value = LiveRecordingState.NeedsConfiguration
+                    null
+                } else {
+                    StreamingEngineConfig.LocalSherpa(model.config)
+                }
+            }
+
+            RecognitionEngine.ONLINE -> {
+                val credential = try {
+                    credentialResolver.loadForStart()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    mutableState.value = LiveRecordingState.Failed(
+                        RecordingFailure(
+                            category = RecordingFailureCategory.STARTUP,
+                            message = "Unable to start live transcription.",
+                        ),
+                    )
+                    return null
+                }
+                if (credential == null || credential.apiKey.isBlank()) {
+                    mutableState.value = LiveRecordingState.NeedsConfiguration
+                    null
+                } else {
+                    val profile = try {
+                        providerCatalog.loadVolcengineStreamingProfile()
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Exception) {
+                        mutableState.value = LiveRecordingState.Failed(
+                            RecordingFailure(
+                                category = RecordingFailureCategory.STARTUP,
+                                message = "Unable to load streaming provider configuration.",
+                            ),
+                        )
+                        return null
+                    }
+                    if (
+                        profile.providerId.isBlank() ||
+                        profile.profileId.isBlank() ||
+                        profile.streamingEndpoint.isBlank() ||
+                        profile.streamingResourceId.isBlank()
+                    ) {
+                        mutableState.value = LiveRecordingState.Failed(
+                            RecordingFailure(
+                                category = RecordingFailureCategory.INVALID_CONFIGURATION,
+                                message = "Streaming provider configuration is incomplete.",
+                            ),
+                        )
+                        null
+                    } else {
+                        StreamingEngineConfig.Online(credential, profile)
                     }
                 }
             }
