@@ -1,6 +1,4 @@
-use std::any::Any;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use async_trait::async_trait;
 use sona_core::ports::asr::{
@@ -54,10 +52,6 @@ pub trait ApiServerPlatform: Send + Sync {
         Err(ApiServerPlatformError::unavailable(
             ONLINE_ASR_BATCH_UNAVAILABLE,
         ))
-    }
-
-    fn streaming_context(&self) -> Option<Arc<dyn Any + Send + Sync>> {
-        None
     }
 }
 

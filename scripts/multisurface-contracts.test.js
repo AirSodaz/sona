@@ -107,9 +107,24 @@ test('sync conflict UI reads the persisted HLC snake_case timestamp', () => {
   assert.doesNotMatch(syncConflictCenter, /version\.clock\.physicalMs\b/u);
 });
 
-test('PR guardrails reference the renamed WebDAV sync adapter crate', () => {
+test('PR guardrails execute both sync application and WebDAV adapter tests', () => {
+  assert.match(prGuardrails, /-p sona-sync(?=\s|$)/u);
   assert.match(prGuardrails, /-p sona-sync-webdav\b/u);
   assert.doesNotMatch(prGuardrails, /-p sona-webdav\b/u);
+});
+
+test('desktop streaming context stays typed across the injected route', () => {
+  const apiServerPlatform = read('adapters', 'api_server', 'src', 'platform.rs');
+  const desktopServer = read('platforms', 'desktop', 'src', 'app', 'server.rs');
+  const desktopStreaming = read('platforms', 'desktop', 'src', 'integrations', 'streaming.rs');
+
+  assert.doesNotMatch(apiServerPlatform, /\bdyn Any\b|std::any::Any/u);
+  assert.doesNotMatch(desktopStreaming, /Arc::downcast|unexpected type/u);
+  assert.match(desktopServer, /\.layer\(axum::Extension\(streaming_context\)\)/u);
+  assert.match(
+    desktopStreaming,
+    /Extension\(context\): Extension<Arc<TauriStreamingContext>>/u,
+  );
 });
 
 test('desktop AppConfig is constrained by the generated Rust contract', () => {

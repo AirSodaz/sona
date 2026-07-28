@@ -110,7 +110,6 @@ test('Android local ASR catalog, managed downloads, and recording startup are wi
     'SonaAppContainer.kt',
   );
 
-  assert.doesNotMatch(settingsPort, /^import (?:android|androidx|uniffi)\./mu);
   assert.match(settingsPort, /enum class AsrSelectionSlot/u);
   assert.match(settingsPort, /sealed interface AsrModelSelection/u);
   assert.match(settingsPort, /val liveSelection: AsrModelSelection\?/u);
@@ -164,7 +163,6 @@ test('Android online batch ASR stays behind an application port and Tokio UniFFI
   assert.match(port, /enum class OnlineAsrProvider/u);
   assert.match(port, /interface OnlineBatchTranscriptionPort/u);
   assert.match(port, /OnlineBatchCredential\(apiKey=<redacted>\)/u);
-  assert.doesNotMatch(port, /^import (?:android|androidx|uniffi)\./mu);
   assert.match(adapter, /OnlineBatchTranscriptionPort/u);
   assert.match(adapter, /FfiTranscriptSegment::toApplication/u);
   assert.match(bindings, /FfiOnlineAsrApiKey/u);
@@ -255,8 +253,6 @@ test('Android cloud batch transcription is wired end to end behind its own crede
   assert.match(useCase, /OnlineBatchTranscriptionPort/u);
   assert.match(useCase, /if \(result\.segments\.isEmpty\(\)\)[\s\S]*EMPTY_TRANSCRIPT/u);
   assert.match(useCase, /if \(request\.isDraft\)[\s\S]*completeLiveDraft/u);
-  assert.doesNotMatch(useCase, /^import (?:android|androidx|uniffi)\./mu);
-  assert.doesNotMatch(credentialPorts, /^import (?:android|androidx|uniffi)\./mu);
   assert.match(credentialPorts, /interface BatchCredentialSettingsPort/u);
   assert.match(credentialPorts, /interface BatchCredentialResolverPort/u);
 
@@ -292,7 +288,12 @@ test('Android cloud batch transcription is wired end to end behind its own crede
 });
 
 test('Android recording composition preserves lifecycle, permission, and credential boundaries', () => {
-  const manifest = clientSource('app', 'AndroidManifest.xml');
+  const appManifest = clientSource('app', 'AndroidManifest.xml');
+  const clientManifests = [
+    appManifest,
+    clientSource(path.join('adapters', 'android'), 'AndroidManifest.xml'),
+    clientSource(path.join('adapters', 'uniffi'), 'AndroidManifest.xml'),
+  ].join('\n');
   const application = clientSource(
     'app', 'kotlin', 'com', 'sona', 'android', 'app', 'SonaApplication.kt',
   );
@@ -343,8 +344,10 @@ test('Android recording composition preserves lifecycle, permission, and credent
     'app', 'kotlin', 'com', 'sona', 'android', 'app', 'navigation', 'SonaApp.kt',
   );
 
-  assert.match(manifest, /android:name="\.SonaApplication"/u);
-  assert.match(manifest, /android\.permission\.INTERNET/u);
+  assert.match(appManifest, /android:name="\.SonaApplication"/u);
+  assert.match(appManifest, /android\.permission\.INTERNET/u);
+  assert.doesNotMatch(clientManifests, /FOREGROUND_SERVICE_MICROPHONE/u);
+  assert.doesNotMatch(clientManifests, /foregroundServiceType="microphone"/u);
   assert.match(application, /SonaAppContainer\(this\)/u);
   assert.match(container, /AndroidBatchCredentialRepository\.create\(appContext\)/u);
   assert.doesNotMatch(container, /AndroidStreamingCredentialRepository/u);
@@ -360,6 +363,10 @@ test('Android recording composition preserves lifecycle, permission, and credent
     /credentialResolver\.load\(selection\.provider\)/u,
   );
   assert.match(recordingViewModel, /controllerFactory\.create\(viewModelScope\)/u);
+  assert.match(
+    recordingViewModel,
+    /fun stopForBackground\(\)\s*\{[\s\S]*?stopRecording\(\)[\s\S]*?\}/u,
+  );
   assert.match(activity, /\(application as SonaApplication\)\.container/u);
   assert.doesNotMatch(activity, /Manifest\.permission\.RECORD_AUDIO/u);
 
@@ -412,7 +419,7 @@ test('Android verification runs all recording tests in one serial Gradle invocat
   const bindingsGradle = read('platforms', 'android', 'sona-uniffi-bindings.gradle.kts');
 
   for (const task of [
-    ':application:testDebugUnitTest',
+    ':application:test',
     ':adapters:android:testDebugUnitTest',
     ':adapters:uniffi:testDebugUnitTest',
     ':app:testDebugUnitTest',

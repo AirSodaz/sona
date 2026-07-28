@@ -26,6 +26,7 @@ class RecordingViewModel(
     }
 
     fun stopForBackground() {
+        // Live capture is foreground-only until a microphone foreground service is introduced.
         stopRecording()
     }
 

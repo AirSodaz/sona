@@ -66,7 +66,7 @@ const buildIdentity = resolveAndroidClientBuildIdentity(gradleEnv);
 
 const gradleArgs = [
   '--no-daemon',
-  ':application:testDebugUnitTest',
+  ':application:test',
   ':adapters:android:testDebugUnitTest',
   ':adapters:uniffi:testDebugUnitTest',
   ':adapters:android:assembleDebugAndroidTest',

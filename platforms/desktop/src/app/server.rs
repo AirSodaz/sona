@@ -5,7 +5,6 @@ use sona_api_server::{
     start_api_server_runtime,
 };
 use sona_core::runtime::serve::{ServeRuntimeArgs, resolve_serve_runtime_options};
-use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::Manager;
@@ -96,6 +95,10 @@ impl TauriApiServerPlatform {
             }),
         }
     }
+
+    fn streaming_context(&self) -> Arc<TauriStreamingContext> {
+        self.streaming_context.clone()
+    }
 }
 
 #[async_trait]
@@ -137,10 +140,6 @@ impl ApiServerPlatform for TauriApiServerPlatform {
         .await
         .map_err(|error| ApiServerPlatformError::transcription(error.to_string()))
     }
-
-    fn streaming_context(&self) -> Option<Arc<dyn Any + Send + Sync>> {
-        Some(self.streaming_context.clone())
-    }
 }
 
 pub async fn refresh_online_asr_config(
@@ -172,6 +171,7 @@ pub async fn start_api_server(
 
     let online_asr_config = controller.online_asr_config();
     let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app.clone())));
+    let streaming_context = platform.streaming_context();
     let resolved = resolve_serve_runtime_options(
         ServeRuntimeArgs {
             host: Some(host),
@@ -214,9 +214,10 @@ pub async fn start_api_server(
         model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),
         batch_plan_resolver: Arc::new(sona_runtime_fs::RuntimeBatchTranscribePlanResolver),
         platform,
-        streaming_router: Some(build_streaming_router(
-            crate::integrations::streaming::handle_streaming,
-        )),
+        streaming_router: Some(
+            build_streaming_router(crate::integrations::streaming::handle_streaming)
+                .layer(axum::Extension(streaming_context)),
+        ),
     })
     .await
     .map_err(|error| error.to_string())?;
@@ -274,6 +275,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
             let controller = app_handle.state::<ApiServerController>();
             let online_asr_config = controller.online_asr_config();
             let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app_handle.clone())));
+            let streaming_context = platform.streaming_context();
             refresh_online_asr_config(
                 &controller,
                 crate::platform::api_server_config::load_online_asr_config_for_app(&app_handle),
@@ -290,9 +292,10 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                 model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),
                 batch_plan_resolver: Arc::new(sona_runtime_fs::RuntimeBatchTranscribePlanResolver),
                 platform,
-                streaming_router: Some(build_streaming_router(
-                    crate::integrations::streaming::handle_streaming,
-                )),
+                streaming_router: Some(
+                    build_streaming_router(crate::integrations::streaming::handle_streaming)
+                        .layer(axum::Extension(streaming_context)),
+                ),
             })
             .await
             {

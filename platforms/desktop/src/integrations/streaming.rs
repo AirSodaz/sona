@@ -1,3 +1,4 @@
+use axum::Extension;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{ConnectInfo, Query, State, WebSocketUpgrade};
 use axum::http::StatusCode;
@@ -49,6 +50,14 @@ pub enum ServerMessage {
     },
 }
 
+struct LocalStreamingRequest {
+    session_id: String,
+    model_id: String,
+    language: String,
+    hotwords: Option<String>,
+    vad_model_id: String,
+}
+
 /// Serialize a ServerMessage to JSON string, logging and returning a fallback error JSON on failure.
 fn serialize_server_message(msg: &ServerMessage) -> String {
     serde_json::to_string(msg).unwrap_or_else(|e| {
@@ -57,17 +66,18 @@ fn serialize_server_message(msg: &ServerMessage) -> String {
     })
 }
 
-pub async fn handle_streaming(
+pub(crate) async fn handle_streaming(
     ws: WebSocketUpgrade,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<ServerState>,
+    Extension(context): Extension<Arc<TauriStreamingContext>>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Response, StatusCode> {
     let token = params.get("token").map(|s| s.as_str());
     let permit = authorize_streaming_request(&state, addr, token)?;
 
     Ok(ws.on_upgrade(move |socket| async move {
-        handle_streaming_socket(socket, state, permit).await;
+        handle_streaming_socket(socket, state, context, permit).await;
     }))
 }
 
@@ -77,6 +87,7 @@ use tokio::sync::mpsc;
 async fn handle_streaming_socket(
     mut socket: WebSocket,
     state: ServerState,
+    context: Arc<TauriStreamingContext>,
     _permit: tokio::sync::OwnedSemaphorePermit,
 ) {
     let session_id = uuid::Uuid::new_v4().to_string();
@@ -110,17 +121,22 @@ async fn handle_streaming_socket(
     let (model_id, language, hotwords, vad_model_id) = start_msg;
 
     if sona_core::ports::asr::find_online_asr_provider(&model_id).is_some() {
-        handle_online_streaming_socket(socket, state, session_id, model_id, language, hotwords)
-            .await;
+        handle_online_streaming_socket(
+            socket, state, context, session_id, model_id, language, hotwords,
+        )
+        .await;
     } else {
         handle_local_streaming_socket(
             socket,
             state,
-            session_id,
-            model_id,
-            language,
-            hotwords,
-            vad_model_id,
+            context,
+            LocalStreamingRequest {
+                session_id,
+                model_id,
+                language,
+                hotwords,
+                vad_model_id,
+            },
         )
         .await;
     }
@@ -129,22 +145,12 @@ async fn handle_streaming_socket(
 async fn handle_online_streaming_socket(
     mut socket: WebSocket,
     state: ServerState,
+    context: Arc<TauriStreamingContext>,
     session_id: String,
     model_id: String,
     language: String,
     hotwords: Option<String>,
 ) {
-    let context = match tauri_streaming_context(&state) {
-        Ok(context) => context,
-        Err(message) => {
-            let _ = socket
-                .send(Message::Text(
-                    serialize_server_message(&ServerMessage::Error { message }).into(),
-                ))
-                .await;
-            return;
-        }
-    };
     let app_handle = match context.app_handle() {
         Some(app) => app.clone(),
         None => {
@@ -332,14 +338,18 @@ async fn handle_online_streaming_socket(
 async fn handle_local_streaming_socket(
     mut socket: WebSocket,
     state: ServerState,
-    session_id: String,
-    model_id: String,
-    language: String,
-    hotwords: Option<String>,
-    vad_model_id: String,
+    context: Arc<TauriStreamingContext>,
+    request: LocalStreamingRequest,
 ) {
+    let LocalStreamingRequest {
+        session_id,
+        model_id,
+        language,
+        hotwords,
+        vad_model_id,
+    } = request;
     // Load models
-    let recognizer = match load_recognizer(&state, &model_id, &language, hotwords).await {
+    let recognizer = match load_recognizer(&state, &context, &model_id, &language, hotwords).await {
         Ok(r) => r,
         Err(e) => {
             let _ = socket
@@ -481,11 +491,11 @@ async fn handle_local_streaming_socket(
 
 async fn load_recognizer(
     state: &ServerState,
+    context: &TauriStreamingContext,
     model_id: &str,
     language: &str,
     hotwords: Option<String>,
 ) -> Result<Arc<crate::integrations::asr::Recognizer>, String> {
-    let context = tauri_streaming_context(state)?;
     let preset =
         crate::platform::preset_models::find_preset_model(model_id).ok_or("Model not found")?;
     let model_path = preset.resolve_install_path(&state.models_dir);
@@ -551,15 +561,6 @@ async fn load_recognizer(
         .clone();
 
     Ok(recognizer)
-}
-
-fn tauri_streaming_context(state: &ServerState) -> Result<Arc<TauriStreamingContext>, String> {
-    let context = state
-        .platform
-        .streaming_context()
-        .ok_or_else(|| "Tauri streaming context is not configured".to_string())?;
-    Arc::downcast::<TauriStreamingContext>(context)
-        .map_err(|_| "Tauri streaming context has unexpected type".to_string())
 }
 
 pub(crate) fn resolve_vad_model_path(models_dir: &Path, vad_model_id_or_path: &str) -> PathBuf {
