@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -101,6 +102,7 @@ internal fun RecordScreen(
     val activity = remember(context) { context.findActivity() }
     val lifecycleOwner = LocalLifecycleOwner.current
     var hasRequestedPermission by rememberSaveable { mutableStateOf(false) }
+    var hasRequestedNotificationPermission by rememberSaveable { mutableStateOf(false) }
     var permissionRevision by remember { mutableIntStateOf(0) }
     var permissionIssue by remember { mutableStateOf<MicrophonePermissionDecision?>(null) }
     var displayedSegments by remember { mutableStateOf(emptyList<TranscriptSegment>()) }
@@ -112,6 +114,33 @@ internal fun RecordScreen(
     val shouldShowRationale = remember(permissionRevision, activity) {
         activity?.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) == true
     }
+    val notificationPermissionGranted = remember(permissionRevision, context) {
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            context.checkSelfPermission(POST_NOTIFICATIONS_PERMISSION) ==
+            PackageManager.PERMISSION_GRANTED
+    }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        hasRequestedNotificationPermission = true
+        permissionRevision += 1
+        onStartRecording()
+    }
+    val startAfterOptionalNotificationPermission = {
+        when (
+            NotificationPermissionPolicy.decide(
+                requiresRuntimePermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU,
+                isGranted = notificationPermissionGranted,
+                hasRequestedBefore = hasRequestedNotificationPermission,
+            )
+        ) {
+            NotificationPermissionDecision.START_RECORDING -> onStartRecording()
+            NotificationPermissionDecision.REQUEST_PERMISSION -> {
+                hasRequestedNotificationPermission = true
+                notificationPermissionLauncher.launch(POST_NOTIFICATIONS_PERMISSION)
+            }
+        }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -119,7 +148,7 @@ internal fun RecordScreen(
         permissionRevision += 1
         if (granted) {
             permissionIssue = null
-            onStartRecording()
+            startAfterOptionalNotificationPermission()
         } else {
             permissionIssue = MicrophonePermissionPolicy.decide(
                 isGranted = false,
@@ -190,7 +219,8 @@ internal fun RecordScreen(
                     shouldShowRationale = shouldShowRationale,
                 )
             ) {
-                MicrophonePermissionDecision.START_RECORDING -> onStartRecording()
+                MicrophonePermissionDecision.START_RECORDING ->
+                    startAfterOptionalNotificationPermission()
                 MicrophonePermissionDecision.REQUEST_PERMISSION -> {
                     hasRequestedPermission = true
                     permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -261,6 +291,8 @@ internal fun RecordScreen(
         )
     }
 }
+
+private const val POST_NOTIFICATIONS_PERMISSION = "android.permission.POST_NOTIFICATIONS"
 
 @Composable
 private fun AsrModelSelection?.liveModelSummary(state: RecognitionSettingsUiState): String =

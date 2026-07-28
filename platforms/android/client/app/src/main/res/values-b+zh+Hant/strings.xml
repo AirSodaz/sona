@@ -48,6 +48,12 @@
     <string name="recording_streaming_failed">即時轉寫無法使用</string>
     <string name="recording_persistence_failed">錄音未能完整儲存</string>
     <string name="recording_audio_only">即時轉寫已停止，音訊仍在錄製</string>
+    <string name="recording_notification_channel">背景錄音</string>
+    <string name="recording_notification_preparing">正在準備麥克風錄音</string>
+    <string name="recording_notification_active">正在錄音和即時轉寫</string>
+    <string name="recording_notification_audio_only">正在錄音，即時轉寫無法使用</string>
+    <string name="recording_notification_stopping">正在停止並儲存錄音</string>
+    <string name="recording_notification_stop">停止並儲存</string>
     <string name="microphone_silenced">系統已暫停麥克風輸入</string>
     <string name="microphone_monitoring_unavailable">無法監測目前麥克風狀態</string>
     <string name="microphone_device_changed">目前輸入：%1$s</string>

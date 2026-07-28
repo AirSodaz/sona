@@ -48,6 +48,12 @@
     <string name="recording_streaming_failed">실시간 받아쓰기를 사용할 수 없음</string>
     <string name="recording_persistence_failed">녹음을 완전히 저장하지 못함</string>
     <string name="recording_audio_only">받아쓰기가 중지되었지만 오디오는 계속 녹음 중</string>
+    <string name="recording_notification_channel">백그라운드 녹음</string>
+    <string name="recording_notification_preparing">마이크 녹음 준비 중</string>
+    <string name="recording_notification_active">녹음 및 실시간 받아쓰기 중</string>
+    <string name="recording_notification_audio_only">녹음 중이며 실시간 받아쓰기는 사용할 수 없음</string>
+    <string name="recording_notification_stopping">녹음을 중지하고 저장하는 중</string>
+    <string name="recording_notification_stop">중지하고 저장</string>
     <string name="microphone_silenced">시스템에서 마이크 입력을 일시 중지함</string>
     <string name="microphone_monitoring_unavailable">현재 마이크 상태를 모니터링할 수 없음</string>
     <string name="microphone_device_changed">현재 입력: %1$s</string>

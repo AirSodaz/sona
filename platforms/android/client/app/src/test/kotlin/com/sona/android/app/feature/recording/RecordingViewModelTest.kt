@@ -2,10 +2,8 @@ package com.sona.android.app.feature.recording
 
 import com.sona.android.application.recording.LiveRecordingController
 import com.sona.android.application.recording.LiveRecordingState
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -15,9 +13,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertSame
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TestWatcher
@@ -29,24 +25,17 @@ class RecordingViewModelTest {
     val mainDispatcherRule = RecordingMainDispatcherRule()
 
     @Test
-    fun `creates the controller with the view model scope and exposes its state`() {
+    fun `exposes the process controller state without creating a recording session`() {
         val controller = FakeLiveRecordingController()
-        var capturedScope: CoroutineScope? = null
-
-        val viewModel = RecordingViewModel { scope ->
-            capturedScope = scope
-            controller
-        }
+        val viewModel = RecordingViewModel(controller)
 
         assertSame(controller.state, viewModel.state)
-        assertNotNull(capturedScope)
-        assertTrue(capturedScope?.coroutineContext?.get(Job)?.isActive == true)
     }
 
     @Test
     fun `start recording delegates to the controller`() = runTest(mainDispatcherRule.dispatcher) {
         val controller = FakeLiveRecordingController()
-        val viewModel = RecordingViewModel { controller }
+        val viewModel = RecordingViewModel(controller)
 
         viewModel.startRecording()
         advanceUntilIdle()
@@ -57,25 +46,13 @@ class RecordingViewModelTest {
     @Test
     fun `stop recording delegates to the controller`() = runTest(mainDispatcherRule.dispatcher) {
         val controller = FakeLiveRecordingController()
-        val viewModel = RecordingViewModel { controller }
+        val viewModel = RecordingViewModel(controller)
 
         viewModel.stopRecording()
         advanceUntilIdle()
 
         assertEquals(1, controller.stopCalls)
     }
-
-    @Test
-    fun `moving the app to the background stops through the same controller`() =
-        runTest(mainDispatcherRule.dispatcher) {
-            val controller = FakeLiveRecordingController()
-            val viewModel = RecordingViewModel { controller }
-
-            viewModel.stopForBackground()
-            advanceUntilIdle()
-
-            assertEquals(1, controller.stopCalls)
-        }
 }
 
 private class FakeLiveRecordingController : LiveRecordingController {

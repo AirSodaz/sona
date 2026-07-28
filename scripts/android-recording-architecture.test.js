@@ -287,7 +287,7 @@ test('Android cloud batch transcription is wired end to end behind its own crede
   assert.match(detailScreen, /enabled = item\.audioAvailable/u);
 });
 
-test('Android recording composition preserves lifecycle, permission, and credential boundaries', () => {
+test('Android recording composition preserves foreground-service, permission, and credential boundaries', () => {
   const appManifest = clientSource('app', 'AndroidManifest.xml');
   const clientManifests = [
     appManifest,
@@ -316,9 +316,21 @@ test('Android recording composition preserves lifecycle, permission, and credent
     'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'recording',
     'RecordScreen.kt',
   );
-  const lifecycleEffect = clientSource(
+  const foregroundGateway = clientSource(
     'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'recording',
-    'ForegroundRecordingLifecycleEffect.kt',
+    'RecordingForegroundGateway.kt',
+  );
+  const foregroundService = clientSource(
+    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'recording',
+    'RecordingForegroundService.kt',
+  );
+  const foregroundSession = clientSource(
+    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'recording',
+    'RecordingForegroundSession.kt',
+  );
+  const notificationPermissionPolicy = clientSource(
+    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'recording',
+    'NotificationPermissionPolicy.kt',
   );
   const permissionPolicy = clientSource(
     'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'recording',
@@ -346,8 +358,15 @@ test('Android recording composition preserves lifecycle, permission, and credent
 
   assert.match(appManifest, /android:name="\.SonaApplication"/u);
   assert.match(appManifest, /android\.permission\.INTERNET/u);
-  assert.doesNotMatch(clientManifests, /FOREGROUND_SERVICE_MICROPHONE/u);
-  assert.doesNotMatch(clientManifests, /foregroundServiceType="microphone"/u);
+  assert.match(appManifest, /android\.permission\.RECORD_AUDIO/u);
+  assert.match(appManifest, /android\.permission\.FOREGROUND_SERVICE"/u);
+  assert.match(appManifest, /android\.permission\.FOREGROUND_SERVICE_MICROPHONE/u);
+  assert.match(appManifest, /android\.permission\.POST_NOTIFICATIONS/u);
+  assert.match(clientManifests, /foregroundServiceType="microphone"/u);
+  assert.match(
+    appManifest,
+    /RecordingForegroundService[\s\S]*android:exported="false"[\s\S]*android:foregroundServiceType="microphone"[\s\S]*android:stopWithTask="false"/u,
+  );
   assert.match(application, /SonaAppContainer\(this\)/u);
   assert.match(container, /AndroidBatchCredentialRepository\.create\(appContext\)/u);
   assert.doesNotMatch(container, /AndroidStreamingCredentialRepository/u);
@@ -356,27 +375,51 @@ test('Android recording composition preserves lifecycle, permission, and credent
   assert.match(container, /UniffiStreamingTranscriptionAdapter\(\)/u);
   assert.match(container, /UniffiRecordingHistoryAdapter\(appDataDir\)/u);
   assert.match(container, /createLiveRecording\(scope: CoroutineScope\): LiveRecordingController/u);
+  assert.match(container, /internal val recordingGateway = RecordingForegroundGateway/u);
   assert.match(coordinator, /:\s*LiveRecordingController/u);
   assert.match(coordinator, /credentialResolver:\s*BatchCredentialResolverPort/u);
   assert.match(
     coordinator,
     /credentialResolver\.load\(selection\.provider\)/u,
   );
-  assert.match(recordingViewModel, /controllerFactory\.create\(viewModelScope\)/u);
-  assert.match(
-    recordingViewModel,
-    /fun stopForBackground\(\)\s*\{[\s\S]*?stopRecording\(\)[\s\S]*?\}/u,
-  );
+  assert.match(recordingViewModel, /private val controller: LiveRecordingController/u);
+  assert.doesNotMatch(recordingViewModel, /controllerFactory|stopForBackground/u);
   assert.match(activity, /\(application as SonaApplication\)\.container/u);
   assert.doesNotMatch(activity, /Manifest\.permission\.RECORD_AUDIO/u);
+  assert.doesNotMatch(activity, /onAppBackground|ProcessLifecycleOwner|Lifecycle\.Event\.ON_STOP/u);
 
   assert.match(recordScreen, /rememberLauncherForActivityResult/u);
   assert.match(recordScreen, /ActivityResultContracts\.RequestPermission/u);
+  assert.match(recordScreen, /android\.permission\.POST_NOTIFICATIONS/u);
   assert.match(recordScreen, /onConfigureCredential/u);
   assert.match(permissionPolicy, /SHOW_RATIONALE/u);
   assert.match(permissionPolicy, /OPEN_APP_SETTINGS/u);
-  assert.match(lifecycleEffect, /ProcessLifecycleOwner/u);
-  assert.match(lifecycleEffect, /Lifecycle\.Event\.ON_STOP/u);
+  assert.match(notificationPermissionPolicy, /hasRequestedBefore/u);
+  assert.match(foregroundGateway, /ContextCompat\.startForegroundService/u);
+  assert.match(foregroundGateway, /RecordingFailureCategory\.STARTUP/u);
+  assert.match(foregroundService, /ServiceCompat\.startForeground/u);
+  assert.match(foregroundService, /FOREGROUND_SERVICE_TYPE_MICROPHONE/u);
+  assert.match(foregroundService, /PendingIntent\.getService/u);
+  assert.match(foregroundService, /ACTION_STOP/u);
+  assert.match(foregroundService, /START_NOT_STICKY/u);
+  assert.match(foregroundService, /serviceScope\.cancel\(\)/u);
+  assert.match(
+    foregroundSession,
+    /publish\(RecordingNotificationPhase\.PREPARING\)[\s\S]*runCommand\(controller::start\)/u,
+  );
+  assert.doesNotMatch(
+    `${activity}\n${recordingViewModel}`,
+    /ProcessLifecycleOwner|Lifecycle\.Event\.ON_STOP|stopForBackground|onAppBackground/u,
+  );
+  assert.equal(
+    fs.existsSync(path.join(
+      repoRoot,
+      'platforms', 'android', 'client', 'app', 'src', 'main', 'kotlin',
+      'com', 'sona', 'android', 'app', 'feature', 'recording',
+      'ForegroundRecordingLifecycleEffect.kt',
+    )),
+    false,
+  );
 
   assert.match(settingsScreen, /NavigableListDetailPaneScaffold/u);
   assert.match(settingsScreen, /initialDestinationHistory/u);

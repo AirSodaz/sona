@@ -37,7 +37,6 @@ import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import com.sona.android.app.feature.library.LibraryDetailScreen
 import com.sona.android.app.feature.library.LibraryScreen
 import com.sona.android.app.feature.library.LibraryUiState
-import com.sona.android.app.feature.recording.ForegroundRecordingLifecycleEffect
 import com.sona.android.app.feature.recording.RecordScreen
 import com.sona.android.app.feature.home.HomeScreen
 import com.sona.android.app.feature.home.FileTranscriptionScreen
@@ -71,7 +70,6 @@ internal fun SonaApp(
     onRetryBootstrap: () -> Unit,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
-    onAppBackground: () -> Unit,
     onRefreshLibrary: () -> Unit,
     onLoadMoreLibrary: () -> Unit,
     onRetryLibrary: () -> Unit,
@@ -91,8 +89,6 @@ internal fun SonaApp(
     onRefreshRecognitionCatalog: () -> Unit,
 ) {
     var cloudCredentialFocusRequested by remember { mutableStateOf(false) }
-
-    ForegroundRecordingLifecycleEffect(onAppBackground)
 
     SonaTheme(dynamicColorEnabled = appearanceState.dynamicColorEnabled) {
         val navController = rememberNavController()

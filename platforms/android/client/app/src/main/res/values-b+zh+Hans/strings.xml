@@ -27,6 +27,12 @@
     <string name="recording_streaming_failed">实时转写不可用</string>
     <string name="recording_persistence_failed">录音未能完整保存</string>
     <string name="recording_audio_only">实时转写已停止，音频仍在录制</string>
+    <string name="recording_notification_channel">后台录音</string>
+    <string name="recording_notification_preparing">正在准备麦克风录音</string>
+    <string name="recording_notification_active">正在录音和实时转写</string>
+    <string name="recording_notification_audio_only">正在录音，实时转写不可用</string>
+    <string name="recording_notification_stopping">正在停止并保存录音</string>
+    <string name="recording_notification_stop">停止并保存</string>
     <string name="microphone_silenced">系统已暂停麦克风输入</string>
     <string name="microphone_monitoring_unavailable">无法监测当前麦克风状态</string>
     <string name="microphone_device_changed">当前输入：%1$s</string>

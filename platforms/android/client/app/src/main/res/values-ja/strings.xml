@@ -27,6 +27,12 @@
     <string name="recording_streaming_failed">リアルタイム文字起こしを利用できません</string>
     <string name="recording_persistence_failed">録音を完全に保存できませんでした</string>
     <string name="recording_audio_only">文字起こしは停止しましたが、音声の録音は継続しています</string>
+    <string name="recording_notification_channel">バックグラウンド録音</string>
+    <string name="recording_notification_preparing">マイク録音を準備中</string>
+    <string name="recording_notification_active">録音と文字起こしを実行中</string>
+    <string name="recording_notification_audio_only">録音中です。リアルタイム文字起こしは利用できません</string>
+    <string name="recording_notification_stopping">録音を停止して保存中</string>
+    <string name="recording_notification_stop">停止して保存</string>
     <string name="microphone_silenced">システムによりマイク入力が一時停止されています</string>
     <string name="microphone_monitoring_unavailable">現在のマイク状態を監視できません</string>
     <string name="microphone_device_changed">現在の入力：%1$s</string>

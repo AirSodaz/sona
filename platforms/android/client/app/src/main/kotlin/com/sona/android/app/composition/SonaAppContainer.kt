@@ -22,6 +22,8 @@ import com.sona.android.adapters.uniffi.recording.UniffiRecordingHistoryAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingProviderCatalogAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingTranscriptionAdapter
 import com.sona.android.adapters.uniffi.sync.UniffiSyncSecretStoreRegistrar
+import com.sona.android.app.feature.recording.AndroidRecordingServiceCommandLauncher
+import com.sona.android.app.feature.recording.RecordingForegroundGateway
 import com.sona.android.application.bootstrap.LoadSonaBootstrap
 import com.sona.android.application.library.RecordingLibraryPort
 import com.sona.android.application.recording.BatchCredentialSettingsPort
@@ -35,10 +37,12 @@ import com.sona.android.application.settings.AppearanceSettingsPort
 import com.sona.android.application.sync.SyncSecretStorePort
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 
 class SonaAppContainer(context: Context) {
     private val appContext = context.applicationContext
+    private val processScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val appDataDir = appContext.filesDir.absolutePath
     private val bootstrapPort = UniffiSonaBootstrapAdapter()
     private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository.create(appContext)
@@ -106,6 +110,10 @@ class SonaAppContainer(context: Context) {
     val audioImportJobState = audioImportJobs.state
     val audioImportJobsController = audioImportJobs
     val audioImportWorkerFactory = AudioImportWorkerFactory(runAudioImport)
+    internal val recordingGateway = RecordingForegroundGateway(
+        launcher = AndroidRecordingServiceCommandLauncher(appContext),
+        scope = processScope,
+    )
 
     fun createLiveRecording(scope: CoroutineScope): LiveRecordingController =
         LiveRecordingCoordinator(

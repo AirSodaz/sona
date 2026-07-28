@@ -4,17 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.sona.android.application.recording.LiveRecordingController
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-fun interface LiveRecordingControllerFactory {
-    fun create(scope: CoroutineScope): LiveRecordingController
-}
-
 class RecordingViewModel(
-    controllerFactory: LiveRecordingControllerFactory,
+    private val controller: LiveRecordingController,
 ) : ViewModel() {
-    private val controller = controllerFactory.create(viewModelScope)
     val state = controller.state
 
     fun startRecording() {
@@ -25,19 +19,14 @@ class RecordingViewModel(
         viewModelScope.launch { controller.stop() }
     }
 
-    fun stopForBackground() {
-        // Live capture is foreground-only until a microphone foreground service is introduced.
-        stopRecording()
-    }
-
     companion object {
         fun factory(
-            controllerFactory: LiveRecordingControllerFactory,
+            controller: LiveRecordingController,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 require(modelClass.isAssignableFrom(RecordingViewModel::class.java))
-                return RecordingViewModel(controllerFactory) as T
+                return RecordingViewModel(controller) as T
             }
         }
     }

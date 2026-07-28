@@ -34,7 +34,7 @@ class MainActivity : AppCompatActivity() {
                 factory = SonaBootstrapViewModel.factory(container.loadSonaBootstrap),
             )
             val recordingViewModel: RecordingViewModel = viewModel(
-                factory = RecordingViewModel.factory(container::createLiveRecording),
+                factory = RecordingViewModel.factory(container.recordingGateway),
             )
             val libraryViewModel: LibraryViewModel = viewModel(
                 factory = LibraryViewModel.factory(
@@ -86,7 +86,6 @@ class MainActivity : AppCompatActivity() {
                 onRetryBootstrap = bootstrapViewModel::refresh,
                 onStartRecording = recordingViewModel::startRecording,
                 onStopRecording = recordingViewModel::stopRecording,
-                onAppBackground = recordingViewModel::stopForBackground,
                 onRefreshLibrary = libraryViewModel::refresh,
                 onLoadMoreLibrary = libraryViewModel::loadNextPage,
                 onRetryLibrary = libraryViewModel::retryList,

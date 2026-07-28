@@ -27,6 +27,12 @@
     <string name="recording_streaming_failed">Live transcription is unavailable</string>
     <string name="recording_persistence_failed">Recording could not be saved completely</string>
     <string name="recording_audio_only">Live transcription stopped; audio recording continues</string>
+    <string name="recording_notification_channel">Background recording</string>
+    <string name="recording_notification_preparing">Preparing microphone recording</string>
+    <string name="recording_notification_active">Recording and transcribing</string>
+    <string name="recording_notification_audio_only">Recording audio; live transcription is unavailable</string>
+    <string name="recording_notification_stopping">Stopping and saving recording</string>
+    <string name="recording_notification_stop">Stop and save</string>
     <string name="microphone_silenced">Microphone input was paused by the system</string>
     <string name="microphone_monitoring_unavailable">The current microphone state cannot be monitored</string>
     <string name="microphone_device_changed">Current input: %1$s</string>
