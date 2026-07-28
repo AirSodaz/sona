@@ -3,23 +3,30 @@ package com.sona.android.adapters.uniffi.recording
 import com.sona.android.application.recording.LocalAsrCatalogModel
 import com.sona.android.application.recording.LocalAsrDownloadFile
 import com.sona.android.application.recording.LocalAsrModelCatalogPort
+import com.sona.android.application.recording.LocalSherpaConfig
+import com.sona.android.application.recording.AsrMode
 import uniffi.sona_uniffi_bind.FfiPresetModel
+import uniffi.sona_uniffi_bind.defaultPunctuationModelId
 import uniffi.sona_uniffi_bind.presetModels
 
 class UniffiLocalAsrModelCatalogAdapter : LocalAsrModelCatalogPort {
-    override suspend fun loadStreamingModels(): List<LocalAsrCatalogModel> {
+    override suspend fun loadModels(): List<LocalAsrCatalogModel> {
         val presets = presetModels()
         val vad = presets.firstOrNull { it.id == SILERO_VAD_ID }
+        val punctuationId = defaultPunctuationModelId()
+        val punctuation = presets.firstOrNull { it.id == punctuationId }
         return presets
             .asSequence()
-            .filter { "streaming" in it.modes }
             .filter { it.engine == "sherpa-onnx" }
-            .filter { it.modelType in SUPPORTED_STREAMING_TYPES }
-            .map { it.toApplication(vad) }
+            .map { it.toApplication(vad, punctuation) }
+            .filter { it.supportedModes.isNotEmpty() }
             .toList()
     }
 
-    private fun FfiPresetModel.toApplication(vad: FfiPresetModel?): LocalAsrCatalogModel =
+    private fun FfiPresetModel.toApplication(
+        vad: FfiPresetModel?,
+        punctuation: FfiPresetModel?,
+    ): LocalAsrCatalogModel =
         LocalAsrCatalogModel(
             id = id,
             displayName = listOfNotNull(name, versionLabel).distinct().joinToString(" "),
@@ -28,8 +35,23 @@ class UniffiLocalAsrModelCatalogAdapter : LocalAsrModelCatalogPort {
             sizeLabel = size,
             estimatedSizeBytes = parseSizeBytes(size),
             isRecommended = isRecommended,
+            supportedModes = modes.mapNotNullTo(mutableSetOf()) {
+                when (it) {
+                    "streaming" -> AsrMode.STREAMING
+                    "batch" -> AsrMode.BATCH
+                    else -> null
+                }
+            },
+            config = LocalSherpaConfig(
+                modelPath = "",
+                numThreads = 2,
+                modelType = modelType,
+            ),
             download = toDownloadFile(),
             vadDownload = vad?.takeIf { rules.requiresVad }?.toDownloadFile(),
+            punctuationDownload = punctuation
+                ?.takeIf { rules.requiresPunctuation }
+                ?.toDownloadFile(),
         )
 
     private fun FfiPresetModel.toDownloadFile(): LocalAsrDownloadFile = LocalAsrDownloadFile(
@@ -41,12 +63,6 @@ class UniffiLocalAsrModelCatalogAdapter : LocalAsrModelCatalogPort {
 
     companion object {
         private const val SILERO_VAD_ID = "silero-vad"
-        private val SUPPORTED_STREAMING_TYPES = setOf(
-            "sensevoice",
-            "dolphin",
-            "paraformer",
-            "zipformer",
-        )
     }
 }
 

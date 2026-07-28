@@ -11,7 +11,7 @@ import com.sona.android.application.recording.CompleteLiveDraftRequest
 import com.sona.android.application.recording.CreateLiveDraftRequest
 import com.sona.android.application.recording.HistoryRecordingSummary
 import com.sona.android.application.recording.OnlineBatchCredential
-import com.sona.android.application.recording.OnlineBatchProvider
+import com.sona.android.application.recording.OnlineAsrProvider
 import com.sona.android.application.recording.OnlineBatchTranscriptionResult
 import com.sona.android.application.recording.RecordingDraft
 import com.sona.android.application.recording.RecordingHistoryPort
@@ -394,7 +394,7 @@ class LibraryViewModelTest {
     ) = LibraryViewModel(port, transcribe)
 
     private fun activeCredential() = ActiveBatchCredential(
-        provider = OnlineBatchProvider.GROQ_WHISPER,
+        provider = OnlineAsrProvider.GROQ_WHISPER,
         credential = OnlineBatchCredential("temporary-secret"),
     )
 

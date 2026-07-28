@@ -9,8 +9,9 @@ import com.sona.android.application.recording.LocalAsrDownloadProgressListener
 import com.sona.android.application.recording.LocalAsrDownloadStage
 import com.sona.android.application.recording.LocalAsrModel
 import com.sona.android.application.recording.LocalAsrModelSource
+import com.sona.android.application.recording.AsrMode
 import com.sona.android.application.recording.LocalSherpaModelFiles
-import com.sona.android.application.recording.LocalSherpaStreamingConfig
+import com.sona.android.application.recording.LocalSherpaConfig
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileInputStream
@@ -73,6 +74,15 @@ internal class AndroidLocalAsrModelStorage(
                     listener = listener,
                 )
             }
+            catalogModel.punctuationDownload?.let { punctuation ->
+                installDownloadFile(
+                    modelId = catalogModel.id,
+                    spec = punctuation,
+                    downloadsDir = downloadsDir,
+                    staging = staging,
+                    listener = listener,
+                )
+            }
             listener.onProgress(
                 LocalAsrDownloadProgress(catalogModel.id, LocalAsrDownloadStage.VERIFYING),
             )
@@ -86,6 +96,7 @@ internal class AndroidLocalAsrModelStorage(
                     catalogModel.id,
                     catalogModel.displayName,
                     LocalAsrModelSource.CATALOG,
+                    catalogModel.supportedModes,
                 ),
             )
             listener.onProgress(
@@ -100,6 +111,7 @@ internal class AndroidLocalAsrModelStorage(
                 displayName = catalogModel.displayName,
                 source = LocalAsrModelSource.CATALOG,
                 numThreads = numThreads,
+                supportedModes = catalogModel.supportedModes,
             )
         } finally {
             staging.deleteRecursively()
@@ -143,13 +155,16 @@ internal class AndroidLocalAsrModelStorage(
             displayName = manifest?.displayName ?: detected.displayName,
             source = manifest?.source ?: LocalAsrModelSource.IMPORTED,
             numThreads = DEFAULT_THREADS,
+            supportedModes = manifest?.supportedModes
+                ?.takeIf { it.isNotEmpty() }
+                ?: detected.supportedModes,
         )
     }
 
     private fun requireSupportedModel(root: File): DetectedLocalAsrModel {
         val detected = detectLocalAsrModel(root)
             ?: throw IllegalArgumentException(
-                "No supported Sherpa-ONNX streaming model was found.",
+                "No supported Sherpa-ONNX ASR model was found.",
             )
         if (detected.requiresVad && detected.vadModel == null) {
             throw IllegalArgumentException("This model also requires silero_vad.onnx.")
@@ -342,11 +357,14 @@ internal data class DetectedLocalAsrModel(
     val modelType: String,
     val files: LocalSherpaModelFiles,
     val vadModel: File?,
+    val punctuationModel: File?,
     val requiresVad: Boolean,
+    val supportedModes: Set<AsrMode>,
 ) {
     fun rebase(oldRoot: File, newRoot: File): DetectedLocalAsrModel = copy(
         modelPath = File(newRoot, modelPath.relativeTo(oldRoot).path),
         vadModel = vadModel?.let { File(newRoot, it.relativeTo(oldRoot).path) },
+        punctuationModel = punctuationModel?.let { File(newRoot, it.relativeTo(oldRoot).path) },
     )
 
     fun toInstalledModel(
@@ -355,18 +373,21 @@ internal data class DetectedLocalAsrModel(
         displayName: String,
         source: LocalAsrModelSource,
         numThreads: Int,
+        supportedModes: Set<AsrMode> = this.supportedModes,
     ): InstalledLocalAsrModel = InstalledLocalAsrModel(
         installRoot = installRoot,
         model = LocalAsrModel(
             id = id,
             displayName = displayName,
-            config = LocalSherpaStreamingConfig(
+            config = LocalSherpaConfig(
                 modelPath = modelPath.absolutePath,
                 numThreads = numThreads.coerceIn(1, 8),
                 modelType = modelType,
+                punctuationModel = punctuationModel?.absolutePath,
                 vadModel = vadModel?.absolutePath,
                 fileConfig = files,
             ),
+            supportedModes = supportedModes,
             sizeBytes = installRoot.walkTopDown().filter(File::isFile).sumOf(File::length),
             source = source,
         ),
@@ -375,16 +396,71 @@ internal data class DetectedLocalAsrModel(
 
 internal fun detectLocalAsrModel(root: File): DetectedLocalAsrModel? {
     val vad = root.walkTopDown().firstOrNull { it.isFile && it.name == "silero_vad.onnx" }
+    val punctuation = root.walkTopDown().firstOrNull {
+        it.isFile && it.extension == "onnx" &&
+            it.parentFile?.name?.contains("punct", ignoreCase = true) == true
+    }
     return root.walkTopDown().filter(File::isDirectory).mapNotNull { directory ->
         val files = directory.listFiles()?.filter(File::isFile)?.associateBy { it.name }
             ?: return@mapNotNull null
-        val tokens = files["tokens.txt"] ?: return@mapNotNull null
+        val tokens = files.values.firstOrNull { it.name.endsWith("tokens.txt") }
         val encoder = files["encoder.int8.onnx"] ?: files["encoder.onnx"]
         val decoder = files["decoder.int8.onnx"] ?: files["decoder.onnx"]
         val joiner = files["joiner.int8.onnx"] ?: files["joiner.onnx"]
         val model = files["model.int8.onnx"] ?: files["model.onnx"]
+        val encoderAdaptor = files["encoder_adaptor.int8.onnx"] ?: files["encoder_adaptor.onnx"]
+        val llm = files["llm.int8.onnx"] ?: files["llm.fp16.onnx"] ?: files["llm.fp32.onnx"]
+        val embedding = files["embedding.int8.onnx"] ?: files["embedding.onnx"]
+        val tokenizerDirectory = directory.listFiles()?.firstOrNull {
+            it.isDirectory && (it.name.contains("tokenizer", true) || it.name.startsWith("Qwen"))
+        }
         when {
-            encoder != null && decoder != null && joiner != null -> DetectedLocalAsrModel(
+            encoderAdaptor != null && llm != null && embedding != null &&
+                tokenizerDirectory != null -> DetectedLocalAsrModel(
+                directory.name, directory, "funasr-nano",
+                LocalSherpaModelFiles(
+                    encoderAdaptor = encoderAdaptor.name,
+                    llm = llm.name,
+                    embedding = embedding.name,
+                    tokenizer = tokenizerDirectory.name,
+                    tokens = tokens?.name,
+                ),
+                vad, punctuation, true, setOf(AsrMode.BATCH),
+            )
+            files["conv_frontend.onnx"] != null && encoder != null && decoder != null &&
+                File(directory, "tokenizer").isDirectory -> DetectedLocalAsrModel(
+                directory.name, directory, "qwen3-asr",
+                LocalSherpaModelFiles(
+                    convFrontend = "conv_frontend.onnx",
+                    encoder = encoder.name,
+                    decoder = decoder.name,
+                    tokenizer = "tokenizer",
+                ),
+                vad, punctuation, true, setOf(AsrMode.BATCH),
+            )
+            encoder != null && decoder != null && tokens != null &&
+                files.keys.any { it.contains("whisper", true) || it.contains("turbo", true) ||
+                    it.contains("large-v3", true) || it.contains("medium-aishell", true) } ->
+                DetectedLocalAsrModel(
+                    directory.name, directory, "whisper",
+                    LocalSherpaModelFiles(
+                        encoder = encoder.name,
+                        decoder = decoder.name,
+                        tokens = tokens.name,
+                    ),
+                    vad, punctuation, true, setOf(AsrMode.BATCH),
+                )
+            encoder != null && decoder != null && tokens != null &&
+                directory.name.contains("fire-red", true) -> DetectedLocalAsrModel(
+                directory.name, directory, "fire-red-asr",
+                LocalSherpaModelFiles(
+                    encoder = encoder.name,
+                    decoder = decoder.name,
+                    tokens = tokens.name,
+                ),
+                vad, punctuation, true, setOf(AsrMode.BATCH),
+            )
+            encoder != null && decoder != null && joiner != null && tokens != null -> DetectedLocalAsrModel(
                 directory.name, directory, "zipformer",
                 LocalSherpaModelFiles(
                     encoder = encoder.name,
@@ -392,18 +468,18 @@ internal fun detectLocalAsrModel(root: File): DetectedLocalAsrModel? {
                     joiner = joiner.name,
                     tokens = tokens.name,
                 ),
-                vad, false,
+                vad, punctuation, false, setOf(AsrMode.STREAMING),
             )
-            encoder != null && decoder != null -> DetectedLocalAsrModel(
+            encoder != null && decoder != null && tokens != null -> DetectedLocalAsrModel(
                 directory.name, directory, "paraformer",
                 LocalSherpaModelFiles(
                     encoder = encoder.name,
                     decoder = decoder.name,
                     tokens = tokens.name,
                 ),
-                vad, false,
+                vad, punctuation, false, setOf(AsrMode.STREAMING),
             )
-            model != null -> {
+            model != null && tokens != null -> {
                 val type = if (directory.name.contains("dolphin", ignoreCase = true)) {
                     "dolphin"
                 } else {
@@ -412,7 +488,14 @@ internal fun detectLocalAsrModel(root: File): DetectedLocalAsrModel? {
                 DetectedLocalAsrModel(
                     directory.name, directory, type,
                     LocalSherpaModelFiles(model = model.name, tokens = tokens.name),
-                    vad, true,
+                    vad,
+                    punctuation,
+                    true,
+                    if (type == "sensevoice" || type == "dolphin") {
+                        setOf(AsrMode.STREAMING, AsrMode.BATCH)
+                    } else {
+                        setOf(AsrMode.BATCH)
+                    },
                 )
             }
             else -> null
@@ -425,12 +508,18 @@ internal fun localModelIsUsable(model: LocalAsrModel): Boolean {
     val directory = File(config.modelPath)
     val files = config.fileConfig ?: return false
     if (!directory.isDirectory || config.modelType.isBlank()) return false
-    fun exists(name: String?): Boolean = name != null && File(directory, name).isFile &&
-        File(directory, name).length() > 0
-    if (!exists(files.tokens)) return false
+    fun exists(name: String?): Boolean = name != null && File(directory, name).let {
+        (it.isFile && it.length() > 0) || (it.isDirectory && it.list().orEmpty().isNotEmpty())
+    }
+    if (config.modelType !in TOKEN_OPTIONAL_MODEL_TYPES && !exists(files.tokens)) return false
     val primaryFilesExist = when (config.modelType) {
         "zipformer" -> exists(files.encoder) && exists(files.decoder) && exists(files.joiner)
         "paraformer" -> exists(files.encoder) && exists(files.decoder)
+        "whisper", "fire-red-asr" -> exists(files.encoder) && exists(files.decoder)
+        "qwen3-asr" -> exists(files.convFrontend) && exists(files.encoder) &&
+            exists(files.decoder) && exists(files.tokenizer)
+        "funasr-nano" -> exists(files.encoderAdaptor) && exists(files.llm) &&
+            exists(files.embedding) && exists(files.tokenizer)
         else -> exists(files.model)
     }
     val vadExistsWhenRequired = config.modelType !in OFFLINE_STREAMING_MODEL_TYPES ||
@@ -442,6 +531,7 @@ private data class ModelManifest(
     val id: String,
     val displayName: String,
     val source: LocalAsrModelSource,
+    val supportedModes: Set<AsrMode>,
 )
 
 private fun writeManifest(root: File, manifest: ModelManifest) {
@@ -449,6 +539,7 @@ private fun writeManifest(root: File, manifest: ModelManifest) {
         setProperty("id", manifest.id)
         setProperty("displayName", manifest.displayName)
         setProperty("source", manifest.source.name)
+        setProperty("modes", manifest.supportedModes.joinToString(",", transform = AsrMode::name))
     }
     File(root, MODEL_MANIFEST).outputStream().buffered().use { properties.store(it, null) }
 }
@@ -463,6 +554,10 @@ private fun readManifest(root: File): ModelManifest? = runCatching {
         source = runCatching {
             LocalAsrModelSource.valueOf(properties.getProperty("source"))
         }.getOrDefault(LocalAsrModelSource.IMPORTED),
+        supportedModes = properties.getProperty("modes")
+            ?.split(',')
+            ?.mapNotNullTo(mutableSetOf()) { runCatching { AsrMode.valueOf(it) }.getOrNull() }
+            .orEmpty(),
     )
 }.getOrNull()
 
@@ -525,3 +620,4 @@ private val OFFLINE_STREAMING_MODEL_TYPES = setOf(
     "dolphin",
     "qwen3-asr",
 )
+private val TOKEN_OPTIONAL_MODEL_TYPES = setOf("qwen3-asr", "funasr-nano")

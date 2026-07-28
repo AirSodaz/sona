@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.sona.android.application.recording.BatchCredentialSettingsPort
 import com.sona.android.application.recording.CredentialStatus
 import com.sona.android.application.recording.OnlineBatchCredential
-import com.sona.android.application.recording.OnlineBatchProvider
+import com.sona.android.application.recording.OnlineAsrProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,8 +16,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class CloudTranscriptionSettingsUiState(
-    val selectedProvider: OnlineBatchProvider = OnlineBatchProvider.VOLCENGINE_DOUBAO,
-    val configuredProviders: Set<OnlineBatchProvider> = emptySet(),
+    val selectedProvider: OnlineAsrProvider = OnlineAsrProvider.VOLCENGINE_DOUBAO,
+    val configuredProviders: Set<OnlineAsrProvider> = emptySet(),
     val apiKeyInput: String = "",
     val operationInProgress: Boolean = false,
     val operationFailed: Boolean = false,
@@ -67,7 +67,7 @@ class CloudTranscriptionSettingsViewModel(
         mutableUiState.update { it.copy(apiKeyInput = value, operationFailed = false) }
     }
 
-    fun selectProvider(provider: OnlineBatchProvider) {
+    fun selectProvider(provider: OnlineAsrProvider) {
         val current = mutableUiState.value
         if (current.operationInProgress || current.selectedProvider == provider) {
             return

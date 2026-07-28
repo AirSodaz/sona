@@ -7,7 +7,7 @@ import com.sona.android.application.recording.BatchCredentialResolverPort
 import com.sona.android.application.recording.BatchCredentialSettingsPort
 import com.sona.android.application.recording.CredentialStatus
 import com.sona.android.application.recording.OnlineBatchCredential
-import com.sona.android.application.recording.OnlineBatchProvider
+import com.sona.android.application.recording.OnlineAsrProvider
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import kotlinx.coroutines.CancellationException
@@ -33,7 +33,7 @@ class BatchCredentialPersistenceException internal constructor(
 )
 
 internal fun interface BatchCredentialCipherFactory {
-    fun cipherFor(provider: OnlineBatchProvider): CredentialCipher
+    fun cipherFor(provider: OnlineAsrProvider): CredentialCipher
 }
 
 /**
@@ -68,7 +68,7 @@ class AndroidBatchCredentialRepository internal constructor(
             throw failure(CredentialErrorCode.STORAGE_UNAVAILABLE)
         }
 
-    override suspend fun selectProvider(provider: OnlineBatchProvider) {
+    override suspend fun selectProvider(provider: OnlineAsrProvider) {
         operations.withLock {
             try {
                 store.writeSelectedProvider(provider.storageId)
@@ -83,7 +83,7 @@ class AndroidBatchCredentialRepository internal constructor(
     }
 
     override suspend fun save(
-        provider: OnlineBatchProvider,
+        provider: OnlineAsrProvider,
         credential: OnlineBatchCredential,
     ) {
         val plaintext = credential.apiKey.encodeToByteArray()
@@ -110,7 +110,7 @@ class AndroidBatchCredentialRepository internal constructor(
         }
     }
 
-    override suspend fun clear(provider: OnlineBatchProvider) {
+    override suspend fun clear(provider: OnlineAsrProvider) {
         operations.withLock {
             if (provider == DEFAULT_PROVIDER) {
                 val legacy = legacyStreamingCredential
@@ -134,7 +134,7 @@ class AndroidBatchCredentialRepository internal constructor(
         }
     }
 
-    override suspend fun load(provider: OnlineBatchProvider): OnlineBatchCredential? {
+    override suspend fun load(provider: OnlineAsrProvider): OnlineBatchCredential? {
         migrateLegacyStreamingCredential()
         return operations.withLock {
             loadCredential(provider, readRecords())
@@ -214,7 +214,7 @@ class AndroidBatchCredentialRepository internal constructor(
     }
 
     private suspend fun loadCredential(
-        provider: OnlineBatchProvider,
+        provider: OnlineAsrProvider,
         records: BatchCredentialRecords,
     ): OnlineBatchCredential? {
         val slot = records.slotFor(provider.storageId)
@@ -234,7 +234,7 @@ class AndroidBatchCredentialRepository internal constructor(
 
     private fun projectConfiguration(records: BatchCredentialRecords) = BatchCredentialConfiguration(
         selectedProvider = selectedProvider(records),
-        configuredProviders = OnlineBatchProvider.entries
+        configuredProviders = OnlineAsrProvider.entries
             .filter {
                 CredentialEnvelope.projectStatus(records.slotFor(it.storageId)) ==
                     CredentialStatus.CONFIGURED
@@ -242,11 +242,11 @@ class AndroidBatchCredentialRepository internal constructor(
             .toSet(),
     )
 
-    private fun selectedProvider(records: BatchCredentialRecords): OnlineBatchProvider =
+    private fun selectedProvider(records: BatchCredentialRecords): OnlineAsrProvider =
         batchProviderForStorageId(records.selectedProviderStorageId) ?: DEFAULT_PROVIDER
 
     private suspend fun loadSupported(
-        provider: OnlineBatchProvider,
+        provider: OnlineAsrProvider,
         envelope: CredentialEnvelope,
     ): OnlineBatchCredential? {
         val plaintext = try {
@@ -276,7 +276,7 @@ class AndroidBatchCredentialRepository internal constructor(
     }
 
     private suspend fun encrypt(
-        provider: OnlineBatchProvider,
+        provider: OnlineAsrProvider,
         plaintext: ByteArray,
     ): CredentialEnvelope = try {
         ciphers.cipherFor(provider).encrypt(plaintext)
@@ -291,7 +291,7 @@ class AndroidBatchCredentialRepository internal constructor(
         throw failure(CredentialErrorCode.STORAGE_UNAVAILABLE)
     }
 
-    private suspend fun cleanupInvalidSlot(provider: OnlineBatchProvider) {
+    private suspend fun cleanupInvalidSlot(provider: OnlineAsrProvider) {
         clearSlot(provider)
         deleteKey(provider)
     }
@@ -306,10 +306,10 @@ class AndroidBatchCredentialRepository internal constructor(
         throw failure(CredentialErrorCode.STORAGE_UNAVAILABLE)
     }
 
-    private suspend fun readSlot(provider: OnlineBatchProvider): CredentialRecord =
+    private suspend fun readSlot(provider: OnlineAsrProvider): CredentialRecord =
         readRecords().slotFor(provider.storageId)
 
-    private suspend fun writeSlot(provider: OnlineBatchProvider, record: CredentialRecord) {
+    private suspend fun writeSlot(provider: OnlineAsrProvider, record: CredentialRecord) {
         try {
             store.writeSlot(provider.storageId, record)
         } catch (error: CancellationException) {
@@ -321,7 +321,7 @@ class AndroidBatchCredentialRepository internal constructor(
         }
     }
 
-    private suspend fun clearSlot(provider: OnlineBatchProvider) {
+    private suspend fun clearSlot(provider: OnlineAsrProvider) {
         try {
             store.clearSlot(provider.storageId)
         } catch (error: CancellationException) {
@@ -333,7 +333,7 @@ class AndroidBatchCredentialRepository internal constructor(
         }
     }
 
-    private fun deleteKey(provider: OnlineBatchProvider) {
+    private fun deleteKey(provider: OnlineAsrProvider) {
         try {
             ciphers.cipherFor(provider).deleteKey()
         } catch (error: CancellationException) {
@@ -345,7 +345,7 @@ class AndroidBatchCredentialRepository internal constructor(
 
     companion object {
         private const val MAX_API_KEY_UTF8_BYTES = 16_384
-        private val DEFAULT_PROVIDER = OnlineBatchProvider.VOLCENGINE_DOUBAO
+        private val DEFAULT_PROVIDER = OnlineAsrProvider.VOLCENGINE_DOUBAO
 
         @JvmStatic
         fun create(context: Context): AndroidBatchCredentialRepository = try {

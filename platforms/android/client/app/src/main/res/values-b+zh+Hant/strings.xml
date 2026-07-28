@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="destination_record">錄音</string>
+    <string name="destination_home">首頁</string>
     <string name="destination_library">記錄</string>
     <string name="destination_settings">設定</string>
     <string name="record_heading">即時轉寫</string>
     <string name="engine_label">辨識引擎</string>
-    <string name="engine_online">線上</string>
-    <string name="engine_local">本機</string>
     <string name="record_action_description">開始錄音</string>
     <string name="record_stop_description">停止錄音</string>
     <string name="transcript_waiting">等待轉寫</string>
@@ -16,7 +14,6 @@
     <string name="action_back">返回</string>
     <string name="library_heading">錄音記錄</string>
     <string name="library_refresh_description">重新整理錄音記錄</string>
-    <string name="library_import_audio">匯入音訊</string>
     <string name="library_import_cancel">取消匯入音訊</string>
     <string name="library_import_queued">音訊匯入已排程</string>
     <string name="library_import_staging">正在準備音訊</string>
@@ -25,13 +22,6 @@
     <string name="library_import_saving">正在儲存匯入的音訊</string>
     <string name="library_import_completed">音訊已匯入</string>
     <string name="library_import_saved_warning">音訊已儲存，但轉寫失敗</string>
-    <string name="library_import_invalid_source">無法開啟所選音訊檔案</string>
-    <string name="library_import_unsupported">此裝置不支援該音訊格式</string>
-    <string name="library_import_too_long">音訊檔案不可超過 6 小時</string>
-    <string name="library_import_storage">可用儲存空間不足，無法匯入音訊</string>
-    <string name="library_import_configuration">請先設定目前選擇的辨識引擎</string>
-    <string name="library_import_transcode_failed">音訊轉換失敗</string>
-    <string name="library_import_save_failed">無法儲存匯入的音訊</string>
     <string name="library_loading">正在載入錄音記錄</string>
     <string name="library_load_failed">無法載入錄音記錄</string>
     <string name="library_empty">尚無記錄</string>
@@ -43,7 +33,6 @@
     <string name="library_transcript_heading">轉寫內容</string>
     <string name="library_transcript_empty">尚無轉寫內容</string>
     <string name="library_transcript_load_failed">無法載入轉寫內容</string>
-    <string name="action_configure_credential">前往設定</string>
     <string name="action_grant_permission">重新授權</string>
     <string name="action_open_app_settings">開啟系統設定</string>
     <string name="recording_idle">準備錄音</string>
@@ -98,7 +87,6 @@
     <string name="runtime_heading">本機執行階段</string>
     <string name="local_runtime_unavailable">無法使用</string>
     <string name="local_recognition_heading">本機辨識模型</string>
-    <string name="local_model_installed">已安裝：%1$s</string>
     <string name="local_model_not_installed">尚未安裝本機模型</string>
     <string name="local_model_installed_heading">已安裝模型</string>
     <string name="local_model_catalog_heading">下載模型</string>
@@ -124,4 +112,26 @@
     <string name="action_refresh_model_catalog">重新整理模型目錄</string>
     <string name="action_delete">刪除</string>
     <string name="action_cancel">取消</string>
+    <string name="action_configure">前往設定</string>
+    <string name="recognition_live_model">即時錄音模型</string>
+    <string name="recognition_batch_model">檔案轉錄模型</string>
+    <string name="recognition_model_not_selected">尚未設定</string>
+    <string name="home_heading">要轉錄什麼內容？</string>
+    <string name="home_live_title">即時錄音</string>
+    <string name="home_file_title">檔案轉錄</string>
+    <string name="home_recent_title">最近記錄</string>
+    <string name="home_view_all">查看全部</string>
+    <string name="home_status_idle">可以開始</string>
+    <string name="home_status_preparing">正在準備</string>
+    <string name="home_status_recording">正在錄音</string>
+    <string name="home_status_processing">正在處理</string>
+    <string name="home_status_completed">已完成</string>
+    <string name="home_status_failed">需要處理</string>
+    <string name="home_status_unavailable">需要設定</string>
+    <string name="file_workspace_heading">檔案轉錄</string>
+    <string name="file_select_audio">選擇音訊檔案</string>
+    <string name="file_no_selection">尚未選擇音訊檔案</string>
+    <string name="file_start_transcription">開始轉錄</string>
+    <string name="file_view_result">查看結果</string>
+    <string name="file_select_another">選擇其他檔案</string>
 </resources>

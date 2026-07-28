@@ -11,7 +11,7 @@ class OnlineBatchPortsContractTest {
         val credential = OnlineBatchCredential("temporary-secret")
         val port = RecordingOnlineBatchTranscriptionPort()
 
-        val results = OnlineBatchProvider.entries.map { provider ->
+        val results = OnlineAsrProvider.entries.map { provider ->
             port.transcribe(
                 OnlineBatchTranscriptionRequest(
                     audioPath = "recording.wav",
@@ -25,9 +25,9 @@ class OnlineBatchPortsContractTest {
         assertFalse(credential.toString().contains("temporary-secret"))
         assertEquals(
             listOf(
-                OnlineBatchProvider.VOLCENGINE_DOUBAO,
-                OnlineBatchProvider.GROQ_WHISPER,
-                OnlineBatchProvider.MISTRAL_VOXTRAL,
+                OnlineAsrProvider.VOLCENGINE_DOUBAO,
+                OnlineAsrProvider.GROQ_WHISPER,
+                OnlineAsrProvider.MISTRAL_VOXTRAL,
             ),
             port.requests.map(OnlineBatchTranscriptionRequest::provider),
         )

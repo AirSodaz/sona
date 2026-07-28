@@ -25,11 +25,16 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -51,20 +56,24 @@ import com.sona.android.app.R
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import com.sona.android.application.recording.LocalAsrDeviceTier
 import com.sona.android.application.recording.LocalAsrDownloadStage
-import com.sona.android.application.recording.OnlineBatchProvider
+import com.sona.android.application.recording.AsrMode
+import com.sona.android.application.recording.AsrModelSelection
+import com.sona.android.application.recording.AsrSelectionSlot
+import com.sona.android.application.recording.OnlineAsrProvider
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun RecognitionSettingsPane(
     bootstrapState: SonaBootstrapUiState,
     cloudTranscriptionState: CloudTranscriptionSettingsUiState,
     recognitionSettingsState: RecognitionSettingsUiState,
     requestCloudCredentialFocus: Boolean,
-    onCloudProviderSelected: (OnlineBatchProvider) -> Unit,
+    onCloudProviderSelected: (OnlineAsrProvider) -> Unit,
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
     onClearCloudApiKey: () -> Unit,
-    onSelectLocalModel: (String) -> Unit,
+    onSelectModel: (AsrSelectionSlot, AsrModelSelection?) -> Unit,
     onDownloadLocalModel: (String) -> Unit,
     onValidateLocalModel: (String) -> Unit,
     onDeleteLocalModel: (String) -> Unit,
@@ -107,7 +116,8 @@ internal fun RecognitionSettingsPane(
             ) {
                 LocalRecognitionSettings(
                     state = recognitionSettingsState,
-                    onSelectModel = onSelectLocalModel,
+                    configuredProviders = cloudTranscriptionState.configuredProviders,
+                    onSelectModel = onSelectModel,
                     onDownloadModel = onDownloadLocalModel,
                     onValidateModel = onValidateLocalModel,
                     onDeleteModel = onDeleteLocalModel,
@@ -167,7 +177,8 @@ internal fun RecognitionSettingsPane(
 @Composable
 private fun LocalRecognitionSettings(
     state: RecognitionSettingsUiState,
-    onSelectModel: (String) -> Unit,
+    configuredProviders: Set<OnlineAsrProvider>,
+    onSelectModel: (AsrSelectionSlot, AsrModelSelection?) -> Unit,
     onDownloadModel: (String) -> Unit,
     onValidateModel: (String) -> Unit,
     onDeleteModel: (String) -> Unit,
@@ -259,12 +270,25 @@ private fun LocalRecognitionSettings(
             }
         }
 
-        Text(
-            text = state.localModel?.let { model ->
-                stringResource(R.string.local_model_installed, model.displayName)
-            } ?: stringResource(R.string.local_model_not_installed),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        ModelSelectionDropdown(
+            label = stringResource(R.string.recognition_live_model),
+            slot = AsrSelectionSlot.LIVE,
+            mode = AsrMode.STREAMING,
+            selected = state.liveSelection,
+            state = state,
+            configuredProviders = configuredProviders,
+            enabled = !busy,
+            onSelect = onSelectModel,
+        )
+        ModelSelectionDropdown(
+            label = stringResource(R.string.recognition_batch_model),
+            slot = AsrSelectionSlot.BATCH,
+            mode = AsrMode.BATCH,
+            selected = state.batchSelection,
+            state = state,
+            configuredProviders = configuredProviders,
+            enabled = !busy,
+            onSelect = onSelectModel,
         )
         if (state.operationError) {
             Text(
@@ -292,11 +316,6 @@ private fun LocalRecognitionSettings(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                RadioButton(
-                    selected = state.localModel?.id == model.id,
-                    onClick = { onSelectModel(model.id) },
-                    enabled = !busy,
-                )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(model.displayName, style = MaterialTheme.typography.bodyMedium)
                     Text(
@@ -420,6 +439,73 @@ private fun LocalRecognitionSettings(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ModelSelectionDropdown(
+    label: String,
+    slot: AsrSelectionSlot,
+    mode: AsrMode,
+    selected: AsrModelSelection?,
+    state: RecognitionSettingsUiState,
+    configuredProviders: Set<OnlineAsrProvider>,
+    enabled: Boolean,
+    onSelect: (AsrSelectionSlot, AsrModelSelection?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val localOptions = state.installedModels
+        .filter { it.supports(mode) }
+        .map { AsrModelSelection.Local(it.id) to it.displayName }
+    val onlineOptions = OnlineAsrProvider.entries
+        .filter { provider ->
+            provider.supports(mode) &&
+                (provider in configuredProviders || selected == AsrModelSelection.Online(provider))
+        }
+        .map { provider -> AsrModelSelection.Online(provider) to provider.displayLabel() }
+    val options = localOptions + onlineOptions
+    val selectedLabel = options.firstOrNull { it.first == selected }?.second
+        ?: stringResource(R.string.recognition_model_not_selected)
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { if (enabled) expanded = !expanded },
+    ) {
+        OutlinedTextField(
+            value = selectedLabel,
+            onValueChange = {},
+            readOnly = true,
+            enabled = enabled,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier.menuAnchor().fillMaxWidth(),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.recognition_model_not_selected)) },
+                onClick = {
+                    expanded = false
+                    onSelect(slot, null)
+                },
+            )
+            options.forEach { (selection, optionLabel) ->
+                DropdownMenuItem(
+                    text = { Text(optionLabel) },
+                    onClick = {
+                        expanded = false
+                        onSelect(slot, selection)
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OnlineAsrProvider.displayLabel(): String = when (this) {
+    OnlineAsrProvider.VOLCENGINE_DOUBAO -> stringResource(R.string.batch_provider_volcengine_doubao)
+    OnlineAsrProvider.GROQ_WHISPER -> stringResource(R.string.batch_provider_groq_whisper)
+    OnlineAsrProvider.MISTRAL_VOXTRAL -> stringResource(R.string.batch_provider_mistral_voxtral)
 }
 
 private fun formatBytes(bytes: Long): String {

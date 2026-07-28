@@ -16,6 +16,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,15 +48,13 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,7 +65,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -78,7 +80,7 @@ import com.sona.android.app.feature.settings.RecognitionSettingsUiState
 import com.sona.android.app.ui.theme.LocalSonaRecordingColor
 import com.sona.android.application.recording.AudioInputStatus
 import com.sona.android.application.recording.LiveRecordingState
-import com.sona.android.application.recording.RecognitionEngine
+import com.sona.android.application.recording.AsrModelSelection
 import com.sona.android.application.recording.StreamingStatus
 import com.sona.android.application.recording.TranscriptSegment
 
@@ -94,7 +96,6 @@ internal fun RecordScreen(
     onStopRecording: () -> Unit,
     onConfigureCredential: () -> Unit,
     onConfigureRecognition: () -> Unit,
-    onEngineSelected: (RecognitionEngine) -> Unit,
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -156,21 +157,27 @@ internal fun RecordScreen(
     }
 
     val presentation = recordingState.toRecordingPresentation()
-    val bootstrapReady = bootstrapState is SonaBootstrapUiState.Ready && when (
-        recognitionSettings.engine
-    ) {
-        RecognitionEngine.ONLINE -> bootstrapState.snapshot.onlineStreamingAvailable
-        RecognitionEngine.LOCAL -> bootstrapState.snapshot.localStreamingSessionAvailable
+    val windowHeight = LocalWindowInfo.current.containerSize.height
+    val verticallyConstrained = with(LocalDensity.current) { windowHeight.toDp() < 600.dp }
+    val workspaceScroll = rememberScrollState()
+    val liveSelection = recognitionSettings.liveSelection
+    val bootstrapReady = bootstrapState is SonaBootstrapUiState.Ready && when (liveSelection) {
+        is AsrModelSelection.Online -> bootstrapState.snapshot.onlineStreamingAvailable
+        is AsrModelSelection.Local -> bootstrapState.snapshot.localStreamingSessionAvailable
+        null -> false
+    }
+    val configurationMissing = when (liveSelection) {
+        is AsrModelSelection.Online -> !onlineCredentialConfigured
+        is AsrModelSelection.Local -> recognitionSettings.installedModels.none {
+            it.id == liveSelection.modelId
+        }
+        null -> true
     }
     val elapsedMillis = (recordingState as? LiveRecordingState.Recording)?.elapsedMillis ?: 0
 
     val requestRecording = {
-        val configurationMissing = when (recognitionSettings.engine) {
-            RecognitionEngine.ONLINE -> !onlineCredentialConfigured
-            RecognitionEngine.LOCAL -> recognitionSettings.localModel == null
-        }
         if (configurationMissing || recordingState is LiveRecordingState.NeedsConfiguration) {
-            if (recognitionSettings.engine == RecognitionEngine.ONLINE) {
+            if (liveSelection is AsrModelSelection.Online) {
                 onConfigureCredential()
             } else {
                 onConfigureRecognition()
@@ -201,6 +208,7 @@ internal fun RecordScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .then(if (verticallyConstrained) Modifier.verticalScroll(workspaceScroll) else Modifier)
             .padding(horizontal = 24.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -212,43 +220,22 @@ internal fun RecordScreen(
         )
         BootstrapStatus(bootstrapState, onRetryBootstrap)
 
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = stringResource(R.string.engine_label),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                SegmentedButton(
-                    selected = recognitionSettings.engine == RecognitionEngine.ONLINE,
-                    onClick = { onEngineSelected(RecognitionEngine.ONLINE) },
-                    enabled = presentation.isStartAvailable,
-                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                    label = { Text(stringResource(R.string.engine_online)) },
-                )
-                SegmentedButton(
-                    selected = recognitionSettings.engine == RecognitionEngine.LOCAL,
-                    onClick = { onEngineSelected(RecognitionEngine.LOCAL) },
-                    enabled = presentation.isStartAvailable &&
-                        (bootstrapState as? SonaBootstrapUiState.Ready)
-                            ?.snapshot?.localStreamingSessionAvailable == true,
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                    label = { Text(stringResource(R.string.engine_local)) },
-                )
-            }
-        }
+        Text(
+            text = liveSelection.liveModelSummary(recognitionSettings),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
 
         RecordingNotices(
             state = recordingState,
+            configurationMissing = configurationMissing,
             permissionIssue = permissionIssue,
             onRetryPermission = {
                 hasRequestedPermission = true
                 permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             },
             onOpenAppSettings = { context.openAppSettings() },
-            onConfigureCredential = if (
-                recognitionSettings.engine == RecognitionEngine.ONLINE
-            ) {
+            onConfigureCredential = if (liveSelection is AsrModelSelection.Online) {
                 onConfigureCredential
             } else {
                 onConfigureRecognition
@@ -257,21 +244,40 @@ internal fun RecordScreen(
 
         TranscriptList(
             segments = displayedSegments,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
+            modifier = if (verticallyConstrained) {
+                Modifier.fillMaxWidth().height(180.dp)
+            } else {
+                Modifier.fillMaxWidth().weight(1f)
+            },
         )
 
         RecordControls(
             elapsedMillis = elapsedMillis,
             state = recordingState,
             presentation = presentation,
-            bootstrapReady = bootstrapReady,
+            bootstrapReady = bootstrapReady && !configurationMissing,
             onStart = requestRecording,
             onStop = onStopRecording,
         )
     }
 }
+
+@Composable
+private fun AsrModelSelection?.liveModelSummary(state: RecognitionSettingsUiState): String =
+    when (this) {
+        is AsrModelSelection.Local -> state.installedModels.firstOrNull { it.id == modelId }
+            ?.displayName
+            ?: stringResource(R.string.local_model_not_installed)
+        is AsrModelSelection.Online -> when (provider) {
+            com.sona.android.application.recording.OnlineAsrProvider.VOLCENGINE_DOUBAO ->
+                stringResource(R.string.batch_provider_volcengine_doubao)
+            com.sona.android.application.recording.OnlineAsrProvider.GROQ_WHISPER ->
+                stringResource(R.string.batch_provider_groq_whisper)
+            com.sona.android.application.recording.OnlineAsrProvider.MISTRAL_VOXTRAL ->
+                stringResource(R.string.batch_provider_mistral_voxtral)
+        }
+        null -> stringResource(R.string.local_model_not_installed)
+    }
 
 @Composable
 private fun TranscriptList(
@@ -375,26 +381,31 @@ private fun TranscriptList(
 @Composable
 private fun RecordingNotices(
     state: LiveRecordingState,
+    configurationMissing: Boolean,
     permissionIssue: MicrophonePermissionDecision?,
     onRetryPermission: () -> Unit,
     onOpenAppSettings: () -> Unit,
     onConfigureCredential: () -> Unit,
 ) {
-    val presentation = state.toRecordingPresentation()
-    val failure = presentation.statusCategory.isFailure()
-    NoticeRow(
-        text = stringResource(presentation.statusCategory.labelRes()),
-        isWarning = failure ||
-            presentation.statusCategory == RecordingStatusCategory.COMPLETED_WITH_WARNING,
-    )
+    val needsConfiguration = state is LiveRecordingState.NeedsConfiguration ||
+        (state is LiveRecordingState.Idle && configurationMissing)
+    val visibleStatus = recordingStatusForDisplay(state, configurationMissing)
+    if (visibleStatus != null) {
+        NoticeRow(
+            text = stringResource(visibleStatus.labelRes()),
+            isWarning = visibleStatus.isFailure() ||
+                visibleStatus == RecordingStatusCategory.COMPLETED_WITH_WARNING ||
+                visibleStatus == RecordingStatusCategory.NEEDS_CONFIGURATION,
+        )
+    }
 
-    if (state is LiveRecordingState.NeedsConfiguration) {
+    if (needsConfiguration) {
         Spacer(Modifier.height(4.dp))
         FilledTonalButton(
             onClick = onConfigureCredential,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(stringResource(R.string.action_configure_credential))
+            Text(stringResource(R.string.action_configure))
         }
     }
 
@@ -558,7 +569,7 @@ private fun RecordControls(
                     label = "scale"
                 )
             } else {
-                remember { mutableStateOf(1.0f) }
+                remember { mutableFloatStateOf(1.0f) }
             }
 
             val pulseAlpha by if (recording) {
@@ -572,7 +583,7 @@ private fun RecordControls(
                     label = "alpha"
                 )
             } else {
-                remember { mutableStateOf(0.0f) }
+                remember { mutableFloatStateOf(0.0f) }
             }
 
             val enabled = if (recording) {

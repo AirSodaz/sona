@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="destination_record">録音</string>
+    <string name="destination_home">ホーム</string>
     <string name="destination_library">履歴</string>
     <string name="destination_settings">設定</string>
     <string name="record_heading">リアルタイム文字起こし</string>
     <string name="engine_label">認識エンジン</string>
-    <string name="engine_online">オンライン</string>
-    <string name="engine_local">ローカル</string>
     <string name="record_action_description">録音を開始</string>
     <string name="record_stop_description">録音を停止</string>
     <string name="transcript_waiting">文字起こしを待機中</string>
@@ -14,7 +12,6 @@
     <string name="status_error">初期化に失敗しました</string>
     <string name="action_retry">再試行</string>
     <string name="action_back">戻る</string>
-    <string name="action_configure_credential">認証情報を設定</string>
     <string name="action_grant_permission">権限を再度許可</string>
     <string name="action_open_app_settings">アプリ設定を開く</string>
     <string name="recording_idle">録音の準備ができました</string>
@@ -38,7 +35,6 @@
     <string name="microphone_permission_settings">システム設定でマイクの権限を許可してください</string>
     <string name="library_heading">録音履歴</string>
     <string name="library_refresh_description">録音履歴を更新</string>
-    <string name="library_import_audio">音声を読み込む</string>
     <string name="library_import_cancel">音声の読み込みをキャンセル</string>
     <string name="library_import_queued">音声の読み込みを待機中</string>
     <string name="library_import_staging">音声を準備中</string>
@@ -47,13 +43,6 @@
     <string name="library_import_saving">読み込んだ音声を保存中</string>
     <string name="library_import_completed">音声を読み込みました</string>
     <string name="library_import_saved_warning">音声は保存されましたが、文字起こしに失敗しました</string>
-    <string name="library_import_invalid_source">選択した音声ファイルを開けません</string>
-    <string name="library_import_unsupported">この端末ではこの音声形式を使用できません</string>
-    <string name="library_import_too_long">音声ファイルは6時間以内にしてください</string>
-    <string name="library_import_storage">音声を読み込むための空き容量が不足しています</string>
-    <string name="library_import_configuration">選択した音声認識エンジンを先に設定してください</string>
-    <string name="library_import_transcode_failed">音声の変換に失敗しました</string>
-    <string name="library_import_save_failed">読み込んだ音声を保存できませんでした</string>
     <string name="library_loading">録音履歴を読み込み中</string>
     <string name="library_load_failed">録音履歴を読み込めません</string>
     <string name="library_empty">録音はまだありません</string>
@@ -98,7 +87,6 @@
     <string name="runtime_heading">ローカルランタイム</string>
     <string name="local_runtime_unavailable">利用できません</string>
     <string name="local_recognition_heading">ローカル認識モデル</string>
-    <string name="local_model_installed">インストール済み：%1$s</string>
     <string name="local_model_not_installed">ローカルモデルがありません</string>
     <string name="local_model_installed_heading">インストール済みモデル</string>
     <string name="local_model_catalog_heading">モデルをダウンロード</string>
@@ -124,4 +112,26 @@
     <string name="action_refresh_model_catalog">モデル一覧を更新</string>
     <string name="action_delete">削除</string>
     <string name="action_cancel">キャンセル</string>
+    <string name="action_configure">設定を開く</string>
+    <string name="recognition_live_model">ライブ録音モデル</string>
+    <string name="recognition_batch_model">ファイル文字起こしモデル</string>
+    <string name="recognition_model_not_selected">未設定</string>
+    <string name="home_heading">何を文字起こししますか？</string>
+    <string name="home_live_title">ライブ録音</string>
+    <string name="home_file_title">ファイル文字起こし</string>
+    <string name="home_recent_title">最近の録音</string>
+    <string name="home_view_all">すべて表示</string>
+    <string name="home_status_idle">開始できます</string>
+    <string name="home_status_preparing">準備中</string>
+    <string name="home_status_recording">録音中</string>
+    <string name="home_status_processing">処理中</string>
+    <string name="home_status_completed">完了</string>
+    <string name="home_status_failed">確認が必要です</string>
+    <string name="home_status_unavailable">設定が必要です</string>
+    <string name="file_workspace_heading">ファイル文字起こし</string>
+    <string name="file_select_audio">音声ファイルを選択</string>
+    <string name="file_no_selection">音声ファイルが選択されていません</string>
+    <string name="file_start_transcription">文字起こしを開始</string>
+    <string name="file_view_result">結果を表示</string>
+    <string name="file_select_another">別のファイルを選択</string>
 </resources>

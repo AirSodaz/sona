@@ -1,7 +1,7 @@
 package com.sona.android.adapters.uniffi.recording
 
 import com.sona.android.application.recording.OnlineBatchCredential
-import com.sona.android.application.recording.OnlineBatchProvider
+import com.sona.android.application.recording.OnlineAsrProvider
 import com.sona.android.application.recording.OnlineBatchTranscriptionRequest
 import com.sona.android.application.recording.TranscriptTimingLevel
 import com.sona.android.application.recording.TranscriptTimingSource
@@ -25,15 +25,15 @@ class UniffiOnlineBatchTranscriptionAdapterTest {
         val adapter = UniffiOnlineBatchTranscriptionAdapter(bindings)
         val credential = OnlineBatchCredential("temporary-secret")
 
-        OnlineBatchProvider.entries.forEach { provider ->
+        OnlineAsrProvider.entries.forEach { provider ->
             adapter.transcribe(request(provider, credential))
         }
 
         assertEquals(
             listOf(
-                UniffiOnlineBatchProvider.VOLCENGINE_DOUBAO,
-                UniffiOnlineBatchProvider.GROQ_WHISPER,
-                UniffiOnlineBatchProvider.MISTRAL_VOXTRAL,
+                UniffiOnlineAsrProvider.VOLCENGINE_DOUBAO,
+                UniffiOnlineAsrProvider.GROQ_WHISPER,
+                UniffiOnlineAsrProvider.MISTRAL_VOXTRAL,
             ),
             bindings.requests.map(UniffiOnlineBatchRequest::provider),
         )
@@ -46,7 +46,7 @@ class UniffiOnlineBatchTranscriptionAdapterTest {
         val bindings = FakeOnlineBatchBindings()
 
         val result = UniffiOnlineBatchTranscriptionAdapter(bindings).transcribe(
-            request(OnlineBatchProvider.GROQ_WHISPER, OnlineBatchCredential("secret")),
+            request(OnlineAsrProvider.GROQ_WHISPER, OnlineBatchCredential("secret")),
         )
 
         val segment = result.segments.single()
@@ -89,7 +89,7 @@ class UniffiOnlineBatchTranscriptionAdapterTest {
     }
 
     private fun request(
-        provider: OnlineBatchProvider,
+        provider: OnlineAsrProvider,
         credential: OnlineBatchCredential,
     ) = OnlineBatchTranscriptionRequest(
         audioPath = "recording.wav",

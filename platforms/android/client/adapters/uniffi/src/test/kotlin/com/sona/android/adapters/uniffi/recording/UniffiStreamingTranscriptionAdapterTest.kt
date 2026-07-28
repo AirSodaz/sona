@@ -1,7 +1,7 @@
 package com.sona.android.adapters.uniffi.recording
 
 import com.sona.android.application.recording.Pcm16Frame
-import com.sona.android.application.recording.LocalSherpaStreamingConfig
+import com.sona.android.application.recording.LocalSherpaConfig
 import com.sona.android.application.recording.LocalSherpaModelFiles
 import com.sona.android.application.recording.StreamingCredential
 import com.sona.android.application.recording.StreamingEngineConfig
@@ -227,7 +227,7 @@ class UniffiStreamingTranscriptionAdapterTest {
     private fun localRequest() = StreamingTranscriptionRequest(
         recordingId = "recording-local",
         engine = StreamingEngineConfig.LocalSherpa(
-            LocalSherpaStreamingConfig(
+            LocalSherpaConfig(
                 modelPath = "/models/zipformer",
                 numThreads = 2,
                 modelType = "zipformer",

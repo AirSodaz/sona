@@ -3,7 +3,7 @@ package com.sona.android.adapters.android.credential
 import com.sona.android.application.recording.ActiveBatchCredential
 import com.sona.android.application.recording.CredentialStatus
 import com.sona.android.application.recording.OnlineBatchCredential
-import com.sona.android.application.recording.OnlineBatchProvider
+import com.sona.android.application.recording.OnlineAsrProvider
 import com.sona.android.application.recording.StreamingCredential
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -30,11 +30,11 @@ class AndroidBatchCredentialRepositoryTest {
         val configuration = repository.configuration.first()
 
         assertTrue(
-            OnlineBatchProvider.VOLCENGINE_DOUBAO in configuration.configuredProviders,
+            OnlineAsrProvider.VOLCENGINE_DOUBAO in configuration.configuredProviders,
         )
         assertEquals(
             OnlineBatchCredential("legacy-secret"),
-            repository.load(OnlineBatchProvider.VOLCENGINE_DOUBAO),
+            repository.load(OnlineAsrProvider.VOLCENGINE_DOUBAO),
         )
         assertEquals(1, legacy.loadCalls)
         assertEquals(1, legacy.clearCalls)
@@ -59,7 +59,7 @@ class AndroidBatchCredentialRepositoryTest {
 
         assertEquals(
             OnlineBatchCredential("provider-secret"),
-            repository.load(OnlineBatchProvider.VOLCENGINE_DOUBAO),
+            repository.load(OnlineAsrProvider.VOLCENGINE_DOUBAO),
         )
         assertEquals(0, legacy.loadCalls)
         assertEquals(1, legacy.clearCalls)
@@ -87,7 +87,7 @@ class AndroidBatchCredentialRepositoryTest {
 
         assertEquals(
             OnlineBatchCredential("provider-secret"),
-            repository.load(OnlineBatchProvider.VOLCENGINE_DOUBAO),
+            repository.load(OnlineAsrProvider.VOLCENGINE_DOUBAO),
         )
         assertEquals(1, legacy.clearCalls)
         assertEquals(StreamingCredential("legacy-secret"), legacy.credential)
@@ -95,7 +95,7 @@ class AndroidBatchCredentialRepositoryTest {
         legacy.clearFailure = null
         assertEquals(
             OnlineBatchCredential("provider-secret"),
-            repository.load(OnlineBatchProvider.VOLCENGINE_DOUBAO),
+            repository.load(OnlineAsrProvider.VOLCENGINE_DOUBAO),
         )
         assertEquals(2, legacy.clearCalls)
         assertNull(legacy.credential)
@@ -118,14 +118,14 @@ class AndroidBatchCredentialRepositoryTest {
         val repository = AndroidBatchCredentialRepository(store, ciphers, legacy)
 
         val error = captureError {
-            repository.clear(OnlineBatchProvider.VOLCENGINE_DOUBAO)
+            repository.clear(OnlineAsrProvider.VOLCENGINE_DOUBAO)
         }
 
         assertEquals(CredentialErrorCode.STORAGE_UNAVAILABLE, error.code)
         assertEquals(original, store.current.slots["volcengine-doubao"])
         assertEquals(
             0,
-            ciphers.cipherFor(OnlineBatchProvider.VOLCENGINE_DOUBAO).deleteCalls,
+            ciphers.cipherFor(OnlineAsrProvider.VOLCENGINE_DOUBAO).deleteCalls,
         )
     }
 
@@ -142,7 +142,7 @@ class AndroidBatchCredentialRepositoryTest {
         )
 
         val error = captureError {
-            repository.load(OnlineBatchProvider.VOLCENGINE_DOUBAO)
+            repository.load(OnlineAsrProvider.VOLCENGINE_DOUBAO)
         }
 
         assertEquals(CredentialErrorCode.STORAGE_UNAVAILABLE, error.code)
@@ -163,13 +163,13 @@ class AndroidBatchCredentialRepositoryTest {
             legacy,
         )
 
-        assertEquals(emptySet<OnlineBatchProvider>(), repository.configuration.first().configuredProviders)
+        assertEquals(emptySet<OnlineAsrProvider>(), repository.configuration.first().configuredProviders)
         assertEquals(StreamingCredential("legacy-secret"), legacy.credential)
 
         store.writeFailure = null
         assertEquals(
             OnlineBatchCredential("legacy-secret"),
-            repository.load(OnlineBatchProvider.VOLCENGINE_DOUBAO),
+            repository.load(OnlineAsrProvider.VOLCENGINE_DOUBAO),
         )
         assertNull(legacy.credential)
     }
@@ -184,8 +184,8 @@ class AndroidBatchCredentialRepositoryTest {
         )
 
         repository.configuration.first()
-        repository.load(OnlineBatchProvider.VOLCENGINE_DOUBAO)
-        repository.selectProvider(OnlineBatchProvider.GROQ_WHISPER)
+        repository.load(OnlineAsrProvider.VOLCENGINE_DOUBAO)
+        repository.selectProvider(OnlineAsrProvider.GROQ_WHISPER)
 
         assertEquals(1, legacy.loadCalls)
         assertEquals(1, legacy.clearCalls)
@@ -209,15 +209,15 @@ class AndroidBatchCredentialRepositoryTest {
 
         val configuration = repository.configuration.first()
 
-        assertEquals(OnlineBatchProvider.GROQ_WHISPER, configuration.selectedProvider)
+        assertEquals(OnlineAsrProvider.GROQ_WHISPER, configuration.selectedProvider)
         assertEquals(
-            setOf(OnlineBatchProvider.GROQ_WHISPER, OnlineBatchProvider.MISTRAL_VOXTRAL),
+            setOf(OnlineAsrProvider.GROQ_WHISPER, OnlineAsrProvider.MISTRAL_VOXTRAL),
             configuration.configuredProviders,
         )
         assertEquals(CredentialStatus.CONFIGURED, configuration.selectedStatus)
         assertEquals(
             CredentialStatus.NOT_CONFIGURED,
-            configuration.statusFor(OnlineBatchProvider.VOLCENGINE_DOUBAO),
+            configuration.statusFor(OnlineAsrProvider.VOLCENGINE_DOUBAO),
         )
         assertEquals(0, ciphers.decryptCalls)
     }
@@ -231,7 +231,7 @@ class AndroidBatchCredentialRepositoryTest {
             val repository = AndroidBatchCredentialRepository(store, FakeSlotCipherFactory())
 
             assertEquals(
-                OnlineBatchProvider.VOLCENGINE_DOUBAO,
+                OnlineAsrProvider.VOLCENGINE_DOUBAO,
                 repository.configuration.first().selectedProvider,
             )
         }
@@ -243,13 +243,13 @@ class AndroidBatchCredentialRepositoryTest {
         val store = FakeBatchStore()
         val repository = AndroidBatchCredentialRepository(store, ciphers)
 
-        repository.selectProvider(OnlineBatchProvider.GROQ_WHISPER)
-        repository.save(OnlineBatchProvider.GROQ_WHISPER, OnlineBatchCredential("groq-secret"))
+        repository.selectProvider(OnlineAsrProvider.GROQ_WHISPER)
+        repository.save(OnlineAsrProvider.GROQ_WHISPER, OnlineBatchCredential("groq-secret"))
         val loaded = repository.loadActive()
 
         assertEquals(
             ActiveBatchCredential(
-                provider = OnlineBatchProvider.GROQ_WHISPER,
+                provider = OnlineAsrProvider.GROQ_WHISPER,
                 credential = OnlineBatchCredential("groq-secret"),
             ),
             loaded,
@@ -269,13 +269,13 @@ class AndroidBatchCredentialRepositoryTest {
         val repository = AndroidBatchCredentialRepository(store, ciphers)
 
         repository.save(
-            OnlineBatchProvider.MISTRAL_VOXTRAL,
+            OnlineAsrProvider.MISTRAL_VOXTRAL,
             OnlineBatchCredential("mistral-secret"),
         )
 
         assertEquals(supportedRecord("groq-secret"), store.current.slots["groq-whisper"])
         assertTrue(store.current.slots.containsKey("mistral-voxtral"))
-        assertEquals(0, ciphers.cipherFor(OnlineBatchProvider.GROQ_WHISPER).deleteCalls)
+        assertEquals(0, ciphers.cipherFor(OnlineAsrProvider.GROQ_WHISPER).deleteCalls)
         assertFalse(operations.any { it.startsWith("store.clear.groq-whisper") })
     }
 
@@ -293,14 +293,14 @@ class AndroidBatchCredentialRepositoryTest {
         )
         val repository = AndroidBatchCredentialRepository(store, ciphers)
 
-        repository.clear(OnlineBatchProvider.GROQ_WHISPER)
+        repository.clear(OnlineAsrProvider.GROQ_WHISPER)
 
         assertNull(store.current.slots["groq-whisper"])
-        assertEquals(1, ciphers.cipherFor(OnlineBatchProvider.GROQ_WHISPER).deleteCalls)
-        assertEquals(0, ciphers.cipherFor(OnlineBatchProvider.MISTRAL_VOXTRAL).deleteCalls)
+        assertEquals(1, ciphers.cipherFor(OnlineAsrProvider.GROQ_WHISPER).deleteCalls)
+        assertEquals(0, ciphers.cipherFor(OnlineAsrProvider.MISTRAL_VOXTRAL).deleteCalls)
         assertNull(repository.loadActive())
 
-        repository.selectProvider(OnlineBatchProvider.MISTRAL_VOXTRAL)
+        repository.selectProvider(OnlineAsrProvider.MISTRAL_VOXTRAL)
         assertEquals(
             OnlineBatchCredential("mistral-secret"),
             repository.loadActive()?.credential,
@@ -314,7 +314,7 @@ class AndroidBatchCredentialRepositoryTest {
 
         listOf("", " \t\n", "a".repeat(16_385)).forEach { apiKey ->
             val error = captureError {
-                repository.save(OnlineBatchProvider.GROQ_WHISPER, OnlineBatchCredential(apiKey))
+                repository.save(OnlineAsrProvider.GROQ_WHISPER, OnlineBatchCredential(apiKey))
             }
             assertEquals(CredentialErrorCode.INVALID_CREDENTIAL, error.code)
             assertEquals("Cloud transcription credential is invalid.", error.message)
@@ -338,7 +338,7 @@ class AndroidBatchCredentialRepositoryTest {
         val repository = AndroidBatchCredentialRepository(store, ciphers)
 
         assertEquals(
-            emptySet<OnlineBatchProvider>(),
+            emptySet<OnlineAsrProvider>(),
             repository.configuration.first().configuredProviders,
         )
         assertNull(repository.loadActive())
@@ -364,14 +364,14 @@ class AndroidBatchCredentialRepositoryTest {
 
         val loadError = captureError { repository.loadActive() }
         val saveError = captureError {
-            repository.save(OnlineBatchProvider.GROQ_WHISPER, OnlineBatchCredential("replacement"))
+            repository.save(OnlineAsrProvider.GROQ_WHISPER, OnlineBatchCredential("replacement"))
         }
 
         assertEquals(CredentialErrorCode.UNSUPPORTED_FORMAT, loadError.code)
         assertEquals(CredentialErrorCode.UNSUPPORTED_FORMAT, saveError.code)
         assertEquals(unknown, store.current.slots["groq-whisper"])
-        assertEquals(0, ciphers.cipherFor(OnlineBatchProvider.GROQ_WHISPER).encryptCalls)
-        assertEquals(0, ciphers.cipherFor(OnlineBatchProvider.GROQ_WHISPER).deleteCalls)
+        assertEquals(0, ciphers.cipherFor(OnlineAsrProvider.GROQ_WHISPER).encryptCalls)
+        assertEquals(0, ciphers.cipherFor(OnlineAsrProvider.GROQ_WHISPER).deleteCalls)
     }
 
     @Test
@@ -397,7 +397,7 @@ class AndroidBatchCredentialRepositoryTest {
             supportedRecord("mistral-secret"),
             store.current.slots["mistral-voxtral"],
         )
-        assertEquals(0, ciphers.cipherFor(OnlineBatchProvider.MISTRAL_VOXTRAL).deleteCalls)
+        assertEquals(0, ciphers.cipherFor(OnlineAsrProvider.MISTRAL_VOXTRAL).deleteCalls)
     }
 
     @Test
@@ -433,7 +433,7 @@ class AndroidBatchCredentialRepositoryTest {
         assertTrue(
             captureCancellation {
                 saveRepository.save(
-                    OnlineBatchProvider.GROQ_WHISPER,
+                    OnlineAsrProvider.GROQ_WHISPER,
                     OnlineBatchCredential("replacement"),
                 )
             } === saveCancellation,
@@ -452,20 +452,20 @@ class AndroidBatchCredentialRepositoryTest {
         val clearRepository = AndroidBatchCredentialRepository(clearStore, clearCiphers)
         assertTrue(
             captureCancellation {
-                clearRepository.clear(OnlineBatchProvider.GROQ_WHISPER)
+                clearRepository.clear(OnlineAsrProvider.GROQ_WHISPER)
             } === clearCancellation,
         )
         assertEquals(initial, clearStore.current)
-        assertEquals(0, clearCiphers.cipherFor(OnlineBatchProvider.GROQ_WHISPER).deleteCalls)
+        assertEquals(0, clearCiphers.cipherFor(OnlineAsrProvider.GROQ_WHISPER).deleteCalls)
     }
 
     @Test
     fun `every provider maps to a stable storage id`() {
         assertEquals(
             listOf("volcengine-doubao", "groq-whisper", "mistral-voxtral"),
-            OnlineBatchProvider.entries.map { it.storageId },
+            OnlineAsrProvider.entries.map { it.storageId },
         )
-        OnlineBatchProvider.entries.forEach { provider ->
+        OnlineAsrProvider.entries.forEach { provider ->
             assertEquals(provider, batchProviderForStorageId(provider.storageId))
         }
         assertNull(batchProviderForStorageId("unknown"))
@@ -564,7 +564,7 @@ private class FakeBatchStore(
 private class FakeSlotCipherFactory(
     private val operations: MutableList<String>? = null,
 ) : BatchCredentialCipherFactory {
-    private val ciphers = mutableMapOf<OnlineBatchProvider, FakeSlotCipher>()
+    private val ciphers = mutableMapOf<OnlineAsrProvider, FakeSlotCipher>()
     var decryptFailure: Throwable? = null
     var lastReceivedPlaintext: ByteArray? = null
     var lastReturnedPlaintext: ByteArray? = null
@@ -572,13 +572,13 @@ private class FakeSlotCipherFactory(
     val decryptCalls: Int
         get() = ciphers.values.sumOf { it.decryptCalls }
 
-    override fun cipherFor(provider: OnlineBatchProvider): FakeSlotCipher =
+    override fun cipherFor(provider: OnlineAsrProvider): FakeSlotCipher =
         ciphers.getOrPut(provider) { FakeSlotCipher(this, provider, operations) }
 }
 
 private class FakeSlotCipher(
     private val factory: FakeSlotCipherFactory,
-    private val provider: OnlineBatchProvider,
+    private val provider: OnlineAsrProvider,
     private val operations: MutableList<String>?,
 ) : CredentialCipher {
     var encryptCalls = 0

@@ -4,7 +4,7 @@ import com.sona.android.application.recording.AudioImportEngine
 import com.sona.android.application.recording.AudioImportJob
 import com.sona.android.application.recording.AudioImportSource
 import com.sona.android.application.recording.AudioImportTarget
-import com.sona.android.application.recording.OnlineBatchProvider
+import com.sona.android.application.recording.OnlineAsrProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
@@ -15,7 +15,7 @@ class AudioImportWorkDataTest {
         val job = AudioImportJob(
             id = "job-1",
             target = AudioImportTarget.NewImport(AudioImportSource("content://audio/1")),
-            engine = AudioImportEngine.Online(OnlineBatchProvider.GROQ_WHISPER),
+            engine = AudioImportEngine.Online(OnlineAsrProvider.GROQ_WHISPER),
         )
 
         val data = job.toWorkData("Meeting.m4a")

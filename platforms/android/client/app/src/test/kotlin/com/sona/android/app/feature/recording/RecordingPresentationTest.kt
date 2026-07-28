@@ -72,6 +72,19 @@ class RecordingPresentationTest {
     }
 
     @Test
+    fun `idle status is hidden unless recognition configuration is missing`() {
+        assertEquals(null, recordingStatusForDisplay(LiveRecordingState.Idle, false))
+        assertEquals(
+            RecordingStatusCategory.NEEDS_CONFIGURATION,
+            recordingStatusForDisplay(LiveRecordingState.Idle, true),
+        )
+        assertEquals(
+            RecordingStatusCategory.NEEDS_CONFIGURATION,
+            recordingStatusForDisplay(LiveRecordingState.NeedsConfiguration, false),
+        )
+    }
+
+    @Test
     fun `failures map to localized categories without exposing domain messages`() {
         val expectedCategories = mapOf(
             RecordingFailureCategory.INVALID_CONFIGURATION to

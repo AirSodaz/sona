@@ -51,7 +51,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
-import com.sona.android.application.recording.OnlineBatchProvider
+import com.sona.android.application.recording.OnlineAsrProvider
+import com.sona.android.application.recording.AsrModelSelection
+import com.sona.android.application.recording.AsrSelectionSlot
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
@@ -67,11 +69,11 @@ internal fun SettingsScreen(
     onCloudCredentialFocusConsumed: () -> Unit,
     onAppLanguageChanged: (AppLanguage) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
-    onCloudProviderSelected: (OnlineBatchProvider) -> Unit,
+    onCloudProviderSelected: (OnlineAsrProvider) -> Unit,
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
     onClearCloudApiKey: () -> Unit,
-    onSelectLocalModel: (String) -> Unit,
+    onSelectModel: (AsrSelectionSlot, AsrModelSelection?) -> Unit,
     onDownloadLocalModel: (String) -> Unit,
     onValidateLocalModel: (String) -> Unit,
     onDeleteLocalModel: (String) -> Unit,
@@ -173,7 +175,7 @@ internal fun SettingsScreen(
                     onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                     onSaveCloudApiKey = onSaveCloudApiKey,
                     onClearCloudApiKey = onClearCloudApiKey,
-                    onSelectLocalModel = onSelectLocalModel,
+                        onSelectModel = onSelectModel,
                     onDownloadLocalModel = onDownloadLocalModel,
                     onValidateLocalModel = onValidateLocalModel,
                     onDeleteLocalModel = onDeleteLocalModel,
@@ -330,11 +332,11 @@ private fun SettingsDetailPane(
     onBack: () -> Unit,
     onAppLanguageChanged: (AppLanguage) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
-    onCloudProviderSelected: (OnlineBatchProvider) -> Unit,
+    onCloudProviderSelected: (OnlineAsrProvider) -> Unit,
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
     onClearCloudApiKey: () -> Unit,
-    onSelectLocalModel: (String) -> Unit,
+    onSelectModel: (AsrSelectionSlot, AsrModelSelection?) -> Unit,
     onDownloadLocalModel: (String) -> Unit,
     onValidateLocalModel: (String) -> Unit,
     onDeleteLocalModel: (String) -> Unit,
@@ -378,7 +380,7 @@ private fun SettingsDetailPane(
                 onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                 onSaveCloudApiKey = onSaveCloudApiKey,
                 onClearCloudApiKey = onClearCloudApiKey,
-                onSelectLocalModel = onSelectLocalModel,
+                onSelectModel = onSelectModel,
                 onDownloadLocalModel = onDownloadLocalModel,
                 onValidateLocalModel = onValidateLocalModel,
                 onDeleteLocalModel = onDeleteLocalModel,

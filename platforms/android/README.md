@@ -68,10 +68,10 @@ canonical camelCase version-1 recovery snapshot format. These operations
 perform filesystem I/O and can fail with `SonaCoreBindingException`.
 
 This AAR includes the native local Sherpa runtime. The Android client reads the
-shared preset catalog through UniFFI and downloads supported streaming models
-into app-private storage. SenseVoice and Dolphin downloads automatically include
-the required `silero_vad.onnx`; streaming Paraformer and Zipformer do not need a
-separate VAD model. The client does not expose arbitrary model-directory import.
+shared preset catalog through UniFFI and downloads supported streaming and batch
+models into app-private storage. Required VAD and punctuation companions are
+installed with the selected preset. The client does not expose arbitrary
+model-directory import.
 
 The Android build downloads the locked sherpa-onnx 1.13.4 archive into
 `target/android-sherpa`. For offline builds, set
@@ -182,21 +182,25 @@ cleared after a successful save or clear. Starting an online recording without
 credentials opens settings, selects Volcengine Doubao, and focuses that
 provider's API key field.
 
-The production online-recording path resolves the Volcengine provider manifest,
+The production online-recording path resolves the provider selected in the live
+model slot (currently Volcengine),
 opens the typed UniFFI streaming session, writes draft/checkpoint/complete history
 mutations through the shared SQLite binding, and maps remote streaming failures
 back to the application coordinator. The app requests microphone permission at
 the recording boundary and keeps the credential repository at `Application`
 scope, while each live-recording coordinator is owned by its recording
-`ViewModel`. The local engine uses the same typed UniFFI session with an active
-managed Sherpa model and bypasses cloud credential resolution.
+`ViewModel`. A local live selection uses the typed UniFFI streaming session and
+bypasses cloud credential resolution. File transcription uses a separate typed
+UniFFI batch request backed by `LocalBatchAsrAdapter`; normalized WAV files are
+not replayed through a streaming session.
 
 Local models are installed under the app-private `files/models` directory using
 versioned install folders. Downloads require HTTPS, resume partial files, verify
 SHA-256 when the shared preset supplies one, reject unsafe archive entries, and
 perform a Sherpa file-layout check before publishing the install. Settings list
-all managed installs and support selection, re-validation, and confirmed deletion.
-Deleting the active model returns recognition to the online engine. Device ABI,
+all managed installs and support re-validation and confirmed deletion. Downloads
+do not change either model slot. Deleting a model clears only the live or batch
+slots that reference it. Device ABI,
 CPU count, total memory, and free app storage determine local-runtime support and
 the recommended inference thread count; downloads are disabled below the minimum
 capability threshold.
@@ -210,17 +214,25 @@ rotation does not stop it. After a successful stop, the recording screen keeps
 the saved result (including any audio-only warning) visible and allows another
 recording.
 
+The Home screen is the task center for live recording and single-file
+transcription. Both task cards show their current model and running state, and
+the screen previews the three most recent records. Each task opens its own
+workspace; active work is resumed there rather than stopped from Home.
+
 The Library screen reads recording history through a platform-neutral
 application port backed by the existing UniFFI history query functions. It
 shows draft and completed recordings newest-first, refreshes when the screen is
 opened or a recording completes, and loads additional pages as the user
-scrolls. Drafts remain visible instead of being silently removed. Selecting a
+scrolls. File selection and import status live only in the file transcription
+workspace, so Library remains a results browser. Drafts remain visible instead
+of being silently removed. Selecting a
 row opens a transcript detail destination that loads the canonical persisted
 segments and presents a localized loading, empty, or retry state without
 exposing binding or database error text.
 
-A recording detail can be re-transcribed through a cloud batch provider. The
-recording's persisted audio file is sent to the provider selected in settings,
+A recording detail can be re-transcribed through the current batch model slot.
+The recording's persisted audio file is sent to the selected online provider or
+the selected installed local batch model,
 and the returned transcript replaces the stored one: a draft is completed with
 the provider-reported audio duration, while an already saved recording keeps its
 duration and only exchanges its transcript. The action is offered only when the
@@ -234,8 +246,9 @@ Whisper, and Mistral Voxtral each own an Android Keystore AES-256-GCM key alias
 and an AAD binding of their own, so saving or clearing one provider can neither
 read nor rotate another. DataStore persists only the versioned encrypted
 envelopes under `noBackupFilesDir`, next to the non-secret active-provider
-marker. The settings surface receives configured status per provider and the
-active selection, never a stored key; plaintext leaves storage only when a
+marker. That marker only controls which credential is being edited; it does not
+select the file transcription provider. The settings surface receives configured
+status per provider, never a stored key; plaintext leaves storage only when a
 transcription starts. Typed keys stay inside the settings `ViewModel`, are
 cleared after a save, a clear, or a provider switch, and are never written to
 saved instance state, Compose saveable state, logs, or user-visible errors.
@@ -245,6 +258,15 @@ transcription. Upgrades migrate the former standalone streaming key into the
 Volcengine provider slot only when that slot is empty. An existing provider key
 wins, and the legacy encrypted record and Keystore key are removed only after a
 successful migration or after the provider slot is confirmed configured.
+
+Recognition settings persist independent live and batch model slots. Each slot
+may select a compatible installed local model or an online provider. New installs
+default both slots to Volcengine and report them unavailable until its credential
+is configured. Schema migration preserves installed models, credentials, and
+history: the old online mode maps live to Volcengine and batch to the former
+credential editor provider, while a legacy local model populates only the modes
+it supports. Existing new-slot values are never overwritten, and legacy selection
+keys are removed only by the successful atomic migration.
 
 The client compiles and targets Android API 37 with min SDK 23. Install
 `platforms;android-37.0` through `sdkmanager`, then run the complete client

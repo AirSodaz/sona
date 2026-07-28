@@ -21,13 +21,13 @@ class RecordingFakes {
         private val calls: MutableList<String>,
     ) : BatchCredentialResolverPort {
         var credential: OnlineBatchCredential? = OnlineBatchCredential("secret")
-        var requestedProviders = mutableListOf<OnlineBatchProvider>()
+        var requestedProviders = mutableListOf<OnlineAsrProvider>()
         var loadFailure: Throwable? = null
         var loadBarrier: Pair<CompletableDeferred<Unit>, CompletableDeferred<Unit>>? = null
 
         override suspend fun loadActive(): ActiveBatchCredential? = null
 
-        override suspend fun load(provider: OnlineBatchProvider): OnlineBatchCredential? {
+        override suspend fun load(provider: OnlineAsrProvider): OnlineBatchCredential? {
             calls += "credential.load.${provider.name}"
             requestedProviders += provider
             loadBarrier?.let { (started, release) ->

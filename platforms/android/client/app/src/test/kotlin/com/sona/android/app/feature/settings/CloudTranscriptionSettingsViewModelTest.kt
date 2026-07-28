@@ -5,7 +5,7 @@ import com.sona.android.application.recording.BatchCredentialConfiguration
 import com.sona.android.application.recording.BatchCredentialSettingsPort
 import com.sona.android.application.recording.CredentialStatus
 import com.sona.android.application.recording.OnlineBatchCredential
-import com.sona.android.application.recording.OnlineBatchProvider
+import com.sona.android.application.recording.OnlineAsrProvider
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,15 +27,15 @@ class CloudTranscriptionSettingsViewModelTest {
         runTest(mainDispatcherRule.dispatcher) {
             val settings = FakeBatchCredentialSettingsPort(
                 BatchCredentialConfiguration(
-                    selectedProvider = OnlineBatchProvider.GROQ_WHISPER,
-                    configuredProviders = setOf(OnlineBatchProvider.GROQ_WHISPER),
+                    selectedProvider = OnlineAsrProvider.GROQ_WHISPER,
+                    configuredProviders = setOf(OnlineAsrProvider.GROQ_WHISPER),
                 ),
             )
 
             val viewModel = CloudTranscriptionSettingsViewModel(settings)
             advanceUntilIdle()
 
-            assertEquals(OnlineBatchProvider.GROQ_WHISPER, viewModel.uiState.value.selectedProvider)
+            assertEquals(OnlineAsrProvider.GROQ_WHISPER, viewModel.uiState.value.selectedProvider)
             assertEquals(CredentialStatus.CONFIGURED, viewModel.uiState.value.selectedStatus)
         }
 
@@ -44,7 +44,7 @@ class CloudTranscriptionSettingsViewModelTest {
         runTest(mainDispatcherRule.dispatcher) {
             val settings = FakeBatchCredentialSettingsPort(
                 BatchCredentialConfiguration(
-                    selectedProvider = OnlineBatchProvider.MISTRAL_VOXTRAL,
+                    selectedProvider = OnlineAsrProvider.MISTRAL_VOXTRAL,
                 ),
             )
             val viewModel = CloudTranscriptionSettingsViewModel(settings)
@@ -56,7 +56,7 @@ class CloudTranscriptionSettingsViewModelTest {
 
             assertEquals(
                 listOf(
-                    OnlineBatchProvider.MISTRAL_VOXTRAL to OnlineBatchCredential("cloud-api-key"),
+                    OnlineAsrProvider.MISTRAL_VOXTRAL to OnlineBatchCredential("cloud-api-key"),
                 ),
                 settings.savedCredentials,
             )
@@ -84,20 +84,20 @@ class CloudTranscriptionSettingsViewModelTest {
             advanceUntilIdle()
             viewModel.onApiKeyInputChanged("volcengine-key")
 
-            viewModel.selectProvider(OnlineBatchProvider.GROQ_WHISPER)
+            viewModel.selectProvider(OnlineAsrProvider.GROQ_WHISPER)
             advanceUntilIdle()
 
             assertEquals("", viewModel.uiState.value.apiKeyInput)
-            assertEquals(listOf(OnlineBatchProvider.GROQ_WHISPER), settings.selectedProviders)
-            assertEquals(OnlineBatchProvider.GROQ_WHISPER, viewModel.uiState.value.selectedProvider)
+            assertEquals(listOf(OnlineAsrProvider.GROQ_WHISPER), settings.selectedProviders)
+            assertEquals(OnlineAsrProvider.GROQ_WHISPER, viewModel.uiState.value.selectedProvider)
         }
 
     @Test
     fun `clear targets the selected provider only`() = runTest(mainDispatcherRule.dispatcher) {
         val settings = FakeBatchCredentialSettingsPort(
             BatchCredentialConfiguration(
-                selectedProvider = OnlineBatchProvider.GROQ_WHISPER,
-                configuredProviders = OnlineBatchProvider.entries.toSet(),
+                selectedProvider = OnlineAsrProvider.GROQ_WHISPER,
+                configuredProviders = OnlineAsrProvider.entries.toSet(),
             ),
         )
         val viewModel = CloudTranscriptionSettingsViewModel(settings)
@@ -106,7 +106,7 @@ class CloudTranscriptionSettingsViewModelTest {
         viewModel.clearApiKey()
         advanceUntilIdle()
 
-        assertEquals(listOf(OnlineBatchProvider.GROQ_WHISPER), settings.clearedProviders)
+        assertEquals(listOf(OnlineAsrProvider.GROQ_WHISPER), settings.clearedProviders)
     }
 
     @Test
@@ -147,18 +147,18 @@ private class FakeBatchCredentialSettingsPort(
 
     override val configuration: Flow<BatchCredentialConfiguration> = mutableConfiguration
 
-    val savedCredentials = mutableListOf<Pair<OnlineBatchProvider, OnlineBatchCredential>>()
-    val clearedProviders = mutableListOf<OnlineBatchProvider>()
-    val selectedProviders = mutableListOf<OnlineBatchProvider>()
+    val savedCredentials = mutableListOf<Pair<OnlineAsrProvider, OnlineBatchCredential>>()
+    val clearedProviders = mutableListOf<OnlineAsrProvider>()
+    val selectedProviders = mutableListOf<OnlineAsrProvider>()
     var saveFailure: RuntimeException? = null
 
-    override suspend fun selectProvider(provider: OnlineBatchProvider) {
+    override suspend fun selectProvider(provider: OnlineAsrProvider) {
         selectedProviders += provider
         mutableConfiguration.value = mutableConfiguration.value.copy(selectedProvider = provider)
     }
 
     override suspend fun save(
-        provider: OnlineBatchProvider,
+        provider: OnlineAsrProvider,
         credential: OnlineBatchCredential,
     ) {
         saveFailure?.let { throw it }
@@ -168,7 +168,7 @@ private class FakeBatchCredentialSettingsPort(
         )
     }
 
-    override suspend fun clear(provider: OnlineBatchProvider) {
+    override suspend fun clear(provider: OnlineAsrProvider) {
         clearedProviders += provider
         mutableConfiguration.value = mutableConfiguration.value.copy(
             configuredProviders = mutableConfiguration.value.configuredProviders - provider,

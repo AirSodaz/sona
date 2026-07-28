@@ -1,8 +1,5 @@
 package com.sona.android.app.feature.library
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -24,8 +21,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
@@ -36,10 +31,8 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
@@ -55,9 +48,6 @@ import com.sona.android.app.R
 import com.sona.android.app.feature.recording.formatRecordingTimer
 import com.sona.android.application.library.RecordingLibraryItem
 import com.sona.android.application.library.RecordingLibraryItemStatus
-import com.sona.android.application.recording.AudioImportFailure
-import com.sona.android.application.recording.AudioImportJobState
-import com.sona.android.application.recording.AudioImportStage
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
@@ -71,14 +61,8 @@ internal fun LibraryScreen(
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     onOpenItem: (String) -> Unit,
-    onImportAudio: (String) -> Unit,
-    onCancelAudioImport: () -> Unit,
 ) {
     val listState = rememberLazyListState()
-    val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
-        uri -> uri?.let { onImportAudio(it.toString()) }
-    }
-    val importRunning = state.audioImport is AudioImportJobState.Running
 
     LaunchedEffect(listState, state.items.size, state.hasMore) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
@@ -120,15 +104,6 @@ internal fun LibraryScreen(
                     Spacer(Modifier.width(12.dp))
                 }
                 IconButton(
-                    onClick = { audioPicker.launch(arrayOf("audio/*")) },
-                    enabled = !importRunning,
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.AudioFile,
-                        contentDescription = stringResource(R.string.library_import_audio),
-                    )
-                }
-                IconButton(
                     onClick = onRefresh,
                     enabled = !state.isInitialLoading && !state.isRefreshing,
                 ) {
@@ -138,10 +113,6 @@ internal fun LibraryScreen(
                     )
                 }
             }
-            AudioImportStatus(
-                state = state.audioImport,
-                onCancel = onCancelAudioImport,
-            )
             Spacer(Modifier.height(16.dp))
 
             when {
@@ -186,88 +157,7 @@ internal fun LibraryScreen(
 }
 
 @Composable
-private fun AudioImportStatus(
-    state: AudioImportJobState,
-    onCancel: () -> Unit,
-) {
-    when (state) {
-        AudioImportJobState.Idle -> Unit
-        is AudioImportJobState.Running -> Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 12.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(state.stage.labelRes()),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = onCancel) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.library_import_cancel),
-                    )
-                }
-            }
-            val progress = state.progressPercent
-            if (progress == null) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            } else {
-                LinearProgressIndicator(
-                    progress = { progress / 100f },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-        is AudioImportJobState.Completed -> Text(
-            text = stringResource(
-                if (state.transcriptionWarning) {
-                    R.string.library_import_saved_warning
-                } else {
-                    R.string.library_import_completed
-                },
-            ),
-            color = if (state.transcriptionWarning) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.primary
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(top = 12.dp),
-        )
-        is AudioImportJobState.Failed -> Text(
-            text = stringResource(state.reason.messageRes()),
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(top = 12.dp),
-        )
-    }
-}
-
-@StringRes
-private fun AudioImportStage.labelRes(): Int = when (this) {
-    AudioImportStage.QUEUED -> R.string.library_import_queued
-    AudioImportStage.STAGING -> R.string.library_import_staging
-    AudioImportStage.TRANSCODING -> R.string.library_import_transcoding
-    AudioImportStage.TRANSCRIBING -> R.string.library_import_transcribing
-    AudioImportStage.SAVING -> R.string.library_import_saving
-}
-
-@StringRes
-private fun AudioImportFailure.messageRes(): Int = when (this) {
-    AudioImportFailure.INVALID_SOURCE -> R.string.library_import_invalid_source
-    AudioImportFailure.UNSUPPORTED_AUDIO -> R.string.library_import_unsupported
-    AudioImportFailure.DURATION_LIMIT -> R.string.library_import_too_long
-    AudioImportFailure.STORAGE -> R.string.library_import_storage
-    AudioImportFailure.CONFIGURATION -> R.string.library_import_configuration
-    AudioImportFailure.TRANSCODING -> R.string.library_import_transcode_failed
-    AudioImportFailure.TRANSCRIPTION -> R.string.library_import_saved_warning
-    AudioImportFailure.PERSISTENCE -> R.string.library_import_save_failed
-}
-
-@Composable
-private fun LibraryItemRow(
+internal fun LibraryItemRow(
     item: RecordingLibraryItem,
     onClick: () -> Unit,
 ) {

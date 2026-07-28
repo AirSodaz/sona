@@ -86,3 +86,14 @@ fun LiveRecordingState.toRecordingPresentation(): RecordingPresentation = when (
         },
     )
 }
+
+fun recordingStatusForDisplay(
+    state: LiveRecordingState,
+    configurationMissing: Boolean,
+): RecordingStatusCategory? = when {
+    state is LiveRecordingState.NeedsConfiguration -> RecordingStatusCategory.NEEDS_CONFIGURATION
+    state is LiveRecordingState.Idle && configurationMissing ->
+        RecordingStatusCategory.NEEDS_CONFIGURATION
+    state is LiveRecordingState.Idle -> null
+    else -> state.toRecordingPresentation().statusCategory
+}

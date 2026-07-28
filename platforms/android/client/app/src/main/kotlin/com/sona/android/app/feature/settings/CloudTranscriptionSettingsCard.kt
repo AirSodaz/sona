@@ -50,21 +50,21 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 import com.sona.android.application.recording.CredentialStatus
-import com.sona.android.application.recording.OnlineBatchProvider
+import com.sona.android.application.recording.OnlineAsrProvider
 
 @get:StringRes
-internal val OnlineBatchProvider.labelRes: Int
+internal val OnlineAsrProvider.labelRes: Int
     get() = when (this) {
-        OnlineBatchProvider.VOLCENGINE_DOUBAO -> R.string.batch_provider_volcengine_doubao
-        OnlineBatchProvider.GROQ_WHISPER -> R.string.batch_provider_groq_whisper
-        OnlineBatchProvider.MISTRAL_VOXTRAL -> R.string.batch_provider_mistral_voxtral
+        OnlineAsrProvider.VOLCENGINE_DOUBAO -> R.string.batch_provider_volcengine_doubao
+        OnlineAsrProvider.GROQ_WHISPER -> R.string.batch_provider_groq_whisper
+        OnlineAsrProvider.MISTRAL_VOXTRAL -> R.string.batch_provider_mistral_voxtral
     }
 
 @Composable
 internal fun CloudTranscriptionSettings(
     state: CloudTranscriptionSettingsUiState,
     requestApiKeyFocus: Boolean,
-    onProviderSelected: (OnlineBatchProvider) -> Unit,
+    onProviderSelected: (OnlineAsrProvider) -> Unit,
     onApiKeyInputChanged: (String) -> Unit,
     onSave: () -> Unit,
     onClear: () -> Unit,
@@ -83,7 +83,7 @@ internal fun CloudTranscriptionSettings(
         if (
             requestApiKeyFocus &&
             apiKeyFieldPlaced &&
-            state.selectedProvider == OnlineBatchProvider.VOLCENGINE_DOUBAO &&
+            state.selectedProvider == OnlineAsrProvider.VOLCENGINE_DOUBAO &&
             !state.operationInProgress
         ) {
             apiKeyFocusRequester.requestFocus()
@@ -109,7 +109,7 @@ internal fun CloudTranscriptionSettings(
             .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        OnlineBatchProvider.entries.forEach { provider ->
+        OnlineAsrProvider.entries.forEach { provider ->
             FilterChip(
                 selected = provider == state.selectedProvider,
                 enabled = !state.operationInProgress,

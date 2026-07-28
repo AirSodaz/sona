@@ -1,6 +1,6 @@
 package com.sona.android.adapters.uniffi.recording
 
-import com.sona.android.application.recording.OnlineBatchProvider
+import com.sona.android.application.recording.OnlineAsrProvider
 import com.sona.android.application.recording.OnlineBatchTranscriptionPort
 import com.sona.android.application.recording.OnlineBatchTranscriptionRequest
 import com.sona.android.application.recording.OnlineBatchTranscriptionResult
@@ -31,8 +31,8 @@ class UniffiOnlineBatchTranscriptionAdapter internal constructor(
     }
 }
 
-private fun OnlineBatchProvider.toUniffi(): UniffiOnlineBatchProvider = when (this) {
-    OnlineBatchProvider.VOLCENGINE_DOUBAO -> UniffiOnlineBatchProvider.VOLCENGINE_DOUBAO
-    OnlineBatchProvider.GROQ_WHISPER -> UniffiOnlineBatchProvider.GROQ_WHISPER
-    OnlineBatchProvider.MISTRAL_VOXTRAL -> UniffiOnlineBatchProvider.MISTRAL_VOXTRAL
+private fun OnlineAsrProvider.toUniffi(): UniffiOnlineAsrProvider = when (this) {
+    OnlineAsrProvider.VOLCENGINE_DOUBAO -> UniffiOnlineAsrProvider.VOLCENGINE_DOUBAO
+    OnlineAsrProvider.GROQ_WHISPER -> UniffiOnlineAsrProvider.GROQ_WHISPER
+    OnlineAsrProvider.MISTRAL_VOXTRAL -> UniffiOnlineAsrProvider.MISTRAL_VOXTRAL
 }

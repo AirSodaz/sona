@@ -12,7 +12,7 @@ enum class CredentialStatus {
  * secret it needs. Resolved only when a transcription actually starts.
  */
 data class ActiveBatchCredential(
-    val provider: OnlineBatchProvider,
+    val provider: OnlineAsrProvider,
     val credential: OnlineBatchCredential,
 )
 
@@ -21,13 +21,13 @@ data class ActiveBatchCredential(
  * which provider is active and which providers hold a key. Never the keys.
  */
 data class BatchCredentialConfiguration(
-    val selectedProvider: OnlineBatchProvider = OnlineBatchProvider.VOLCENGINE_DOUBAO,
-    val configuredProviders: Set<OnlineBatchProvider> = emptySet(),
+    val selectedProvider: OnlineAsrProvider = OnlineAsrProvider.VOLCENGINE_DOUBAO,
+    val configuredProviders: Set<OnlineAsrProvider> = emptySet(),
 ) {
     val selectedStatus: CredentialStatus
         get() = statusFor(selectedProvider)
 
-    fun statusFor(provider: OnlineBatchProvider): CredentialStatus =
+    fun statusFor(provider: OnlineAsrProvider): CredentialStatus =
         if (provider in configuredProviders) {
             CredentialStatus.CONFIGURED
         } else {
@@ -38,16 +38,16 @@ data class BatchCredentialConfiguration(
 interface BatchCredentialSettingsPort {
     val configuration: Flow<BatchCredentialConfiguration>
 
-    suspend fun selectProvider(provider: OnlineBatchProvider)
+    suspend fun selectProvider(provider: OnlineAsrProvider)
 
-    suspend fun save(provider: OnlineBatchProvider, credential: OnlineBatchCredential)
+    suspend fun save(provider: OnlineAsrProvider, credential: OnlineBatchCredential)
 
-    suspend fun clear(provider: OnlineBatchProvider)
+    suspend fun clear(provider: OnlineAsrProvider)
 }
 
 fun interface BatchCredentialResolverPort {
     suspend fun loadActive(): ActiveBatchCredential?
 
-    suspend fun load(provider: OnlineBatchProvider): OnlineBatchCredential? =
+    suspend fun load(provider: OnlineAsrProvider): OnlineBatchCredential? =
         loadActive()?.takeIf { it.provider == provider }?.credential
 }

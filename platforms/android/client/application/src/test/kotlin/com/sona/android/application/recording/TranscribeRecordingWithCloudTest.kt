@@ -26,7 +26,7 @@ class TranscribeRecordingWithCloudTest {
         assertEquals(
             CloudTranscriptionOutcome.Completed(
                 historyId = "history-1",
-                provider = OnlineBatchProvider.GROQ_WHISPER,
+                provider = OnlineAsrProvider.GROQ_WHISPER,
                 segments = segments,
             ),
             outcome,
@@ -79,7 +79,7 @@ class TranscribeRecordingWithCloudTest {
         val transcribe = TranscribeRecordingWithCloud(
             credentials = {
                 ActiveBatchCredential(
-                    provider = OnlineBatchProvider.MISTRAL_VOXTRAL,
+                    provider = OnlineAsrProvider.MISTRAL_VOXTRAL,
                     credential = OnlineBatchCredential("temporary-secret"),
                 )
             },
@@ -95,7 +95,7 @@ class TranscribeRecordingWithCloudTest {
         assertEquals(
             OnlineBatchTranscriptionRequest(
                 audioPath = "/recordings/history-1.wav",
-                provider = OnlineBatchProvider.MISTRAL_VOXTRAL,
+                provider = OnlineAsrProvider.MISTRAL_VOXTRAL,
                 credential = OnlineBatchCredential("temporary-secret"),
                 language = "auto",
             ),
@@ -127,7 +127,7 @@ class TranscribeRecordingWithCloudTest {
             BatchCredentialResolverPort { null },
             BatchCredentialResolverPort {
                 ActiveBatchCredential(
-                    provider = OnlineBatchProvider.GROQ_WHISPER,
+                    provider = OnlineAsrProvider.GROQ_WHISPER,
                     credential = OnlineBatchCredential("   "),
                 )
             },
@@ -239,7 +239,7 @@ class TranscribeRecordingWithCloudTest {
         CloudTranscriptionOutcome.Failed(historyId = "history-1", reason = reason)
 
     private fun activeCredential() = ActiveBatchCredential(
-        provider = OnlineBatchProvider.GROQ_WHISPER,
+        provider = OnlineAsrProvider.GROQ_WHISPER,
         credential = OnlineBatchCredential("temporary-secret"),
     )
 

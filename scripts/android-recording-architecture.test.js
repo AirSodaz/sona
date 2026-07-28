@@ -111,12 +111,15 @@ test('Android local ASR catalog, managed downloads, and recording startup are wi
   );
 
   assert.doesNotMatch(settingsPort, /^import (?:android|androidx|uniffi)\./mu);
-  assert.match(settingsPort, /enum class RecognitionEngine/u);
+  assert.match(settingsPort, /enum class AsrSelectionSlot/u);
+  assert.match(settingsPort, /sealed interface AsrModelSelection/u);
+  assert.match(settingsPort, /val liveSelection: AsrModelSelection\?/u);
+  assert.match(settingsPort, /val batchSelection: AsrModelSelection\?/u);
   assert.match(settingsPort, /interface RecognitionSettingsPort/u);
   assert.match(settingsPort, /downloadLocalModel/u);
   assert.match(settingsPort, /validateLocalModel/u);
   assert.match(settingsPort, /deleteLocalModel/u);
-  assert.match(coordinator, /RecognitionEngine\.LOCAL[\s\S]*StreamingEngineConfig\.LocalSherpa/u);
+  assert.match(coordinator, /is AsrModelSelection\.Local[\s\S]*StreamingEngineConfig\.LocalSherpa/u);
   assert.match(repository, /AndroidLocalAsrModelStorage/u);
   assert.match(storage, /filesDir, "models"/u);
   assert.match(storage, /verifySha256/u);
@@ -126,9 +129,12 @@ test('Android local ASR catalog, managed downloads, and recording startup are wi
   assert.match(capabilities, /ActivityManager\.MemoryInfo/u);
   assert.match(capabilities, /StatFs/u);
   assert.match(catalog, /presetModels/u);
-  assert.match(catalog, /"streaming" in it\.modes/u);
+  assert.match(catalog, /override suspend fun loadModels/u);
+  assert.match(catalog, /"streaming" -> AsrMode\.STREAMING/u);
+  assert.match(catalog, /"batch" -> AsrMode\.BATCH/u);
   assert.doesNotMatch(settingsPane, /OpenDocumentTree|DocumentFile|FolderOpen/u);
-  assert.match(recordScreen, /onEngineSelected\(RecognitionEngine\.LOCAL\)/u);
+  assert.doesNotMatch(recordScreen, /SegmentedButton|RecognitionEngine/u);
+  assert.match(settingsPane, /ModelSelectionDropdown/u);
   assert.match(container, /AndroidRecognitionSettingsRepository/u);
 });
 
@@ -155,7 +161,7 @@ test('Android online batch ASR stays behind an application port and Tokio UniFFI
   const rustBindings = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
   const rustBatchBridge = read('adapters', 'uniffi_bind', 'src', 'asr_batch_bridge.rs');
 
-  assert.match(port, /enum class OnlineBatchProvider/u);
+  assert.match(port, /enum class OnlineAsrProvider/u);
   assert.match(port, /interface OnlineBatchTranscriptionPort/u);
   assert.match(port, /OnlineBatchCredential\(apiKey=<redacted>\)/u);
   assert.doesNotMatch(port, /^import (?:android|androidx|uniffi)\./mu);
@@ -169,6 +175,30 @@ test('Android online batch ASR stays behind an application port and Tokio UniFFI
   assert.match(
     rustBindings,
     /#\[uniffi::export\(async_runtime = "tokio"\)\]\s+pub async fn transcribe_online_asr_batch/u,
+  );
+});
+
+test('Android local batch ASR uses its own application port and UniFFI bridge', () => {
+  const useCase = clientSource(
+    'application', 'kotlin', 'com', 'sona', 'android', 'application', 'recording',
+    'AudioImport.kt',
+  );
+  const adapter = clientSource(
+    path.join('adapters', 'uniffi'),
+    'kotlin', 'com', 'sona', 'android', 'adapters', 'uniffi', 'recording',
+    'UniffiLocalBatchTranscriptionAdapter.kt',
+  );
+  const rustBridge = read('adapters', 'uniffi_bind', 'src', 'asr_batch_bridge.rs');
+  const rustBindings = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
+
+  assert.match(useCase, /fun interface LocalBatchTranscriptionPort/u);
+  assert.match(useCase, /LocalBatchTranscriptionRequest/u);
+  assert.doesNotMatch(useCase, /pcmReader\.readFrames/u);
+  assert.match(adapter, /FfiLocalAsrBatchRequest/u);
+  assert.match(rustBridge, /LocalBatchAsrAdapter/u);
+  assert.match(
+    rustBindings,
+    /pub async fn transcribe_local_asr_batch/u,
   );
 });
 
@@ -327,7 +357,7 @@ test('Android recording composition preserves lifecycle, permission, and credent
   assert.match(coordinator, /credentialResolver:\s*BatchCredentialResolverPort/u);
   assert.match(
     coordinator,
-    /credentialResolver\.load\(OnlineBatchProvider\.VOLCENGINE_DOUBAO\)/u,
+    /credentialResolver\.load\(selection\.provider\)/u,
   );
   assert.match(recordingViewModel, /controllerFactory\.create\(viewModelScope\)/u);
   assert.match(activity, /\(application as SonaApplication\)\.container/u);
@@ -362,7 +392,7 @@ test('Android recording composition preserves lifecycle, permission, and credent
   assert.match(navigation, /cloudCredentialFocusRequested/u);
   assert.match(
     navigation,
-    /onCloudProviderSelected\(OnlineBatchProvider\.VOLCENGINE_DOUBAO\)/u,
+    /onCloudProviderSelected\(OnlineAsrProvider\.VOLCENGINE_DOUBAO\)/u,
   );
   assert.doesNotMatch(navigation, /cloudCredentialFocusRequested by rememberSaveable/u);
   assert.equal(

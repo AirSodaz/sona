@@ -2,18 +2,31 @@ package com.sona.android.application.recording
 
 import kotlinx.coroutines.flow.Flow
 
-enum class RecognitionEngine {
-    ONLINE,
-    LOCAL,
+enum class AsrSelectionSlot {
+    LIVE,
+    BATCH,
+}
+
+enum class AsrMode {
+    STREAMING,
+    BATCH,
+}
+
+sealed interface AsrModelSelection {
+    data class Local(val modelId: String) : AsrModelSelection
+    data class Online(val provider: OnlineAsrProvider) : AsrModelSelection
 }
 
 data class LocalAsrModel(
     val id: String,
     val displayName: String,
-    val config: LocalSherpaStreamingConfig,
+    val config: LocalSherpaConfig,
+    val supportedModes: Set<AsrMode> = setOf(AsrMode.STREAMING, AsrMode.BATCH),
     val sizeBytes: Long = 0,
     val source: LocalAsrModelSource = LocalAsrModelSource.IMPORTED,
-)
+) {
+    fun supports(mode: AsrMode): Boolean = mode in supportedModes
+}
 
 enum class LocalAsrModelSource {
     CATALOG,
@@ -28,8 +41,15 @@ data class LocalAsrCatalogModel(
     val sizeLabel: String,
     val estimatedSizeBytes: Long,
     val isRecommended: Boolean,
+    val supportedModes: Set<AsrMode> = setOf(AsrMode.STREAMING, AsrMode.BATCH),
+    val config: LocalSherpaConfig = LocalSherpaConfig(
+        modelPath = "",
+        numThreads = 2,
+        modelType = modelType,
+    ),
     val download: LocalAsrDownloadFile,
     val vadDownload: LocalAsrDownloadFile? = null,
+    val punctuationDownload: LocalAsrDownloadFile? = null,
 )
 
 data class LocalAsrDownloadFile(
@@ -78,17 +98,25 @@ data class LocalAsrDeviceCapabilities(
 )
 
 data class RecognitionSettings(
-    val engine: RecognitionEngine = RecognitionEngine.ONLINE,
-    val localModel: LocalAsrModel? = null,
-    val installedModels: List<LocalAsrModel> = listOfNotNull(localModel),
-)
+    val liveSelection: AsrModelSelection? = AsrModelSelection.Online(
+        OnlineAsrProvider.VOLCENGINE_DOUBAO,
+    ),
+    val batchSelection: AsrModelSelection? = AsrModelSelection.Online(
+        OnlineAsrProvider.VOLCENGINE_DOUBAO,
+    ),
+    val installedModels: List<LocalAsrModel> = emptyList(),
+) {
+    fun selectionFor(slot: AsrSelectionSlot): AsrModelSelection? = when (slot) {
+        AsrSelectionSlot.LIVE -> liveSelection
+        AsrSelectionSlot.BATCH -> batchSelection
+    }
+}
 
 interface RecognitionSettingsPort {
     val settings: Flow<RecognitionSettings>
 
     suspend fun load(): RecognitionSettings
-    suspend fun selectEngine(engine: RecognitionEngine)
-    suspend fun selectLocalModel(modelId: String)
+    suspend fun selectModel(slot: AsrSelectionSlot, selection: AsrModelSelection?)
     suspend fun downloadLocalModel(
         model: LocalAsrCatalogModel,
         progress: LocalAsrDownloadProgressListener,
@@ -98,7 +126,7 @@ interface RecognitionSettingsPort {
 }
 
 fun interface LocalAsrModelCatalogPort {
-    suspend fun loadStreamingModels(): List<LocalAsrCatalogModel>
+    suspend fun loadModels(): List<LocalAsrCatalogModel>
 }
 
 fun interface LocalAsrDeviceCapabilitiesPort {

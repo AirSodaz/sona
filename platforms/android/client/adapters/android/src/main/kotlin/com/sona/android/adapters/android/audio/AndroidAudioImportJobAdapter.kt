@@ -33,7 +33,7 @@ import com.sona.android.application.recording.AudioImportProgressListener
 import com.sona.android.application.recording.AudioImportSource
 import com.sona.android.application.recording.AudioImportStage
 import com.sona.android.application.recording.AudioImportTarget
-import com.sona.android.application.recording.OnlineBatchProvider
+import com.sona.android.application.recording.OnlineAsrProvider
 import com.sona.android.application.recording.RunAudioImport
 import com.sona.android.application.recording.RunAudioImportOutcome
 import java.util.concurrent.TimeUnit
@@ -262,7 +262,7 @@ internal fun Data.toAudioImportJob(): AudioImportJob? {
             getString(KEY_MODEL_ID)?.takeIf { it.isNotBlank() } ?: return null,
         )
         ENGINE_ONLINE -> AudioImportEngine.Online(
-            runCatching { OnlineBatchProvider.valueOf(getString(KEY_PROVIDER).orEmpty()) }
+            runCatching { OnlineAsrProvider.valueOf(getString(KEY_PROVIDER).orEmpty()) }
                 .getOrNull() ?: return null,
         )
         else -> return null

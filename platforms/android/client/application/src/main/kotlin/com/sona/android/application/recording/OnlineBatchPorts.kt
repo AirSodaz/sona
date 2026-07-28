@@ -1,9 +1,18 @@
 package com.sona.android.application.recording
 
-enum class OnlineBatchProvider {
-    VOLCENGINE_DOUBAO,
-    GROQ_WHISPER,
-    MISTRAL_VOXTRAL,
+enum class OnlineAsrProvider(
+    val supportsStreaming: Boolean,
+    val supportsBatch: Boolean,
+) {
+    VOLCENGINE_DOUBAO(supportsStreaming = true, supportsBatch = true),
+    GROQ_WHISPER(supportsStreaming = false, supportsBatch = true),
+    MISTRAL_VOXTRAL(supportsStreaming = false, supportsBatch = true),
+    ;
+
+    fun supports(mode: AsrMode): Boolean = when (mode) {
+        AsrMode.STREAMING -> supportsStreaming
+        AsrMode.BATCH -> supportsBatch
+    }
 }
 
 class OnlineBatchCredential(
@@ -19,7 +28,7 @@ class OnlineBatchCredential(
 
 data class OnlineBatchTranscriptionRequest(
     val audioPath: String,
-    val provider: OnlineBatchProvider,
+    val provider: OnlineAsrProvider,
     val credential: OnlineBatchCredential,
     val language: String,
 )

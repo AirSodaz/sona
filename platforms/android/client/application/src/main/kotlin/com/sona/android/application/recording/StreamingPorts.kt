@@ -20,7 +20,7 @@ class StreamingCredential(
     override fun toString(): String = "StreamingCredential(apiKey=<redacted>)"
 }
 
-data class LocalSherpaStreamingConfig(
+data class LocalSherpaConfig(
     val modelPath: String,
     val numThreads: Int,
     val modelType: String,
@@ -52,7 +52,7 @@ sealed interface StreamingEngineConfig {
     ) : StreamingEngineConfig
 
     data class LocalSherpa(
-        val config: LocalSherpaStreamingConfig,
+        val config: LocalSherpaConfig,
     ) : StreamingEngineConfig
 }
 

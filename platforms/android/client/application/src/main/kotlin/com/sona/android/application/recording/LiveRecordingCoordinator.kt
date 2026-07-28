@@ -356,11 +356,12 @@ class LiveRecordingCoordinator(
     }
 
     private suspend fun resolveEngine(settings: RecognitionSettings): StreamingEngineConfig? {
-        return when (settings.engine) {
-            RecognitionEngine.LOCAL -> {
-                val model = settings.localModel
+        return when (val selection = settings.liveSelection) {
+            is AsrModelSelection.Local -> {
+                val model = settings.installedModels.firstOrNull { it.id == selection.modelId }
                 if (
                     model == null ||
+                    !model.supports(AsrMode.STREAMING) ||
                     model.config.modelPath.isBlank() ||
                     model.config.modelType.isBlank()
                 ) {
@@ -371,9 +372,13 @@ class LiveRecordingCoordinator(
                 }
             }
 
-            RecognitionEngine.ONLINE -> {
+            is AsrModelSelection.Online -> {
+                if (!selection.provider.supportsStreaming) {
+                    mutableState.value = LiveRecordingState.NeedsConfiguration
+                    return null
+                }
                 val credential = try {
-                    credentialResolver.load(OnlineBatchProvider.VOLCENGINE_DOUBAO)
+                    credentialResolver.load(selection.provider)
                 } catch (error: CancellationException) {
                     throw error
                 } catch (_: Exception) {
@@ -422,6 +427,11 @@ class LiveRecordingCoordinator(
                         )
                     }
                 }
+            }
+
+            null -> {
+                mutableState.value = LiveRecordingState.NeedsConfiguration
+                null
             }
         }
     }

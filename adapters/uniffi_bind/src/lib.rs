@@ -28,8 +28,8 @@ mod sync_secret_store_bridge;
 mod tag_bridge;
 mod task_ledger_bridge;
 pub use asr_batch_bridge::{
-    FfiOnlineAsrApiKey, FfiOnlineAsrBatchProvider, FfiOnlineAsrBatchRequest,
-    FfiOnlineAsrBatchResult,
+    FfiLocalAsrBatchRequest, FfiLocalAsrBatchResult, FfiLocalAsrModelFiles, FfiOnlineAsrApiKey,
+    FfiOnlineAsrBatchProvider, FfiOnlineAsrBatchRequest, FfiOnlineAsrBatchResult,
 };
 pub use asr_streaming_bridge::{FfiAsrStreamingObserver, FfiAsrStreamingSession};
 pub use llm_task_bridge::FfiLlmTaskObserver;
@@ -1298,6 +1298,13 @@ pub async fn transcribe_online_asr_batch(
     request: FfiOnlineAsrBatchRequest,
 ) -> SonaCoreBindingResult<FfiOnlineAsrBatchResult> {
     asr_batch_bridge::transcribe_online_asr_batch(request).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn transcribe_local_asr_batch(
+    request: FfiLocalAsrBatchRequest,
+) -> SonaCoreBindingResult<FfiLocalAsrBatchResult> {
+    asr_batch_bridge::transcribe_local_asr_batch(request).await
 }
 
 #[uniffi::export]

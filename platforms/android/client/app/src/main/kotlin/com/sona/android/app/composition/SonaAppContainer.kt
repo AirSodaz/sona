@@ -5,7 +5,6 @@ import android.content.Context
 import com.sona.android.adapters.android.audio.AndroidMicrophoneCapturePort
 import com.sona.android.adapters.android.audio.AndroidAudioImportJobAdapter
 import com.sona.android.adapters.android.audio.AndroidAudioTranscoder
-import com.sona.android.adapters.android.audio.AndroidPcmAudioReader
 import com.sona.android.adapters.android.audio.AudioImportWorkerFactory
 import com.sona.android.adapters.android.audio.FrameworkAudioRecordBackend
 import com.sona.android.adapters.android.credential.AndroidBatchCredentialRepository
@@ -18,6 +17,7 @@ import com.sona.android.adapters.android.system.UuidRecordingIdPort
 import com.sona.android.adapters.uniffi.bootstrap.UniffiSonaBootstrapAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiOnlineBatchTranscriptionAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiLocalAsrModelCatalogAdapter
+import com.sona.android.adapters.uniffi.recording.UniffiLocalBatchTranscriptionAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiRecordingHistoryAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingProviderCatalogAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingTranscriptionAdapter
@@ -35,6 +35,7 @@ import com.sona.android.application.settings.AppearanceSettingsPort
 import com.sona.android.application.sync.SyncSecretStorePort
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 
 class SonaAppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -43,8 +44,14 @@ class SonaAppContainer(context: Context) {
     private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository.create(appContext)
     private val localAsrDeviceCapabilities = AndroidLocalAsrDeviceCapabilities.create(appContext)
     private val localAsrModelCatalog = UniffiLocalAsrModelCatalogAdapter()
-    private val recognitionSettingsRepository =
-        AndroidRecognitionSettingsRepository.create(appContext, localAsrDeviceCapabilities)
+    private val batchCredentialRepository = AndroidBatchCredentialRepository.create(appContext)
+    private val recognitionSettingsRepository = AndroidRecognitionSettingsRepository.create(
+        appContext,
+        localAsrDeviceCapabilities,
+        legacyBatchProvider = {
+            batchCredentialRepository.configuration.first().selectedProvider
+        },
+    )
     private val syncSecretStore = AndroidSyncSecretStore.create(appContext)
     private val syncSecretStoreRegistration = UniffiSyncSecretStoreRegistrar().apply {
         register(appDataDir, syncSecretStore)
@@ -55,12 +62,11 @@ class SonaAppContainer(context: Context) {
         readerDispatcher = Dispatchers.IO,
     )
     private val streamingTranscription = UniffiStreamingTranscriptionAdapter()
-    private val batchCredentialRepository = AndroidBatchCredentialRepository.create(appContext)
     private val batchTranscription = UniffiOnlineBatchTranscriptionAdapter()
+    private val localBatchTranscription = UniffiLocalBatchTranscriptionAdapter()
     private val history = UniffiRecordingHistoryAdapter(appDataDir)
     private val audioImportJobs = AndroidAudioImportJobAdapter.create(appContext)
     private val audioTranscoder = AndroidAudioTranscoder.create(appContext)
-    private val pcmAudioReader = AndroidPcmAudioReader()
     private val monotonicClock = AndroidMonotonicClock()
     private val recordingIds = UuidRecordingIdPort()
 
@@ -79,10 +85,9 @@ class SonaAppContainer(context: Context) {
     )
     private val runAudioImport = RunAudioImport(
         transcoder = audioTranscoder,
-        pcmReader = pcmAudioReader,
         recognitionSettings = recognitionSettingsRepository,
         batchCredentials = batchCredentialRepository,
-        localTranscription = streamingTranscription,
+        localTranscription = localBatchTranscription,
         onlineTranscription = batchTranscription,
         history = history,
     )

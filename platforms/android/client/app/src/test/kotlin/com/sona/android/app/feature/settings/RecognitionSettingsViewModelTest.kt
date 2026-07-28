@@ -12,8 +12,10 @@ import com.sona.android.application.recording.LocalAsrDownloadStage
 import com.sona.android.application.recording.LocalAsrModel
 import com.sona.android.application.recording.LocalAsrModelCatalogPort
 import com.sona.android.application.recording.LocalAsrModelValidation
-import com.sona.android.application.recording.LocalSherpaStreamingConfig
-import com.sona.android.application.recording.RecognitionEngine
+import com.sona.android.application.recording.LocalSherpaConfig
+import com.sona.android.application.recording.AsrModelSelection
+import com.sona.android.application.recording.AsrSelectionSlot
+import com.sona.android.application.recording.OnlineAsrProvider
 import com.sona.android.application.recording.RecognitionSettings
 import com.sona.android.application.recording.RecognitionSettingsPort
 import kotlinx.coroutines.flow.Flow
@@ -41,7 +43,7 @@ class RecognitionSettingsViewModelTest {
         }
 
     @Test
-    fun `download publishes installed model and selects local recognition`() =
+    fun `download publishes installed model without changing either selection`() =
         runTest(mainDispatcherRule.dispatcher) {
             val viewModel = createViewModel()
             advanceUntilIdle()
@@ -49,8 +51,14 @@ class RecognitionSettingsViewModelTest {
             viewModel.downloadLocalModel("sensevoice")
             advanceUntilIdle()
 
-            assertEquals("SenseVoice", viewModel.uiState.value.localModel?.displayName)
-            assertEquals(RecognitionEngine.LOCAL, viewModel.uiState.value.engine)
+            assertEquals(
+                AsrModelSelection.Online(OnlineAsrProvider.VOLCENGINE_DOUBAO),
+                viewModel.uiState.value.liveSelection,
+            )
+            assertEquals(
+                AsrModelSelection.Online(OnlineAsrProvider.VOLCENGINE_DOUBAO),
+                viewModel.uiState.value.batchSelection,
+            )
             assertEquals(1, viewModel.uiState.value.installedModels.size)
             assertEquals(null, viewModel.uiState.value.operationModelId)
         }
@@ -69,7 +77,10 @@ class RecognitionSettingsViewModelTest {
             viewModel.deleteLocalModel("sensevoice")
             advanceUntilIdle()
             assertEquals(emptyList<LocalAsrModel>(), viewModel.uiState.value.installedModels)
-            assertEquals(RecognitionEngine.ONLINE, viewModel.uiState.value.engine)
+            assertEquals(
+                AsrModelSelection.Online(OnlineAsrProvider.VOLCENGINE_DOUBAO),
+                viewModel.uiState.value.liveSelection,
+            )
         }
 
     private fun createViewModel(
@@ -87,16 +98,11 @@ private class FakeRecognitionSettingsPort : RecognitionSettingsPort {
 
     override suspend fun load(): RecognitionSettings = mutableSettings.value
 
-    override suspend fun selectEngine(engine: RecognitionEngine) {
-        mutableSettings.value = mutableSettings.value.copy(engine = engine)
-    }
-
-    override suspend fun selectLocalModel(modelId: String) {
-        val model = mutableSettings.value.installedModels.first { it.id == modelId }
-        mutableSettings.value = mutableSettings.value.copy(
-            engine = RecognitionEngine.LOCAL,
-            localModel = model,
-        )
+    override suspend fun selectModel(slot: AsrSelectionSlot, selection: AsrModelSelection?) {
+        mutableSettings.value = when (slot) {
+            AsrSelectionSlot.LIVE -> mutableSettings.value.copy(liveSelection = selection)
+            AsrSelectionSlot.BATCH -> mutableSettings.value.copy(batchSelection = selection)
+        }
     }
 
     override suspend fun downloadLocalModel(
@@ -120,17 +126,13 @@ private class FakeRecognitionSettingsPort : RecognitionSettingsPort {
         val model = LocalAsrModel(
             id = "sensevoice",
             displayName = "SenseVoice",
-            config = LocalSherpaStreamingConfig(
+            config = LocalSherpaConfig(
                 modelPath = "/models/sensevoice",
                 numThreads = 2,
                 modelType = "sensevoice",
             ),
         )
-        mutableSettings.value = RecognitionSettings(
-            engine = RecognitionEngine.LOCAL,
-            localModel = model,
-            installedModels = listOf(model),
-        )
+        mutableSettings.value = mutableSettings.value.copy(installedModels = listOf(model))
         return model
     }
 }

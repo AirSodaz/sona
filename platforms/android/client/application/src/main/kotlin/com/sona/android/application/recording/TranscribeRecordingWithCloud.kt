@@ -23,7 +23,7 @@ sealed interface CloudTranscriptionOutcome {
 
     data class Completed(
         override val historyId: String,
-        val provider: OnlineBatchProvider,
+        val provider: OnlineAsrProvider,
         val segments: List<TranscriptSegment>,
     ) : CloudTranscriptionOutcome
 

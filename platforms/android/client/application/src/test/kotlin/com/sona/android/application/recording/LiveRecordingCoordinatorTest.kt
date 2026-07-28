@@ -20,7 +20,7 @@ class LiveRecordingCoordinatorTest {
     @Test
     fun `local engine starts without reading cloud credentials or provider metadata`() = runTest {
         val fakes = RecordingFakes()
-        val localConfig = LocalSherpaStreamingConfig(
+        val localConfig = LocalSherpaConfig(
             modelPath = "/data/user/0/com.sona.android/files/models/sensevoice",
             numThreads = 2,
             modelType = "sensevoice",
@@ -38,8 +38,8 @@ class LiveRecordingCoordinatorTest {
             scope = backgroundScope,
             recognitionSettings = {
                 RecognitionSettings(
-                    engine = RecognitionEngine.LOCAL,
-                    localModel = LocalAsrModel("sensevoice", "SenseVoice", localConfig),
+                    liveSelection = AsrModelSelection.Local("sensevoice"),
+                    installedModels = listOf(LocalAsrModel("sensevoice", "SenseVoice", localConfig)),
                 )
             },
         )
@@ -67,7 +67,7 @@ class LiveRecordingCoordinatorTest {
                 recordingIds = fakes.recordingIds,
                 scope = backgroundScope,
                 recognitionSettings = {
-                    RecognitionSettings(engine = RecognitionEngine.LOCAL)
+                    RecognitionSettings(liveSelection = AsrModelSelection.Local("missing"))
                 },
             )
 
@@ -1285,7 +1285,7 @@ class LiveRecordingCoordinatorTest {
         coordinator.start()
         assertTrue(coordinator.state.value is LiveRecordingState.Recording)
         assertEquals(
-            listOf(OnlineBatchProvider.VOLCENGINE_DOUBAO),
+            listOf(OnlineAsrProvider.VOLCENGINE_DOUBAO),
             fakes.credentialResolver.requestedProviders,
         )
 

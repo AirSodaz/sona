@@ -2,10 +2,8 @@ package com.sona.android.application.recording
 
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 
 data class AudioImportSource(
     val locator: String,
@@ -24,7 +22,7 @@ sealed interface AudioImportTarget {
 
 sealed interface AudioImportEngine {
     data class Local(val modelId: String) : AudioImportEngine
-    data class Online(val provider: OnlineBatchProvider) : AudioImportEngine
+    data class Online(val provider: OnlineAsrProvider) : AudioImportEngine
 }
 
 data class AudioImportJob(
@@ -105,6 +103,21 @@ fun interface PcmAudioReaderPort {
     fun readFrames(normalizedWavPath: String): Flow<Pcm16Frame>
 }
 
+data class LocalBatchTranscriptionRequest(
+    val audioPath: String,
+    val config: LocalSherpaConfig,
+    val language: String,
+    val enableItn: Boolean,
+)
+
+data class LocalBatchTranscriptionResult(
+    val segments: List<TranscriptSegment>,
+)
+
+fun interface LocalBatchTranscriptionPort {
+    suspend fun transcribe(request: LocalBatchTranscriptionRequest): LocalBatchTranscriptionResult
+}
+
 data class SaveImportedRecordingRequest(
     val historyId: String,
     val displayName: String,
@@ -135,18 +148,21 @@ class ScheduleAudioImport(
         if (source.locator.isBlank()) return ScheduleAudioImportOutcome.Failed
         return try {
             val settings = recognitionSettings.load()
-            val engine = when (settings.engine) {
-                RecognitionEngine.LOCAL -> {
-                    val model = settings.localModel ?: return ScheduleAudioImportOutcome.NeedsConfiguration
+            val engine = when (val selection = settings.batchSelection) {
+                is AsrModelSelection.Local -> {
+                    val model = settings.installedModels.firstOrNull { it.id == selection.modelId }
+                        ?.takeIf { it.supports(AsrMode.BATCH) }
+                        ?: return ScheduleAudioImportOutcome.NeedsConfiguration
                     AudioImportEngine.Local(model.id)
                 }
-                RecognitionEngine.ONLINE -> {
+                is AsrModelSelection.Online -> {
                     val configuration = batchCredentials.configuration.first()
-                    if (configuration.selectedStatus != CredentialStatus.CONFIGURED) {
+                    if (configuration.statusFor(selection.provider) != CredentialStatus.CONFIGURED) {
                         return ScheduleAudioImportOutcome.NeedsConfiguration
                     }
-                    AudioImportEngine.Online(configuration.selectedProvider)
+                    AudioImportEngine.Online(selection.provider)
                 }
+                null -> return ScheduleAudioImportOutcome.NeedsConfiguration
             }
             val job = AudioImportJob(
                 id = recordingIds.nextRecordingId(),
@@ -178,19 +194,21 @@ class ScheduleAudioRetranscription(
         if (historyId.isBlank() || audioPath.isBlank()) return ScheduleAudioImportOutcome.Failed
         return try {
             val settings = recognitionSettings.load()
-            val engine = when (settings.engine) {
-                RecognitionEngine.LOCAL -> {
-                    val model = settings.localModel
+            val engine = when (val selection = settings.batchSelection) {
+                is AsrModelSelection.Local -> {
+                    val model = settings.installedModels.firstOrNull { it.id == selection.modelId }
+                        ?.takeIf { it.supports(AsrMode.BATCH) }
                         ?: return ScheduleAudioImportOutcome.NeedsConfiguration
                     AudioImportEngine.Local(model.id)
                 }
-                RecognitionEngine.ONLINE -> {
+                is AsrModelSelection.Online -> {
                     val configuration = batchCredentials.configuration.first()
-                    if (configuration.selectedStatus != CredentialStatus.CONFIGURED) {
+                    if (configuration.statusFor(selection.provider) != CredentialStatus.CONFIGURED) {
                         return ScheduleAudioImportOutcome.NeedsConfiguration
                     }
-                    AudioImportEngine.Online(configuration.selectedProvider)
+                    AudioImportEngine.Online(selection.provider)
                 }
+                null -> return ScheduleAudioImportOutcome.NeedsConfiguration
             }
             val job = AudioImportJob(
                 id = recordingIds.nextRecordingId(),
@@ -230,10 +248,9 @@ class AudioImportPortException(
 
 class RunAudioImport(
     private val transcoder: AudioTranscoderPort,
-    private val pcmReader: PcmAudioReaderPort,
     private val recognitionSettings: RecognitionSettingsPort,
     private val batchCredentials: BatchCredentialResolverPort,
-    private val localTranscription: StreamingTranscriptionPort,
+    private val localTranscription: LocalBatchTranscriptionPort,
     private val onlineTranscription: OnlineBatchTranscriptionPort,
     private val history: ImportedRecordingHistoryPort,
 ) {
@@ -361,48 +378,21 @@ class RunAudioImport(
     }
 
     private suspend fun transcribeLocal(
-        job: AudioImportJob,
+        @Suppress("UNUSED_PARAMETER") job: AudioImportJob,
         engine: AudioImportEngine.Local,
         prepared: PreparedImportedAudio,
-    ): List<TranscriptSegment> = coroutineScope {
+    ): List<TranscriptSegment> {
         val model = recognitionSettings.load().installedModels.firstOrNull { it.id == engine.modelId }
+            ?.takeIf { it.supports(AsrMode.BATCH) }
             ?: throw AudioImportPortException(AudioImportFailure.CONFIGURATION)
-        val session = localTranscription.open(
-            StreamingTranscriptionRequest(
-                recordingId = job.id,
-                engine = StreamingEngineConfig.LocalSherpa(model.config),
+        return localTranscription.transcribe(
+            LocalBatchTranscriptionRequest(
+                audioPath = prepared.normalizedWavPath,
+                config = model.config,
                 language = "auto",
                 enableItn = true,
             ),
-        )
-        var segments = emptyList<TranscriptSegment>()
-        var failure: StreamingTranscriptionEvent.Failure? = null
-        val eventJob = launch {
-            session.events.collect { event ->
-                when (event) {
-                    is StreamingTranscriptionEvent.Transcript ->
-                        segments = TranscriptReducer.apply(segments, event.update)
-                    is StreamingTranscriptionEvent.Failure -> failure = event
-                }
-            }
-        }
-        try {
-            session.start()
-            pcmReader.readFrames(prepared.normalizedWavPath).collect(session::feed)
-            session.flush()
-            session.stop()
-            eventJob.join()
-            if (failure != null) {
-                throw AudioImportPortException(
-                    AudioImportFailure.TRANSCRIPTION,
-                    retryable = true,
-                )
-            }
-            segments
-        } finally {
-            eventJob.cancel()
-            session.close()
-        }
+        ).segments
     }
 }
 

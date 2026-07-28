@@ -1,14 +1,17 @@
 use crate::mapper::transcript_segment_to_ffi;
 use crate::{FfiTranscriptSegment, SonaCoreBindingError, SonaCoreBindingResult};
 use serde_json::Value;
+use sona_core::export::ExportFormat;
+use sona_core::models::config::ModelFileConfig;
 use sona_core::ports::asr::{
-    AsrEngineConfig, AsrMode, AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID,
+    AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchTranscriber, GROQ_WHISPER_PROVIDER_ID,
     MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest, OnlineBatchTranscriptionOutput,
     OnlineBatchTranscriptionRequest, VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
 };
 use sona_core::transcription::postprocess::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions,
 };
+use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -84,6 +87,106 @@ pub struct FfiOnlineAsrBatchResult {
     pub audio_duration_ms: f64,
     pub buffered_samples: u64,
     pub stage: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, uniffi::Record)]
+pub struct FfiLocalAsrModelFiles {
+    pub encoder: Option<String>,
+    pub decoder: Option<String>,
+    pub model: Option<String>,
+    pub joiner: Option<String>,
+    pub tokens: Option<String>,
+    pub conv_frontend: Option<String>,
+    pub encoder_adaptor: Option<String>,
+    pub llm: Option<String>,
+    pub embedding: Option<String>,
+    pub tokenizer: Option<String>,
+}
+
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct FfiLocalAsrBatchRequest {
+    pub audio_path: String,
+    pub model_path: String,
+    pub num_threads: i32,
+    pub model_type: String,
+    pub punctuation_model: Option<String>,
+    pub vad_model: Option<String>,
+    pub vad_buffer: f32,
+    pub files: Option<FfiLocalAsrModelFiles>,
+    pub language: String,
+    pub enable_itn: bool,
+    pub hotwords: Option<String>,
+    pub gpu_acceleration: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct FfiLocalAsrBatchResult {
+    pub segments: Vec<FfiTranscriptSegment>,
+}
+
+impl From<FfiLocalAsrModelFiles> for ModelFileConfig {
+    fn from(value: FfiLocalAsrModelFiles) -> Self {
+        Self {
+            encoder: value.encoder,
+            decoder: value.decoder,
+            model: value.model,
+            joiner: value.joiner,
+            tokens: value.tokens,
+            conv_frontend: value.conv_frontend,
+            encoder_adaptor: value.encoder_adaptor,
+            llm: value.llm,
+            embedding: value.embedding,
+            tokenizer: value.tokenizer,
+        }
+    }
+}
+
+pub(crate) fn build_local_batch_plan(
+    request: FfiLocalAsrBatchRequest,
+) -> SonaCoreBindingResult<BatchTranscribePlan> {
+    if request.audio_path.trim().is_empty()
+        || request.model_path.trim().is_empty()
+        || request.model_type.trim().is_empty()
+        || request.language.trim().is_empty()
+        || request.num_threads <= 0
+    {
+        return Err(invalid_input("Local ASR batch request is incomplete."));
+    }
+    Ok(BatchTranscribePlan {
+        input_path: PathBuf::from(request.audio_path.trim()),
+        save_to_path: None,
+        model_path: request.model_path.trim().to_string(),
+        num_threads: request.num_threads,
+        enable_itn: request.enable_itn,
+        language: request.language.trim().to_string(),
+        punctuation_model: request
+            .punctuation_model
+            .filter(|value| !value.trim().is_empty()),
+        vad_model: request.vad_model.filter(|value| !value.trim().is_empty()),
+        vad_buffer: request.vad_buffer,
+        model_type: request.model_type.trim().to_string(),
+        file_config: request.files.map(Into::into),
+        hotwords: request.hotwords.filter(|value| !value.trim().is_empty()),
+        gpu_acceleration: request
+            .gpu_acceleration
+            .filter(|value| !value.trim().is_empty()),
+        export_format: ExportFormat::Json,
+        output_target: OutputTarget::Stdout,
+        quiet: true,
+    })
+}
+
+pub(crate) async fn transcribe_local_asr_batch(
+    request: FfiLocalAsrBatchRequest,
+) -> SonaCoreBindingResult<FfiLocalAsrBatchResult> {
+    let plan = build_local_batch_plan(request)?;
+    sona_local_asr::batch::LocalBatchAsrAdapter
+        .transcribe(plan)
+        .await
+        .map(|segments| FfiLocalAsrBatchResult {
+            segments: segments.iter().map(transcript_segment_to_ffi).collect(),
+        })
+        .map_err(Into::into)
 }
 
 pub(crate) fn validate_request(request: &FfiOnlineAsrBatchRequest) -> SonaCoreBindingResult<()> {
@@ -291,5 +394,60 @@ mod tests {
         assert_eq!(mapped.audio_duration_ms, 1_500.0);
         assert_eq!(mapped.buffered_samples, 24_000);
         assert_eq!(mapped.stage, "groq_batch_complete");
+    }
+
+    #[test]
+    fn local_batch_request_preserves_complete_model_configuration() {
+        let plan = build_local_batch_plan(FfiLocalAsrBatchRequest {
+            audio_path: " input.wav ".to_string(),
+            model_path: " models/qwen ".to_string(),
+            num_threads: 4,
+            model_type: " qwen3-asr ".to_string(),
+            punctuation_model: Some("punct.onnx".to_string()),
+            vad_model: Some("vad.onnx".to_string()),
+            vad_buffer: 7.0,
+            files: Some(FfiLocalAsrModelFiles {
+                encoder: Some("encoder.int8.onnx".to_string()),
+                decoder: Some("decoder.int8.onnx".to_string()),
+                conv_frontend: Some("conv_frontend.onnx".to_string()),
+                tokenizer: Some("tokenizer".to_string()),
+                ..Default::default()
+            }),
+            language: " auto ".to_string(),
+            enable_itn: true,
+            hotwords: Some("Sona".to_string()),
+            gpu_acceleration: Some("cpu".to_string()),
+        })
+        .expect("local batch plan");
+
+        assert_eq!(plan.input_path, PathBuf::from("input.wav"));
+        assert_eq!(plan.model_path, "models/qwen");
+        assert_eq!(plan.model_type, "qwen3-asr");
+        assert_eq!(
+            plan.file_config.unwrap().conv_frontend.as_deref(),
+            Some("conv_frontend.onnx")
+        );
+        assert!(plan.enable_itn);
+    }
+
+    #[test]
+    fn local_batch_request_rejects_incomplete_inputs() {
+        let error = build_local_batch_plan(FfiLocalAsrBatchRequest {
+            audio_path: String::new(),
+            model_path: "model".to_string(),
+            num_threads: 2,
+            model_type: "sensevoice".to_string(),
+            punctuation_model: None,
+            vad_model: None,
+            vad_buffer: 5.0,
+            files: None,
+            language: "auto".to_string(),
+            enable_itn: true,
+            hotwords: None,
+            gpu_acceleration: None,
+        })
+        .expect_err("blank audio path must fail");
+
+        assert!(error.to_string().contains("incomplete"));
     }
 }

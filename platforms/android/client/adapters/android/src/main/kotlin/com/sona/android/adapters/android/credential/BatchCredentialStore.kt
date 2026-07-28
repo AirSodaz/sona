@@ -1,21 +1,21 @@
 package com.sona.android.adapters.android.credential
 
-import com.sona.android.application.recording.OnlineBatchProvider
+import com.sona.android.application.recording.OnlineAsrProvider
 import kotlinx.coroutines.flow.Flow
 
 /**
  * Stable on-disk identifiers for cloud batch providers. They name key aliases,
  * AAD bindings, and preference keys, so they must never follow enum renames.
  */
-internal val OnlineBatchProvider.storageId: String
+internal val OnlineAsrProvider.storageId: String
     get() = when (this) {
-        OnlineBatchProvider.VOLCENGINE_DOUBAO -> "volcengine-doubao"
-        OnlineBatchProvider.GROQ_WHISPER -> "groq-whisper"
-        OnlineBatchProvider.MISTRAL_VOXTRAL -> "mistral-voxtral"
+        OnlineAsrProvider.VOLCENGINE_DOUBAO -> "volcengine-doubao"
+        OnlineAsrProvider.GROQ_WHISPER -> "groq-whisper"
+        OnlineAsrProvider.MISTRAL_VOXTRAL -> "mistral-voxtral"
     }
 
-internal fun batchProviderForStorageId(storageId: String?): OnlineBatchProvider? =
-    OnlineBatchProvider.entries.firstOrNull { it.storageId == storageId }
+internal fun batchProviderForStorageId(storageId: String?): OnlineAsrProvider? =
+    OnlineAsrProvider.entries.firstOrNull { it.storageId == storageId }
 
 /**
  * One encrypted slot per provider plus the non-secret active provider marker.

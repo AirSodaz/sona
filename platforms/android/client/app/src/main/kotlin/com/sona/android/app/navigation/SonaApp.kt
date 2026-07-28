@@ -39,6 +39,8 @@ import com.sona.android.app.feature.library.LibraryScreen
 import com.sona.android.app.feature.library.LibraryUiState
 import com.sona.android.app.feature.recording.ForegroundRecordingLifecycleEffect
 import com.sona.android.app.feature.recording.RecordScreen
+import com.sona.android.app.feature.home.HomeScreen
+import com.sona.android.app.feature.home.FileTranscriptionScreen
 import com.sona.android.app.feature.settings.AppLanguage
 import com.sona.android.app.feature.settings.AppearanceSettingsUiState
 import com.sona.android.app.feature.settings.CloudTranscriptionSettingsUiState
@@ -48,8 +50,9 @@ import com.sona.android.app.feature.settings.SettingsSection
 import com.sona.android.app.ui.theme.SonaTheme
 import com.sona.android.application.library.RecordingLibraryItem
 import com.sona.android.application.recording.LiveRecordingState
-import com.sona.android.application.recording.OnlineBatchProvider
-import com.sona.android.application.recording.RecognitionEngine
+import com.sona.android.application.recording.OnlineAsrProvider
+import com.sona.android.application.recording.AsrModelSelection
+import com.sona.android.application.recording.AsrSelectionSlot
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -77,12 +80,11 @@ internal fun SonaApp(
     onImportAudio: (String) -> Unit,
     onCancelAudioImport: () -> Unit,
     onTranscribeWithCurrentEngine: (RecordingLibraryItem) -> Unit,
-    onCloudProviderSelected: (OnlineBatchProvider) -> Unit,
+    onCloudProviderSelected: (OnlineAsrProvider) -> Unit,
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
     onClearCloudApiKey: () -> Unit,
-    onRecognitionEngineSelected: (RecognitionEngine) -> Unit,
-    onSelectLocalModel: (String) -> Unit,
+    onSelectModel: (AsrSelectionSlot, AsrModelSelection?) -> Unit,
     onDownloadLocalModel: (String) -> Unit,
     onValidateLocalModel: (String) -> Unit,
     onDeleteLocalModel: (String) -> Unit,
@@ -95,15 +97,16 @@ internal fun SonaApp(
     SonaTheme(dynamicColorEnabled = appearanceState.dynamicColorEnabled) {
         val navController = rememberNavController()
         val backStackEntry by navController.currentBackStackEntryAsState()
-        val currentRoute = backStackEntry?.destination?.route ?: SonaDestination.RECORD.route
+        val currentRoute = backStackEntry?.destination?.route ?: SonaDestination.HOME.route
         val currentDestination = SonaDestination.entries.firstOrNull { it.matches(currentRoute) }
-            ?: SonaDestination.RECORD
+            ?: SonaDestination.HOME
         val isLibraryDetail = currentRoute == LIBRARY_DETAIL_ROUTE
+        val isHomeWorkspace = currentRoute == HOME_LIVE_ROUTE || currentRoute == HOME_FILE_ROUTE
         val onConfigureCredential = {
-            onCloudProviderSelected(OnlineBatchProvider.VOLCENGINE_DOUBAO)
+            onCloudProviderSelected(OnlineAsrProvider.VOLCENGINE_DOUBAO)
             cloudCredentialFocusRequested = true
             navController.navigate(settingsRoute(SettingsSection.RECOGNITION)) {
-                popUpTo(SonaDestination.RECORD.route) { saveState = true }
+                popUpTo(SonaDestination.HOME.route) { saveState = true }
                 launchSingleTop = true
                 restoreState = true
             }
@@ -111,7 +114,7 @@ internal fun SonaApp(
         val onConfigureRecognition = {
             cloudCredentialFocusRequested = false
             navController.navigate(settingsRoute(SettingsSection.RECOGNITION)) {
-                popUpTo(SonaDestination.RECORD.route) { saveState = true }
+                popUpTo(SonaDestination.HOME.route) { saveState = true }
                 launchSingleTop = true
                 restoreState = true
             }
@@ -126,7 +129,7 @@ internal fun SonaApp(
                         selected = destination.matches(currentRoute),
                         onClick = {
                             navController.navigate(destination.route) {
-                                popUpTo(SonaDestination.RECORD.route) { saveState = true }
+                                popUpTo(SonaDestination.HOME.route) { saveState = true }
                                 launchSingleTop = true
                                 restoreState = true
                             }
@@ -149,7 +152,7 @@ internal fun SonaApp(
                         MediumTopAppBar(
                             scrollBehavior = scrollBehavior,
                             navigationIcon = {
-                                if (isLibraryDetail) {
+                                if (isLibraryDetail || isHomeWorkspace) {
                                     IconButton(onClick = { navController.popBackStack() }) {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
@@ -183,17 +186,30 @@ internal fun SonaApp(
             ) { contentPadding ->
                 NavHost(
                     navController = navController,
-                    startDestination = SonaDestination.RECORD.route,
+                    startDestination = SonaDestination.HOME.route,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(contentPadding),
                 ) {
-                    composable(SonaDestination.RECORD.route) {
+                    composable(SonaDestination.HOME.route) {
+                        LaunchedEffect(Unit) { onRefreshLibrary() }
+                        HomeScreen(
+                            recordingState = recordingState,
+                            libraryState = libraryState,
+                            recognitionSettings = recognitionSettingsState,
+                            configuredProviders = cloudTranscriptionState.configuredProviders,
+                            onOpenLive = { navController.navigate(HOME_LIVE_ROUTE) },
+                            onOpenFile = { navController.navigate(HOME_FILE_ROUTE) },
+                            onOpenLibrary = { navController.navigate(SonaDestination.LIBRARY.route) },
+                            onOpenItem = { navController.navigate(libraryDetailRoute(it)) },
+                        )
+                    }
+                    composable(HOME_LIVE_ROUTE) {
                         RecordScreen(
                             bootstrapState = bootstrapState,
                             recordingState = recordingState,
                             onlineCredentialConfigured =
-                                OnlineBatchProvider.VOLCENGINE_DOUBAO in
+                                OnlineAsrProvider.VOLCENGINE_DOUBAO in
                                     cloudTranscriptionState.configuredProviders,
                             recognitionSettings = recognitionSettingsState,
                             onRetryBootstrap = onRetryBootstrap,
@@ -201,7 +217,17 @@ internal fun SonaApp(
                             onStopRecording = onStopRecording,
                             onConfigureCredential = onConfigureCredential,
                             onConfigureRecognition = onConfigureRecognition,
-                            onEngineSelected = onRecognitionEngineSelected,
+                        )
+                    }
+                    composable(HOME_FILE_ROUTE) {
+                        FileTranscriptionScreen(
+                            importState = libraryState.audioImport,
+                            recognitionSettings = recognitionSettingsState,
+                            configuredProviders = cloudTranscriptionState.configuredProviders,
+                            onStart = onImportAudio,
+                            onCancel = onCancelAudioImport,
+                            onConfigure = onConfigureRecognition,
+                            onViewResult = { navController.navigate(libraryDetailRoute(it)) },
                         )
                     }
                     composable(SonaDestination.LIBRARY.route) {
@@ -214,8 +240,6 @@ internal fun SonaApp(
                             onOpenItem = { historyId ->
                                 navController.navigate(libraryDetailRoute(historyId))
                             },
-                            onImportAudio = onImportAudio,
-                            onCancelAudioImport = onCancelAudioImport,
                         )
                     }
                     composable(
@@ -268,7 +292,7 @@ internal fun SonaApp(
                             onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                             onSaveCloudApiKey = onSaveCloudApiKey,
                             onClearCloudApiKey = onClearCloudApiKey,
-                            onSelectLocalModel = onSelectLocalModel,
+                            onSelectModel = onSelectModel,
                             onDownloadLocalModel = onDownloadLocalModel,
                             onValidateLocalModel = onValidateLocalModel,
                             onDeleteLocalModel = onDeleteLocalModel,
@@ -296,3 +320,5 @@ internal fun libraryDetailRoute(historyId: String): String {
 
 internal const val LIBRARY_HISTORY_ID_ARGUMENT = "historyId"
 internal const val LIBRARY_DETAIL_ROUTE = "library/{$LIBRARY_HISTORY_ID_ARGUMENT}"
+internal const val HOME_LIVE_ROUTE = "home/live"
+internal const val HOME_FILE_ROUTE = "home/file"

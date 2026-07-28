@@ -10,7 +10,8 @@ import com.sona.android.application.recording.LocalAsrDownloadProgress
 import com.sona.android.application.recording.LocalAsrDownloadProgressListener
 import com.sona.android.application.recording.LocalAsrModel
 import com.sona.android.application.recording.LocalAsrModelCatalogPort
-import com.sona.android.application.recording.RecognitionEngine
+import com.sona.android.application.recording.AsrModelSelection
+import com.sona.android.application.recording.AsrSelectionSlot
 import com.sona.android.application.recording.RecognitionSettingsPort
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,8 +22,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class RecognitionSettingsUiState(
-    val engine: RecognitionEngine = RecognitionEngine.ONLINE,
-    val localModel: LocalAsrModel? = null,
+    val liveSelection: AsrModelSelection? = AsrModelSelection.Online(
+        com.sona.android.application.recording.OnlineAsrProvider.VOLCENGINE_DOUBAO,
+    ),
+    val batchSelection: AsrModelSelection? = AsrModelSelection.Online(
+        com.sona.android.application.recording.OnlineAsrProvider.VOLCENGINE_DOUBAO,
+    ),
     val installedModels: List<LocalAsrModel> = emptyList(),
     val catalogModels: List<LocalAsrCatalogModel> = emptyList(),
     val deviceCapabilities: LocalAsrDeviceCapabilities? = null,
@@ -46,8 +51,8 @@ class RecognitionSettingsViewModel(
             settingsPort.settings.collect { settings ->
                 mutableUiState.update {
                     it.copy(
-                        engine = settings.engine,
-                        localModel = settings.localModel,
+                        liveSelection = settings.liveSelection,
+                        batchSelection = settings.batchSelection,
                         installedModels = settings.installedModels,
                     )
                 }
@@ -56,12 +61,9 @@ class RecognitionSettingsViewModel(
         loadCatalogAndCapabilities()
     }
 
-    fun selectEngine(engine: RecognitionEngine) = runOperation(null) {
-        settingsPort.selectEngine(engine)
-    }
-
-    fun selectLocalModel(modelId: String) = runOperation(modelId) {
-        settingsPort.selectLocalModel(modelId)
+    fun selectModel(slot: AsrSelectionSlot, selection: AsrModelSelection?) =
+        runOperation("${slot.name}:${selection ?: "none"}") {
+            settingsPort.selectModel(slot, selection)
     }
 
     fun downloadLocalModel(modelId: String) {
@@ -100,7 +102,7 @@ class RecognitionSettingsViewModel(
         viewModelScope.launch {
             try {
                 val capabilities = deviceCapabilitiesPort.detect()
-                val catalog = catalogPort.loadStreamingModels()
+                val catalog = catalogPort.loadModels()
                 mutableUiState.update {
                     it.copy(
                         catalogModels = catalog,

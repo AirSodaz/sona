@@ -7,7 +7,7 @@ import uniffi.sona_uniffi_bind.FfiOnlineAsrBatchRequest
 import uniffi.sona_uniffi_bind.FfiTranscriptSegment
 import uniffi.sona_uniffi_bind.transcribeOnlineAsrBatch
 
-internal enum class UniffiOnlineBatchProvider {
+internal enum class UniffiOnlineAsrProvider {
     VOLCENGINE_DOUBAO,
     GROQ_WHISPER,
     MISTRAL_VOXTRAL,
@@ -15,7 +15,7 @@ internal enum class UniffiOnlineBatchProvider {
 
 internal data class UniffiOnlineBatchRequest(
     val audioPath: String,
-    val provider: UniffiOnlineBatchProvider,
+    val provider: UniffiOnlineAsrProvider,
     val credential: OnlineBatchCredential,
     val language: String,
 )
@@ -56,9 +56,9 @@ internal object GeneratedUniffiOnlineBatchBindings : UniffiOnlineBatchBindings {
     }
 }
 
-private fun UniffiOnlineBatchProvider.toGenerated(): FfiOnlineAsrBatchProvider = when (this) {
-    UniffiOnlineBatchProvider.VOLCENGINE_DOUBAO ->
+private fun UniffiOnlineAsrProvider.toGenerated(): FfiOnlineAsrBatchProvider = when (this) {
+    UniffiOnlineAsrProvider.VOLCENGINE_DOUBAO ->
         FfiOnlineAsrBatchProvider.VOLCENGINE_DOUBAO
-    UniffiOnlineBatchProvider.GROQ_WHISPER -> FfiOnlineAsrBatchProvider.GROQ_WHISPER
-    UniffiOnlineBatchProvider.MISTRAL_VOXTRAL -> FfiOnlineAsrBatchProvider.MISTRAL_VOXTRAL
+    UniffiOnlineAsrProvider.GROQ_WHISPER -> FfiOnlineAsrBatchProvider.GROQ_WHISPER
+    UniffiOnlineAsrProvider.MISTRAL_VOXTRAL -> FfiOnlineAsrBatchProvider.MISTRAL_VOXTRAL
 }

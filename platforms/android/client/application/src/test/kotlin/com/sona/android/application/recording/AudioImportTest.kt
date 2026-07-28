@@ -1,14 +1,11 @@
 package com.sona.android.application.recording
 
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -21,8 +18,7 @@ class AudioImportTest {
         val outcome = ScheduleAudioImport(
             recognitionSettings = FakeRecognitionSettings(
                 RecognitionSettings(
-                    engine = RecognitionEngine.LOCAL,
-                    localModel = model,
+                    batchSelection = AsrModelSelection.Local(model.id),
                     installedModels = listOf(model),
                 ),
             ),
@@ -48,7 +44,7 @@ class AudioImportTest {
         fixture.onlineResult = listOf(segment("cloud"))
 
         val outcome = fixture.run(
-            job = newJob(AudioImportEngine.Online(OnlineBatchProvider.GROQ_WHISPER)),
+            job = newJob(AudioImportEngine.Online(OnlineAsrProvider.GROQ_WHISPER)),
             allowWarning = false,
         )
 
@@ -60,11 +56,9 @@ class AudioImportTest {
     }
 
     @Test
-    fun `local import feeds normalized pcm and reduces final update`() = runTest {
+    fun `local import sends normalized wav through batch transcription`() = runTest {
         val fixture = Fixture()
-        fixture.streaming.eventOnStop = StreamingTranscriptionEvent.Transcript(
-            TranscriptUpdate(emptyList(), listOf(segment("local"))),
-        )
+        fixture.localResult = listOf(segment("local"))
 
         val outcome = fixture.run(
             job = newJob(AudioImportEngine.Local("model-a")),
@@ -72,8 +66,7 @@ class AudioImportTest {
         )
 
         assertEquals(RunAudioImportOutcome.Completed("import-1", false), outcome)
-        assertEquals(1, fixture.streaming.frames.size)
-        assertArrayEquals(byteArrayOf(1, 2), fixture.streaming.frames.single().bytes)
+        assertEquals("/jobs/normalized.wav", fixture.localRequests.single().audioPath)
         assertEquals(listOf(segment("local")), fixture.history.saved.single().segments)
     }
 
@@ -83,7 +76,7 @@ class AudioImportTest {
         fixture.onlineFailure = IllegalStateException("provider detail")
 
         val outcome = fixture.run(
-            job = newJob(AudioImportEngine.Online(OnlineBatchProvider.VOLCENGINE_DOUBAO)),
+            job = newJob(AudioImportEngine.Online(OnlineAsrProvider.VOLCENGINE_DOUBAO)),
             allowWarning = true,
         )
 
@@ -93,9 +86,9 @@ class AudioImportTest {
     }
 
     @Test
-    fun `local session failure retries before saving warning`() = runTest {
+    fun `local batch failure retries before saving warning`() = runTest {
         val fixture = Fixture()
-        fixture.streaming.eventOnStop = StreamingTranscriptionEvent.Failure("runtime", "failed")
+        fixture.localFailure = IllegalStateException("runtime")
 
         val retry = fixture.run(
             job = newJob(AudioImportEngine.Local("model-a")),
@@ -232,7 +225,7 @@ class AudioImportTest {
                 displayName = "Meeting",
                 durationMillis = 4_000,
             ),
-            engine = AudioImportEngine.Online(OnlineBatchProvider.MISTRAL_VOXTRAL),
+            engine = AudioImportEngine.Online(OnlineAsrProvider.MISTRAL_VOXTRAL),
         )
 
         val outcome = fixture.run(job, allowWarning = false)
@@ -247,7 +240,9 @@ class AudioImportTest {
     private class Fixture {
         val transcoder = FakeTranscoder()
         val history = FakeHistory()
-        val streaming = FakeStreaming()
+        val localRequests = mutableListOf<LocalBatchTranscriptionRequest>()
+        var localResult = emptyList<TranscriptSegment>()
+        var localFailure: Throwable? = null
         val onlineRequests = mutableListOf<OnlineBatchTranscriptionRequest>()
         var onlineResult = emptyList<TranscriptSegment>()
         var onlineFailure: Throwable? = null
@@ -256,20 +251,22 @@ class AudioImportTest {
         suspend fun run(job: AudioImportJob, allowWarning: Boolean): RunAudioImportOutcome =
             RunAudioImport(
                 transcoder = transcoder,
-                pcmReader = PcmAudioReaderPort { flowOf(Pcm16Frame(byteArrayOf(1, 2))) },
                 recognitionSettings = FakeRecognitionSettings(
                     RecognitionSettings(
-                        engine = RecognitionEngine.LOCAL,
-                        localModel = model,
+                        batchSelection = AsrModelSelection.Local(model.id),
                         installedModels = listOf(model),
                     ),
                 ),
                 batchCredentials = object : BatchCredentialResolverPort {
                     override suspend fun loadActive() = null
-                    override suspend fun load(provider: OnlineBatchProvider) =
+                    override suspend fun load(provider: OnlineAsrProvider) =
                         OnlineBatchCredential("secret")
                 },
-                localTranscription = streaming,
+                localTranscription = LocalBatchTranscriptionPort { request ->
+                    localRequests += request
+                    localFailure?.let { throw it }
+                    LocalBatchTranscriptionResult(localResult)
+                },
                 onlineTranscription = OnlineBatchTranscriptionPort { request ->
                     onlineRequests += request
                     onlineFailure?.let { throw it }
@@ -324,26 +321,6 @@ class AudioImportTest {
         }
     }
 
-    private class FakeStreaming : StreamingTranscriptionPort {
-        val frames = mutableListOf<Pcm16Frame>()
-        var eventOnStop: StreamingTranscriptionEvent? = null
-
-        override suspend fun open(request: StreamingTranscriptionRequest): StreamingTranscriptionSession {
-            val events = Channel<StreamingTranscriptionEvent>(Channel.UNLIMITED)
-            return object : StreamingTranscriptionSession {
-                override val events: Flow<StreamingTranscriptionEvent> = events.receiveAsFlow()
-                override suspend fun start() = Unit
-                override suspend fun feed(frame: Pcm16Frame) { frames += frame }
-                override suspend fun flush() = Unit
-                override suspend fun stop() {
-                    eventOnStop?.let { events.send(it) }
-                    events.close()
-                }
-                override fun close() { events.close() }
-            }
-        }
-    }
-
     private class FakeJobs : AudioImportJobPort {
         override val state = flowOf<AudioImportJobState>(AudioImportJobState.Idle)
         val enqueued = mutableListOf<AudioImportJob>()
@@ -353,9 +330,9 @@ class AudioImportTest {
 
     private class FakeBatchSettings : BatchCredentialSettingsPort {
         override val configuration = MutableStateFlow(BatchCredentialConfiguration())
-        override suspend fun selectProvider(provider: OnlineBatchProvider) = Unit
-        override suspend fun save(provider: OnlineBatchProvider, credential: OnlineBatchCredential) = Unit
-        override suspend fun clear(provider: OnlineBatchProvider) = Unit
+        override suspend fun selectProvider(provider: OnlineAsrProvider) = Unit
+        override suspend fun save(provider: OnlineAsrProvider, credential: OnlineBatchCredential) = Unit
+        override suspend fun clear(provider: OnlineAsrProvider) = Unit
     }
 
     private class FakeRecognitionSettings(
@@ -363,8 +340,7 @@ class AudioImportTest {
     ) : RecognitionSettingsPort {
         override val settings = MutableStateFlow(value)
         override suspend fun load() = value
-        override suspend fun selectEngine(engine: RecognitionEngine) = Unit
-        override suspend fun selectLocalModel(modelId: String) = Unit
+        override suspend fun selectModel(slot: AsrSelectionSlot, selection: AsrModelSelection?) = Unit
         override suspend fun downloadLocalModel(
             model: LocalAsrCatalogModel,
             progress: LocalAsrDownloadProgressListener,
@@ -383,7 +359,7 @@ private fun newJob(engine: AudioImportEngine) = AudioImportJob(
 private fun localModel(id: String) = LocalAsrModel(
     id = id,
     displayName = id,
-    config = LocalSherpaStreamingConfig(
+    config = LocalSherpaConfig(
         modelPath = "/models/$id",
         numThreads = 2,
         modelType = "sense_voice",
