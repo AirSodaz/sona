@@ -1,0 +1,30 @@
+# UniFFI configuration for sona-uniffi-bind.
+#
+# The library uses the proc-macro approach exclusively (no UDL files).
+# Bindings are generated via the workspace-pinned `sona-uniffi-bindgen` binary:
+#
+#   cargo run --bin sona-uniffi-bindgen -- generate \
+#     --library target/debug/libsona_uniffi_bind.dylib \
+#     --language kotlin --out-dir <dir>
+#
+# Default generated namespaces (kept explicit here so they are easy to change):
+#   Kotlin : uniffi.sona_uniffi_bind
+#   Swift  : sona_uniffi_bind
+
+[bindings.kotlin]
+package_name = "uniffi.sona_uniffi_bind"
+
+[bindings.swift]
+module_name = "sona_uniffi_bind"
+
+# ── Custom type converters ───────────────────────────────────────────────────
+# Add [custom_types.<TypeName>] sections here when the Rust FFI surface needs
+# to lift/lower opaque wrappers (e.g. Uuid → String, DateTime → i64) without
+# forcing every mapper to convert by hand.
+#
+# Example:
+#   [custom_types.Uuid]
+#   remote = true
+#   imports = ["java.util.UUID"]
+#   into_custom = "UUID.fromString({})"
+#   from_custom = "{}.toString()"

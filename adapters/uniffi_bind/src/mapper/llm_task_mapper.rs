@@ -19,14 +19,27 @@ pub struct FfiLlmTaskProgress {
     pub total_chunks: u64,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
-pub struct FfiLlmTaskChunk {
-    pub task_id: String,
-    pub task_type: FfiLlmTaskType,
-    pub chunk_index: u64,
-    pub total_chunks: u64,
-    pub items_json: Option<String>,
-    pub text: Option<String>,
+/// A streaming chunk event from an LLM task.
+///
+/// Use `Items` for Polish and Translate tasks — `items_json` is a JSON array
+/// of `PolishedSegment` or `TranslatedSegment` objects respectively.
+/// Use `Text` for Summary tasks — `text` is the raw incremental text.
+#[derive(Clone, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum FfiLlmTaskChunk {
+    Items {
+        task_id: String,
+        task_type: FfiLlmTaskType,
+        chunk_index: u64,
+        total_chunks: u64,
+        items_json: String,
+    },
+    Text {
+        task_id: String,
+        task_type: FfiLlmTaskType,
+        chunk_index: u64,
+        total_chunks: u64,
+        text: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
@@ -68,24 +81,22 @@ pub fn llm_task_items_chunk_to_ffi<T>(
 where
     T: Serialize,
 {
-    Ok(FfiLlmTaskChunk {
+    Ok(FfiLlmTaskChunk::Items {
         task_id: payload.task_id,
         task_type: llm_task_type_to_ffi(payload.task_type),
         chunk_index: u64::from(payload.chunk_index),
         total_chunks: u64::from(payload.total_chunks),
-        items_json: Some(serde_json::to_string(&payload.items)?),
-        text: None,
+        items_json: serde_json::to_string(&payload.items)?,
     })
 }
 
 pub fn llm_task_summary_chunk_to_ffi(payload: LlmTaskSummaryChunkPayload) -> FfiLlmTaskChunk {
-    FfiLlmTaskChunk {
+    FfiLlmTaskChunk::Text {
         task_id: payload.task_id,
         task_type: FfiLlmTaskType::Summary,
         chunk_index: u64::from(payload.chunk_index),
         total_chunks: u64::from(payload.total_chunks),
-        items_json: None,
-        text: Some(payload.text),
+        text: payload.text,
     }
 }
 
