@@ -5,6 +5,15 @@ use sona_core::sync::{SyncError, SyncSecretStore};
 
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 
+/// Async keychain / secret-store bridge, implemented on the foreign side
+/// (Kotlin / Swift) and called by the Rust sync engine for each vault
+/// operation that needs a stored credential.
+///
+/// `#[async_trait]` is required here: native `async fn` in traits is not
+/// dyn-compatible, so UniFFI cannot generate an `Arc<dyn FfiSecretStore>`
+/// vtable from them. The macro desugars each method to return
+/// `Pin<Box<dyn Future>>`, which is dyn-compatible. The generated Kotlin
+/// bindings expose these as `suspend fun` via UniFFI's callback machinery.
 #[uniffi::export(foreign)]
 #[async_trait]
 pub trait FfiSecretStore: Send + Sync {
