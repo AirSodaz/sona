@@ -26,6 +26,19 @@ use crate::mapper::{
 };
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 
+/// Observer for streamed LLM task events, implemented on the foreign side
+/// (Kotlin / Swift).
+///
+/// All methods are **synchronous**. Async callbacks in a `uniffi::export(foreign)`
+/// trait require `async_trait`, which desugars to `fn() -> Pin<Box<dyn Future>>`.
+/// That is dyn-compatible, but the generated Kotlin/Swift bindings do not map
+/// the future to a coroutine — they block on the calling thread. Making the
+/// methods sync keeps the contract clear: implementations must not block or
+/// do long-running work; they should enqueue work for another coroutine if
+/// needed.
+///
+/// Every callback is wrapped in `catch_unwind` on the Rust adapter side so a
+/// foreign panic cannot unwind through the FFI boundary and corrupt Rust state.
 #[uniffi::export(foreign)]
 pub trait FfiLlmTaskObserver: Send + Sync {
     fn on_progress(&self, event: FfiLlmTaskProgress);

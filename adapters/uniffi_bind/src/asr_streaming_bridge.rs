@@ -19,6 +19,15 @@ use std::sync::{Arc, OnceLock};
 
 static LOCAL_RECOGNIZER_POOL: OnceLock<RecognizerPool> = OnceLock::new();
 
+/// Observer for ASR streaming events, implemented on the foreign side
+/// (Kotlin / Swift).
+///
+/// All methods are **synchronous** — implementations must not block or do
+/// long-running work; enqueue work for another coroutine/thread if needed.
+/// Making these async would require `async_trait`, whose generated bindings
+/// do not map to coroutines on the foreign side, so sync keeps the contract
+/// explicit. Every callback is wrapped in `catch_unwind` on the Rust adapter
+/// side so a foreign panic cannot unwind through the FFI boundary.
 #[uniffi::export(foreign)]
 pub trait FfiAsrStreamingObserver: Send + Sync {
     fn on_transcript_update(&self, event: FfiAsrTranscriptUpdateEvent);
