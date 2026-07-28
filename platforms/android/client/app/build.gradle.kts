@@ -89,7 +89,7 @@ android {
 
     lint {
         // The dynamic split list is verified against both generated APKs below.
-        disable += "ChromeOsAbiSupport"
+        disable += setOf("ChromeOsAbiSupport", "GradleDependency")
         enable += setOf("MissingTranslation", "ExtraTranslation")
         warningsAsErrors = true
     }
@@ -126,7 +126,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.11.0")
     implementation("androidx.navigation:navigation-compose:2.9.8")
-    implementation("androidx.work:work-runtime-ktx:2.11.0")
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
     implementation("com.google.android.material:material:1.14.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")

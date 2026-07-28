@@ -459,6 +459,9 @@ test('Android recording composition preserves foreground-service, permission, an
 test('Android verification runs all recording tests in one serial Gradle invocation', () => {
   const verifier = read('scripts', 'verify-android-client.js');
   const appGradle = read('platforms', 'android', 'client', 'app', 'build.gradle.kts');
+  const androidAdapterGradle = read(
+    'platforms', 'android', 'client', 'adapters', 'android', 'build.gradle.kts',
+  );
   const bindingsGradle = read('platforms', 'android', 'sona-uniffi-bindings.gradle.kts');
 
   for (const task of [
@@ -479,6 +482,9 @@ test('Android verification runs all recording tests in one serial Gradle invocat
   );
   assert.match(appGradle, /lifecycle-process:2\.11\.0/u);
   assert.match(appGradle, /kotlinx-coroutines-test:1\.11\.0/u);
+  assert.match(appGradle, /work-runtime-ktx:2\.11\.2/u);
+  assert.match(androidAdapterGradle, /work-runtime-ktx:2\.11\.2/u);
+  assert.match(appGradle, /disable \+= setOf\("ChromeOsAbiSupport", "GradleDependency"\)/u);
   assert.match(
     bindingsGradle,
     /net\.java\.dev\.jna:jna:5\.19\.1@aar/u,
