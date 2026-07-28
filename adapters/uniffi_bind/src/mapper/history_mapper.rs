@@ -142,14 +142,30 @@ pub struct FfiHistoryDeleteItemsRequestV1 {
     pub ids: Vec<String>,
 }
 
+/// The recorded audio, carried in one of two forms depending on how the
+/// recording was captured.
+///
+/// Use `Bytes` when audio was captured in-memory (e.g. a microphone buffer).
+/// Use `NativePath` when the platform wrote the audio directly to disk.
+#[derive(Clone, Debug, PartialEq, uniffi::Enum)]
+pub enum FfiAudioSourceV1 {
+    /// Audio encoded in memory. `extension` names the container format
+    /// ("wav", "m4a", …); omit it only when the format is unknown.
+    Bytes {
+        data: Vec<u8>,
+        extension: Option<String>,
+    },
+    /// Platform-native audio file; the extension is inferred from the path.
+    NativePath { path: String },
+}
+
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct FfiHistorySaveRecordingRequestV1 {
     pub segments: Vec<FfiTranscriptSegment>,
     pub duration: f64,
     pub tag_ids: Vec<String>,
-    pub audio_bytes: Option<Vec<u8>>,
-    pub native_audio_path: Option<String>,
-    pub audio_extension: Option<String>,
+    /// The audio for this recording, or `None` when no audio was captured.
+    pub audio: Option<FfiAudioSourceV1>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -356,13 +372,18 @@ impl TryFrom<FfiHistorySaveRecordingRequestV1> for HistorySaveRecordingRequest {
     type Error = HistoryMapperError;
 
     fn try_from(value: FfiHistorySaveRecordingRequestV1) -> Result<Self, Self::Error> {
+        let (audio_bytes, native_audio_path, audio_extension) = match value.audio {
+            Some(FfiAudioSourceV1::Bytes { data, extension }) => (Some(data), None, extension),
+            Some(FfiAudioSourceV1::NativePath { path }) => (None, Some(path), None),
+            None => (None, None, None),
+        };
         Ok(Self {
             segments: history_transcript_segments_from_ffi(value.segments)?,
             duration: value.duration,
             tag_ids: value.tag_ids,
-            audio_bytes: value.audio_bytes,
-            native_audio_path: value.native_audio_path,
-            audio_extension: value.audio_extension,
+            audio_bytes,
+            native_audio_path,
+            audio_extension,
         })
     }
 }

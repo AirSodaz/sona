@@ -66,7 +66,7 @@ pub use export_mapper::{
     FfiExportTranscriptFileResultV1,
 };
 pub use history_mapper::{
-    FfiHistoryAudioStatusV1, FfiHistoryCompleteLiveDraftRequestV1,
+    FfiAudioSourceV1, FfiHistoryAudioStatusV1, FfiHistoryCompleteLiveDraftRequestV1,
     FfiHistoryCreateLiveDraftRequestV1, FfiHistoryCreateTranscriptSnapshotRequestV1,
     FfiHistoryDeleteItemsRequestV1, FfiHistoryDraftSourcePatchV1, FfiHistoryDraftSourceV1,
     FfiHistoryItemKindV1, FfiHistoryItemMetaPatchV1, FfiHistoryItemRecordV1,

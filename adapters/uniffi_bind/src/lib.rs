@@ -36,7 +36,7 @@ pub use llm_task_bridge::FfiLlmTaskObserver;
 pub use mapper::{
     FfiAsrEngine, FfiAsrInferenceMetric, FfiAsrMode, FfiAsrModelLoadMetric,
     FfiAsrRuntimeMetricsSnapshotV1, FfiAsrStreamingErrorEvent, FfiAsrTranscriptUpdateEvent,
-    FfiAudioUsageCategoryV1, FfiAutomationActionsV1, FfiAutomationExportConfigV1,
+    FfiAudioSourceV1, FfiAudioUsageCategoryV1, FfiAutomationActionsV1, FfiAutomationExportConfigV1,
     FfiAutomationProcessedInputV1, FfiAutomationProcessedRecordV1, FfiAutomationProfileInputV1,
     FfiAutomationProfileRecordV1, FfiAutomationRepositoryInputV1, FfiAutomationRepositoryStateV1,
     FfiAutomationRuleInputV1, FfiAutomationRuleRecordV1, FfiAutomationRuleValidationResultV1,

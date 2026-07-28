@@ -1,5 +1,5 @@
 use sona_uniffi_bind::{
-    FfiHistoryCompleteLiveDraftRequestV1, FfiHistoryCreateLiveDraftRequestV1,
+    FfiAudioSourceV1, FfiHistoryCompleteLiveDraftRequestV1, FfiHistoryCreateLiveDraftRequestV1,
     FfiHistoryCreateTranscriptSnapshotRequestV1, FfiHistoryDeleteItemsRequestV1,
     FfiHistoryDraftSourcePatchV1, FfiHistoryDraftSourceV1, FfiHistoryItemMetaPatchV1,
     FfiHistoryItemStatusV1, FfiHistoryReplaceTagAssignmentsRequestV1,
@@ -232,9 +232,10 @@ async fn history_v1_exposes_typed_lists_and_transcript_snapshots() {
             segments: vec![segment()],
             duration: 1.5,
             tag_ids: Vec::new(),
-            audio_bytes: Some(vec![1, 2, 3]),
-            native_audio_path: None,
-            audio_extension: Some("wav".to_string()),
+            audio: Some(FfiAudioSourceV1::Bytes {
+                data: vec![1, 2, 3],
+                extension: Some("wav".to_string()),
+            }),
         },
     )
     .await
@@ -429,9 +430,10 @@ async fn history_v1_rejects_invalid_mutations_without_database_or_partial_writes
             segments: vec![segment()],
             duration: f64::NAN,
             tag_ids: Vec::new(),
-            audio_bytes: Some(vec![1]),
-            native_audio_path: None,
-            audio_extension: Some("wav".to_string()),
+            audio: Some(FfiAudioSourceV1::Bytes {
+                data: vec![1],
+                extension: Some("wav".to_string()),
+            }),
         },
     )
     .await
