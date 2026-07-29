@@ -211,7 +211,7 @@ test('Android cloud batch transcription is wired end to end behind its own crede
   );
   const libraryPort = clientSource(
     'application', 'kotlin', 'com', 'sona', 'android', 'application', 'library',
-    'RecordingLibraryPort.kt',
+    'HistoryWorkspace.kt',
   );
   const historyAdapter = clientSource(
     path.join('adapters', 'uniffi'),
@@ -277,7 +277,7 @@ test('Android cloud batch transcription is wired end to end behind its own crede
   assert.match(container, /UniffiOnlineBatchTranscriptionAdapter\(\)/u);
   assert.match(container, /val transcribeRecordingWithCloud = TranscribeRecordingWithCloud\(/u);
   assert.match(container, /val batchCredentialSettings: BatchCredentialSettingsPort/u);
-  assert.match(libraryViewModel, /fun transcribeWithCloud\(item: RecordingLibraryItem\)/u);
+  assert.match(libraryViewModel, /fun transcribeWithCloud\(item: HistoryItem\)/u);
   assert.match(libraryViewModel, /CloudTranscriptionUiState\.Running/u);
   assert.match(settingsViewModel, /apiKeyInput=<redacted>/u);
   assert.doesNotMatch(settingsViewModel, /SavedStateHandle/u);
@@ -373,7 +373,7 @@ test('Android recording composition preserves foreground-service, permission, an
   assert.match(container, /appContext\.filesDir\.absolutePath/u);
   assert.match(container, /UniffiStreamingProviderCatalogAdapter\(\)/u);
   assert.match(container, /UniffiStreamingTranscriptionAdapter\(\)/u);
-  assert.match(container, /UniffiRecordingHistoryAdapter\(appDataDir\)/u);
+  assert.match(container, /UniffiRecordingHistoryAdapter\(appDataDir,/u);
   assert.match(container, /createLiveRecording\(scope: CoroutineScope\): LiveRecordingController/u);
   assert.match(container, /internal val recordingGateway = RecordingForegroundGateway/u);
   assert.match(coordinator, /:\s*LiveRecordingController/u);

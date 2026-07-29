@@ -1,6 +1,10 @@
 package com.sona.android.app.feature.library
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,17 +22,27 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloudSync
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Replay
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -36,23 +50,140 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
-import com.sona.android.application.library.RecordingLibraryItem
-import com.sona.android.application.library.RecordingLibraryItemStatus
+import com.sona.android.application.data.TranscriptExportFormat
+import com.sona.android.application.data.TranscriptExportMode
+import com.sona.android.application.library.HistoryItem
+import com.sona.android.application.library.HistoryItemStatus
+import com.sona.android.application.library.TagRecord
+import com.sona.android.application.library.TranscriptSnapshot
+import com.sona.android.application.library.TranscriptSnapshotDetail
 import com.sona.android.application.recording.CloudTranscriptionFailure
 import com.sona.android.application.recording.TranscriptSegment
 
 @Composable
 internal fun LibraryDetailScreen(
     historyId: String,
-    item: RecordingLibraryItem?,
+    item: HistoryItem?,
     detail: LibraryDetailUiState,
     cloudTranscription: CloudTranscriptionUiState,
+    tags: List<TagRecord>,
+    snapshots: List<TranscriptSnapshot>,
+    snapshotDetail: TranscriptSnapshotDetail?,
+    operationInProgress: Boolean,
+    operationError: Boolean,
     onRetry: () -> Unit,
-    onTranscribeWithCloud: (RecordingLibraryItem) -> Unit,
-    onTranscribeWithCurrentEngine: (RecordingLibraryItem) -> Unit,
+    onTranscribeWithCloud: (HistoryItem) -> Unit,
+    onTranscribeWithCurrentEngine: (HistoryItem) -> Unit,
+    onUpdateTitle: (String) -> Unit,
+    onUpdateTags: (Set<String>) -> Unit,
+    onCreateTag: (String) -> Unit,
+    onLoadSnapshot: (String) -> Unit,
+    onCloseSnapshot: () -> Unit,
+    onExportTranscript: (String, TranscriptExportFormat, TranscriptExportMode) -> Unit,
 ) {
     val resolvedDetail = detail.forHistory(historyId)
     val fallbackTitle = stringResource(R.string.library_detail_heading)
+    var titleEditorVisible by remember { mutableStateOf(false) }
+    var titleInput by remember(item?.historyId, item?.title) { mutableStateOf(item?.title.orEmpty()) }
+    var tagCreatorVisible by remember { mutableStateOf(false) }
+    var tagNameInput by remember { mutableStateOf("") }
+    var exportDialogVisible by remember { mutableStateOf(false) }
+    var exportFormat by remember { mutableStateOf(TranscriptExportFormat.TXT) }
+    var exportMode by remember { mutableStateOf(TranscriptExportMode.ORIGINAL) }
+    var pendingExport by remember { mutableStateOf<Pair<TranscriptExportFormat, TranscriptExportMode>?>(null) }
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("*/*"),
+    ) { uri ->
+        val selection = pendingExport
+        pendingExport = null
+        if (uri != null && selection != null) {
+            onExportTranscript(uri.toString(), selection.first, selection.second)
+        }
+    }
+
+    if (titleEditorVisible) {
+        AlertDialog(
+            onDismissRequest = { titleEditorVisible = false },
+            title = { Text(stringResource(R.string.history_edit_title)) },
+            text = {
+                OutlinedTextField(
+                    value = titleInput,
+                    onValueChange = { titleInput = it },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = titleInput.isNotBlank() && !operationInProgress,
+                    onClick = {
+                        onUpdateTitle(titleInput.trim())
+                        titleEditorVisible = false
+                    },
+                ) { Text(stringResource(R.string.action_save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { titleEditorVisible = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+    if (tagCreatorVisible) {
+        AlertDialog(
+            onDismissRequest = { tagCreatorVisible = false },
+            title = { Text(stringResource(R.string.history_create_tag)) },
+            text = {
+                OutlinedTextField(
+                    value = tagNameInput,
+                    onValueChange = { tagNameInput = it },
+                    label = { Text(stringResource(R.string.history_tag_name)) },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = tagNameInput.isNotBlank() && !operationInProgress,
+                    onClick = {
+                        onCreateTag(tagNameInput.trim())
+                        tagNameInput = ""
+                        tagCreatorVisible = false
+                    },
+                ) { Text(stringResource(R.string.history_create_tag)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { tagCreatorVisible = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+    if (exportDialogVisible) {
+        TranscriptExportDialog(
+            format = exportFormat,
+            mode = exportMode,
+            enabled = resolvedDetail is LibraryDetailUiState.Ready && !operationInProgress,
+            onFormatChanged = { exportFormat = it },
+            onModeChanged = { exportMode = it },
+            onDismiss = { exportDialogVisible = false },
+            onExport = {
+                exportDialogVisible = false
+                pendingExport = exportFormat to exportMode
+                exportLauncher.launch(transcriptFileName(item?.title, exportFormat))
+            },
+        )
+    }
+    snapshotDetail?.takeIf { it.metadata.historyId == historyId }?.let { snapshot ->
+        AlertDialog(
+            onDismissRequest = onCloseSnapshot,
+            title = {
+                Text(stringResource(R.string.history_snapshot_title, snapshot.metadata.reason.name.lowercase()))
+            },
+            text = { TranscriptDetail(snapshot.segments) },
+            confirmButton = {
+                TextButton(onClick = onCloseSnapshot) { Text(stringResource(R.string.action_close)) }
+            },
+        )
+    }
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -64,18 +195,75 @@ internal fun LibraryDetailScreen(
                 .widthIn(max = 840.dp)
                 .padding(horizontal = 24.dp, vertical = 20.dp),
         ) {
-            Text(
-                text = item?.title?.ifBlank { fallbackTitle } ?: fallbackTitle,
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = item?.title?.ifBlank { fallbackTitle } ?: fallbackTitle,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(
+                    enabled = item != null && !operationInProgress,
+                    onClick = { titleEditorVisible = true },
+                ) {
+                    Icon(Icons.Rounded.Edit, stringResource(R.string.history_edit_title))
+                }
+                IconButton(
+                    enabled = resolvedDetail is LibraryDetailUiState.Ready && !operationInProgress,
+                    onClick = { exportDialogVisible = true },
+                ) {
+                    Icon(Icons.Rounded.FileDownload, stringResource(R.string.history_export_transcript))
+                }
+            }
             Spacer(Modifier.height(6.dp))
             item?.let { LibraryItemMetadata(it) }
 
-            if (item?.status == RecordingLibraryItemStatus.DRAFT) {
+            if (item != null) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.history_tags),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    tags.forEach { tag ->
+                        val selected = tag.id in item.tagIds
+                        FilterChip(
+                            selected = selected,
+                            enabled = !operationInProgress,
+                            onClick = {
+                                val updated = item.tagIds.toMutableSet().apply {
+                                    if (selected) remove(tag.id) else add(tag.id)
+                                }
+                                onUpdateTags(updated)
+                            },
+                            label = { Text(tag.name) },
+                        )
+                    }
+                    TextButton(
+                        enabled = !operationInProgress,
+                        onClick = { tagCreatorVisible = true },
+                    ) { Text(stringResource(R.string.history_create_tag)) }
+                }
+            }
+            if (operationError) {
+                Text(
+                    text = stringResource(R.string.history_operation_failed),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
+            if (item?.status == HistoryItemStatus.DRAFT) {
                 Spacer(Modifier.height(12.dp))
                 Card(
                     shape = MaterialTheme.shapes.small,
@@ -130,6 +318,29 @@ internal fun LibraryDetailScreen(
                 }
             }
             CloudTranscriptionStatus(historyId = historyId, state = cloudTranscription)
+            Text(
+                text = stringResource(R.string.history_snapshots),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (snapshots.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.history_snapshot_empty),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    snapshots.forEach { snapshot ->
+                        TextButton(onClick = { onLoadSnapshot(snapshot.id) }) {
+                            Text(snapshot.reason.name.lowercase())
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(8.dp))
 
             when (resolvedDetail) {
@@ -149,10 +360,82 @@ internal fun LibraryDetailScreen(
 }
 
 @Composable
+private fun TranscriptExportDialog(
+    format: TranscriptExportFormat,
+    mode: TranscriptExportMode,
+    enabled: Boolean,
+    onFormatChanged: (TranscriptExportFormat) -> Unit,
+    onModeChanged: (TranscriptExportMode) -> Unit,
+    onDismiss: () -> Unit,
+    onExport: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.history_export_transcript)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.history_export_format), fontWeight = FontWeight.SemiBold)
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TranscriptExportFormat.entries.forEach { value ->
+                        FilterChip(
+                            selected = format == value,
+                            onClick = { onFormatChanged(value) },
+                            label = { Text(value.name.lowercase()) },
+                        )
+                    }
+                }
+                Text(stringResource(R.string.history_export_content), fontWeight = FontWeight.SemiBold)
+                TranscriptExportMode.entries.forEach { value ->
+                    FilterChip(
+                        selected = mode == value,
+                        onClick = { onModeChanged(value) },
+                        label = {
+                            Text(
+                                stringResource(
+                                    when (value) {
+                                        TranscriptExportMode.ORIGINAL -> R.string.history_export_original
+                                        TranscriptExportMode.TRANSLATION -> R.string.history_export_translation
+                                        TranscriptExportMode.BILINGUAL -> R.string.history_export_bilingual
+                                    },
+                                ),
+                            )
+                        },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = enabled, onClick = onExport) {
+                Text(stringResource(R.string.action_export))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        },
+    )
+}
+
+private fun transcriptFileName(title: String?, format: TranscriptExportFormat): String {
+    val stem = title.orEmpty().trim().ifBlank { "sona-transcript" }
+        .replace(Regex("[^A-Za-z0-9._ -]"), "_")
+    val extension = when (format) {
+        TranscriptExportFormat.JSON -> "json"
+        TranscriptExportFormat.TXT -> "txt"
+        TranscriptExportFormat.SRT -> "srt"
+        TranscriptExportFormat.VTT -> "vtt"
+        TranscriptExportFormat.MARKDOWN -> "md"
+    }
+    return "$stem.$extension"
+}
+
+@Composable
 private fun CloudTranscriptionAction(
-    item: RecordingLibraryItem,
+    item: HistoryItem,
     cloudTranscription: CloudTranscriptionUiState,
-    onTranscribeWithCloud: (RecordingLibraryItem) -> Unit,
+    onTranscribeWithCloud: (HistoryItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val running = cloudTranscription is CloudTranscriptionUiState.Running

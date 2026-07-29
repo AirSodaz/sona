@@ -3,9 +3,24 @@ package com.sona.android.app.feature.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.sona.android.application.library.RecordingLibraryItem
-import com.sona.android.application.library.RecordingLibraryItemStatus
-import com.sona.android.application.library.RecordingLibraryPort
+import com.sona.android.application.library.HistoryItem
+import com.sona.android.application.library.HistoryItemStatus
+import com.sona.android.application.library.HistoryDateFilter
+import com.sona.android.application.library.HistoryFilterType
+import com.sona.android.application.library.HistoryScope
+import com.sona.android.application.library.HistorySortOrder
+import com.sona.android.application.library.HistoryWorkspacePort
+import com.sona.android.application.library.HistoryWorkspaceQuery
+import com.sona.android.application.library.TagRecord
+import com.sona.android.application.library.TagWorkspacePort
+import com.sona.android.application.library.TranscriptSnapshot
+import com.sona.android.application.library.TranscriptSnapshotDetail
+import com.sona.android.application.library.CreateTagRequest
+import com.sona.android.application.data.FileTransferPort
+import com.sona.android.application.data.TranscriptExportFormat
+import com.sona.android.application.data.TranscriptExportMode
+import com.sona.android.application.data.TranscriptExportPort
+import com.sona.android.application.data.TranscriptExportRequest
 import com.sona.android.application.recording.CloudTranscriptionFailure
 import com.sona.android.application.recording.CloudTranscriptionOutcome
 import com.sona.android.application.recording.CloudTranscriptionRequest
@@ -67,7 +82,7 @@ sealed interface CloudTranscriptionUiState {
 }
 
 data class LibraryUiState(
-    val items: List<RecordingLibraryItem> = emptyList(),
+    val items: List<HistoryItem> = emptyList(),
     val hasMore: Boolean = false,
     val isInitialLoading: Boolean = false,
     val isRefreshing: Boolean = false,
@@ -76,14 +91,26 @@ data class LibraryUiState(
     val detail: LibraryDetailUiState = LibraryDetailUiState.None,
     val cloudTranscription: CloudTranscriptionUiState = CloudTranscriptionUiState.Idle,
     val audioImport: AudioImportJobState = AudioImportJobState.Idle,
+    val query: HistoryWorkspaceQuery = HistoryWorkspaceQuery(),
+    val tags: List<TagRecord> = emptyList(),
+    val selectedIds: Set<String> = emptySet(),
+    val snapshots: List<TranscriptSnapshot> = emptyList(),
+    val snapshotDetail: TranscriptSnapshotDetail? = null,
+    val workspaceCount: Long = 0,
+    val trashCount: Long = 0,
+    val operationInProgress: Boolean = false,
+    val operationError: Boolean = false,
 )
 
 class LibraryViewModel(
-    private val library: RecordingLibraryPort,
+    private val library: HistoryWorkspacePort,
     private val transcribeRecordingWithCloud: TranscribeRecordingWithCloud,
     private val scheduleAudioImport: ScheduleAudioImport? = null,
     private val scheduleAudioRetranscription: ScheduleAudioRetranscription? = null,
     private val audioImportJobs: AudioImportJobPort = IdleAudioImportJobPort,
+    private val tags: TagWorkspacePort,
+    private val exporter: TranscriptExportPort,
+    private val files: FileTransferPort,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(LibraryUiState())
     val state: StateFlow<LibraryUiState> = mutableState.asStateFlow()
@@ -148,7 +175,7 @@ class LibraryViewModel(
         viewModelScope.launch { audioImportJobs.cancel(running.jobId) }
     }
 
-    fun transcribeWithCurrentEngine(item: RecordingLibraryItem) {
+    fun transcribeWithCurrentEngine(item: HistoryItem) {
         if (
             !item.audioAvailable ||
             item.audioPath.isBlank() ||
@@ -189,18 +216,23 @@ class LibraryViewModel(
         }
         listJob = viewModelScope.launch {
             try {
-                val page = library.loadPage(offset = 0, limit = PAGE_SIZE)
+                val page = library.query(mutableState.value.query.copy(offset = 0, limit = PAGE_SIZE))
                 if (generation != listGeneration) return@launch
                 nextOffset = page.items.size
                 failedListOperation = null
                 mutableState.update {
                     it.copy(
-                        items = page.items.distinctBy(RecordingLibraryItem::historyId),
+                        items = page.items.distinctBy(HistoryItem::historyId),
                         hasMore = page.hasMore && page.items.isNotEmpty(),
                         isInitialLoading = false,
                         isRefreshing = false,
                         listError = null,
+                        workspaceCount = page.filteredItemCount,
+                        trashCount = page.counts.trash,
                     )
+                }
+                runCatching { tags.listTags() }.getOrNull()?.let { loaded ->
+                    mutableState.update { it.copy(tags = loaded) }
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -235,10 +267,10 @@ class LibraryViewModel(
             try {
                 var pageOffset = offset
                 while (true) {
-                    val page = library.loadPage(offset = pageOffset, limit = PAGE_SIZE)
+                    val page = library.query(mutableState.value.query.copy(offset = pageOffset, limit = PAGE_SIZE))
                     if (generation != listGeneration) return@launch
                     val existingIds = mutableState.value.items
-                        .mapTo(mutableSetOf(), RecordingLibraryItem::historyId)
+                        .mapTo(mutableSetOf(), HistoryItem::historyId)
                     val containsNewItem = page.items.any { it.historyId !in existingIds }
                     val pageHasMore = page.hasMore && page.items.isNotEmpty()
                     nextOffset = pageOffset + page.items.size
@@ -247,7 +279,7 @@ class LibraryViewModel(
                         mutableState.update { state ->
                             state.copy(
                                 items = (state.items + page.items)
-                                    .distinctBy(RecordingLibraryItem::historyId),
+                                    .distinctBy(HistoryItem::historyId),
                                 hasMore = pageHasMore,
                                 isLoadingMore = false,
                                 listError = null,
@@ -296,7 +328,11 @@ class LibraryViewModel(
                 val segments = library.loadTranscript(historyId)
                 if (generation != detailGeneration) return@launch
                 mutableState.update {
-                    it.copy(detail = LibraryDetailUiState.Ready(historyId, segments))
+                    it.copy(
+                        detail = LibraryDetailUiState.Ready(historyId, segments),
+                        snapshots = runCatching { library.listSnapshots(historyId) }.getOrDefault(emptyList()),
+                        snapshotDetail = null,
+                    )
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -309,11 +345,130 @@ class LibraryViewModel(
         }
     }
 
+    fun setSearchQuery(value: String) = updateQuery { copy(query = value) }
+    fun setScope(value: HistoryScope) = updateQuery { copy(scope = value) }
+    fun setFilter(value: HistoryFilterType) = updateQuery { copy(filterType = value) }
+    fun setDateFilter(value: HistoryDateFilter) = updateQuery { copy(dateFilter = value) }
+    fun setSortOrder(value: HistorySortOrder) = updateQuery { copy(sortOrder = value) }
+
+    fun toggleSelection(historyId: String) = mutableState.update { state ->
+        state.copy(selectedIds = state.selectedIds.toMutableSet().apply {
+            if (!add(historyId)) remove(historyId)
+        })
+    }
+
+    fun clearSelection() = mutableState.update { it.copy(selectedIds = emptySet()) }
+
+    fun resetAfterRestore() {
+        detailGeneration += 1
+        detailJob?.cancel()
+        mutableState.update {
+            it.copy(
+                items = emptyList(),
+                hasMore = false,
+                detail = LibraryDetailUiState.None,
+                cloudTranscription = CloudTranscriptionUiState.Idle,
+                snapshots = emptyList(),
+                snapshotDetail = null,
+                selectedIds = emptySet(),
+            )
+        }
+        refresh()
+    }
+
+    fun trashSelected() = mutateSelection { library.trash(it, System.currentTimeMillis()) }
+    fun restoreSelected() = mutateSelection(library::restore)
+    fun purgeSelected() = mutateSelection(library::purge)
+    fun addTagToSelected(tagId: String) = mutateSelection { library.updateTags(it, listOf(tagId), emptyList()) }
+    fun removeTagFromSelected(tagId: String) = mutateSelection { library.updateTags(it, emptyList(), listOf(tagId)) }
+
+    fun updateTitle(historyId: String, title: String) = mutateWorkspace {
+        library.updateTitle(historyId, title)
+    }
+
+    fun updateTags(historyId: String, selectedTagIds: Set<String>) = mutateWorkspace {
+        val current = mutableState.value.items.firstOrNull { it.historyId == historyId }?.tagIds.orEmpty().toSet()
+        library.updateTags(
+            listOf(historyId),
+            (selectedTagIds - current).toList(),
+            (current - selectedTagIds).toList(),
+        )
+    }
+
+    fun createTag(name: String) = mutateWorkspace {
+        tags.createTag(CreateTagRequest(name))
+    }
+
+    fun loadSnapshot(historyId: String, snapshotId: String) {
+        viewModelScope.launch {
+            runCatching { library.loadSnapshot(historyId, snapshotId) }
+                .onSuccess { detail -> mutableState.update { it.copy(snapshotDetail = detail) } }
+                .onFailure { mutableState.update { it.copy(operationError = true) } }
+        }
+    }
+
+    fun closeSnapshot() = mutableState.update { it.copy(snapshotDetail = null) }
+
+    fun exportTranscript(
+        destinationUri: String,
+        format: TranscriptExportFormat,
+        mode: TranscriptExportMode,
+    ) {
+        val detail = mutableState.value.detail as? LibraryDetailUiState.Ready ?: return
+        mutateWorkspace {
+            val extension = when (format) {
+                TranscriptExportFormat.JSON -> "json"
+                TranscriptExportFormat.TXT -> "txt"
+                TranscriptExportFormat.SRT -> "srt"
+                TranscriptExportFormat.VTT -> "vtt"
+                TranscriptExportFormat.MARKDOWN -> "md"
+            }
+            val path = files.createExportStagingPath("sona-transcript.$extension")
+            try {
+                exporter.export(TranscriptExportRequest(detail.segments, format, mode, path))
+                files.publishExport(path, destinationUri)
+            } finally {
+                files.cleanup(path)
+            }
+        }
+    }
+
+    private fun updateQuery(transform: HistoryWorkspaceQuery.() -> HistoryWorkspaceQuery) {
+        mutableState.update { it.copy(query = it.query.transform().copy(offset = 0), selectedIds = emptySet()) }
+        refresh()
+    }
+
+    private fun mutateSelection(operation: suspend (List<String>) -> Unit) {
+        val ids = mutableState.value.selectedIds.toList()
+        if (ids.isEmpty()) return
+        mutateWorkspace {
+            operation(ids)
+            mutableState.update { it.copy(selectedIds = emptySet()) }
+        }
+    }
+
+    private fun mutateWorkspace(operation: suspend () -> Unit) {
+        if (mutableState.value.operationInProgress) return
+        mutableState.update { it.copy(operationInProgress = true, operationError = false) }
+        viewModelScope.launch {
+            try {
+                operation()
+                refresh()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                mutableState.update { it.copy(operationError = true) }
+            } finally {
+                mutableState.update { it.copy(operationInProgress = false) }
+            }
+        }
+    }
+
     /**
      * Re-transcribes an existing recording through the configured cloud batch
      * provider and republishes the persisted transcript.
      */
-    fun transcribeWithCloud(item: RecordingLibraryItem) {
+    fun transcribeWithCloud(item: HistoryItem) {
         if (mutableState.value.cloudTranscription is CloudTranscriptionUiState.Running) {
             return
         }
@@ -328,7 +483,7 @@ class LibraryViewModel(
                         historyId = item.historyId,
                         audioPath = item.audioPath,
                         audioAvailable = item.audioAvailable,
-                        isDraft = item.status == RecordingLibraryItemStatus.DRAFT,
+                        isDraft = item.status == HistoryItemStatus.DRAFT,
                     ),
                 )
             } catch (error: CancellationException) {
@@ -373,11 +528,14 @@ class LibraryViewModel(
         internal const val PAGE_SIZE = 30
 
         fun factory(
-            library: RecordingLibraryPort,
+            library: HistoryWorkspacePort,
             transcribeRecordingWithCloud: TranscribeRecordingWithCloud,
             scheduleAudioImport: ScheduleAudioImport? = null,
             scheduleAudioRetranscription: ScheduleAudioRetranscription? = null,
             audioImportJobs: AudioImportJobPort = IdleAudioImportJobPort,
+            tags: TagWorkspacePort,
+            exporter: TranscriptExportPort,
+            files: FileTransferPort,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -389,6 +547,9 @@ class LibraryViewModel(
                         scheduleAudioImport,
                         scheduleAudioRetranscription,
                         audioImportJobs,
+                        tags,
+                        exporter,
+                        files,
                     ) as T
                 }
             }

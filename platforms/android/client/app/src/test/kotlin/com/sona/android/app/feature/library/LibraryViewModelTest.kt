@@ -1,10 +1,24 @@
 package com.sona.android.app.feature.library
 
 import com.sona.android.app.MainDispatcherRule
-import com.sona.android.application.library.RecordingLibraryItem
-import com.sona.android.application.library.RecordingLibraryItemStatus
-import com.sona.android.application.library.RecordingLibraryPage
-import com.sona.android.application.library.RecordingLibraryPort
+import com.sona.android.application.data.FileTransferPort
+import com.sona.android.application.data.TranscriptExportPort
+import com.sona.android.application.data.TranscriptExportFormat
+import com.sona.android.application.data.TranscriptExportMode
+import com.sona.android.application.data.TranscriptExportRequest
+import com.sona.android.application.data.TranscriptExportResult
+import com.sona.android.application.library.HistoryItem
+import com.sona.android.application.library.HistoryItemKind
+import com.sona.android.application.library.HistoryItemStatus
+import com.sona.android.application.library.HistoryWorkspaceCounts
+import com.sona.android.application.library.HistoryWorkspacePage
+import com.sona.android.application.library.HistoryWorkspacePort
+import com.sona.android.application.library.HistoryWorkspaceQuery
+import com.sona.android.application.library.HistoryWorkspaceSummary
+import com.sona.android.application.library.TagRecord
+import com.sona.android.application.library.TagWorkspacePort
+import com.sona.android.application.library.TranscriptSnapshot
+import com.sona.android.application.library.HistoryScope
 import com.sona.android.application.recording.ActiveBatchCredential
 import com.sona.android.application.recording.CloudTranscriptionFailure
 import com.sona.android.application.recording.CompleteLiveDraftRequest
@@ -36,15 +50,15 @@ class LibraryViewModelTest {
     @Test
     fun `refresh and pagination append distinct history items`() = runTest {
         val port = FakeLibraryPort().apply {
-            pages += RecordingLibraryPage(
+            pages += page(
                 items = listOf(item("history-1"), item("history-2")),
                 hasMore = true,
             )
-            pages += RecordingLibraryPage(
+            pages += page(
                 items = listOf(item("history-2"), item("history-3")),
                 hasMore = true,
             )
-            pages += RecordingLibraryPage(
+            pages += page(
                 items = listOf(item("history-4")),
                 hasMore = false,
             )
@@ -62,7 +76,7 @@ class LibraryViewModelTest {
 
         assertEquals(
             listOf("history-1", "history-2", "history-3", "history-4"),
-            viewModel.state.value.items.map(RecordingLibraryItem::historyId),
+            viewModel.state.value.items.map(HistoryItem::historyId),
         )
         assertFalse(viewModel.state.value.hasMore)
         assertEquals(listOf(0 to 30, 2 to 30, 4 to 30), port.pageRequests)
@@ -71,15 +85,15 @@ class LibraryViewModelTest {
     @Test
     fun `pagination skips a fully duplicate page to reach later recordings`() = runTest {
         val port = FakeLibraryPort().apply {
-            pages += RecordingLibraryPage(
+            pages += page(
                 items = listOf(item("history-1"), item("history-2")),
                 hasMore = true,
             )
-            pages += RecordingLibraryPage(
+            pages += page(
                 items = listOf(item("history-1"), item("history-2")),
                 hasMore = true,
             )
-            pages += RecordingLibraryPage(
+            pages += page(
                 items = listOf(item("history-3")),
                 hasMore = false,
             )
@@ -93,7 +107,7 @@ class LibraryViewModelTest {
 
         assertEquals(
             listOf("history-1", "history-2", "history-3"),
-            viewModel.state.value.items.map(RecordingLibraryItem::historyId),
+            viewModel.state.value.items.map(HistoryItem::historyId),
         )
         assertEquals(listOf(0 to 30, 2 to 30, 4 to 30), port.pageRequests)
         assertFalse(viewModel.state.value.hasMore)
@@ -116,8 +130,8 @@ class LibraryViewModelTest {
 
     @Test
     fun `an obsolete refresh cannot replace a newer result`() = runTest {
-        val first = PendingResult<RecordingLibraryPage>()
-        val second = PendingResult<RecordingLibraryPage>()
+        val first = PendingResult<HistoryWorkspacePage>()
+        val second = PendingResult<HistoryWorkspacePage>()
         val port = FakeLibraryPort().apply {
             pendingPages += first
             pendingPages += second
@@ -128,9 +142,9 @@ class LibraryViewModelTest {
         runCurrent()
         viewModel.refresh()
         runCurrent()
-        second.complete(RecordingLibraryPage(listOf(item("new")), hasMore = false))
+        second.complete(page(listOf(item("new")), hasMore = false))
         runCurrent()
-        first.complete(RecordingLibraryPage(listOf(item("old")), hasMore = false))
+        first.complete(page(listOf(item("old")), hasMore = false))
         advanceUntilIdle()
 
         assertEquals(listOf("new"), viewModel.state.value.items.map { it.historyId })
@@ -203,7 +217,7 @@ class LibraryViewModelTest {
             audioAvailable = true,
         )
         val port = FakeLibraryPort().apply {
-            pages += RecordingLibraryPage(items = listOf(recording), hasMore = false)
+            pages += page(items = listOf(recording), hasMore = false)
         }
         val history = FakeHistoryPort()
         val viewModel = libraryViewModel(
@@ -237,12 +251,12 @@ class LibraryViewModelTest {
     @Test
     fun `a draft is completed instead of checkpointed`() = runTest {
         val draft = item("history-draft").copy(
-            status = RecordingLibraryItemStatus.DRAFT,
+            status = HistoryItemStatus.DRAFT,
             audioPath = "/recordings/history-draft.wav",
             audioAvailable = true,
         )
         val port = FakeLibraryPort().apply {
-            pages += RecordingLibraryPage(items = emptyList(), hasMore = false)
+            pages += page(items = emptyList(), hasMore = false)
         }
         val history = FakeHistoryPort()
         val viewModel = libraryViewModel(
@@ -364,7 +378,7 @@ class LibraryViewModelTest {
             audioAvailable = true,
         )
         val port = FakeLibraryPort().apply {
-            pages += RecordingLibraryPage(items = listOf(recording), hasMore = false)
+            pages += page(items = listOf(recording), hasMore = false)
             transcripts["history-1"] = listOf(segment("cloud-segment"))
         }
         val viewModel = libraryViewModel(
@@ -384,14 +398,78 @@ class LibraryViewModelTest {
         assertEquals(CloudTranscriptionUiState.Idle, viewModel.state.value.cloudTranscription)
     }
 
+    @Test
+    fun `query changes reset offset and forward typed filters`() = runTest {
+        val port = FakeLibraryPort().apply {
+            repeat(3) { pages += page(emptyList(), false) }
+        }
+        val viewModel = libraryViewModel(port)
+
+        viewModel.refresh()
+        advanceUntilIdle()
+        viewModel.setSearchQuery("meeting")
+        advanceUntilIdle()
+        viewModel.setScope(HistoryScope.Trash)
+        advanceUntilIdle()
+
+        assertEquals(listOf(0, 0, 0), port.queries.map { it.offset })
+        assertEquals("meeting", port.queries.last().query)
+        assertEquals(HistoryScope.Trash, port.queries.last().scope)
+    }
+
+    @Test
+    fun `selection mutations use typed batch operations`() = runTest {
+        val port = FakeLibraryPort().apply {
+            repeat(3) { pages += page(emptyList(), false) }
+        }
+        val viewModel = libraryViewModel(port)
+
+        viewModel.toggleSelection("history-1")
+        viewModel.addTagToSelected("tag-1")
+        advanceUntilIdle()
+        viewModel.toggleSelection("history-2")
+        viewModel.trashSelected()
+        advanceUntilIdle()
+
+        assertEquals(listOf(listOf("history-1") to listOf("tag-1")), port.addedTags)
+        assertEquals(listOf(listOf("history-2")), port.trashed)
+        assertTrue(viewModel.state.value.selectedIds.isEmpty())
+    }
+
+    @Test
+    fun `transcript export publishes and always cleans staging`() = runTest {
+        val port = FakeLibraryPort().apply { transcripts["history-1"] = listOf(segment("segment-1")) }
+        val exporter = FakeExporter()
+        val files = RecordingFileTransfer()
+        val viewModel = libraryViewModel(port, exporter = exporter, files = files)
+        viewModel.loadTranscript("history-1")
+        advanceUntilIdle()
+
+        viewModel.exportTranscript("content://destination", TranscriptExportFormat.VTT, TranscriptExportMode.BILINGUAL)
+        advanceUntilIdle()
+
+        assertEquals(TranscriptExportFormat.VTT, exporter.request?.format)
+        assertEquals(TranscriptExportMode.BILINGUAL, exporter.request?.mode)
+        assertEquals(listOf("/cache/sona-transcript.vtt" to "content://destination"), files.published)
+        assertEquals(listOf("/cache/sona-transcript.vtt"), files.cleaned)
+    }
+
     private fun libraryViewModel(
-        port: RecordingLibraryPort,
+        port: HistoryWorkspacePort,
         transcribe: TranscribeRecordingWithCloud = TranscribeRecordingWithCloud(
             credentials = { null },
             transcription = { throw AssertionError("must not transcribe") },
             history = FakeHistoryPort(),
         ),
-    ) = LibraryViewModel(port, transcribe)
+        exporter: TranscriptExportPort = TranscriptExportPort { error("must not export") },
+        files: FileTransferPort = FakeFileTransfer,
+    ) = LibraryViewModel(
+        library = port,
+        transcribeRecordingWithCloud = transcribe,
+        tags = FakeTagWorkspace,
+        exporter = exporter,
+        files = files,
+    )
 
     private fun activeCredential() = ActiveBatchCredential(
         provider = OnlineAsrProvider.GROQ_WHISPER,
@@ -408,13 +486,14 @@ class LibraryViewModelTest {
         stage = "batch_complete",
     )
 
-    private fun item(id: String) = RecordingLibraryItem(
+    private fun item(id: String) = HistoryItem(
         historyId = id,
         title = "Recording $id",
         timestampEpochMillis = 1_725_000_000_000,
         durationMillis = 1_000,
         previewText = "Preview",
-        status = RecordingLibraryItemStatus.COMPLETE,
+        status = HistoryItemStatus.COMPLETE,
+        kind = HistoryItemKind.RECORDING,
     )
 
     private fun segment(id: String) = TranscriptSegment(
@@ -425,18 +504,22 @@ class LibraryViewModelTest {
         isFinal = true,
     )
 
-    private class FakeLibraryPort : RecordingLibraryPort {
-        val pages = ArrayDeque<RecordingLibraryPage>()
-        val pendingPages = ArrayDeque<PendingResult<RecordingLibraryPage>>()
+    private class FakeLibraryPort : HistoryWorkspacePort {
+        val pages = ArrayDeque<HistoryWorkspacePage>()
+        val pendingPages = ArrayDeque<PendingResult<HistoryWorkspacePage>>()
         val pageRequests = mutableListOf<Pair<Int, Int>>()
+        val queries = mutableListOf<HistoryWorkspaceQuery>()
         val transcripts = mutableMapOf<String, List<TranscriptSegment>>()
         val pendingTranscripts = mutableMapOf<String, PendingResult<List<TranscriptSegment>>>()
         val transcriptRequests = mutableListOf<String>()
         var pageFailure: Throwable? = null
         var transcriptFailure: Throwable? = null
+        val addedTags = mutableListOf<Pair<List<String>, List<String>>>()
+        val trashed = mutableListOf<List<String>>()
 
-        override suspend fun loadPage(offset: Int, limit: Int): RecordingLibraryPage {
-            pageRequests += offset to limit
+        override suspend fun query(request: HistoryWorkspaceQuery): HistoryWorkspacePage {
+            pageRequests += request.offset to request.limit
+            queries += request
             pageFailure?.let { throw it }
             pendingPages.removeFirstOrNull()?.let { return it.await() }
             return pages.removeFirst()
@@ -448,6 +531,71 @@ class LibraryViewModelTest {
             pendingTranscripts[historyId]?.let { return it.await() }
             return transcripts.getValue(historyId)
         }
+
+        override suspend fun updateTitle(historyId: String, title: String) = Unit
+        override suspend fun updateTags(ids: List<String>, addTagIds: List<String>, removeTagIds: List<String>) {
+            if (addTagIds.isNotEmpty()) addedTags += ids to addTagIds
+        }
+        override suspend fun trash(ids: List<String>, deletedAtEpochMillis: Long) { trashed += ids }
+        override suspend fun restore(ids: List<String>) = Unit
+        override suspend fun purge(ids: List<String>) = Unit
+        override suspend fun listSnapshots(historyId: String) = emptyList<TranscriptSnapshot>()
+        override suspend fun loadSnapshot(historyId: String, snapshotId: String) = null
+    }
+
+    private object FakeTagWorkspace : TagWorkspacePort {
+        override suspend fun listTags() = emptyList<TagRecord>()
+        override suspend fun createTag(request: com.sona.android.application.library.CreateTagRequest) =
+            error("must not create a tag")
+        override suspend fun renameTag(tagId: String, name: String): TagRecord? = null
+        override suspend fun deleteTag(tagId: String) = Unit
+    }
+
+    private object FakeFileTransfer : FileTransferPort {
+        override suspend fun stageImport(sourceUri: String) = error("must not stage")
+        override suspend fun publishExport(stagedPath: String, destinationUri: String) = Unit
+        override suspend fun createExportStagingPath(fileName: String) = error("must not export")
+        override suspend fun cleanup(path: String) = Unit
+        override suspend fun publishText(text: String, destinationUri: String) = Unit
+    }
+
+    private class FakeExporter : TranscriptExportPort {
+        var request: TranscriptExportRequest? = null
+        override suspend fun export(request: TranscriptExportRequest): TranscriptExportResult {
+            this.request = request
+            return TranscriptExportResult(request.outputPath, 10)
+        }
+    }
+
+    private class RecordingFileTransfer : FileTransferPort {
+        val published = mutableListOf<Pair<String, String>>()
+        val cleaned = mutableListOf<String>()
+        override suspend fun stageImport(sourceUri: String) = error("unused")
+        override suspend fun publishExport(stagedPath: String, destinationUri: String) {
+            published += stagedPath to destinationUri
+        }
+        override suspend fun createExportStagingPath(fileName: String) = "/cache/$fileName"
+        override suspend fun cleanup(path: String) { cleaned += path }
+        override suspend fun publishText(text: String, destinationUri: String) = Unit
+    }
+
+    companion object {
+        private fun page(
+            items: List<HistoryItem>,
+            hasMore: Boolean,
+        ) = HistoryWorkspacePage(
+            items = items,
+            filteredItemCount = items.size.toLong(),
+            hasMore = hasMore,
+            summary = HistoryWorkspaceSummary(
+                totalItems = items.size.toLong(),
+                totalDurationMillis = items.sumOf(HistoryItem::durationMillis),
+                latestTimestampEpochMillis = items.maxOfOrNull(HistoryItem::timestampEpochMillis),
+                recordingCount = items.count { it.kind == HistoryItemKind.RECORDING }.toLong(),
+                batchCount = items.count { it.kind == HistoryItemKind.BATCH }.toLong(),
+            ),
+            counts = HistoryWorkspaceCounts(0, 0, emptyMap()),
+        )
     }
 
     private class FakeHistoryPort : RecordingHistoryPort {

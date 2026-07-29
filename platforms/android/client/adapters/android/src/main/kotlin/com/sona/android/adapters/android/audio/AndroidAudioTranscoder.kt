@@ -53,17 +53,24 @@ class AndroidAudioTranscoder private constructor(
         progress: AudioImportProgressListener,
     ): PreparedImportedAudio = withContext(Dispatchers.IO) {
         requireValidJobId(jobId)
-        val uri = parseContentUri(source.locator)
-        val metadata = queryMetadata(uri)
+        val nativeSource = source.locator.takeUnless { it.startsWith("content://") }
+            ?.let(::File)
+            ?.takeIf(File::isFile)
+        val uri = nativeSource?.let { null } ?: parseContentUri(source.locator)
+        val metadata = nativeSource?.let {
+            SourceMetadata(it.name.ifBlank { "Imported audio" }, it.length())
+        } ?: queryMetadata(checkNotNull(uri))
         val jobDirectory = File(jobsRoot, jobId).apply { mkdirsOrThrow() }
         val extension = safeExtension(metadata.displayName)
-        val sourceFile = File(jobDirectory, "source$extension")
-        val reusableSource = sourceFile.isFile && sourceFile.length() > 0L &&
-            (metadata.sizeBytes == null || sourceFile.length() == metadata.sizeBytes)
-        if (!reusableSource) {
-            sourceFile.delete()
-            progress.onProgress(AudioImportStage.STAGING, 0)
-            stageSource(uri, sourceFile, metadata.sizeBytes, progress)
+        val sourceFile = nativeSource ?: File(jobDirectory, "source$extension")
+        if (nativeSource == null) {
+            val reusableSource = sourceFile.isFile && sourceFile.length() > 0L &&
+                (metadata.sizeBytes == null || sourceFile.length() == metadata.sizeBytes)
+            if (!reusableSource) {
+                sourceFile.delete()
+                progress.onProgress(AudioImportStage.STAGING, 0)
+                stageSource(checkNotNull(uri), sourceFile, metadata.sizeBytes, progress)
+            }
         }
 
         val outputFile = File(jobDirectory, NORMALIZED_WAV_NAME)

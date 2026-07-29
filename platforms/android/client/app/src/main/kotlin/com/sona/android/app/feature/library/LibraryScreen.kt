@@ -1,6 +1,8 @@
 package com.sona.android.app.feature.library
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,30 +26,52 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DeleteForever
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Label
+import androidx.compose.material.icons.rounded.Restore
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 import com.sona.android.app.feature.recording.formatRecordingTimer
-import com.sona.android.application.library.RecordingLibraryItem
-import com.sona.android.application.library.RecordingLibraryItemStatus
+import com.sona.android.application.library.HistoryItem
+import com.sona.android.application.library.HistoryItemStatus
+import com.sona.android.application.library.HistoryDateFilter
+import com.sona.android.application.library.HistoryFilterType
+import com.sona.android.application.library.HistoryScope
+import com.sona.android.application.library.HistorySortOrder
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
@@ -61,8 +85,45 @@ internal fun LibraryScreen(
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
     onOpenItem: (String) -> Unit,
+    onSearchChanged: (String) -> Unit,
+    onScopeChanged: (HistoryScope) -> Unit,
+    onFilterChanged: (HistoryFilterType) -> Unit,
+    onDateChanged: (HistoryDateFilter) -> Unit,
+    onSortChanged: (HistorySortOrder) -> Unit,
+    onToggleSelection: (String) -> Unit,
+    onClearSelection: () -> Unit,
+    onTrashSelected: () -> Unit,
+    onRestoreSelected: () -> Unit,
+    onPurgeSelected: () -> Unit,
+    onAddTagToSelected: (String) -> Unit,
+    onRemoveTagFromSelected: (String) -> Unit,
+    recoveryPendingCount: Int,
+    onOpenRecovery: () -> Unit,
 ) {
     val listState = rememberLazyListState()
+    var purgeConfirmationVisible by remember { mutableStateOf(false) }
+    var tagMenuVisible by remember { mutableStateOf(false) }
+
+    if (purgeConfirmationVisible) {
+        AlertDialog(
+            onDismissRequest = { purgeConfirmationVisible = false },
+            title = { Text(stringResource(R.string.history_delete_confirm_title)) },
+            text = {
+                Text(pluralStringResource(R.plurals.history_delete_confirm_body, state.selectedIds.size, state.selectedIds.size))
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    purgeConfirmationVisible = false
+                    onPurgeSelected()
+                }) { Text(stringResource(R.string.history_delete_forever)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { purgeConfirmationVisible = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
 
     LaunchedEffect(listState, state.items.size, state.hasMore) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
@@ -114,6 +175,91 @@ internal fun LibraryScreen(
                 }
             }
             Spacer(Modifier.height(16.dp))
+            if (recoveryPendingCount > 0) {
+                FilledTonalButton(
+                    onClick = onOpenRecovery,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(pluralStringResource(R.plurals.recovery_pending_notice, recoveryPendingCount, recoveryPendingCount))
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+            OutlinedTextField(
+                value = state.query.query,
+                onValueChange = onSearchChanged,
+                label = { Text(stringResource(R.string.history_search)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ScopeChip(stringResource(R.string.history_scope_all), state.query.scope == HistoryScope.All) { onScopeChanged(HistoryScope.All) }
+                ScopeChip(stringResource(R.string.history_scope_untagged), state.query.scope == HistoryScope.Untagged) { onScopeChanged(HistoryScope.Untagged) }
+                state.tags.forEach { tag ->
+                    ScopeChip(tag.name, state.query.scope == HistoryScope.Tag(tag.id)) { onScopeChanged(HistoryScope.Tag(tag.id)) }
+                }
+                ScopeChip(stringResource(R.string.history_scope_trash), state.query.scope == HistoryScope.Trash) { onScopeChanged(HistoryScope.Trash) }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                HistoryFilterType.entries.forEach { value ->
+                    FilterChip(selected = state.query.filterType == value, onClick = { onFilterChanged(value) }, label = { Text(value.name.lowercase()) })
+                }
+                HistoryDateFilter.entries.forEach { value ->
+                    FilterChip(selected = state.query.dateFilter == value, onClick = { onDateChanged(value) }, label = { Text(value.name.lowercase()) })
+                }
+                HistorySortOrder.entries.forEach { value ->
+                    FilterChip(selected = state.query.sortOrder == value, onClick = { onSortChanged(value) }, label = { Text(value.name.lowercase().replace('_', ' ')) })
+                }
+            }
+            if (state.selectedIds.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        pluralStringResource(R.plurals.history_selected_count, state.selectedIds.size, state.selectedIds.size),
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (state.query.scope == HistoryScope.Trash) {
+                        IconButton(onClick = onRestoreSelected) { Icon(Icons.Rounded.Restore, stringResource(R.string.history_restore)) }
+                        IconButton(onClick = { purgeConfirmationVisible = true }) { Icon(Icons.Rounded.DeleteForever, stringResource(R.string.history_delete_forever)) }
+                    } else {
+                        Box {
+                            IconButton(onClick = { tagMenuVisible = true }) {
+                                Icon(Icons.Rounded.Label, stringResource(R.string.history_manage_selected_tags))
+                            }
+                            DropdownMenu(expanded = tagMenuVisible, onDismissRequest = { tagMenuVisible = false }) {
+                                state.tags.forEach { tag ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.history_add_tag, tag.name)) },
+                                        onClick = {
+                                            tagMenuVisible = false
+                                            onAddTagToSelected(tag.id)
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.history_remove_tag, tag.name)) },
+                                        onClick = {
+                                            tagMenuVisible = false
+                                            onRemoveTagFromSelected(tag.id)
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        IconButton(onClick = onTrashSelected) { Icon(Icons.Rounded.Delete, stringResource(R.string.history_move_to_trash)) }
+                    }
+                    IconButton(onClick = onClearSelection) {
+                        Icon(Icons.Rounded.Close, stringResource(R.string.history_clear_selection))
+                    }
+                }
+            }
 
             when {
                 state.isInitialLoading -> LibraryLoading(modifier = Modifier.weight(1f))
@@ -134,8 +280,16 @@ internal fun LibraryScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         contentPadding = PaddingValues(vertical = 8.dp)
                     ) {
-                        items(state.items, key = RecordingLibraryItem::historyId) { item ->
-                            LibraryItemRow(item = item, onClick = { onOpenItem(item.historyId) })
+                        items(state.items, key = HistoryItem::historyId) { item ->
+                            LibraryItemRow(
+                                item = item,
+                                selected = item.historyId in state.selectedIds,
+                                onClick = {
+                                    if (state.selectedIds.isEmpty()) onOpenItem(item.historyId)
+                                    else onToggleSelection(item.historyId)
+                                },
+                                onLongClick = { onToggleSelection(item.historyId) },
+                            )
                         }
                         if (state.isLoadingMore) {
                             item(key = "library-loading-more") {
@@ -158,17 +312,21 @@ internal fun LibraryScreen(
 
 @Composable
 internal fun LibraryItemRow(
-    item: RecordingLibraryItem,
+    item: HistoryItem,
+    selected: Boolean = false,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
 ) {
     val fallbackTitle = stringResource(R.string.library_detail_heading)
-    val containerColor = if (item.status == RecordingLibraryItemStatus.DRAFT) {
+    val containerColor = if (selected) {
+        MaterialTheme.colorScheme.secondaryContainer
+    } else if (item.status == HistoryItemStatus.DRAFT) {
         MaterialTheme.colorScheme.surfaceContainerLow
     } else {
         MaterialTheme.colorScheme.surfaceContainer
     }
 
-    val status = if (item.status == RecordingLibraryItemStatus.DRAFT) {
+    val status = if (item.status == HistoryItemStatus.DRAFT) {
         stringResource(R.string.library_status_draft)
     } else {
         stringResource(R.string.library_status_complete)
@@ -186,7 +344,7 @@ internal fun LibraryItemRow(
         colors = CardDefaults.cardColors(containerColor = containerColor),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .semantics {
                 contentDescription = accessibilityDescription
             }
@@ -198,13 +356,13 @@ internal fun LibraryItemRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = if (item.status == RecordingLibraryItemStatus.DRAFT) {
+                imageVector = if (item.status == HistoryItemStatus.DRAFT) {
                     Icons.Rounded.Schedule
                 } else {
                     Icons.Rounded.CheckCircle
                 },
                 contentDescription = null,
-                tint = if (item.status == RecordingLibraryItemStatus.DRAFT) {
+                tint = if (item.status == HistoryItemStatus.DRAFT) {
                     MaterialTheme.colorScheme.tertiary
                 } else {
                     MaterialTheme.colorScheme.primary
@@ -222,10 +380,11 @@ internal fun LibraryItemRow(
                 )
                 Spacer(Modifier.height(6.dp))
                 LibraryItemMetadata(item)
-                if (item.previewText.isNotBlank()) {
+                val preview = item.searchMatch?.snippet ?: item.previewText
+                if (preview.isNotBlank()) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = item.previewText,
+                        text = highlightedPreview(item, preview),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
@@ -244,14 +403,37 @@ internal fun LibraryItemRow(
 }
 
 @Composable
-internal fun LibraryItemMetadata(item: RecordingLibraryItem) {
-    val status = if (item.status == RecordingLibraryItemStatus.DRAFT) {
+private fun highlightedPreview(item: HistoryItem, preview: String) = buildAnnotatedString {
+    append(preview)
+    val match = item.searchMatch ?: return@buildAnnotatedString
+    val start = match.highlightStart.coerceIn(0, preview.length)
+    val end = match.highlightEnd.coerceIn(start, preview.length)
+    if (start < end) {
+        addStyle(
+            SpanStyle(
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+            ),
+            start,
+            end,
+        )
+    }
+}
+
+@Composable
+private fun ScopeChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(selected = selected, onClick = onClick, label = { Text(label) })
+}
+
+@Composable
+internal fun LibraryItemMetadata(item: HistoryItem) {
+    val status = if (item.status == HistoryItemStatus.DRAFT) {
         stringResource(R.string.library_status_draft)
     } else {
         stringResource(R.string.library_status_complete)
     }
 
-    val statusColor = if (item.status == RecordingLibraryItemStatus.DRAFT) {
+    val statusColor = if (item.status == HistoryItemStatus.DRAFT) {
         MaterialTheme.colorScheme.tertiary
     } else {
         MaterialTheme.colorScheme.primary

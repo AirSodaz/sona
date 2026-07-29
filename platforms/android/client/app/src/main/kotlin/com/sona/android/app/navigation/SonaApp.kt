@@ -46,12 +46,24 @@ import com.sona.android.app.feature.settings.CloudTranscriptionSettingsUiState
 import com.sona.android.app.feature.settings.RecognitionSettingsUiState
 import com.sona.android.app.feature.settings.SettingsScreen
 import com.sona.android.app.feature.settings.SettingsSection
+import com.sona.android.app.feature.settings.SyncSettingsUiState
+import com.sona.android.app.feature.settings.DataRecoveryUiState
 import com.sona.android.app.ui.theme.SonaTheme
-import com.sona.android.application.library.RecordingLibraryItem
+import com.sona.android.application.library.HistoryItem
+import com.sona.android.application.library.HistoryDateFilter
+import com.sona.android.application.library.HistoryFilterType
+import com.sona.android.application.library.HistoryScope
+import com.sona.android.application.library.HistorySortOrder
+import com.sona.android.application.data.TranscriptExportFormat
+import com.sona.android.application.data.TranscriptExportMode
 import com.sona.android.application.recording.LiveRecordingState
 import com.sona.android.application.recording.OnlineAsrProvider
 import com.sona.android.application.recording.AsrModelSelection
 import com.sona.android.application.recording.AsrSelectionSlot
+import com.sona.android.application.sync.SyncConflictResolution
+import com.sona.android.application.sync.SyncPreset
+import com.sona.android.application.sync.WebDavSyncProvider
+import com.sona.android.application.recovery.RecoveryResolution
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -64,6 +76,8 @@ internal fun SonaApp(
     appearanceState: AppearanceSettingsUiState,
     cloudTranscriptionState: CloudTranscriptionSettingsUiState,
     recognitionSettingsState: RecognitionSettingsUiState,
+    syncState: SyncSettingsUiState,
+    dataRecoveryState: DataRecoveryUiState,
     appLanguage: AppLanguage,
     onAppLanguageChanged: (AppLanguage) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
@@ -74,10 +88,28 @@ internal fun SonaApp(
     onLoadMoreLibrary: () -> Unit,
     onRetryLibrary: () -> Unit,
     onLoadLibraryTranscript: (String) -> Unit,
-    onTranscribeWithCloud: (RecordingLibraryItem) -> Unit,
+    onLibrarySearchChanged: (String) -> Unit,
+    onLibraryScopeChanged: (HistoryScope) -> Unit,
+    onLibraryFilterChanged: (HistoryFilterType) -> Unit,
+    onLibraryDateChanged: (HistoryDateFilter) -> Unit,
+    onLibrarySortChanged: (HistorySortOrder) -> Unit,
+    onToggleLibrarySelection: (String) -> Unit,
+    onClearLibrarySelection: () -> Unit,
+    onTrashLibrarySelection: () -> Unit,
+    onRestoreLibrarySelection: () -> Unit,
+    onPurgeLibrarySelection: () -> Unit,
+    onAddTagToLibrarySelection: (String) -> Unit,
+    onRemoveTagFromLibrarySelection: (String) -> Unit,
+    onUpdateHistoryTitle: (String, String) -> Unit,
+    onUpdateHistoryTags: (String, Set<String>) -> Unit,
+    onCreateHistoryTag: (String) -> Unit,
+    onLoadTranscriptSnapshot: (String, String) -> Unit,
+    onCloseTranscriptSnapshot: () -> Unit,
+    onExportTranscript: (String, TranscriptExportFormat, TranscriptExportMode) -> Unit,
+    onTranscribeWithCloud: (HistoryItem) -> Unit,
     onImportAudio: (String) -> Unit,
     onCancelAudioImport: () -> Unit,
-    onTranscribeWithCurrentEngine: (RecordingLibraryItem) -> Unit,
+    onTranscribeWithCurrentEngine: (HistoryItem) -> Unit,
     onCloudProviderSelected: (OnlineAsrProvider) -> Unit,
     onCloudApiKeyInputChanged: (String) -> Unit,
     onSaveCloudApiKey: () -> Unit,
@@ -87,8 +119,38 @@ internal fun SonaApp(
     onValidateLocalModel: (String) -> Unit,
     onDeleteLocalModel: (String) -> Unit,
     onRefreshRecognitionCatalog: () -> Unit,
+    onRefreshSync: () -> Unit,
+    onTestSyncProvider: (WebDavSyncProvider) -> Unit,
+    onCreateSync: (WebDavSyncProvider, SyncPreset, String) -> Unit,
+    onPreviewSyncJoin: (WebDavSyncProvider, String, String) -> Unit,
+    onJoinSync: (WebDavSyncProvider, String, String) -> Unit,
+    onUnlockSync: (String, String) -> Unit,
+    onUnlockSyncWithRecovery: (String, String) -> Unit,
+    onRunSync: () -> Unit,
+    onPauseSync: (Boolean) -> Unit,
+    onLockSync: () -> Unit,
+    onDisconnectSync: () -> Unit,
+    onGenerateSyncRecoveryKey: () -> Unit,
+    onExportSyncRecoveryKey: (String) -> Unit,
+    onConsumeSyncRecoveryKey: () -> Unit,
+    onResolveSyncConflict: (String, SyncConflictResolution) -> Unit,
+    onLoadSyncConflict: (String) -> Unit,
+    onChangeSyncPreset: (SyncPreset) -> Unit,
+    onChangeSyncPassword: (String, String) -> Unit,
+    onExportBackup: (String) -> Unit,
+    onInspectBackup: (String) -> Unit,
+    onConfirmBackupImport: () -> Unit,
+    onCancelBackupImport: () -> Unit,
+    onRefreshRecovery: () -> Unit,
+    onResumeRecovery: (String) -> Unit,
+    onResumeAllRecovery: () -> Unit,
+    onDiscardRecovery: (String) -> Unit,
+    onClearResolvedRecovery: () -> Unit,
 ) {
     var cloudCredentialFocusRequested by remember { mutableStateOf(false) }
+    val recoveryPendingCount = dataRecoveryState.recovery.items.count {
+        it.resolution == RecoveryResolution.PENDING
+    }
 
     SonaTheme(dynamicColorEnabled = appearanceState.dynamicColorEnabled) {
         val navController = rememberNavController()
@@ -198,6 +260,10 @@ internal fun SonaApp(
                             onOpenFile = { navController.navigate(HOME_FILE_ROUTE) },
                             onOpenLibrary = { navController.navigate(SonaDestination.LIBRARY.route) },
                             onOpenItem = { navController.navigate(libraryDetailRoute(it)) },
+                            recoveryPendingCount = recoveryPendingCount,
+                            onOpenRecovery = {
+                                navController.navigate(settingsRoute(SettingsSection.DATA_RECOVERY))
+                            },
                         )
                     }
                     composable(HOME_LIVE_ROUTE) {
@@ -236,6 +302,22 @@ internal fun SonaApp(
                             onOpenItem = { historyId ->
                                 navController.navigate(libraryDetailRoute(historyId))
                             },
+                            onSearchChanged = onLibrarySearchChanged,
+                            onScopeChanged = onLibraryScopeChanged,
+                            onFilterChanged = onLibraryFilterChanged,
+                            onDateChanged = onLibraryDateChanged,
+                            onSortChanged = onLibrarySortChanged,
+                            onToggleSelection = onToggleLibrarySelection,
+                            onClearSelection = onClearLibrarySelection,
+                            onTrashSelected = onTrashLibrarySelection,
+                            onRestoreSelected = onRestoreLibrarySelection,
+                            onPurgeSelected = onPurgeLibrarySelection,
+                            onAddTagToSelected = onAddTagToLibrarySelection,
+                            onRemoveTagFromSelected = onRemoveTagFromLibrarySelection,
+                            recoveryPendingCount = recoveryPendingCount,
+                            onOpenRecovery = {
+                                navController.navigate(settingsRoute(SettingsSection.DATA_RECOVERY))
+                            },
                         )
                     }
                     composable(
@@ -257,9 +339,20 @@ internal fun SonaApp(
                             item = libraryState.items.firstOrNull { it.historyId == historyId },
                             detail = libraryState.detail,
                             cloudTranscription = libraryState.cloudTranscription,
+                            tags = libraryState.tags,
+                            snapshots = libraryState.snapshots,
+                            snapshotDetail = libraryState.snapshotDetail,
+                            operationInProgress = libraryState.operationInProgress,
+                            operationError = libraryState.operationError,
                             onRetry = { onLoadLibraryTranscript(historyId) },
                             onTranscribeWithCloud = onTranscribeWithCloud,
                             onTranscribeWithCurrentEngine = onTranscribeWithCurrentEngine,
+                            onUpdateTitle = { title -> onUpdateHistoryTitle(historyId, title) },
+                            onUpdateTags = { selected -> onUpdateHistoryTags(historyId, selected) },
+                            onCreateTag = onCreateHistoryTag,
+                            onLoadSnapshot = { snapshotId -> onLoadTranscriptSnapshot(historyId, snapshotId) },
+                            onCloseSnapshot = onCloseTranscriptSnapshot,
+                            onExportTranscript = onExportTranscript,
                         )
                     }
                     composable(
@@ -280,6 +373,8 @@ internal fun SonaApp(
                             appearanceState = appearanceState,
                             cloudTranscriptionState = cloudTranscriptionState,
                             recognitionSettingsState = recognitionSettingsState,
+                            syncState = syncState,
+                            dataRecoveryState = dataRecoveryState,
                             appLanguage = appLanguage,
                             requestCloudCredentialFocus = cloudCredentialFocusRequested,
                             onAppLanguageChanged = onAppLanguageChanged,
@@ -293,6 +388,33 @@ internal fun SonaApp(
                             onValidateLocalModel = onValidateLocalModel,
                             onDeleteLocalModel = onDeleteLocalModel,
                             onRefreshRecognitionCatalog = onRefreshRecognitionCatalog,
+                            onRefreshSync = onRefreshSync,
+                            onTestSyncProvider = onTestSyncProvider,
+                            onCreateSync = onCreateSync,
+                            onPreviewSyncJoin = onPreviewSyncJoin,
+                            onJoinSync = onJoinSync,
+                            onUnlockSync = onUnlockSync,
+                            onUnlockSyncWithRecovery = onUnlockSyncWithRecovery,
+                            onRunSync = onRunSync,
+                            onPauseSync = onPauseSync,
+                            onLockSync = onLockSync,
+                            onDisconnectSync = onDisconnectSync,
+                            onGenerateSyncRecoveryKey = onGenerateSyncRecoveryKey,
+                            onExportSyncRecoveryKey = onExportSyncRecoveryKey,
+                            onConsumeSyncRecoveryKey = onConsumeSyncRecoveryKey,
+                            onResolveSyncConflict = onResolveSyncConflict,
+                            onLoadSyncConflict = onLoadSyncConflict,
+                            onChangeSyncPreset = onChangeSyncPreset,
+                            onChangeSyncPassword = onChangeSyncPassword,
+                            onExportBackup = onExportBackup,
+                            onInspectBackup = onInspectBackup,
+                            onConfirmBackupImport = onConfirmBackupImport,
+                            onCancelBackupImport = onCancelBackupImport,
+                            onRefreshRecovery = onRefreshRecovery,
+                            onResumeRecovery = onResumeRecovery,
+                            onResumeAllRecovery = onResumeAllRecovery,
+                            onDiscardRecovery = onDiscardRecovery,
+                            onClearResolvedRecovery = onClearResolvedRecovery,
                             onCloudCredentialFocusConsumed = {
                                 cloudCredentialFocusRequested = false
                             },

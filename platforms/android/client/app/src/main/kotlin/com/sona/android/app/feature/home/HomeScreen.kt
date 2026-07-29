@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
@@ -53,6 +54,8 @@ internal fun HomeScreen(
     onOpenFile: () -> Unit,
     onOpenLibrary: () -> Unit,
     onOpenItem: (String) -> Unit,
+    recoveryPendingCount: Int,
+    onOpenRecovery: () -> Unit,
 ) {
     val liveAvailable = recognitionSettings.liveSelection.isConfigured(
         recognitionSettings,
@@ -77,6 +80,12 @@ internal fun HomeScreen(
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary,
         )
+        if (recoveryPendingCount > 0) {
+            TextButton(onClick = onOpenRecovery) {
+                Text(pluralStringResource(R.plurals.recovery_pending_notice, recoveryPendingCount, recoveryPendingCount))
+                Icon(Icons.AutoMirrored.Rounded.ArrowForward, null)
+            }
+        }
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val wide = maxWidth >= 600.dp
             if (wide) {

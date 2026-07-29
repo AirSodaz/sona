@@ -7,6 +7,10 @@ import com.sona.android.adapters.android.audio.AndroidAudioImportJobAdapter
 import com.sona.android.adapters.android.audio.AndroidAudioTranscoder
 import com.sona.android.adapters.android.audio.AudioImportWorkerFactory
 import com.sona.android.adapters.android.audio.FrameworkAudioRecordBackend
+import com.sona.android.adapters.android.data.AndroidSafFileTransferAdapter
+import com.sona.android.adapters.android.recovery.AndroidRecoveryController
+import com.sona.android.adapters.android.sync.AndroidSyncScheduler
+import com.sona.android.adapters.android.sync.SyncWorkerFactory
 import com.sona.android.adapters.android.credential.AndroidBatchCredentialRepository
 import com.sona.android.adapters.android.settings.AndroidAppearanceSettingsRepository
 import com.sona.android.adapters.android.settings.AndroidLocalAsrDeviceCapabilities
@@ -15,6 +19,10 @@ import com.sona.android.adapters.android.sync.AndroidSyncSecretStore
 import com.sona.android.adapters.android.system.AndroidMonotonicClock
 import com.sona.android.adapters.android.system.UuidRecordingIdPort
 import com.sona.android.adapters.uniffi.bootstrap.UniffiSonaBootstrapAdapter
+import com.sona.android.adapters.uniffi.data.UniffiBackupAdapter
+import com.sona.android.adapters.uniffi.data.UniffiTranscriptExportAdapter
+import com.sona.android.adapters.uniffi.library.UniffiTagWorkspaceAdapter
+import com.sona.android.adapters.uniffi.recovery.UniffiRecoveryAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiOnlineBatchTranscriptionAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiLocalAsrModelCatalogAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiLocalAsrModelStorageAdapter
@@ -23,10 +31,20 @@ import com.sona.android.adapters.uniffi.recording.UniffiRecordingHistoryAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingProviderCatalogAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingTranscriptionAdapter
 import com.sona.android.adapters.uniffi.sync.UniffiSyncSecretStoreRegistrar
+import com.sona.android.adapters.uniffi.sync.UniffiSyncAdapter
 import com.sona.android.app.feature.recording.AndroidRecordingServiceCommandLauncher
 import com.sona.android.app.feature.recording.RecordingForegroundGateway
 import com.sona.android.application.bootstrap.LoadSonaBootstrap
-import com.sona.android.application.library.RecordingLibraryPort
+import com.sona.android.application.library.HistoryWorkspacePort
+import com.sona.android.application.library.TagWorkspacePort
+import com.sona.android.application.data.BackupPort
+import com.sona.android.application.data.FileTransferPort
+import com.sona.android.application.data.TranscriptExportPort
+import com.sona.android.application.recovery.RecoveryControllerPort
+import com.sona.android.application.recovery.RecoveryUnavailableReason
+import com.sona.android.application.recording.AudioImportEngine
+import com.sona.android.application.sync.SyncPort
+import com.sona.android.application.sync.SyncSchedulerPort
 import com.sona.android.application.recording.BatchCredentialSettingsPort
 import com.sona.android.application.recording.LiveRecordingController
 import com.sona.android.application.recording.LiveRecordingCoordinator
@@ -63,6 +81,13 @@ class SonaAppContainer(context: Context) {
     private val syncSecretStoreRegistration = UniffiSyncSecretStoreRegistrar().apply {
         register(appDataDir, syncSecretStore)
     }
+    private val sync = UniffiSyncAdapter(appDataDir)
+    private val syncScheduler = AndroidSyncScheduler.create(appContext)
+    private val recovery = UniffiRecoveryAdapter(appDataDir)
+    private val backup = UniffiBackupAdapter(appDataDir)
+    private val transcriptExporter = UniffiTranscriptExportAdapter()
+    private val fileTransfer = AndroidSafFileTransferAdapter.create(appContext)
+    private val tags = UniffiTagWorkspaceAdapter(appDataDir, syncScheduler::scheduleAfterLocalChange)
     private val providerCatalog = UniffiStreamingProviderCatalogAdapter()
     private val microphoneCapture = AndroidMicrophoneCapturePort(
         backendFactory = ::createAudioBackend,
@@ -71,8 +96,18 @@ class SonaAppContainer(context: Context) {
     private val streamingTranscription = UniffiStreamingTranscriptionAdapter()
     private val batchTranscription = UniffiOnlineBatchTranscriptionAdapter()
     private val localBatchTranscription = UniffiLocalBatchTranscriptionAdapter()
-    private val history = UniffiRecordingHistoryAdapter(appDataDir)
-    private val audioImportJobs = AndroidAudioImportJobAdapter.create(appContext)
+    private val history = UniffiRecordingHistoryAdapter(appDataDir, syncScheduler::scheduleAfterLocalChange)
+    private val audioImportJobs = AndroidAudioImportJobAdapter.create(appContext, recovery)
+    private val recoveryController = AndroidRecoveryController(appContext, recovery, audioImportJobs) { job ->
+        when (val engine = job.engine) {
+            is AudioImportEngine.Local -> if (
+                localAsrModelStorage.listInstalledModels().none { it.id == engine.modelId }
+            ) RecoveryUnavailableReason.MODEL_MISSING else null
+            is AudioImportEngine.Online -> if (
+                batchCredentialRepository.load(engine.provider) == null
+            ) RecoveryUnavailableReason.CREDENTIAL_MISSING else null
+        }
+    }
     private val audioTranscoder = AndroidAudioTranscoder.create(appContext)
     private val monotonicClock = AndroidMonotonicClock()
     private val recordingIds = UuidRecordingIdPort()
@@ -84,7 +119,14 @@ class SonaAppContainer(context: Context) {
     val recognitionDeviceCapabilities = localAsrDeviceCapabilities
     val batchCredentialSettings: BatchCredentialSettingsPort = batchCredentialRepository
     val syncSecrets: SyncSecretStorePort = syncSecretStore
-    val recordingLibrary: RecordingLibraryPort = history
+    val syncOperations: SyncPort = sync
+    val syncWork: SyncSchedulerPort = syncScheduler
+    val backups: BackupPort = backup
+    val transcriptExports: TranscriptExportPort = transcriptExporter
+    val fileTransfers: FileTransferPort = fileTransfer
+    val recoveryJobs: RecoveryControllerPort = recoveryController
+    val tagWorkspace: TagWorkspacePort = tags
+    val recordingLibrary: HistoryWorkspacePort = history
     val transcribeRecordingWithCloud = TranscribeRecordingWithCloud(
         credentials = batchCredentialRepository,
         transcription = batchTranscription,
@@ -112,11 +154,23 @@ class SonaAppContainer(context: Context) {
     )
     val audioImportJobState = audioImportJobs.state
     val audioImportJobsController = audioImportJobs
-    val audioImportWorkerFactory = AudioImportWorkerFactory(runAudioImport)
+    internal val workerFactory = SonaWorkerFactory(
+        AudioImportWorkerFactory(runAudioImport, recovery),
+        SyncWorkerFactory(sync),
+    )
     internal val recordingGateway = RecordingForegroundGateway(
         launcher = AndroidRecordingServiceCommandLauncher(appContext),
         scope = processScope,
     )
+
+    init {
+        syncScheduler.schedulePeriodic()
+    }
+
+    fun rebindAfterBackupRestore() {
+        syncSecretStoreRegistration.register(appDataDir, syncSecretStore)
+        syncScheduler.schedulePeriodic()
+    }
 
     fun createLiveRecording(scope: CoroutineScope): LiveRecordingController =
         LiveRecordingCoordinator(

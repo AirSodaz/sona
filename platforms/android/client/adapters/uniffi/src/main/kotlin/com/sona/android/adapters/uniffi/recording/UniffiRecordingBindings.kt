@@ -10,6 +10,11 @@ import uniffi.sona_uniffi_bind.FfiHistorySaveImportedFileRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryUpdateTranscriptRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceQueryRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceQueryResultV1
+import uniffi.sona_uniffi_bind.FfiHistoryTrashItemsRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryUpdateItemMetaRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryUpdateTagAssignmentsRequestV1
+import uniffi.sona_uniffi_bind.FfiTranscriptSnapshotMetadataV1
+import uniffi.sona_uniffi_bind.FfiTranscriptSnapshotRecordV1
 import uniffi.sona_uniffi_bind.FfiLiveRecordingDraftResultV1
 import uniffi.sona_uniffi_bind.FfiTranscriptSegment
 import uniffi.sona_uniffi_bind.completeHistoryLiveDraftV1
@@ -17,10 +22,16 @@ import uniffi.sona_uniffi_bind.createAsrStreamingSession
 import uniffi.sona_uniffi_bind.createHistoryLiveDraftV1
 import uniffi.sona_uniffi_bind.findOnlineAsrProvider
 import uniffi.sona_uniffi_bind.loadHistoryTranscriptV1
+import uniffi.sona_uniffi_bind.listHistoryTranscriptSnapshotsV1
+import uniffi.sona_uniffi_bind.loadHistoryTranscriptSnapshotV1
 import uniffi.sona_uniffi_bind.onlineAsrProviderRequest
 import uniffi.sona_uniffi_bind.purgeHistoryItemsV1
 import uniffi.sona_uniffi_bind.queryHistoryWorkspaceV1
 import uniffi.sona_uniffi_bind.saveHistoryImportedFileV1
+import uniffi.sona_uniffi_bind.restoreHistoryItemsV1
+import uniffi.sona_uniffi_bind.trashHistoryItemsV1
+import uniffi.sona_uniffi_bind.updateHistoryItemMetaV1
+import uniffi.sona_uniffi_bind.updateHistoryTagAssignmentsV1
 import uniffi.sona_uniffi_bind.updateHistoryTranscriptV1
 import uniffi.sona_uniffi_bind.volcengineDoubaoAsrConfigFromJson
 
@@ -156,6 +167,13 @@ internal interface UniffiHistoryBindings {
         historyId: String,
     ): List<FfiTranscriptSegment>?
 
+    suspend fun updateItemMeta(appDataDir: String, request: FfiHistoryUpdateItemMetaRequestV1)
+    suspend fun updateTagAssignments(appDataDir: String, request: FfiHistoryUpdateTagAssignmentsRequestV1)
+    suspend fun trashItems(appDataDir: String, request: FfiHistoryTrashItemsRequestV1)
+    suspend fun restoreItems(appDataDir: String, request: FfiHistoryDeleteItemsRequestV1)
+    suspend fun listSnapshots(appDataDir: String, historyId: String): List<FfiTranscriptSnapshotMetadataV1>
+    suspend fun loadSnapshot(appDataDir: String, historyId: String, snapshotId: String): FfiTranscriptSnapshotRecordV1?
+
     suspend fun saveImported(
         appDataDir: String,
         request: FfiHistorySaveImportedFileRequestV1,
@@ -192,6 +210,37 @@ internal object GeneratedUniffiHistoryBindings : UniffiHistoryBindings {
         appDataDir: String,
         historyId: String,
     ): List<FfiTranscriptSegment>? = loadHistoryTranscriptV1(appDataDir, historyId)
+
+    override suspend fun updateItemMeta(
+        appDataDir: String,
+        request: FfiHistoryUpdateItemMetaRequestV1,
+    ) = updateHistoryItemMetaV1(appDataDir, request)
+
+    override suspend fun updateTagAssignments(
+        appDataDir: String,
+        request: FfiHistoryUpdateTagAssignmentsRequestV1,
+    ) = updateHistoryTagAssignmentsV1(appDataDir, request)
+
+    override suspend fun trashItems(
+        appDataDir: String,
+        request: FfiHistoryTrashItemsRequestV1,
+    ) = trashHistoryItemsV1(appDataDir, request)
+
+    override suspend fun restoreItems(
+        appDataDir: String,
+        request: FfiHistoryDeleteItemsRequestV1,
+    ) = restoreHistoryItemsV1(appDataDir, request)
+
+    override suspend fun listSnapshots(
+        appDataDir: String,
+        historyId: String,
+    ): List<FfiTranscriptSnapshotMetadataV1> = listHistoryTranscriptSnapshotsV1(appDataDir, historyId)
+
+    override suspend fun loadSnapshot(
+        appDataDir: String,
+        historyId: String,
+        snapshotId: String,
+    ): FfiTranscriptSnapshotRecordV1? = loadHistoryTranscriptSnapshotV1(appDataDir, historyId, snapshotId)
 
     override suspend fun saveImported(
         appDataDir: String,

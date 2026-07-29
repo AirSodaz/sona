@@ -7,6 +7,8 @@ import com.sona.android.application.recording.AudioImportTarget
 import com.sona.android.application.recording.OnlineAsrProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AudioImportWorkDataTest {
@@ -38,5 +40,26 @@ class AudioImportWorkDataTest {
         )
 
         assertEquals(job, job.toWorkData("Meeting").toAudioImportJob())
+    }
+
+    @Test
+    fun `round trips a versioned Android recovery leaf`() {
+        val job = AudioImportJob(
+            id = "job-recovery",
+            target = AudioImportTarget.NewImport(AudioImportSource("/data/recovery/source.m4a")),
+            engine = AudioImportEngine.Local("model-1"),
+        )
+
+        val payload = job.toRecoveryPayload()
+
+        assertTrue(payload.contains("\"androidAudioImportV1\""))
+        assertFalse(payload.contains("content://"))
+        assertEquals(job, recoveryPayloadToJob(payload))
+    }
+
+    @Test
+    fun `rejects legacy and malformed recovery payloads`() {
+        assertNull(recoveryPayloadToJob("{\"version\":1,\"id\":\"legacy\"}"))
+        assertNull(recoveryPayloadToJob("not-json"))
     }
 }

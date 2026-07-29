@@ -9,6 +9,6 @@ class SonaApplication : Application(), Configuration.Provider {
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
-            .setWorkerFactory(container.audioImportWorkerFactory)
+            .setWorkerFactory(container.workerFactory)
             .build()
 }

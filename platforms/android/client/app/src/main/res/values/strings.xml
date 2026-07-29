@@ -60,6 +60,42 @@
     <string name="library_transcript_heading">Transcript</string>
     <string name="library_transcript_empty">No transcript yet</string>
     <string name="library_transcript_load_failed">Transcript could not be loaded</string>
+    <string name="history_search" translatable="false">Search history</string>
+    <string name="history_scope_all" translatable="false">All</string>
+    <string name="history_scope_untagged" translatable="false">Untagged</string>
+    <string name="history_scope_trash" translatable="false">Trash</string>
+    <plurals name="history_selected_count" translatable="false">
+        <item quantity="one">%1$d item selected</item>
+        <item quantity="other">%1$d items selected</item>
+    </plurals>
+    <string name="history_restore" translatable="false">Restore</string>
+    <string name="history_delete_forever" translatable="false">Delete permanently</string>
+    <string name="history_move_to_trash" translatable="false">Move to trash</string>
+    <string name="history_clear_selection" translatable="false">Clear selection</string>
+    <string name="history_manage_selected_tags" translatable="false">Manage selected tags</string>
+    <string name="history_add_tag" translatable="false">Add %1$s</string>
+    <string name="history_remove_tag" translatable="false">Remove %1$s</string>
+    <string name="history_delete_confirm_title" translatable="false">Delete permanently?</string>
+    <plurals name="history_delete_confirm_body" translatable="false">
+        <item quantity="one">%1$d history item and its lightweight transcript data will be permanently deleted.</item>
+        <item quantity="other">%1$d history items and their lightweight transcript data will be permanently deleted.</item>
+    </plurals>
+    <string name="history_edit_title" translatable="false">Edit title</string>
+    <string name="history_tags" translatable="false">Tags</string>
+    <string name="history_create_tag" translatable="false">Create tag</string>
+    <string name="history_tag_name" translatable="false">Tag name</string>
+    <string name="history_snapshots" translatable="false">Transcript snapshots</string>
+    <string name="history_snapshot_empty" translatable="false">No transcript snapshots</string>
+    <string name="history_snapshot_title" translatable="false">Snapshot · %1$s</string>
+    <string name="history_export_transcript" translatable="false">Export transcript</string>
+    <string name="history_export_format" translatable="false">Format</string>
+    <string name="history_export_content" translatable="false">Content</string>
+    <string name="history_export_original" translatable="false">Original</string>
+    <string name="history_export_translation" translatable="false">Translation</string>
+    <string name="history_export_bilingual" translatable="false">Bilingual</string>
+    <string name="history_operation_failed" translatable="false">The history operation could not be completed.</string>
+    <string name="action_save" translatable="false">Save</string>
+    <string name="action_close" translatable="false">Close</string>
     <string name="action_cloud_transcribe">Cloud transcribe</string>
     <string name="action_transcribe_current_engine">Transcribe again</string>
     <string name="cloud_transcription_heading">Cloud transcription</string>
@@ -148,4 +184,64 @@
     <string name="file_start_transcription">Start transcription</string>
     <string name="file_view_result">View result</string>
     <string name="file_select_another">Choose another file</string>
+    <string name="settings_sync_heading" translatable="false">Sync</string>
+    <string name="settings_sync_summary" translatable="false">WebDAV vault, status, and conflicts</string>
+    <string name="settings_data_heading" translatable="false">Data and recovery</string>
+    <string name="settings_data_summary" translatable="false">Backup, restore, and interrupted tasks</string>
+    <string name="sync_status" translatable="false">Status: %1$s</string>
+    <string name="sync_create" translatable="false">Create vault</string>
+    <string name="sync_join" translatable="false">Join vault</string>
+    <string name="sync_server_url" translatable="false">WebDAV server URL</string>
+    <string name="sync_remote_root" translatable="false">Remote root</string>
+    <string name="sync_username" translatable="false">Username</string>
+    <string name="sync_provider_password" translatable="false">WebDAV password</string>
+    <string name="sync_master_password" translatable="false">Master password</string>
+    <string name="sync_vault_id" translatable="false">Vault ID</string>
+    <string name="sync_test" translatable="false">Test connection</string>
+    <string name="sync_preview" translatable="false">Preview</string>
+    <string name="sync_preview_counts" translatable="false">Local %1$d · Remote %2$d · Conflicts %3$d</string>
+    <string name="sync_confirm_join" translatable="false">Confirm join</string>
+    <string name="sync_recovery_key" translatable="false">Recovery key</string>
+    <string name="sync_unlock" translatable="false">Unlock</string>
+    <string name="sync_counts" translatable="false">Pending %1$d · Conflicts %2$d</string>
+    <string name="sync_now" translatable="false">Sync now</string>
+    <string name="sync_pause" translatable="false">Pause</string>
+    <string name="sync_resume" translatable="false">Resume</string>
+    <string name="sync_lock" translatable="false">Lock</string>
+    <string name="sync_disconnect" translatable="false">Disconnect</string>
+    <string name="sync_generate_recovery_key" translatable="false">Generate recovery key</string>
+    <string name="sync_preset" translatable="false">Sync preset</string>
+    <string name="sync_current_master_password" translatable="false">Current master password</string>
+    <string name="sync_new_master_password" translatable="false">New master password</string>
+    <string name="sync_change_master_password" translatable="false">Change master password</string>
+    <string name="sync_keep_current" translatable="false">Keep current</string>
+    <string name="sync_use_remote" translatable="false">Use remote</string>
+    <string name="sync_keep_both" translatable="false">Keep both</string>
+    <string name="action_copy" translatable="false">Copy</string>
+    <string name="action_export" translatable="false">Export</string>
+    <string name="action_refresh" translatable="false">Refresh</string>
+    <string name="backup_heading" translatable="false">Backup</string>
+    <string name="backup_blocked" translatable="false">Stop recording, imports, sync, and recovery work first.</string>
+    <string name="backup_export" translatable="false">Export backup</string>
+    <string name="backup_import" translatable="false">Import backup</string>
+    <string name="backup_excludes" translatable="false">Backups exclude audio, device credentials, local models, and sync secrets.</string>
+    <string name="backup_confirm_title" translatable="false">Replace local data?</string>
+    <string name="backup_confirm_body" translatable="false">Archive contents · History: %1$d · Transcripts: %2$d · Tags: %3$d. Current local data will be replaced.</string>
+    <string name="backup_manifest_details" translatable="false">Schema %1$d · Created %2$s · App %3$s</string>
+    <string name="backup_replace_scopes" translatable="false">Restore replaces local config, workspace, lightweight history, automation, and analytics included by this archive.</string>
+    <string name="backup_restore" translatable="false">Restore</string>
+    <string name="recovery_heading" translatable="false">Interrupted tasks</string>
+    <plurals name="recovery_pending_notice" translatable="false">
+        <item quantity="one">%1$d interrupted task needs attention</item>
+        <item quantity="other">%1$d interrupted tasks need attention</item>
+    </plurals>
+    <string name="recovery_resume" translatable="false">Resume</string>
+    <string name="recovery_resume_all" translatable="false">Resume all available</string>
+    <string name="recovery_unavailable_source" translatable="false">Source file is missing</string>
+    <string name="recovery_unavailable_model" translatable="false">Recognition model is missing</string>
+    <string name="recovery_unavailable_credential" translatable="false">Provider credential is missing</string>
+    <string name="recovery_unavailable_automation" translatable="false">Automation recovery is unavailable on Android</string>
+    <string name="recovery_unavailable_payload" translatable="false">Recovery data is invalid or from an unsupported version</string>
+    <string name="recovery_discard" translatable="false">Discard</string>
+    <string name="recovery_clear_resolved" translatable="false">Clear resolved</string>
 </resources>

@@ -1,8 +1,12 @@
 package com.sona.android.adapters.uniffi.recording
 
-import com.sona.android.application.library.RecordingLibraryItem
-import com.sona.android.application.library.RecordingLibraryItemStatus
-import com.sona.android.application.library.RecordingLibraryPage
+import com.sona.android.application.library.HistoryItem
+import com.sona.android.application.library.HistoryItemKind
+import com.sona.android.application.library.HistoryItemStatus
+import com.sona.android.application.library.HistoryWorkspaceCounts
+import com.sona.android.application.library.HistoryWorkspacePage
+import com.sona.android.application.library.HistoryWorkspaceQuery
+import com.sona.android.application.library.HistoryWorkspaceSummary
 import com.sona.android.application.recording.CompleteLiveDraftRequest
 import com.sona.android.application.recording.CreateLiveDraftRequest
 import com.sona.android.application.recording.RecordingDestination
@@ -32,6 +36,12 @@ import uniffi.sona_uniffi_bind.FfiHistoryItemKindV1
 import uniffi.sona_uniffi_bind.FfiHistoryItemRecordV1
 import uniffi.sona_uniffi_bind.FfiHistoryItemStatusV1
 import uniffi.sona_uniffi_bind.FfiHistorySaveImportedFileRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryItemMetaPatchV1
+import uniffi.sona_uniffi_bind.FfiHistoryTrashItemsRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryUpdateItemMetaRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryUpdateTagAssignmentsRequestV1
+import uniffi.sona_uniffi_bind.FfiTranscriptSnapshotMetadataV1
+import uniffi.sona_uniffi_bind.FfiTranscriptSnapshotRecordV1
 import uniffi.sona_uniffi_bind.FfiHistoryUpdateTranscriptRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceDateFilterV1
 import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceFilterTypeV1
@@ -50,33 +60,37 @@ class UniffiRecordingHistoryAdapterTest {
         val bindings = FakeHistoryBindings()
         val adapter = UniffiRecordingHistoryAdapter("C:/app-data", bindings)
 
-        val page = adapter.loadPage(offset = 20, limit = 30)
+        val page = adapter.query(HistoryWorkspaceQuery(offset = 20, limit = 30))
         val transcript = adapter.loadTranscript("history-1")
 
         assertEquals(
-            RecordingLibraryPage(
+            HistoryWorkspacePage(
                 items = listOf(
-                    RecordingLibraryItem(
+                    HistoryItem(
                         historyId = "history-1",
                         title = "Recording 1",
                         timestampEpochMillis = 1_725_000_000_000,
                         durationMillis = 2_500,
                         previewText = "Hello mobile history",
-                        status = RecordingLibraryItemStatus.DRAFT,
+                        status = HistoryItemStatus.DRAFT,
+                        kind = HistoryItemKind.RECORDING,
                         tagIds = listOf("tag-1"),
                         deletedAtEpochMillis = null,
                         audioPath = "history-1.wav",
                         audioAvailable = true,
                     ),
                 ),
+                filteredItemCount = 1,
                 hasMore = true,
+                summary = HistoryWorkspaceSummary(1, 2_500, 1_725_000_000_000, 1, 0),
+                counts = HistoryWorkspaceCounts(0, 0, emptyMap()),
             ),
             page,
         )
         assertEquals(listOf(fullSegment()), transcript)
         val request = checkNotNull(bindings.queryRequest)
         assertEquals(FfiHistoryWorkspaceScopeV1.All, request.scope)
-        assertEquals(FfiHistoryWorkspaceFilterTypeV1.RECORDING, request.filterType)
+        assertEquals(FfiHistoryWorkspaceFilterTypeV1.ALL, request.filterType)
         assertEquals(FfiHistoryWorkspaceSortOrderV1.NEWEST, request.sortOrder)
         assertEquals(20uL, request.offset)
         assertEquals(30uL, request.limit)
@@ -131,7 +145,7 @@ class UniffiRecordingHistoryAdapterTest {
         assertThrows(IllegalArgumentException::class.java) {
             runTest {
                 UniffiRecordingHistoryAdapter("C:/app-data", bindings)
-                    .loadPage(offset = 0, limit = 30)
+                    .query(HistoryWorkspaceQuery())
             }
         }
     }
@@ -159,7 +173,7 @@ class UniffiRecordingHistoryAdapterTest {
             val bindings = FakeHistoryBindings().apply { queryResponse = queryResult(record) }
 
             val item = UniffiRecordingHistoryAdapter("C:/app-data", bindings)
-                .loadPage(offset = 0, limit = 30)
+                .query(HistoryWorkspaceQuery())
                 .items
                 .single()
 
@@ -174,7 +188,7 @@ class UniffiRecordingHistoryAdapterTest {
         }
 
         val page = UniffiRecordingHistoryAdapter("C:/app-data", bindings)
-            .loadPage(offset = 0, limit = 30)
+            .query(HistoryWorkspaceQuery())
 
         assertEquals("", page.items.single().title)
     }
@@ -309,6 +323,37 @@ class UniffiRecordingHistoryAdapterTest {
             transcriptFailure?.let { throw it }
             return transcriptResponse
         }
+
+        override suspend fun updateItemMeta(
+            appDataDir: String,
+            request: FfiHistoryUpdateItemMetaRequestV1,
+        ) = Unit
+
+        override suspend fun updateTagAssignments(
+            appDataDir: String,
+            request: FfiHistoryUpdateTagAssignmentsRequestV1,
+        ) = Unit
+
+        override suspend fun trashItems(
+            appDataDir: String,
+            request: FfiHistoryTrashItemsRequestV1,
+        ) = Unit
+
+        override suspend fun restoreItems(
+            appDataDir: String,
+            request: FfiHistoryDeleteItemsRequestV1,
+        ) = Unit
+
+        override suspend fun listSnapshots(
+            appDataDir: String,
+            historyId: String,
+        ): List<FfiTranscriptSnapshotMetadataV1> = emptyList()
+
+        override suspend fun loadSnapshot(
+            appDataDir: String,
+            historyId: String,
+            snapshotId: String,
+        ): FfiTranscriptSnapshotRecordV1? = null
 
         override suspend fun saveImported(
             appDataDir: String,
