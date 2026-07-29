@@ -24,7 +24,6 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.2.1")
     implementation("androidx.media3:media3-common:1.8.0")
     implementation("androidx.work:work-runtime-ktx:2.11.2")
-    implementation("org.apache.commons:commons-compress:1.28.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     compileOnly("androidx.annotation:annotation:1.10.0")
 

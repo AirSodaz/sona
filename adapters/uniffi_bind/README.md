@@ -35,9 +35,9 @@ Hosts may compose Core, Application, Inbound Adapter, and Outbound Adapter.
 This package does that for Android / UniFFI consumers.
 
 Current intentional gaps (product / wiring limits, not missing Core ports) are
-locked by the host capability matrix — for example no `sona-model-downloads`,
-`sona-media-detector`, or `sona-api-server` dependency today. Do not add them
-without updating that matrix and its tests.
+locked by the host capability matrix — for example no `sona-media-detector` or
+`sona-api-server` dependency today. Do not add them without updating that
+matrix and its tests.
 
 ## Further reading
 

@@ -6281,6 +6281,7 @@ dependencies = [
  "sona-core",
  "sona-export",
  "sona-local-asr",
+ "sona-model-downloads",
  "sona-online-asr",
  "sona-online-llm",
  "sona-recovery-fs",

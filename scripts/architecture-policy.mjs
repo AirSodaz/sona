@@ -143,7 +143,7 @@ export const HOST_CAPABILITY_MATRIX = [
     status: {
       sona: 'yes',
       'sona-cli': 'yes',
-      'sona-uniffi-bind': 'no',
+      'sona-uniffi-bind': 'yes',
     },
     packages: ['sona-model-downloads'],
     wiringPatterns: ['\\bsona_model_downloads\\b'],

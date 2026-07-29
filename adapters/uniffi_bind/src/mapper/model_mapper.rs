@@ -1,3 +1,4 @@
+use sona_core::models::config::ModelFileConfig;
 use sona_core::models::downloads::{RequiredCompanionModels, ResolvedModelDownload};
 use sona_core::models::preset_models::{
     ModelCatalogGroup, ModelCatalogModel, ModelCatalogPathMatchToken, ModelCatalogRestoreDefaults,
@@ -195,6 +196,49 @@ pub struct FfiResolvedModelDownload {
     pub download_path: String,
     pub install_path: String,
     pub required_companions: FfiRequiredCompanionModels,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, uniffi::Record)]
+pub struct FfiModelFileConfig {
+    pub encoder: Option<String>,
+    pub decoder: Option<String>,
+    pub model: Option<String>,
+    pub joiner: Option<String>,
+    pub tokens: Option<String>,
+    pub conv_frontend: Option<String>,
+    pub encoder_adaptor: Option<String>,
+    pub llm: Option<String>,
+    pub embedding: Option<String>,
+    pub tokenizer: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
+pub struct FfiInstalledLocalAsrModel {
+    pub id: String,
+    pub display_name: String,
+    pub model_path: String,
+    pub model_type: String,
+    pub modes: Vec<String>,
+    pub size_bytes: u64,
+    pub num_threads: u32,
+    pub vad_model_path: Option<String>,
+    pub punctuation_model_path: Option<String>,
+    pub files: FfiModelFileConfig,
+}
+
+pub fn model_file_config_to_ffi(config: ModelFileConfig) -> FfiModelFileConfig {
+    FfiModelFileConfig {
+        encoder: config.encoder,
+        decoder: config.decoder,
+        model: config.model,
+        joiner: config.joiner,
+        tokens: config.tokens,
+        conv_frontend: config.conv_frontend,
+        encoder_adaptor: config.encoder_adaptor,
+        llm: config.llm,
+        embedding: config.embedding,
+        tokenizer: config.tokenizer,
+    }
 }
 
 pub fn timestamp_support_hint_to_ffi(hint: TimestampSupportHint) -> FfiTimestampSupportHint {

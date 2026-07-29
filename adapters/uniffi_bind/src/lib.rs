@@ -63,24 +63,24 @@ pub use mapper::{
     FfiHistoryWorkspaceQueryRequestV1, FfiHistoryWorkspaceQueryResultV1,
     FfiHistoryWorkspaceScopeV1, FfiHistoryWorkspaceSearchRangeV1,
     FfiHistoryWorkspaceSearchSnippetV1, FfiHistoryWorkspaceSortOrderV1,
-    FfiHistoryWorkspaceSummaryV1, FfiHybridLogicalClockV1, FfiLiveRecordingDraftResultV1,
-    FfiLlmCapabilityPolicyV1, FfiLlmCompletionOptionsV1, FfiLlmCompletionRequestV1,
-    FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmExecutionMetadata, FfiLlmGenerateRequestV1,
-    FfiLlmGenerateSourceV1, FfiLlmModality, FfiLlmModelMetadataSource, FfiLlmModelSummary,
-    FfiLlmModelsRequestV1, FfiLlmPromptCachePolicyV1, FfiLlmPromptChunk, FfiLlmProvider,
-    FfiLlmProviderDefaults, FfiLlmProviderStrategy, FfiLlmResponseFormatKind,
+    FfiHistoryWorkspaceSummaryV1, FfiHybridLogicalClockV1, FfiInstalledLocalAsrModel,
+    FfiLiveRecordingDraftResultV1, FfiLlmCapabilityPolicyV1, FfiLlmCompletionOptionsV1,
+    FfiLlmCompletionRequestV1, FfiLlmCompletionResponse, FfiLlmConfig, FfiLlmExecutionMetadata,
+    FfiLlmGenerateRequestV1, FfiLlmGenerateSourceV1, FfiLlmModality, FfiLlmModelMetadataSource,
+    FfiLlmModelSummary, FfiLlmModelsRequestV1, FfiLlmPromptCachePolicyV1, FfiLlmPromptChunk,
+    FfiLlmProvider, FfiLlmProviderDefaults, FfiLlmProviderStrategy, FfiLlmResponseFormatKind,
     FfiLlmResponseFormatV1, FfiLlmSegmentInput, FfiLlmTaskChunk, FfiLlmTaskFinal,
     FfiLlmTaskProgress, FfiLlmTaskText, FfiLlmTaskType, FfiLlmTokenUsage,
     FfiLlmUsageDashboardStatsV1, FfiModelCatalogGroup, FfiModelCatalogModel,
     FfiModelCatalogPathMatchToken, FfiModelCatalogRestoreDefaults, FfiModelCatalogSection,
     FfiModelCatalogSectionType, FfiModelCatalogSelectedIds, FfiModelCatalogSelectionOptions,
     FfiModelCatalogSnapshot, FfiModelDependencyConfigKey, FfiModelDependencyRequest,
-    FfiModelDependencyRequestsForModel, FfiModelIdByNormalizedPathEntry, FfiModelPathByIdEntry,
-    FfiModelRules, FfiModelSelectionOption, FfiModelSelectionPaths, FfiOnlineAsrBatchCapability,
-    FfiOnlineAsrCapability, FfiOnlineAsrLocalFileBatchMode, FfiOnlineAsrProvider,
-    FfiOnlineAsrProviderRequest, FfiOverviewStatsV1, FfiPolishSegmentsRequest, FfiPolishedSegment,
-    FfiPreparedBackupImportV1, FfiPresetModel, FfiRecoveredQueueItemV1,
-    FfiRecoveredTranscriptSegmentV1, FfiRecoveredTranscriptTimingUnitV1,
+    FfiModelDependencyRequestsForModel, FfiModelFileConfig, FfiModelIdByNormalizedPathEntry,
+    FfiModelPathByIdEntry, FfiModelRules, FfiModelSelectionOption, FfiModelSelectionPaths,
+    FfiOnlineAsrBatchCapability, FfiOnlineAsrCapability, FfiOnlineAsrLocalFileBatchMode,
+    FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest, FfiOverviewStatsV1,
+    FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPreparedBackupImportV1, FfiPresetModel,
+    FfiRecoveredQueueItemV1, FfiRecoveredTranscriptSegmentV1, FfiRecoveredTranscriptTimingUnitV1,
     FfiRecoveredTranscriptTimingV1, FfiRecoveryFileStatV1, FfiRecoveryItemInputV1,
     FfiRecoveryItemStageV1, FfiRecoveryQueueStatusV1, FfiRecoveryResolutionV1,
     FfiRecoverySnapshotV1, FfiRecoverySourceV1, FfiRequiredCompanionModels,
@@ -105,6 +105,7 @@ pub use mapper::{
     FfiUsageTrendPointV1, FfiVoiceTypingReadinessV1, FfiVolcengineDoubaoAsrConfig,
     FfiWebviewCacheUsageCategoryV1,
 };
+pub use model_bridge::{FfiModelDownloadObserver, FfiModelDownloadProgress, FfiModelDownloadStage};
 pub use sona_context::SonaContext;
 pub use sync_secret_store_bridge::FfiSecretStore;
 
@@ -148,6 +149,8 @@ pub enum SonaCoreBindingError {
     Backup { reason: String },
     #[error("{reason}")]
     Sync { reason: String },
+    #[error("{reason}")]
+    ModelDownload { code: String, reason: String },
 }
 
 pub type SonaCoreBindingResult<T> = Result<T, SonaCoreBindingError>;
@@ -1161,6 +1164,37 @@ pub fn resolve_model_download(
     models_dir: String,
 ) -> SonaCoreBindingResult<FfiResolvedModelDownload> {
     model_bridge::resolve_model_download(model_id, models_dir)
+}
+
+#[uniffi::export]
+pub fn list_installed_local_asr_models(
+    models_dir: String,
+    num_threads: u32,
+) -> SonaCoreBindingResult<Vec<FfiInstalledLocalAsrModel>> {
+    model_bridge::list_installed_local_asr_models(models_dir, num_threads)
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn download_local_asr_model(
+    model_id: String,
+    models_dir: String,
+    num_threads: u32,
+    observer: std::sync::Arc<dyn FfiModelDownloadObserver>,
+) -> SonaCoreBindingResult<FfiInstalledLocalAsrModel> {
+    model_bridge::download_local_asr_model(model_id, models_dir, num_threads, observer).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn validate_local_asr_model(
+    model_id: String,
+    models_dir: String,
+) -> SonaCoreBindingResult<bool> {
+    model_bridge::validate_local_asr_model(model_id, models_dir).await
+}
+
+#[uniffi::export]
+pub fn delete_local_asr_model(model_id: String, models_dir: String) -> SonaCoreBindingResult<()> {
+    model_bridge::delete_local_asr_model(model_id, models_dir)
 }
 
 #[uniffi::export]

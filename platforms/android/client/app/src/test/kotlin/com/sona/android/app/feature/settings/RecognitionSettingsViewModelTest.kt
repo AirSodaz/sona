@@ -5,7 +5,6 @@ import com.sona.android.application.recording.LocalAsrCatalogModel
 import com.sona.android.application.recording.LocalAsrDeviceCapabilities
 import com.sona.android.application.recording.LocalAsrDeviceCapabilitiesPort
 import com.sona.android.application.recording.LocalAsrDeviceTier
-import com.sona.android.application.recording.LocalAsrDownloadFile
 import com.sona.android.application.recording.LocalAsrDownloadProgress
 import com.sona.android.application.recording.LocalAsrDownloadProgressListener
 import com.sona.android.application.recording.LocalAsrDownloadStage
@@ -145,12 +144,6 @@ private fun catalogModel() = LocalAsrCatalogModel(
     sizeLabel = "155 MB",
     estimatedSizeBytes = 155L * 1_024 * 1_024,
     isRecommended = true,
-    download = LocalAsrDownloadFile(
-        url = "https://example.com/sensevoice.tar.bz2",
-        sha256 = null,
-        archive = true,
-        fileName = "sensevoice.tar.bz2",
-    ),
 )
 
 private fun deviceCapabilities() = LocalAsrDeviceCapabilities(

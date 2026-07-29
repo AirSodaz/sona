@@ -100,7 +100,7 @@ test('CLI Sync and intentional host gaps stay encoded as non-yes matrix statuses
   const modelDownloads = HOST_CAPABILITY_MATRIX.find(
     (capability) => capability.id === 'model-downloads',
   );
-  assert.equal(modelDownloads.status['sona-uniffi-bind'], 'no');
+  assert.equal(modelDownloads.status['sona-uniffi-bind'], 'yes');
 
   const mediaDetector = HOST_CAPABILITY_MATRIX.find(
     (capability) => capability.id === 'media-detector',

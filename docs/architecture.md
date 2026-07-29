@@ -196,7 +196,7 @@ intentional product boundary, not a missing dependency by accident.
 | Local ASR | yes | yes | yes |
 | Online ASR | yes | no | yes |
 | Online LLM | yes | yes | yes |
-| Model downloads | yes | yes | no |
+| Model downloads | yes | yes | yes |
 | Media detector | yes | yes | no |
 | API server | yes | yes | no |
 | Sync (application + WebDAV) | yes | out of scope | yes |
@@ -204,8 +204,8 @@ intentional product boundary, not a missing dependency by accident.
 | Archive / export / recovery / runtime-fs | yes | yes | yes |
 
 CLI Sync remains undefined product scope and must not be added until that scope
-is specified. UniFFI gaps for model downloads and media detection are current
-host wiring limits, not Core port absences.
+is specified. UniFFI's media detection gap is a current host wiring limit, not
+a Core port absence.
 
 <a id="error-boundaries"></a>
 ## Error boundaries

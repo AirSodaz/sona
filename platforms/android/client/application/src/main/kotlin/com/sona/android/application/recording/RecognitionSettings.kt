@@ -47,16 +47,6 @@ data class LocalAsrCatalogModel(
         numThreads = 2,
         modelType = modelType,
     ),
-    val download: LocalAsrDownloadFile,
-    val vadDownload: LocalAsrDownloadFile? = null,
-    val punctuationDownload: LocalAsrDownloadFile? = null,
-)
-
-data class LocalAsrDownloadFile(
-    val url: String,
-    val sha256: String?,
-    val archive: Boolean,
-    val fileName: String,
 )
 
 enum class LocalAsrDownloadStage {
@@ -127,6 +117,20 @@ interface RecognitionSettingsPort {
 
 fun interface LocalAsrModelCatalogPort {
     suspend fun loadModels(): List<LocalAsrCatalogModel>
+}
+
+interface LocalAsrModelStoragePort {
+    fun listInstalledModels(numThreads: Int = 2): List<LocalAsrModel>
+
+    suspend fun downloadModel(
+        modelId: String,
+        numThreads: Int,
+        progress: LocalAsrDownloadProgressListener,
+    ): LocalAsrModel
+
+    suspend fun validateModel(modelId: String): Boolean
+
+    suspend fun deleteModel(modelId: String)
 }
 
 fun interface LocalAsrDeviceCapabilitiesPort {

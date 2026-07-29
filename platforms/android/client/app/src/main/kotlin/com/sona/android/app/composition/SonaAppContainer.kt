@@ -17,6 +17,7 @@ import com.sona.android.adapters.android.system.UuidRecordingIdPort
 import com.sona.android.adapters.uniffi.bootstrap.UniffiSonaBootstrapAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiOnlineBatchTranscriptionAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiLocalAsrModelCatalogAdapter
+import com.sona.android.adapters.uniffi.recording.UniffiLocalAsrModelStorageAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiLocalBatchTranscriptionAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiRecordingHistoryAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingProviderCatalogAdapter
@@ -39,6 +40,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
+import java.io.File
 
 class SonaAppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -48,13 +50,14 @@ class SonaAppContainer(context: Context) {
     private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository.create(appContext)
     private val localAsrDeviceCapabilities = AndroidLocalAsrDeviceCapabilities.create(appContext)
     private val localAsrModelCatalog = UniffiLocalAsrModelCatalogAdapter()
+    private val localAsrModelStorage = UniffiLocalAsrModelStorageAdapter(
+        File(appContext.filesDir, "models").absolutePath,
+    )
     private val batchCredentialRepository = AndroidBatchCredentialRepository.create(appContext)
     private val recognitionSettingsRepository = AndroidRecognitionSettingsRepository.create(
         appContext,
+        localAsrModelStorage,
         localAsrDeviceCapabilities,
-        legacyBatchProvider = {
-            batchCredentialRepository.configuration.first().selectedProvider
-        },
     )
     private val syncSecretStore = AndroidSyncSecretStore.create(appContext)
     private val syncSecretStoreRegistration = UniffiSyncSecretStoreRegistrar().apply {

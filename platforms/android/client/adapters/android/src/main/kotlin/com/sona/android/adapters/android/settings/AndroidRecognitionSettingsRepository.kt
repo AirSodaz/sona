@@ -16,6 +16,7 @@ import com.sona.android.application.recording.LocalAsrCatalogModel
 import com.sona.android.application.recording.LocalAsrDeviceCapabilitiesPort
 import com.sona.android.application.recording.LocalAsrDownloadProgressListener
 import com.sona.android.application.recording.LocalAsrModel
+import com.sona.android.application.recording.LocalAsrModelStoragePort
 import com.sona.android.application.recording.LocalAsrModelValidation
 import com.sona.android.application.recording.OnlineAsrProvider
 import com.sona.android.application.recording.RecognitionSettings
@@ -27,9 +28,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -37,19 +36,12 @@ import kotlinx.coroutines.sync.withLock
 
 class AndroidRecognitionSettingsRepository internal constructor(
     private val dataStore: DataStore<Preferences>,
-    private val storage: AndroidLocalAsrModelStorage,
+    private val storage: LocalAsrModelStoragePort,
     private val deviceCapabilities: LocalAsrDeviceCapabilitiesPort,
-    private val legacyBatchProvider: suspend () -> OnlineAsrProvider = {
-        OnlineAsrProvider.VOLCENGINE_DOUBAO
-    },
 ) : RecognitionSettingsPort {
     private val modelOperationMutex = Mutex()
-    private val migrationMutex = Mutex()
 
-    override val settings: Flow<RecognitionSettings> = flow {
-        migrateIfNeeded()
-        emitAll(dataStore.data)
-    }
+    override val settings: Flow<RecognitionSettings> = dataStore.data
         .catch { error ->
             if (error is IOException) emit(emptyPreferences()) else throw error
         }
@@ -70,20 +62,27 @@ class AndroidRecognitionSettingsRepository internal constructor(
     ): LocalAsrModel = modelOperationMutex.withLock {
         val capabilities = deviceCapabilities.detect()
         require(capabilities.supported) { "This device does not support local recognition." }
-        val installed = storage.downloadModel(model, capabilities.recommendedThreads, progress)
-        storage.deleteOtherCatalogInstalls(model.id, installed.installRoot)
+        require(
+            hasLocalModelDownloadStorage(
+                capabilities.availableStorageBytes,
+                model.estimatedSizeBytes,
+            ),
+        ) {
+            "Not enough storage for this model."
+        }
+        val installed = storage.downloadModel(model.id, capabilities.recommendedThreads, progress)
         bumpRevision()
-        installed.model
+        installed
     }
 
     override suspend fun validateLocalModel(modelId: String): LocalAsrModelValidation =
         modelOperationMutex.withLock {
-            LocalAsrModelValidation(modelId, storage.validate(modelId))
+            LocalAsrModelValidation(modelId, storage.validateModel(modelId))
         }
 
     override suspend fun deleteLocalModel(modelId: String) {
         modelOperationMutex.withLock {
-            storage.delete(modelId)
+            storage.deleteModel(modelId)
             dataStore.edit { preferences ->
                 preferences[MODEL_REVISION] = (preferences[MODEL_REVISION] ?: 0) + 1
                 AsrSelectionSlot.entries.forEach { slot ->
@@ -101,10 +100,9 @@ class AndroidRecognitionSettingsRepository internal constructor(
         when (selection) {
             is AsrModelSelection.Local -> {
                 val model = storage.listInstalledModels()
-                    .firstOrNull { it.model.id == selection.modelId }
-                    ?.model
+                    .firstOrNull { it.id == selection.modelId }
                     ?: throw IllegalArgumentException("The selected local model is unavailable.")
-                require(model.supports(mode) && localModelIsUsable(model)) {
+                require(model.supports(mode)) {
                     "The selected local model is incompatible or invalid."
                 }
             }
@@ -114,48 +112,8 @@ class AndroidRecognitionSettingsRepository internal constructor(
         }
     }
 
-    private suspend fun migrateIfNeeded() = migrationMutex.withLock {
-        val preferences = dataStore.data.first()
-        if ((preferences[SCHEMA_VERSION] ?: 0) >= CURRENT_SCHEMA_VERSION) return@withLock
-
-        val hasNewSelection = AsrSelectionSlot.entries.any { slot ->
-            preferences[selectionKindKey(slot)] != null
-        }
-        val hasLegacySelection = preferences[LEGACY_ENGINE] != null ||
-            preferences[LEGACY_MODEL_ID] != null
-        val installedModels = storage.listInstalledModels().map(InstalledLocalAsrModel::model)
-
-        val migrated = if (hasNewSelection) {
-            null
-        } else if (!hasLegacySelection) {
-            RecognitionSettings()
-        } else {
-            val localRequested = preferences[LEGACY_ENGINE] == "LOCAL"
-            migrateLegacyRecognitionSettings(
-                legacyEngine = preferences[LEGACY_ENGINE],
-                legacyModelId = preferences[LEGACY_MODEL_ID],
-                installedModels = installedModels,
-                legacyBatchProvider = if (localRequested) {
-                    OnlineAsrProvider.VOLCENGINE_DOUBAO
-                } else {
-                    legacyBatchProvider()
-                },
-            )
-        }
-
-        dataStore.edit { mutable ->
-            if (!hasNewSelection && migrated != null) {
-                writeSelection(mutable, AsrSelectionSlot.LIVE, migrated.liveSelection)
-                writeSelection(mutable, AsrSelectionSlot.BATCH, migrated.batchSelection)
-            }
-            mutable[SCHEMA_VERSION] = CURRENT_SCHEMA_VERSION
-            LEGACY_STRING_KEYS.forEach(mutable::remove)
-            LEGACY_INT_KEYS.forEach(mutable::remove)
-        }
-    }
-
     private fun toSettings(preferences: Preferences): RecognitionSettings {
-        val installedModels = storage.listInstalledModels().map(InstalledLocalAsrModel::model)
+        val installedModels = storage.listInstalledModels()
         return RecognitionSettings(
             liveSelection = readSelection(preferences, AsrSelectionSlot.LIVE),
             batchSelection = readSelection(preferences, AsrSelectionSlot.BATCH),
@@ -169,34 +127,12 @@ class AndroidRecognitionSettingsRepository internal constructor(
 
     companion object {
         private const val DATASTORE_NAME = "recognition_settings"
-        private const val CURRENT_SCHEMA_VERSION = 2
-        private val SCHEMA_VERSION = intPreferencesKey("schema_version")
         private val MODEL_REVISION = intPreferencesKey("local_model_revision")
-        private val LEGACY_ENGINE = stringPreferencesKey("engine")
-        private val LEGACY_MODEL_ID = stringPreferencesKey("local_model_id")
-        private val LEGACY_STRING_KEYS = listOf(
-            LEGACY_ENGINE,
-            LEGACY_MODEL_ID,
-            stringPreferencesKey("local_model_name"),
-            stringPreferencesKey("local_model_path"),
-            stringPreferencesKey("local_model_type"),
-            stringPreferencesKey("local_vad_path"),
-            stringPreferencesKey("local_file_encoder"),
-            stringPreferencesKey("local_file_decoder"),
-            stringPreferencesKey("local_file_model"),
-            stringPreferencesKey("local_file_joiner"),
-            stringPreferencesKey("local_file_tokens"),
-        )
-        private val LEGACY_INT_KEYS = listOf(
-            intPreferencesKey("local_model_threads"),
-        )
 
         fun create(
             context: Context,
+            storage: LocalAsrModelStoragePort,
             deviceCapabilities: LocalAsrDeviceCapabilitiesPort,
-            legacyBatchProvider: suspend () -> OnlineAsrProvider = {
-                OnlineAsrProvider.VOLCENGINE_DOUBAO
-            },
         ): AndroidRecognitionSettingsRepository {
             val appContext = context.applicationContext
             return AndroidRecognitionSettingsRepository(
@@ -205,13 +141,21 @@ class AndroidRecognitionSettingsRepository internal constructor(
                     scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
                     produceFile = { appContext.preferencesDataStoreFile(DATASTORE_NAME) },
                 ),
-                storage = AndroidLocalAsrModelStorage(appContext),
+                storage = storage,
                 deviceCapabilities = deviceCapabilities,
-                legacyBatchProvider = legacyBatchProvider,
             )
         }
     }
 }
+
+internal fun hasLocalModelDownloadStorage(availableBytes: Long, estimatedSizeBytes: Long): Boolean {
+    if (estimatedSizeBytes <= 0) return true
+    if (estimatedSizeBytes > (Long.MAX_VALUE - LOCAL_MODEL_STORAGE_MARGIN_BYTES) / 2) return false
+    val requiredBytes = estimatedSizeBytes * 2 + LOCAL_MODEL_STORAGE_MARGIN_BYTES
+    return availableBytes >= requiredBytes
+}
+
+private const val LOCAL_MODEL_STORAGE_MARGIN_BYTES = 128L * 1_024 * 1_024
 
 private val AsrSelectionSlot.mode: AsrMode
     get() = if (this == AsrSelectionSlot.LIVE) AsrMode.STREAMING else AsrMode.BATCH
@@ -259,26 +203,3 @@ private val LIVE_SELECTION_KIND = stringPreferencesKey("live_selection_kind")
 private val LIVE_SELECTION_VALUE = stringPreferencesKey("live_selection_value")
 private val BATCH_SELECTION_KIND = stringPreferencesKey("batch_selection_kind")
 private val BATCH_SELECTION_VALUE = stringPreferencesKey("batch_selection_value")
-
-internal fun migrateLegacyRecognitionSettings(
-    legacyEngine: String?,
-    legacyModelId: String?,
-    installedModels: List<LocalAsrModel>,
-    legacyBatchProvider: OnlineAsrProvider,
-): RecognitionSettings {
-    val model = installedModels.firstOrNull { it.id == legacyModelId }
-    if (legacyEngine == "LOCAL" && model != null) {
-        return RecognitionSettings(
-            liveSelection = model.takeIf { it.supports(AsrMode.STREAMING) }
-                ?.let { AsrModelSelection.Local(it.id) },
-            batchSelection = model.takeIf { it.supports(AsrMode.BATCH) }
-                ?.let { AsrModelSelection.Local(it.id) },
-            installedModels = installedModels,
-        )
-    }
-    return RecognitionSettings(
-        liveSelection = AsrModelSelection.Online(OnlineAsrProvider.VOLCENGINE_DOUBAO),
-        batchSelection = AsrModelSelection.Online(legacyBatchProvider),
-        installedModels = installedModels,
-    )
-}

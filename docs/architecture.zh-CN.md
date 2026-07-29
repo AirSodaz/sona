@@ -176,14 +176,14 @@ crate 之前，优先把 Core 内服务写清楚。
 | Local ASR | yes | yes | yes |
 | Online ASR | yes | no | yes |
 | Online LLM | yes | yes | yes |
-| Model downloads | yes | yes | no |
+| Model downloads | yes | yes | yes |
 | Media detector | yes | yes | no |
 | API server | yes | yes | no |
 | Sync（application + WebDAV） | yes | out of scope | yes |
 | TypeScript/Tauri 契约绑定 | yes | no | no |
 | Archive / export / recovery / runtime-fs | yes | yes | yes |
 
-CLI Sync 的产品范围尚未定义，在明确范围之前不得接入。UniFFI 缺少 model downloads 与 media detector 属于当前 Host 接线限制，不是 Core 端口缺失。
+CLI Sync 的产品范围尚未定义，在明确范围之前不得接入。UniFFI 缺少 media detector 属于当前 Host 接线限制，不是 Core 端口缺失。
 
 <a id="error-boundaries"></a>
 ## 错误边界

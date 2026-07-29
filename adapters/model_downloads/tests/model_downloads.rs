@@ -4,9 +4,10 @@ use sha2::{Digest, Sha256};
 use sona_core::models::downloads::ResolvedModelDownload;
 use sona_core::models::preset_models::find_preset_model;
 use sona_model_downloads::{
-    DownloadError, DownloadFileOperation, download_model, installed_model_is_valid,
-    remove_model_install_path, sha256_file,
+    DownloadError, DownloadFileOperation, ModelDownloadStage, download_model,
+    download_model_with_cancel, installed_model_is_valid, remove_model_install_path, sha256_file,
 };
+use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -93,4 +94,45 @@ async fn downloads_single_file_model_and_validates_existing_hash() {
     assert_eq!(downloaded, install_path);
     assert_eq!(tokio::fs::read(&downloaded).await.unwrap(), body);
     assert!(installed_model_is_valid(&resolved).await.unwrap());
+}
+
+#[tokio::test]
+async fn cancellable_model_download_reports_download_verify_and_install_stages() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    let body = b"progress-model";
+    let hash = sha256_hex(body);
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let app = Router::new().route("/model.onnx", get(move || async move { body }));
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    let mut model = find_preset_model("silero-vad").unwrap().clone();
+    model.url = format!("http://{addr}/model.onnx");
+    model.sha256 = Some(hash);
+    let install_path = models_dir.join("silero_vad.onnx");
+    let resolved = ResolvedModelDownload {
+        model,
+        models_dir,
+        download_path: install_path.clone(),
+        install_path,
+    };
+    let stages = Arc::new(Mutex::new(Vec::new()));
+    let recorded_stages = stages.clone();
+
+    download_model_with_cancel(
+        &resolved,
+        Arc::new(tokio::sync::Notify::new()),
+        move |event| recorded_stages.lock().unwrap().push(event.stage),
+    )
+    .await
+    .unwrap();
+
+    let stages = stages.lock().unwrap();
+    assert!(stages.contains(&ModelDownloadStage::Downloading));
+    assert!(stages.contains(&ModelDownloadStage::Verifying));
+    assert!(stages.contains(&ModelDownloadStage::Installing));
 }

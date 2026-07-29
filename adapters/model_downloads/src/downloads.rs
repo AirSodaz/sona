@@ -8,9 +8,14 @@ use tokio::fs::OpenOptions;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::Notify;
 
+const MAX_REDIRECTS: usize = 5;
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+const READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DownloadFileOperation {
     CreateModelsDirectory,
+    AcquireInstallLock,
     InspectInstall,
     RemoveInstallFile,
     RemoveInstallDirectory,
@@ -25,6 +30,7 @@ impl std::fmt::Display for DownloadFileOperation {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let value = match self {
             Self::CreateModelsDirectory => "create models directory",
+            Self::AcquireInstallLock => "acquire model install lock",
             Self::InspectInstall => "inspect model install",
             Self::RemoveInstallFile => "remove model file",
             Self::RemoveInstallDirectory => "remove model directory",
@@ -145,6 +151,21 @@ impl DownloadClient {
         Ok(Self {
             client: reqwest::Client::builder()
                 .user_agent("Sona/1.0")
+                .connect_timeout(CONNECT_TIMEOUT)
+                .read_timeout(READ_TIMEOUT)
+                .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                    if attempt.previous().len() > MAX_REDIRECTS {
+                        return attempt.error("too many model download redirects");
+                    }
+                    let started_with_https = attempt
+                        .previous()
+                        .first()
+                        .is_some_and(|url| url.scheme() == "https");
+                    if started_with_https && attempt.url().scheme() != "https" {
+                        return attempt.error("model download redirect cannot downgrade HTTPS");
+                    }
+                    attempt.follow()
+                }))
                 .build()
                 .map_err(|error| DownloadError::HttpClient {
                     reason: error.to_string(),

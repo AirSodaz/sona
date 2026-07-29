@@ -21,6 +21,7 @@ sona-archive = { path = "../archive" }
 sona-core = { path = "../../core" }
 sona-export = { path = "../export" }
 sona-local-asr = { path = "../local_asr" }
+sona-model-downloads = { path = "../model_downloads" }
 sona-online-asr = { path = "../online_asr" }
 sona-online-llm = { path = "../online_llm" }
 sona-recovery-fs = { path = "../recovery_fs" }

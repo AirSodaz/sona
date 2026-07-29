@@ -83,9 +83,9 @@ test('Android local ASR catalog, managed downloads, and recording startup are wi
     'AndroidRecognitionSettingsRepository.kt',
   );
   const storage = clientSource(
-    path.join('adapters', 'android'),
-    'kotlin', 'com', 'sona', 'android', 'adapters', 'android', 'settings',
-    'AndroidLocalAsrModelStorage.kt',
+    path.join('adapters', 'uniffi'),
+    'kotlin', 'com', 'sona', 'android', 'adapters', 'uniffi', 'recording',
+    'UniffiLocalAsrModelStorageAdapter.kt',
   );
   const capabilities = clientSource(
     path.join('adapters', 'android'),
@@ -119,12 +119,12 @@ test('Android local ASR catalog, managed downloads, and recording startup are wi
   assert.match(settingsPort, /validateLocalModel/u);
   assert.match(settingsPort, /deleteLocalModel/u);
   assert.match(coordinator, /is AsrModelSelection\.Local[\s\S]*StreamingEngineConfig\.LocalSherpa/u);
-  assert.match(repository, /AndroidLocalAsrModelStorage/u);
-  assert.match(storage, /filesDir, "models"/u);
-  assert.match(storage, /verifySha256/u);
-  assert.match(storage, /extractTarBz2/u);
-  assert.match(storage, /safeArchiveDestination/u);
-  assert.match(storage, /silero_vad\.onnx/u);
+  assert.match(settingsPort, /interface LocalAsrModelStoragePort/u);
+  assert.match(repository, /LocalAsrModelStoragePort/u);
+  assert.match(storage, /downloadLocalAsrModel/u);
+  assert.match(storage, /validateLocalAsrModel/u);
+  assert.match(storage, /deleteLocalAsrModel/u);
+  assert.doesNotMatch(storage, /HttpURLConnection|MessageDigest|TarArchiveInputStream/u);
   assert.match(capabilities, /ActivityManager\.MemoryInfo/u);
   assert.match(capabilities, /StatFs/u);
   assert.match(catalog, /presetModels/u);
