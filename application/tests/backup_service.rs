@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+﻿use std::collections::VecDeque;
 use std::sync::Mutex;
 
 use serde_json::{Value, json};
@@ -12,13 +12,13 @@ use sona_core::backup::{
 };
 use sona_core::config::CURRENT_CONFIG_VERSION;
 use sona_core::history::HistoryBackupSnapshot;
-use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::ports::time::{ClockError, ClockPort};
 
 const FIXED_NOW_MS: u64 = 1_783_900_800_123;
 
 struct FixedClock;
 
-impl UnixMillisClock for FixedClock {
+impl ClockPort for FixedClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(FIXED_NOW_MS)
     }
@@ -26,7 +26,7 @@ impl UnixMillisClock for FixedClock {
 
 struct FailingClock;
 
-impl UnixMillisClock for FailingClock {
+impl ClockPort for FailingClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         Err(ClockError::BeforeUnixEpoch(
             "clock before Unix epoch".to_string(),

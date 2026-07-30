@@ -1,5 +1,5 @@
-use crate::integrations::asr::AsrState;
-use crate::platform::paths::{PathKind, PathProvider};
+﻿use crate::integrations::asr::AsrState;
+use crate::platform::paths::{PathKind, PathPort};
 use tauri::State;
 
 pub use sona_core::runtime::diagnostics::{
@@ -20,7 +20,7 @@ fn validate_diagnostics_snapshot(snapshot: &DiagnosticsCoreSnapshot) -> Result<(
 }
 
 pub async fn get_diagnostics_core_snapshot(
-    provider: &dyn PathProvider,
+    provider: &dyn PathPort,
     state: State<'_, AsrState>,
     mut input: DiagnosticsCoreInput,
 ) -> Result<DiagnosticsCoreSnapshot, String> {

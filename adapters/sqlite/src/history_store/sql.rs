@@ -1,9 +1,9 @@
-use chrono::Local;
+﻿use chrono::Local;
 use sona_core::history::item_factory::HistoryItemGeneratedValues;
 use sona_core::history::mutation_repository::HistoryMutationError;
 use sona_core::history::{HistoryIdGenerator, HistoryItemRecord};
 use sona_core::ports::fs::{FileSystemError, FileSystemOperation};
-use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::ports::time::{ClockError, ClockPort};
 use std::fs;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
@@ -27,7 +27,7 @@ pub(super) fn require_history_source_file(
 }
 
 pub(super) fn new_history_item_generated_values(
-    clock: &dyn UnixMillisClock,
+    clock: &dyn ClockPort,
     ids: &dyn HistoryIdGenerator,
 ) -> Result<HistoryItemGeneratedValues, ClockError> {
     let timestamp = clock.now_ms()?;

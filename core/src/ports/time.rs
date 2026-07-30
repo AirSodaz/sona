@@ -1,4 +1,4 @@
-use thiserror::Error;
+﻿use thiserror::Error;
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum ClockError {
@@ -10,6 +10,6 @@ pub enum ClockError {
     Unavailable(String),
 }
 
-pub trait UnixMillisClock: Send + Sync {
+pub trait ClockPort: Send + Sync {
     fn now_ms(&self) -> Result<u64, ClockError>;
 }

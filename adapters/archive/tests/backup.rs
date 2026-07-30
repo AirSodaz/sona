@@ -1,4 +1,4 @@
-use std::fs::{self, File};
+﻿use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -21,7 +21,7 @@ use sona_core::history::{
     HistoryAudioStatus, HistoryBackupSnapshot, HistoryItemKind, HistoryItemRecord,
     HistoryItemStatus,
 };
-use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::ports::time::{ClockError, ClockPort};
 use sona_core::tag::TagRecord;
 use tar::{EntryType, Header};
 use uuid::Uuid;
@@ -446,7 +446,7 @@ impl BackupStateRepository for FixedBackupState {
 
 struct FixedClock(u64);
 
-impl UnixMillisClock for FixedClock {
+impl ClockPort for FixedClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(self.0)
     }

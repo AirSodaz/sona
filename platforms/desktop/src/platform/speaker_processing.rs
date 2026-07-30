@@ -1,4 +1,4 @@
-use crate::platform::paths::{PathKind, PathProvider};
+﻿use crate::platform::paths::{PathKind, PathPort};
 
 pub use sona_core::transcription::speaker::{
     SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample,
@@ -21,7 +21,7 @@ pub async fn annotate_speaker_segments_from_file(
 }
 
 pub async fn import_speaker_profile_sample(
-    provider: &dyn PathProvider,
+    provider: &dyn PathPort,
     profile_id: String,
     source_path: String,
     source_name: Option<String>,

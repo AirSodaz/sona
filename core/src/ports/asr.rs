@@ -1,4 +1,4 @@
-use crate::models::config::ModelFileConfig;
+﻿use crate::models::config::ModelFileConfig;
 use crate::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 use crate::transcription::postprocess::TranscriptPostprocessor;
 pub use crate::transcription::postprocess::{
@@ -165,7 +165,7 @@ impl From<&str> for AsrPortError {
 }
 
 #[async_trait]
-pub trait BatchTranscriber: Send + Sync {
+pub trait BatchTranscriberPort: Send + Sync {
     async fn transcribe(
         &self,
         plan: BatchTranscribePlan,
@@ -378,7 +378,7 @@ pub struct OnlineBatchTranscriptionOutput {
 }
 
 #[async_trait]
-pub trait OnlineBatchTranscriber: Send + Sync {
+pub trait OnlineBatchTranscriberPort: Send + Sync {
     async fn transcribe(
         &self,
         request: OnlineBatchTranscriptionRequest,

@@ -1,9 +1,9 @@
-/// Re-export the core trait so platform consumers can use either path.
-pub use sona_core::ports::event::{EventEmitter, EventError};
+﻿/// Re-export the core trait so platform consumers can use either path.
+pub use sona_core::ports::event::{EventEmitterPort, EventError};
 
 use tauri::{AppHandle, Emitter, Runtime};
 
-/// Tauri adapter: wraps AppHandle into the core EventEmitter port.
+/// Tauri adapter: wraps AppHandle into the core EventEmitterPort port.
 ///
 /// Using a newtype avoids Rust's orphan rule — the trait lives in `sona-core`
 /// and the foreign type `AppHandle` comes from `tauri`, so a direct impl is
@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter, Runtime};
 /// explicit: platform code adapts Tauri into the core port.
 pub struct TauriEventEmitter<R: Runtime>(pub AppHandle<R>);
 
-impl<R: Runtime> EventEmitter for TauriEventEmitter<R> {
+impl<R: Runtime> EventEmitterPort for TauriEventEmitter<R> {
     fn emit(&self, event: &str, payload: serde_json::Value) -> Result<(), EventError> {
         Emitter::emit(&self.0, event, &payload)
             .map_err(|error| EventError::new(event, error.to_string()))
@@ -40,7 +40,7 @@ impl MockEventEmitter {
 }
 
 #[cfg(test)]
-impl EventEmitter for MockEventEmitter {
+impl EventEmitterPort for MockEventEmitter {
     fn emit(&self, event: &str, payload: serde_json::Value) -> Result<(), EventError> {
         let mut guard = self.emitted.lock().expect("emitted lock poisoned");
         guard.push((event.to_string(), payload));

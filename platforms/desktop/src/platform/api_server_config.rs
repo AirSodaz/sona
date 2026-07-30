@@ -1,4 +1,4 @@
-use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
+﻿use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
 use sona_core::config::ConfigError;
 use sona_core::runtime::serve::{
     ServeStartupSettings, online_asr_config_from_app_config, serve_startup_settings_from_app_config,
@@ -35,7 +35,7 @@ fn with_config_adapter<T>(
 }
 
 fn load_sqlite_app_config_payload(
-    provider: &dyn PathProvider,
+    provider: &dyn PathPort,
     database: Option<Arc<Database>>,
 ) -> Option<serde_json::Value> {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData).ok()?;
@@ -51,7 +51,7 @@ fn load_sqlite_app_config_payload(
 }
 
 fn load_sqlite_serve_startup_settings(
-    provider: &dyn PathProvider,
+    provider: &dyn PathPort,
     database: Option<Arc<Database>>,
 ) -> Option<ServeStartupSettings> {
     let app_local_data_dir = provider.resolve_path(PathKind::AppLocalData).ok()?;
@@ -66,7 +66,7 @@ fn load_sqlite_serve_startup_settings(
     .flatten()
 }
 
-fn load_legacy_settings_config(provider: &dyn PathProvider) -> Option<serde_json::Value> {
+fn load_legacy_settings_config(provider: &dyn PathPort) -> Option<serde_json::Value> {
     let app_data_dir = provider.resolve_path(PathKind::AppData).ok()?;
     sona_runtime_fs::load_legacy_settings_app_config(&app_data_dir)
         .map_err(|error| {
@@ -77,19 +77,19 @@ fn load_legacy_settings_config(provider: &dyn PathProvider) -> Option<serde_json
         .flatten()
 }
 
-fn load_app_config_for_server(provider: &dyn PathProvider) -> Option<serde_json::Value> {
+fn load_app_config_for_server(provider: &dyn PathPort) -> Option<serde_json::Value> {
     load_app_config_for_server_with_database(provider, None)
 }
 
 fn load_app_config_for_server_with_database(
-    provider: &dyn PathProvider,
+    provider: &dyn PathPort,
     database: Option<Arc<Database>>,
 ) -> Option<serde_json::Value> {
     load_sqlite_app_config_payload(provider, database)
         .or_else(|| load_legacy_settings_config(provider))
 }
 
-pub fn load_online_asr_config(provider: &dyn PathProvider) -> HashMap<String, serde_json::Value> {
+pub fn load_online_asr_config(provider: &dyn PathPort) -> HashMap<String, serde_json::Value> {
     load_app_config_for_server(provider)
         .map(|config| online_asr_config_from_app_config(&config))
         .unwrap_or_default()
@@ -107,7 +107,7 @@ pub fn load_online_asr_config_for_app<R: tauri::Runtime>(
     .unwrap_or_default()
 }
 
-pub fn load_api_server_startup_settings(provider: &dyn PathProvider) -> ServeStartupSettings {
+pub fn load_api_server_startup_settings(provider: &dyn PathPort) -> ServeStartupSettings {
     if let Some(settings) = load_sqlite_serve_startup_settings(provider, None) {
         return settings;
     }

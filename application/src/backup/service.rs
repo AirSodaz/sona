@@ -1,8 +1,8 @@
-use serde_json::Value;
+﻿use serde_json::Value;
 
 use crate::config::service::app_config_stored_state_from_value;
 use sona_core::config::migrate_app_config;
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::ClockPort;
 
 use sona_core::backup::{
     BackupApplyPreparedImportRequest, BackupApplyResult, BackupArchivePort, BackupDataset,
@@ -14,14 +14,14 @@ use sona_core::backup::{
 pub struct BackupService<'a> {
     archive: &'a dyn BackupArchivePort,
     state: &'a dyn BackupStateRepository,
-    clock: &'a dyn UnixMillisClock,
+    clock: &'a dyn ClockPort,
 }
 
 impl<'a> BackupService<'a> {
     pub fn new(
         archive: &'a dyn BackupArchivePort,
         state: &'a dyn BackupStateRepository,
-        clock: &'a dyn UnixMillisClock,
+        clock: &'a dyn ClockPort,
     ) -> Self {
         Self {
             archive,

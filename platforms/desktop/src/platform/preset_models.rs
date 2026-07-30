@@ -1,11 +1,11 @@
-use crate::platform::paths::{PathKind, PathProvider};
+﻿use crate::platform::paths::{PathKind, PathPort};
 pub use sona_core::models::preset_models::*;
 pub use sona_runtime_fs::{build_model_catalog_snapshot, is_preset_model_installed_at};
 use std::path::PathBuf;
 
 /// Returns a settings-page-ready catalog snapshot for the app-local models dir.
 pub async fn get_model_catalog_snapshot(
-    provider: &dyn PathProvider,
+    provider: &dyn PathPort,
 ) -> Result<ModelCatalogSnapshot, String> {
     let models_dir = provider
         .resolve_path(PathKind::AppLocalData)
@@ -23,7 +23,7 @@ pub async fn get_model_catalog_snapshot_for_app<R: tauri::Runtime>(
 }
 
 pub async fn resolve_model_catalog_selected_ids_command(
-    provider: &dyn PathProvider,
+    provider: &dyn PathPort,
     paths: ModelSelectionPaths,
 ) -> Result<ModelCatalogSelectedIds, String> {
     let models_dir = provider

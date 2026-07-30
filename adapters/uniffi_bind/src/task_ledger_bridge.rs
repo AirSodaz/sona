@@ -1,11 +1,11 @@
-use crate::application_context::ContextSource;
+﻿use crate::application_context::ContextSource;
 use crate::{
     FfiTaskLedgerPatchV1, FfiTaskLedgerRecordV1, FfiTaskLedgerSnapshotV1, SonaCoreBindingError,
     SonaCoreBindingResult,
 };
 #[cfg(test)]
 use sona_core::ports::time::ClockError;
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::ClockPort;
 use sona_core::task_ledger::{
     TaskLedgerError,
     types::{TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot},
@@ -84,7 +84,7 @@ pub(crate) fn clear_resolved_task_ledger_records_v1(
 
 fn load_task_ledger_snapshot_json_with_clock(
     context: impl Into<ContextSource>,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<String> {
     with_task_ledger_adapter(context, clock, |adapter| adapter.load_snapshot())
         .and_then(serialize_snapshot)
@@ -92,7 +92,7 @@ fn load_task_ledger_snapshot_json_with_clock(
 
 fn load_task_ledger_snapshot_v1_with_clock(
     context: impl Into<ContextSource>,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
     with_task_ledger_adapter(context, clock, |adapter| adapter.load_snapshot()).map(Into::into)
 }
@@ -100,7 +100,7 @@ fn load_task_ledger_snapshot_v1_with_clock(
 fn upsert_task_ledger_record_json_with_clock(
     context: impl Into<ContextSource>,
     record_json: String,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<String> {
     let record = serde_json::from_str::<TaskLedgerRecord>(&record_json).map_err(|error| {
         SonaCoreBindingError::InvalidInput {
@@ -114,7 +114,7 @@ fn upsert_task_ledger_record_json_with_clock(
 fn upsert_task_ledger_record_v1_with_clock(
     context: impl Into<ContextSource>,
     record: FfiTaskLedgerRecordV1,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
     with_task_ledger_adapter(context, clock, |adapter| adapter.upsert_task(record.into()))
         .map(Into::into)
@@ -124,7 +124,7 @@ fn patch_task_ledger_record_json_with_clock(
     context: impl Into<ContextSource>,
     id: String,
     patch_json: String,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<String> {
     let patch = serde_json::from_str::<TaskLedgerPatch>(&patch_json).map_err(|error| {
         SonaCoreBindingError::InvalidInput {
@@ -139,7 +139,7 @@ fn patch_task_ledger_record_v1_with_clock(
     context: impl Into<ContextSource>,
     id: String,
     patch: FfiTaskLedgerPatchV1,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
     with_task_ledger_adapter(context, clock, |adapter| {
         adapter.patch_task(&id, patch.into())
@@ -150,7 +150,7 @@ fn patch_task_ledger_record_v1_with_clock(
 fn remove_task_ledger_record_json_with_clock(
     context: impl Into<ContextSource>,
     id: String,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<String> {
     with_task_ledger_adapter(context, clock, |adapter| adapter.remove_task(&id))
         .and_then(serialize_snapshot)
@@ -159,14 +159,14 @@ fn remove_task_ledger_record_json_with_clock(
 fn remove_task_ledger_record_v1_with_clock(
     context: impl Into<ContextSource>,
     id: String,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
     with_task_ledger_adapter(context, clock, |adapter| adapter.remove_task(&id)).map(Into::into)
 }
 
 fn clear_resolved_task_ledger_records_json_with_clock(
     context: impl Into<ContextSource>,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<String> {
     with_task_ledger_adapter(context, clock, |adapter| adapter.clear_resolved())
         .and_then(serialize_snapshot)
@@ -174,14 +174,14 @@ fn clear_resolved_task_ledger_records_json_with_clock(
 
 fn clear_resolved_task_ledger_records_v1_with_clock(
     context: impl Into<ContextSource>,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<FfiTaskLedgerSnapshotV1> {
     with_task_ledger_adapter(context, clock, |adapter| adapter.clear_resolved()).map(Into::into)
 }
 
 fn with_task_ledger_adapter<T>(
     context: impl Into<ContextSource>,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
     operation: impl FnOnce(&SqliteTaskLedgerAdapter) -> Result<T, TaskLedgerError>,
 ) -> SonaCoreBindingResult<T> {
     let context = context.into().resolve().map_err(task_ledger_error)?;
@@ -203,7 +203,7 @@ fn task_ledger_error(reason: impl ToString) -> SonaCoreBindingError {
 struct FixedClock(u64);
 
 #[cfg(test)]
-impl UnixMillisClock for FixedClock {
+impl ClockPort for FixedClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(self.0)
     }
@@ -264,7 +264,7 @@ mod tests {
         FfiTaskLedgerKindV1, FfiTaskLedgerRecordV1, FfiTaskLedgerStatusV1, SonaCoreBindingError,
     };
     use serde_json::{Value, json};
-    use sona_core::ports::time::{ClockError, UnixMillisClock};
+    use sona_core::ports::time::{ClockError, ClockPort};
     use sona_core::task_ledger::repository::TaskLedgerStore;
     use sona_core::task_ledger::types::TASK_LEDGER_VERSION;
     use sona_sqlite::{Database, SqliteLedgerRepository};
@@ -491,7 +491,7 @@ mod tests {
     fn clock_failures_map_to_task_ledger_error() {
         struct FailingClock;
 
-        impl UnixMillisClock for FailingClock {
+        impl ClockPort for FailingClock {
             fn now_ms(&self) -> Result<u64, ClockError> {
                 Err(ClockError::Unavailable("test clock failure".to_string()))
             }

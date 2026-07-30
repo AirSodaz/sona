@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+﻿use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use sona_core::history::HistoryIdGenerator;
@@ -7,12 +7,12 @@ use sona_core::history::mutation_repository::{
 };
 use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history::{HistorySaveRecordingRequest, TranscriptSnapshotReason};
-use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::ports::time::{ClockError, ClockPort};
 use sona_sqlite::{Database, SqliteHistoryStore};
 
 struct FixedClock(Result<u64, ClockError>);
 
-impl UnixMillisClock for FixedClock {
+impl ClockPort for FixedClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         self.0.clone()
     }

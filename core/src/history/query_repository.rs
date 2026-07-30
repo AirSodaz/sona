@@ -1,4 +1,4 @@
-use crate::history::{
+﻿use crate::history::{
     HistoryItemRecord, HistoryListOptions, HistoryWorkspaceQueryRequest,
     HistoryWorkspaceQueryResult, TranscriptSnapshotMetadata, TranscriptSnapshotRecord,
 };

@@ -1,6 +1,6 @@
-use std::collections::HashSet;
+﻿use std::collections::HashSet;
 
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::ClockPort;
 use sona_core::recovery::RecoveryError;
 use sona_core::recovery::normalization::{
     SourcePathStatus, SourcePathStatusProvider, recovered_item_from_queue_input_with_source_paths,
@@ -13,14 +13,14 @@ use sona_core::recovery::types::{RecoveryItemInput, RecoveryResolution, Recovery
 pub struct RecoveryService<'a> {
     store: &'a dyn RecoverySnapshotStore,
     source_paths: &'a dyn SourcePathStatusProvider,
-    clock: &'a dyn UnixMillisClock,
+    clock: &'a dyn ClockPort,
 }
 
 impl<'a> RecoveryService<'a> {
     pub fn new(
         store: &'a dyn RecoverySnapshotStore,
         source_paths: &'a dyn SourcePathStatusProvider,
-        clock: &'a dyn UnixMillisClock,
+        clock: &'a dyn ClockPort,
     ) -> Self {
         Self {
             store,

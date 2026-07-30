@@ -1,4 +1,4 @@
-use serde_json::{Value, json};
+﻿use serde_json::{Value, json};
 use sona_core::automation::repository::{
     AutomationProcessedInput, AutomationProcessedRecord, AutomationProfileInput,
     AutomationProfileRecord, AutomationRepositoryInput, AutomationRepositoryState,
@@ -11,7 +11,7 @@ use sona_core::automation::{
     validate_rule_activation,
 };
 
-use sona_core::automation::{AutomationFileSystem, AutomationIdGenerator};
+use sona_core::automation::{AutomationFsPort, AutomationIdGenerator};
 
 pub struct AutomationRepositoryService<'a> {
     store: &'a dyn AutomationStore,
@@ -101,11 +101,11 @@ fn normalize_profile_record(
 }
 
 pub struct AutomationValidationService<'a> {
-    fs: &'a dyn AutomationFileSystem,
+    fs: &'a dyn AutomationFsPort,
 }
 
 impl<'a> AutomationValidationService<'a> {
-    pub fn new(fs: &'a dyn AutomationFileSystem) -> Self {
+    pub fn new(fs: &'a dyn AutomationFsPort) -> Self {
         Self { fs }
     }
 

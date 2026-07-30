@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+﻿use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::domain::{BuiltinLlmProvider, LlmProvider};
@@ -20,7 +20,7 @@ pub trait AutomationIdGenerator: Send + Sync {
 }
 
 /// Filesystem capability port required by the automation validation service.
-pub trait AutomationFileSystem: Send + Sync {
+pub trait AutomationFsPort: Send + Sync {
     fn path_exists(&self, path: &str) -> Result<bool, FileSystemError>;
     fn create_dir_all(&self, path: &str) -> Result<(), FileSystemError>;
 }

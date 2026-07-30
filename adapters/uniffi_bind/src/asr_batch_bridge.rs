@@ -4,9 +4,10 @@ use serde_json::Value;
 use sona_core::export::ExportFormat;
 use sona_core::models::config::ModelFileConfig;
 use sona_core::ports::asr::{
-    AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchTranscriber, GROQ_WHISPER_PROVIDER_ID,
-    MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest, OnlineBatchTranscriptionOutput,
-    OnlineBatchTranscriptionRequest, VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
+    AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchTranscriberPort,
+    GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest,
+    OnlineBatchTranscriptionOutput, OnlineBatchTranscriptionRequest, VOLCENGINE_DOUBAO_PROVIDER_ID,
+    find_online_asr_provider,
 };
 use sona_core::transcription::postprocess::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions,

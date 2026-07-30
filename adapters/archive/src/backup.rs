@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+﻿use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{self, BufReader, BufWriter, Read};
 use std::path::Path;
@@ -22,7 +22,7 @@ use sona_core::history::{
     HistoryBackupSnapshot, HistoryItemRecord, HistoryItemStatus, TranscriptSnapshotMetadata,
     TranscriptSnapshotRecord,
 };
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::ClockPort;
 use sona_core::tag::{TagRecord, normalize_tag_value};
 use uuid::Uuid;
 
@@ -68,7 +68,7 @@ pub struct FsBackupArchiveRepository {
 pub struct FsBackupAdapter<S, C>
 where
     S: BackupStateRepository,
-    C: UnixMillisClock,
+    C: ClockPort,
 {
     archive: Arc<FsBackupArchiveRepository>,
     state: S,
@@ -78,7 +78,7 @@ where
 impl<S, C> FsBackupAdapter<S, C>
 where
     S: BackupStateRepository,
-    C: UnixMillisClock,
+    C: ClockPort,
 {
     pub fn new(state: S, clock: C) -> Self {
         Self::with_archive(Arc::new(FsBackupArchiveRepository::new()), state, clock)

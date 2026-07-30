@@ -1,10 +1,10 @@
-use std::path::{Path as StdPath, PathBuf};
+﻿use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
 
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
-use sona_core::ports::asr::BatchTranscriber;
-use sona_core::ports::runtime::{BatchTranscribePlanResolver, RuntimeCapabilityError};
+use sona_core::ports::asr::BatchTranscriberPort;
+use sona_core::ports::runtime::{BatchTranscribePlanPort, RuntimeCapabilityError};
 use sona_core::transcription::runtime::BatchTranscribeOptions;
 use tokio::sync::mpsc;
 
@@ -99,8 +99,8 @@ pub(crate) struct TranscriptionWorkerDeps {
     pub models_dir: PathBuf,
     pub max_concurrent: usize,
     pub transcription_defaults: ApiServerTranscriptionDefaults,
-    pub batch_transcriber: Arc<dyn BatchTranscriber>,
-    pub batch_plan_resolver: Arc<dyn BatchTranscribePlanResolver>,
+    pub batch_transcriber: Arc<dyn BatchTranscriberPort>,
+    pub batch_plan_resolver: Arc<dyn BatchTranscribePlanPort>,
     pub platform: Arc<dyn ApiServerPlatform>,
 }
 

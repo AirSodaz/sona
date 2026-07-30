@@ -14,17 +14,17 @@ use sona_core::automation::{
     AutomationError, AutomationRule, AutomationRuleValidationResult, AutomationRuntimePathMetadata,
     AutomationRuntimeRuleConfig, should_consider_runtime_candidate_path,
 };
-use sona_core::automation::{AutomationFileSystem, AutomationIdGenerator};
+use sona_core::automation::{AutomationFsPort, AutomationIdGenerator};
 use sona_core::export::ExportFormat;
 use sona_core::history::HistoryIdGenerator;
 use sona_core::models::catalog::ModelSummary;
 use sona_core::models::paths::{ModelsDirStatus, status_of};
 use sona_core::models::preset_models::{PresetModel, preset_models};
-use sona_core::ports::fs::{FileMetadata, FileSystem, FileSystemError, FileSystemOperation};
+use sona_core::ports::fs::{FileMetadata, FileSystemError, FileSystemOperation, FileSystemPort};
 use sona_core::ports::runtime::{
-    BatchTranscribePlanResolver, ModelCatalogProvider, RuntimeCapabilityError,
+    BatchTranscribePlanPort, ModelCatalogPort, RuntimeCapabilityError,
 };
-use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::ports::time::{ClockError, ClockPort};
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
 use sona_core::runtime::config::{
     ServeConfigSection, TranscribeConfigSection, TranscribeLiveConfigSection,
@@ -81,7 +81,7 @@ impl RuntimeFsError {
     }
 }
 
-impl AutomationFileSystem for NativeAutomationFileSystem {
+impl AutomationFsPort for NativeAutomationFileSystem {
     fn path_exists(&self, path: &str) -> Result<bool, FileSystemError> {
         RealFileSystem
             .metadata(Path::new(path))
@@ -123,7 +123,7 @@ impl TagIdGenerator for UuidGenerator {
     }
 }
 
-impl UnixMillisClock for SystemClock {
+impl ClockPort for SystemClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         unix_millis_from_system_time(SystemTime::now())
     }
@@ -164,7 +164,7 @@ mod clock_tests {
     }
 }
 
-impl FileSystem for RealFileSystem {
+impl FileSystemPort for RealFileSystem {
     fn create_dir_all(&self, path: &Path) -> Result<(), FileSystemError> {
         fs::create_dir_all(path)
             .map_err(|error| file_system_error(FileSystemOperation::CreateDirectory, path, error))
@@ -279,7 +279,7 @@ pub fn write_cli_config_template_file(
 }
 
 fn write_json_pretty_atomic_with<T: Serialize + ?Sized>(
-    fs: &dyn FileSystem,
+    fs: &dyn FileSystemPort,
     path: &Path,
     value: &T,
 ) -> Result<(), RuntimeFsError> {
@@ -292,7 +292,7 @@ fn write_json_pretty_atomic_with<T: Serialize + ?Sized>(
 }
 
 fn write_binary_atomic(
-    fs: &dyn FileSystem,
+    fs: &dyn FileSystemPort,
     path: &Path,
     contents: &[u8],
 ) -> Result<(), RuntimeFsError> {
@@ -314,7 +314,7 @@ fn write_binary_atomic(
 }
 
 fn replace_path_atomically(
-    fs: &dyn FileSystem,
+    fs: &dyn FileSystemPort,
     temp_path: &Path,
     final_path: &Path,
 ) -> Result<(), RuntimeFsError> {
@@ -351,7 +351,7 @@ fn replace_path_atomically(
     }
 }
 
-fn remove_path_if_exists_with(fs: &dyn FileSystem, path: &Path) -> Result<(), FileSystemError> {
+fn remove_path_if_exists_with(fs: &dyn FileSystemPort, path: &Path) -> Result<(), FileSystemError> {
     match fs.metadata(path)? {
         Some(meta) if meta.is_dir => fs.remove_dir_all(path),
         Some(_) => fs.remove_file(path),
@@ -644,7 +644,7 @@ pub fn resolve_batch_transcribe_plan_with_runtime_paths(
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RuntimeBatchTranscribePlanResolver;
 
-impl BatchTranscribePlanResolver for RuntimeBatchTranscribePlanResolver {
+impl BatchTranscribePlanPort for RuntimeBatchTranscribePlanResolver {
     fn resolve_batch_transcribe_plan(
         &self,
         options: BatchTranscribeOptions,
@@ -716,7 +716,7 @@ pub fn build_model_catalog_snapshot(
 #[derive(Clone, Copy, Debug, Default)]
 pub struct RuntimeModelCatalogProvider;
 
-impl ModelCatalogProvider for RuntimeModelCatalogProvider {
+impl ModelCatalogPort for RuntimeModelCatalogProvider {
     fn build_model_catalog_snapshot(
         &self,
         models_dir: &Path,

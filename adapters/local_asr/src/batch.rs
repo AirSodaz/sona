@@ -1,4 +1,4 @@
-use crate::audio::{
+﻿use crate::audio::{
     VadDetectorOptions, create_vad_config, extract_and_resample_audio, fixed_chunk_audio,
     save_wav_file, vad_segment_audio,
 };
@@ -11,7 +11,7 @@ use crate::recognizer::{
 use async_trait::async_trait;
 use sherpa_onnx::VadModelConfig;
 use sona_core::models::config::ModelFileConfig;
-use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind, BatchTranscriber};
+use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind, BatchTranscriberPort};
 use sona_core::transcription::runtime::BatchTranscribePlan;
 use sona_core::transcription::transcript::{
     TranscriptSegment, ensure_transcript_segment_timing, normalize_recognizer_text,
@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 pub struct LocalBatchAsrAdapter;
 
 #[async_trait]
-impl BatchTranscriber for LocalBatchAsrAdapter {
+impl BatchTranscriberPort for LocalBatchAsrAdapter {
     async fn transcribe(
         &self,
         plan: BatchTranscribePlan,
@@ -237,7 +237,7 @@ fn finalize_transcript_text(cleaned_text: &str, punctuation: Option<&Punctuation
 mod tests {
     use super::LocalBatchAsrAdapter;
     use sona_core::export::ExportFormat;
-    use sona_core::ports::asr::BatchTranscriber;
+    use sona_core::ports::asr::BatchTranscriberPort;
     use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
     use std::path::PathBuf;
 

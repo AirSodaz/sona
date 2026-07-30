@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
 use sona_application::history::HistoryMutationService;
 use sona_core::history::mutation_repository::{HistoryMutationError, HistoryMutationRepository};
@@ -6,12 +6,12 @@ use sona_core::history::{
     HistoryCreateLiveDraftRequest, HistoryIdGenerator, HistorySaveImportedFileRequest,
     HistorySaveRecordingRequest,
 };
-use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::ports::time::{ClockError, ClockPort};
 use sona_sqlite::DeferredSqliteHistoryMutationRepository;
 
 struct TestClock;
 
-impl UnixMillisClock for TestClock {
+impl ClockPort for TestClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(1_700_000_000_000)
     }

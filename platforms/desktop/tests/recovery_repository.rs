@@ -1,5 +1,5 @@
 use serde_json::json;
-use sona_core::ports::path::{PathKind, PathProvider, PathProviderError};
+use sona_core::ports::path::{PathKind, PathPort, PathPortError};
 use sona_core::recovery::types::RecoveryItemInput;
 use std::fs::{self, File};
 use std::path::PathBuf;
@@ -31,12 +31,12 @@ impl RecordingPathProvider {
     }
 }
 
-impl PathProvider for RecordingPathProvider {
-    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathProviderError> {
+impl PathPort for RecordingPathProvider {
+    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathPortError> {
         self.resolved_kinds.lock().unwrap().push(kind);
         match kind {
             PathKind::AppLocalData => Ok(self.app_local_data_dir.clone()),
-            _ => Err(PathProviderError::new(
+            _ => Err(PathPortError::new(
                 kind,
                 format!("unexpected path kind: {kind:?}"),
             )),
@@ -46,12 +46,9 @@ impl PathProvider for RecordingPathProvider {
 
 struct FailingPathProvider;
 
-impl PathProvider for FailingPathProvider {
-    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathProviderError> {
-        Err(PathProviderError::new(
-            kind,
-            "desktop test path unavailable",
-        ))
+impl PathPort for FailingPathProvider {
+    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathPortError> {
+        Err(PathPortError::new(kind, "desktop test path unavailable"))
     }
 }
 

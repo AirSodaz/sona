@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+﻿use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -14,7 +14,7 @@ use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history::{HistoryIdGenerator, HistorySaveRecordingRequest};
 use sona_core::history_store::HistoryStore;
 use sona_core::llm::usage::{LlmUsageCategory, TokenUsage, UsageRecord};
-use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::ports::time::{ClockError, ClockPort};
 use sona_core::tag::{TagRecord, TagStore};
 use sona_sqlite::llm_usage::{read_stats, record_usage};
 use sona_sqlite::{
@@ -24,7 +24,7 @@ use sona_sqlite::{
 
 struct HistoryClock;
 
-impl UnixMillisClock for HistoryClock {
+impl ClockPort for HistoryClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(1_700_000_000_000)
     }

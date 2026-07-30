@@ -1,9 +1,9 @@
-use std::collections::{BTreeMap, VecDeque};
+﻿use std::collections::{BTreeMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::ports::time::{ClockError, ClockPort};
 use sona_core::sync::{
     SyncDeleteResult, SyncError, SyncLifecycleState, SyncListPage, SyncLocalRepository,
     SyncLocalRuntimeState, SyncObject, SyncObjectKey, SyncObjectMetadata, SyncObjectPrefix,
@@ -23,7 +23,7 @@ use tokio::sync::Notify;
 
 struct RepositoryClock;
 
-impl UnixMillisClock for RepositoryClock {
+impl ClockPort for RepositoryClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(1_000)
     }

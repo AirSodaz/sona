@@ -1,4 +1,4 @@
-use tauri::Manager;
+﻿use tauri::Manager;
 
 pub use sona_core::runtime::environment::{
     RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus,
@@ -21,7 +21,7 @@ pub async fn open_log_folder<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Res
 }
 
 pub fn resolve_runtime_environment_status(
-    provider: &dyn crate::platform::paths::PathProvider,
+    provider: &dyn crate::platform::paths::PathPort,
 ) -> Result<RuntimeEnvironmentStatus, String> {
     let log_dir = provider
         .resolve_path(crate::platform::paths::PathKind::AppLogData)

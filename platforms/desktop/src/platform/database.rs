@@ -1,6 +1,6 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
-use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
+use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, Runtime};
 

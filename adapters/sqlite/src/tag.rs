@@ -1,4 +1,4 @@
-use crate::DatabaseError;
+﻿use crate::DatabaseError;
 use crate::ports::Database as DatabasePort;
 use rusqlite::OptionalExtension;
 use rusqlite::types::Type;
@@ -6,7 +6,7 @@ use serde_json::Value;
 use sona_application::tag::TagRepositoryService;
 use sona_core::dashboard::error::DashboardServiceError;
 use sona_core::dashboard::ports::TagRepository;
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::ClockPort;
 use sona_core::sync::SyncEntityKind;
 use sona_core::tag::{
     ACTIVE_TAG_SETTINGS_KEY, ActiveTagSelection, TagCreateInput, TagError, TagIdGenerator,
@@ -36,14 +36,14 @@ where
 {
     repository: SqliteTagRepository<D>,
     ids: Arc<dyn TagIdGenerator>,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 }
 
 impl<D> SqliteTagAdapter<D>
 where
     D: DatabasePort,
 {
-    pub fn new(db: Arc<D>, ids: Arc<dyn TagIdGenerator>, clock: Arc<dyn UnixMillisClock>) -> Self {
+    pub fn new(db: Arc<D>, ids: Arc<dyn TagIdGenerator>, clock: Arc<dyn ClockPort>) -> Self {
         Self {
             repository: SqliteTagRepository::new(db),
             ids,

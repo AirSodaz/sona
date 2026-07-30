@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+﻿use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use serde_json::json;
@@ -10,7 +10,7 @@ use sona_core::history::HistoryIdGenerator;
 use sona_core::history::mutation_repository::{
     HistoryMutationRepository, HistoryUpdateTranscriptRequest,
 };
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::ClockPort;
 use sona_core::sync::{
     HybridLogicalClock, SyncCausalContext, SyncConflictResolution, SyncEntityKey, SyncEntityKind,
     SyncLocalRepository, SyncOperation, SyncOperationKind, SyncPresetV1, SyncPublishedSegment,
@@ -25,7 +25,7 @@ use sona_sqlite::{
 
 struct FixedClock;
 
-impl UnixMillisClock for FixedClock {
+impl ClockPort for FixedClock {
     fn now_ms(&self) -> Result<u64, sona_core::ports::time::ClockError> {
         Ok(5_000)
     }

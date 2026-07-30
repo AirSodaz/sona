@@ -1,11 +1,11 @@
-use async_trait::async_trait;
+﻿use async_trait::async_trait;
 use base64::Engine;
 use reqwest::multipart;
 use serde_json::Value;
 use sona_core::ports::asr::{
     AsrEngineConfig, AsrMode, AsrPortError, AsrPortErrorKind, AsrRuntimeObserver,
     AsrStreamingSession, AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID,
-    MISTRAL_VOXTRAL_PROVIDER_ID, OnlineBatchTranscriber, OnlineBatchTranscriptionOutput,
+    MISTRAL_VOXTRAL_PROVIDER_ID, OnlineBatchTranscriberPort, OnlineBatchTranscriptionOutput,
     OnlineBatchTranscriptionRequest, VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
 };
 use sona_core::transcription::provider_resolution::{
@@ -96,7 +96,7 @@ impl OnlineAsrAdapter {
 }
 
 #[async_trait]
-impl OnlineBatchTranscriber for OnlineAsrAdapter {
+impl OnlineBatchTranscriberPort for OnlineAsrAdapter {
     async fn transcribe(
         &self,
         request: OnlineBatchTranscriptionRequest,
@@ -317,7 +317,7 @@ impl VolcengineDoubaoBatchTranscriber {
 }
 
 #[async_trait]
-impl OnlineBatchTranscriber for VolcengineDoubaoBatchTranscriber {
+impl OnlineBatchTranscriberPort for VolcengineDoubaoBatchTranscriber {
     async fn transcribe(
         &self,
         input: OnlineBatchTranscriptionRequest,
@@ -422,7 +422,7 @@ impl WhisperCompatibleBatchTranscriber {
 }
 
 #[async_trait]
-impl OnlineBatchTranscriber for WhisperCompatibleBatchTranscriber {
+impl OnlineBatchTranscriberPort for WhisperCompatibleBatchTranscriber {
     async fn transcribe(
         &self,
         input: OnlineBatchTranscriptionRequest,
@@ -531,7 +531,7 @@ impl Default for GroqWhisperBatchTranscriber {
 }
 
 #[async_trait]
-impl OnlineBatchTranscriber for GroqWhisperBatchTranscriber {
+impl OnlineBatchTranscriberPort for GroqWhisperBatchTranscriber {
     async fn transcribe(
         &self,
         request: OnlineBatchTranscriptionRequest,
@@ -556,7 +556,7 @@ impl Default for MistralVoxtralBatchTranscriber {
 }
 
 #[async_trait]
-impl OnlineBatchTranscriber for MistralVoxtralBatchTranscriber {
+impl OnlineBatchTranscriberPort for MistralVoxtralBatchTranscriber {
     async fn transcribe(
         &self,
         request: OnlineBatchTranscriptionRequest,
@@ -1180,7 +1180,7 @@ mod tests {
     use sona_core::ports::asr::{
         AsrEngineConfig, AsrMode, AsrPortErrorKind, AsrTranscriptionRequest,
         GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, NoopAsrRuntimeObserver,
-        OnlineAsrProviderRequest, OnlineBatchTranscriber, OnlineBatchTranscriptionRequest,
+        OnlineAsrProviderRequest, OnlineBatchTranscriberPort, OnlineBatchTranscriptionRequest,
         VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
     use sona_core::transcription::postprocess::{
@@ -1252,7 +1252,7 @@ mod tests {
 
     #[test]
     fn online_runtime_adapter_implements_the_core_batch_port() {
-        fn assert_batch_port<T: OnlineBatchTranscriber>() {}
+        fn assert_batch_port<T: OnlineBatchTranscriberPort>() {}
 
         assert_batch_port::<OnlineAsrAdapter>();
     }
@@ -1330,7 +1330,7 @@ mod tests {
 
     #[tokio::test]
     async fn core_batch_port_preserves_unsupported_and_filesystem_categories() {
-        let unsupported = OnlineBatchTranscriber::transcribe(
+        let unsupported = OnlineBatchTranscriberPort::transcribe(
             &OnlineAsrAdapter,
             OnlineBatchTranscriptionRequest {
                 file_path: "missing.wav".into(),
@@ -1341,7 +1341,7 @@ mod tests {
         .unwrap_err();
         assert_eq!(unsupported.kind, AsrPortErrorKind::Unsupported);
 
-        let missing_audio = OnlineBatchTranscriber::transcribe(
+        let missing_audio = OnlineBatchTranscriberPort::transcribe(
             &OnlineAsrAdapter,
             OnlineBatchTranscriptionRequest {
                 file_path: "missing.wav".into(),

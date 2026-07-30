@@ -1,4 +1,4 @@
-use super::recognizer_output_event;
+﻿use super::recognizer_output_event;
 use super::types::{TranscriptNormalizationOptions, TranscriptSegment, TranscriptUpdate};
 #[cfg(test)]
 use super::types::{TranscriptTimingLevel, TranscriptTimingSource};
@@ -78,7 +78,7 @@ pub(crate) fn build_transcript_update(
 }
 
 pub(crate) fn emit_transcript_update(
-    emitter: &dyn crate::platform::event::EventEmitter,
+    emitter: &dyn crate::platform::event::EventEmitterPort,
     instance_id: &str,
     update: &TranscriptUpdate,
     stage: &str,

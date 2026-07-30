@@ -1,4 +1,4 @@
-use sona_core::ports::asr::BatchTranscriber;
+﻿use sona_core::ports::asr::BatchTranscriberPort;
 use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
 use std::path::PathBuf;
 

@@ -1,9 +1,9 @@
-use async_trait::async_trait;
+﻿use async_trait::async_trait;
 use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
 use sona_core::llm::provider_protocol::{LlmModelSummary, StandardLlmResponse};
 use sona_core::llm::requests::{LlmConfig, LlmGenerateRequest, LlmModelsRequest};
 use sona_core::llm::tasks::LlmProviderStrategy;
-use sona_core::ports::llm::{LlmModelLister, LlmPortError, LlmTextGenerator};
+use sona_core::ports::llm::{LlmModelListerPort, LlmPortError, LlmTextGeneratorPort};
 
 fn sample_config() -> LlmConfig {
     LlmConfig {
@@ -24,7 +24,7 @@ fn sample_config() -> LlmConfig {
 struct EchoLlmAdapter;
 
 #[async_trait]
-impl LlmTextGenerator for EchoLlmAdapter {
+impl LlmTextGeneratorPort for EchoLlmAdapter {
     async fn generate_text(
         &self,
         request: LlmGenerateRequest,
@@ -37,7 +37,7 @@ impl LlmTextGenerator for EchoLlmAdapter {
 }
 
 #[async_trait]
-impl LlmModelLister for EchoLlmAdapter {
+impl LlmModelListerPort for EchoLlmAdapter {
     async fn list_models(
         &self,
         request: LlmModelsRequest,

@@ -1,4 +1,4 @@
-pub use sona_core::ports::path::{PathKind, PathProvider, PathProviderError};
+﻿pub use sona_core::ports::path::{PathKind, PathPort, PathPortError};
 pub use sona_runtime_fs::{
     default_desktop_app_data_roots, default_desktop_models_dir,
     select_desktop_models_dir_from_app_roots,
@@ -16,7 +16,7 @@ pub fn models_dir_status(path: &Path) -> sona_core::models::paths::ModelsDirStat
 
 /// Tauri adapter for the pure `sona-core` path provider port.
 ///
-/// `PathProvider` lives in `sona-core`, so the desktop host cannot implement it
+/// `PathPort` lives in `sona-core`, so the desktop host cannot implement it
 /// directly for `tauri::AppHandle<R>` because both the trait and type are
 /// external to this crate. This local newtype keeps the dependency direction
 /// explicit: platform code adapts Tauri into the core port.
@@ -35,45 +35,45 @@ impl<R: Runtime> TauriPathProvider<R> {
     }
 }
 
-impl<R: Runtime> PathProvider for TauriPathProvider<R> {
-    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathProviderError> {
+impl<R: Runtime> PathPort for TauriPathProvider<R> {
+    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathPortError> {
         match kind {
             PathKind::AppData => self
                 .app
                 .path()
                 .app_data_dir()
-                .map_err(|error| PathProviderError::new(kind, error.to_string())),
+                .map_err(|error| PathPortError::new(kind, error.to_string())),
             PathKind::AppLocalData => self
                 .app
                 .path()
                 .app_local_data_dir()
-                .map_err(|error| PathProviderError::new(kind, error.to_string())),
+                .map_err(|error| PathPortError::new(kind, error.to_string())),
             PathKind::AppLogData => self
                 .app
                 .path()
                 .app_log_dir()
-                .map_err(|error| PathProviderError::new(kind, error.to_string())),
+                .map_err(|error| PathPortError::new(kind, error.to_string())),
         }
     }
 }
 
 #[cfg(test)]
 pub struct MockPathProvider {
-    entries: HashMap<PathKind, Result<PathBuf, PathProviderError>>,
+    entries: HashMap<PathKind, Result<PathBuf, PathPortError>>,
 }
 
 #[cfg(test)]
 impl MockPathProvider {
-    pub fn from_map(entries: HashMap<PathKind, Result<PathBuf, PathProviderError>>) -> Self {
+    pub fn from_map(entries: HashMap<PathKind, Result<PathBuf, PathPortError>>) -> Self {
         Self { entries }
     }
 }
 
 #[cfg(test)]
-impl PathProvider for MockPathProvider {
-    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathProviderError> {
+impl PathPort for MockPathProvider {
+    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathPortError> {
         self.entries.get(&kind).cloned().unwrap_or_else(|| {
-            Err(PathProviderError::new(
+            Err(PathPortError::new(
                 kind,
                 format!("path kind {kind:?} not configured"),
             ))

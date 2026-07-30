@@ -1,4 +1,4 @@
-use crate::llm::provider_protocol::{LlmModelSummary, StandardLlmResponse};
+﻿use crate::llm::provider_protocol::{LlmModelSummary, StandardLlmResponse};
 use std::time::Duration;
 
 use crate::llm::requests::{LlmConfig, LlmGenerateRequest, LlmModelsRequest};
@@ -116,7 +116,7 @@ impl<T> LlmTaskRuntimePort for T where
 }
 
 #[async_trait]
-pub trait LlmTextGenerator: Send + Sync {
+pub trait LlmTextGeneratorPort: Send + Sync {
     async fn generate_text(
         &self,
         request: LlmGenerateRequest,
@@ -124,7 +124,7 @@ pub trait LlmTextGenerator: Send + Sync {
 }
 
 #[async_trait]
-pub trait LlmModelLister: Send + Sync {
+pub trait LlmModelListerPort: Send + Sync {
     async fn list_models(
         &self,
         request: LlmModelsRequest,

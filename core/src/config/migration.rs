@@ -2239,7 +2239,7 @@ fn merge_object_values(first: Value, second: Option<Value>) -> Option<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{migrate_app_config, resolve_effective_config};
+    use crate::config::migrate_app_config;
 
     #[test]
     fn config_core_migrates_legacy_config_to_current_shape() {

@@ -1,17 +1,17 @@
-use super::metrics::{AsrMetricsStore, set_live_inference_metric, set_model_load_metric};
+﻿use super::metrics::{AsrMetricsStore, set_live_inference_metric, set_model_load_metric};
 use super::recognizer_output_event;
-use crate::platform::event::EventEmitter;
+use crate::platform::event::EventEmitterPort;
 use sona_core::ports::asr::{AsrRuntimeObserver, AsrTranscriptUpdateEvent};
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 use std::sync::Arc;
 
 pub(crate) struct TauriAsrRuntimeObserver {
-    emitter: Arc<dyn EventEmitter>,
+    emitter: Arc<dyn EventEmitterPort>,
     metrics: AsrMetricsStore,
 }
 
 impl TauriAsrRuntimeObserver {
-    pub(crate) fn new(emitter: Arc<dyn EventEmitter>, metrics: AsrMetricsStore) -> Self {
+    pub(crate) fn new(emitter: Arc<dyn EventEmitterPort>, metrics: AsrMetricsStore) -> Self {
         Self { emitter, metrics }
     }
 }

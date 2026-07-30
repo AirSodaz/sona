@@ -1,4 +1,4 @@
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+﻿#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[error("Failed to emit event {event}: {reason}")]
 pub struct EventError {
     pub event: String,
@@ -14,11 +14,11 @@ impl EventError {
     }
 }
 
-pub trait EventEmitter: Send + Sync + 'static {
+pub trait EventEmitterPort: Send + Sync + 'static {
     fn emit(&self, event: &str, payload: serde_json::Value) -> Result<(), EventError>;
 }
 
-impl<T: EventEmitter + ?Sized> EventEmitter for std::sync::Arc<T> {
+impl<T: EventEmitterPort + ?Sized> EventEmitterPort for std::sync::Arc<T> {
     fn emit(&self, event: &str, payload: serde_json::Value) -> Result<(), EventError> {
         (**self).emit(event, payload)
     }

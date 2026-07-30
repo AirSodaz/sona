@@ -1,15 +1,15 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use sona_core::automation::{AutomationFileSystem, AutomationIdGenerator};
+use sona_core::automation::{AutomationFsPort, AutomationIdGenerator};
 use sona_core::automation::{
     AutomationRule, AutomationRuntimePathCollectionOutcome, AutomationRuntimeRuleConfig,
 };
 use sona_core::export::ExportFormat;
 use sona_core::models::preset_models::{DEFAULT_SILERO_VAD_MODEL_ID, find_preset_model};
-use sona_core::ports::fs::{FileSystem, FileSystemError, FileSystemOperation};
-use sona_core::ports::runtime::{BatchTranscribePlanResolver, ModelCatalogProvider};
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::fs::{FileSystemError, FileSystemOperation, FileSystemPort};
+use sona_core::ports::runtime::{BatchTranscribePlanPort, ModelCatalogPort};
+use sona_core::ports::time::ClockPort;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
 use sona_core::runtime::diagnostics::{
     DiagnosticsConfigInput, DiagnosticsCoreInput, DiagnosticsEnrichmentRepository, DiagnosticsError,
@@ -41,14 +41,12 @@ fn native_automation_file_system_probes_and_creates_directories() {
     let regular_file = dir.path().join("existing.json");
     std::fs::write(&regular_file, b"{}").unwrap();
     let fs = NativeAutomationFileSystem;
-    assert!(!AutomationFileSystem::path_exists(&fs, nested.to_string_lossy().as_ref()).unwrap());
-    AutomationFileSystem::create_dir_all(&fs, nested.to_string_lossy().as_ref()).unwrap();
-    assert!(AutomationFileSystem::path_exists(&fs, nested.to_string_lossy().as_ref()).unwrap());
-    assert!(
-        AutomationFileSystem::path_exists(&fs, regular_file.to_string_lossy().as_ref()).unwrap()
-    );
-    let error = AutomationFileSystem::create_dir_all(&fs, regular_file.to_string_lossy().as_ref())
-        .unwrap_err();
+    assert!(!AutomationFsPort::path_exists(&fs, nested.to_string_lossy().as_ref()).unwrap());
+    AutomationFsPort::create_dir_all(&fs, nested.to_string_lossy().as_ref()).unwrap();
+    assert!(AutomationFsPort::path_exists(&fs, nested.to_string_lossy().as_ref()).unwrap());
+    assert!(AutomationFsPort::path_exists(&fs, regular_file.to_string_lossy().as_ref()).unwrap());
+    let error =
+        AutomationFsPort::create_dir_all(&fs, regular_file.to_string_lossy().as_ref()).unwrap_err();
     assert_eq!(error.operation, FileSystemOperation::CreateDirectory);
     assert_eq!(error.path, regular_file);
 }
@@ -219,7 +217,7 @@ fn live_plan_rejects_existing_output_before_model_resolution() {
     ));
 }
 
-fn accepts_clock(_: &dyn UnixMillisClock) {}
+fn accepts_clock(_: &dyn ClockPort) {}
 
 #[test]
 fn system_clock_implements_shared_unix_millis_port() {
@@ -228,7 +226,7 @@ fn system_clock_implements_shared_unix_millis_port() {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64;
-    let actual = UnixMillisClock::now_ms(&SystemClock).unwrap();
+    let actual = ClockPort::now_ms(&SystemClock).unwrap();
     let after = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()

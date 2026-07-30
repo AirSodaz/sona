@@ -1,4 +1,4 @@
-use clap::{Args, Subcommand};
+﻿use clap::{Args, Subcommand};
 use sona_core::recovery::{RecoveryError, types::RecoverySnapshot};
 use sona_recovery_fs::FsRecoveryAdapter;
 use std::path::PathBuf;
@@ -166,7 +166,7 @@ mod tests {
     fn maps_recovery_error_variants_to_io() {
         use crate::CliError;
         use sona_core::ports::{
-            path::{PathKind, PathProviderError},
+            path::{PathKind, PathPortError},
             time::ClockError,
         };
         use sona_core::recovery::RecoveryError;
@@ -176,7 +176,7 @@ mod tests {
             CliError::Io(_)
         ));
         assert!(matches!(
-            super::map_recovery_error(RecoveryError::Path(PathProviderError::new(
+            super::map_recovery_error(RecoveryError::Path(PathPortError::new(
                 PathKind::AppData,
                 "path unavailable"
             ))),

@@ -1,4 +1,4 @@
-use crate::application_context::ContextSource;
+﻿use crate::application_context::ContextSource;
 use crate::{
     FfiTagCreateInputV1, FfiTagRecordV1, FfiTagRepositorySnapshotV1, FfiTagUpdateInputV1,
     SonaCoreBindingError, SonaCoreBindingResult,
@@ -6,7 +6,7 @@ use crate::{
 use serde_json::Value;
 #[cfg(test)]
 use sona_core::ports::time::ClockError;
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::ClockPort;
 use sona_core::tag::{TagCreateInput, TagError, TagIdGenerator};
 use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::SqliteTagAdapter;
@@ -184,7 +184,7 @@ fn create_tag_json_with_runtime(
     context: impl Into<ContextSource>,
     input_json: String,
     ids: Arc<dyn TagIdGenerator>,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<String> {
     let input = parse_json_object_as::<TagCreateInput>("tag input", &input_json)?;
     with_tag_adapter(context, ids, clock, |adapter| adapter.create_tag(input))
@@ -195,7 +195,7 @@ fn create_tag_v1_with_runtime(
     context: impl Into<ContextSource>,
     input: FfiTagCreateInputV1,
     ids: Arc<dyn TagIdGenerator>,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<FfiTagRecordV1> {
     with_tag_adapter(context, ids, clock, |adapter| {
         adapter.create_tag(input.into())
@@ -207,7 +207,7 @@ fn update_tag_json_with_clock(
     context: impl Into<ContextSource>,
     tag_id: String,
     updates_json: String,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<String> {
     let tag_id = parse_tag_id("tag ID", &tag_id)?;
     let updates = parse_json_object("tag updates", &updates_json)?;
@@ -221,7 +221,7 @@ fn update_tag_v1_with_clock(
     context: impl Into<ContextSource>,
     tag_id: String,
     updates: FfiTagUpdateInputV1,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<Option<FfiTagRecordV1>> {
     let tag_id = parse_tag_id("tag ID", &tag_id)?;
     with_tag_adapter(context, Arc::new(UuidGenerator), clock, |adapter| {
@@ -233,7 +233,7 @@ fn update_tag_v1_with_clock(
 fn with_tag_adapter<T, F>(
     context: impl Into<ContextSource>,
     ids: Arc<dyn TagIdGenerator>,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
     operation: F,
 ) -> SonaCoreBindingResult<T>
 where
@@ -247,7 +247,7 @@ where
 fn with_tag_input_adapter<T, F>(
     context: impl Into<ContextSource>,
     ids: Arc<dyn TagIdGenerator>,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
     operation: F,
 ) -> SonaCoreBindingResult<T>
 where
@@ -417,7 +417,7 @@ fn update_tag_v1_at(
 struct FixedClock(u64);
 
 #[cfg(test)]
-impl UnixMillisClock for FixedClock {
+impl ClockPort for FixedClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(self.0)
     }
@@ -433,7 +433,7 @@ mod tests {
     };
     use crate::{FfiTagCreateInputV1, FfiTagUpdateInputV1, SonaCoreBindingError};
     use serde_json::{Value, json};
-    use sona_core::ports::time::{ClockError, UnixMillisClock};
+    use sona_core::ports::time::{ClockError, ClockPort};
     use sona_runtime_fs::UuidGenerator;
     use std::fs;
     use std::sync::Arc;
@@ -688,7 +688,7 @@ mod tests {
     fn clock_failures_are_tag_errors() {
         struct FailingClock;
 
-        impl UnixMillisClock for FailingClock {
+        impl ClockPort for FailingClock {
             fn now_ms(&self) -> Result<u64, ClockError> {
                 Err(ClockError::Unavailable("test clock failure".to_string()))
             }

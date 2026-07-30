@@ -1,6 +1,6 @@
-//! Compatibility clock for legacy repository methods that do not yet accept a clock port.
+﻿//! Compatibility clock for legacy repository methods that do not yet accept a clock port.
 //!
-//! New application paths receive `UnixMillisClock` through their composition root. Tag and
+//! New application paths receive `ClockPort` through their composition root. Tag and
 //! Automation compatibility stores still need a timestamp for Sync outbox records even though
 //! their legacy store traits do not carry an operation timestamp.
 

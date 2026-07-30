@@ -1,10 +1,10 @@
-use std::fmt;
+﻿use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use sona_core::automation::AutomationIdGenerator;
 use sona_core::history::HistoryIdGenerator;
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::ClockPort;
 use sona_core::tag::TagIdGenerator;
 
 use crate::{
@@ -81,7 +81,7 @@ impl SqliteApplicationContext {
         Arc::clone(&self.database)
     }
 
-    pub fn app_config_adapter(&self, clock: Arc<dyn UnixMillisClock>) -> SqliteAppConfigAdapter {
+    pub fn app_config_adapter(&self, clock: Arc<dyn ClockPort>) -> SqliteAppConfigAdapter {
         SqliteAppConfigAdapter::new(self.database(), clock)
     }
 
@@ -99,7 +99,7 @@ impl SqliteApplicationContext {
     pub fn tag_adapter(
         &self,
         ids: Arc<dyn TagIdGenerator>,
-        clock: Arc<dyn UnixMillisClock>,
+        clock: Arc<dyn ClockPort>,
     ) -> SqliteTagAdapter {
         SqliteTagAdapter::new(self.database(), ids, clock)
     }
@@ -108,7 +108,7 @@ impl SqliteApplicationContext {
         SqliteTagRepository::new(self.database())
     }
 
-    pub fn task_ledger_adapter(&self, clock: Arc<dyn UnixMillisClock>) -> SqliteTaskLedgerAdapter {
+    pub fn task_ledger_adapter(&self, clock: Arc<dyn ClockPort>) -> SqliteTaskLedgerAdapter {
         SqliteTaskLedgerAdapter::new(self.database(), clock)
     }
 
@@ -118,7 +118,7 @@ impl SqliteApplicationContext {
 
     pub fn history_store(
         &self,
-        clock: Arc<dyn UnixMillisClock>,
+        clock: Arc<dyn ClockPort>,
         ids: Arc<dyn HistoryIdGenerator>,
     ) -> SqliteHistoryStore {
         SqliteHistoryStore::with_environment(self.app_data_dir.clone(), self.database(), clock, ids)
@@ -134,7 +134,7 @@ impl SqliteApplicationContext {
 
     pub fn sync_repository_factory(
         &self,
-        clock: Arc<dyn UnixMillisClock>,
+        clock: Arc<dyn ClockPort>,
     ) -> SqliteSyncRepositoryFactory {
         SqliteSyncRepositoryFactory::new(self.database(), clock)
     }

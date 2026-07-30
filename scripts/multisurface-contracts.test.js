@@ -332,7 +332,7 @@ test('History uses structured failures and injected production time and IDs', ()
   );
   assert.match(
     historyStore,
-    /pub\s+fn\s+with_environment\s*\([\s\S]*?Arc<dyn\s+UnixMillisClock>[\s\S]*?Arc<dyn\s+HistoryIdGenerator>/u,
+    /pub\s+fn\s+with_environment\s*\([\s\S]*?Arc<dyn\s+ClockPort>[\s\S]*?Arc<dyn\s+HistoryIdGenerator>/u,
   );
 });
 
@@ -343,10 +343,10 @@ test('SQLite Sync receives its clock through the repository factory', () => {
     /SystemTime|UNIX_EPOCH|\bsync_now_ms\s*\(/u,
     'SQLite Sync must not read the system clock directly',
   );
-  assert.match(syncRepository, /clock:\s*Arc<dyn\s+UnixMillisClock>/u);
+  assert.match(syncRepository, /clock:\s*Arc<dyn\s+ClockPort>/u);
   assert.match(
     syncRepository,
-    /pub\s+fn\s+new\s*\(db:\s*Arc<Database>,\s*clock:\s*Arc<dyn\s+UnixMillisClock>/u,
+    /pub\s+fn\s+new\s*\(db:\s*Arc<Database>,\s*clock:\s*Arc<dyn\s+ClockPort>/u,
   );
 
   assert.match(
@@ -374,9 +374,9 @@ test('API server preserves typed failures and receives local ASR through the Cor
   assert.doesNotMatch(
     apiServer,
     /sona_local_asr::batch::LocalBatchAsrAdapter/u,
-    'API server orchestration must receive the Core BatchTranscriber port',
+    'API server orchestration must receive the Core BatchTranscriberPort port',
   );
-  assert.match(apiServer, /Arc<dyn\s+BatchTranscriber>/u);
+  assert.match(apiServer, /Arc<dyn\s+BatchTranscriberPort>/u);
   for (const errorType of [
     'ApiServerPlatformError',
     'ApiServerRuntimeError',
@@ -431,10 +431,10 @@ test('API server depends only on Core runtime capability ports', () => {
   ].map(withoutInlineRustTests).join('\n');
 
   for (const port of [
-    'MediaFileValidator',
-    'GpuAvailabilityProvider',
-    'ModelCatalogProvider',
-    'BatchTranscribePlanResolver',
+    'MediaValidatorPort',
+    'GpuAvailabilityPort',
+    'ModelCatalogPort',
+    'BatchTranscribePlanPort',
   ]) {
     assert.match(runtimePorts, new RegExp(`pub\\s+trait\\s+${port}\\b`, 'u'));
     assert.match(apiServerSource, new RegExp(`Arc<dyn\\s+${port}>`, 'u'));

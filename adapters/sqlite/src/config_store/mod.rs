@@ -1,4 +1,4 @@
-mod app_config;
+﻿mod app_config;
 mod library;
 mod settings;
 
@@ -12,7 +12,7 @@ use sona_core::config::{
     AppConfigRepositorySnapshot, AppConfigStartupProjection, AppConfigStore, AppConfigStoredState,
     ConfigError,
 };
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::ClockPort;
 use sona_core::runtime::serve::ServeStartupSettings;
 use sona_core::sync::SyncEntityKind;
 
@@ -432,14 +432,14 @@ where
     D: DatabasePort,
 {
     store: SqliteConfigStore<D>,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 }
 
 impl<D> SqliteAppConfigAdapter<D>
 where
     D: DatabasePort,
 {
-    pub fn new(db: Arc<D>, clock: Arc<dyn UnixMillisClock>) -> Self {
+    pub fn new(db: Arc<D>, clock: Arc<dyn ClockPort>) -> Self {
         Self {
             store: SqliteConfigStore::new(db),
             clock,

@@ -1,6 +1,6 @@
-use serde_json::{Map, Value};
+﻿use serde_json::{Map, Value};
 
-use crate::ports::time::UnixMillisClock;
+use crate::ports::time::ClockPort;
 
 use super::{
     ActiveTagSelection, TagCreateInput, TagError, TagListOptions, TagPatch, TagRecord,
@@ -15,14 +15,14 @@ pub trait TagIdGenerator: Send + Sync {
 pub struct TagRepositoryService<'a> {
     store: &'a dyn TagStore,
     ids: &'a dyn TagIdGenerator,
-    clock: &'a dyn UnixMillisClock,
+    clock: &'a dyn ClockPort,
 }
 
 impl<'a> TagRepositoryService<'a> {
     pub fn new(
         store: &'a dyn TagStore,
         ids: &'a dyn TagIdGenerator,
-        clock: &'a dyn UnixMillisClock,
+        clock: &'a dyn ClockPort,
     ) -> Self {
         Self { store, ids, clock }
     }

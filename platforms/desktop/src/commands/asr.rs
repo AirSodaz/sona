@@ -1,8 +1,8 @@
-use crate::integrations::asr::{
+﻿use crate::integrations::asr::{
     AsrPortError, AsrRuntimeMetricsSnapshot, AsrState, AsrTranscriptionRequest,
     TauriAsrRuntimeObserver, TranscriptSegment, ensure_adapter, get_provider_id,
 };
-use crate::platform::event::{EventEmitter, TauriEventEmitter};
+use crate::platform::event::{EventEmitterPort, TauriEventEmitter};
 use sona_core::ports::asr::{AsrPortErrorKind, AsrRuntimeObserver};
 use std::sync::Arc;
 use tauri::{AppHandle, State};
@@ -15,7 +15,7 @@ pub async fn init_recognizer(
     asr_request: AsrTranscriptionRequest,
 ) -> Result<(), AsrPortError> {
     let adapter = ensure_adapter(&asr_request)?;
-    let emitter = Arc::new(TauriEventEmitter(app)) as Arc<dyn EventEmitter>;
+    let emitter = Arc::new(TauriEventEmitter(app)) as Arc<dyn EventEmitterPort>;
     let observer = Arc::new(TauriAsrRuntimeObserver::new(emitter, state.metrics_store()))
         as Arc<dyn AsrRuntimeObserver>;
     let session = adapter
@@ -104,7 +104,7 @@ pub async fn process_batch_file(
                 get_provider_id(&asr_request).unwrap_or("unknown")
             ))
         })?;
-    let emitter = Arc::new(TauriEventEmitter(app.clone())) as Arc<dyn EventEmitter>;
+    let emitter = Arc::new(TauriEventEmitter(app.clone())) as Arc<dyn EventEmitterPort>;
     processor
         .process_file(
             emitter,

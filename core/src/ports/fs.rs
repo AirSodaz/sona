@@ -1,4 +1,4 @@
-use std::fmt;
+﻿use std::fmt;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,7 +93,7 @@ impl fmt::Display for FileSystemError {
 
 impl std::error::Error for FileSystemError {}
 
-pub trait FileSystem: Send + Sync {
+pub trait FileSystemPort: Send + Sync {
     fn create_dir_all(&self, path: &Path) -> Result<(), FileSystemError>;
     fn write_file(&self, path: &Path, contents: &[u8]) -> Result<(), FileSystemError>;
     fn read_file(&self, path: &Path) -> Result<Vec<u8>, FileSystemError>;
@@ -105,12 +105,12 @@ pub trait FileSystem: Send + Sync {
 }
 
 #[cfg(test)]
-pub struct MockFileSystem {
+pub struct MockFileSystemPort {
     pub files: std::sync::Mutex<std::collections::HashMap<String, Vec<u8>>>,
 }
 
 #[cfg(test)]
-impl MockFileSystem {
+impl MockFileSystemPort {
     pub fn new() -> Self {
         Self {
             files: std::sync::Mutex::new(std::collections::HashMap::new()),
@@ -119,14 +119,14 @@ impl MockFileSystem {
 }
 
 #[cfg(test)]
-impl Default for MockFileSystem {
+impl Default for MockFileSystemPort {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[cfg(test)]
-impl FileSystem for MockFileSystem {
+impl FileSystemPort for MockFileSystemPort {
     fn create_dir_all(&self, _path: &Path) -> Result<(), FileSystemError> {
         Ok(())
     }

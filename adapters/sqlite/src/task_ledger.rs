@@ -1,9 +1,9 @@
-use crate::DatabaseError;
+﻿use crate::DatabaseError;
 use crate::ports::Database as DatabasePort;
 use serde::Serialize;
 use serde_json::Value;
 use sona_application::task_ledger::TaskLedgerService;
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::ClockPort;
 use sona_core::task_ledger::TaskLedgerError;
 use sona_core::task_ledger::repository::TaskLedgerStore;
 use sona_core::task_ledger::types::{
@@ -38,14 +38,14 @@ where
     D: DatabasePort,
 {
     repository: SqliteLedgerRepository<D>,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 }
 
 impl<D> SqliteTaskLedgerAdapter<D>
 where
     D: DatabasePort,
 {
-    pub fn new(db: Arc<D>, clock: Arc<dyn UnixMillisClock>) -> Self {
+    pub fn new(db: Arc<D>, clock: Arc<dyn ClockPort>) -> Self {
         Self {
             repository: SqliteLedgerRepository::new(db),
             clock,
@@ -299,7 +299,7 @@ mod tests {
 
     struct TestClock;
 
-    impl UnixMillisClock for TestClock {
+    impl ClockPort for TestClock {
         fn now_ms(&self) -> Result<u64, ClockError> {
             Ok(0)
         }
@@ -309,7 +309,7 @@ mod tests {
 
     struct FixedClock(u64);
 
-    impl UnixMillisClock for FixedClock {
+    impl ClockPort for FixedClock {
         fn now_ms(&self) -> Result<u64, ClockError> {
             Ok(self.0)
         }
@@ -317,7 +317,7 @@ mod tests {
 
     struct FailingClock;
 
-    impl UnixMillisClock for FailingClock {
+    impl ClockPort for FailingClock {
         fn now_ms(&self) -> Result<u64, ClockError> {
             Err(ClockError::Unavailable("test clock failure".to_string()))
         }

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
 use sona_core::config::{
     AppConfigLibrary, AppConfigStartupProjection, AppConfigStore, AppConfigStoredState,
@@ -6,12 +6,12 @@ use sona_core::config::{
     SpeakerProfileRecord, SpeakerProfileSampleRecord, SummaryTemplateRecord,
     TextReplacementRuleRecord, TextReplacementSetRecord,
 };
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::ClockPort;
 use sona_sqlite::{Database, DatabaseError, SqliteAppConfigAdapter, SqliteConfigStore};
 
 struct FixedClock;
 
-impl UnixMillisClock for FixedClock {
+impl ClockPort for FixedClock {
     fn now_ms(&self) -> Result<u64, sona_core::ports::time::ClockError> {
         Ok(1)
     }

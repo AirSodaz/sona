@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+﻿use std::collections::HashMap;
 use std::path::Path as StdPath;
 use std::sync::Arc;
 
 use sona_core::ports::asr::online_asr_providers;
-use sona_core::ports::runtime::{GpuAvailabilityProvider, ModelCatalogProvider};
+use sona_core::ports::runtime::{GpuAvailabilityPort, ModelCatalogPort};
 
 use crate::ApiServerPlatformError;
 use crate::jobs::JobStatus;
@@ -40,8 +40,8 @@ pub struct InfoResponse {
 }
 
 pub async fn build_info_response(
-    gpu_availability: Arc<dyn GpuAvailabilityProvider>,
-    model_catalog: Arc<dyn ModelCatalogProvider>,
+    gpu_availability: Arc<dyn GpuAvailabilityPort>,
+    model_catalog: Arc<dyn ModelCatalogPort>,
     models_dir: &StdPath,
     online_asr_config: &HashMap<String, serde_json::Value>,
 ) -> Result<InfoResponse, ApiServerPlatformError> {

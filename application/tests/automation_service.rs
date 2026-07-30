@@ -1,4 +1,4 @@
-use serde_json::{Value, json};
+﻿use serde_json::{Value, json};
 use sona_application::automation::{AutomationRepositoryService, AutomationValidationService};
 use sona_core::automation::repository::{
     AutomationProcessedInput, AutomationProcessedRecord, AutomationRepositoryInput,
@@ -7,7 +7,7 @@ use sona_core::automation::repository::{
 use sona_core::automation::{
     AutomationError, AutomationRule, AutomationRuleExportConfig, AutomationRuleStageConfig,
 };
-use sona_core::automation::{AutomationFileSystem, AutomationIdGenerator};
+use sona_core::automation::{AutomationFsPort, AutomationIdGenerator};
 use sona_core::ports::fs::{FileSystemError, FileSystemOperation};
 use std::sync::Mutex;
 
@@ -75,7 +75,7 @@ struct FakeFileSystem {
     metadata_failure: Option<String>,
 }
 
-impl AutomationFileSystem for FakeFileSystem {
+impl AutomationFsPort for FakeFileSystem {
     fn path_exists(&self, path: &str) -> Result<bool, FileSystemError> {
         self.queried.lock().unwrap().push(path.to_string());
         if let Some(reason) = &self.metadata_failure {

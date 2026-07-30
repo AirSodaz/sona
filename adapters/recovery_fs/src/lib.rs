@@ -1,7 +1,7 @@
 use serde::Serialize;
 use sona_application::recovery::RecoveryService;
-use sona_core::ports::fs::{FileMetadata, FileSystem, FileSystemError, FileSystemOperation};
-use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::ports::fs::{FileMetadata, FileSystemError, FileSystemOperation, FileSystemPort};
+use sona_core::ports::time::{ClockError, ClockPort};
 use sona_core::recovery::RecoveryError;
 use sona_core::recovery::normalization::{
     SourcePathStatus, SourcePathStatusProvider, empty_snapshot,
@@ -28,7 +28,7 @@ struct SystemClock;
 #[derive(Clone, Copy, Debug, Default)]
 struct FsSourcePathStatusProvider;
 
-impl FileSystem for RealFileSystem {
+impl FileSystemPort for RealFileSystem {
     fn create_dir_all(&self, path: &Path) -> Result<(), FileSystemError> {
         fs::create_dir_all(path)
             .map_err(|error| file_system_error(FileSystemOperation::CreateDirectory, path, error))
@@ -84,7 +84,7 @@ impl FileSystem for RealFileSystem {
     }
 }
 
-impl UnixMillisClock for SystemClock {
+impl ClockPort for SystemClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         let duration = SystemTime::now()
             .duration_since(UNIX_EPOCH)

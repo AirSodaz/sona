@@ -1,9 +1,9 @@
-use std::collections::HashSet;
+﻿use std::collections::HashSet;
 
 use serde_json::{Map, Value};
 
 use crate::config::defaults::CURRENT_CONFIG_VERSION;
-use crate::ports::time::UnixMillisClock;
+use crate::ports::time::ClockPort;
 use crate::runtime::config::ServeConfigSection;
 use crate::runtime::gpu::DEFAULT_GPU_ACCELERATION;
 use crate::runtime::serve::{
@@ -28,11 +28,11 @@ const SPEAKER_PROFILES_KEY: &str = "speakerProfiles";
 
 pub struct AppConfigRepositoryService<'a> {
     store: &'a dyn AppConfigStore,
-    clock: &'a dyn UnixMillisClock,
+    clock: &'a dyn ClockPort,
 }
 
 impl<'a> AppConfigRepositoryService<'a> {
-    pub fn new(store: &'a dyn AppConfigStore, clock: &'a dyn UnixMillisClock) -> Self {
+    pub fn new(store: &'a dyn AppConfigStore, clock: &'a dyn ClockPort) -> Self {
         Self { store, clock }
     }
 

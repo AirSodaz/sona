@@ -1,4 +1,4 @@
-use sona_core::task_ledger::TaskLedgerError;
+﻿use sona_core::task_ledger::TaskLedgerError;
 use sona_core::task_ledger::types::{
     TASK_LEDGER_UPDATED_EVENT, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot,
 };
@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Runtime};
 
 use crate::platform::blocking::{map_err_string, with_sqlite_context};
-use crate::platform::event::{EventEmitter, TauriEventEmitter};
+use crate::platform::event::{EventEmitterPort, TauriEventEmitter};
 
 async fn run_task_ledger_adapter_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
 where
@@ -24,7 +24,7 @@ where
 }
 
 fn emit_task_ledger_snapshot(
-    emitter: &dyn EventEmitter,
+    emitter: &dyn EventEmitterPort,
     snapshot: &TaskLedgerSnapshot,
 ) -> Result<(), String> {
     sona_ts_bind::validate_task_ledger_snapshot_for_typescript(snapshot).map_err(map_err_string)?;

@@ -28,10 +28,10 @@ const DOMAIN_AGGREGATES = [
 // Capability ports that must stay in `core/src/ports/`. Guards the inverse
 // drift: someone emptying the shared module by pushing everything into domains.
 const REQUIRED_CAPABILITY_PORTS = [
-  'FileSystem',
-  'PathProvider',
-  'UnixMillisClock',
-  'EventEmitter',
+  'FileSystemPort',
+  'PathPort',
+  'ClockPort',
+  'EventEmitterPort',
 ];
 
 function corePortFiles() {

@@ -1,4 +1,4 @@
-use std::path::Path;
+﻿use std::path::Path;
 
 use async_trait::async_trait;
 
@@ -14,23 +14,23 @@ pub enum RuntimeCapabilityError {
 }
 
 #[async_trait]
-pub trait MediaFileValidator: Send + Sync {
+pub trait MediaValidatorPort: Send + Sync {
     async fn is_valid_media_file(&self, path: &Path) -> bool;
 }
 
 #[async_trait]
-pub trait GpuAvailabilityProvider: Send + Sync {
+pub trait GpuAvailabilityPort: Send + Sync {
     async fn is_gpu_available(&self) -> bool;
 }
 
-pub trait ModelCatalogProvider: Send + Sync {
+pub trait ModelCatalogPort: Send + Sync {
     fn build_model_catalog_snapshot(
         &self,
         models_dir: &Path,
     ) -> Result<ModelCatalogSnapshot, RuntimeCapabilityError>;
 }
 
-pub trait BatchTranscribePlanResolver: Send + Sync {
+pub trait BatchTranscribePlanPort: Send + Sync {
     fn resolve_batch_transcribe_plan(
         &self,
         options: BatchTranscribeOptions,

@@ -1,4 +1,4 @@
-use reqwest::header::RANGE;
+﻿use reqwest::header::RANGE;
 use sha2::{Digest, Sha256};
 use std::io::SeekFrom;
 use std::path::{Path, PathBuf};

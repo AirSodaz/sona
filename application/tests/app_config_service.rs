@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+﻿use std::collections::HashMap;
 use std::sync::Mutex;
 
 use serde_json::{Value, json};
@@ -9,7 +9,7 @@ use sona_core::config::{
     PolishPresetRecord, SpeakerProfileRecord, SpeakerProfileSampleRecord, SummaryTemplateRecord,
     TextReplacementRuleRecord, TextReplacementSetRecord,
 };
-use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::ports::time::{ClockError, ClockPort};
 
 #[derive(Clone, Debug, PartialEq)]
 enum StoreCall {
@@ -109,13 +109,13 @@ struct FailingClock;
 
 static FIXED_CLOCK: FixedClock = FixedClock(1_234_567);
 
-impl UnixMillisClock for FixedClock {
+impl ClockPort for FixedClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(self.0)
     }
 }
 
-impl UnixMillisClock for FailingClock {
+impl ClockPort for FailingClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         Err(ClockError::BeforeUnixEpoch(
             "clock before Unix epoch".into(),

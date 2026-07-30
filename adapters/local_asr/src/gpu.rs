@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, PartialEq, Eq)]
+﻿#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuFallbackNotice {
     pub from_provider: String,
     pub to_provider: String,
@@ -135,7 +135,7 @@ mod tests {
         GpuAccelerationPlan, GpuFallbackNotice, LocalGpuAvailabilityProvider,
         check_gpu_availability,
     };
-    use sona_core::ports::runtime::GpuAvailabilityProvider;
+    use sona_core::ports::runtime::GpuAvailabilityPort;
 
     #[test]
     fn windows_auto_gpu_plan_falls_back_to_cpu_after_directml() {
@@ -170,7 +170,7 @@ mod tests {
 pub struct LocalGpuAvailabilityProvider;
 
 #[async_trait::async_trait]
-impl sona_core::ports::runtime::GpuAvailabilityProvider for LocalGpuAvailabilityProvider {
+impl sona_core::ports::runtime::GpuAvailabilityPort for LocalGpuAvailabilityProvider {
     async fn is_gpu_available(&self) -> bool {
         check_gpu_availability().await.unwrap_or(false)
     }

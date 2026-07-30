@@ -1,4 +1,4 @@
-use async_trait::async_trait;
+﻿use async_trait::async_trait;
 use sona_core::ports::asr::{AsrPortError, AsrRuntimeObserver, AsrStreamingSession};
 use std::sync::Arc;
 
@@ -9,7 +9,7 @@ pub trait AsrBatchProcessor: Send + Sync {
     #[allow(clippy::too_many_arguments)]
     async fn process_file(
         &self,
-        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
+        emitter: std::sync::Arc<dyn crate::platform::event::EventEmitterPort>,
         state: &AsrState,
         file_path: std::path::PathBuf,
         save_to_path: Option<std::path::PathBuf>,

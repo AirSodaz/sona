@@ -1,4 +1,4 @@
-use super::AsrState;
+﻿use super::AsrState;
 use super::BATCH_PROGRESS_EVENT;
 use super::metrics::{
     AsrInferenceMetric, AsrMetricsStore, AsrModelLoadMetric, calculate_rss_delta_mb, calculate_rtf,
@@ -25,7 +25,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 pub async fn process_batch_request_impl(
-    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitter>,
+    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitterPort>,
     state: &AsrState,
     request: BatchTranscriptionRequest,
 ) -> Result<Vec<TranscriptSegment>, String> {
@@ -67,7 +67,7 @@ pub(crate) async fn transcribe_batch_with_progress_and_metrics<F>(
     request: &BatchTranscriptionRequest,
     mut on_progress: F,
     metrics_store: Option<AsrMetricsStore>,
-    emitter: Option<&dyn crate::platform::event::EventEmitter>,
+    emitter: Option<&dyn crate::platform::event::EventEmitterPort>,
 ) -> Result<Vec<TranscriptSegment>, String>
 where
     F: FnMut(f32),
@@ -89,7 +89,7 @@ async fn transcribe_batch_with_progress_and_metrics_inner<F, N>(
     mut on_progress: F,
     metrics_store: Option<AsrMetricsStore>,
     mut on_fallback: N,
-    emitter: Option<&dyn crate::platform::event::EventEmitter>,
+    emitter: Option<&dyn crate::platform::event::EventEmitterPort>,
 ) -> Result<Vec<TranscriptSegment>, String>
 where
     F: FnMut(f32),
@@ -246,7 +246,7 @@ async fn process_batch_local<F>(
     punctuation: Option<&Punctuation>,
     on_progress: &mut F,
     normalization_options: TranscriptNormalizationOptions,
-    emitter: Option<&dyn crate::platform::event::EventEmitter>,
+    emitter: Option<&dyn crate::platform::event::EventEmitterPort>,
     instance_id: Option<&str>,
 ) -> Result<Vec<TranscriptSegment>, String>
 where
@@ -314,7 +314,7 @@ async fn process_batch_online<F>(
     punctuation: Option<&Punctuation>,
     on_progress: &mut F,
     normalization_options: TranscriptNormalizationOptions,
-    emitter: Option<&dyn crate::platform::event::EventEmitter>,
+    emitter: Option<&dyn crate::platform::event::EventEmitterPort>,
     instance_id: Option<&str>,
 ) -> Result<Vec<TranscriptSegment>, String>
 where

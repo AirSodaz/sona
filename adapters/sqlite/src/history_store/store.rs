@@ -1,4 +1,4 @@
-use crate::DatabaseError;
+﻿use crate::DatabaseError;
 use crate::history_fs_utils::{
     ensure_safe_file_name, optional_history_child_path, remove_path_if_exists,
 };
@@ -35,7 +35,7 @@ use sona_core::history::{
 };
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
 use sona_core::ports::fs::{FileSystemError, FileSystemOperation};
-use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::ports::time::{ClockError, ClockPort};
 use sona_core::sync::SyncEntityKind;
 use sona_core::transcription::transcript::TranscriptSegment;
 use std::cell::Cell;
@@ -71,7 +71,7 @@ where
 {
     app_local_data_dir: PathBuf,
     db: Arc<D>,
-    clock: Option<Arc<dyn UnixMillisClock>>,
+    clock: Option<Arc<dyn ClockPort>>,
     ids: Option<Arc<dyn HistoryIdGenerator>>,
 }
 
@@ -91,7 +91,7 @@ where
     pub fn with_environment(
         app_local_data_dir: PathBuf,
         db: Arc<D>,
-        clock: Arc<dyn UnixMillisClock>,
+        clock: Arc<dyn ClockPort>,
         ids: Arc<dyn HistoryIdGenerator>,
     ) -> Self {
         Self {
@@ -106,7 +106,7 @@ where
         Ok(self.db.as_ref())
     }
 
-    fn clock(&self) -> Result<&dyn UnixMillisClock, ClockError> {
+    fn clock(&self) -> Result<&dyn ClockPort, ClockError> {
         self.clock
             .as_deref()
             .ok_or_else(|| ClockError::Unavailable("History clock is not configured".to_string()))
@@ -149,7 +149,7 @@ impl SqliteHistoryStore<crate::Database> {
 struct TestHistoryClock;
 
 #[cfg(test)]
-impl UnixMillisClock for TestHistoryClock {
+impl ClockPort for TestHistoryClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         std::time::SystemTime::now()
             .duration_since(UNIX_EPOCH)

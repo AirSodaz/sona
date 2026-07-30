@@ -53,8 +53,8 @@ use sona_core::llm::requests::{LlmConfig, LlmGenerateRequest, LlmModelsRequest};
 use sona_core::llm::runtime::{LlmCompletionRequest, LlmStreamDelta};
 use sona_core::llm::streaming_protocol::StreamTextAccumulator;
 use sona_core::ports::llm::{
-    LlmCompletionPort, LlmModelDiscoveryPort, LlmModelLister, LlmModelMetadataPort, LlmPortError,
-    LlmStreamingPort, LlmTaskDelayPort, LlmTextGenerator, LlmTranslationPort,
+    LlmCompletionPort, LlmModelDiscoveryPort, LlmModelListerPort, LlmModelMetadataPort,
+    LlmPortError, LlmStreamingPort, LlmTaskDelayPort, LlmTextGeneratorPort, LlmTranslationPort,
     LlmTranslationRequest,
 };
 
@@ -65,7 +65,7 @@ use crate::providers::google_translate_free_port_error;
 pub struct OnlineLlmAdapter;
 
 #[async_trait]
-impl LlmTextGenerator for OnlineLlmAdapter {
+impl LlmTextGeneratorPort for OnlineLlmAdapter {
     async fn generate_text(
         &self,
         request: LlmGenerateRequest,
@@ -188,7 +188,7 @@ impl LlmTranslationPort for OnlineLlmAdapter {
 }
 
 #[async_trait]
-impl LlmModelLister for OnlineLlmAdapter {
+impl LlmModelListerPort for OnlineLlmAdapter {
     async fn list_models(
         &self,
         request: LlmModelsRequest,

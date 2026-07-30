@@ -1,4 +1,4 @@
-use super::metrics::{
+﻿use super::metrics::{
     AsrInferenceMetric, current_time_millis, duration_to_ms, log_inference_metric,
     set_batch_inference_metric,
 };
@@ -74,7 +74,7 @@ struct OnlineBatchProcessor;
 impl AsrBatchProcessor for OnlineBatchProcessor {
     async fn process_file(
         &self,
-        emitter: Arc<dyn crate::platform::event::EventEmitter>,
+        emitter: Arc<dyn crate::platform::event::EventEmitterPort>,
         state: &AsrState,
         file_path: std::path::PathBuf,
         _save_to_path: Option<std::path::PathBuf>,

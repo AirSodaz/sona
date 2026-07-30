@@ -1,4 +1,4 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use sona_core::history::mutation_repository::{
@@ -12,7 +12,7 @@ use sona_core::history::{
     HistoryWorkspaceQueryResult, HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
     TranscriptSnapshotReason,
 };
-use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::ports::time::{ClockError, ClockPort};
 use sona_core::sync::{SyncLocalRepository, SyncPresetV1};
 use sona_core::tag::{TagRecord, TagStore};
 use sona_core::transcription::transcript::TranscriptSegment;
@@ -20,7 +20,7 @@ use sona_sqlite::{Database, SqliteHistoryStore, SqliteSyncRepository, SqliteTagR
 
 struct TestClock;
 
-impl UnixMillisClock for TestClock {
+impl ClockPort for TestClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(1_700_000_000_000)
     }

@@ -1,8 +1,8 @@
-use std::path::PathBuf;
+﻿use std::path::PathBuf;
 use std::sync::Arc;
 use thiserror::Error;
 
-/// Path kinds supported by `PathProvider`.
+/// Path kinds supported by `PathPort`.
 /// Add variants here as needed; match arms in impls will guide you.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PathKind {
@@ -13,12 +13,12 @@ pub enum PathKind {
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 #[error("Failed to resolve {kind:?} path: {reason}")]
-pub struct PathProviderError {
+pub struct PathPortError {
     pub kind: PathKind,
     pub reason: String,
 }
 
-impl PathProviderError {
+impl PathPortError {
     pub fn new(kind: PathKind, reason: impl Into<String>) -> Self {
         Self {
             kind,
@@ -28,12 +28,12 @@ impl PathProviderError {
 }
 
 /// Port for resolving application-specific data directories.
-pub trait PathProvider: Send + Sync {
-    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathProviderError>;
+pub trait PathPort: Send + Sync {
+    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathPortError>;
 }
 
-impl<T: PathProvider + ?Sized> PathProvider for Arc<T> {
-    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathProviderError> {
+impl<T: PathPort + ?Sized> PathPort for Arc<T> {
+    fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathPortError> {
         (**self).resolve_path(kind)
     }
 }
@@ -44,7 +44,7 @@ mod tests {
     use std::collections::HashMap;
 
     struct TestPathProvider {
-        entries: HashMap<PathKind, Result<PathBuf, PathProviderError>>,
+        entries: HashMap<PathKind, Result<PathBuf, PathPortError>>,
     }
 
     impl TestPathProvider {
@@ -62,15 +62,15 @@ mod tests {
             Self { entries }
         }
 
-        fn from_map(entries: HashMap<PathKind, Result<PathBuf, PathProviderError>>) -> Self {
+        fn from_map(entries: HashMap<PathKind, Result<PathBuf, PathPortError>>) -> Self {
             Self { entries }
         }
     }
 
-    impl PathProvider for TestPathProvider {
-        fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathProviderError> {
+    impl PathPort for TestPathProvider {
+        fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathPortError> {
             self.entries.get(&kind).cloned().unwrap_or_else(|| {
-                Err(PathProviderError::new(
+                Err(PathPortError::new(
                     kind,
                     format!("path kind {kind:?} not configured"),
                 ))

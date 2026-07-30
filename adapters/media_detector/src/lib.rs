@@ -1,4 +1,4 @@
-use std::path::Path;
+﻿use std::path::Path;
 
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
@@ -7,7 +7,7 @@ use tokio::io::AsyncReadExt;
 pub struct MagicNumberMediaFileValidator;
 
 #[async_trait::async_trait]
-impl sona_core::ports::runtime::MediaFileValidator for MagicNumberMediaFileValidator {
+impl sona_core::ports::runtime::MediaValidatorPort for MagicNumberMediaFileValidator {
     async fn is_valid_media_file(&self, path: &Path) -> bool {
         crate::is_valid_media_file(path).await
     }
@@ -46,7 +46,7 @@ pub async fn check_media_formats(paths: Vec<String>) -> Vec<bool> {
 #[cfg(test)]
 mod tests {
     use super::MagicNumberMediaFileValidator;
-    use sona_core::ports::runtime::MediaFileValidator;
+    use sona_core::ports::runtime::MediaValidatorPort;
 
     #[tokio::test]
     async fn runtime_capability_media_validator_delegates_to_magic_number_detection() {

@@ -1,9 +1,9 @@
-use sona_core::ports::asr::BatchTranscriber;
+﻿use sona_core::ports::asr::BatchTranscriberPort;
 use sona_core::ports::asr::{AsrRuntimeObserver, AsrStreamingSession};
 use sona_core::transcription::runtime::LiveTranscribePlan;
 use std::sync::Arc;
 
-pub(crate) fn local_batch_transcriber() -> impl BatchTranscriber {
+pub(crate) fn local_batch_transcriber() -> impl BatchTranscriberPort {
     sona_local_asr::batch::LocalBatchAsrAdapter
 }
 

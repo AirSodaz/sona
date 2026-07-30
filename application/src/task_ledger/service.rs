@@ -1,6 +1,6 @@
-use serde_json::Value;
+﻿use serde_json::Value;
 
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::ClockPort;
 
 use sona_core::task_ledger::TaskLedgerError;
 use sona_core::task_ledger::repository::TaskLedgerStore;
@@ -12,11 +12,11 @@ const INTERRUPTED_MESSAGE: &str = "Task was interrupted before it finished.";
 
 pub struct TaskLedgerService<'a> {
     store: &'a dyn TaskLedgerStore,
-    clock: &'a dyn UnixMillisClock,
+    clock: &'a dyn ClockPort,
 }
 
 impl<'a> TaskLedgerService<'a> {
-    pub fn new(store: &'a dyn TaskLedgerStore, clock: &'a dyn UnixMillisClock) -> Self {
+    pub fn new(store: &'a dyn TaskLedgerStore, clock: &'a dyn ClockPort) -> Self {
         Self { store, clock }
     }
 

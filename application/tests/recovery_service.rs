@@ -1,6 +1,6 @@
-use serde_json::{Value, json};
+﻿use serde_json::{Value, json};
 use sona_application::recovery::RecoveryService;
-use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::ports::time::{ClockError, ClockPort};
 use sona_core::recovery::RecoveryError;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
 use sona_core::recovery::repository::RecoverySnapshotStore;
@@ -71,7 +71,7 @@ impl SourcePathStatusProvider for FixedSourcePaths {
 
 struct FixedClock(Result<u64, ClockError>);
 
-impl UnixMillisClock for FixedClock {
+impl ClockPort for FixedClock {
     fn now_ms(&self) -> Result<u64, ClockError> {
         self.0.clone()
     }

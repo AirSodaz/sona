@@ -1,6 +1,6 @@
-use std::collections::HashSet;
+﻿use std::collections::HashSet;
 
-use crate::ports::time::UnixMillisClock;
+use crate::ports::time::ClockPort;
 use crate::recovery::RecoveryError;
 use crate::recovery::normalization::{
     SourcePathStatus, SourcePathStatusProvider, recovered_item_from_queue_input_with_source_paths,
@@ -13,14 +13,14 @@ use crate::recovery::types::{RecoveryItemInput, RecoveryResolution, RecoverySnap
 pub struct RecoveryService<'a> {
     store: &'a dyn RecoverySnapshotStore,
     source_paths: &'a dyn SourcePathStatusProvider,
-    clock: &'a dyn UnixMillisClock,
+    clock: &'a dyn ClockPort,
 }
 
 impl<'a> RecoveryService<'a> {
     pub fn new(
         store: &'a dyn RecoverySnapshotStore,
         source_paths: &'a dyn SourcePathStatusProvider,
-        clock: &'a dyn UnixMillisClock,
+        clock: &'a dyn ClockPort,
     ) -> Self {
         Self {
             store,

@@ -1,6 +1,6 @@
-use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
+﻿use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
 
-pub fn create_history_recording_path(provider: &dyn PathProvider) -> Result<String, String> {
+pub fn create_history_recording_path(provider: &dyn PathPort) -> Result<String, String> {
     let app_data_dir = provider
         .resolve_path(PathKind::AppLocalData)
         .map_err(|error| error.to_string())?;

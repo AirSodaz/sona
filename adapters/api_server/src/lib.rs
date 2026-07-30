@@ -45,10 +45,10 @@ mod tests {
         DEFAULT_SILERO_VAD_MODEL_ID, ModelCatalogSnapshot,
         build_model_catalog_snapshot_with_installed_ids,
     };
-    use sona_core::ports::asr::BatchTranscriber;
+    use sona_core::ports::asr::BatchTranscriberPort;
     use sona_core::ports::runtime::{
-        BatchTranscribePlanResolver, GpuAvailabilityProvider, MediaFileValidator,
-        ModelCatalogProvider, RuntimeCapabilityError,
+        BatchTranscribePlanPort, GpuAvailabilityPort, MediaValidatorPort, ModelCatalogPort,
+        RuntimeCapabilityError,
     };
     use sona_core::transcription::runtime::{
         BatchTranscribeOptions, BatchTranscribePlan, OutputTarget,
@@ -65,7 +65,7 @@ mod tests {
     struct RejectingMediaValidator;
 
     #[async_trait]
-    impl MediaFileValidator for RejectingMediaValidator {
+    impl MediaValidatorPort for RejectingMediaValidator {
         async fn is_valid_media_file(&self, _path: &StdPath) -> bool {
             false
         }
@@ -74,7 +74,7 @@ mod tests {
     struct AcceptingMediaValidator;
 
     #[async_trait]
-    impl MediaFileValidator for AcceptingMediaValidator {
+    impl MediaValidatorPort for AcceptingMediaValidator {
         async fn is_valid_media_file(&self, _path: &StdPath) -> bool {
             true
         }
@@ -83,7 +83,7 @@ mod tests {
     struct FixedGpuAvailability(bool);
 
     #[async_trait]
-    impl GpuAvailabilityProvider for FixedGpuAvailability {
+    impl GpuAvailabilityPort for FixedGpuAvailability {
         async fn is_gpu_available(&self) -> bool {
             self.0
         }
@@ -93,7 +93,7 @@ mod tests {
         snapshot: ModelCatalogSnapshot,
     }
 
-    impl ModelCatalogProvider for FixedModelCatalog {
+    impl ModelCatalogPort for FixedModelCatalog {
         fn build_model_catalog_snapshot(
             &self,
             _models_dir: &StdPath,
@@ -104,7 +104,7 @@ mod tests {
 
     struct FailingModelCatalog;
 
-    impl ModelCatalogProvider for FailingModelCatalog {
+    impl ModelCatalogPort for FailingModelCatalog {
         fn build_model_catalog_snapshot(
             &self,
             _models_dir: &StdPath,
@@ -120,7 +120,7 @@ mod tests {
         plan: BatchTranscribePlan,
     }
 
-    impl BatchTranscribePlanResolver for RecordingBatchPlanResolver {
+    impl BatchTranscribePlanPort for RecordingBatchPlanResolver {
         fn resolve_batch_transcribe_plan(
             &self,
             _options: BatchTranscribeOptions,
@@ -136,7 +136,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl BatchTranscriber for RecordingBatchTranscriber {
+    impl BatchTranscriberPort for RecordingBatchTranscriber {
         async fn transcribe(
             &self,
             _plan: BatchTranscribePlan,
@@ -150,7 +150,7 @@ mod tests {
     struct NoopBatchTranscriber;
 
     #[async_trait]
-    impl BatchTranscriber for NoopBatchTranscriber {
+    impl BatchTranscriberPort for NoopBatchTranscriber {
         async fn transcribe(
             &self,
             _plan: BatchTranscribePlan,
@@ -180,11 +180,11 @@ mod tests {
         }
     }
 
-    fn test_batch_transcriber() -> Arc<dyn BatchTranscriber> {
+    fn test_batch_transcriber() -> Arc<dyn BatchTranscriberPort> {
         Arc::new(NoopBatchTranscriber)
     }
 
-    fn test_model_catalog() -> Arc<dyn ModelCatalogProvider> {
+    fn test_model_catalog() -> Arc<dyn ModelCatalogPort> {
         Arc::new(FixedModelCatalog {
             snapshot: build_model_catalog_snapshot_with_installed_ids(
                 StdPath::new("models"),
@@ -193,7 +193,7 @@ mod tests {
         })
     }
 
-    fn test_batch_plan_resolver() -> Arc<dyn BatchTranscribePlanResolver> {
+    fn test_batch_plan_resolver() -> Arc<dyn BatchTranscribePlanPort> {
         Arc::new(RecordingBatchPlanResolver {
             calls: Arc::new(AtomicUsize::new(0)),
             plan: test_batch_plan(PathBuf::from("sample.wav")),
@@ -398,9 +398,7 @@ mod tests {
         }
     }
 
-    fn test_dashboard_handle(
-        model_catalog: Arc<dyn ModelCatalogProvider>,
-    ) -> ApiServerDashboardHandle {
+    fn test_dashboard_handle(model_catalog: Arc<dyn ModelCatalogPort>) -> ApiServerDashboardHandle {
         let (tx, _rx) = mpsc::channel(1);
         ApiServerDashboardHandle {
             state: ServerState {

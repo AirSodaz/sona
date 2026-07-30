@@ -1,8 +1,8 @@
-use serde_json::Value;
+﻿use serde_json::Value;
 
 use crate::config::migrate_app_config;
 use crate::config::service::app_config_stored_state_from_value;
-use crate::ports::time::UnixMillisClock;
+use crate::ports::time::ClockPort;
 
 use super::{
     BackupApplyPreparedImportRequest, BackupApplyResult, BackupArchivePort, BackupDataset,
@@ -14,14 +14,14 @@ use super::{
 pub struct BackupService<'a> {
     archive: &'a dyn BackupArchivePort,
     state: &'a dyn BackupStateRepository,
-    clock: &'a dyn UnixMillisClock,
+    clock: &'a dyn ClockPort,
 }
 
 impl<'a> BackupService<'a> {
     pub fn new(
         archive: &'a dyn BackupArchivePort,
         state: &'a dyn BackupStateRepository,
-        clock: &'a dyn UnixMillisClock,
+        clock: &'a dyn ClockPort,
     ) -> Self {
         Self {
             archive,

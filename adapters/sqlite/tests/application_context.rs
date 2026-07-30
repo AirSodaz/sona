@@ -1,6 +1,6 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
 
-use sona_core::ports::time::{ClockError, UnixMillisClock};
+use sona_core::ports::time::{ClockError, ClockPort};
 use sona_core::tag::{TagCreateInput, TagError, TagIdGenerator, TagListOptions};
 use sona_sqlite::{Database, SqliteApplicationContext};
 
@@ -13,7 +13,7 @@ impl TagIdGenerator for FixedRuntime {
     }
 }
 
-impl UnixMillisClock for FixedRuntime {
+impl ClockPort for FixedRuntime {
     fn now_ms(&self) -> Result<u64, ClockError> {
         Ok(42)
     }

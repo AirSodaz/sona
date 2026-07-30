@@ -1,7 +1,7 @@
-use tauri::{AppHandle, Manager, Runtime};
+﻿use tauri::{AppHandle, Manager, Runtime};
 
 use crate::platform::blocking::{map_err_string, spawn_blocking_map, with_sqlite_context};
-use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
+use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
 pub use sona_core::storage_usage::{StorageUsageSnapshot, WebviewBrowsingDataClearResult};
 
 pub async fn get_usage_snapshot<R: Runtime>(

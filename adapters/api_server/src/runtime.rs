@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+﻿use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -8,10 +8,10 @@ use axum::{
     routing::{get, post},
 };
 use ipnet::IpNet;
-use sona_core::ports::asr::BatchTranscriber;
+use sona_core::ports::asr::BatchTranscriberPort;
 use sona_core::ports::fs::{FileSystemError, FileSystemOperation};
 use sona_core::ports::runtime::{
-    BatchTranscribePlanResolver, GpuAvailabilityProvider, MediaFileValidator, ModelCatalogProvider,
+    BatchTranscribePlanPort, GpuAvailabilityPort, MediaValidatorPort, ModelCatalogPort,
 };
 use sona_core::runtime::serve::ResolvedServeRuntimeOptions;
 use tokio::sync::{RwLock, mpsc};
@@ -51,11 +51,11 @@ pub struct ApiServerRuntimeConfig {
     pub ip_whitelist: Arc<Vec<IpNet>>,
     pub online_asr_config: Arc<RwLock<HashMap<String, serde_json::Value>>>,
     pub transcription_defaults: ApiServerTranscriptionDefaults,
-    pub batch_transcriber: Arc<dyn BatchTranscriber>,
-    pub media_validator: Arc<dyn MediaFileValidator>,
-    pub gpu_availability: Arc<dyn GpuAvailabilityProvider>,
-    pub model_catalog: Arc<dyn ModelCatalogProvider>,
-    pub batch_plan_resolver: Arc<dyn BatchTranscribePlanResolver>,
+    pub batch_transcriber: Arc<dyn BatchTranscriberPort>,
+    pub media_validator: Arc<dyn MediaValidatorPort>,
+    pub gpu_availability: Arc<dyn GpuAvailabilityPort>,
+    pub model_catalog: Arc<dyn ModelCatalogPort>,
+    pub batch_plan_resolver: Arc<dyn BatchTranscribePlanPort>,
     pub platform: Arc<dyn ApiServerPlatform>,
     pub streaming_router: Option<Router<ServerState>>,
     pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
@@ -68,11 +68,11 @@ pub struct ApiServerRuntimeParts {
     pub resolved: ResolvedServeRuntimeOptions,
     pub temp_dir: PathBuf,
     pub online_asr_config: Arc<RwLock<HashMap<String, serde_json::Value>>>,
-    pub batch_transcriber: Arc<dyn BatchTranscriber>,
-    pub media_validator: Arc<dyn MediaFileValidator>,
-    pub gpu_availability: Arc<dyn GpuAvailabilityProvider>,
-    pub model_catalog: Arc<dyn ModelCatalogProvider>,
-    pub batch_plan_resolver: Arc<dyn BatchTranscribePlanResolver>,
+    pub batch_transcriber: Arc<dyn BatchTranscriberPort>,
+    pub media_validator: Arc<dyn MediaValidatorPort>,
+    pub gpu_availability: Arc<dyn GpuAvailabilityPort>,
+    pub model_catalog: Arc<dyn ModelCatalogPort>,
+    pub batch_plan_resolver: Arc<dyn BatchTranscribePlanPort>,
     pub platform: Arc<dyn ApiServerPlatform>,
     pub streaming_router: Option<Router<ServerState>>,
     pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
@@ -90,11 +90,11 @@ pub struct ApiServerServiceParts {
     pub resolved: ResolvedServeRuntimeOptions,
     pub temp_dir: PathBuf,
     pub online_asr_config: Arc<RwLock<HashMap<String, serde_json::Value>>>,
-    pub batch_transcriber: Arc<dyn BatchTranscriber>,
-    pub media_validator: Arc<dyn MediaFileValidator>,
-    pub gpu_availability: Arc<dyn GpuAvailabilityProvider>,
-    pub model_catalog: Arc<dyn ModelCatalogProvider>,
-    pub batch_plan_resolver: Arc<dyn BatchTranscribePlanResolver>,
+    pub batch_transcriber: Arc<dyn BatchTranscriberPort>,
+    pub media_validator: Arc<dyn MediaValidatorPort>,
+    pub gpu_availability: Arc<dyn GpuAvailabilityPort>,
+    pub model_catalog: Arc<dyn ModelCatalogPort>,
+    pub batch_plan_resolver: Arc<dyn BatchTranscribePlanPort>,
     pub platform: Arc<dyn ApiServerPlatform>,
     pub streaming_router: Option<Router<ServerState>>,
 }

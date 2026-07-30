@@ -1,4 +1,4 @@
-use crate::platform::paths::{PathKind, PathProvider, TauriPathProvider};
+﻿use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -8,7 +8,7 @@ pub struct ApiServerRuntimeDirs {
 }
 
 pub fn resolve_api_server_runtime_dirs(
-    provider: &dyn PathProvider,
+    provider: &dyn PathPort,
 ) -> Result<ApiServerRuntimeDirs, String> {
     let app_local_data_dir = provider
         .resolve_path(PathKind::AppLocalData)
@@ -29,7 +29,7 @@ pub fn resolve_api_server_runtime_dirs_for_app<R: tauri::Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::platform::paths::{MockPathProvider, PathProviderError};
+    use crate::platform::paths::{MockPathProvider, PathPortError};
     use std::collections::HashMap;
 
     #[test]
@@ -50,7 +50,7 @@ mod tests {
         let mut entries = HashMap::new();
         entries.insert(
             PathKind::AppLocalData,
-            Err(PathProviderError::new(
+            Err(PathPortError::new(
                 PathKind::AppLocalData,
                 "app local data unavailable",
             )),

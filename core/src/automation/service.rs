@@ -1,4 +1,4 @@
-use super::repository::{
+﻿use super::repository::{
     AutomationProcessedInput, AutomationProcessedRecord, AutomationProfileInput,
     AutomationProfileRecord, AutomationRepositoryInput, AutomationRepositoryState,
     AutomationRuleInput, AutomationRuleRecord, AutomationRuleRecordExportConfig,
@@ -17,7 +17,7 @@ pub trait AutomationIdGenerator: Send + Sync {
     fn generate_id(&self) -> String;
 }
 
-pub trait AutomationFileSystem: Send + Sync {
+pub trait AutomationFsPort: Send + Sync {
     fn path_exists(&self, path: &str) -> Result<bool, FileSystemError>;
     fn create_dir_all(&self, path: &str) -> Result<(), FileSystemError>;
 }
@@ -110,11 +110,11 @@ fn normalize_profile_record(
 }
 
 pub struct AutomationValidationService<'a> {
-    fs: &'a dyn AutomationFileSystem,
+    fs: &'a dyn AutomationFsPort,
 }
 
 impl<'a> AutomationValidationService<'a> {
-    pub fn new(fs: &'a dyn AutomationFileSystem) -> Self {
+    pub fn new(fs: &'a dyn AutomationFsPort) -> Self {
         Self { fs }
     }
 

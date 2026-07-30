@@ -1,4 +1,4 @@
-use std::fmt;
+﻿use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -14,7 +14,7 @@ use sona_core::history::{
     HistorySaveImportedFileRequest, HistorySaveRecordingRequest, LiveRecordingDraftResult,
     TranscriptSnapshotMetadata,
 };
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::ClockPort;
 
 use crate::{Database, DatabaseError, history_store::SqliteHistoryStore};
 
@@ -25,14 +25,14 @@ type DatabaseProvider =
 pub struct DeferredSqliteHistoryMutationRepository {
     app_local_data_dir: PathBuf,
     database_provider: Option<Arc<DatabaseProvider>>,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
     ids: Arc<dyn HistoryIdGenerator>,
 }
 
 impl DeferredSqliteHistoryMutationRepository {
     pub fn new(
         app_local_data_dir: PathBuf,
-        clock: Arc<dyn UnixMillisClock>,
+        clock: Arc<dyn ClockPort>,
         ids: Arc<dyn HistoryIdGenerator>,
     ) -> Self {
         Self {
@@ -45,7 +45,7 @@ impl DeferredSqliteHistoryMutationRepository {
 
     pub fn with_database_provider(
         app_local_data_dir: PathBuf,
-        clock: Arc<dyn UnixMillisClock>,
+        clock: Arc<dyn ClockPort>,
         ids: Arc<dyn HistoryIdGenerator>,
         provider: impl Fn(&Path) -> Result<Arc<Database>, DatabaseError> + Send + Sync + 'static,
     ) -> Self {

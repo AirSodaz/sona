@@ -1,6 +1,6 @@
-use serde_json::{Map, Value};
+﻿use serde_json::{Map, Value};
 
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::ClockPort;
 use sona_core::tag::TagIdGenerator;
 
 use sona_core::tag::{
@@ -12,14 +12,14 @@ use sona_core::tag::{
 pub struct TagRepositoryService<'a> {
     store: &'a dyn TagStore,
     ids: &'a dyn TagIdGenerator,
-    clock: &'a dyn UnixMillisClock,
+    clock: &'a dyn ClockPort,
 }
 
 impl<'a> TagRepositoryService<'a> {
     pub fn new(
         store: &'a dyn TagStore,
         ids: &'a dyn TagIdGenerator,
-        clock: &'a dyn UnixMillisClock,
+        clock: &'a dyn ClockPort,
     ) -> Self {
         Self { store, ids, clock }
     }

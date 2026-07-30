@@ -1,1 +1,1 @@
-pub use crate::ports::path::{PathKind, PathProvider};
+﻿pub use crate::ports::path::{PathKind, PathPort};

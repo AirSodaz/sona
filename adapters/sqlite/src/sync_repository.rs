@@ -1,9 +1,9 @@
-use std::collections::{BTreeMap, BTreeSet};
+﻿use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use rusqlite::{OptionalExtension, Transaction, params};
 use serde_json::Value;
-use sona_core::ports::time::UnixMillisClock;
+use sona_core::ports::time::ClockPort;
 use sona_core::sync::{
     HybridLogicalClock, SyncApplicationRepository, SyncCausalContext, SyncConflict,
     SyncConflictDetail, SyncConflictResolution, SyncConflictSummary, SyncDeviceCursor,
@@ -20,17 +20,17 @@ const DELETE_FIELD: &str = "__entity__";
 #[derive(Clone)]
 pub struct SqliteSyncRepository {
     db: Arc<Database>,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 }
 
 #[derive(Clone)]
 pub struct SqliteSyncRepositoryFactory {
     db: Arc<Database>,
-    clock: Arc<dyn UnixMillisClock>,
+    clock: Arc<dyn ClockPort>,
 }
 
 impl SqliteSyncRepositoryFactory {
-    pub fn new(db: Arc<Database>, clock: Arc<dyn UnixMillisClock>) -> Self {
+    pub fn new(db: Arc<Database>, clock: Arc<dyn ClockPort>) -> Self {
         Self { db, clock }
     }
 }
@@ -82,7 +82,7 @@ impl SyncRepositoryFactory for SqliteSyncRepositoryFactory {
 impl SqliteSyncRepository {
     pub fn open_existing(
         db: Arc<Database>,
-        clock: Arc<dyn UnixMillisClock>,
+        clock: Arc<dyn ClockPort>,
     ) -> Result<Option<Self>, SyncError> {
         let exists = db
             .with_connection(|connection| {
@@ -100,7 +100,7 @@ impl SqliteSyncRepository {
 
     pub fn initialize(
         db: Arc<Database>,
-        clock: Arc<dyn UnixMillisClock>,
+        clock: Arc<dyn ClockPort>,
         vault_id: &str,
         device_id: &str,
         preset: SyncPresetV1,
@@ -138,7 +138,7 @@ impl SqliteSyncRepository {
 
     pub fn preview_join(
         db: Arc<Database>,
-        clock: Arc<dyn UnixMillisClock>,
+        clock: Arc<dyn ClockPort>,
         vault_id: &str,
         preview_device_id: &str,
         preset: SyncPresetV1,

@@ -1,4 +1,4 @@
-use sona_core::ports::fs::FileSystemError;
+﻿use sona_core::ports::fs::FileSystemError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
