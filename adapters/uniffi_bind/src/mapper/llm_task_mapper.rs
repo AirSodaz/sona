@@ -1,7 +1,7 @@
 use serde::Serialize;
+use sona_application::llm::{LlmTaskResult, LlmTaskSummaryChunkPayload};
 use sona_core::llm::tasks::{
-    LlmTaskChunkPayload, LlmTaskProgressPayload, LlmTaskResult, LlmTaskSummaryChunkPayload,
-    LlmTaskTextPayload, LlmTaskType,
+    LlmTaskChunkPayload, LlmTaskProgressPayload, LlmTaskTextPayload, LlmTaskType,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]

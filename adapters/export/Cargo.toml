@@ -11,6 +11,7 @@ role = "outbound-adapter"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 sona-core = { path = "../../core" }
+sona-application = { path = "../../application" }
 
 [dev-dependencies]
 tempfile = "3"

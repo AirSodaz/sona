@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use sona_core::automation::service::{AutomationFileSystem, AutomationIdGenerator};
+use sona_core::automation::{AutomationFileSystem, AutomationIdGenerator};
 use sona_core::automation::{
     AutomationRule, AutomationRuntimePathCollectionOutcome, AutomationRuntimeRuleConfig,
 };

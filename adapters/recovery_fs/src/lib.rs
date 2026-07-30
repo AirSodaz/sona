@@ -1,4 +1,5 @@
 use serde::Serialize;
+use sona_application::recovery::RecoveryService;
 use sona_core::ports::fs::{FileMetadata, FileSystem, FileSystemError, FileSystemOperation};
 use sona_core::ports::time::{ClockError, UnixMillisClock};
 use sona_core::recovery::RecoveryError;
@@ -6,7 +7,6 @@ use sona_core::recovery::normalization::{
     SourcePathStatus, SourcePathStatusProvider, empty_snapshot,
 };
 use sona_core::recovery::repository::RecoverySnapshotStore;
-use sona_core::recovery::service::RecoveryService;
 use sona_core::recovery::types::{
     QUEUE_RECOVERY_FILE_NAME, RECOVERY_DIR_NAME, RecoveryItemInput, RecoverySnapshot,
     RecoverySnapshotInput,

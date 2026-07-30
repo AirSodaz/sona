@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use serde_json::json;
+use sona_application::history::HistoryMutationService;
 use sona_core::history::mutation_repository::{
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
     HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryMutationError,
@@ -8,7 +9,6 @@ use sona_core::history::mutation_repository::{
     HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
     HistoryUpdateTranscriptRequest,
 };
-use sona_core::history::mutation_service::HistoryMutationService;
 use sona_core::history::{
     HistoryAudioStatus, HistoryCreateLiveDraftRequest, HistoryItemKind, HistoryItemRecord,
     HistoryItemStatus, HistorySaveImportedFileRequest, HistorySaveRecordingRequest,

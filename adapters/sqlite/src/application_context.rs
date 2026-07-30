@@ -2,7 +2,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use sona_core::automation::service::AutomationIdGenerator;
+use sona_core::automation::AutomationIdGenerator;
 use sona_core::history::HistoryIdGenerator;
 use sona_core::ports::time::UnixMillisClock;
 use sona_core::tag::TagIdGenerator;

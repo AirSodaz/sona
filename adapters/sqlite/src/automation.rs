@@ -1,13 +1,14 @@
 use crate::DatabaseError;
 use crate::ports::Database as DatabasePort;
+use sona_application::automation::AutomationRepositoryService;
 use sona_core::automation::AutomationError;
+use sona_core::automation::AutomationIdGenerator;
 pub use sona_core::automation::repository::AutomationRepositoryState;
 use sona_core::automation::repository::{
     AutomationProcessedInput, AutomationProcessedRecord, AutomationProfileInput,
     AutomationProfileRecord, AutomationRepositoryInput, AutomationRuleInput, AutomationRuleRecord,
     AutomationRuleRecordExportConfig, AutomationRuleRecordStageConfig, AutomationStore,
 };
-use sona_core::automation::service::{AutomationIdGenerator, AutomationRepositoryService};
 use sona_core::sync::SyncEntityKind;
 use std::collections::BTreeSet;
 use std::sync::Arc;

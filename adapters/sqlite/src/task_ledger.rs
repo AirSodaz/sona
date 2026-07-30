@@ -2,10 +2,10 @@ use crate::DatabaseError;
 use crate::ports::Database as DatabasePort;
 use serde::Serialize;
 use serde_json::Value;
+use sona_application::task_ledger::TaskLedgerService;
 use sona_core::ports::time::UnixMillisClock;
 use sona_core::task_ledger::TaskLedgerError;
 use sona_core::task_ledger::repository::TaskLedgerStore;
-use sona_core::task_ledger::service::TaskLedgerService;
 use sona_core::task_ledger::types::{
     TASK_LEDGER_VERSION, TaskLedgerKind, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot,
     TaskLedgerStatus,

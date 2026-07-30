@@ -2,10 +2,10 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use sona_application::config::app_config_value_from_stored_state;
 use sona_core::backup::{
     BackupApplyResult, BackupDataset, BackupError, BackupRestoreDataset, BackupStateRepository,
 };
-use sona_core::config::app_config_value_from_stored_state;
 use sona_core::tag::ACTIVE_TAG_SETTINGS_KEY;
 
 use crate::automation::{

@@ -1,5 +1,5 @@
 use chrono::{DateTime, FixedOffset, Local, Offset, SecondsFormat, Utc};
-use sona_core::dashboard::DashboardSnapshotTime;
+use sona_application::dashboard::DashboardSnapshotTime;
 
 pub fn dashboard_snapshot_time_now() -> DashboardSnapshotTime {
     let now = Utc::now();

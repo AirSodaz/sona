@@ -3,13 +3,18 @@ use serde_json::Value;
 
 mod error;
 mod repository;
-mod service;
 
 pub use error::TagError;
 pub use repository::{
     ActiveTagSelection, TagPatch, TagRepositorySnapshot, TagStore, TagStoredState,
 };
-pub use service::{TagIdGenerator, TagRepositoryService};
+
+/// ID generator port for tag entities. Placed in Core so that outbound
+/// adapters (e.g. sona-sqlite) can implement it without depending on the
+/// application layer.
+pub trait TagIdGenerator: Send + Sync {
+    fn generate_id(&self) -> String;
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct TagListOptions {

@@ -3,14 +3,15 @@ use crate::ports::Database as DatabasePort;
 use rusqlite::OptionalExtension;
 use rusqlite::types::Type;
 use serde_json::Value;
+use sona_application::tag::TagRepositoryService;
 use sona_core::dashboard::error::DashboardServiceError;
 use sona_core::dashboard::ports::TagRepository;
 use sona_core::ports::time::UnixMillisClock;
 use sona_core::sync::SyncEntityKind;
 use sona_core::tag::{
     ACTIVE_TAG_SETTINGS_KEY, ActiveTagSelection, TagCreateInput, TagError, TagIdGenerator,
-    TagListOptions, TagPatch, TagRecord, TagRepositoryService, TagRepositorySnapshot, TagStore,
-    TagStoredState, TagUpdateInput,
+    TagListOptions, TagPatch, TagRecord, TagRepositorySnapshot, TagStore, TagStoredState,
+    TagUpdateInput,
 };
 use std::sync::Arc;
 

@@ -9,13 +9,12 @@ pub use diagnostics_time::diagnostics_scanned_at_now;
 pub use storage_usage_time::storage_usage_generated_at_now;
 
 use serde::Serialize;
-use sona_core::automation::service::{
-    AutomationFileSystem, AutomationIdGenerator, AutomationValidationService,
-};
+use sona_application::automation::AutomationValidationService;
 use sona_core::automation::{
     AutomationError, AutomationRule, AutomationRuleValidationResult, AutomationRuntimePathMetadata,
     AutomationRuntimeRuleConfig, should_consider_runtime_candidate_path,
 };
+use sona_core::automation::{AutomationFileSystem, AutomationIdGenerator};
 use sona_core::export::ExportFormat;
 use sona_core::history::HistoryIdGenerator;
 use sona_core::models::catalog::ModelSummary;

@@ -1,4 +1,5 @@
-use sona_core::export::{ExportError, ExportService, TranscriptExportRepository};
+use sona_application::export::ExportService;
+use sona_core::export::{ExportError, TranscriptExportRepository};
 
 pub use sona_core::export::{ExportTranscriptFileRequest, ExportTranscriptFileResult};
 

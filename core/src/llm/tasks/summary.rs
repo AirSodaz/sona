@@ -182,7 +182,7 @@ pub fn resolve_summary_chunk_char_budget(
         .min(token_limited_chars)
 }
 
-pub(crate) fn build_summary_direct_prompt(
+pub fn build_summary_direct_prompt(
     template: &super::SummaryTemplateConfig,
     segments: &[super::SummarySegmentInput],
 ) -> String {

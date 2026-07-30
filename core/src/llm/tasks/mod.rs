@@ -3,14 +3,12 @@ use serde::{Deserialize, Serialize};
 
 mod planning;
 mod polish;
-mod service;
 mod structured;
 mod summary;
 mod translate;
 
 pub use planning::*;
 pub use polish::*;
-pub use service::*;
 pub use structured::*;
 pub use summary::*;
 pub use translate::*;
@@ -18,6 +16,24 @@ pub use translate::*;
 #[cfg(feature = "specta")]
 use specta::Type;
 
+/// Error type for LLM task execution. Lives in Core so that `core::llm::tasks`
+/// private helpers (e.g. `validate_segment_ids`) can reference it without
+/// depending on the application layer.
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum LlmTaskError {
+    #[error("{reason}")]
+    InvalidRequest { reason: String },
+    #[error("{stage} failed: {source}")]
+    Runtime {
+        stage: String,
+        #[source]
+        source: crate::llm::runtime::LlmRuntimeError,
+    },
+    #[error("{reason}")]
+    InvalidResponse { reason: String },
+    #[error("LLM task observer failed: {reason}")]
+    Observer { reason: String },
+}
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "snake_case")]

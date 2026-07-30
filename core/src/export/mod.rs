@@ -7,12 +7,10 @@ use crate::transcription::transcript::{SpeakerTag, TranscriptSegment};
 mod error;
 mod models;
 mod ports;
-mod service;
 
 pub use error::ExportError;
 pub use models::{ExportTranscriptFileRequest, ExportTranscriptFileResult};
 pub use ports::TranscriptExportRepository;
-pub use service::ExportService;
 
 /// Supported transcript export formats for every Sona frontend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]

@@ -440,9 +440,7 @@ pub struct HistoryBackupSnapshot {
 
 pub mod item_factory;
 pub mod mutation_repository;
-pub mod mutation_service;
 pub mod query_repository;
-pub mod query_service;
 pub mod store;
 pub mod transcript_diff;
 pub mod transcript_payload;

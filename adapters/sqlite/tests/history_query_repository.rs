@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
+use sona_application::history::HistoryQueryService;
 use sona_core::history::query_repository::{HistoryQueryError, HistoryQueryRepository};
-use sona_core::history::query_service::HistoryQueryService;
 use sona_core::history::{
     HistoryListOptions, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
     HistoryWorkspaceQueryRequest, HistoryWorkspaceScope, HistoryWorkspaceSortOrder,

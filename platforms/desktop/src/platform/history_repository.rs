@@ -1,13 +1,13 @@
 pub(crate) mod llm_helpers;
 mod state;
 use serde::Serialize;
+use sona_application::history::HistoryMutationService;
+use sona_application::history::HistoryQueryService;
 use sona_archive::FsBackupAdapter;
 use sona_core::backup::{
     BackupApplyPreparedImportRequest, BackupError, BackupExportRequest, BackupPrepareImportRequest,
 };
 use sona_core::history::mutation_repository::HistoryMutationError;
-use sona_core::history::mutation_service::HistoryMutationService;
-use sona_core::history::query_service::HistoryQueryService;
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
 use sona_runtime_fs::{SystemClock, UuidGenerator};
 pub use sona_sqlite::history_store as sqlite_store;

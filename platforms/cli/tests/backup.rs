@@ -5,6 +5,7 @@ use std::sync::Arc;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
+use sona_application::config::app_config_stored_state_from_value;
 use sona_core::automation::repository::{
     AutomationProcessedRecord, AutomationProfileRecord, AutomationRepositoryState,
     AutomationRuleInputActions, AutomationRuleRecord, AutomationRuleRecordExportConfig,
@@ -13,7 +14,6 @@ use sona_core::automation::repository::{
 use sona_core::backup::{
     BackupApplyResult, BackupManifest, BackupStateRepository, PreparedBackupImport,
 };
-use sona_core::config::service::app_config_stored_state_from_value;
 use sona_core::config::{AppConfigStore, CURRENT_CONFIG_VERSION};
 use sona_core::history::mutation_repository::HistoryMutationRepository;
 use sona_core::history::{

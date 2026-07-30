@@ -14,14 +14,14 @@ use crate::{
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
+use sona_application::history::HistoryMutationService;
+use sona_application::history::HistoryQueryService;
 use sona_core::history::mutation_repository::{
     HistoryCommitTranscriptEditRequest, HistoryCompleteLiveDraftRequest,
     HistoryCreateTranscriptSnapshotRequest, HistoryDeleteItemsRequest, HistoryMutationError,
     HistoryReplaceTagAssignmentsRequest, HistoryTrashItemsRequest,
     HistoryUpdateTagAssignmentsRequest, HistoryUpdateTranscriptRequest,
 };
-use sona_core::history::mutation_service::HistoryMutationService;
-use sona_core::history::query_service::HistoryQueryService;
 use sona_core::history::transcript_edit::apply_transcript_edit;
 use sona_core::history::transcript_payload::normalize_history_transcript_segments;
 use sona_core::history::{

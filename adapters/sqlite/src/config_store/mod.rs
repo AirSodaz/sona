@@ -7,9 +7,10 @@ use std::sync::Arc;
 
 use rusqlite::Transaction;
 use serde_json::Value;
+use sona_application::config::AppConfigRepositoryService;
 use sona_core::config::{
-    AppConfigRepositoryService, AppConfigRepositorySnapshot, AppConfigStartupProjection,
-    AppConfigStore, AppConfigStoredState, ConfigError,
+    AppConfigRepositorySnapshot, AppConfigStartupProjection, AppConfigStore, AppConfigStoredState,
+    ConfigError,
 };
 use sona_core::ports::time::UnixMillisClock;
 use sona_core::runtime::serve::ServeStartupSettings;

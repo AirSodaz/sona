@@ -36,7 +36,8 @@ pub async fn clear_webview_browsing_data<R: Runtime>(
         .map_err(map_err_string)?;
 
     let after_bytes = observable_webview_cache_bytes(app_local_data_dir).await?;
-    let result = sona_core::storage_usage::build_webview_clear_result(before_bytes, after_bytes);
+    let result =
+        sona_application::storage_usage::build_webview_clear_result(before_bytes, after_bytes);
     sona_ts_bind::validate_webview_browsing_data_clear_result_for_typescript(&result)
         .map_err(map_err_string)?;
     Ok(result)

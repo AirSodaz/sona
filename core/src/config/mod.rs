@@ -2,14 +2,11 @@ pub mod defaults;
 pub mod error;
 pub mod migration;
 pub mod repository;
-pub mod service;
 pub mod types;
 
 pub use defaults::*;
 pub use error::ConfigError;
 pub use repository::*;
-pub use service::AppConfigRepositoryService;
-pub use service::{app_config_stored_state_from_value, app_config_value_from_stored_state};
 pub use types::*;
 
 use serde_json::Value;
@@ -27,7 +24,15 @@ pub fn resolve_effective_config(global_config: Value, project: Option<Value>) ->
 }
 
 pub fn validate_app_config(config: &Value) -> Result<(), ConfigError> {
-    serde_json::from_value::<AppConfig>(service::app_config_payload(config).clone())
-        .map_err(ConfigError::Json)?;
+    serde_json::from_value::<AppConfig>(
+        config
+            .get("sona-config")
+            .filter(|v| v.is_object())
+            .or_else(|| config.get("sona_config").filter(|v| v.is_object()))
+            .or_else(|| config.get("config").filter(|v| v.is_object()))
+            .unwrap_or(config)
+            .clone(),
+    )
+    .map_err(ConfigError::Json)?;
     Ok(())
 }

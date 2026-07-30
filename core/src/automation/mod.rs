@@ -9,9 +9,21 @@ use crate::ports::fs::FileSystemError;
 
 mod error;
 pub mod repository;
-pub mod service;
 
 pub use error::AutomationError;
+
+/// ID generator port for automation entities. Placed in Core so that outbound
+/// adapters (e.g. sona-sqlite) can implement it without depending on the
+/// application layer.
+pub trait AutomationIdGenerator: Send + Sync {
+    fn generate_id(&self) -> String;
+}
+
+/// Filesystem capability port required by the automation validation service.
+pub trait AutomationFileSystem: Send + Sync {
+    fn path_exists(&self, path: &str) -> Result<bool, FileSystemError>;
+    fn create_dir_all(&self, path: &str) -> Result<(), FileSystemError>;
+}
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]

@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use sona_application::storage_usage::StorageUsageService;
 use sona_core::storage_usage::{
-    StorageUsageError, StorageUsageMeasurements, StorageUsageRepository, StorageUsageService,
-    StorageUsageSnapshot,
+    StorageUsageError, StorageUsageMeasurements, StorageUsageRepository, StorageUsageSnapshot,
 };
 
 use crate::Database;

@@ -16,6 +16,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
  */
 export const EXPECTED_ROLES = new Map([
   ['sona-core', 'core'],
+  ['sona-application', 'application'],
   ['sona-sync', 'application'],
   ['sona-api-server', 'inbound-adapter'],
   ['sona-ts-bind', 'inbound-adapter'],

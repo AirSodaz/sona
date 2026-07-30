@@ -1,14 +1,14 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 
+use sona_application::llm::{
+    LlmTaskEvent, LlmTaskObserver, LlmTaskObserverError, LlmTaskResult, LlmTaskService,
+};
 use sona_core::llm::requests::{
     PolishSegmentsRequest, SummarizeTranscriptRequest, TranslateSegmentsRequest,
 };
 use sona_core::llm::runtime::LlmRuntimeError;
-use sona_core::llm::tasks::{
-    LlmTaskError, LlmTaskEvent, LlmTaskObserver, LlmTaskObserverError, LlmTaskResult,
-    LlmTaskService,
-};
+use sona_core::llm::tasks::LlmTaskError;
 use sona_core::ports::llm::LlmTaskRuntimePort;
 use sona_online_llm::OnlineLlmAdapter;
 

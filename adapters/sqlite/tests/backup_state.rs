@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 use fs3::FileExt;
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 use serde_json::{Value, json};
+use sona_application::config::app_config_stored_state_from_value;
 use sona_core::automation::repository::{
     AutomationProcessedRecord, AutomationProfileRecord, AutomationRepositoryState,
     AutomationRuleInputActions, AutomationRuleRecord, AutomationRuleRecordExportConfig,
@@ -15,7 +16,6 @@ use sona_core::automation::repository::{
 use sona_core::backup::{
     BackupDataset, BackupError, BackupRestoreDataset, BackupStateRepository, build_backup_manifest,
 };
-use sona_core::config::service::app_config_stored_state_from_value;
 use sona_core::config::{AppConfigStore, AppConfigStoredState};
 use sona_core::history::{HistoryBackupSnapshot, HistoryItemStatus};
 use sona_core::tag::{TagRecord, TagStore};

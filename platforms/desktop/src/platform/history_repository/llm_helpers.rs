@@ -6,11 +6,11 @@ use super::{
 };
 use crate::integrations::asr::TranscriptSegment;
 use crate::platform::blocking::with_sqlite_context;
+use sona_application::history::HistoryMutationService;
 use sona_core::history::HistorySummaryPayload;
 use sona_core::history::mutation_repository::{
     HistoryCreateTranscriptSnapshotRequest, HistoryMutationError, HistoryUpdateTranscriptRequest,
 };
-use sona_core::history::mutation_service::HistoryMutationService;
 use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
 

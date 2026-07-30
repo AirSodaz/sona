@@ -1,15 +1,13 @@
 use serde_json::{Value, json};
+use sona_application::automation::{AutomationRepositoryService, AutomationValidationService};
 use sona_core::automation::repository::{
     AutomationProcessedInput, AutomationProcessedRecord, AutomationRepositoryInput,
     AutomationRepositoryState, AutomationRuleInput, AutomationRuleRecord, AutomationStore,
 };
-use sona_core::automation::service::{
-    AutomationFileSystem, AutomationIdGenerator, AutomationRepositoryService,
-    AutomationValidationService,
-};
 use sona_core::automation::{
     AutomationError, AutomationRule, AutomationRuleExportConfig, AutomationRuleStageConfig,
 };
+use sona_core::automation::{AutomationFileSystem, AutomationIdGenerator};
 use sona_core::ports::fs::{FileSystemError, FileSystemOperation};
 use std::sync::Mutex;
 

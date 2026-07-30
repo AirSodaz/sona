@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
+use sona_application::history::HistoryQueryService;
 use sona_core::history::query_repository::HistoryQueryRepository;
-use sona_core::history::query_service::HistoryQueryService;
 use sona_core::history::{
     HistoryListOptions, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
     HistoryWorkspaceItemCounts, HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult,

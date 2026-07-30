@@ -5,8 +5,8 @@ use crate::{
     FfiTranscriptSegment, FfiTranscriptSnapshotMetadataV1, FfiTranscriptSnapshotRecordV1,
     SonaCoreBindingError, SonaCoreBindingResult,
 };
+use sona_application::history::HistoryQueryService;
 use sona_core::history::query_repository::HistoryQueryError;
-use sona_core::history::query_service::HistoryQueryService;
 use sona_core::history::workspace_query::validate_workspace_query_request;
 use sona_core::history::{HistoryListOptions, HistoryWorkspaceQueryRequest};
 use sona_core::history_store::HistoryStore;

@@ -10,6 +10,7 @@ Sona uses six stable roles. The role is the reviewed dependency contract, not a 
 | Package | Role |
 | --- | --- |
 | `sona-core` | core |
+| `sona-application` | application |
 | `sona-sync` | application |
 | `sona-api-server` | inbound-adapter |
 | `sona-ts-bind` | inbound-adapter |
@@ -53,6 +54,7 @@ role from path alone.
 | Path | Package | Role | Notes |
 | --- | --- | --- | --- |
 | `core/` | `sona-core` | core | Domain contracts and Core-owned ports |
+| `application/` | `sona-application` | application | Use-case services; directory name matches role |
 | `adapters/sync/` | `sona-sync` | application | Directory says adapters; role is application |
 | `adapters/api_server/` | `sona-api-server` | inbound-adapter | |
 | `adapters/ts_bind/` | `sona-ts-bind` | inbound-adapter | |
@@ -128,14 +130,17 @@ existing entry point.
 
 ### Application ownership today
 
-Most use-case services (History, Tag, Automation, Backup, Recovery, LLM tasks,
-and similar) live **inside** `sona-core` next to their domain types and
-Core-owned ports. The only standalone Application-role package is `sona-sync`
+Use-case services (History, Tag, Automation, Backup, Recovery, Config, Dashboard,
+Export, StorageUsage, TaskLedger, and LLM tasks) live in `sona-application`
+(`application/`). Each service holds only the `Arc<dyn Port>` dependencies it
+needs and delegates to Core-owned port traits. Domain types, port trait
+definitions, and errors remain in `sona-core`.
+
+The other standalone Application-role package is `sona-sync`
 (`adapters/sync/`), isolated because Sync needs a provider-neutral vault and
-lifecycle that must not pull concrete network or database adapters into Core.
-Do not invent a second Application crate for every domain without a dedicated
-migration slice; prefer documenting Core-owned services until a composition
-crate is introduced.
+lifecycle. Do not create additional Application crates per domain; consolidate
+new use-case services into `sona-application` unless a clear isolation boundary
+warrants a separate crate.
 
 ### Core module map (orientation)
 

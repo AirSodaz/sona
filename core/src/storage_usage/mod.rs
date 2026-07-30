@@ -1,6 +1,5 @@
 mod models;
 mod ports;
-mod service;
 
 pub use models::{
     AudioUsageCategory, DatabaseUsageCategory, FileUsageCategory, SQLiteIndexUsageEntry,
@@ -8,7 +7,6 @@ pub use models::{
     WebviewBrowsingDataClearResult, WebviewCacheUsageCategory,
 };
 pub use ports::StorageUsageRepository;
-pub use service::{StorageUsageService, build_webview_clear_result};
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum StorageUsageError {

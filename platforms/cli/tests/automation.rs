@@ -1,7 +1,10 @@
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use sona_core::automation::repository::{AutomationRepositoryInput, AutomationRepositoryState};
-use sona_core::automation::service::{AutomationIdGenerator, AutomationRepositoryService};
+use sona_application::automation::AutomationRepositoryService;
+use sona_core::automation::{
+    AutomationIdGenerator,
+    repository::{AutomationRepositoryInput, AutomationRepositoryState},
+};
 use sona_sqlite::{Database, SqliteAutomationRepository};
 use std::path::Path;
 use std::sync::{Arc, Mutex};

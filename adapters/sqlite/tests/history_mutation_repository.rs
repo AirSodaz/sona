@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
+use sona_application::history::HistoryMutationService;
 use sona_core::history::mutation_repository::{HistoryMutationError, HistoryMutationRepository};
-use sona_core::history::mutation_service::HistoryMutationService;
 use sona_core::history::{
     HistoryCreateLiveDraftRequest, HistoryIdGenerator, HistorySaveImportedFileRequest,
     HistorySaveRecordingRequest,

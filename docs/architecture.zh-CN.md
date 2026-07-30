@@ -10,6 +10,7 @@ Sona 使用六种稳定角色。角色是经过评审的依赖契约，而不是
 | 包 | 角色 |
 | --- | --- |
 | `sona-core` | core |
+| `sona-application` | application |
 | `sona-sync` | application |
 | `sona-api-server` | inbound-adapter |
 | `sona-ts-bind` | inbound-adapter |
@@ -52,6 +53,7 @@ Core <- Outbound Adapter <------------- Host
 | 路径 | 包 | 角色 | 说明 |
 | --- | --- | --- | --- |
 | `core/` | `sona-core` | core | 领域契约与由 Core 所有的端口 |
+| `application/` | `sona-application` | application | 用例服务；目录名与角色一致 |
 | `adapters/sync/` | `sona-sync` | application | 目录在 adapters 下，角色是 application |
 | `adapters/api_server/` | `sona-api-server` | inbound-adapter | |
 | `adapters/ts_bind/` | `sona-ts-bind` | inbound-adapter | |

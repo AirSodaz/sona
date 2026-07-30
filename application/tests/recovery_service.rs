@@ -1,9 +1,9 @@
 use serde_json::{Value, json};
+use sona_application::recovery::RecoveryService;
 use sona_core::ports::time::{ClockError, UnixMillisClock};
 use sona_core::recovery::RecoveryError;
 use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvider};
 use sona_core::recovery::repository::RecoverySnapshotStore;
-use sona_core::recovery::service::RecoveryService;
 use sona_core::recovery::types::{RecoveryItemInput, RecoverySnapshot, RecoverySnapshotInput};
 use std::sync::Mutex;
 

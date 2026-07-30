@@ -1,5 +1,5 @@
 use sha2::{Digest, Sha256};
-use sona_core::task_ledger::service::TaskLedgerService;
+use sona_application::task_ledger::TaskLedgerService;
 use sona_core::task_ledger::types::{
     TaskLedgerKind, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
 };

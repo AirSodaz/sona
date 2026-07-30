@@ -23,6 +23,7 @@ tauri-build = { version = "2", features = [] }
 
 
 [dependencies]
+sona-application = { path = "../../application" }
 sona-archive = { path = "../../adapters/archive" }
 sona-api-server = { path = "../../adapters/api_server" }
 sona-core = { path = "../../core" }
