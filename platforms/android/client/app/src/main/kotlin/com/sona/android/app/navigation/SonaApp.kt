@@ -41,6 +41,7 @@ import com.sona.android.app.feature.recording.RecordScreen
 import com.sona.android.app.feature.home.HomeScreen
 import com.sona.android.app.feature.home.FileTranscriptionScreen
 import com.sona.android.app.feature.settings.AppLanguage
+import com.sona.android.app.feature.settings.AboutSettingsUiState
 import com.sona.android.app.feature.settings.AppearanceSettingsUiState
 import com.sona.android.app.feature.settings.CloudTranscriptionSettingsUiState
 import com.sona.android.app.feature.settings.RecognitionSettingsUiState
@@ -80,9 +81,12 @@ internal fun SonaApp(
     recognitionSettingsState: RecognitionSettingsUiState,
     syncState: SyncSettingsUiState,
     dataRecoveryState: DataRecoveryUiState,
+    aboutState: AboutSettingsUiState,
     appLanguage: AppLanguage,
     onAppLanguageChanged: (AppLanguage) -> Unit,
     onDynamicColorChanged: (Boolean) -> Unit,
+    onAboutShown: () -> Unit,
+    onCheckForUpdates: () -> Unit,
     onRetryBootstrap: () -> Unit,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
@@ -442,10 +446,13 @@ internal fun SonaApp(
                             recognitionSettingsState = recognitionSettingsState,
                             syncState = syncState,
                             dataRecoveryState = dataRecoveryState,
+                            aboutState = aboutState,
                             appLanguage = appLanguage,
                             requestCloudCredentialFocus = cloudCredentialFocusRequested,
                             onAppLanguageChanged = onAppLanguageChanged,
                             onDynamicColorChanged = onDynamicColorChanged,
+                            onAboutShown = onAboutShown,
+                            onCheckForUpdates = onCheckForUpdates,
                             onCloudProviderSelected = onCloudProviderSelected,
                             onCloudApiKeyInputChanged = onCloudApiKeyInputChanged,
                             onSaveCloudApiKey = onSaveCloudApiKey,

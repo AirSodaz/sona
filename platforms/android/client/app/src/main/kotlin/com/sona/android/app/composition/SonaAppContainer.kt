@@ -16,6 +16,7 @@ import com.sona.android.adapters.android.sync.AndroidSyncScheduler
 import com.sona.android.adapters.android.sync.SyncWorkerFactory
 import com.sona.android.adapters.android.credential.AndroidBatchCredentialRepository
 import com.sona.android.adapters.android.settings.AndroidAppearanceSettingsRepository
+import com.sona.android.adapters.android.settings.AndroidAppUpdateAdapter
 import com.sona.android.adapters.android.settings.AndroidLocalAsrDeviceCapabilities
 import com.sona.android.adapters.android.settings.AndroidRecognitionSettingsRepository
 import com.sona.android.adapters.android.sync.AndroidSyncSecretStore
@@ -61,6 +62,7 @@ import com.sona.android.application.recording.ScheduleAudioImport
 import com.sona.android.application.recording.ScheduleAudioRetranscription
 import com.sona.android.application.recording.TranscribeRecordingWithCloud
 import com.sona.android.application.settings.AppearanceSettingsPort
+import com.sona.android.application.settings.CheckForAppUpdate
 import com.sona.android.application.sync.SyncSecretStorePort
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +76,7 @@ class SonaAppContainer(context: Context) {
     private val appDataDir = appContext.filesDir.absolutePath
     private val bootstrapPort = UniffiSonaBootstrapAdapter()
     private val appearanceSettingsRepository = AndroidAppearanceSettingsRepository.create(appContext)
+    private val appUpdates = AndroidAppUpdateAdapter()
     private val localAsrDeviceCapabilities = AndroidLocalAsrDeviceCapabilities.create(appContext)
     private val localAsrModelCatalog = UniffiLocalAsrModelCatalogAdapter()
     private val localAsrModelStorage = UniffiLocalAsrModelStorageAdapter(
@@ -135,6 +138,7 @@ class SonaAppContainer(context: Context) {
 
     val loadSonaBootstrap = LoadSonaBootstrap(bootstrapPort)
     val appearanceSettings: AppearanceSettingsPort = appearanceSettingsRepository
+    val checkForAppUpdate = CheckForAppUpdate(appUpdates)
     val recognitionSettings = recognitionSettingsRepository
     val recognitionModelCatalog = localAsrModelCatalog
     val recognitionDeviceCapabilities = localAsrDeviceCapabilities

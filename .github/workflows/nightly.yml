@@ -368,6 +368,14 @@ jobs:
           echo "Generated updater.json:"
           cat updater.json
 
+      - name: Build Android update manifest
+        run: |
+          node scripts/android-update-manifest.js generate \
+            --channel nightly \
+            --version-name "${{ needs.prepare.outputs.version }}" \
+            --version-code "${{ github.run_number }}" \
+            --output android-update.json
+
       - name: Collect release artifact paths
         id: release-artifacts
         run: |
@@ -375,6 +383,7 @@ jobs:
             echo "paths<<EOF"
             find all-artifacts -type f -print
             echo "updater.json"
+            echo "android-update.json"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 

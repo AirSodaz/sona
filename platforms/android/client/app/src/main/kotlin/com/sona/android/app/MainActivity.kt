@@ -15,6 +15,7 @@ import com.sona.android.app.feature.bootstrap.SonaBootstrapViewModel
 import com.sona.android.app.feature.library.LibraryViewModel
 import com.sona.android.app.feature.recording.RecordingViewModel
 import com.sona.android.app.feature.settings.AppLanguage
+import com.sona.android.app.feature.settings.AboutSettingsViewModel
 import com.sona.android.app.feature.settings.AppearanceSettingsViewModel
 import com.sona.android.app.feature.settings.CloudTranscriptionSettingsViewModel
 import com.sona.android.app.feature.settings.RecognitionSettingsViewModel
@@ -26,6 +27,8 @@ import com.sona.android.application.recording.AudioImportJobState
 import com.sona.android.application.recording.LiveRecordingState
 import com.sona.android.application.recovery.RecoveryResolution
 import com.sona.android.application.sync.SyncLifecycleState
+import com.sona.android.application.settings.AppBuildInfo
+import com.sona.android.application.settings.AppUpdateChannel
 
 class MainActivity : AppCompatActivity() {
     private val container: SonaAppContainer by lazy {
@@ -61,6 +64,17 @@ class MainActivity : AppCompatActivity() {
             val appearanceSettingsViewModel: AppearanceSettingsViewModel = viewModel(
                 factory = AppearanceSettingsViewModel.factory(container.appearanceSettings),
             )
+            val aboutSettingsViewModel: AboutSettingsViewModel = viewModel(
+                factory = AboutSettingsViewModel.factory(
+                    build = AppBuildInfo(
+                        appName = BuildConfig.APP_NAME,
+                        versionName = BuildConfig.VERSION_NAME,
+                        versionCode = BuildConfig.VERSION_CODE,
+                        channel = AppUpdateChannel.fromWireValue(BuildConfig.UPDATE_CHANNEL),
+                    ),
+                    checkForAppUpdate = container.checkForAppUpdate,
+                ),
+            )
             val cloudTranscriptionViewModel: CloudTranscriptionSettingsViewModel = viewModel(
                 factory = CloudTranscriptionSettingsViewModel.factory(
                     container.batchCredentialSettings,
@@ -94,6 +108,7 @@ class MainActivity : AppCompatActivity() {
             val recordingState by recordingViewModel.state.collectAsStateWithLifecycle()
             val libraryState by libraryViewModel.state.collectAsStateWithLifecycle()
             val appearanceState by appearanceSettingsViewModel.state.collectAsStateWithLifecycle()
+            val aboutState by aboutSettingsViewModel.state.collectAsStateWithLifecycle()
             val cloudTranscriptionState by cloudTranscriptionViewModel.uiState
                 .collectAsStateWithLifecycle()
             val recognitionSettingsState by recognitionSettingsViewModel.uiState
@@ -141,9 +156,12 @@ class MainActivity : AppCompatActivity() {
                 recognitionSettingsState = recognitionSettingsState,
                 syncState = syncState,
                 dataRecoveryState = dataRecoveryState,
+                aboutState = aboutState,
                 appLanguage = currentAppLanguage(),
                 onAppLanguageChanged = ::setAppLanguage,
                 onDynamicColorChanged = appearanceSettingsViewModel::setDynamicColorEnabled,
+                onAboutShown = aboutSettingsViewModel::checkIfNeeded,
+                onCheckForUpdates = aboutSettingsViewModel::checkForUpdates,
                 onRetryBootstrap = bootstrapViewModel::refresh,
                 onStartRecording = recordingViewModel::startRecording,
                 onStopRecording = recordingViewModel::stopRecording,

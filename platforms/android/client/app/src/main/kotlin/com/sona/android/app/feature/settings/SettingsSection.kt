@@ -3,6 +3,7 @@ package com.sona.android.app.feature.settings
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Restore
@@ -38,6 +39,12 @@ internal enum class SettingsSection(
         labelRes = R.string.settings_data_heading,
         summaryRes = R.string.settings_data_summary,
         icon = Icons.Rounded.Restore,
+    ),
+    ABOUT(
+        route = "about",
+        labelRes = R.string.about_heading,
+        summaryRes = R.string.settings_about_summary,
+        icon = Icons.Rounded.Info,
     ),
     ;
 

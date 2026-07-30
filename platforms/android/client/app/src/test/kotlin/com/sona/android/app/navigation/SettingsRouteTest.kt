@@ -13,6 +13,11 @@ class SettingsRouteTest {
     }
 
     @Test
+    fun `about uses the settings section route`() {
+        assertEquals("settings?section=about", settingsRoute(SettingsSection.ABOUT))
+    }
+
+    @Test
     fun `settings destination matches its base and argument route`() {
         assertTrue(SonaDestination.SETTINGS.matches("settings"))
         assertTrue(SonaDestination.SETTINGS.matches("settings?section={section}"))

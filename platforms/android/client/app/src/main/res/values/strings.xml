@@ -122,6 +122,21 @@
     <string name="settings_appearance_summary">Language and colors</string>
     <string name="settings_recognition_heading">Speech recognition</string>
     <string name="settings_recognition_summary">Online credentials and local runtime</string>
+    <string name="about_heading">About</string>
+    <string name="settings_about_summary">Version, updates, and project links</string>
+    <string name="about_version_value">Version %1$s (%2$d)</string>
+    <string name="about_channel_stable">Stable</string>
+    <string name="about_channel_nightly">Nightly</string>
+    <string name="about_update_heading">Updates</string>
+    <string name="about_update_idle">Check whether a newer version is available</string>
+    <string name="about_update_checking">Checking for updates</string>
+    <string name="about_update_current">You are up to date</string>
+    <string name="about_update_available">Version %1$s is available</string>
+    <string name="about_update_failed">Could not check for updates</string>
+    <string name="about_check_updates">Check</string>
+    <string name="about_view_update">View update</string>
+    <string name="about_project_page">Project on GitHub</string>
+    <string name="about_open_external">Open externally</string>
     <string name="language_label">Language</string>
     <string name="language_follow_system">Follow system</string>
     <string name="language_english" translatable="false">English</string>

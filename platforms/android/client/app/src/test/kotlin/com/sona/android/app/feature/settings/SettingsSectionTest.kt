@@ -11,6 +11,7 @@ class SettingsSectionTest {
     fun `stable routes resolve to their settings sections`() {
         assertEquals(SettingsSection.APPEARANCE, SettingsSection.fromRoute("appearance"))
         assertEquals(SettingsSection.RECOGNITION, SettingsSection.fromRoute("recognition"))
+        assertEquals(SettingsSection.ABOUT, SettingsSection.fromRoute("about"))
     }
 
     @Test
@@ -33,5 +34,20 @@ class SettingsSectionTest {
         )
         assertNull(history.first().contentKey)
         assertEquals(SettingsSection.RECOGNITION, history.last().contentKey)
+    }
+
+    @Test
+    @OptIn(ExperimentalMaterial3AdaptiveApi::class)
+    fun `about deep links initialize list and detail navigation history`() {
+        val history = settingsDestinationHistory(SettingsSection.ABOUT)
+
+        assertEquals(
+            listOf(
+                ListDetailPaneScaffoldRole.List,
+                ListDetailPaneScaffoldRole.Detail,
+            ),
+            history.map { it.pane },
+        )
+        assertEquals(SettingsSection.ABOUT, history.last().contentKey)
     }
 }

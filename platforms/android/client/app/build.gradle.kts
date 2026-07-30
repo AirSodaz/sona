@@ -68,6 +68,7 @@ android {
         versionName = sonaAndroidVersionName
         manifestPlaceholders["sonaAppName"] = sonaAndroidAppName
         buildConfigField("String", "APP_NAME", "\"$sonaAndroidAppName\"")
+        buildConfigField("String", "UPDATE_CHANNEL", "\"$sonaAndroidChannel\"")
     }
 
     buildFeatures {
