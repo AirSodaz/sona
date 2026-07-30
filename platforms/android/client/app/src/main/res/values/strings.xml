@@ -161,6 +161,32 @@
     <string name="action_delete_model">Delete model</string>
     <string name="action_refresh_model_catalog">Refresh model catalog</string>
     <string name="action_delete">Delete</string>
+    <string name="action_discard" translatable="false">Discard</string>
+    <string name="action_done" translatable="false">Done</string>
+    <string name="transcript_auto_save_saving" translatable="false">Saving...</string>
+    <string name="transcript_auto_save_unsaved" translatable="false">Unsaved</string>
+    <string name="transcript_auto_save_saved" translatable="false">Saved</string>
+    <string name="action_undo" translatable="false">Undo</string>
+    <string name="action_redo" translatable="false">Redo</string>
+    <string name="transcript_unsaved_title" translatable="false">Unsaved transcript edits</string>
+    <string name="transcript_unsaved_body" translatable="false">Save the draft before leaving this recording?</string>
+    <string name="transcript_edit" translatable="false">Edit transcript</string>
+    <string name="transcript_edit_invalid" translatable="false">This edit is not valid for the selected segment.</string>
+    <string name="transcript_edit_save_failed" translatable="false">Transcript could not be saved.</string>
+    <string name="transcript_edit_conflict" translatable="false">Transcript changed elsewhere. Reload the current version before saving.</string>
+    <string name="transcript_original" translatable="false">Original</string>
+    <string name="transcript_translation" translatable="false">Translation</string>
+    <string name="transcript_split" translatable="false">Split segment</string>
+    <string name="transcript_merge_next" translatable="false">Merge with next segment</string>
+    <string name="transcript_left_original" translatable="false">Left original</string>
+    <string name="transcript_right_original" translatable="false">Right original</string>
+    <string name="transcript_left_translation" translatable="false">Left translation</string>
+    <string name="transcript_right_translation" translatable="false">Right translation</string>
+    <string name="playback_play" translatable="false">Play</string>
+    <string name="playback_pause" translatable="false">Pause</string>
+    <string name="playback_back_five" translatable="false">Back 5 seconds</string>
+    <string name="playback_forward_five" translatable="false">Forward 5 seconds</string>
+    <string name="playback_failed" translatable="false">Audio playback is unavailable.</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_configure">Open settings</string>
     <string name="recognition_live_model">Live recording model</string>
@@ -242,6 +268,8 @@
     <string name="recovery_unavailable_credential" translatable="false">Provider credential is missing</string>
     <string name="recovery_unavailable_automation" translatable="false">Automation recovery is unavailable on Android</string>
     <string name="recovery_unavailable_payload" translatable="false">Recovery data is invalid or from an unsupported version</string>
+    <string name="recovery_unavailable_history" translatable="false">Recording no longer exists</string>
+    <string name="recovery_unavailable_transcript_changed" translatable="false">Transcript changed after this draft was created</string>
     <string name="recovery_discard" translatable="false">Discard</string>
     <string name="recovery_clear_resolved" translatable="false">Clear resolved</string>
 </resources>

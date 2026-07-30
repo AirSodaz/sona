@@ -56,6 +56,7 @@ import com.sona.android.application.library.HistoryScope
 import com.sona.android.application.library.HistorySortOrder
 import com.sona.android.application.data.TranscriptExportFormat
 import com.sona.android.application.data.TranscriptExportMode
+import com.sona.android.application.recording.TranscriptSegment
 import com.sona.android.application.recording.LiveRecordingState
 import com.sona.android.application.recording.OnlineAsrProvider
 import com.sona.android.application.recording.AsrModelSelection
@@ -64,6 +65,7 @@ import com.sona.android.application.sync.SyncConflictResolution
 import com.sona.android.application.sync.SyncPreset
 import com.sona.android.application.sync.WebDavSyncProvider
 import com.sona.android.application.recovery.RecoveryResolution
+import com.sona.android.application.recovery.RecoverySource
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -106,6 +108,24 @@ internal fun SonaApp(
     onLoadTranscriptSnapshot: (String, String) -> Unit,
     onCloseTranscriptSnapshot: () -> Unit,
     onExportTranscript: (String, TranscriptExportFormat, TranscriptExportMode) -> Unit,
+    onTogglePlayback: () -> Unit,
+    onSeekPlayback: (Long) -> Unit,
+    onSkipPlayback: (Long) -> Unit,
+    onSetPlaybackSpeed: (Float) -> Unit,
+    onPausePlayback: () -> Unit,
+    onReleasePlayback: () -> Unit,
+    onStartTranscriptEdit: (String, String?) -> Unit,
+    onEditTranscriptSegment: (String?) -> Unit,
+    onUpdateTranscriptText: (String, String) -> Unit,
+    onUpdateTranscriptTranslation: (String, String) -> Unit,
+    onDeleteTranscriptSegment: (String) -> Unit,
+    onMergeTranscriptSegment: (String) -> Unit,
+    onSplitTranscriptSegment: (String, String, String, String?, String?) -> Unit,
+    onUndoTranscriptEdit: () -> Unit,
+    onRedoTranscriptEdit: () -> Unit,
+    onSaveTranscriptEdit: () -> Unit,
+    onDiscardTranscriptEdit: () -> Unit,
+    onFlushTranscriptEdit: () -> Unit,
     onTranscribeWithCloud: (HistoryItem) -> Unit,
     onImportAudio: (String) -> Unit,
     onCancelAudioImport: () -> Unit,
@@ -148,6 +168,8 @@ internal fun SonaApp(
     onClearResolvedRecovery: () -> Unit,
 ) {
     var cloudCredentialFocusRequested by remember { mutableStateOf(false) }
+    var detailExitRequestToken by remember { mutableStateOf(0) }
+    var pendingDetailDestination by remember { mutableStateOf<String?>(null) }
     val recoveryPendingCount = dataRecoveryState.recovery.items.count {
         it.resolution == RecoveryResolution.PENDING
     }
@@ -186,10 +208,15 @@ internal fun SonaApp(
                     item(
                         selected = destination.matches(currentRoute),
                         onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo(SonaDestination.HOME.route) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+                            if (isLibraryDetail && libraryState.editor.dirty) {
+                                pendingDetailDestination = destination.route
+                                detailExitRequestToken += 1
+                            } else {
+                                navController.navigate(destination.route) {
+                                    popUpTo(SonaDestination.HOME.route) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
                             }
                         },
                         icon = {
@@ -211,7 +238,13 @@ internal fun SonaApp(
                             scrollBehavior = scrollBehavior,
                             navigationIcon = {
                                 if (isLibraryDetail || isHomeWorkspace) {
-                                    IconButton(onClick = { navController.popBackStack() }) {
+                                    IconButton(onClick = {
+                                        if (isLibraryDetail) {
+                                            pendingDetailDestination = null
+                                            detailExitRequestToken += 1
+                                        }
+                                        else navController.popBackStack()
+                                    }) {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                             contentDescription = stringResource(R.string.action_back),
@@ -353,6 +386,40 @@ internal fun SonaApp(
                             onLoadSnapshot = { snapshotId -> onLoadTranscriptSnapshot(historyId, snapshotId) },
                             onCloseSnapshot = onCloseTranscriptSnapshot,
                             onExportTranscript = onExportTranscript,
+                            playback = libraryState.playback,
+                            editor = libraryState.editor,
+                            exitRequestToken = detailExitRequestToken,
+                            onNavigateBack = {
+                                val destination = pendingDetailDestination
+                                pendingDetailDestination = null
+                                if (destination == null) {
+                                    navController.popBackStack()
+                                } else {
+                                    navController.navigate(destination) {
+                                        popUpTo(SonaDestination.HOME.route) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            },
+                            onTogglePlayback = onTogglePlayback,
+                            onSeekPlayback = onSeekPlayback,
+                            onSkipPlayback = onSkipPlayback,
+                            onSetPlaybackSpeed = onSetPlaybackSpeed,
+                            onPausePlayback = onPausePlayback,
+                            onReleasePlayback = onReleasePlayback,
+                            onStartEditing = { segmentId -> onStartTranscriptEdit(historyId, segmentId) },
+                            onEditSegment = onEditTranscriptSegment,
+                            onUpdateText = onUpdateTranscriptText,
+                            onUpdateTranslation = onUpdateTranscriptTranslation,
+                            onDeleteSegment = onDeleteTranscriptSegment,
+                            onMergeSegment = onMergeTranscriptSegment,
+                            onSplitSegment = onSplitTranscriptSegment,
+                            onUndoEdit = onUndoTranscriptEdit,
+                            onRedoEdit = onRedoTranscriptEdit,
+                            onSaveEdit = onSaveTranscriptEdit,
+                            onDiscardEdit = onDiscardTranscriptEdit,
+                            onFlushEdit = onFlushTranscriptEdit,
                         )
                     }
                     composable(
@@ -411,7 +478,15 @@ internal fun SonaApp(
                             onConfirmBackupImport = onConfirmBackupImport,
                             onCancelBackupImport = onCancelBackupImport,
                             onRefreshRecovery = onRefreshRecovery,
-                            onResumeRecovery = onResumeRecovery,
+                            onResumeRecovery = { itemId ->
+                                val item = dataRecoveryState.recovery.items.firstOrNull { it.id == itemId }
+                                val transcriptHistoryId = item?.historyId
+                                if (item?.source == RecoverySource.TRANSCRIPT_EDIT && transcriptHistoryId != null) {
+                                    navController.navigate(libraryDetailRoute(transcriptHistoryId))
+                                } else {
+                                    onResumeRecovery(itemId)
+                                }
+                            },
                             onResumeAllRecovery = onResumeAllRecovery,
                             onDiscardRecovery = onDiscardRecovery,
                             onClearResolvedRecovery = onClearResolvedRecovery,

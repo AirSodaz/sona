@@ -74,6 +74,8 @@ internal fun DataRecoveryPane(
                             RecoveryUnavailableReason.CREDENTIAL_MISSING -> R.string.recovery_unavailable_credential
                             RecoveryUnavailableReason.AUTOMATION_UNSUPPORTED -> R.string.recovery_unavailable_automation
                             RecoveryUnavailableReason.INVALID_PAYLOAD -> R.string.recovery_unavailable_payload
+                            RecoveryUnavailableReason.HISTORY_MISSING -> R.string.recovery_unavailable_history
+                            RecoveryUnavailableReason.TRANSCRIPT_CHANGED -> R.string.recovery_unavailable_transcript_changed
                         }),
                         color = MaterialTheme.colorScheme.tertiary,
                         style = MaterialTheme.typography.bodySmall,

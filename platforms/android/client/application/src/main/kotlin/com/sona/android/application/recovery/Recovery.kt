@@ -2,10 +2,18 @@ package com.sona.android.application.recovery
 
 import kotlinx.coroutines.flow.Flow
 
-enum class RecoverySource { BATCH_IMPORT, AUTOMATION }
+enum class RecoverySource { BATCH_IMPORT, AUTOMATION, TRANSCRIPT_EDIT }
 enum class RecoveryResolution { PENDING, RESUMED, DISCARDED }
 enum class RecoveryStage { QUEUED, TRANSCODING, TRANSCRIBING, SAVING, EXPORTING }
-enum class RecoveryUnavailableReason { SOURCE_MISSING, MODEL_MISSING, CREDENTIAL_MISSING, AUTOMATION_UNSUPPORTED, INVALID_PAYLOAD }
+enum class RecoveryUnavailableReason {
+    SOURCE_MISSING,
+    MODEL_MISSING,
+    CREDENTIAL_MISSING,
+    AUTOMATION_UNSUPPORTED,
+    INVALID_PAYLOAD,
+    HISTORY_MISSING,
+    TRANSCRIPT_CHANGED,
+}
 
 data class RecoveryItem(
     val id: String,
@@ -40,7 +48,25 @@ data class RecoveryItemInput(
     val historyTitle: String? = null,
     val stage: RecoveryStage = RecoveryStage.QUEUED,
     val payload: String,
+    val source: RecoverySource = RecoverySource.BATCH_IMPORT,
+    val hasSourceFile: Boolean? = null,
+    val canResume: Boolean? = null,
 )
+
+data class TranscriptEditDraft(
+    val recoveryId: String,
+    val editSessionId: String,
+    val historyId: String,
+    val historyTitle: String,
+    val baseSegments: List<com.sona.android.application.recording.TranscriptSegment>,
+    val draftSegments: List<com.sona.android.application.recording.TranscriptSegment>,
+)
+
+interface TranscriptEditRecoveryPort {
+    suspend fun load(historyId: String): TranscriptEditDraft?
+    suspend fun save(draft: TranscriptEditDraft)
+    suspend fun discard(historyId: String)
+}
 
 interface RecoveryPort {
     suspend fun load(): RecoverySnapshot

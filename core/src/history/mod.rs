@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use crate::transcription::transcript::TranscriptSegment;
 
 pub mod error;
+pub mod transcript_edit;
 
 #[cfg(feature = "specta")]
 use specta::Type;
@@ -330,6 +331,7 @@ pub enum TranscriptSnapshotReason {
     Translate,
     Retranscribe,
     Restore,
+    ManualEdit,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]

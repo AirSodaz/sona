@@ -66,7 +66,8 @@ pub use export_mapper::{
     FfiExportTranscriptFileResultV1,
 };
 pub use history_mapper::{
-    FfiAudioSourceV1, FfiHistoryAudioStatusV1, FfiHistoryCompleteLiveDraftRequestV1,
+    FfiAudioSourceV1, FfiHistoryAudioStatusV1, FfiHistoryCommitTranscriptEditRequestV1,
+    FfiHistoryCommitTranscriptEditResultV1, FfiHistoryCompleteLiveDraftRequestV1,
     FfiHistoryCreateLiveDraftRequestV1, FfiHistoryCreateTranscriptSnapshotRequestV1,
     FfiHistoryDeleteItemsRequestV1, FfiHistoryDraftSourcePatchV1, FfiHistoryDraftSourceV1,
     FfiHistoryItemKindV1, FfiHistoryItemMetaPatchV1, FfiHistoryItemRecordV1,
@@ -79,8 +80,8 @@ pub use history_mapper::{
     FfiHistoryWorkspaceItemSearchMatchV1, FfiHistoryWorkspaceQueryRequestV1,
     FfiHistoryWorkspaceQueryResultV1, FfiHistoryWorkspaceScopeV1, FfiHistoryWorkspaceSearchRangeV1,
     FfiHistoryWorkspaceSearchSnippetV1, FfiHistoryWorkspaceSortOrderV1,
-    FfiHistoryWorkspaceSummaryV1, FfiLiveRecordingDraftResultV1, FfiTranscriptSnapshotMetadataV1,
-    FfiTranscriptSnapshotReasonV1, FfiTranscriptSnapshotRecordV1,
+    FfiHistoryWorkspaceSummaryV1, FfiLiveRecordingDraftResultV1, FfiTranscriptEditOperationV1,
+    FfiTranscriptSnapshotMetadataV1, FfiTranscriptSnapshotReasonV1, FfiTranscriptSnapshotRecordV1,
 };
 pub(crate) use history_mapper::{
     history_transcript_segments_from_ffi, history_transcript_segments_to_ffi,

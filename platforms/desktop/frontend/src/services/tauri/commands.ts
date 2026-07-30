@@ -53,6 +53,7 @@ export const TauriCommand = {
     purgeItems: 'history_purge_items',
     loadTranscript: 'history_load_transcript',
     updateTranscript: 'history_update_transcript',
+    commitTranscriptEdit: 'history_commit_transcript_edit',
     createTranscriptSnapshot: 'history_create_transcript_snapshot',
     listTranscriptSnapshots: 'history_list_transcript_snapshots',
     loadTranscriptSnapshot: 'history_load_transcript_snapshot',

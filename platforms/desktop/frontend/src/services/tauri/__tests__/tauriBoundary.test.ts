@@ -28,6 +28,7 @@ import {
 import { startMicrophoneCapture, stopSystemAudioCapture } from '../audio';
 import {
   historyCleanupAudio,
+  historyCommitTranscriptEdit,
   historyBuildTranscriptDiff,
   historyCreateLiveDraft,
   historyCreateTranscriptSnapshot,
@@ -1568,6 +1569,38 @@ describe('tauri boundary wrappers', () => {
 
     expect(invoke).toHaveBeenCalledWith(TauriCommand.automation.replaceRuntimeRules, {
       rules: [rule],
+    });
+  });
+
+  it('history wrappers normalize atomic transcript edit conflicts', async () => {
+    const segment = { id: 'segment-1', text: 'hello', start: 0, end: 1, isFinal: true };
+    vi.mocked(invoke).mockResolvedValueOnce({
+      status: 'conflict',
+      current_segments: [{
+        ...segment,
+        timing: null,
+        tokens: null,
+        timestamps: null,
+        durations: null,
+        translation: null,
+        speaker: null,
+        speakerAttribution: null,
+      }],
+    });
+
+    const result = await historyCommitTranscriptEdit(
+      'history-1',
+      'session-1',
+      [segment],
+      [{ ...segment, text: 'edited' }],
+    );
+
+    expect(result).toEqual({ status: 'conflict', currentSegments: [segment] });
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.history.commitTranscriptEdit, {
+      historyId: 'history-1',
+      editSessionId: 'session-1',
+      baseSegments: [expect.objectContaining({ id: 'segment-1', text: 'hello' })],
+      editedSegments: [expect.objectContaining({ id: 'segment-1', text: 'edited' })],
     });
   });
 

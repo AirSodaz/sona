@@ -5,10 +5,13 @@ import android.content.Context
 import com.sona.android.adapters.android.audio.AndroidMicrophoneCapturePort
 import com.sona.android.adapters.android.audio.AndroidAudioImportJobAdapter
 import com.sona.android.adapters.android.audio.AndroidAudioTranscoder
+import com.sona.android.adapters.android.audio.AndroidAudioPlaybackAdapter
 import com.sona.android.adapters.android.audio.AudioImportWorkerFactory
 import com.sona.android.adapters.android.audio.FrameworkAudioRecordBackend
 import com.sona.android.adapters.android.data.AndroidSafFileTransferAdapter
 import com.sona.android.adapters.android.recovery.AndroidRecoveryController
+import com.sona.android.adapters.android.recovery.AndroidTranscriptEditRecoveryAdapter
+import com.sona.android.adapters.android.recovery.RecoveryCoordinator
 import com.sona.android.adapters.android.sync.AndroidSyncScheduler
 import com.sona.android.adapters.android.sync.SyncWorkerFactory
 import com.sona.android.adapters.android.credential.AndroidBatchCredentialRepository
@@ -22,6 +25,7 @@ import com.sona.android.adapters.uniffi.bootstrap.UniffiSonaBootstrapAdapter
 import com.sona.android.adapters.uniffi.data.UniffiBackupAdapter
 import com.sona.android.adapters.uniffi.data.UniffiTranscriptExportAdapter
 import com.sona.android.adapters.uniffi.library.UniffiTagWorkspaceAdapter
+import com.sona.android.adapters.uniffi.library.UniffiTranscriptEditorAdapter
 import com.sona.android.adapters.uniffi.recovery.UniffiRecoveryAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiOnlineBatchTranscriptionAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiLocalAsrModelCatalogAdapter
@@ -37,10 +41,14 @@ import com.sona.android.app.feature.recording.RecordingForegroundGateway
 import com.sona.android.application.bootstrap.LoadSonaBootstrap
 import com.sona.android.application.library.HistoryWorkspacePort
 import com.sona.android.application.library.TagWorkspacePort
+import com.sona.android.application.library.HistoryMediaSourcePort
+import com.sona.android.application.library.TranscriptEditorPort
+import com.sona.android.application.media.AudioPlaybackPort
 import com.sona.android.application.data.BackupPort
 import com.sona.android.application.data.FileTransferPort
 import com.sona.android.application.data.TranscriptExportPort
 import com.sona.android.application.recovery.RecoveryControllerPort
+import com.sona.android.application.recovery.TranscriptEditRecoveryPort
 import com.sona.android.application.recovery.RecoveryUnavailableReason
 import com.sona.android.application.recording.AudioImportEngine
 import com.sona.android.application.sync.SyncPort
@@ -84,6 +92,7 @@ class SonaAppContainer(context: Context) {
     private val sync = UniffiSyncAdapter(appDataDir)
     private val syncScheduler = AndroidSyncScheduler.create(appContext)
     private val recovery = UniffiRecoveryAdapter(appDataDir)
+    private val recoveryCoordinator = RecoveryCoordinator(recovery)
     private val backup = UniffiBackupAdapter(appDataDir)
     private val transcriptExporter = UniffiTranscriptExportAdapter()
     private val fileTransfer = AndroidSafFileTransferAdapter.create(appContext)
@@ -97,8 +106,18 @@ class SonaAppContainer(context: Context) {
     private val batchTranscription = UniffiOnlineBatchTranscriptionAdapter()
     private val localBatchTranscription = UniffiLocalBatchTranscriptionAdapter()
     private val history = UniffiRecordingHistoryAdapter(appDataDir, syncScheduler::scheduleAfterLocalChange)
-    private val audioImportJobs = AndroidAudioImportJobAdapter.create(appContext, recovery)
-    private val recoveryController = AndroidRecoveryController(appContext, recovery, audioImportJobs) { job ->
+    private val transcriptEditorAdapter = UniffiTranscriptEditorAdapter(
+        appDataDir,
+        syncScheduler::scheduleAfterLocalChange,
+    )
+    private val transcriptEditRecoveryAdapter = AndroidTranscriptEditRecoveryAdapter(recoveryCoordinator)
+    private val audioPlaybackAdapter = AndroidAudioPlaybackAdapter.create(appContext)
+    private val audioImportJobs = AndroidAudioImportJobAdapter.create(appContext, recoveryCoordinator)
+    private val recoveryController = AndroidRecoveryController(
+        appContext,
+        recoveryCoordinator,
+        audioImportJobs,
+        unavailableReason = { job ->
         when (val engine = job.engine) {
             is AudioImportEngine.Local -> if (
                 localAsrModelStorage.listInstalledModels().none { it.id == engine.modelId }
@@ -107,7 +126,9 @@ class SonaAppContainer(context: Context) {
                 batchCredentialRepository.load(engine.provider) == null
             ) RecoveryUnavailableReason.CREDENTIAL_MISSING else null
         }
-    }
+        },
+        transcriptHistory = history,
+    )
     private val audioTranscoder = AndroidAudioTranscoder.create(appContext)
     private val monotonicClock = AndroidMonotonicClock()
     private val recordingIds = UuidRecordingIdPort()
@@ -127,6 +148,10 @@ class SonaAppContainer(context: Context) {
     val recoveryJobs: RecoveryControllerPort = recoveryController
     val tagWorkspace: TagWorkspacePort = tags
     val recordingLibrary: HistoryWorkspacePort = history
+    val transcriptEditor: TranscriptEditorPort = transcriptEditorAdapter
+    val historyMediaSources: HistoryMediaSourcePort = transcriptEditorAdapter
+    val audioPlayback: AudioPlaybackPort = audioPlaybackAdapter
+    val transcriptEditRecovery: TranscriptEditRecoveryPort = transcriptEditRecoveryAdapter
     val transcribeRecordingWithCloud = TranscribeRecordingWithCloud(
         credentials = batchCredentialRepository,
         transcription = batchTranscription,
@@ -155,7 +180,7 @@ class SonaAppContainer(context: Context) {
     val audioImportJobState = audioImportJobs.state
     val audioImportJobsController = audioImportJobs
     internal val workerFactory = SonaWorkerFactory(
-        AudioImportWorkerFactory(runAudioImport, recovery),
+        AudioImportWorkerFactory(runAudioImport, recoveryCoordinator),
         SyncWorkerFactory(sync),
     )
     internal val recordingGateway = RecordingForegroundGateway(

@@ -21,6 +21,7 @@ pub const QUEUE_RECOVERY_FILE_NAME: &str = "queue-recovery.json";
 pub enum RecoverySource {
     BatchImport,
     Automation,
+    TranscriptEdit,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, strum::Display)]

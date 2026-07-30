@@ -13,6 +13,7 @@ use crate::platform::history_repository::{
 };
 use sona_core::history::HistorySummaryPayload;
 use sona_core::history::mutation_repository::{
+    HistoryCommitTranscriptEditRequest, HistoryCommitTranscriptEditResult,
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
     HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryReplaceTagAssignmentsRequest,
     HistoryTrashItemsRequest, HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
@@ -266,6 +267,27 @@ pub async fn history_update_transcript<R: Runtime>(
     validate_history_input(&request)?;
     crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
         service.update_transcript(request)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn history_commit_transcript_edit<R: Runtime>(
+    app: AppHandle<R>,
+    history_id: String,
+    edit_session_id: String,
+    base_segments: Vec<TranscriptSegment>,
+    edited_segments: Vec<TranscriptSegment>,
+) -> Result<HistoryCommitTranscriptEditResult, String> {
+    let request = HistoryCommitTranscriptEditRequest {
+        history_id,
+        edit_session_id,
+        base_segments,
+        edited_segments,
+    };
+    validate_history_input(&request)?;
+    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
+        service.commit_transcript_edit(request)
     })
     .await
 }

@@ -903,6 +903,28 @@ export type HistoryAudioCleanupRequest_Serialize = {
 
 export type HistoryAudioStatus = "available" | "missing" | "removed";
 
+export type HistoryCommitTranscriptEditRequest = HistoryCommitTranscriptEditRequest_Serialize | HistoryCommitTranscriptEditRequest_Deserialize;
+
+export type HistoryCommitTranscriptEditRequest_Deserialize = {
+	historyId: string,
+	editSessionId: string,
+	baseSegments: TranscriptSegment_Deserialize[],
+	editedSegments: TranscriptSegment_Deserialize[],
+};
+
+export type HistoryCommitTranscriptEditRequest_Serialize = {
+	historyId: string,
+	editSessionId: string,
+	baseSegments: TranscriptSegment_Serialize[],
+	editedSegments: TranscriptSegment_Serialize[],
+};
+
+export type HistoryCommitTranscriptEditResult = HistoryCommitTranscriptEditResult_Serialize | HistoryCommitTranscriptEditResult_Deserialize;
+
+export type HistoryCommitTranscriptEditResult_Deserialize = ({ status: "unchanged" }) & { current_segments?: never; item?: never; snapshot?: never } | ({ status: "committed"; item: HistoryItemRecord; snapshot: TranscriptSnapshotMetadata }) & { current_segments?: never } | ({ status: "conflict"; current_segments: TranscriptSegment_Deserialize[] }) & { item?: never; snapshot?: never };
+
+export type HistoryCommitTranscriptEditResult_Serialize = ({ status: "unchanged" }) & { current_segments?: never; item?: never; snapshot?: never } | ({ status: "committed"; item: HistoryItemRecord; snapshot: TranscriptSnapshotMetadata }) & { current_segments?: never } | ({ status: "conflict"; current_segments: TranscriptSegment_Serialize[] }) & { item?: never; snapshot?: never };
+
 export type HistoryCompleteLiveDraftRequest = HistoryCompleteLiveDraftRequest_Serialize | HistoryCompleteLiveDraftRequest_Deserialize;
 
 export type HistoryCompleteLiveDraftRequest_Deserialize = {
@@ -1965,7 +1987,7 @@ export type RecoverySnapshot_Serialize = {
 	items: RecoveredQueueItem_Serialize[],
 };
 
-export type RecoverySource = "batch_import" | "automation";
+export type RecoverySource = "batch_import" | "automation" | "transcript_edit";
 
 export type RuntimeEnvironmentStatus = {
 	ffmpegPath: string,
@@ -2558,7 +2580,7 @@ export type TranscriptSnapshotMetadata = {
 	segmentCount: number,
 };
 
-export type TranscriptSnapshotReason = "polish" | "translate" | "retranscribe" | "restore";
+export type TranscriptSnapshotReason = "polish" | "translate" | "retranscribe" | "restore" | "manual_edit";
 
 export type TranscriptSnapshotRecord = TranscriptSnapshotRecord_Serialize | TranscriptSnapshotRecord_Deserialize;
 
@@ -2832,6 +2854,10 @@ export type RustTauriCommandContractMap = {
 	"history_update_transcript": {
 		args: HistoryUpdateTranscriptRequest_Deserialize;
 		result: HistoryItemRecord;
+	};
+	"history_commit_transcript_edit": {
+		args: HistoryCommitTranscriptEditRequest_Deserialize;
+		result: HistoryCommitTranscriptEditResult_Serialize;
 	};
 	"history_create_transcript_snapshot": {
 		args: HistoryCreateTranscriptSnapshotRequest_Deserialize;

@@ -325,6 +325,7 @@ private fun FfiTranscriptSnapshotMetadataV1.toApplication() = TranscriptSnapshot
         FfiTranscriptSnapshotReasonV1.TRANSLATE -> TranscriptSnapshotReason.TRANSLATE
         FfiTranscriptSnapshotReasonV1.RETRANSCRIBE -> TranscriptSnapshotReason.RETRANSCRIBE
         FfiTranscriptSnapshotReasonV1.RESTORE -> TranscriptSnapshotReason.RESTORE
+        FfiTranscriptSnapshotReasonV1.MANUAL_EDIT -> TranscriptSnapshotReason.MANUAL_EDIT
     },
     createdAtEpochMillis = createdAt.toLongChecked("Snapshot timestamp"),
     segmentCount = segmentCount.toLongChecked("Snapshot segment count"),

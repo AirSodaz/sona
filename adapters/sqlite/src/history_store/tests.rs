@@ -699,6 +699,141 @@ fn update_transcript_missing_history_returns_not_found() {
 }
 
 #[test]
+fn commit_transcript_edit_is_atomic_and_detects_stale_baselines() {
+    let root = tempdir().unwrap();
+    let db = Database::open_in_memory().unwrap();
+    let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+    store.ensure_ready().unwrap();
+    store.get_db().unwrap().with_connection(|connection| {
+        connection.execute(
+            "INSERT INTO sync_state (id, vault_id, device_id, preset) VALUES (1, 'vault-1', 'device-1', '\"full\"')",
+            [],
+        )?;
+        Ok(())
+    }).unwrap();
+    let base = vec![segment_value("seg-1", "Original", 0.0, 1.0)];
+    let recording = store
+        .save_recording(HistorySaveRecordingRequest {
+            segments: base.clone(),
+            duration: 1.0,
+            tag_ids: Vec::new(),
+            audio_bytes: Some(vec![1, 2, 3]),
+            native_audio_path: None,
+            audio_extension: None,
+        })
+        .unwrap();
+    let outbox_count = || {
+        store
+            .get_db()
+            .unwrap()
+            .with_connection(|connection| {
+                Ok(
+                    connection.query_row("SELECT COUNT(*) FROM sync_outbox", [], |row| {
+                        row.get::<_, i64>(0)
+                    })?,
+                )
+            })
+            .unwrap()
+    };
+    let before_unchanged = outbox_count();
+
+    let unchanged = store
+        .commit_transcript_edit(&recording.id, "session-1", base.clone(), base.clone())
+        .unwrap();
+    assert!(matches!(
+        unchanged,
+        HistoryCommitTranscriptEditResult::Unchanged
+    ));
+    assert_eq!(outbox_count(), before_unchanged);
+    assert!(
+        store
+            .list_transcript_snapshots(&recording.id)
+            .unwrap()
+            .is_empty()
+    );
+
+    let external = vec![segment_value("seg-1", "External", 0.0, 1.0)];
+    store
+        .update_transcript(&recording.id, external.clone())
+        .unwrap();
+    let before_conflict = outbox_count();
+    let conflict = store
+        .commit_transcript_edit(
+            &recording.id,
+            "session-1",
+            base,
+            vec![segment_value("seg-1", "Draft", 0.0, 1.0)],
+        )
+        .unwrap();
+    assert!(matches!(
+        conflict,
+        HistoryCommitTranscriptEditResult::Conflict { .. }
+    ));
+    assert_eq!(outbox_count(), before_conflict);
+    let current_after_external = store.load_transcript(&recording.id).unwrap().unwrap();
+    assert_eq!(current_after_external[0].text, "External");
+    assert!(
+        store
+            .list_transcript_snapshots(&recording.id)
+            .unwrap()
+            .is_empty()
+    );
+
+    let edited = vec![segment_value("seg-1", "Manual edit", 0.0, 1.0)];
+    let committed = store
+        .commit_transcript_edit(
+            &recording.id,
+            "session-1",
+            current_after_external.clone(),
+            edited.clone(),
+        )
+        .unwrap();
+    let snapshot = match committed {
+        HistoryCommitTranscriptEditResult::Committed { snapshot, .. } => snapshot,
+        other => panic!("expected committed edit, got {other:?}"),
+    };
+    assert_eq!(snapshot.reason, TranscriptSnapshotReason::ManualEdit);
+    assert_eq!(
+        store.load_transcript(&recording.id).unwrap().unwrap()[0].text,
+        "Manual edit"
+    );
+    assert_eq!(
+        store
+            .load_transcript_snapshot(&recording.id, &snapshot.id)
+            .unwrap()
+            .unwrap()
+            .segments,
+        current_after_external
+    );
+    assert!(outbox_count() > before_conflict);
+
+    let edited_again = vec![segment_value("seg-1", "Manual edit again", 0.0, 1.0)];
+    let committed_again = store
+        .commit_transcript_edit(&recording.id, "session-1", edited, edited_again)
+        .unwrap();
+    let repeated_snapshot = match committed_again {
+        HistoryCommitTranscriptEditResult::Committed { snapshot, .. } => snapshot,
+        other => panic!("expected committed edit, got {other:?}"),
+    };
+    assert_eq!(repeated_snapshot.id, snapshot.id);
+    assert_eq!(
+        store
+            .list_transcript_snapshots(&recording.id)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        store
+            .load_transcript_snapshot(&recording.id, &snapshot.id)
+            .unwrap()
+            .unwrap()
+            .segments,
+        current_after_external
+    );
+}
+
+#[test]
 fn complete_live_draft_missing_history_returns_not_found() {
     let root = tempdir().unwrap();
     let db = Database::open_in_memory().unwrap();

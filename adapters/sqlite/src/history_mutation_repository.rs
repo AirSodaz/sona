@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use sona_core::history::mutation_repository::{
+    HistoryCommitTranscriptEditRequest, HistoryCommitTranscriptEditResult,
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest, HistoryMutationError,
     HistoryMutationRepository, HistoryPurgeItemsRequest, HistoryReplaceTagAssignmentsRequest,
     HistoryRestoreItemsRequest, HistoryTrashItemsRequest, HistoryUpdateItemMetaRequest,
@@ -151,6 +152,13 @@ impl HistoryMutationRepository for DeferredSqliteHistoryMutationRepository {
         self.with_store(|store| {
             HistoryMutationRepository::create_transcript_snapshot(store, request)
         })
+    }
+
+    fn commit_transcript_edit(
+        &self,
+        request: HistoryCommitTranscriptEditRequest,
+    ) -> Result<HistoryCommitTranscriptEditResult, HistoryMutationError> {
+        self.with_store(|store| HistoryMutationRepository::commit_transcript_edit(store, request))
     }
 
     fn update_item_meta(

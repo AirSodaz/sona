@@ -252,6 +252,36 @@ export async function historyUpdateTranscript(
   });
 }
 
+export type HistoryCommitTranscriptEditResult =
+  | { status: "unchanged" }
+  | {
+      status: "committed";
+      item: HistoryItemRecord;
+      snapshot: TranscriptSnapshotMetadata;
+    }
+  | { status: "conflict"; currentSegments: TranscriptSegment[] };
+
+export async function historyCommitTranscriptEdit(
+  historyId: string,
+  editSessionId: string,
+  baseSegments: TranscriptSegment[],
+  editedSegments: TranscriptSegment[],
+): Promise<HistoryCommitTranscriptEditResult> {
+  const result = await invokeTauri(TauriCommand.history.commitTranscriptEdit, {
+    historyId,
+    editSessionId,
+    baseSegments: baseSegments.map(toTranscriptSegmentTransport),
+    editedSegments: editedSegments.map(toTranscriptSegmentTransport),
+  });
+  if (result.status === "conflict") {
+    return {
+      status: "conflict",
+      currentSegments: result.current_segments.map(normalizeTranscriptSegment),
+    };
+  }
+  return result;
+}
+
 export async function historyCreateTranscriptSnapshot(
   historyId: string,
   reason: TranscriptSnapshotReason,

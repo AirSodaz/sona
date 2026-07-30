@@ -16,6 +16,11 @@ import com.sona.android.application.library.TagWorkspacePort
 import com.sona.android.application.library.TranscriptSnapshot
 import com.sona.android.application.library.TranscriptSnapshotDetail
 import com.sona.android.application.library.CreateTagRequest
+import com.sona.android.application.library.CommitTranscriptEditRequest
+import com.sona.android.application.library.CommitTranscriptEditResult
+import com.sona.android.application.library.HistoryMediaSourcePort
+import com.sona.android.application.library.TranscriptEditOperation
+import com.sona.android.application.library.TranscriptEditorPort
 import com.sona.android.application.data.FileTransferPort
 import com.sona.android.application.data.TranscriptExportFormat
 import com.sona.android.application.data.TranscriptExportMode
@@ -33,7 +38,13 @@ import com.sona.android.application.recording.ScheduleAudioImportOutcome
 import com.sona.android.application.recording.ScheduleAudioRetranscription
 import com.sona.android.application.recording.TranscribeRecordingWithCloud
 import com.sona.android.application.recording.TranscriptSegment
+import com.sona.android.application.media.AudioPlaybackPort
+import com.sona.android.application.media.AudioPlaybackState
+import com.sona.android.application.media.AudioPlaybackStatus
+import com.sona.android.application.recovery.TranscriptEditDraft
+import com.sona.android.application.recovery.TranscriptEditRecoveryPort
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +53,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.UUID
 
 enum class LibraryListError {
     LOAD_FAILED,
@@ -100,6 +114,8 @@ data class LibraryUiState(
     val trashCount: Long = 0,
     val operationInProgress: Boolean = false,
     val operationError: Boolean = false,
+    val playback: AudioPlaybackState = AudioPlaybackState(),
+    val editor: TranscriptEditorUiState = TranscriptEditorUiState(),
 )
 
 class LibraryViewModel(
@@ -111,6 +127,10 @@ class LibraryViewModel(
     private val tags: TagWorkspacePort,
     private val exporter: TranscriptExportPort,
     private val files: FileTransferPort,
+    private val editor: TranscriptEditorPort? = null,
+    private val mediaSources: HistoryMediaSourcePort? = null,
+    private val playback: AudioPlaybackPort = IdleAudioPlaybackPort,
+    private val editRecovery: TranscriptEditRecoveryPort? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(LibraryUiState())
     val state: StateFlow<LibraryUiState> = mutableState.asStateFlow()
@@ -121,8 +141,20 @@ class LibraryViewModel(
     private var nextOffset: Int = 0
     private var listGeneration: Int = 0
     private var detailGeneration: Int = 0
+    private var draftSaveJob: Job? = null
+    private var editAutoSaveJob: Job? = null
+    private var editCommitJob: Job? = null
+    private var closeAfterSaveSessionId: String? = null
+    private var playbackPrepareJob: Job? = null
+    private var playbackGeneration: Int = 0
+    private val undoStack = ArrayDeque<List<TranscriptSegment>>()
+    private val redoStack = ArrayDeque<List<TranscriptSegment>>()
+    private val editMutex = Mutex()
 
     init {
+        viewModelScope.launch {
+            playback.state.collect { value -> mutableState.update { it.copy(playback = value) } }
+        }
         viewModelScope.launch {
             audioImportJobs.state.distinctUntilChanged().collect { importState ->
                 val previous = mutableState.value.audioImport
@@ -177,6 +209,7 @@ class LibraryViewModel(
 
     fun transcribeWithCurrentEngine(item: HistoryItem) {
         if (
+            mutableState.value.editor.dirty ||
             !item.audioAvailable ||
             item.audioPath.isBlank() ||
             mutableState.value.audioImport is AudioImportJobState.Running
@@ -315,6 +348,7 @@ class LibraryViewModel(
 
     fun loadTranscript(historyId: String) {
         if (historyId.isBlank()) return
+        releasePlayback()
         val generation = ++detailGeneration
         detailJob?.cancel()
         mutableState.update {
@@ -334,6 +368,8 @@ class LibraryViewModel(
                         snapshotDetail = null,
                     )
                 }
+                preparePlayback(historyId)
+                restoreDraft(historyId, segments)
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
@@ -360,6 +396,7 @@ class LibraryViewModel(
     fun clearSelection() = mutableState.update { it.copy(selectedIds = emptySet()) }
 
     fun resetAfterRestore() {
+        closeDetail(forceDiscard = true)
         detailGeneration += 1
         detailJob?.cancel()
         mutableState.update {
@@ -374,6 +411,311 @@ class LibraryViewModel(
             )
         }
         refresh()
+    }
+
+    fun preparePlayback(historyId: String) {
+        val sourcePort = mediaSources ?: return
+        if (historyId.isBlank()) return
+        playbackPrepareJob?.cancel()
+        playback.release()
+        val generation = ++playbackGeneration
+        playbackPrepareJob = viewModelScope.launch {
+            val source = runCatching { sourcePort.resolve(historyId) }.getOrNull()
+            val currentDetail = mutableState.value.detail as? LibraryDetailUiState.Ready
+            if (generation != playbackGeneration || currentDetail?.historyId != historyId) return@launch
+            if (source != null) playback.prepare(historyId, source.nativePath) else playback.release()
+        }
+    }
+
+    fun togglePlayback() = when (mutableState.value.playback.status) {
+        AudioPlaybackStatus.Playing -> playback.pause()
+        else -> playback.play()
+    }
+
+    fun seekPlayback(positionMillis: Long) = playback.seekTo(positionMillis)
+    fun skipPlayback(deltaMillis: Long) = playback.seekBy(deltaMillis)
+    fun setPlaybackSpeed(speed: Float) = playback.setSpeed(speed)
+    fun pausePlayback() = playback.pause()
+    fun releasePlayback() {
+        playbackPrepareJob?.cancel()
+        playbackPrepareJob = null
+        playbackGeneration += 1
+        playback.release()
+    }
+
+    fun startEditing(historyId: String, segmentId: String? = null) {
+        val segments = (mutableState.value.detail as? LibraryDetailUiState.Ready)
+            ?.takeIf { it.historyId == historyId }?.segments ?: return
+        if (editor == null) return
+        undoStack.clear()
+        redoStack.clear()
+        mutableState.update { state ->
+            state.copy(editor = TranscriptEditorUiState(
+                historyId = historyId,
+                editSessionId = UUID.randomUUID().toString(),
+                baseSegments = segments,
+                draftSegments = segments,
+                editingSegmentId = segmentId ?: segments.firstOrNull()?.id,
+            ))
+        }
+    }
+
+    fun editSegment(segmentId: String?) = mutableState.update {
+        it.copy(editor = it.editor.copy(editingSegmentId = segmentId, error = null))
+    }
+
+    fun updateSegmentText(segmentId: String, value: String) =
+        applyEdit(TranscriptEditOperation.UpdateText(segmentId, value), debounce = true)
+
+    fun updateSegmentTranslation(segmentId: String, value: String) =
+        applyEdit(TranscriptEditOperation.UpdateTranslation(segmentId, value.ifBlank { null }), debounce = true)
+
+    fun deleteSegment(segmentId: String) = applyEdit(TranscriptEditOperation.Delete(segmentId))
+    fun mergeNextSegment(segmentId: String) = applyEdit(TranscriptEditOperation.MergeNext(segmentId))
+
+    fun splitSegment(
+        segmentId: String,
+        leftText: String,
+        rightText: String,
+        leftTranslation: String?,
+        rightTranslation: String?,
+    ) = applyEdit(TranscriptEditOperation.Split(
+        segmentId = segmentId,
+        newSegmentId = UUID.randomUUID().toString(),
+        leftText = leftText,
+        rightText = rightText,
+        leftTranslation = leftTranslation,
+        rightTranslation = rightTranslation,
+    ))
+
+    fun undoEdit() {
+        val session = mutableState.value.editor
+        val previous = undoStack.removeLastOrNull() ?: return
+        redoStack.addLast(session.draftSegments)
+        publishDraft(previous, immediate = true)
+    }
+
+    fun redoEdit() {
+        val session = mutableState.value.editor
+        val next = redoStack.removeLastOrNull() ?: return
+        undoStack.addLast(session.draftSegments)
+        publishDraft(next, immediate = true)
+    }
+
+    fun saveEdit() {
+        commitEdit(closeAfterSave = true)
+    }
+
+    private fun commitEdit(closeAfterSave: Boolean) {
+        val session = mutableState.value.editor
+        val port = editor ?: return
+        val historyId = session.historyId ?: return
+        if (closeAfterSave) closeAfterSaveSessionId = session.editSessionId
+        if (!session.dirty) {
+            if (closeAfterSave) {
+                closeAfterSaveSessionId = null
+                mutableState.update { it.copy(editor = TranscriptEditorUiState()) }
+            }
+            return
+        }
+        if (session.saving || session.error == TranscriptEditorError.STALE_TRANSCRIPT) return
+        draftSaveJob?.cancel()
+        editAutoSaveJob?.cancel()
+        mutableState.update { it.copy(editor = it.editor.copy(saving = true, error = null)) }
+        editCommitJob = viewModelScope.launch {
+            try {
+                when (port.commit(CommitTranscriptEditRequest(
+                    historyId = historyId,
+                    editSessionId = session.editSessionId,
+                    baseSegments = session.baseSegments,
+                    editedSegments = session.draftSegments,
+                ))) {
+                    is CommitTranscriptEditResult.Conflict -> {
+                        closeAfterSaveSessionId = null
+                        mutableState.update {
+                            it.copy(editor = it.editor.copy(
+                                saving = false,
+                                error = TranscriptEditorError.STALE_TRANSCRIPT,
+                            ))
+                        }
+                    }
+                    is CommitTranscriptEditResult.Committed,
+                    CommitTranscriptEditResult.Unchanged,
+                    -> {
+                        var remainingSession: TranscriptEditorUiState? = null
+                        var closed = false
+                        mutableState.update { state ->
+                            val current = state.editor
+                            if (current.editSessionId != session.editSessionId) return@update state
+                            val stillDirty = current.draftSegments != session.draftSegments
+                            val shouldClose = closeAfterSaveSessionId == session.editSessionId && !stillDirty
+                            closed = shouldClose
+                            val nextEditor = if (shouldClose) {
+                                TranscriptEditorUiState()
+                            } else {
+                                current.copy(
+                                    baseSegments = session.draftSegments,
+                                    dirty = stillDirty,
+                                    saving = false,
+                                    error = null,
+                                ).also { updated -> remainingSession = updated.takeIf { it.dirty } }
+                            }
+                            state.copy(
+                                detail = LibraryDetailUiState.Ready(historyId, session.draftSegments),
+                                editor = nextEditor,
+                            )
+                        }
+                        if (closed || remainingSession == null) {
+                            closeAfterSaveSessionId = null
+                            editRecovery?.discard(historyId)
+                        } else {
+                            persistDraft(remainingSession!!)
+                            if (closeAfterSaveSessionId == session.editSessionId) {
+                                viewModelScope.launch { commitEdit(closeAfterSave = true) }
+                            } else {
+                                scheduleEditAutoSave()
+                            }
+                        }
+                        refresh()
+                        mutableState.update { it.copy(
+                            snapshots = runCatching {
+                                library.listSnapshots(historyId)
+                            }.getOrDefault(emptyList()),
+                        ) }
+                    }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                closeAfterSaveSessionId = null
+                mutableState.update { it.copy(editor = it.editor.copy(
+                    saving = false,
+                    error = TranscriptEditorError.SAVE_FAILED,
+                )) }
+            }
+        }
+    }
+
+    fun discardEdit() {
+        val historyId = mutableState.value.editor.historyId ?: return
+        draftSaveJob?.cancel()
+        editAutoSaveJob?.cancel()
+        editCommitJob?.cancel()
+        closeAfterSaveSessionId = null
+        viewModelScope.launch { editRecovery?.discard(historyId) }
+        undoStack.clear()
+        redoStack.clear()
+        mutableState.update { it.copy(editor = TranscriptEditorUiState()) }
+    }
+
+    fun closeDetail(forceDiscard: Boolean = false): Boolean {
+        if (mutableState.value.editor.dirty && !forceDiscard) return false
+        if (forceDiscard && mutableState.value.editor.active) discardEdit()
+        draftSaveJob?.cancel()
+        editAutoSaveJob?.cancel()
+        releasePlayback()
+        mutableState.update { it.copy(editor = TranscriptEditorUiState()) }
+        return true
+    }
+
+    fun flushEditDraft() {
+        val session = mutableState.value.editor.takeIf { it.dirty } ?: return
+        draftSaveJob?.cancel()
+        viewModelScope.launch { persistDraft(session) }
+        commitEdit(closeAfterSave = false)
+    }
+
+    private fun applyEdit(operation: TranscriptEditOperation, debounce: Boolean = false) {
+        val port = editor ?: return
+        viewModelScope.launch {
+            editMutex.withLock {
+              val session = mutableState.value.editor.takeIf { it.active } ?: return@withLock
+              try {
+                val changed = port.apply(session.draftSegments, operation)
+                if (changed == session.draftSegments) return@withLock
+                undoStack.addLast(session.draftSegments)
+                while (undoStack.size > MAX_UNDO) undoStack.removeFirst()
+                redoStack.clear()
+                publishDraft(changed, immediate = !debounce)
+              } catch (error: CancellationException) {
+                throw error
+              } catch (_: Exception) {
+                mutableState.update {
+                    it.copy(editor = it.editor.copy(error = TranscriptEditorError.INVALID_EDIT))
+                }
+              }
+            }
+        }
+    }
+
+    private fun publishDraft(segments: List<TranscriptSegment>, immediate: Boolean) {
+        mutableState.update { state -> state.copy(editor = state.editor.copy(
+            draftSegments = segments,
+            dirty = segments != state.editor.baseSegments,
+            undoAvailable = undoStack.isNotEmpty(),
+            redoAvailable = redoStack.isNotEmpty(),
+            error = null,
+        )) }
+        scheduleDraftSave(immediate)
+        scheduleEditAutoSave()
+    }
+
+    private fun scheduleDraftSave(immediate: Boolean) {
+        draftSaveJob?.cancel()
+        val session = mutableState.value.editor.takeIf { it.dirty } ?: return
+        draftSaveJob = viewModelScope.launch {
+            if (!immediate) delay(DRAFT_DEBOUNCE_MILLIS)
+            persistDraft(session)
+        }
+    }
+
+    private fun scheduleEditAutoSave() {
+        editAutoSaveJob?.cancel()
+        val session = mutableState.value.editor
+            .takeIf { it.dirty && it.error != TranscriptEditorError.STALE_TRANSCRIPT } ?: return
+        editAutoSaveJob = viewModelScope.launch {
+            delay(EDIT_AUTO_SAVE_DEBOUNCE_MILLIS)
+            if (mutableState.value.editor.editSessionId == session.editSessionId) {
+                commitEdit(closeAfterSave = false)
+            }
+        }
+    }
+
+    private suspend fun persistDraft(session: TranscriptEditorUiState) {
+        val historyId = session.historyId ?: return
+        val title = mutableState.value.items.firstOrNull { it.historyId == historyId }?.title.orEmpty()
+        try {
+            editRecovery?.save(TranscriptEditDraft(
+                recoveryId = "transcript-edit-$historyId",
+                editSessionId = session.editSessionId,
+                historyId = historyId,
+                historyTitle = title,
+                baseSegments = session.baseSegments,
+                draftSegments = session.draftSegments,
+            ))
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            mutableState.update {
+                it.copy(editor = it.editor.copy(error = TranscriptEditorError.SAVE_FAILED))
+            }
+        }
+    }
+
+    private suspend fun restoreDraft(historyId: String, current: List<TranscriptSegment>) {
+        val recovered = runCatching { editRecovery?.load(historyId) }.getOrNull() ?: return
+        if (recovered.baseSegments != current) return
+        undoStack.clear()
+        redoStack.clear()
+        mutableState.update { it.copy(editor = TranscriptEditorUiState(
+            historyId = historyId,
+            editSessionId = recovered.editSessionId,
+            baseSegments = recovered.baseSegments,
+            draftSegments = recovered.draftSegments,
+            editingSegmentId = recovered.draftSegments.firstOrNull()?.id,
+            dirty = recovered.draftSegments != recovered.baseSegments,
+            recoveredDraft = true,
+        )) }
     }
 
     fun trashSelected() = mutateSelection { library.trash(it, System.currentTimeMillis()) }
@@ -469,6 +811,7 @@ class LibraryViewModel(
      * provider and republishes the persisted transcript.
      */
     fun transcribeWithCloud(item: HistoryItem) {
+        if (mutableState.value.editor.dirty) return
         if (mutableState.value.cloudTranscription is CloudTranscriptionUiState.Running) {
             return
         }
@@ -526,6 +869,9 @@ class LibraryViewModel(
 
     companion object {
         internal const val PAGE_SIZE = 30
+        private const val MAX_UNDO = 100
+        private const val DRAFT_DEBOUNCE_MILLIS = 500L
+        internal const val EDIT_AUTO_SAVE_DEBOUNCE_MILLIS = 2_000L
 
         fun factory(
             library: HistoryWorkspacePort,
@@ -536,6 +882,10 @@ class LibraryViewModel(
             tags: TagWorkspacePort,
             exporter: TranscriptExportPort,
             files: FileTransferPort,
+            editor: TranscriptEditorPort? = null,
+            mediaSources: HistoryMediaSourcePort? = null,
+            playback: AudioPlaybackPort = IdleAudioPlaybackPort,
+            editRecovery: TranscriptEditRecoveryPort? = null,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -550,6 +900,10 @@ class LibraryViewModel(
                         tags,
                         exporter,
                         files,
+                        editor,
+                        mediaSources,
+                        playback,
+                        editRecovery,
                     ) as T
                 }
             }
@@ -561,12 +915,41 @@ class LibraryViewModel(
     }
 }
 
+enum class TranscriptEditorError { INVALID_EDIT, SAVE_FAILED, STALE_TRANSCRIPT }
+
+data class TranscriptEditorUiState(
+    val historyId: String? = null,
+    val editSessionId: String = "",
+    val baseSegments: List<TranscriptSegment> = emptyList(),
+    val draftSegments: List<TranscriptSegment> = emptyList(),
+    val editingSegmentId: String? = null,
+    val undoAvailable: Boolean = false,
+    val redoAvailable: Boolean = false,
+    val dirty: Boolean = false,
+    val saving: Boolean = false,
+    val recoveredDraft: Boolean = false,
+    val error: TranscriptEditorError? = null,
+) {
+    val active: Boolean get() = historyId != null
+}
+
 private object IdleAudioImportJobPort : AudioImportJobPort {
     override val state = flowOf<AudioImportJobState>(AudioImportJobState.Idle)
 
     override suspend fun enqueue(job: com.sona.android.application.recording.AudioImportJob) = Unit
 
     override suspend fun cancel(jobId: String) = Unit
+}
+
+private object IdleAudioPlaybackPort : AudioPlaybackPort {
+    override val state = MutableStateFlow(AudioPlaybackState())
+    override suspend fun prepare(historyId: String, nativePath: String) = Unit
+    override fun play() = Unit
+    override fun pause() = Unit
+    override fun seekTo(positionMillis: Long) = Unit
+    override fun seekBy(deltaMillis: Long) = Unit
+    override fun setSpeed(speed: Float) = Unit
+    override fun release() = Unit
 }
 
 /**

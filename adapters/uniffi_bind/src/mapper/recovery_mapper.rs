@@ -17,6 +17,7 @@ use std::fmt::{Display, Formatter};
 pub enum FfiRecoverySourceV1 {
     BatchImport,
     Automation,
+    TranscriptEdit,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
@@ -164,6 +165,7 @@ impl From<FfiRecoverySourceV1> for RecoverySource {
         match value {
             FfiRecoverySourceV1::BatchImport => Self::BatchImport,
             FfiRecoverySourceV1::Automation => Self::Automation,
+            FfiRecoverySourceV1::TranscriptEdit => Self::TranscriptEdit,
         }
     }
 }
@@ -173,6 +175,7 @@ impl From<RecoverySource> for FfiRecoverySourceV1 {
         match value {
             RecoverySource::BatchImport => Self::BatchImport,
             RecoverySource::Automation => Self::Automation,
+            RecoverySource::TranscriptEdit => Self::TranscriptEdit,
         }
     }
 }

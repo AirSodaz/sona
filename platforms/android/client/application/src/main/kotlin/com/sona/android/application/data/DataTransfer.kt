@@ -66,7 +66,7 @@ interface BackupPort {
     fun releaseApplicationContext(): Boolean
 }
 
-enum class DataTransferBlocker { LIVE_RECORDING, AUDIO_IMPORT, SYNC, RECOVERY }
+enum class DataTransferBlocker { LIVE_RECORDING, AUDIO_IMPORT, SYNC, RECOVERY, TRANSCRIPT_EDIT }
 
 interface FileTransferPort {
     suspend fun stageImport(sourceUri: String): String

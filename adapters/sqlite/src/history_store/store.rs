@@ -11,6 +11,7 @@ use serde_json::Value;
 use sona_core::dashboard::error::DashboardServiceError;
 use sona_core::history::item_factory::HistoryItemGeneratedValues;
 use sona_core::history::mutation_repository::{
+    HistoryCommitTranscriptEditRequest, HistoryCommitTranscriptEditResult,
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest, HistoryItemMetaPatch,
     HistoryMutationError, HistoryMutationRepository, HistoryPurgeItemsRequest,
     HistoryReplaceTagAssignmentsRequest, HistoryRestoreItemsRequest, HistoryTrashItemsRequest,
@@ -1363,6 +1364,7 @@ where
             TranscriptSnapshotReason::Translate => "translate",
             TranscriptSnapshotReason::Retranscribe => "retranscribe",
             TranscriptSnapshotReason::Restore => "restore",
+            TranscriptSnapshotReason::ManualEdit => "manual_edit",
         };
 
         let segments_str = serde_json::to_string(&parsed_segments)?;
@@ -1445,6 +1447,177 @@ where
         })?)
     }
 
+    fn commit_transcript_edit(
+        &self,
+        history_id: &str,
+        edit_session_id: &str,
+        base_segments: Vec<TranscriptSegment>,
+        edited_segments: Vec<TranscriptSegment>,
+    ) -> Result<HistoryCommitTranscriptEditResult, HistoryMutationError> {
+        validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
+        let base_segments = canonicalize_history_transcript_segments(base_segments).segments;
+        let edited_transcript = canonicalize_history_transcript_segments(edited_segments);
+        let now_ms = self.mutation_now_ms()?;
+        let snapshot_id = format!("manual-edit-{edit_session_id}");
+
+        Ok(self.get_db()?.with_rw_transaction(|tx| {
+            let current_segments = {
+                let mut statement = tx.prepare_cached(
+                    "SELECT t.segments
+                     FROM history_items i
+                     LEFT JOIN history_transcripts t ON i.id = t.history_id
+                     WHERE i.id = ?1",
+                )?;
+                let value =
+                    statement.query_row([history_id], |row| row.get::<_, Option<String>>(0));
+                match value {
+                    Ok(Some(value)) => {
+                        let parsed: Value = serde_json::from_str(&value)?;
+                        normalize_history_transcript_segments(parsed)
+                            .map_err(|error| DatabaseError::Internal(error.to_string()))?
+                            .segments
+                    }
+                    Ok(None) => Vec::new(),
+                    Err(rusqlite::Error::QueryReturnedNoRows) => {
+                        return Err(DatabaseError::NotFoundError(format!(
+                            "History item not found: {history_id}"
+                        )));
+                    }
+                    Err(error) => return Err(error.into()),
+                }
+            };
+
+            if current_segments != base_segments {
+                return Ok(HistoryCommitTranscriptEditResult::Conflict { current_segments });
+            }
+            if edited_transcript.segments == base_segments {
+                return Ok(HistoryCommitTranscriptEditResult::Unchanged);
+            }
+
+            let snapshot = {
+                let mut statement = tx.prepare_cached(
+                    "SELECT created_at, segment_count
+                     FROM transcript_snapshots
+                     WHERE history_id = ?1 AND id = ?2",
+                )?;
+                match statement.query_row(rusqlite::params![history_id, snapshot_id], |row| {
+                    Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
+                }) {
+                    Ok((created_at, segment_count)) => TranscriptSnapshotMetadata {
+                        id: snapshot_id.clone(),
+                        history_id: history_id.to_string(),
+                        reason: TranscriptSnapshotReason::ManualEdit,
+                        created_at: created_at.max(0) as u64,
+                        segment_count: segment_count.max(0) as u64,
+                    },
+                    Err(rusqlite::Error::QueryReturnedNoRows) => {
+                        let previous_ids = {
+                            let mut statement = tx.prepare_cached(
+                                "SELECT id FROM transcript_snapshots WHERE history_id = ?1 ORDER BY id",
+                            )?;
+                            statement
+                                .query_map([history_id], |row| row.get::<_, String>(0))?
+                                .collect::<Result<HashSet<_>, _>>()?
+                        };
+                        let metadata = TranscriptSnapshotMetadata {
+                            id: snapshot_id.clone(),
+                            history_id: history_id.to_string(),
+                            reason: TranscriptSnapshotReason::ManualEdit,
+                            created_at: now_ms,
+                            segment_count: base_segments.len() as u64,
+                        };
+                        tx.execute(
+                            "INSERT INTO transcript_snapshots
+                             (id, history_id, reason, created_at, segment_count, segments)
+                             VALUES (?1, ?2, 'manual_edit', ?3, ?4, ?5)",
+                            rusqlite::params![
+                                metadata.id,
+                                history_id,
+                                now_ms as i64,
+                                metadata.segment_count as i64,
+                                serde_json::to_string(&base_segments)?,
+                            ],
+                        )?;
+                        tx.execute(
+                            "DELETE FROM transcript_snapshots
+                             WHERE history_id = ?1 AND id NOT IN (
+                                 SELECT id FROM transcript_snapshots
+                                 WHERE history_id = ?1
+                                 ORDER BY created_at DESC, id DESC
+                                 LIMIT ?2
+                             )",
+                            rusqlite::params![history_id, TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT as i64],
+                        )?;
+                        let current_ids = {
+                            let mut statement = tx.prepare_cached(
+                                "SELECT id FROM transcript_snapshots WHERE history_id = ?1 ORDER BY id",
+                            )?;
+                            statement
+                                .query_map([history_id], |row| row.get::<_, String>(0))?
+                                .collect::<Result<HashSet<_>, _>>()?
+                        };
+                        for removed_id in previous_ids.difference(&current_ids) {
+                            record_local_delete_in_transaction(
+                                tx,
+                                SyncEntityKind::TranscriptSnapshot,
+                                &format!("{history_id}::{removed_id}"),
+                                now_ms,
+                            )?;
+                        }
+                        let snapshot_entity_id = format!("{history_id}::{snapshot_id}");
+                        for (field, value) in [
+                            ("document", serde_json::to_value(&base_segments)?),
+                            ("reason", serde_json::json!("manual_edit")),
+                            ("createdAt", serde_json::json!(now_ms)),
+                            ("segmentCount", serde_json::json!(metadata.segment_count)),
+                        ] {
+                            record_local_field_change_in_transaction(
+                                tx,
+                                SyncEntityKind::TranscriptSnapshot,
+                                &snapshot_entity_id,
+                                field,
+                                value,
+                                now_ms,
+                            )?;
+                        }
+                        metadata
+                    }
+                    Err(error) => return Err(error.into()),
+                }
+            };
+
+            let edited_segments_json = serde_json::to_string(&edited_transcript.segments)?;
+            tx.execute(
+                "UPDATE history_items SET preview_text = ?1, search_content = ?2 WHERE id = ?3",
+                rusqlite::params![
+                    edited_transcript.preview_text,
+                    edited_transcript.search_content,
+                    history_id,
+                ],
+            )?;
+            tx.execute(
+                "INSERT OR REPLACE INTO history_transcripts (history_id, segments) VALUES (?1, ?2)",
+                rusqlite::params![history_id, edited_segments_json],
+            )?;
+            let columns = history_select_columns(None, &[]);
+            let mut statement = tx.prepare_cached(&format!(
+                "SELECT {columns} FROM history_items WHERE id = ?1"
+            ))?;
+            let item = statement.query_row([history_id], map_row_to_item)?;
+            Self::record_history_item_sync(tx, &item, now_ms)?;
+            Self::record_transcript_sync(
+                tx,
+                history_id,
+                &serde_json::to_value(&edited_transcript.segments)?,
+                now_ms,
+            )?;
+            Ok(HistoryCommitTranscriptEditResult::Committed {
+                item: Box::new(item),
+                snapshot,
+            })
+        })?)
+    }
+
     fn list_transcript_snapshots(
         &self,
         history_id: &str,
@@ -1468,6 +1641,7 @@ where
                     "translate" => TranscriptSnapshotReason::Translate,
                     "retranscribe" => TranscriptSnapshotReason::Retranscribe,
                     "restore" => TranscriptSnapshotReason::Restore,
+                    "manual_edit" => TranscriptSnapshotReason::ManualEdit,
                     _ => TranscriptSnapshotReason::Polish,
                 };
 
@@ -1514,6 +1688,7 @@ where
                     "translate" => TranscriptSnapshotReason::Translate,
                     "retranscribe" => TranscriptSnapshotReason::Retranscribe,
                     "restore" => TranscriptSnapshotReason::Restore,
+                    "manual_edit" => TranscriptSnapshotReason::ManualEdit,
                     _ => TranscriptSnapshotReason::Polish,
                 };
 
@@ -1941,6 +2116,19 @@ where
             &request.history_id,
             request.reason,
             request.segments,
+        )
+    }
+
+    fn commit_transcript_edit(
+        &self,
+        request: HistoryCommitTranscriptEditRequest,
+    ) -> Result<HistoryCommitTranscriptEditResult, HistoryMutationError> {
+        SqliteHistoryStore::commit_transcript_edit(
+            self,
+            &request.history_id,
+            &request.edit_session_id,
+            request.base_segments,
+            request.edited_segments,
         )
     }
 

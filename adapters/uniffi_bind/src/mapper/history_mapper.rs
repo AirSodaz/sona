@@ -5,11 +5,13 @@ use crate::{
     FfiTranscriptTimingUnit,
 };
 use sona_core::history::mutation_repository::{
+    HistoryCommitTranscriptEditRequest, HistoryCommitTranscriptEditResult,
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
     HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryReplaceTagAssignmentsRequest,
     HistoryTrashItemsRequest, HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
     HistoryUpdateTranscriptRequest,
 };
+use sona_core::history::transcript_edit::TranscriptEditOperation;
 use sona_core::history::{
     HistoryAudioStatus, HistoryCreateLiveDraftRequest, HistoryDraftSource, HistoryItemKind,
     HistoryItemRecord, HistoryItemStatus, HistorySaveImportedFileRequest,
@@ -63,6 +65,7 @@ pub enum FfiTranscriptSnapshotReasonV1 {
     Translate,
     Retranscribe,
     Restore,
+    ManualEdit,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Enum)]
@@ -135,6 +138,53 @@ pub struct FfiHistoryCompleteLiveDraftRequestV1 {
 pub struct FfiHistoryUpdateTranscriptRequestV1 {
     pub history_id: String,
     pub segments: Vec<FfiTranscriptSegment>,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Enum)]
+pub enum FfiTranscriptEditOperationV1 {
+    UpdateText {
+        segment_id: String,
+        text: String,
+    },
+    UpdateTranslation {
+        segment_id: String,
+        translation: Option<String>,
+    },
+    Delete {
+        segment_id: String,
+    },
+    MergeNext {
+        segment_id: String,
+    },
+    Split {
+        segment_id: String,
+        new_segment_id: String,
+        left_text: String,
+        right_text: String,
+        left_translation: Option<String>,
+        right_translation: Option<String>,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Record)]
+pub struct FfiHistoryCommitTranscriptEditRequestV1 {
+    pub history_id: String,
+    pub edit_session_id: String,
+    pub base_segments: Vec<FfiTranscriptSegment>,
+    pub edited_segments: Vec<FfiTranscriptSegment>,
+}
+
+#[derive(Clone, Debug, PartialEq, uniffi::Enum)]
+#[allow(clippy::large_enum_variant)]
+pub enum FfiHistoryCommitTranscriptEditResultV1 {
+    Unchanged,
+    Committed {
+        item: FfiHistoryItemRecordV1,
+        snapshot: FfiTranscriptSnapshotMetadataV1,
+    },
+    Conflict {
+        current_segments: Vec<FfiTranscriptSegment>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
@@ -359,6 +409,70 @@ impl TryFrom<FfiHistoryUpdateTranscriptRequestV1> for HistoryUpdateTranscriptReq
             history_id: value.history_id,
             segments: history_transcript_segments_from_ffi(value.segments)?,
         })
+    }
+}
+
+impl TryFrom<FfiHistoryCommitTranscriptEditRequestV1> for HistoryCommitTranscriptEditRequest {
+    type Error = HistoryMapperError;
+
+    fn try_from(value: FfiHistoryCommitTranscriptEditRequestV1) -> Result<Self, Self::Error> {
+        Ok(Self {
+            history_id: value.history_id,
+            edit_session_id: value.edit_session_id,
+            base_segments: history_transcript_segments_from_ffi(value.base_segments)?,
+            edited_segments: history_transcript_segments_from_ffi(value.edited_segments)?,
+        })
+    }
+}
+
+impl From<FfiTranscriptEditOperationV1> for TranscriptEditOperation {
+    fn from(value: FfiTranscriptEditOperationV1) -> Self {
+        match value {
+            FfiTranscriptEditOperationV1::UpdateText { segment_id, text } => {
+                Self::UpdateText { segment_id, text }
+            }
+            FfiTranscriptEditOperationV1::UpdateTranslation {
+                segment_id,
+                translation,
+            } => Self::UpdateTranslation {
+                segment_id,
+                translation,
+            },
+            FfiTranscriptEditOperationV1::Delete { segment_id } => Self::Delete { segment_id },
+            FfiTranscriptEditOperationV1::MergeNext { segment_id } => {
+                Self::MergeNext { segment_id }
+            }
+            FfiTranscriptEditOperationV1::Split {
+                segment_id,
+                new_segment_id,
+                left_text,
+                right_text,
+                left_translation,
+                right_translation,
+            } => Self::Split {
+                segment_id,
+                new_segment_id,
+                left_text,
+                right_text,
+                left_translation,
+                right_translation,
+            },
+        }
+    }
+}
+
+impl From<HistoryCommitTranscriptEditResult> for FfiHistoryCommitTranscriptEditResultV1 {
+    fn from(value: HistoryCommitTranscriptEditResult) -> Self {
+        match value {
+            HistoryCommitTranscriptEditResult::Unchanged => Self::Unchanged,
+            HistoryCommitTranscriptEditResult::Committed { item, snapshot } => Self::Committed {
+                item: (*item).into(),
+                snapshot: snapshot.into(),
+            },
+            HistoryCommitTranscriptEditResult::Conflict { current_segments } => Self::Conflict {
+                current_segments: history_transcript_segments_to_ffi(current_segments),
+            },
+        }
     }
 }
 
@@ -638,6 +752,7 @@ impl From<FfiTranscriptSnapshotReasonV1> for TranscriptSnapshotReason {
             FfiTranscriptSnapshotReasonV1::Translate => Self::Translate,
             FfiTranscriptSnapshotReasonV1::Retranscribe => Self::Retranscribe,
             FfiTranscriptSnapshotReasonV1::Restore => Self::Restore,
+            FfiTranscriptSnapshotReasonV1::ManualEdit => Self::ManualEdit,
         }
     }
 }
@@ -649,6 +764,7 @@ impl From<TranscriptSnapshotReason> for FfiTranscriptSnapshotReasonV1 {
             TranscriptSnapshotReason::Translate => Self::Translate,
             TranscriptSnapshotReason::Retranscribe => Self::Retranscribe,
             TranscriptSnapshotReason::Restore => Self::Restore,
+            TranscriptSnapshotReason::ManualEdit => Self::ManualEdit,
         }
     }
 }

@@ -558,6 +558,13 @@ impl SonaContext {
         history_query_bridge::load_history_transcript_v1(self.source(), history_id).await
     }
 
+    pub async fn resolve_history_audio_source_v1(
+        &self,
+        history_id: String,
+    ) -> SonaCoreBindingResult<Option<String>> {
+        history_query_bridge::resolve_history_audio_source_v1(self.source(), history_id).await
+    }
+
     pub async fn list_history_transcript_snapshots_json(
         &self,
         history_id: String,
@@ -742,6 +749,13 @@ impl SonaContext {
         request: FfiHistoryCreateTranscriptSnapshotRequestV1,
     ) -> SonaCoreBindingResult<FfiTranscriptSnapshotMetadataV1> {
         history_mutation_bridge::create_history_transcript_snapshot_v1(self.source(), request).await
+    }
+
+    pub async fn commit_history_transcript_edit_v1(
+        &self,
+        request: FfiHistoryCommitTranscriptEditRequestV1,
+    ) -> SonaCoreBindingResult<FfiHistoryCommitTranscriptEditResultV1> {
+        history_mutation_bridge::commit_history_transcript_edit_v1(self.source(), request).await
     }
 
     pub async fn update_history_item_meta_json(

@@ -79,6 +79,30 @@ pub struct HistoryCreateTranscriptSnapshotRequest {
     pub segments: Vec<TranscriptSegment>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryCommitTranscriptEditRequest {
+    pub history_id: String,
+    pub edit_session_id: String,
+    pub base_segments: Vec<TranscriptSegment>,
+    pub edited_segments: Vec<TranscriptSegment>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum HistoryCommitTranscriptEditResult {
+    Unchanged,
+    Committed {
+        item: Box<HistoryItemRecord>,
+        snapshot: TranscriptSnapshotMetadata,
+    },
+    Conflict {
+        current_segments: Vec<TranscriptSegment>,
+    },
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -194,6 +218,15 @@ pub trait HistoryMutationRepository: Send + Sync {
         &self,
         request: HistoryCreateTranscriptSnapshotRequest,
     ) -> Result<TranscriptSnapshotMetadata, HistoryMutationError>;
+
+    fn commit_transcript_edit(
+        &self,
+        _request: HistoryCommitTranscriptEditRequest,
+    ) -> Result<HistoryCommitTranscriptEditResult, HistoryMutationError> {
+        Err(HistoryMutationError::Internal(
+            "Atomic transcript editing is unavailable.".to_string(),
+        ))
+    }
 
     fn update_item_meta(
         &self,

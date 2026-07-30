@@ -168,6 +168,11 @@ const RUST_OWNED_TAURI_COMMAND_CONTRACTS: &[TauriCommandContract] = &[
         "HistoryItemRecord",
     ),
     TauriCommandContract::new(
+        "history_commit_transcript_edit",
+        "HistoryCommitTranscriptEditRequest_Deserialize",
+        "HistoryCommitTranscriptEditResult_Serialize",
+    ),
+    TauriCommandContract::new(
         "history_create_transcript_snapshot",
         "HistoryCreateTranscriptSnapshotRequest_Deserialize",
         "TranscriptSnapshotMetadata",
@@ -271,7 +276,7 @@ mod tests {
     #[test]
     fn tauri_command_contract_registry_is_unique_and_complete_for_the_slice() {
         let contracts = rust_owned_tauri_command_contracts();
-        assert_eq!(contracts.len(), 54);
+        assert_eq!(contracts.len(), 55);
         let names = contracts
             .iter()
             .map(|contract| contract.command)
@@ -285,6 +290,7 @@ mod tests {
             "automation_load_repository_state",
             "replace_automation_runtime_rules",
             "history_list_items",
+            "history_commit_transcript_edit",
             "history_open_folder",
         ] {
             assert!(names.contains(expected), "missing {expected}");

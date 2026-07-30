@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::history::mutation_repository::{
+    HistoryCommitTranscriptEditRequest, HistoryCommitTranscriptEditResult,
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest, HistoryItemMetaPatch,
     HistoryMutationError, HistoryMutationRepository, HistoryPurgeItemsRequest,
     HistoryReplaceTagAssignmentsRequest, HistoryRestoreItemsRequest, HistoryTrashItemsRequest,
@@ -15,6 +16,7 @@ use crate::history::{
 };
 
 const MAX_HISTORY_ID_UTF16_UNITS: usize = 238;
+const MAX_EDIT_SESSION_ID_UTF16_UNITS: usize = 128;
 const MAX_MANAGED_FILE_NAME_UTF16_UNITS: usize = 255;
 
 pub struct HistoryMutationService {
@@ -148,6 +150,21 @@ impl HistoryMutationService {
         validate_history_id("history ID", &request.history_id)?;
         request.segments = canonical_transcript(request.segments)?;
         self.repository.create_transcript_snapshot(request)
+    }
+
+    pub fn commit_transcript_edit(
+        &self,
+        mut request: HistoryCommitTranscriptEditRequest,
+    ) -> Result<HistoryCommitTranscriptEditResult, HistoryMutationError> {
+        validate_history_id("history ID", &request.history_id)?;
+        validate_managed_file_name(
+            "edit session ID",
+            &request.edit_session_id,
+            MAX_EDIT_SESSION_ID_UTF16_UNITS,
+        )?;
+        request.base_segments = canonical_transcript(request.base_segments)?;
+        request.edited_segments = canonical_transcript(request.edited_segments)?;
+        self.repository.commit_transcript_edit(request)
     }
 
     pub fn update_item_meta(

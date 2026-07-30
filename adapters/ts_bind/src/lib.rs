@@ -45,6 +45,7 @@ pub use sona_core::export::{
     ExportFormat, ExportMode, ExportTranscriptFileRequest, ExportTranscriptFileResult,
 };
 pub use sona_core::history::mutation_repository::{
+    HistoryCommitTranscriptEditRequest, HistoryCommitTranscriptEditResult,
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
     HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryReplaceTagAssignmentsRequest,
     HistoryTrashItemsRequest, HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
@@ -681,6 +682,8 @@ pub fn desktop_types() -> specta::Types {
         .register::<HistorySaveImportedFileRequest>()
         .register::<HistoryDeleteItemsRequest>()
         .register::<HistoryUpdateTranscriptRequest>()
+        .register::<HistoryCommitTranscriptEditRequest>()
+        .register::<HistoryCommitTranscriptEditResult>()
         .register::<HistoryCreateTranscriptSnapshotRequest>()
         .register::<HistoryItemMetaPatch>()
         .register::<HistoryUpdateItemMetaRequest>()
@@ -924,6 +927,8 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "HistorySaveImportedFileRequest",
     "HistoryDeleteItemsRequest",
     "HistoryUpdateTranscriptRequest",
+    "HistoryCommitTranscriptEditRequest",
+    "HistoryCommitTranscriptEditResult",
     "HistoryCreateTranscriptSnapshotRequest",
     "HistoryItemMetaPatch",
     "HistoryUpdateItemMetaRequest",
@@ -1735,6 +1740,8 @@ mod tests {
         assert_specta_type::<HistorySaveImportedFileRequest>();
         assert_specta_type::<HistoryDeleteItemsRequest>();
         assert_specta_type::<HistoryUpdateTranscriptRequest>();
+        assert_specta_type::<HistoryCommitTranscriptEditRequest>();
+        assert_specta_type::<HistoryCommitTranscriptEditResult>();
         assert_specta_type::<HistoryCreateTranscriptSnapshotRequest>();
         assert_specta_type::<HistoryItemMetaPatch>();
         assert_specta_type::<HistoryUpdateItemMetaRequest>();

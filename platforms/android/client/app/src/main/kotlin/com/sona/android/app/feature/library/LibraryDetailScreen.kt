@@ -1,6 +1,7 @@
 package com.sona.android.app.feature.library
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.horizontalScroll
@@ -20,11 +21,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Replay
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.Replay5
+import androidx.compose.material.icons.rounded.Forward5
+import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material.icons.rounded.Undo
+import androidx.compose.material.icons.rounded.Redo
+import androidx.compose.material.icons.rounded.CallMerge
+import androidx.compose.material.icons.rounded.CallSplit
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,16 +50,24 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 import com.sona.android.application.data.TranscriptExportFormat
@@ -59,6 +79,12 @@ import com.sona.android.application.library.TranscriptSnapshot
 import com.sona.android.application.library.TranscriptSnapshotDetail
 import com.sona.android.application.recording.CloudTranscriptionFailure
 import com.sona.android.application.recording.TranscriptSegment
+import com.sona.android.application.media.AudioPlaybackState
+import com.sona.android.application.media.AudioPlaybackStatus
+import java.util.Locale
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 @Composable
 internal fun LibraryDetailScreen(
@@ -80,6 +106,28 @@ internal fun LibraryDetailScreen(
     onLoadSnapshot: (String) -> Unit,
     onCloseSnapshot: () -> Unit,
     onExportTranscript: (String, TranscriptExportFormat, TranscriptExportMode) -> Unit,
+    playback: AudioPlaybackState,
+    editor: TranscriptEditorUiState,
+    exitRequestToken: Int,
+    onNavigateBack: () -> Unit,
+    onTogglePlayback: () -> Unit,
+    onSeekPlayback: (Long) -> Unit,
+    onSkipPlayback: (Long) -> Unit,
+    onSetPlaybackSpeed: (Float) -> Unit,
+    onPausePlayback: () -> Unit,
+    onReleasePlayback: () -> Unit,
+    onStartEditing: (String?) -> Unit,
+    onEditSegment: (String?) -> Unit,
+    onUpdateText: (String, String) -> Unit,
+    onUpdateTranslation: (String, String) -> Unit,
+    onDeleteSegment: (String) -> Unit,
+    onMergeSegment: (String) -> Unit,
+    onSplitSegment: (String, String, String, String?, String?) -> Unit,
+    onUndoEdit: () -> Unit,
+    onRedoEdit: () -> Unit,
+    onSaveEdit: () -> Unit,
+    onDiscardEdit: () -> Unit,
+    onFlushEdit: () -> Unit,
 ) {
     val resolvedDetail = detail.forHistory(historyId)
     val fallbackTitle = stringResource(R.string.library_detail_heading)
@@ -91,6 +139,60 @@ internal fun LibraryDetailScreen(
     var exportFormat by remember { mutableStateOf(TranscriptExportFormat.TXT) }
     var exportMode by remember { mutableStateOf(TranscriptExportMode.ORIGINAL) }
     var pendingExport by remember { mutableStateOf<Pair<TranscriptExportFormat, TranscriptExportMode>?>(null) }
+    var exitPending by remember { mutableStateOf(false) }
+    val requestExit = {
+        if (editor.dirty) exitPending = true else onNavigateBack()
+    }
+    BackHandler(onBack = requestExit)
+    LaunchedEffect(exitRequestToken) {
+        if (exitRequestToken > 0) requestExit()
+    }
+    LaunchedEffect(editor.active, exitPending) {
+        if (exitPending && !editor.active) {
+            exitPending = false
+            onNavigateBack()
+        }
+    }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                onPausePlayback()
+                onFlushEdit()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            onReleasePlayback()
+            onFlushEdit()
+        }
+    }
+
+    if (exitPending) {
+        AlertDialog(
+            onDismissRequest = { exitPending = false },
+            title = { Text(stringResource(R.string.transcript_unsaved_title)) },
+            text = { Text(stringResource(R.string.transcript_unsaved_body)) },
+            confirmButton = {
+                TextButton(enabled = !editor.saving, onClick = onSaveEdit) {
+                    Text(stringResource(R.string.action_save))
+                }
+            },
+            dismissButton = {
+                androidx.compose.foundation.layout.Row {
+                    TextButton(onClick = {
+                        onDiscardEdit()
+                        exitPending = false
+                        onNavigateBack()
+                    }) { Text(stringResource(R.string.action_discard)) }
+                    TextButton(onClick = { exitPending = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            },
+        )
+    }
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("*/*"),
     ) { uri ->
@@ -224,6 +326,17 @@ internal fun LibraryDetailScreen(
             Spacer(Modifier.height(6.dp))
             item?.let { LibraryItemMetadata(it) }
 
+            if (playback.historyId == historyId) {
+                Spacer(Modifier.height(12.dp))
+                TranscriptAudioPlayer(
+                    state = playback,
+                    onToggle = onTogglePlayback,
+                    onSeek = onSeekPlayback,
+                    onSkip = onSkipPlayback,
+                    onSetSpeed = onSetPlaybackSpeed,
+                )
+            }
+
             if (item != null) {
                 Spacer(Modifier.height(12.dp))
                 Text(
@@ -290,6 +403,18 @@ internal fun LibraryDetailScreen(
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (resolvedDetail is LibraryDetailUiState.Ready && item != null) {
+                Spacer(Modifier.height(8.dp))
+                TranscriptEditToolbar(
+                    editor = editor,
+                    editable = item.status == HistoryItemStatus.COMPLETE && item.deletedAtEpochMillis == null,
+                    onStart = { onStartEditing(null) },
+                    onUndo = onUndoEdit,
+                    onRedo = onRedoEdit,
+                    onSave = onSaveEdit,
+                    onDiscard = onDiscardEdit,
+                )
+            }
             if (item != null) {
                 Spacer(Modifier.height(8.dp))
                 Column(
@@ -298,7 +423,7 @@ internal fun LibraryDetailScreen(
                 ) {
                     FilledTonalButton(
                         onClick = { onTranscribeWithCurrentEngine(item) },
-                        enabled = item.audioAvailable,
+                        enabled = item.audioAvailable && !editor.dirty,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Icon(
@@ -312,6 +437,7 @@ internal fun LibraryDetailScreen(
                     CloudTranscriptionAction(
                         item = item,
                         cloudTranscription = cloudTranscription,
+                        enabled = !editor.dirty,
                         onTranscribeWithCloud = onTranscribeWithCloud,
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -350,7 +476,16 @@ internal fun LibraryDetailScreen(
                     modifier = Modifier.weight(1f),
                 )
                 is LibraryDetailUiState.Ready -> TranscriptDetail(
-                    segments = resolvedDetail.segments,
+                    segments = if (editor.historyId == historyId) editor.draftSegments else resolvedDetail.segments,
+                    editor = editor.takeIf { it.historyId == historyId },
+                    playbackPositionMillis = playback.takeIf { it.historyId == historyId }?.positionMillis,
+                    onSeek = onSeekPlayback,
+                    onEditSegment = onEditSegment,
+                    onUpdateText = onUpdateText,
+                    onUpdateTranslation = onUpdateTranslation,
+                    onDeleteSegment = onDeleteSegment,
+                    onMergeSegment = onMergeSegment,
+                    onSplitSegment = onSplitSegment,
                     modifier = Modifier.weight(1f),
                 )
                 LibraryDetailUiState.None -> Unit
@@ -437,11 +572,12 @@ private fun CloudTranscriptionAction(
     cloudTranscription: CloudTranscriptionUiState,
     onTranscribeWithCloud: (HistoryItem) -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     val running = cloudTranscription is CloudTranscriptionUiState.Running
     FilledTonalButton(
         onClick = { onTranscribeWithCloud(item) },
-        enabled = item.audioAvailable && !running,
+        enabled = item.audioAvailable && !running && enabled,
         modifier = modifier,
     ) {
         if (running) {
@@ -547,9 +683,138 @@ private fun LibraryDetailUiState.forHistory(historyId: String): LibraryDetailUiS
 }
 
 @Composable
+private fun TranscriptAudioPlayer(
+    state: AudioPlaybackState,
+    onToggle: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onSkip: (Long) -> Unit,
+    onSetSpeed: (Float) -> Unit,
+) {
+    val duration = state.durationMillis.coerceAtLeast(0L)
+    val position = state.positionMillis.coerceIn(0L, duration.coerceAtLeast(1L))
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Slider(
+            value = position.toFloat(),
+            onValueChange = { onSeek(it.toLong()) },
+            valueRange = 0f..duration.coerceAtLeast(1L).toFloat(),
+            enabled = duration > 0 && state.status !is AudioPlaybackStatus.Failed,
+            modifier = Modifier.semantics {
+                contentDescription = "Playback position ${formatMediaTime(position)} of ${formatMediaTime(duration)}"
+            },
+        )
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text("${formatMediaTime(position)} / ${formatMediaTime(duration)}", style = MaterialTheme.typography.labelMedium)
+            androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { onSkip(-5_000) }) {
+                    Icon(Icons.Rounded.Replay5, stringResource(R.string.playback_back_five))
+                }
+                IconButton(onClick = onToggle, enabled = state.status !is AudioPlaybackStatus.Failed) {
+                    Icon(
+                        if (state.status == AudioPlaybackStatus.Playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        stringResource(if (state.status == AudioPlaybackStatus.Playing) R.string.playback_pause else R.string.playback_play),
+                    )
+                }
+                IconButton(onClick = { onSkip(5_000) }) {
+                    Icon(Icons.Rounded.Forward5, stringResource(R.string.playback_forward_five))
+                }
+            }
+        }
+        androidx.compose.foundation.layout.Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            listOf(0.5f, 0.8f, 1f, 1.25f, 1.5f, 2f, 3f).forEach { speed ->
+                FilterChip(
+                    selected = state.speed == speed,
+                    onClick = { onSetSpeed(speed) },
+                    label = { Text("${speed}x") },
+                )
+            }
+        }
+        (state.status as? AudioPlaybackStatus.Failed)?.let {
+            Text(stringResource(R.string.playback_failed), color = MaterialTheme.colorScheme.error)
+        }
+    }
+}
+
+@Composable
+private fun TranscriptEditToolbar(
+    editor: TranscriptEditorUiState,
+    editable: Boolean,
+    onStart: () -> Unit,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+    onSave: () -> Unit,
+    onDiscard: () -> Unit,
+) {
+    if (!editor.active) {
+        FilledTonalButton(onClick = onStart, enabled = editable, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Rounded.Edit, null)
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.transcript_edit))
+        }
+        return
+    }
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            stringResource(when {
+                editor.saving -> R.string.transcript_auto_save_saving
+                editor.dirty -> R.string.transcript_auto_save_unsaved
+                else -> R.string.transcript_auto_save_saved
+            }),
+            style = MaterialTheme.typography.labelMedium,
+        )
+        androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onUndo, enabled = editor.undoAvailable && !editor.saving) {
+                Icon(Icons.Rounded.Undo, stringResource(R.string.action_undo))
+            }
+            IconButton(onClick = onRedo, enabled = editor.redoAvailable && !editor.saving) {
+                Icon(Icons.Rounded.Redo, stringResource(R.string.action_redo))
+            }
+            TextButton(onClick = onDiscard, enabled = !editor.saving) {
+                Text(stringResource(if (editor.dirty) R.string.action_discard else R.string.action_done))
+            }
+            FilledTonalButton(onClick = onSave, enabled = editor.dirty && !editor.saving) {
+                Icon(Icons.Rounded.Save, null)
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.action_save))
+            }
+        }
+    }
+    editor.error?.let { error ->
+        Text(
+            stringResource(when (error) {
+                TranscriptEditorError.INVALID_EDIT -> R.string.transcript_edit_invalid
+                TranscriptEditorError.SAVE_FAILED -> R.string.transcript_edit_save_failed
+                TranscriptEditorError.STALE_TRANSCRIPT -> R.string.transcript_edit_conflict
+            }),
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+@Composable
 private fun TranscriptDetail(
     segments: List<TranscriptSegment>,
     modifier: Modifier = Modifier,
+    editor: TranscriptEditorUiState? = null,
+    playbackPositionMillis: Long? = null,
+    onSeek: (Long) -> Unit = {},
+    onEditSegment: (String?) -> Unit = {},
+    onUpdateText: (String, String) -> Unit = { _, _ -> },
+    onUpdateTranslation: (String, String) -> Unit = { _, _ -> },
+    onDeleteSegment: (String) -> Unit = {},
+    onMergeSegment: (String) -> Unit = {},
+    onSplitSegment: (String, String, String, String?, String?) -> Unit = { _, _, _, _, _ -> },
 ) {
     if (segments.isEmpty()) {
         Box(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -561,17 +826,38 @@ private fun TranscriptDetail(
         }
         return
     }
+    val listState = rememberLazyListState()
+    val activeIndex = playbackPositionMillis?.let { position ->
+        segments.indexOfFirst { segment ->
+            position >= (segment.startSeconds * 1_000).toLong() &&
+                position < (segment.endSeconds * 1_000).toLong()
+        }.takeIf { it >= 0 }
+    }
+    LaunchedEffect(activeIndex, editor?.active) {
+        if (activeIndex != null && editor?.active != true) listState.animateScrollToItem(activeIndex)
+    }
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(vertical = 8.dp)
     ) {
         items(segments, key = TranscriptSegment::id) { segment ->
+            val active = playbackPositionMillis?.let { position ->
+                position >= (segment.startSeconds * 1_000).toLong() &&
+                    position < (segment.endSeconds * 1_000).toLong()
+            } == true
+            val editing = editor?.editingSegmentId == segment.id
             Card(
                 shape = MaterialTheme.shapes.medium,
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    containerColor = if (active) MaterialTheme.colorScheme.secondaryContainer
+                    else MaterialTheme.colorScheme.surfaceContainerHigh,
                 ),
+                onClick = {
+                    if (editor?.active == true) onEditSegment(segment.id)
+                    else onSeek((segment.startSeconds * 1_000).toLong())
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -595,14 +881,149 @@ private fun TranscriptDetail(
                         }
                     }
                     Text(
-                        text = segment.text,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        text = formatMediaTime((segment.startSeconds * 1_000).toLong()),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
                     )
+                    if (editing) {
+                        TranscriptSegmentEditor(
+                            segment = segment,
+                            hasNext = segments.lastOrNull()?.id != segment.id,
+                            onUpdateText = { onUpdateText(segment.id, it) },
+                            onUpdateTranslation = { onUpdateTranslation(segment.id, it) },
+                            onDelete = { onDeleteSegment(segment.id) },
+                            onMerge = { onMergeSegment(segment.id) },
+                            onSplit = { left, right, leftTranslation, rightTranslation ->
+                                onSplitSegment(segment.id, left, right, leftTranslation, rightTranslation)
+                            },
+                        )
+                    } else {
+                        Text(
+                            text = highlightedSegmentText(
+                                segment,
+                                playbackPositionMillis,
+                                MaterialTheme.colorScheme.primaryContainer,
+                            ),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        segment.translation?.takeIf(String::isNotBlank)?.let { translation ->
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = translation,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun TranscriptSegmentEditor(
+    segment: TranscriptSegment,
+    hasNext: Boolean,
+    onUpdateText: (String) -> Unit,
+    onUpdateTranslation: (String) -> Unit,
+    onDelete: () -> Unit,
+    onMerge: () -> Unit,
+    onSplit: (String, String, String?, String?) -> Unit,
+) {
+    var textValue by remember(segment.id) { mutableStateOf(TextFieldValue(segment.text)) }
+    var translationValue by remember(segment.id) { mutableStateOf(TextFieldValue(segment.translation.orEmpty())) }
+    var splitVisible by remember(segment.id) { mutableStateOf(false) }
+    if (splitVisible) {
+        val splitIndex = textValue.selection.start.coerceIn(1, (textValue.text.length - 1).coerceAtLeast(1))
+        val leftText = textValue.text.substring(0, splitIndex).trim()
+        val rightText = textValue.text.substring(splitIndex).trim()
+        val translationParts = splitTranslation(translationValue.text, splitIndex, textValue.text.length)
+        var leftTranslation by remember(splitIndex, translationValue.text) { mutableStateOf(translationParts.first) }
+        var rightTranslation by remember(splitIndex, translationValue.text) { mutableStateOf(translationParts.second) }
+        AlertDialog(
+            onDismissRequest = { splitVisible = false },
+            title = { Text(stringResource(R.string.transcript_split)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(leftText, {}, readOnly = true, label = { Text(stringResource(R.string.transcript_left_original)) })
+                    OutlinedTextField(rightText, {}, readOnly = true, label = { Text(stringResource(R.string.transcript_right_original)) })
+                    if (segment.translation != null) {
+                        OutlinedTextField(leftTranslation, { leftTranslation = it }, label = { Text(stringResource(R.string.transcript_left_translation)) })
+                        OutlinedTextField(rightTranslation, { rightTranslation = it }, label = { Text(stringResource(R.string.transcript_right_translation)) })
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = leftText.isNotBlank() && rightText.isNotBlank() &&
+                        (segment.translation == null || (leftTranslation.isNotBlank() && rightTranslation.isNotBlank())),
+                    onClick = {
+                        onSplit(leftText, rightText, leftTranslation.takeIf { segment.translation != null }, rightTranslation.takeIf { segment.translation != null })
+                        splitVisible = false
+                    },
+                ) { Text(stringResource(R.string.transcript_split)) }
+            },
+            dismissButton = { TextButton(onClick = { splitVisible = false }) { Text(stringResource(R.string.action_cancel)) } },
+        )
+    }
+    OutlinedTextField(
+        value = textValue,
+        onValueChange = { textValue = it; onUpdateText(it.text) },
+        label = { Text(stringResource(R.string.transcript_original)) },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Spacer(Modifier.height(8.dp))
+    OutlinedTextField(
+        value = translationValue,
+        onValueChange = { translationValue = it; onUpdateTranslation(it.text) },
+        label = { Text(stringResource(R.string.transcript_translation)) },
+        modifier = Modifier.fillMaxWidth(),
+    )
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End,
+    ) {
+        IconButton(onClick = { splitVisible = true }, enabled = textValue.selection.start in 1 until textValue.text.length) {
+            Icon(Icons.Rounded.CallSplit, stringResource(R.string.transcript_split))
+        }
+        IconButton(onClick = onMerge, enabled = hasNext) {
+            Icon(Icons.Rounded.CallMerge, stringResource(R.string.transcript_merge_next))
+        }
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Rounded.Delete, stringResource(R.string.action_delete))
+        }
+    }
+}
+
+private fun splitTranslation(value: String, sourceIndex: Int, sourceLength: Int): Pair<String, String> {
+    if (value.isBlank()) return "" to ""
+    val target = ((sourceIndex.toDouble() / sourceLength.coerceAtLeast(1)) * value.length).toInt()
+    val boundaries = value.indices.filter { index -> value[index].isWhitespace() }
+    val boundary = boundaries.minByOrNull { kotlin.math.abs(it - target) } ?: target
+    return value.substring(0, boundary).trim() to value.substring(boundary).trim()
+}
+
+private fun highlightedSegmentText(
+    segment: TranscriptSegment,
+    playbackPositionMillis: Long?,
+    highlightColor: androidx.compose.ui.graphics.Color,
+) = buildAnnotatedString {
+    append(segment.text)
+    val positionSeconds = playbackPositionMillis?.div(1_000.0) ?: return@buildAnnotatedString
+    val unit = segment.timing?.units?.firstOrNull {
+        positionSeconds >= it.startSeconds && positionSeconds < it.endSeconds
+    } ?: return@buildAnnotatedString
+    val start = segment.text.indexOf(unit.text).takeIf { it >= 0 } ?: return@buildAnnotatedString
+    addStyle(SpanStyle(background = highlightColor), start, (start + unit.text.length).coerceAtMost(segment.text.length))
+}
+
+private fun formatMediaTime(millis: Long): String {
+    val totalSeconds = millis.coerceAtLeast(0L) / 1_000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "%d:%02d".format(Locale.US, minutes, seconds)
 }
 
 @Composable

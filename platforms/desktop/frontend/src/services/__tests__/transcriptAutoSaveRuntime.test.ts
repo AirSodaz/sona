@@ -8,6 +8,7 @@ vi.mock('../historyService', () => ({
     deleteRecording: vi.fn(),
     deleteRecordings: vi.fn(),
     updateTranscript: vi.fn(),
+    commitTranscriptEdit: vi.fn(),
     updateItemMeta: vi.fn(),
     updateProjectAssignments: vi.fn(),
     updateProjectAssignmentsByCurrentProject: vi.fn(),
@@ -24,19 +25,7 @@ describe('transcriptAutoSaveRuntime', () => {
     resetTranscriptStores();
     vi.clearAllMocks();
     vi.useFakeTimers();
-    vi.mocked(historyService.updateTranscript).mockResolvedValue({
-      id: 'history-1',
-      timestamp: 1,
-      duration: 1,
-      audioPath: 'history-1.wav',
-      transcriptPath: 'history-1.json',
-      title: 'History 1',
-      previewText: 'Hello...',
-      type: 'recording',
-      searchContent: 'Hello',
-      projectId: null,
-      status: 'complete',
-    });
+    vi.mocked(historyService.commitTranscriptEdit).mockResolvedValue({ status: 'unchanged' });
   });
 
   afterEach(() => {
@@ -67,8 +56,10 @@ describe('transcriptAutoSaveRuntime', () => {
 
     await vi.advanceTimersByTimeAsync(2100);
 
-    expect(historyService.updateTranscript).toHaveBeenCalledWith(
+    expect(historyService.commitTranscriptEdit).toHaveBeenCalledWith(
       'history-1',
+      expect.any(String),
+      expect.any(Array),
       [
         expect.objectContaining({
           id: 'seg-1',
@@ -76,5 +67,33 @@ describe('transcriptAutoSaveRuntime', () => {
         }),
       ],
     );
+  });
+
+  it('serializes slow saves and commits the latest edit with the advanced baseline', async () => {
+    let resolveFirst: (value: { status: 'unchanged' }) => void = () => {
+      throw new Error('first save was not started');
+    };
+    vi.mocked(historyService.commitTranscriptEdit)
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockResolvedValue({ status: 'unchanged' });
+    openTranscriptSession({
+      sourceHistoryId: 'history-1',
+      segments: [{ id: 'seg-1', text: 'Original', start: 0, end: 1, isFinal: true }],
+    });
+    transcriptAutoSaveRuntime.start();
+
+    updateTranscriptSegment('seg-1', { text: 'First' });
+    await vi.advanceTimersByTimeAsync(2000);
+    updateTranscriptSegment('seg-1', { text: 'Second' });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(historyService.commitTranscriptEdit).toHaveBeenCalledTimes(1);
+
+    resolveFirst({ status: 'unchanged' });
+    await vi.waitFor(() => expect(historyService.commitTranscriptEdit).toHaveBeenCalledTimes(2));
+
+    const secondCall = vi.mocked(historyService.commitTranscriptEdit).mock.calls[1];
+    expect(secondCall[2][0].text).toBe('First');
+    expect(secondCall[3][0].text).toBe('Second');
+    expect(secondCall[1]).toBe(vi.mocked(historyService.commitTranscriptEdit).mock.calls[0][1]);
   });
 });

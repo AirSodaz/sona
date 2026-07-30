@@ -9,6 +9,7 @@ use sona_core::history::query_repository::HistoryQueryError;
 use sona_core::history::query_service::HistoryQueryService;
 use sona_core::history::workspace_query::validate_workspace_query_request;
 use sona_core::history::{HistoryListOptions, HistoryWorkspaceQueryRequest};
+use sona_core::history_store::HistoryStore;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -93,6 +94,24 @@ pub(crate) async fn load_history_transcript_v1(
     run_blocking(move || {
         with_typed_service(context, |service| service.load_transcript(&history_id))
             .map(history_transcript_to_ffi)
+    })
+    .await
+}
+
+pub(crate) async fn resolve_history_audio_source_v1(
+    context: impl Into<ContextSource>,
+    history_id: String,
+) -> SonaCoreBindingResult<Option<String>> {
+    validate_nonblank_input("history ID", &history_id)?;
+    let context = context.into();
+    run_blocking(move || {
+        let app_data_dir = context.app_data_dir().map_err(history_query_error)?;
+        ensure_existing_directory(&app_data_dir)?;
+        let context = context.resolve().map_err(history_query_error)?;
+        context
+            .history_store()
+            .resolve_audio_path(&history_id)
+            .map_err(history_typed_query_error)
     })
     .await
 }

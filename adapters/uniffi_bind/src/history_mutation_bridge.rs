@@ -1,24 +1,28 @@
 use crate::application_context::ContextSource;
+use crate::mapper::{history_transcript_segments_from_ffi, history_transcript_segments_to_ffi};
 use crate::{
+    FfiHistoryCommitTranscriptEditRequestV1, FfiHistoryCommitTranscriptEditResultV1,
     FfiHistoryCompleteLiveDraftRequestV1, FfiHistoryCreateLiveDraftRequestV1,
     FfiHistoryCreateTranscriptSnapshotRequestV1, FfiHistoryDeleteItemsRequestV1,
     FfiHistoryItemRecordV1, FfiHistoryReplaceTagAssignmentsRequestV1,
     FfiHistorySaveImportedFileRequestV1, FfiHistorySaveRecordingRequestV1,
     FfiHistoryTrashItemsRequestV1, FfiHistoryUpdateItemMetaRequestV1,
     FfiHistoryUpdateTagAssignmentsRequestV1, FfiHistoryUpdateTranscriptRequestV1,
-    FfiLiveRecordingDraftResultV1, FfiTranscriptSnapshotMetadataV1, SonaCoreBindingError,
-    SonaCoreBindingResult,
+    FfiLiveRecordingDraftResultV1, FfiTranscriptEditOperationV1, FfiTranscriptSegment,
+    FfiTranscriptSnapshotMetadataV1, SonaCoreBindingError, SonaCoreBindingResult,
 };
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use sona_core::history::mutation_repository::{
-    HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
-    HistoryDeleteItemsRequest, HistoryMutationError, HistoryReplaceTagAssignmentsRequest,
-    HistoryTrashItemsRequest, HistoryUpdateTagAssignmentsRequest, HistoryUpdateTranscriptRequest,
+    HistoryCommitTranscriptEditRequest, HistoryCompleteLiveDraftRequest,
+    HistoryCreateTranscriptSnapshotRequest, HistoryDeleteItemsRequest, HistoryMutationError,
+    HistoryReplaceTagAssignmentsRequest, HistoryTrashItemsRequest,
+    HistoryUpdateTagAssignmentsRequest, HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::mutation_service::HistoryMutationService;
 use sona_core::history::query_service::HistoryQueryService;
+use sona_core::history::transcript_edit::apply_transcript_edit;
 use sona_core::history::transcript_payload::normalize_history_transcript_segments;
 use sona_core::history::{
     HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceDateFilter,
@@ -303,6 +307,29 @@ pub(crate) async fn create_history_transcript_snapshot_v1(
     let request = request.try_into().map_err(history_input_error)?;
     run_typed_mutation(context, move |service| {
         service.create_transcript_snapshot(request)
+    })
+    .await
+    .map(Into::into)
+}
+
+pub(crate) fn apply_transcript_edit_v1(
+    segments: Vec<FfiTranscriptSegment>,
+    operation: FfiTranscriptEditOperationV1,
+) -> SonaCoreBindingResult<Vec<FfiTranscriptSegment>> {
+    let segments = history_transcript_segments_from_ffi(segments).map_err(history_input_error)?;
+    apply_transcript_edit(segments, operation.into())
+        .map(history_transcript_segments_to_ffi)
+        .map_err(history_typed_mutation_error)
+}
+
+pub(crate) async fn commit_history_transcript_edit_v1(
+    context: impl Into<ContextSource>,
+    request: FfiHistoryCommitTranscriptEditRequestV1,
+) -> SonaCoreBindingResult<FfiHistoryCommitTranscriptEditResultV1> {
+    let request: HistoryCommitTranscriptEditRequest =
+        request.try_into().map_err(history_input_error)?;
+    run_typed_mutation(context, move |service| {
+        service.commit_transcript_edit(request)
     })
     .await
     .map(Into::into)

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { HistoryItem } from '../types/history';
-import { historyService } from '../services/historyService';
+import { historyService, type TranscriptEditCommitResult } from '../services/historyService';
 import { TranscriptSegment } from '../types/transcript';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
@@ -28,6 +28,12 @@ interface HistoryState {
      * @return A promise that resolves when the update is complete.
      */
     updateTranscript: (id: string, segments: TranscriptSegment[]) => Promise<void>;
+    commitTranscriptEdit: (
+        id: string,
+        editSessionId: string,
+        baseSegments: TranscriptSegment[],
+        editedSegments: TranscriptSegment[],
+    ) => Promise<TranscriptEditCommitResult>;
     /**
      * Updates metadata fields for a specific history item in the in-memory list and on disk.
      *
@@ -141,6 +147,30 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
             const errorMessage = extractErrorMessage(error);
             logger.error('Failed to update history transcript:', error);
             set({ error: errorMessage || 'Failed to update history transcript' });
+            throw error;
+        }
+    },
+
+    commitTranscriptEdit: async (id, editSessionId, baseSegments, editedSegments) => {
+        try {
+            const result = await historyService.commitTranscriptEdit(
+                id,
+                editSessionId,
+                baseSegments,
+                editedSegments,
+            );
+            if (result.status === 'committed') {
+                set((state) => ({
+                    items: state.items.map((item) => (
+                        item.id === id ? { ...item, ...result.item } : item
+                    )),
+                }));
+            }
+            return result;
+        } catch (error) {
+            const errorMessage = extractErrorMessage(error);
+            logger.error('Failed to commit history transcript edit:', error);
+            set({ error: errorMessage || 'Failed to commit history transcript edit' });
             throw error;
         }
     },

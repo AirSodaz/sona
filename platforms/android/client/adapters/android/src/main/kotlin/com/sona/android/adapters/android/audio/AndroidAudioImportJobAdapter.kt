@@ -36,11 +36,9 @@ import com.sona.android.application.recording.AudioImportTarget
 import com.sona.android.application.recording.OnlineAsrProvider
 import com.sona.android.application.recording.RunAudioImport
 import com.sona.android.application.recording.RunAudioImportOutcome
-import com.sona.android.application.recovery.RecoveryItem
 import com.sona.android.application.recovery.RecoveryItemInput
-import com.sona.android.application.recovery.RecoveryPort
-import com.sona.android.application.recovery.RecoveryResolution
 import com.sona.android.application.recovery.RecoveryStage
+import com.sona.android.adapters.android.recovery.RecoveryCoordinator
 import com.sona.android.adapters.android.data.isFileWithinRoot
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -49,8 +47,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -62,10 +58,10 @@ import kotlinx.serialization.json.put
 class AndroidAudioImportJobAdapter private constructor(
     private val context: Context,
     private val workManager: Lazy<WorkManager>,
-    private val recovery: RecoveryPort,
+    private val recovery: RecoveryCoordinator,
 ) : AudioImportJobPort {
     companion object {
-        fun create(context: Context, recovery: RecoveryPort): AndroidAudioImportJobAdapter = AndroidAudioImportJobAdapter(
+        fun create(context: Context, recovery: RecoveryCoordinator): AndroidAudioImportJobAdapter = AndroidAudioImportJobAdapter(
             context = context.applicationContext,
             workManager = lazy { WorkManager.getInstance(context.applicationContext) },
             recovery = recovery,
@@ -102,7 +98,7 @@ class AndroidAudioImportJobAdapter private constructor(
             }
             is AudioImportTarget.ExistingRecording -> target.displayName
         }
-        recovery.upsert(persistedJob, displayName, RecoveryStage.QUEUED, 0.0)
+        recovery.upsert(persistedJob.toRecoveryInput(displayName, RecoveryStage.QUEUED, 0.0))
         val constraints = Constraints.Builder().apply {
             if (persistedJob.engine is AudioImportEngine.Online) {
                 setRequiredNetworkType(NetworkType.CONNECTED)
@@ -124,7 +120,7 @@ class AndroidAudioImportJobAdapter private constructor(
 
     override suspend fun cancel(jobId: String) {
         workManager.value.cancelAllWorkByTag(jobId)
-        recovery.resolve(jobId, context)
+        recovery.resolve(jobId).item?.filePath?.let { deleteRecoverySource(context, it) }
     }
 
     private fun displayName(uri: Uri): String? = context.contentResolver.query(
@@ -169,7 +165,7 @@ class AndroidAudioImportJobAdapter private constructor(
 
 class AudioImportWorkerFactory(
     private val runAudioImport: RunAudioImport,
-    private val recovery: RecoveryPort,
+    private val recovery: RecoveryCoordinator,
 ) : WorkerFactory() {
     override fun createWorker(
         appContext: Context,
@@ -186,7 +182,7 @@ class AudioImportWorker internal constructor(
     appContext: Context,
     params: WorkerParameters,
     private val runAudioImport: RunAudioImport,
-    private val recovery: RecoveryPort,
+    private val recovery: RecoveryCoordinator,
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val job = inputData.toAudioImportJob()
@@ -196,7 +192,7 @@ class AudioImportWorker internal constructor(
         val progress = AudioImportProgressListener { stage, percent ->
             setProgress(progressData(job, displayName, stage, percent))
             setForeground(foregroundInfo(stage, percent))
-            recovery.upsert(job, displayName, stage.toRecoveryStage(), (percent ?: 0) / 100.0)
+            recovery.upsert(job.toRecoveryInput(displayName, stage.toRecoveryStage(), (percent ?: 0) / 100.0))
         }
         return when (
             val outcome = runAudioImport(
@@ -206,7 +202,9 @@ class AudioImportWorker internal constructor(
             )
         ) {
             is RunAudioImportOutcome.Completed -> {
-                recovery.resolve(job.id, applicationContext)
+                recovery.resolve(job.id).item?.filePath?.let {
+                    deleteRecoverySource(applicationContext, it)
+                }
                 Result.success(workDataOf(
                     KEY_JOB_ID to job.id,
                     KEY_HISTORY_ID to outcome.historyId,
@@ -278,30 +276,6 @@ class AudioImportWorker internal constructor(
     }
 }
 
-private val RECOVERY_MUTEX = Mutex()
-
-private suspend fun RecoveryPort.upsert(
-    job: AudioImportJob,
-    displayName: String?,
-    stage: RecoveryStage,
-    progress: Double,
-) = RECOVERY_MUTEX.withLock {
-    val current = load().items.filter { it.resolution == RecoveryResolution.PENDING && it.id != job.id }
-    val input = job.toRecoveryInput(displayName, stage, progress)
-    persistQueue(current.map(RecoveryItem::toInput) + input, emptyList())
-}
-
-private suspend fun RecoveryPort.resolve(jobId: String, context: Context) = RECOVERY_MUTEX.withLock {
-    val current = load().items
-    val resolved = current.firstOrNull { it.id == jobId }
-    persistQueue(
-        current.filter { it.resolution == RecoveryResolution.PENDING && it.id != jobId }
-            .map(RecoveryItem::toInput),
-        listOf(jobId),
-    )
-    resolved?.filePath?.let { deleteRecoverySource(context, it) }
-}
-
 internal fun AudioImportJob.toRecoveryInput(
     displayName: String?,
     stage: RecoveryStage = RecoveryStage.QUEUED,
@@ -318,18 +292,6 @@ internal fun AudioImportJob.toRecoveryInput(
     stage = stage,
     progress = progress.coerceIn(0.0, 1.0),
     payload = toRecoveryPayload(),
-)
-
-internal fun RecoveryItem.toInput() = RecoveryItemInput(
-    id = id,
-    filename = filename,
-    filePath = filePath,
-    resolution = resolution,
-    progress = progress,
-    historyId = historyId,
-    historyTitle = historyTitle,
-    stage = stage,
-    payload = payload.orEmpty(),
 )
 
 internal fun AudioImportJob.toRecoveryPayload(): String = buildJsonObject {

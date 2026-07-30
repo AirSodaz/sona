@@ -40,8 +40,8 @@ internal fun RecoveryItemInput.toFfi() = FfiRecoveryItemInputV1(
     recoveryId = id,
     filename = filename,
     filePath = filePath,
-    source = FfiRecoverySourceV1.BATCH_IMPORT,
-    origin = FfiRecoverySourceV1.BATCH_IMPORT,
+    source = source.toFfi(),
+    origin = source.toFfi(),
     resolution = resolution.toFfi(),
     status = FfiRecoveryQueueStatusV1.PENDING,
     progress = progress,
@@ -52,8 +52,8 @@ internal fun RecoveryItemInput.toFfi() = FfiRecoveryItemInputV1(
     historyTitle = historyTitle,
     lastKnownStage = stage.toFfi(),
     updatedAt = null,
-    hasSourceFile = null,
-    canResume = null,
+    hasSourceFile = hasSourceFile,
+    canResume = canResume,
     automationRuleId = null,
     automationRuleName = null,
     resolvedConfigSnapshotJson = payload,
@@ -78,6 +78,7 @@ private fun FfiRecoveredQueueItemV1.toApplication() = RecoveryItem(
     source = when (source) {
         FfiRecoverySourceV1.BATCH_IMPORT -> RecoverySource.BATCH_IMPORT
         FfiRecoverySourceV1.AUTOMATION -> RecoverySource.AUTOMATION
+        FfiRecoverySourceV1.TRANSCRIPT_EDIT -> RecoverySource.TRANSCRIPT_EDIT
     },
     resolution = when (resolution) {
         FfiRecoveryResolutionV1.PENDING -> RecoveryResolution.PENDING
@@ -98,6 +99,12 @@ private fun RecoveryResolution.toFfi() = when (this) {
     RecoveryResolution.PENDING -> FfiRecoveryResolutionV1.PENDING
     RecoveryResolution.RESUMED -> FfiRecoveryResolutionV1.RESUMED
     RecoveryResolution.DISCARDED -> FfiRecoveryResolutionV1.DISCARDED
+}
+
+private fun RecoverySource.toFfi() = when (this) {
+    RecoverySource.BATCH_IMPORT -> FfiRecoverySourceV1.BATCH_IMPORT
+    RecoverySource.AUTOMATION -> FfiRecoverySourceV1.AUTOMATION
+    RecoverySource.TRANSCRIPT_EDIT -> FfiRecoverySourceV1.TRANSCRIPT_EDIT
 }
 
 private fun RecoveryStage.toFfi() = when (this) {

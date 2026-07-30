@@ -22,6 +22,7 @@ import {
     historyTrashItems,
     historyDeleteSummary,
     historyCreateTranscriptSnapshot,
+    historyCommitTranscriptEdit,
     historyBuildTranscriptDiff,
     historyListItems,
     historyLoadSummary,
@@ -48,6 +49,11 @@ export interface LiveRecordingDraftHandle {
     item: HistoryItem;
     audioAbsolutePath: string;
 }
+
+export type TranscriptEditCommitResult =
+    | { status: 'unchanged' }
+    | { status: 'committed'; item: HistoryItem; snapshot: TranscriptSnapshotMetadata }
+    | { status: 'conflict'; currentSegments: TranscriptSegment[] };
 
 function inferAudioExtensionFromPath(filePath: string, fallback: string): string {
     const fileName = filePath.split(/[/\\]/).pop() || '';
@@ -83,6 +89,7 @@ export interface HistoryServicePorts {
     historyTrashItems: typeof historyTrashItems;
     historyDeleteSummary: typeof historyDeleteSummary;
     historyCreateTranscriptSnapshot: typeof historyCreateTranscriptSnapshot;
+    historyCommitTranscriptEdit: typeof historyCommitTranscriptEdit;
     historyBuildTranscriptDiff: typeof historyBuildTranscriptDiff;
     historyLoadSummary: typeof historyLoadSummary;
     historyLoadTranscript: typeof historyLoadTranscript;
@@ -271,6 +278,23 @@ export class HistoryService {
         }
     }
 
+    async commitTranscriptEdit(
+        historyId: string,
+        editSessionId: string,
+        baseSegments: TranscriptSegment[],
+        editedSegments: TranscriptSegment[],
+    ): Promise<TranscriptEditCommitResult> {
+        const result = await this.ports.historyCommitTranscriptEdit(
+            historyId,
+            editSessionId,
+            baseSegments,
+            editedSegments,
+        );
+        return result.status === 'committed'
+            ? { ...result, item: normalizeHistoryItem(result.item) }
+            : result;
+    }
+
     async createTranscriptSnapshot(
         historyId: string,
         reason: TranscriptSnapshotReason,
@@ -399,6 +423,7 @@ export const historyService = createHistoryService({
     historyTrashItems,
     historyDeleteSummary,
     historyCreateTranscriptSnapshot,
+    historyCommitTranscriptEdit,
     historyBuildTranscriptDiff,
     historyLoadSummary,
     historyLoadTranscript,

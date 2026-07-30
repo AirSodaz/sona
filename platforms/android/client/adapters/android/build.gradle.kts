@@ -23,6 +23,7 @@ dependencies {
     implementation(project(":application"))
     implementation("androidx.datastore:datastore-preferences:1.2.1")
     implementation("androidx.media3:media3-common:1.8.0")
+    implementation("androidx.media3:media3-exoplayer:1.8.0")
     implementation("androidx.work:work-runtime-ktx:2.11.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")

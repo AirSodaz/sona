@@ -7,6 +7,7 @@ import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 vi.mock('../../services/historyService', () => ({
   historyService: {
     updateTranscript: vi.fn(),
+    commitTranscriptEdit: vi.fn(),
     updateItemMeta: vi.fn(),
   },
 }));
@@ -42,7 +43,7 @@ describe('useAutoSaveTranscript', () => {
     });
 
     const { historyService } = await import('../../services/historyService');
-    (historyService.updateTranscript as any).mockResolvedValue(undefined);
+    (historyService.commitTranscriptEdit as any).mockResolvedValue({ status: 'unchanged' });
   });
 
   afterEach(() => {
@@ -67,7 +68,7 @@ describe('useAutoSaveTranscript', () => {
     await flushMicrotasks();
 
     const { historyService } = await import('../../services/historyService');
-    expect(historyService.updateTranscript).not.toHaveBeenCalled();
+    expect(historyService.commitTranscriptEdit).not.toHaveBeenCalled();
     expect(useTranscriptStore.getState().autoSaveStates['hist-1']).toBeUndefined();
   });
 
@@ -91,13 +92,18 @@ describe('useAutoSaveTranscript', () => {
     await flushMicrotasks();
 
     const { historyService } = await import('../../services/historyService');
-    expect(historyService.updateTranscript).toHaveBeenCalledWith('hist-1', expect.any(Array));
+    expect(historyService.commitTranscriptEdit).toHaveBeenCalledWith(
+      'hist-1',
+      expect.any(String),
+      expect.any(Array),
+      expect.any(Array),
+    );
     expect(useTranscriptStore.getState().autoSaveStates['hist-1']?.status).toBe('saved');
   });
 
   it('sets error status when transcript persistence fails', async () => {
     const { historyService } = await import('../../services/historyService');
-    (historyService.updateTranscript as any).mockRejectedValueOnce(new Error('Disk full'));
+    (historyService.commitTranscriptEdit as any).mockRejectedValueOnce(new Error('Disk full'));
 
     useTranscriptStore.setState({
       sourceHistoryId: 'hist-1',
@@ -141,7 +147,12 @@ describe('useAutoSaveTranscript', () => {
     await flushMicrotasks();
 
     const { historyService } = await import('../../services/historyService');
-    expect(historyService.updateTranscript).toHaveBeenCalledWith('hist-1', expect.any(Array));
+    expect(historyService.commitTranscriptEdit).toHaveBeenCalledWith(
+      'hist-1',
+      expect.any(String),
+      expect.any(Array),
+      expect.any(Array),
+    );
     expect(useTranscriptStore.getState().autoSaveStates['hist-1']?.status).toBe('saved');
 
     expect(useTranscriptStore.getState().autoSaveStates['hist-2']).toBeUndefined();

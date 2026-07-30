@@ -294,7 +294,7 @@ async fn install_tar_bz2_archive(
     let join_archive_path = archive_path.clone();
     let join_staging_path = staging_path.clone();
 
-    let extract_result = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || {
         let _install_lock = install_lock;
         let result = (|| -> Result<(), DownloadError> {
             let file = std::fs::File::open(&archive_path).map_err(|error| {
@@ -404,9 +404,7 @@ async fn install_tar_bz2_archive(
             &join_staging_path,
             format!("Failed to join extraction task: {error}"),
         )
-    })?;
-
-    extract_result
+    })?
 }
 
 fn staging_install_path(install_path: &Path) -> PathBuf {

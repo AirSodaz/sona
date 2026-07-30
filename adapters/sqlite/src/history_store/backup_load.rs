@@ -127,6 +127,7 @@ pub(crate) fn load_history_backup_in_transaction(
             "translate" => TranscriptSnapshotReason::Translate,
             "retranscribe" => TranscriptSnapshotReason::Retranscribe,
             "restore" => TranscriptSnapshotReason::Restore,
+            "manual_edit" => TranscriptSnapshotReason::ManualEdit,
             value => {
                 return Err(DatabaseError::Internal(format!(
                     "Unknown transcript snapshot reason: {value}"

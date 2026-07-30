@@ -19,6 +19,17 @@ import com.sona.android.application.library.TagRecord
 import com.sona.android.application.library.TagWorkspacePort
 import com.sona.android.application.library.TranscriptSnapshot
 import com.sona.android.application.library.HistoryScope
+import com.sona.android.application.library.CommitTranscriptEditRequest
+import com.sona.android.application.library.CommitTranscriptEditResult
+import com.sona.android.application.library.HistoryMediaSource
+import com.sona.android.application.library.HistoryMediaSourcePort
+import com.sona.android.application.library.TranscriptEditOperation
+import com.sona.android.application.library.TranscriptEditorPort
+import com.sona.android.application.library.TranscriptSnapshotReason
+import com.sona.android.application.media.AudioPlaybackPort
+import com.sona.android.application.media.AudioPlaybackState
+import com.sona.android.application.recovery.TranscriptEditDraft
+import com.sona.android.application.recovery.TranscriptEditRecoveryPort
 import com.sona.android.application.recording.ActiveBatchCredential
 import com.sona.android.application.recording.CloudTranscriptionFailure
 import com.sona.android.application.recording.CompleteLiveDraftRequest
@@ -32,8 +43,10 @@ import com.sona.android.application.recording.RecordingHistoryPort
 import com.sona.android.application.recording.TranscribeRecordingWithCloud
 import com.sona.android.application.recording.TranscriptSegment
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -46,6 +59,70 @@ import kotlin.coroutines.suspendCoroutine
 class LibraryViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
+
+    @Test
+    fun `edit draft debounces recovery supports undo and commits explicitly`() = runTest {
+        val port = FakeLibraryPort().apply { transcripts["history-1"] = listOf(segment("segment-1")) }
+        val editor = FakeTranscriptEditor()
+        val recovery = FakeTranscriptRecovery()
+        val viewModel = libraryViewModel(port, editor = editor, editRecovery = recovery)
+
+        viewModel.loadTranscript("history-1")
+        advanceUntilIdle()
+        viewModel.startEditing("history-1")
+        viewModel.updateSegmentText("segment-1", "Edited")
+        runCurrent()
+        assertEquals("Edited", viewModel.state.value.editor.draftSegments.single().text)
+        advanceTimeBy(499)
+        assertEquals(0, recovery.saved.size)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals("Edited", recovery.saved.single().draftSegments.single().text)
+
+        viewModel.undoEdit()
+        assertEquals("Hello", viewModel.state.value.editor.draftSegments.single().text)
+        viewModel.redoEdit()
+        assertEquals("Edited", viewModel.state.value.editor.draftSegments.single().text)
+        viewModel.saveEdit()
+        advanceUntilIdle()
+
+        assertEquals("Edited", editor.committed?.editedSegments?.single()?.text)
+        assertFalse(viewModel.state.value.editor.active)
+        assertEquals(listOf("history-1"), recovery.discarded)
+    }
+
+    @Test
+    fun `edit auto saves after two seconds and keeps one edit session`() = runTest {
+        val port = FakeLibraryPort().apply { transcripts["history-1"] = listOf(segment("segment-1")) }
+        val editor = FakeTranscriptEditor()
+        val recovery = FakeTranscriptRecovery()
+        val viewModel = libraryViewModel(port, editor = editor, editRecovery = recovery)
+
+        viewModel.loadTranscript("history-1")
+        advanceUntilIdle()
+        viewModel.startEditing("history-1")
+        viewModel.updateSegmentText("segment-1", "First")
+        runCurrent()
+        advanceTimeBy(LibraryViewModel.EDIT_AUTO_SAVE_DEBOUNCE_MILLIS - 1)
+        assertTrue(editor.commits.isEmpty())
+        advanceTimeBy(1)
+        runCurrent()
+
+        assertTrue(viewModel.state.value.editor.active)
+        assertFalse(viewModel.state.value.editor.dirty)
+        val editSessionId = editor.commits.single().editSessionId
+        assertTrue(editSessionId.isNotBlank())
+
+        viewModel.updateSegmentText("segment-1", "Second")
+        runCurrent()
+        advanceTimeBy(LibraryViewModel.EDIT_AUTO_SAVE_DEBOUNCE_MILLIS)
+        advanceUntilIdle()
+
+        assertEquals(2, editor.commits.size)
+        assertEquals(listOf(editSessionId, editSessionId), editor.commits.map { it.editSessionId })
+        assertEquals("First", editor.commits[1].baseSegments.single().text)
+        assertEquals("Second", editor.commits[1].editedSegments.single().text)
+    }
 
     @Test
     fun `refresh and pagination append distinct history items`() = runTest {
@@ -180,6 +257,33 @@ class LibraryViewModelTest {
         )
         assertFalse(viewModel.state.value.toString().contains(sensitiveMessage))
         assertEquals(listOf("history-1", "history-2"), port.transcriptRequests)
+    }
+
+    @Test
+    fun `late media source resolution cannot replace the current detail playback`() = runTest {
+        val oldSource = PendingResult<HistoryMediaSource?>()
+        val currentSource = PendingResult<HistoryMediaSource?>()
+        val mediaSources = object : HistoryMediaSourcePort {
+            override suspend fun resolve(historyId: String): HistoryMediaSource? =
+                if (historyId == "history-old") oldSource.await() else currentSource.await()
+        }
+        val playback = FakeAudioPlayback()
+        val port = FakeLibraryPort().apply {
+            transcripts["history-old"] = listOf(segment("old-segment"))
+            transcripts["history-current"] = listOf(segment("current-segment"))
+        }
+        val viewModel = libraryViewModel(port, mediaSources = mediaSources, playback = playback)
+
+        viewModel.loadTranscript("history-old")
+        runCurrent()
+        viewModel.loadTranscript("history-current")
+        runCurrent()
+        currentSource.complete(HistoryMediaSource("/current.m4a"))
+        runCurrent()
+        oldSource.complete(HistoryMediaSource("/old.m4a"))
+        advanceUntilIdle()
+
+        assertEquals(listOf("history-current" to "/current.m4a"), playback.prepared)
     }
 
     @Test
@@ -463,12 +567,20 @@ class LibraryViewModelTest {
         ),
         exporter: TranscriptExportPort = TranscriptExportPort { error("must not export") },
         files: FileTransferPort = FakeFileTransfer,
+        editor: TranscriptEditorPort? = null,
+        editRecovery: TranscriptEditRecoveryPort? = null,
+        mediaSources: HistoryMediaSourcePort? = null,
+        playback: AudioPlaybackPort = FakeAudioPlayback(),
     ) = LibraryViewModel(
         library = port,
         transcribeRecordingWithCloud = transcribe,
         tags = FakeTagWorkspace,
         exporter = exporter,
         files = files,
+        editor = editor,
+        editRecovery = editRecovery,
+        mediaSources = mediaSources,
+        playback = playback,
     )
 
     private fun activeCredential() = ActiveBatchCredential(
@@ -631,5 +743,56 @@ class LibraryViewModelTest {
         fun complete(value: T) {
             continuation.resume(value)
         }
+    }
+
+    private class FakeAudioPlayback : AudioPlaybackPort {
+        override val state = MutableStateFlow(AudioPlaybackState())
+        val prepared = mutableListOf<Pair<String, String>>()
+
+        override suspend fun prepare(historyId: String, nativePath: String) {
+            prepared += historyId to nativePath
+        }
+
+        override fun play() = Unit
+        override fun pause() = Unit
+        override fun seekTo(positionMillis: Long) = Unit
+        override fun seekBy(deltaMillis: Long) = Unit
+        override fun setSpeed(speed: Float) = Unit
+        override fun release() = Unit
+    }
+
+    private class FakeTranscriptEditor : TranscriptEditorPort {
+        var committed: CommitTranscriptEditRequest? = null
+        val commits = mutableListOf<CommitTranscriptEditRequest>()
+
+        override suspend fun apply(
+            segments: List<TranscriptSegment>,
+            operation: TranscriptEditOperation,
+        ): List<TranscriptSegment> = when (operation) {
+            is TranscriptEditOperation.UpdateText -> segments.map {
+                if (it.id == operation.segmentId) it.copy(text = operation.text) else it
+            }
+            is TranscriptEditOperation.UpdateTranslation -> segments.map {
+                if (it.id == operation.segmentId) it.copy(translation = operation.translation) else it
+            }
+            is TranscriptEditOperation.Delete -> segments.filterNot { it.id == operation.segmentId }
+            is TranscriptEditOperation.MergeNext, is TranscriptEditOperation.Split -> segments
+        }
+
+        override suspend fun commit(request: CommitTranscriptEditRequest): CommitTranscriptEditResult {
+            committed = request
+            commits += request
+            return CommitTranscriptEditResult.Committed(
+                TranscriptSnapshot("snapshot-1", request.historyId, TranscriptSnapshotReason.MANUAL_EDIT, 1, request.baseSegments.size.toLong()),
+            )
+        }
+    }
+
+    private class FakeTranscriptRecovery : TranscriptEditRecoveryPort {
+        val saved = mutableListOf<TranscriptEditDraft>()
+        val discarded = mutableListOf<String>()
+        override suspend fun load(historyId: String): TranscriptEditDraft? = null
+        override suspend fun save(draft: TranscriptEditDraft) { saved += draft }
+        override suspend fun discard(historyId: String) { discarded += historyId }
     }
 }

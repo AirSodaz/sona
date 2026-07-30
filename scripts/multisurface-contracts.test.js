@@ -172,7 +172,7 @@ test('Rust-owned Tauri command contracts stay generated and complete', () => {
     rustRegistry.matchAll(/TauriCommandContract::new\(\s*"([^"]+)"/gu),
     (match) => match[1],
   );
-  assert.equal(registryCommands.length, 54);
+  assert.equal(registryCommands.length, 55);
   assert.equal(new Set(registryCommands).size, registryCommands.length);
 
   const commandGroups = [
@@ -230,6 +230,7 @@ test('Rust-owned Tauri command contracts stay generated and complete', () => {
     ['recovery_save_snapshot', '{ items: RecoveryItemInput_Deserialize[] }', 'RecoverySnapshot_Serialize'],
     ['automation_persist_repository_state', '{ profiles: AutomationProfileInput_Deserialize[]; rules: AutomationRuleInput_Deserialize[]; processedEntries: AutomationProcessedInput_Deserialize[] }', 'void'],
     ['history_update_transcript', 'HistoryUpdateTranscriptRequest_Deserialize', 'HistoryItemRecord'],
+    ['history_commit_transcript_edit', 'HistoryCommitTranscriptEditRequest_Deserialize', 'HistoryCommitTranscriptEditResult_Serialize'],
   ]) {
     const escapedCommand = command.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
     const entry = new RegExp(

@@ -7,7 +7,7 @@ enum class HistoryItemKind { RECORDING, BATCH }
 enum class HistoryFilterType { ALL, RECORDING, BATCH }
 enum class HistoryDateFilter { ALL, TODAY, WEEK, MONTH }
 enum class HistorySortOrder { NEWEST, OLDEST, DURATION_DESC, DURATION_ASC, TITLE_ASC }
-enum class TranscriptSnapshotReason { POLISH, TRANSLATE, RETRANSCRIBE, RESTORE }
+enum class TranscriptSnapshotReason { POLISH, TRANSLATE, RETRANSCRIBE, RESTORE, MANUAL_EDIT }
 
 sealed interface HistoryScope {
     data object All : HistoryScope

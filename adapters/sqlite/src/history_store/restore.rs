@@ -236,6 +236,7 @@ pub(super) fn transcript_snapshot_reason_str(reason: TranscriptSnapshotReason) -
         TranscriptSnapshotReason::Translate => "translate",
         TranscriptSnapshotReason::Retranscribe => "retranscribe",
         TranscriptSnapshotReason::Restore => "restore",
+        TranscriptSnapshotReason::ManualEdit => "manual_edit",
     }
 }
 

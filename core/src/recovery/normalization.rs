@@ -91,12 +91,16 @@ impl RecoveryItemInput {
         let queue_id = non_empty_string(self.id)?;
         let id = non_empty_string(self.recovery_id).unwrap_or(queue_id);
         let file_path = self.file_path.unwrap_or_default();
-        let source =
-            if self.origin.as_deref() == Some("automation") || self.automation_rule_id.is_some() {
-                RecoverySource::Automation
-            } else {
-                RecoverySource::BatchImport
-            };
+        let source = if self.origin.as_deref() == Some("transcript_edit")
+            || self.source.as_deref() == Some("transcript_edit")
+        {
+            RecoverySource::TranscriptEdit
+        } else if self.origin.as_deref() == Some("automation") || self.automation_rule_id.is_some()
+        {
+            RecoverySource::Automation
+        } else {
+            RecoverySource::BatchImport
+        };
         let resolution = RecoveryResolution::Pending;
         let (has_source_file, can_resume) =
             resolve_source_flags(&file_path, resolution, true, true, source_paths);
@@ -351,6 +355,7 @@ fn normalize_source(
     match raw_source {
         Some("automation") => RecoverySource::Automation,
         Some("batch_import") => RecoverySource::BatchImport,
+        Some("transcript_edit") => RecoverySource::TranscriptEdit,
         _ if automation_rule_id.is_some() => RecoverySource::Automation,
         _ => RecoverySource::BatchImport,
     }

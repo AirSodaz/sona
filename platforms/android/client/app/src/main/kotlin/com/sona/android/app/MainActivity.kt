@@ -52,6 +52,10 @@ class MainActivity : AppCompatActivity() {
                     tags = container.tagWorkspace,
                     exporter = container.transcriptExports,
                     files = container.fileTransfers,
+                    editor = container.transcriptEditor,
+                    mediaSources = container.historyMediaSources,
+                    playback = container.audioPlayback,
+                    editRecovery = container.transcriptEditRecovery,
                 ),
             )
             val appearanceSettingsViewModel: AppearanceSettingsViewModel = viewModel(
@@ -108,6 +112,7 @@ class MainActivity : AppCompatActivity() {
                     ) add(DataTransferBlocker.LIVE_RECORDING)
                     if (libraryState.audioImport is AudioImportJobState.Running) add(DataTransferBlocker.AUDIO_IMPORT)
                     if (syncState.status.state == SyncLifecycleState.SYNCING) add(DataTransferBlocker.SYNC)
+                    if (libraryState.editor.active) add(DataTransferBlocker.TRANSCRIPT_EDIT)
                     if (dataRecoveryState.recovery.items.any { it.resolution == RecoveryResolution.PENDING }) {
                         add(DataTransferBlocker.RECOVERY)
                     }
@@ -164,6 +169,24 @@ class MainActivity : AppCompatActivity() {
                 onLoadTranscriptSnapshot = libraryViewModel::loadSnapshot,
                 onCloseTranscriptSnapshot = libraryViewModel::closeSnapshot,
                 onExportTranscript = libraryViewModel::exportTranscript,
+                onTogglePlayback = libraryViewModel::togglePlayback,
+                onSeekPlayback = libraryViewModel::seekPlayback,
+                onSkipPlayback = libraryViewModel::skipPlayback,
+                onSetPlaybackSpeed = libraryViewModel::setPlaybackSpeed,
+                onPausePlayback = libraryViewModel::pausePlayback,
+                onReleasePlayback = libraryViewModel::releasePlayback,
+                onStartTranscriptEdit = libraryViewModel::startEditing,
+                onEditTranscriptSegment = libraryViewModel::editSegment,
+                onUpdateTranscriptText = libraryViewModel::updateSegmentText,
+                onUpdateTranscriptTranslation = libraryViewModel::updateSegmentTranslation,
+                onDeleteTranscriptSegment = libraryViewModel::deleteSegment,
+                onMergeTranscriptSegment = libraryViewModel::mergeNextSegment,
+                onSplitTranscriptSegment = libraryViewModel::splitSegment,
+                onUndoTranscriptEdit = libraryViewModel::undoEdit,
+                onRedoTranscriptEdit = libraryViewModel::redoEdit,
+                onSaveTranscriptEdit = libraryViewModel::saveEdit,
+                onDiscardTranscriptEdit = libraryViewModel::discardEdit,
+                onFlushTranscriptEdit = libraryViewModel::flushEditDraft,
                 onTranscribeWithCloud = libraryViewModel::transcribeWithCloud,
                 onImportAudio = libraryViewModel::importAudio,
                 onCancelAudioImport = libraryViewModel::cancelAudioImport,

@@ -50,6 +50,7 @@ pub use mapper::{
     FfiDiagnosticsModelSummaryV1, FfiDiagnosticsPathStatusesV1, FfiDiagnosticsSelectedModelsV1,
     FfiDiagnosticsSnapshotV1, FfiExportFormatV1, FfiExportModeV1, FfiExportTranscriptFileRequestV1,
     FfiExportTranscriptFileResultV1, FfiFileUsageCategoryV1, FfiHistoryAudioStatusV1,
+    FfiHistoryCommitTranscriptEditRequestV1, FfiHistoryCommitTranscriptEditResultV1,
     FfiHistoryCompleteLiveDraftRequestV1, FfiHistoryCreateLiveDraftRequestV1,
     FfiHistoryCreateTranscriptSnapshotRequestV1, FfiHistoryDeleteItemsRequestV1,
     FfiHistoryDraftSourcePatchV1, FfiHistoryDraftSourceV1, FfiHistoryItemKindV1,
@@ -98,12 +99,12 @@ pub use mapper::{
     FfiSyncStatusSnapshotV1, FfiSyncUnlockRequestV1, FfiSyncVersionV1, FfiTagCreateInputV1,
     FfiTagRecordV1, FfiTagRepositorySnapshotV1, FfiTagUpdateInputV1, FfiTaskLedgerKindV1,
     FfiTaskLedgerPatchV1, FfiTaskLedgerRecordV1, FfiTaskLedgerSnapshotV1, FfiTaskLedgerStatusV1,
-    FfiTimestampSupportHint, FfiTranscriptSegment, FfiTranscriptSnapshotMetadataV1,
-    FfiTranscriptSnapshotReasonV1, FfiTranscriptSnapshotRecordV1, FfiTranscriptTiming,
-    FfiTranscriptTimingLevel, FfiTranscriptTimingSource, FfiTranscriptTimingUnit,
-    FfiTranscriptUpdate, FfiTranslateSegmentsRequest, FfiTranslatedSegment, FfiUsageBreakdownV1,
-    FfiUsageTrendPointV1, FfiVoiceTypingReadinessV1, FfiVolcengineDoubaoAsrConfig,
-    FfiWebviewCacheUsageCategoryV1,
+    FfiTimestampSupportHint, FfiTranscriptEditOperationV1, FfiTranscriptSegment,
+    FfiTranscriptSnapshotMetadataV1, FfiTranscriptSnapshotReasonV1, FfiTranscriptSnapshotRecordV1,
+    FfiTranscriptTiming, FfiTranscriptTimingLevel, FfiTranscriptTimingSource,
+    FfiTranscriptTimingUnit, FfiTranscriptUpdate, FfiTranslateSegmentsRequest,
+    FfiTranslatedSegment, FfiUsageBreakdownV1, FfiUsageTrendPointV1, FfiVoiceTypingReadinessV1,
+    FfiVolcengineDoubaoAsrConfig, FfiWebviewCacheUsageCategoryV1,
 };
 pub use model_bridge::{FfiModelDownloadObserver, FfiModelDownloadProgress, FfiModelDownloadStage};
 pub use sona_context::SonaContext;
@@ -856,6 +857,14 @@ pub async fn load_history_transcript_v1(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
+pub async fn resolve_history_audio_source_v1(
+    app_data_dir: String,
+    history_id: String,
+) -> SonaCoreBindingResult<Option<String>> {
+    history_query_bridge::resolve_history_audio_source_v1(app_data_dir, history_id).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
 pub async fn list_history_transcript_snapshots_json(
     app_data_dir: String,
     history_id: String,
@@ -1054,6 +1063,22 @@ pub async fn create_history_transcript_snapshot_v1(
     request: FfiHistoryCreateTranscriptSnapshotRequestV1,
 ) -> SonaCoreBindingResult<FfiTranscriptSnapshotMetadataV1> {
     history_mutation_bridge::create_history_transcript_snapshot_v1(app_data_dir, request).await
+}
+
+#[uniffi::export]
+pub fn apply_transcript_edit_v1(
+    segments: Vec<FfiTranscriptSegment>,
+    operation: FfiTranscriptEditOperationV1,
+) -> SonaCoreBindingResult<Vec<FfiTranscriptSegment>> {
+    history_mutation_bridge::apply_transcript_edit_v1(segments, operation)
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn commit_history_transcript_edit_v1(
+    app_data_dir: String,
+    request: FfiHistoryCommitTranscriptEditRequestV1,
+) -> SonaCoreBindingResult<FfiHistoryCommitTranscriptEditResultV1> {
+    history_mutation_bridge::commit_history_transcript_edit_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]

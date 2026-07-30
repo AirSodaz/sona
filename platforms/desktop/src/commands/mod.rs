@@ -45,6 +45,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::history::history_purge_items,
         crate::commands::history::history_load_transcript,
         crate::commands::history::history_update_transcript,
+        crate::commands::history::history_commit_transcript_edit,
         crate::commands::history::history_create_transcript_snapshot,
         crate::commands::history::history_list_transcript_snapshots,
         crate::commands::history::history_load_transcript_snapshot,
