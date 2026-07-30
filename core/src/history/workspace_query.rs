@@ -37,7 +37,7 @@ pub fn query_workspace_items_at(
     date_filter_thresholds: HistoryWorkspaceDateFilterThresholds,
 ) -> Result<HistoryWorkspaceQueryResult, HistoryQueryError> {
     validate_workspace_query_request(&request)?;
-    let item_counts = count_items_by_project(&items);
+    let item_counts = count_items_by_tag(&items);
     Ok(query_workspace_items_impl(
         items,
         request,
@@ -216,7 +216,7 @@ fn summarize_items(items: &[HistoryItemRecord]) -> HistoryWorkspaceSummary {
     }
 }
 
-fn count_items_by_project(items: &[HistoryItemRecord]) -> HistoryWorkspaceItemCounts {
+fn count_items_by_tag(items: &[HistoryItemRecord]) -> HistoryWorkspaceItemCounts {
     let mut untagged = 0;
     let mut trash = 0;
     let mut by_tag_id = BTreeMap::new();
@@ -521,7 +521,7 @@ mod tests {
             icon: None,
             kind: HistoryItemKind::Recording,
             search_content: String::new(),
-            tag_ids: Vec::new(),
+            tag_ids: vec![id.to_string()],
             deleted_at: None,
             status,
             draft_source: if status == HistoryItemStatus::Draft {

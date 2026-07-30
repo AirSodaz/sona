@@ -2835,60 +2835,6 @@ mod tests {
     }
 
     #[test]
-    fn config_core_ignores_legacy_project_defaults_when_resolving_effective_config() {
-        let global = json!({
-            "summaryTemplateId": "missing",
-            "summaryCustomTemplates": [
-                { "id": "custom-summary", "name": "Custom Summary", "instructions": "Do it." }
-            ],
-            "translationLanguage": "zh",
-            "polishPresetId": "general",
-            "textReplacementSets": [
-                { "id": "tr-a", "enabled": true, "rules": [] },
-                { "id": "tr-b", "enabled": true, "rules": [] }
-            ],
-            "hotwordSets": [
-                { "id": "hw-a", "enabled": true, "rules": [] },
-                { "id": "hw-b", "enabled": false, "rules": [] }
-            ],
-            "polishKeywordSets": [
-                { "id": "kw-a", "enabled": true, "keywords": "a" },
-                { "id": "kw-b", "enabled": true, "keywords": "b" }
-            ],
-            "speakerProfiles": [
-                { "id": "sp-a", "enabled": true, "samples": [] },
-                { "id": "sp-b", "enabled": true, "samples": [] }
-            ]
-        });
-        let project = json!({
-            "defaults": {
-                "summaryTemplateId": "custom-summary",
-                "translationLanguage": "ja",
-                "polishPresetId": "meeting",
-                "enabledTextReplacementSetIds": ["tr-b"],
-                "enabledHotwordSetIds": ["hw-b"],
-                "enabledPolishKeywordSetIds": ["kw-a"],
-                "enabledSpeakerProfileIds": ["sp-b"]
-            }
-        });
-
-        let resolved = resolve_effective_config(global, Some(project));
-
-        assert_eq!(resolved["summaryTemplateId"], "general");
-        assert_eq!(resolved["translationLanguage"], "zh");
-        assert_eq!(resolved["polishPresetId"], "general");
-        assert_eq!(resolved["textReplacementSets"][0]["id"], "tr-a");
-        assert_eq!(resolved["textReplacementSets"][0]["enabled"], true);
-        assert_eq!(resolved["textReplacementSets"][1]["enabled"], true);
-        assert_eq!(resolved["hotwordSets"][0]["enabled"], true);
-        assert_eq!(resolved["hotwordSets"][1]["enabled"], false);
-        assert_eq!(resolved["polishKeywordSets"][0]["enabled"], true);
-        assert_eq!(resolved["polishKeywordSets"][1]["enabled"], true);
-        assert_eq!(resolved["speakerProfiles"][0]["enabled"], true);
-        assert_eq!(resolved["speakerProfiles"][1]["enabled"], true);
-    }
-
-    #[test]
     fn config_core_cleans_up_dirty_data_in_online_providers_and_falls_back_to_defaults() {
         let saved = json!({
             "configVersion": 7,

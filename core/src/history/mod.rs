@@ -423,8 +423,6 @@ pub struct ExportBackupArchiveRequest {
     #[serde(default)]
     pub config: Value,
     #[serde(default)]
-    pub projects: Vec<Value>,
-    #[serde(default)]
     pub automation_rules: Vec<Value>,
     #[serde(default)]
     pub automation_processed_entries: Vec<Value>,

@@ -566,7 +566,7 @@ fn imports_v1_projects_and_single_assignments_as_tags() {
             }),
         ),
         json_entry(
-            "projects/index.json",
+            "tags/index.json",
             &json!([{
                 "id": "tag-1", "name": "Tag One", "description": "Test tag",
                 "icon": "folder", "color": "#2563eb", "createdAt": 1, "updatedAt": 2,
