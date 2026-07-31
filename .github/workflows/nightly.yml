@@ -40,7 +40,7 @@ jobs:
 
           if [ -n "$LAST_NIGHTLY_SHA" ] && [ "$LAST_NIGHTLY_SHA" = "${{ github.sha }}" ]; then
             echo "should_build=false" >> "$GITHUB_OUTPUT"
-            echo "No new commits on master since the last nightly build. Skipping."
+            echo "No new commits on main since the last nightly build. Skipping."
           else
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           fi
