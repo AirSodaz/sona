@@ -11,7 +11,10 @@ use std::sync::Arc;
 use tokio;
 
 use crate::app::server::TauriStreamingContext;
+use crate::integrations::asr::TauriAsrRuntimeObserver;
+use crate::platform::event::{EventEmitterPort, TauriEventEmitter};
 use sona_api_server::{ServerState, authorize_streaming_request};
+use sona_core::ports::asr::AsrRuntimeObserver;
 use sona_local_asr::audio::{load_vad, pcm_s16le_bytes_to_f32};
 
 #[derive(Deserialize)]
@@ -220,29 +223,30 @@ async fn handle_online_streaming_socket(
     };
 
     let sherpa_state = app_handle.state::<crate::integrations::asr::AsrState>();
-
-    if let Err(e) = crate::commands::asr::init_recognizer(
-        app_handle.clone(),
-        sherpa_state.clone(),
-        session_id.clone(),
-        request,
-    )
-    .await
+    let emitter = Arc::new(TauriEventEmitter(app_handle.clone())) as Arc<dyn EventEmitterPort>;
+    let observer = Arc::new(TauriAsrRuntimeObserver::new(
+        emitter,
+        sherpa_state.metrics_store(),
+    )) as Arc<dyn AsrRuntimeObserver>;
+    let session = match sherpa_state
+        .create_independent_streaming_session(&session_id, &request, observer)
+        .await
     {
-        let _ = socket
-            .send(Message::Text(
-                serialize_server_message(&ServerMessage::Error {
-                    message: e.to_string(),
-                })
-                .into(),
-            ))
-            .await;
-        return;
-    }
+        Ok(session) => session,
+        Err(error) => {
+            let _ = socket
+                .send(Message::Text(
+                    serialize_server_message(&ServerMessage::Error {
+                        message: error.to_string(),
+                    })
+                    .into(),
+                ))
+                .await;
+            return;
+        }
+    };
 
-    if let Err(e) =
-        crate::commands::asr::start_recognizer(sherpa_state.clone(), session_id.clone()).await
-    {
+    if let Err(e) = session.start().await {
         let _ = socket
             .send(Message::Text(
                 serialize_server_message(&ServerMessage::Error {
@@ -292,23 +296,21 @@ async fn handle_online_streaming_socket(
     };
 
     let mut stopping = false;
+    let mut frame_cursor = sona_core::ports::asr::StreamingAudioFrameCursor::default();
     loop {
         tokio::select! {
             msg = socket.recv(), if !stopping => {
                 match msg {
                     Some(Ok(Message::Binary(pcm))) => {
                         let samples = pcm_s16le_bytes_to_f32(&pcm);
-                        if let Err(e) = crate::integrations::asr::feed_audio_samples(
-                            sherpa_state.inner(),
-                            &session_id,
-                            &samples,
-                        ).await {
+                        let frame = frame_cursor.next_samples(samples);
+                        if let Err(e) = session.feed_audio_frame(frame).await {
                             log::error!("Error feeding audio samples: {}", e);
                         }
                     }
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(ClientMessage::Stop) = serde_json::from_str::<ClientMessage>(&text) {
-                            let _ = crate::commands::asr::flush_recognizer(sherpa_state.clone(), session_id.clone()).await;
+                            let _ = session.flush().await;
                             stopping = true;
                         }
                     }
@@ -332,7 +334,7 @@ async fn handle_online_streaming_socket(
         }
     }
 
-    let _ = crate::commands::asr::stop_recognizer(sherpa_state.clone(), session_id.clone()).await;
+    let _ = session.stop().await;
 }
 
 async fn handle_local_streaming_socket(

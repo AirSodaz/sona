@@ -1,10 +1,15 @@
 use async_trait::async_trait;
+use serde_json::json;
 use sona_core::ports::asr::{
-    AsrPortError, AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession,
-    AsrTranscriptUpdateEvent, NoopAsrRuntimeObserver,
+    AsrAudioFrame, AsrEngineConfig, AsrMode, AsrPortError, AsrRuntimeObserver,
+    AsrStreamBoundaryEvent, AsrStreamingErrorEvent, AsrStreamingSession, AsrTranscriptUpdateEvent,
+    AsrTranscriptionRequest, NoopAsrRuntimeObserver, OnlineAsrProviderRequest,
+    StreamingAudioFrameCursor, StreamingInferenceSpec, StreamingOutputPolicy,
+    TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptTextReplacementRule,
+    TranscriptTextReplacementRuleSet,
 };
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
-use sona_core::transcription::transcript::TranscriptUpdate;
+use sona_core::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
 use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
@@ -13,6 +18,7 @@ struct RecordingObserver {
     model_loads: Mutex<Vec<AsrModelLoadMetric>>,
     live_inferences: Mutex<Vec<AsrInferenceMetric>>,
     streaming_errors: Mutex<Vec<AsrStreamingErrorEvent>>,
+    boundaries: Mutex<Vec<AsrStreamBoundaryEvent>>,
 }
 
 impl AsrRuntimeObserver for RecordingObserver {
@@ -30,6 +36,10 @@ impl AsrRuntimeObserver for RecordingObserver {
 
     fn on_streaming_error(&self, event: &AsrStreamingErrorEvent) {
         self.streaming_errors.lock().unwrap().push(event.clone());
+    }
+
+    fn on_stream_boundary(&self, event: &AsrStreamBoundaryEvent) {
+        self.boundaries.lock().unwrap().push(event.clone());
     }
 }
 
@@ -49,11 +59,7 @@ impl AsrStreamingSession for DummySession {
         Ok(())
     }
 
-    async fn feed_audio_chunk(&self, _samples: Vec<u8>) -> Result<(), AsrPortError> {
-        Ok(())
-    }
-
-    async fn feed_audio_samples(&self, _samples: &[f32]) -> Result<(), AsrPortError> {
+    async fn feed_audio_frame(&self, _frame: AsrAudioFrame) -> Result<(), AsrPortError> {
         Ok(())
     }
 }
@@ -112,11 +118,17 @@ fn observer_accepts_typed_streaming_outputs() {
         code: "VOLCENGINE_WEB_SOCKET_CLOSED".to_string(),
         message: "closed".to_string(),
     };
+    let boundary = AsrStreamBoundaryEvent {
+        instance_id: "live-1".to_string(),
+        sequence: 4,
+        end_sample: 6_400,
+    };
 
     observer.on_transcript_update(&event);
     observer.on_model_load(&model_load);
     observer.on_live_inference(&live);
     observer.on_streaming_error(&streaming_error);
+    observer.on_stream_boundary(&boundary);
 
     assert_eq!(*observer.updates.lock().unwrap(), vec![event]);
     assert_eq!(*observer.model_loads.lock().unwrap(), vec![model_load]);
@@ -125,6 +137,7 @@ fn observer_accepts_typed_streaming_outputs() {
         *observer.streaming_errors.lock().unwrap(),
         vec![streaming_error]
     );
+    assert_eq!(*observer.boundaries.lock().unwrap(), vec![boundary]);
 }
 
 #[test]
@@ -154,8 +167,146 @@ async fn streaming_session_is_object_safe() {
     let session: Arc<dyn AsrStreamingSession> = Arc::new(DummySession);
 
     session.start().await.unwrap();
-    session.feed_audio_chunk(vec![0, 1]).await.unwrap();
-    session.feed_audio_samples(&[0.0, 0.25]).await.unwrap();
+    session
+        .feed_audio_frame(AsrAudioFrame::new(1, 0, vec![0.0, 0.25]))
+        .await
+        .unwrap();
     session.flush().await.unwrap();
     session.stop().await.unwrap();
+}
+
+#[test]
+fn audio_frame_cursor_assigns_monotonic_sequence_and_sample_boundaries() {
+    let mut cursor = StreamingAudioFrameCursor::default();
+    let first = cursor.next_pcm_s16le(&[0, 0, 0, 64]).unwrap();
+    let second = cursor.next_samples(vec![0.5; 3]);
+
+    assert_eq!(first.sequence, 0);
+    assert_eq!(first.start_sample, 0);
+    assert_eq!(first.end_sample(), 2);
+    assert_eq!(second.sequence, 1);
+    assert_eq!(second.start_sample, 2);
+    assert_eq!(second.end_sample(), 5);
+
+    let mut cursor = StreamingAudioFrameCursor::default();
+    let explicit = AsrAudioFrame::new(7, 100, vec![0.0; 4]);
+    cursor.observe(&explicit);
+    let next = cursor.next_samples(vec![0.0]);
+    assert_eq!((next.sequence, next.start_sample), (8, 104));
+}
+
+fn local_request() -> AsrTranscriptionRequest {
+    AsrTranscriptionRequest::local_sherpa(
+        AsrMode::Streaming,
+        "model".into(),
+        4,
+        true,
+        "auto".into(),
+        Some("punctuation".into()),
+        Some("vad".into()),
+        5.0,
+        "sensevoice".into(),
+        None,
+        Some("sona".into()),
+        TranscriptNormalizationOptions::default(),
+        TranscriptPostprocessOptions::default(),
+        None,
+        Some("auto".into()),
+    )
+}
+
+#[test]
+fn inference_spec_excludes_consumer_output_policy() {
+    let left = local_request();
+    let mut right = left.clone();
+    right.normalization_options.enable_timeline = true;
+    right.postprocess_options = TranscriptPostprocessOptions {
+        text_replacement_sets: vec![TranscriptTextReplacementRuleSet {
+            enabled: true,
+            ignore_case: false,
+            rules: vec![TranscriptTextReplacementRule {
+                from: "hello".into(),
+                to: "hi".into(),
+            }],
+        }],
+        drop_final_dot_segments: false,
+    };
+
+    assert_eq!(
+        StreamingInferenceSpec::from_request(&left).unwrap(),
+        StreamingInferenceSpec::from_request(&right).unwrap()
+    );
+
+    right.language = "zh".into();
+    assert_ne!(
+        StreamingInferenceSpec::from_request(&left).unwrap(),
+        StreamingInferenceSpec::from_request(&right).unwrap()
+    );
+}
+
+#[test]
+fn inference_spec_debug_redacts_online_configuration() {
+    let request = AsrTranscriptionRequest {
+        mode: AsrMode::Streaming,
+        language: "auto".into(),
+        enable_itn: true,
+        normalization_options: Default::default(),
+        postprocess_options: Default::default(),
+        hotwords: None,
+        speaker_processing: None,
+        engine_config: AsrEngineConfig::Online {
+            provider: OnlineAsrProviderRequest {
+                provider_id: "volcengine-doubao".into(),
+                profile_id: "private-profile".into(),
+                config: json!({ "apiKey": "super-secret-value" }),
+            },
+        },
+    };
+
+    let debug = format!(
+        "{:?}",
+        StreamingInferenceSpec::from_request(&request).unwrap()
+    );
+    assert!(!debug.contains("super-secret-value"));
+    assert!(!debug.contains("private-profile"));
+    assert!(debug.contains("volcengine-doubao"));
+}
+
+#[test]
+fn output_policy_applies_timeline_and_replacements_per_consumer() {
+    let mut request = local_request();
+    request.normalization_options.enable_timeline = true;
+    request.postprocess_options = TranscriptPostprocessOptions {
+        text_replacement_sets: vec![TranscriptTextReplacementRuleSet {
+            enabled: true,
+            ignore_case: false,
+            rules: vec![TranscriptTextReplacementRule {
+                from: "World".into(),
+                to: "Sona".into(),
+            }],
+        }],
+        drop_final_dot_segments: false,
+    };
+    let policy = StreamingOutputPolicy::from_request(&request).unwrap();
+    let update = policy.process_update(TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![TranscriptSegment {
+            id: "raw-1".into(),
+            text: "Hello. World.".into(),
+            start: 0.0,
+            end: 2.0,
+            is_final: true,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            speaker: None,
+            speaker_attribution: None,
+        }],
+    });
+
+    assert_eq!(update.remove_ids, vec!["raw-1"]);
+    assert_eq!(update.upsert_segments.len(), 2);
+    assert_eq!(update.upsert_segments[1].text, "Sona.");
 }

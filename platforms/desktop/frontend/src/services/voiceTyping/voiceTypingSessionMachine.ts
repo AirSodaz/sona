@@ -123,23 +123,23 @@ export class VoiceTypingSessionMachine {
         );
 
         try {
-            const startPromise = this.options.transcriptionService.start(
-                (update) => {
-                    this.enqueueSegmentUpdate(sessionId, requestId, update);
-                },
-                (error) => {
-                    if (!this.isCurrentSession(sessionId, requestId)) {
-                        return;
-                    }
-
-                    logger.error('[VoiceTypingSessionMachine] Voice typing transcription error:', error);
-                    void this.handleSessionError(sessionId, requestId, error);
-                },
-                {
-                    callbackOwner: 'voice-typing',
-                    callbackSessionId: sessionId,
+            const service = this.options.transcriptionService;
+            const onUpdate = (update: TranscriptUpdate) => {
+                this.enqueueSegmentUpdate(sessionId, requestId, update);
+            };
+            const onError = (error: string) => {
+                if (!this.isCurrentSession(sessionId, requestId)) {
+                    return;
                 }
-            );
+
+                logger.error('[VoiceTypingSessionMachine] Voice typing transcription error:', error);
+                void this.handleSessionError(sessionId, requestId, error);
+            };
+            const callbackOptions = {
+                callbackOwner: 'voice-typing',
+                callbackSessionId: sessionId,
+            };
+            const startPromise = service.prepareNativeStart(onUpdate, onError, callbackOptions);
 
             const preparingRevision = await preparingPromise;
             await startPromise;
@@ -149,6 +149,17 @@ export class VoiceTypingSessionMachine {
             }
 
             await this.options.ensureMicrophoneStarted();
+
+            if (!this.isCurrentSession(sessionId, requestId) || this.isSessionStopping()) {
+                return;
+            }
+
+            await service.attachPreparedNative({
+                sourceKind: 'microphone',
+                deviceName: null,
+                callbackOwner: 'voice-typing',
+                callbackSessionId: sessionId,
+            });
 
             if (!this.isCurrentSession(sessionId, requestId) || this.isSessionStopping()) {
                 return;

@@ -11,7 +11,6 @@ import {
     listSystemAudioDeviceOptions,
 } from '../../services/audioDeviceService';
 import {
-    setMicrophoneBoost,
     startMicrophoneCapture,
     startSystemAudioCapture,
     stopMicrophoneCapture,
@@ -187,15 +186,6 @@ export function SettingsMicrophoneTab({
             isMounted = false;
         };
     }, [shouldRunActiveEffects, t]);
-
-    // Sync Microphone Boost to Rust backend
-    useEffect(() => {
-        if (!shouldRunActiveEffects) {
-            return;
-        }
-
-        setMicrophoneBoost(microphoneBoost).catch(logger.error);
-    }, [microphoneBoost, shouldRunActiveEffects]);
 
     const startMicrophonePreview = useCallback(async (deviceId: string, isCurrentRequest: () => boolean) => {
         if (!isCurrentRequest()) {

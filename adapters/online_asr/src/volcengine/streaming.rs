@@ -2,13 +2,13 @@ use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use log::{info, warn};
 use sona_core::ports::asr::{
-    AsrMode, AsrPortError, AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession,
-    AsrTranscriptionRequest,
+    AsrAudioFrame, AsrMode, AsrPortError, AsrRuntimeObserver, AsrStreamBoundaryEvent,
+    AsrStreamingErrorEvent, AsrStreamingSession, AsrTranscriptionRequest,
 };
 use sona_core::transcription::postprocess::TranscriptPostprocessor;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
 };
 use std::time::Duration;
 use tokio::sync::{Mutex, Notify};
@@ -31,6 +31,8 @@ struct VolcengineStreamingSession {
     // Converted to AsrPortError at the AsrStreamingSession trait boundary.
     final_response_outcome: Arc<Mutex<Option<Result<(), SherpaError>>>>,
     reader_task: Arc<Mutex<Option<JoinHandle<()>>>>,
+    last_frame_sequence: Arc<AtomicU64>,
+    last_frame_end_sample: Arc<AtomicU64>,
 }
 
 type VolcengineWriter = futures_util::stream::SplitSink<
@@ -59,12 +61,16 @@ pub fn create_volcengine_streaming_session(
         final_response_received: Arc::new(Notify::new()),
         final_response_outcome: Arc::new(Mutex::new(None)),
         reader_task: Arc::new(Mutex::new(None)),
+        last_frame_sequence: Arc::new(AtomicU64::new(0)),
+        last_frame_end_sample: Arc::new(AtomicU64::new(0)),
     }))
 }
 
 #[async_trait]
 impl AsrStreamingSession for VolcengineStreamingSession {
     async fn start(&self) -> Result<(), AsrPortError> {
+        self.last_frame_sequence.store(0, Ordering::Release);
+        self.last_frame_end_sample.store(0, Ordering::Release);
         start_streaming_recognizer_impl(self.observer.clone(), self, &self.instance_id)
             .await
             .map_err(AsrPortError::from)
@@ -82,14 +88,12 @@ impl AsrStreamingSession for VolcengineStreamingSession {
             .map_err(AsrPortError::from)
     }
 
-    async fn feed_audio_chunk(&self, samples: Vec<u8>) -> Result<(), AsrPortError> {
-        feed_audio_chunk_impl(self, samples)
-            .await
-            .map_err(AsrPortError::from)
-    }
-
-    async fn feed_audio_samples(&self, samples: &[f32]) -> Result<(), AsrPortError> {
-        feed_audio_samples_impl(self, samples)
+    async fn feed_audio_frame(&self, frame: AsrAudioFrame) -> Result<(), AsrPortError> {
+        self.last_frame_sequence
+            .store(frame.sequence, Ordering::Release);
+        self.last_frame_end_sample
+            .store(frame.end_sample(), Ordering::Release);
+        feed_audio_samples_impl(self, &frame.samples)
             .await
             .map_err(AsrPortError::from)
     }
@@ -168,6 +172,8 @@ async fn start_streaming_recognizer_impl(
     let final_response_received = session.final_response_received.clone();
     let final_response_outcome = session.final_response_outcome.clone();
     let observer_for_task = observer.clone();
+    let last_frame_sequence = Arc::clone(&session.last_frame_sequence);
+    let last_frame_end_sample = Arc::clone(&session.last_frame_end_sample);
     let reader_task = tokio::spawn(async move {
         while let Some(message) = reader.next().await {
             match message {
@@ -193,6 +199,8 @@ async fn start_streaming_recognizer_impl(
                                 normalization_options,
                             );
                             let processed = postprocessor.process_segments(normalized);
+                            let has_final_segment =
+                                processed.iter().any(|segment| segment.is_final);
                             for segment in processed {
                                 let update = super::transcript::build_transcript_update(
                                     segment,
@@ -203,6 +211,13 @@ async fn start_streaming_recognizer_impl(
                                     &instance_id_for_task,
                                     &update,
                                 );
+                            }
+                            if has_final_segment || is_final {
+                                observer_for_task.on_stream_boundary(&AsrStreamBoundaryEvent {
+                                    instance_id: instance_id_for_task.clone(),
+                                    sequence: last_frame_sequence.load(Ordering::Acquire),
+                                    end_sample: last_frame_end_sample.load(Ordering::Acquire),
+                                });
                             }
                             if is_final {
                                 publish_reader_outcome(
@@ -331,25 +346,6 @@ fn insert_header(
     Ok(())
 }
 
-async fn feed_audio_chunk_impl(
-    session: &VolcengineStreamingSession,
-    samples: Vec<u8>,
-) -> Result<(), SherpaError> {
-    let mut writer_guard = session.writer.lock().await;
-    let Some(writer) = writer_guard.as_mut() else {
-        return Err(SherpaError::VolcengineWebSocketNotConnected);
-    };
-    writer
-        .send(Message::Binary(crate::build_volcengine_audio_frame(
-            &samples, false,
-        )))
-        .await
-        .map_err(|error| SherpaError::VolcengineAudioSendFailed {
-            error: error.to_string(),
-        })?;
-    Ok(())
-}
-
 /// Feed f32 audio samples from the hardware capture worker to a Volcengine
 /// streaming session. Converts f32 -> i16 PCM bytes and sends via WebSocket.
 async fn feed_audio_samples_impl(
@@ -359,7 +355,7 @@ async fn feed_audio_samples_impl(
     let mut writer_guard = session.writer.lock().await;
     let Some(writer) = writer_guard.as_mut() else {
         // WebSocket not yet connected -- silently skip. The session may still
-        // be in the "preparing" phase before start_recognizer connects.
+        // be in the "preparing" phase before the session connects.
         return Ok(());
     };
     let pcm_bytes = crate::f32_samples_to_i16_pcm_bytes(samples);
@@ -450,9 +446,9 @@ mod tests {
     use super::*;
     use futures_util::{SinkExt, StreamExt};
     use sona_core::ports::asr::{
-        AsrEngineConfig, AsrMode, AsrRuntimeObserver, AsrStreamingErrorEvent, AsrStreamingSession,
-        AsrTranscriptUpdateEvent, AsrTranscriptionRequest, OnlineAsrProviderRequest,
-        VOLCENGINE_DOUBAO_PROVIDER_ID,
+        AsrAudioFrame, AsrEngineConfig, AsrMode, AsrRuntimeObserver, AsrStreamBoundaryEvent,
+        AsrStreamingErrorEvent, AsrStreamingSession, AsrTranscriptUpdateEvent,
+        AsrTranscriptionRequest, OnlineAsrProviderRequest, VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
     use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
     use sona_core::transcription::postprocess::{
@@ -469,6 +465,7 @@ mod tests {
     struct RecordingObserver {
         events: StdMutex<Vec<AsrTranscriptUpdateEvent>>,
         errors: StdMutex<Vec<AsrStreamingErrorEvent>>,
+        boundaries: StdMutex<Vec<AsrStreamBoundaryEvent>>,
     }
 
     impl AsrRuntimeObserver for RecordingObserver {
@@ -482,6 +479,10 @@ mod tests {
 
         fn on_streaming_error(&self, event: &AsrStreamingErrorEvent) {
             self.errors.lock().unwrap().push(event.clone());
+        }
+
+        fn on_stream_boundary(&self, event: &AsrStreamBoundaryEvent) {
+            self.boundaries.lock().unwrap().push(event.clone());
         }
     }
 
@@ -568,7 +569,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn byte_feed_before_connect_returns_the_existing_error() {
+    async fn frame_feed_before_connect_is_a_silent_success() {
         let session = create_volcengine_streaming_session(
             "live-1".to_string(),
             test_request("ws://127.0.0.1:1", AsrMode::Streaming),
@@ -576,23 +577,10 @@ mod tests {
         )
         .unwrap();
 
-        let err = session
-            .feed_audio_chunk(vec![1, 2])
+        session
+            .feed_audio_frame(AsrAudioFrame::new(0, 0, vec![0.25, -0.25]))
             .await
-            .expect_err("feed before connect should fail");
-        assert_eq!(err.code(), "VOLCENGINE_WEB_SOCKET_NOT_CONNECTED");
-    }
-
-    #[tokio::test]
-    async fn f32_feed_before_connect_is_a_silent_success() {
-        let session = create_volcengine_streaming_session(
-            "live-1".to_string(),
-            test_request("ws://127.0.0.1:1", AsrMode::Streaming),
-            Arc::new(RecordingObserver::default()),
-        )
-        .unwrap();
-
-        session.feed_audio_samples(&[0.25, -0.25]).await.unwrap();
+            .unwrap();
     }
 
     async fn streaming_error_from_server_message(message: Message) -> AsrStreamingErrorEvent {
@@ -707,8 +695,14 @@ mod tests {
         .unwrap();
 
         session.start().await.unwrap();
-        session.feed_audio_chunk(vec![1, 2, 3, 4]).await.unwrap();
-        session.feed_audio_samples(&[0.0, 1.0]).await.unwrap();
+        session
+            .feed_audio_frame(AsrAudioFrame::new(6, 31_998, vec![0.0, 0.0]))
+            .await
+            .unwrap();
+        session
+            .feed_audio_frame(AsrAudioFrame::new(7, 32_000, vec![0.0, 1.0]))
+            .await
+            .unwrap();
         let flush_started = Instant::now();
         session.flush().await.unwrap();
         assert!(flush_started.elapsed() < Duration::from_secs(1));
@@ -727,7 +721,7 @@ mod tests {
         assert_eq!(observation.frames.len(), 4);
         assert_eq!(&observation.frames[0][..4], &[0x11, 0x10, 0x10, 0x00]);
         assert_eq!(&observation.frames[1][..4], &[0x11, 0x20, 0x00, 0x00]);
-        assert_eq!(binary_payload(&observation.frames[1]), &[1, 2, 3, 4]);
+        assert_eq!(binary_payload(&observation.frames[1]), &[0, 0, 0, 0]);
         assert_eq!(&observation.frames[2][..4], &[0x11, 0x20, 0x00, 0x00]);
         assert_eq!(binary_payload(&observation.frames[2]), &[0, 0, 0xff, 0x7f]);
         assert_eq!(&observation.frames[3][..4], &[0x11, 0x22, 0x00, 0x00]);
@@ -741,6 +735,14 @@ mod tests {
         assert_eq!(events[0].update.upsert_segments.len(), 1);
         assert_eq!(events[0].update.upsert_segments[0].text, "hello from mock");
         assert!(events[0].update.upsert_segments[0].is_final);
+        assert_eq!(
+            observer.boundaries.lock().unwrap().as_slice(),
+            &[AsrStreamBoundaryEvent {
+                instance_id: "live-1".to_string(),
+                sequence: 7,
+                end_sample: 32_002,
+            }]
+        );
         assert!(observer.errors.lock().unwrap().is_empty());
     }
 

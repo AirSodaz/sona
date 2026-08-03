@@ -11,13 +11,11 @@ const tauriEventMocks = vi.hoisted(() => ({
   listen: vi.fn(),
 }));
 
-const tauriFsMocks = vi.hoisted(() => ({
-  remove: vi.fn(),
-}));
-
 const transcriptionServiceMocks = vi.hoisted(() => ({
-  captionStart: vi.fn(),
+  captionStartNative: vi.fn(),
+  captionStartExternal: vi.fn(),
   captionStop: vi.fn(),
+  captionRestart: vi.fn(),
   captionSendAudioInt16: vi.fn(),
 }));
 
@@ -27,10 +25,6 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 vi.mock('@tauri-apps/api/event', () => ({
   listen: tauriEventMocks.listen,
-}));
-
-vi.mock('@tauri-apps/plugin-fs', () => ({
-  remove: tauriFsMocks.remove,
 }));
 
 vi.mock('../captionWindowService', () => ({
@@ -44,8 +38,10 @@ vi.mock('../captionWindowService', () => ({
 
 vi.mock('../transcriptionService', () => ({
   captionTranscriptionService: {
-    start: transcriptionServiceMocks.captionStart,
+    startNative: transcriptionServiceMocks.captionStartNative,
+    startExternal: transcriptionServiceMocks.captionStartExternal,
     stop: transcriptionServiceMocks.captionStop,
+    restartStream: transcriptionServiceMocks.captionRestart,
     sendAudioInt16: transcriptionServiceMocks.captionSendAudioInt16,
   },
 }));
@@ -88,44 +84,33 @@ describe('captionSessionRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     captionSessionRuntime.resetForTesting();
-    transcriptionServiceMocks.captionStart.mockResolvedValue(undefined);
+    transcriptionServiceMocks.captionStartNative.mockResolvedValue(undefined);
+    transcriptionServiceMocks.captionStartExternal.mockResolvedValue(undefined);
     transcriptionServiceMocks.captionStop.mockResolvedValue(undefined);
+    transcriptionServiceMocks.captionRestart.mockResolvedValue(undefined);
     tauriEventMocks.listen.mockResolvedValue(vi.fn());
-    tauriFsMocks.remove.mockResolvedValue(undefined);
   });
 
   it('starts and stops native caption capture through the caption service', async () => {
     const unlisten = vi.fn();
     tauriEventMocks.listen.mockResolvedValue(unlisten);
-    tauriCoreMocks.invoke.mockImplementation(async (command: string) => {
-      if (command === 'start_system_audio_capture') {
-        return undefined;
-      }
-
-      if (command === 'stop_system_audio_capture') {
-        return 'C:/tmp/caption.wav';
-      }
-
-      throw new Error(`Unexpected native command: ${command}`);
-    });
-
     await captionSessionRuntime.start(config, () => true, vi.fn());
     await captionSessionRuntime.stop();
 
-    expect(transcriptionServiceMocks.captionStart).toHaveBeenCalledTimes(1);
+    expect(transcriptionServiceMocks.captionStartNative).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.any(Function),
+      {
+        sourceKind: 'system',
+        deviceName: null,
+        callbackOwner: 'caption',
+      },
+    );
     expect(captionWindowService.open).toHaveBeenCalledWith(expect.objectContaining({
       width: config.captionWindowWidth,
       fontSize: config.captionFontSize,
     }));
-    expect(tauriCoreMocks.invoke).toHaveBeenCalledWith('start_system_audio_capture', {
-      deviceName: null,
-      instanceId: 'caption',
-    });
     expect(transcriptionServiceMocks.captionStop).toHaveBeenCalledTimes(1);
-    expect(tauriCoreMocks.invoke).toHaveBeenCalledWith('stop_system_audio_capture', {
-      instanceId: 'caption',
-    });
-    expect(tauriFsMocks.remove).toHaveBeenCalledWith('C:/tmp/caption.wav');
     expect(unlisten).toHaveBeenCalledTimes(1);
   });
 

@@ -1,6 +1,5 @@
-﻿use async_trait::async_trait;
-use sona_core::ports::asr::{AsrPortError, AsrRuntimeObserver, AsrStreamingSession};
-use std::sync::Arc;
+use async_trait::async_trait;
+use sona_core::ports::asr::AsrPortError;
 
 use super::{AsrState, AsrTranscriptionRequest, TranscriptSegment};
 
@@ -27,12 +26,4 @@ pub trait AsrProviderAdapter: Send + Sync {
         &self,
         request: &AsrTranscriptionRequest,
     ) -> Result<Option<std::sync::Arc<dyn AsrBatchProcessor>>, AsrPortError>;
-
-    async fn create_streaming_session(
-        &self,
-        state: &AsrState,
-        instance_id: &str,
-        request: &AsrTranscriptionRequest,
-        observer: Arc<dyn AsrRuntimeObserver>,
-    ) -> Result<Option<Arc<dyn AsrStreamingSession>>, AsrPortError>;
 }

@@ -1,22 +1,21 @@
 import { v4 as uuidv4 } from 'uuid';
-import { logger } from "../utils/logger";
 import { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import type { AppConfig } from '../types/config';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { normalizeTranscriptSegments } from '../utils/transcriptTiming';
+import { type AsrTranscriptionRequest } from './asrConfigService';
 import {
-    type AsrTranscriptionRequest,
-    type TranscriptPostprocessOptions,
-} from './asrConfigService';
-import {
-    initRecognizer,
+    pauseNativeLiveTranscription,
+    prepareLiveTranscription,
     processBatchFile,
+    resumeNativeLiveTranscription,
+    startNativeLiveTranscription,
+    stopNativeLiveTranscription,
 } from './tauri/recognizer';
 import { RecognizerLifecycle } from './transcription/recognizerLifecycle';
 import {
     buildBatchTranscriptionRequest,
-    buildRecognizerInitRequest,
     buildStreamingAsrRequest,
     isTranscriptionRequestConfigured,
 } from './transcription/transcriptionRequest';
@@ -35,20 +34,17 @@ interface StartOptions {
     callbackSessionId?: string | null;
 }
 
-type ServiceConfig = AsrTranscriptionRequest;
-
-function arePostprocessOptionsEqual(
-    left: TranscriptPostprocessOptions,
-    right: TranscriptPostprocessOptions,
-): boolean {
-    return JSON.stringify(left) === JSON.stringify(right);
+export interface NativeTranscriptionStartOptions extends StartOptions {
+    sourceKind: 'system' | 'microphone';
+    deviceName: string | null;
+    outputPath?: string | null;
+    gain?: number;
 }
 
-
+type ServiceConfig = AsrTranscriptionRequest;
 
 export interface TranscriptionServicePorts {
     getEffectiveConfigSnapshot: () => AppConfig;
-    initRecognizer: typeof initRecognizer;
     processBatchFile: typeof processBatchFile;
 }
 
@@ -60,10 +56,13 @@ export class TranscriptionService {
     private modelPath: string = '';
     private enableITN: boolean = true;
     private onError: ErrorCallback | null = null;
-    private startingPromise: Promise<void> | null = null;
     private runningConfig: ServiceConfig | null = null;
     private language: string = 'auto';
     private readonly lifecycle: RecognizerLifecycle;
+    private transport: 'idle' | 'external' | 'native' = 'idle';
+    private nativeSourceKind: 'system' | 'microphone' | null = null;
+    private nativeGain = 1;
+    private preparedNativeConfig: ServiceConfig | null = null;
 
     constructor(
         private readonly instanceId: string = 'default',
@@ -85,32 +84,82 @@ export class TranscriptionService {
     }
 
     async prepare(): Promise<void> {
-        if (this._isConfigMatch()) return;
-        if (!isTranscriptionRequestConfigured(this._buildStreamingServiceConfig())) return;
-        return this._initBackend();
+        const config = this._buildStreamingServiceConfig();
+        if (!isTranscriptionRequestConfigured(config)) return;
+        await prepareLiveTranscription(config);
     }
 
-    async start(onUpdate: TranscriptionUpdateCallback, onError: ErrorCallback, options?: StartOptions): Promise<void> {
-        this.onError = onError;
+    async startExternal(
+        onUpdate: TranscriptionUpdateCallback,
+        onError: ErrorCallback,
+        options?: StartOptions,
+    ): Promise<void> {
+        const config = await this.prepareSharedStart(onUpdate, onError, options);
+        await prepareLiveTranscription(config);
+        await this.lifecycle.startExternal(config, onError);
+        this.runningConfig = config;
+        this.transport = 'external';
+        this.nativeSourceKind = null;
+    }
 
-        const initialConfig = this._buildStreamingServiceConfig();
-        if (!isTranscriptionRequestConfigured(initialConfig)) {
+    async startNative(
+        onUpdate: TranscriptionUpdateCallback,
+        onError: ErrorCallback,
+        options: NativeTranscriptionStartOptions,
+    ): Promise<void> {
+        await this.prepareNativeStart(onUpdate, onError, options);
+        await this.attachPreparedNative(options);
+    }
+
+    async prepareNativeStart(
+        onUpdate: TranscriptionUpdateCallback,
+        onError: ErrorCallback,
+        options?: StartOptions,
+    ): Promise<void> {
+        const config = await this.prepareSharedStart(onUpdate, onError, options);
+        await prepareLiveTranscription(config);
+        this.preparedNativeConfig = config;
+    }
+
+    async attachPreparedNative(options: NativeTranscriptionStartOptions): Promise<void> {
+        const config = this.preparedNativeConfig;
+        if (!config) {
+            throw new Error(`Native transcription for ${this.instanceId} was not prepared`);
+        }
+        await startNativeLiveTranscription({
+            consumerId: this.instanceId,
+            sourceKind: options.sourceKind,
+            deviceName: options.deviceName,
+            outputPath: options.outputPath ?? null,
+            gain: options.gain ?? 1,
+            asrRequest: config,
+        });
+        this.lifecycle.markNativeRunning();
+        this.runningConfig = config;
+        this.transport = 'native';
+        this.nativeSourceKind = options.sourceKind;
+        this.nativeGain = options.gain ?? 1;
+        this.preparedNativeConfig = null;
+    }
+
+    private async prepareSharedStart(
+        onUpdate: TranscriptionUpdateCallback,
+        onError: ErrorCallback,
+        options?: StartOptions,
+    ): Promise<ServiceConfig> {
+        this.onError = onError;
+        const config = this._buildStreamingServiceConfig();
+        if (!isTranscriptionRequestConfigured(config)) {
             const errorMessage = 'ASR is not configured';
             onError(errorMessage);
             throw new Error(errorMessage);
         }
-
         this.lifecycle.registerCallback(onUpdate, onError, {
             owner: options?.callbackOwner,
             sessionId: options?.callbackSessionId,
         });
         await this.lifecycle.ensureGlobalBus();
-
-        if (!this._isConfigMatch()) {
-            await this._initBackend();
-        }
-
-        await this.lifecycle.start(onError);
+        return config;
     }
 
     private _buildStreamingServiceConfig(): ServiceConfig {
@@ -124,109 +173,110 @@ export class TranscriptionService {
         });
     }
 
-    private async _initBackend(): Promise<void> {
-        if (this.startingPromise) return this.startingPromise;
-
-        this.startingPromise = (async () => {
-            try {
-                const { request, asrRequest: configToUse } = buildRecognizerInitRequest({
-                    appConfig: this.ports.getEffectiveConfigSnapshot(),
-                    instanceId: this.instanceId,
-                    modelPathOverride: this.modelPath,
-                    language: this.language,
-                    enableItn: this.enableITN,
-                });
-                if (!isTranscriptionRequestConfigured(configToUse)) {
-                    throw new Error('ASR is not configured');
-                }
-
-                await this.ports.initRecognizer(request);
-
-                this.runningConfig = configToUse;
-            } catch (error) {
-                logger.error(`[TranscriptionService:${this.instanceId}] Failed to initialize:`, error);
-                if (this.onError) this.onError(`Failed to initialize: ${error}`);
-                this.runningConfig = null;
-                throw error;
-            }
-        })();
-
-        try {
-            await this.startingPromise;
-        } finally {
-            this.startingPromise = null;
-        }
-    }
-
-    private _isConfigMatch(): boolean {
-        if (!this.runningConfig) return false;
-
-        const nextRequest = this._buildStreamingServiceConfig();
-
-        const mismatches: string[] = [];
-        if (nextRequest.engine !== this.runningConfig.engine) mismatches.push(`engine: ${nextRequest.engine} vs ${this.runningConfig.engine}`);
-        if (this.enableITN !== this.runningConfig.enableItn) mismatches.push(`enableITN: ${this.enableITN} vs ${this.runningConfig.enableItn}`);
-        if (this.language !== this.runningConfig.language) mismatches.push(`language: ${this.language} vs ${this.runningConfig.language}`);
-        if (nextRequest.normalizationOptions.enableTimeline !== this.runningConfig.normalizationOptions.enableTimeline) mismatches.push(`enableTimeline: ${nextRequest.normalizationOptions.enableTimeline} vs ${this.runningConfig.normalizationOptions.enableTimeline}`);
-        if (!arePostprocessOptionsEqual(nextRequest.postprocessOptions, this.runningConfig.postprocessOptions)) mismatches.push('postprocessOptions changed');
-        
-        if (nextRequest.engine === 'local-sherpa' && this.runningConfig.engine === 'local-sherpa') {
-            if (nextRequest.modelPath !== this.runningConfig.modelPath) mismatches.push(`modelPath: ${nextRequest.modelPath} vs ${this.runningConfig.modelPath}`);
-            if (nextRequest.vadModel !== this.runningConfig.vadModel) mismatches.push(`vadModel: ${nextRequest.vadModel} vs ${this.runningConfig.vadModel}`);
-            if (nextRequest.punctuationModel !== this.runningConfig.punctuationModel) mismatches.push(`punctuationModel: ${nextRequest.punctuationModel} vs ${this.runningConfig.punctuationModel}`);
-            if (nextRequest.hotwords !== this.runningConfig.hotwords) mismatches.push(`hotwords: ${nextRequest.hotwords} vs ${this.runningConfig.hotwords}`);
-            if (nextRequest.modelType !== this.runningConfig.modelType) mismatches.push(`modelType: ${nextRequest.modelType} vs ${this.runningConfig.modelType}`);
-        } else if (nextRequest.engine === 'online' && this.runningConfig.engine === 'online') {
-            if (JSON.stringify(nextRequest.onlineProvider) !== JSON.stringify(this.runningConfig.onlineProvider)) {
-                mismatches.push('online ASR provider config changed');
-            }
-        }
-
-        if (mismatches.length > 0) {
-            logger.info(`[TranscriptionService:${this.instanceId}] Config mismatch detected. Model will be re-initialized.`, mismatches);
-            return false;
-        }
-
-        return true;
-    }
-
     async stop(): Promise<void> {
-        await this.lifecycle.stop();
+        this.preparedNativeConfig = null;
+        if (this.transport === 'external') {
+            await this.lifecycle.stopExternal();
+            this.runningConfig = null;
+            this.transport = 'idle';
+            return;
+        }
+        if (this.transport === 'native' && this.nativeSourceKind) {
+            await stopNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
+            this.lifecycle.markStopped();
+            this.runningConfig = null;
+            this.transport = 'idle';
+            this.nativeSourceKind = null;
+            return;
+        }
         this.runningConfig = null;
+        this.transport = 'idle';
+    }
+
+    async stopNativeCapture(): Promise<string> {
+        this.preparedNativeConfig = null;
+        if (this.transport !== 'native' || !this.nativeSourceKind) {
+            return '';
+        }
+        const path = await stopNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
+        this.lifecycle.markStopped();
+        this.runningConfig = null;
+        this.transport = 'idle';
+        this.nativeSourceKind = null;
+        return path;
     }
 
     async softStop(): Promise<void> {
-        await this.lifecycle.flushAndStop();
+        this.preparedNativeConfig = null;
+        if (this.transport === 'native' && this.nativeSourceKind) {
+            await pauseNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
+            this.lifecycle.markStopped();
+            return;
+        }
+        if (this.transport === 'external') {
+            await this.lifecycle.stopExternal();
+            return;
+        }
         this.runningConfig = null;
+        this.transport = 'idle';
     }
 
     async pauseStream(): Promise<void> {
-        await this.softStop();
+        if (this.transport === 'native' && this.nativeSourceKind) {
+            await pauseNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
+            this.lifecycle.markStopped();
+            return;
+        }
+        if (this.transport === 'external') {
+            await this.lifecycle.stopExternal();
+            return;
+        }
     }
 
     async resumeStream(): Promise<void> {
-        if (this.lifecycle.running) {
+        if (this.transport === 'native' && this.nativeSourceKind && this.runningConfig) {
+            await resumeNativeLiveTranscription({
+                consumerId: this.instanceId,
+                sourceKind: this.nativeSourceKind,
+                gain: this.nativeGain,
+                asrRequest: this.runningConfig,
+            });
+            this.lifecycle.markNativeRunning();
             return;
         }
-
-        const nextConfig = this._buildStreamingServiceConfig();
-        if (!isTranscriptionRequestConfigured(nextConfig)) {
-            const errorMessage = 'ASR is not configured';
-            if (this.onError) this.onError(errorMessage);
-            throw new Error(errorMessage);
+        if (this.transport === 'external' && this.runningConfig) {
+            await this.lifecycle.startExternal(
+                this.runningConfig,
+                (error) => this.onError?.(error),
+            );
+            return;
         }
+    }
 
-        if (!this.lifecycle.hasCallbackRegistration()) {
-            throw new Error(`No active callback registration for ${this.instanceId}`);
+    async restartStream(): Promise<void> {
+        const config = this._buildStreamingServiceConfig();
+        if (!isTranscriptionRequestConfigured(config)) {
+            throw new Error('ASR is not configured');
         }
-
-        await this.lifecycle.ensureGlobalBus();
-
-        if (!this._isConfigMatch()) {
-            await this._initBackend();
+        await prepareLiveTranscription(config);
+        if (this.transport === 'native' && this.nativeSourceKind) {
+            await pauseNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
+            this.lifecycle.markStopped();
+            this.runningConfig = config;
+            await resumeNativeLiveTranscription({
+                consumerId: this.instanceId,
+                sourceKind: this.nativeSourceKind,
+                gain: this.nativeGain,
+                asrRequest: config,
+            });
+            this.lifecycle.markNativeRunning();
+            return;
         }
-
-        await this.lifecycle.start((error) => this.onError?.(error));
+        if (this.transport === 'external') {
+            await this.lifecycle.stopExternal();
+            await this.lifecycle.startExternal(config, (error) => this.onError?.(error));
+            this.runningConfig = config;
+        }
     }
 
     async terminate(): Promise<void> {
@@ -234,7 +284,9 @@ export class TranscriptionService {
     }
 
     async sendAudioInt16(samples: Int16Array): Promise<void> {
-        await this.lifecycle.feedAudioInt16(samples);
+        if (this.transport === 'external') {
+            await this.lifecycle.feedExternalAudioInt16(samples);
+        }
     }
 
     async transcribeFile(
@@ -329,7 +381,6 @@ export function createTranscriptionService(
 
 const defaultPorts: TranscriptionServicePorts = {
     getEffectiveConfigSnapshot,
-    initRecognizer,
     processBatchFile,
 };
 

@@ -1,4 +1,4 @@
-﻿use super::metrics::{
+use super::metrics::{
     AsrInferenceMetric, current_time_millis, duration_to_ms, log_inference_metric,
     set_batch_inference_metric,
 };
@@ -6,9 +6,7 @@ use super::transcript::apply_timeline_normalization;
 use super::types::{AsrTranscriptionRequest, TranscriptSegment};
 use super::{AsrBatchProcessor, AsrPortError, AsrProviderAdapter, AsrState};
 use async_trait::async_trait;
-use sona_core::ports::asr::{
-    AsrPortErrorKind, AsrRuntimeObserver, AsrStreamingSession, OnlineBatchTranscriptionRequest,
-};
+use sona_core::ports::asr::{AsrPortErrorKind, OnlineBatchTranscriptionRequest};
 use sona_core::transcription::postprocess::TranscriptPostprocessor;
 use std::sync::Arc;
 use std::time::Instant;
@@ -42,29 +40,6 @@ impl AsrProviderAdapter for DesktopOnlineAsrAdapter {
             .with_code("UNSUPPORTED_ONLINE_PROVIDER"));
         }
         Ok(Some(Arc::new(OnlineBatchProcessor)))
-    }
-
-    async fn create_streaming_session(
-        &self,
-        _state: &AsrState,
-        instance_id: &str,
-        request: &AsrTranscriptionRequest,
-        observer: Arc<dyn AsrRuntimeObserver>,
-    ) -> Result<Option<Arc<dyn AsrStreamingSession>>, AsrPortError> {
-        let provider_id = sona_online_asr::resolve_online_asr_provider_id(request)?;
-        if provider_id != self.provider_id {
-            return Err(AsrPortError::new(
-                AsrPortErrorKind::Unsupported,
-                format!("不支持的在线 ASR provider：{provider_id}"),
-            )
-            .with_code("UNSUPPORTED_ONLINE_PROVIDER"));
-        }
-        let session = sona_online_asr::OnlineAsrAdapter.create_streaming_session(
-            instance_id.to_string(),
-            request.clone(),
-            observer,
-        )?;
-        Ok(Some(session))
     }
 }
 

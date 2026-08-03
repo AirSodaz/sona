@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { buildTestConfig } from '../../../test-utils/configTestUtils';
 import {
   buildBatchTranscriptionRequest,
-  buildRecognizerInitRequest,
+  buildStreamingAsrRequest,
   resolveStreamingSlot,
 } from '../transcriptionRequest';
 
@@ -25,7 +25,7 @@ describe('transcriptionRequest helpers', () => {
     expect(resolveStreamingSlot('custom')).toBe('live');
   });
 
-  it('builds a record recognizer init request with local model override and timeline enabled', () => {
+  it('builds a record streaming request with local model override and timeline enabled', () => {
     const config = buildTestConfig({
       batchModelPath: '/models/batch',
       streamingModelPath: '/models/streaming',
@@ -42,7 +42,7 @@ describe('transcriptionRequest helpers', () => {
       ],
     });
 
-    const { request, asrRequest } = buildRecognizerInitRequest({
+    const asrRequest = buildStreamingAsrRequest({
       appConfig: config,
       instanceId: 'record',
       modelPathOverride: '/models/runtime-streaming',
@@ -62,10 +62,6 @@ describe('transcriptionRequest helpers', () => {
         dropFinalDotSegments: true,
       },
     }));
-    expect(request).toEqual({
-      instanceId: 'record',
-      asrRequest,
-    });
   });
 
   it('disables timeline for non-record streaming instances', () => {
@@ -74,14 +70,14 @@ describe('transcriptionRequest helpers', () => {
       enableTimeline: true,
     });
 
-    const { request } = buildRecognizerInitRequest({
+    const request = buildStreamingAsrRequest({
       appConfig: config,
       instanceId: 'caption',
       language: 'en',
       enableItn: true,
     });
 
-    expect(request.asrRequest.normalizationOptions).toEqual({ enableTimeline: false });
+    expect(request.normalizationOptions).toEqual({ enableTimeline: false });
   });
 
   it('builds batch process requests with speaker processing and save target', () => {

@@ -79,6 +79,32 @@ import type {
 } from "../speakerReviewService";
 import { TauriCommand, type TauriCommandName } from "./commands";
 
+export interface LiveTranscriptionSubscription {
+  consumerId: string;
+  pipelineId: string;
+  shared: boolean;
+  transient: boolean;
+}
+
+export interface LiveCaptureLease {
+  sourceId: string;
+  sourceGeneration: number;
+  sourceCursor: number;
+}
+
+export interface LiveNativeTranscriptionStart {
+  lease: LiveCaptureLease;
+  subscription: LiveTranscriptionSubscription;
+}
+
+export interface LiveTranscriptionMetrics {
+  activeSources: number;
+  activePipelines: number;
+  activeConsumers: number;
+  sharedPipelines: number;
+  avoidedFeedCount: number;
+}
+
 type AudioDevice = {
   name: string;
 };
@@ -243,10 +269,6 @@ type ManualTauriCommandContractMap = {
     args: SetCapturePausedArgs;
     result: void;
   };
-  [TauriCommand.audio.setMicrophoneBoost]: {
-    args: { boost: number };
-    result: void;
-  };
   [TauriCommand.audio.getMicrophoneDevices]: {
     args: undefined;
     result: AudioDevice[];
@@ -323,31 +345,71 @@ type ManualTauriCommandContractMap = {
     args: { request: CoreTranslateSegmentsRequest };
     result: TranslatedSegment[];
   };
-  [TauriCommand.recognizer.init]: {
+  [TauriCommand.recognizer.prepareLive]: {
+    args: { asrRequest: CoreAsrTranscriptionRequest };
+    result: void;
+  };
+  [TauriCommand.recognizer.createExternalSource]: {
+    args: undefined;
+    result: {
+      sourceToken: string;
+      sourceId: string;
+      sourceGeneration: number;
+      sourceCursor: number;
+    };
+  };
+  [TauriCommand.recognizer.startExternalLive]: {
     args: {
-      instanceId: string;
+      consumerId: string;
+      sourceToken: string;
+      gain: number;
       asrRequest: CoreAsrTranscriptionRequest;
     };
+    result: LiveTranscriptionSubscription;
+  };
+  [TauriCommand.recognizer.feedExternalSource]: {
+    args: { sourceToken: string; samples: Uint8Array };
     result: void;
   };
-  [TauriCommand.recognizer.start]: {
-    args: { instanceId: string };
+  [TauriCommand.recognizer.retireExternalSource]: {
+    args: { sourceToken: string };
     result: void;
   };
-  [TauriCommand.recognizer.stop]: {
-    args: { instanceId: string };
-    result: void;
-  };
-  [TauriCommand.recognizer.flush]: {
-    args: { instanceId: string };
-    result: void;
-  };
-  [TauriCommand.recognizer.feedAudioChunk]: {
+  [TauriCommand.recognizer.startNativeLive]: {
     args: {
-      instanceId: string;
-      samples: Uint8Array;
+      consumerId: string;
+      sourceKind: 'system' | 'microphone';
+      deviceName: string | null;
+      outputPath: string | null;
+      gain: number;
+      asrRequest: CoreAsrTranscriptionRequest;
     };
+    result: LiveNativeTranscriptionStart;
+  };
+  [TauriCommand.recognizer.pauseNativeLive]: {
+    args: { consumerId: string; sourceKind: 'system' | 'microphone' };
     result: void;
+  };
+  [TauriCommand.recognizer.resumeNativeLive]: {
+    args: {
+      consumerId: string;
+      sourceKind: 'system' | 'microphone';
+      gain: number;
+      asrRequest: CoreAsrTranscriptionRequest;
+    };
+    result: LiveNativeTranscriptionStart;
+  };
+  [TauriCommand.recognizer.stopNativeLive]: {
+    args: { consumerId: string; sourceKind: 'system' | 'microphone' };
+    result: string;
+  };
+  [TauriCommand.recognizer.stopLive]: {
+    args: { consumerId: string };
+    result: void;
+  };
+  [TauriCommand.recognizer.getLiveMetrics]: {
+    args: undefined;
+    result: LiveTranscriptionMetrics;
   };
   [TauriCommand.recognizer.processBatchFile]: {
     args: {

@@ -1,20 +1,41 @@
+use super::factory::DesktopStreamingAsrFactory;
 use super::metrics::{
     AsrInferenceMetric, AsrMetricsStore, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
     new_metrics_store, set_batch_inference_metric, set_live_inference_metric,
     set_model_load_metric, snapshot_metrics,
 };
-use super::types::AsrEngine;
-use sona_core::ports::asr::AsrStreamingSession;
+use sona_application::live_transcription::LiveTranscriptionCoordinator;
+use sona_core::ports::asr::{
+    AsrPortError, AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest,
+    StreamingAsrFactoryPort, StreamingInferenceSpec,
+};
 use sona_local_asr::runtime::RecognizerPool;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::Mutex;
 
 pub struct AsrState {
-    active_sessions: Mutex<HashMap<String, Arc<dyn AsrStreamingSession>>>,
-    instance_engines: Mutex<HashMap<String, AsrEngine>>,
     pub(crate) recognizer_pool: RecognizerPool,
     pub(crate) metrics: AsrMetricsStore,
+    pub(crate) live_coordinator: LiveTranscriptionCoordinator,
+    external_sources: Mutex<HashMap<String, ExternalSourceState>>,
+    next_external_generation: AtomicU64,
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalLiveSource {
+    pub source_token: String,
+    pub source_id: String,
+    pub source_generation: u64,
+    pub source_cursor: u64,
+}
+
+struct ExternalSourceState {
+    source: sona_application::live_transcription::LiveSourceEpoch,
+    sequence: u64,
+    sample_cursor: u64,
 }
 
 impl Default for AsrState {
@@ -25,11 +46,14 @@ impl Default for AsrState {
 
 impl AsrState {
     pub fn new() -> Self {
+        let recognizer_pool = RecognizerPool::new();
+        let factory = DesktopStreamingAsrFactory::new(recognizer_pool.clone());
         Self {
-            active_sessions: Mutex::new(HashMap::new()),
-            instance_engines: Mutex::new(HashMap::new()),
-            recognizer_pool: RecognizerPool::new(),
+            recognizer_pool,
             metrics: new_metrics_store(),
+            live_coordinator: factory.coordinator(),
+            external_sources: Mutex::new(HashMap::new()),
+            next_external_generation: AtomicU64::new(1),
         }
     }
 
@@ -41,37 +65,87 @@ impl AsrState {
         self.metrics.clone()
     }
 
-    pub async fn has_online_session(&self, instance_id: &str) -> bool {
-        self.active_sessions.lock().await.contains_key(instance_id)
+    pub(crate) fn live_coordinator(&self) -> &LiveTranscriptionCoordinator {
+        &self.live_coordinator
     }
 
-    pub async fn insert_session(&self, instance_id: &str, session: Arc<dyn AsrStreamingSession>) {
-        self.active_sessions
+    pub(crate) async fn create_independent_streaming_session(
+        &self,
+        session_id: &str,
+        request: &AsrTranscriptionRequest,
+        observer: Arc<dyn AsrRuntimeObserver>,
+    ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
+        let spec = StreamingInferenceSpec::from_request(request)?;
+        DesktopStreamingAsrFactory::new(self.recognizer_pool.clone())
+            .create(session_id, &spec, observer)
+            .await
+    }
+
+    pub(crate) async fn create_external_source(&self) -> ExternalLiveSource {
+        let generation = self
+            .next_external_generation
+            .fetch_add(1, Ordering::Relaxed);
+        let token = uuid::Uuid::new_v4().to_string();
+        let source = sona_application::live_transcription::LiveSourceEpoch::new(
+            format!("external-source-{generation}"),
+            generation,
+        );
+        self.external_sources.lock().await.insert(
+            token.clone(),
+            ExternalSourceState {
+                source: source.clone(),
+                sequence: 0,
+                sample_cursor: 0,
+            },
+        );
+        ExternalLiveSource {
+            source_token: token,
+            source_id: source.source_id,
+            source_generation: source.generation,
+            source_cursor: 0,
+        }
+    }
+
+    pub(crate) async fn external_source(
+        &self,
+        token: &str,
+    ) -> Option<(sona_application::live_transcription::LiveSourceEpoch, u64)> {
+        self.external_sources
             .lock()
             .await
-            .insert(instance_id.to_string(), session);
+            .get(token)
+            .map(|source| (source.source.clone(), source.sample_cursor))
     }
 
-    pub async fn session(&self, instance_id: &str) -> Option<Arc<dyn AsrStreamingSession>> {
-        self.active_sessions.lock().await.get(instance_id).cloned()
+    pub(crate) async fn next_external_frame(
+        &self,
+        token: &str,
+        samples: Vec<f32>,
+    ) -> Option<(
+        sona_application::live_transcription::LiveSourceEpoch,
+        sona_core::ports::asr::AsrAudioFrame,
+    )> {
+        let mut sources = self.external_sources.lock().await;
+        let source = sources.get_mut(token)?;
+        source.sequence = source.sequence.saturating_add(1);
+        let frame = sona_core::ports::asr::AsrAudioFrame::new(
+            source.sequence,
+            source.sample_cursor,
+            samples,
+        );
+        source.sample_cursor = frame.end_sample();
+        Some((source.source.clone(), frame))
     }
 
-    pub async fn remove_session(&self, instance_id: &str) -> Option<Arc<dyn AsrStreamingSession>> {
-        let mut sessions = self.active_sessions.lock().await;
-        let session = sessions.remove(instance_id);
-        self.instance_engines.lock().await.remove(instance_id);
-        session
-    }
-
-    pub async fn set_instance_engine(&self, instance_id: &str, engine: AsrEngine) {
-        self.instance_engines
+    pub(crate) async fn remove_external_source(
+        &self,
+        token: &str,
+    ) -> Option<sona_application::live_transcription::LiveSourceEpoch> {
+        self.external_sources
             .lock()
             .await
-            .insert(instance_id.to_string(), engine);
-    }
-
-    pub async fn instance_engine(&self, instance_id: &str) -> Option<AsrEngine> {
-        self.instance_engines.lock().await.get(instance_id).copied()
+            .remove(token)
+            .map(|source| source.source)
     }
 
     pub async fn record_model_load_metric(&self, metric: AsrModelLoadMetric) {
@@ -88,74 +162,5 @@ impl AsrState {
 
     pub async fn metrics_snapshot(&self) -> AsrRuntimeMetricsSnapshot {
         snapshot_metrics(&self.metrics)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    struct DummySession;
-
-    #[async_trait::async_trait]
-    impl AsrStreamingSession for DummySession {
-        async fn start(&self) -> Result<(), sona_core::ports::asr::AsrPortError> {
-            Ok(())
-        }
-        async fn stop(&self) -> Result<(), sona_core::ports::asr::AsrPortError> {
-            Ok(())
-        }
-        async fn flush(&self) -> Result<(), sona_core::ports::asr::AsrPortError> {
-            Ok(())
-        }
-        async fn feed_audio_chunk(
-            &self,
-            _samples: Vec<u8>,
-        ) -> Result<(), sona_core::ports::asr::AsrPortError> {
-            Ok(())
-        }
-        async fn feed_audio_samples(
-            &self,
-            _samples: &[f32],
-        ) -> Result<(), sona_core::ports::asr::AsrPortError> {
-            Ok(())
-        }
-    }
-
-    #[tokio::test]
-    async fn session_lookup_returns_inserted_session() {
-        let state = AsrState::new();
-        let instance_id = "test_instance";
-        let session: Arc<dyn AsrStreamingSession> = Arc::new(DummySession);
-
-        state.insert_session(instance_id, session.clone()).await;
-
-        let stored = state.session(instance_id).await.expect("session exists");
-        assert!(Arc::ptr_eq(&session, &stored));
-    }
-
-    #[tokio::test]
-    async fn test_remove_session() {
-        let state = AsrState::new();
-        let instance_id = "test_instance";
-
-        state
-            .insert_session(instance_id, Arc::new(DummySession))
-            .await;
-        state
-            .set_instance_engine(instance_id, AsrEngine::LocalSherpa)
-            .await;
-
-        assert!(state.has_online_session(instance_id).await);
-        assert_eq!(
-            state.instance_engine(instance_id).await,
-            Some(AsrEngine::LocalSherpa)
-        );
-
-        let removed = state.remove_session(instance_id).await;
-        assert!(removed.is_some());
-
-        assert!(!state.has_online_session(instance_id).await);
-        assert_eq!(state.instance_engine(instance_id).await, None);
     }
 }

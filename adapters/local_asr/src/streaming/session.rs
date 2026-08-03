@@ -19,10 +19,10 @@ use crate::runtime::{
     start_instance_runtime, stop_instance_runtime,
 };
 use async_trait::async_trait;
-use log::{debug, info, trace};
+use log::{debug, info};
 use sona_core::ports::asr::{
-    AsrPortError, AsrPortErrorKind, AsrRuntimeObserver, AsrStreamingSession,
-    LocalSherpaStreamingRequest,
+    AsrAudioFrame, AsrPortError, AsrPortErrorKind, AsrRuntimeObserver, AsrStreamBoundaryEvent,
+    AsrStreamingSession, LocalSherpaStreamingRequest,
 };
 use sona_core::transcription::asr_metrics::{
     AsrModelLoadMetric, calculate_rss_delta_mb, duration_to_ms,
@@ -31,7 +31,7 @@ use sona_core::transcription::postprocess::TranscriptPostprocessor;
 use sona_core::transcription::transcript::TranscriptSegment;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 const PARTIAL_METRIC_INTERVAL_SAMPLES: usize = 16_000;
@@ -42,6 +42,8 @@ pub struct LocalSherpaSession {
     observer: Arc<dyn AsrRuntimeObserver>,
     instance: tokio::sync::Mutex<SherpaInstance>,
     pending_inference: tokio::sync::Mutex<Option<PendingInferenceTask>>,
+    last_frame_sequence: AtomicU64,
+    last_frame_end_sample: AtomicU64,
 }
 
 fn queue_inference_task(
@@ -81,7 +83,7 @@ async fn prepare_partial_inference_slot(
 impl AsrStreamingSession for LocalSherpaSession {
     async fn start(&self) -> Result<(), AsrPortError> {
         let mut instance = self.instance.lock().await;
-        start_recognizer_impl_inner(&self.instance_id, &mut instance)
+        start_session_impl_inner(&self.instance_id, &mut instance)
             .await
             .map_err(AsrPortError::runtime)
     }
@@ -92,7 +94,7 @@ impl AsrStreamingSession for LocalSherpaSession {
         wait_for_inference_task(&mut pending)
             .await
             .map_err(AsrPortError::runtime)?;
-        stop_recognizer_impl_inner(&self.instance_id, &mut instance)
+        stop_session_impl_inner(&self.instance_id, &mut instance)
             .await
             .map_err(AsrPortError::runtime)
     }
@@ -103,26 +105,23 @@ impl AsrStreamingSession for LocalSherpaSession {
         wait_for_inference_task(&mut pending)
             .await
             .map_err(AsrPortError::runtime)?;
-        flush_recognizer_impl_inner(self.observer.clone(), &self.instance_id, &mut instance)
+        flush_session_impl_inner(self.observer.clone(), &self.instance_id, &mut instance)
             .await
-            .map_err(AsrPortError::runtime)
+            .map_err(AsrPortError::runtime)?;
+        self.observer.on_stream_boundary(&self.current_boundary());
+        Ok(())
     }
 
-    async fn feed_audio_chunk(&self, samples: Vec<u8>) -> Result<(), AsrPortError> {
-        let mut instance = self.instance.lock().await;
-        let mut pending = self.pending_inference.lock().await;
-        feed_audio_chunk_impl_inner(
-            self.observer.clone(),
-            &self.instance_id,
-            &mut instance,
-            &mut pending,
-            samples,
-        )
-        .await
-        .map_err(AsrPortError::runtime)
-    }
-
-    async fn feed_audio_samples(&self, samples: &[f32]) -> Result<(), AsrPortError> {
+    async fn feed_audio_frame(&self, frame: AsrAudioFrame) -> Result<(), AsrPortError> {
+        self.last_frame_sequence
+            .store(frame.sequence, Ordering::Release);
+        self.last_frame_end_sample
+            .store(frame.end_sample(), Ordering::Release);
+        let boundary = AsrStreamBoundaryEvent {
+            instance_id: self.instance_id.clone(),
+            sequence: frame.sequence,
+            end_sample: frame.end_sample(),
+        };
         let mut instance = self.instance.lock().await;
         let mut pending = self.pending_inference.lock().await;
         feed_audio_samples_inner(
@@ -130,10 +129,21 @@ impl AsrStreamingSession for LocalSherpaSession {
             &self.instance_id,
             &mut instance,
             &mut pending,
-            samples,
+            &frame.samples,
+            Some(boundary),
         )
         .await
         .map_err(AsrPortError::runtime)
+    }
+}
+
+impl LocalSherpaSession {
+    fn current_boundary(&self) -> AsrStreamBoundaryEvent {
+        AsrStreamBoundaryEvent {
+            instance_id: self.instance_id.clone(),
+            sequence: self.last_frame_sequence.load(Ordering::Acquire),
+            end_sample: self.last_frame_end_sample.load(Ordering::Acquire),
+        }
     }
 }
 
@@ -156,49 +166,28 @@ pub async fn resolve_punctuation(
     .cloned()
 }
 
-pub async fn create_streaming_session(
-    recognizer_pool: RecognizerPool,
-    request: LocalSherpaStreamingRequest,
-    observer: Arc<dyn AsrRuntimeObserver>,
-) -> Result<Arc<LocalSherpaSession>, AsrPortError> {
-    let LocalSherpaStreamingRequest {
-        instance_id,
-        model_path,
-        num_threads,
-        enable_itn,
-        language,
-        punctuation_model,
-        vad_model,
-        vad_buffer,
-        model_type,
-        file_config,
-        hotwords,
-        normalization_options,
-        postprocess_options,
-        gpu_acceleration,
-    } = request;
+struct LocalStreamingResources {
+    recognizer: Arc<Recognizer>,
+    punctuation: Option<Arc<Punctuation>>,
+}
 
-    let gpu_plan = resolve_gpu_acceleration_plan(gpu_acceleration.as_deref()).await;
-
-    info!(
-        "[init_recognizer] start instance_id={instance_id} model_path={model_path} model_type={model_type} num_threads={num_threads} enable_itn={enable_itn} language={language} punctuation_model={:?} vad_model={:?} vad_buffer={vad_buffer} hotwords={:?} gpu_acceleration={:?} gpu_plan={:?}",
-        punctuation_model, vad_model, hotwords, gpu_acceleration, gpu_plan
-    );
-
+async fn load_streaming_resources(
+    recognizer_pool: &RecognizerPool,
+    request: &LocalSherpaStreamingRequest,
+    observer: Option<&dyn AsrRuntimeObserver>,
+) -> Result<LocalStreamingResources, AsrPortError> {
+    let gpu_plan = resolve_gpu_acceleration_plan(request.gpu_acceleration.as_deref()).await;
     let config_key = ModelConfigKey::new(
-        model_path.clone(),
-        model_type.clone(),
-        num_threads,
-        enable_itn,
-        language.clone(),
-        hotwords.clone(),
+        request.model_path.clone(),
+        request.model_type.clone(),
+        request.num_threads,
+        request.enable_itn,
+        request.language.clone(),
+        request.hotwords.clone(),
         None,
     );
-
     let load_started = Instant::now();
     let rss_before_mb = capture_process_memory_mb();
-    let mut reused_from_pool = false;
-
     let primary_provider = gpu_plan.provider_options().first().cloned().flatten();
     let (cell, is_new) = recognizer_pool
         .recognizer_cell_for_gpu_plan(
@@ -207,72 +196,100 @@ pub async fn create_streaming_session(
             primary_provider.clone(),
         )
         .await;
-
-    // A cell may exist in the pool but still be uninitialized if a prior
-    // `get_or_try_init` failed. Only count it as reused when it actually holds
-    // a recognizer, so the load metric reflects a genuine reuse rather than a
-    // retry that has to build the model this time around.
-    if !is_new && cell.initialized() {
-        reused_from_pool = true;
-    }
-
+    let reused_from_pool = !is_new && cell.initialized();
     let recognizer = cell
         .get_or_try_init(|| async {
-            info!("[init_recognizer] Creating new recognizer and adding to pool");
+            info!("[Streaming ASR] loading pooled local recognizer");
             let config_type = build_model_config(
-                Path::new(&model_path),
-                &model_type,
-                &file_config,
-                enable_itn,
-                &language,
-                hotwords.clone(),
+                Path::new(&request.model_path),
+                &request.model_type,
+                &request.file_config,
+                request.enable_itn,
+                &request.language,
+                request.hotwords.clone(),
             )?;
-            let create_result =
-                create_recognizer_with_gpu_plan(config_type, num_threads, gpu_plan.clone())?;
+            let create_result = create_recognizer_with_gpu_plan(
+                config_type,
+                request.num_threads,
+                gpu_plan.clone(),
+            )?;
             if let Some(notice) = create_result.fallback_notice.as_ref() {
                 log::warn!(
-                    "[init_recognizer] {} recognizer creation failed, retrying with {}: {}",
+                    "[Streaming ASR] {} provider failed, retrying with {}: {}",
                     notice.from_provider,
                     notice.to_provider,
                     notice.error
                 );
             }
             let actual_provider = create_result.provider.clone();
-            let r = Arc::new(create_result.recognizer);
-
+            let recognizer = Arc::new(create_result.recognizer);
             if actual_provider != primary_provider {
                 recognizer_pool
                     .register_recognizer_gpu_provider(&config_key, actual_provider, cell.clone())
                     .await;
             }
-
-            Ok::<Arc<Recognizer>, AsrPortError>(r)
+            Ok::<Arc<Recognizer>, AsrPortError>(recognizer)
         })
         .await?
         .clone();
-    let load_ms = duration_to_ms(load_started.elapsed());
-    let rss_after_mb = capture_process_memory_mb();
-    let model_load_metric = AsrModelLoadMetric {
-        occurred_at_ms: current_time_millis(),
-        instance_id: instance_id.clone(),
-        model_path: model_path.clone(),
-        model_type: model_type.clone(),
-        recognizer_kind: recognizer.kind_label().to_string(),
-        num_threads,
-        reused_from_pool,
-        load_ms,
-        rss_before_mb,
-        rss_after_mb,
-        rss_delta_mb: calculate_rss_delta_mb(rss_before_mb, rss_after_mb, reused_from_pool),
-        process_rss_mb: rss_after_mb,
-    };
-    observer.on_model_load(&model_load_metric);
-    log_model_load_metric(&model_load_metric);
 
-    let punctuation = resolve_punctuation(&recognizer_pool, punctuation_model).await;
+    if let Some(observer) = observer {
+        let load_ms = duration_to_ms(load_started.elapsed());
+        let rss_after_mb = capture_process_memory_mb();
+        let metric = AsrModelLoadMetric {
+            occurred_at_ms: current_time_millis(),
+            instance_id: request.instance_id.clone(),
+            model_path: request.model_path.clone(),
+            model_type: request.model_type.clone(),
+            recognizer_kind: recognizer.kind_label().to_string(),
+            num_threads: request.num_threads,
+            reused_from_pool,
+            load_ms,
+            rss_before_mb,
+            rss_after_mb,
+            rss_delta_mb: calculate_rss_delta_mb(rss_before_mb, rss_after_mb, reused_from_pool),
+            process_rss_mb: rss_after_mb,
+        };
+        observer.on_model_load(&metric);
+        log_model_load_metric(&metric);
+    }
+
+    let punctuation = resolve_punctuation(recognizer_pool, request.punctuation_model.clone()).await;
+    Ok(LocalStreamingResources {
+        recognizer,
+        punctuation,
+    })
+}
+
+/// Loads reusable local ASR resources without constructing or starting a
+/// streaming inference session.
+pub async fn prepare_streaming_resources(
+    recognizer_pool: RecognizerPool,
+    request: &LocalSherpaStreamingRequest,
+) -> Result<(), AsrPortError> {
+    load_streaming_resources(&recognizer_pool, request, None)
+        .await
+        .map(drop)
+}
+
+pub async fn create_streaming_session(
+    recognizer_pool: RecognizerPool,
+    request: LocalSherpaStreamingRequest,
+    observer: Arc<dyn AsrRuntimeObserver>,
+) -> Result<Arc<LocalSherpaSession>, AsrPortError> {
+    let resources =
+        load_streaming_resources(&recognizer_pool, &request, Some(observer.as_ref())).await?;
+    let LocalSherpaStreamingRequest {
+        instance_id,
+        vad_model,
+        vad_buffer,
+        normalization_options,
+        postprocess_options,
+        ..
+    } = request;
     let mut session_instance = SherpaInstance::default();
-    session_instance.set_recognizer(recognizer);
-    session_instance.set_punctuation(punctuation);
+    session_instance.set_recognizer(resources.recognizer);
+    session_instance.set_punctuation(resources.punctuation);
     session_instance.configure_vad(vad_model.clone(), vad_buffer);
     session_instance.normalization_options = normalization_options;
     session_instance.postprocessor = TranscriptPostprocessor::compile(postprocess_options)
@@ -283,12 +300,14 @@ pub async fn create_streaming_session(
         observer,
         instance: tokio::sync::Mutex::new(session_instance),
         pending_inference: tokio::sync::Mutex::new(None),
+        last_frame_sequence: AtomicU64::new(0),
+        last_frame_end_sample: AtomicU64::new(0),
     });
 
     Ok(session)
 }
 
-async fn start_recognizer_impl_inner(
+async fn start_session_impl_inner(
     instance_id: &str,
     instance: &mut SherpaInstance,
 ) -> Result<(), String> {
@@ -307,7 +326,7 @@ async fn start_recognizer_impl_inner(
 
     if let Some(label) = diagnostics_instance_label(instance_id) {
         info!(
-            "[Sherpa] start_recognizer({label}): is_running=true recognizer_kind={} vad_configured={} punctuation_loaded={}",
+            "[Sherpa] start_session({label}): is_running=true recognizer_kind={} vad_configured={} punctuation_loaded={}",
             recognizer_kind,
             instance.has_vad_configuration(),
             instance.has_punctuation()
@@ -317,14 +336,14 @@ async fn start_recognizer_impl_inner(
     Ok(())
 }
 
-async fn stop_recognizer_impl_inner(
+async fn stop_session_impl_inner(
     instance_id: &str,
     instance: &mut SherpaInstance,
 ) -> Result<(), String> {
     {
         if let Some(label) = diagnostics_instance_label(instance_id) {
             info!(
-                "[Sherpa] stop_recognizer({label}): was_running={} total_samples={} buffered_chunks={} buffered_samples={} current_segment={} emitted_any={}",
+                "[Sherpa] stop_session({label}): was_running={} total_samples={} buffered_chunks={} buffered_samples={} current_segment={} emitted_any={}",
                 instance.is_running(),
                 instance.total_samples,
                 instance.offline_state.buffered_speech_chunk_count(),
@@ -341,7 +360,7 @@ async fn stop_recognizer_impl_inner(
     Ok(())
 }
 
-async fn flush_recognizer_impl_inner(
+async fn flush_session_impl_inner(
     observer: Arc<dyn AsrRuntimeObserver>,
     instance_id: &str,
     instance: &mut SherpaInstance,
@@ -350,7 +369,7 @@ async fn flush_recognizer_impl_inner(
 
     if let Some(label) = diagnostics_instance_label(instance_id) {
         info!(
-            "[Sherpa] flush_recognizer({label}): is_running={} total_samples={} buffered_chunks={} buffered_samples={} current_segment={} speaking={}",
+            "[Sherpa] flush_session({label}): is_running={} total_samples={} buffered_chunks={} buffered_samples={} current_segment={} speaking={}",
             instance.is_running(),
             instance.total_samples,
             instance.offline_state.buffered_speech_chunk_count(),
@@ -430,7 +449,7 @@ async fn flush_recognizer_impl_inner(
         instance.current_segment_id = None;
         instance.offline_state = OfflineState::default();
         if let Some(label) = diagnostics_instance_label(instance_id) {
-            info!("[Sherpa] flush_recognizer({label}) complete. mode=offline");
+            info!("[Sherpa] flush_session({label}) complete. mode=offline");
         }
         return Ok(());
     }
@@ -520,7 +539,7 @@ async fn flush_recognizer_impl_inner(
         instance.restore_stream(stream);
         instance.segment_start_time = current_time;
         if let Some(label) = diagnostics_instance_label(instance_id) {
-            info!("[Sherpa] flush_recognizer({label}) complete. mode=online");
+            info!("[Sherpa] flush_session({label}) complete. mode=online");
         }
     }
 
@@ -533,6 +552,7 @@ async fn feed_audio_samples_inner(
     instance: &mut SherpaInstance,
     pending_inference: &mut Option<PendingInferenceTask>,
     samples: &[f32],
+    boundary: Option<AsrStreamBoundaryEvent>,
 ) -> Result<(), String> {
     // instances removed
     // instances lookup removed
@@ -724,6 +744,7 @@ async fn feed_audio_samples_inner(
                 let normalization_options = instance.normalization_options;
                 let postprocessor = instance.postprocessor.clone();
                 let triggered_at = Instant::now();
+                let boundary = boundary.clone();
 
                 if let Some(label) = diagnostics_instance_label(instance_id) {
                     info!(
@@ -753,6 +774,9 @@ async fn feed_audio_samples_inner(
                             true,
                             triggered_at,
                         );
+                    }
+                    if let Some(boundary) = boundary.as_ref() {
+                        observer_copy.on_stream_boundary(boundary);
                     }
                 };
                 *pending_inference = Some(queue_inference_task(pending_inference.take(), task));
@@ -933,6 +957,9 @@ async fn feed_audio_samples_inner(
             reset_online_stream(r, st);
             instance.clear_partial_metric_sample();
             instance.segment_start_time = current_time;
+            if let Some(boundary) = boundary.as_ref() {
+                observer.on_stream_boundary(boundary);
+            }
         }
 
         if did_record_partial_metric {
@@ -945,33 +972,6 @@ async fn feed_audio_samples_inner(
     } else {
         Err("Unsupported recognizer type".to_string())
     }
-}
-
-async fn feed_audio_chunk_impl_inner(
-    observer: Arc<dyn AsrRuntimeObserver>,
-    instance_id: &str,
-    instance: &mut SherpaInstance,
-    pending_inference: &mut Option<PendingInferenceTask>,
-    samples: Vec<u8>,
-) -> Result<(), String> {
-    trace!(
-        "feed_audio_chunk called with id: {}, samples bytes: {}",
-        instance_id,
-        samples.len()
-    );
-    let mut float_samples = Vec::with_capacity(samples.len() / 2);
-    for chunk in samples.chunks_exact(2) {
-        let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
-        float_samples.push(sample as f32 / 32768.0);
-    }
-    feed_audio_samples_inner(
-        observer,
-        instance_id,
-        instance,
-        pending_inference,
-        &float_samples,
-    )
-    .await
 }
 
 #[cfg(test)]

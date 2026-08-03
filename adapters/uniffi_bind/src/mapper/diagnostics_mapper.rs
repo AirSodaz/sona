@@ -309,6 +309,7 @@ impl From<FfiDiagnosticsInputV1> for DiagnosticsCoreInput {
             voice_typing_readiness: value.voice_typing_readiness.into(),
             runtime_environment: value.runtime_environment.into(),
             asr_runtime_metrics: value.asr_runtime_metrics.into(),
+            live_transcription: Default::default(),
             onboarding_ready: value.onboarding_ready,
             punctuation_required: value.punctuation_required,
         }

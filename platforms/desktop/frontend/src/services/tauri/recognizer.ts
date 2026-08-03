@@ -10,13 +10,8 @@ import { TauriCommand } from './commands';
 import type { TauriCommandArgs } from './contracts';
 import { invokeTauri } from './invoke';
 
-type CoreInitRecognizerRequest = TauriCommandArgs<typeof TauriCommand.recognizer.init>;
 type CoreProcessBatchFileRequest =
   TauriCommandArgs<typeof TauriCommand.recognizer.processBatchFile>;
-
-export type InitRecognizerRequest = Omit<CoreInitRecognizerRequest, 'asrRequest'> & {
-  asrRequest: AsrTranscriptionRequest;
-};
 
 export type ProcessBatchFileRequest = Omit<
   CoreProcessBatchFileRequest,
@@ -54,7 +49,7 @@ function normalizeModelFileConfig(
   };
 }
 
-function normalizeAsrRequest(
+export function normalizeAsrRequest(
   request: AsrTranscriptionRequest,
 ): CoreAsrTranscriptionRequest {
   const common = {
@@ -119,27 +114,91 @@ function normalizeSpeakerProcessing(
   };
 }
 
-export async function initRecognizer(request: InitRecognizerRequest): Promise<void> {
-  await invokeTauri(TauriCommand.recognizer.init, {
+export async function prepareLiveTranscription(
+  asrRequest: AsrTranscriptionRequest,
+): Promise<void> {
+  await invokeTauri(TauriCommand.recognizer.prepareLive, {
+    asrRequest: normalizeAsrRequest(asrRequest),
+  });
+}
+
+export async function createExternalLiveSource() {
+  return invokeTauri(TauriCommand.recognizer.createExternalSource);
+}
+
+export async function startExternalLiveTranscription(request: {
+  consumerId: string;
+  sourceToken: string;
+  gain: number;
+  asrRequest: AsrTranscriptionRequest;
+}) {
+  return invokeTauri(TauriCommand.recognizer.startExternalLive, {
     ...request,
     asrRequest: normalizeAsrRequest(request.asrRequest),
   });
 }
 
-export async function startRecognizer(instanceId: string): Promise<void> {
-  await invokeTauri(TauriCommand.recognizer.start, { instanceId });
+export async function feedExternalLiveSource(
+  sourceToken: string,
+  samples: Uint8Array,
+): Promise<void> {
+  await invokeTauri(TauriCommand.recognizer.feedExternalSource, { sourceToken, samples });
 }
 
-export async function stopRecognizer(instanceId: string): Promise<void> {
-  await invokeTauri(TauriCommand.recognizer.stop, { instanceId });
+export async function retireExternalLiveSource(sourceToken: string): Promise<void> {
+  await invokeTauri(TauriCommand.recognizer.retireExternalSource, { sourceToken });
 }
 
-export async function flushRecognizer(instanceId: string): Promise<void> {
-  await invokeTauri(TauriCommand.recognizer.flush, { instanceId });
+export interface StartNativeLiveTranscriptionRequest {
+  consumerId: string;
+  sourceKind: 'system' | 'microphone';
+  deviceName: string | null;
+  outputPath: string | null;
+  gain: number;
+  asrRequest: AsrTranscriptionRequest;
 }
 
-export async function feedAudioChunk(instanceId: string, samples: Uint8Array): Promise<void> {
-  await invokeTauri(TauriCommand.recognizer.feedAudioChunk, { instanceId, samples });
+export async function startNativeLiveTranscription(
+  request: StartNativeLiveTranscriptionRequest,
+) {
+  return invokeTauri(TauriCommand.recognizer.startNativeLive, {
+    ...request,
+    asrRequest: normalizeAsrRequest(request.asrRequest),
+  });
+}
+
+export async function pauseNativeLiveTranscription(
+  consumerId: string,
+  sourceKind: 'system' | 'microphone',
+): Promise<void> {
+  await invokeTauri(TauriCommand.recognizer.pauseNativeLive, { consumerId, sourceKind });
+}
+
+export async function resumeNativeLiveTranscription(request: {
+  consumerId: string;
+  sourceKind: 'system' | 'microphone';
+  gain: number;
+  asrRequest: AsrTranscriptionRequest;
+}) {
+  return invokeTauri(TauriCommand.recognizer.resumeNativeLive, {
+    ...request,
+    asrRequest: normalizeAsrRequest(request.asrRequest),
+  });
+}
+
+export async function stopNativeLiveTranscription(
+  consumerId: string,
+  sourceKind: 'system' | 'microphone',
+): Promise<string> {
+  return invokeTauri(TauriCommand.recognizer.stopNativeLive, { consumerId, sourceKind });
+}
+
+export async function stopLiveTranscription(consumerId: string): Promise<void> {
+  await invokeTauri(TauriCommand.recognizer.stopLive, { consumerId });
+}
+
+export async function getLiveTranscriptionMetrics() {
+  return invokeTauri(TauriCommand.recognizer.getLiveMetrics);
 }
 
 export async function processBatchFile(

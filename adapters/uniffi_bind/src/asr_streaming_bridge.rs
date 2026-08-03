@@ -8,8 +8,8 @@ use crate::{
     FfiAsrTranscriptUpdateEvent, SonaCoreBindingResult,
 };
 use sona_core::ports::asr::{
-    AsrEngine, AsrPortError, AsrPortErrorKind, AsrRuntimeObserver, AsrStreamingErrorEvent,
-    AsrStreamingSession, AsrTranscriptUpdateEvent, AsrTranscriptionRequest,
+    AsrAudioFrame, AsrEngine, AsrPortError, AsrPortErrorKind, AsrRuntimeObserver,
+    AsrStreamingErrorEvent, AsrStreamingSession, AsrTranscriptUpdateEvent, AsrTranscriptionRequest,
     LocalSherpaStreamingRequest,
 };
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
@@ -95,18 +95,14 @@ impl FfiAsrStreamingSession {
         self.inner.flush().await.map_err(Into::into)
     }
 
-    pub async fn feed_audio_chunk(&self, samples: Vec<u8>) -> SonaCoreBindingResult<()> {
-        self.inner
-            .feed_audio_chunk(samples)
-            .await
-            .map_err(Into::into)
-    }
-
-    pub async fn feed_audio_samples(&self, samples: Vec<f32>) -> SonaCoreBindingResult<()> {
-        self.inner
-            .feed_audio_samples(&samples)
-            .await
-            .map_err(Into::into)
+    pub async fn feed_pcm16_frame(
+        &self,
+        sequence: u64,
+        start_sample: u64,
+        samples: Vec<u8>,
+    ) -> SonaCoreBindingResult<()> {
+        let frame = AsrAudioFrame::from_pcm_s16le(sequence, start_sample, &samples)?;
+        self.inner.feed_audio_frame(frame).await.map_err(Into::into)
     }
 }
 
@@ -170,10 +166,10 @@ mod tests {
     use super::*;
     use crate::SonaCoreBindingError;
     use sona_core::ports::asr::{
-        AsrEngineConfig, AsrMode, AsrPortError, AsrRuntimeObserver, AsrStreamingErrorEvent,
-        AsrStreamingSession, AsrTranscriptUpdateEvent, AsrTranscriptionRequest,
-        GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest,
-        VOLCENGINE_DOUBAO_PROVIDER_ID,
+        AsrAudioFrame, AsrEngineConfig, AsrMode, AsrPortError, AsrRuntimeObserver,
+        AsrStreamingErrorEvent, AsrStreamingSession, AsrTranscriptUpdateEvent,
+        AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID,
+        OnlineAsrProviderRequest, VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
     use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
     use sona_core::transcription::postprocess::{
@@ -274,31 +270,18 @@ mod tests {
             })
         }
 
-        fn feed_audio_chunk<'life0, 'async_trait>(
+        fn feed_audio_frame<'life0, 'async_trait>(
             &'life0 self,
-            _samples: Vec<u8>,
+            frame: AsrAudioFrame,
         ) -> Pin<Box<dyn Future<Output = Result<(), AsrPortError>> + Send + 'async_trait>>
         where
             'life0: 'async_trait,
             Self: 'async_trait,
         {
             Box::pin(async move {
-                self.calls.lock().unwrap().push("bytes");
-                Ok(())
-            })
-        }
-
-        fn feed_audio_samples<'life0, 'life1, 'async_trait>(
-            &'life0 self,
-            _samples: &'life1 [f32],
-        ) -> Pin<Box<dyn Future<Output = Result<(), AsrPortError>> + Send + 'async_trait>>
-        where
-            'life0: 'async_trait,
-            'life1: 'async_trait,
-            Self: 'async_trait,
-        {
-            Box::pin(async move {
-                self.calls.lock().unwrap().push("samples");
+                assert_eq!((frame.sequence, frame.start_sample), (3, 8));
+                assert_eq!(frame.samples.len(), 2);
+                self.calls.lock().unwrap().push("frame");
                 Ok(())
             })
         }
@@ -455,7 +438,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn session_object_delegates_all_five_core_methods() {
+    async fn session_object_delegates_legacy_and_cursor_aware_core_methods() {
         let calls = Arc::new(Mutex::new(Vec::new()));
         let session = FfiAsrStreamingSession {
             inner: Arc::new(RecordingCoreSession {
@@ -463,13 +446,15 @@ mod tests {
             }),
         };
         session.start().await.unwrap();
-        session.feed_audio_chunk(vec![1, 2]).await.unwrap();
-        session.feed_audio_samples(vec![0.25]).await.unwrap();
+        session
+            .feed_pcm16_frame(3, 8, vec![0, 0, 0, 64])
+            .await
+            .unwrap();
         session.flush().await.unwrap();
         session.stop().await.unwrap();
         assert_eq!(
             *calls.lock().unwrap(),
-            vec!["start", "bytes", "samples", "flush", "stop"]
+            vec!["start", "frame", "flush", "stop"]
         );
     }
 
@@ -604,7 +589,10 @@ mod tests {
             recording_observer(),
         )
         .unwrap();
-        let error = session.feed_audio_chunk(vec![1, 2]).await.unwrap_err();
+        let error = session
+            .feed_pcm16_frame(0, 0, vec![1, 2])
+            .await
+            .unwrap_err();
         assert!(matches!(
             error,
             SonaCoreBindingError::AsrRuntime { code, .. }

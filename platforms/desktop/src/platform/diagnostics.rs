@@ -1,11 +1,12 @@
-﻿use crate::integrations::asr::AsrState;
+use crate::integrations::asr::AsrState;
 use crate::platform::paths::{PathKind, PathPort};
 use tauri::State;
 
 pub use sona_core::runtime::diagnostics::{
     DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
-    DiagnosticsCoreSnapshot, ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput,
-    RuntimeEnvironmentStatus, RuntimePathStatus, SelectedModelsInput, VoiceTypingReadinessInput,
+    DiagnosticsCoreSnapshot, LiveTranscriptionDiagnosticsSnapshot, ModelRuleInput, ModelRulesInput,
+    ModelSummaryInput, PathStatusesInput, RuntimeEnvironmentStatus, RuntimePathStatus,
+    SelectedModelsInput, VoiceTypingReadinessInput,
 };
 use sona_runtime_fs::build_diagnostics_snapshot;
 
@@ -33,6 +34,14 @@ pub async fn get_diagnostics_core_snapshot(
         .resolve_path(PathKind::AppLogData)
         .map_err(|error| error.to_string())?;
     input.asr_runtime_metrics = state.metrics_snapshot().await;
+    let live = state.live_coordinator().metrics().await;
+    input.live_transcription = LiveTranscriptionDiagnosticsSnapshot {
+        active_sources: live.active_sources,
+        active_pipelines: live.active_pipelines,
+        active_consumers: live.active_consumers,
+        shared_pipelines: live.shared_pipelines,
+        avoided_feed_count: live.avoided_feed_count,
+    };
 
     let snapshot = tauri::async_runtime::spawn_blocking(move || {
         input.runtime_environment =

@@ -131,6 +131,7 @@ fn base_input() -> DiagnosticsCoreInput {
             log_dir_path: "C:\\app\\logs".to_string(),
         },
         asr_runtime_metrics: AsrRuntimeMetricsSnapshot::default(),
+        live_transcription: Default::default(),
         onboarding_ready: true,
         punctuation_required: false,
     }
@@ -429,6 +430,13 @@ fn service_snapshot_preserves_the_existing_camel_case_json_contract() {
                 "modelLoad": null,
                 "liveInference": null,
                 "batchInference": null
+            },
+            "liveTranscription": {
+                "activeSources": 0,
+                "activePipelines": 0,
+                "activeConsumers": 0,
+                "sharedPipelines": 0,
+                "avoidedFeedCount": 0
             },
             "onboardingReady": true,
             "punctuationRequired": true

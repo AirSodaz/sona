@@ -255,7 +255,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         },
         logger,
         onSegment: forwardRecordSegment,
-        showError,
         activateRecordSession: session.activateRecordSession,
         canMutateActiveRecordResources: session.canMutateActiveRecordResources,
         rollbackRecognizer: session.softStopRecordSessionIfActive,
@@ -270,7 +269,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         setIsPaused,
         setIsRecording,
         setPeakFromInt16,
-        showError,
     ]);
 
     const recordController = useMemo(() => createRecordController({

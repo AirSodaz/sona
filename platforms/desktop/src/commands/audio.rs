@@ -88,11 +88,6 @@ pub fn set_microphone_capture_paused(
 }
 
 #[tauri::command]
-pub fn set_microphone_boost(state: State<'_, AudioState>, boost: f32) -> Result<(), String> {
-    crate::integrations::audio::set_microphone_boost(state, boost)
-}
-
-#[tauri::command]
 pub async fn set_system_audio_mute(mute: bool) -> Result<(), String> {
     crate::platform::system_audio::set_system_audio_mute(mute).await
 }

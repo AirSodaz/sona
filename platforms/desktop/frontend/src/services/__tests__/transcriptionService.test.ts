@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => {
 
     return {
         listenCallbacks,
-        invoke: vi.fn(async () => undefined),
+        invoke: vi.fn(async (): Promise<any> => undefined),
         listen: vi.fn(async (eventName: string, callback: (event: any) => void) => {
             listenCallbacks[eventName] = callback;
             return () => {
@@ -85,13 +85,12 @@ vi.mock('../../utils/logger', () => ({
 async function loadTranscriptionService() {
     const module = await import('../transcriptionService');
     const { getEffectiveConfigSnapshot } = await import('../../stores/effectiveConfigStore');
-    const { initRecognizer, processBatchFile } = await import('../tauri/recognizer');
+    const { processBatchFile } = await import('../tauri/recognizer');
 
     class TestTranscriptionService extends module.TranscriptionService {
         constructor(instanceId: string) {
             super(instanceId, {
                 getEffectiveConfigSnapshot,
-                initRecognizer,
                 processBatchFile,
             });
         }
@@ -134,7 +133,17 @@ describe('TranscriptionService voice typing diagnostics', () => {
             speakerEmbeddingModelPath: '',
             speakerProfiles: [],
         };
-        mocks.invoke.mockImplementation(async () => undefined);
+        mocks.invoke.mockImplementation(async (command: string) => {
+            if (command === 'create_external_live_source') {
+                return {
+                    sourceToken: 'source-token-1',
+                    sourceId: 'source-1',
+                    sourceGeneration: 1,
+                    sourceCursor: 0,
+                };
+            }
+            return undefined;
+        });
     });
 
     it('rejects when streaming ASR is not configured', async () => {
@@ -144,10 +153,10 @@ describe('TranscriptionService voice typing diagnostics', () => {
         const onUpdate = vi.fn();
         const onError = vi.fn();
 
-        await expect(service.start(onUpdate, onError)).rejects.toThrow('ASR is not configured');
+        await expect(service.startExternal(onUpdate, onError)).rejects.toThrow('ASR is not configured');
 
         expect(onError).toHaveBeenCalledWith('ASR is not configured');
-        expect(mocks.invoke).not.toHaveBeenCalledWith('start_recognizer', expect.anything());
+        expect(mocks.invoke).not.toHaveBeenCalledWith('start_external_live_transcription', expect.anything());
     });
 
     it('logs raw and processed voice-typing text before invoking the callback', async () => {
@@ -158,7 +167,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
         const onError = vi.fn();
 
         service.setModelPath('path/to/model');
-        await service.start(onSegment, onError);
+        await service.startExternal(onSegment, onError);
 
         mocks.listenCallbacks['recognizer-output-voice-typing']?.({
             payload: {
@@ -202,7 +211,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
                 callbackInvoked: true,
             })
         );
-        expect(mocks.invoke).toHaveBeenCalledWith('init_recognizer', expect.objectContaining({
+        expect(mocks.invoke).toHaveBeenCalledWith('prepare_live_transcription', expect.objectContaining({
             asrRequest: expect.objectContaining({
                 postprocessOptions: {
                     textReplacementSets: [],
@@ -210,7 +219,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
                 },
             }),
         }));
-        const initPayload = getInvokePayload('init_recognizer');
+        const initPayload = getInvokePayload('prepare_live_transcription');
         expect(initPayload).not.toHaveProperty('postprocessOptions');
         expect(initPayload).not.toHaveProperty('language');
     });
@@ -241,7 +250,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
         const onError = vi.fn();
 
         service.setModelPath('path/to/model');
-        await service.start(onSegment, onError);
+        await service.startExternal(onSegment, onError);
 
         mocks.listenCallbacks['recognizer-output-voice-typing']?.({
             payload: {
@@ -273,7 +282,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
                 processedTextLength: 5,
             })
         );
-        expect(mocks.invoke).toHaveBeenCalledWith('init_recognizer', expect.objectContaining({
+        expect(mocks.invoke).toHaveBeenCalledWith('prepare_live_transcription', expect.objectContaining({
             asrRequest: expect.objectContaining({
                 postprocessOptions: {
                     textReplacementSets: mocks.config.textReplacementSets,
@@ -465,9 +474,9 @@ describe('TranscriptionService voice typing diagnostics', () => {
         await syncTranscriptConfig();
         const service = new TranscriptionService('record');
 
-        await service.start(vi.fn(), vi.fn());
+        await service.startExternal(vi.fn(), vi.fn());
 
-        expect(mocks.invoke).toHaveBeenCalledWith('init_recognizer', expect.objectContaining({
+        expect(mocks.invoke).toHaveBeenCalledWith('prepare_live_transcription', expect.objectContaining({
             asrRequest: expect.objectContaining({
                 engine: 'online',
                 mode: 'streaming',
@@ -481,10 +490,13 @@ describe('TranscriptionService voice typing diagnostics', () => {
                 }),
             }),
         }));
-        const initPayload = getInvokePayload('init_recognizer');
+        const initPayload = getInvokePayload('prepare_live_transcription');
         expect(initPayload).not.toHaveProperty('modelPath');
         expect(initPayload).not.toHaveProperty('language');
-        expect(mocks.invoke).toHaveBeenCalledWith('start_recognizer', { instanceId: 'record' });
+        expect(mocks.invoke).toHaveBeenCalledWith('start_external_live_transcription', expect.objectContaining({
+            consumerId: 'record',
+            sourceToken: 'source-token-1',
+        }));
     });
 
     it('transcribes an online Volcengine batch request without setting a local model path', async () => {
@@ -574,34 +586,6 @@ describe('TranscriptionService voice typing diagnostics', () => {
                 text: '关闭透传。',
             }),
         ]);
-    });
-
-    it('re-initializes the backend on subsequent start if stopped in between', async () => {
-        const TranscriptionService = await loadTranscriptionService();
-        await syncTranscriptConfig();
-        const service = new TranscriptionService('record');
-        service.setModelPath('path/to/model');
-
-        // First start
-        await service.start(vi.fn(), vi.fn());
-        expect(mocks.invoke).toHaveBeenCalledWith('init_recognizer', expect.anything());
-        expect(mocks.invoke).toHaveBeenCalledWith('start_recognizer', { instanceId: 'record' });
-
-        vi.clearAllMocks();
-
-        // Second start immediately without stopping: should NOT call init_recognizer again
-        await service.start(vi.fn(), vi.fn());
-        expect(mocks.invoke).not.toHaveBeenCalledWith('init_recognizer', expect.anything());
-
-        // Stop the service
-        await service.stop();
-
-        vi.clearAllMocks();
-
-        // Third start after stopping: should call init_recognizer again!
-        await service.start(vi.fn(), vi.fn());
-        expect(mocks.invoke).toHaveBeenCalledWith('init_recognizer', expect.anything());
-        expect(mocks.invoke).toHaveBeenCalledWith('start_recognizer', { instanceId: 'record' });
     });
 
 });

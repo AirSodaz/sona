@@ -5,6 +5,7 @@ use tauri::{AppHandle, Manager};
 
 mod adapter;
 mod batch;
+mod factory;
 mod metrics;
 mod observer;
 mod online;
@@ -21,6 +22,7 @@ fn recognizer_output_event(instance_id: &str) -> String {
 
 pub use adapter::LocalSherpaAdapter;
 pub use batch::transcribe_batch_with_progress;
+pub use factory::DesktopStreamingAsrFactory;
 pub(crate) use observer::TauriAsrRuntimeObserver;
 pub use sona_core::models::config::ModelFileConfig;
 pub use sona_core::ports::asr::AsrPortError;
@@ -38,6 +40,7 @@ pub(crate) use sona_local_asr::recognizer::{
 pub(crate) use sona_local_asr::runtime::ModelConfigKey;
 pub use sona_local_asr::runtime::RecognizerPool;
 pub use state::AsrState;
+pub use state::ExternalLiveSource;
 pub use traits::{AsrBatchProcessor, AsrProviderAdapter};
 pub(crate) use transcript::{
     finalize_transcript_text, normalize_recognizer_text, synthesize_durations,
@@ -87,22 +90,6 @@ pub(crate) fn ensure_adapter(
 pub(crate) fn recognizer_pool_for_app(app: Option<&AppHandle>) -> RecognizerPool {
     app.map(|app| app.state::<AsrState>().recognizer_pool())
         .unwrap_or_else(RecognizerPool::new)
-}
-
-/// Feed f32 audio samples from the hardware capture worker to the correct
-/// ASR backend. Routes by the engine selected during `init_recognizer` so an
-/// expected online recognizer cannot silently fall through to local Sherpa when
-/// the online session is missing or failed.
-pub async fn feed_audio_samples(
-    state: &AsrState,
-    instance_id: &str,
-    samples: &[f32],
-) -> Result<(), AsrPortError> {
-    let session = state
-        .session(instance_id)
-        .await
-        .ok_or_else(|| AsrPortError::runtime(format!("ASR instance {} not found", instance_id)))?;
-    session.feed_audio_samples(samples).await
 }
 
 #[cfg(test)]

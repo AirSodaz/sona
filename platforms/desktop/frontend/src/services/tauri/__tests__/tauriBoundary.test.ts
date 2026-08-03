@@ -53,7 +53,7 @@ import {
   summarizeTranscript,
   translateTranscriptSegments,
 } from '../llm';
-import { initRecognizer, processBatchFile } from '../recognizer';
+import { processBatchFile } from '../recognizer';
 import { replaceAutomationRuntimeRules } from '../automation';
 import {
   automationLoadRepositoryState,
@@ -1391,74 +1391,6 @@ describe('tauri boundary wrappers', () => {
     });
   });
 
-  it('recognizer wrappers use the centralized recognizer commands', async () => {
-    await initRecognizer({
-      instanceId: 'record',
-      asrRequest: {
-        engine: 'local-sherpa',
-        mode: 'streaming',
-        modelId: null,
-        modelPath: 'C:/models/live',
-        numThreads: 4,
-        enableItn: true,
-        language: 'auto',
-        punctuationModel: null,
-        vadModel: null,
-        vadBuffer: 5,
-        modelType: 'sensevoice',
-        fileConfig: {
-          encoder: 'encoder.onnx',
-        },
-        hotwords: null,
-        normalizationOptions: {
-          enableTimeline: false,
-        },
-        postprocessOptions: {
-          textReplacementSets: [],
-          dropFinalDotSegments: true,
-        },
-      },
-    });
-
-    expect(invoke).toHaveBeenCalledWith(TauriCommand.recognizer.init, {
-      instanceId: 'record',
-      asrRequest: {
-        engine: 'local-sherpa',
-        mode: 'streaming',
-        modelId: null,
-        modelPath: 'C:/models/live',
-        numThreads: 4,
-        enableItn: true,
-        language: 'auto',
-        punctuationModel: null,
-        vadModel: null,
-        vadBuffer: 5,
-        modelType: 'sensevoice',
-        fileConfig: {
-          encoder: 'encoder.onnx',
-          decoder: null,
-          model: null,
-          joiner: null,
-          tokens: null,
-          convFrontend: null,
-          encoderAdaptor: null,
-          llm: null,
-          embedding: null,
-          tokenizer: null,
-        },
-        hotwords: null,
-        speakerProcessing: null,
-        normalizationOptions: {
-          enableTimeline: false,
-        },
-        postprocessOptions: {
-          textReplacementSets: [],
-          dropFinalDotSegments: true,
-        },
-      },
-    });
-  });
-
   it('normalizes batch speaker processing for the generated Core contract', async () => {
     vi.mocked(invoke).mockResolvedValueOnce([]);
 
@@ -1525,33 +1457,6 @@ describe('tauri boundary wrappers', () => {
         speakerProcessing: null,
       }),
     });
-  });
-
-  it('rejects non-finite ASR transport numbers before invoking Tauri', async () => {
-    await expect(initRecognizer({
-      instanceId: 'record',
-      asrRequest: {
-        engine: 'local-sherpa',
-        mode: 'streaming',
-        modelId: null,
-        modelPath: 'C:/models/live',
-        numThreads: 4,
-        enableItn: true,
-        language: 'auto',
-        punctuationModel: null,
-        vadModel: null,
-        vadBuffer: Number.POSITIVE_INFINITY,
-        modelType: 'sensevoice',
-        hotwords: null,
-        normalizationOptions: { enableTimeline: false },
-        postprocessOptions: {
-          textReplacementSets: [],
-          dropFinalDotSegments: true,
-        },
-      },
-    })).rejects.toThrow('asrRequest.vadBuffer must be a finite number');
-
-    expect(invoke).not.toHaveBeenCalled();
   });
 
   it('automation wrappers centralize runtime rule calls', async () => {

@@ -1,4 +1,4 @@
-﻿use crate::models::config::ModelFileConfig;
+use crate::models::config::ModelFileConfig;
 use crate::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 use crate::transcription::postprocess::TranscriptPostprocessor;
 pub use crate::transcription::postprocess::{
@@ -12,8 +12,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[cfg(feature = "specta")]
 use specta::Type;
+use std::fmt;
 use std::path::PathBuf;
-use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
 
 const ONLINE_ASR_PROVIDERS_JSON: &str = include_str!("online-asr-providers.json");
 
@@ -186,12 +188,89 @@ pub struct AsrStreamingErrorEvent {
     pub message: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AsrStreamBoundaryEvent {
+    pub instance_id: String,
+    pub sequence: u64,
+    pub end_sample: u64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct AsrAudioFrame {
+    pub sequence: u64,
+    pub start_sample: u64,
+    pub samples: Arc<[f32]>,
+}
+
+/// Assigns a monotonic sequence and sample cursor to frames produced by a
+/// single input source. Hosts use this small pure helper when their capture
+/// API only exposes raw PCM chunks.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct StreamingAudioFrameCursor {
+    next_sequence: u64,
+    next_sample: u64,
+}
+
+impl StreamingAudioFrameCursor {
+    pub fn next_samples(&mut self, samples: impl Into<Arc<[f32]>>) -> AsrAudioFrame {
+        let samples = samples.into();
+        let frame = AsrAudioFrame::new(self.next_sequence, self.next_sample, samples);
+        self.next_sequence = self.next_sequence.saturating_add(1);
+        self.next_sample = frame.end_sample();
+        frame
+    }
+
+    pub fn next_pcm_s16le(&mut self, bytes: &[u8]) -> Result<AsrAudioFrame, AsrPortError> {
+        let frame = AsrAudioFrame::from_pcm_s16le(self.next_sequence, self.next_sample, bytes)?;
+        self.observe(&frame);
+        Ok(frame)
+    }
+
+    pub fn observe(&mut self, frame: &AsrAudioFrame) {
+        self.next_sequence = self.next_sequence.max(frame.sequence.saturating_add(1));
+        self.next_sample = self.next_sample.max(frame.end_sample());
+    }
+}
+
+impl AsrAudioFrame {
+    pub fn new(sequence: u64, start_sample: u64, samples: impl Into<Arc<[f32]>>) -> Self {
+        Self {
+            sequence,
+            start_sample,
+            samples: samples.into(),
+        }
+    }
+
+    pub fn end_sample(&self) -> u64 {
+        self.start_sample.saturating_add(self.samples.len() as u64)
+    }
+
+    pub fn from_pcm_s16le(
+        sequence: u64,
+        start_sample: u64,
+        bytes: &[u8],
+    ) -> Result<Self, AsrPortError> {
+        if !bytes.len().is_multiple_of(2) {
+            return Err(AsrPortError::invalid_request(
+                "PCM16 payload must contain complete samples",
+            ));
+        }
+        let samples = bytes
+            .chunks_exact(2)
+            .map(|sample| i16::from_le_bytes([sample[0], sample[1]]) as f32 / 32768.0)
+            .collect::<Vec<_>>();
+        Ok(Self::new(sequence, start_sample, samples))
+    }
+}
+
 pub trait AsrRuntimeObserver: Send + Sync {
     fn on_transcript_update(&self, event: &AsrTranscriptUpdateEvent);
     fn on_model_load(&self, metric: &AsrModelLoadMetric);
     fn on_live_inference(&self, metric: &AsrInferenceMetric);
 
     fn on_streaming_error(&self, _event: &AsrStreamingErrorEvent) {}
+
+    fn on_stream_boundary(&self, _event: &AsrStreamBoundaryEvent) {}
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -210,8 +289,7 @@ pub trait AsrStreamingSession: Send + Sync {
     async fn start(&self) -> Result<(), AsrPortError>;
     async fn stop(&self) -> Result<(), AsrPortError>;
     async fn flush(&self) -> Result<(), AsrPortError>;
-    async fn feed_audio_chunk(&self, samples: Vec<u8>) -> Result<(), AsrPortError>;
-    async fn feed_audio_samples(&self, samples: &[f32]) -> Result<(), AsrPortError>;
+    async fn feed_audio_frame(&self, frame: AsrAudioFrame) -> Result<(), AsrPortError>;
 }
 
 #[derive(Debug, Clone)]
@@ -487,6 +565,112 @@ impl AsrTranscriptionRequest {
             AsrEngineConfig::Online { provider } => provider.provider_id.as_str(),
         }
     }
+}
+
+#[derive(Clone, PartialEq)]
+pub struct StreamingInferenceSpec {
+    request: AsrTranscriptionRequest,
+}
+
+impl StreamingInferenceSpec {
+    pub fn from_request(request: &AsrTranscriptionRequest) -> Result<Self, AsrPortError> {
+        if request.mode != AsrMode::Streaming {
+            return Err(AsrPortError::invalid_request(
+                "Streaming inference requires ASR mode streaming",
+            ));
+        }
+
+        let mut request = request.clone();
+        request.normalization_options = TranscriptNormalizationOptions::default();
+        request.postprocess_options = TranscriptPostprocessOptions::default();
+        request.speaker_processing = None;
+        Ok(Self { request })
+    }
+
+    pub fn engine_request(&self) -> AsrTranscriptionRequest {
+        self.request.clone()
+    }
+
+    pub fn engine(&self) -> AsrEngine {
+        self.request.engine()
+    }
+
+    pub fn provider_id(&self) -> &str {
+        self.request.provider_id()
+    }
+}
+
+impl fmt::Debug for StreamingInferenceSpec {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("StreamingInferenceSpec")
+            .field("engine", &self.engine())
+            .field("provider_id", &self.provider_id())
+            .field("mode", &self.request.mode)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct StreamingOutputPolicy {
+    normalization_options: TranscriptNormalizationOptions,
+    postprocessor: TranscriptPostprocessor,
+    next_timeline_id: Arc<AtomicU64>,
+}
+
+impl StreamingOutputPolicy {
+    pub fn from_request(request: &AsrTranscriptionRequest) -> Result<Self, AsrPortError> {
+        let postprocessor = TranscriptPostprocessor::compile(request.postprocess_options.clone())
+            .map_err(|error| AsrPortError::invalid_request(error.to_string()))?;
+        Ok(Self {
+            normalization_options: request.normalization_options,
+            postprocessor,
+            next_timeline_id: Arc::new(AtomicU64::new(0)),
+        })
+    }
+
+    pub fn process_update(&self, update: TranscriptUpdate) -> TranscriptUpdate {
+        if !self.normalization_options.enable_timeline {
+            return self.postprocessor.process_update(update);
+        }
+
+        let mut normalized = TranscriptUpdate {
+            remove_ids: update.remove_ids,
+            upsert_segments: Vec::new(),
+        };
+        for segment in update.upsert_segments {
+            let segment_update =
+                crate::transcription::transcript::build_transcript_update_with_id_generator(
+                    segment,
+                    self.normalization_options,
+                    || {
+                        let next = self.next_timeline_id.fetch_add(1, Ordering::Relaxed);
+                        format!("timeline-{next}")
+                    },
+                );
+            for remove_id in segment_update.remove_ids {
+                if !normalized.remove_ids.contains(&remove_id) {
+                    normalized.remove_ids.push(remove_id);
+                }
+            }
+            normalized
+                .upsert_segments
+                .extend(segment_update.upsert_segments);
+        }
+        self.postprocessor.process_update(normalized)
+    }
+}
+
+#[async_trait]
+pub trait StreamingAsrFactoryPort: Send + Sync {
+    async fn prepare(&self, spec: &StreamingInferenceSpec) -> Result<(), AsrPortError>;
+
+    async fn create(
+        &self,
+        pipeline_id: &str,
+        spec: &StreamingInferenceSpec,
+        observer: Arc<dyn AsrRuntimeObserver>,
+    ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError>;
 }
 
 pub fn validate_local_sherpa_mode(

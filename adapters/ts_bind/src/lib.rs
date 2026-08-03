@@ -103,8 +103,8 @@ pub use sona_core::recovery::types::{
 };
 pub use sona_core::runtime::diagnostics::{
     DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
-    DiagnosticsCoreSnapshot, ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput,
-    SelectedModelsInput, VoiceTypingReadinessInput,
+    DiagnosticsCoreSnapshot, LiveTranscriptionDiagnosticsSnapshot, ModelRuleInput, ModelRulesInput,
+    ModelSummaryInput, PathStatusesInput, SelectedModelsInput, VoiceTypingReadinessInput,
 };
 pub use sona_core::runtime::environment::{
     RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus,
@@ -597,6 +597,7 @@ pub fn desktop_types() -> specta::Types {
         .register::<DeviceOptionInput>()
         .register::<VoiceTypingReadinessInput>()
         .register::<DiagnosticsCoreSnapshot>()
+        .register::<LiveTranscriptionDiagnosticsSnapshot>()
         .register::<AsrRuntimeMetricsSnapshot>()
         .register::<AsrModelLoadMetric>()
         .register::<AsrInferenceMetric>()
@@ -842,6 +843,7 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "DeviceOptionInput",
     "VoiceTypingReadinessInput",
     "DiagnosticsCoreSnapshot",
+    "LiveTranscriptionDiagnosticsSnapshot",
     "AsrRuntimeMetricsSnapshot",
     "AsrModelLoadMetric",
     "AsrInferenceMetric",

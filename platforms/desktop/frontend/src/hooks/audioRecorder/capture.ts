@@ -1,14 +1,5 @@
 import { transcriptionService } from '../../services/transcriptionService';
-import {
-    setMicrophoneBoost as setMicrophoneBoostTauri,
-    setMicrophoneCapturePaused,
-    setSystemAudioCapturePaused,
-    setSystemAudioMute as setSystemAudioMuteTauri,
-    startMicrophoneCapture,
-    startSystemAudioCapture,
-    stopMicrophoneCapture,
-    stopSystemAudioCapture,
-} from '../../services/tauri/audio';
+import { setSystemAudioMute as setSystemAudioMuteTauri } from '../../services/tauri/audio';
 import { TauriEvent } from '../../services/tauri/events';
 import type { TranscriptUpdate } from '../../types/transcript';
 import { shouldFeedWebAudioForPhase } from './timing';
@@ -18,12 +9,6 @@ import type {
     InputSource,
 } from './types';
 import { listen } from '../../services/tauri/platform/events';
-
-interface CaptureErrorDialogInput {
-    code: string;
-    messageKey: string;
-    cause: unknown;
-}
 
 export class TranscriptionStartupError extends Error {
     cause: unknown;
@@ -61,7 +46,6 @@ interface CreateAudioRecorderCaptureArgs {
     refs: AudioRecorderCaptureRefs;
     logger: AudioRecorderLogger;
     onSegment: (update: TranscriptUpdate) => void;
-    showError: (input: CaptureErrorDialogInput) => Promise<void>;
     activateRecordSession: (sessionId: string) => boolean;
     canMutateActiveRecordResources: (sessionId: string) => boolean;
     rollbackRecognizer: (sessionId: string, reason: string) => Promise<void>;
@@ -75,7 +59,6 @@ export function createAudioRecorderCapture({
     refs,
     logger,
     onSegment,
-    showError,
     activateRecordSession,
     canMutateActiveRecordResources,
     rollbackRecognizer,
@@ -92,20 +75,6 @@ export function createAudioRecorderCapture({
 
     function isDesktopCaptureActive(): boolean {
         return refs.activeInputSourceRef.current === 'desktop';
-    }
-
-    async function stopActiveNativeCapture(instanceId: string): Promise<string> {
-        return isDesktopCaptureActive()
-            ? stopSystemAudioCapture(instanceId)
-            : stopMicrophoneCapture(instanceId);
-    }
-
-    async function setActiveNativeCapturePaused(instanceId: string, paused: boolean): Promise<void> {
-        await (
-            isDesktopCaptureActive()
-                ? setSystemAudioCapturePaused({ instanceId, paused })
-                : setMicrophoneCapturePaused({ instanceId, paused })
-        );
     }
 
     async function setSystemAudioMute(mute: boolean, errorMessage: string): Promise<void> {
@@ -132,7 +101,7 @@ export function createAudioRecorderCapture({
                 refs.nativeAudioUnlistenRef.current = null;
             }
             try {
-                await stopActiveNativeCapture('record');
+                await transcriptionService.stopNativeCapture();
                 logger.info(
                     `[useAudioRecorder] Rolled back native capture. session=${sessionId} source=${isDesktopCaptureActive() ? 'desktop' : 'microphone'}`
                 );
@@ -192,31 +161,6 @@ export function createAudioRecorderCapture({
         }
     }
 
-    async function initializeNativeSession(sessionId: string): Promise<void> {
-        logger.info(`[useAudioRecorder] Initializing transcription service (native). session=${sessionId}`);
-        try {
-            await transcriptionService.start(
-                onSegment,
-                (error) => {
-                    logger.error(`[useAudioRecorder] Transcription error callback. session=${sessionId}:`, error);
-                    void showError({
-                        code: 'transcription.service_error',
-                        messageKey: 'errors.transcription.service_error',
-                        cause: error,
-                    });
-                },
-                {
-                    callbackOwner: 'live-record',
-                    callbackSessionId: sessionId
-                }
-            );
-            logger.info(`[useAudioRecorder] Record session recognizer ready. session=${sessionId} transport=native`);
-        } catch (error) {
-            logger.error(`[useAudioRecorder] Failed to start transcription service. session=${sessionId}:`, error);
-            throw new TranscriptionStartupError(error);
-        }
-    }
-
     async function initializeAudioSession(stream: MediaStream, sessionId: string): Promise<void> {
         if (!refs.audioContextRef.current || refs.audioContextRef.current.state === 'closed') {
             refs.audioContextRef.current = new AudioContext({ sampleRate: 16000 });
@@ -228,7 +172,7 @@ export function createAudioRecorderCapture({
         // This ensures isRunning=true before any audio samples arrive via onmessage,
         // preventing initial audio data from being silently dropped.
         logger.info(`[useAudioRecorder] Initializing transcription service (web audio). session=${sessionId}`);
-        await transcriptionService.start(
+        await transcriptionService.startExternal(
             onSegment,
             (error) => { logger.error(`[useAudioRecorder] Transcription error. session=${sessionId}:`, error); },
             {
@@ -272,15 +216,19 @@ export function createAudioRecorderCapture({
         try {
             logger.info(`[useAudioRecorder] Attempting native system audio capture. session=${sessionId}`);
 
-            // CRITICAL: Initialize recognizer BEFORE starting capture to avoid
-            // a race condition where audio feeds Sherpa before it is ready.
-            await initializeNativeSession(sessionId);
-
-            await startSystemAudioCapture({
-                deviceName,
-                instanceId: 'record',
-                outputPath,
-            });
+            await transcriptionService.startNative(
+                onSegment,
+                (error) => {
+                    logger.error(`[useAudioRecorder] Transcription error callback. session=${sessionId}:`, error);
+                },
+                {
+                    sourceKind: 'system',
+                    deviceName,
+                    outputPath,
+                    callbackOwner: 'live-record',
+                    callbackSessionId: sessionId,
+                },
+            );
             refs.usingNativeCaptureRef.current = true;
 
             const peakListenerAttached = await attachNativePeakListener(TauriEvent.audio.systemPeak, sessionId);
@@ -313,19 +261,20 @@ export function createAudioRecorderCapture({
         try {
             logger.info(`[useAudioRecorder] Attempting native microphone capture. session=${sessionId}`);
 
-            await setMicrophoneBoostTauri(options.boost).catch((error) => {
-                logger.warn(`[useAudioRecorder] Failed to set initial microphone boost. session=${sessionId}:`, error);
-            });
-
-            // CRITICAL: Initialize recognizer BEFORE starting capture to avoid
-            // a race condition where audio feeds Sherpa before it is ready.
-            await initializeNativeSession(sessionId);
-
-            await startMicrophoneCapture({
-                deviceName: options.deviceName,
-                instanceId: 'record',
-                outputPath: options.outputPath,
-            });
+            await transcriptionService.startNative(
+                onSegment,
+                (error) => {
+                    logger.error(`[useAudioRecorder] Transcription error callback. session=${sessionId}:`, error);
+                },
+                {
+                    sourceKind: 'microphone',
+                    deviceName: options.deviceName,
+                    outputPath: options.outputPath,
+                    gain: options.boost,
+                    callbackOwner: 'live-record',
+                    callbackSessionId: sessionId,
+                },
+            );
             refs.usingNativeCaptureRef.current = true;
 
             const peakListenerAttached = await attachNativePeakListener(TauriEvent.audio.microphonePeak, sessionId);
@@ -476,7 +425,7 @@ export function createAudioRecorderCapture({
                 refs.nativeAudioUnlistenRef.current = null;
             }
             try {
-                savedWavPath = await stopActiveNativeCapture('record');
+                savedWavPath = await transcriptionService.stopNativeCapture();
                 logger.info('[useAudioRecorder] Saved raw audio to:', savedWavPath);
             } catch (error) {
                 logger.error(`[useAudioRecorder] Failed to stop native capture. session=${sessionId}:`, error);
@@ -497,9 +446,8 @@ export function createAudioRecorderCapture({
 
     async function pauseCapture(sessionId: string): Promise<void> {
         if (refs.usingNativeCaptureRef.current) {
-            await setActiveNativeCapturePaused('record', true);
             logger.info(
-                `[useAudioRecorder] Paused native capture instance. session=${sessionId} source=${isDesktopCaptureActive() ? 'desktop' : 'microphone'}`
+                `[useAudioRecorder] Native capture pause is coordinated with the transcription consumer. session=${sessionId}`
             );
             return;
         }
@@ -514,9 +462,8 @@ export function createAudioRecorderCapture({
 
     async function resumeCapture(sessionId: string): Promise<void> {
         if (refs.usingNativeCaptureRef.current) {
-            await setActiveNativeCapturePaused('record', false);
             logger.info(
-                `[useAudioRecorder] Resumed native capture instance. session=${sessionId} source=${isDesktopCaptureActive() ? 'desktop' : 'microphone'}`
+                `[useAudioRecorder] Native capture resume is coordinated with the transcription consumer. session=${sessionId}`
             );
             return;
         }

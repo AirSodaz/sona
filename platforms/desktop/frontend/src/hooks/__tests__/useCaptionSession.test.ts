@@ -62,6 +62,7 @@ const transcriptionServiceMocks = vi.hoisted(() => ({
     recordStop: vi.fn(),
     recordSendAudioInt16: vi.fn(),
     captionStart: vi.fn(),
+    captionRestart: vi.fn(),
     captionStop: vi.fn(),
     captionSendAudioInt16: vi.fn(),
 }));
@@ -69,11 +70,17 @@ const transcriptionServiceMocks = vi.hoisted(() => ({
 vi.mock('../../services/transcriptionService', () => ({
     transcriptionService: {
         start: transcriptionServiceMocks.recordStart,
+        startNative: transcriptionServiceMocks.recordStart,
+        startExternal: transcriptionServiceMocks.recordStart,
+        restartStream: transcriptionServiceMocks.recordStart,
         stop: transcriptionServiceMocks.recordStop,
         sendAudioInt16: transcriptionServiceMocks.recordSendAudioInt16,
     },
     captionTranscriptionService: {
         start: transcriptionServiceMocks.captionStart,
+        startNative: transcriptionServiceMocks.captionStart,
+        startExternal: transcriptionServiceMocks.captionStart,
+        restartStream: transcriptionServiceMocks.captionRestart,
         stop: transcriptionServiceMocks.captionStop,
         sendAudioInt16: transcriptionServiceMocks.captionSendAudioInt16,
     }
@@ -138,6 +145,7 @@ describe('useCaptionSession', () => {
         };
 
         transcriptionServiceMocks.captionStart.mockResolvedValue(undefined);
+        transcriptionServiceMocks.captionRestart.mockResolvedValue(undefined);
         transcriptionServiceMocks.captionStop.mockResolvedValue(undefined);
         transcriptionServiceMocks.recordStart.mockResolvedValue(undefined);
         transcriptionServiceMocks.recordStop.mockResolvedValue(undefined);
@@ -180,6 +188,9 @@ describe('useCaptionSession', () => {
                 resolveDisplayMedia = resolve;
             });
         });
+        transcriptionServiceMocks.captionStart.mockRejectedValueOnce(
+            new Error('Native capture not supported'),
+        );
 
         const { rerender, unmount } = renderHook(
             (props) => useCaptionSession(props.config, props.isCaptionMode),
@@ -209,20 +220,6 @@ describe('useCaptionSession', () => {
     });
 
     it('starts and cleans up native caption capture without display media fallback', async () => {
-        const unlisten = vi.fn();
-        tauriEventMocks.listen.mockResolvedValue(unlisten);
-        tauriCoreMocks.invoke.mockImplementation(async (command: string) => {
-            if (command === 'start_system_audio_capture') {
-                return undefined;
-            }
-
-            if (command === 'stop_system_audio_capture') {
-                return 'C:/tmp/caption.wav';
-            }
-
-            throw new Error(`Unexpected native command: ${command}`);
-        });
-
         const { rerender } = renderHook(
             (props) => useCaptionSession(props.config, props.isCaptionMode),
             { initialProps: { config: defaultConfig, isCaptionMode: true } }
@@ -230,10 +227,11 @@ describe('useCaptionSession', () => {
 
         await waitFor(() => expect(transcriptionServiceMocks.captionStart).toHaveBeenCalled());
 
-        expect(tauriCoreMocks.invoke).toHaveBeenCalledWith('start_system_audio_capture', {
-            deviceName: null,
-            instanceId: 'caption',
-        });
+        expect(transcriptionServiceMocks.captionStart).toHaveBeenCalledWith(
+            expect.any(Function),
+            expect.any(Function),
+            expect.objectContaining({ sourceKind: 'system', deviceName: null }),
+        );
         expect(navigator.mediaDevices.getDisplayMedia).not.toHaveBeenCalled();
         expect(captionWindowService.open).toHaveBeenCalled();
 
@@ -241,10 +239,6 @@ describe('useCaptionSession', () => {
 
         await waitFor(() => expect(transcriptionServiceMocks.captionStop).toHaveBeenCalled());
 
-        expect(tauriCoreMocks.invoke).toHaveBeenCalledWith('stop_system_audio_capture', {
-            instanceId: 'caption',
-        });
-        expect(tauriFsMocks.remove).toHaveBeenCalledWith('C:/tmp/caption.wav');
-        expect(unlisten).toHaveBeenCalledTimes(1);
+        expect(tauriFsMocks.remove).not.toHaveBeenCalled();
     });
 });

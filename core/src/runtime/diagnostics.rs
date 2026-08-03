@@ -32,9 +32,27 @@ pub struct DiagnosticsCoreInput {
     #[serde(default)]
     pub asr_runtime_metrics: AsrRuntimeMetricsSnapshot,
     #[serde(default)]
+    pub live_transcription: LiveTranscriptionDiagnosticsSnapshot,
+    #[serde(default)]
     pub onboarding_ready: bool,
     #[serde(default)]
     pub punctuation_required: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "camelCase")]
+pub struct LiveTranscriptionDiagnosticsSnapshot {
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
+    pub active_sources: usize,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
+    pub active_pipelines: usize,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
+    pub active_consumers: usize,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
+    pub shared_pipelines: usize,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
+    pub avoided_feed_count: u64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -132,6 +150,7 @@ pub struct DiagnosticsCoreSnapshot {
     pub voice_typing_readiness: VoiceTypingReadinessInput,
     pub runtime_environment: RuntimeEnvironmentStatus,
     pub asr_runtime_metrics: AsrRuntimeMetricsSnapshot,
+    pub live_transcription: LiveTranscriptionDiagnosticsSnapshot,
     pub onboarding_ready: bool,
     pub punctuation_required: bool,
 }
@@ -253,6 +272,7 @@ pub fn build_diagnostics_core_snapshot_at(
         voice_typing_readiness: input.voice_typing_readiness,
         runtime_environment: input.runtime_environment,
         asr_runtime_metrics: input.asr_runtime_metrics,
+        live_transcription: input.live_transcription,
         onboarding_ready: input.onboarding_ready,
         punctuation_required: input.punctuation_required,
     }

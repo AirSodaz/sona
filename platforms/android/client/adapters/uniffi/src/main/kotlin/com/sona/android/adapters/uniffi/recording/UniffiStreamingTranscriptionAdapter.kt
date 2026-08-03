@@ -53,6 +53,8 @@ private class UniffiStreamingTranscriptionSession(
 ) : StreamingTranscriptionSession {
     private val stopped = AtomicBoolean()
     private val closed = AtomicBoolean()
+    private var nextSequence = 0uL
+    private var nextSample = 0uL
 
     override val events: Flow<StreamingTranscriptionEvent> = eventChannel.receiveAsFlow()
 
@@ -63,7 +65,10 @@ private class UniffiStreamingTranscriptionSession(
 
     override suspend fun feed(frame: Pcm16Frame) {
         check(!closed.get()) { "Streaming transcription session is closed." }
-        handle.feedAudioChunk(frame.bytes)
+        require(frame.bytes.size % 2 == 0) { "PCM16 frame must contain complete samples." }
+        handle.feedPcm16Frame(nextSequence, nextSample, frame.bytes)
+        nextSequence += 1u
+        nextSample += (frame.bytes.size / 2).toULong()
     }
 
     override suspend fun flush() {

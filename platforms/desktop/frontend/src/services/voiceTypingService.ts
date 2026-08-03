@@ -22,7 +22,7 @@ import {
     type VoiceTypingConfigSnapshot,
     type VoiceTypingShortcutModifier,
 } from './voiceTyping/voiceTypingConfig';
-import { initRecognizer, processBatchFile } from './tauri/recognizer';
+import { processBatchFile } from './tauri/recognizer';
 import type { AppConfig } from '../types/config';
 
 const CURSOR_POSITION_OFFSET = 12;
@@ -373,7 +373,6 @@ export function createVoiceTypingService(ports: VoiceTypingServicePorts): VoiceT
 
 const voiceTypingTranscriptionService = createTranscriptionService('voice-typing', {
     getEffectiveConfigSnapshot,
-    initRecognizer,
     processBatchFile,
 });
 

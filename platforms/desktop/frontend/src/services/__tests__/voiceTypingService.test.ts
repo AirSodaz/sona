@@ -40,6 +40,7 @@ const mocks = vi.hoisted(() => {
         isRegistered: vi.fn().mockResolvedValue(false),
         mockPrepare: vi.fn(),
         mockStart: vi.fn(),
+        mockAttachNative: vi.fn(),
         mockSoftStop: vi.fn(),
         setModelPath: vi.fn(),
         setLanguage: vi.fn(),
@@ -82,7 +83,8 @@ vi.mock('../transcriptionService', () => {
         setLanguage = mocks.setLanguage;
         setEnableITN = mocks.setEnableITN;
         prepare = mocks.mockPrepare;
-        start = mocks.mockStart;
+        prepareNativeStart = mocks.mockStart;
+        attachPreparedNative = mocks.mockAttachNative;
         softStop = mocks.mockSoftStop;
         stop = vi.fn();
     }
@@ -158,6 +160,7 @@ describe('voiceTypingService', () => {
         mocks.isRegistered.mockResolvedValue(false);
         mocks.mockPrepare.mockResolvedValue(undefined);
         mocks.mockStart.mockResolvedValue(undefined);
+        mocks.mockAttachNative.mockResolvedValue(undefined);
         mocks.mockSoftStop.mockResolvedValue(undefined);
         mocks.windowPrepare.mockResolvedValue(undefined);
         mocks.windowOpen.mockResolvedValue(undefined);

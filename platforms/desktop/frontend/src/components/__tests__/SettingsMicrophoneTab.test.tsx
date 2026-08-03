@@ -170,7 +170,7 @@ describe('SettingsMicrophoneTab', () => {
         vi.unstubAllGlobals();
     });
 
-    it('does not enumerate devices, sync boost, or start previews while inactive for tab prewarm', async () => {
+    it('does not enumerate devices or start previews while inactive for tab prewarm', async () => {
         render(<SettingsMicrophoneTab isActiveTab={false} isOpen />);
 
         await act(async () => {
@@ -179,7 +179,6 @@ describe('SettingsMicrophoneTab', () => {
 
         expect(mockListMicrophoneDeviceOptions).not.toHaveBeenCalled();
         expect(mockListSystemAudioDeviceOptions).not.toHaveBeenCalled();
-        expect(getInvokeCalls('set_microphone_boost')).toHaveLength(0);
         expect(getInvokeCalls('start_microphone_capture')).toHaveLength(0);
         expect(getInvokeCalls('start_system_audio_capture')).toHaveLength(0);
     });

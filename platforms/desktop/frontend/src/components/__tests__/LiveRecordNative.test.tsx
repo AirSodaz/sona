@@ -9,12 +9,7 @@ import {
 } from '../../__tests__/testUtils/liveRecord';
 
 // Mock Tauri invoke
-const mockInvoke = vi.fn().mockImplementation(async (cmd: string) => {
-    if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
-        return '/mock/path/to/audio.wav';
-    }
-    return undefined;
-});
+const mockInvoke = vi.fn().mockResolvedValue(undefined);
 vi.mock('@tauri-apps/api/core', () => ({
     invoke: (cmd: string, args: any) => mockInvoke(cmd, args),
     convertFileSrc: vi.fn((path: string) => `asset://${path}`),
@@ -58,7 +53,10 @@ vi.mock('../../services/historyService', async () => {
 // Hoist mocks to share between singleton and class instances
 const {
     mockStart,
+    mockStartNative,
+    mockStartExternal,
     mockStop,
+    mockStopNativeCapture,
     mockSoftStop,
     mockPauseStream,
     mockResumeStream,
@@ -69,9 +67,18 @@ const {
     mockSetEnableITN,
     mockSetITNModelPaths,
     mockTerminate
-} = vi.hoisted(() => ({
-    mockStart: vi.fn().mockResolvedValue(undefined),
-    mockStop: vi.fn().mockResolvedValue(undefined),
+} = vi.hoisted(() => {
+    const start = vi.fn().mockResolvedValue(undefined);
+    const stop = vi.fn().mockResolvedValue(undefined);
+    return {
+    mockStart: start,
+    mockStartNative: vi.fn((...args: any[]) => start(...args)),
+    mockStartExternal: vi.fn((...args: any[]) => start(...args)),
+    mockStop: stop,
+    mockStopNativeCapture: vi.fn(async () => {
+        await stop();
+        return '/mock/path/to/audio.wav';
+    }),
     mockSoftStop: vi.fn().mockResolvedValue(undefined),
     mockPauseStream: vi.fn().mockResolvedValue(undefined),
     mockResumeStream: vi.fn().mockResolvedValue(undefined),
@@ -82,13 +89,18 @@ const {
     mockSetEnableITN: vi.fn(),
     mockSetITNModelPaths: vi.fn(),
     mockTerminate: vi.fn().mockResolvedValue(undefined),
-}));
+    };
+});
 
 // Mock transcription service
 vi.mock('../../services/transcriptionService', () => {
     return {
         transcriptionService: {
             start: mockStart,
+            startNative: mockStartNative,
+            startExternal: mockStartExternal,
+            stopNativeCapture: mockStopNativeCapture,
+            restartStream: mockPrepare,
             stop: mockStop,
             softStop: mockSoftStop,
             pauseStream: mockPauseStream,
@@ -103,6 +115,10 @@ vi.mock('../../services/transcriptionService', () => {
         },
         captionTranscriptionService: {
             start: mockStart,
+            startNative: mockStartNative,
+            startExternal: mockStartExternal,
+            stopNativeCapture: mockStopNativeCapture,
+            restartStream: mockPrepare,
             stop: mockStop,
             softStop: mockSoftStop,
             pauseStream: mockPauseStream,
@@ -117,6 +133,10 @@ vi.mock('../../services/transcriptionService', () => {
         },
         TranscriptionService: class {
             start = mockStart;
+            startNative = mockStartNative;
+            startExternal = mockStartExternal;
+            stopNativeCapture = mockStopNativeCapture;
+            restartStream = mockPrepare;
             stop = mockStop;
             softStop = mockSoftStop;
             pauseStream = mockPauseStream;
@@ -191,12 +211,7 @@ vi.mock('lucide-react', () => ({
 describe('LiveRecord Native Capture', () => {
     beforeEach(async () => {
         vi.useFakeTimers();
-        mockInvoke.mockImplementation(async (cmd: string) => {
-            if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
-                return '/mock/path/to/audio.wav';
-            }
-            return undefined;
-        });
+        mockInvoke.mockResolvedValue(undefined);
         resetLiveRecordHistoryMocks(mockLiveRecordHistory, {
             saveRecordingResult: { id: 'mock-id', title: 'Recording test', projectId: null },
             saveNativeRecordingResult: { id: 'mock-id', title: 'Recording test', projectId: null },
@@ -345,7 +360,16 @@ describe('LiveRecord Native Capture', () => {
 
         // Reset mocks
         mockStart.mockClear();
+        mockStartNative.mockReset();
+        mockStartNative.mockImplementation((...args: any[]) => mockStart(...args));
+        mockStartExternal.mockReset();
+        mockStartExternal.mockImplementation((...args: any[]) => mockStart(...args));
         mockStop.mockClear();
+        mockStopNativeCapture.mockReset();
+        mockStopNativeCapture.mockImplementation(async () => {
+            await mockStop();
+            return '/mock/path/to/audio.wav';
+        });
         mockSoftStop.mockClear();
         mockPauseStream.mockClear();
         mockResumeStream.mockClear();
@@ -411,10 +435,12 @@ describe('LiveRecord Native Capture', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        // Check invoke called
-        expect(mockInvoke).toHaveBeenCalledWith('start_system_audio_capture', expect.objectContaining({
+        expect(mockStartNative).toHaveBeenCalledWith(
+            expect.any(Function),
+            expect.any(Function),
+            expect.objectContaining({
+            sourceKind: 'system',
             deviceName: null,
-            instanceId: 'record',
             outputPath: expect.any(String),
         }));
         expect(useTranscriptStore.getState().isRecording).toBe(true);
@@ -448,8 +474,7 @@ describe('LiveRecord Native Capture', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        // Check invoke stop called for desktop source
-        expect(mockInvoke).toHaveBeenCalledWith('stop_system_audio_capture', { instanceId: 'record' });
+        expect(mockStopNativeCapture).toHaveBeenCalled();
 
         // Check saveRecording called
         // Note: LiveRecord checks if segments > 0 OR duration > 1.0
@@ -482,9 +507,12 @@ describe('LiveRecord Native Capture', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        expect(mockInvoke).toHaveBeenCalledWith('start_microphone_capture', expect.objectContaining({
+        expect(mockStartNative).toHaveBeenCalledWith(
+            expect.any(Function),
+            expect.any(Function),
+            expect.objectContaining({
+            sourceKind: 'microphone',
             deviceName: null,
-            instanceId: 'record',
             outputPath: expect.any(String),
         }));
         expect(useTranscriptStore.getState().isRecording).toBe(true);
@@ -539,7 +567,7 @@ describe('LiveRecord Native Capture', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        // Give time for promises (like stop_system_audio_capture) to resolve
+        // Give the typed stop lifecycle time to settle.
         // In Vitest with fake timers, we need to advance them to let promises resolve
         await act(async () => {
             await vi.advanceTimersByTimeAsync(100);
@@ -689,12 +717,15 @@ describe('LiveRecord Native Capture', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        expect(mockInvoke).toHaveBeenCalledWith('start_microphone_capture', expect.objectContaining({
+        expect(mockStartNative).toHaveBeenCalledWith(
+            expect.any(Function),
+            expect.any(Function),
+            expect.objectContaining({
+            sourceKind: 'microphone',
             deviceName: null,
-            instanceId: 'record',
             outputPath: expect.any(String),
         }));
-        expect(mockInvoke).not.toHaveBeenCalledWith('stop_microphone_capture', { instanceId: 'record' });
+        expect(mockStopNativeCapture).not.toHaveBeenCalled();
         expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
         expect(useTranscriptStore.getState().isRecording).toBe(true);
 
@@ -730,14 +761,9 @@ describe('LiveRecord Native Capture', () => {
             });
         });
         navigator.mediaDevices.getUserMedia = vi.fn().mockRejectedValue(new Error('web fallback failed'));
-        mockInvoke.mockImplementation(async (cmd: string) => {
-            if (cmd === 'start_microphone_capture') {
-                throw new Error('mic attach failed');
-            }
-            if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
-                return '/mock/path/to/audio.wav';
-            }
-            return undefined;
+        mockStartNative.mockImplementationOnce(async (...args: any[]) => {
+            await mockStart(...args);
+            throw new Error('mic attach failed');
         });
 
         render(<LiveRecord />);
@@ -754,7 +780,7 @@ describe('LiveRecord Native Capture', () => {
         expect(screen.getByRole('button', { name: /live.start_recording/i })).not.toBeNull();
     });
 
-    it('reports transcription startup errors without falling back to browser capture', async () => {
+    it('falls back to browser capture when native transcription startup fails', async () => {
         const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
         const { useDialogStore } = await import('../../stores/dialogStore');
         const showError = vi.fn().mockResolvedValue(undefined);
@@ -770,13 +796,10 @@ describe('LiveRecord Native Capture', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
-        expect(mockInvoke).not.toHaveBeenCalledWith('start_microphone_capture', expect.anything());
-        expect(useTranscriptStore.getState().isRecording).toBe(false);
-        expect(showError).toHaveBeenCalledWith(expect.objectContaining({
-            code: 'transcription.service_error',
-            cause: expect.any(Error),
-        }));
+        expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalled();
+        expect(mockStartExternal).toHaveBeenCalled();
+        expect(useTranscriptStore.getState().isRecording).toBe(true);
+        expect(showError).not.toHaveBeenCalled();
     });
 
     it('does not let a stale microphone startup rollback stop a newer record session', async () => {
@@ -785,26 +808,14 @@ describe('LiveRecord Native Capture', () => {
         let rejectFirstAttach: ((reason?: unknown) => void) | null = null;
         let microphoneAttachAttempts = 0;
 
-        mockInvoke.mockImplementation((cmd: string) => {
-            if (cmd === 'set_microphone_boost') {
-                return Promise.resolve(undefined);
+        mockStartNative.mockImplementation((...args: any[]) => {
+            microphoneAttachAttempts += 1;
+            if (microphoneAttachAttempts === 1) {
+                return new Promise((_, reject) => {
+                    rejectFirstAttach = reject;
+                });
             }
-
-            if (cmd === 'start_microphone_capture') {
-                microphoneAttachAttempts += 1;
-                if (microphoneAttachAttempts === 1) {
-                    return new Promise((_, reject) => {
-                        rejectFirstAttach = reject;
-                    });
-                }
-                return Promise.resolve(undefined);
-            }
-
-            if (cmd === 'stop_microphone_capture' || cmd === 'stop_system_audio_capture') {
-                return Promise.resolve('/mock/path/to/audio.wav');
-            }
-
-            return Promise.resolve(undefined);
+            return mockStart(...args);
         });
 
         const { result } = renderHook(() => useAudioRecorder({
@@ -838,7 +849,7 @@ describe('LiveRecord Native Capture', () => {
 
         expect(useTranscriptStore.getState().isRecording).toBe(true);
         expect(mockSoftStop).not.toHaveBeenCalled();
-        expect(mockInvoke).not.toHaveBeenCalledWith('stop_microphone_capture', { instanceId: 'record' });
+        expect(mockStopNativeCapture).not.toHaveBeenCalled();
     });
 
     it('should stop the correct native capture after switching desktop back to microphone', async () => {
@@ -860,12 +871,15 @@ describe('LiveRecord Native Capture', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        expect(mockInvoke).toHaveBeenCalledWith('start_system_audio_capture', expect.objectContaining({
+        expect(mockStartNative).toHaveBeenCalledWith(
+            expect.any(Function),
+            expect.any(Function),
+            expect.objectContaining({
+            sourceKind: 'system',
             deviceName: null,
-            instanceId: 'record',
             outputPath: expect.any(String),
         }));
-        expect(mockInvoke).toHaveBeenCalledWith('stop_system_audio_capture', { instanceId: 'record' });
+        expect(mockStopNativeCapture).toHaveBeenCalledTimes(1);
 
         // Switch back to microphone source and start/stop again
         await act(async () => { fireEvent.click(screen.getByLabelText('live.source_select')); });
@@ -881,12 +895,15 @@ describe('LiveRecord Native Capture', () => {
             await vi.advanceTimersByTimeAsync(100);
         });
 
-        expect(mockInvoke).toHaveBeenCalledWith('start_microphone_capture', expect.objectContaining({
+        expect(mockStartNative).toHaveBeenCalledWith(
+            expect.any(Function),
+            expect.any(Function),
+            expect.objectContaining({
+            sourceKind: 'microphone',
             deviceName: null,
-            instanceId: 'record',
             outputPath: expect.any(String),
         }));
-        expect(mockInvoke).toHaveBeenCalledWith('stop_microphone_capture', { instanceId: 'record' });
+        expect(mockStopNativeCapture).toHaveBeenCalledTimes(2);
     });
 
     it('keeps the displayed timer accumulated across pause and resume when using native capture', async () => {

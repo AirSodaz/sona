@@ -11,12 +11,13 @@ const mocks = vi.hoisted(() => {
         delete listenCallbacks[eventName];
       };
     }),
-    startRecognizer: vi.fn(async () => undefined),
-    stopRecognizer: vi.fn(async () => undefined),
-    flushRecognizer: vi.fn(async () => undefined),
-    feedAudioChunk: vi.fn(async () => undefined),
     loggerInfo: vi.fn(),
     loggerError: vi.fn(),
+    createExternalLiveSource: vi.fn(),
+    startExternalLiveTranscription: vi.fn(),
+    retireExternalLiveSource: vi.fn(),
+    stopLiveTranscription: vi.fn(),
+    feedExternalLiveSource: vi.fn(),
   };
 });
 
@@ -25,10 +26,11 @@ vi.mock('@tauri-apps/api/event', () => ({
 }));
 
 vi.mock('../../tauri/recognizer', () => ({
-  startRecognizer: mocks.startRecognizer,
-  stopRecognizer: mocks.stopRecognizer,
-  flushRecognizer: mocks.flushRecognizer,
-  feedAudioChunk: mocks.feedAudioChunk,
+  createExternalLiveSource: mocks.createExternalLiveSource,
+  startExternalLiveTranscription: mocks.startExternalLiveTranscription,
+  retireExternalLiveSource: mocks.retireExternalLiveSource,
+  stopLiveTranscription: mocks.stopLiveTranscription,
+  feedExternalLiveSource: mocks.feedExternalLiveSource,
 }));
 
 vi.mock('../../../utils/logger', () => ({
@@ -129,35 +131,21 @@ describe('RecognizerLifecycle', () => {
     );
   });
 
-  it('coalesces running state across start, feed, flush, and stop', async () => {
+  it('retires a newly created external source when subscription startup fails', async () => {
+    mocks.createExternalLiveSource.mockResolvedValue({ sourceToken: 'source-token' });
+    mocks.startExternalLiveTranscription.mockRejectedValue(new Error('start failed'));
+    mocks.retireExternalLiveSource.mockResolvedValue(undefined);
     const RecognizerLifecycle = await loadLifecycle();
     const lifecycle = new RecognizerLifecycle('record');
+    const onError = vi.fn();
 
-    await lifecycle.start(vi.fn());
-    await lifecycle.start(vi.fn());
+    await expect(
+      lifecycle.startExternal({ mode: 'streaming' } as never, onError),
+    ).rejects.toThrow('start failed');
 
-    expect(mocks.startRecognizer).toHaveBeenCalledTimes(1);
-    expect(lifecycle.running).toBe(true);
-
-    const samples = new Int16Array([1, -1, 2]);
-    await lifecycle.feedAudioInt16(samples);
-
-    expect(mocks.feedAudioChunk).toHaveBeenCalledTimes(1);
-    expect(mocks.feedAudioChunk).toHaveBeenCalledWith(
-      'record',
-      new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength),
-    );
-
-    await lifecycle.flushAndStop();
-
-    expect(mocks.flushRecognizer).toHaveBeenCalledWith('record');
-    expect(mocks.stopRecognizer).toHaveBeenCalledWith('record');
+    expect(mocks.retireExternalLiveSource).toHaveBeenCalledWith('source-token');
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('start failed'));
     expect(lifecycle.running).toBe(false);
-
-    await lifecycle.stop();
-    await lifecycle.feedAudioInt16(new Int16Array([3]));
-
-    expect(mocks.stopRecognizer).toHaveBeenCalledTimes(1);
-    expect(mocks.feedAudioChunk).toHaveBeenCalledTimes(1);
   });
+
 });

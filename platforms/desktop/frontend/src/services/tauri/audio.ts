@@ -31,10 +31,6 @@ export async function setSystemAudioCapturePaused(request: SetCapturePausedReque
   await invokeTauri(TauriCommand.audio.setSystemAudioCapturePaused, request);
 }
 
-export async function setMicrophoneBoost(boost: number): Promise<void> {
-  await invokeTauri(TauriCommand.audio.setMicrophoneBoost, { boost });
-}
-
 export async function getMicrophoneDevices(): Promise<AudioDevice[]> {
   return invokeTauri(TauriCommand.audio.getMicrophoneDevices);
 }

@@ -403,6 +403,7 @@ pub(crate) async fn run_live_session<W: Write + ?Sized>(
         return Err(CliError::Io(error));
     }
 
+    let mut frame_cursor = sona_core::ports::asr::StreamingAudioFrameCursor::default();
     let run_result: CliResult<LiveStopReason> = async {
         loop {
             tokio::select! {
@@ -414,7 +415,7 @@ pub(crate) async fn run_live_session<W: Write + ?Sized>(
                 }
                 message = input.receiver.recv() => {
                     match message.unwrap_or(LiveAudioMessage::Eof) {
-                        LiveAudioMessage::Chunk(chunk) => feed_audio(session.as_ref(), chunk).await?,
+                        LiveAudioMessage::Chunk(chunk) => feed_audio(session.as_ref(), &mut frame_cursor, chunk).await?,
                         LiveAudioMessage::Eof => break Ok(LiveStopReason::Eof),
                         LiveAudioMessage::Error(error) => break Err(CliError::Io(error)),
                     }
@@ -423,7 +424,7 @@ pub(crate) async fn run_live_session<W: Write + ?Sized>(
                     let reason = stop.unwrap_or(LiveStopReason::CtrlC);
                     input.request_stop();
                     if input.should_drain_on_stop() {
-                        drain_stopped_input(session.as_ref(), input).await?;
+                        drain_stopped_input(session.as_ref(), input, &mut frame_cursor).await?;
                     }
                     break Ok(reason);
                 }
@@ -471,10 +472,11 @@ pub(crate) async fn run_live_session<W: Write + ?Sized>(
 async fn drain_stopped_input(
     session: &dyn AsrStreamingSession,
     input: &mut RunningAudioInput,
+    frame_cursor: &mut sona_core::ports::asr::StreamingAudioFrameCursor,
 ) -> CliResult<()> {
     while let Some(message) = input.receiver.recv().await {
         match message {
-            LiveAudioMessage::Chunk(chunk) => feed_audio(session, chunk).await?,
+            LiveAudioMessage::Chunk(chunk) => feed_audio(session, frame_cursor, chunk).await?,
             LiveAudioMessage::Eof => return Ok(()),
             LiveAudioMessage::Error(error) => return Err(CliError::Io(error)),
         }
@@ -482,19 +484,29 @@ async fn drain_stopped_input(
     Ok(())
 }
 
-async fn feed_audio(session: &dyn AsrStreamingSession, chunk: LiveAudioChunk) -> CliResult<()> {
-    match chunk {
-        LiveAudioChunk::PcmS16Le(bytes) => session.feed_audio_chunk(bytes).await,
-        LiveAudioChunk::Samples(samples) => session.feed_audio_samples(&samples).await,
+async fn feed_audio(
+    session: &dyn AsrStreamingSession,
+    frame_cursor: &mut sona_core::ports::asr::StreamingAudioFrameCursor,
+    chunk: LiveAudioChunk,
+) -> CliResult<()> {
+    let frame = match chunk {
+        LiveAudioChunk::PcmS16Le(bytes) => frame_cursor.next_pcm_s16le(&bytes),
+        LiveAudioChunk::Samples(samples) => Ok(frame_cursor.next_samples(samples)),
     }
-    .map_err(|error| CliError::Model(error.to_string()))
+    .map_err(|error| CliError::Model(error.to_string()))?;
+    session
+        .feed_audio_frame(frame)
+        .await
+        .map_err(|error| CliError::Model(error.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use sona_core::ports::asr::{AsrPortError, AsrStreamingSession, AsrTranscriptUpdateEvent};
+    use sona_core::ports::asr::{
+        AsrAudioFrame, AsrPortError, AsrStreamingSession, AsrTranscriptUpdateEvent,
+    };
     use sona_core::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
     use std::sync::{Arc, Mutex};
 
@@ -528,19 +540,14 @@ mod tests {
             Ok(())
         }
 
-        async fn feed_audio_chunk(&self, _samples: Vec<u8>) -> Result<(), AsrPortError> {
-            self.calls.lock().unwrap().push("feed-bytes");
+        async fn feed_audio_frame(&self, _frame: AsrAudioFrame) -> Result<(), AsrPortError> {
+            self.calls.lock().unwrap().push("feed-frame");
             if self.fail_feed {
                 return Err(AsrPortError::runtime("decode failed"));
             }
             self.updates
                 .send(update_event("partial", false))
                 .map_err(|error| AsrPortError::runtime(error.to_string()))?;
-            Ok(())
-        }
-
-        async fn feed_audio_samples(&self, _samples: &[f32]) -> Result<(), AsrPortError> {
-            self.calls.lock().unwrap().push("feed-samples");
             Ok(())
         }
     }
@@ -591,11 +598,7 @@ mod tests {
             Ok(())
         }
 
-        async fn feed_audio_chunk(&self, _samples: Vec<u8>) -> Result<(), AsrPortError> {
-            Ok(())
-        }
-
-        async fn feed_audio_samples(&self, _samples: &[f32]) -> Result<(), AsrPortError> {
+        async fn feed_audio_frame(&self, _frame: AsrAudioFrame) -> Result<(), AsrPortError> {
             Ok(())
         }
     }
@@ -675,7 +678,7 @@ mod tests {
 
         assert_eq!(
             calls.lock().unwrap().as_slice(),
-            &["start", "feed-bytes", "flush", "stop"]
+            &["start", "feed-frame", "flush", "stop"]
         );
         assert_eq!(renderer.segments().len(), 1);
         assert!(renderer.segments()[0].is_final);
@@ -936,7 +939,7 @@ mod tests {
         assert_eq!(reason, LiveStopReason::Duration);
         assert_eq!(
             calls.lock().unwrap().as_slice(),
-            &["start", "feed-samples", "flush", "stop"]
+            &["start", "feed-frame", "flush", "stop"]
         );
     }
 

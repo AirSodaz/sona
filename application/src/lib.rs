@@ -4,6 +4,7 @@ pub mod config;
 pub mod dashboard;
 pub mod export;
 pub mod history;
+pub mod live_transcription;
 pub mod llm;
 pub mod recovery;
 pub mod storage_usage;

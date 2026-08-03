@@ -9,12 +9,7 @@ import {
 } from '../../__tests__/testUtils/liveRecord';
 
 // Mock Tauri invoke
-const mockInvoke = vi.fn().mockImplementation(async (cmd: string) => {
-    if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
-        return '/mock/path/to/audio.wav';
-    }
-    return undefined;
-});
+const mockInvoke = vi.fn().mockResolvedValue(undefined);
 vi.mock('@tauri-apps/api/core', () => ({
     invoke: (cmd: string, args: any) => mockInvoke(cmd, args),
     convertFileSrc: vi.fn((path: string) => `asset://${path}`),
@@ -27,7 +22,10 @@ vi.mock('@tauri-apps/api/event', () => ({
 // Hoist mocks to share between singleton and class instances
 const {
     mockStart,
+    mockStartNative,
+    mockStartExternal,
     mockStop,
+    mockStopNativeCapture,
     mockSoftStop,
     mockPauseStream,
     mockResumeStream,
@@ -38,9 +36,18 @@ const {
     mockSetEnableITN,
     mockSetITNModelPaths,
     mockTerminate
-} = vi.hoisted(() => ({
-    mockStart: vi.fn().mockResolvedValue(undefined),
-    mockStop: vi.fn().mockResolvedValue(undefined),
+} = vi.hoisted(() => {
+    const start = vi.fn().mockResolvedValue(undefined);
+    const stop = vi.fn().mockResolvedValue(undefined);
+    return {
+    mockStart: start,
+    mockStartNative: vi.fn((...args: any[]) => start(...args)),
+    mockStartExternal: vi.fn((...args: any[]) => start(...args)),
+    mockStop: stop,
+    mockStopNativeCapture: vi.fn(async () => {
+        await stop();
+        return '/mock/path/to/audio.wav';
+    }),
     mockSoftStop: vi.fn().mockResolvedValue(undefined),
     mockPauseStream: vi.fn().mockResolvedValue(undefined),
     mockResumeStream: vi.fn().mockResolvedValue(undefined),
@@ -51,13 +58,18 @@ const {
     mockSetEnableITN: vi.fn(),
     mockSetITNModelPaths: vi.fn(),
     mockTerminate: vi.fn().mockResolvedValue(undefined),
-}));
+    };
+});
 
 // Mock transcription service
 vi.mock('../../services/transcriptionService', () => {
     return {
         transcriptionService: {
             start: mockStart,
+            startNative: mockStartNative,
+            startExternal: mockStartExternal,
+            stopNativeCapture: mockStopNativeCapture,
+            restartStream: mockPrepare,
             stop: mockStop,
             softStop: mockSoftStop,
             pauseStream: mockPauseStream,
@@ -72,6 +84,10 @@ vi.mock('../../services/transcriptionService', () => {
         },
         captionTranscriptionService: {
             start: mockStart,
+            startNative: mockStartNative,
+            startExternal: mockStartExternal,
+            stopNativeCapture: mockStopNativeCapture,
+            restartStream: mockPrepare,
             stop: mockStop,
             softStop: mockSoftStop,
             pauseStream: mockPauseStream,
@@ -86,6 +102,10 @@ vi.mock('../../services/transcriptionService', () => {
         },
         TranscriptionService: class {
             start = mockStart;
+            startNative = mockStartNative;
+            startExternal = mockStartExternal;
+            stopNativeCapture = mockStopNativeCapture;
+            restartStream = mockPrepare;
             stop = mockStop;
             softStop = mockSoftStop;
             pauseStream = mockPauseStream;
@@ -186,12 +206,7 @@ describe('LiveRecord', () => {
         vi.useFakeTimers();
         capturedOnSegment = null;
         localStorage.clear();
-        mockInvoke.mockImplementation(async (cmd: string) => {
-            if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
-                return '/mock/path/to/audio.wav';
-            }
-            return undefined;
-        });
+        mockInvoke.mockResolvedValue(undefined);
         resetLiveRecordHistoryMocks(mockLiveRecordHistory, {
             saveRecordingResult: { id: 'test-id', title: 'Recording test', projectId: null },
             saveNativeRecordingResult: { id: 'test-id', title: 'Recording test', projectId: null },
@@ -309,7 +324,16 @@ describe('LiveRecord', () => {
 
         // Reset mocks
         mockStart.mockClear();
+        mockStartNative.mockReset();
+        mockStartNative.mockImplementation((...args: any[]) => mockStart(...args));
+        mockStartExternal.mockReset();
+        mockStartExternal.mockImplementation((...args: any[]) => mockStart(...args));
         mockStop.mockClear();
+        mockStopNativeCapture.mockReset();
+        mockStopNativeCapture.mockImplementation(async () => {
+            await mockStop();
+            return '/mock/path/to/audio.wav';
+        });
         mockSoftStop.mockClear();
         mockPauseStream.mockClear();
         mockResumeStream.mockClear();
@@ -383,7 +407,6 @@ describe('LiveRecord', () => {
             await Promise.resolve();
         });
 
-        expect(mockInvoke).toHaveBeenCalledWith('set_microphone_capture_paused', { instanceId: 'record', paused: true });
         expect(mockPauseStream).toHaveBeenCalled();
         expect(useTranscriptStore.getState().isPaused).toBe(true);
         expect(useTranscriptStore.getState().segments).toEqual([
@@ -413,7 +436,6 @@ describe('LiveRecord', () => {
         });
 
         expect(mockResumeStream).toHaveBeenCalled();
-        expect(mockInvoke).toHaveBeenCalledWith('set_microphone_capture_paused', { instanceId: 'record', paused: false });
         expect(useTranscriptStore.getState().isPaused).toBe(false);
     });
 
@@ -524,15 +546,7 @@ describe('LiveRecord', () => {
     });
 
     it('keeps the displayed timer accumulated across pause and resume when using web audio fallback', async () => {
-        mockInvoke.mockImplementation(async (cmd: string) => {
-            if (cmd === 'start_microphone_capture') {
-                throw new Error('native unavailable');
-            }
-            if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
-                return '/mock/path/to/audio.wav';
-            }
-            return undefined;
-        });
+        mockStartNative.mockRejectedValueOnce(new Error('native unavailable'));
 
         render(<LiveRecord />);
 
@@ -568,15 +582,7 @@ describe('LiveRecord', () => {
 
     it('syncs the saved history title into the editor after web recording fallback is persisted', async () => {
         const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
-        mockInvoke.mockImplementation(async (cmd: string) => {
-            if (cmd === 'start_microphone_capture') {
-                throw new Error('native unavailable');
-            }
-            if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
-                return '/mock/path/to/audio.wav';
-            }
-            return undefined;
-        });
+        mockStartNative.mockRejectedValueOnce(new Error('native unavailable'));
         let webHistoryId = '';
         mockCreateLiveRecordingDraft
             .mockImplementationOnce((_audioExtension: string, _projectId?: string | null, _icon?: string | null, id?: string) =>
@@ -627,15 +633,7 @@ describe('LiveRecord', () => {
 
     it('keeps web fallback recording active until the live draft is finalized', async () => {
         const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
-        mockInvoke.mockImplementation(async (cmd: string) => {
-            if (cmd === 'start_microphone_capture') {
-                throw new Error('native unavailable');
-            }
-            if (cmd === 'stop_system_audio_capture' || cmd === 'stop_microphone_capture') {
-                return '/mock/path/to/audio.wav';
-            }
-            return undefined;
-        });
+        mockStartNative.mockRejectedValueOnce(new Error('native unavailable'));
         mockCreateLiveRecordingDraft
             .mockResolvedValueOnce(createDraftHandle('native-fallback-draft', 'wav'))
             .mockResolvedValueOnce(createDraftHandle('web-history-id', 'webm'));

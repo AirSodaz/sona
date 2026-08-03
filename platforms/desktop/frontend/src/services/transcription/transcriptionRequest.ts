@@ -5,10 +5,7 @@ import {
   type AsrTranscriptionRequest,
 } from '../asrConfigService';
 import { speakerService } from '../speakerService';
-import type {
-  InitRecognizerRequest,
-  ProcessBatchFileRequest,
-} from '../tauri/recognizer';
+import type { ProcessBatchFileRequest } from '../tauri/recognizer';
 
 interface StreamingRequestOptions {
   appConfig: AppConfig;
@@ -26,11 +23,6 @@ interface BatchRequestOptions {
   language: string;
   enableItn: boolean;
   instanceId?: string;
-}
-
-interface ResolvedRecognizerInitRequest {
-  request: InitRecognizerRequest;
-  asrRequest: AsrTranscriptionRequest;
 }
 
 interface ResolvedBatchTranscriptionRequest {
@@ -86,17 +78,6 @@ export function buildStreamingAsrRequest({
       enableTimeline: instanceId === 'record'
         ? (appConfig.enableTimeline ?? false)
         : false,
-    },
-  };
-}
-
-export function buildRecognizerInitRequest(options: StreamingRequestOptions): ResolvedRecognizerInitRequest {
-  const asrRequest = buildStreamingAsrRequest(options);
-  return {
-    asrRequest,
-    request: {
-      instanceId: options.instanceId,
-      asrRequest,
     },
   };
 }

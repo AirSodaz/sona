@@ -826,6 +826,7 @@ export type DiagnosticsCoreInput = {
 	voiceTypingReadiness: VoiceTypingReadinessInput,
 	runtimeEnvironment?: RuntimeEnvironmentStatus,
 	asrRuntimeMetrics?: AsrRuntimeMetricsSnapshot,
+	liveTranscription?: LiveTranscriptionDiagnosticsSnapshot,
 	onboardingReady?: boolean,
 	punctuationRequired?: boolean,
 };
@@ -842,6 +843,7 @@ export type DiagnosticsCoreSnapshot = {
 	voiceTypingReadiness: VoiceTypingReadinessInput,
 	runtimeEnvironment: RuntimeEnvironmentStatus,
 	asrRuntimeMetrics: AsrRuntimeMetricsSnapshot,
+	liveTranscription: LiveTranscriptionDiagnosticsSnapshot,
 	onboardingReady: boolean,
 	punctuationRequired: boolean,
 };
@@ -1190,6 +1192,14 @@ export type HybridLogicalClock = {
 export type LiveRecordingDraftResult = {
 	item: HistoryItemRecord,
 	audioAbsolutePath: string,
+};
+
+export type LiveTranscriptionDiagnosticsSnapshot = {
+	activeSources: number,
+	activePipelines: number,
+	activeConsumers: number,
+	sharedPipelines: number,
+	avoidedFeedCount: number,
 };
 
 export type LlmCapabilityPolicy = "strict" | "compatible";

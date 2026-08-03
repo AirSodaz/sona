@@ -3,11 +3,13 @@ import { logger } from '../../utils/logger';
 import { normalizeTranscriptUpdate } from '../../utils/transcriptTiming';
 import { buildRecognizerOutputEvent } from '../tauri/events';
 import {
-  feedAudioChunk,
-  flushRecognizer,
-  startRecognizer,
-  stopRecognizer,
+  createExternalLiveSource,
+  feedExternalLiveSource,
+  retireExternalLiveSource,
+  startExternalLiveTranscription,
+  stopLiveTranscription,
 } from '../tauri/recognizer';
+import type { AsrTranscriptionRequest } from '../asrConfigService';
 import { listen, type UnlistenFn } from '../tauri/platform/events';
 
 const LOG_PREVIEW_MAX_CHARS = 24;
@@ -56,6 +58,7 @@ function formatSession(sessionId: string | null | undefined): string {
 
 export class RecognizerLifecycle {
   private isRunning = false;
+  private externalSourceToken: string | null = null;
 
   constructor(private readonly instanceId: string) {}
 
@@ -142,10 +145,6 @@ export class RecognizerLifecycle {
     }
   }
 
-  hasCallbackRegistration(): boolean {
-    return instanceCallbacks.has(this.instanceId);
-  }
-
   async ensureGlobalBus(): Promise<void> {
     if (globalListeners.has(this.instanceId)) return;
 
@@ -196,49 +195,64 @@ export class RecognizerLifecycle {
     globalListeners.set(this.instanceId, unlisten);
   }
 
-  async start(onError: RecognizerErrorCallback): Promise<void> {
-    if (this.isRunning) {
-      return;
-    }
+  async startExternal(
+    asrRequest: AsrTranscriptionRequest,
+    onError: RecognizerErrorCallback,
+    gain = 1,
+  ): Promise<void> {
+    if (this.isRunning) return;
+    let sourceToken: string | null = null;
     try {
-      await startRecognizer(this.instanceId);
+      const source = await createExternalLiveSource();
+      sourceToken = source.sourceToken;
+      await startExternalLiveTranscription({
+        consumerId: this.instanceId,
+        sourceToken,
+        gain,
+        asrRequest,
+      });
+      this.externalSourceToken = sourceToken;
       this.isRunning = true;
     } catch (error) {
-      logger.error(`[TranscriptionService:${this.instanceId}] Failed to start stream:`, error);
+      if (sourceToken) {
+        await retireExternalLiveSource(sourceToken).catch((retireError) => {
+          logger.error('Failed to retire external live source after startup failure:', retireError);
+        });
+      }
       onError(`Failed to start stream: ${error}`);
+      this.externalSourceToken = null;
       this.isRunning = false;
       throw error;
     }
   }
 
-  async stop(): Promise<void> {
-    if (!this.isRunning) return;
+  async stopExternal(): Promise<void> {
+    if (!this.isRunning || !this.externalSourceToken) return;
+    const sourceToken = this.externalSourceToken;
+    this.externalSourceToken = null;
     try {
-      await stopRecognizer(this.instanceId);
+      await stopLiveTranscription(this.instanceId);
     } finally {
+      await retireExternalLiveSource(sourceToken).catch((error) => {
+        logger.error('Failed to retire external live source:', error);
+      });
       this.isRunning = false;
     }
   }
 
-  async flushAndStop(): Promise<void> {
-    if (this.isRunning) {
-      try {
-        await flushRecognizer(this.instanceId);
-      } catch (error) {
-        logger.error('Flush failed:', error);
-      }
-    }
-    await this.stop();
+  async feedExternalAudioInt16(samples: Int16Array): Promise<void> {
+    if (!this.isRunning || !this.externalSourceToken) return;
+    const bytes = new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength);
+    await feedExternalLiveSource(this.externalSourceToken, bytes);
   }
 
-  async feedAudioInt16(samples: Int16Array): Promise<void> {
-    if (!this.isRunning) return;
-    try {
-      const bytes = new Uint8Array(samples.buffer, samples.byteOffset, samples.byteLength);
-      await feedAudioChunk(this.instanceId, bytes);
-    } catch (error) {
-      logger.error('Feed audio failed:', error);
-    }
+  markNativeRunning(): void {
+    this.isRunning = true;
+  }
+
+  markStopped(): void {
+    this.isRunning = false;
+    this.externalSourceToken = null;
   }
 }
 

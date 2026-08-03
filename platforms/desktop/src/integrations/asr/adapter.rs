@@ -1,12 +1,10 @@
-﻿use super::AsrPortError;
+use super::AsrPortError;
 use super::types::{
-    AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest, LocalSherpaStreamingRequest,
-    TranscriptSegment,
+    AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest, TranscriptSegment,
 };
 use super::{AsrBatchProcessor, AsrProviderAdapter, AsrState};
 use async_trait::async_trait;
-use sona_core::ports::asr::{AsrRuntimeObserver, AsrStreamingSession, validate_local_sherpa_mode};
-use std::sync::Arc;
+use sona_core::ports::asr::validate_local_sherpa_mode;
 
 #[derive(Debug, Clone, Copy)]
 pub struct LocalSherpaAdapter;
@@ -24,27 +22,6 @@ impl AsrProviderAdapter for LocalSherpaAdapter {
         validate_local_sherpa_mode(request, AsrMode::Batch)
             .map_err(|error| AsrPortError::invalid_request(error.to_string()))?;
         Ok(Some(std::sync::Arc::new(LocalSherpaBatchProcessor)))
-    }
-
-    async fn create_streaming_session(
-        &self,
-        state: &AsrState,
-        instance_id: &str,
-        request: &AsrTranscriptionRequest,
-        observer: Arc<dyn AsrRuntimeObserver>,
-    ) -> Result<Option<Arc<dyn AsrStreamingSession>>, AsrPortError> {
-        let request = LocalSherpaStreamingRequest::from_local_sherpa_request(
-            instance_id.to_string(),
-            request.clone(),
-        )?;
-
-        let session = sona_local_asr::streaming::create_streaming_session(
-            state.recognizer_pool(),
-            request,
-            observer,
-        )
-        .await?;
-        Ok(Some(session))
     }
 }
 

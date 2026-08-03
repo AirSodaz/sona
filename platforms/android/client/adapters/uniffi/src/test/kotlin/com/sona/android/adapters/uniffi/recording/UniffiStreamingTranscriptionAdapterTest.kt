@@ -41,7 +41,7 @@ class UniffiStreamingTranscriptionAdapterTest {
         val events = async { session.events.toList() }
 
         session.start()
-        session.feed(Pcm16Frame(byteArrayOf(1, 2, 3)))
+        session.feed(Pcm16Frame(byteArrayOf(1, 2, 3, 4)))
         session.flush()
         session.stop()
         session.close()
@@ -72,7 +72,10 @@ class UniffiStreamingTranscriptionAdapterTest {
         )
         events.await()
         assertEquals(listOf("start", "feed", "flush", "stop", "close"), bindings.handle.calls)
-        assertArrayEquals(byteArrayOf(1, 2, 3), bindings.handle.fedBytes.single())
+        assertArrayEquals(byteArrayOf(1, 2, 3, 4), bindings.handle.fedFrames.single().third)
+        assertEquals(Triple(0uL, 0uL, byteArrayOf(1, 2, 3, 4).toList()), bindings.handle.fedFrames.single().let {
+            Triple(it.first, it.second, it.third.toList())
+        })
     }
 
     @Test
@@ -323,16 +326,16 @@ class UniffiStreamingTranscriptionAdapterTest {
 
     private class FakeSessionHandle : UniffiStreamingSessionHandle {
         val calls = mutableListOf<String>()
-        val fedBytes = mutableListOf<ByteArray>()
+        val fedFrames = mutableListOf<Triple<ULong, ULong, ByteArray>>()
         var stopFailure: Throwable? = null
 
         override suspend fun start() {
             calls += "start"
         }
 
-        override suspend fun feedAudioChunk(bytes: ByteArray) {
+        override suspend fun feedPcm16Frame(sequence: ULong, startSample: ULong, bytes: ByteArray) {
             calls += "feed"
-            fedBytes += bytes.copyOf()
+            fedFrames += Triple(sequence, startSample, bytes.copyOf())
         }
 
         override suspend fun flush() {

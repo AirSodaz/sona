@@ -80,7 +80,7 @@ internal data class UniffiOnlineProviderRequest(
 
 internal interface UniffiStreamingSessionHandle : AutoCloseable {
     suspend fun start()
-    suspend fun feedAudioChunk(bytes: ByteArray)
+    suspend fun feedPcm16Frame(sequence: ULong, startSample: ULong, bytes: ByteArray)
     suspend fun flush()
     suspend fun stop()
 }
@@ -130,7 +130,8 @@ private class GeneratedUniffiStreamingSessionHandle(
 ) : UniffiStreamingSessionHandle {
     override suspend fun start() = session.start()
 
-    override suspend fun feedAudioChunk(bytes: ByteArray) = session.feedAudioChunk(bytes)
+    override suspend fun feedPcm16Frame(sequence: ULong, startSample: ULong, bytes: ByteArray) =
+        session.feedPcm16Frame(sequence, startSample, bytes)
 
     override suspend fun flush() = session.flush()
 

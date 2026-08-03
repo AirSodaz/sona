@@ -3,17 +3,12 @@ import {
   captionTranscriptionService,
   type TranscriptionService,
 } from './transcriptionService';
-import {
-  startSystemAudioCapture,
-  stopSystemAudioCapture,
-} from './tauri/audio';
 import { TauriEvent } from './tauri/events';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { normalizeTranscriptUpdate } from '../utils/transcriptTiming';
 import { listen, type UnlistenFn } from './tauri/platform/events';
-import { remove } from './tauri/platform/fs';
 
 type CaptionWindowOpenOptions = Parameters<typeof captionWindowService.open>[0];
 type CaptionWindowStyleOptions = Parameters<typeof captionWindowService.updateStyle>[0];
@@ -98,27 +93,6 @@ async function closeCaptionWindow(): Promise<void> {
   }
 }
 
-async function deleteNativeCaptureFile(savedWavPath: string): Promise<void> {
-  logger.info('[CaptionSession] Deleting auto-saved native capture file:', savedWavPath);
-
-  try {
-    await remove(savedWavPath);
-  } catch (error) {
-    logger.error('[CaptionSession] Failed to delete native capture file:', error);
-  }
-}
-
-async function stopNativeCaptureAndDiscardFile(): Promise<void> {
-  try {
-    const savedWavPath = await stopSystemAudioCapture('caption');
-    if (savedWavPath) {
-      await deleteNativeCaptureFile(savedWavPath);
-    }
-  } catch (error) {
-    logger.error('Error:', error);
-  }
-}
-
 async function closeAudioContext(audioContext: AudioContext | null): Promise<void> {
   if (!audioContext) {
     return;
@@ -134,10 +108,15 @@ async function closeAudioContext(audioContext: AudioContext | null): Promise<voi
 async function tryStartNativeCaptionCapture(config: AppConfig): Promise<CaptionNativeCaptureResult> {
   try {
     logger.info('[CaptionSession] Attempting native system audio capture...');
-    await startSystemAudioCapture({
-      deviceName: getCaptionDeviceName(config),
-      instanceId: 'caption',
-    });
+    await captionTranscriptionService.startNative(
+      sendCaptionSegments,
+      logCaptionServiceError,
+      {
+        sourceKind: 'system',
+        deviceName: getCaptionDeviceName(config),
+        callbackOwner: 'caption',
+      },
+    );
     const unlisten = await listen<number>(TauriEvent.audio.systemPeak, () => {
       // The Rust backend feeds the recognizer directly for native caption capture.
     });
@@ -228,12 +207,6 @@ function logCaptionServiceError(error: string): void {
   logger.error('[CaptionSession] Service error:', error);
 }
 
-async function startCaptionRecognizer(captionService: TranscriptionService): Promise<void> {
-  logger.info('[CaptionSession] Starting caption recognizer...');
-  await captionService.start(sendCaptionSegments, logCaptionServiceError);
-  logger.info('[CaptionSession] Caption recognizer started.');
-}
-
 function connectWebAudioPipeline(
   audioContext: AudioContext,
   stream: MediaStream,
@@ -319,7 +292,11 @@ class CaptionSessionRuntime {
       return;
     }
 
-    await startCaptionRecognizer(captionService);
+    if (!this.usingNativeCapture) {
+      logger.info('[CaptionSession] Starting caption recognizer...');
+      await captionService.startExternal(sendCaptionSegments, logCaptionServiceError);
+      logger.info('[CaptionSession] Caption recognizer started.');
+    }
 
     if (!isActive()) {
       await captionService.stop();
@@ -346,10 +323,8 @@ class CaptionSessionRuntime {
 
     await closeCaptionWindow();
 
-    if (this.usingNativeCapture) {
-      await stopNativeCaptureAndDiscardFile();
-      this.usingNativeCapture = false;
-    }
+    await this.activeService.stop();
+    this.usingNativeCapture = false;
 
     clearNativePeakListener(this.systemAudioUnlisten);
     this.systemAudioUnlisten = null;
@@ -362,7 +337,6 @@ class CaptionSessionRuntime {
       this.stream = null;
     }
 
-    await this.activeService.stop();
     this.activeService = captionTranscriptionService;
 
     this.processor = null;
@@ -371,7 +345,7 @@ class CaptionSessionRuntime {
   async restartRecognizer(): Promise<void> {
     const captionService = captionTranscriptionService;
     this.activeService = captionService;
-    await captionService.start(sendCaptionSegments, logCaptionServiceError);
+    await captionService.restartStream();
   }
 
   async updateStyle(config: AppConfig): Promise<void> {
