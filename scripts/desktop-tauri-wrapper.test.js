@@ -84,4 +84,9 @@ test('release workflows enable C++ exceptions for Windows ARM64 clang-cl builds'
     const source = fs.readFileSync(path.join(repoRoot, '.github', 'workflows', workflow), 'utf8');
     assert.match(source, /CXXFLAGS_aarch64_pc_windows_msvc=\/EHsc/u);
   }
+
+  const config = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'platforms', 'desktop', 'tauri.conf.json'), 'utf8'),
+  );
+  assert.equal(config.bundle.macOS.minimumSystemVersion, '10.15');
 });
