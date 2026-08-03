@@ -19,7 +19,7 @@ import {
     buildStreamingAsrRequest,
     isTranscriptionRequestConfigured,
 } from './transcription/transcriptionRequest';
-import { buildRecognizerOutputEvent } from './tauri/events';
+import { buildRecognizerOutputEvent, TauriEvent } from './tauri/events';
 import { listen, type UnlistenFn } from './tauri/platform/events';
 
 /** Callback for receiving a normalized streaming transcript update. */
@@ -357,12 +357,34 @@ export class TranscriptionService {
         }
 
         let unlisten: UnlistenFn | undefined;
+        let unlistenProgress: UnlistenFn | undefined;
         if (onSegment) {
             unlisten = await listen<TranscriptUpdate>(
                 buildRecognizerOutputEvent(instanceId),
                 (event) => {
                     for (const segment of event.payload.upsertSegments) {
                         onSegment(segment);
+                    }
+                },
+            );
+        }
+        if (onProgress) {
+            unlistenProgress = await listen<unknown>(
+                TauriEvent.app.batchProgress,
+                (event) => {
+                    if (!Array.isArray(event.payload) || event.payload.length < 2) {
+                        return;
+                    }
+                    const [path, value, eventInstanceId] = event.payload;
+                    if (path !== filePath || (
+                        typeof eventInstanceId === 'string'
+                        && eventInstanceId !== instanceId
+                    )) {
+                        return;
+                    }
+                    const progress = typeof value === 'number' ? value : Number(value);
+                    if (Number.isFinite(progress)) {
+                        onProgress(Math.max(0, Math.min(100, progress)));
                     }
                 },
             );
@@ -377,6 +399,7 @@ export class TranscriptionService {
             return processedSegments;
         } finally {
             unlisten?.();
+            unlistenProgress?.();
         }
     }
 }

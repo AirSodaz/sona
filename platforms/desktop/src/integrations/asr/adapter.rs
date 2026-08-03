@@ -1,10 +1,13 @@
 use super::types::{
     AsrMode, AsrTranscriptionRequest, BatchTranscriptionRequest, TranscriptSegment,
+    TranscriptUpdate,
 };
 use super::{AsrBatchProcessor, AsrPortError, AsrProviderAdapter, AsrState};
 use async_trait::async_trait;
 use sona_core::export::ExportFormat;
-use sona_core::ports::asr::{BatchTranscriberPort, validate_local_asr_mode};
+use sona_core::ports::asr::{
+    BatchTranscriberPort, BatchTranscriptionObserver, validate_local_asr_mode,
+};
 use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
 use std::sync::Arc;
 
@@ -28,6 +31,37 @@ impl AsrProviderAdapter for LocalAsrAdapter {
 
 pub struct LocalAsrBatchProcessor;
 
+struct TauriBatchTranscriptionObserver {
+    emitter: Arc<dyn crate::platform::event::EventEmitterPort>,
+    progress_path: String,
+    instance_id: Option<String>,
+}
+
+impl BatchTranscriptionObserver for TauriBatchTranscriptionObserver {
+    fn on_progress(&self, progress: f32) {
+        let _ = self.emitter.emit(
+            super::BATCH_PROGRESS_EVENT,
+            serde_json::json!([&self.progress_path, progress, &self.instance_id]),
+        );
+    }
+
+    fn on_transcript_update(&self, update: &TranscriptUpdate) {
+        let Some(instance_id) = self.instance_id.as_deref() else {
+            return;
+        };
+        let payload = match serde_json::to_value(update) {
+            Ok(payload) => payload,
+            Err(error) => {
+                log::warn!("[ASR] failed to serialize batch transcript update: {error}");
+                return;
+            }
+        };
+        let _ = self
+            .emitter
+            .emit(&super::recognizer_output_event(instance_id), payload);
+    }
+}
+
 #[async_trait]
 impl AsrBatchProcessor for LocalAsrBatchProcessor {
     async fn process_file(
@@ -48,10 +82,12 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
             instance_id,
         )?;
         let progress_path = request.file_path.to_string_lossy().into_owned();
-        let _ = emitter.emit(
-            super::BATCH_PROGRESS_EVENT,
-            serde_json::json!([&progress_path, 0.0]),
-        );
+        let observer = Arc::new(TauriBatchTranscriptionObserver {
+            emitter,
+            progress_path,
+            instance_id: request.instance_id.clone(),
+        });
+        observer.on_progress(0.0);
 
         let normalization_options = request.normalization_options;
         let postprocessor = request.postprocessor.clone();
@@ -80,15 +116,17 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
             Arc::new(sona_local_asr::batch::LocalBatchAsrAdapter),
             Arc::new(sona_llama_asr::batch::LlamaBatchAsrAdapter),
         );
-        let segments = transcriber.transcribe(plan).await?;
+        let segments = transcriber
+            .transcribe_with_observer(plan, observer.clone())
+            .await?;
         let normalized =
             super::transcript::apply_timeline_normalization(segments, normalization_options);
         let output = postprocessor.process_segments(normalized);
-
-        let _ = emitter.emit(
-            super::BATCH_PROGRESS_EVENT,
-            serde_json::json!([&progress_path, 100.0]),
-        );
+        observer.on_transcript_update(&TranscriptUpdate {
+            remove_ids: Vec::new(),
+            upsert_segments: output.clone(),
+        });
+        observer.on_progress(100.0);
         Ok(output)
     }
 }
@@ -96,6 +134,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::platform::event::MockEventEmitter;
     use sona_core::ports::asr::{
         AsrEngineConfig, AsrPortErrorKind, LocalAsrEngine, OnlineAsrProviderRequest,
     };
@@ -159,5 +198,44 @@ mod tests {
         )
         .unwrap();
         assert_eq!(mapped.engine, LocalAsrEngine::LlamaCpp);
+    }
+
+    #[test]
+    fn batch_observer_correlates_progress_and_transcript_events() {
+        let emitter = Arc::new(MockEventEmitter::new());
+        let observer = TauriBatchTranscriptionObserver {
+            emitter: emitter.clone(),
+            progress_path: "C:/audio/demo.wav".to_string(),
+            instance_id: Some("batch-1".to_string()),
+        };
+        let segment = TranscriptSegment {
+            id: "segment-1".to_string(),
+            text: "partial".to_string(),
+            start: 0.0,
+            end: 1.0,
+            is_final: false,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            speaker: None,
+            speaker_attribution: None,
+        };
+
+        observer.on_progress(42.0);
+        observer.on_transcript_update(&TranscriptUpdate {
+            remove_ids: Vec::new(),
+            upsert_segments: vec![segment],
+        });
+
+        let emitted = emitter.emitted.lock().unwrap();
+        assert_eq!(emitted[0].0, super::super::BATCH_PROGRESS_EVENT);
+        assert_eq!(
+            emitted[0].1,
+            serde_json::json!(["C:/audio/demo.wav", 42.0, "batch-1"])
+        );
+        assert_eq!(emitted[1].0, "recognizer-output-batch-1");
+        assert_eq!(emitted[1].1["upsertSegments"][0]["text"], "partial");
     }
 }

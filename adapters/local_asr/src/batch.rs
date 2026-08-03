@@ -8,15 +8,17 @@ use crate::recognizer::{
 use async_trait::async_trait;
 use sona_core::models::config::ModelFileConfig;
 use sona_core::ports::asr::{
-    AsrPortError, AsrPortErrorKind, BatchSegmentationMode, BatchTranscriberPort, LocalAsrEngine,
+    AsrPortError, AsrPortErrorKind, BatchSegmentationMode, BatchTranscriberPort,
+    BatchTranscriptionObserver, LocalAsrEngine, NoopBatchTranscriptionObserver,
     local_asr_engine_mismatch,
 };
 use sona_core::transcription::runtime::BatchTranscribePlan;
 use sona_core::transcription::transcript::{
-    TranscriptSegment, ensure_transcript_segment_timing, normalize_recognizer_text,
-    synthesize_durations,
+    TranscriptSegment, TranscriptUpdate, ensure_transcript_segment_timing,
+    normalize_recognizer_text, synthesize_durations,
 };
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LocalBatchAsrAdapter;
@@ -28,7 +30,17 @@ impl BatchTranscriberPort for LocalBatchAsrAdapter {
         plan: BatchTranscribePlan,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
         let job = BatchTranscriptionJob::from_plan(plan)?;
-        job.transcribe().await
+        job.transcribe(Arc::new(NoopBatchTranscriptionObserver))
+            .await
+    }
+
+    async fn transcribe_with_observer(
+        &self,
+        plan: BatchTranscribePlan,
+        observer: Arc<dyn BatchTranscriptionObserver>,
+    ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+        let job = BatchTranscriptionJob::from_plan(plan)?;
+        job.transcribe(observer).await
     }
 }
 
@@ -89,13 +101,19 @@ impl BatchTranscriptionJob {
         })
     }
 
-    async fn transcribe(self) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+    async fn transcribe(
+        self,
+        observer: Arc<dyn BatchTranscriptionObserver>,
+    ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
         let gpu_plan = resolve_gpu_acceleration_plan(self.gpu_acceleration.as_deref()).await;
         let mut last_error = None;
         let mut fallback_notice: Option<GpuFallbackNotice> = None;
 
         for provider in gpu_plan.provider_options() {
-            match self.transcribe_with_provider(provider.as_deref()).await {
+            match self
+                .transcribe_with_provider(provider.as_deref(), Arc::clone(&observer))
+                .await
+            {
                 Ok(segments) => {
                     if let Some(notice) = fallback_notice.take()
                         && !self.quiet
@@ -126,6 +144,7 @@ impl BatchTranscriptionJob {
     async fn transcribe_with_provider(
         &self,
         provider: Option<&str>,
+        observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
         let model_type = build_offline_model_config(
             &self.model_path,
@@ -139,6 +158,7 @@ impl BatchTranscriptionJob {
         let recognizer = create_offline_recognizer(model_type, self.num_threads, provider)?;
         let punctuation = load_punctuation_from_path(self.punctuation_model.as_deref())?;
         let samples = extract_and_resample_audio(&self.input_path, 16000).await?;
+        observer.on_progress(5.0);
         if let Some(path) = self.save_to_path.as_ref() {
             save_wav_file(&samples, 16000, path).map_err(|error| {
                 AsrPortError::new(
@@ -155,12 +175,19 @@ impl BatchTranscriptionJob {
             self.vad_model.as_deref(),
             self.vad_buffer,
             self.batch_segmentation_mode,
+            observer.as_ref(),
         )?;
-        crate::speaker_processing::annotate_segments_with_speakers(
+        let segments = crate::speaker_processing::annotate_segments_with_speakers(
             &samples,
             &segments,
             self.speaker_processing.as_ref(),
-        )
+        )?;
+        observer.on_transcript_update(&TranscriptUpdate {
+            remove_ids: Vec::new(),
+            upsert_segments: segments.clone(),
+        });
+        observer.on_progress(98.0);
+        Ok(segments)
     }
 }
 
@@ -171,10 +198,12 @@ fn transcribe_samples(
     vad_model: Option<&Path>,
     vad_buffer: f32,
     batch_segmentation_mode: BatchSegmentationMode,
+    observer: &dyn BatchTranscriptionObserver,
 ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
     let audio_segments =
         segment_batch_audio(samples, vad_model, vad_buffer, batch_segmentation_mode);
 
+    let total_duration = samples.len() as f32 / 16_000.0;
     let mut results = Vec::new();
     for segment in audio_segments {
         if let Some(result) = decode_offline_samples(recognizer, &segment.samples) {
@@ -214,8 +243,18 @@ fn transcribe_samples(
             };
 
             ensure_transcript_segment_timing(&mut transcript_segment);
+            observer.on_transcript_update(&TranscriptUpdate {
+                remove_ids: Vec::new(),
+                upsert_segments: vec![transcript_segment.clone()],
+            });
             results.push(transcript_segment);
         }
+        let processed = if total_duration > 0.0 {
+            (segment.end_time() / total_duration).clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        observer.on_progress(5.0 + processed * 90.0);
     }
 
     Ok(results)

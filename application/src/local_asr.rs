@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind, BatchTranscriberPort, LocalAsrEngine};
+use sona_core::ports::asr::{
+    AsrPortError, AsrPortErrorKind, BatchTranscriberPort, BatchTranscriptionObserver,
+    LocalAsrEngine,
+};
 use sona_core::transcription::runtime::BatchTranscribePlan;
 use sona_core::transcription::transcript::TranscriptSegment;
 
@@ -46,6 +49,29 @@ impl BatchTranscriberPort for LocalBatchTranscriberRouter {
                     )
                 })?;
                 adapter.transcribe(plan).await
+            }
+        }
+    }
+
+    async fn transcribe_with_observer(
+        &self,
+        plan: BatchTranscribePlan,
+        observer: Arc<dyn BatchTranscriptionObserver>,
+    ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+        match plan.engine {
+            LocalAsrEngine::SherpaOnnx => {
+                self.sherpa_onnx
+                    .transcribe_with_observer(plan, observer)
+                    .await
+            }
+            LocalAsrEngine::LlamaCpp => {
+                let adapter = self.llama_cpp.as_ref().ok_or_else(|| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Unsupported,
+                        "The llama.cpp local ASR engine is not available on this host.",
+                    )
+                })?;
+                adapter.transcribe_with_observer(plan, observer).await
             }
         }
     }

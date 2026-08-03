@@ -117,6 +117,22 @@ describe('batchQueueStore', () => {
         }));
     });
 
+    it('keeps the active batch editor on the queue session while segments arrive', () => {
+        useBatchQueueStore.getState().addFiles(['/path/to/live-result.wav']);
+
+        const itemId = useBatchQueueStore.getState().queueItems[0].id;
+        expect(useTranscriptStore.getState().activeSessionId).toBe(itemId);
+
+        useBatchQueueStore.getState().updateItemSegments(itemId, [
+            { id: 'seg-1', text: 'Visible immediately', start: 0, end: 1, isFinal: false },
+        ]);
+
+        expect(useTranscriptStore.getState().activeSessionId).toBe(itemId);
+        expect(useTranscriptStore.getState().segments).toEqual([
+            expect.objectContaining({ id: 'seg-1', text: 'Visible immediately' }),
+        ]);
+    });
+
     it('records task ledger progress and failures for queue items', () => {
         useBatchQueueStore.setState({
             queueItems: [

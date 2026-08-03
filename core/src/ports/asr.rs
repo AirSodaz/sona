@@ -198,6 +198,34 @@ pub trait BatchTranscriberPort: Send + Sync {
         &self,
         plan: BatchTranscribePlan,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError>;
+
+    async fn transcribe_with_observer(
+        &self,
+        plan: BatchTranscribePlan,
+        observer: Arc<dyn BatchTranscriptionObserver>,
+    ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+        let segments = self.transcribe(plan).await?;
+        observer.on_transcript_update(&TranscriptUpdate {
+            remove_ids: Vec::new(),
+            upsert_segments: segments.clone(),
+        });
+        observer.on_progress(100.0);
+        Ok(segments)
+    }
+}
+
+pub trait BatchTranscriptionObserver: Send + Sync {
+    fn on_progress(&self, progress: f32);
+    fn on_transcript_update(&self, update: &TranscriptUpdate);
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct NoopBatchTranscriptionObserver;
+
+impl BatchTranscriptionObserver for NoopBatchTranscriptionObserver {
+    fn on_progress(&self, _progress: f32) {}
+
+    fn on_transcript_update(&self, _update: &TranscriptUpdate) {}
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -24,9 +24,8 @@ import {
 import { useConfigStore } from './configStore';
 import { useProjectStore } from './projectStore';
 import {
-  clearActiveTranscriptSession,
-  openTranscriptSession,
-  setTranscriptSegments,
+    clearActiveTranscriptSession,
+    setTranscriptSegments,
 } from './transcriptCoordinator';
 import { useTranscriptSessionStore } from './transcriptSessionStore';
 import { useTranscriptStore, DEFAULT_SESSION_DATA } from './transcriptStore';
@@ -330,30 +329,26 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         const state = get();
         const item = state.queueItems.find((queueItem) => queueItem.id === id);
         if (id !== null && item) {
-            const existingSession = useTranscriptStore.getState().sessions[id];
-            if (existingSession && existingSession.segments.length > 0) {
-                // Session already has data from updateItemSegments, just activate it
-                useTranscriptStore.setState({
-                    activeSessionId: id,
-                    sessions: {
-                        ...useTranscriptStore.getState().sessions,
-                        [id]: {
-                            ...existingSession,
-                            sourceHistoryId: item.historyId || existingSession.sourceHistoryId,
-                            title: item.historyTitle || existingSession.title,
-                            audioUrl: item.audioUrl || existingSession.audioUrl,
-                        }
-                    }
-                });
-                useTranscriptStore.getState().setAudioUrl(item.audioUrl || existingSession.audioUrl);
-            } else {
-                openTranscriptSession({
-                    segments: item.segments,
-                    sourceHistoryId: item.historyId || null,
-                    title: item.historyTitle || item.filename,
-                    audioUrl: item.audioUrl || null,
-                });
+            let transcriptState = useTranscriptStore.getState();
+            if (!transcriptState.sessions[id]) {
+                transcriptState.setSegmentsForSession(id, item.segments);
+                transcriptState = useTranscriptStore.getState();
             }
+            const session = transcriptState.sessions[id] || DEFAULT_SESSION_DATA;
+            const audioUrl = item.audioUrl || session.audioUrl;
+            useTranscriptStore.setState({
+                activeSessionId: id,
+                sessions: {
+                    ...transcriptState.sessions,
+                    [id]: {
+                        ...session,
+                        sourceHistoryId: item.historyId || session.sourceHistoryId,
+                        title: item.historyTitle || session.title || item.filename,
+                        audioUrl,
+                    }
+                }
+            });
+            useTranscriptStore.getState().setAudioUrl(audioUrl);
             void useProjectStore.getState().setActiveProjectId(item.tagIds?.[0] ?? item.projectId);
         } else if (id === null) {
             clearActiveTranscriptSession({ clearAudio: true, title: '' });

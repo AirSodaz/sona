@@ -16,11 +16,13 @@ use llama_cpp_2::mtmd::{
 use llama_cpp_2::sampling::LlamaSampler;
 use sona_core::models::config::ModelFileConfig;
 use sona_core::ports::asr::{
-    AsrPortError, AsrPortErrorKind, BatchTranscriberPort, LocalAsrEngine, local_asr_engine_mismatch,
+    AsrPortError, AsrPortErrorKind, BatchTranscriberPort, BatchTranscriptionObserver,
+    LocalAsrEngine, NoopBatchTranscriptionObserver, local_asr_engine_mismatch,
 };
 use sona_core::transcription::runtime::BatchTranscribePlan;
 use sona_core::transcription::transcript::{
-    TranscriptSegment, ensure_transcript_segment_timing, normalize_recognizer_text,
+    TranscriptSegment, TranscriptUpdate, ensure_transcript_segment_timing,
+    normalize_recognizer_text,
 };
 
 const MODEL_TYPE_QWEN3_ASR: &str = "qwen3-asr";
@@ -40,7 +42,25 @@ impl BatchTranscriberPort for LlamaBatchAsrAdapter {
         plan: BatchTranscribePlan,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
         let job = LlamaBatchTranscriptionJob::from_plan(plan)?;
-        tokio::task::spawn_blocking(move || job.transcribe())
+        tokio::task::spawn_blocking(move || {
+            job.transcribe(Arc::new(NoopBatchTranscriptionObserver))
+        })
+        .await
+        .map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::Runtime,
+                format!("llama.cpp transcription task failed: {error}"),
+            )
+        })?
+    }
+
+    async fn transcribe_with_observer(
+        &self,
+        plan: BatchTranscribePlan,
+        observer: Arc<dyn BatchTranscriptionObserver>,
+    ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+        let job = LlamaBatchTranscriptionJob::from_plan(plan)?;
+        tokio::task::spawn_blocking(move || job.transcribe(observer))
             .await
             .map_err(|error| {
                 AsrPortError::new(
@@ -110,7 +130,10 @@ impl LlamaBatchTranscriptionJob {
         })
     }
 
-    fn transcribe(self) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+    fn transcribe(
+        self,
+        observer: Arc<dyn BatchTranscriptionObserver>,
+    ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
         let backend = backend()?;
         let model = load_model(backend, &self.model_path)?;
         let mtmd_params = MtmdContextParams {
@@ -140,6 +163,7 @@ impl LlamaBatchTranscriptionJob {
 
         let sample_rate = mtmd.get_audio_sample_rate().unwrap_or(16_000).max(1);
         let samples = decode_audio_input(&self.input_path, sample_rate)?;
+        observer.on_progress(10.0);
         let audio = MtmdBitmap::from_audio_data(&samples).map_err(|error| {
             AsrPortError::new(
                 AsrPortErrorKind::InvalidRequest,
@@ -195,10 +219,14 @@ impl LlamaBatchTranscriptionJob {
                     format!("Failed to evaluate Qwen3-ASR audio: {error}"),
                 )
             })?;
+        observer.on_progress(60.0);
 
         let mut sampler = LlamaSampler::greedy();
         let mut decoder = encoding_rs::UTF_8.new_decoder();
         let mut generated = String::new();
+        let segment_id = uuid::Uuid::new_v4().to_string();
+        let duration = samples.len() as f64 / f64::from(sample_rate);
+        let mut generated_tokens = 0usize;
         let available = context.n_ctx().saturating_sub(n_past.max(0) as u32) as usize;
         let generation_limit = MAX_GENERATED_TOKENS.min(available);
         let generation_end =
@@ -219,6 +247,17 @@ impl LlamaBatchTranscriptionJob {
                         )
                     })?,
             );
+            generated_tokens = generated_tokens.saturating_add(1);
+
+            if generated_tokens.is_multiple_of(8) {
+                emit_partial_transcript(
+                    observer.as_ref(),
+                    &segment_id,
+                    duration,
+                    &generated,
+                    generated_tokens,
+                );
+            }
 
             let mut batch = LlamaBatch::new(1, 1);
             batch
@@ -239,11 +278,11 @@ impl LlamaBatchTranscriptionJob {
 
         let text = parse_qwen3_asr_output(&generated);
         if text.is_empty() {
+            observer.on_progress(100.0);
             return Ok(Vec::new());
         }
-        let duration = samples.len() as f64 / f64::from(sample_rate);
         let mut segment = TranscriptSegment {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: segment_id,
             text,
             start: 0.0,
             end: duration,
@@ -257,8 +296,56 @@ impl LlamaBatchTranscriptionJob {
             speaker_attribution: None,
         };
         ensure_transcript_segment_timing(&mut segment);
+        observer.on_transcript_update(&TranscriptUpdate {
+            remove_ids: Vec::new(),
+            upsert_segments: vec![segment.clone()],
+        });
+        observer.on_progress(100.0);
         Ok(vec![segment])
     }
+}
+
+fn emit_partial_transcript(
+    observer: &dyn BatchTranscriptionObserver,
+    segment_id: &str,
+    duration: f64,
+    generated: &str,
+    generated_tokens: usize,
+) {
+    let text = parse_qwen3_asr_partial_output(generated);
+    if text.is_empty() {
+        return;
+    }
+
+    let mut segment = TranscriptSegment {
+        id: segment_id.to_string(),
+        text,
+        start: 0.0,
+        end: duration,
+        is_final: false,
+        timing: None,
+        tokens: None,
+        timestamps: None,
+        durations: None,
+        translation: None,
+        speaker: None,
+        speaker_attribution: None,
+    };
+    ensure_transcript_segment_timing(&mut segment);
+    observer.on_transcript_update(&TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![segment],
+    });
+    observer.on_progress(llama_generation_progress(generated_tokens));
+}
+
+fn llama_generation_progress(generated_tokens: usize) -> f32 {
+    const GENERATION_START: f32 = 60.0;
+    const GENERATION_SPAN: f32 = 35.0;
+    const TOKEN_SCALE: f32 = 160.0;
+
+    let completion_curve = 1.0 - (-(generated_tokens as f32) / TOKEN_SCALE).exp();
+    (GENERATION_START + GENERATION_SPAN * completion_curve).min(95.0)
 }
 
 fn decode_audio_input(path: &Path, sample_rate: u32) -> Result<Vec<f32>, AsrPortError> {
@@ -510,11 +597,19 @@ fn parse_qwen3_asr_output(output: &str) -> String {
     normalize_recognizer_text(transcript.trim())
 }
 
+fn parse_qwen3_asr_partial_output(output: &str) -> String {
+    output
+        .split_once("<asr_text>")
+        .map(|(_, transcript)| normalize_recognizer_text(transcript.trim()))
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        LlamaBatchTranscriptionJob, MODEL_TYPE_QWEN3_ASR, parse_qwen3_asr_output,
-        pcm_s16le_bytes_to_f32, resolve_ffmpeg_sidecar_path_from_exe, validate_supported_options,
+        LlamaBatchTranscriptionJob, MODEL_TYPE_QWEN3_ASR, llama_generation_progress,
+        parse_qwen3_asr_output, parse_qwen3_asr_partial_output, pcm_s16le_bytes_to_f32,
+        resolve_ffmpeg_sidecar_path_from_exe, validate_supported_options,
     };
     use sona_core::export::ExportFormat;
     use sona_core::ports::asr::{AsrPortErrorKind, LocalAsrEngine};
@@ -556,6 +651,26 @@ mod tests {
     #[test]
     fn accepts_plain_transcript_output() {
         assert_eq!(parse_qwen3_asr_output(" hello world "), "hello world");
+    }
+
+    #[test]
+    fn partial_output_waits_for_asr_text_marker() {
+        assert_eq!(parse_qwen3_asr_partial_output("language Chinese"), "");
+        assert_eq!(
+            parse_qwen3_asr_partial_output("language Chinese<asr_text>你好"),
+            "你好"
+        );
+    }
+
+    #[test]
+    fn token_generation_progress_is_monotonic_and_capped() {
+        let first = llama_generation_progress(8);
+        let later = llama_generation_progress(160);
+        let much_later = llama_generation_progress(10_000);
+
+        assert!(first > 60.0);
+        assert!(later > first);
+        assert_eq!(much_later, 95.0);
     }
 
     #[test]

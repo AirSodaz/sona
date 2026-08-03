@@ -426,6 +426,61 @@ describe('TranscriptionService voice typing diagnostics', () => {
         ]);
     });
 
+    it('forwards correlated batch progress and incremental transcript events', async () => {
+        const onProgress = vi.fn();
+        const onSegment = vi.fn();
+        mocks.invoke.mockImplementation((async (...args: any[]) => {
+            const [command, payload] = args;
+            if (command !== 'process_batch_file') {
+                return undefined;
+            }
+
+            const instanceId = payload.instanceId as string;
+            mocks.listenCallbacks['batch-progress']?.({
+                payload: ['C:/audio/demo.wav', 64, instanceId],
+            });
+            mocks.listenCallbacks[`recognizer-output-${instanceId}`]?.({
+                payload: {
+                    removeIds: [],
+                    upsertSegments: [{
+                        id: 'partial-1',
+                        text: 'Partial text',
+                        start: 0,
+                        end: 2,
+                        isFinal: false,
+                    }],
+                },
+            });
+            return [{
+                id: 'partial-1',
+                text: 'Final text',
+                start: 0,
+                end: 2,
+                isFinal: true,
+            }];
+        }) as any);
+
+        const TranscriptionService = await loadTranscriptionService();
+        await syncTranscriptConfig();
+        const service = new TranscriptionService('record');
+        service.setModelPath('/models/batch');
+
+        await service.transcribeFile(
+            'C:/audio/demo.wav',
+            onProgress,
+            onSegment,
+        );
+
+        expect(onProgress).toHaveBeenCalledWith(64);
+        expect(onProgress).toHaveBeenLastCalledWith(100);
+        expect(onSegment).toHaveBeenCalledWith(expect.objectContaining({
+            id: 'partial-1',
+            text: 'Partial text',
+            isFinal: false,
+        }));
+        expect(mocks.listenCallbacks['batch-progress']).toBeUndefined();
+    });
+
     it('starts an online Volcengine streaming recognizer with the requested input gain', async () => {
         mocks.config = {
             ...mocks.config,

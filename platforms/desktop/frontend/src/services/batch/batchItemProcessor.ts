@@ -69,7 +69,7 @@ export class BatchItemProcessor {
     callbacks.updateStatus('processing', 0, 'transcribing');
 
     let currentSegments: TranscriptSegment[] = [];
-    let segmentBuffer: TranscriptSegment[] = [];
+    const segmentBuffer = new Map<string, TranscriptSegment>();
     let lastUpdateTime = 0;
     let tempWavPath: string | undefined;
     let savedHistoryId: string | null = item.historyId || null;
@@ -113,6 +113,18 @@ export class BatchItemProcessor {
       callbacks.updateSegments(segments);
     };
 
+    const flushSegmentBuffer = (): void => {
+      if (segmentBuffer.size === 0) {
+        return;
+      }
+      const merged = new Map(currentSegments.map((segment) => [segment.id, segment]));
+      for (const segment of segmentBuffer.values()) {
+        merged.set(segment.id, segment);
+      }
+      segmentBuffer.clear();
+      setCurrentSegments([...merged.values()].sort((left, right) => left.start - right.start));
+    };
+
     try {
       if (batchAsr.engine === 'local-sherpa') {
         this.ports.transcriptionService.setModelPath(batchAsr.modelPath);
@@ -128,12 +140,11 @@ export class BatchItemProcessor {
           callbacks.updateStatus('processing', progress);
         },
         (segment) => {
-          segmentBuffer.push(segment);
+          segmentBuffer.set(segment.id, segment);
           const now = Date.now();
 
-          if (segmentBuffer.length >= 50 || now - lastUpdateTime > 500) {
-            setCurrentSegments([...currentSegments, ...segmentBuffer]);
-            segmentBuffer = [];
+          if (segmentBuffer.size >= 50 || now - lastUpdateTime > 500) {
+            flushSegmentBuffer();
             lastUpdateTime = now;
           }
         },
