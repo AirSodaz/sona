@@ -12,6 +12,9 @@ fn transcribe_live_command_exposes_the_public_input_and_output_flags() {
     assert!(help.contains("--output-format"));
     assert!(help.contains("--output"));
     assert!(help.contains("--force"));
+    assert!(help.contains("--online-provider"));
+    assert!(help.contains("--api-key-env"));
+    assert!(help.contains("--online-config"));
 }
 
 #[test]

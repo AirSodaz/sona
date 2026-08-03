@@ -4,6 +4,8 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # Generated keys are commented out by default. Uncomment the settings you want
 # before using this file with Sona commands.
 # `sona-cli transcribe` requires model_id to be enabled.
+# Online ASR provider selection and API-key environment variables are command-line-only.
+# Use --online-config for non-secret provider endpoint/model overrides.
 # Save as sona-cli.toml, then pass it with:
 #   sona-cli transcribe ./sample.wav -c ./sona-cli.toml
 #   sona-cli transcribe-live -c ./sona-cli.toml

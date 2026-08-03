@@ -90,7 +90,7 @@ All static and dynamic `@tauri-apps/*` imports live under `src/services/tauri/pl
 
 The UniFFI surface is exactly two layers: an `#[uniffi::export]` free function in `lib.rs` delegates straight into the matching `*_bridge` module. The former `SonaCoreFacade` type in `facade.rs` forwarded every call a second time without adding behaviour and has been merged into `lib.rs`. Do not reintroduce an intermediate forwarding type; `scripts/multisurface-contracts.test.js` enforces this, allowing only `release_application_context` to call the composition root directly.
 
-Hosts share the SQLite composition type `SqliteApplicationContext` from `sona-sqlite`, but each host still owns its own wiring, lifecycle, and error mapping. There is no separate shared application-composition crate yet.
+Desktop and UniFFI share the SQLite composition type `SqliteApplicationContext` from `sona-sqlite`, but each host still owns its own wiring, lifecycle, and error mapping. The stateless CLI does not depend on this composition type. There is no separate shared application-composition crate yet.
 
 **One context per application-data directory.** The UniFFI registry caches contexts by normalized path, and its capacity is a *soft* limit: an entry a caller still holds is never evicted, because reopening that path would create a second connection pool, migration run, and service graph for one directory. The cache may exceed capacity until its callers release.
 
@@ -149,18 +149,19 @@ Capabilities are derived from current workspace dependencies and product scope. 
 
 | Capability | Desktop (`sona`) | CLI (`sona-cli`) | UniFFI (`sona-uniffi-bind`) |
 | --- | --- | --- | --- |
-| SQLite / History / Tag | yes | yes | yes |
+| SQLite / History / Tag | yes | out of scope | yes |
 | Local ASR | yes | yes | yes |
-| Online ASR | yes | no | yes |
-| Online LLM | yes | yes | yes |
+| Online ASR | yes | yes | yes |
+| Online LLM | yes | out of scope | yes |
 | Model downloads | yes | yes | yes |
 | Media detector | yes | yes | no |
 | API server | yes | yes | no |
 | Sync (application + WebDAV) | yes | out of scope | yes |
 | TypeScript/Tauri contract bind | yes | no | no |
-| Archive / export / recovery / runtime-fs | yes | yes | yes |
+| Archive / recovery | yes | out of scope | yes |
+| Export / runtime-fs | yes | yes | yes |
 
-CLI Sync remains undefined product scope and must not be added until that scope is specified. UniFFI's media detection gap is a current host wiring limit, not a Core port absence.
+CLI is a stateless transcription host: application persistence, History/Tag, Online LLM, archive/recovery, and Sync are intentional product boundaries. Online ASR credentials come from an environment variable and are never stored by the CLI. UniFFI's media detection gap is a current host wiring limit, not a Core port absence.
 
 <a id="error-boundaries"></a>
 ## Error boundaries
@@ -214,7 +215,7 @@ UniFFI renders a `Record` as a Kotlin `data class`, and its generated `toString(
 - Resolved outbound edges: `model-downloads` and `recovery-fs` no longer depend on `runtime-fs`; completeness rules live in Core and I/O stays local to each adapter.
 - Sync legacy secret-store registration and raw WebDAV wire shapes as host delegates for older callers.
 - `sona-sqlite` depends on `tempfile` in production dependencies because `Database` owns a read-only snapshot `TempDir` lifecycle; this is not a mistaken dev-only dependency.
-- CLI Sync remains out of scope until product scope is defined.
+- CLI persistence, History/Tag, Online LLM, archive/recovery, and Sync remain intentionally out of scope.
 
 <a id="verification"></a>
 ## Verification

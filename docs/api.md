@@ -22,7 +22,7 @@ The same API server adapter is available from the standalone CLI:
 sona-cli serve --host 127.0.0.1 --port 14200 --api-key your_secure_key
 ```
 
-The CLI server supports local REST transcription with installed offline models. Desktop-only online ASR and streaming integrations still require the desktop app runtime.
+The CLI server supports local REST transcription with installed offline models. The `serve` routes do not expose Online ASR or WebSocket streaming; use `sona-cli transcribe` or `sona-cli transcribe-live` for direct online transcription.
 
 ---
 

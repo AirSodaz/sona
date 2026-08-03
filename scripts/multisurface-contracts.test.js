@@ -715,7 +715,7 @@ test('new production code cannot consume the removed Project API', () => {
   }
 });
 
-test('hosts reuse the shared SQLite application context', () => {
+test('stateful hosts reuse SQLite while the CLI stays stateless', () => {
   const uniffiBridges = [
     'app_config_repository_bridge.rs',
     'automation_bridge.rs',
@@ -740,11 +740,14 @@ test('hosts reuse the shared SQLite application context', () => {
   assert.doesNotMatch(desktopSetup, /manage\(db\)/u);
   assert.doesNotMatch(desktopDatabase, /\bDatabase::(?:global|set_global)\b/u);
 
-  for (const file of ['app_config.rs', 'automation.rs', 'backup.rs', 'history.rs', 'task_ledger.rs']) {
-    const source = withoutInlineRustTests(read('platforms', 'cli', 'src', file));
-    assert.match(source, /\bSqliteApplicationContext\b/u, `${file} must use the CLI context`);
-    assert.doesNotMatch(source, /\bDatabase::open(?:_read_only)?\b/u);
-    assert.doesNotMatch(source, /\bLazySqlite\w+\b/u);
+  const cliManifest = read('platforms', 'cli', 'Cargo.toml');
+  assert.doesNotMatch(cliManifest, /\bsona-sqlite\b/u);
+  for (const { relativePath, source } of rustSources('platforms/cli/src')) {
+    assert.doesNotMatch(
+      withoutInlineRustTests(source),
+      /\b(?:SqliteApplicationContext|sona_sqlite|LazySqlite\w+)\b/u,
+      `${relativePath} must preserve the stateless CLI boundary`,
+    );
   }
 });
 

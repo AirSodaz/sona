@@ -92,7 +92,7 @@ export const HOST_CAPABILITY_MATRIX = [
     zhLabel: 'SQLite / History / Tag',
     status: {
       sona: 'yes',
-      'sona-cli': 'yes',
+      'sona-cli': 'out of scope',
       'sona-uniffi-bind': 'yes',
     },
     packages: ['sona-sqlite'],
@@ -119,7 +119,7 @@ export const HOST_CAPABILITY_MATRIX = [
     zhLabel: 'Online ASR',
     status: {
       sona: 'yes',
-      'sona-cli': 'no',
+      'sona-cli': 'yes',
       'sona-uniffi-bind': 'yes',
     },
     packages: ['sona-online-asr'],
@@ -131,7 +131,7 @@ export const HOST_CAPABILITY_MATRIX = [
     zhLabel: 'Online LLM',
     status: {
       sona: 'yes',
-      'sona-cli': 'yes',
+      'sona-cli': 'out of scope',
       'sona-uniffi-bind': 'yes',
     },
     packages: ['sona-online-llm'],
@@ -198,26 +198,28 @@ export const HOST_CAPABILITY_MATRIX = [
     wiringPatterns: ['\\bsona_ts_bind\\b'],
   },
   {
-    id: 'archive-export-recovery-runtime',
-    enLabel: 'Archive / export / recovery / runtime-fs',
-    zhLabel: 'Archive / export / recovery / runtime-fs',
+    id: 'archive-recovery',
+    enLabel: 'Archive / recovery',
+    zhLabel: 'Archive / recovery',
+    status: {
+      sona: 'yes',
+      'sona-cli': 'out of scope',
+      'sona-uniffi-bind': 'yes',
+    },
+    packages: ['sona-archive', 'sona-recovery-fs'],
+    wiringPatterns: ['\\bsona_archive\\b', '\\bsona_recovery_fs\\b'],
+  },
+  {
+    id: 'export-runtime',
+    enLabel: 'Export / runtime-fs',
+    zhLabel: 'Export / runtime-fs',
     status: {
       sona: 'yes',
       'sona-cli': 'yes',
       'sona-uniffi-bind': 'yes',
     },
-    packages: [
-      'sona-archive',
-      'sona-export',
-      'sona-recovery-fs',
-      'sona-runtime-fs',
-    ],
-    wiringPatterns: [
-      '\\bsona_archive\\b',
-      '\\bsona_export\\b',
-      '\\bsona_recovery_fs\\b',
-      '\\bsona_runtime_fs\\b',
-    ],
+    packages: ['sona-export', 'sona-runtime-fs'],
+    wiringPatterns: ['\\bsona_export\\b', '\\bsona_runtime_fs\\b'],
   },
 ];
 

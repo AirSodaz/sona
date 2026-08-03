@@ -1,169 +1,149 @@
 # Sona CLI
 
-`sona-cli` 是 Sona 的独立命令行程序。桌面端 Tauri 应用已经不再内嵌 CLI 子命令，因此打包后的桌面应用请使用 `sona-cli`，不要再把 `Sona` 当作命令行入口。
+`sona-cli` 是一个无状态的命令行转写 Host。它不会打开或管理 Sona 的 SQLite 应用数据库、History/Tag 工作区、同步状态或 Online LLM 任务。转录结果只写入 stdout，或写入命令明确指定的输出文件。
 
-当前独立 CLI 已提供的命令如下：
+当前独立 CLI 提供以下命令：
 
 - `path-status`
 - `init-config`
-- `models list`
-- `models download`
-- `models delete`
-- `history list|query|transcript|snapshots|snapshot|<mutation>`
+- `models list|download|delete`
+- `diagnostics`
 - `export transcript`
-- `backup export|inspect|import`
-- `serve`
-- `transcribe`
-- `transcribe-live`
-
-无头 HTTP API 服务由共享的 `sona-api-server` 适配器提供，可从桌面应用或 `sona-cli serve` 启动。
+- `serve`（使用本地 ASR 的本地 REST 转写）
+- `transcribe`（本地或在线批量 ASR）
+- `transcribe-live`（本地或在线流式 ASR）
 
 ## 运行方式
 
-- 安装包：使用同平台安装包里附带的 `sona-cli`
-- 源码：`cargo run -p sona-cli -- <command> ...`
+```bash
+cargo run -p sona-cli -- <command> ...
+```
 
 示例：
 
 ```bash
-cargo run -p sona-cli -- path-status .
+cargo run -p sona-cli -- path-status ./models
 cargo run -p sona-cli -- init-config
 cargo run -p sona-cli -- models list --json
-cargo run -p sona-cli -- history list --app-data-dir ./sona-data --json
+cargo run -p sona-cli -- transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo
+cargo run -p sona-cli -- transcribe ./sample.wav --online-provider groq-whisper
+cargo run -p sona-cli -- transcribe-live --online-provider volcengine-doubao
 cargo run -p sona-cli -- export transcript --input ./segments.json --output ./transcript.vtt
 cargo run -p sona-cli -- serve --host 127.0.0.1 --port 14200
-cargo run -p sona-cli -- transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo
-cargo run -p sona-cli -- transcribe-live --model-id sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17
 ```
 
-## 命令
+## 无状态边界
 
-### `path-status`
+CLI 有意排除 SQLite、History、Tag、应用备份/恢复、Sync 和 Online LLM。不要增加会隐式创建或修改桌面应用数据目录的命令。请使用 `export transcript` 以及 stdout/文件输出，把 CLI 与其他工具组合起来。
 
-通过共享的运行时状态契约解析一个文件系统路径，并将 JSON 输出到 `stdout`。
+## `path-status`
+
+通过共享运行时状态契约解析一个文件系统路径，并将 JSON 输出到 stdout。
 
 ```bash
 sona-cli path-status ./models
 ```
 
-示例输出：
+## `init-config`
 
-```json
-{
-  "kind": "directory",
-  "path": "C:/work/models",
-  "error": null
-}
-```
-
-### `init-config`
-
-生成一份带注释的起始配置文件，供后续独立 CLI 工作流使用。
+生成带注释的本地转写和本地 API server 配置模板。
 
 ```bash
 sona-cli init-config
 sona-cli init-config ./sona-cli.toml --force
 ```
 
-- 默认输出路径：`./sona-cli.toml`
-- 已有文件默认受保护，传入 `--force` 才会覆盖
-- 状态文本写入 `stderr`
+已有文件默认受保护，只有传入 `--force` 才会覆盖；状态文本写入 stderr。
 
-### `models list`
+## `models`
 
-列出预置模型，并可按模式、类型、语言、安装状态过滤。
+列出、下载或删除本地 ASR 预置模型。这些命令只操作模型目录，不操作 SQLite 应用状态。
 
 ```bash
-sona-cli models list
 sona-cli models list --mode offline --type whisper
-sona-cli models list --language zh --installed
-sona-cli models list --json
-```
-
-传入 `--json` 会输出完整的机器可读结构，包括 `install_path`。
-
-### `models download`
-
-下载一个预置模型到解析出的模型目录。
-
-```bash
+sona-cli models list --language zh --installed --json
 sona-cli models download sherpa-onnx-whisper-turbo
-sona-cli models download silero-vad --models-dir ./models --yes
-```
-
-如果目标预置模型依赖伴生资源，`sona-cli` 也会同时下载所需的 VAD 或标点模型。
-
-### `models delete`
-
-删除一个已安装的预置模型。
-
-```bash
 sona-cli models delete sherpa-onnx-whisper-turbo --yes
-sona-cli models delete silero-vad --models-dir ./models --yes
 ```
 
-不会自动删除伴生模型。
+## `diagnostics`
 
-### `history`
+根据 Host 提供的事实构造 diagnostics 快照，不读取应用数据库。
 
-通过共享的 history service 查询或修改已有的 Sona 应用数据目录。
+## `export transcript`
 
-```bash
-sona-cli history list --app-data-dir ./sona-data --limit 50 --offset 0
-sona-cli history query --app-data-dir ./sona-data --input ./workspace-query.json --json
-sona-cli history transcript --app-data-dir ./sona-data --history-id <ID> --json
-sona-cli history snapshots --app-data-dir ./sona-data --history-id <ID>
-sona-cli history snapshot --app-data-dir ./sona-data --history-id <ID> --snapshot-id <ID> --json
-sona-cli history create-live-draft --app-data-dir ./sona-data --id <ID> --audio-extension wav --json
-sona-cli history complete-live-draft --app-data-dir ./sona-data --history-id <ID> --segments ./segments.json --duration 12.5 --json
-sona-cli history save-recording --app-data-dir ./sona-data --input ./recording.json --audio ./recording.wav --json
-sona-cli history import-file --app-data-dir ./sona-data --input ./history-import.json --json
-sona-cli history update-transcript --app-data-dir ./sona-data --history-id <ID> --segments ./segments.json --json
-sona-cli history create-snapshot --app-data-dir ./sona-data --history-id <ID> --reason polish --segments ./segments.json --json
-sona-cli history update-meta --app-data-dir ./sona-data --history-id <ID> --updates ./history-meta.json
-sona-cli history assign-project --app-data-dir ./sona-data --history-id <ID> --project-id <PROJECT_ID>
-sona-cli history reassign-project --app-data-dir ./sona-data --current-project-id <PROJECT_ID>
-sona-cli history delete --app-data-dir ./sona-data --history-id <ID>
-```
-
-- `query` 使用与 Tauri、UniFFI 相同的 camelCase `HistoryWorkspaceQueryRequest` JSON 契约。
-- `list`、`query`、`snapshots` 默认输出表格；`--json` 保留完整的机器可读响应。
-- `transcript`、`snapshot` 默认输出 segment 表格。
-- `recording.json` 包含 `segments`、`duration`，以及可选的 `projectId`、`audioExtension`；音频字节只从 `--audio` 读取。
-- `history-import.json` 使用 camelCase `HistorySaveImportedFileRequest` 契约。`--segments` 文件是 JSON 数组，`--updates` 文件是 JSON 对象。
-- `assign-project` 或 `reassign-project` 不提供目标项目参数时，会把记录移回收件箱。
-- 应用数据目录必须已经存在；非法 mutation 输入会在 lazy SQLite adapter 打开数据库前被拒绝。
-
-### `export transcript`
-
-通过共享的 core export service 导出已有的 transcript segment JSON 数组。
+通过共享 Core export service 导出 transcript segment JSON 数组。
 
 ```bash
 sona-cli export transcript --input ./segments.json --output ./transcript.vtt
 sona-cli export transcript --input ./segments.json --output ./transcript.srt --mode bilingual
-sona-cli export transcript --input ./segments.json --output ./transcript.txt --format txt --json
 ```
 
-- 未提供 `--format` 时，从输出文件扩展名推断格式。
-- 支持格式：`json`、`txt`、`srt`、`vtt`、`md`。
-- 支持模式：`original`（默认）、`translation`、`bilingual`。
-- `--json` 输出机器可读的目标路径和写入字节数。
+未提供 `--format` 时从输出扩展名推断。支持 `json`、`txt`、`srt`、`vtt`、`md`；模式支持 `original`、`translation`、`bilingual`。
 
-### `backup`
+## `transcribe`
 
-导出全部五个应用状态范围、在不打开应用数据的情况下验证归档，或从归档中原子替换已备份状态。
+转写一个本地音频文件；使用本地 ASR 时也可输入视频。不提供 `--online-provider` 时使用已安装的本地 Sherpa 预置模型。
 
 ```bash
-sona-cli backup export --app-data-dir ./sona-data --output ./sona-backup.sona-backup --app-version 0.8.0
-sona-cli backup inspect --archive ./sona-backup.sona-backup
-sona-cli backup import --app-data-dir ./sona-data --archive ./sona-backup.sona-backup --default-rule-set-name "Default Rules" --confirm-replace
+sona-cli transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo
+sona-cli transcribe ./sample.wav --config ./sona-cli.toml --output ./out.srt
 ```
 
-导入会原子替换 `config`、`workspace`、`history`、`automation` 和 `analytics` 范围。必须提供 `--confirm-replace`，且不会打开交互式提示。归档不包含任务账本和原始音频。
+提供 `--online-provider` 后，CLI 会把本地文件上传到指定服务商，并将结果输出到 stdout 或目标文件：
 
-### `serve`
+```bash
+set GROQ_API_KEY=...
+sona-cli transcribe ./sample.wav --online-provider groq-whisper --format txt
 
-从独立 CLI 启动共享的本地 HTTP API 服务。
+set SONA_VOLCENGINE_ASR_API_KEY=...
+sona-cli transcribe ./sample.wav --online-provider volcengine-doubao --output ./out.srt
+```
+
+支持的 provider 为 `volcengine-doubao`、`groq-whisper` 和 `mistral-voxtral`。默认环境变量如下：
+
+| Provider | 默认环境变量 |
+| --- | --- |
+| `volcengine-doubao` | `SONA_VOLCENGINE_ASR_API_KEY` |
+| `groq-whisper` | `GROQ_API_KEY` |
+| `mistral-voxtral` | `MISTRAL_API_KEY` |
+
+使用 `--api-key-env NAME` 指定其他变量。`--online-config FILE` 接受用于覆盖 endpoint/model 等非敏感配置的 JSON 对象；其中不得包含 `apiKey` 或 `api_key`。
+
+选择在线 provider 后，`--model-id`、`--models-dir`、VAD/标点参数、线程数、GPU 模式和 `--save-wav` 等本地参数会被拒绝。覆盖已有输出文件必须使用 `--force`。
+
+## `transcribe-live`
+
+实时转写麦克风，或从 stdin 读取无文件头的 16 kHz、单声道、signed 16-bit little-endian PCM。
+
+```bash
+sona-cli transcribe-live --list-input-devices
+sona-cli transcribe-live \
+  --model-id sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17 \
+  --device "Studio Mic" --duration 60 --output ./live.srt
+
+ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
+  sona-cli transcribe-live --input stdin \
+    --model-id sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en \
+    --output-format ndjson
+```
+
+在线流式目前支持 `volcengine-doubao`：
+
+```bash
+set SONA_VOLCENGINE_ASR_API_KEY=...
+ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
+  sona-cli transcribe-live --input stdin \
+    --online-provider volcengine-doubao --output-format ndjson
+```
+
+`--input microphone` 默认使用 CPAL 输入设备；`--device` 必须与 `--list-input-devices` 返回的完整名称匹配。`--output-format` 支持 `text` 和 `ndjson`；`--output` 可写入最终的 `json`、`txt`、`srt`、`vtt` 或 `md` 快照；`--format` 必须同时提供 `--output`。Ctrl+C、stdin EOF 和 `--duration` 都会先 flush/stop 会话再退出。
+
+在线凭据和非敏感配置规则与 `transcribe` 相同。在线流式使用本地模型参数会被拒绝。
+
+## `serve`
+
+从独立 CLI 启动共享的本地 HTTP API server。CLI server 保持本地 ASR-only；Online ASR 请直接使用 `transcribe` 或 `transcribe-live`。
 
 ```bash
 sona-cli serve
@@ -171,60 +151,8 @@ sona-cli serve --config ./sona-cli.toml
 sona-cli serve --host 127.0.0.1 --port 14200 --api-key local-secret
 ```
 
-- 持续运行直到按 Ctrl+C
-- 复用与桌面应用相同的本地批量转写 API server adapter
-- `--config` 会读取 `init-config` 生成的 `[serve]` 配置段
-- CLI 侧支持本地 REST 转写。`serve` 的 WebSocket 流式路由和在线 ASR 集成仍需要桌面运行时；独立本地流式转写请使用 `transcribe-live`。
+## 输出和错误
 
-### `transcribe`
+`transcribe` 默认将 JSON 写入 stdout。`transcribe-live` 输出实时 text 或 NDJSON 事件，并可选写入最终文件。参数校验错误退出 2，模型错误退出 3，网络/provider 错误退出 4，文件系统/输入错误退出 5。
 
-使用离线 ASR 适配器转写一个本地音频或视频文件。
-
-```bash
-sona-cli transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo
-sona-cli transcribe ./sample.wav --config ./sona-cli.toml --output ./out.srt
-sona-cli transcribe ./sample.wav --format txt --quiet
-```
-
-- 省略 `--output` 时默认输出到 `stdout`
-- 支持导出格式：`json`、`txt`、`srt`、`vtt`、`md`
-- `--config` 读取由 `init-config` 生成的带注释 `sona-cli.toml` 模板
-- `--force` 允许覆盖已有输出文件
-
-### `transcribe-live`
-
-使用已安装的本地流式模型，实时转写麦克风或 stdin 原始音频。
-
-```bash
-sona-cli transcribe-live --list-input-devices
-sona-cli transcribe-live \
-  --model-id sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17 \
-  --device "Studio Mic" \
-  --duration 60 \
-  --output ./live.srt
-ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
-  sona-cli transcribe-live \
-    --input stdin \
-    --model-id sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en \
-    --output-format ndjson
-```
-
-- 第一版仅支持本地离线 ASR；所选预设必须声明支持 `streaming`，并已安装到解析后的模型目录。
-- 麦克风默认使用 CPAL 默认输入设备；`--device` 必须与 `--list-input-devices` 返回的完整名称精确匹配。
-- `--input stdin` 接收无文件头的 16 kHz、单声道、signed 16-bit little-endian PCM；末尾不完整 sample 会作为输入错误返回。
-- TTY text 模式原位刷新当前转录；stdout 被重定向时，text 模式只在 flush 后写一次最终快照。
-- `--output-format ndjson` 每行输出并立即 flush 一个 JSON 对象。事件类型为 `started`、`update`、`stopped` 和仅运行时失败使用的 `error`；转录字段采用 camelCase。
-- Ctrl+C、stdin EOF 和 `--duration` 使用相同的正常收尾流程：排空采集音频、flush/stop ASR、可选写入最终文件、输出 `stopped`，并以 0 退出。
-- `--output` 可将最终快照写为 `json`、`txt`、`srt`、`vtt` 或 `md`；默认从扩展名推断，也可用 `--format` 覆盖。覆盖已有文件必须显式传入 `--force`。
-- `--config` 读取 `sona-cli.toml` 的 `[transcribe_live]`；命令行值覆盖该分区，该分区继续继承顶层 ASR 共享默认值。最终输出路径、导出格式和覆盖行为只允许通过命令行指定。
-- 参数校验错误退出码为 2，模型错误为 3，输入/设备错误为 5。NDJSON 运行时错误还会在非零退出前输出一个 `error` 事件。
-
-## 全局参数
-
-```text
-sona-cli
-  -V, --version
-  -h, --help
-```
-
-可以通过 `sona-cli <command> --help` 查看对应命令的参数说明。
+可以通过 `sona-cli <command> --help` 查看命令参数。

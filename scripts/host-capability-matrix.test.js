@@ -88,14 +88,27 @@ test('host Cargo manifests match the reviewed capability matrix dependencies', (
   }
 });
 
-test('CLI Sync and intentional host gaps stay encoded as non-yes matrix statuses', () => {
+test('CLI stateless transcription scope stays encoded in the matrix', () => {
+  const sqlite = HOST_CAPABILITY_MATRIX.find(
+    (capability) => capability.id === 'sqlite-history-tag',
+  );
+  assert.equal(sqlite.status['sona-cli'], 'out of scope');
+
   const sync = HOST_CAPABILITY_MATRIX.find((capability) => capability.id === 'sync');
   assert.ok(sync, 'sync capability must remain in the matrix');
   assert.equal(sync.status['sona-cli'], 'out of scope');
   assert.deepEqual(hostCapabilityStatuses(sync), ['yes', 'out of scope', 'yes']);
 
   const onlineAsr = HOST_CAPABILITY_MATRIX.find((capability) => capability.id === 'online-asr');
-  assert.equal(onlineAsr.status['sona-cli'], 'no');
+  assert.equal(onlineAsr.status['sona-cli'], 'yes');
+
+  const onlineLlm = HOST_CAPABILITY_MATRIX.find((capability) => capability.id === 'online-llm');
+  assert.equal(onlineLlm.status['sona-cli'], 'out of scope');
+
+  const archiveRecovery = HOST_CAPABILITY_MATRIX.find(
+    (capability) => capability.id === 'archive-recovery',
+  );
+  assert.equal(archiveRecovery.status['sona-cli'], 'out of scope');
 
   const modelDownloads = HOST_CAPABILITY_MATRIX.find(
     (capability) => capability.id === 'model-downloads',
@@ -143,6 +156,11 @@ test('stable architecture guides publish the host capability matrix', () => {
       source,
       /\|\s*Sync[\s\S]*?\|\s*yes\s*\|\s*out of scope\s*\|\s*yes\s*\|/u,
       `${title} architecture guide must keep the Sync matrix row`,
+    );
+    assert.match(
+      source,
+      /\|\s*Online ASR\s*\|\s*yes\s*\|\s*yes\s*\|\s*yes\s*\|/u,
+      `${title} architecture guide must publish CLI online ASR support`,
     );
     assert.match(
       source,

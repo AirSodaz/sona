@@ -1,23 +1,15 @@
-mod app_config;
 mod asr_adapter;
-mod automation;
-mod backup;
 mod config_template;
-mod dashboard;
 mod desktop_paths;
 mod diagnostics;
 mod export;
-mod history;
 mod init_config;
 mod live_audio;
 mod live_output;
-mod llm;
 mod models;
-mod recovery;
+mod online_asr;
 mod serve;
-mod storage;
 mod table;
-mod task_ledger;
 mod transcribe;
 mod transcribe_live;
 
@@ -175,39 +167,21 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    /// Inspects persisted application configuration.
-    AppConfig(app_config::AppConfigArgs),
-    /// Inspects persisted automation rules and processed entries.
-    Automation(automation::AutomationArgs),
-    /// Exports, inspects, or imports complete Sona backup archives.
-    Backup(backup::BackupArgs),
-    /// Shows a read-only dashboard snapshot.
-    Dashboard(dashboard::DashboardArgs),
     /// Builds diagnostics snapshots from host-provided facts.
     Diagnostics(diagnostics::DiagnosticsArgs),
     /// Exports transcript segments through the shared core service.
     Export(export::ExportArgs),
-    /// Queries persisted history through the shared core service.
-    History(history::HistoryArgs),
-    /// Generates text or structured output and discovers online LLM models.
-    Llm(llm::LlmArgs),
     /// Resolves a filesystem path using the shared runtime status contract.
     PathStatus { path: String },
     /// Creates a commented TOML starter template.
     InitConfig(init_config::InitConfigArgs),
     /// Lists and manages preset models.
     Models(models::ModelsArgs),
-    /// Inspects persisted recovery snapshots.
-    Recovery(recovery::RecoveryArgs),
     /// Runs the shared local HTTP API server.
     Serve(serve::ServeArgs),
-    /// Shows read-only application storage usage.
-    Storage(storage::StorageArgs),
-    /// Inspects the shared task ledger.
-    TaskLedger(task_ledger::TaskLedgerArgs),
-    /// Transcribes a local audio or video file using offline ASR.
+    /// Transcribe audio with local or online ASR; local ASR also accepts video.
     Transcribe(transcribe::TranscribeArgs),
-    /// Transcribe live audio from a microphone or stdin PCM using offline ASR.
+    /// Transcribe live audio using local or online ASR.
     TranscribeLive(transcribe_live::TranscribeLiveArgs),
 }
 
@@ -246,21 +220,12 @@ where
 
 fn dispatch(command: Commands, io: &mut dyn CliIo) -> CliResult<Option<CliOutput>> {
     let output = match command {
-        Commands::AppConfig(args) => app_config::run_app_config(args),
-        Commands::Automation(args) => automation::run_automation(args),
-        Commands::Backup(args) => backup::run_backup(args),
-        Commands::Dashboard(args) => dashboard::run_dashboard(args),
         Commands::Diagnostics(args) => diagnostics::run_diagnostics(args),
         Commands::Export(args) => export::run_export(args),
-        Commands::History(args) => history::run_history(args),
-        Commands::Llm(args) => llm::run_llm(args),
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::InitConfig(args) => init_config::run_init_config(args),
         Commands::Models(args) => models::run_models(args),
-        Commands::Recovery(args) => recovery::run_recovery(args),
         Commands::Serve(args) => serve::run_serve(args),
-        Commands::Storage(args) => storage::run_storage(args),
-        Commands::TaskLedger(args) => task_ledger::run_task_ledger(args),
         Commands::Transcribe(args) => transcribe::run_transcribe(args),
         Commands::TranscribeLive(args) => {
             transcribe_live::run_transcribe_live(args, io)?;

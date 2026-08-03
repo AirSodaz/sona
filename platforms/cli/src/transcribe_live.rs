@@ -5,7 +5,10 @@ use crate::live_audio::{
 use crate::live_output::{LiveOutputFormat, LiveOutputRenderer, LiveStopReason};
 use crate::{CliError, CliIo, CliResult};
 use clap::{Args, ValueEnum};
-use sona_core::ports::asr::{AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptUpdateEvent};
+use sona_core::ports::asr::{
+    AsrMode, AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptUpdateEvent,
+    AsrTranscriptionRequest,
+};
 use sona_core::runtime::config::TranscribeLiveConfigSection;
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 use sona_core::transcription::runtime::{LiveTranscribeOptions, LiveTranscribePlan};
@@ -68,8 +71,8 @@ impl From<LiveOutputFormatArg> for LiveOutputFormat {
 
 #[derive(Debug, Args)]
 #[command(
-    about = "Transcribe live audio with offline ASR",
-    after_help = "Examples:\n  sona-cli transcribe-live --model-id sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17\n  ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | sona-cli transcribe-live --input stdin --model-id sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en --output-format ndjson"
+    about = "Transcribe live audio with local or online ASR",
+    after_help = "Examples:\n  sona-cli transcribe-live --model-id sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17\n  sona-cli transcribe-live --online-provider volcengine-doubao\n  ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | sona-cli transcribe-live --input stdin --online-provider volcengine-doubao --output-format ndjson"
 )]
 pub struct TranscribeLiveArgs {
     /// Live input source.
@@ -102,6 +105,8 @@ pub struct TranscribeLiveArgs {
     /// Streaming preset model id to use.
     #[arg(long = "model-id")]
     model_id: Option<String>,
+    #[command(flatten)]
+    online: crate::online_asr::OnlineAsrArgs,
     /// Models directory containing installed presets.
     #[arg(long = "models-dir")]
     models_dir: Option<PathBuf>,
@@ -136,7 +141,19 @@ struct ResolvedLiveCommand {
     device: Option<String>,
     duration: Option<Duration>,
     output_format: LiveOutputFormat,
-    plan: LiveTranscribePlan,
+    asr: ResolvedLiveAsr,
+}
+
+enum ResolvedLiveAsr {
+    Local(LiveTranscribePlan),
+    Online(ResolvedOnlineLiveAsr),
+}
+
+struct ResolvedOnlineLiveAsr {
+    request: AsrTranscriptionRequest,
+    provider_id: String,
+    export_format: Option<sona_core::export::ExportFormat>,
+    output_path: Option<PathBuf>,
 }
 
 struct CliStreamingObserver {
@@ -234,7 +251,7 @@ fn resolve_live_command(
             .transpose()?
             .unwrap_or(LiveInputSource::Microphone),
     };
-    let device = args.device.or(config.device.clone());
+    let device = args.device.clone().or(config.device.clone());
     let duration_seconds = args.duration.or(config.duration_seconds);
     validate_direct_input_options(Some(input), device.as_deref(), duration_seconds)?;
     let duration = duration_seconds.map(Duration::from_secs_f64);
@@ -247,33 +264,111 @@ fn resolve_live_command(
             .transpose()?
             .unwrap_or(LiveOutputFormatArg::Text),
     };
-    let plan = sona_runtime_fs::resolve_live_transcribe_plan_with_runtime_paths(
-        LiveTranscribeOptions {
-            output: args.output,
-            format: args.format,
-            model_id: args.model_id,
-            models_dir: args.models_dir,
-            default_models_dir: crate::desktop_paths::default_models_dir(),
-            vad_model_id: args.vad_model_id,
-            punctuation_model_id: args.punctuation_model_id,
-            threads: args.threads,
-            enable_itn: args.enable_itn.then_some(true),
-            language: args.language,
-            hotwords: args.hotwords,
-            gpu_acceleration: args.gpu_acceleration,
-            vad_buffer: args.vad_buffer,
-            force: args.force,
-        },
-        Some(config),
-    )
-    .map_err(crate::map_runtime_fs_error)?;
+    let asr = if args.online.is_online() {
+        reject_online_local_options(&args)?;
+        validate_online_output(args.output.as_ref(), args.format.as_deref(), args.force)?;
+        let language = args
+            .language
+            .clone()
+            .or_else(|| config.language.clone())
+            .unwrap_or_else(|| sona_core::transcription::runtime::DEFAULT_LANGUAGE.to_string());
+        let enable_itn = args.enable_itn || config.enable_itn.unwrap_or(false);
+        let hotwords = args.hotwords.clone().or_else(|| config.hotwords.clone());
+        let request =
+            args.online
+                .build_request(AsrMode::Streaming, language, enable_itn, hotwords)?;
+        let export_format = args
+            .output
+            .as_deref()
+            .map(|path| {
+                sona_core::transcription::runtime::resolve_export_format(
+                    args.format.as_deref(),
+                    Some(path),
+                )
+            })
+            .transpose()
+            .map_err(|error| CliError::Validation(error.to_string()))?;
+        ResolvedLiveAsr::Online(ResolvedOnlineLiveAsr {
+            provider_id: request.provider_id().to_string(),
+            request,
+            export_format,
+            output_path: args.output,
+        })
+    } else {
+        let plan = sona_runtime_fs::resolve_live_transcribe_plan_with_runtime_paths(
+            LiveTranscribeOptions {
+                output: args.output,
+                format: args.format,
+                model_id: args.model_id,
+                models_dir: args.models_dir,
+                default_models_dir: crate::desktop_paths::default_models_dir(),
+                vad_model_id: args.vad_model_id,
+                punctuation_model_id: args.punctuation_model_id,
+                threads: args.threads,
+                enable_itn: args.enable_itn.then_some(true),
+                language: args.language,
+                hotwords: args.hotwords,
+                gpu_acceleration: args.gpu_acceleration,
+                vad_buffer: args.vad_buffer,
+                force: args.force,
+            },
+            Some(config),
+        )
+        .map_err(crate::map_runtime_fs_error)?;
+        ResolvedLiveAsr::Local(plan)
+    };
     Ok(ResolvedLiveCommand {
         input,
         device,
         duration,
         output_format: output_format.into(),
-        plan,
+        asr,
     })
+}
+
+fn reject_online_local_options(args: &TranscribeLiveArgs) -> CliResult<()> {
+    let local_option = [
+        (args.model_id.is_some(), "--model-id"),
+        (args.models_dir.is_some(), "--models-dir"),
+        (args.vad_model_id.is_some(), "--vad-model-id"),
+        (
+            args.punctuation_model_id.is_some(),
+            "--punctuation-model-id",
+        ),
+        (args.threads.is_some(), "--threads"),
+        (args.gpu_acceleration.is_some(), "--gpu-acceleration"),
+        (args.vad_buffer.is_some(), "--vad-buffer"),
+    ]
+    .into_iter()
+    .find_map(|(present, option)| present.then_some(option));
+    if let Some(option) = local_option {
+        return Err(CliError::Validation(format!(
+            "{option} can only be used with local ASR."
+        )));
+    }
+    Ok(())
+}
+
+fn validate_online_output(
+    output: Option<&PathBuf>,
+    format: Option<&str>,
+    force: bool,
+) -> CliResult<()> {
+    if output.is_none() && format.is_some() {
+        return Err(CliError::Validation(
+            "--format requires --output for live transcription.".to_string(),
+        ));
+    }
+    if let Some(output) = output
+        && output.exists()
+        && !force
+    {
+        return Err(CliError::Io(format!(
+            "Output file already exists: {}. Use --force to overwrite.",
+            output.display()
+        )));
+    }
+    Ok(())
 }
 
 async fn run_resolved_live_command(
@@ -286,10 +381,25 @@ async fn run_resolved_live_command(
     let observer: Arc<dyn AsrRuntimeObserver> = Arc::new(CliStreamingObserver {
         sender: update_sender,
     });
-    let session =
-        crate::asr_adapter::local_streaming_session(&resolved.plan, &session_id, observer)
-            .await
-            .map_err(CliError::Model)?;
+    let (session, model_id, output_path, export_format) = match resolved.asr {
+        ResolvedLiveAsr::Local(plan) => {
+            let session = crate::asr_adapter::local_streaming_session(&plan, &session_id, observer)
+                .await
+                .map_err(CliError::Model)?;
+            (session, plan.model_id, plan.output_path, plan.export_format)
+        }
+        ResolvedLiveAsr::Online(plan) => {
+            let session =
+                crate::asr_adapter::online_streaming_session(plan.request, &session_id, observer)
+                    .map_err(crate::online_asr::map_asr_error)?;
+            (
+                session,
+                plan.provider_id,
+                plan.output_path,
+                plan.export_format,
+            )
+        }
+    };
     let mut input = match resolved.input {
         LiveInputSource::Microphone => {
             start_microphone_input(resolved.device.as_deref()).map_err(CliError::Io)?
@@ -300,7 +410,7 @@ async fn run_resolved_live_command(
     let metadata = LiveSessionMetadata {
         source: resolved.input.label().to_string(),
         device_name: input.device_name.clone(),
-        model_id: resolved.plan.model_id.clone(),
+        model_id,
     };
     let mut renderer =
         LiveOutputRenderer::new(resolved.output_format, stdout_is_terminal, &session_id);
@@ -315,11 +425,9 @@ async fn run_resolved_live_command(
     )
     .await?;
 
-    let status = if let Some(path) = resolved.plan.output_path.as_ref() {
-        let format = resolved
-            .plan
-            .export_format
-            .expect("live plan with output path must include an export format");
+    let status = if let Some(path) = output_path.as_ref() {
+        let format =
+            export_format.expect("live plan with output path must include an export format");
         match write_final_transcript(path, format, renderer.segments()) {
             Ok(status) => Some(status),
             Err(error) => {
@@ -774,7 +882,7 @@ mod tests {
         assert_eq!(error.to_string(), "decode failed");
         assert_eq!(
             calls.lock().unwrap().as_slice(),
-            &["start", "feed-bytes", "stop"]
+            &["start", "feed-frame", "stop"]
         );
         let events = String::from_utf8(output)
             .unwrap()

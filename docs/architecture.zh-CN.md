@@ -90,7 +90,7 @@ Desktop 前端的导入方向是：view 与 hook 指向 feature service 和 stor
 
 UniFFI 导出面只有两层：`lib.rs` 中的 `#[uniffi::export]` 自由函数直接委托到对应的 `*_bridge` 模块。原先 `facade.rs` 中的 `SonaCoreFacade` 类型只是把每个调用再转发一次、不附加任何行为，现已合并进 `lib.rs`。不要重新引入中间转发类型； `scripts/multisurface-contracts.test.js` 会强制这一约束，仅允许 `release_application_context` 直接调用组合根。
 
-各 Host 共享 `sona-sqlite` 提供的 `SqliteApplicationContext`，但接线、生命周期与错误映射仍由各 Host 自行拥有。目前还没有单独的共享 application-composition crate。
+Desktop 与 UniFFI 共享 `sona-sqlite` 提供的 `SqliteApplicationContext`，但接线、生命周期与错误映射仍由各 Host 自行拥有。无状态 CLI 不依赖该组合类型。目前还没有单独的共享 application-composition crate。
 
 **每个应用数据目录只有一个 context。** UniFFI registry 按规范化路径缓存 context，其容量是**软**上限：仍被调用方持有的条目永不驱逐，因为重新打开该路径会为同一个目录创建第二套连接池、第二次迁移和第二个服务图。在调用方释放之前，缓存允许超出容量。
 
@@ -149,18 +149,19 @@ pnpm run generate:sona-context
 
 | 能力 | Desktop (`sona`) | CLI (`sona-cli`) | UniFFI (`sona-uniffi-bind`) |
 | --- | --- | --- | --- |
-| SQLite / History / Tag | yes | yes | yes |
+| SQLite / History / Tag | yes | out of scope | yes |
 | Local ASR | yes | yes | yes |
-| Online ASR | yes | no | yes |
-| Online LLM | yes | yes | yes |
+| Online ASR | yes | yes | yes |
+| Online LLM | yes | out of scope | yes |
 | Model downloads | yes | yes | yes |
 | Media detector | yes | yes | no |
 | API server | yes | yes | no |
 | Sync（application + WebDAV） | yes | out of scope | yes |
 | TypeScript/Tauri 契约绑定 | yes | no | no |
-| Archive / export / recovery / runtime-fs | yes | yes | yes |
+| Archive / recovery | yes | out of scope | yes |
+| Export / runtime-fs | yes | yes | yes |
 
-CLI Sync 的产品范围尚未定义，在明确范围之前不得接入。UniFFI 缺少 media detector 属于当前 Host 接线限制，不是 Core 端口缺失。
+CLI 定位为无状态转写 Host：应用持久化、History/Tag、Online LLM、archive/recovery 与 Sync 均属于有意的产品边界。Online ASR 凭据只从环境变量读取，CLI 不会持久化。UniFFI 缺少 media detector 属于当前 Host 接线限制，不是 Core 端口缺失。
 
 <a id="error-boundaries"></a>
 ## 错误边界
@@ -214,7 +215,7 @@ UniFFI 把 `Record` 生成为 Kotlin `data class`，其自动派生的 `toString
 - 已消除的 outbound 互依：`model-downloads` 与 `recovery-fs` 不再依赖 `runtime-fs`；完整性规则在 Core，I/O 由各适配器本地完成。
 - Sync 遗留 secret-store 注册与原始 WebDAV 线格式，作为面向旧调用方的 Host 委托。
 - `sona-sqlite` 在生产依赖中使用 `tempfile`，因为 `Database` 拥有只读快照 `TempDir` 生命周期；这不是误放的 dev-only 依赖。
-- CLI Sync 在产品范围定义前保持 out of scope。
+- CLI 的持久化、History/Tag、Online LLM、archive/recovery 与 Sync 均有意保持 out of scope。
 
 <a id="verification"></a>
 ## 验证

@@ -34,7 +34,7 @@ When Sona opens for the first time, it can block the main workflow with `First R
 
 ### Need CLI?
 
-If you want command-line file or live transcription, model management, history/export/backup automation, or the local HTTP API server, read the dedicated [CLI guide](cli.md). This user guide stays focused on the desktop app.
+If you want stateless command-line file or live transcription, model management, transcript export, or the local HTTP API server, read the dedicated [CLI guide](cli.md). This user guide stays focused on the desktop app.
 
 ## 3. First Run Setup
 

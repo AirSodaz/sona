@@ -19,14 +19,11 @@ rubato = "0.16"
 ringbuf = "0.4"
 sona-application = { path = "../../application" }
 sona-api-server = { path = "../../adapters/api_server" }
-sona-archive = { path = "../../adapters/archive" }
 sona-local-asr = { path = "../../adapters/local_asr" }
 sona-media-detector = { path = "../../adapters/media_detector" }
 sona-model-downloads = { path = "../../adapters/model_downloads" }
-sona-online-llm = { path = "../../adapters/online_llm" }
-sona-recovery-fs = { path = "../../adapters/recovery_fs" }
+sona-online-asr = { path = "../../adapters/online_asr" }
 sona-runtime-fs = { path = "../../adapters/runtime_fs" }
-sona-sqlite = { path = "../../adapters/sqlite" }
 sona-core = { path = "../../core" }
 sona-export = { path = "../../adapters/export" }
 thiserror = "2.0.18"
@@ -36,8 +33,6 @@ uuid = { version = "1", features = ["v4", "fast-rng"] }
 
 [dev-dependencies]
 async-trait = "0.1"
-axum = { version = "0.8", features = ["macros"] }
 hex = "0.4"
 sha2 = "0.11"
 tempfile = "3"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }

@@ -36,7 +36,7 @@
 | 文档 | 内容 | 语言 |
 | --- | --- | --- |
 | 用户指南 | 安装、首次设置、转录、编辑和导出 | [简体中文](docs/user-guide.zh-CN.md) · [English](docs/user-guide.md) |
-| CLI 指南 | 独立命令、自动化、实时转录和配置 | [简体中文](docs/cli.zh-CN.md) · [English](docs/cli.md) |
+| CLI 指南 | 无状态本地/在线转写、模型管理和配置 | [简体中文](docs/cli.zh-CN.md) · [English](docs/cli.md) |
 | HTTP API 参考 | 服务配置、认证、接口和 Webhook | [简体中文](docs/api.zh-CN.md) · [English](docs/api.md) |
 | 开发指南 | 本地环境、测试、桌面构建和 CLI 构建 | [简体中文](docs/development.zh-CN.md) · [English](docs/development.md) |
 | 架构指南 | 包角色、依赖方向、兼容性边界和验证 | [简体中文](docs/architecture.zh-CN.md) · [English](docs/architecture.md) |
