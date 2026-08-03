@@ -19,10 +19,10 @@ import com.sona.android.application.sync.SyncSchedulerPort
 import java.util.concurrent.TimeUnit
 
 class AndroidSyncScheduler private constructor(
-    private val workManager: WorkManager,
+    private val workManager: Lazy<WorkManager>,
 ) : SyncSchedulerPort {
     override fun schedulePeriodic() {
-        workManager.enqueueUniquePeriodicWork(
+        workManager.value.enqueueUniquePeriodicWork(
             PERIODIC_WORK,
             ExistingPeriodicWorkPolicy.UPDATE,
             PeriodicWorkRequestBuilder<SyncWorker>(6, TimeUnit.HOURS)
@@ -33,7 +33,7 @@ class AndroidSyncScheduler private constructor(
     }
 
     override fun scheduleAfterLocalChange() {
-        workManager.enqueueUniqueWork(
+        workManager.value.enqueueUniqueWork(
             LOCAL_CHANGE_WORK,
             ExistingWorkPolicy.REPLACE,
             OneTimeWorkRequestBuilder<SyncWorker>()
@@ -45,7 +45,7 @@ class AndroidSyncScheduler private constructor(
     }
 
     override fun scheduleImmediate() {
-        workManager.enqueueUniqueWork(
+        workManager.value.enqueueUniqueWork(
             MANUAL_WORK,
             ExistingWorkPolicy.REPLACE,
             OneTimeWorkRequestBuilder<SyncWorker>()
@@ -56,14 +56,14 @@ class AndroidSyncScheduler private constructor(
     }
 
     override fun cancelAll() {
-        workManager.cancelUniqueWork(PERIODIC_WORK)
-        workManager.cancelUniqueWork(LOCAL_CHANGE_WORK)
-        workManager.cancelUniqueWork(MANUAL_WORK)
+        workManager.value.cancelUniqueWork(PERIODIC_WORK)
+        workManager.value.cancelUniqueWork(LOCAL_CHANGE_WORK)
+        workManager.value.cancelUniqueWork(MANUAL_WORK)
     }
 
     companion object {
         fun create(context: Context): AndroidSyncScheduler =
-            AndroidSyncScheduler(WorkManager.getInstance(context.applicationContext))
+            AndroidSyncScheduler(lazy { WorkManager.getInstance(context.applicationContext) })
     }
 }
 

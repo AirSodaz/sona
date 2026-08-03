@@ -192,10 +192,6 @@ class SonaAppContainer(context: Context) {
         scope = processScope,
     )
 
-    init {
-        syncScheduler.schedulePeriodic()
-    }
-
     fun rebindAfterBackupRestore() {
         syncSecretStoreRegistration.register(appDataDir, syncSecretStore)
         syncScheduler.schedulePeriodic()

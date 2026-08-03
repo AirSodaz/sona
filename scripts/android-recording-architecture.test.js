@@ -109,7 +109,6 @@ test('Android local ASR catalog, managed downloads, and recording startup are wi
     'app', 'kotlin', 'com', 'sona', 'android', 'app', 'composition',
     'SonaAppContainer.kt',
   );
-
   assert.match(settingsPort, /enum class AsrSelectionSlot/u);
   assert.match(settingsPort, /sealed interface AsrModelSelection/u);
   assert.match(settingsPort, /val liveSelection: AsrModelSelection\?/u);
@@ -301,6 +300,11 @@ test('Android recording composition preserves foreground-service, permission, an
     'app', 'kotlin', 'com', 'sona', 'android', 'app', 'composition',
     'SonaAppContainer.kt',
   );
+  const syncWorker = clientSource(
+    path.join('adapters', 'android'),
+    'kotlin', 'com', 'sona', 'android', 'adapters', 'android', 'sync',
+    'AndroidSyncWorker.kt',
+  );
   const activity = clientSource(
     'app', 'kotlin', 'com', 'sona', 'android', 'app', 'MainActivity.kt',
   );
@@ -368,6 +372,16 @@ test('Android recording composition preserves foreground-service, permission, an
     /RecordingForegroundService[\s\S]*android:exported="false"[\s\S]*android:foregroundServiceType="microphone"[\s\S]*android:stopWithTask="false"/u,
   );
   assert.match(application, /SonaAppContainer\(this\)/u);
+  assert.match(
+    application,
+    /override fun onCreate\(\)[\s\S]*container\.syncWork\.schedulePeriodic\(\)/u,
+  );
+  assert.doesNotMatch(container, /init\s*\{[\s\S]*syncScheduler\.schedulePeriodic\(\)/u);
+  assert.match(syncWorker, /private val workManager: Lazy<WorkManager>/u);
+  assert.match(
+    syncWorker,
+    /AndroidSyncScheduler\(lazy \{ WorkManager\.getInstance\(context\.applicationContext\) \}\)/u,
+  );
   assert.match(container, /AndroidBatchCredentialRepository\.create\(appContext\)/u);
   assert.doesNotMatch(container, /AndroidStreamingCredentialRepository/u);
   assert.match(container, /appContext\.filesDir\.absolutePath/u);
