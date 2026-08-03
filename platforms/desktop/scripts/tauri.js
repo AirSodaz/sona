@@ -17,6 +17,7 @@ const tauriBinary = process.env.SONA_TAURI_BINARY ?? path.resolve(
 );
 
 const desktopTauriConfig = path.join(repoRoot, 'platforms', 'desktop', 'tauri.conf.json');
+const minimumMacosDeploymentTarget = '10.15';
 const args = process.argv.slice(2);
 let tauriArgs = withDesktopConfig(args);
 let tauriEnvironment = process.env;
@@ -60,7 +61,9 @@ function prepareDesktopBundle(commandArgs) {
   const preparerEnvironment = target.includes('apple')
     ? {
         ...process.env,
-        MACOSX_DEPLOYMENT_TARGET: process.env.MACOSX_DEPLOYMENT_TARGET ?? '10.15',
+        MACOSX_DEPLOYMENT_TARGET: resolveMacosDeploymentTarget(
+          process.env.MACOSX_DEPLOYMENT_TARGET,
+        ),
       }
     : process.env;
   runRequired(
@@ -99,6 +102,31 @@ function prepareDesktopBundle(commandArgs) {
     args: withBundleConfig(commandArgs, bundleConfig),
     environment,
   };
+}
+
+function resolveMacosDeploymentTarget(configuredTarget) {
+  if (!configuredTarget) {
+    return minimumMacosDeploymentTarget;
+  }
+
+  const configuredParts = configuredTarget.split('.').map(Number);
+  const minimumParts = minimumMacosDeploymentTarget.split('.').map(Number);
+  if (configuredParts.some((part) => !Number.isInteger(part) || part < 0)) {
+    return configuredTarget;
+  }
+
+  const length = Math.max(configuredParts.length, minimumParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const configured = configuredParts[index] ?? 0;
+    const minimum = minimumParts[index] ?? 0;
+    if (configured > minimum) {
+      return configuredTarget;
+    }
+    if (configured < minimum) {
+      return minimumMacosDeploymentTarget;
+    }
+  }
+  return configuredTarget;
 }
 
 function withBundleConfig(commandArgs, bundleConfig) {

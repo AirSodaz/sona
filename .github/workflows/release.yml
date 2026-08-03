@@ -140,6 +140,7 @@ jobs:
           "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
           "CC_aarch64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
           "CXX_aarch64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
+          "CXXFLAGS_aarch64_pc_windows_msvc=/EHsc" >> $env:GITHUB_ENV
           clang-cl --version
           ninja --version
 

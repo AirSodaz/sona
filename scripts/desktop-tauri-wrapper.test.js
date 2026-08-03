@@ -63,6 +63,13 @@ test('tauri wrapper passes generated config to build and bundle while dev preser
   );
   assert.equal(macInvocation.macosDeploymentTarget, '10.15');
   assert.equal(macInvocation.preparedMacosDeploymentTarget, '10.15');
+  const legacyMacInvocation = run(
+    'build',
+    ['--target', macTarget],
+    { MACOSX_DEPLOYMENT_TARGET: '10.13' },
+  );
+  assert.equal(legacyMacInvocation.macosDeploymentTarget, '10.15');
+  assert.equal(legacyMacInvocation.preparedMacosDeploymentTarget, '10.15');
   const customMacInvocation = run(
     'build',
     ['--target', macTarget],
@@ -70,4 +77,11 @@ test('tauri wrapper passes generated config to build and bundle while dev preser
   );
   assert.equal(customMacInvocation.macosDeploymentTarget, '12.0');
   assert.equal(customMacInvocation.preparedMacosDeploymentTarget, '12.0');
+});
+
+test('release workflows enable C++ exceptions for Windows ARM64 clang-cl builds', () => {
+  for (const workflow of ['release.yml', 'nightly.yml']) {
+    const source = fs.readFileSync(path.join(repoRoot, '.github', 'workflows', workflow), 'utf8');
+    assert.match(source, /CXXFLAGS_aarch64_pc_windows_msvc=\/EHsc/u);
+  }
 });
