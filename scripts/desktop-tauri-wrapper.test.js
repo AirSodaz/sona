@@ -17,8 +17,9 @@ test('tauri wrapper passes generated config to build and bundle while dev preser
   const { logPath, preparerPath, tauriBinary } = writeTauriWrapperStubs(root);
   fs.writeFileSync(customDevConfig, '{}');
 
-  const run = (command, commandArgs = []) => {
+  const run = (command, commandArgs = [], environment = {}) => {
     fs.rmSync(logPath, { force: true });
+    const { MACOSX_DEPLOYMENT_TARGET: _ignored, ...baseEnvironment } = process.env;
     const result = spawnSync(
       node,
       [path.join(repoRoot, 'platforms', 'desktop', 'scripts', 'tauri.js'), command, ...commandArgs],
@@ -26,11 +27,12 @@ test('tauri wrapper passes generated config to build and bundle while dev preser
         cwd: repoRoot,
         encoding: 'utf8',
         env: {
-          ...process.env,
+          ...baseEnvironment,
           SONA_TAURI_BINARY: tauriBinary,
           SONA_DESKTOP_BUNDLE_PREPARER: preparerPath,
           SONA_TAURI_ARGS_LOG: logPath,
           SHERPA_ONNX_LIB_DIR: path.join(root, 'source-runtime-libs'),
+          ...environment,
         },
       },
     );
@@ -59,4 +61,13 @@ test('tauri wrapper passes generated config to build and bundle while dev preser
     macInvocation.sherpaLibDir,
     path.join(repoRoot, 'target', 'desktop-bundle', macTarget, 'runtime-libs'),
   );
+  assert.equal(macInvocation.macosDeploymentTarget, '10.15');
+  assert.equal(macInvocation.preparedMacosDeploymentTarget, '10.15');
+  const customMacInvocation = run(
+    'build',
+    ['--target', macTarget],
+    { MACOSX_DEPLOYMENT_TARGET: '12.0' },
+  );
+  assert.equal(customMacInvocation.macosDeploymentTarget, '12.0');
+  assert.equal(customMacInvocation.preparedMacosDeploymentTarget, '12.0');
 });

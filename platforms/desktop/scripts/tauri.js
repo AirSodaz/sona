@@ -57,6 +57,12 @@ function withDesktopConfig(commandArgs) {
 function prepareDesktopBundle(commandArgs) {
   const target = readFlagValue(commandArgs, '--target') ?? resolveHostTarget();
   const baseConfig = readFlagValue(commandArgs, '--config') ?? desktopTauriConfig;
+  const preparerEnvironment = target.includes('apple')
+    ? {
+        ...process.env,
+        MACOSX_DEPLOYMENT_TARGET: process.env.MACOSX_DEPLOYMENT_TARGET ?? '10.15',
+      }
+    : process.env;
   runRequired(
     'prepare desktop bundle',
     process.execPath,
@@ -72,6 +78,7 @@ function prepareDesktopBundle(commandArgs) {
     {
       cwd: repoRoot,
       stdio: 'inherit',
+      env: preparerEnvironment,
     },
   );
 
@@ -83,7 +90,10 @@ function prepareDesktopBundle(commandArgs) {
     'tauri.bundle.conf.json',
   );
   const environment = target.includes('apple')
-    ? { ...process.env, SHERPA_ONNX_LIB_DIR: path.join(repoRoot, 'target', 'desktop-bundle', target, 'runtime-libs') }
+    ? {
+        ...preparerEnvironment,
+        SHERPA_ONNX_LIB_DIR: path.join(repoRoot, 'target', 'desktop-bundle', target, 'runtime-libs'),
+      }
     : process.env;
   return {
     args: withBundleConfig(commandArgs, bundleConfig),

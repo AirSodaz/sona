@@ -153,11 +153,11 @@ function writeTauriWrapperStubs(root) {
   const preparerPath = path.join(root, 'prepare-stub.mjs');
   fs.writeFileSync(
     loggerPath,
-    "import fs from 'node:fs'; fs.writeFileSync(process.env.SONA_TAURI_ARGS_LOG, JSON.stringify({ args: process.argv.slice(2), sherpaLibDir: process.env.SHERPA_ONNX_LIB_DIR }));\n",
+    "import fs from 'node:fs'; const args = process.argv.slice(2); const configPath = args[args.indexOf('--config') + 1]; const config = configPath && fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {}; fs.writeFileSync(process.env.SONA_TAURI_ARGS_LOG, JSON.stringify({ args, macosDeploymentTarget: process.env.MACOSX_DEPLOYMENT_TARGET, preparedMacosDeploymentTarget: config.macosDeploymentTarget, sherpaLibDir: process.env.SHERPA_ONNX_LIB_DIR }));\n",
   );
   fs.writeFileSync(
     preparerPath,
-    "import fs from 'node:fs'; import path from 'node:path'; const args = process.argv.slice(2); const value = (flag) => args[args.indexOf(flag) + 1]; const root = value('--repo-root'); const target = value('--target'); const config = path.join(root, 'target', 'desktop-bundle', target, 'tauri.bundle.conf.json'); fs.mkdirSync(path.dirname(config), { recursive: true }); fs.writeFileSync(config, '{}');\n",
+    "import fs from 'node:fs'; import path from 'node:path'; const args = process.argv.slice(2); const value = (flag) => args[args.indexOf(flag) + 1]; const root = value('--repo-root'); const target = value('--target'); const config = path.join(root, 'target', 'desktop-bundle', target, 'tauri.bundle.conf.json'); fs.mkdirSync(path.dirname(config), { recursive: true }); fs.writeFileSync(config, JSON.stringify({ macosDeploymentTarget: process.env.MACOSX_DEPLOYMENT_TARGET }));\n",
   );
 
   if (process.platform === 'win32') {
