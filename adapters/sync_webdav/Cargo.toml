@@ -16,7 +16,7 @@ roxmltree = "0.20"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sona-core = { path = "../../core" }
-sona-sync = { path = "../sync" }
+sona-sync = { path = "../../application/sync" }
 tokio = { version = "1", features = ["fs"] }
 url = "2"
 urlencoding = "2.1.3"

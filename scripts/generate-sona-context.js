@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Regenerates the `SonaContext` domain operations from the exported free
- * functions in `adapters/uniffi_bind/src/lib.rs`.
+ * functions in `platforms/uniffi/src/lib.rs`.
  *
  * Every `#[uniffi::export]` whose first parameter is an application-data
  * directory is an operation an explicit context can serve, so the handle must
@@ -19,8 +19,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const bindingPath = path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'lib.rs');
-const contextPath = path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'sona_context.rs');
+const bindingPath = path.join(repoRoot, 'platforms', 'uniffi', 'src', 'lib.rs');
+const contextPath = path.join(repoRoot, 'platforms', 'uniffi', 'src', 'sona_context.rs');
 
 export const OPERATIONS_MARKER =
   '\n// ---------------------------------------------------------------------\n';
@@ -66,7 +66,7 @@ function splitArguments(text) {
 /** Bridge functions that accept a `ContextSource` rather than a directory. */
 function contextAwareBridgeFunctions() {
   const names = new Set();
-  const bridgeDir = path.join(repoRoot, 'adapters', 'uniffi_bind', 'src');
+  const bridgeDir = path.join(repoRoot, 'platforms', 'uniffi', 'src');
   for (const entry of fs.readdirSync(bridgeDir)) {
     if (!entry.endsWith('_bridge.rs')) {
       continue;

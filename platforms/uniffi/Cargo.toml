@@ -18,18 +18,18 @@ log = "0.4.22"
 serde = "1"
 serde_json = "1"
 sona-application = { path = "../../application" }
-sona-archive = { path = "../archive" }
+sona-archive = { path = "../../adapters/archive" }
 sona-core = { path = "../../core" }
-sona-export = { path = "../export" }
-sona-local-asr = { path = "../local_asr" }
-sona-model-downloads = { path = "../model_downloads" }
-sona-online-asr = { path = "../online_asr" }
-sona-online-llm = { path = "../online_llm" }
-sona-recovery-fs = { path = "../recovery_fs" }
-sona-runtime-fs = { path = "../runtime_fs" }
-sona-sqlite = { path = "../sqlite" }
-sona-sync = { path = "../sync" }
-sona-sync-webdav = { path = "../sync_webdav" }
+sona-export = { path = "../../adapters/export" }
+sona-local-asr = { path = "../../adapters/local_asr" }
+sona-model-downloads = { path = "../../adapters/model_downloads" }
+sona-online-asr = { path = "../../adapters/online_asr" }
+sona-online-llm = { path = "../../adapters/online_llm" }
+sona-recovery-fs = { path = "../../adapters/recovery_fs" }
+sona-runtime-fs = { path = "../../adapters/runtime_fs" }
+sona-sqlite = { path = "../../adapters/sqlite" }
+sona-sync = { path = "../../application/sync" }
+sona-sync-webdav = { path = "../../adapters/sync_webdav" }
 thiserror = "2.0.18"
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
 uniffi = { version = "0.32", features = ["tokio"] }

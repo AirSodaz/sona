@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 import {
   ALLOWED_TARGET_ROLES,
   EXPECTED_ROLES,
-  HISTORICAL_PATH_ROLE_OVERRIDES,
   REVIEWED_OUTBOUND_ADAPTER_EDGES,
+  ROLE_DIRECTORY_ROOTS,
   workspacePackages,
 } from './architecture-policy.mjs';
 
@@ -207,13 +207,13 @@ test('stable architecture guides publish the reviewed roles and exceptions', () 
 
     assert.match(
       guide,
-      /`adapters\/sync\/`[\s\S]*?`sona-sync`[\s\S]*?application/u,
-      `${title} must map adapters/sync to the application role`,
+      /`application\/sync\/`[\s\S]*?`sona-sync`[\s\S]*?application/u,
+      `${title} must map application/sync to the application role`,
     );
     assert.match(
       guide,
-      /`adapters\/uniffi_bind\/`[\s\S]*?`sona-uniffi-bind`[\s\S]*?host/u,
-      `${title} must map adapters/uniffi_bind to the host role`,
+      /`platforms\/uniffi\/`[\s\S]*?`sona-uniffi-bind`[\s\S]*?host/u,
+      `${title} must map platforms/uniffi to the host role`,
     );
     assert.match(
       guide,
@@ -260,74 +260,19 @@ test('crate role boundaries run in PR guardrails through the script-test glob', 
   );
 });
 
-test('historical path role overrides keep soft-migration READMEs and metadata aligned', () => {
-  const packagesByName = new Map(
-    workspacePackages().map((pkg) => [pkg.packageName, pkg]),
+test('workspace crate paths match their reviewed role roots', () => {
+  assert.deepEqual(
+    [...ROLE_DIRECTORY_ROOTS.keys()].sort(),
+    [...ALLOWED_TARGET_ROLES.keys()].sort(),
+    'every architecture role must have one directory root',
   );
 
-  assert.ok(
-    HISTORICAL_PATH_ROLE_OVERRIDES.length >= 2,
-    'reviewed historical path overrides must stay explicit',
-  );
-
-  for (const override of HISTORICAL_PATH_ROLE_OVERRIDES) {
-    assert.equal(
-      EXPECTED_ROLES.get(override.packageName),
-      override.role,
-      `${override.packageName} registry role must match historical override`,
-    );
-
-    const pkg = packagesByName.get(override.packageName);
-    assert.ok(pkg, `${override.packageName} must remain a workspace member`);
-    assert.equal(pkg.memberPath, override.memberPath);
-    assert.equal(pkg.roles[0], override.role);
-
-    const readmePath = path.join(repoRoot, ...override.readmeRelative.split('/'));
+  for (const { memberPath, packageName, role } of workspacePackages()) {
+    const expectedRoot = ROLE_DIRECTORY_ROOTS.get(role);
+    assert.ok(expectedRoot, `${packageName} has no directory root for role ${role}`);
     assert.ok(
-      fs.existsSync(readmePath),
-      `${override.readmeRelative} must document the historical path role mismatch`,
-    );
-    const readme = fs.readFileSync(readmePath, 'utf8').replace(/\r\n/gu, '\n');
-    assert.match(
-      readme,
-      new RegExp(`\\b${override.packageName}\\b`, 'u'),
-      `${override.readmeRelative} must name ${override.packageName}`,
-    );
-    assert.match(
-      readme,
-      new RegExp(`\\b${override.role}\\b`, 'u'),
-      `${override.readmeRelative} must state role ${override.role}`,
-    );
-    assert.match(
-      readme,
-      /historical/iu,
-      `${override.readmeRelative} must mark the path as historical`,
-    );
-    assert.match(
-      readme,
-      /docs\/architecture\.md/u,
-      `${override.readmeRelative} must link to the English architecture guide`,
-    );
-    assert.match(
-      readme,
-      /docs\/architecture\.zh-CN\.md/u,
-      `${override.readmeRelative} must link to the Chinese architecture guide`,
-    );
-  }
-
-  const contributing = read('CONTRIBUTING.md');
-  assert.match(
-    contributing,
-    /Do not\s+infer a crate.s architecture role from its folder name/iu,
-  );
-  for (const override of HISTORICAL_PATH_ROLE_OVERRIDES) {
-    assert.match(
-      contributing,
-      new RegExp(
-        `${override.memberPath.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}[\\s\\S]*?${override.packageName}[\\s\\S]*?${override.role}`,
-        'u',
-      ),
-      'CONTRIBUTING.md must inventory historical path role mismatches',
+      memberPath === expectedRoot || memberPath.startsWith(`${expectedRoot}/`),
+      `${packageName} (${role}) must live under ${expectedRoot}/, found ${memberPath}`,
     );
   }
 });

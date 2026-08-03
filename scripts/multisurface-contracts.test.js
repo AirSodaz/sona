@@ -354,7 +354,7 @@ test('SQLite Sync receives its clock through the repository factory', () => {
     /sync_repository_factory\(Arc::new\(SystemClock\)\)/u,
   );
   assert.match(
-    read('adapters', 'uniffi_bind', 'src', 'sync_bridge.rs'),
+    read('platforms', 'uniffi', 'src', 'sync_bridge.rs'),
     /sync_repository_factory\(Arc::new\(SystemClock\)\)/u,
   );
 });
@@ -459,7 +459,7 @@ test('API server depends only on Core runtime capability ports', () => {
 test('desktop and UniFFI host sync through the shared application layer', () => {
   const hosts = [
     read('platforms', 'desktop', 'src', 'platform', 'sync.rs'),
-    read('adapters', 'uniffi_bind', 'src', 'sync_bridge.rs'),
+    read('platforms', 'uniffi', 'src', 'sync_bridge.rs'),
   ];
   const lowLevelCalls = [
     'create_remote_vault',
@@ -483,7 +483,7 @@ test('desktop and UniFFI host sync through the shared application layer', () => 
 });
 
 test('Desktop Sync lifecycle requests are provider-neutral behind WebDAV compatibility', () => {
-  const syncApplication = read('adapters', 'sync', 'src', 'application.rs');
+  const syncApplication = read('application', 'sync', 'src', 'application.rs');
   const desktopSync = read('platforms', 'desktop', 'src', 'platform', 'sync.rs');
   const desktopCommands = read('platforms', 'desktop', 'src', 'commands', 'sync.rs');
   const frontendCommands = read(
@@ -539,8 +539,8 @@ test('Desktop Sync lifecycle requests are provider-neutral behind WebDAV compati
 });
 
 test('UniFFI Sync lifecycle JSON is provider-neutral behind WebDAV compatibility', () => {
-  const binding = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
-  const syncBridge = read('adapters', 'uniffi_bind', 'src', 'sync_bridge.rs');
+  const binding = read('platforms', 'uniffi', 'src', 'lib.rs');
+  const syncBridge = read('platforms', 'uniffi', 'src', 'sync_bridge.rs');
 
   assert.match(
     syncBridge,
@@ -593,14 +593,14 @@ test('Android registers its secure sync secret store with the UniFFI binding', (
 });
 
 test('UniFFI owns Sync secrets and cache lifetime per canonical application context', () => {
-  const binding = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
-  const applicationContext = read('adapters', 'uniffi_bind', 'src', 'application_context.rs');
+  const binding = read('platforms', 'uniffi', 'src', 'lib.rs');
+  const applicationContext = read('platforms', 'uniffi', 'src', 'application_context.rs');
   const syncBridge = withoutInlineRustTests(
-    read('adapters', 'uniffi_bind', 'src', 'sync_bridge.rs'),
+    read('platforms', 'uniffi', 'src', 'sync_bridge.rs'),
   );
   const secretStoreBridge = read(
-    'adapters',
-    'uniffi_bind',
+    'platforms',
+    'uniffi',
     'src',
     'sync_secret_store_bridge.rs',
   );
@@ -685,15 +685,15 @@ test('UniFFI owns Sync secrets and cache lifetime per canonical application cont
 
 test('UniFFI tests own application context and History environments', () => {
   const applicationContext = read(
-    'adapters',
-    'uniffi_bind',
+    'platforms',
+    'uniffi',
     'src',
     'application_context.rs',
   );
-  const syncBridge = read('adapters', 'uniffi_bind', 'src', 'sync_bridge.rs');
+  const syncBridge = read('platforms', 'uniffi', 'src', 'sync_bridge.rs');
   const historyFixtures = [
-    read('adapters', 'uniffi_bind', 'src', 'backup_bridge.rs'),
-    read('adapters', 'uniffi_bind', 'src', 'dashboard_bridge.rs'),
+    read('platforms', 'uniffi', 'src', 'backup_bridge.rs'),
+    read('platforms', 'uniffi', 'src', 'dashboard_bridge.rs'),
   ].join('\n');
 
   assert.doesNotMatch(applicationContext, /clear_application_contexts_for_tests/u);
@@ -727,7 +727,7 @@ test('stateful hosts reuse SQLite while the CLI stays stateless', () => {
     'task_ledger_bridge.rs',
   ];
   for (const file of uniffiBridges) {
-    const source = withoutInlineRustTests(read('adapters', 'uniffi_bind', 'src', file));
+    const source = withoutInlineRustTests(read('platforms', 'uniffi', 'src', file));
     assert.match(source, /\bapplication_context\b/u, `${file} must use the host context`);
     assert.doesNotMatch(source, /\bDatabase::open(?:_read_only)?\b/u);
     assert.doesNotMatch(source, /\bLazySqlite\w+\b/u);
@@ -793,7 +793,7 @@ test('per-call reopening SQLite repositories stay behind the test-support featur
   for (const host of [
     ['platforms', 'desktop'],
     ['platforms', 'cli'],
-    ['adapters', 'uniffi_bind'],
+    ['platforms', 'uniffi'],
   ]) {
     const manifest = read(...host, 'Cargo.toml');
     const production = manifest.split(/^\[dev-dependencies\]$/mu)[0];
@@ -806,13 +806,13 @@ test('per-call reopening SQLite repositories stay behind the test-support featur
 });
 
 test('UniFFI exposes versioned typed Tag contracts without extending legacy Project', () => {
-  const binding = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
+  const binding = read('platforms', 'uniffi', 'src', 'lib.rs');
   const tagBridge = withoutInlineRustTests(
-    read('adapters', 'uniffi_bind', 'src', 'tag_bridge.rs'),
+    read('platforms', 'uniffi', 'src', 'tag_bridge.rs'),
   );
   const tagMapper = read(
-    'adapters',
-    'uniffi_bind',
+    'platforms',
+    'uniffi',
     'src',
     'mapper',
     'tag_mapper.rs',
@@ -851,16 +851,16 @@ test('UniFFI exposes versioned typed Tag contracts without extending legacy Proj
 });
 
 test('UniFFI exposes typed History V1 contracts and Android consumes them without JSON', () => {
-  const binding = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
+  const binding = read('platforms', 'uniffi', 'src', 'lib.rs');
   const queryBridge = withoutInlineRustTests(
-    read('adapters', 'uniffi_bind', 'src', 'history_query_bridge.rs'),
+    read('platforms', 'uniffi', 'src', 'history_query_bridge.rs'),
   );
   const mutationBridge = withoutInlineRustTests(
-    read('adapters', 'uniffi_bind', 'src', 'history_mutation_bridge.rs'),
+    read('platforms', 'uniffi', 'src', 'history_mutation_bridge.rs'),
   );
   const historyMapper = read(
-    'adapters',
-    'uniffi_bind',
+    'platforms',
+    'uniffi',
     'src',
     'mapper',
     'history_mapper.rs',
@@ -1009,13 +1009,13 @@ test('UniFFI exposes typed History V1 contracts and Android consumes them withou
 });
 
 test('UniFFI exposes versioned typed Task Ledger contracts with tri-state patches', () => {
-  const binding = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
+  const binding = read('platforms', 'uniffi', 'src', 'lib.rs');
   const taskLedgerBridge = withoutInlineRustTests(
-    read('adapters', 'uniffi_bind', 'src', 'task_ledger_bridge.rs'),
+    read('platforms', 'uniffi', 'src', 'task_ledger_bridge.rs'),
   );
   const taskLedgerMapper = read(
-    'adapters',
-    'uniffi_bind',
+    'platforms',
+    'uniffi',
     'src',
     'mapper',
     'task_ledger_mapper.rs',
@@ -1062,13 +1062,13 @@ test('UniFFI exposes versioned typed Task Ledger contracts with tri-state patche
 });
 
 test('UniFFI exposes typed Recovery V1 records with JSON limited to dynamic leaves', () => {
-  const binding = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
+  const binding = read('platforms', 'uniffi', 'src', 'lib.rs');
   const recoveryBridge = withoutInlineRustTests(
-    read('adapters', 'uniffi_bind', 'src', 'recovery_bridge.rs'),
+    read('platforms', 'uniffi', 'src', 'recovery_bridge.rs'),
   );
   const recoveryMapper = read(
-    'adapters',
-    'uniffi_bind',
+    'platforms',
+    'uniffi',
     'src',
     'mapper',
     'recovery_mapper.rs',
@@ -1133,13 +1133,13 @@ test('UniFFI exposes typed Recovery V1 records with JSON limited to dynamic leav
 });
 
 test('UniFFI exposes typed Automation V1 repository and Tag-based validation contracts', () => {
-  const binding = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
+  const binding = read('platforms', 'uniffi', 'src', 'lib.rs');
   const automationBridge = withoutInlineRustTests(
-    read('adapters', 'uniffi_bind', 'src', 'automation_bridge.rs'),
+    read('platforms', 'uniffi', 'src', 'automation_bridge.rs'),
   );
   const automationMapper = read(
-    'adapters',
-    'uniffi_bind',
+    'platforms',
+    'uniffi',
     'src',
     'mapper',
     'automation_mapper.rs',
@@ -1225,7 +1225,7 @@ const UNIFFI_JSON_ONLY_EXPORTS = new Map([
 
 function uniffiExports() {
   const binding = withoutInlineRustTests(
-    read('adapters', 'uniffi_bind', 'src', 'lib.rs'),
+    read('platforms', 'uniffi', 'src', 'lib.rs'),
   );
   return [
     ...binding.matchAll(
@@ -1318,7 +1318,7 @@ const NON_CREDENTIAL_FIELDS = new Set([
 ]);
 
 test('UniFFI records carry credentials as opaque handles, never printable fields', () => {
-  const sources = rustSources('adapters/uniffi_bind/src').filter(({ relativePath }) =>
+  const sources = rustSources('platforms/uniffi/src').filter(({ relativePath }) =>
     relativePath.includes('/mapper/'),
   );
   assert.ok(sources.length > 5, `expected the mapper modules, found ${sources.length}`);
@@ -1358,8 +1358,8 @@ test('UniFFI records carry credentials as opaque handles, never printable fields
   // The secret holders themselves must redact in Rust logs too, and must never
   // expose the value as an exported getter on the generated Kotlin handle.
   for (const [name, ...filePath] of [
-    ['FfiSecret', 'adapters', 'uniffi_bind', 'src', 'mapper', 'secret_mapper.rs'],
-    ['FfiOnlineAsrApiKey', 'adapters', 'uniffi_bind', 'src', 'asr_batch_bridge.rs'],
+    ['FfiSecret', 'platforms', 'uniffi', 'src', 'mapper', 'secret_mapper.rs'],
+    ['FfiOnlineAsrApiKey', 'platforms', 'uniffi', 'src', 'asr_batch_bridge.rs'],
   ]) {
     const source = read(...filePath);
     assert.match(
@@ -1383,9 +1383,9 @@ test('UniFFI records carry credentials as opaque handles, never printable fields
 });
 
 test('SonaContext exposes every directory-scoped operation the free functions do', () => {
-  const binding = withoutInlineRustTests(read('adapters', 'uniffi_bind', 'src', 'lib.rs'));
+  const binding = withoutInlineRustTests(read('platforms', 'uniffi', 'src', 'lib.rs'));
   const context = withoutInlineRustTests(
-    read('adapters', 'uniffi_bind', 'src', 'sona_context.rs'),
+    read('platforms', 'uniffi', 'src', 'sona_context.rs'),
   );
 
   // Free functions that take an application-data directory are exactly the ones
@@ -1431,11 +1431,11 @@ test('SonaContext exposes every directory-scoped operation the free functions do
 
 test('UniFFI binding delegates to bridges without an intermediate facade layer', () => {
   assert.ok(
-    !fs.existsSync(path.join(repoRoot, 'adapters', 'uniffi_bind', 'src', 'facade.rs')),
+    !fs.existsSync(path.join(repoRoot, 'platforms', 'uniffi', 'src', 'facade.rs')),
     'the SonaCoreFacade forwarding layer was merged into lib.rs; do not reintroduce facade.rs',
   );
 
-  const uniffiSources = rustSources('adapters/uniffi_bind/src');
+  const uniffiSources = rustSources('platforms/uniffi/src');
   for (const { relativePath, source } of uniffiSources) {
     assert.doesNotMatch(
       source,
@@ -1450,7 +1450,7 @@ test('UniFFI binding delegates to bridges without an intermediate facade layer',
   // the host composition root itself rather than a domain bridge.
   const compositionRootExports = new Set(['release_application_context']);
   const binding = withoutInlineRustTests(
-    read('adapters', 'uniffi_bind', 'src', 'lib.rs'),
+    read('platforms', 'uniffi', 'src', 'lib.rs'),
   );
   const exports = [
     ...binding.matchAll(

@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "application",
+    "application/sync",
     "adapters/api_server",
     "adapters/archive",
     "adapters/export",
@@ -13,13 +14,12 @@ members = [
     "adapters/recovery_fs",
     "adapters/runtime_fs",
     "adapters/sqlite",
-    "adapters/sync",
     "adapters/ts_bind",
-    "adapters/uniffi_bind",
     "adapters/sync_webdav",
     "core",
     "platforms/cli",
     "platforms/desktop",
+    "platforms/uniffi",
     "tools/uniffi_bindgen",
 ]
 

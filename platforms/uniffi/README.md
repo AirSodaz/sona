@@ -3,8 +3,8 @@
 | | |
 | --- | --- |
 | Package | `sona-uniffi-bind` |
-| Path | `adapters/uniffi_bind/` (**historical**; directory says “adapter”) |
-| Role | **`host`** — mobile / UniFFI composition root, not an inbound adapter |
+| Path | `platforms/uniffi/` |
+| Role | **`host`** — mobile / UniFFI composition root |
 | Declared in | `[package.metadata.sona] role` in this crate’s `Cargo.toml` |
 
 ## What this crate is
@@ -27,7 +27,7 @@ was merged away); `scripts/multisurface-contracts.test.js` enforces this.
 
 - Not an inbound HTTP/TS adapter (`sona-api-server`, `sona-ts-bind` are)
 - Not a place to put Core domain rules
-- Not “an adapter” for workspace dependency-direction policy
+- Not an adapter for workspace dependency-direction policy
 
 ## Dependency rules
 
@@ -43,4 +43,3 @@ matrix and its tests.
 
 - [Architecture guide (EN)](../../docs/architecture.md) — host role, capability matrix, composition roots
 - [架构指南（简体中文）](../../docs/architecture.zh-CN.md)
-- Physical path relocation (for example toward `platforms/…`) is a dedicated later slice

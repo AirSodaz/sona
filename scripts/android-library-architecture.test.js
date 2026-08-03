@@ -24,7 +24,7 @@ function sourceFiles(root) {
 }
 
 test('Android library reads history through an application port and UniFFI adapter', () => {
-  const rustBindings = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
+  const rustBindings = read('platforms', 'uniffi', 'src', 'lib.rs');
   const port = clientSource(
     'application', 'kotlin', 'com', 'sona', 'android', 'application', 'library',
     'HistoryWorkspace.kt',

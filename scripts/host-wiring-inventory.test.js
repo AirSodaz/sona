@@ -77,8 +77,8 @@ test('host wiring inventory stays aligned with reviewed composition roots', () =
     [
       'sona-uniffi-bind',
       [
-        'adapters/uniffi_bind/src/application_context.rs',
-        'adapters/uniffi_bind/src/lib.rs',
+        'platforms/uniffi/src/application_context.rs',
+        'platforms/uniffi/src/lib.rs',
       ],
     ],
   ]);
@@ -101,8 +101,8 @@ test('host wiring inventory stays aligned with reviewed composition roots', () =
   for (const guide of guides) {
     assert.match(guide, /platforms\/desktop\/src\/app\/setup\.rs/u);
     assert.match(guide, /platforms\/cli\/src\/lib\.rs/u);
-    assert.match(guide, /adapters\/uniffi_bind\/src\/application_context\.rs/u);
-    assert.match(guide, /adapters\/uniffi_bind\/src\/lib\.rs/u);
+    assert.match(guide, /platforms\/uniffi\/src\/application_context\.rs/u);
+    assert.match(guide, /platforms\/uniffi\/src\/lib\.rs/u);
     assert.match(
       guide,
       /host-wiring-inventory\.test\.js/u,

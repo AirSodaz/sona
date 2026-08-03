@@ -582,21 +582,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn byte_feed_before_start_preserves_the_volcengine_error_code() {
+    async fn pcm16_frame_feed_before_start_is_a_silent_success() {
         let session = create_online_asr_streaming_session(
             "live-1".into(),
             request_json(VOLCENGINE_DOUBAO_PROVIDER_ID, "streaming"),
             recording_observer(),
         )
         .unwrap();
-        let error = session
-            .feed_pcm16_frame(0, 0, vec![1, 2])
-            .await
-            .unwrap_err();
-        assert!(matches!(
-            error,
-            SonaCoreBindingError::AsrRuntime { code, .. }
-                if code == "VOLCENGINE_WEB_SOCKET_NOT_CONNECTED"
-        ));
+        session.feed_pcm16_frame(0, 0, vec![1, 2]).await.unwrap();
     }
 }

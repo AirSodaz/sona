@@ -5,7 +5,7 @@
 <a id="architecture-roles"></a>
 ## Architecture roles
 
-Sona uses six stable roles. The role is the reviewed dependency contract, not a description inferred from a directory name.
+Sona uses six stable roles. The role is the reviewed dependency contract; workspace paths mirror that contract so the directory tree is also a reliable navigation aid.
 
 | Package | Role |
 | --- | --- |
@@ -47,13 +47,13 @@ Dependencies point only toward the roles shown by this model. Core has no runtim
 <a id="directory-vs-role"></a>
 ## Directory versus role
 
-Directory names are organizational. The reviewed role lives in each package's `[package.metadata.sona] role` field and in the role table above. Do not infer role from path alone.
+Each workspace package lives under the root for its reviewed role. The `[package.metadata.sona] role` field remains the machine-readable contract, and `scripts/crate-boundaries.test.js` rejects path/role mismatches.
 
 | Path | Package | Role | Notes |
 | --- | --- | --- | --- |
 | `core/` | `sona-core` | core | Domain contracts and Core-owned ports |
-| `application/` | `sona-application` | application | Use-case services; directory name matches role |
-| `adapters/sync/` | `sona-sync` | application | Directory says adapters; role is application |
+| `application/` | `sona-application` | application | Shared use-case services |
+| `application/sync/` | `sona-sync` | application | Provider-neutral Sync application runtime |
 | `adapters/api_server/` | `sona-api-server` | inbound-adapter | |
 | `adapters/ts_bind/` | `sona-ts-bind` | inbound-adapter | |
 | `adapters/archive/` | `sona-archive` | outbound-adapter | |
@@ -67,19 +67,19 @@ Directory names are organizational. The reviewed role lives in each package's `[
 | `adapters/runtime_fs/` | `sona-runtime-fs` | outbound-adapter | |
 | `adapters/sqlite/` | `sona-sqlite` | outbound-adapter | Owns `SqliteApplicationContext` |
 | `adapters/sync_webdav/` | `sona-sync-webdav` | outbound-adapter | |
-| `adapters/uniffi_bind/` | `sona-uniffi-bind` | host | Historical directory name; host composition root, not an adapter |
 | `platforms/desktop/` | `sona` | host | Desktop Tauri host |
 | `platforms/cli/` | `sona-cli` | host | |
+| `platforms/uniffi/` | `sona-uniffi-bind` | host | Mobile / UniFFI composition root |
 | `tools/uniffi_bindgen/` | `sona-uniffi-bindgen` | tool | |
 
-Physical relocation of historical paths is out of scope until a dedicated slice owns the move.
+Role roots are `core/`, `application/`, `adapters/`, `platforms/`, and `tools/`. Inbound and outbound adapters share the `adapters/` root and remain distinguished by manifest metadata.
 
 <a id="composition-roots"></a>
 ## Composition roots
 
 - Desktop: `platforms/desktop/src/app/setup.rs` plus `platforms/desktop/src/platform/` compose the desktop runtime.
 - CLI: `platforms/cli/src/lib.rs` and individual command modules compose CLI commands.
-- UniFFI/mobile: `adapters/uniffi_bind/src/application_context.rs` composes the mobile-facing runtime, and `adapters/uniffi_bind/src/lib.rs` publishes the exported surface. The `adapters/uniffi_bind` directory name is historical: `sona-uniffi-bind` has the host role, not an adapter role.
+- UniFFI/mobile: `platforms/uniffi/src/application_context.rs` composes the mobile-facing runtime, and `platforms/uniffi/src/lib.rs` publishes the exported surface.
 
 <a id="desktop-frontend-dependencies"></a>
 ### Desktop frontend dependency direction
@@ -112,7 +112,7 @@ The free functions remain: this is additive, and the exported ABI kept every exi
 
 Use-case services (History, Tag, Automation, Backup, Recovery, Config, Dashboard, Diagnostics, Export, StorageUsage, TaskLedger, LLM runtime, and LLM tasks) live in `sona-application` (`application/`). Each service holds only the port dependencies it needs and delegates to Core-owned port traits. Domain types, port trait definitions, and errors remain in `sona-core`.
 
-The other standalone Application-role package is `sona-sync` (`adapters/sync/`), isolated because Sync needs a provider-neutral vault and lifecycle. Do not create additional Application crates per domain; consolidate new use-case services into `sona-application` unless a clear isolation boundary warrants a separate crate.
+The other standalone Application-role package is `sona-sync` (`application/sync/`), isolated because Sync needs a provider-neutral vault and lifecycle. Do not create additional Application crates per domain; consolidate new use-case services into `sona-application` unless a clear isolation boundary warrants a separate crate.
 
 Live transcription is coordinated by `sona-application` through `LiveTranscriptionCoordinator`. Core owns the ASR contract, typed audio-frame cursor, inference-spec equality, and per-consumer output policy; it does not own capture devices or UI lifecycles. `StreamingAsrFactoryPort` is implemented by the Desktop composition root, which selects the local or online adapter and reuses its model/connection resources. Desktop owns CPAL capture leases, recording writers, Tauri commands, and event delivery. CLI and UniFFI/Android use the same Core frame port while retaining independent sessions, so their future adoption of the coordinator does not require a second streaming API. Only one pipeline feeds a source frame for an identical source epoch, input transform, and inference spec; consumers keep independent mailboxes and output post-processing.
 
@@ -189,7 +189,7 @@ These items are explicit and allowed during the current compatibility window. Th
 - **Removed empty module:** `core/src/project/` is gone; do not recreate an empty Project core module.
 - **Host compatibility leaves that still use Project naming:**
   - Desktop Tauri: `history_update_project_assignments`, `history_reassign_project` in `platforms/desktop/src/commands/history.rs` (delegates to tag assignment).
-  - UniFFI JSON: Project-named history/config helpers under `adapters/uniffi_bind/src/` (for example project assignment and effective-config project JSON parameters).
+  - UniFFI JSON: Project-named history/config helpers under `platforms/uniffi/src/` (for example project assignment and effective-config project JSON parameters).
   - Desktop frontend product paths still named Project: `platforms/desktop/frontend/src/types/project.ts`, `services/projectService.ts`, `stores/projectStore.ts`, `components/projects/*`, and `components/ProjectsView.tsx`.
 - **Policy:** keep public Project names during the compatibility window; physical frontend/API renames are a later slice.
 

@@ -5,7 +5,7 @@
 <a id="architecture-roles"></a>
 ## 架构角色
 
-Sona 使用六种稳定角色。角色是经过评审的依赖契约，而不是根据目录名推断出的描述。
+Sona 使用六种稳定角色。角色是经过评审的依赖契约；工作区路径与该契约保持一致，因此目录树本身也是可靠的导航入口。
 
 | 包 | 角色 |
 | --- | --- |
@@ -47,13 +47,13 @@ Core <- Outbound Adapter <------------- Host
 <a id="directory-vs-role"></a>
 ## 目录与角色
 
-目录名只用于组织代码。经过评审的角色写在各包的 `[package.metadata.sona] role` 字段以及上文角色表中。不要仅凭路径推断角色。
+每个工作区包都位于其评审角色对应的根目录下。`[package.metadata.sona] role` 字段仍是机器可读契约，`scripts/crate-boundaries.test.js` 会拒绝路径与角色不一致的包。
 
 | 路径 | 包 | 角色 | 说明 |
 | --- | --- | --- | --- |
 | `core/` | `sona-core` | core | 领域契约与由 Core 所有的端口 |
-| `application/` | `sona-application` | application | 用例服务；目录名与角色一致 |
-| `adapters/sync/` | `sona-sync` | application | 目录在 adapters 下，角色是 application |
+| `application/` | `sona-application` | application | 共享用例服务 |
+| `application/sync/` | `sona-sync` | application | 提供商中立的 Sync 应用运行时 |
 | `adapters/api_server/` | `sona-api-server` | inbound-adapter | |
 | `adapters/ts_bind/` | `sona-ts-bind` | inbound-adapter | |
 | `adapters/archive/` | `sona-archive` | outbound-adapter | |
@@ -67,19 +67,19 @@ Core <- Outbound Adapter <------------- Host
 | `adapters/runtime_fs/` | `sona-runtime-fs` | outbound-adapter | |
 | `adapters/sqlite/` | `sona-sqlite` | outbound-adapter | 拥有 `SqliteApplicationContext` |
 | `adapters/sync_webdav/` | `sona-sync-webdav` | outbound-adapter | |
-| `adapters/uniffi_bind/` | `sona-uniffi-bind` | host | 历史目录名；是 host 组合根，不是适配器 |
 | `platforms/desktop/` | `sona` | host | 桌面 Tauri Host |
 | `platforms/cli/` | `sona-cli` | host | |
+| `platforms/uniffi/` | `sona-uniffi-bind` | host | 移动端 / UniFFI 组合根 |
 | `tools/uniffi_bindgen/` | `sona-uniffi-bindgen` | tool | |
 
-历史路径的物理搬家不在本指南范围内，需由专门切片负责。
+角色根目录分别为 `core/`、`application/`、`adapters/`、`platforms/` 和 `tools/`。Inbound 与 Outbound Adapter 共用 `adapters/` 根目录，并通过 manifest 元数据区分。
 
 <a id="composition-roots"></a>
 ## 组合根
 
 - 桌面端：`platforms/desktop/src/app/setup.rs` 与 `platforms/desktop/src/platform/` 组合桌面运行时。
 - CLI：`platforms/cli/src/lib.rs` 与各个命令模块组合 CLI 命令。
-- UniFFI/移动端：`adapters/uniffi_bind/src/application_context.rs` 组合面向移动端的运行时，`adapters/uniffi_bind/src/lib.rs` 发布对外导出面。目录名 `adapters/uniffi_bind` 是历史遗留名称：`sona-uniffi-bind` 的角色是 host，而不是适配器角色。
+- UniFFI/移动端：`platforms/uniffi/src/application_context.rs` 组合面向移动端的运行时，`platforms/uniffi/src/lib.rs` 发布对外导出面。
 
 <a id="desktop-frontend-dependencies"></a>
 ### Desktop 前端依赖方向
@@ -112,7 +112,7 @@ pnpm run generate:sona-context
 
 用例服务（History、Tag、Automation、Backup、Recovery、Config、Dashboard、Diagnostics、Export、StorageUsage、TaskLedger、LLM runtime 和 LLM tasks）位于 `sona-application`（`application/`）。每个服务只持有自身需要的端口依赖，并委托给 Core 所有的端口 trait。领域类型、端口 trait 定义和错误类型保留在 `sona-core`。
 
-另一个独立的 Application 角色包是 `sona-sync`（路径 `adapters/sync/`），因为 Sync 需要与具体网络/数据库适配器解耦的、提供商中立的 vault 与生命周期。除非存在明确的隔离边界，否则不要为每个领域再造 Application crate；新的用例服务应集中到 `sona-application`。
+另一个独立的 Application 角色包是 `sona-sync`（路径 `application/sync/`），因为 Sync 需要与具体网络/数据库适配器解耦的、提供商中立的 vault 与生命周期。除非存在明确的隔离边界，否则不要为每个领域再造 Application crate；新的用例服务应集中到 `sona-application`。
 
 实时转录由 `sona-application` 的 `LiveTranscriptionCoordinator` 统一协调。Core 只拥有 ASR 契约、带类型的音频帧游标、推理规范等值比较，以及每个消费者独立的输出策略；不拥有采集设备或 UI 生命周期。`StreamingAsrFactoryPort` 由 Desktop 组合根实现，负责选择 local/online adapter 并复用模型或连接资源。Desktop 仍拥有 CPAL 采集 lease、录音 writer、Tauri 命令和事件投递。CLI 与 UniFFI/Android 使用同一个 Core 音频帧端口，但保留独立 session，未来接入协调器时不需要再造一套 streaming API。对于相同 source epoch、输入变换和推理规范，每个 source frame 只向唯一 pipeline feed 一次；消费者仍有独立邮箱和后处理。
 
@@ -189,7 +189,7 @@ CLI 定位为无状态转写 Host：应用持久化、History/Tag、Online LLM�
 - **已删除空模块：** `core/src/project/` 已移除；不要再创建空的 Project core 模块。
 - **仍使用 Project 命名的 Host 兼容叶节点：**
   - Desktop Tauri：`platforms/desktop/src/commands/history.rs` 中的 `history_update_project_assignments`、`history_reassign_project`（委托到 tag assignment）。
-  - UniFFI JSON：`adapters/uniffi_bind/src/` 下仍带 Project 命名的 history/config 辅助接口（例如 project assignment 与 effective-config 的 project JSON 参数）。
+  - UniFFI JSON：`platforms/uniffi/src/` 下仍带 Project 命名的 history/config 辅助接口（例如 project assignment 与 effective-config 的 project JSON 参数）。
   - Desktop 前端仍使用 Project 产品路径： `platforms/desktop/frontend/src/types/project.ts`、 `services/projectService.ts`、`stores/projectStore.ts`、 `components/projects/*`、以及 `components/ProjectsView.tsx`。
 - **策略：** 兼容窗口内保留公开 Project 名称；前端/API 物理重命名属于后续切片。
 

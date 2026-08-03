@@ -156,8 +156,8 @@ test('Android online batch ASR stays behind an application port and Tokio UniFFI
     'kotlin', 'com', 'sona', 'android', 'adapters', 'uniffi', 'recording',
     'UniffiTranscriptMapper.kt',
   );
-  const rustBindings = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
-  const rustBatchBridge = read('adapters', 'uniffi_bind', 'src', 'asr_batch_bridge.rs');
+  const rustBindings = read('platforms', 'uniffi', 'src', 'lib.rs');
+  const rustBatchBridge = read('platforms', 'uniffi', 'src', 'asr_batch_bridge.rs');
 
   assert.match(port, /enum class OnlineAsrProvider/u);
   assert.match(port, /interface OnlineBatchTranscriptionPort/u);
@@ -185,8 +185,8 @@ test('Android local batch ASR uses its own application port and UniFFI bridge', 
     'kotlin', 'com', 'sona', 'android', 'adapters', 'uniffi', 'recording',
     'UniffiLocalBatchTranscriptionAdapter.kt',
   );
-  const rustBridge = read('adapters', 'uniffi_bind', 'src', 'asr_batch_bridge.rs');
-  const rustBindings = read('adapters', 'uniffi_bind', 'src', 'lib.rs');
+  const rustBridge = read('platforms', 'uniffi', 'src', 'asr_batch_bridge.rs');
+  const rustBindings = read('platforms', 'uniffi', 'src', 'lib.rs');
 
   assert.match(useCase, /fun interface LocalBatchTranscriptionPort/u);
   assert.match(useCase, /LocalBatchTranscriptionRequest/u);
