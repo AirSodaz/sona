@@ -171,6 +171,18 @@ fn upsert_clamps_finite_progress_to_percent_bounds() {
 }
 
 #[test]
+fn upsert_returns_running_task_without_treating_it_as_interrupted() {
+    let store = MemoryStore::default();
+
+    let snapshot = service(&store)
+        .upsert_task_at(record("running", TaskLedgerStatus::Running), 5_000)
+        .unwrap();
+
+    assert_eq!(snapshot.tasks[0].status, TaskLedgerStatus::Running);
+    assert_eq!(snapshot.tasks[0].error_message, None);
+}
+
+#[test]
 fn load_recovers_running_task_with_default_interruption_error() {
     let store = MemoryStore::with_records([record("running", TaskLedgerStatus::Running)]);
 
@@ -180,6 +192,29 @@ fn load_recovers_running_task_with_default_interruption_error() {
     assert!(!snapshot.tasks[0].cancelable);
     assert_eq!(
         snapshot.tasks[0].error_message.as_deref(),
+        Some("Task was interrupted before it finished.")
+    );
+    assert_eq!(store.records()[0].status, TaskLedgerStatus::Interrupted);
+}
+
+#[test]
+fn recovered_task_stays_interrupted_after_later_mutations() {
+    let store = MemoryStore::with_records([record("stale", TaskLedgerStatus::Running)]);
+    let service = service(&store);
+
+    service.load_snapshot_at(6_000).unwrap();
+    let snapshot = service
+        .upsert_task_at(record("new", TaskLedgerStatus::Pending), 7_000)
+        .unwrap();
+
+    let stale = snapshot
+        .tasks
+        .iter()
+        .find(|task| task.id == "stale")
+        .unwrap();
+    assert_eq!(stale.status, TaskLedgerStatus::Interrupted);
+    assert_eq!(
+        stale.error_message.as_deref(),
         Some("Task was interrupted before it finished.")
     );
 }
@@ -253,12 +288,9 @@ fn typed_patch_updates_fields_clears_nullable_values_and_supplies_update_time() 
         )
         .unwrap();
 
-    assert_eq!(snapshot.tasks[0].status, TaskLedgerStatus::Interrupted);
+    assert_eq!(snapshot.tasks[0].status, TaskLedgerStatus::Running);
     assert_eq!(snapshot.tasks[0].progress, 75.0);
-    assert_eq!(
-        snapshot.tasks[0].error_message.as_deref(),
-        Some("Task was interrupted before it finished.")
-    );
+    assert_eq!(snapshot.tasks[0].error_message, None);
     assert_eq!(snapshot.tasks[0].updated_at, 7_000);
     assert_eq!(store.records()[0].status, TaskLedgerStatus::Running);
     assert_eq!(store.records()[0].error_message, None);

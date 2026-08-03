@@ -106,6 +106,7 @@ describe('batchQueueStore', () => {
         const transcriptState = useTranscriptStore.getState();
         expect(queueState.queueItems[0].audioUrl).toBeNull();
         expect(transcriptState.audioUrl).toBeNull();
+        expect(transcriptState.sourceHistoryId).toBeNull();
         expect(taskLedgerContext.upsertTaskLedgerRecord).toHaveBeenCalledWith(expect.objectContaining({
             id: 'batch-test-uuid-123',
             kind: 'batchImport',

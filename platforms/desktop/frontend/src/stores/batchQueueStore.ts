@@ -349,7 +349,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             } else {
                 openTranscriptSession({
                     segments: item.segments,
-                    sourceHistoryId: id,
+                    sourceHistoryId: item.historyId || null,
                     title: item.historyTitle || item.filename,
                     audioUrl: item.audioUrl || null,
                 });

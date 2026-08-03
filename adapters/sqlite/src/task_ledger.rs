@@ -505,8 +505,15 @@ mod tests {
         let record = make_record("task-1", TaskLedgerStatus::Running);
         let snapshot = service.upsert_task_at(record, 2_000).unwrap();
         assert_eq!(snapshot.tasks.len(), 1);
-        assert_eq!(snapshot.tasks[0].status, TaskLedgerStatus::Interrupted);
+        assert_eq!(snapshot.tasks[0].status, TaskLedgerStatus::Running);
         assert_eq!(snapshot.tasks[0].id, "task-1");
+
+        let recovered = service.load_snapshot_at(3_000).unwrap();
+        assert_eq!(recovered.tasks[0].status, TaskLedgerStatus::Interrupted);
+        assert_eq!(
+            TaskLedgerStore::load_records(&repo).unwrap()[0].status,
+            TaskLedgerStatus::Interrupted
+        );
     }
 
     #[test]

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use async_trait::async_trait;
@@ -137,12 +138,13 @@ impl LlamaBatchTranscriptionJob {
             ));
         }
 
-        let input_path = path_to_str(&self.input_path, "audio input")?;
-        let audio = MtmdBitmap::from_file(&mtmd, input_path, false).map_err(|error| {
+        let sample_rate = mtmd.get_audio_sample_rate().unwrap_or(16_000).max(1);
+        let samples = decode_audio_input(&self.input_path, sample_rate)?;
+        let audio = MtmdBitmap::from_audio_data(&samples).map_err(|error| {
             AsrPortError::new(
                 AsrPortErrorKind::InvalidRequest,
                 format!(
-                    "Failed to decode audio input {}: {error}",
+                    "Failed to create llama.cpp audio input {}: {error}",
                     self.input_path.display()
                 ),
             )
@@ -239,8 +241,7 @@ impl LlamaBatchTranscriptionJob {
         if text.is_empty() {
             return Ok(Vec::new());
         }
-        let sample_rate = mtmd.get_audio_sample_rate().unwrap_or(16_000).max(1);
-        let duration = audio.data().len() as f64 / 4.0 / f64::from(sample_rate);
+        let duration = samples.len() as f64 / f64::from(sample_rate);
         let mut segment = TranscriptSegment {
             id: uuid::Uuid::new_v4().to_string(),
             text,
@@ -258,6 +259,92 @@ impl LlamaBatchTranscriptionJob {
         ensure_transcript_segment_timing(&mut segment);
         Ok(vec![segment])
     }
+}
+
+fn decode_audio_input(path: &Path, sample_rate: u32) -> Result<Vec<f32>, AsrPortError> {
+    let ffmpeg_path = resolve_ffmpeg_sidecar_path()?;
+    let mut command = Command::new(&ffmpeg_path);
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+
+    let output = command
+        .arg("-loglevel")
+        .arg("error")
+        .arg("-i")
+        .arg(path)
+        .arg("-f")
+        .arg("s16le")
+        .arg("-acodec")
+        .arg("pcm_s16le")
+        .arg("-ar")
+        .arg(sample_rate.to_string())
+        .arg("-ac")
+        .arg("1")
+        .arg("-")
+        .output()
+        .map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::FileSystem,
+                format!(
+                    "Failed to run FFmpeg audio decoder {}: {error}",
+                    ffmpeg_path.display()
+                ),
+            )
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::InvalidRequest,
+            format!("Failed to decode audio input {}: {stderr}", path.display()),
+        ));
+    }
+
+    let samples = pcm_s16le_bytes_to_f32(&output.stdout);
+    if samples.is_empty() {
+        return Err(AsrPortError::invalid_request(format!(
+            "Decoded audio input contains no samples: {}",
+            path.display()
+        )));
+    }
+    Ok(samples)
+}
+
+fn resolve_ffmpeg_sidecar_path() -> Result<PathBuf, AsrPortError> {
+    let executable = std::env::current_exe().map_err(|error| {
+        AsrPortError::new(
+            AsrPortErrorKind::FileSystem,
+            format!("Failed to locate the current executable: {error}"),
+        )
+    })?;
+    resolve_ffmpeg_sidecar_path_from_exe(&executable)
+}
+
+fn resolve_ffmpeg_sidecar_path_from_exe(executable: &Path) -> Result<PathBuf, AsrPortError> {
+    let directory = executable.parent().ok_or_else(|| {
+        AsrPortError::new(
+            AsrPortErrorKind::FileSystem,
+            "Failed to locate the executable directory.",
+        )
+    })?;
+
+    #[cfg(windows)]
+    let filename = "ffmpeg.exe";
+    #[cfg(not(windows))]
+    let filename = "ffmpeg";
+
+    Ok(directory.join(filename))
+}
+
+fn pcm_s16le_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
+    bytes
+        .chunks_exact(2)
+        .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / 32768.0)
+        .collect()
 }
 
 fn validate_supported_options(plan: &BatchTranscribePlan) -> Result<(), AsrPortError> {
@@ -427,7 +514,7 @@ fn parse_qwen3_asr_output(output: &str) -> String {
 mod tests {
     use super::{
         LlamaBatchTranscriptionJob, MODEL_TYPE_QWEN3_ASR, parse_qwen3_asr_output,
-        validate_supported_options,
+        pcm_s16le_bytes_to_f32, resolve_ffmpeg_sidecar_path_from_exe, validate_supported_options,
     };
     use sona_core::export::ExportFormat;
     use sona_core::ports::asr::{AsrPortErrorKind, LocalAsrEngine};
@@ -469,6 +556,25 @@ mod tests {
     #[test]
     fn accepts_plain_transcript_output() {
         assert_eq!(parse_qwen3_asr_output(" hello world "), "hello world");
+    }
+
+    #[test]
+    fn converts_little_endian_pcm_to_normalized_samples() {
+        assert_eq!(
+            pcm_s16le_bytes_to_f32(&[0x00, 0x80, 0x00, 0x00, 0xff, 0x7f]),
+            vec![-1.0, 0.0, 32767.0 / 32768.0]
+        );
+    }
+
+    #[test]
+    fn resolves_ffmpeg_next_to_host_executable() {
+        let executable = PathBuf::from("C:/sona/sona.exe");
+        let ffmpeg = resolve_ffmpeg_sidecar_path_from_exe(&executable).unwrap();
+
+        #[cfg(windows)]
+        assert_eq!(ffmpeg, PathBuf::from("C:/sona/ffmpeg.exe"));
+        #[cfg(not(windows))]
+        assert_eq!(ffmpeg, PathBuf::from("C:/sona/ffmpeg"));
     }
 
     #[test]

@@ -72,6 +72,25 @@ describe('useAutoSaveTranscript', () => {
     expect(useTranscriptStore.getState().autoSaveStates['hist-1']).toBeUndefined();
   });
 
+  it('does not auto-save batch segments before a history record exists', async () => {
+    renderHook(() => useAutoSaveTranscript());
+
+    act(() => {
+      useTranscriptStore.getState().setSegments([
+        { id: 'seg-1', text: 'Batch result', start: 0, end: 1, isFinal: true },
+      ]);
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2100);
+    });
+    await flushMicrotasks();
+
+    const { historyService } = await import('../../services/historyService');
+    expect(historyService.commitTranscriptEdit).not.toHaveBeenCalled();
+    expect(useTranscriptStore.getState().autoSaveStates).toEqual({});
+  });
+
   it('transitions from saving to saved for persisted transcript edits', async () => {
     useTranscriptStore.setState({
       sourceHistoryId: 'hist-1',

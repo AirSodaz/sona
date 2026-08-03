@@ -255,9 +255,11 @@ describe('batchQueueStore History Integration', () => {
         useBatchQueueStore.getState().addFiles([file]);
 
         expect(useTranscriptStore.getState().title).toBe('meeting.wav');
+        expect(useTranscriptStore.getState().sourceHistoryId).toBeNull();
 
         await new Promise((resolve) => setTimeout(resolve, 0));
         expect(useTranscriptStore.getState().title).toBe('meeting.wav');
+        expect(useTranscriptStore.getState().sourceHistoryId).toBeNull();
 
         resolveSave({
             id: 'history-1',

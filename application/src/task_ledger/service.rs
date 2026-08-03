@@ -25,8 +25,36 @@ impl<'a> TaskLedgerService<'a> {
     }
 
     pub fn load_snapshot_at(&self, now_ms: u64) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
+        let records = self
+            .store
+            .load_records()?
+            .into_iter()
+            .map(|record| {
+                let was_active = matches!(
+                    record.status,
+                    TaskLedgerStatus::Running | TaskLedgerStatus::CancelRequested
+                );
+                let record = normalize_loaded_record_at(record, now_ms);
+                if was_active {
+                    self.store.upsert_record(&record)?;
+                }
+                Ok(record)
+            })
+            .collect::<Result<Vec<_>, TaskLedgerError>>()?;
+        Ok(snapshot_from_records_at(
+            records,
+            now_ms,
+            normalize_record_at,
+        ))
+    }
+
+    fn load_current_snapshot_at(&self, now_ms: u64) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         let records = self.store.load_records()?;
-        Ok(snapshot_from_records_at(records, now_ms))
+        Ok(snapshot_from_records_at(
+            records,
+            now_ms,
+            normalize_record_at,
+        ))
     }
 
     pub fn upsert_task_at(
@@ -36,7 +64,7 @@ impl<'a> TaskLedgerService<'a> {
     ) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         let record = normalize_record_at(record, now_ms);
         self.store.upsert_record(&record)?;
-        self.load_snapshot_at(now_ms)
+        self.load_current_snapshot_at(now_ms)
     }
 
     pub fn upsert_task(
@@ -54,7 +82,7 @@ impl<'a> TaskLedgerService<'a> {
     ) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         let mut update = |record| Ok(apply_typed_patch_at(record, id, &patch, now_ms));
         self.store.update_record(id, &mut update)?;
-        self.load_snapshot_at(now_ms)
+        self.load_current_snapshot_at(now_ms)
     }
 
     pub fn patch_task(
@@ -73,7 +101,7 @@ impl<'a> TaskLedgerService<'a> {
     ) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         let mut update = |record| merge_json_patch_at(record, id, &patch, now_ms);
         self.store.update_record(id, &mut update)?;
-        self.load_snapshot_at(now_ms)
+        self.load_current_snapshot_at(now_ms)
     }
 
     pub fn patch_task_json(
@@ -90,7 +118,7 @@ impl<'a> TaskLedgerService<'a> {
         now_ms: u64,
     ) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.store.remove_record(id)?;
-        self.load_snapshot_at(now_ms)
+        self.load_current_snapshot_at(now_ms)
     }
 
     pub fn remove_task(&self, id: &str) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
@@ -100,7 +128,7 @@ impl<'a> TaskLedgerService<'a> {
     pub fn clear_resolved_at(&self, now_ms: u64) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         let mut should_remove = |record: &TaskLedgerRecord| !is_retained_status(&record.status);
         self.store.remove_records_matching(&mut should_remove)?;
-        self.load_snapshot_at(now_ms)
+        self.load_current_snapshot_at(now_ms)
     }
 
     pub fn clear_resolved(&self) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
@@ -259,10 +287,14 @@ fn is_retained_status(status: &TaskLedgerStatus) -> bool {
     )
 }
 
-fn snapshot_from_records_at(records: Vec<TaskLedgerRecord>, now_ms: u64) -> TaskLedgerSnapshot {
+fn snapshot_from_records_at(
+    records: Vec<TaskLedgerRecord>,
+    now_ms: u64,
+    normalize: fn(TaskLedgerRecord, u64) -> TaskLedgerRecord,
+) -> TaskLedgerSnapshot {
     let mut tasks = records
         .into_iter()
-        .map(|record| normalize_loaded_record_at(record, now_ms))
+        .map(|record| normalize(record, now_ms))
         .filter(|record| is_retained_status(&record.status))
         .collect::<Vec<_>>();
     tasks.sort_by(|left, right| left.id.cmp(&right.id));
