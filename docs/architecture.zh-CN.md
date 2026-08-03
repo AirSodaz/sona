@@ -103,14 +103,16 @@ pnpm run generate:sona-context
 
 ### 当前的 Application 归属
 
-多数用例服务（History、Tag、Automation、Backup、Recovery、LLM tasks 等）放在 `sona-core` 内，与领域类型和由 Core 所有的端口放在一起。唯一独立的 Application 角色包是 `sona-sync`（路径 `adapters/sync/`），因为 Sync 需要与具体网络/数据库适配器解耦的、提供商中立的 vault 与生命周期。不要在没有专门迁移切片的情况下为每个领域再造 Application crate；在引入共享 composition crate 之前，优先把 Core 内服务写清楚。
+用例服务（History、Tag、Automation、Backup、Recovery、Config、Dashboard、Export、StorageUsage、TaskLedger 和 LLM tasks）位于 `sona-application`（`application/`）。每个服务只持有自身需要的 `Arc<dyn Port>` 依赖，并委托给 Core 所有的端口 trait。领域类型、端口 trait 定义和错误类型保留在 `sona-core`。
+
+另一个独立的 Application 角色包是 `sona-sync`（路径 `adapters/sync/`），因为 Sync 需要与具体网络/数据库适配器解耦的、提供商中立的 vault 与生命周期。除非存在明确的隔离边界，否则不要为每个领域再造 Application crate；新的用例服务应集中到 `sona-application`。
 
 实时转录由 `sona-application` 的 `LiveTranscriptionCoordinator` 统一协调。Core 只拥有 ASR 契约、带类型的音频帧游标、推理规范等值比较，以及每个消费者独立的输出策略；不拥有采集设备或 UI 生命周期。`StreamingAsrFactoryPort` 由 Desktop 组合根实现，负责选择 local/online adapter 并复用模型或连接资源。Desktop 仍拥有 CPAL 采集 lease、录音 writer、Tauri 命令和事件投递。CLI 与 UniFFI/Android 使用同一个 Core 音频帧端口，但保留独立 session，未来接入协调器时不需要再造一套 streaming API。对于相同 source epoch、输入变换和推理规范，每个 source frame 只向唯一 pipeline feed 一次；消费者仍有独立邮箱和后处理。
 
 ### Core 模块导航
 
 - `core/src/domain/` 存放跨 LLM/自动化使用的**产品身份枚举**（例如 `LlmProvider`、润色预设、摘要模板）。它不是全部领域逻辑的入口；History、 Tag、Transcription 等各自在 `core/src/` 下的独立模块中。
-- `core/src/history/` 拥有历史记录、查询/变更服务，以及 `HistoryStore` trait （`history/store.rs`，对外仍通过 `sona_core::history_store` 重导出）。
+- `core/src/history/` 拥有历史记录、校验与编辑规则，以及 `HistoryStore` trait（`history/store.rs`，对外仍通过 `sona_core::history_store` 重导出）；查询/变更用例服务位于 `application/src/history/`。
 
 <a id="port-placement"></a>
 ## 端口放置规则
@@ -131,7 +133,7 @@ pnpm run generate:sona-context
 1. `core/src/ports/` 中不得声明任何 `*Store` 或 `*Repository` trait。持久化形态的 trait 按定义就归属某个领域。
 2. `core/src/ports/` 中的 trait 不得以领域聚合命名（History、Tag、Automation、 Backup、Recovery、TaskLedger、Dashboard、StorageUsage、AppConfig）。
 
-新增领域端口应使用 `core/src/<domain>/ports.rs`——`backup`、`dashboard`、 `export`、`storage_usage`、`sync` 已采用该形式。`automation`、`config`、 `history`、`recovery`、`tag`、`task_ledger` 中现有的 `repository.rs` / `store.rs` / `service.rs` 放置属于历史沿用：它们满足上述两条规则，统一文件命名是独立的迁移切片，不是顺手可做的清理。
+新增领域端口应使用 `core/src/<domain>/ports.rs`——`backup`、`dashboard`、 `export`、`storage_usage`、`sync` 已采用该形式。`automation`、`config`、 `history`、`recovery`、`tag`、`task_ledger` 中现有的 `repository.rs` / `store.rs` 放置属于历史沿用：它们满足上述两条规则，统一文件命名是独立的迁移切片，不是顺手可做的清理。
 
 <a id="host-capability-matrix"></a>
 ## Host 能力矩阵

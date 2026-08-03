@@ -5,7 +5,11 @@ const mocks = vi.hoisted(() => {
 
     return {
         listenCallbacks,
-        invoke: vi.fn(async (): Promise<any> => undefined),
+        invoke: vi.fn(async (command: string, args?: unknown): Promise<any> => {
+            void command;
+            void args;
+            return undefined;
+        }),
         listen: vi.fn(async (eventName: string, callback: (event: any) => void) => {
             listenCallbacks[eventName] = callback;
             return () => {

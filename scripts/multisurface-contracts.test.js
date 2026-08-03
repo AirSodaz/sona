@@ -249,15 +249,15 @@ test('Rust-owned Tauri command contracts stay generated and complete', () => {
 test('core domain and host ports expose structured errors', () => {
   const structuredErrorFiles = [
     ['core', 'src', 'config', 'repository.rs'],
-    ['core', 'src', 'config', 'service.rs'],
+    ['application', 'src', 'config', 'service.rs'],
     ['core', 'src', 'tag', 'repository.rs'],
-    ['core', 'src', 'tag', 'service.rs'],
+    ['application', 'src', 'tag', 'service.rs'],
     ['core', 'src', 'automation', 'repository.rs'],
-    ['core', 'src', 'automation', 'service.rs'],
+    ['application', 'src', 'automation', 'service.rs'],
     ['core', 'src', 'recovery', 'repository.rs'],
-    ['core', 'src', 'recovery', 'service.rs'],
+    ['application', 'src', 'recovery', 'service.rs'],
     ['core', 'src', 'task_ledger', 'repository.rs'],
-    ['core', 'src', 'task_ledger', 'service.rs'],
+    ['application', 'src', 'task_ledger', 'service.rs'],
     ['core', 'src', 'ports', 'fs.rs'],
     ['core', 'src', 'ports', 'path.rs'],
     ['core', 'src', 'ports', 'time.rs'],
@@ -281,13 +281,13 @@ test('ASR, LLM, Event, and Automation system ports preserve structured failures'
     );
   }
 
-  const automationService = read('core', 'src', 'automation', 'service.rs');
+  const automationPorts = read('core', 'src', 'automation', 'mod.rs');
   assert.match(
-    automationService,
+    automationPorts,
     /fn\s+path_exists\s*\([^)]*\)\s*->\s*Result\s*<\s*bool\s*,\s*FileSystemError\s*>/u,
   );
   assert.match(
-    automationService,
+    automationPorts,
     /fn\s+create_dir_all\s*\([^)]*\)\s*->\s*Result\s*<\s*\(\)\s*,\s*FileSystemError\s*>/u,
   );
 });

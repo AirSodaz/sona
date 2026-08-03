@@ -13,6 +13,21 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+const APPLICATION_SERVICE_PATHS = [
+  ['automation', 'service.rs'],
+  ['backup', 'service.rs'],
+  ['config', 'service.rs'],
+  ['dashboard', 'service.rs'],
+  ['export', 'service.rs'],
+  ['history', 'mutation_service.rs'],
+  ['history', 'query_service.rs'],
+  ['llm', 'tasks', 'service.rs'],
+  ['recovery', 'service.rs'],
+  ['storage_usage', 'service.rs'],
+  ['tag', 'service.rs'],
+  ['task_ledger', 'service.rs'],
+];
+
 function read(...parts) {
   return fs.readFileSync(path.join(repoRoot, ...parts), 'utf8').replace(/\r\n/gu, '\n');
 }
@@ -77,11 +92,26 @@ test('workspace runtime dependencies follow the reviewed role direction', () => 
   );
 });
 
+test('migrated use-case services are owned only by sona-application', () => {
+  for (const relativePath of APPLICATION_SERVICE_PATHS) {
+    const displayPath = relativePath.join('/');
+    assert.ok(
+      fs.existsSync(path.join(repoRoot, 'application', 'src', ...relativePath)),
+      `application/src/${displayPath} must remain in the application layer`,
+    );
+    assert.ok(
+      !fs.existsSync(path.join(repoRoot, 'core', 'src', ...relativePath)),
+      `core/src/${displayPath} is a stale application-layer implementation`,
+    );
+  }
+});
+
 test('stable architecture guides publish the reviewed roles and exceptions', () => {
   const guides = [
     {
       source: read('docs', 'architecture.md'),
       title: '# Sona Architecture',
+      applicationOwnership: /Use-case services[\s\S]*?live in `sona-application` \(`application\/`\)/u,
       navigation: [
         '[English](architecture.md)',
         '[简体中文](architecture.zh-CN.md)',
@@ -92,6 +122,7 @@ test('stable architecture guides publish the reviewed roles and exceptions', () 
     {
       source: read('docs', 'architecture.zh-CN.md'),
       title: '# Sona 架构',
+      applicationOwnership: /用例服务[\s\S]*?位于 `sona-application`（`application\/`）/u,
       navigation: [
         '[English](architecture.md)',
         '[简体中文](architecture.zh-CN.md)',
@@ -114,7 +145,7 @@ test('stable architecture guides publish the reviewed roles and exceptions', () 
     'verification',
   ];
 
-  for (const { source: guide, title, navigation } of guides) {
+  for (const { source: guide, title, applicationOwnership, navigation } of guides) {
     assert.ok(guide.startsWith(`${title}\n`), `${title} must be the top-level title`);
     for (const link of navigation) {
       assert.ok(guide.includes(link), `${title} must link to ${link}`);
@@ -122,6 +153,11 @@ test('stable architecture guides publish the reviewed roles and exceptions', () 
     for (const anchor of anchors) {
       assert.match(guide, new RegExp(`<a id="${anchor}"></a>`, 'u'));
     }
+    assert.match(
+      guide,
+      applicationOwnership,
+      `${title} must assign migrated use-case services to sona-application`,
+    );
     for (const [packageName, role] of EXPECTED_ROLES) {
       assert.match(
         guide,

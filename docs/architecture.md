@@ -112,7 +112,7 @@ Live transcription is coordinated by `sona-application` through `LiveTranscripti
 ### Core module map (orientation)
 
 - `core/src/domain/` holds shared **product identity enums** used across LLM and automation (for example `LlmProvider`, polish presets, summary templates). It is not the home of all domain logic; History, Tag, Transcription, and other domains live in their own modules under `core/src/`.
-- `core/src/history/` owns history records, query/mutation services, and the `HistoryStore` trait (`history/store.rs`, re-exported as `sona_core::history_store`).
+- `core/src/history/` owns history records, validation and editing rules, and the `HistoryStore` trait (`history/store.rs`, re-exported as `sona_core::history_store`); query and mutation use-case services live in `application/src/history/`.
 
 <a id="port-placement"></a>
 ## Port placement
@@ -133,7 +133,7 @@ Two rules follow, and both are enforced by `scripts/core-port-placement.test.js`
 1. No `*Store` or `*Repository` trait may be declared in `core/src/ports/`. A persistence-shaped trait is by definition owned by a domain.
 2. No trait in `core/src/ports/` may be named after a domain aggregate (History, Tag, Automation, Backup, Recovery, TaskLedger, Dashboard, StorageUsage, AppConfig).
 
-New domain ports should use `core/src/<domain>/ports.rs`, the form already used by `backup`, `dashboard`, `export`, `storage_usage`, and `sync`. Existing `repository.rs` / `store.rs` / `service.rs` placements in `automation`, `config`, `history`, `recovery`, `tag`, and `task_ledger` are grandfathered: they satisfy both rules above, and consolidating their file names is a separate slice, not a free cleanup.
+New domain ports should use `core/src/<domain>/ports.rs`, the form already used by `backup`, `dashboard`, `export`, `storage_usage`, and `sync`. Existing `repository.rs` / `store.rs` placements in `automation`, `config`, `history`, `recovery`, `tag`, and `task_ledger` are grandfathered: they satisfy both rules above, and consolidating their file names is a separate slice, not a free cleanup.
 
 <a id="host-capability-matrix"></a>
 ## Host capability matrix
