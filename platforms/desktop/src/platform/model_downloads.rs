@@ -105,6 +105,61 @@ pub async fn download_file<R: tauri::Runtime>(
     }
 }
 
+pub async fn download_preset_model<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    state: tauri::State<'_, DownloadState>,
+    model_id: String,
+    download_id: String,
+) -> Result<String, String> {
+    use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
+    use sona_core::models::downloads::resolve_model_download;
+    use sona_model_downloads::{download_model_with_cancel, installed_model_is_valid};
+    use tauri::Emitter;
+
+    let models_dir = TauriPathProvider::from_app(&app)
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?
+        .join("models");
+    let resolved =
+        resolve_model_download(&model_id, &models_dir).map_err(|error| error.to_string())?;
+    if !resolved.model.is_multi_file() {
+        return Err(format!(
+            "Model '{model_id}' is not a multi-file preset download"
+        ));
+    }
+    if installed_model_is_valid(&resolved)
+        .await
+        .map_err(|error| error.to_string())?
+    {
+        return Ok(resolved.install_path.to_string_lossy().into_owned());
+    }
+
+    let notify = Arc::new(Notify::new());
+    state
+        .insert_download(download_id.clone(), notify.clone())
+        .await;
+    let app_clone = app.clone();
+    let event_download_id = download_id.clone();
+    let result = download_model_with_cancel(&resolved, notify, move |progress| {
+        if progress.stage == sona_model_downloads::ModelDownloadStage::Downloading {
+            let _ = app_clone.emit(
+                DOWNLOAD_PROGRESS_EVENT,
+                (
+                    progress.downloaded_bytes,
+                    progress.total_bytes,
+                    &event_download_id,
+                ),
+            );
+        }
+    })
+    .await;
+    state.remove_download(&download_id).await;
+
+    result
+        .map(|path| path.to_string_lossy().into_owned())
+        .map_err(|error| error.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

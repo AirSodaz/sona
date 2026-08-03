@@ -9,6 +9,7 @@
 - Node.js 20 或更高版本
 - Corepack，以及仓库锁定版本的 pnpm
 - Rust stable 工具链
+- 用于构建 llama.cpp 本地 ASR 适配器的 CMake 与 C/C++ 编译器
 - Tauri 在当前平台所需的系统依赖
 
 在 Ubuntu 或 Debian 上，可通过以下命令安装桌面端系统依赖：
@@ -17,6 +18,7 @@
 sudo apt-get update
 sudo apt-get install libwebkit2gtk-4.1-dev \
     build-essential \
+    cmake \
     curl \
     wget \
     file \

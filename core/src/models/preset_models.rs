@@ -24,6 +24,17 @@ pub const DEFAULT_MODEL_RULES: ModelRules = ModelRules {
     timestamp_support_hint: None,
 };
 
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "camelCase")]
+pub struct PresetModelArtifact {
+    pub url: String,
+    pub filename: String,
+    pub sha256: String,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
+    pub size_bytes: u64,
+}
+
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "lowercase")]
@@ -57,6 +68,7 @@ pub struct PresetModel {
     pub language: String,
     pub size: String,
     pub sha256: Option<String>,
+    pub artifacts: Option<Vec<PresetModelArtifact>>,
     pub is_recommended: Option<bool>,
     pub is_archive: Option<bool>,
     pub filename: Option<String>,
@@ -115,6 +127,8 @@ pub struct ModelCatalogModel {
     pub size: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub artifacts: Vec<PresetModelArtifact>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_recommended: Option<bool>,
     pub is_archive: bool,
@@ -337,6 +351,14 @@ impl PresetModel {
     /// Returns true when the preset ships as an archive.
     pub fn is_archive(&self) -> bool {
         self.is_archive.unwrap_or(true)
+    }
+
+    /// Returns true when the preset is installed from multiple independently
+    /// verified files into one model directory.
+    pub fn is_multi_file(&self) -> bool {
+        self.artifacts
+            .as_ref()
+            .is_some_and(|files| !files.is_empty())
     }
 
     /// Pure completeness rule for a resolved install path.
@@ -611,6 +633,7 @@ impl ModelCatalogModel {
             is_recommended: model.is_recommended,
             is_archive: model.is_archive(),
             sha256: model.sha256.clone(),
+            artifacts: model.artifacts.clone().unwrap_or_default(),
             filename: model.filename.clone(),
             engine: model
                 .engine

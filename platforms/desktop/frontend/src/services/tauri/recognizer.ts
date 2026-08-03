@@ -46,6 +46,7 @@ function normalizeModelFileConfig(
     llm: config.llm ?? null,
     embedding: config.embedding ?? null,
     tokenizer: config.tokenizer ?? null,
+    mmproj: config.mmproj ?? null,
   };
 }
 
@@ -74,6 +75,7 @@ export function normalizeAsrRequest(
   return {
     ...common,
     engine: 'local-sherpa',
+    localEngine: request.localEngine ?? 'sherpa-onnx',
     ...(request.modelId !== undefined ? { modelId: request.modelId } : {}),
     modelPath: request.modelPath,
     numThreads: request.numThreads,

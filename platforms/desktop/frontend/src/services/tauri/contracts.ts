@@ -119,6 +119,11 @@ type DownloadFileArgs = {
   expectedSha256?: string;
 };
 
+type DownloadPresetModelArgs = {
+  modelId: string;
+  downloadId: string;
+};
+
 type UpdateTrayMenuArgs = {
   showText: string;
   settingsText: string;
@@ -156,6 +161,10 @@ type ManualTauriCommandContractMap = {
   [TauriCommand.app.downloadFile]: {
     args: DownloadFileArgs;
     result: void;
+  };
+  [TauriCommand.app.downloadPresetModel]: {
+    args: DownloadPresetModelArgs;
+    result: string;
   };
   [TauriCommand.app.cancelDownload]: {
     args: { id: string };

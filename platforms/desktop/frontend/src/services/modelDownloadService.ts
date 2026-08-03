@@ -14,11 +14,13 @@ interface DownloadProgressPayloadObject {
 }
 
 type DownloadFile = (input: { url: string; outputPath: string; id: string; expectedSha256?: string }) => Promise<void>;
+type DownloadPresetModel = (input: { modelId: string; downloadId: string }) => Promise<string>;
 type ExtractTarBz2 = (input: { archivePath: string; targetDir: string }) => Promise<void>;
 type Listen = <T>(event: string, handler: (event: { payload: T }) => void) => Promise<() => void>;
 
 interface ModelDownloadServicePorts {
   downloadFile: DownloadFile;
+  downloadPresetModel?: DownloadPresetModel;
   extractTarBz2: ExtractTarBz2;
   cancelDownload: (id: string) => Promise<void>;
   remove: (path: string) => Promise<void>;
@@ -86,6 +88,9 @@ class ModelDownloadService {
     mirror,
   }: DownloadModelInput): Promise<string> {
     const targetModelsDir = modelsDir ?? await this.ports.getModelsDir();
+    if (model.artifacts?.length) {
+      return await this.downloadMultiFilePreset(modelId, onProgress, signal);
+    }
     const targetFilename = model.filename || `${modelId}.tar.bz2`;
     const tempFilePath = isCatalogModel(model)
       ? model.downloadPath
@@ -144,6 +149,75 @@ class ModelDownloadService {
       return tempFilePath;
     }
     return await this.ports.join(targetModelsDir, modelId);
+  }
+
+  private async downloadMultiFilePreset(
+    modelId: string,
+    onProgress?: ProgressCallback,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    if (!this.ports.downloadPresetModel) {
+      throw new Error('Multi-file model downloads are unavailable in this host');
+    }
+
+    const downloadId = Math.random().toString(36).substring(7);
+    const abort = async () => {
+      try {
+        await this.ports.cancelDownload(downloadId);
+      } catch (error) {
+        logger.error('Failed to cancel multi-file model download:', error);
+      }
+    };
+    signal?.addEventListener('abort', abort, { once: true });
+
+    let lastDownloaded = 0;
+    let uiLastDownloaded = 0;
+    let lastTime = Date.now();
+    const unlisten = await this.ports.listen<unknown>(TauriEvent.app.downloadProgress, (event) => {
+      const { downloaded, total, id } = parseDownloadProgressPayload(event.payload);
+      if (id !== downloadId || total <= 0) return;
+
+      if (downloaded < lastDownloaded) {
+        uiLastDownloaded = 0;
+      }
+      lastDownloaded = downloaded;
+
+      const now = Date.now();
+      const timeDiff = now - lastTime;
+      if (onProgress && timeDiff > 500) {
+        const bytesDiff = Math.max(0, downloaded - uiLastDownloaded);
+        const speedBytesPerSec = bytesDiff / (timeDiff / 1000);
+        const speedStr = speedBytesPerSec > 1024 * 1024
+          ? `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`
+          : `${Math.round(speedBytesPerSec / 1024)} KB/s`;
+
+        uiLastDownloaded = downloaded;
+        lastTime = now;
+        onProgress(Math.round((downloaded / total) * 100), i18n.t('settings.model_download_status.downloading', {
+          label: 'Downloading',
+          downloadedMB: Math.round(downloaded / 1024 / 1024),
+          totalMB: Math.round(total / 1024 / 1024),
+          speed: speedStr,
+        }));
+      }
+    });
+
+    try {
+      onProgress?.(0, i18n.t('settings.model_download_status.downloading_only', {
+        label: 'Downloading',
+      }));
+      const path = await this.ports.downloadPresetModel({ modelId, downloadId });
+      onProgress?.(100, i18n.t('settings.model_download_status.done'), true);
+      return path;
+    } catch (error) {
+      if (signal?.aborted || extractErrorMessage(error).includes('cancelled')) {
+        throw Object.assign(new Error('Download cancelled'), { cause: error });
+      }
+      throw error;
+    } finally {
+      signal?.removeEventListener('abort', abort);
+      unlisten();
+    }
   }
 
   private async downloadFile(

@@ -1,6 +1,7 @@
 import type { AppConfig, AsrSelectionSlot } from '../../types/config';
 import {
   isAsrRequestConfigured,
+  isLlamaCppBatchRequest,
   resolveAsrTranscriptionRequest,
   type AsrTranscriptionRequest,
 } from '../asrConfigService';
@@ -92,14 +93,26 @@ export function buildBatchTranscriptionRequest({
   instanceId,
 }: BatchRequestOptions): ResolvedBatchTranscriptionRequest {
   const resolvedBatchRequest = resolveAsrTranscriptionRequest(appConfig, 'batch', { language });
-  const asrRequest = applyRuntimeOptions(resolvedBatchRequest, modelPathOverride, enableItn);
+  const runtimeRequest = applyRuntimeOptions(resolvedBatchRequest, modelPathOverride, enableItn);
+  const asrRequest = isLlamaCppBatchRequest(runtimeRequest)
+    ? {
+        ...runtimeRequest,
+        language: 'auto',
+        enableItn: false,
+        hotwords: null,
+        punctuationModel: null,
+        vadModel: null,
+        batchSegmentationMode: 'whole' as const,
+      }
+    : runtimeRequest;
+  const isLlamaCpp = isLlamaCppBatchRequest(asrRequest);
 
   return {
     asrRequest,
     request: {
       filePath,
-      saveToPath: saveToPath || null,
-      speakerProcessing: speakerService.buildProcessingConfig(appConfig),
+      saveToPath: isLlamaCpp ? null : saveToPath || null,
+      speakerProcessing: isLlamaCpp ? null : speakerService.buildProcessingConfig(appConfig),
       asrRequest,
       ...(instanceId ? { instanceId } : {}),
     },

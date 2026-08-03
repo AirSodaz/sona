@@ -4,7 +4,6 @@ use std::sync::{Arc, OnceLock};
 use tauri::{AppHandle, Manager};
 
 mod adapter;
-mod batch;
 mod factory;
 mod metrics;
 mod observer;
@@ -20,8 +19,7 @@ fn recognizer_output_event(instance_id: &str) -> String {
     format!("recognizer-output-{instance_id}")
 }
 
-pub use adapter::LocalSherpaAdapter;
-pub use batch::transcribe_batch_with_progress;
+pub use adapter::LocalAsrAdapter;
 pub use factory::DesktopStreamingAsrFactory;
 pub(crate) use observer::TauriAsrRuntimeObserver;
 pub use sona_core::models::config::ModelFileConfig;
@@ -57,7 +55,7 @@ fn asr_adapters() -> &'static HashMap<&'static str, Arc<dyn AsrProviderAdapter>>
     static ADAPTERS: OnceLock<HashMap<&'static str, Arc<dyn AsrProviderAdapter>>> = OnceLock::new();
     ADAPTERS.get_or_init(|| {
         let mut map: HashMap<&'static str, Arc<dyn AsrProviderAdapter>> = HashMap::new();
-        let local = LocalSherpaAdapter;
+        let local = LocalAsrAdapter;
         map.insert(local.provider_id(), Arc::new(local));
         for capability in sona_online_asr::ONLINE_ASR_PROVIDER_CAPABILITIES {
             let adapter = online::DesktopOnlineAsrAdapter::new(capability.provider_id);

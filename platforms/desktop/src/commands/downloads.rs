@@ -32,3 +32,13 @@ pub async fn download_file<R: tauri::Runtime>(
     )
     .await
 }
+
+#[tauri::command]
+pub async fn download_preset_model<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    state: tauri::State<'_, DownloadState>,
+    model_id: String,
+    download_id: String,
+) -> Result<String, String> {
+    crate::platform::model_downloads::download_preset_model(app, state, model_id, download_id).await
+}

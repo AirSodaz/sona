@@ -25,6 +25,32 @@ pub const VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY: &str = "volcengineDoubao";
 pub const GROQ_WHISPER_PROVIDER_ID: &str = "groq-whisper";
 pub const MISTRAL_VOXTRAL_PROVIDER_ID: &str = "mistral-voxtral";
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "kebab-case")]
+pub enum LocalAsrEngine {
+    #[default]
+    SherpaOnnx,
+    LlamaCpp,
+}
+
+impl LocalAsrEngine {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SherpaOnnx => "sherpa-onnx",
+            Self::LlamaCpp => "llama-cpp",
+        }
+    }
+
+    pub fn from_name(value: &str) -> Option<Self> {
+        match value {
+            "sherpa-onnx" => Some(Self::SherpaOnnx),
+            "llama-cpp" => Some(Self::LlamaCpp),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "kebab-case")]
@@ -312,10 +338,11 @@ pub struct BatchTranscriptionRequest {
     pub normalization_options: TranscriptNormalizationOptions,
     pub postprocessor: TranscriptPostprocessor,
     pub gpu_acceleration: Option<String>,
+    pub engine: LocalAsrEngine,
 }
 
 impl BatchTranscriptionRequest {
-    pub fn from_local_sherpa_request(
+    pub fn from_local_asr_request(
         file_path: PathBuf,
         save_to_path: Option<PathBuf>,
         request: AsrTranscriptionRequest,
@@ -334,6 +361,7 @@ impl BatchTranscriptionRequest {
 
         match engine_config {
             AsrEngineConfig::LocalSherpa {
+                local_engine,
                 model_path,
                 num_threads,
                 punctuation_model,
@@ -364,9 +392,10 @@ impl BatchTranscriptionRequest {
                 postprocessor: TranscriptPostprocessor::compile(postprocess_options)
                     .map_err(|error| AsrPortError::invalid_request(error.to_string()))?,
                 gpu_acceleration,
+                engine: local_engine,
             }),
             _ => Err(AsrPortError::invalid_request(
-                "Expected LocalSherpa engine config",
+                "Expected local ASR engine config",
             )),
         }
     }
@@ -395,7 +424,7 @@ impl LocalSherpaStreamingRequest {
         instance_id: String,
         request: AsrTranscriptionRequest,
     ) -> Result<Self, AsrPortError> {
-        validate_local_sherpa_mode(&request, AsrMode::Streaming)?;
+        validate_local_asr_mode(&request, AsrMode::Streaming)?;
 
         let AsrTranscriptionRequest {
             language,
@@ -409,6 +438,7 @@ impl LocalSherpaStreamingRequest {
 
         match engine_config {
             AsrEngineConfig::LocalSherpa {
+                local_engine,
                 model_path,
                 num_threads,
                 punctuation_model,
@@ -418,22 +448,30 @@ impl LocalSherpaStreamingRequest {
                 file_config,
                 gpu_acceleration,
                 ..
-            } => Ok(Self {
-                instance_id,
-                model_path,
-                num_threads,
-                enable_itn,
-                language,
-                punctuation_model,
-                vad_model,
-                vad_buffer,
-                model_type,
-                file_config: *file_config,
-                hotwords,
-                normalization_options,
-                postprocess_options,
-                gpu_acceleration,
-            }),
+            } => {
+                if local_engine != LocalAsrEngine::SherpaOnnx {
+                    return Err(local_asr_engine_mismatch(
+                        LocalAsrEngine::SherpaOnnx,
+                        local_engine,
+                    ));
+                }
+                Ok(Self {
+                    instance_id,
+                    model_path,
+                    num_threads,
+                    enable_itn,
+                    language,
+                    punctuation_model,
+                    vad_model,
+                    vad_buffer,
+                    model_type,
+                    file_config: *file_config,
+                    hotwords,
+                    normalization_options,
+                    postprocess_options,
+                    gpu_acceleration,
+                })
+            }
             _ => Err(AsrPortError::invalid_request(
                 "Expected LocalSherpa engine config",
             )),
@@ -485,6 +523,8 @@ pub struct AsrTranscriptionRequest {
 pub enum AsrEngineConfig {
     #[serde(rename = "local-sherpa", rename_all = "camelCase")]
     LocalSherpa {
+        #[serde(default)]
+        local_engine: LocalAsrEngine,
         #[serde(default)]
         model_id: Option<String>,
         model_path: String,
@@ -538,6 +578,7 @@ impl AsrTranscriptionRequest {
             hotwords,
             speaker_processing,
             engine_config: AsrEngineConfig::LocalSherpa {
+                local_engine: LocalAsrEngine::SherpaOnnx,
                 model_id: None,
                 model_path,
                 num_threads,
@@ -673,14 +714,14 @@ pub trait StreamingAsrFactoryPort: Send + Sync {
     ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError>;
 }
 
-pub fn validate_local_sherpa_mode(
+pub fn validate_local_asr_mode(
     request: &AsrTranscriptionRequest,
     expected: AsrMode,
 ) -> Result<(), AsrPortError> {
     if request.engine() != AsrEngine::LocalSherpa {
         return Err(AsrPortError::new(
             AsrPortErrorKind::Unsupported,
-            "Unsupported ASR engine for local Sherpa adapter",
+            "Unsupported ASR engine for local ASR adapter",
         ));
     }
     if request.mode != expected {
@@ -690,6 +731,20 @@ pub fn validate_local_sherpa_mode(
         )));
     }
     Ok(())
+}
+
+pub fn local_asr_engine_mismatch(
+    adapter: LocalAsrEngine,
+    requested: LocalAsrEngine,
+) -> AsrPortError {
+    AsrPortError::new(
+        AsrPortErrorKind::Unsupported,
+        format!(
+            "Local ASR adapter '{}' cannot execute engine '{}'.",
+            adapter.as_str(),
+            requested.as_str()
+        ),
+    )
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

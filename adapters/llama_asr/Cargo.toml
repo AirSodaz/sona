@@ -1,0 +1,17 @@
+[package]
+name = "sona-llama-asr"
+version.workspace = true
+description = "llama.cpp batch ASR adapter for Qwen3-ASR"
+authors.workspace = true
+edition.workspace = true
+
+[package.metadata.sona]
+role = "outbound-adapter"
+
+[dependencies]
+async-trait = "0.1"
+encoding_rs = "0.8"
+llama-cpp-2 = { version = "=0.1.153", default-features = false, features = ["mtmd"] }
+sona-core = { path = "../../core" }
+tokio = { version = "1", features = ["rt", "sync"] }
+uuid = { version = "1", features = ["v4", "fast-rng"] }

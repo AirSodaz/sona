@@ -29,6 +29,28 @@ fn resolves_model_download_paths_and_required_companions() {
 }
 
 #[test]
+fn resolves_qwen_gguf_artifacts_inside_atomic_install_directory() {
+    let models_dir = std::path::Path::new("C:/models");
+    let resolved = resolve_model_download("qwen3-asr-0.6b-q8-gguf", models_dir).unwrap();
+
+    assert_eq!(
+        resolved.install_path,
+        models_dir.join("qwen3-asr-0.6b-q8-gguf")
+    );
+    assert_eq!(resolved.artifacts.len(), 2);
+    assert_eq!(
+        resolved.artifacts[0].install_path,
+        resolved.install_path.join("Qwen3-ASR-0.6B-Q8_0.gguf")
+    );
+    assert_eq!(
+        resolved.artifacts[1].install_path,
+        resolved
+            .install_path
+            .join("mmproj-Qwen3-ASR-0.6B-Q8_0.gguf")
+    );
+}
+
+#[test]
 fn unknown_model_download_preserves_model_id_validation_context() {
     let error =
         resolve_model_download("missing-model", std::path::Path::new("C:/models")).unwrap_err();

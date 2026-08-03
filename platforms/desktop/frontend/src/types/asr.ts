@@ -12,6 +12,8 @@ export type OnlineAsrProviderRequest = {
   config: OnlineAsrProviderConfig;
 };
 
+export type LocalAsrEngine = 'sherpa-onnx' | 'llama-cpp';
+
 export type TranscriptPostprocessOptions = {
   textReplacementSets: TextReplacementRuleSet[];
   dropFinalDotSegments: boolean;
@@ -28,8 +30,9 @@ export type AsrTranscriptionRequestBase = {
   hotwords: string | null;
 };
 
-export type LocalSherpaAsrRequest = AsrTranscriptionRequestBase & {
+export type LocalAsrRequest = AsrTranscriptionRequestBase & {
   engine: 'local-sherpa';
+  localEngine?: LocalAsrEngine;
   modelId: string | null;
   modelPath: string;
   numThreads: number;
@@ -47,4 +50,6 @@ export type OnlineAsrRequest = AsrTranscriptionRequestBase & {
   onlineProvider: OnlineAsrProviderRequest;
 };
 
-export type AsrTranscriptionRequest = LocalSherpaAsrRequest | OnlineAsrRequest;
+export type LocalSherpaAsrRequest = LocalAsrRequest;
+
+export type AsrTranscriptionRequest = LocalAsrRequest | OnlineAsrRequest;

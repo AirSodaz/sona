@@ -1444,6 +1444,7 @@ describe('tauri boundary wrappers', () => {
       },
       asrRequest: expect.objectContaining({
         engine: 'local-sherpa',
+        localEngine: 'sherpa-onnx',
         mode: 'batch',
         speakerProcessing: null,
       }),

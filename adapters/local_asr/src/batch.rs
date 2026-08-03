@@ -1,7 +1,4 @@
-﻿use crate::audio::{
-    VadDetectorOptions, create_vad_config, extract_and_resample_audio, fixed_chunk_audio,
-    save_wav_file, vad_segment_audio,
-};
+use crate::audio::{extract_and_resample_audio, save_wav_file, segment_batch_audio};
 use crate::gpu::{GpuFallbackNotice, resolve_gpu_acceleration_plan};
 use crate::punctuation::{Punctuation, load_punctuation_from_path};
 use crate::recognizer::{
@@ -9,9 +6,11 @@ use crate::recognizer::{
     decode_offline_samples,
 };
 use async_trait::async_trait;
-use sherpa_onnx::VadModelConfig;
 use sona_core::models::config::ModelFileConfig;
-use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind, BatchTranscriberPort};
+use sona_core::ports::asr::{
+    AsrPortError, AsrPortErrorKind, BatchSegmentationMode, BatchTranscriberPort, LocalAsrEngine,
+    local_asr_engine_mismatch,
+};
 use sona_core::transcription::runtime::BatchTranscribePlan;
 use sona_core::transcription::transcript::{
     TranscriptSegment, ensure_transcript_segment_timing, normalize_recognizer_text,
@@ -44,15 +43,23 @@ struct BatchTranscriptionJob {
     punctuation_model: Option<PathBuf>,
     vad_model: Option<PathBuf>,
     vad_buffer: f32,
+    batch_segmentation_mode: BatchSegmentationMode,
     model_type: String,
     file_config: Option<ModelFileConfig>,
     hotwords: Option<String>,
+    speaker_processing: Option<sona_core::transcription::speaker::SpeakerProcessingConfig>,
     gpu_acceleration: Option<String>,
     quiet: bool,
 }
 
 impl BatchTranscriptionJob {
     fn from_plan(plan: BatchTranscribePlan) -> Result<Self, AsrPortError> {
+        if plan.engine != LocalAsrEngine::SherpaOnnx {
+            return Err(local_asr_engine_mismatch(
+                LocalAsrEngine::SherpaOnnx,
+                plan.engine,
+            ));
+        }
         if !plan.input_path.is_file() {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::InvalidRequest,
@@ -62,7 +69,6 @@ impl BatchTranscriptionJob {
                 ),
             ));
         }
-
         Ok(Self {
             input_path: plan.input_path,
             save_to_path: plan.save_to_path,
@@ -73,9 +79,11 @@ impl BatchTranscriptionJob {
             punctuation_model: plan.punctuation_model.map(PathBuf::from),
             vad_model: plan.vad_model.map(PathBuf::from),
             vad_buffer: plan.vad_buffer,
+            batch_segmentation_mode: plan.batch_segmentation_mode,
             model_type: plan.model_type,
             file_config: plan.file_config,
             hotwords: plan.hotwords,
+            speaker_processing: plan.speaker_processing,
             gpu_acceleration: plan.gpu_acceleration,
             quiet: plan.quiet,
         })
@@ -130,8 +138,6 @@ impl BatchTranscriptionJob {
 
         let recognizer = create_offline_recognizer(model_type, self.num_threads, provider)?;
         let punctuation = load_punctuation_from_path(self.punctuation_model.as_deref())?;
-        let vad_config = load_vad_config(self.vad_model.as_deref())?;
-
         let samples = extract_and_resample_audio(&self.input_path, 16000).await?;
         if let Some(path) = self.save_to_path.as_ref() {
             save_wav_file(&samples, 16000, path).map_err(|error| {
@@ -142,37 +148,32 @@ impl BatchTranscriptionJob {
             })?;
         }
 
-        transcribe_samples(
+        let segments = transcribe_samples(
             &samples,
             &recognizer,
             punctuation.as_ref(),
-            vad_config.as_ref(),
+            self.vad_model.as_deref(),
             self.vad_buffer,
+            self.batch_segmentation_mode,
+        )?;
+        crate::speaker_processing::annotate_segments_with_speakers(
+            &samples,
+            &segments,
+            self.speaker_processing.as_ref(),
         )
     }
-}
-
-fn load_vad_config(vad_model: Option<&Path>) -> Result<Option<VadModelConfig>, AsrPortError> {
-    let Some(path) = vad_model else {
-        return Ok(None);
-    };
-
-    create_vad_config(path, VadDetectorOptions::default()).map(Some)
 }
 
 fn transcribe_samples(
     samples: &[f32],
     recognizer: &SafeOfflineRecognizer,
     punctuation: Option<&Punctuation>,
-    vad_config: Option<&VadModelConfig>,
+    vad_model: Option<&Path>,
     vad_buffer: f32,
+    batch_segmentation_mode: BatchSegmentationMode,
 ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-    let audio_segments = if let Some(vad_config) = vad_config {
-        vad_segment_audio(samples, 16000, vad_config, vad_buffer)
-            .unwrap_or_else(|_| fixed_chunk_audio(samples, 16000, 30.0))
-    } else {
-        fixed_chunk_audio(samples, 16000, 30.0)
-    };
+    let audio_segments =
+        segment_batch_audio(samples, vad_model, vad_buffer, batch_segmentation_mode);
 
     let mut results = Vec::new();
     for segment in audio_segments {
@@ -246,6 +247,7 @@ mod tests {
         let plan = BatchTranscribePlan {
             input_path: PathBuf::from("missing.wav"),
             save_to_path: None,
+            engine: sona_core::ports::asr::LocalAsrEngine::SherpaOnnx,
             model_path: "C:/models/demo".to_string(),
             num_threads: 4,
             enable_itn: false,
@@ -253,9 +255,11 @@ mod tests {
             punctuation_model: None,
             vad_model: None,
             vad_buffer: 5.0,
+            batch_segmentation_mode: sona_core::ports::asr::BatchSegmentationMode::Vad,
             model_type: "whisper".to_string(),
             file_config: None,
             hotwords: None,
+            speaker_processing: None,
             gpu_acceleration: Some("cpu".to_string()),
             export_format: ExportFormat::Json,
             output_target: OutputTarget::Stdout,
@@ -268,5 +272,41 @@ mod tests {
             sona_core::ports::asr::AsrPortErrorKind::InvalidRequest
         );
         assert!(error.message.contains("existing file"));
+    }
+
+    #[tokio::test]
+    async fn adapter_mismatch_uses_shared_error_contract() {
+        let mut plan = BatchTranscribePlan {
+            input_path: PathBuf::from("missing.wav"),
+            save_to_path: None,
+            engine: sona_core::ports::asr::LocalAsrEngine::SherpaOnnx,
+            model_path: "C:/models/demo".to_string(),
+            num_threads: 4,
+            enable_itn: false,
+            language: "auto".to_string(),
+            punctuation_model: None,
+            vad_model: None,
+            vad_buffer: 5.0,
+            batch_segmentation_mode: sona_core::ports::asr::BatchSegmentationMode::Vad,
+            model_type: "whisper".to_string(),
+            file_config: None,
+            hotwords: None,
+            speaker_processing: None,
+            gpu_acceleration: Some("cpu".to_string()),
+            export_format: ExportFormat::Json,
+            output_target: OutputTarget::Stdout,
+            quiet: true,
+        };
+        plan.engine = sona_core::ports::asr::LocalAsrEngine::LlamaCpp;
+
+        let error = LocalBatchAsrAdapter.transcribe(plan).await.unwrap_err();
+        assert_eq!(
+            error.kind,
+            sona_core::ports::asr::AsrPortErrorKind::Unsupported
+        );
+        assert_eq!(
+            error.message,
+            "Local ASR adapter 'sherpa-onnx' cannot execute engine 'llama-cpp'."
+        );
     }
 }

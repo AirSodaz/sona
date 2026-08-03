@@ -33,6 +33,14 @@ pub fn installed_model_is_complete(resolved: &ResolvedModelDownload) -> bool {
     if metadata.file_type().is_symlink() {
         return false;
     }
+    if resolved.model.is_multi_file() {
+        return metadata.is_dir()
+            && resolved.artifacts.iter().all(|artifact| {
+                std::fs::symlink_metadata(&artifact.install_path).is_ok_and(|metadata| {
+                    metadata.is_file() && !metadata.file_type().is_symlink() && metadata.len() > 0
+                })
+            });
+    }
     if resolved.model.is_archive() {
         return metadata.is_dir()
             && std::fs::read_dir(&resolved.install_path)
@@ -51,6 +59,16 @@ pub async fn installed_model_is_valid(
     }
 
     if resolved.model.is_archive() {
+        return Ok(true);
+    }
+
+    if resolved.model.is_multi_file() {
+        for artifact in &resolved.artifacts {
+            let actual_sha = sha256_file(&artifact.install_path).await?;
+            if !actual_sha.eq_ignore_ascii_case(&artifact.sha256) {
+                return Ok(false);
+            }
+        }
         return Ok(true);
     }
 
@@ -141,6 +159,9 @@ where
     let install_lock = InstallLock::acquire(&resolved.install_path)?;
 
     let progress = Arc::new(Mutex::new(on_progress));
+    if resolved.model.is_multi_file() {
+        return download_multi_file_model(resolved, cancel, progress, install_lock).await;
+    }
     let download_progress = progress.clone();
     let temp_download_path = temporary_download_path(&resolved.download_path);
 
@@ -216,6 +237,130 @@ where
     }
 
     Ok(resolved.install_path.clone())
+}
+
+async fn download_multi_file_model<F>(
+    resolved: &ResolvedModelDownload,
+    cancel: Arc<tokio::sync::Notify>,
+    progress: Arc<Mutex<F>>,
+    install_lock: InstallLock,
+) -> Result<PathBuf, DownloadError>
+where
+    F: FnMut(ModelDownloadProgress) + Send + 'static,
+{
+    let staging_path = staging_install_path(&resolved.install_path);
+    if std::fs::symlink_metadata(&staging_path)
+        .is_ok_and(|metadata| metadata.file_type().is_symlink() || !metadata.is_dir())
+    {
+        remove_model_install_path(&staging_path)?;
+    }
+    tokio::fs::create_dir_all(&staging_path)
+        .await
+        .map_err(|error| {
+            DownloadError::file_system(
+                DownloadFileOperation::CreateInstallDirectory,
+                &staging_path,
+                error.to_string(),
+            )
+        })?;
+
+    let expected_total = resolved
+        .artifacts
+        .iter()
+        .map(|artifact| artifact.size_bytes)
+        .sum::<u64>();
+    let client = DownloadClient::try_new()?;
+    let mut completed_bytes = 0_u64;
+
+    for artifact in &resolved.artifacts {
+        let staged_path = staging_path.join(&artifact.filename);
+        if staged_artifact_is_valid(&staged_path, &artifact.sha256).await? {
+            completed_bytes = completed_bytes.saturating_add(artifact.size_bytes);
+            report_progress(
+                &progress,
+                ModelDownloadProgress {
+                    stage: ModelDownloadStage::Downloading,
+                    downloaded_bytes: completed_bytes,
+                    total_bytes: expected_total,
+                },
+            );
+            continue;
+        }
+
+        let temp_path = temporary_download_path(&staged_path);
+        let artifact_progress = progress.clone();
+        let completed_before_artifact = completed_bytes;
+        let artifact_size = artifact.size_bytes;
+        client
+            .download_file(
+                &artifact.url,
+                &temp_path,
+                cancel.clone(),
+                Some(Box::new(move |downloaded_bytes, _| {
+                    report_progress(
+                        &artifact_progress,
+                        ModelDownloadProgress {
+                            stage: ModelDownloadStage::Downloading,
+                            downloaded_bytes: completed_before_artifact
+                                .saturating_add(downloaded_bytes.min(artifact_size)),
+                            total_bytes: expected_total,
+                        },
+                    );
+                })),
+            )
+            .await?;
+
+        report_progress(
+            &progress,
+            ModelDownloadProgress {
+                stage: ModelDownloadStage::Verifying,
+                downloaded_bytes: completed_bytes,
+                total_bytes: expected_total,
+            },
+        );
+        crate::downloads::complete_download_file(&temp_path, &staged_path, Some(&artifact.sha256))
+            .await?;
+        completed_bytes = completed_bytes.saturating_add(artifact.size_bytes);
+    }
+
+    report_progress(
+        &progress,
+        ModelDownloadProgress {
+            stage: ModelDownloadStage::Installing,
+            downloaded_bytes: expected_total,
+            total_bytes: expected_total,
+        },
+    );
+
+    remove_model_install_path(&resolved.install_path)?;
+    tokio::fs::rename(&staging_path, &resolved.install_path)
+        .await
+        .map_err(|error| {
+            DownloadError::file_system_with_target(
+                DownloadFileOperation::Publish,
+                &staging_path,
+                &resolved.install_path,
+                error.to_string(),
+            )
+        })?;
+    drop(install_lock);
+
+    Ok(resolved.install_path.clone())
+}
+
+async fn staged_artifact_is_valid(
+    path: &Path,
+    expected_sha256: &str,
+) -> Result<bool, DownloadError> {
+    let Ok(metadata) = tokio::fs::symlink_metadata(path).await else {
+        return Ok(false);
+    };
+    if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() == 0 {
+        return Ok(false);
+    }
+    Ok(sha256_file(path)
+        .await?
+        .eq_ignore_ascii_case(expected_sha256))
 }
 
 struct InstallLock {

@@ -49,10 +49,17 @@ export {
 export type {
   AsrTranscriptionRequest,
   AsrTranscriptionRequestBase,
+  LocalAsrRequest,
   LocalSherpaAsrRequest,
   OnlineAsrRequest,
   TranscriptPostprocessOptions,
 } from '../types/asr';
+
+export function isLlamaCppBatchRequest(request: AsrTranscriptionRequest): boolean {
+  return request.engine === 'local-sherpa'
+    && request.mode === 'batch'
+    && request.localEngine === 'llama-cpp';
+}
 
 const SLOT_MODE: Record<AsrSelectionSlot, AsrMode> = {
   live: 'streaming',
@@ -141,6 +148,7 @@ export class AsrConfigService {
     return {
       ...baseRequest,
       engine: 'local-sherpa',
+      localEngine: modelInfo?.engine ?? 'sherpa-onnx',
       modelId: selection.modelId ?? modelInfo?.id ?? null,
       modelPath: selection.modelPath,
       numThreads: 4,

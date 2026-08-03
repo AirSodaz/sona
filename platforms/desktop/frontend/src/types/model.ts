@@ -9,4 +9,5 @@ export interface ModelFileConfig {
   llm?: string;
   embedding?: string;
   tokenizer?: string;
+  mmproj?: string;
 }

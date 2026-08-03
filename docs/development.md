@@ -9,6 +9,7 @@ This guide covers local setup, development, testing, and source builds. See the 
 - Node.js 20 or later
 - Corepack with the repository-pinned pnpm version
 - The stable Rust toolchain
+- CMake and a C/C++ compiler for the llama.cpp local ASR adapter
 - The platform dependencies required by Tauri
 
 On Ubuntu or Debian, install the desktop system dependencies with:
@@ -17,6 +18,7 @@ On Ubuntu or Debian, install the desktop system dependencies with:
 sudo apt-get update
 sudo apt-get install libwebkit2gtk-4.1-dev \
     build-essential \
+    cmake \
     curl \
     wget \
     file \

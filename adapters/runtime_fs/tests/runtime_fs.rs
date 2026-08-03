@@ -678,6 +678,25 @@ fn preset_model_install_status_uses_filesystem_shape() {
 }
 
 #[test]
+fn multi_file_preset_requires_every_non_empty_artifact() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path();
+    let model = find_preset_model("qwen3-asr-0.6b-q8-gguf").unwrap();
+    let install_path = model.resolve_install_path(models_dir);
+    std::fs::create_dir_all(&install_path).unwrap();
+
+    let artifacts = model.artifacts.as_ref().unwrap();
+    std::fs::write(install_path.join(&artifacts[0].filename), b"model").unwrap();
+    assert!(!is_preset_model_installed_at(model, models_dir));
+
+    std::fs::write(install_path.join(&artifacts[1].filename), b"mmproj").unwrap();
+    assert!(is_preset_model_installed_at(model, models_dir));
+
+    std::fs::write(install_path.join(&artifacts[1].filename), []).unwrap();
+    assert!(!is_preset_model_installed_at(model, models_dir));
+}
+
+#[test]
 fn selects_existing_models_dir_from_candidate_roots() {
     let dir = tempfile::tempdir().unwrap();
     let first_root = dir.path().join("Sona");

@@ -1,8 +1,49 @@
 use sona_core::ports::asr::{
     AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,
-    GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest,
-    VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider, online_asr_providers,
+    GROQ_WHISPER_PROVIDER_ID, LocalAsrEngine, MISTRAL_VOXTRAL_PROVIDER_ID,
+    OnlineAsrProviderRequest, VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
+    online_asr_providers,
 };
+
+#[test]
+fn local_asr_engine_wire_names_are_stable() {
+    assert_eq!(
+        serde_json::to_string(&LocalAsrEngine::SherpaOnnx).unwrap(),
+        "\"sherpa-onnx\""
+    );
+    assert_eq!(
+        serde_json::to_string(&LocalAsrEngine::LlamaCpp).unwrap(),
+        "\"llama-cpp\""
+    );
+    assert_eq!(LocalAsrEngine::default(), LocalAsrEngine::SherpaOnnx);
+}
+
+#[test]
+fn local_engine_defaults_to_sherpa_for_legacy_requests() {
+    let request: AsrTranscriptionRequest = serde_json::from_value(serde_json::json!({
+        "mode": "batch",
+        "language": "auto",
+        "enableItn": false,
+        "normalizationOptions": { "enableTimeline": false },
+        "postprocessOptions": { "textReplacementSets": [], "dropFinalDotSegments": false },
+        "hotwords": null,
+        "speakerProcessing": null,
+        "engine": "local-sherpa",
+        "modelPath": "models/legacy",
+        "numThreads": 4,
+        "vadBuffer": 5.0,
+        "modelType": "sensevoice"
+    }))
+    .unwrap();
+
+    assert!(matches!(
+        request.engine_config,
+        AsrEngineConfig::LocalSherpa {
+            local_engine: LocalAsrEngine::SherpaOnnx,
+            ..
+        }
+    ));
+}
 use sona_core::transcription::postprocess::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions,
 };

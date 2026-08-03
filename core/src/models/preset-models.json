@@ -22,28 +22,79 @@
     "versionLabel": "Int8"
   },
   {
-    "id": "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25",
+    "id": "qwen3-asr-0.6b-q8-gguf",
     "name": "Qwen3 ASR",
     "description": "settings.descriptions.qwen3_asr",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2",
+    "url": "https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF/resolve/928ab958557df9aa2ef1c93e0e83c7ad0933fae2/Qwen3-ASR-0.6B-Q8_0.gguf?download=true",
     "type": "qwen3-asr",
     "modes": ["batch"],
     "language": "multi",
-    "size": "827 MB",
+    "size": "~972 MiB",
     "isRecommended": true,
-    "engine": "sherpa-onnx",
+    "isArchive": false,
+    "engine": "llama-cpp",
     "rules": {
-      "requiresVad": true,
-      "requiresPunctuation": false
+      "requiresVad": false,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment"
     },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF/resolve/928ab958557df9aa2ef1c93e0e83c7ad0933fae2/Qwen3-ASR-0.6B-Q8_0.gguf?download=true",
+        "filename": "Qwen3-ASR-0.6B-Q8_0.gguf",
+        "sha256": "bca259818b50ca7c4c05e9bdb35a5dc04fa039653a6d6f3f0f331f96f6aa1971",
+        "sizeBytes": 804749248
+      },
+      {
+        "url": "https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF/resolve/928ab958557df9aa2ef1c93e0e83c7ad0933fae2/mmproj-Qwen3-ASR-0.6B-Q8_0.gguf?download=true",
+        "filename": "mmproj-Qwen3-ASR-0.6B-Q8_0.gguf",
+        "sha256": "41a342b5e4c514e968cb756de6cd1b7be39eff43c44c57a2ef5fc6522e36603d",
+        "sizeBytes": 214392480
+      }
+    ],
     "fileConfig": {
-      "convFrontend": "conv_frontend.onnx",
-      "encoder": "encoder.int8.onnx",
-      "decoder": "decoder.int8.onnx",
-      "tokenizer": "tokenizer"
+      "model": "Qwen3-ASR-0.6B-Q8_0.gguf",
+      "mmproj": "mmproj-Qwen3-ASR-0.6B-Q8_0.gguf"
     },
     "groupId": "qwen3-asr",
-    "versionLabel": "0.6B Int8"
+    "versionLabel": "0.6B Q8_0"
+  },
+  {
+    "id": "qwen3-asr-1.7b-q8-gguf",
+    "name": "Qwen3 ASR",
+    "description": "settings.descriptions.qwen3_asr",
+    "url": "https://huggingface.co/ggml-org/Qwen3-ASR-1.7B-GGUF/resolve/36a678687ba7d07a74ca70ccb0e36902e005fb80/Qwen3-ASR-1.7B-Q8_0.gguf?download=true",
+    "type": "qwen3-asr",
+    "modes": ["batch"],
+    "language": "multi",
+    "size": "~2.35 GiB",
+    "isArchive": false,
+    "engine": "llama-cpp",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment"
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/ggml-org/Qwen3-ASR-1.7B-GGUF/resolve/36a678687ba7d07a74ca70ccb0e36902e005fb80/Qwen3-ASR-1.7B-Q8_0.gguf?download=true",
+        "filename": "Qwen3-ASR-1.7B-Q8_0.gguf",
+        "sha256": "58e22d0532d4eacaf034cfac17a6fed159f37c41390c710186783be439d1fc57",
+        "sizeBytes": 2165034944
+      },
+      {
+        "url": "https://huggingface.co/ggml-org/Qwen3-ASR-1.7B-GGUF/resolve/36a678687ba7d07a74ca70ccb0e36902e005fb80/mmproj-Qwen3-ASR-1.7B-Q8_0.gguf?download=true",
+        "filename": "mmproj-Qwen3-ASR-1.7B-Q8_0.gguf",
+        "sha256": "46c1d533af3f354ceb37ce855dbceff7da7fa7cf1e6a523df3b13440bd164c0d",
+        "sizeBytes": 355709344
+      }
+    ],
+    "fileConfig": {
+      "model": "Qwen3-ASR-1.7B-Q8_0.gguf",
+      "mmproj": "mmproj-Qwen3-ASR-1.7B-Q8_0.gguf"
+    },
+    "groupId": "qwen3-asr",
+    "versionLabel": "1.7B Q8_0"
   },
   {
     "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",

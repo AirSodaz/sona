@@ -7,6 +7,7 @@ members = [
     "adapters/archive",
     "adapters/export",
     "adapters/local_asr",
+    "adapters/llama_asr",
     "adapters/media_detector",
     "adapters/model_downloads",
     "adapters/online_llm",

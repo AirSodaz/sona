@@ -23,6 +23,14 @@ pub struct FfiModelRules {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
+pub struct FfiModelArtifact {
+    pub url: String,
+    pub filename: String,
+    pub sha256: String,
+    pub size_bytes: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
 pub struct FfiPresetModel {
     pub id: String,
     pub name: String,
@@ -33,6 +41,7 @@ pub struct FfiPresetModel {
     pub language: String,
     pub size: String,
     pub sha256: Option<String>,
+    pub artifacts: Vec<FfiModelArtifact>,
     pub is_recommended: bool,
     pub is_archive: bool,
     pub filename: Option<String>,
@@ -53,6 +62,7 @@ pub struct FfiModelCatalogModel {
     pub language: String,
     pub size: String,
     pub sha256: Option<String>,
+    pub artifacts: Vec<FfiModelArtifact>,
     pub is_recommended: bool,
     pub is_archive: bool,
     pub filename: Option<String>,
@@ -210,6 +220,7 @@ pub struct FfiModelFileConfig {
     pub llm: Option<String>,
     pub embedding: Option<String>,
     pub tokenizer: Option<String>,
+    pub mmproj: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
@@ -238,7 +249,22 @@ pub fn model_file_config_to_ffi(config: ModelFileConfig) -> FfiModelFileConfig {
         llm: config.llm,
         embedding: config.embedding,
         tokenizer: config.tokenizer,
+        mmproj: config.mmproj,
     }
+}
+
+fn model_artifacts_to_ffi(
+    artifacts: &[sona_core::models::preset_models::PresetModelArtifact],
+) -> Vec<FfiModelArtifact> {
+    artifacts
+        .iter()
+        .map(|artifact| FfiModelArtifact {
+            url: artifact.url.clone(),
+            filename: artifact.filename.clone(),
+            sha256: artifact.sha256.clone(),
+            size_bytes: artifact.size_bytes,
+        })
+        .collect()
 }
 
 pub fn timestamp_support_hint_to_ffi(hint: TimestampSupportHint) -> FfiTimestampSupportHint {
@@ -270,6 +296,7 @@ pub fn preset_model_to_ffi(model: &PresetModel) -> FfiPresetModel {
         language: model.language.clone(),
         size: model.size.clone(),
         sha256: model.sha256.clone(),
+        artifacts: model_artifacts_to_ffi(model.artifacts.as_deref().unwrap_or_default()),
         is_recommended: model.is_recommended.unwrap_or(false),
         is_archive: model.is_archive(),
         filename: model.filename.clone(),
@@ -457,6 +484,7 @@ pub fn model_catalog_model_to_ffi(model: ModelCatalogModel) -> FfiModelCatalogMo
         language: model.language,
         size: model.size,
         sha256: model.sha256,
+        artifacts: model_artifacts_to_ffi(&model.artifacts),
         is_recommended: model.is_recommended.unwrap_or(false),
         is_archive: model.is_archive,
         filename: model.filename,

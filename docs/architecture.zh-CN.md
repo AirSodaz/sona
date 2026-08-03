@@ -17,6 +17,7 @@ Sona 使用六种稳定角色。角色是经过评审的依赖契约；工作区
 | `sona-archive` | outbound-adapter |
 | `sona-export` | outbound-adapter |
 | `sona-local-asr` | outbound-adapter |
+| `sona-llama-asr` | outbound-adapter |
 | `sona-media-detector` | outbound-adapter |
 | `sona-model-downloads` | outbound-adapter |
 | `sona-online-asr` | outbound-adapter |
@@ -59,6 +60,7 @@ Core <- Outbound Adapter <------------- Host
 | `adapters/archive/` | `sona-archive` | outbound-adapter | |
 | `adapters/export/` | `sona-export` | outbound-adapter | |
 | `adapters/local_asr/` | `sona-local-asr` | outbound-adapter | |
+| `adapters/llama_asr/` | `sona-llama-asr` | outbound-adapter | 通过 llama.cpp 执行 Qwen3-ASR 批量推理 |
 | `adapters/media_detector/` | `sona-media-detector` | outbound-adapter | |
 | `adapters/model_downloads/` | `sona-model-downloads` | outbound-adapter | |
 | `adapters/online_asr/` | `sona-online-asr` | outbound-adapter | |
@@ -150,7 +152,8 @@ pnpm run generate:sona-context
 | 能力 | Desktop (`sona`) | CLI (`sona-cli`) | UniFFI (`sona-uniffi-bind`) |
 | --- | --- | --- | --- |
 | SQLite / History / Tag | yes | out of scope | yes |
-| Local ASR | yes | yes | yes |
+| Local ASR (sherpa-onnx) | yes | yes | yes |
+| Local ASR (llama.cpp) | yes | yes | no |
 | Online ASR | yes | yes | yes |
 | Online LLM | yes | out of scope | yes |
 | Model downloads | yes | yes | yes |
@@ -160,6 +163,11 @@ pnpm run generate:sona-context
 | TypeScript/Tauri 契约绑定 | yes | no | no |
 | Archive / recovery | yes | out of scope | yes |
 | Export / runtime-fs | yes | yes | yes |
+
+Desktop 与 CLI 的模型下载器会将 `ggml-org/Qwen3-ASR-0.6B-GGUF` 和
+`ggml-org/Qwen3-ASR-1.7B-GGUF` 的 Q8_0 预设作为经过校验的多文件模型包安装。
+主 GGUF 与匹配的 mmproj 会先下载到暂存目录，再整体发布，因此文件不完整时不会被标记为已安装。
+UniFFI 与 Android 仍只暴露 sherpa-onnx 本地 ASR 模型。
 
 CLI 定位为无状态转写 Host：应用持久化、History/Tag、Online LLM、archive/recovery 与 Sync 均属于有意的产品边界。Online ASR 凭据只从环境变量读取，CLI 不会持久化。UniFFI 缺少 media detector 属于当前 Host 接线限制，不是 Core 端口缺失。
 

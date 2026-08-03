@@ -7,7 +7,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 pub(crate) fn local_batch_transcriber() -> impl BatchTranscriberPort {
-    sona_local_asr::batch::LocalBatchAsrAdapter
+    sona_application::local_asr::LocalBatchTranscriberRouter::new(
+        Arc::new(sona_local_asr::batch::LocalBatchAsrAdapter),
+        Arc::new(sona_llama_asr::batch::LlamaBatchAsrAdapter),
+    )
 }
 
 pub(crate) async fn local_streaming_session(

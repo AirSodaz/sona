@@ -10,7 +10,7 @@ const i18nMocks = vi.hoisted(() => ({
     if (key === 'settings.model_download_status.extracting_file') return `Extracting ${params?.filename}`;
     if (key === 'settings.model_download_status.downloading_only') return `Downloading ${params?.label}`;
     if (key === 'settings.model_download_status.downloading_from_mirror') return `Mirror ${params?.label}`;
-    if (key === 'settings.model_download_status.downloading') return `${params?.downloadedMB}/${params?.totalMB} ${params?.speed}`;
+    if (key === 'settings.model_download_status.downloading') return `${params?.label}... ${params?.downloadedMB}/${params?.totalMB} (${params?.speed})`;
     if (key === 'settings.model_download_status.download_label') return 'Downloading';
     return key;
   }),
@@ -52,6 +52,7 @@ function makeCatalogModel(overrides: Partial<ModelCatalogModel> = {}): ModelCata
 
 describe('modelDownloadService', () => {
   const downloadFile = vi.fn();
+  const downloadPresetModel = vi.fn();
   const extractTarBz2 = vi.fn();
   const cancelDownload = vi.fn();
   const remove = vi.fn();
@@ -62,6 +63,7 @@ describe('modelDownloadService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     downloadFile.mockResolvedValue(undefined);
+    downloadPresetModel.mockResolvedValue('/models/qwen3-asr-0.6b-q8-gguf');
     extractTarBz2.mockResolvedValue(undefined);
     cancelDownload.mockResolvedValue(undefined);
     remove.mockResolvedValue(undefined);
@@ -103,6 +105,56 @@ describe('modelDownloadService', () => {
     });
     expect(remove).toHaveBeenCalledWith('/catalog/download.tar.bz2');
     expect(onProgress).toHaveBeenCalledWith(100, 'Done', true);
+  });
+
+  it('delegates multi-file catalog models to the atomic preset installer', async () => {
+    const now = vi.spyOn(Date, 'now')
+      .mockReturnValueOnce(1_000)
+      .mockReturnValueOnce(2_000);
+    let progressHandler: ((event: { payload: unknown }) => void) | undefined;
+    listen.mockImplementation(async (_event: string, handler: (event: { payload: unknown }) => void) => {
+      progressHandler = handler;
+      return vi.fn();
+    });
+    downloadPresetModel.mockImplementation(async ({ downloadId }) => {
+      progressHandler?.({ payload: [8 * 1024 * 1024, 16 * 1024 * 1024, downloadId] });
+      return '/models/qwen3-asr-0.6b-q8-gguf';
+    });
+    const service = createModelDownloadService({
+      downloadFile,
+      downloadPresetModel,
+      extractTarBz2,
+      cancelDownload,
+      remove,
+      listen,
+      join,
+      getModelsDir,
+    });
+    const onProgress = vi.fn();
+
+    await expect(service.downloadModel({
+      modelId: 'qwen3-asr-0.6b-q8-gguf',
+      model: makeCatalogModel({
+        id: 'qwen3-asr-0.6b-q8-gguf',
+        engine: 'llama-cpp',
+        isArchive: false,
+        installPath: '/models/qwen3-asr-0.6b-q8-gguf',
+        artifacts: [
+          { url: 'https://example.com/model.gguf', filename: 'model.gguf', sha256: 'a', sizeBytes: 768 },
+          { url: 'https://example.com/mmproj.gguf', filename: 'mmproj.gguf', sha256: 'b', sizeBytes: 256 },
+        ],
+      }),
+      onProgress,
+    })).resolves.toBe('/models/qwen3-asr-0.6b-q8-gguf');
+
+    expect(downloadPresetModel).toHaveBeenCalledWith(expect.objectContaining({
+      modelId: 'qwen3-asr-0.6b-q8-gguf',
+    }));
+    expect(downloadFile).not.toHaveBeenCalled();
+    expect(extractTarBz2).not.toHaveBeenCalled();
+    expect(onProgress).toHaveBeenCalledWith(50, 'Downloading... 8/16 (8.0 MB/s)');
+    expect(onProgress).toHaveBeenCalledWith(100, 'Done', true);
+    now.mockRestore();
   });
 
   it('passes expected sha256 for archive model downloads before extraction', async () => {

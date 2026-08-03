@@ -72,7 +72,7 @@ pub use mapper::{
     FfiLlmProvider, FfiLlmProviderDefaults, FfiLlmProviderStrategy, FfiLlmResponseFormatKind,
     FfiLlmResponseFormatV1, FfiLlmSegmentInput, FfiLlmTaskChunk, FfiLlmTaskFinal,
     FfiLlmTaskProgress, FfiLlmTaskText, FfiLlmTaskType, FfiLlmTokenUsage,
-    FfiLlmUsageDashboardStatsV1, FfiModelCatalogGroup, FfiModelCatalogModel,
+    FfiLlmUsageDashboardStatsV1, FfiModelArtifact, FfiModelCatalogGroup, FfiModelCatalogModel,
     FfiModelCatalogPathMatchToken, FfiModelCatalogRestoreDefaults, FfiModelCatalogSection,
     FfiModelCatalogSectionType, FfiModelCatalogSelectedIds, FfiModelCatalogSelectionOptions,
     FfiModelCatalogSnapshot, FfiModelDependencyConfigKey, FfiModelDependencyRequest,
@@ -2754,8 +2754,7 @@ mod tests {
             FfiModelSelectionPaths {
                 streaming_model_path:
                     "C:/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17".to_string(),
-                batch_model_path: "D:\\portable\\sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25"
-                    .to_string(),
+                batch_model_path: "D:\\portable\\qwen3-asr-0.6b-q8-gguf".to_string(),
                 speaker_segmentation_model_path: String::new(),
                 speaker_embedding_model_path:
                     "D:/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
@@ -2767,10 +2766,7 @@ mod tests {
             selected.streaming,
             Some("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17".to_string())
         );
-        assert_eq!(
-            selected.batch,
-            Some("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25".to_string())
-        );
+        assert_eq!(selected.batch, Some("qwen3-asr-0.6b-q8-gguf".to_string()));
         assert_eq!(selected.speaker_segmentation, None);
         assert_eq!(
             selected.speaker_embedding,

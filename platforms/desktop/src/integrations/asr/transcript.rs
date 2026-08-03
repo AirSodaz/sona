@@ -1,11 +1,7 @@
-﻿use super::recognizer_output_event;
-use super::types::{TranscriptNormalizationOptions, TranscriptSegment, TranscriptUpdate};
+﻿use super::types::{TranscriptNormalizationOptions, TranscriptSegment};
 #[cfg(test)]
 use super::types::{TranscriptTimingLevel, TranscriptTimingSource};
-use log::info;
 use sona_local_asr::punctuation::Punctuation;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 pub(crate) use sona_core::transcription::transcript::{
     normalize_recognizer_text, select_final_transcript_text, synthesize_durations,
@@ -13,46 +9,6 @@ pub(crate) use sona_core::transcription::transcript::{
 
 fn new_transcript_segment_id() -> String {
     uuid::Uuid::new_v4().to_string()
-}
-
-pub(crate) fn diagnostics_instance_label(instance_id: &str) -> Option<&'static str> {
-    match instance_id {
-        "record" => Some("record"),
-        "caption" => Some("caption"),
-        "voice-typing" => Some("voice-typing"),
-        _ => None,
-    }
-}
-
-pub(crate) fn log_segment_emit_diagnostics(
-    instance_id: &str,
-    first_segment_emitted: Option<&Arc<AtomicBool>>,
-    segment: &TranscriptSegment,
-    stage: &str,
-) {
-    // These logs are intentionally scoped to the long-lived live instances we
-    // debug most often (`record`, `caption`, `voice-typing`), not to every
-    // possible recognizer consumer.
-    let Some(label) = diagnostics_instance_label(instance_id) else {
-        return;
-    };
-
-    let text_len = segment.text.chars().count();
-    if let Some(first_segment_emitted) = first_segment_emitted
-        && first_segment_emitted
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
-    {
-        info!(
-            "[Sherpa] {label} first segment emitted. stage={} segment_id={} final={} text_len={}",
-            stage, segment.id, segment.is_final, text_len
-        );
-    }
-
-    info!(
-        "[Sherpa] {label} emit. stage={} segment_id={} final={} text_len={}",
-        stage, segment.id, segment.is_final, text_len
-    );
 }
 
 pub(crate) fn apply_timeline_normalization(
@@ -64,36 +20,6 @@ pub(crate) fn apply_timeline_normalization(
         options,
         new_transcript_segment_id,
     )
-}
-
-pub(crate) fn build_transcript_update(
-    segment: TranscriptSegment,
-    options: TranscriptNormalizationOptions,
-) -> TranscriptUpdate {
-    sona_core::transcription::transcript::build_transcript_update_with_id_generator(
-        segment,
-        options,
-        new_transcript_segment_id,
-    )
-}
-
-pub(crate) fn emit_transcript_update(
-    emitter: &dyn crate::platform::event::EventEmitterPort,
-    instance_id: &str,
-    update: &TranscriptUpdate,
-    stage: &str,
-    first_segment_emitted: Option<&Arc<AtomicBool>>,
-) {
-    let event_name = recognizer_output_event(instance_id);
-    for segment in &update.upsert_segments {
-        log_segment_emit_diagnostics(instance_id, first_segment_emitted, segment, stage);
-    }
-    match serde_json::to_value(update) {
-        Ok(value) => {
-            let _ = emitter.emit(&event_name, value);
-        }
-        Err(e) => log::error!("[Transcript] Failed to serialize transcript update: {e}"),
-    }
 }
 
 pub(crate) fn format_transcript(text: &str, punctuation: Option<&Punctuation>) -> String {

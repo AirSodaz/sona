@@ -12,6 +12,13 @@ use tokio::sync::Mutex as AsyncMutex;
 
 pub const DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Online ASR batch is unavailable in the desktop app because no online ASR configuration is loaded. Start the API Server from the desktop app to use configured Online ASR providers.";
 
+fn local_batch_transcriber() -> sona_application::local_asr::LocalBatchTranscriberRouter {
+    sona_application::local_asr::LocalBatchTranscriberRouter::new(
+        Arc::new(sona_local_asr::batch::LocalBatchAsrAdapter),
+        Arc::new(sona_llama_asr::batch::LlamaBatchAsrAdapter),
+    )
+}
+
 pub struct ApiServerController {
     running_server: Arc<AsyncMutex<Option<RunningApiServer>>>,
     online_asr_config: Arc<tokio::sync::RwLock<HashMap<String, serde_json::Value>>>,
@@ -208,7 +215,7 @@ pub async fn start_api_server(
         resolved,
         temp_dir,
         online_asr_config,
-        batch_transcriber: Arc::new(sona_local_asr::batch::LocalBatchAsrAdapter),
+        batch_transcriber: Arc::new(local_batch_transcriber()),
         media_validator: Arc::new(sona_media_detector::MagicNumberMediaFileValidator),
         gpu_availability: Arc::new(sona_local_asr::gpu::LocalGpuAvailabilityProvider),
         model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),
@@ -286,7 +293,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                 resolved,
                 temp_dir,
                 online_asr_config,
-                batch_transcriber: Arc::new(sona_local_asr::batch::LocalBatchAsrAdapter),
+                batch_transcriber: Arc::new(local_batch_transcriber()),
                 media_validator: Arc::new(sona_media_detector::MagicNumberMediaFileValidator),
                 gpu_availability: Arc::new(sona_local_asr::gpu::LocalGpuAvailabilityProvider),
                 model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),

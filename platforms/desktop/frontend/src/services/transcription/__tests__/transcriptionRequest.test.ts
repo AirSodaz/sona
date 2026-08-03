@@ -8,7 +8,23 @@ import {
 
 vi.mock('../../modelService', () => ({
   PRESET_MODELS: [],
-  PRESET_MODELS_MAP: new Map(),
+  PRESET_MODELS_MAP: new Map([
+    ['qwen3-asr-0.6b-q8-gguf', {
+      id: 'qwen3-asr-0.6b-q8-gguf',
+      name: 'Qwen3 ASR',
+      description: '',
+      url: 'https://example.com/qwen.gguf',
+      type: 'qwen3-asr',
+      modes: ['batch'],
+      language: 'multi',
+      size: '1 GB',
+      engine: 'llama-cpp',
+      fileConfig: {
+        model: 'Qwen3-ASR-0.6B-Q8_0.gguf',
+        mmproj: 'mmproj-Qwen3-ASR-0.6B-Q8_0.gguf',
+      },
+    }],
+  ]),
   modelService: {
     getModelRules: vi.fn(() => ({
       requiresPunctuation: false,
@@ -153,5 +169,50 @@ describe('transcriptionRequest helpers', () => {
       batchSegmentationMode: 'whole',
     }));
     expect(request.asrRequest).toBe(asrRequest);
+  });
+
+  it('removes unsupported options from llama.cpp Qwen batch requests', () => {
+    const config = buildTestConfig({
+      language: 'zh',
+      enableITN: true,
+      hotwords: ['Sona'],
+      vadModelPath: '/models/vad.onnx',
+      punctuationModelPath: '/models/punctuation.onnx',
+      speakerSegmentationModelPath: '/models/speaker-segmentation',
+      asr: {
+        selections: {
+          batch: {
+            engine: 'local-sherpa',
+            mode: 'batch',
+            modelId: 'qwen3-asr-0.6b-q8-gguf',
+            modelPath: '/models/qwen3-asr-0.6b-q8-gguf',
+          },
+        },
+      },
+    });
+
+    const { request, asrRequest } = buildBatchTranscriptionRequest({
+      appConfig: config,
+      filePath: 'C:/audio/demo.wav',
+      saveToPath: 'C:/audio/copy.wav',
+      language: 'zh',
+      enableItn: true,
+    });
+
+    expect(asrRequest).toEqual(expect.objectContaining({
+      localEngine: 'llama-cpp',
+      language: 'auto',
+      enableItn: false,
+      hotwords: null,
+      vadModel: null,
+      punctuationModel: null,
+      batchSegmentationMode: 'whole',
+      modelType: 'qwen3-asr',
+      fileConfig: expect.objectContaining({
+        mmproj: 'mmproj-Qwen3-ASR-0.6B-Q8_0.gguf',
+      }),
+    }));
+    expect(request.saveToPath).toBeNull();
+    expect(request.speakerProcessing).toBeNull();
   });
 });

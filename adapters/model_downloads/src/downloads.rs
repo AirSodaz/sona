@@ -15,6 +15,7 @@ const READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DownloadFileOperation {
     CreateModelsDirectory,
+    CreateInstallDirectory,
     AcquireInstallLock,
     InspectInstall,
     RemoveInstallFile,
@@ -30,6 +31,7 @@ impl std::fmt::Display for DownloadFileOperation {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let value = match self {
             Self::CreateModelsDirectory => "create models directory",
+            Self::CreateInstallDirectory => "create model install directory",
             Self::AcquireInstallLock => "acquire model install lock",
             Self::InspectInstall => "inspect model install",
             Self::RemoveInstallFile => "remove model file",

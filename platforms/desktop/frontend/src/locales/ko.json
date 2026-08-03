@@ -1015,7 +1015,7 @@
         "rules_placeholder": "e.g. Find => Replace With",
         "rules_hint": "Use \" => \" to separate find and replace text. One rule per line.",
         "hotwords_title": "Hotwords",
-        "hotwords_description": "Enhance recognition for specific terms. One per line. (Currently supported by Transducer and Qwen3 ASR 모델)",
+        "hotwords_description": "Enhance recognition for specific terms. One per line. (Supported by compatible sherpa-onnx Transducer models; llama.cpp Qwen3-ASR does not use hotwords.)",
         "hotwords_placeholder": "e.g.\nChatGPT\nSherpa-onnx :2.0",
         "hotwords_hint": "Tip: You can add weight by appending \" :weight\" (e.g. \"Term :2.0\"). Default weight is 1.0.",
         "polish_keywords_title": "정리 Keywords",

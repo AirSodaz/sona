@@ -1015,7 +1015,7 @@
         "rules_placeholder": "例如：查找 => 替换为",
         "rules_hint": "使用 \" => \" 分隔查找和替换文本。每行一条规则。",
         "hotwords_title": "热词",
-        "hotwords_description": "增强特定术语的识别率。每行一个。（目前仅 Transducer 和 Qwen3 ASR 模型支持）",
+        "hotwords_description": "增强特定术语的识别率。每行一个。（适用于兼容的 sherpa-onnx Transducer 模型；llama.cpp Qwen3-ASR 不使用热词。）",
         "hotwords_placeholder": "例如：\nChatGPT\nSherpa-onnx :2.0",
         "hotwords_hint": "提示：可以通过附加 \" :权重\" 来增加权重（例如 \"术语 :2.0\"）。默认权重为 1.0。",
         "polish_keywords_title": "润色关键词",

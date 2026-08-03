@@ -8,6 +8,7 @@ export const TauriCommand = {
   app: {
     extractTarBz2: 'extract_tar_bz2',
     downloadFile: 'download_file',
+    downloadPresetModel: 'download_preset_model',
     cancelDownload: 'cancel_download',
     openLogFolder: 'open_log_folder',
     getModelCatalogSnapshot: 'get_model_catalog_snapshot',

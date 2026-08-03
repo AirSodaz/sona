@@ -17,6 +17,7 @@ Sona uses six stable roles. The role is the reviewed dependency contract; worksp
 | `sona-archive` | outbound-adapter |
 | `sona-export` | outbound-adapter |
 | `sona-local-asr` | outbound-adapter |
+| `sona-llama-asr` | outbound-adapter |
 | `sona-media-detector` | outbound-adapter |
 | `sona-model-downloads` | outbound-adapter |
 | `sona-online-asr` | outbound-adapter |
@@ -59,6 +60,7 @@ Each workspace package lives under the root for its reviewed role. The `[package
 | `adapters/archive/` | `sona-archive` | outbound-adapter | |
 | `adapters/export/` | `sona-export` | outbound-adapter | |
 | `adapters/local_asr/` | `sona-local-asr` | outbound-adapter | |
+| `adapters/llama_asr/` | `sona-llama-asr` | outbound-adapter | Qwen3-ASR batch inference through llama.cpp |
 | `adapters/media_detector/` | `sona-media-detector` | outbound-adapter | |
 | `adapters/model_downloads/` | `sona-model-downloads` | outbound-adapter | |
 | `adapters/online_asr/` | `sona-online-asr` | outbound-adapter | |
@@ -150,7 +152,8 @@ Capabilities are derived from current workspace dependencies and product scope. 
 | Capability | Desktop (`sona`) | CLI (`sona-cli`) | UniFFI (`sona-uniffi-bind`) |
 | --- | --- | --- | --- |
 | SQLite / History / Tag | yes | out of scope | yes |
-| Local ASR | yes | yes | yes |
+| Local ASR (sherpa-onnx) | yes | yes | yes |
+| Local ASR (llama.cpp) | yes | yes | no |
 | Online ASR | yes | yes | yes |
 | Online LLM | yes | out of scope | yes |
 | Model downloads | yes | yes | yes |
@@ -160,6 +163,12 @@ Capabilities are derived from current workspace dependencies and product scope. 
 | TypeScript/Tauri contract bind | yes | no | no |
 | Archive / recovery | yes | out of scope | yes |
 | Export / runtime-fs | yes | yes | yes |
+
+The Desktop and CLI model downloader installs the `ggml-org/Qwen3-ASR-0.6B-GGUF`
+and `ggml-org/Qwen3-ASR-1.7B-GGUF` Q8_0 presets as verified multi-file bundles.
+The main GGUF and matching mmproj are downloaded into a staging directory and
+published together, so an incomplete pair is never reported as installed.
+UniFFI and Android continue to expose sherpa-onnx local ASR models only.
 
 CLI is a stateless transcription host: application persistence, History/Tag, Online LLM, archive/recovery, and Sync are intentional product boundaries. Online ASR credentials come from an environment variable and are never stored by the CLI. UniFFI's media detection gap is a current host wiring limit, not a Core port absence.
 

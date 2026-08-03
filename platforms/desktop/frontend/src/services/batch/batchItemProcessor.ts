@@ -6,7 +6,7 @@ import type { HistoryItem } from '../../types/history';
 import type { RecoveryItemStage } from '../../types/recovery';
 import type { TranscriptSegment } from '../../types/transcript';
 import { transcriptionService } from '../transcriptionService';
-import { asrConfigService } from '../asrConfigService';
+import { asrConfigService, isLlamaCppBatchRequest } from '../asrConfigService';
 import { historyService } from '../historyService';
 import { polishService } from '../polishService';
 import { translationService } from '../translationService';
@@ -59,6 +59,7 @@ export class BatchItemProcessor {
   }: ProcessBatchItemOptions): Promise<void> => {
     const language = config.language;
     const batchAsr = this.ports.asrConfigService.resolveAsrTranscriptionRequest(config, 'batch');
+    const isLlamaCpp = isLlamaCppBatchRequest(batchAsr);
     const stageConfig = this.getAutomationStageConfig(item, config);
 
     if (!this.ports.asrConfigService.isAsrRequestConfigured(batchAsr)) {
@@ -93,7 +94,7 @@ export class BatchItemProcessor {
         item.filePath,
         currentSegments,
         this.calculateDuration(currentSegments),
-        batchAsr.engine === 'local-sherpa' ? tempWavPath : undefined,
+        batchAsr.engine === 'local-sherpa' && !isLlamaCpp ? tempWavPath : undefined,
         item.tagIds ?? (item.projectId ? [item.projectId] : []),
         item.id,
       );
@@ -119,7 +120,7 @@ export class BatchItemProcessor {
       this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);
 
       const tempDirectory = await tempDir();
-      tempWavPath = await join(tempDirectory, `${uuidv4()}.wav`);
+      tempWavPath = isLlamaCpp ? undefined : await join(tempDirectory, `${uuidv4()}.wav`);
 
       const segments = await this.ports.transcriptionService.transcribeFile(
         item.filePath,

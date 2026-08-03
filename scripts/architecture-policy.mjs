@@ -21,6 +21,7 @@ export const EXPECTED_ROLES = new Map([
   ['sona-archive', 'outbound-adapter'],
   ['sona-export', 'outbound-adapter'],
   ['sona-local-asr', 'outbound-adapter'],
+  ['sona-llama-asr', 'outbound-adapter'],
   ['sona-media-detector', 'outbound-adapter'],
   ['sona-model-downloads', 'outbound-adapter'],
   ['sona-online-asr', 'outbound-adapter'],
@@ -91,8 +92,8 @@ export const HOST_CAPABILITY_MATRIX = [
   },
   {
     id: 'local-asr',
-    enLabel: 'Local ASR',
-    zhLabel: 'Local ASR',
+    enLabel: 'Local ASR (sherpa-onnx)',
+    zhLabel: 'Local ASR (sherpa-onnx)',
     status: {
       sona: 'yes',
       'sona-cli': 'yes',
@@ -100,6 +101,18 @@ export const HOST_CAPABILITY_MATRIX = [
     },
     packages: ['sona-local-asr'],
     wiringPatterns: ['\\bsona_local_asr\\b'],
+  },
+  {
+    id: 'local-asr-llama-cpp',
+    enLabel: 'Local ASR (llama.cpp)',
+    zhLabel: 'Local ASR (llama.cpp)',
+    status: {
+      sona: 'yes',
+      'sona-cli': 'yes',
+      'sona-uniffi-bind': 'no',
+    },
+    packages: ['sona-llama-asr'],
+    wiringPatterns: ['\\bsona_llama_asr\\b'],
   },
   {
     id: 'online-asr',

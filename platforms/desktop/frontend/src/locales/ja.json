@@ -1015,7 +1015,7 @@
         "rules_placeholder": "例:検索 => 置換",
         "rules_hint": "「 => 」を使用して、テキストの検索と置換を区切ります。 1 行に 1 つのルール。",
         "hotwords_title": "ホットワード",
-        "hotwords_description": "特定の用語の認識を強化します。 1 行に 1 つ。 (現在、トランスデューサーおよび Qwen3 ASR モデルでサポートされています)",
+        "hotwords_description": "特定の用語の認識を強化します。1 行に 1 つ。（互換性のある sherpa-onnx Transducer モデルでサポート。llama.cpp Qwen3-ASR はホットワードを使用しません。）",
         "hotwords_placeholder": "例:\nチャットGPT\nシェルパオンクス：2.0",
         "hotwords_hint": "ヒント: 「:weight」を追加することでウェイトを追加できます (例: 「Term:2.0」)。デフォルトの重みは 1.0 です。",
         "polish_keywords_title": "Polish キーワード",

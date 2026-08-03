@@ -62,6 +62,7 @@ pub struct BatchTranscribeOptions {
 pub struct BatchTranscribePlan {
     pub input_path: PathBuf,
     pub save_to_path: Option<PathBuf>,
+    pub engine: crate::ports::asr::LocalAsrEngine,
     pub model_path: String,
     pub num_threads: i32,
     pub enable_itn: bool,
@@ -69,9 +70,11 @@ pub struct BatchTranscribePlan {
     pub punctuation_model: Option<String>,
     pub vad_model: Option<String>,
     pub vad_buffer: f32,
+    pub batch_segmentation_mode: crate::ports::asr::BatchSegmentationMode,
     pub model_type: String,
     pub file_config: Option<crate::models::config::ModelFileConfig>,
     pub hotwords: Option<String>,
+    pub speaker_processing: Option<crate::transcription::speaker::SpeakerProcessingConfig>,
     pub gpu_acceleration: Option<String>,
     pub export_format: ExportFormat,
     pub output_target: OutputTarget,
@@ -446,6 +449,7 @@ pub fn resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
     Ok(BatchTranscribePlan {
         input_path: options.input,
         save_to_path: options.save_wav,
+        engine: resolved.engine,
         model_path: resolved.model_path,
         num_threads: resolved.num_threads,
         enable_itn: resolved.enable_itn,
@@ -453,9 +457,11 @@ pub fn resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
         punctuation_model: resolved.punctuation_model,
         vad_model: resolved.vad_model,
         vad_buffer: resolved.vad_buffer,
+        batch_segmentation_mode: crate::ports::asr::BatchSegmentationMode::Vad,
         model_type: resolved.model_type,
         file_config: resolved.file_config,
         hotwords: resolved.hotwords,
+        speaker_processing: None,
         gpu_acceleration: resolved.gpu_acceleration,
         export_format,
         output_target,
@@ -479,6 +485,7 @@ struct LocalTranscribeSettings {
 
 struct ResolvedLocalTranscribeSettings {
     model_id: String,
+    engine: crate::ports::asr::LocalAsrEngine,
     model_path: String,
     num_threads: i32,
     enable_itn: bool,
@@ -506,6 +513,13 @@ fn resolve_local_transcribe_settings(
         .model_id
         .ok_or_else(|| RuntimeValidationError::new("model_id", missing_model_error))?;
     let model = resolve_model_for_mode(&model_id, mode)?;
+    let engine_name = model.engine.as_deref().unwrap_or("sherpa-onnx");
+    let engine = crate::ports::asr::LocalAsrEngine::from_name(engine_name).ok_or_else(|| {
+        RuntimeValidationError::new(
+            "model_id",
+            format!("Model '{model_id}' uses unsupported local ASR engine '{engine_name}'."),
+        )
+    })?;
     let models_dir = crate::models::paths::resolve_models_dir(
         settings.models_dir,
         settings.default_models_dir,
@@ -565,6 +579,7 @@ fn resolve_local_transcribe_settings(
     };
     Ok(ResolvedLocalTranscribeSettings {
         model_id,
+        engine,
         model_path,
         num_threads: threads,
         enable_itn: settings.enable_itn.unwrap_or(false),

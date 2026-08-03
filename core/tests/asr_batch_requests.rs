@@ -1,7 +1,8 @@
 use sona_core::ports::asr::{
     AsrEngineConfig, AsrMode, AsrPortErrorKind, AsrTranscriptionRequest, BatchSegmentationMode,
-    BatchTranscriptionRequest, LocalSherpaStreamingRequest, OnlineAsrProviderRequest,
-    TranscriptNormalizationOptions, TranscriptPostprocessOptions, validate_local_sherpa_mode,
+    BatchTranscriptionRequest, LocalAsrEngine, LocalSherpaStreamingRequest,
+    OnlineAsrProviderRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
+    validate_local_asr_mode,
 };
 use sona_core::transcription::postprocess::TranscriptPostprocessor;
 
@@ -28,6 +29,7 @@ fn local_batch_transcription_request_is_a_core_owned_runtime_contract() {
         },
         postprocessor: TranscriptPostprocessor::default(),
         gpu_acceleration: Some("cpu".to_string()),
+        engine: LocalAsrEngine::SherpaOnnx,
     };
 
     let cloned = request.clone();
@@ -43,7 +45,7 @@ fn local_batch_transcription_request_is_a_core_owned_runtime_contract() {
 }
 
 #[test]
-fn local_sherpa_mode_validation_is_a_core_owned_contract() {
+fn local_asr_mode_validation_is_a_core_owned_contract() {
     let batch_request = AsrTranscriptionRequest::local_sherpa(
         AsrMode::Batch,
         "models/sherpa".to_string(),
@@ -62,9 +64,9 @@ fn local_sherpa_mode_validation_is_a_core_owned_contract() {
         Some("cpu".to_string()),
     );
 
-    validate_local_sherpa_mode(&batch_request, AsrMode::Batch).unwrap();
+    validate_local_asr_mode(&batch_request, AsrMode::Batch).unwrap();
 
-    let mode_error = validate_local_sherpa_mode(&batch_request, AsrMode::Streaming).unwrap_err();
+    let mode_error = validate_local_asr_mode(&batch_request, AsrMode::Streaming).unwrap_err();
     assert_eq!(mode_error.kind, AsrPortErrorKind::InvalidRequest);
     assert_eq!(
         mode_error.message,
@@ -88,11 +90,11 @@ fn local_sherpa_mode_validation_is_a_core_owned_contract() {
         },
     };
 
-    let engine_error = validate_local_sherpa_mode(&online_request, AsrMode::Batch).unwrap_err();
+    let engine_error = validate_local_asr_mode(&online_request, AsrMode::Batch).unwrap_err();
     assert_eq!(engine_error.kind, AsrPortErrorKind::Unsupported);
     assert_eq!(
         engine_error.message,
-        "Unsupported ASR engine for local Sherpa adapter"
+        "Unsupported ASR engine for local ASR adapter"
     );
 }
 
@@ -118,7 +120,7 @@ fn local_batch_request_mapping_from_asr_request_is_core_owned() {
         Some("directml".to_string()),
     );
 
-    let batch_request = BatchTranscriptionRequest::from_local_sherpa_request(
+    let batch_request = BatchTranscriptionRequest::from_local_asr_request(
         "input.wav".into(),
         Some("output.wav".into()),
         request,
@@ -149,6 +151,7 @@ fn local_batch_request_mapping_from_asr_request_is_core_owned() {
     assert_eq!(batch_request.hotwords.as_deref(), Some("Sona, meeting"));
     assert!(batch_request.normalization_options.enable_timeline);
     assert_eq!(batch_request.gpu_acceleration.as_deref(), Some("directml"));
+    assert_eq!(batch_request.engine, LocalAsrEngine::SherpaOnnx);
 }
 
 #[test]
@@ -170,7 +173,7 @@ fn local_batch_request_mapping_rejects_online_engine() {
         },
     };
 
-    let error = BatchTranscriptionRequest::from_local_sherpa_request(
+    let error = BatchTranscriptionRequest::from_local_asr_request(
         "input.wav".into(),
         None,
         online_request,
@@ -180,7 +183,7 @@ fn local_batch_request_mapping_rejects_online_engine() {
     .unwrap_err();
 
     assert_eq!(error.kind, AsrPortErrorKind::InvalidRequest);
-    assert_eq!(error.message, "Expected LocalSherpa engine config");
+    assert_eq!(error.message, "Expected local ASR engine config");
 }
 
 #[test]
@@ -257,5 +260,40 @@ fn local_streaming_request_mapping_rejects_batch_mode() {
     assert_eq!(
         error.message,
         "ASR request mode mismatch: expected Streaming, got Batch"
+    );
+}
+
+#[test]
+fn local_sherpa_streaming_rejects_llama_engine_with_shared_error() {
+    let mut request = AsrTranscriptionRequest::local_sherpa(
+        AsrMode::Streaming,
+        "models/qwen".to_string(),
+        4,
+        false,
+        "auto".to_string(),
+        None,
+        None,
+        5.0,
+        "qwen3-asr".to_string(),
+        None,
+        None,
+        TranscriptNormalizationOptions::default(),
+        TranscriptPostprocessOptions::default(),
+        None,
+        None,
+    );
+    let AsrEngineConfig::LocalSherpa { local_engine, .. } = &mut request.engine_config else {
+        unreachable!();
+    };
+    *local_engine = LocalAsrEngine::LlamaCpp;
+
+    let error =
+        LocalSherpaStreamingRequest::from_local_sherpa_request("live-llama".to_string(), request)
+            .unwrap_err();
+
+    assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
+    assert_eq!(
+        error.message,
+        "Local ASR adapter 'sherpa-onnx' cannot execute engine 'llama-cpp'."
     );
 }

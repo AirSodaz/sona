@@ -700,7 +700,29 @@ pub fn resolve_live_transcribe_plan_with_runtime_paths_and_models_dir_status(
 }
 
 pub fn is_preset_model_installed_at(model: &PresetModel, models_dir: &Path) -> bool {
-    is_preset_model_install_path_complete(model, &model.resolve_install_path(models_dir))
+    let install_path = model.resolve_install_path(models_dir);
+    if model.is_multi_file() {
+        let Ok(metadata) = std::fs::symlink_metadata(&install_path) else {
+            return false;
+        };
+        return metadata.is_dir()
+            && !metadata.file_type().is_symlink()
+            && model
+                .artifacts
+                .as_deref()
+                .unwrap_or_default()
+                .iter()
+                .all(|artifact| {
+                    std::fs::symlink_metadata(install_path.join(&artifact.filename)).is_ok_and(
+                        |metadata| {
+                            metadata.is_file()
+                                && !metadata.file_type().is_symlink()
+                                && metadata.len() > 0
+                        },
+                    )
+                });
+    }
+    is_preset_model_install_path_complete(model, &install_path)
 }
 
 pub fn build_model_catalog_snapshot(

@@ -7,6 +7,7 @@ pub mod export;
 pub mod history;
 pub mod live_transcription;
 pub mod llm;
+pub mod local_asr;
 pub mod recovery;
 pub mod storage_usage;
 pub mod tag;

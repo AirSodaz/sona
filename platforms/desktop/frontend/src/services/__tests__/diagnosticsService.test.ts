@@ -23,7 +23,7 @@ import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useVoiceTypingRuntimeStore } from '../../stores/voiceTypingRuntimeStore';
 
 const STREAMING_SENSEVOICE_PATH = 'C:\\models\\sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
-const BATCH_QWEN_PATH = 'C:\\models\\sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25';
+const BATCH_QWEN_PATH = 'C:\\models\\qwen3-asr-0.6b-q8-gguf';
 const VAD_PATH = 'C:\\models\\silero_vad.onnx';
 
 const runtimeEnvironment = {

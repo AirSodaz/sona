@@ -219,7 +219,7 @@ export type AppTheme = "auto" | "light" | "dark";
 
 export type AsrEngine = "local-sherpa" | "online";
 
-export type AsrEngineConfig = { engine: "local-sherpa"; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
+export type AsrEngineConfig = { engine: "local-sherpa"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
 	encoder: string | null,
 	decoder: string | null,
 	model: string | null,
@@ -230,6 +230,7 @@ export type AsrEngineConfig = { engine: "local-sherpa"; modelId?: string | null;
 	llm: string | null,
 	embedding: string | null,
 	tokenizer: string | null,
+	mmproj: string | null,
 } | null; gpuAcceleration?: string | null } | { engine: "online"; onlineProvider: OnlineAsrProviderRequest };
 
 export type AsrInferenceMetric = {
@@ -1444,6 +1445,8 @@ export type LlmUsageEventPayload_Serialize = {
 	usage: TokenUsage | null,
 };
 
+export type LocalAsrEngine = "sherpa-onnx" | "llama-cpp";
+
 export type ModelCatalogGroup = ModelCatalogGroup_Serialize | ModelCatalogGroup_Deserialize;
 
 export type ModelCatalogGroup_Deserialize = {
@@ -1468,6 +1471,7 @@ export type ModelCatalogModel_Deserialize = {
 	language: string,
 	size: string,
 	sha256: string | null,
+	artifacts: PresetModelArtifact[],
 	isRecommended: boolean | null,
 	isArchive: boolean,
 	filename: string | null,
@@ -1490,6 +1494,7 @@ export type ModelCatalogModel_Serialize = {
 	language: string,
 	size: string,
 	sha256?: string | null,
+	artifacts?: PresetModelArtifact[],
 	isRecommended?: boolean | null,
 	isArchive: boolean,
 	filename?: string | null,
@@ -1609,6 +1614,7 @@ export type ModelFileConfig = {
 	llm: string | null,
 	embedding: string | null,
 	tokenizer: string | null,
+	mmproj: string | null,
 };
 
 export type ModelRuleInput = {
@@ -1798,6 +1804,13 @@ export type PreparedBackupImport_Serialize = {
 	automationRules: unknown[],
 	automationProcessedEntries: unknown[],
 	analyticsContent: string,
+};
+
+export type PresetModelArtifact = {
+	url: string,
+	filename: string,
+	sha256: string,
+	sizeBytes: number,
 };
 
 export type ProjectsViewMode = "list" | "grid" | "table";

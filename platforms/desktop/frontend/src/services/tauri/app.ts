@@ -34,6 +34,10 @@ import { flattenAppConfig } from '../../types/llm';
 
 export type DownloadFileRequest = TauriCommandArgs<typeof TauriCommand.app.downloadFile>;
 
+export type DownloadPresetModelRequest = TauriCommandArgs<
+  typeof TauriCommand.app.downloadPresetModel
+>;
+
 export type ExtractTarBz2Request = TauriCommandArgs<typeof TauriCommand.app.extractTarBz2>;
 
 export type UpdateTrayMenuRequest = TauriCommandArgs<typeof TauriCommand.app.updateTrayMenu>;
@@ -210,12 +214,13 @@ function normalizeModelRules(modelRules: CoreModelCatalogModel['rules']): ModelR
 function normalizeCatalogModel(model: CoreModelCatalogModel): ModelCatalogModel {
   const modes = normalizeModelModes(model.modes);
   const sha256 = optionalString(model.sha256);
+  const artifacts = model.artifacts ?? [];
   const isRecommended = model.isRecommended ?? undefined;
   const filename = optionalString(model.filename);
   const groupId = optionalString(model.groupId);
   const versionLabel = optionalString(model.versionLabel);
 
-  if (model.engine !== 'sherpa-onnx') {
+  if (model.engine !== 'sherpa-onnx' && model.engine !== 'llama-cpp') {
     throw new Error(`Unexpected model catalog engine: ${model.engine}`);
   }
 
@@ -229,6 +234,7 @@ function normalizeCatalogModel(model: CoreModelCatalogModel): ModelCatalogModel 
     language: model.language,
     size: model.size,
     ...(sha256 === undefined ? {} : { sha256 }),
+    ...(artifacts.length === 0 ? {} : { artifacts }),
     ...(isRecommended === undefined ? {} : { isRecommended }),
     isArchive: model.isArchive,
     ...(filename === undefined ? {} : { filename }),
@@ -305,6 +311,12 @@ export async function extractTarBz2(request: ExtractTarBz2Request): Promise<void
 
 export async function downloadFile(request: DownloadFileRequest): Promise<void> {
   await invokeTauri(TauriCommand.app.downloadFile, request);
+}
+
+export async function downloadPresetModel(
+  request: DownloadPresetModelRequest,
+): Promise<string> {
+  return await invokeTauri(TauriCommand.app.downloadPresetModel, request);
 }
 
 export async function cancelDownload(id: string): Promise<void> {

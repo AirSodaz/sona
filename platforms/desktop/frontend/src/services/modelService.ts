@@ -1,6 +1,7 @@
 import {
     cancelDownload,
     downloadFile,
+    downloadPresetModel,
     extractTarBz2,
     getModelCatalogSnapshot as getModelCatalogSnapshotFromRust,
     resolveModelCatalogSelectedIds as resolveModelCatalogSelectedIdsFromRust,
@@ -196,6 +197,7 @@ const registryService = createModelRegistryService({
 
 const downloadService = createModelDownloadService({
     downloadFile,
+    downloadPresetModel,
     extractTarBz2,
     cancelDownload: async (id: string) => {
         await cancelDownload(id);

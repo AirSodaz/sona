@@ -102,7 +102,7 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
             resolved,
             temp_dir,
             online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            batch_transcriber: Arc::new(sona_local_asr::batch::LocalBatchAsrAdapter),
+            batch_transcriber: Arc::new(crate::asr_adapter::local_batch_transcriber()),
             media_validator: Arc::new(sona_media_detector::MagicNumberMediaFileValidator),
             gpu_availability: Arc::new(sona_local_asr::gpu::LocalGpuAvailabilityProvider),
             model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),

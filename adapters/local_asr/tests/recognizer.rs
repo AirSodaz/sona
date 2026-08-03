@@ -8,7 +8,7 @@ use std::path::Path;
 
 #[test]
 fn build_model_config_supports_qwen3_asr_without_tokens() {
-    let model_path = Path::new("C:/models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25");
+    let model_path = Path::new("C:/models/qwen3-asr-0.6b-q8-gguf");
     let file_config = Some(ModelFileConfig {
         conv_frontend: Some("conv_frontend.onnx".to_string()),
         encoder: Some("encoder.int8.onnx".to_string()),

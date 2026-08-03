@@ -98,5 +98,6 @@ private fun installedModel(numThreads: UInt) = FfiInstalledLocalAsrModel(
         llm = null,
         embedding = null,
         tokenizer = null,
+        mmproj = null,
     ),
 )

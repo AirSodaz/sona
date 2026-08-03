@@ -15,11 +15,50 @@ fn shared_preset_metadata_lives_in_core() {
 }
 
 #[test]
+fn qwen_gguf_presets_replace_the_sherpa_qwen_catalog_entry() {
+    assert!(find_preset_model("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25").is_none());
+
+    for (id, expected_model, expected_mmproj) in [
+        (
+            "qwen3-asr-0.6b-q8-gguf",
+            "Qwen3-ASR-0.6B-Q8_0.gguf",
+            "mmproj-Qwen3-ASR-0.6B-Q8_0.gguf",
+        ),
+        (
+            "qwen3-asr-1.7b-q8-gguf",
+            "Qwen3-ASR-1.7B-Q8_0.gguf",
+            "mmproj-Qwen3-ASR-1.7B-Q8_0.gguf",
+        ),
+    ] {
+        let model = find_preset_model(id).unwrap();
+        assert_eq!(model.engine.as_deref(), Some("llama-cpp"));
+        assert!(model.supports_mode("batch"));
+        assert!(!model.supports_mode("streaming"));
+        assert_eq!(model.artifacts.as_ref().unwrap().len(), 2);
+        assert_eq!(
+            model.file_config.as_ref().unwrap().model.as_deref(),
+            Some(expected_model)
+        );
+        assert_eq!(
+            model.file_config.as_ref().unwrap().mmproj.as_deref(),
+            Some(expected_mmproj)
+        );
+        assert!(model.artifacts.as_ref().unwrap().iter().all(|artifact| {
+            artifact.sha256.len() == 64
+                && artifact
+                    .sha256
+                    .chars()
+                    .all(|character| character.is_ascii_hexdigit())
+        }));
+    }
+}
+
+#[test]
 fn resolves_model_paths_without_filesystem_status_checks() {
-    let directory_model = find_preset_model("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25").unwrap();
+    let directory_model = find_preset_model("qwen3-asr-0.6b-q8-gguf").unwrap();
     assert_eq!(
         directory_model.resolve_install_path(Path::new("C:/models")),
-        PathBuf::from("C:/models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25")
+        PathBuf::from("C:/models/qwen3-asr-0.6b-q8-gguf")
     );
 
     let file_model = find_preset_model(DEFAULT_SILERO_VAD_MODEL_ID).unwrap();
@@ -142,8 +181,7 @@ fn resolves_catalog_selection_ids_without_adapter_state() {
         &snapshot,
         &ModelSelectionPaths {
             streaming_model_path: int8_path,
-            batch_model_path: "D:\\portable\\sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25"
-                .to_string(),
+            batch_model_path: "D:\\portable\\qwen3-asr-0.6b-q8-gguf".to_string(),
             speaker_segmentation_model_path: String::new(),
             speaker_embedding_model_path:
                 "D:/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx".to_string(),
@@ -154,10 +192,7 @@ fn resolves_catalog_selection_ids_without_adapter_state() {
         selected.streaming,
         Some("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17".to_string())
     );
-    assert_eq!(
-        selected.batch,
-        Some("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25".to_string())
-    );
+    assert_eq!(selected.batch, Some("qwen3-asr-0.6b-q8-gguf".to_string()));
     assert_eq!(selected.speaker_segmentation, None);
     assert_eq!(
         selected.speaker_embedding,

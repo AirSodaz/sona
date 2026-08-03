@@ -482,7 +482,9 @@ describe('ModelService', () => {
 
     describe('single-file model metadata', () => {
         it('exposes sha256 hashes for non-archive models', () => {
-            const singleFileModels = PRESET_MODELS.filter(model => model.isArchive === false);
+            const singleFileModels = PRESET_MODELS.filter(model => (
+                model.isArchive === false && !model.artifacts?.length
+            ));
             const silero = PRESET_MODELS.find(model => model.id === 'silero-vad');
 
             expect(silero).toMatchObject({
@@ -498,9 +500,9 @@ describe('ModelService', () => {
     });
 
     describe('Qwen3 ASR metadata', () => {
-        const qwen3ModelId = 'sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25';
+        const qwen3ModelId = 'qwen3-asr-0.6b-q8-gguf';
 
-        it('registers qwen3-asr as an batch-only model with VAD support', () => {
+        it('registers Qwen3-ASR GGUF as a llama.cpp batch-only model', () => {
             const qwen3Model = PRESET_MODELS.find((model) => model.id === qwen3ModelId);
             const batchModelIds = PRESET_MODELS
                 .filter((model) => model.modes?.includes('batch'))
@@ -514,18 +516,22 @@ describe('ModelService', () => {
                 type: 'qwen3-asr',
                 modes: ['batch'],
                 fileConfig: {
-                    convFrontend: 'conv_frontend.onnx',
-                    encoder: 'encoder.int8.onnx',
-                    decoder: 'decoder.int8.onnx',
-                    tokenizer: 'tokenizer',
+                    model: 'Qwen3-ASR-0.6B-Q8_0.gguf',
+                    mmproj: 'mmproj-Qwen3-ASR-0.6B-Q8_0.gguf',
                 },
+                engine: 'llama-cpp',
+                artifacts: expect.arrayContaining([
+                    expect.objectContaining({ filename: 'Qwen3-ASR-0.6B-Q8_0.gguf' }),
+                    expect.objectContaining({ filename: 'mmproj-Qwen3-ASR-0.6B-Q8_0.gguf' }),
+                ]),
             });
             expect(qwen3Model?.fileConfig).not.toHaveProperty('tokens');
             expect(batchModelIds).toContain(qwen3ModelId);
             expect(streamingModelIds).not.toContain(qwen3ModelId);
             expect(modelService.getModelRules(qwen3ModelId)).toEqual({
-                requiresVad: true,
+                requiresVad: false,
                 requiresPunctuation: false,
+                timestampSupportHint: 'segment',
             });
         });
 

@@ -9,6 +9,13 @@ export interface ModelRules {
   timestampSupportHint?: TimestampSupportHint;
 }
 
+export interface ModelArtifact {
+  url: string;
+  filename: string;
+  sha256: string;
+  sizeBytes: number;
+}
+
 export interface ModelInfo {
   id: string;
   name: string;
@@ -32,10 +39,11 @@ export interface ModelInfo {
   language: string;
   size: string;
   sha256?: string;
+  artifacts?: ModelArtifact[];
   isRecommended?: boolean;
   isArchive?: boolean;
   filename?: string;
-  engine: 'sherpa-onnx';
+  engine: 'sherpa-onnx' | 'llama-cpp';
   rules?: ModelRules;
   fileConfig?: ModelFileConfig;
   groupId?: string;

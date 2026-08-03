@@ -16,4 +16,5 @@ pub struct ModelFileConfig {
     pub llm: Option<String>,
     pub embedding: Option<String>,
     pub tokenizer: Option<String>,
+    pub mmproj: Option<String>,
 }

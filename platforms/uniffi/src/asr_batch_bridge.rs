@@ -138,6 +138,7 @@ impl From<FfiLocalAsrModelFiles> for ModelFileConfig {
             llm: value.llm,
             embedding: value.embedding,
             tokenizer: value.tokenizer,
+            mmproj: None,
         }
     }
 }
@@ -156,6 +157,7 @@ pub(crate) fn build_local_batch_plan(
     Ok(BatchTranscribePlan {
         input_path: PathBuf::from(request.audio_path.trim()),
         save_to_path: None,
+        engine: sona_core::ports::asr::LocalAsrEngine::SherpaOnnx,
         model_path: request.model_path.trim().to_string(),
         num_threads: request.num_threads,
         enable_itn: request.enable_itn,
@@ -165,9 +167,11 @@ pub(crate) fn build_local_batch_plan(
             .filter(|value| !value.trim().is_empty()),
         vad_model: request.vad_model.filter(|value| !value.trim().is_empty()),
         vad_buffer: request.vad_buffer,
+        batch_segmentation_mode: sona_core::ports::asr::BatchSegmentationMode::Vad,
         model_type: request.model_type.trim().to_string(),
         file_config: request.files.map(Into::into),
         hotwords: request.hotwords.filter(|value| !value.trim().is_empty()),
+        speaker_processing: None,
         gpu_acceleration: request
             .gpu_acceleration
             .filter(|value| !value.trim().is_empty()),
