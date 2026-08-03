@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use chrono::{Duration, FixedOffset, NaiveDate, TimeZone};
 
-use sona_core::dashboard::error::DashboardServiceError;
+use sona_core::dashboard::error::DashboardError;
 use sona_core::dashboard::models::*;
 use sona_core::dashboard::ports::{AnalyticsRepository, HistoryRepository, TagRepository};
 use sona_core::history::{HistoryItemKind, HistoryItemRecord};
@@ -46,7 +46,7 @@ where
         &self,
         deep: bool,
         time: DashboardSnapshotTime,
-    ) -> Result<DashboardSnapshotDomainModel, DashboardServiceError> {
+    ) -> Result<DashboardSnapshotDomainModel, DashboardError> {
         let history_items = self.history_repo.list_items().await?;
         let tag_count = self.tag_repo.count_tags().await?;
         let llm_usage = self.analytics_repo.read_dashboard_stats().await?;
@@ -81,7 +81,7 @@ where
     async fn aggregate_transcript_analytics(
         &self,
         history_items: &[HistoryItemRecord],
-    ) -> Result<TranscriptAnalytics, DashboardServiceError> {
+    ) -> Result<TranscriptAnalytics, DashboardError> {
         let mut speakers = create_empty_speaker_stats(true);
         let mut transcript_character_count = 0_u64;
         let mut identified_speaker_ids: HashSet<String> = HashSet::new();

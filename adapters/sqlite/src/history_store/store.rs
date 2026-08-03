@@ -8,7 +8,7 @@ use crate::sync_repository::{
 };
 use rusqlite::types::ToSql;
 use serde_json::Value;
-use sona_core::dashboard::error::DashboardServiceError;
+use sona_core::dashboard::error::DashboardError;
 use sona_core::history::item_factory::HistoryItemGeneratedValues;
 use sona_core::history::mutation_repository::{
     HistoryCommitTranscriptEditRequest, HistoryCommitTranscriptEditResult,
@@ -2210,17 +2210,17 @@ impl<D> sona_core::dashboard::ports::HistoryRepository for SqliteHistoryStore<D>
 where
     D: DatabasePort,
 {
-    async fn list_items(&self) -> Result<Vec<HistoryItemRecord>, DashboardServiceError> {
+    async fn list_items(&self) -> Result<Vec<HistoryItemRecord>, DashboardError> {
         HistoryQueryRepository::list_items(self)
-            .map_err(|error| DashboardServiceError::HistoryRepository(error.to_string()))
+            .map_err(|error| DashboardError::HistoryRepository(error.to_string()))
     }
 
     async fn load_transcript(
         &self,
         history_id: &str,
-    ) -> Result<Option<Vec<TranscriptSegment>>, DashboardServiceError> {
+    ) -> Result<Option<Vec<TranscriptSegment>>, DashboardError> {
         HistoryQueryRepository::load_transcript(self, history_id)
-            .map_err(|error| DashboardServiceError::HistoryRepository(error.to_string()))
+            .map_err(|error| DashboardError::HistoryRepository(error.to_string()))
     }
 }
 

@@ -4,6 +4,7 @@ use std::time::Duration;
 use futures_util::{StreamExt, stream};
 use serde::Serialize;
 
+use crate::llm::runtime_service::LlmRuntimeService;
 use sona_core::llm::provider_protocol::LlmModelSummary;
 use sona_core::llm::requests::{
     LlmConfig, PolishSegmentsRequest, SummarizeTranscriptRequest, TranslateSegmentsRequest,
@@ -12,7 +13,7 @@ use sona_core::llm::requests::{
 };
 use sona_core::llm::runtime::{
     LlmCapabilityPolicy, LlmCompletionOptions, LlmCompletionRequest, LlmCompletionResponse,
-    LlmPromptCachePolicy, LlmResponseFormat, LlmRuntimeError, LlmRuntimeService, LlmStreamDelta,
+    LlmPromptCachePolicy, LlmResponseFormat, LlmRuntimeError, LlmStreamDelta,
 };
 use sona_core::llm::tasks::LlmTaskError;
 use sona_core::ports::llm::{

@@ -6,7 +6,7 @@ use clap::{ArgGroup, Args, Subcommand, ValueEnum};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use sona_application::llm::LlmTaskService;
+use sona_application::llm::{LlmRuntimeService, LlmTaskService};
 use sona_core::llm::provider_protocol::LlmModelSummary;
 #[cfg(test)]
 use sona_core::llm::requests::LlmConfig;
@@ -15,7 +15,7 @@ use sona_core::llm::requests::{
 };
 use sona_core::llm::runtime::{
     LlmCapabilityPolicy, LlmCompletionOptions, LlmCompletionRequest, LlmCompletionResponse,
-    LlmPromptCachePolicy, LlmResponseFormat, LlmRuntimeError, LlmRuntimeService,
+    LlmPromptCachePolicy, LlmResponseFormat, LlmRuntimeError,
 };
 use sona_core::llm::tasks::{
     LlmTaskError, PolishedSegment, TranscriptSummaryResult, TranslatedSegment,

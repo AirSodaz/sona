@@ -281,7 +281,7 @@ test('ASR, LLM, Event, and Automation system ports preserve structured failures'
     );
   }
 
-  const automationPorts = read('core', 'src', 'automation', 'mod.rs');
+  const automationPorts = read('core', 'src', 'automation', 'model.rs');
   assert.match(
     automationPorts,
     /fn\s+path_exists\s*\([^)]*\)\s*->\s*Result\s*<\s*bool\s*,\s*FileSystemError\s*>/u,

@@ -103,7 +103,7 @@ pnpm run generate:sona-context
 
 ### 当前的 Application 归属
 
-用例服务（History、Tag、Automation、Backup、Recovery、Config、Dashboard、Export、StorageUsage、TaskLedger 和 LLM tasks）位于 `sona-application`（`application/`）。每个服务只持有自身需要的 `Arc<dyn Port>` 依赖，并委托给 Core 所有的端口 trait。领域类型、端口 trait 定义和错误类型保留在 `sona-core`。
+用例服务（History、Tag、Automation、Backup、Recovery、Config、Dashboard、Diagnostics、Export、StorageUsage、TaskLedger、LLM runtime 和 LLM tasks）位于 `sona-application`（`application/`）。每个服务只持有自身需要的端口依赖，并委托给 Core 所有的端口 trait。领域类型、端口 trait 定义和错误类型保留在 `sona-core`。
 
 另一个独立的 Application 角色包是 `sona-sync`（路径 `adapters/sync/`），因为 Sync 需要与具体网络/数据库适配器解耦的、提供商中立的 vault 与生命周期。除非存在明确的隔离边界，否则不要为每个领域再造 Application crate；新的用例服务应集中到 `sona-application`。
 

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use sona_application::dashboard::{DashboardService, DashboardSnapshotTime};
-use sona_core::dashboard::DashboardServiceError;
+use sona_core::dashboard::DashboardError;
 use sona_core::dashboard::models::{DashboardUsageBucket, LlmUsageDashboardStats};
 use sona_core::dashboard::ports::{AnalyticsRepository, HistoryRepository, TagRepository};
 use sona_core::history::{
@@ -17,14 +17,14 @@ struct TestHistoryRepository {
 
 #[async_trait]
 impl HistoryRepository for TestHistoryRepository {
-    async fn list_items(&self) -> Result<Vec<HistoryItemRecord>, DashboardServiceError> {
+    async fn list_items(&self) -> Result<Vec<HistoryItemRecord>, DashboardError> {
         Ok(self.items.clone())
     }
 
     async fn load_transcript(
         &self,
         history_id: &str,
-    ) -> Result<Option<Vec<TranscriptSegment>>, DashboardServiceError> {
+    ) -> Result<Option<Vec<TranscriptSegment>>, DashboardError> {
         Ok(self
             .transcripts
             .iter()
@@ -37,7 +37,7 @@ struct TestTagRepository;
 
 #[async_trait]
 impl TagRepository for TestTagRepository {
-    async fn count_tags(&self) -> Result<u64, DashboardServiceError> {
+    async fn count_tags(&self) -> Result<u64, DashboardError> {
         Ok(3)
     }
 }
@@ -46,7 +46,7 @@ struct TestAnalyticsRepository;
 
 #[async_trait]
 impl AnalyticsRepository for TestAnalyticsRepository {
-    async fn read_dashboard_stats(&self) -> Result<LlmUsageDashboardStats, DashboardServiceError> {
+    async fn read_dashboard_stats(&self) -> Result<LlmUsageDashboardStats, DashboardError> {
         Ok(LlmUsageDashboardStats {
             started_at: None,
             last_updated_at: None,

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use sona_core::dashboard::{
-    error::DashboardServiceError, models::LlmUsageDashboardStats, ports::AnalyticsRepository,
+    error::DashboardError, models::LlmUsageDashboardStats, ports::AnalyticsRepository,
 };
 
 use crate::Database;
@@ -15,15 +15,15 @@ impl SqliteAnalyticsRepository {
         Self { db }
     }
 
-    fn read_dashboard_stats_sync(&self) -> Result<LlmUsageDashboardStats, DashboardServiceError> {
+    fn read_dashboard_stats_sync(&self) -> Result<LlmUsageDashboardStats, DashboardError> {
         crate::llm_usage::read_dashboard_stats(self.db.as_ref())
-            .map_err(|error| DashboardServiceError::AnalyticsRepository(error.to_string()))
+            .map_err(|error| DashboardError::AnalyticsRepository(error.to_string()))
     }
 }
 
 #[async_trait::async_trait]
 impl AnalyticsRepository for SqliteAnalyticsRepository {
-    async fn read_dashboard_stats(&self) -> Result<LlmUsageDashboardStats, DashboardServiceError> {
+    async fn read_dashboard_stats(&self) -> Result<LlmUsageDashboardStats, DashboardError> {
         self.read_dashboard_stats_sync()
     }
 }

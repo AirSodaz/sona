@@ -2,6 +2,7 @@ pub mod automation;
 pub mod backup;
 pub mod config;
 pub mod dashboard;
+pub mod diagnostics;
 pub mod export;
 pub mod history;
 pub mod live_transcription;

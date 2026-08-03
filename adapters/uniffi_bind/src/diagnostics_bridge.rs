@@ -1,8 +1,9 @@
 use crate::{
     FfiDiagnosticsInputV1, FfiDiagnosticsSnapshotV1, SonaCoreBindingError, SonaCoreBindingResult,
 };
+use sona_application::diagnostics::DiagnosticsService;
 use sona_core::runtime::diagnostics::{DiagnosticsCoreInput, DiagnosticsCoreSnapshot};
-use sona_runtime_fs::build_diagnostics_snapshot;
+use sona_runtime_fs::FsDiagnosticsEnrichmentRepository;
 use std::path::PathBuf;
 
 pub(crate) async fn load_diagnostics_snapshot_json(
@@ -32,7 +33,10 @@ async fn load_snapshot(
     tokio::task::spawn_blocking(move || {
         let app_data_dir =
             std::path::absolute(PathBuf::from(app_data_dir)).map_err(diagnostics_error)?;
-        build_diagnostics_snapshot(app_data_dir.join("models"), input).map_err(diagnostics_error)
+        let repository = FsDiagnosticsEnrichmentRepository::new(app_data_dir.join("models"));
+        DiagnosticsService::new(std::sync::Arc::new(repository))
+            .build_snapshot_at(input, sona_runtime_fs::diagnostics_scanned_at_now())
+            .map_err(diagnostics_error)
     })
     .await
     .map_err(diagnostics_error)?

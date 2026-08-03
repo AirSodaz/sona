@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum DashboardServiceError {
+pub enum DashboardError {
     #[error("History repository error: {0}")]
     HistoryRepository(String),
 

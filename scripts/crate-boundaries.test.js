@@ -18,10 +18,12 @@ const APPLICATION_SERVICE_PATHS = [
   ['backup', 'service.rs'],
   ['config', 'service.rs'],
   ['dashboard', 'service.rs'],
+  ['diagnostics', 'service.rs'],
   ['export', 'service.rs'],
   ['history', 'mutation_service.rs'],
   ['history', 'query_service.rs'],
   ['llm', 'tasks', 'service.rs'],
+  ['llm', 'runtime_service.rs'],
   ['recovery', 'service.rs'],
   ['storage_usage', 'service.rs'],
   ['tag', 'service.rs'],
@@ -30,6 +32,22 @@ const APPLICATION_SERVICE_PATHS = [
 
 function read(...parts) {
   return fs.readFileSync(path.join(repoRoot, ...parts), 'utf8').replace(/\r\n/gu, '\n');
+}
+
+function rustSourceFiles(relativeDir) {
+  const absoluteDir = path.join(repoRoot, relativeDir);
+  const files = [];
+
+  for (const entry of fs.readdirSync(absoluteDir, { withFileTypes: true })) {
+    const relativePath = path.join(relativeDir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...rustSourceFiles(relativePath));
+    } else if (entry.isFile() && entry.name.endsWith('.rs')) {
+      files.push(relativePath);
+    }
+  }
+
+  return files;
 }
 
 test('workspace crate role registry is complete and matches manifest metadata', () => {
@@ -104,6 +122,24 @@ test('migrated use-case services are owned only by sona-application', () => {
       `core/src/${displayPath} is a stale application-layer implementation`,
     );
   }
+});
+
+test('Core does not reintroduce application service structs', () => {
+  const staleServices = rustSourceFiles('core/src').flatMap((relativePath) => {
+    const source = read(relativePath);
+    return [
+      ...source.matchAll(/^\s*(?:pub(?:\([^)]*\))?\s+)?struct\s+(\w*Service)\b/gmu),
+    ].map((match) => ({
+      relativePath,
+      service: match[1],
+    }));
+  });
+
+  assert.deepEqual(
+    staleServices,
+    [],
+    `Core must keep use-case service structs in sona-application: ${JSON.stringify(staleServices)}`,
+  );
 });
 
 test('stable architecture guides publish the reviewed roles and exceptions', () => {

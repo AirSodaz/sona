@@ -4,7 +4,7 @@ use rusqlite::OptionalExtension;
 use rusqlite::types::Type;
 use serde_json::Value;
 use sona_application::tag::TagRepositoryService;
-use sona_core::dashboard::error::DashboardServiceError;
+use sona_core::dashboard::error::DashboardError;
 use sona_core::dashboard::ports::TagRepository;
 use sona_core::ports::time::ClockPort;
 use sona_core::sync::SyncEntityKind;
@@ -539,9 +539,9 @@ impl<D> TagRepository for SqliteTagRepository<D>
 where
     D: DatabasePort,
 {
-    async fn count_tags(&self) -> Result<u64, DashboardServiceError> {
+    async fn count_tags(&self) -> Result<u64, DashboardError> {
         let state = TagStore::load_state(self)
-            .map_err(|error| DashboardServiceError::TagRepository(error.to_string()))?;
+            .map_err(|error| DashboardError::TagRepository(error.to_string()))?;
         Ok(state.tags.len() as u64)
     }
 }

@@ -1,23 +1,23 @@
-use super::error::DashboardServiceError;
+use super::error::DashboardError;
 use crate::history::HistoryItemRecord;
 use crate::transcription::transcript::TranscriptSegment;
 
 #[async_trait::async_trait]
 pub trait HistoryRepository: Send + Sync {
     /// Lists history records used by dashboard content aggregation.
-    async fn list_items(&self) -> Result<Vec<HistoryItemRecord>, DashboardServiceError>;
+    async fn list_items(&self) -> Result<Vec<HistoryItemRecord>, DashboardError>;
 
     /// Loads transcript segments for deep dashboard aggregation.
     async fn load_transcript(
         &self,
         history_id: &str,
-    ) -> Result<Option<Vec<TranscriptSegment>>, DashboardServiceError>;
+    ) -> Result<Option<Vec<TranscriptSegment>>, DashboardError>;
 }
 
 #[async_trait::async_trait]
 pub trait TagRepository: Send + Sync {
     /// Counts the total number of tags.
-    async fn count_tags(&self) -> Result<u64, DashboardServiceError>;
+    async fn count_tags(&self) -> Result<u64, DashboardError>;
 }
 
 #[async_trait::async_trait]
@@ -25,5 +25,5 @@ pub trait AnalyticsRepository: Send + Sync {
     /// Reads the dashboard stats for LLM usage
     async fn read_dashboard_stats(
         &self,
-    ) -> Result<crate::dashboard::models::LlmUsageDashboardStats, DashboardServiceError>;
+    ) -> Result<crate::dashboard::models::LlmUsageDashboardStats, DashboardError>;
 }

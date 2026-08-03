@@ -1,5 +1,6 @@
 use crate::integrations::asr::AsrState;
 use crate::platform::paths::{PathKind, PathPort};
+use sona_application::diagnostics::DiagnosticsService;
 use tauri::State;
 
 pub use sona_core::runtime::diagnostics::{
@@ -8,7 +9,7 @@ pub use sona_core::runtime::diagnostics::{
     ModelSummaryInput, PathStatusesInput, RuntimeEnvironmentStatus, RuntimePathStatus,
     SelectedModelsInput, VoiceTypingReadinessInput,
 };
-use sona_runtime_fs::build_diagnostics_snapshot;
+use sona_runtime_fs::FsDiagnosticsEnrichmentRepository;
 
 fn validate_diagnostics_input(input: &DiagnosticsCoreInput) -> Result<(), String> {
     sona_ts_bind::validate_diagnostics_input_for_typescript(input)
@@ -48,7 +49,10 @@ pub async fn get_diagnostics_core_snapshot(
             crate::platform::runtime_status::resolve_runtime_environment_status_for_log_dir(
                 log_dir,
             )?;
-        build_diagnostics_snapshot(models_dir, input).map_err(|error| error.to_string())
+        let repository = FsDiagnosticsEnrichmentRepository::new(models_dir);
+        DiagnosticsService::new(std::sync::Arc::new(repository))
+            .build_snapshot_at(input, sona_runtime_fs::diagnostics_scanned_at_now())
+            .map_err(|error| error.to_string())
     })
     .await
     .map_err(|error| error.to_string())??;

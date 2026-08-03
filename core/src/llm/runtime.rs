@@ -1,14 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::llm::provider_protocol::LlmModelSummary;
 use crate::llm::provider_protocol::StandardLlmResponse;
-use crate::llm::requests::{LlmConfig, LlmGenerateRequest, LlmModelsRequest, validate_llm_config};
+use crate::llm::requests::{LlmConfig, LlmGenerateRequest};
 use crate::llm::usage::{LlmGenerateSource, TokenUsage};
-use crate::ports::llm::{
-    LlmCompletionPort, LlmModelDiscoveryPort, LlmModelMetadataPort, LlmPortError, LlmPortErrorKind,
-    LlmStreamingPort,
-};
+use crate::ports::llm::{LlmPortError, LlmPortErrorKind};
 
 #[cfg(feature = "specta")]
 use specta::Type;
@@ -99,7 +95,7 @@ impl LlmCompletionRequest {
             .or(self.config.reasoning_level.as_deref())
     }
 
-    fn normalize_legacy_options(&mut self) {
+    pub fn normalize_legacy_options(&mut self) {
         if self.options.temperature.is_none() {
             self.options.temperature = self.config.temperature;
         }
@@ -207,140 +203,22 @@ impl From<LlmPortError> for LlmRuntimeError {
     }
 }
 
-pub struct LlmRuntimeService<'a, Completion, Metadata> {
-    completion: &'a Completion,
-    metadata: Metadata,
-}
-
-impl<'a, Completion, Metadata> LlmRuntimeService<'a, Completion, Metadata>
-where
-    Completion: LlmCompletionPort,
-    Metadata: LlmModelMetadataPort,
-{
-    pub fn new(completion: &'a Completion, metadata: Metadata) -> Self {
-        Self {
-            completion,
-            metadata,
-        }
-    }
-
-    pub async fn complete(
-        &self,
-        request: LlmCompletionRequest,
-    ) -> Result<LlmCompletionResponse, LlmRuntimeError> {
-        let prepared = self.prepare_request(request).await?;
-        let applied_format = prepared.request.options.response_format.clone();
-        let response = self.completion.complete(prepared.request).await?;
-        finish_response(
-            response,
-            prepared.requested_format,
-            applied_format,
-            prepared.validation_format,
-            prepared.warnings,
-        )
-    }
-
-    pub async fn stream(
-        &self,
-        request: LlmCompletionRequest,
-        emit_delta: &mut (dyn FnMut(LlmStreamDelta) -> Result<(), LlmPortError> + Send),
-    ) -> Result<LlmCompletionResponse, LlmRuntimeError>
-    where
-        Completion: LlmStreamingPort,
-    {
-        let prepared = self.prepare_request(request).await?;
-        let applied_format = prepared.request.options.response_format.clone();
-        let response = self
-            .completion
-            .stream_completion(prepared.request, emit_delta)
-            .await?;
-        finish_response(
-            response,
-            prepared.requested_format,
-            applied_format,
-            prepared.validation_format,
-            prepared.warnings,
-        )
-    }
-
-    async fn prepare_request(
-        &self,
-        mut request: LlmCompletionRequest,
-    ) -> Result<PreparedRequest, LlmRuntimeError> {
-        validate_llm_config(&request.config).map_err(|error| LlmRuntimeError::InvalidRequest {
+pub fn validate_completion_request(
+    request: &mut LlmCompletionRequest,
+) -> Result<(), LlmRuntimeError> {
+    crate::llm::requests::validate_llm_config(&request.config).map_err(|error| {
+        LlmRuntimeError::InvalidRequest {
             reason: error.reason,
-        })?;
-        if request.input.trim().is_empty() {
-            return Err(LlmRuntimeError::InvalidRequest {
-                reason: "Input cannot be empty".to_string(),
-            });
         }
-        request.normalize_legacy_options();
-        validate_completion_options(&request.options)?;
-        validate_response_format(&request.options.response_format)?;
-
-        let requested_format = LlmResponseFormatKind::from(&request.options.response_format);
-        let validation_format = request.options.response_format.clone();
-        let mut warnings = Vec::new();
-        let requested_schema = match &request.options.response_format {
-            LlmResponseFormat::JsonSchema { schema, .. } => Some(schema.clone()),
-            _ => None,
-        };
-        if let Some(schema) = requested_schema
-            && self
-                .metadata
-                .describe_model(&request.config)
-                .await?
-                .and_then(|model| model.supports_structured_output)
-                == Some(false)
-        {
-            if request.options.capability_policy == LlmCapabilityPolicy::Strict {
-                return Err(LlmRuntimeError::UnsupportedCapability {
-                    model: request.config.model.clone(),
-                    capability: "structured output".to_string(),
-                });
-            }
-            request
-                .input
-                .push_str("\n\nReturn only a JSON object that satisfies this JSON Schema:\n");
-            request.input.push_str(&schema.to_string());
-            request.options.response_format = LlmResponseFormat::JsonObject;
-            warnings.push(
-                "Model metadata reports no structured output support; using JSON object mode"
-                    .to_string(),
-            );
-        }
-
-        Ok(PreparedRequest {
-            request,
-            requested_format,
-            validation_format,
-            warnings,
-        })
+    })?;
+    if request.input.trim().is_empty() {
+        return Err(LlmRuntimeError::InvalidRequest {
+            reason: "Input cannot be empty".to_string(),
+        });
     }
-
-    pub async fn list_models(
-        &self,
-        request: LlmModelsRequest,
-    ) -> Result<Vec<LlmModelSummary>, LlmRuntimeError>
-    where
-        Completion: LlmModelDiscoveryPort,
-    {
-        self.completion
-            .list_models(request)
-            .await
-            .map_err(Into::into)
-    }
-
-    pub async fn describe_model(
-        &self,
-        config: &LlmConfig,
-    ) -> Result<Option<LlmModelSummary>, LlmRuntimeError> {
-        self.metadata
-            .describe_model(config)
-            .await
-            .map_err(Into::into)
-    }
+    request.normalize_legacy_options();
+    validate_completion_options(&request.options)?;
+    validate_response_format(&request.options.response_format)
 }
 
 fn validate_completion_options(options: &LlmCompletionOptions) -> Result<(), LlmRuntimeError> {
@@ -359,14 +237,7 @@ fn validate_completion_options(options: &LlmCompletionOptions) -> Result<(), Llm
     Ok(())
 }
 
-struct PreparedRequest {
-    request: LlmCompletionRequest,
-    requested_format: LlmResponseFormatKind,
-    validation_format: LlmResponseFormat,
-    warnings: Vec<String>,
-}
-
-fn finish_response(
+pub fn finish_response(
     response: StandardLlmResponse,
     requested_format: LlmResponseFormatKind,
     applied_response_format: LlmResponseFormat,

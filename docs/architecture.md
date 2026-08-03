@@ -103,7 +103,7 @@ The free functions remain: this is additive, and the exported ABI kept every exi
 
 ### Application ownership today
 
-Use-case services (History, Tag, Automation, Backup, Recovery, Config, Dashboard, Export, StorageUsage, TaskLedger, and LLM tasks) live in `sona-application` (`application/`). Each service holds only the `Arc<dyn Port>` dependencies it needs and delegates to Core-owned port traits. Domain types, port trait definitions, and errors remain in `sona-core`.
+Use-case services (History, Tag, Automation, Backup, Recovery, Config, Dashboard, Diagnostics, Export, StorageUsage, TaskLedger, LLM runtime, and LLM tasks) live in `sona-application` (`application/`). Each service holds only the port dependencies it needs and delegates to Core-owned port traits. Domain types, port trait definitions, and errors remain in `sona-core`.
 
 The other standalone Application-role package is `sona-sync` (`adapters/sync/`), isolated because Sync needs a provider-neutral vault and lifecycle. Do not create additional Application crates per domain; consolidate new use-case services into `sona-application` unless a clear isolation boundary warrants a separate crate.
 

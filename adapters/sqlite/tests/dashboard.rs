@@ -8,7 +8,7 @@ use chrono::NaiveDate;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use sona_application::dashboard::DashboardSnapshotTime;
-use sona_core::dashboard::DashboardServiceError;
+use sona_core::dashboard::DashboardError;
 use sona_core::history::mutation_repository::HistoryMutationRepository;
 use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history::{HistoryIdGenerator, HistorySaveRecordingRequest};
@@ -285,7 +285,7 @@ fn lazy_dashboard_entrypoint_rejects_future_schema() {
 
     assert!(matches!(
         error,
-        DashboardServiceError::Internal(reason) if reason.contains("99")
+        DashboardError::Internal(reason) if reason.contains("99")
     ));
 }
 
@@ -302,6 +302,6 @@ fn lazy_dashboard_entrypoint_rejects_missing_directory_without_creating_it() {
         ))
         .unwrap_err();
 
-    assert!(matches!(error, DashboardServiceError::Internal(_)));
+    assert!(matches!(error, DashboardError::Internal(_)));
     assert!(!missing.exists());
 }

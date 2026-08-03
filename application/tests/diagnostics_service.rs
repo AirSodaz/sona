@@ -1,11 +1,12 @@
 use serde_json::json;
+use sona_application::diagnostics::DiagnosticsService;
 use sona_core::models::preset_models::{
     ModelCatalogSnapshot, build_model_catalog_snapshot_with_installed_ids,
 };
 use sona_core::runtime::diagnostics::{
     DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
     DiagnosticsEnrichmentMeasurements, DiagnosticsEnrichmentRepository, DiagnosticsError,
-    DiagnosticsService, ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput,
+    ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput,
     RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus, SelectedModelsInput,
     VoiceTypingReadinessInput, build_diagnostics_core_snapshot_at,
 };

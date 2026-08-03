@@ -1,12 +1,13 @@
 use async_trait::async_trait;
 use serde_json::json;
+use sona_application::llm::LlmRuntimeService;
 use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
 use sona_core::llm::provider_protocol::normalize_token_usage;
 use sona_core::llm::provider_protocol::{LlmModelSummary, StandardLlmResponse};
 use sona_core::llm::requests::{LlmConfig, LlmModelsRequest};
 use sona_core::llm::runtime::{
     LlmCapabilityPolicy, LlmCompletionOptions, LlmCompletionRequest, LlmResponseFormat,
-    LlmResponseFormatKind, LlmRuntimeError, LlmRuntimeService, LlmStreamDelta,
+    LlmResponseFormatKind, LlmRuntimeError, LlmStreamDelta,
 };
 use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::ports::llm::{

@@ -1,8 +1,9 @@
+use sona_application::llm::LlmRuntimeService;
 use sona_core::llm::requests::{
     LlmConfig, LlmModelsRequest,
     validate_llm_generate_request as core_validate_llm_generate_request,
 };
-use sona_core::llm::runtime::{LlmCompletionRequest, LlmRuntimeError, LlmRuntimeService};
+use sona_core::llm::runtime::{LlmCompletionRequest, LlmRuntimeError};
 use sona_core::ports::llm::{
     LlmCompletionPort, LlmModelDiscoveryPort, LlmModelMetadataPort, LlmPortErrorKind,
 };

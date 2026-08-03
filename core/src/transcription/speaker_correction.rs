@@ -235,24 +235,6 @@ pub fn confirm_speaker_group_review_impl(
     })
 }
 
-pub async fn apply_speaker_profile_to_group(
-    request: ApplySpeakerProfileToGroupRequest,
-) -> Result<SpeakerCorrectionResponse, SpeakerCorrectionError> {
-    apply_speaker_profile_to_group_impl(request)
-}
-
-pub async fn reset_speaker_group_to_anonymous(
-    request: SpeakerGroupRequest,
-) -> Result<SpeakerCorrectionResponse, SpeakerCorrectionError> {
-    reset_speaker_group_to_anonymous_impl(request)
-}
-
-pub async fn confirm_speaker_group_review(
-    request: SpeakerGroupRequest,
-) -> Result<SpeakerCorrectionResponse, SpeakerCorrectionError> {
-    confirm_speaker_group_review_impl(request)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

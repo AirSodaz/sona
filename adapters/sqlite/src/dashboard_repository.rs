@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use sona_application::dashboard::{DashboardService, DashboardSnapshotTime};
-use sona_core::dashboard::DashboardServiceError;
+use sona_core::dashboard::DashboardError;
 use sona_core::dashboard::models::DashboardSnapshotDomainModel;
 
 use crate::analytics::SqliteAnalyticsRepository;
@@ -29,10 +29,10 @@ pub async fn load_dashboard_snapshot(
     app_local_data_dir: PathBuf,
     deep: bool,
     time: DashboardSnapshotTime,
-) -> Result<DashboardSnapshotDomainModel, DashboardServiceError> {
+) -> Result<DashboardSnapshotDomainModel, DashboardError> {
     let database = Database::open_read_only_with_analytics(&app_local_data_dir)
         .map(Arc::new)
-        .map_err(|error| DashboardServiceError::Internal(error.to_string()))?;
+        .map_err(|error| DashboardError::Internal(error.to_string()))?;
     create_dashboard_service(app_local_data_dir, database)
         .build_snapshot_at(deep, time)
         .await

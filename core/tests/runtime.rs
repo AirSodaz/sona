@@ -1,6 +1,6 @@
-use sona_core::runtime::environment::{
-    RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus,
-};
+#[cfg(feature = "specta")]
+use sona_core::runtime::environment::RuntimeEnvironmentStatus;
+use sona_core::runtime::environment::{RuntimePathKind, RuntimePathStatus};
 
 #[test]
 fn runtime_path_status_serializes_kind_as_frontend_contract_string() {

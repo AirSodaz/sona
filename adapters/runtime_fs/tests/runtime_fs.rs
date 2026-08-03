@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use sona_application::diagnostics::DiagnosticsService;
 use sona_core::automation::{AutomationFsPort, AutomationIdGenerator};
 use sona_core::automation::{
     AutomationRule, AutomationRuntimePathCollectionOutcome, AutomationRuntimeRuleConfig,
@@ -23,7 +24,7 @@ use sona_core::transcription::runtime::{
 use sona_runtime_fs::{
     FsDiagnosticsEnrichmentRepository, FsSourcePathStatusProvider, NativeAutomationFileSystem,
     RealFileSystem, RuntimeBatchTranscribePlanResolver, RuntimeFsError,
-    RuntimeModelCatalogProvider, SystemClock, UuidGenerator, build_diagnostics_snapshot,
+    RuntimeModelCatalogProvider, SystemClock, UuidGenerator,
     collect_automation_runtime_candidate_paths, ensure_directory_exists,
     is_preset_model_installed_at, load_legacy_settings_app_config, load_transcribe_config_file,
     load_transcribe_live_config_file, path_exists, plan_batch_output_files, remove_path_if_exists,
@@ -32,6 +33,7 @@ use sona_runtime_fs::{
     validate_native_automation_rule_activation, write_cli_config_template_file,
     write_json_pretty_atomic, write_transcript_output_file,
 };
+use std::sync::Arc;
 use uuid::{Uuid, Version};
 
 #[test]
@@ -562,14 +564,20 @@ fn diagnostics_adapter_entrypoint_builds_snapshot_and_preserves_typed_errors() {
     let dir = tempfile::tempdir().unwrap();
     let models_dir = dir.path().join("models");
 
-    let snapshot = build_diagnostics_snapshot(models_dir.clone(), input()).unwrap();
+    let repository = FsDiagnosticsEnrichmentRepository::new(models_dir.clone());
+    let snapshot = DiagnosticsService::new(Arc::new(repository))
+        .build_snapshot_at(input(), sona_runtime_fs::diagnostics_scanned_at_now())
+        .unwrap();
 
     assert!(models_dir.is_dir());
     assert!(snapshot.scanned_at.ends_with('Z'));
 
     let blocked = dir.path().join("blocked-models");
     std::fs::write(&blocked, b"not a directory").unwrap();
-    let error = build_diagnostics_snapshot(blocked, input()).unwrap_err();
+    let repository = FsDiagnosticsEnrichmentRepository::new(blocked);
+    let error = DiagnosticsService::new(Arc::new(repository))
+        .build_snapshot_at(input(), sona_runtime_fs::diagnostics_scanned_at_now())
+        .unwrap_err();
 
     assert!(matches!(error, DiagnosticsError::Repository(_)));
 }
