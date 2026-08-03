@@ -171,7 +171,9 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         setActiveProjectId: (projectId) => useProjectStore.getState().setActiveProjectId(projectId),
         addHistoryItem: (item) => useHistoryStore.getState().addItem(item),
         upsertHistoryItem: (item) => useHistoryStore.getState().upsertItem(item),
-        deleteHistoryItem: (id) => useHistoryStore.getState().deleteItem(id),
+        removeHistoryItem: (id) => useHistoryStore.setState((state) => ({
+            items: state.items.filter((item) => item.id !== id),
+        })),
         persistSummary: (historyId) => summaryService.persistSummary(historyId),
         postProcessSavedItem: async (historyId, segments) => {
             const snapshot = recordingAutomationSnapshotRef.current;

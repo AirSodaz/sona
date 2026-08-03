@@ -60,6 +60,7 @@ export class VoiceTypingService {
             resolveOverlayPosition: () => this.getOverlayPosition(),
             resolveOverlayPositionAfterCommit: () => this.getOverlayPositionAfterCommit(),
             ensureMicrophoneStarted: () => this.ensureMicrophoneStarted(),
+            resolveMicrophoneGain: () => this.ports.getConfig().microphoneBoost ?? 1.0,
             injectText: async (text) => {
                 const shortcutModifiers = this.getCurrentShortcutModifiers();
                 await this.ports.injectText(text, shortcutModifiers);

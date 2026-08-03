@@ -48,7 +48,7 @@ describe('createRecordingPersistence', () => {
 
         const addHistoryItem = vi.fn();
         const upsertHistoryItem = vi.fn();
-        const deleteHistoryItem = vi.fn().mockResolvedValue(undefined);
+        const removeHistoryItem = vi.fn();
         const syncSavedRecordingMeta = vi.fn();
         const persistSummary = vi.fn().mockResolvedValue(undefined);
         const setActiveProjectId = vi.fn().mockResolvedValue(undefined);
@@ -61,6 +61,7 @@ describe('createRecordingPersistence', () => {
         const removeFile = vi.fn().mockResolvedValue(undefined);
         const writeFile = vi.fn().mockResolvedValue(undefined);
 
+        const discardLiveRecordingDraft = vi.fn().mockResolvedValue(undefined);
         const persistence = createRecordingPersistence({
             logger: {
                 info: vi.fn(),
@@ -70,7 +71,7 @@ describe('createRecordingPersistence', () => {
             history: {
                 createLiveRecordingDraft,
                 completeLiveRecordingDraft,
-                discardLiveRecordingDraft: vi.fn().mockResolvedValue(undefined),
+                discardLiveRecordingDraft,
                 saveRecording: vi.fn(),
                 saveNativeRecording: vi.fn(),
             },
@@ -79,7 +80,7 @@ describe('createRecordingPersistence', () => {
             setActiveProjectId,
             addHistoryItem,
             upsertHistoryItem,
-            deleteHistoryItem,
+            removeHistoryItem,
             persistSummary,
             annotateSegmentsForFile: vi.fn(async (_filePath, segments) => segments),
             syncSavedRecordingMeta,
@@ -114,13 +115,14 @@ describe('createRecordingPersistence', () => {
         expect(setActiveProjectId).toHaveBeenNthCalledWith(3, 'project-1');
         expect(setActiveProjectId).toHaveBeenNthCalledWith(4, 'project-1');
         expect(writeFile).toHaveBeenCalledWith('C:/history/web-history.webm', expect.any(Uint8Array));
-        expect(deleteHistoryItem).not.toHaveBeenCalled();
+        expect(discardLiveRecordingDraft).not.toHaveBeenCalled();
+        expect(removeHistoryItem).not.toHaveBeenCalled();
         expect(removeFile).not.toHaveBeenCalled();
         expect(transcriptState.setAudioUrl).toHaveBeenNthCalledWith(1, 'file://C:/history/web-history.webm');
         expect(transcriptState.setAudioUrl).toHaveBeenNthCalledWith(2, 'file://native.wav');
     });
 
-    it('deletes empty live recording drafts instead of leaving stale workspace badges', async () => {
+    it('purges empty live recording drafts before removing their workspace badges', async () => {
         const transcriptState: RecordingPersistenceTranscriptState = {
             config: {} as RecordingPersistenceTranscriptState['config'],
             segments: [],
@@ -130,7 +132,7 @@ describe('createRecordingPersistence', () => {
 
         const addHistoryItem = vi.fn();
         const upsertHistoryItem = vi.fn();
-        const deleteHistoryItem = vi.fn().mockResolvedValue(undefined);
+        const removeHistoryItem = vi.fn();
         const syncSavedRecordingMeta = vi.fn();
         const persistSummary = vi.fn().mockResolvedValue(undefined);
         const setActiveProjectId = vi.fn().mockResolvedValue(undefined);
@@ -141,6 +143,7 @@ describe('createRecordingPersistence', () => {
         const removeFile = vi.fn().mockResolvedValue(undefined);
         const writeFile = vi.fn().mockResolvedValue(undefined);
 
+        const discardLiveRecordingDraft = vi.fn().mockResolvedValue(undefined);
         const persistence = createRecordingPersistence({
             logger: {
                 info: vi.fn(),
@@ -150,7 +153,7 @@ describe('createRecordingPersistence', () => {
             history: {
                 createLiveRecordingDraft,
                 completeLiveRecordingDraft,
-                discardLiveRecordingDraft: vi.fn().mockResolvedValue(undefined),
+                discardLiveRecordingDraft,
                 saveRecording: vi.fn(),
                 saveNativeRecording: vi.fn(),
             },
@@ -159,7 +162,7 @@ describe('createRecordingPersistence', () => {
             setActiveProjectId,
             addHistoryItem,
             upsertHistoryItem,
-            deleteHistoryItem,
+            removeHistoryItem,
             persistSummary,
             annotateSegmentsForFile: vi.fn(async (_filePath, segments) => segments),
             syncSavedRecordingMeta,
@@ -174,8 +177,10 @@ describe('createRecordingPersistence', () => {
         await persistence.persistBrowserRecording(webDraft, new Blob(['web'], { type: 'audio/webm' }), 3);
         await persistence.persistNativeRecording(nativeDraft, 'native.wav', 3);
 
-        expect(deleteHistoryItem).toHaveBeenNthCalledWith(1, 'empty-web-history');
-        expect(deleteHistoryItem).toHaveBeenNthCalledWith(2, 'empty-native-history');
+        expect(discardLiveRecordingDraft).toHaveBeenNthCalledWith(1, 'empty-web-history');
+        expect(discardLiveRecordingDraft).toHaveBeenNthCalledWith(2, 'empty-native-history');
+        expect(removeHistoryItem).toHaveBeenNthCalledWith(1, 'empty-web-history');
+        expect(removeHistoryItem).toHaveBeenNthCalledWith(2, 'empty-native-history');
         expect(completeLiveRecordingDraft).not.toHaveBeenCalled();
         expect(upsertHistoryItem).not.toHaveBeenCalled();
         expect(writeFile).not.toHaveBeenCalled();

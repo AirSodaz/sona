@@ -782,9 +782,16 @@ describe('LiveRecord Native Capture', () => {
 
     it('falls back to browser capture when native transcription startup fails', async () => {
         const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
+        const { useConfigStore } = await import('../../stores/configStore');
         const { useDialogStore } = await import('../../stores/dialogStore');
         const showError = vi.fn().mockResolvedValue(undefined);
         act(() => {
+            useConfigStore.setState({
+                config: {
+                    ...useConfigStore.getState().config,
+                    microphoneBoost: 2.5,
+                },
+            });
             useDialogStore.setState({ showError } as any);
         });
         mockStart.mockRejectedValueOnce(new Error('volcengine websocket failed'));
@@ -797,7 +804,11 @@ describe('LiveRecord Native Capture', () => {
         });
 
         expect(navigator.mediaDevices.getUserMedia).toHaveBeenCalled();
-        expect(mockStartExternal).toHaveBeenCalled();
+        expect(mockStartExternal).toHaveBeenCalledWith(
+            expect.any(Function),
+            expect.any(Function),
+            expect.objectContaining({ gain: 2.5 }),
+        );
         expect(useTranscriptStore.getState().isRecording).toBe(true);
         expect(showError).not.toHaveBeenCalled();
     });

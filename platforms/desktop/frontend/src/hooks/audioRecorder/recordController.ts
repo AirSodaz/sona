@@ -35,6 +35,7 @@ interface RecordControllerCapture {
         stream: MediaStream,
         inputSource: InputSource,
         muteDuringRecording: boolean,
+        gain: number,
     ) => Promise<void>;
     startFileRecording: (sessionId: string) => boolean;
     cleanupPartialStart: (sessionId: string) => Promise<void>;
@@ -183,6 +184,7 @@ export function createRecordController({
                     fallbackStream,
                     inputSource,
                     config.muteDuringRecording ?? false,
+                    inputSource === 'microphone' ? config.microphoneBoost ?? 1.0 : 1.0,
                 );
             }
 

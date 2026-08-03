@@ -36,7 +36,7 @@ interface CreateRecordingPersistenceArgs {
     setActiveProjectId: (projectId: string | null) => Promise<void> | void;
     addHistoryItem: (item: HistoryItem) => void;
     upsertHistoryItem: (item: HistoryItem) => void;
-    deleteHistoryItem: (id: string) => Promise<void>;
+    removeHistoryItem: (id: string) => void;
     persistSummary: (historyId: string) => Promise<void>;
     postProcessSavedItem?: (
         historyId: string,
@@ -61,7 +61,7 @@ export function createRecordingPersistence({
     setActiveProjectId,
     addHistoryItem,
     upsertHistoryItem,
-    deleteHistoryItem,
+    removeHistoryItem,
     persistSummary,
     postProcessSavedItem,
     annotateSegmentsForFile,
@@ -116,7 +116,8 @@ export function createRecordingPersistence({
     }
 
     async function discardLiveRecordingDraft(draft: LiveRecordingDraftHandle): Promise<void> {
-        await deleteHistoryItem(draft.item.id);
+        await history.discardLiveRecordingDraft(draft.item.id);
+        removeHistoryItem(draft.item.id);
     }
 
     async function persistBrowserRecording(

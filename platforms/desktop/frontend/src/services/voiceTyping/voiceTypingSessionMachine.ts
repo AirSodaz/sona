@@ -26,6 +26,7 @@ interface VoiceTypingSessionMachineOptions {
     resolveOverlayPosition: VoiceTypingPositionResolver;
     resolveOverlayPositionAfterCommit: VoiceTypingPositionResolver;
     ensureMicrophoneStarted: () => Promise<void>;
+    resolveMicrophoneGain: () => number;
     injectText: (text: string) => Promise<void>;
     onRuntimeError?: (error: string) => void;
 }
@@ -157,6 +158,7 @@ export class VoiceTypingSessionMachine {
             await service.attachPreparedNative({
                 sourceKind: 'microphone',
                 deviceName: null,
+                gain: this.options.resolveMicrophoneGain(),
                 callbackOwner: 'voice-typing',
                 callbackSessionId: sessionId,
             });

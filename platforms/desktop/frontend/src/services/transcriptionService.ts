@@ -32,6 +32,7 @@ export type ErrorCallback = (error: string) => void;
 interface StartOptions {
     callbackOwner?: string;
     callbackSessionId?: string | null;
+    gain?: number;
 }
 
 export interface NativeTranscriptionStartOptions extends StartOptions {
@@ -62,6 +63,7 @@ export class TranscriptionService {
     private transport: 'idle' | 'external' | 'native' = 'idle';
     private nativeSourceKind: 'system' | 'microphone' | null = null;
     private nativeGain = 1;
+    private externalGain = 1;
     private preparedNativeConfig: ServiceConfig | null = null;
 
     constructor(
@@ -96,10 +98,12 @@ export class TranscriptionService {
     ): Promise<void> {
         const config = await this.prepareSharedStart(onUpdate, onError, options);
         await prepareLiveTranscription(config);
-        await this.lifecycle.startExternal(config, onError);
+        const gain = options?.gain ?? 1;
+        await this.lifecycle.startExternal(config, onError, gain);
         this.runningConfig = config;
         this.transport = 'external';
         this.nativeSourceKind = null;
+        this.externalGain = gain;
     }
 
     async startNative(
@@ -248,6 +252,7 @@ export class TranscriptionService {
             await this.lifecycle.startExternal(
                 this.runningConfig,
                 (error) => this.onError?.(error),
+                this.externalGain,
             );
             return;
         }
@@ -274,7 +279,11 @@ export class TranscriptionService {
         }
         if (this.transport === 'external') {
             await this.lifecycle.stopExternal();
-            await this.lifecycle.startExternal(config, (error) => this.onError?.(error));
+            await this.lifecycle.startExternal(
+                config,
+                (error) => this.onError?.(error),
+                this.externalGain,
+            );
             this.runningConfig = config;
         }
     }

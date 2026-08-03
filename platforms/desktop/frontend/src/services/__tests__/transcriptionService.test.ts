@@ -426,7 +426,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
         ]);
     });
 
-    it('starts an online Volcengine streaming recognizer without a local model path', async () => {
+    it('starts an online Volcengine streaming recognizer with the requested input gain', async () => {
         mocks.config = {
             ...mocks.config,
             language: 'zh',
@@ -478,7 +478,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
         await syncTranscriptConfig();
         const service = new TranscriptionService('record');
 
-        await service.startExternal(vi.fn(), vi.fn());
+        await service.startExternal(vi.fn(), vi.fn(), { gain: 2.25 });
 
         expect(mocks.invoke).toHaveBeenCalledWith('prepare_live_transcription', expect.objectContaining({
             asrRequest: expect.objectContaining({
@@ -500,6 +500,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
         expect(mocks.invoke).toHaveBeenCalledWith('start_external_live_transcription', expect.objectContaining({
             consumerId: 'record',
             sourceToken: 'source-token-1',
+            gain: 2.25,
         }));
     });
 

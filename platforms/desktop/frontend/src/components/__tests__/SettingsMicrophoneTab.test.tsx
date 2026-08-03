@@ -10,6 +10,7 @@ const mockListen = vi.fn();
 const mockRemove = vi.fn();
 const mockListMicrophoneDeviceOptions = vi.fn();
 const mockListSystemAudioDeviceOptions = vi.fn();
+const mockVisualizerPeakRefs = vi.hoisted(() => [] as Array<{ current: number }>);
 
 function createDeferred<T>() {
     let resolve!: (value: T | PromiseLike<T>) => void;
@@ -93,10 +94,13 @@ vi.mock('../settings/SettingsLayout', () => ({
 }));
 
 vi.mock('../../hooks/useAudioVisualizer', () => ({
-    useAudioVisualizer: () => ({
-        startVisualizer: vi.fn(),
-        stopVisualizer: vi.fn(),
-    }),
+    useAudioVisualizer: ({ peakLevelRef }: { peakLevelRef: { current: number } }) => {
+        mockVisualizerPeakRefs.push(peakLevelRef);
+        return {
+            startVisualizer: vi.fn(),
+            stopVisualizer: vi.fn(),
+        };
+    },
 }));
 
 vi.mock('../../services/audioDeviceService', () => ({
@@ -116,6 +120,7 @@ vi.mock('../../utils/logger', () => ({
 describe('SettingsMicrophoneTab', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockVisualizerPeakRefs.length = 0;
 
         vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
             callback(16);
@@ -267,6 +272,32 @@ describe('SettingsMicrophoneTab', () => {
         });
 
         expect(getInvokeCalls('start_microphone_capture')).toEqual([]);
+    });
+
+    it('applies microphone boost to the preview waveform peak', async () => {
+        useConfigStore.setState({
+            config: {
+                ...useConfigStore.getState().config,
+                microphoneBoost: 2,
+            },
+        });
+
+        render(<SettingsMicrophoneTab isActiveTab isOpen />);
+
+        await waitFor(() => {
+            expect(getListenCalls('microphone-audio')).toHaveLength(1);
+        });
+
+        const listener = getListenCalls('microphone-audio')[0]?.[1] as
+            | ((event: { payload: number }) => void)
+            | undefined;
+        expect(listener).toBeDefined();
+
+        act(() => {
+            listener?.({ payload: 8192 });
+        });
+
+        expect(mockVisualizerPeakRefs[0]?.current).toBeCloseTo((8192 / 32767) * 2);
     });
 
     it('renders a global keep-microphone-active switch that updates audio config', async () => {

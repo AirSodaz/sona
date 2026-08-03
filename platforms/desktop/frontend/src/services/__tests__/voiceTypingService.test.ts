@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
             language: 'auto',
             enableITN: true,
             microphoneId: 'default',
+            microphoneBoost: 1,
             keepMicrophoneActive: false,
         },
         config: {
@@ -29,6 +30,7 @@ const mocks = vi.hoisted(() => {
             language: 'auto',
             enableITN: true,
             microphoneId: 'default',
+            microphoneBoost: 1,
             keepMicrophoneActive: false,
         } as Record<string, any>,
         configSubscribe: vi.fn(),
@@ -242,6 +244,22 @@ describe('voiceTypingService', () => {
         expect(mocks.windowPrepare).toHaveBeenCalledWith([0, 0]);
         expect(getInvokeCalls('start_microphone_capture')).toEqual([]);
         expect(useVoiceTypingRuntimeStore.getState().warmup).toBe('ready');
+    });
+
+    it('passes the configured microphone boost into native voice typing inference', async () => {
+        mocks.config = {
+            ...mocks.defaultConfig,
+            microphoneBoost: 2.5,
+        };
+
+        const service = await loadService();
+        await service.startListening();
+
+        expect(mocks.mockAttachNative).toHaveBeenCalledWith(expect.objectContaining({
+            sourceKind: 'microphone',
+            deviceName: null,
+            gain: 2.5,
+        }));
     });
 
     it('releases on-demand microphone capture after voice typing stops when persistence is disabled', async () => {

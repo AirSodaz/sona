@@ -215,7 +215,10 @@ export function SettingsMicrophoneTab({
 
             const unlisten = await listen<number>(TauriEvent.audio.microphonePeak, (event) => {
                 if (!isCurrentRequest()) return;
-                micTargetPeakRef.current = Math.min(1, Math.abs(event.payload) / 32767);
+                micTargetPeakRef.current = Math.min(
+                    1,
+                    (Math.abs(event.payload) / 32767) * microphoneBoost,
+                );
             });
 
             if (!isCurrentRequest()) {
@@ -238,6 +241,7 @@ export function SettingsMicrophoneTab({
     }, [
         canReusePersistentVoiceTypingMic,
         isActiveSession,
+        microphoneBoost,
         startMicWaveAnimation,
         stopMicWaveAnimation,
         stopPreviewCapture,

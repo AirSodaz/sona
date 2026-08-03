@@ -161,7 +161,11 @@ export function createAudioRecorderCapture({
         }
     }
 
-    async function initializeAudioSession(stream: MediaStream, sessionId: string): Promise<void> {
+    async function initializeAudioSession(
+        stream: MediaStream,
+        sessionId: string,
+        gain: number,
+    ): Promise<void> {
         if (!refs.audioContextRef.current || refs.audioContextRef.current.state === 'closed') {
             refs.audioContextRef.current = new AudioContext({ sampleRate: 16000 });
         } else if (refs.audioContextRef.current.state === 'suspended') {
@@ -177,7 +181,8 @@ export function createAudioRecorderCapture({
             (error) => { logger.error(`[useAudioRecorder] Transcription error. session=${sessionId}:`, error); },
             {
                 callbackOwner: 'live-record',
-                callbackSessionId: sessionId
+                callbackSessionId: sessionId,
+                gain,
             }
         );
         logger.info(`[useAudioRecorder] Record session recognizer ready. session=${sessionId} transport=web-audio`);
@@ -347,9 +352,10 @@ export function createAudioRecorderCapture({
         stream: MediaStream,
         inputSource: InputSource,
         muteDuringRecording: boolean,
+        gain: number,
     ): Promise<void> {
         refs.activeStreamRef.current = stream;
-        await initializeAudioSession(stream, sessionId);
+        await initializeAudioSession(stream, sessionId, gain);
         logger.info(`[useAudioRecorder] Record session capture attached. session=${sessionId} source=${inputSource} transport=web-audio`);
 
         if (muteDuringRecording && inputSource === 'microphone') {
