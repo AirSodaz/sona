@@ -14,7 +14,7 @@ import type {
   ModelInfo,
   ModelRules,
   TimestampSupportHint,
-} from '../modelService';
+} from '../../types/modelCatalog';
 import type {
   DiagnosticsCoreInput as CoreDiagnosticsInput,
   DiagnosticsCoreSnapshot as CoreDiagnosticsSnapshot,
@@ -26,7 +26,7 @@ import type {
 import type {
   DiagnosticsCoreInput,
   DiagnosticsCoreFactsSnapshot,
-} from '../diagnosticsSnapshotBuilders';
+} from '../../types/diagnostics';
 import { TauriCommand } from './commands';
 import type { TauriCommandArgs, TauriCommandResult } from './contracts';
 import { invokeTauri } from './invoke';

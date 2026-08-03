@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { notifySyncLocalChangeForCommand } from '../syncLocalChangeBus';
+import { notifySyncLocalChangeForCommand } from '../tauri/syncLocalChangeBus';
 import { syncRuntimeService } from '../syncRuntimeService';
 import { useSyncStatusStore } from '../../stores/syncStatusStore';
 import type { SyncStatusSnapshot } from '../../types/sync';

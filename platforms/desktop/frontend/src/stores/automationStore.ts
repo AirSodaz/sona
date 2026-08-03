@@ -13,7 +13,10 @@ import type {
   AutomationRule,
   AutomationRuntimeState,
 } from '../types/automation';
-import type { TagAutomationRunRequest } from '../services/automation/tagAutomationRun';
+import {
+  registerTagAutomationRunPorts,
+  type TagAutomationRunRequest,
+} from '../services/automation/tagAutomationRun';
 import type { RecoveredQueueItem } from '../types/recovery';
 import { extractErrorMessage } from '../utils/errorUtils';
 import {
@@ -665,6 +668,11 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     }));
   },
 }));
+
+registerTagAutomationRunPorts({
+  begin: (request) => useAutomationStore.getState().beginTagAutomationRun(request),
+  finish: (request) => useAutomationStore.getState().finishTagAutomationRun(request),
+});
 
 function getAutomationRuntimeCoordinatorState(state: AutomationState): AutomationRuntimeCoordinatorState {
   return {

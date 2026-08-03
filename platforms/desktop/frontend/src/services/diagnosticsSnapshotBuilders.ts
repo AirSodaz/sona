@@ -4,68 +4,31 @@ import type {
   DiagnosticOverviewCard,
   DiagnosticSection,
   DiagnosticStatus,
+  DiagnosticsCoreFactsSnapshot,
   DiagnosticsSnapshot,
 } from '../types/diagnostics';
-import type { SettingsTab } from '../hooks/useSettingsLogic';
+import type { SettingsTab } from '../types/settings';
 import type {
   AsrInferenceMetric,
   AsrModelLoadMetric,
   AsrRuntimeMetricsSnapshot,
   RuntimePathStatus,
 } from '../types/runtime';
-import type {
-  DeviceProbeInput,
-  DiagnosticsConfigInput,
-  DiagnosticsCoreSnapshot,
-  ModelRuleInput,
-  ModelRulesInput,
-  ModelSummaryInput,
-  PathStatusesInput,
-  SelectedModelsInput,
-  VoiceTypingReadinessInput,
-} from '../bindings';
-import type {
-  DeviceProbeResult,
-  MicrophonePermissionState,
-} from './audioDeviceService';
-import type { VoiceTypingReadinessSnapshot } from '../hooks/useVoiceTypingReadiness';
 
 export type Translate = (key: string, options?: Record<string, unknown>) => string;
 
-export type DiagnosticsConfigFacts = Required<DiagnosticsConfigInput>;
-
-export type ModelSummaryFacts = ModelSummaryInput;
-
-export type ModelRuleFacts = ModelRuleInput;
-
-export type DiagnosticsSelectedModelsFacts = SelectedModelsInput;
-
-export type DiagnosticsModelRulesFacts = ModelRulesInput;
-
-export type DiagnosticsPathStatusesFacts = PathStatusesInput;
-
-export type DeviceProbeFacts = DeviceProbeInput;
-
-export type VoiceTypingReadinessFacts = Omit<VoiceTypingReadinessInput, 'state'> & {
-  state: VoiceTypingReadinessSnapshot['state'];
-};
-
-export interface DiagnosticsCoreInput {
-  config: DiagnosticsConfigFacts;
-  permissionState: MicrophonePermissionState;
-  microphoneProbe: DeviceProbeResult;
-  systemAudioProbe: DeviceProbeResult;
-  voiceTypingReadiness: VoiceTypingReadinessSnapshot;
-}
-
-export type DiagnosticsCoreFactsSnapshot = Omit<
-  DiagnosticsCoreSnapshot,
-  'config' | 'permissionState' | 'voiceTypingReadiness'
-> & {
-  config: DiagnosticsConfigFacts;
-  permissionState: MicrophonePermissionState;
-  voiceTypingReadiness: VoiceTypingReadinessFacts;
-};
+export type {
+  DiagnosticsConfigFacts,
+  DiagnosticsCoreFactsSnapshot,
+  DiagnosticsCoreInput,
+  DiagnosticsModelRulesFacts,
+  DiagnosticsPathStatusesFacts,
+  DiagnosticsSelectedModelsFacts,
+  DeviceProbeFacts,
+  ModelRuleFacts,
+  ModelSummaryFacts,
+  VoiceTypingReadinessFacts,
+} from '../types/diagnostics';
 
 interface BuiltChecks {
   model: {

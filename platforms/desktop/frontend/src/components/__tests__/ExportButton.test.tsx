@@ -30,11 +30,6 @@ vi.mock('@tauri-apps/api/path', () => ({
     join: vi.fn().mockImplementation((...args) => args.join('/')),
 }));
 
-vi.mock('../../utils/fileExport', () => ({
-    exportToPath: vi.fn().mockResolvedValue(undefined),
-    saveTranscript: vi.fn().mockResolvedValue(true),
-}));
-
 const mockAlert = vi.fn().mockResolvedValue(undefined);
 vi.mock('../../stores/dialogStore', () => ({
     useDialogStore: (selector: any) => selector({

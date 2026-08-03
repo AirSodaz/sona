@@ -31,7 +31,7 @@ import type {
 import {
   normalizeSpeakerAttribution,
   normalizeSpeakerTag,
-} from "../../types/speaker";
+} from "../../types/speakerNormalization";
 import type { WorkspaceItemSearchMatch } from "../../utils/workspaceSearch";
 import { TauriCommand } from "./commands";
 import type { TauriCommandArgs, TauriCommandResult } from "./contracts";

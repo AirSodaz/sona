@@ -13,7 +13,7 @@ import type {
     AutomationStageConfig,
 } from '../types/automation';
 import type { TranscriptSegment } from '../types/transcript';
-import { normalizeSpeakerAttribution, normalizeSpeakerTag } from '../types/speaker';
+import { normalizeSpeakerAttribution, normalizeSpeakerTag } from '../types/speakerNormalization';
 import { logger } from '../utils/logger';
 import {
     recoveryLoadSnapshot,

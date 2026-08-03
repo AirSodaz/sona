@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openUrl } from '../../services/tauri/platform/opener';
 import packageJson from '../../../package.json';
 import { GithubIcon, HeartIcon, ExternalLinkIcon, ProcessingIcon, CheckIcon, DownloadIcon, BookIcon } from '../Icons';
 import { useAppUpdater } from '../../hooks/useAppUpdater';

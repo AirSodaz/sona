@@ -7,12 +7,17 @@ import type {
   AsrSelectionSlot,
   ModelConfig,
   OnlineAsrProviderId,
-  TextReplacementRuleSet,
   OnlineAsrProviderConfig,
 } from '../types/config';
-import type { ModelFileConfig } from '../types/model';
+import type {
+  AsrTranscriptionRequest,
+  AsrTranscriptionRequestBase,
+  OnlineAsrProviderRequest,
+  TranscriptPostprocessOptions,
+} from '../types/asr';
 import { findSelectedModelByMode } from '../utils/modelSelection';
-import { modelService, PRESET_MODELS_MAP, type ModelInfo } from './modelService';
+import { modelService, PRESET_MODELS_MAP } from './modelService';
+import type { ModelInfo } from '../types/modelCatalog';
 import {
   DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
   ONLINE_ASR_PROVIDER_DEFINITIONS,
@@ -27,7 +32,6 @@ import {
   getOnlineProviderConfig,
   isOnlineAsrProviderId,
   isVolcengineFlashBatchMode,
-  type OnlineAsrProviderRequest,
 } from './onlineAsrProviders';
 
 export {
@@ -42,42 +46,13 @@ export {
   isVolcengineFlashBatchMode,
 };
 
-export type AsrTranscriptionRequestBase = {
-  mode: AsrMode;
-  language: string;
-  enableItn: boolean;
-  normalizationOptions: {
-    enableTimeline: boolean;
-  };
-  postprocessOptions: TranscriptPostprocessOptions;
-  hotwords: string | null;
-};
-
-export type LocalSherpaAsrRequest = AsrTranscriptionRequestBase & {
-  engine: 'local-sherpa';
-  modelId: string | null;
-  modelPath: string;
-  numThreads: number;
-  punctuationModel: string | null;
-  vadModel: string | null;
-  vadBuffer: number;
-  batchSegmentationMode?: 'vad' | 'whole';
-  modelType: string;
-  fileConfig?: ModelFileConfig;
-  gpuAcceleration?: string;
-};
-
-export type OnlineAsrRequest = AsrTranscriptionRequestBase & {
-  engine: 'online';
-  onlineProvider: OnlineAsrProviderRequest;
-};
-
-export type AsrTranscriptionRequest = LocalSherpaAsrRequest | OnlineAsrRequest;
-
-export type TranscriptPostprocessOptions = {
-  textReplacementSets: TextReplacementRuleSet[];
-  dropFinalDotSegments: boolean;
-};
+export type {
+  AsrTranscriptionRequest,
+  AsrTranscriptionRequestBase,
+  LocalSherpaAsrRequest,
+  OnlineAsrRequest,
+  TranscriptPostprocessOptions,
+} from '../types/asr';
 
 const SLOT_MODE: Record<AsrSelectionSlot, AsrMode> = {
   live: 'streaming',

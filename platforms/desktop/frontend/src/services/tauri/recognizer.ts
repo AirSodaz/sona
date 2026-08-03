@@ -3,7 +3,7 @@ import type {
   ModelFileConfig as CoreModelFileConfig,
   SpeakerProcessingConfig as CoreSpeakerProcessingConfig,
 } from '../../bindings';
-import type { AsrTranscriptionRequest } from '../asrConfigService';
+import type { AsrTranscriptionRequest } from '../../types/asr';
 import type { SpeakerProcessingConfig } from '../../types/speaker';
 import type { TranscriptSegment } from '../../types/transcript';
 import { TauriCommand } from './commands';

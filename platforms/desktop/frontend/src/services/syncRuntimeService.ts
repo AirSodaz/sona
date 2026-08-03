@@ -4,7 +4,7 @@ import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import type { SyncStatusSnapshot } from '../types/sync';
 import { logger } from '../utils/logger';
 import { getSyncStatus, runSyncNow } from './tauri/sync';
-import { subscribeToSyncLocalChanges } from './syncLocalChangeBus';
+import { subscribeToSyncLocalChanges } from './tauri/syncLocalChangeBus';
 
 const LOCAL_CHANGE_DEBOUNCE_MS = 5_000;
 const STATUS_POLL_INTERVAL_MS = 5_000;

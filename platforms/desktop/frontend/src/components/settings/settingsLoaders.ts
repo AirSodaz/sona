@@ -1,4 +1,4 @@
-import type { SettingsTab } from '../../hooks/useSettingsLogic';
+import type { SettingsTab } from '../../types/settings';
 import { preloadSettingsGeneralDeferredSections } from './settingsGeneralDeferredLoaders';
 
 export const SETTINGS_TABS = [

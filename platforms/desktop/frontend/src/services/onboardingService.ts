@@ -1,5 +1,6 @@
 import type { AppConfig } from '../types/config';
-import { ModelInfo, PRESET_MODELS, modelService } from './modelService';
+import { modelService } from './modelService';
+import { PRESET_MODELS, type ModelInfo } from '../types/modelCatalog';
 
 export const RECOMMENDED_RECOGNITION_MODEL_ID =
   'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';

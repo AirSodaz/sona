@@ -150,15 +150,6 @@ describe('tauri boundary wrappers', () => {
       invokeBoundaryFile,
       resolve(platformBoundaryRoot, 'assets.ts'),
     ]);
-    const platformCapabilityModules = new Set([
-      '@tauri-apps/api/dpi',
-      '@tauri-apps/api/event',
-      '@tauri-apps/api/path',
-      '@tauri-apps/api/webviewWindow',
-      '@tauri-apps/api/window',
-      '@tauri-apps/plugin-dialog',
-      '@tauri-apps/plugin-fs',
-    ]);
     const allowedInvokeFiles = new Set([
       resolve(srcRoot, 'services/tauri/invoke.ts'),
     ]);
@@ -183,7 +174,7 @@ describe('tauri boundary wrappers', () => {
       }
 
       const source = readFileSync(path, 'utf8');
-      const tauriImportPattern = /from\s+['"](@tauri-apps\/(?:api\/(?:core|dpi|event|path|webviewWindow|window)|plugin-(?:dialog|fs)))['"]/g;
+      const tauriImportPattern = /from\s+['"](@tauri-apps\/[^'"]+)['"]/g;
       for (const match of source.matchAll(tauriImportPattern)) {
         const moduleName = match[1];
         if (moduleName === '@tauri-apps/api/core') {
@@ -193,7 +184,7 @@ describe('tauri boundary wrappers', () => {
           continue;
         }
 
-        if (platformCapabilityModules.has(moduleName) && !isInsidePlatformBoundary(path)) {
+        if (!isInsidePlatformBoundary(path)) {
           violations.push(`${relative(srcRoot, path)} imports ${moduleName} outside services/tauri/platform`);
         }
       }

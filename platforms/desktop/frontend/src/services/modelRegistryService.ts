@@ -6,7 +6,7 @@ import type {
   ModelInfo,
   ModelRules,
   ModelSelectionPaths,
-} from './modelService';
+} from '../types/modelCatalog';
 
 interface ModelRegistryServicePorts {
   getModelCatalogSnapshot: () => Promise<ModelCatalogSnapshot>;

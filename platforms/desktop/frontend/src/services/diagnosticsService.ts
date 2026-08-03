@@ -7,7 +7,7 @@ import {
 import { useConfigStore } from '../stores/configStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
-import { resolveVoiceTypingReadinessSnapshot } from '../hooks/useVoiceTypingReadiness';
+import { resolveVoiceTypingReadinessSnapshot } from './voiceTypingReadiness';
 import type {
   DiagnosticsSnapshot,
 } from '../types/diagnostics';

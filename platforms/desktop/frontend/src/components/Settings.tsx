@@ -7,7 +7,7 @@ import { useDialogStore } from '../stores/dialogStore';
 import { useErrorDialogStore } from '../stores/errorDialogStore';
 import { SettingsTabButton } from './settings/SettingsTabButton';
 import { SettingsNavigationProvider } from './settings/SettingsNavigationContext';
-import { SettingsTabInput, type SettingsTab } from '../hooks/useSettingsLogic';
+import type { SettingsTab, SettingsTabInput } from '../types/settings';
 import { markSettingsPerf } from '../utils/settingsPerf';
 import {
     SETTINGS_TABS,

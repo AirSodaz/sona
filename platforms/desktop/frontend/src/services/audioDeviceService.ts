@@ -5,20 +5,17 @@ import {
   getSystemAudioDevices,
   type AudioDevice,
 } from './tauri/audio';
+import type {
+  DeviceOption,
+  DeviceProbeResult,
+  MicrophonePermissionState,
+} from '../types/diagnostics';
 
-export interface DeviceOption {
-  label: string;
-  value: string;
-}
-
-export type MicrophonePermissionState = PermissionState | 'unsupported';
-
-export interface DeviceProbeResult {
-  options: DeviceOption[];
-  available: boolean;
-  source: 'native' | 'browser' | 'fallback';
-  errorMessage?: string;
-}
+export type {
+  DeviceOption,
+  DeviceProbeResult,
+  MicrophonePermissionState,
+} from '../types/diagnostics';
 
 const DEFAULT_DEVICE_VALUE = 'default';
 const MICROPHONE_ENUMERATION_UNAVAILABLE_MESSAGE = 'Browser device enumeration is unavailable.';

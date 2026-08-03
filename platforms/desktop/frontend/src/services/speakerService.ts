@@ -1,10 +1,10 @@
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment } from '../types/transcript';
-import {
-  normalizeSpeakerProfiles,
-  type SpeakerProcessingConfig,
-  type SpeakerProfileSample,
+import type {
+  SpeakerProcessingConfig,
+  SpeakerProfileSample,
 } from '../types/speaker';
+import { normalizeSpeakerProfiles } from '../types/speakerNormalization';
 import {
   annotateSpeakerSegmentsFromFile,
   importSpeakerProfileSample,

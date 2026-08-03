@@ -2,21 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { resolveAppLanguagePreference } from '../constants/appLanguages';
 import { useConfigStore } from '../stores/configStore';
+import type { SettingsTab, SettingsTabInput } from '../types/settings';
 
-export type SettingsTab =
-    | 'general'
-    | 'dashboard'
-    | 'microphone'
-    | 'subtitle'
-    | 'models'
-    | 'shortcuts'
-    | 'about'
-    | 'llm_service'
-    | 'vocabulary'
-    | 'automation'
-    | 'storage'
-    | 'api_server';
-export type SettingsTabInput = SettingsTab | 'context' | 'voice_typing';
+export type { SettingsTab, SettingsTabInput } from '../types/settings';
 
 interface SettingsTabState {
     isOpen: boolean;

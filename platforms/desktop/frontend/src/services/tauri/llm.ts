@@ -25,7 +25,7 @@ import type {
   TranscriptSummaryResult,
   TranslatedSegment,
   TranslateSegmentsRequest,
-} from '../llmTaskTypes';
+} from '../../types/llmTask';
 import type { LlmGenerateCommandRequest } from '../../types/dashboard';
 import type {
   LlmCompletionRequest,

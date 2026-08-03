@@ -19,7 +19,7 @@ import { SearchUI } from '../SearchUI';
 import { EditorToolbar } from '../EditorToolbar';
 import { useSearchStore } from '../../stores/searchStore';
 import { useTranscriptUIState } from '../../hooks/useTranscriptUIState';
-import { areSpeakerTagsEqual } from '../../types/speaker';
+import { areSpeakerTagsEqual } from '../../types/speakerNormalization';
 
 const TranscriptListHeader = React.memo(function TranscriptListHeader(): React.JSX.Element {
     return (

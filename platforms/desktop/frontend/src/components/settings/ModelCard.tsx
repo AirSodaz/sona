@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ModelInfo } from '../../services/modelService';
+import type { ModelInfo } from '../../types/modelCatalog';
 import { TrashIcon, DownloadIcon, XIcon } from '../Icons';
 
 interface ModelCardProps {

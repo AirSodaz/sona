@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { forceExitWithGuard } from '../services/quitGuard';
-import { SettingsTab } from './useSettingsLogic';
+import type { SettingsTab } from '../types/settings';
 import { logger } from '../utils/logger';
 import { useAppUpdaterStore } from '../stores/appUpdaterStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';

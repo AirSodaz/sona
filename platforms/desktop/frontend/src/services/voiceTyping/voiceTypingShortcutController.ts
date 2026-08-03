@@ -1,4 +1,8 @@
-import { isRegistered, register, unregister } from '@tauri-apps/plugin-global-shortcut';
+import {
+  isRegistered,
+  register,
+  unregister,
+} from '../tauri/platform/globalShortcut';
 import { useVoiceTypingRuntimeStore } from '../../stores/voiceTypingRuntimeStore';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { logger } from '../../utils/logger';

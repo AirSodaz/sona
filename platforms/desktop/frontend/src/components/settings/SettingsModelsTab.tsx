@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type {
     ModelCatalogSectionType,
     ModelSelectionOption,
-} from '../../services/modelService';
+} from '../../types/modelCatalog';
 import { ModelCard } from './ModelCard';
 import { Dropdown } from '../Dropdown';
 import { useModelConfig, useSetConfig, useTranscriptionConfig } from '../../stores/configStore';

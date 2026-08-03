@@ -8,8 +8,10 @@ import { useAutomationStore } from '../../stores/automationStore';
 import {
   deriveSpeakerProfileReadiness,
   normalizeSpeakerProfiles,
-  type SpeakerProfile,
-  type SpeakerProfileSample,
+} from '../../types/speakerNormalization';
+import type {
+  SpeakerProfile,
+  SpeakerProfileSample,
 } from '../../types/speaker';
 import { speakerService } from '../../services/speakerService';
 import { SettingsSection } from './SettingsLayout';

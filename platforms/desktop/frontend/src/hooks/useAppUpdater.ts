@@ -1,5 +1,5 @@
 import { useShallow } from 'zustand/shallow';
-import { Update } from '@tauri-apps/plugin-updater';
+import type { Update } from '../services/tauri/platform/updater';
 import { useAppUpdaterStore, UpdateStatus } from '../stores/appUpdaterStore';
 
 interface UseAppUpdaterReturn {

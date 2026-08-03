@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 
 import React, { createContext, useContext } from 'react';
-import type { SettingsTab } from '../../hooks/useSettingsLogic';
+import type { SettingsTab } from '../../types/settings';
 
 interface SettingsNavigationContextValue {
     activeTab: SettingsTab;

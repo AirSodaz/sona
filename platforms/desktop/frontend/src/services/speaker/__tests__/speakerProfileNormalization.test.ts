@@ -4,7 +4,7 @@ import {
   deriveSpeakerProfileReadiness,
   normalizeSpeakerAttribution,
   normalizeSpeakerProfiles,
-} from '../speakerProfileNormalization';
+} from '../../../types/speakerNormalization';
 import type { SpeakerProfile } from '../../../types/speaker';
 
 function createProfile(samples: number[]): SpeakerProfile {

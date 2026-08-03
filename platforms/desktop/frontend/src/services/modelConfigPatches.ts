@@ -8,7 +8,7 @@ import {
   syncOnlineAsrProviderConfig,
   syncStreamingAsrSelectionFields,
 } from './asrConfigService';
-import type { ModelCatalogRestoreDefaults, ModelInfo } from './modelService';
+import type { ModelCatalogRestoreDefaults, ModelInfo } from '../types/modelCatalog';
 
 export function buildModelPathConfigPatch(
   config: AppConfig,

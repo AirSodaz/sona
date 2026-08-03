@@ -20,7 +20,7 @@ import type {
   DiagnosticStatus,
   DiagnosticsSnapshot,
 } from '../types/diagnostics';
-import type { SettingsTab } from '../hooks/useSettingsLogic';
+import type { SettingsTab } from '../types/settings';
 import { normalizeError } from '../utils/errorUtils';
 import { openLogFolder } from '../services/tauri/app';
 import { PanelModal } from './PanelModal';

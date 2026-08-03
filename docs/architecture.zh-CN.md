@@ -81,6 +81,13 @@ Core <- Outbound Adapter <------------- Host
 - CLI：`platforms/cli/src/lib.rs` 与各个命令模块组合 CLI 命令。
 - UniFFI/移动端：`adapters/uniffi_bind/src/application_context.rs` 组合面向移动端的运行时，`adapters/uniffi_bind/src/lib.rs` 发布对外导出面。目录名 `adapters/uniffi_bind` 是历史遗留名称：`sona-uniffi-bind` 的角色是 host，而不是适配器角色。
 
+<a id="desktop-frontend-dependencies"></a>
+### Desktop 前端依赖方向
+
+Desktop 前端的导入方向是：view 与 hook 指向 feature service 和 store，再指向稳定的领域 DTO 与 `services/tauri` 平台网关。`src/types/`、`src/constants/` 不得导入 service、store、hook 或 component；feature service 可以编排 store，但不得导入 hook 或 component；store 不得导入 UI 模块。完整的生产模块依赖图必须保持无环。
+
+所有静态或动态 `@tauri-apps/*` 导入必须位于 `src/services/tauri/platform/`，唯一例外是集中调用命令的 `src/services/tauri/invoke.ts` 可以导入 `@tauri-apps/api/core`。Tauri command contract 只能依赖生成 bindings、command name 和由 `src/types/` 拥有的 DTO，不得反向依赖业务 service。`scripts/frontend-architecture.test.js` 在 `test:scripts` 与 PR CI 中强制执行这些规则。
+
 UniFFI 导出面只有两层：`lib.rs` 中的 `#[uniffi::export]` 自由函数直接委托到对应的 `*_bridge` 模块。原先 `facade.rs` 中的 `SonaCoreFacade` 类型只是把每个调用再转发一次、不附加任何行为，现已合并进 `lib.rs`。不要重新引入中间转发类型； `scripts/multisurface-contracts.test.js` 会强制这一约束，仅允许 `release_application_context` 直接调用组合根。
 
 各 Host 共享 `sona-sqlite` 提供的 `SqliteApplicationContext`，但接线、生命周期与错误映射仍由各 Host 自行拥有。目前还没有单独的共享 application-composition crate。

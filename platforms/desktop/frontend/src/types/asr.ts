@@ -1,0 +1,50 @@
+import type {
+  AsrMode,
+  OnlineAsrProviderConfig,
+  OnlineAsrProviderId,
+  TextReplacementRuleSet,
+} from './config';
+import type { ModelFileConfig } from './model';
+
+export type OnlineAsrProviderRequest = {
+  providerId: OnlineAsrProviderId;
+  profileId: string;
+  config: OnlineAsrProviderConfig;
+};
+
+export type TranscriptPostprocessOptions = {
+  textReplacementSets: TextReplacementRuleSet[];
+  dropFinalDotSegments: boolean;
+};
+
+export type AsrTranscriptionRequestBase = {
+  mode: AsrMode;
+  language: string;
+  enableItn: boolean;
+  normalizationOptions: {
+    enableTimeline: boolean;
+  };
+  postprocessOptions: TranscriptPostprocessOptions;
+  hotwords: string | null;
+};
+
+export type LocalSherpaAsrRequest = AsrTranscriptionRequestBase & {
+  engine: 'local-sherpa';
+  modelId: string | null;
+  modelPath: string;
+  numThreads: number;
+  punctuationModel: string | null;
+  vadModel: string | null;
+  vadBuffer: number;
+  batchSegmentationMode?: 'vad' | 'whole';
+  modelType: string;
+  fileConfig?: ModelFileConfig;
+  gpuAcceleration?: string;
+};
+
+export type OnlineAsrRequest = AsrTranscriptionRequestBase & {
+  engine: 'online';
+  onlineProvider: OnlineAsrProviderRequest;
+};
+
+export type AsrTranscriptionRequest = LocalSherpaAsrRequest | OnlineAsrRequest;

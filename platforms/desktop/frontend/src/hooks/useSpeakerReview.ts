@@ -9,11 +9,13 @@ import {
 } from '../services/speakerCorrectionService';
 import {
   buildSpeakerReviewSnapshot,
-  type SpeakerReviewCounts,
-  type SpeakerReviewFilter,
-  type SpeakerReviewGroup,
-  type SpeakerReviewSnapshot,
 } from '../services/speakerReviewService';
+import type {
+  SpeakerReviewCounts,
+  SpeakerReviewFilter,
+  SpeakerReviewGroup,
+  SpeakerReviewSnapshot,
+} from '../types/speaker';
 
 const EMPTY_SPEAKER_REVIEW_COUNTS: SpeakerReviewCounts = {
   total: 0,

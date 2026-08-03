@@ -1,14 +1,15 @@
-import type { SpeakerProfileSample, SpeakerProcessingConfig } from '../../types/speaker';
-import type { TranscriptSegment } from '../../types/transcript';
+import type {
+  SpeakerProfileSample,
+  SpeakerProcessingConfig,
+  SpeakerReviewFilter,
+  SpeakerReviewSnapshot,
+} from '../../types/speaker';
 import type {
   ApplySpeakerProfileToGroupRequest,
   SpeakerCorrectionResponse,
   SpeakerGroupRequest,
-} from '../speakerCorrectionService';
-import type {
-  SpeakerReviewFilter,
-  SpeakerReviewSnapshot,
-} from '../speakerReviewService';
+} from '../../types/speakerCommands';
+import type { TranscriptSegment } from '../../types/transcript';
 import { TauriCommand } from './commands';
 import { invokeTauri } from './invoke';
 

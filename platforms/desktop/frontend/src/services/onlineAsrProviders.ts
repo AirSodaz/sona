@@ -6,12 +6,7 @@ import type {
   OnlineAsrProviderConfig,
   AsrProviderConfig,
 } from '../types/config';
-
-export type OnlineAsrProviderRequest = {
-  providerId: OnlineAsrProviderId;
-  profileId: string;
-  config: OnlineAsrProviderConfig;
-};
+export type { OnlineAsrProviderRequest } from '../types/asr';
 
 export type OnlineAsrProviderDefinition = {
   id: OnlineAsrProviderId;

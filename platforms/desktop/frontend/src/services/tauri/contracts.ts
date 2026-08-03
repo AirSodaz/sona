@@ -37,9 +37,16 @@ import type {
   ProjectRecord,
 } from "../../types/project";
 import type {
+  SpeakerReviewFilter,
+  SpeakerReviewSnapshot,
   SpeakerProfileSample,
   SpeakerProcessingConfig,
 } from "../../types/speaker";
+import type {
+  ApplySpeakerProfileToGroupRequest,
+  SpeakerCorrectionResponse,
+  SpeakerGroupRequest,
+} from "../../types/speakerCommands";
 import type { TranscriptSegment } from "../../types/transcript";
 import type { ApiServerDashboardSnapshot } from "../../types/apiServer";
 import type {
@@ -67,16 +74,7 @@ import type {
   TranscriptLlmJobResult,
   TranscriptSummaryResult,
   TranslatedSegment,
-} from "../llmTaskTypes";
-import type {
-  ApplySpeakerProfileToGroupRequest,
-  SpeakerCorrectionResponse,
-  SpeakerGroupRequest,
-} from "../speakerCorrectionService";
-import type {
-  SpeakerReviewFilter,
-  SpeakerReviewSnapshot,
-} from "../speakerReviewService";
+} from "../../types/llmTask";
 import { TauriCommand, type TauriCommandName } from "./commands";
 
 export interface LiveTranscriptionSubscription {

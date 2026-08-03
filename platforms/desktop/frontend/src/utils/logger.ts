@@ -3,6 +3,7 @@
  * which become {} when simply passed to JSON.stringify.
  */
 import type { AppLogLevel } from '../types/config';
+import { getPluginLogModule } from '../services/tauri/platform/log';
 import { normalizeLogLevel, shouldWriteLogLevel } from './logLevel';
 
 const browserConsole = globalThis.console;
@@ -29,9 +30,6 @@ function serializeArgs(args: unknown[]): string {
 }
 
 type LogLevel = AppLogLevel;
-type PluginLogModule = typeof import('@tauri-apps/plugin-log');
-
-let pluginLogModulePromise: Promise<PluginLogModule | null> | null = null;
 let currentLogLevel: AppLogLevel = 'info';
 
 export function setLoggerLevel(level: unknown): AppLogLevel {
@@ -41,16 +39,6 @@ export function setLoggerLevel(level: unknown): AppLogLevel {
 
 export function getLoggerLevel(): AppLogLevel {
   return currentLogLevel;
-}
-
-async function getPluginLogModule(): Promise<PluginLogModule | null> {
-  if (!pluginLogModulePromise) {
-    pluginLogModulePromise = import('@tauri-apps/plugin-log')
-      .then((module) => module)
-      .catch(() => null);
-  }
-
-  return pluginLogModulePromise;
 }
 
 async function writeLog(level: LogLevel, message: unknown, ...args: unknown[]) {

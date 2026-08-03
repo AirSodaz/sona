@@ -81,6 +81,13 @@ Physical relocation of historical paths is out of scope until a dedicated slice 
 - CLI: `platforms/cli/src/lib.rs` and individual command modules compose CLI commands.
 - UniFFI/mobile: `adapters/uniffi_bind/src/application_context.rs` composes the mobile-facing runtime, and `adapters/uniffi_bind/src/lib.rs` publishes the exported surface. The `adapters/uniffi_bind` directory name is historical: `sona-uniffi-bind` has the host role, not an adapter role.
 
+<a id="desktop-frontend-dependencies"></a>
+### Desktop frontend dependency direction
+
+Desktop frontend imports point from views and hooks toward feature services and stores, then toward stable domain DTOs and `services/tauri` platform gateways. `src/types/` and `src/constants/` must not import services, stores, hooks, or components. Feature services may coordinate stores but must not import hooks or components; stores must not import UI modules. The complete production import graph must remain acyclic.
+
+All static and dynamic `@tauri-apps/*` imports live under `src/services/tauri/platform/`, except the centralized `@tauri-apps/api/core` invocation adapter at `src/services/tauri/invoke.ts`. Tauri command contracts depend only on generated bindings, command names, and DTOs owned by `src/types/`; they never depend on a business service. `scripts/frontend-architecture.test.js` enforces these rules in `test:scripts` and PR CI.
+
 The UniFFI surface is exactly two layers: an `#[uniffi::export]` free function in `lib.rs` delegates straight into the matching `*_bridge` module. The former `SonaCoreFacade` type in `facade.rs` forwarded every call a second time without adding behaviour and has been merged into `lib.rs`. Do not reintroduce an intermediate forwarding type; `scripts/multisurface-contracts.test.js` enforces this, allowing only `release_application_context` to call the composition root directly.
 
 Hosts share the SQLite composition type `SqliteApplicationContext` from `sona-sqlite`, but each host still owns its own wiring, lifecycle, and error mapping. There is no separate shared application-composition crate yet.

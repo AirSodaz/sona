@@ -6,7 +6,7 @@ import type {
   TauriCommandsWithArgs,
   TauriCommandsWithoutArgs,
 } from './contracts';
-import { notifySyncLocalChangeForCommand } from '../syncLocalChangeBus';
+import { notifySyncLocalChangeForCommand } from './syncLocalChangeBus';
 
 export async function invokeTauri<TCommand extends TauriCommandsWithoutArgs>(
   command: TCommand,

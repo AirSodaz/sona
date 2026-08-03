@@ -24,7 +24,7 @@ import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
 import { useAutoUpdateCheck } from './hooks/useAutoUpdateCheck';
 import { useTrayHandling } from './hooks/useTrayHandling';
 import { useTranscriptionServiceSync } from './hooks/useTranscriptionServiceSync';
-import { SettingsTab } from './hooks/useSettingsLogic';
+import type { SettingsTab } from './types/settings';
 import { preloadAllSettingsTabs, preloadSettingsTab } from './components/settings/settingsLoaders';
 import { diagnosticsService } from './services/diagnosticsService';
 import { clearActiveTranscriptSession } from './stores/transcriptCoordinator';

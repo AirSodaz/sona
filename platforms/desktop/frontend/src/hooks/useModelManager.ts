@@ -16,7 +16,7 @@ import type {
     ModelCatalogSnapshot,
     ModelInfo,
     ProgressCallback,
-} from '../services/modelService';
+} from '../types/modelCatalog';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { getSettingsPerfErrorDetail, markSettingsPerf } from '../utils/settingsPerf';

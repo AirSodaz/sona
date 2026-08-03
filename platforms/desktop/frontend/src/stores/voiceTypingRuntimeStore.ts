@@ -1,20 +1,16 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/shallow';
+import type {
+    VoiceTypingRuntimeErrorSource,
+    VoiceTypingRuntimeLifecycleStatus,
+    VoiceTypingRuntimeStatus,
+} from '../types/voiceTyping';
 
-export type VoiceTypingRuntimeLifecycleStatus = 'idle' | 'preparing' | 'ready' | 'error';
-export type VoiceTypingRuntimeErrorSource =
-    | 'shortcut_registration'
-    | 'warmup'
-    | 'microphone'
-    | 'session';
-
-export interface VoiceTypingRuntimeStatus {
-    shortcutRegistration: Exclude<VoiceTypingRuntimeLifecycleStatus, 'preparing'>;
-    warmup: VoiceTypingRuntimeLifecycleStatus;
-    lastErrorSource: VoiceTypingRuntimeErrorSource | null;
-    lastErrorMessage: string | null;
-    updatedAt: number | null;
-}
+export type {
+    VoiceTypingRuntimeErrorSource,
+    VoiceTypingRuntimeLifecycleStatus,
+    VoiceTypingRuntimeStatus,
+} from '../types/voiceTyping';
 
 export const DEFAULT_VOICE_TYPING_RUNTIME_STATUS: VoiceTypingRuntimeStatus = {
     shortcutRegistration: 'idle',

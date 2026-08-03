@@ -2,7 +2,7 @@ import i18n from '../i18n';
 import { logger } from '../utils/logger';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { TauriEvent } from './tauri/events';
-import type { ModelCatalogModel, ModelInfo, ProgressCallback } from './modelService';
+import type { ModelCatalogModel, ModelInfo, ProgressCallback } from '../types/modelCatalog';
 
 interface DownloadProgressPayloadObject {
   0?: number;

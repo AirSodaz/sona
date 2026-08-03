@@ -1,7 +1,7 @@
 import { create, type StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import type { TranscriptSegment, TranscriptUpdate, AppMode, ProcessingStatus, TranscriptSummaryState, HistorySummaryPayload } from '../types/transcript';
-import { areSpeakerTagsEqual } from '../types/speaker';
+import { areSpeakerTagsEqual } from '../types/speakerNormalization';
 import { normalizeTranscriptSegment, normalizeTranscriptSegments, normalizeTranscriptUpdate } from '../utils/transcriptTiming';
 import { findSegmentAndIndexForTime, stripHtmlTags, performSegmentSplit } from '../utils/segmentUtils';
 

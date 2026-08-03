@@ -1,4 +1,4 @@
-import { LazyStore } from '@tauri-apps/plugin-store';
+import { LazyStore } from './tauri/platform/store';
 import type { AppConfig } from '../types/config';
 import {
   getAppSetting,

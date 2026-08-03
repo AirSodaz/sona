@@ -1,5 +1,5 @@
 import React from 'react';
-import { SettingsTab } from '../../hooks/useSettingsLogic';
+import type { SettingsTab } from '../../types/settings';
 
 /** Props for the SettingsTabButton component. */
 export interface SettingsTabButtonProps {

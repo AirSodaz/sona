@@ -1,8 +1,11 @@
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import type { SpeakerProfile } from '../types/speaker';
-import { normalizeSpeakerProfiles } from '../types/speaker';
+import type {
+  SpeakerCorrectionProfileSections,
+  SpeakerProfile,
+} from '../types/speaker';
+import { normalizeSpeakerProfiles } from '../types/speakerNormalization';
 import type { TranscriptSegment } from '../types/transcript';
 import {
   applySpeakerProfileToGroup,
@@ -10,28 +13,12 @@ import {
   resetSpeakerGroupToAnonymous as resetSpeakerGroupToAnonymousInRust,
 } from './tauri/speaker';
 
-export interface SpeakerCorrectionProfileSections {
-  primaryProfiles: SpeakerProfile[];
-  secondaryProfiles: SpeakerProfile[];
-}
-
-export interface ApplySpeakerProfileToGroupRequest {
-  segments: TranscriptSegment[];
-  groupId: string;
-  targetProfileId: string;
-  speakerProfiles: SpeakerProfile[];
-  enabledSpeakerProfileIds: string[];
-}
-
-export interface SpeakerGroupRequest {
-  segments: TranscriptSegment[];
-  groupId: string;
-}
-
-export interface SpeakerCorrectionResponse {
-  segments: TranscriptSegment[];
-  enabledSpeakerProfileIds?: string[];
-}
+export type {
+  ApplySpeakerProfileToGroupRequest,
+  SpeakerCorrectionResponse,
+  SpeakerGroupRequest,
+} from '../types/speakerCommands';
+export type { SpeakerCorrectionProfileSections } from '../types/speaker';
 
 export function buildSpeakerCorrectionProfileSections(
   inputProfiles: SpeakerProfile[] | undefined,

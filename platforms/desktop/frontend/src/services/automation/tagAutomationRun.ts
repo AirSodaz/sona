@@ -8,20 +8,40 @@ export interface TagAutomationRunRequest {
   force?: boolean;
 }
 
-export async function beginTagAutomationRun(
-  request: TagAutomationRunRequest,
-): Promise<boolean> {
-  const { useAutomationStore } = await import('../../stores/automationStore');
-  return useAutomationStore.getState().beginTagAutomationRun(request);
-}
-
-export async function finishTagAutomationRun(args: {
+export interface TagAutomationRunFinishRequest {
   ruleId: string;
   historyId: string;
   inputVersion: string;
   status: 'complete' | 'error';
   errorMessage?: string;
-}): Promise<void> {
-  const { useAutomationStore } = await import('../../stores/automationStore');
-  await useAutomationStore.getState().finishTagAutomationRun(args);
+}
+
+export interface TagAutomationRunPorts {
+  begin: (request: TagAutomationRunRequest) => Promise<boolean>;
+  finish: (request: TagAutomationRunFinishRequest) => Promise<void>;
+}
+
+let ports: TagAutomationRunPorts | null = null;
+
+export function registerTagAutomationRunPorts(nextPorts: TagAutomationRunPorts): void {
+  ports = nextPorts;
+}
+
+function requirePorts(): TagAutomationRunPorts {
+  if (!ports) {
+    throw new Error('Tag automation run ports are not registered.');
+  }
+  return ports;
+}
+
+export async function beginTagAutomationRun(
+  request: TagAutomationRunRequest,
+): Promise<boolean> {
+  return requirePorts().begin(request);
+}
+
+export async function finishTagAutomationRun(
+  request: TagAutomationRunFinishRequest,
+): Promise<void> {
+  await requirePorts().finish(request);
 }

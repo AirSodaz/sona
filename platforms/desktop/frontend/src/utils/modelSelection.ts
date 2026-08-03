@@ -1,4 +1,4 @@
-import { PRESET_MODELS, type ModelInfo } from '../services/modelService';
+import { PRESET_MODELS, type ModelInfo } from '../types/modelCatalog';
 
 function normalizeModelPath(modelPath: string): string {
     return modelPath.replace(/\\/g, '/').toLowerCase();

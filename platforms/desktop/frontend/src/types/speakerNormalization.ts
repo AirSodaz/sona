@@ -9,7 +9,7 @@ import type {
   SpeakerProfileReadiness,
   SpeakerProfileSample,
   SpeakerTag,
-} from '../../types/speaker';
+} from './speaker';
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;

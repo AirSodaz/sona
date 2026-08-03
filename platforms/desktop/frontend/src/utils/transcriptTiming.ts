@@ -5,7 +5,7 @@ import type {
   TranscriptTimingUnit,
   TranscriptUpdate,
 } from '../types/transcript';
-import { normalizeSpeakerAttribution } from '../types/speaker';
+import { normalizeSpeakerAttribution } from '../types/speakerNormalization';
 import { alignTextToTimedTokens } from './transcriptTextUtils';
 
 function toSafeNumber(value: unknown, fallback: number): number {
