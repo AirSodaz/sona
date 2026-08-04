@@ -272,6 +272,8 @@ mod tests {
     };
     use crate::SonaCoreBindingError;
 
+    const TEST_APP_VERSION: &str = "test-version";
+
     fn path_arg(path: &Path) -> String {
         path.to_string_lossy().into_owned()
     }
@@ -531,12 +533,12 @@ mod tests {
         let manifest_json = export_backup_archive_json(
             path_arg(&source_dir),
             path_arg(&archive),
-            "0.8.0".to_string(),
+            TEST_APP_VERSION.to_string(),
         )
         .await
         .unwrap();
         let manifest: BackupManifest = canonical_output(&manifest_json);
-        assert_eq!(manifest.app_version, "0.8.0");
+        assert_eq!(manifest.app_version, TEST_APP_VERSION);
         assert_eq!(manifest.counts.tags, 1);
         assert_eq!(manifest.counts.history_items, 1);
         assert_eq!(manifest.counts.automation_rules, 1);
@@ -614,11 +616,11 @@ mod tests {
         let typed_manifest = export_backup_archive_v1(
             path_arg(&source_dir),
             path_arg(&archive),
-            "0.8.0".to_string(),
+            TEST_APP_VERSION.to_string(),
         )
         .await
         .unwrap();
-        assert_eq!(typed_manifest.app_version, "0.8.0");
+        assert_eq!(typed_manifest.app_version, TEST_APP_VERSION);
         assert_eq!(typed_manifest.counts.tags, 1);
         assert_eq!(typed_manifest.counts.history_items, 1);
         assert!(typed_manifest.scopes.config && typed_manifest.scopes.analytics);
@@ -662,10 +664,13 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let archive = root.path().join("never-created.sona-backup");
 
-        let error =
-            export_backup_archive_v1("   ".to_string(), path_arg(&archive), "0.8.0".to_string())
-                .await
-                .unwrap_err();
+        let error = export_backup_archive_v1(
+            "   ".to_string(),
+            path_arg(&archive),
+            TEST_APP_VERSION.to_string(),
+        )
+        .await
+        .unwrap_err();
 
         assert!(matches!(error, SonaCoreBindingError::Backup { .. }));
         assert!(!archive.exists());
@@ -780,7 +785,7 @@ mod tests {
         export_backup_archive_json(
             path_arg(&source_dir),
             path_arg(&archive),
-            "0.8.0".to_string(),
+            TEST_APP_VERSION.to_string(),
         )
         .await
         .unwrap();
@@ -788,7 +793,7 @@ mod tests {
         let export_error = export_backup_archive_json(
             path_arg(&missing_export_dir),
             path_arg(&unused_archive),
-            "0.8.0".to_string(),
+            TEST_APP_VERSION.to_string(),
         )
         .await
         .unwrap_err();
@@ -823,7 +828,7 @@ mod tests {
         export_backup_archive_json(
             path_arg(&source_dir),
             path_arg(&archive),
-            "0.8.0".to_string(),
+            TEST_APP_VERSION.to_string(),
         )
         .await
         .unwrap();

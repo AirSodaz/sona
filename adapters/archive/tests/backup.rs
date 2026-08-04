@@ -27,6 +27,7 @@ use tar::{EntryType, Header};
 use uuid::Uuid;
 
 const MANIFEST_PATH: &str = "manifest.json";
+const TEST_APP_VERSION: &str = "test-version";
 
 #[derive(Clone)]
 struct TestEntry {
@@ -168,7 +169,7 @@ fn manifest() -> BackupManifest {
     BackupManifest {
         schema_version: 3,
         created_at: "2026-07-13T00:00:00.000Z".to_string(),
-        app_version: "0.8.0".to_string(),
+        app_version: TEST_APP_VERSION.to_string(),
         history_mode: "light".to_string(),
         scopes: BackupManifestScopes {
             config: true,
@@ -462,7 +463,7 @@ fn filesystem_backup_adapter_composes_archive_state_and_clock() {
     let manifest = adapter
         .export_archive(BackupExportRequest {
             archive_path: archive_path.clone(),
-            app_version: "0.8.0".to_string(),
+            app_version: TEST_APP_VERSION.to_string(),
         })
         .unwrap();
 
@@ -473,7 +474,7 @@ fn filesystem_backup_adapter_composes_archive_state_and_clock() {
         .inspect_archive(BackupInspectRequest { archive_path })
         .unwrap();
 
-    assert_eq!(preview.manifest.app_version, "0.8.0");
+    assert_eq!(preview.manifest.app_version, TEST_APP_VERSION);
     assert_eq!(preview.manifest.counts.tags, 1);
 }
 
@@ -559,7 +560,7 @@ fn imports_v1_projects_and_single_assignments_as_tags() {
             &json!({
                 "schemaVersion": 1,
                 "createdAt": "2026-07-13T00:00:00.000Z",
-                "appVersion": "0.8.0",
+                "appVersion": TEST_APP_VERSION,
                 "historyMode": "light",
                 "scopes": {"config": true, "workspace": true, "history": true, "automation": true, "analytics": true},
                 "counts": {"projects": 1, "historyItems": 1, "transcriptFiles": 1, "summaryFiles": 1, "automationRules": 1, "automationProcessedEntries": 1, "analyticsFiles": 1}

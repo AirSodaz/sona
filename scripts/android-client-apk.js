@@ -1,5 +1,8 @@
 import fs from 'node:fs';
 
+const projectVersion = JSON.parse(
+  fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+).version;
 const supportedAndroidAbis = new Set(['arm64-v8a', 'x86_64']);
 const maximumAndroidVersionCode = 2100000000;
 const requiredNativeLibraries = new Set([
@@ -54,7 +57,7 @@ function resolveAndroidClientBuildIdentity(environment = process.env) {
     applicationId: channel === 'nightly' ? 'com.sona.android.nightly' : 'com.sona.android',
     appName: channel === 'nightly' ? 'Sona Nightly' : 'Sona',
     versionCode: parseAndroidVersionCode(suppliedVersionCode || '1'),
-    versionName: suppliedVersionName || '0.8.0',
+    versionName: suppliedVersionName || projectVersion,
   };
 }
 

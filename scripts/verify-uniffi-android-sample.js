@@ -23,8 +23,10 @@ const requiredSherpaRuntimeLibraries = [
   'libsherpa-onnx-c-api.so',
   'libonnxruntime.so',
 ];
-const samplePublicationVersion = '0.8.0';
-const sampleMavenCoordinatePath = 'com/sona/sona-uniffi-bindings/0.8.0';
+const samplePublicationVersion = JSON.parse(
+  fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf8'),
+).version;
+const sampleMavenCoordinatePath = `com/sona/sona-uniffi-bindings/${samplePublicationVersion}`;
 
 function run(command, commandArgs, options = {}) {
   const result = spawnSync(command, commandArgs, {

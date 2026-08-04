@@ -15,6 +15,7 @@ use sona_core::history::HistoryBackupSnapshot;
 use sona_core::ports::time::{ClockError, ClockPort};
 
 const FIXED_NOW_MS: u64 = 1_783_900_800_123;
+const TEST_APP_VERSION: &str = "test-version";
 
 struct FixedClock;
 
@@ -200,7 +201,7 @@ fn manifest() -> BackupManifest {
     BackupManifest {
         schema_version: 2,
         created_at: "2026-07-13T00:00:00.000Z".to_string(),
-        app_version: "0.8.0".to_string(),
+        app_version: TEST_APP_VERSION.to_string(),
         history_mode: "light".to_string(),
         scopes: BackupManifestScopes {
             config: true,
@@ -253,7 +254,7 @@ fn export_validates_request_before_calling_either_port() {
     let error = service
         .export_archive(BackupExportRequest {
             archive_path: "  ".to_string(),
-            app_version: "0.8.0".to_string(),
+            app_version: TEST_APP_VERSION.to_string(),
         })
         .unwrap_err();
 
@@ -271,7 +272,7 @@ fn export_builds_manifest_from_the_typed_snapshot_and_writes_it() {
     let result = service
         .export_archive(BackupExportRequest {
             archive_path: "backup.sona-backup".to_string(),
-            app_version: "0.8.0".to_string(),
+            app_version: TEST_APP_VERSION.to_string(),
         })
         .unwrap();
 
@@ -298,7 +299,7 @@ fn export_maps_clock_failure_without_writing_an_archive() {
     let error = service
         .export_archive(BackupExportRequest {
             archive_path: "backup.sona-backup".to_string(),
-            app_version: "0.8.0".to_string(),
+            app_version: TEST_APP_VERSION.to_string(),
         })
         .unwrap_err();
 

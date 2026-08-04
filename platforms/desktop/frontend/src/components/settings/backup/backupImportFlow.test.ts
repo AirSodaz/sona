@@ -13,6 +13,8 @@ import {
 } from './backupImportFlow';
 import { preparedBackupImportActions } from './useBackupSettingsController';
 
+const TEST_APP_VERSION = 'test-version';
+
 function buildManifest(): BackupManifestV1 {
   return {
     schemaVersion: 3,
@@ -157,7 +159,7 @@ describe('production prepared-backup callbacks', () => {
       prepareBackupImport: vi.fn(),
       disposePreparedBackupImport,
       applyPreparedHistoryImport,
-      appVersion: '0.8.0',
+      appVersion: TEST_APP_VERSION,
     } as unknown as BackupServicePorts;
     return { applyPreparedHistoryImport, disposePreparedBackupImport };
   }

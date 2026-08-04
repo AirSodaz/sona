@@ -38,7 +38,7 @@ class AppUpdateTest {
 
     private fun build(versionCode: Int = 11) = AppBuildInfo(
         appName = "Sona",
-        versionName = "0.8.0",
+        versionName = "1.2.3",
         versionCode = versionCode,
         channel = AppUpdateChannel.STABLE,
     )
@@ -47,7 +47,7 @@ class AppUpdateTest {
         versionCode: Int = 12,
         channel: AppUpdateChannel = AppUpdateChannel.STABLE,
     ) = AppReleaseInfo(
-        versionName = "0.8.1",
+        versionName = "1.2.4",
         versionCode = versionCode,
         channel = channel,
         releasePageUrl = "https://github.com/AirSodaz/sona/releases/latest",

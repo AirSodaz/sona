@@ -101,13 +101,13 @@ class AboutSettingsViewModelTest {
     companion object {
         private fun build() = AppBuildInfo(
             appName = "Sona",
-            versionName = "0.8.0",
+            versionName = "1.2.3",
             versionCode = 11,
             channel = AppUpdateChannel.STABLE,
         )
 
         private fun release(versionCode: Int = 12) = AppReleaseInfo(
-            versionName = "0.8.1",
+            versionName = "1.2.4",
             versionCode = versionCode,
             channel = AppUpdateChannel.STABLE,
             releasePageUrl = "https://github.com/AirSodaz/sona/releases/latest",

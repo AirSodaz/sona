@@ -7,6 +7,8 @@ import { gzipSync } from 'node:zlib';
 import { repoRoot } from './repo-root.js';
 
 const node = process.execPath;
+const testVersion = '1.2.3';
+
 function makeTempRepo() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-packaging-'));
   fs.mkdirSync(path.join(root, 'platforms', 'desktop', 'binaries'), { recursive: true });
@@ -115,7 +117,7 @@ function writeCanonicalAppBundle(root, target, releaseDir = path.join(root, 'tar
     fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
     fs.writeFileSync(path.join(releaseDir, 'ffmpeg.exe'), 'ffmpeg');
     for (const libraryName of runtimeLibraryNames(target)) fs.writeFileSync(path.join(releaseDir, libraryName), libraryName);
-    const installerPath = path.join(bundleRoot, 'nsis', 'Sona_0.8.0_x64-setup.exe');
+    const installerPath = path.join(bundleRoot, 'nsis', `Sona_${testVersion}_x64-setup.exe`);
     fs.mkdirSync(path.dirname(installerPath), { recursive: true });
     fs.writeFileSync(installerPath, 'installer');
     return;
@@ -130,7 +132,7 @@ function writeCanonicalAppBundle(root, target, releaseDir = path.join(root, 'tar
     fs.writeFileSync(path.join(macosDir, 'sona-cli'), 'cli');
     fs.writeFileSync(path.join(macosDir, 'ffmpeg'), 'ffmpeg');
     for (const libraryName of runtimeLibraryNames(target)) fs.writeFileSync(path.join(frameworksDir, libraryName), libraryName);
-    const dmgPath = path.join(bundleRoot, 'dmg', 'Sona_0.8.0_aarch64.dmg');
+    const dmgPath = path.join(bundleRoot, 'dmg', `Sona_${testVersion}_aarch64.dmg`);
     fs.mkdirSync(path.dirname(dmgPath), { recursive: true });
     fs.writeFileSync(dmgPath, 'installer');
     return;
@@ -144,7 +146,7 @@ function writeCanonicalAppBundle(root, target, releaseDir = path.join(root, 'tar
   fs.writeFileSync(path.join(binDir, 'sona-cli'), 'cli');
   fs.writeFileSync(path.join(binDir, 'ffmpeg'), 'ffmpeg');
   for (const libraryName of runtimeLibraryNames(target)) fs.writeFileSync(path.join(libDir, libraryName), libraryName);
-  fs.writeFileSync(path.join(bundleRoot, 'appimage', 'Sona_0.8.0_amd64.AppImage'), 'installer');
+  fs.writeFileSync(path.join(bundleRoot, 'appimage', `Sona_${testVersion}_amd64.AppImage`), 'installer');
 }
 
 function writeTauriWrapperStubs(root) {

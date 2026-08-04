@@ -4,6 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+const projectVersion = JSON.parse(
+  fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+).version;
+const testVersion = '1.2.3';
+const testNightlyVersion = `${testVersion}-123`;
+
 async function loadAndroidClientVerifier() {
   try {
     return await import('./android-client-apk.js');
@@ -128,19 +134,19 @@ test('Android build identity resolves stable defaults and explicit nightly value
     applicationId: 'com.sona.android',
     appName: 'Sona',
     versionCode: 1,
-    versionName: '0.8.0',
+    versionName: projectVersion,
   });
 
   assert.deepEqual(resolveAndroidClientBuildIdentity({
     SONA_ANDROID_CHANNEL: ' nightly ',
     SONA_ANDROID_VERSION_CODE: '123',
-    SONA_ANDROID_VERSION_NAME: ' 0.8.0-123 ',
+    SONA_ANDROID_VERSION_NAME: ` ${testNightlyVersion} `,
   }), {
     channel: 'nightly',
     applicationId: 'com.sona.android.nightly',
     appName: 'Sona Nightly',
     versionCode: 123,
-    versionName: '0.8.0-123',
+    versionName: testNightlyVersion,
   });
 });
 
@@ -161,7 +167,7 @@ test('Android build identity rejects invalid channel and version values', async 
   assert.throws(
     () => resolveAndroidClientBuildIdentity({
       SONA_ANDROID_CHANNEL: 'nightly',
-      SONA_ANDROID_VERSION_NAME: '0.8.0-123',
+      SONA_ANDROID_VERSION_NAME: testNightlyVersion,
     }),
     /SONA_ANDROID_VERSION_CODE is required for nightly builds/u,
   );
@@ -170,7 +176,7 @@ test('Android build identity rejects invalid channel and version values', async 
       () => resolveAndroidClientBuildIdentity({
         SONA_ANDROID_CHANNEL: 'nightly',
         SONA_ANDROID_VERSION_CODE: versionCode,
-        SONA_ANDROID_VERSION_NAME: '0.8.0-123',
+        SONA_ANDROID_VERSION_NAME: testNightlyVersion,
       }),
       /SONA_ANDROID_VERSION_CODE must be an integer from 1 to 2100000000/u,
     );
@@ -185,7 +191,7 @@ test('Android output metadata verification checks channel identity and every APK
     applicationId: 'com.sona.android',
     variantName: 'debug',
     versionCode: 1,
-    versionName: '0.8.0',
+    versionName: testVersion,
     abis: ['arm64-v8a', 'x86_64'],
     fileSuffix: 'debug',
   });
@@ -196,7 +202,7 @@ test('Android output metadata verification checks channel identity and every APK
       applicationId: 'com.sona.android',
       variantName: 'debug',
       versionCode: 1,
-      versionName: '0.8.0',
+      versionName: testVersion,
       abis: ['arm64-v8a', 'x86_64'],
       fileSuffix: 'debug',
     }));
@@ -205,7 +211,7 @@ test('Android output metadata verification checks channel identity and every APK
       applicationId: 'com.sona.android.nightly',
       variantName: 'release',
       versionCode: 123,
-      versionName: '0.8.0-123',
+      versionName: testNightlyVersion,
       abis: ['arm64-v8a'],
       fileSuffix: 'release-unsigned',
     });
@@ -214,7 +220,7 @@ test('Android output metadata verification checks channel identity and every APK
       applicationId: 'com.sona.android.nightly',
       variantName: 'release',
       versionCode: 123,
-      versionName: '0.8.0-123',
+      versionName: testNightlyVersion,
       abis: ['arm64-v8a'],
       fileSuffix: 'release-unsigned',
     }));
@@ -224,7 +230,7 @@ test('Android output metadata verification checks channel identity and every APK
         applicationId: 'com.sona.android',
         variantName: 'release',
         versionCode: 123,
-        versionName: '0.8.0-123',
+        versionName: testNightlyVersion,
         abis: ['arm64-v8a'],
         fileSuffix: 'release-unsigned',
       }),
@@ -241,7 +247,7 @@ test('Android output metadata verification checks channel identity and every APK
         applicationId: 'com.sona.android.nightly',
         variantName: 'release',
         versionCode: 123,
-        versionName: '0.8.0-123',
+        versionName: testNightlyVersion,
         abis: ['arm64-v8a'],
         fileSuffix: 'release-unsigned',
       }),

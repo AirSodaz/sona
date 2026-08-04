@@ -54,7 +54,7 @@ class AndroidAppUpdateAdapterTest {
             releasePageUrl = "https://github.com/AirSodaz/sona/releases/latest",
         )
 
-        assertEquals("0.8.1", release.versionName)
+        assertEquals("1.2.4", release.versionName)
         assertEquals(42, release.versionCode)
     }
 
@@ -119,7 +119,7 @@ class AndroidAppUpdateAdapterTest {
         private fun manifest(
             schemaVersion: Int = 1,
             channel: String = "stable",
-            versionName: String = "0.8.1",
+            versionName: String = "1.2.4",
             versionCode: Int = 42,
         ): String = """
             {
