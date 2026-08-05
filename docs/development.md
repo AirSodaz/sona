@@ -9,7 +9,7 @@ This guide covers local setup, development, testing, and source builds. See the 
 - Node.js 20 or later
 - Corepack with the repository-pinned pnpm version
 - The stable Rust toolchain
-- CMake and a C/C++ compiler for the llama.cpp local ASR adapter
+- CMake and a C/C++ compiler for the llama.cpp local ASR adapter. Desktop and CLI builds dynamically link its generated ggml and llama libraries; release bundles stage those libraries beside the host runtime.
 - The platform dependencies required by Tauri
 
 On Ubuntu or Debian, install the desktop system dependencies with:

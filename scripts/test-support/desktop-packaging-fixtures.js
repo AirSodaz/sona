@@ -44,17 +44,41 @@ function writeNativeFfmpegBinary(target) {
   return binary;
 }
 
-function runtimeLibraryNames(target) {
+function sherpaRuntimeLibraryNames(target) {
   if (target.includes('windows')) return ['sherpa-onnx-c-api.dll', 'onnxruntime.dll', 'optional-runtime.dll'];
   if (target.includes('apple')) return ['libsherpa-onnx-c-api.dylib', 'libonnxruntime.dylib'];
   return ['libsherpa-onnx-c-api.so.1', 'libonnxruntime.so.1'];
 }
 
-function writeRuntimeLibraries(directoryPath, target) {
+function llamaCppRuntimeLibraryNames(target) {
+  if (target.includes('windows')) return ['ggml.dll', 'ggml-base.dll', 'ggml-cpu.dll', 'llama.dll'];
+  if (target.includes('apple')) {
+    return ['libggml.dylib', 'libggml-base.dylib', 'libggml-cpu.dylib', 'libllama.dylib'];
+  }
+  return ['libggml.so', 'libggml-base.so', 'libggml-cpu.so', 'libllama.so'];
+}
+
+function runtimeLibraryNames(target) {
+  return [...sherpaRuntimeLibraryNames(target), ...llamaCppRuntimeLibraryNames(target)];
+}
+
+function writeNamedRuntimeLibraries(directoryPath, libraryNames) {
   fs.mkdirSync(directoryPath, { recursive: true });
-  for (const libraryName of runtimeLibraryNames(target)) {
+  for (const libraryName of libraryNames) {
     fs.writeFileSync(path.join(directoryPath, libraryName), libraryName);
   }
+}
+
+function writeRuntimeLibraries(directoryPath, target) {
+  writeNamedRuntimeLibraries(directoryPath, runtimeLibraryNames(target));
+}
+
+function writeSherpaRuntimeLibraries(directoryPath, target) {
+  writeNamedRuntimeLibraries(directoryPath, sherpaRuntimeLibraryNames(target));
+}
+
+function writeLlamaCppRuntimeLibraries(directoryPath, target) {
+  writeNamedRuntimeLibraries(directoryPath, llamaCppRuntimeLibraryNames(target));
 }
 
 function runtimeFileMap(runtimeLibDir, target, destinationDir) {
@@ -74,7 +98,8 @@ async function prepareBundleFixture(target) {
   const configPath = path.join(root, 'base-tauri.conf.json');
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, target.includes('windows') ? 'sona-cli.exe' : 'sona-cli'), 'cli');
-  writeRuntimeLibraries(runtimeLibDir, target);
+  writeSherpaRuntimeLibraries(runtimeLibDir, target);
+  writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(configPath, JSON.stringify({ bundle: {} }));
 
   return prepareDesktopBundle({
@@ -202,4 +227,4 @@ async function loadDesktopBundlePreparer() {
   return import(pathToFileURL(path.join(repoRoot, 'platforms', 'desktop', 'scripts', 'prepare-desktop-bundle.js')).href);
 }
 
-export { node, makeTempRepo, writeNativeFfmpegBinary, runtimeLibraryNames, writeRuntimeLibraries, runtimeFileMap, prepareBundleFixture, writeGeneratedBundleConfig, writeCanonicalAppBundle, writeTauriWrapperStubs, writeTestFfmpegLock, loadDesktopBundlePreparer };
+export { node, makeTempRepo, writeNativeFfmpegBinary, runtimeLibraryNames, writeRuntimeLibraries, writeSherpaRuntimeLibraries, writeLlamaCppRuntimeLibraries, runtimeFileMap, prepareBundleFixture, writeGeneratedBundleConfig, writeCanonicalAppBundle, writeTauriWrapperStubs, writeTestFfmpegLock, loadDesktopBundlePreparer };

@@ -10,7 +10,8 @@ import {
   runtimeFileMap,
   runtimeLibraryNames,
   writeNativeFfmpegBinary,
-  writeRuntimeLibraries,
+  writeLlamaCppRuntimeLibraries,
+  writeSherpaRuntimeLibraries,
   writeTestFfmpegLock,
 } from './test-support/desktop-packaging-fixtures.js';
 
@@ -62,7 +63,8 @@ test('desktop bundle preparer rejects targets absent from its production source 
 
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli'), 'cli');
-  writeRuntimeLibraries(runtimeLibDir, target);
+  writeSherpaRuntimeLibraries(runtimeLibDir, target);
+  writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(configPath, JSON.stringify({ bundle: {} }));
 
   await assert.rejects(
@@ -89,6 +91,7 @@ test('desktop bundle preparer stages target inputs and generates a replacement T
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.mkdirSync(runtimeLibDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
+  writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(path.join(runtimeLibDir, 'sherpa-onnx-c-api.dll'), 'sherpa');
   fs.writeFileSync(path.join(runtimeLibDir, 'onnxruntime.dll'), 'onnxruntime');
   fs.writeFileSync(path.join(runtimeLibDir, 'optional-runtime.dll'), 'optional');
@@ -118,6 +121,7 @@ test('desktop bundle preparer stages target inputs and generates a replacement T
   assert.equal(fs.existsSync(path.join(prepared.sidecarsDir, `sona-cli-${target}.exe`)), true);
   assert.equal(fs.existsSync(path.join(prepared.sidecarsDir, `ffmpeg-${target}.exe`)), true);
   assert.equal(fs.existsSync(path.join(prepared.runtimeLibDir, 'optional-runtime.dll')), true);
+  assert.equal(fs.existsSync(path.join(prepared.runtimeLibDir, 'llama.dll')), true);
 
   const generatedConfig = JSON.parse(fs.readFileSync(prepared.configPath, 'utf8'));
   assert.deepEqual(generatedConfig.bundle.externalBin, [
@@ -180,7 +184,8 @@ test('desktop bundle preparer rebases staged macOS dylibs before linking the CLI
   const commandCalls = [];
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli'), 'cli');
-  writeRuntimeLibraries(sourceRuntimeLibDir, target);
+  writeSherpaRuntimeLibraries(sourceRuntimeLibDir, target);
+  writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(configPath, JSON.stringify({ bundle: {} }));
 
   const prepared = await prepareDesktopBundle({
@@ -201,6 +206,12 @@ test('desktop bundle preparer rebases staged macOS dylibs before linking the CLI
 
   const stagedSherpa = path.join(prepared.runtimeLibDir, 'libsherpa-onnx-c-api.dylib');
   const stagedOnnxRuntime = path.join(prepared.runtimeLibDir, 'libonnxruntime.dylib');
+  const stagedLlamaCppLibraries = [
+    'libggml.dylib',
+    'libggml-base.dylib',
+    'libggml-cpu.dylib',
+    'libllama.dylib',
+  ];
   assert.deepEqual(
     commandCalls.filter((call) => call.executable === 'install_name_tool')
       .map(({ commandArgs }) => commandArgs)
@@ -209,6 +220,11 @@ test('desktop bundle preparer rebases staged macOS dylibs before linking the CLI
       ['-id', '@rpath/libsherpa-onnx-c-api.dylib', stagedSherpa],
       ['-change', path.join(sourceRuntimeLibDir, 'libonnxruntime.dylib'), '@loader_path/libonnxruntime.dylib', stagedSherpa],
       ['-id', '@rpath/libonnxruntime.dylib', stagedOnnxRuntime],
+      ...stagedLlamaCppLibraries.map((libraryName) => [
+        '-id',
+        `@rpath/${libraryName}`,
+        path.join(prepared.runtimeLibDir, libraryName),
+      ]),
     ].sort((left, right) => left.join('\0').localeCompare(right.join('\0'))),
   );
   const cargoCall = commandCalls.find((call) => call.executable === 'cargo');
@@ -287,5 +303,58 @@ test('desktop bundle preparer fails release preparation without SHERPA runtime a
       sherpaLibDir: null,
     }),
     /SHERPA_ONNX_LIB_DIR/u,
+  );
+});
+
+test('desktop bundle preparer fails when a llama.cpp shared library is missing', async () => {
+  const { prepareDesktopBundle } = await loadDesktopBundlePreparer();
+  const root = makeTempRepo();
+  const target = 'x86_64-pc-windows-msvc';
+  const releaseDir = path.join(root, 'target', target, 'release');
+  const sherpaLibDir = path.join(root, 'native-libs');
+  const configPath = path.join(root, 'base-tauri.conf.json');
+  fs.mkdirSync(releaseDir, { recursive: true });
+  fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
+  writeSherpaRuntimeLibraries(sherpaLibDir, target);
+  writeLlamaCppRuntimeLibraries(releaseDir, target);
+  fs.rmSync(path.join(releaseDir, 'llama.dll'));
+  fs.writeFileSync(configPath, JSON.stringify({ bundle: {} }));
+
+  await assert.rejects(
+    prepareDesktopBundle({
+      repoRoot: root,
+      target,
+      configPath,
+      ffmpegLockPath: writeTestFfmpegLock(root, target),
+      sherpaLibDir,
+      runCommand() {},
+    }),
+    /llama\.cpp dynamic build is missing runtime library anchors.*llama/u,
+  );
+});
+
+test('desktop bundle preparer collects llama.cpp libraries from Cargo build output', async () => {
+  const { stageLlamaCppRuntimeLibraries } = await loadDesktopBundlePreparer();
+  const root = makeTempRepo();
+  const target = 'x86_64-pc-windows-msvc';
+  const runtimeLibDir = path.join(root, 'runtime-libs');
+  const buildOutputDir = path.join(
+    root,
+    'target',
+    target,
+    'release',
+    'build',
+    'llama-cpp-sys-2-test',
+    'out',
+    'bin',
+  );
+  writeLlamaCppRuntimeLibraries(buildOutputDir, target);
+  fs.mkdirSync(runtimeLibDir, { recursive: true });
+
+  stageLlamaCppRuntimeLibraries(root, target, runtimeLibDir);
+
+  assert.deepEqual(
+    fs.readdirSync(runtimeLibDir).sort(),
+    ['ggml-base.dll', 'ggml-cpu.dll', 'ggml.dll', 'llama.dll'],
   );
 });

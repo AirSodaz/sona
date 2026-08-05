@@ -220,9 +220,34 @@ function nativeAppLayout(appRoot, target) {
 }
 
 function requiredRuntimeLibraries(target) {
-  if (target.includes('windows')) return ['sherpa-onnx-c-api.dll', 'onnxruntime.dll'];
-  if (target.includes('apple')) return ['libsherpa-onnx-c-api.dylib', 'libonnxruntime.dylib'];
-  return [/^libsherpa-onnx-c-api\.so/u, /^libonnxruntime\.so/u];
+  if (target.includes('windows')) {
+    return [
+      'sherpa-onnx-c-api.dll',
+      'onnxruntime.dll',
+      'ggml.dll',
+      'ggml-base.dll',
+      'ggml-cpu.dll',
+      'llama.dll',
+    ];
+  }
+  if (target.includes('apple')) {
+    return [
+      'libsherpa-onnx-c-api.dylib',
+      'libonnxruntime.dylib',
+      /^libggml(?:\.\d+)*\.dylib$/u,
+      /^libggml-base(?:\.\d+)*\.dylib$/u,
+      /^libggml-cpu(?:\.\d+)*\.dylib$/u,
+      /^libllama(?:\.\d+)*\.dylib$/u,
+    ];
+  }
+  return [
+    /^libsherpa-onnx-c-api\.so/u,
+    /^libonnxruntime\.so/u,
+    /^libggml\.so(?:\.\d+)*$/u,
+    /^libggml-base\.so(?:\.\d+)*$/u,
+    /^libggml-cpu\.so(?:\.\d+)*$/u,
+    /^libllama\.so(?:\.\d+)*$/u,
+  ];
 }
 
 function hasLegacyResourcePath(value) {

@@ -51,10 +51,11 @@ export async function prepareDesktopBundle({
   fs.mkdirSync(runtimeLibDir, { recursive: true });
 
   stageRuntimeLibraries(sherpaLibDir, target, runtimeLibDir);
+  buildStandaloneCli(repoRoot, target, runtimeLibDir, runCommand);
+  stageLlamaCppRuntimeLibraries(repoRoot, target, runtimeLibDir);
   if (target.includes('apple')) {
     rebaseMacDylibs(runtimeLibDir, runCommand, readMacDylibDependencies);
   }
-  buildStandaloneCli(repoRoot, target, runtimeLibDir, runCommand);
   stageCliSidecar(repoRoot, target, sidecarsDir);
   await stageFfmpegSidecar(target, sidecarsDir, ffmpegLockPath, stagingRoot, runCommand);
 
@@ -276,6 +277,63 @@ function stageRuntimeLibraries(sherpaLibDir, target, runtimeLibDir) {
       `SHERPA_ONNX_LIB_DIR is missing runtime library anchors for ${target}: ${missingAnchors.map(String).join(', ')}`,
     );
   }
+}
+
+export function stageLlamaCppRuntimeLibraries(repoRoot, target, runtimeLibDir) {
+  const releaseDir = path.join(repoRoot, 'target', target, 'release');
+  const buildDir = path.join(releaseDir, 'build');
+  const buildOutputs = fs.existsSync(buildDir)
+    ? fs.readdirSync(buildDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith('llama-cpp-sys-'))
+      .map((entry) => path.join(buildDir, entry.name, 'out'))
+      .filter((directoryPath) => fs.existsSync(directoryPath))
+    : [];
+  const releaseFiles = fs.existsSync(releaseDir)
+    ? fs.readdirSync(releaseDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() || entry.isSymbolicLink())
+      .map((entry) => path.join(releaseDir, entry.name))
+    : [];
+  const sourceFiles = [...releaseFiles, ...buildOutputs.flatMap((directoryPath) => walkFiles(directoryPath))]
+    .filter((filePath) => isLlamaCppDynamicLibrary(path.basename(filePath), target));
+
+  for (const sourcePath of sourceFiles) {
+    fs.copyFileSync(sourcePath, path.join(runtimeLibDir, path.basename(sourcePath)));
+  }
+
+  const stagedNames = fs.readdirSync(runtimeLibDir);
+  const missingAnchors = requiredLlamaCppRuntimeLibraryAnchors(target)
+    .filter((anchor) => !stagedNames.some((name) => anchor.test(name)));
+  if (missingAnchors.length > 0) {
+    throw new Error(
+      `llama.cpp dynamic build is missing runtime library anchors for ${target}: ${missingAnchors.map(String).join(', ')}`,
+    );
+  }
+}
+
+function walkFiles(directoryPath) {
+  if (!fs.existsSync(directoryPath)) return [];
+  return fs.readdirSync(directoryPath, { withFileTypes: true }).flatMap((entry) => {
+    const resolvedPath = path.join(directoryPath, entry.name);
+    return entry.isDirectory() ? walkFiles(resolvedPath) : [resolvedPath];
+  });
+}
+
+function isLlamaCppDynamicLibrary(name, target) {
+  return requiredLlamaCppRuntimeLibraryAnchors(target).some((anchor) => anchor.test(name));
+}
+
+function requiredLlamaCppRuntimeLibraryAnchors(target) {
+  const names = ['ggml', 'ggml-base', 'ggml-cpu', 'llama'];
+  if (target.includes('windows')) {
+    return names.map((name) => new RegExp(`^${name}\\.dll$`, 'iu'));
+  }
+  if (target.includes('apple')) {
+    return names.map((name) => new RegExp(`^lib${name}(?:\\.\\d+)*\\.dylib$`, 'u'));
+  }
+  if (target.includes('linux')) {
+    return names.map((name) => new RegExp(`^lib${name}\\.so(?:\\.\\d+)*$`, 'u'));
+  }
+  throw new Error(`Unsupported desktop bundle target: ${target}`);
 }
 
 function isPlatformDynamicLibrary(name, target) {
