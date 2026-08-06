@@ -358,3 +358,29 @@ test('desktop bundle preparer collects llama.cpp libraries from Cargo build outp
     ['ggml-base.dll', 'ggml-cpu.dll', 'ggml.dll', 'llama.dll'],
   );
 });
+
+test('desktop bundle preparer skips broken release symlinks in favor of CMake output', async () => {
+  const { stageLlamaCppRuntimeLibraries } = await loadDesktopBundlePreparer();
+  const root = makeTempRepo();
+  const target = 'x86_64-unknown-linux-gnu';
+  const releaseDir = path.join(root, 'target', target, 'release');
+  const runtimeLibDir = path.join(root, 'runtime-libs');
+  const buildOutputDir = path.join(
+    releaseDir,
+    'build',
+    'llama-cpp-sys-2-test',
+    'out',
+    'lib',
+  );
+  writeLlamaCppRuntimeLibraries(buildOutputDir, target);
+  fs.mkdirSync(releaseDir, { recursive: true });
+  fs.mkdirSync(runtimeLibDir, { recursive: true });
+  fs.symlinkSync('libggml-base.so.0', path.join(releaseDir, 'libggml-base.so'), 'file');
+
+  stageLlamaCppRuntimeLibraries(root, target, runtimeLibDir);
+
+  assert.deepEqual(
+    fs.readdirSync(runtimeLibDir).sort(),
+    ['libggml-base.so', 'libggml-cpu.so', 'libggml.so', 'libllama.so'],
+  );
+});

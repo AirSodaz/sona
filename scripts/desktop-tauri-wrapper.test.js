@@ -63,6 +63,8 @@ test('tauri wrapper passes generated config to build and bundle while dev preser
   );
   assert.equal(macInvocation.macosDeploymentTarget, '10.15');
   assert.equal(macInvocation.preparedMacosDeploymentTarget, '10.15');
+  assert.equal(macInvocation.cmakeDisableFindPackageOpenSsl, 'TRUE');
+  assert.equal(macInvocation.preparedCmakeDisableFindPackageOpenSsl, 'TRUE');
   const legacyMacInvocation = run(
     'build',
     ['--target', macTarget],

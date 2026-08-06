@@ -61,6 +61,8 @@ function prepareDesktopBundle(commandArgs) {
   const preparerEnvironment = target.includes('apple')
     ? {
         ...process.env,
+        // Cross-architecture builds must not discover host-architecture Homebrew libraries.
+        CMAKE_DISABLE_FIND_PACKAGE_OpenSSL: 'TRUE',
         MACOSX_DEPLOYMENT_TARGET: resolveMacosDeploymentTarget(
           process.env.MACOSX_DEPLOYMENT_TARGET,
         ),

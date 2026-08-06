@@ -294,7 +294,10 @@ export function stageLlamaCppRuntimeLibraries(repoRoot, target, runtimeLibDir) {
       .map((entry) => path.join(releaseDir, entry.name))
     : [];
   const sourceFiles = [...releaseFiles, ...buildOutputs.flatMap((directoryPath) => walkFiles(directoryPath))]
-    .filter((filePath) => isLlamaCppDynamicLibrary(path.basename(filePath), target));
+    .filter((filePath) => (
+      isLlamaCppDynamicLibrary(path.basename(filePath), target)
+      && fs.existsSync(filePath)
+    ));
 
   for (const sourcePath of sourceFiles) {
     fs.copyFileSync(sourcePath, path.join(runtimeLibDir, path.basename(sourcePath)));
