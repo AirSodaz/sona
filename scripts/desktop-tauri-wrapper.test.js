@@ -85,6 +85,10 @@ test('release workflows enable C++ exceptions for Windows ARM64 clang-cl builds'
   for (const workflow of ['release.yml', 'nightly.yml']) {
     const source = fs.readFileSync(path.join(repoRoot, '.github', 'workflows', workflow), 'utf8');
     assert.match(source, /CXXFLAGS_aarch64_pc_windows_msvc=\/EHsc/u);
+    assert.match(
+      source,
+      /NO_STRIP:\s*\$\{\{\s*startsWith\(matrix\.platform,\s*'ubuntu'\)\s*&&\s*'true'\s*\|\|\s*''\s*\}\}/u,
+    );
   }
 
   const config = JSON.parse(
