@@ -220,20 +220,34 @@ function nativeAppLayout(appRoot, target) {
 }
 
 function requiredRuntimeLibraries(target) {
+  const llamaRuntimeLibraries = llamaCppRuntimeLibraries(target);
+
   if (target.includes('windows')) {
     return [
       'sherpa-onnx-c-api.dll',
       'onnxruntime.dll',
-      'ggml.dll',
-      'ggml-base.dll',
-      'ggml-cpu.dll',
-      'llama.dll',
+      ...llamaRuntimeLibraries,
     ];
   }
   if (target.includes('apple')) {
     return [
       'libsherpa-onnx-c-api.dylib',
       'libonnxruntime.dylib',
+      ...llamaRuntimeLibraries,
+    ];
+  }
+  return [
+    /^libsherpa-onnx-c-api\.so/u,
+    /^libonnxruntime\.so/u,
+    ...llamaRuntimeLibraries,
+  ];
+}
+
+function llamaCppRuntimeLibraries(target) {
+  if (process.env.LLAMA_BUILD_SHARED_LIBS === '0') return [];
+  if (target.includes('windows')) return ['ggml.dll', 'ggml-base.dll', 'ggml-cpu.dll', 'llama.dll'];
+  if (target.includes('apple')) {
+    return [
       /^libggml(?:\.\d+)*\.dylib$/u,
       /^libggml-base(?:\.\d+)*\.dylib$/u,
       /^libggml-cpu(?:\.\d+)*\.dylib$/u,
@@ -241,8 +255,6 @@ function requiredRuntimeLibraries(target) {
     ];
   }
   return [
-    /^libsherpa-onnx-c-api\.so/u,
-    /^libonnxruntime\.so/u,
     /^libggml\.so(?:\.\d+)*$/u,
     /^libggml-base\.so(?:\.\d+)*$/u,
     /^libggml-cpu\.so(?:\.\d+)*$/u,

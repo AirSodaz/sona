@@ -87,7 +87,7 @@ test('release workflows enable C++ exceptions for Windows ARM64 clang-cl builds'
     assert.match(source, /CXXFLAGS_aarch64_pc_windows_msvc=\/EHsc/u);
     assert.match(
       source,
-      /NO_STRIP:\s*\$\{\{\s*startsWith\(matrix\.platform,\s*'ubuntu'\)\s*&&\s*'true'\s*\|\|\s*''\s*\}\}/u,
+      /LLAMA_BUILD_SHARED_LIBS:\s*\$\{\{\s*startsWith\(matrix\.platform,\s*'ubuntu'\)\s*&&\s*'0'\s*\|\|\s*'1'\s*\}\}/u,
     );
   }
 

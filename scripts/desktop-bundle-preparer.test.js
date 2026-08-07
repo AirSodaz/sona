@@ -359,6 +359,19 @@ test('desktop bundle preparer collects llama.cpp libraries from Cargo build outp
   );
 });
 
+test('desktop bundle preparer skips llama.cpp libraries for static builds', async () => {
+  const { stageLlamaCppRuntimeLibraries } = await loadDesktopBundlePreparer();
+  const root = makeTempRepo();
+  const target = 'x86_64-unknown-linux-gnu';
+  const runtimeLibDir = path.join(root, 'runtime-libs');
+  fs.mkdirSync(path.join(root, 'target', target, 'release'), { recursive: true });
+  fs.mkdirSync(runtimeLibDir, { recursive: true });
+
+  stageLlamaCppRuntimeLibraries(root, target, runtimeLibDir, { buildSharedLibs: '0' });
+
+  assert.deepEqual(fs.readdirSync(runtimeLibDir), []);
+});
+
 test('desktop bundle preparer skips broken release symlinks in favor of CMake output', async () => {
   const { stageLlamaCppRuntimeLibraries } = await loadDesktopBundlePreparer();
   const root = makeTempRepo();

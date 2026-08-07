@@ -279,7 +279,14 @@ function stageRuntimeLibraries(sherpaLibDir, target, runtimeLibDir) {
   }
 }
 
-export function stageLlamaCppRuntimeLibraries(repoRoot, target, runtimeLibDir) {
+export function stageLlamaCppRuntimeLibraries(
+  repoRoot,
+  target,
+  runtimeLibDir,
+  { buildSharedLibs = process.env.LLAMA_BUILD_SHARED_LIBS } = {},
+) {
+  if (buildSharedLibs === '0') return;
+
   const releaseDir = path.join(repoRoot, 'target', target, 'release');
   const buildDir = path.join(releaseDir, 'build');
   const buildOutputs = fs.existsSync(buildDir)

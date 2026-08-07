@@ -85,6 +85,7 @@ jobs:
     env:
       SHERPA_ONNX_VERSION: 1.13.4
       SHERPA_ONNX_TAG: v1.13.4
+      LLAMA_BUILD_SHARED_LIBS: ${{ startsWith(matrix.platform, 'ubuntu') && '0' || '1' }}
       NIGHTLY_VERSION: ${{ needs.prepare.outputs.version }}
     strategy:
       fail-fast: false
@@ -186,7 +187,6 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           LD_LIBRARY_PATH: ${{ env.SHERPA_ONNX_LIB_DIR }}
-          NO_STRIP: ${{ startsWith(matrix.platform, 'ubuntu') && 'true' || '' }}
         run: node platforms/desktop/scripts/tauri.js build ${{ matrix.args }}
 
       - name: Verify Tauri bundle and shared libraries

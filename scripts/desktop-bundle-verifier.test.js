@@ -7,6 +7,7 @@ import { repoRoot } from './test-support/repo-root.js';
 import {
   makeTempRepo,
   node,
+  runtimeLibraryNames,
   writeCanonicalAppBundle,
   writeGeneratedBundleConfig,
   writeRuntimeLibraries,
@@ -84,6 +85,61 @@ test('tauri bundle verification accepts an explicit native Windows bundle root',
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /Verified canonical app bundle/u);
+});
+
+test('tauri bundle verification omits llama.cpp libraries for static Linux builds', () => {
+  const target = 'x86_64-unknown-linux-gnu';
+  const root = makeTempRepo();
+  const stagingRoot = path.join(root, 'target', 'desktop-bundle', target);
+  const sidecarsDir = path.join(stagingRoot, 'sidecars');
+  const runtimeLibDir = path.join(stagingRoot, 'runtime-libs');
+  const configPath = path.join(stagingRoot, 'tauri.bundle.conf.json');
+  fs.mkdirSync(sidecarsDir, { recursive: true });
+  fs.mkdirSync(runtimeLibDir, { recursive: true });
+  fs.writeFileSync(path.join(sidecarsDir, `ffmpeg-${target}`), 'ffmpeg');
+  fs.writeFileSync(path.join(sidecarsDir, `sona-cli-${target}`), 'cli');
+  writeRuntimeLibraries(runtimeLibDir, target);
+  for (const name of runtimeLibraryNames(target).filter((value) => /^(?:lib)?(?:ggml|llama)/u.test(value))) {
+    fs.rmSync(path.join(runtimeLibDir, name));
+  }
+  writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
+  writeCanonicalAppBundle(root, target);
+  const canonicalRuntimeDir = path.join(
+    root,
+    'target',
+    target,
+    'release',
+    'bundle',
+    'appimage',
+    'Sona.AppDir',
+    'usr',
+    'lib',
+    'sona',
+  );
+  for (const name of runtimeLibraryNames(target).filter((value) => /^(?:lib)?(?:ggml|llama)/u.test(value))) {
+    fs.rmSync(path.join(canonicalRuntimeDir, name));
+  }
+
+  const result = spawnSync(
+    node,
+    [
+      path.join(repoRoot, 'platforms', 'desktop', 'scripts', 'verify-tauri-bundle.js'),
+      '--repo-root',
+      root,
+      '--target',
+      target,
+      '--config',
+      configPath,
+    ],
+    {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      env: { ...process.env, LLAMA_BUILD_SHARED_LIBS: '0' },
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /Verified packaged artifacts/u);
 });
 
 test('tauri bundle verification does not mix native and target-qualified Windows outputs', () => {
