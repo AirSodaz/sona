@@ -16,6 +16,8 @@ import com.sona.android.application.library.HistoryWorkspaceSummary
 import com.sona.android.application.library.TranscriptSnapshot
 import com.sona.android.application.library.TranscriptSnapshotDetail
 import com.sona.android.application.library.TranscriptSnapshotReason
+import com.sona.android.application.llm.LlmHistorySummaryPort
+import com.sona.android.application.llm.LlmSummary
 import com.sona.android.application.recording.CompleteLiveDraftRequest
 import com.sona.android.application.recording.CreateLiveDraftRequest
 import com.sona.android.application.recording.HistoryRecordingSummary
@@ -48,13 +50,17 @@ import uniffi.sona_uniffi_bind.FfiTranscriptSegment
 import uniffi.sona_uniffi_bind.FfiStringPatchV1
 import uniffi.sona_uniffi_bind.FfiTranscriptSnapshotMetadataV1
 import uniffi.sona_uniffi_bind.FfiTranscriptSnapshotReasonV1
+import uniffi.sona_uniffi_bind.FfiHistoryCreateTranscriptSnapshotRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryCommitTranscriptEditRequestV1
+import uniffi.sona_uniffi_bind.FfiHistorySummaryPayloadV1
+import uniffi.sona_uniffi_bind.FfiTranscriptSummaryRecordV1
 import kotlin.math.roundToLong
 
 class UniffiRecordingHistoryAdapter internal constructor(
     private val appDataDir: String,
     private val bindings: UniffiHistoryBindings,
     private val onLocalChange: () -> Unit = {},
-) : RecordingHistoryPort, HistoryWorkspacePort, ImportedRecordingHistoryPort {
+) : RecordingHistoryPort, HistoryWorkspacePort, ImportedRecordingHistoryPort, LlmHistorySummaryPort {
     constructor(appDataDir: String, onLocalChange: () -> Unit = {}) :
         this(appDataDir, GeneratedUniffiHistoryBindings, onLocalChange)
 
@@ -263,9 +269,39 @@ class UniffiRecordingHistoryAdapter internal constructor(
                 segments = it.segments.map(FfiTranscriptSegment::toApplication),
             )
         }
+
+    override suspend fun loadSummary(historyId: String): LlmSummary? = bindings.loadSummary(appDataDir, historyId)?.record?.let {
+        LlmSummary(it.templateId, it.content, it.generatedAt, it.sourceFingerprint)
+    }
+
+    override suspend fun saveSummary(historyId: String, summary: LlmSummary) {
+        bindings.saveSummary(appDataDir, historyId, FfiHistorySummaryPayloadV1(summary.templateId, FfiTranscriptSummaryRecordV1(summary.templateId, summary.content, summary.generatedAt, summary.sourceFingerprint)))
+        onLocalChange()
+    }
+
+    override suspend fun deleteSummary(historyId: String) { bindings.deleteSummary(appDataDir, historyId); onLocalChange() }
+
+    override suspend fun createSnapshot(historyId: String, reason: TranscriptSnapshotReason) {
+        val segments = loadTranscript(historyId)
+        bindings.createSnapshot(appDataDir, FfiHistoryCreateTranscriptSnapshotRequestV1(historyId, reason.toFfi(), segments.map(TranscriptSegment::toFfi)))
+    }
+
+    override suspend fun commitTranscript(historyId: String, segments: List<TranscriptSegment>) {
+        val current = loadTranscript(historyId)
+        bindings.commitTranscriptEdit(appDataDir, FfiHistoryCommitTranscriptEditRequestV1(historyId, "android-llm", current.map(TranscriptSegment::toFfi), segments.map(TranscriptSegment::toFfi)))
+        onLocalChange()
+    }
 }
 
 private const val MAX_LIBRARY_PAGE_SIZE = 200
+
+private fun TranscriptSnapshotReason.toFfi() = when (this) {
+    TranscriptSnapshotReason.POLISH -> FfiTranscriptSnapshotReasonV1.POLISH
+    TranscriptSnapshotReason.TRANSLATE -> FfiTranscriptSnapshotReasonV1.TRANSLATE
+    TranscriptSnapshotReason.RETRANSCRIBE -> FfiTranscriptSnapshotReasonV1.RETRANSCRIBE
+    TranscriptSnapshotReason.RESTORE -> FfiTranscriptSnapshotReasonV1.RESTORE
+    TranscriptSnapshotReason.MANUAL_EDIT -> FfiTranscriptSnapshotReasonV1.MANUAL_EDIT
+}
 
 private fun FfiHistoryItemRecordV1.toApplication(searchMatch: HistorySearchMatch? = null): HistoryItem = HistoryItem(
     historyId = id,

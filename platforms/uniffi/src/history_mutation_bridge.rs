@@ -6,7 +6,7 @@ use crate::{
     FfiHistoryCreateTranscriptSnapshotRequestV1, FfiHistoryDeleteItemsRequestV1,
     FfiHistoryItemRecordV1, FfiHistoryReplaceTagAssignmentsRequestV1,
     FfiHistorySaveImportedFileRequestV1, FfiHistorySaveRecordingRequestV1,
-    FfiHistoryTrashItemsRequestV1, FfiHistoryUpdateItemMetaRequestV1,
+    FfiHistorySummaryPayloadV1, FfiHistoryTrashItemsRequestV1, FfiHistoryUpdateItemMetaRequestV1,
     FfiHistoryUpdateTagAssignmentsRequestV1, FfiHistoryUpdateTranscriptRequestV1,
     FfiLiveRecordingDraftResultV1, FfiTranscriptEditOperationV1, FfiTranscriptSegment,
     FfiTranscriptSnapshotMetadataV1, SonaCoreBindingError, SonaCoreBindingResult,
@@ -25,10 +25,12 @@ use sona_core::history::mutation_repository::{
 use sona_core::history::transcript_edit::apply_transcript_edit;
 use sona_core::history::transcript_payload::normalize_history_transcript_segments;
 use sona_core::history::{
-    HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistoryWorkspaceDateFilter,
-    HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest, HistoryWorkspaceScope,
-    HistoryWorkspaceSortOrder, TranscriptSnapshotReason,
+    HistorySaveImportedFileRequest, HistorySaveRecordingRequest, HistorySummaryPayload,
+    HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest,
+    HistoryWorkspaceScope, HistoryWorkspaceSortOrder, TranscriptSnapshotReason,
+    TranscriptSummaryRecordPayload,
 };
+use sona_core::history_store::HistoryStore;
 use sona_runtime_fs::{SystemClock, UuidGenerator};
 use sona_sqlite::{DatabaseError, DeferredSqliteHistoryMutationRepository};
 use std::path::Path;
@@ -282,6 +284,48 @@ pub(crate) async fn update_history_transcript_v1(
     run_typed_mutation(context, move |service| service.update_transcript(request))
         .await
         .map(Into::into)
+}
+
+pub(crate) async fn save_history_summary_v1(
+    context: impl Into<ContextSource>,
+    history_id: String,
+    payload: FfiHistorySummaryPayloadV1,
+) -> SonaCoreBindingResult<()> {
+    let payload = HistorySummaryPayload {
+        active_template_id: payload.active_template_id,
+        record: payload.record.map(|record| TranscriptSummaryRecordPayload {
+            template_id: record.template_id,
+            content: record.content,
+            generated_at: record.generated_at,
+            source_fingerprint: record.source_fingerprint,
+        }),
+    };
+    let context = context.into();
+    tokio::task::spawn_blocking(move || {
+        let resolved = context.resolve().map_err(history_mutation_error)?;
+        resolved
+            .history_store()
+            .save_summary(&history_id, payload)
+            .map_err(history_mutation_error)
+    })
+    .await
+    .map_err(history_mutation_error)?
+}
+
+pub(crate) async fn delete_history_summary_v1(
+    context: impl Into<ContextSource>,
+    history_id: String,
+) -> SonaCoreBindingResult<()> {
+    let context = context.into();
+    tokio::task::spawn_blocking(move || {
+        let resolved = context.resolve().map_err(history_mutation_error)?;
+        resolved
+            .history_store()
+            .delete_summary(&history_id)
+            .map_err(history_mutation_error)
+    })
+    .await
+    .map_err(history_mutation_error)?
 }
 
 pub(crate) async fn create_history_transcript_snapshot_json(

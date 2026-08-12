@@ -1,11 +1,13 @@
 use crate::application_context::ContextSource;
 use crate::mapper::{history_transcript_to_ffi, history_workspace_result_to_ffi};
 use crate::{
-    FfiHistoryItemRecordV1, FfiHistoryWorkspaceQueryRequestV1, FfiHistoryWorkspaceQueryResultV1,
-    FfiTranscriptSegment, FfiTranscriptSnapshotMetadataV1, FfiTranscriptSnapshotRecordV1,
-    SonaCoreBindingError, SonaCoreBindingResult,
+    FfiHistoryItemRecordV1, FfiHistorySummaryPayloadV1, FfiHistoryWorkspaceQueryRequestV1,
+    FfiHistoryWorkspaceQueryResultV1, FfiTranscriptSegment, FfiTranscriptSnapshotMetadataV1,
+    FfiTranscriptSnapshotRecordV1, FfiTranscriptSummaryRecordV1, SonaCoreBindingError,
+    SonaCoreBindingResult,
 };
 use sona_application::history::HistoryQueryService;
+use sona_core::history::HistorySummaryPayload;
 use sona_core::history::query_repository::HistoryQueryError;
 use sona_core::history::workspace_query::validate_workspace_query_request;
 use sona_core::history::{HistoryListOptions, HistoryWorkspaceQueryRequest};
@@ -96,6 +98,37 @@ pub(crate) async fn load_history_transcript_v1(
             .map(history_transcript_to_ffi)
     })
     .await
+}
+
+pub(crate) async fn load_history_summary_v1(
+    context: impl Into<ContextSource>,
+    history_id: String,
+) -> SonaCoreBindingResult<Option<FfiHistorySummaryPayloadV1>> {
+    validate_nonblank_input("history ID", &history_id)?;
+    let context = context.into();
+    run_blocking(move || {
+        let app_data_dir = context.app_data_dir().map_err(history_query_error)?;
+        ensure_existing_directory(&app_data_dir)?;
+        let resolved = context.resolve().map_err(history_query_error)?;
+        resolved
+            .history_store()
+            .load_summary(&history_id)
+            .map(|value| value.map(summary_to_ffi))
+            .map_err(history_query_error)
+    })
+    .await
+}
+
+fn summary_to_ffi(value: HistorySummaryPayload) -> FfiHistorySummaryPayloadV1 {
+    FfiHistorySummaryPayloadV1 {
+        active_template_id: value.active_template_id,
+        record: value.record.map(|record| FfiTranscriptSummaryRecordV1 {
+            template_id: record.template_id,
+            content: record.content,
+            generated_at: record.generated_at,
+            source_fingerprint: record.source_fingerprint,
+        }),
+    }
 }
 
 pub(crate) async fn resolve_history_audio_source_v1(

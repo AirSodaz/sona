@@ -20,6 +20,7 @@ import com.sona.android.app.feature.settings.AppearanceSettingsViewModel
 import com.sona.android.app.feature.settings.CloudTranscriptionSettingsViewModel
 import com.sona.android.app.feature.settings.RecognitionSettingsViewModel
 import com.sona.android.app.feature.settings.SyncSettingsViewModel
+import com.sona.android.app.feature.settings.LlmSettingsViewModel
 import com.sona.android.app.feature.settings.DataRecoveryViewModel
 import com.sona.android.app.navigation.SonaApp
 import com.sona.android.application.data.DataTransferBlocker
@@ -59,6 +60,9 @@ class MainActivity : AppCompatActivity() {
                     mediaSources = container.historyMediaSources,
                     playback = container.audioPlayback,
                     editRecovery = container.transcriptEditRecovery,
+                    llmTasks = container.llmTasks,
+                    llmHistory = container.recordingLibrary as com.sona.android.application.llm.LlmHistorySummaryPort,
+                    llmConfiguration = container.llmConfiguration,
                 ),
             )
             val appearanceSettingsViewModel: AppearanceSettingsViewModel = viewModel(
@@ -104,6 +108,7 @@ class MainActivity : AppCompatActivity() {
                     container::rebindAfterBackupRestore,
                 ),
             )
+            val llmSettingsViewModel: LlmSettingsViewModel = viewModel(factory = LlmSettingsViewModel.factory(container.llmConfiguration))
             val bootstrapState by bootstrapViewModel.bootstrapState.collectAsStateWithLifecycle()
             val recordingState by recordingViewModel.state.collectAsStateWithLifecycle()
             val libraryState by libraryViewModel.state.collectAsStateWithLifecycle()
@@ -115,6 +120,7 @@ class MainActivity : AppCompatActivity() {
                 .collectAsStateWithLifecycle()
             val syncState by syncSettingsViewModel.state.collectAsStateWithLifecycle()
             val dataRecoveryState by dataRecoveryViewModel.state.collectAsStateWithLifecycle()
+            val llmSettingsState by llmSettingsViewModel.state.collectAsStateWithLifecycle()
             LaunchedEffect(Unit) {
                 syncSettingsViewModel.refresh()
                 dataRecoveryViewModel.refreshRecovery()
@@ -156,6 +162,15 @@ class MainActivity : AppCompatActivity() {
                 recognitionSettingsState = recognitionSettingsState,
                 syncState = syncState,
                 dataRecoveryState = dataRecoveryState,
+                llmState = llmSettingsState,
+                onLlmProvider = llmSettingsViewModel::provider,
+                onLlmModel = llmSettingsViewModel::model,
+                onLlmBaseUrl = llmSettingsViewModel::baseUrl,
+                onLlmPath = llmSettingsViewModel::apiPath,
+                onLlmVersion = llmSettingsViewModel::apiVersion,
+                onLlmApiKey = llmSettingsViewModel::apiKey,
+                onLlmSave = llmSettingsViewModel::save,
+                onLlmClear = llmSettingsViewModel::clear,
                 aboutState = aboutState,
                 appLanguage = currentAppLanguage(),
                 onAppLanguageChanged = ::setAppLanguage,
@@ -185,6 +200,10 @@ class MainActivity : AppCompatActivity() {
                 onUpdateHistoryTags = libraryViewModel::updateTags,
                 onCreateHistoryTag = libraryViewModel::createTag,
                 onLoadTranscriptSnapshot = libraryViewModel::loadSnapshot,
+                onSummarizeLibrary = libraryViewModel::summarizeCurrent,
+                onTranslateLibrary = libraryViewModel::translateCurrent,
+                onPolishLibrary = libraryViewModel::polishCurrent,
+                onRetryLibraryLlm = libraryViewModel::retryLlm,
                 onCloseTranscriptSnapshot = libraryViewModel::closeSnapshot,
                 onExportTranscript = libraryViewModel::exportTranscript,
                 onTogglePlayback = libraryViewModel::togglePlayback,

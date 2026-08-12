@@ -37,6 +37,7 @@ import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import com.sona.android.app.feature.library.LibraryDetailScreen
 import com.sona.android.app.feature.library.LibraryScreen
 import com.sona.android.app.feature.library.LibraryUiState
+import com.sona.android.app.feature.library.LibraryLlmUiState
 import com.sona.android.app.feature.recording.RecordScreen
 import com.sona.android.app.feature.home.HomeScreen
 import com.sona.android.app.feature.home.FileTranscriptionScreen
@@ -81,6 +82,7 @@ internal fun SonaApp(
     recognitionSettingsState: RecognitionSettingsUiState,
     syncState: SyncSettingsUiState,
     dataRecoveryState: DataRecoveryUiState,
+    llmState: com.sona.android.app.feature.settings.LlmSettingsUiState = com.sona.android.app.feature.settings.LlmSettingsUiState(),
     aboutState: AboutSettingsUiState,
     appLanguage: AppLanguage,
     onAppLanguageChanged: (AppLanguage) -> Unit,
@@ -111,6 +113,10 @@ internal fun SonaApp(
     onCreateHistoryTag: (String) -> Unit,
     onLoadTranscriptSnapshot: (String, String) -> Unit,
     onCloseTranscriptSnapshot: () -> Unit,
+    onSummarizeLibrary: () -> Unit = {},
+    onTranslateLibrary: (String, String?) -> Unit = { _, _ -> },
+    onPolishLibrary: () -> Unit = {},
+    onRetryLibraryLlm: () -> Unit = {},
     onExportTranscript: (String, TranscriptExportFormat, TranscriptExportMode) -> Unit,
     onTogglePlayback: () -> Unit,
     onSeekPlayback: (Long) -> Unit,
@@ -170,6 +176,7 @@ internal fun SonaApp(
     onResumeAllRecovery: () -> Unit,
     onDiscardRecovery: (String) -> Unit,
     onClearResolvedRecovery: () -> Unit,
+    onLlmProvider: (String) -> Unit = {}, onLlmModel: (String) -> Unit = {}, onLlmBaseUrl: (String) -> Unit = {}, onLlmPath: (String) -> Unit = {}, onLlmVersion: (String) -> Unit = {}, onLlmApiKey: (String) -> Unit = {}, onLlmSave: () -> Unit = {}, onLlmClear: () -> Unit = {},
 ) {
     var cloudCredentialFocusRequested by remember { mutableStateOf(false) }
     var detailExitRequestToken by remember { mutableStateOf(0) }
@@ -392,6 +399,11 @@ internal fun SonaApp(
                             onExportTranscript = onExportTranscript,
                             playback = libraryState.playback,
                             editor = libraryState.editor,
+                            llm = libraryState.llm,
+                            onSummarize = onSummarizeLibrary,
+                            onTranslate = onTranslateLibrary,
+                            onPolish = onPolishLibrary,
+                            onRetryLlm = onRetryLibraryLlm,
                             exitRequestToken = detailExitRequestToken,
                             onNavigateBack = {
                                 val destination = pendingDetailDestination
@@ -446,6 +458,7 @@ internal fun SonaApp(
                             recognitionSettingsState = recognitionSettingsState,
                             syncState = syncState,
                             dataRecoveryState = dataRecoveryState,
+                            llmState = llmState,
                             aboutState = aboutState,
                             appLanguage = appLanguage,
                             requestCloudCredentialFocus = cloudCredentialFocusRequested,
@@ -497,6 +510,7 @@ internal fun SonaApp(
                             onResumeAllRecovery = onResumeAllRecovery,
                             onDiscardRecovery = onDiscardRecovery,
                             onClearResolvedRecovery = onClearResolvedRecovery,
+                            onLlmProvider = onLlmProvider, onLlmModel = onLlmModel, onLlmBaseUrl = onLlmBaseUrl, onLlmPath = onLlmPath, onLlmVersion = onLlmVersion, onLlmApiKey = onLlmApiKey, onLlmSave = onLlmSave, onLlmClear = onLlmClear,
                             onCloudCredentialFocusConsumed = {
                                 cloudCredentialFocusRequested = false
                             },

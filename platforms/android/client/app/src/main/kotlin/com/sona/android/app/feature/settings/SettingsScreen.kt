@@ -70,6 +70,7 @@ internal fun SettingsScreen(
     syncState: SyncSettingsUiState,
     dataRecoveryState: DataRecoveryUiState,
     aboutState: AboutSettingsUiState,
+    llmState: LlmSettingsUiState = LlmSettingsUiState(),
     appLanguage: AppLanguage,
     requestCloudCredentialFocus: Boolean,
     onCloudCredentialFocusConsumed: () -> Unit,
@@ -113,6 +114,7 @@ internal fun SettingsScreen(
     onResumeAllRecovery: () -> Unit,
     onDiscardRecovery: (String) -> Unit,
     onClearResolvedRecovery: () -> Unit,
+    onLlmProvider: (String) -> Unit = {}, onLlmModel: (String) -> Unit = {}, onLlmBaseUrl: (String) -> Unit = {}, onLlmPath: (String) -> Unit = {}, onLlmVersion: (String) -> Unit = {}, onLlmApiKey: (String) -> Unit = {}, onLlmSave: () -> Unit = {}, onLlmClear: () -> Unit = {},
 ) {
     val initialDestinationHistory = remember(initialSection) {
         settingsDestinationHistory(initialSection)
@@ -204,6 +206,7 @@ internal fun SettingsScreen(
                     syncState = syncState,
                     dataRecoveryState = dataRecoveryState,
                     aboutState = aboutState,
+                    llmState = llmState,
                     appLanguage = appLanguage,
                     requestCloudCredentialFocus = cloudCredentialFocusSessionActive,
                     onBack = navigateBack,
@@ -247,6 +250,7 @@ internal fun SettingsScreen(
                     onResumeAllRecovery = onResumeAllRecovery,
                     onDiscardRecovery = onDiscardRecovery,
                     onClearResolvedRecovery = onClearResolvedRecovery,
+                    onLlmProvider = onLlmProvider, onLlmModel = onLlmModel, onLlmBaseUrl = onLlmBaseUrl, onLlmPath = onLlmPath, onLlmVersion = onLlmVersion, onLlmApiKey = onLlmApiKey, onLlmSave = onLlmSave, onLlmClear = onLlmClear,
                 )
             }
         },
@@ -397,6 +401,7 @@ private fun SettingsDetailPane(
     syncState: SyncSettingsUiState,
     dataRecoveryState: DataRecoveryUiState,
     aboutState: AboutSettingsUiState,
+    llmState: LlmSettingsUiState,
     appLanguage: AppLanguage,
     requestCloudCredentialFocus: Boolean,
     onBack: () -> Unit,
@@ -440,6 +445,7 @@ private fun SettingsDetailPane(
     onResumeAllRecovery: () -> Unit,
     onDiscardRecovery: (String) -> Unit,
     onClearResolvedRecovery: () -> Unit,
+    onLlmProvider: (String) -> Unit, onLlmModel: (String) -> Unit, onLlmBaseUrl: (String) -> Unit, onLlmPath: (String) -> Unit, onLlmVersion: (String) -> Unit, onLlmApiKey: (String) -> Unit, onLlmSave: () -> Unit, onLlmClear: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -486,6 +492,7 @@ private fun SettingsDetailPane(
                 onRefreshRecognitionCatalog = onRefreshRecognitionCatalog,
                 modifier = Modifier.weight(1f),
             )
+            SettingsSection.LLM -> LlmSettingsPane(llmState, onLlmProvider, onLlmModel, onLlmBaseUrl, onLlmPath, onLlmVersion, onLlmApiKey, onLlmSave, onLlmClear, Modifier.weight(1f))
             SettingsSection.SYNC -> SyncSettingsPane(
                 state = syncState,
                 onRefresh = onRefreshSync,

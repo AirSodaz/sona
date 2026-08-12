@@ -81,6 +81,7 @@ import com.sona.android.application.recording.CloudTranscriptionFailure
 import com.sona.android.application.recording.TranscriptSegment
 import com.sona.android.application.media.AudioPlaybackState
 import com.sona.android.application.media.AudioPlaybackStatus
+import com.sona.android.application.llm.LlmTaskState
 import java.util.Locale
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -108,6 +109,11 @@ internal fun LibraryDetailScreen(
     onExportTranscript: (String, TranscriptExportFormat, TranscriptExportMode) -> Unit,
     playback: AudioPlaybackState,
     editor: TranscriptEditorUiState,
+    llm: LibraryLlmUiState = LibraryLlmUiState(),
+    onSummarize: () -> Unit = {},
+    onTranslate: (String, String?) -> Unit = { _, _ -> },
+    onPolish: () -> Unit = {},
+    onRetryLlm: () -> Unit = {},
     exitRequestToken: Int,
     onNavigateBack: () -> Unit,
     onTogglePlayback: () -> Unit,
@@ -348,6 +354,8 @@ internal fun LibraryDetailScreen(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    FilledTonalButton(onClick = onSummarize, enabled = !editor.dirty && llm.task !is LlmTaskState.Running, modifier = Modifier.fillMaxWidth()) { Text("Summarize") }
+                    FilledTonalButton(onClick = onPolish, enabled = !editor.dirty && llm.task !is LlmTaskState.Running, modifier = Modifier.fillMaxWidth()) { Text("Polish") }
                     tags.forEach { tag ->
                         val selected = tag.id in item.tagIds
                         FilterChip(
@@ -367,6 +375,14 @@ internal fun LibraryDetailScreen(
                         onClick = { tagCreatorVisible = true },
                     ) { Text(stringResource(R.string.history_create_tag)) }
                 }
+            }
+            when (val task = llm.task) {
+                is LlmTaskState.Running -> Text("LLM ${task.progress.percent}%")
+                is LlmTaskState.Failed -> TextButton(onClick = onRetryLlm) { Text("Retry LLM") }
+                else -> Unit
+            }
+            llm.summary?.content?.takeIf(String::isNotBlank)?.let { summary ->
+                Card(modifier = Modifier.fillMaxWidth()) { Text(summary, modifier = Modifier.padding(12.dp)) }
             }
             if (operationError) {
                 Text(

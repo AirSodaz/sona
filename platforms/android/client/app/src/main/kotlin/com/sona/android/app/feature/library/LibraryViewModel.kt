@@ -41,6 +41,15 @@ import com.sona.android.application.recording.TranscriptSegment
 import com.sona.android.application.media.AudioPlaybackPort
 import com.sona.android.application.media.AudioPlaybackState
 import com.sona.android.application.media.AudioPlaybackStatus
+import com.sona.android.application.llm.LlmConfigurationPort
+import com.sona.android.application.llm.LlmHistorySummaryPort
+import com.sona.android.application.llm.LlmSummary
+import com.sona.android.application.llm.LlmSummaryTemplate
+import com.sona.android.application.llm.LlmTaskKind
+import com.sona.android.application.llm.LlmTaskObserver
+import com.sona.android.application.llm.LlmTaskPort
+import com.sona.android.application.llm.LlmTaskState
+import com.sona.android.application.library.TranscriptSnapshotReason
 import com.sona.android.application.recovery.TranscriptEditDraft
 import com.sona.android.application.recovery.TranscriptEditRecoveryPort
 import kotlinx.coroutines.CancellationException
@@ -116,6 +125,13 @@ data class LibraryUiState(
     val operationError: Boolean = false,
     val playback: AudioPlaybackState = AudioPlaybackState(),
     val editor: TranscriptEditorUiState = TranscriptEditorUiState(),
+    val llm: LibraryLlmUiState = LibraryLlmUiState(),
+)
+
+data class LibraryLlmUiState(
+    val summary: LlmSummary? = null,
+    val task: LlmTaskState = LlmTaskState.Idle,
+    val configurationAvailable: Boolean = false,
 )
 
 class LibraryViewModel(
@@ -131,6 +147,9 @@ class LibraryViewModel(
     private val mediaSources: HistoryMediaSourcePort? = null,
     private val playback: AudioPlaybackPort = IdleAudioPlaybackPort,
     private val editRecovery: TranscriptEditRecoveryPort? = null,
+    private val llmTasks: LlmTaskPort? = null,
+    private val llmHistory: LlmHistorySummaryPort? = null,
+    private val llmConfiguration: LlmConfigurationPort? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(LibraryUiState())
     val state: StateFlow<LibraryUiState> = mutableState.asStateFlow()
@@ -165,6 +184,11 @@ class LibraryViewModel(
                 ) {
                     refresh()
                 }
+            }
+        }
+        viewModelScope.launch {
+            llmConfiguration?.configuration?.collect { config ->
+                mutableState.update { it.copy(llm = it.llm.copy(configurationAvailable = config.configured)) }
             }
         }
     }
@@ -364,6 +388,7 @@ class LibraryViewModel(
                 mutableState.update {
                     it.copy(
                         detail = LibraryDetailUiState.Ready(historyId, segments),
+                        llm = it.llm.copy(summary = runCatching { llmHistory?.loadSummary(historyId) }.getOrNull()),
                         snapshots = runCatching { library.listSnapshots(historyId) }.getOrDefault(emptyList()),
                         snapshotDetail = null,
                     )
@@ -377,6 +402,56 @@ class LibraryViewModel(
                 mutableState.update {
                     it.copy(detail = LibraryDetailUiState.Failed(historyId))
                 }
+            }
+        }
+    }
+
+    fun summarizeCurrent() = runLlm(LlmTaskKind.SUMMARY)
+    fun translateCurrent(targetLanguage: String, targetLanguageName: String? = null) = runLlm(LlmTaskKind.TRANSLATE, targetLanguage, targetLanguageName)
+    fun polishCurrent() = runLlm(LlmTaskKind.POLISH)
+    fun retryLlm() {
+        when (val task = mutableState.value.llm.task) {
+            is LlmTaskState.Failed -> runLlm(task.kind)
+            else -> Unit
+        }
+    }
+
+    private fun runLlm(kind: LlmTaskKind, targetLanguage: String? = null, targetLanguageName: String? = null) {
+        val tasks = llmTasks ?: return
+        val historyPort = llmHistory ?: return
+        val detail = mutableState.value.detail as? LibraryDetailUiState.Ready ?: return
+        if (detail.segments.isEmpty() || mutableState.value.llm.task is LlmTaskState.Running) return
+        val historyId = detail.historyId
+        mutableState.update { it.copy(llm = it.llm.copy(task = LlmTaskState.Running(kind, com.sona.android.application.llm.LlmTaskProgress(0, 0)))) }
+        viewModelScope.launch {
+            try {
+                val observer = LlmTaskObserver { state -> mutableState.update { it.copy(llm = it.llm.copy(task = state)) } }
+                when (kind) {
+                    LlmTaskKind.SUMMARY -> {
+                        val summary = tasks.summarize(historyId, detail.segments, LlmSummaryTemplate(), observer)
+                        if (summary.content.isBlank()) error("empty result")
+                        historyPort.saveSummary(historyId, summary)
+                        mutableState.update { it.copy(llm = it.llm.copy(summary = summary, task = LlmTaskState.Succeeded(kind, summary.content))) }
+                    }
+                    LlmTaskKind.TRANSLATE -> {
+                        val result = tasks.translate(historyId, detail.segments, targetLanguage.orEmpty(), targetLanguageName, observer)
+                        if (result.isEmpty() || result.any { it.id.isBlank() }) error("empty result")
+                        historyPort.createSnapshot(historyId, TranscriptSnapshotReason.TRANSLATE)
+                        historyPort.commitTranscript(historyId, result)
+                        mutableState.update { it.copy(detail = LibraryDetailUiState.Ready(historyId, result), llm = it.llm.copy(task = LlmTaskState.Succeeded(kind))) }
+                    }
+                    LlmTaskKind.POLISH -> {
+                        val result = tasks.polish(historyId, detail.segments, observer)
+                        if (result.isEmpty() || result.any { it.text.isBlank() }) error("empty result")
+                        historyPort.createSnapshot(historyId, TranscriptSnapshotReason.POLISH)
+                        historyPort.commitTranscript(historyId, result)
+                        mutableState.update { it.copy(detail = LibraryDetailUiState.Ready(historyId, result), llm = it.llm.copy(task = LlmTaskState.Succeeded(kind))) }
+                    }
+                }
+                refresh()
+            } catch (error: CancellationException) { throw error
+            } catch (_: Exception) {
+                mutableState.update { it.copy(llm = it.llm.copy(task = LlmTaskState.Failed(kind, com.sona.android.application.llm.LlmFailureCategory.UNKNOWN))) }
             }
         }
     }
@@ -886,6 +961,9 @@ class LibraryViewModel(
             mediaSources: HistoryMediaSourcePort? = null,
             playback: AudioPlaybackPort = IdleAudioPlaybackPort,
             editRecovery: TranscriptEditRecoveryPort? = null,
+            llmTasks: LlmTaskPort? = null,
+            llmHistory: LlmHistorySummaryPort? = null,
+            llmConfiguration: LlmConfigurationPort? = null,
         ): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
@@ -904,6 +982,9 @@ class LibraryViewModel(
                         mediaSources,
                         playback,
                         editRecovery,
+                        llmTasks,
+                        llmHistory,
+                        llmConfiguration,
                     ) as T
                 }
             }

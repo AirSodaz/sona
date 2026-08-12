@@ -7,6 +7,7 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Restore
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.sona.android.app.R
 
@@ -27,6 +28,12 @@ internal enum class SettingsSection(
         labelRes = R.string.settings_recognition_heading,
         summaryRes = R.string.settings_recognition_summary,
         icon = Icons.Rounded.GraphicEq,
+    ),
+    LLM(
+        route = "llm",
+        labelRes = R.string.settings_llm_heading,
+        summaryRes = R.string.settings_llm_summary,
+        icon = Icons.Rounded.AutoAwesome,
     ),
     SYNC(
         route = "sync",

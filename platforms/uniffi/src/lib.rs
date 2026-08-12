@@ -56,8 +56,8 @@ pub use mapper::{
     FfiHistoryDraftSourcePatchV1, FfiHistoryDraftSourceV1, FfiHistoryItemKindV1,
     FfiHistoryItemMetaPatchV1, FfiHistoryItemRecordV1, FfiHistoryItemStatusV1,
     FfiHistoryReplaceTagAssignmentsRequestV1, FfiHistorySaveImportedFileRequestV1,
-    FfiHistorySaveRecordingRequestV1, FfiHistorySearchMatchEntryV1, FfiHistoryTagCountEntryV1,
-    FfiHistoryTrashItemsRequestV1, FfiHistoryUpdateItemMetaRequestV1,
+    FfiHistorySaveRecordingRequestV1, FfiHistorySearchMatchEntryV1, FfiHistorySummaryPayloadV1,
+    FfiHistoryTagCountEntryV1, FfiHistoryTrashItemsRequestV1, FfiHistoryUpdateItemMetaRequestV1,
     FfiHistoryUpdateTagAssignmentsRequestV1, FfiHistoryUpdateTranscriptRequestV1,
     FfiHistoryWorkspaceDateFilterV1, FfiHistoryWorkspaceFilterTypeV1,
     FfiHistoryWorkspaceItemCountsV1, FfiHistoryWorkspaceItemSearchMatchV1,
@@ -101,10 +101,10 @@ pub use mapper::{
     FfiTaskLedgerPatchV1, FfiTaskLedgerRecordV1, FfiTaskLedgerSnapshotV1, FfiTaskLedgerStatusV1,
     FfiTimestampSupportHint, FfiTranscriptEditOperationV1, FfiTranscriptSegment,
     FfiTranscriptSnapshotMetadataV1, FfiTranscriptSnapshotReasonV1, FfiTranscriptSnapshotRecordV1,
-    FfiTranscriptTiming, FfiTranscriptTimingLevel, FfiTranscriptTimingSource,
-    FfiTranscriptTimingUnit, FfiTranscriptUpdate, FfiTranslateSegmentsRequest,
-    FfiTranslatedSegment, FfiUsageBreakdownV1, FfiUsageTrendPointV1, FfiVoiceTypingReadinessV1,
-    FfiVolcengineDoubaoAsrConfig, FfiWebviewCacheUsageCategoryV1,
+    FfiTranscriptSummaryRecordV1, FfiTranscriptTiming, FfiTranscriptTimingLevel,
+    FfiTranscriptTimingSource, FfiTranscriptTimingUnit, FfiTranscriptUpdate,
+    FfiTranslateSegmentsRequest, FfiTranslatedSegment, FfiUsageBreakdownV1, FfiUsageTrendPointV1,
+    FfiVoiceTypingReadinessV1, FfiVolcengineDoubaoAsrConfig, FfiWebviewCacheUsageCategoryV1,
 };
 pub use model_bridge::{FfiModelDownloadObserver, FfiModelDownloadProgress, FfiModelDownloadStage};
 pub use sona_context::SonaContext;
@@ -1046,6 +1046,31 @@ pub async fn update_history_transcript_v1(
     request: FfiHistoryUpdateTranscriptRequestV1,
 ) -> SonaCoreBindingResult<FfiHistoryItemRecordV1> {
     history_mutation_bridge::update_history_transcript_v1(app_data_dir, request).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn load_history_summary_v1(
+    app_data_dir: String,
+    history_id: String,
+) -> SonaCoreBindingResult<Option<FfiHistorySummaryPayloadV1>> {
+    history_query_bridge::load_history_summary_v1(app_data_dir, history_id).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn save_history_summary_v1(
+    app_data_dir: String,
+    history_id: String,
+    payload: FfiHistorySummaryPayloadV1,
+) -> SonaCoreBindingResult<()> {
+    history_mutation_bridge::save_history_summary_v1(app_data_dir, history_id, payload).await
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn delete_history_summary_v1(
+    app_data_dir: String,
+    history_id: String,
+) -> SonaCoreBindingResult<()> {
+    history_mutation_bridge::delete_history_summary_v1(app_data_dir, history_id).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]

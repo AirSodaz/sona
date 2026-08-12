@@ -412,6 +412,20 @@ impl TryFrom<FfiHistoryUpdateTranscriptRequestV1> for HistoryUpdateTranscriptReq
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
+pub struct FfiTranscriptSummaryRecordV1 {
+    pub template_id: String,
+    pub content: String,
+    pub generated_at: String,
+    pub source_fingerprint: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
+pub struct FfiHistorySummaryPayloadV1 {
+    pub active_template_id: String,
+    pub record: Option<FfiTranscriptSummaryRecordV1>,
+}
+
 impl TryFrom<FfiHistoryCommitTranscriptEditRequestV1> for HistoryCommitTranscriptEditRequest {
     type Error = HistoryMapperError;
 

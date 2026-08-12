@@ -733,6 +733,25 @@ impl SonaContext {
         history_mutation_bridge::update_history_transcript_v1(self.source(), request).await
     }
 
+    pub async fn load_history_summary_v1(
+        &self,
+        history_id: String,
+    ) -> SonaCoreBindingResult<Option<FfiHistorySummaryPayloadV1>> {
+        history_query_bridge::load_history_summary_v1(self.source(), history_id).await
+    }
+
+    pub async fn save_history_summary_v1(
+        &self,
+        history_id: String,
+        payload: FfiHistorySummaryPayloadV1,
+    ) -> SonaCoreBindingResult<()> {
+        history_mutation_bridge::save_history_summary_v1(self.source(), history_id, payload).await
+    }
+
+    pub async fn delete_history_summary_v1(&self, history_id: String) -> SonaCoreBindingResult<()> {
+        history_mutation_bridge::delete_history_summary_v1(self.source(), history_id).await
+    }
+
     pub async fn create_history_transcript_snapshot_json(
         &self,
         request_json: String,

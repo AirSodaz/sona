@@ -64,6 +64,11 @@ internal data class AndroidKeyStoreCredentialPolicy(
             )
         }
 
+        fun llm(): AndroidKeyStoreCredentialPolicy = production.copy(
+            alias = "sona.llm_credential.aes_gcm.v1",
+            aadValue = "sona/android/llm-credential/v1".encodeToByteArray(),
+        )
+
         private val SAFE_STORAGE_ID = Regex("[a-z0-9]+(?:-[a-z0-9]+)*")
     }
 }

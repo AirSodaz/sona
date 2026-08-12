@@ -14,6 +14,10 @@ import uniffi.sona_uniffi_bind.FfiHistoryTrashItemsRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryUpdateItemMetaRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryUpdateTagAssignmentsRequestV1
 import uniffi.sona_uniffi_bind.FfiTranscriptSnapshotMetadataV1
+import uniffi.sona_uniffi_bind.FfiHistorySummaryPayloadV1
+import uniffi.sona_uniffi_bind.FfiHistoryCreateTranscriptSnapshotRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryCommitTranscriptEditRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryCommitTranscriptEditResultV1
 import uniffi.sona_uniffi_bind.FfiTranscriptSnapshotRecordV1
 import uniffi.sona_uniffi_bind.FfiLiveRecordingDraftResultV1
 import uniffi.sona_uniffi_bind.FfiTranscriptSegment
@@ -24,6 +28,11 @@ import uniffi.sona_uniffi_bind.findOnlineAsrProvider
 import uniffi.sona_uniffi_bind.loadHistoryTranscriptV1
 import uniffi.sona_uniffi_bind.listHistoryTranscriptSnapshotsV1
 import uniffi.sona_uniffi_bind.loadHistoryTranscriptSnapshotV1
+import uniffi.sona_uniffi_bind.commitHistoryTranscriptEditV1
+import uniffi.sona_uniffi_bind.createHistoryTranscriptSnapshotV1
+import uniffi.sona_uniffi_bind.loadHistorySummaryV1
+import uniffi.sona_uniffi_bind.saveHistorySummaryV1
+import uniffi.sona_uniffi_bind.deleteHistorySummaryV1
 import uniffi.sona_uniffi_bind.onlineAsrProviderRequest
 import uniffi.sona_uniffi_bind.purgeHistoryItemsV1
 import uniffi.sona_uniffi_bind.queryHistoryWorkspaceV1
@@ -174,6 +183,11 @@ internal interface UniffiHistoryBindings {
     suspend fun restoreItems(appDataDir: String, request: FfiHistoryDeleteItemsRequestV1)
     suspend fun listSnapshots(appDataDir: String, historyId: String): List<FfiTranscriptSnapshotMetadataV1>
     suspend fun loadSnapshot(appDataDir: String, historyId: String, snapshotId: String): FfiTranscriptSnapshotRecordV1?
+    suspend fun createSnapshot(appDataDir: String, request: FfiHistoryCreateTranscriptSnapshotRequestV1): FfiTranscriptSnapshotMetadataV1 { throw UnsupportedOperationException() }
+    suspend fun commitTranscriptEdit(appDataDir: String, request: FfiHistoryCommitTranscriptEditRequestV1): FfiHistoryCommitTranscriptEditResultV1 { throw UnsupportedOperationException() }
+    suspend fun loadSummary(appDataDir: String, historyId: String): FfiHistorySummaryPayloadV1? = null
+    suspend fun saveSummary(appDataDir: String, historyId: String, payload: FfiHistorySummaryPayloadV1) { throw UnsupportedOperationException() }
+    suspend fun deleteSummary(appDataDir: String, historyId: String) { throw UnsupportedOperationException() }
 
     suspend fun saveImported(
         appDataDir: String,
@@ -242,6 +256,17 @@ internal object GeneratedUniffiHistoryBindings : UniffiHistoryBindings {
         historyId: String,
         snapshotId: String,
     ): FfiTranscriptSnapshotRecordV1? = loadHistoryTranscriptSnapshotV1(appDataDir, historyId, snapshotId)
+
+    override suspend fun createSnapshot(appDataDir: String, request: FfiHistoryCreateTranscriptSnapshotRequestV1) =
+        createHistoryTranscriptSnapshotV1(appDataDir, request)
+
+    override suspend fun commitTranscriptEdit(appDataDir: String, request: FfiHistoryCommitTranscriptEditRequestV1) =
+        commitHistoryTranscriptEditV1(appDataDir, request)
+
+    override suspend fun loadSummary(appDataDir: String, historyId: String) = loadHistorySummaryV1(appDataDir, historyId)
+    override suspend fun saveSummary(appDataDir: String, historyId: String, payload: FfiHistorySummaryPayloadV1) =
+        saveHistorySummaryV1(appDataDir, historyId, payload)
+    override suspend fun deleteSummary(appDataDir: String, historyId: String) = deleteHistorySummaryV1(appDataDir, historyId)
 
     override suspend fun saveImported(
         appDataDir: String,

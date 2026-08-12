@@ -19,6 +19,7 @@ import com.sona.android.adapters.android.settings.AndroidAppearanceSettingsRepos
 import com.sona.android.adapters.android.settings.AndroidAppUpdateAdapter
 import com.sona.android.adapters.android.settings.AndroidLocalAsrDeviceCapabilities
 import com.sona.android.adapters.android.settings.AndroidRecognitionSettingsRepository
+import com.sona.android.adapters.android.llm.AndroidLlmConfigurationRepository
 import com.sona.android.adapters.android.sync.AndroidSyncSecretStore
 import com.sona.android.adapters.android.system.AndroidMonotonicClock
 import com.sona.android.adapters.android.system.UuidRecordingIdPort
@@ -33,6 +34,8 @@ import com.sona.android.adapters.uniffi.recording.UniffiLocalAsrModelCatalogAdap
 import com.sona.android.adapters.uniffi.recording.UniffiLocalAsrModelStorageAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiLocalBatchTranscriptionAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiRecordingHistoryAdapter
+import com.sona.android.adapters.uniffi.llm.UniffiLlmAdapter
+import com.sona.android.adapters.uniffi.llm.loadLlmProviders
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingProviderCatalogAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiStreamingTranscriptionAdapter
 import com.sona.android.adapters.uniffi.sync.UniffiSyncSecretStoreRegistrar
@@ -64,6 +67,8 @@ import com.sona.android.application.recording.TranscribeRecordingWithCloud
 import com.sona.android.application.settings.AppearanceSettingsPort
 import com.sona.android.application.settings.CheckForAppUpdate
 import com.sona.android.application.sync.SyncSecretStorePort
+import com.sona.android.application.llm.LlmConfigurationPort
+import com.sona.android.application.llm.LlmTaskPort
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -83,6 +88,7 @@ class SonaAppContainer(context: Context) {
         File(appContext.filesDir, "models").absolutePath,
     )
     private val batchCredentialRepository = AndroidBatchCredentialRepository.create(appContext)
+    private val llmConfigurationRepository = AndroidLlmConfigurationRepository.create(appContext, ::loadLlmProviders)
     private val recognitionSettingsRepository = AndroidRecognitionSettingsRepository.create(
         appContext,
         localAsrModelStorage,
@@ -143,6 +149,19 @@ class SonaAppContainer(context: Context) {
     val recognitionModelCatalog = localAsrModelCatalog
     val recognitionDeviceCapabilities = localAsrDeviceCapabilities
     val batchCredentialSettings: BatchCredentialSettingsPort = batchCredentialRepository
+    val llmConfiguration: LlmConfigurationPort = llmConfigurationRepository
+    val llmTasks: LlmTaskPort = object : LlmTaskPort {
+        private suspend fun adapter(): UniffiLlmAdapter {
+            val config = llmConfigurationRepository.configuration.first()
+            check(config.configured) { "LLM configuration is missing." }
+            val key = llmConfigurationRepository.loadApiKey()
+            check(!key.isNullOrBlank()) { "LLM API key is missing." }
+            return UniffiLlmAdapter(config, key)
+        }
+        override suspend fun summarize(historyId: String, segments: List<com.sona.android.application.recording.TranscriptSegment>, template: com.sona.android.application.llm.LlmSummaryTemplate, observer: com.sona.android.application.llm.LlmTaskObserver) = adapter().summarize(historyId, segments, template, observer)
+        override suspend fun translate(historyId: String, segments: List<com.sona.android.application.recording.TranscriptSegment>, targetLanguage: String, targetLanguageName: String?, observer: com.sona.android.application.llm.LlmTaskObserver) = adapter().translate(historyId, segments, targetLanguage, targetLanguageName, observer)
+        override suspend fun polish(historyId: String, segments: List<com.sona.android.application.recording.TranscriptSegment>, observer: com.sona.android.application.llm.LlmTaskObserver) = adapter().polish(historyId, segments, observer)
+    }
     val syncSecrets: SyncSecretStorePort = syncSecretStore
     val syncOperations: SyncPort = sync
     val syncWork: SyncSchedulerPort = syncScheduler
