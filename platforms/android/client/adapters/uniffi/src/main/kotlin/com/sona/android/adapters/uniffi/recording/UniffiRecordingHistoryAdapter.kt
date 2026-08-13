@@ -17,6 +17,8 @@ import com.sona.android.application.library.TranscriptSnapshot
 import com.sona.android.application.library.TranscriptSnapshotDetail
 import com.sona.android.application.library.TranscriptSnapshotReason
 import com.sona.android.application.llm.LlmHistorySummaryPort
+import com.sona.android.application.llm.LlmTaskException
+import com.sona.android.application.llm.LlmFailureCategory
 import com.sona.android.application.llm.LlmSummary
 import com.sona.android.application.recording.CompleteLiveDraftRequest
 import com.sona.android.application.recording.CreateLiveDraftRequest
@@ -53,6 +55,7 @@ import uniffi.sona_uniffi_bind.FfiTranscriptSnapshotReasonV1
 import uniffi.sona_uniffi_bind.FfiHistoryCreateTranscriptSnapshotRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryCommitTranscriptEditRequestV1
 import uniffi.sona_uniffi_bind.FfiHistorySummaryPayloadV1
+import uniffi.sona_uniffi_bind.FfiHistoryCommitTranscriptEditResultV1
 import uniffi.sona_uniffi_bind.FfiTranscriptSummaryRecordV1
 import kotlin.math.roundToLong
 
@@ -286,9 +289,15 @@ class UniffiRecordingHistoryAdapter internal constructor(
         bindings.createSnapshot(appDataDir, FfiHistoryCreateTranscriptSnapshotRequestV1(historyId, reason.toFfi(), segments.map(TranscriptSegment::toFfi)))
     }
 
-    override suspend fun commitTranscript(historyId: String, segments: List<TranscriptSegment>) {
-        val current = loadTranscript(historyId)
-        bindings.commitTranscriptEdit(appDataDir, FfiHistoryCommitTranscriptEditRequestV1(historyId, "android-llm", current.map(TranscriptSegment::toFfi), segments.map(TranscriptSegment::toFfi)))
+    override suspend fun commitTranscript(historyId: String, baseSegments: List<TranscriptSegment>, segments: List<TranscriptSegment>) {
+        when (val result = bindings.commitTranscriptEdit(appDataDir, FfiHistoryCommitTranscriptEditRequestV1(historyId, "android-llm", baseSegments.map(TranscriptSegment::toFfi), segments.map(TranscriptSegment::toFfi)))) {
+            FfiHistoryCommitTranscriptEditResultV1.Unchanged,
+            is FfiHistoryCommitTranscriptEditResultV1.Committed,
+            -> Unit
+            is FfiHistoryCommitTranscriptEditResultV1.Conflict -> {
+                throw LlmTaskException(LlmFailureCategory.INVALID_RESPONSE)
+            }
+        }
         onLocalChange()
     }
 }

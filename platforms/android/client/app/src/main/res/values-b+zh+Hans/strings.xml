@@ -3,6 +3,9 @@
     <string name="destination_home">首页</string>
     <string name="destination_library">记录</string>
     <string name="destination_settings">设置</string>
+    <string name="settings_llm_heading">LLM</string>
+    <string name="settings_llm_summary">配置摘要、翻译和润色</string>
+    <string name="llm_provider">服务商</string><string name="llm_model">模型</string><string name="llm_base_url">基础 URL</string><string name="llm_api_path">API 路径（可选）</string><string name="llm_api_version">API 版本（可选）</string><string name="llm_api_key">API Key</string><string name="llm_api_key_stored">API Key（已保存）</string><string name="llm_save">保存</string><string name="llm_saved">已保存</string><string name="llm_clear">清除 LLM 配置</string><string name="llm_configuration_failed">无法保存配置</string><string name="llm_summarize">摘要</string><string name="llm_translate">翻译</string><string name="llm_polish">润色</string><string name="llm_translate_title">选择目标语言</string><string name="llm_progress">LLM 进度：%1$d%%</string><string name="llm_retry">重试</string><string name="llm_not_configured">尚未配置 LLM</string><string name="llm_configure_prompt">请先配置 LLM 服务商，再运行此任务。</string><string name="llm_error_authentication">身份验证失败</string><string name="llm_error_network">网络请求失败</string><string name="llm_error_rate_limited">服务商正在限制请求频率</string><string name="llm_error_invalid_response">服务商返回了无效结果</string><string name="llm_error_unsupported">此服务商不支持该任务</string><string name="llm_error_unknown">LLM 任务失败</string>
     <string name="record_heading">实时转写</string>
     <string name="engine_label">识别引擎</string>
     <string name="record_action_description">开始录音</string>

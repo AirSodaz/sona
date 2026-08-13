@@ -43,9 +43,7 @@ class AndroidLlmConfigurationRepository private constructor(
     }
 
     override suspend fun save(config: LlmConfig, apiKey: String) {
-        require(config.providerId.isNotBlank() && config.strategy.isNotBlank())
-        require(config.baseUrl.startsWith("https://") || config.baseUrl.startsWith("http://"))
-        require(config.model.isNotBlank() && apiKey.isNotBlank())
+        require(config.validate(apiKey))
         val bytes = apiKey.encodeToByteArray()
         try {
             val envelope = cipher.encrypt(bytes).toRecord()

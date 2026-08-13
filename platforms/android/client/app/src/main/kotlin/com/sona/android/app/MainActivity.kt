@@ -61,7 +61,7 @@ class MainActivity : AppCompatActivity() {
                     playback = container.audioPlayback,
                     editRecovery = container.transcriptEditRecovery,
                     llmTasks = container.llmTasks,
-                    llmHistory = container.recordingLibrary as com.sona.android.application.llm.LlmHistorySummaryPort,
+                    llmHistory = container.llmHistory,
                     llmConfiguration = container.llmConfiguration,
                 ),
             )
@@ -204,6 +204,7 @@ class MainActivity : AppCompatActivity() {
                 onTranslateLibrary = libraryViewModel::translateCurrent,
                 onPolishLibrary = libraryViewModel::polishCurrent,
                 onRetryLibraryLlm = libraryViewModel::retryLlm,
+                onClearLibraryLlmConfigurationPrompt = libraryViewModel::clearLlmConfigurationPrompt,
                 onCloseTranscriptSnapshot = libraryViewModel::closeSnapshot,
                 onExportTranscript = libraryViewModel::exportTranscript,
                 onTogglePlayback = libraryViewModel::togglePlayback,

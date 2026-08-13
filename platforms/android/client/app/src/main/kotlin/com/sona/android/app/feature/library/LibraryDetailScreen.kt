@@ -82,6 +82,8 @@ import com.sona.android.application.recording.TranscriptSegment
 import com.sona.android.application.media.AudioPlaybackState
 import com.sona.android.application.media.AudioPlaybackStatus
 import com.sona.android.application.llm.LlmTaskState
+import com.sona.android.application.llm.LlmFailureCategory
+import com.sona.android.app.feature.settings.AppLanguage
 import java.util.Locale
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -114,6 +116,9 @@ internal fun LibraryDetailScreen(
     onTranslate: (String, String?) -> Unit = { _, _ -> },
     onPolish: () -> Unit = {},
     onRetryLlm: () -> Unit = {},
+    onConfigureLlm: () -> Unit = {},
+    onClearLlmConfigurationPrompt: () -> Unit = {},
+    appLanguage: AppLanguage = AppLanguage.SYSTEM,
     exitRequestToken: Int,
     onNavigateBack: () -> Unit,
     onTogglePlayback: () -> Unit,
@@ -145,6 +150,8 @@ internal fun LibraryDetailScreen(
     var exportFormat by remember { mutableStateOf(TranscriptExportFormat.TXT) }
     var exportMode by remember { mutableStateOf(TranscriptExportMode.ORIGINAL) }
     var pendingExport by remember { mutableStateOf<Pair<TranscriptExportFormat, TranscriptExportMode>?>(null) }
+    var translateDialogVisible by remember { mutableStateOf(false) }
+    var targetLanguage by remember(appLanguage) { mutableStateOf(appLanguage.takeUnless { it == AppLanguage.SYSTEM } ?: AppLanguage.ENGLISH) }
     var exitPending by remember { mutableStateOf(false) }
     val requestExit = {
         if (editor.dirty) exitPending = true else onNavigateBack()
@@ -280,6 +287,34 @@ internal fun LibraryDetailScreen(
             },
         )
     }
+    if (translateDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { translateDialogVisible = false },
+            title = { Text(stringResource(R.string.llm_translate_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    AppLanguage.entries.filter { it != AppLanguage.SYSTEM }.forEach { language ->
+                        val languageName = stringResource(language.labelRes)
+                        TextButton(onClick = { targetLanguage = language; translateDialogVisible = false; onTranslate(language.languageTag, languageName) }) {
+                            Text(languageName)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { translateDialogVisible = false }) { Text(stringResource(R.string.action_cancel)) } },
+        )
+    }
+    if (llm.needsConfiguration) {
+        AlertDialog(
+            onDismissRequest = onClearLlmConfigurationPrompt,
+            title = { Text(stringResource(R.string.llm_not_configured)) },
+            text = { Text(stringResource(R.string.llm_configure_prompt)) },
+            confirmButton = {
+                TextButton(onClick = { onClearLlmConfigurationPrompt(); onConfigureLlm() }) { Text(stringResource(R.string.action_configure)) }
+            },
+            dismissButton = { TextButton(onClick = onClearLlmConfigurationPrompt) { Text(stringResource(R.string.action_cancel)) } },
+        )
+    }
     snapshotDetail?.takeIf { it.metadata.historyId == historyId }?.let { snapshot ->
         AlertDialog(
             onDismissRequest = onCloseSnapshot,
@@ -354,8 +389,9 @@ internal fun LibraryDetailScreen(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    FilledTonalButton(onClick = onSummarize, enabled = !editor.dirty && llm.task !is LlmTaskState.Running, modifier = Modifier.fillMaxWidth()) { Text("Summarize") }
-                    FilledTonalButton(onClick = onPolish, enabled = !editor.dirty && llm.task !is LlmTaskState.Running, modifier = Modifier.fillMaxWidth()) { Text("Polish") }
+                    FilledTonalButton(onClick = onSummarize, enabled = !editor.dirty && llm.task !is LlmTaskState.Running, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.llm_summarize)) }
+                    FilledTonalButton(onClick = { translateDialogVisible = true }, enabled = !editor.dirty && llm.task !is LlmTaskState.Running, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.llm_translate)) }
+                    FilledTonalButton(onClick = onPolish, enabled = !editor.dirty && llm.task !is LlmTaskState.Running, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.llm_polish)) }
                     tags.forEach { tag ->
                         val selected = tag.id in item.tagIds
                         FilterChip(
@@ -377,8 +413,11 @@ internal fun LibraryDetailScreen(
                 }
             }
             when (val task = llm.task) {
-                is LlmTaskState.Running -> Text("LLM ${task.progress.percent}%")
-                is LlmTaskState.Failed -> TextButton(onClick = onRetryLlm) { Text("Retry LLM") }
+                is LlmTaskState.Running -> Text(stringResource(R.string.llm_progress, task.progress.percent))
+                is LlmTaskState.Failed -> Column {
+                    Text(stringResource(task.category.toStringResource()))
+                    TextButton(onClick = onRetryLlm) { Text(stringResource(R.string.llm_retry)) }
+                }
                 else -> Unit
             }
             llm.summary?.content?.takeIf(String::isNotBlank)?.let { summary ->
@@ -508,6 +547,16 @@ internal fun LibraryDetailScreen(
             }
         }
     }
+}
+
+private fun LlmFailureCategory.toStringResource(): Int = when (this) {
+    LlmFailureCategory.NOT_CONFIGURED -> R.string.llm_not_configured
+    LlmFailureCategory.AUTHENTICATION -> R.string.llm_error_authentication
+    LlmFailureCategory.NETWORK -> R.string.llm_error_network
+    LlmFailureCategory.RATE_LIMITED -> R.string.llm_error_rate_limited
+    LlmFailureCategory.INVALID_RESPONSE -> R.string.llm_error_invalid_response
+    LlmFailureCategory.UNSUPPORTED -> R.string.llm_error_unsupported
+    LlmFailureCategory.UNKNOWN -> R.string.llm_error_unknown
 }
 
 @Composable

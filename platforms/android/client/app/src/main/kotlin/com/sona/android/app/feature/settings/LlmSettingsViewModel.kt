@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 data class LlmSettingsUiState(
@@ -31,16 +33,30 @@ class LlmSettingsViewModel(private val repository: LlmConfigurationPort) : ViewM
     private var apiKeyDraft = ""
 
     init {
-        viewModelScope.launch { repository.providers.collect { values -> mutableState.update { it.copy(providers = values) } } }
         viewModelScope.launch {
-            repository.configuration.collect { config ->
-                mutableState.update { it.copy(providerId = config.providerId, model = config.model, baseUrl = config.baseUrl, apiPath = config.apiPath.orEmpty(), apiVersion = config.apiVersion.orEmpty()) }
-            }
+            val providers = repository.providers.first()
+            mutableState.update { it.copy(providers = providers) }
+            val initialConfig = repository.configuration.first()
+            val initialProvider = providers.firstOrNull { it.id == initialConfig.providerId }
+            mutableState.update { it.copy(providerId = initialConfig.providerId, model = initialConfig.model, baseUrl = initialConfig.baseUrl, apiPath = initialConfig.apiPath ?: initialProvider?.apiPath.orEmpty(), apiVersion = initialConfig.apiVersion ?: initialProvider?.apiVersion.orEmpty()) }
             mutableState.update { it.copy(hasApiKey = !repository.loadApiKey().isNullOrBlank()) }
+            repository.configuration.drop(1).collect { config ->
+                val provider = providers.firstOrNull { it.id == config.providerId }
+                mutableState.update { it.copy(providerId = config.providerId, model = config.model, baseUrl = config.baseUrl, apiPath = config.apiPath ?: provider?.apiPath.orEmpty(), apiVersion = config.apiVersion ?: provider?.apiVersion.orEmpty(), hasApiKey = it.hasApiKey || config.configured) }
+            }
         }
     }
 
-    fun provider(value: String) = mutableState.update { it.copy(providerId = value, saved = false) }
+    fun provider(value: String) = mutableState.update {
+        val provider = it.providers.firstOrNull { candidate -> candidate.id == value }
+        it.copy(
+            providerId = value,
+            baseUrl = provider?.apiHost?.ifBlank { it.baseUrl } ?: it.baseUrl,
+            apiPath = provider?.apiPath ?: it.apiPath,
+            apiVersion = provider?.apiVersion ?: it.apiVersion,
+            saved = false,
+        )
+    }
     fun model(value: String) = mutableState.update { it.copy(model = value, saved = false) }
     fun baseUrl(value: String) = mutableState.update { it.copy(baseUrl = value, saved = false) }
     fun apiPath(value: String) = mutableState.update { it.copy(apiPath = value, saved = false) }

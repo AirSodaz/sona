@@ -19,7 +19,13 @@ data class LlmConfig(
     val apiPath: String? = null,
     val apiVersion: String? = null,
     val configured: Boolean = false,
-)
+) {
+    fun validate(apiKey: String?): Boolean = providerId.isNotBlank() &&
+        strategy.isNotBlank() &&
+        (baseUrl.startsWith("https://") || baseUrl.startsWith("http://")) &&
+        model.isNotBlank() &&
+        !apiKey.isNullOrBlank()
+}
 
 data class LlmTaskProgress(val completedChunks: Long, val totalChunks: Long) {
     val percent: Int get() = if (totalChunks <= 0) 0 else (completedChunks * 100 / totalChunks).toInt().coerceIn(0, 100)
@@ -35,6 +41,11 @@ sealed interface LlmTaskState {
 }
 
 enum class LlmFailureCategory { NOT_CONFIGURED, AUTHENTICATION, NETWORK, RATE_LIMITED, INVALID_RESPONSE, UNSUPPORTED, UNKNOWN }
+
+class LlmTaskException(
+    val category: LlmFailureCategory,
+    cause: Throwable? = null,
+) : Exception(category.name, cause)
 
 data class LlmSummary(val templateId: String, val content: String, val generatedAt: String, val sourceFingerprint: String)
 
@@ -63,5 +74,5 @@ interface LlmHistorySummaryPort {
     suspend fun saveSummary(historyId: String, summary: LlmSummary)
     suspend fun deleteSummary(historyId: String)
     suspend fun createSnapshot(historyId: String, reason: com.sona.android.application.library.TranscriptSnapshotReason)
-    suspend fun commitTranscript(historyId: String, segments: List<TranscriptSegment>)
+    suspend fun commitTranscript(historyId: String, baseSegments: List<TranscriptSegment>, segments: List<TranscriptSegment>)
 }

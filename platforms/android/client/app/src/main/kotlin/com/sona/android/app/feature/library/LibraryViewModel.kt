@@ -49,6 +49,8 @@ import com.sona.android.application.llm.LlmTaskKind
 import com.sona.android.application.llm.LlmTaskObserver
 import com.sona.android.application.llm.LlmTaskPort
 import com.sona.android.application.llm.LlmTaskState
+import com.sona.android.application.llm.LlmTaskException
+import com.sona.android.application.llm.LlmFailureCategory
 import com.sona.android.application.library.TranscriptSnapshotReason
 import com.sona.android.application.recovery.TranscriptEditDraft
 import com.sona.android.application.recovery.TranscriptEditRecoveryPort
@@ -132,6 +134,9 @@ data class LibraryLlmUiState(
     val summary: LlmSummary? = null,
     val task: LlmTaskState = LlmTaskState.Idle,
     val configurationAvailable: Boolean = false,
+    val needsConfiguration: Boolean = false,
+    val targetLanguage: String? = null,
+    val targetLanguageName: String? = null,
 )
 
 class LibraryViewModel(
@@ -411,48 +416,70 @@ class LibraryViewModel(
     fun polishCurrent() = runLlm(LlmTaskKind.POLISH)
     fun retryLlm() {
         when (val task = mutableState.value.llm.task) {
-            is LlmTaskState.Failed -> runLlm(task.kind)
+            is LlmTaskState.Failed -> runLlm(task.kind, mutableState.value.llm.targetLanguage, mutableState.value.llm.targetLanguageName)
             else -> Unit
         }
     }
+
+    fun clearLlmConfigurationPrompt() = mutableState.update { it.copy(llm = it.llm.copy(needsConfiguration = false)) }
 
     private fun runLlm(kind: LlmTaskKind, targetLanguage: String? = null, targetLanguageName: String? = null) {
         val tasks = llmTasks ?: return
         val historyPort = llmHistory ?: return
         val detail = mutableState.value.detail as? LibraryDetailUiState.Ready ?: return
+        if (!mutableState.value.llm.configurationAvailable) {
+            mutableState.update { it.copy(llm = it.llm.copy(needsConfiguration = true, task = LlmTaskState.Failed(kind, LlmFailureCategory.NOT_CONFIGURED))) }
+            return
+        }
         if (detail.segments.isEmpty() || mutableState.value.llm.task is LlmTaskState.Running) return
         val historyId = detail.historyId
-        mutableState.update { it.copy(llm = it.llm.copy(task = LlmTaskState.Running(kind, com.sona.android.application.llm.LlmTaskProgress(0, 0)))) }
+        mutableState.update { it.copy(llm = it.llm.copy(targetLanguage = targetLanguage ?: it.llm.targetLanguage, targetLanguageName = targetLanguageName ?: it.llm.targetLanguageName, task = LlmTaskState.Running(kind, com.sona.android.application.llm.LlmTaskProgress(0, 0)))) }
         viewModelScope.launch {
             try {
                 val observer = LlmTaskObserver { state -> mutableState.update { it.copy(llm = it.llm.copy(task = state)) } }
                 when (kind) {
                     LlmTaskKind.SUMMARY -> {
                         val summary = tasks.summarize(historyId, detail.segments, LlmSummaryTemplate(), observer)
-                        if (summary.content.isBlank()) error("empty result")
+                        if (summary.templateId.isBlank() || summary.content.isBlank() || summary.generatedAt.isBlank() || summary.sourceFingerprint.isBlank()) {
+                            throw LlmTaskException(LlmFailureCategory.INVALID_RESPONSE)
+                        }
                         historyPort.saveSummary(historyId, summary)
                         mutableState.update { it.copy(llm = it.llm.copy(summary = summary, task = LlmTaskState.Succeeded(kind, summary.content))) }
                     }
                     LlmTaskKind.TRANSLATE -> {
-                        val result = tasks.translate(historyId, detail.segments, targetLanguage.orEmpty(), targetLanguageName, observer)
-                        if (result.isEmpty() || result.any { it.id.isBlank() }) error("empty result")
                         historyPort.createSnapshot(historyId, TranscriptSnapshotReason.TRANSLATE)
-                        historyPort.commitTranscript(historyId, result)
+                        val result = tasks.translate(historyId, detail.segments, targetLanguage.orEmpty(), targetLanguageName, observer)
+                        validateLlmSegments(detail.segments, result, requireText = false, requireTranslation = true)
+                        historyPort.commitTranscript(historyId, detail.segments, result)
                         mutableState.update { it.copy(detail = LibraryDetailUiState.Ready(historyId, result), llm = it.llm.copy(task = LlmTaskState.Succeeded(kind))) }
                     }
                     LlmTaskKind.POLISH -> {
-                        val result = tasks.polish(historyId, detail.segments, observer)
-                        if (result.isEmpty() || result.any { it.text.isBlank() }) error("empty result")
                         historyPort.createSnapshot(historyId, TranscriptSnapshotReason.POLISH)
-                        historyPort.commitTranscript(historyId, result)
+                        val result = tasks.polish(historyId, detail.segments, observer)
+                        validateLlmSegments(detail.segments, result, requireText = true, requireTranslation = false)
+                        historyPort.commitTranscript(historyId, detail.segments, result)
                         mutableState.update { it.copy(detail = LibraryDetailUiState.Ready(historyId, result), llm = it.llm.copy(task = LlmTaskState.Succeeded(kind))) }
                     }
                 }
                 refresh()
             } catch (error: CancellationException) { throw error
+            } catch (error: LlmTaskException) {
+                mutableState.update { it.copy(llm = it.llm.copy(task = LlmTaskState.Failed(kind, error.category))) }
             } catch (_: Exception) {
-                mutableState.update { it.copy(llm = it.llm.copy(task = LlmTaskState.Failed(kind, com.sona.android.application.llm.LlmFailureCategory.UNKNOWN))) }
+                mutableState.update { it.copy(llm = it.llm.copy(task = LlmTaskState.Failed(kind, LlmFailureCategory.UNKNOWN))) }
             }
+        }
+    }
+
+    private fun validateLlmSegments(original: List<TranscriptSegment>, result: List<TranscriptSegment>, requireText: Boolean, requireTranslation: Boolean) {
+        val expected = original.map { it.id }.toSet()
+        val actual = result.map { it.id }
+        if (result.isEmpty() || actual.size != expected.size || actual.toSet() != expected || result.any {
+                it.id.isBlank() ||
+                    (requireText && it.text.isBlank()) ||
+                    (requireTranslation && it.translation.isNullOrBlank())
+            }) {
+            throw LlmTaskException(LlmFailureCategory.INVALID_RESPONSE)
         }
     }
 

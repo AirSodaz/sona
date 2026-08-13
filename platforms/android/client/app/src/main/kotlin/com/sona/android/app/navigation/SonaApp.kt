@@ -117,6 +117,7 @@ internal fun SonaApp(
     onTranslateLibrary: (String, String?) -> Unit = { _, _ -> },
     onPolishLibrary: () -> Unit = {},
     onRetryLibraryLlm: () -> Unit = {},
+    onClearLibraryLlmConfigurationPrompt: () -> Unit = {},
     onExportTranscript: (String, TranscriptExportFormat, TranscriptExportMode) -> Unit,
     onTogglePlayback: () -> Unit,
     onSeekPlayback: (Long) -> Unit,
@@ -205,6 +206,13 @@ internal fun SonaApp(
         val onConfigureRecognition = {
             cloudCredentialFocusRequested = false
             navController.navigate(settingsRoute(SettingsSection.RECOGNITION)) {
+                popUpTo(SonaDestination.HOME.route) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+        val onConfigureLlm = {
+            navController.navigate(settingsRoute(SettingsSection.LLM)) {
                 popUpTo(SonaDestination.HOME.route) { saveState = true }
                 launchSingleTop = true
                 restoreState = true
@@ -404,6 +412,9 @@ internal fun SonaApp(
                             onTranslate = onTranslateLibrary,
                             onPolish = onPolishLibrary,
                             onRetryLlm = onRetryLibraryLlm,
+                            onConfigureLlm = onConfigureLlm,
+                            onClearLlmConfigurationPrompt = onClearLibraryLlmConfigurationPrompt,
+                            appLanguage = appLanguage,
                             exitRequestToken = detailExitRequestToken,
                             onNavigateBack = {
                                 val destination = pendingDetailDestination

@@ -171,6 +171,7 @@ class SonaAppContainer(context: Context) {
     val recoveryJobs: RecoveryControllerPort = recoveryController
     val tagWorkspace: TagWorkspacePort = tags
     val recordingLibrary: HistoryWorkspacePort = history
+    val llmHistory: com.sona.android.application.llm.LlmHistorySummaryPort = history
     val transcriptEditor: TranscriptEditorPort = transcriptEditorAdapter
     val historyMediaSources: HistoryMediaSourcePort = transcriptEditorAdapter
     val audioPlayback: AudioPlaybackPort = audioPlaybackAdapter
