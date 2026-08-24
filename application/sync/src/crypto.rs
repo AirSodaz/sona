@@ -9,8 +9,8 @@ use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use hkdf::Hkdf;
-use rand::RngCore;
-use rand::rngs::OsRng;
+use rand::TryRng;
+use rand::rngs::SysRng;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use sha2::Sha256;
@@ -72,11 +72,15 @@ pub fn create_vault(
     require_identifier(vault_id, "vault ID")?;
 
     let mut vault_key = Zeroizing::new(vec![0_u8; VAULT_KEY_BYTES]);
-    OsRng.fill_bytes(&mut vault_key);
+    SysRng
+        .try_fill_bytes(&mut vault_key)
+        .expect("unexpected failure from SysRng");
     let password_slot = wrap_with_master_password(vault_id, &vault_key, master_password)?;
     let (recovery_slot, recovery_key) = if create_recovery_key {
         let mut recovery_secret = Zeroizing::new(vec![0_u8; VAULT_KEY_BYTES]);
-        OsRng.fill_bytes(&mut recovery_secret);
+        SysRng
+            .try_fill_bytes(&mut recovery_secret)
+            .expect("unexpected failure from SysRng");
         let slot = wrap_with_recovery_secret(vault_id, &vault_key, &recovery_secret)?;
         let encoded = URL_SAFE_NO_PAD.encode(&*recovery_secret);
         (Some(slot), Some(encoded))
@@ -169,7 +173,9 @@ pub fn seal_json<T: Serialize>(
         .finish()
         .map_err(|error| crypto_error(format!("Sync compression failed: {error}")))?;
     let mut nonce = [0_u8; NONCE_BYTES];
-    OsRng.fill_bytes(&mut nonce);
+    SysRng
+        .try_fill_bytes(&mut nonce)
+        .expect("unexpected failure from SysRng");
     let cipher = XChaCha20Poly1305::new_from_slice(vault_key)
         .map_err(|_| crypto_error("Vault key has an invalid size."))?;
     let ciphertext = cipher
@@ -234,9 +240,13 @@ fn wrap_with_master_password(
 ) -> Result<PasswordKeySlotV1, SyncError> {
     require_master_password(master_password)?;
     let mut salt = [0_u8; SALT_BYTES];
-    OsRng.fill_bytes(&mut salt);
+    SysRng
+        .try_fill_bytes(&mut salt)
+        .expect("unexpected failure from SysRng");
     let mut nonce = [0_u8; NONCE_BYTES];
-    OsRng.fill_bytes(&mut nonce);
+    SysRng
+        .try_fill_bytes(&mut nonce)
+        .expect("unexpected failure from SysRng");
     let template = PasswordKeySlotV1 {
         memory_kib: ARGON2_MEMORY_KIB,
         time_cost: ARGON2_TIME_COST,
@@ -261,7 +271,9 @@ pub(crate) fn wrap_with_recovery_secret(
 ) -> Result<RecoveryKeySlotV1, SyncError> {
     let key = derive_recovery_key(vault_id, recovery_secret)?;
     let mut nonce = [0_u8; NONCE_BYTES];
-    OsRng.fill_bytes(&mut nonce);
+    SysRng
+        .try_fill_bytes(&mut nonce)
+        .expect("unexpected failure from SysRng");
     let ciphertext = encrypt_key(&key, &nonce, vault_key, vault_key_aad(vault_id))?;
     Ok(RecoveryKeySlotV1 {
         nonce: URL_SAFE_NO_PAD.encode(nonce),

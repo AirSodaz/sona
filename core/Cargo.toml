@@ -25,7 +25,7 @@ specta-typescript = { version = "0.0.12", optional = true }
 strum = { version = "0.28", features = ["derive"] }
 thiserror = "2.0.18"
 futures-util = "0.3"
-toml = "0.8.20"
+toml = "1.1"
 infer = "0.16"
 jsonschema = { version = "0.37", default-features = false }
 

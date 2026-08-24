@@ -73,7 +73,7 @@ models into app-private storage. Required VAD and punctuation companions are
 installed with the selected preset. The client does not expose arbitrary
 model-directory import.
 
-The Android build downloads the locked sherpa-onnx 1.13.4 archive into
+The Android build downloads the locked sherpa-onnx 1.13.5 archive into
 `target/android-sherpa`. For offline builds, set
 `SONA_SHERPA_ONNX_ANDROID_ARCHIVE` to a local copy of the locked archive. The
 local copy must match the SHA-256 recorded in

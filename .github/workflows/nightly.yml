@@ -83,8 +83,8 @@ jobs:
     permissions:
       contents: read
     env:
-      SHERPA_ONNX_VERSION: 1.13.4
-      SHERPA_ONNX_TAG: v1.13.4
+      SHERPA_ONNX_VERSION: 1.13.5
+      SHERPA_ONNX_TAG: v1.13.5
       LLAMA_BUILD_SHARED_LIBS: ${{ startsWith(matrix.platform, 'ubuntu') && '0' || '1' }}
       NIGHTLY_VERSION: ${{ needs.prepare.outputs.version }}
     strategy:

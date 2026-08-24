@@ -1,5 +1,5 @@
-use rand::RngCore;
-use rand::rngs::OsRng;
+use rand::TryRng;
+use rand::rngs::SysRng;
 use sona_core::sync::{SyncError, SyncObjectKey, SyncObjectStore, SyncPresetV1, SyncPutResult};
 use zeroize::{Zeroize, Zeroizing};
 
@@ -119,7 +119,9 @@ pub async fn regenerate_remote_recovery_key(
     opened: &mut OpenedRemoteVault,
 ) -> Result<String, SyncError> {
     let mut recovery_secret = Zeroizing::new(vec![0_u8; RECOVERY_KEY_BYTES]);
-    OsRng.fill_bytes(&mut recovery_secret);
+    SysRng
+        .try_fill_bytes(&mut recovery_secret)
+        .expect("unexpected failure from SysRng");
     let mut changed = opened.header.clone();
     changed.recovery_slot = Some(wrap_with_recovery_secret(
         &changed.vault_id,
