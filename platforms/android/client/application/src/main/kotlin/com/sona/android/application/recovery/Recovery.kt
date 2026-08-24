@@ -30,6 +30,9 @@ data class RecoveryItem(
     val canResume: Boolean,
     val payload: String?,
     val unavailableReason: RecoveryUnavailableReason? = null,
+    val attemptCount: Int = 0,
+    val lastError: com.sona.android.application.recording.AudioImportFailure? = null,
+    val retryable: Boolean = false,
 )
 
 data class RecoverySnapshot(
@@ -51,6 +54,9 @@ data class RecoveryItemInput(
     val source: RecoverySource = RecoverySource.BATCH_IMPORT,
     val hasSourceFile: Boolean? = null,
     val canResume: Boolean? = null,
+    val attemptCount: Int = 0,
+    val lastError: com.sona.android.application.recording.AudioImportFailure? = null,
+    val retryable: Boolean = false,
 )
 
 data class TranscriptEditDraft(

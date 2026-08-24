@@ -66,4 +66,7 @@ internal fun RecoveryItem.toInput() = RecoveryItemInput(
     source = source,
     hasSourceFile = hasSourceFile,
     canResume = canResume,
+    attemptCount = attemptCount,
+    lastError = lastError,
+    retryable = retryable,
 )

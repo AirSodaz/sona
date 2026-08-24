@@ -107,6 +107,9 @@ pub struct FfiRecoveryItemInputV1 {
     pub source_fingerprint: Option<String>,
     pub file_stat: Option<FfiRecoveryFileStatV1>,
     pub export_file_name_prefix: Option<String>,
+    pub attempt_count: Option<u32>,
+    pub last_error: Option<String>,
+    pub retryable: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -141,6 +144,9 @@ pub struct FfiRecoveredQueueItemV1 {
     pub source_fingerprint: Option<String>,
     pub file_stat: Option<FfiRecoveryFileStatV1>,
     pub export_file_name_prefix: Option<String>,
+    pub attempt_count: u32,
+    pub last_error: Option<String>,
+    pub retryable: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -292,6 +298,9 @@ impl TryFrom<FfiRecoveryItemInputV1> for RecoveryItemInput {
             source_fingerprint,
             file_stat,
             export_file_name_prefix,
+            attempt_count,
+            last_error,
+            retryable,
         } = value;
 
         Ok(Self {
@@ -342,6 +351,9 @@ impl TryFrom<FfiRecoveryItemInputV1> for RecoveryItemInput {
             source_fingerprint,
             file_stat: file_stat.map(Into::into),
             export_file_name_prefix,
+            attempt_count,
+            last_error,
+            retryable,
         })
     }
 }
@@ -600,6 +612,9 @@ impl TryFrom<RecoveredQueueItem> for FfiRecoveredQueueItemV1 {
             source_fingerprint: value.source_fingerprint,
             file_stat: value.file_stat.map(Into::into),
             export_file_name_prefix: value.export_file_name_prefix,
+            attempt_count: value.attempt_count,
+            last_error: value.last_error,
+            retryable: value.retryable,
         })
     }
 }

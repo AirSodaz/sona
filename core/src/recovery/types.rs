@@ -192,6 +192,12 @@ pub struct RecoveryItemInput {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "specta", specta(type = Option<String>))]
     pub export_file_name_prefix: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attempt_count: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
+    #[serde(default)]
+    pub retryable: bool,
 }
 
 fn deserialize_valid_items<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
@@ -270,6 +276,12 @@ pub struct RecoveredQueueItem {
     pub file_stat: Option<RecoveryFileStat>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub export_file_name_prefix: Option<String>,
+    #[serde(default)]
+    pub attempt_count: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
+    #[serde(default)]
+    pub retryable: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

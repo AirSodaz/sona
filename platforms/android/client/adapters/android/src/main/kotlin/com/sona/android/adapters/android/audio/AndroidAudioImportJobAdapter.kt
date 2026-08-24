@@ -29,6 +29,9 @@ import com.sona.android.application.recording.AudioImportFailure
 import com.sona.android.application.recording.AudioImportJob
 import com.sona.android.application.recording.AudioImportJobPort
 import com.sona.android.application.recording.AudioImportJobState
+import com.sona.android.application.recording.AudioImportQueueState
+import com.sona.android.application.recording.AudioImportTask
+import com.sona.android.application.recording.AudioImportTaskStatus
 import com.sona.android.application.recording.AudioImportProgressListener
 import com.sona.android.application.recording.AudioImportSource
 import com.sona.android.application.recording.AudioImportStage
@@ -47,6 +50,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -60,6 +68,7 @@ class AndroidAudioImportJobAdapter private constructor(
     private val workManager: Lazy<WorkManager>,
     private val recovery: RecoveryCoordinator,
 ) : AudioImportJobPort {
+    private val mutex = Mutex()
     companion object {
         fun create(context: Context, recovery: RecoveryCoordinator): AndroidAudioImportJobAdapter = AndroidAudioImportJobAdapter(
             context = context.applicationContext,
@@ -68,15 +77,17 @@ class AndroidAudioImportJobAdapter private constructor(
         )
     }
 
-    override val state: Flow<AudioImportJobState> = flow {
-        emitAll(
-            workManager.value.getWorkInfosForUniqueWorkFlow(UNIQUE_WORK_NAME).map { workInfos ->
-                workInfos.relevantAudioImport()?.toApplicationState() ?: AudioImportJobState.Idle
-            },
-        )
+    override val queueState: Flow<AudioImportQueueState> = flow {
+        while (currentCoroutineContext().isActive) {
+            emit(buildQueueState())
+            delay(500)
+        }
     }
 
+    override val state: Flow<AudioImportJobState> = queueState.map { it.toLegacyState() }
+
     override suspend fun enqueue(job: AudioImportJob) {
+        mutex.withLock {
         var persistedJob = job
         val displayName = when (val target = job.target) {
             is AudioImportTarget.NewImport -> {
@@ -99,28 +110,64 @@ class AndroidAudioImportJobAdapter private constructor(
             is AudioImportTarget.ExistingRecording -> target.displayName
         }
         recovery.upsert(persistedJob.toRecoveryInput(displayName, RecoveryStage.QUEUED, 0.0))
-        val constraints = Constraints.Builder().apply {
-            if (persistedJob.engine is AudioImportEngine.Online) {
-                setRequiredNetworkType(NetworkType.CONNECTED)
-            }
-        }.build()
-        val request = OneTimeWorkRequestBuilder<AudioImportWorker>()
-            .setInputData(persistedJob.toWorkData(displayName))
-            .setConstraints(constraints)
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-            .addTag(persistedJob.id)
-            .addTag("$ENQUEUED_AT_TAG_PREFIX${System.currentTimeMillis()}")
-            .build()
-        workManager.value.enqueueUniqueWork(
-            UNIQUE_WORK_NAME,
-            ExistingWorkPolicy.APPEND_OR_REPLACE,
-            request,
-        )
+        reconcileAndScheduleLocked()
+        }
     }
 
     override suspend fun cancel(jobId: String) {
-        workManager.value.cancelAllWorkByTag(jobId)
-        recovery.resolve(jobId).item?.filePath?.let { deleteRecoverySource(context, it) }
+        mutex.withLock {
+            workManager.value.cancelAllWorkByTag(jobId)
+            recovery.resolve(jobId).item?.filePath?.let { deleteRecoverySource(context, it) }
+            reconcileAndScheduleLocked()
+        }
+    }
+
+    suspend fun reconcileAndSchedule() = mutex.withLock { reconcileAndScheduleLocked() }
+
+    private suspend fun reconcileAndScheduleLocked() {
+        val snapshot = recovery.load()
+        val active = SLOT_WORK_NAMES.flatMap { workManager.value.getWorkInfosForUniqueWork(it).get() }
+            .filter { !it.state.isFinished }
+        val activeJobIds = active.mapNotNull { it.jobId() }.toSet()
+        snapshot.items
+            .filter { it.resolution == com.sona.android.application.recovery.RecoveryResolution.PENDING }
+            .filter { it.id !in activeJobIds && (it.lastError == null || it.retryable) }
+            .sortedBy { it.updatedAtEpochMillis }
+            .take((SLOT_WORK_NAMES.size - active.size).coerceAtLeast(0))
+            .forEach { item ->
+                val job = item.payload?.let(::recoveryPayloadToJob) ?: return@forEach
+                val slot = SLOT_WORK_NAMES.firstOrNull { name ->
+                    workManager.value.getWorkInfosForUniqueWork(name).get().none { !it.state.isFinished }
+                } ?: return@forEach
+                enqueueInSlot(job, item.filename, slot)
+            }
+    }
+
+    private suspend fun enqueueInSlot(job: AudioImportJob, displayName: String?, slot: String) {
+        val constraints = Constraints.Builder().apply {
+            if (job.engine is AudioImportEngine.Online) setRequiredNetworkType(NetworkType.CONNECTED)
+        }.build()
+        val request = OneTimeWorkRequestBuilder<AudioImportWorker>()
+            .setInputData(job.toWorkData(displayName))
+            .setConstraints(constraints)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .addTag(job.id)
+            .addTag("$ENQUEUED_AT_TAG_PREFIX${System.currentTimeMillis()}")
+            .build()
+        workManager.value.enqueueUniqueWork(slot, ExistingWorkPolicy.KEEP, request)
+    }
+
+    private suspend fun buildQueueState(): AudioImportQueueState {
+        val snapshot = recovery.load()
+        val infos = SLOT_WORK_NAMES.flatMap { workManager.value.getWorkInfosForUniqueWork(it).get() }
+        val workTasks = infos
+            .filter { !it.state.isFinished || it.state == WorkInfo.State.SUCCEEDED || it.state == WorkInfo.State.FAILED }
+            .map { info -> info.toAudioImportTask(snapshot.items.firstOrNull { it.id == info.jobId() }) }
+        val known = workTasks.map { it.jobId }.toSet()
+        val recoveryTasks = snapshot.items
+            .filter { it.resolution == com.sona.android.application.recovery.RecoveryResolution.PENDING && it.id !in known }
+            .map { it.toAudioImportTask() }
+        return AudioImportQueueState((workTasks + recoveryTasks).distinctBy(AudioImportTask::jobId))
     }
 
     private fun displayName(uri: Uri): String? = context.contentResolver.query(
@@ -212,14 +259,33 @@ class AudioImportWorker internal constructor(
                 ))
             }
             is RunAudioImportOutcome.RetryableFailure -> {
+                recovery.upsert(
+                    job.toRecoveryInput(
+                        displayName,
+                        AudioImportStage.TRANSCRIBING.toRecoveryStage(),
+                        0.0,
+                    ).copy(
+                        attemptCount = runAttemptCount + 1,
+                        lastError = outcome.reason,
+                        retryable = runAttemptCount < MAX_RETRY_ATTEMPTS - 1,
+                    ),
+                )
                 if (runAttemptCount < MAX_RETRY_ATTEMPTS - 1) {
                     Result.retry()
                 } else {
                     Result.failure(failureData(outcome.reason, job.id))
                 }
             }
-            is RunAudioImportOutcome.TerminalFailure ->
+            is RunAudioImportOutcome.TerminalFailure -> {
+                recovery.upsert(
+                    job.toRecoveryInput(displayName).copy(
+                        lastError = outcome.reason,
+                        retryable = false,
+                        attemptCount = runAttemptCount + 1,
+                    ),
+                )
                 Result.failure(failureData(outcome.reason, job.id))
+            }
         }
     }
 
@@ -466,6 +532,64 @@ private fun WorkInfo.toApplicationState(): AudioImportJobState {
     }
 }
 
+private fun WorkInfo.jobId(): String? = progress.getString(KEY_JOB_ID)
+    ?: outputData.getString(KEY_JOB_ID)
+    ?: tags.firstOrNull { it.matches(Regex("[A-Za-z0-9-]{1,64}")) }
+
+private fun WorkInfo.toAudioImportTask(recovery: com.sona.android.application.recovery.RecoveryItem?): AudioImportTask {
+    val jobId = jobId().orEmpty()
+    val failure = outputData.getString(KEY_FAILURE)?.let { runCatching { AudioImportFailure.valueOf(it) }.getOrNull() }
+    val stage = runCatching { AudioImportStage.valueOf(progress.getString(KEY_STAGE).orEmpty()) }
+        .getOrDefault(AudioImportStage.QUEUED)
+    val status = when (state) {
+        WorkInfo.State.SUCCEEDED -> AudioImportTaskStatus.SUCCEEDED
+        WorkInfo.State.FAILED -> AudioImportTaskStatus.FAILED
+        WorkInfo.State.CANCELLED -> AudioImportTaskStatus.CANCELLED
+        WorkInfo.State.RUNNING -> AudioImportTaskStatus.RUNNING
+        WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> AudioImportTaskStatus.QUEUED
+    }
+    return AudioImportTask(
+        jobId = jobId,
+        displayName = progress.getString(KEY_DISPLAY_NAME),
+        historyId = outputData.getString(KEY_HISTORY_ID) ?: recovery?.historyId,
+        status = status,
+        stage = stage,
+        progressPercent = progress.getInt(KEY_PROGRESS_PERCENT, NO_PROGRESS).takeUnless { it == NO_PROGRESS },
+        attemptCount = recovery?.attemptCount ?: runAttemptCount,
+        failure = failure ?: recovery?.lastError,
+        retryable = recovery?.retryable ?: (state == WorkInfo.State.FAILED),
+        transcriptionWarning = outputData.getBoolean(KEY_TRANSCRIPTION_WARNING, false),
+    )
+}
+
+private fun com.sona.android.application.recovery.RecoveryItem.toAudioImportTask() = AudioImportTask(
+    jobId = id,
+    displayName = historyTitle ?: filename,
+    historyId = historyId,
+    status = AudioImportTaskStatus.FAILED.takeIf { lastError != null }
+        ?: AudioImportTaskStatus.QUEUED,
+    stage = when (stage) {
+        RecoveryStage.QUEUED -> AudioImportStage.QUEUED
+        RecoveryStage.TRANSCODING -> AudioImportStage.TRANSCODING
+        RecoveryStage.TRANSCRIBING -> AudioImportStage.TRANSCRIBING
+        RecoveryStage.SAVING -> AudioImportStage.SAVING
+        RecoveryStage.EXPORTING -> AudioImportStage.SAVING
+    },
+    progressPercent = (progress * 100).toInt().coerceIn(0, 100),
+    attemptCount = attemptCount,
+    failure = lastError,
+    retryable = retryable,
+)
+
+private fun AudioImportQueueState.toLegacyState(): AudioImportJobState = tasks
+    .firstOrNull { it.status == AudioImportTaskStatus.RUNNING || it.status == AudioImportTaskStatus.QUEUED }
+    ?.let { task -> AudioImportJobState.Running(task.jobId, task.displayName, task.stage, task.progressPercent) }
+    ?: tasks.firstOrNull { it.status == AudioImportTaskStatus.FAILED }
+        ?.let { task -> AudioImportJobState.Failed(task.jobId, task.failure ?: AudioImportFailure.PERSISTENCE) }
+    ?: tasks.firstOrNull { it.status == AudioImportTaskStatus.SUCCEEDED }
+        ?.let { task -> AudioImportJobState.Completed(task.jobId, task.historyId.orEmpty(), task.transcriptionWarning) }
+    ?: AudioImportJobState.Idle
+
 private fun List<WorkInfo>.relevantAudioImport(): WorkInfo? =
     firstOrNull { !it.state.isFinished } ?: maxByOrNull { workInfo ->
         workInfo.tags.firstNotNullOfOrNull { tag ->
@@ -485,7 +609,7 @@ private fun AudioImportStage.notificationText(): String = when (this) {
     AudioImportStage.SAVING -> "Saving audio"
 }
 
-private const val UNIQUE_WORK_NAME = "sona-audio-import"
+private val SLOT_WORK_NAMES = listOf("sona-audio-import-slot-0", "sona-audio-import-slot-1")
 private const val KEY_JOB_ID = "job_id"
 private const val KEY_SOURCE_LOCATOR = "source_locator"
 private const val KEY_TARGET = "target"

@@ -4,6 +4,7 @@ import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 
 data class AudioImportSource(
     val locator: String,
@@ -71,8 +72,40 @@ sealed interface AudioImportJobState {
     ) : AudioImportJobState
 }
 
+enum class AudioImportTaskStatus { QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLED }
+
+data class AudioImportTask(
+    val jobId: String,
+    val displayName: String?,
+    val historyId: String? = null,
+    val status: AudioImportTaskStatus,
+    val stage: AudioImportStage = AudioImportStage.QUEUED,
+    val progressPercent: Int? = null,
+    val attemptCount: Int = 0,
+    val failure: AudioImportFailure? = null,
+    val retryable: Boolean = false,
+    val transcriptionWarning: Boolean = false,
+)
+
+data class AudioImportQueueState(
+    val tasks: List<AudioImportTask> = emptyList(),
+    val activeCount: Int = tasks.count {
+        it.status == AudioImportTaskStatus.QUEUED || it.status == AudioImportTaskStatus.RUNNING
+    },
+    val maxConcurrent: Int = MAX_CONCURRENT_AUDIO_IMPORTS,
+) {
+    val pendingCount: Int get() = tasks.count { it.status == AudioImportTaskStatus.QUEUED }
+    val failedCount: Int get() = tasks.count { it.status == AudioImportTaskStatus.FAILED }
+}
+
+private const val MAX_CONCURRENT_AUDIO_IMPORTS = 2
+
 interface AudioImportJobPort {
     val state: Flow<AudioImportJobState>
+
+    /** Durable multi-job view. The legacy state remains for existing UI callers. */
+    val queueState: Flow<AudioImportQueueState>
+        get() = state.map { legacyState -> legacyState.toQueueState() }
 
     suspend fun enqueue(job: AudioImportJob)
     suspend fun cancel(jobId: String)
@@ -128,6 +161,7 @@ data class SaveImportedRecordingRequest(
 
 interface ImportedRecordingHistoryPort {
     suspend fun contains(historyId: String): Boolean
+    suspend fun loadTranscript(historyId: String): List<TranscriptSegment> = emptyList()
     suspend fun saveImported(request: SaveImportedRecordingRequest): HistoryRecordingSummary
     suspend fun updateTranscript(historyId: String, segments: List<TranscriptSegment>)
 }
@@ -315,6 +349,13 @@ class RunAudioImport(
             emptyList()
         }
 
+        if (target is AudioImportTarget.ExistingRecording) {
+            val original = history.loadTranscript(target.historyId)
+            if (segments.isEmpty() || (original.isNotEmpty() && !segments.isCompleteReplacementFor(original))) {
+                return RunAudioImportOutcome.RetryableFailure(AudioImportFailure.TRANSCRIPTION)
+            }
+        }
+
         return try {
             progress.onProgress(AudioImportStage.SAVING, null)
             val historyId = when (target) {
@@ -394,6 +435,49 @@ class RunAudioImport(
             ),
         ).segments
     }
+}
+
+private fun List<TranscriptSegment>.isCompleteReplacementFor(original: List<TranscriptSegment>): Boolean {
+    if (isEmpty() || size != original.size) return false
+    val originalIds = original.map { it.id }.toSet()
+    return size == originalIds.size && map { it.id }.toSet() == originalIds
+}
+
+private fun AudioImportJobState.toQueueState(): AudioImportQueueState = when (this) {
+    AudioImportJobState.Idle -> AudioImportQueueState()
+    is AudioImportJobState.Running -> AudioImportQueueState(
+        tasks = listOf(
+            AudioImportTask(
+                jobId = jobId,
+                displayName = displayName,
+                status = AudioImportTaskStatus.RUNNING,
+                stage = stage,
+                progressPercent = progressPercent,
+            ),
+        ),
+    )
+    is AudioImportJobState.Completed -> AudioImportQueueState(
+        tasks = listOf(
+            AudioImportTask(
+                jobId = jobId,
+                displayName = null,
+                historyId = historyId,
+                status = AudioImportTaskStatus.SUCCEEDED,
+                transcriptionWarning = transcriptionWarning,
+            ),
+        ),
+    )
+    is AudioImportJobState.Failed -> AudioImportQueueState(
+        tasks = listOf(
+            AudioImportTask(
+                jobId = jobId.orEmpty(),
+                displayName = null,
+                status = AudioImportTaskStatus.FAILED,
+                failure = reason,
+                retryable = true,
+            ),
+        ),
+    )
 }
 
 private fun AudioImportPortException.toOutcome(): RunAudioImportOutcome =

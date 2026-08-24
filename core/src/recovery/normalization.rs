@@ -75,6 +75,9 @@ impl RecoveryItemInput {
             source_fingerprint: self.source_fingerprint,
             file_stat: self.file_stat,
             export_file_name_prefix: self.export_file_name_prefix,
+            attempt_count: self.attempt_count.unwrap_or(0),
+            last_error: self.last_error,
+            retryable: self.retryable,
         })
     }
 
@@ -130,6 +133,9 @@ impl RecoveryItemInput {
             source_fingerprint: self.source_fingerprint,
             file_stat: self.file_stat,
             export_file_name_prefix: self.export_file_name_prefix,
+            attempt_count: self.attempt_count.unwrap_or(0),
+            last_error: self.last_error,
+            retryable: self.retryable,
         })
     }
 }

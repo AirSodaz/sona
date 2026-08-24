@@ -63,6 +63,9 @@ internal fun RecoveryItemInput.toFfi() = FfiRecoveryItemInputV1(
     sourceFingerprint = null,
     fileStat = null,
     exportFileNamePrefix = null,
+    attemptCount = attemptCount.toUInt(),
+    lastError = lastError?.name,
+    retryable = retryable,
 )
 
 internal fun FfiRecoverySnapshotV1.toApplication() = RecoverySnapshot(
@@ -93,6 +96,9 @@ private fun FfiRecoveredQueueItemV1.toApplication() = RecoveryItem(
     hasSourceFile = hasSourceFile,
     canResume = canResume,
     payload = resolvedConfigSnapshotJson,
+    attemptCount = attemptCount.toIntChecked("Recovery attempt count"),
+    lastError = lastError?.let { value -> com.sona.android.application.recording.AudioImportFailure.entries.firstOrNull { it.name == value } },
+    retryable = retryable,
 )
 
 private fun RecoveryResolution.toFfi() = when (this) {

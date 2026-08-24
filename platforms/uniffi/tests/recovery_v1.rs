@@ -83,6 +83,9 @@ fn saved_item(id: &str) -> FfiRecoveryItemInputV1 {
             mtime_ms: 2_000,
         }),
         export_file_name_prefix: Some("meeting".to_string()),
+        attempt_count: None,
+        last_error: None,
+        retryable: false,
     }
 }
 

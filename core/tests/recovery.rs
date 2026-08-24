@@ -67,6 +67,9 @@ fn recovery_snapshot_transport_shape_lives_in_core() {
                 mtime_ms: 2000,
             }),
             export_file_name_prefix: Some("meeting".to_string()),
+            attempt_count: 0,
+            last_error: None,
+            retryable: false,
         }],
     };
 
