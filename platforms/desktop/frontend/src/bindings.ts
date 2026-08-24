@@ -1841,6 +1841,9 @@ export type RecoveredQueueItem_Deserialize = {
 	sourceFingerprint: string | null,
 	fileStat: RecoveryFileStat | null,
 	exportFileNamePrefix: string | null,
+	attemptCount?: number,
+	lastError?: string | null,
+	retryable?: boolean,
 };
 
 export type RecoveredQueueItem_Serialize = {
@@ -1867,6 +1870,9 @@ export type RecoveredQueueItem_Serialize = {
 	sourceFingerprint?: string | null,
 	fileStat?: RecoveryFileStat | null,
 	exportFileNamePrefix?: string | null,
+	attemptCount: number,
+	lastError?: string | null,
+	retryable: boolean,
 };
 
 export type RecoveredTranscriptSegment = RecoveredTranscriptSegment_Serialize | RecoveredTranscriptSegment_Deserialize;
@@ -1948,6 +1954,9 @@ export type RecoveryItemInput_Deserialize = {
 	sourceFingerprint?: string | null,
 	fileStat?: RecoveryFileStat | null,
 	exportFileNamePrefix?: string | null,
+	attemptCount?: number | null,
+	lastError?: string | null,
+	retryable?: boolean,
 };
 
 export type RecoveryItemInput_Serialize = {
@@ -1978,6 +1987,9 @@ export type RecoveryItemInput_Serialize = {
 	sourceFingerprint?: string | null,
 	fileStat?: RecoveryFileStat | null,
 	exportFileNamePrefix?: string | null,
+	attemptCount?: number | null,
+	lastError?: string | null,
+	retryable: boolean,
 };
 
 export type RecoveryItemStage = "queued" | "transcribing" | "polishing" | "translating" | "exporting";
