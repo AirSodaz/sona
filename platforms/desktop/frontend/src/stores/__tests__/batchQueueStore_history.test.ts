@@ -194,9 +194,9 @@ describe('batchQueueStore History Integration', () => {
                 enableTimeline: false,
                 asr: {
                     selections: {
-                        live: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
-                        caption: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
-                        voiceTyping: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                        live: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+                        caption: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+                        voiceTyping: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
                         batch: {
                             engine: 'online',
                             mode: 'batch',
@@ -437,6 +437,9 @@ describe('batchQueueStore History Integration', () => {
             updatedAt: 1,
             hasSourceFile: true,
             canResume: true,
+            attemptCount: 0,
+            lastError: null,
+            retryable: false,
         }]);
 
         await new Promise((resolve) => setTimeout(resolve, 1000));

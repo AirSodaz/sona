@@ -88,6 +88,9 @@ function normalizeRecoveredItem(item: CoreRecoveredQueueItem): RecoveredQueueIte
         updatedAt: item.updatedAt,
         hasSourceFile: item.hasSourceFile,
         canResume: item.canResume,
+        attemptCount: item.attemptCount ?? 0,
+        lastError: item.lastError ?? null,
+        retryable: item.retryable ?? false,
         ...(item.automationRuleId != null ? { automationRuleId: item.automationRuleId } : {}),
         ...(item.automationRuleName != null ? { automationRuleName: item.automationRuleName } : {}),
         ...(isRecord(item.resolvedConfigSnapshot)
@@ -145,6 +148,9 @@ function recoveredItemInput(item: RecoveredQueueItem): RecoveryItemInput_Seriali
         updatedAt: item.updatedAt,
         hasSourceFile: item.hasSourceFile,
         canResume: item.canResume,
+        attemptCount: item.attemptCount ?? 0,
+        lastError: item.lastError ?? null,
+        retryable: item.retryable ?? false,
         ...(item.automationRuleId != null ? { automationRuleId: item.automationRuleId } : {}),
         ...(item.automationRuleName != null ? { automationRuleName: item.automationRuleName } : {}),
         ...(item.resolvedConfigSnapshot != null
@@ -197,6 +203,8 @@ function queueItemInput(item: BatchQueueItem): RecoveryItemInput_Serialize {
         ...(item.exportFileNamePrefix != null
             ? { exportFileNamePrefix: item.exportFileNamePrefix }
             : {}),
+        attemptCount: 0,
+        retryable: false,
     };
 }
 

@@ -171,6 +171,9 @@ describe('batchQueueStore', () => {
                 updatedAt: 100,
                 hasSourceFile: true,
                 canResume: true,
+                attemptCount: 0,
+                lastError: null,
+                retryable: false,
             },
             {
                 id: 'recovery-automation-1',
@@ -185,6 +188,9 @@ describe('batchQueueStore', () => {
                 updatedAt: 101,
                 hasSourceFile: true,
                 canResume: true,
+                attemptCount: 0,
+                lastError: null,
+                retryable: false,
                 automationRuleId: 'rule-1',
                 sourceFingerprint: 'fp-1',
             },
@@ -259,9 +265,9 @@ describe('batchQueueStore', () => {
             enableITN: true,
             asr: {
                 selections: {
-                    live: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
-                    caption: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
-                    voiceTyping: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                    live: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+                    caption: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+                    voiceTyping: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
                     batch: {
                         engine: 'online',
                         mode: 'batch',

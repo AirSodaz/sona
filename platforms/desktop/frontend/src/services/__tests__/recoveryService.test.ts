@@ -44,6 +44,9 @@ function recoveryItem(overrides: Partial<RecoveredQueueItem> = {}): RecoveredQue
         updatedAt: 100,
         hasSourceFile: true,
         canResume: true,
+        attemptCount: 0,
+        lastError: null,
+        retryable: false,
         exportConfig: null,
         stageConfig: null,
         ...overrides,
@@ -65,10 +68,14 @@ function queueItem(overrides: Partial<BatchQueueItem> = {}): BatchQueueItem {
     };
 }
 
-function queuePayloadItem(item: BatchQueueItem): Omit<BatchQueueItem, 'projectId'> {
+function queuePayloadItem(
+    item: BatchQueueItem,
+): Omit<BatchQueueItem, 'projectId'> & { attemptCount: number; retryable: boolean } {
     const { projectId, ...payload } = item;
     void projectId;
-    return payload;
+    // Mirrors RecoveryItemInput_Serialize: Rust requires the retry metadata
+    // on every persisted queue item.
+    return { ...payload, attemptCount: 0, retryable: false };
 }
 
 describe('recoveryService', () => {

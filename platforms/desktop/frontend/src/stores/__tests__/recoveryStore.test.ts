@@ -105,6 +105,9 @@ describe('recoveryStore', () => {
             updatedAt: 100,
             hasSourceFile: true,
             canResume: true,
+            attemptCount: 0,
+            lastError: null,
+            retryable: false,
         };
         testContext.loadRecoverySnapshotMock.mockResolvedValueOnce({
             version: 1,
@@ -135,6 +138,9 @@ describe('recoveryStore', () => {
             updatedAt: 100,
             hasSourceFile: true,
             canResume: true,
+            attemptCount: 0,
+            lastError: null,
+            retryable: false,
         };
         testContext.loadRecoverySnapshotMock.mockResolvedValueOnce({
             version: 1,
@@ -166,6 +172,9 @@ describe('recoveryStore', () => {
                 updatedAt: 100,
                 hasSourceFile: true,
                 canResume: true,
+                attemptCount: 0,
+                lastError: null,
+                retryable: false,
                 historyId: 'history-1',
             },
         ];
@@ -207,6 +216,9 @@ describe('recoveryStore', () => {
             updatedAt: 100,
             hasSourceFile: true,
             canResume: true,
+            attemptCount: 0,
+            lastError: null,
+            retryable: false,
         };
         useRecoveryStore.setState({
             items: [recoveryItem],
@@ -246,6 +258,9 @@ describe('recoveryStore', () => {
             updatedAt: 100,
             hasSourceFile: true,
             canResume: true,
+            attemptCount: 0,
+            lastError: null,
+            retryable: false,
         };
         testContext.enqueueRecoveredItemsMock.mockImplementationOnce(() => {
             throw new Error('Queue unavailable.');
@@ -288,6 +303,9 @@ describe('recoveryStore', () => {
                     updatedAt: 100,
                     hasSourceFile: false,
                     canResume: false,
+                    attemptCount: 0,
+                    lastError: null,
+                    retryable: false,
                 },
             ],
             updatedAt: 100,
@@ -317,6 +335,9 @@ describe('recoveryStore', () => {
             updatedAt: 100,
             hasSourceFile: true,
             canResume: true,
+            attemptCount: 0,
+            lastError: null,
+            retryable: false,
             automationRuleId: 'rule-1',
             sourceFingerprint: 'fp-1',
         };
@@ -333,6 +354,9 @@ describe('recoveryStore', () => {
             updatedAt: 101,
             hasSourceFile: true,
             canResume: true,
+            attemptCount: 0,
+            lastError: null,
+            retryable: false,
         };
 
         useRecoveryStore.setState({
@@ -371,6 +395,9 @@ describe('recoveryStore', () => {
                 updatedAt: 101,
                 hasSourceFile: true,
                 canResume: true,
+                attemptCount: 0,
+                lastError: null,
+                retryable: false,
             },
             {
                 id: 'recovery-automation-1',
@@ -385,6 +412,9 @@ describe('recoveryStore', () => {
                 updatedAt: 100,
                 hasSourceFile: true,
                 canResume: true,
+                attemptCount: 0,
+                lastError: null,
+                retryable: false,
                 automationRuleId: 'rule-1',
                 sourceFingerprint: 'fp-1',
             },
@@ -426,6 +456,9 @@ describe('recoveryStore', () => {
             updatedAt: 100,
             hasSourceFile: true,
             canResume: true,
+            attemptCount: 0,
+            lastError: null,
+            retryable: false,
         };
         testContext.saveRecoveredItemsMock.mockRejectedValueOnce(new Error('Disk full.'));
         useRecoveryStore.setState({
