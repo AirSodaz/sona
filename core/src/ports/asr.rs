@@ -934,6 +934,54 @@ pub fn find_online_asr_provider(provider_id: &str) -> Option<&'static OnlineAsrP
         .find(|provider| provider.id == provider_id)
 }
 
+bitflags::bitflags! {
+    /// Declares which engine-neutral Core ports a local ASR engine can back.
+    ///
+    /// Capability bits are the single source of truth for feature gating:
+    /// hosts derive UI availability and run-time routing decisions from this
+    /// set instead of special-casing individual engines.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct EngineCapabilities: u16 {
+        /// Can transcribe complete audio files through [`BatchTranscriberPort`].
+        const BATCH = 1 << 0;
+        /// Can create live sessions through [`StreamingAsrFactoryPort`].
+        const STREAMING = 1 << 1;
+        /// Can attribute transcript segments to speakers.
+        const SPEAKER = 1 << 2;
+        /// Can restore punctuation on transcripts.
+        const PUNCTUATION = 1 << 3;
+        /// Can bias recognition with user-provided hotwords.
+        const HOTWORDS = 1 << 4;
+        /// Can offload inference to a GPU when one is available.
+        const GPU = 1 << 5;
+    }
+}
+
+/// Engine-owned facade exposing one local ASR engine behind the
+/// engine-neutral Core ports.
+///
+/// Implementations live in provider crates. Application and platform code
+/// must depend only on this trait; hosts compose concrete adapters into an
+/// application-level registry so adding an engine never requires touching
+/// Core or shared wiring.
+pub trait LocalAsrAdapter: Send + Sync {
+    /// The local engine implemented by this adapter.
+    fn engine(&self) -> LocalAsrEngine;
+
+    /// The ports this adapter can back. Must agree with the accessors below:
+    /// `BATCH` implies [`Self::batch_transcriber`] always succeeds, and the
+    /// `STREAMING` bit implies [`Self::streaming_factory`] returns `Some`.
+    fn capabilities(&self) -> EngineCapabilities;
+
+    /// Batch transcription for this engine. Only meaningful when
+    /// `capabilities()` contains `BATCH`.
+    fn batch_transcriber(&self) -> Arc<dyn BatchTranscriberPort>;
+
+    /// Streaming session factory for this engine, or `None` when the engine
+    /// does not support live transcription.
+    fn streaming_factory(&self) -> Option<Arc<dyn StreamingAsrFactoryPort>>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

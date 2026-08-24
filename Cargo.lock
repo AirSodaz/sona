@@ -6131,6 +6131,7 @@ version = "0.8.1"
 dependencies = [
  "async-trait",
  "axum",
+ "bitflags 2.13.1",
  "chrono",
  "futures-util",
  "infer 0.16.0",
