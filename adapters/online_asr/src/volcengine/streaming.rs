@@ -152,7 +152,7 @@ async fn start_streaming_recognizer_impl(
         session.request.hotwords.as_deref(),
     )?;
     writer
-        .send(Message::Binary(init_frame))
+        .send(Message::Binary(init_frame.into()))
         .await
         .map_err(|error| SherpaError::VolcengineInitFrameSendFailed {
             error: error.to_string(),
@@ -360,9 +360,9 @@ async fn feed_audio_samples_impl(
     };
     let pcm_bytes = crate::f32_samples_to_i16_pcm_bytes(samples);
     writer
-        .send(Message::Binary(crate::build_volcengine_audio_frame(
-            &pcm_bytes, false,
-        )))
+        .send(Message::Binary(
+            crate::build_volcengine_audio_frame(&pcm_bytes, false).into(),
+        ))
         .await
         .map_err(|error| SherpaError::VolcengineAudioSendFailed {
             error: error.to_string(),
@@ -384,10 +384,9 @@ async fn flush_streaming_recognizer_impl(
         return outcome;
     }
     writer
-        .send(Message::Binary(crate::build_volcengine_audio_frame(
-            &[],
-            true,
-        )))
+        .send(Message::Binary(
+            crate::build_volcengine_audio_frame(&[], true).into(),
+        ))
         .await
         .map_err(|error| SherpaError::VolcengineEndFrameSendFailed {
             error: error.to_string(),
@@ -620,7 +619,10 @@ mod tests {
     async fn reader_failures_are_reported_to_the_runtime_observer() {
         for (message, expected_code) in [
             (Message::Close(None), "VOLCENGINE_WEB_SOCKET_CLOSED"),
-            (Message::Binary(vec![0]), "VOLCENGINE_FRAME_TOO_SHORT"),
+            (
+                Message::Binary(vec![0].into()),
+                "VOLCENGINE_FRAME_TOO_SHORT",
+            ),
         ] {
             let error = streaming_error_from_server_message(message).await;
             assert_eq!(
@@ -664,16 +666,14 @@ mod tests {
             let mut frames = Vec::new();
             for _ in 0..4 {
                 match reader.next().await.unwrap().unwrap() {
-                    Message::Binary(frame) => frames.push(frame),
+                    Message::Binary(frame) => frames.push(frame.to_vec()),
                     message => panic!("expected binary frame, got {message:?}"),
                 }
             }
             writer
-                .send(Message::Binary(server_result_frame(
-                    -1,
-                    "hello from mock",
-                    true,
-                )))
+                .send(Message::Binary(
+                    server_result_frame(-1, "hello from mock", true).into(),
+                ))
                 .await
                 .unwrap();
             let close_observed = matches!(
@@ -762,13 +762,17 @@ mod tests {
                 assert!(matches!(reader.next().await, Some(Ok(Message::Binary(_)))));
             }
             writer
-                .send(Message::Binary(server_result_frame(1, "partial", false)))
+                .send(Message::Binary(
+                    server_result_frame(1, "partial", false).into(),
+                ))
                 .await
                 .unwrap();
             partial_sent_for_server.notify_one();
             release_final_for_server.notified().await;
             writer
-                .send(Message::Binary(server_result_frame(-2, "final", true)))
+                .send(Message::Binary(
+                    server_result_frame(-2, "final", true).into(),
+                ))
                 .await
                 .unwrap();
             let _ = reader.next().await;
