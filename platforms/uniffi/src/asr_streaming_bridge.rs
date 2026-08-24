@@ -144,7 +144,7 @@ pub(crate) async fn create_asr_streaming_session(
             request,
             observer,
         )?,
-        AsrEngine::LocalSherpa => {
+        AsrEngine::Local => {
             let request =
                 LocalSherpaStreamingRequest::from_local_sherpa_request(instance_id, request)?;
             sona_sherpa_onnx::streaming::create_streaming_session(

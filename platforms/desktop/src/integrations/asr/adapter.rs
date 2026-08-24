@@ -12,10 +12,10 @@ use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy)]
-pub struct LocalAsrAdapter;
+pub struct DesktopLocalProviderAdapter;
 
 #[async_trait]
-impl AsrProviderAdapter for LocalAsrAdapter {
+impl AsrProviderAdapter for DesktopLocalProviderAdapter {
     fn provider_id(&self) -> &'static str {
         "local_sherpa"
     }
@@ -113,8 +113,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
             quiet: true,
         };
         let transcriber = sona_application::local_asr::LocalBatchTranscriberRouter::new(
-            Arc::new(sona_sherpa_onnx::batch::LocalBatchAsrAdapter),
-            Arc::new(sona_llama_cpp::batch::LlamaBatchAsrAdapter),
+            super::local_asr_registry_default(),
         );
         let segments = transcriber
             .transcribe_with_observer(plan, observer.clone())
@@ -158,7 +157,7 @@ mod tests {
             },
         };
 
-        let error = match LocalAsrAdapter.create_batch_processor(&request) {
+        let error = match DesktopLocalProviderAdapter.create_batch_processor(&request) {
             Err(error) => error,
             Ok(_) => panic!("online request should be rejected"),
         };
@@ -184,7 +183,7 @@ mod tests {
             None,
             Some("cpu".to_string()),
         );
-        let AsrEngineConfig::LocalSherpa { local_engine, .. } = &mut request.engine_config else {
+        let AsrEngineConfig::Local { local_engine, .. } = &mut request.engine_config else {
             unreachable!();
         };
         *local_engine = LocalAsrEngine::LlamaCpp;

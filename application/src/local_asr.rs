@@ -3,33 +3,88 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use sona_core::ports::asr::{
     AsrPortError, AsrPortErrorKind, BatchTranscriberPort, BatchTranscriptionObserver,
-    LocalAsrEngine,
+    EngineCapabilities, LocalAsrAdapter, LocalAsrEngine,
 };
 use sona_core::transcription::runtime::BatchTranscribePlan;
 use sona_core::transcription::transcript::TranscriptSegment;
 
-#[derive(Clone)]
-pub struct LocalBatchTranscriberRouter {
-    sherpa_onnx: Arc<dyn BatchTranscriberPort>,
-    llama_cpp: Option<Arc<dyn BatchTranscriberPort>>,
+/// What an engine can do, exposed for feature gating and UI availability.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EngineInfo {
+    pub engine: LocalAsrEngine,
+    pub capabilities: EngineCapabilities,
 }
 
-impl LocalBatchTranscriberRouter {
-    pub fn new(
-        sherpa_onnx: Arc<dyn BatchTranscriberPort>,
-        llama_cpp: Arc<dyn BatchTranscriberPort>,
-    ) -> Self {
+/// Composition-time registry of the local ASR engines available on this
+/// host.
+///
+/// Hosts build one registry at startup by registering provider adapters;
+/// everything downstream (batch routing, streaming factories, UI
+/// availability) reads from it instead of importing concrete engines.
+#[derive(Clone, Default)]
+pub struct LocalAsrRegistry {
+    adapters: Vec<Arc<dyn LocalAsrAdapter>>,
+}
+
+impl LocalAsrRegistry {
+    pub fn empty() -> Self {
         Self {
-            sherpa_onnx,
-            llama_cpp: Some(llama_cpp),
+            adapters: Vec::new(),
         }
     }
 
-    pub fn sherpa_only(sherpa_onnx: Arc<dyn BatchTranscriberPort>) -> Self {
-        Self {
-            sherpa_onnx,
-            llama_cpp: None,
-        }
+    /// Builder-style registration for composition roots.
+    pub fn register(mut self, adapter: Arc<dyn LocalAsrAdapter>) -> Self {
+        self.adapters.push(adapter);
+        self
+    }
+
+    pub fn get(&self, engine: LocalAsrEngine) -> Option<Arc<dyn LocalAsrAdapter>> {
+        self.adapters
+            .iter()
+            .find(|adapter| adapter.engine() == engine)
+            .cloned()
+    }
+
+    pub fn available(&self) -> Vec<EngineInfo> {
+        self.adapters
+            .iter()
+            .map(|adapter| EngineInfo {
+                engine: adapter.engine(),
+                capabilities: adapter.capabilities(),
+            })
+            .collect()
+    }
+}
+
+/// Routes batch transcription to the engine selected in each plan.
+///
+/// Observers are forwarded to the selected adapter so engines keep their
+/// incremental progress behavior.
+#[derive(Clone)]
+pub struct LocalBatchTranscriberRouter {
+    registry: LocalAsrRegistry,
+}
+
+impl LocalBatchTranscriberRouter {
+    pub fn new(registry: LocalAsrRegistry) -> Self {
+        Self { registry }
+    }
+
+    fn batch_transcriber(
+        &self,
+        engine: LocalAsrEngine,
+    ) -> Result<Arc<dyn BatchTranscriberPort>, AsrPortError> {
+        let adapter = self.registry.get(engine).ok_or_else(|| {
+            AsrPortError::new(
+                AsrPortErrorKind::Unsupported,
+                format!(
+                    "The {} local ASR engine is not available on this host.",
+                    engine.as_str()
+                ),
+            )
+        })?;
+        Ok(adapter.batch_transcriber())
     }
 }
 
@@ -39,18 +94,8 @@ impl BatchTranscriberPort for LocalBatchTranscriberRouter {
         &self,
         plan: BatchTranscribePlan,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        match plan.engine {
-            LocalAsrEngine::SherpaOnnx => self.sherpa_onnx.transcribe(plan).await,
-            LocalAsrEngine::LlamaCpp => {
-                let adapter = self.llama_cpp.as_ref().ok_or_else(|| {
-                    AsrPortError::new(
-                        AsrPortErrorKind::Unsupported,
-                        "The llama.cpp local ASR engine is not available on this host.",
-                    )
-                })?;
-                adapter.transcribe(plan).await
-            }
-        }
+        let engine = plan.engine;
+        self.batch_transcriber(engine)?.transcribe(plan).await
     }
 
     async fn transcribe_with_observer(
@@ -58,22 +103,10 @@ impl BatchTranscriberPort for LocalBatchTranscriberRouter {
         plan: BatchTranscribePlan,
         observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        match plan.engine {
-            LocalAsrEngine::SherpaOnnx => {
-                self.sherpa_onnx
-                    .transcribe_with_observer(plan, observer)
-                    .await
-            }
-            LocalAsrEngine::LlamaCpp => {
-                let adapter = self.llama_cpp.as_ref().ok_or_else(|| {
-                    AsrPortError::new(
-                        AsrPortErrorKind::Unsupported,
-                        "The llama.cpp local ASR engine is not available on this host.",
-                    )
-                })?;
-                adapter.transcribe_with_observer(plan, observer).await
-            }
-        }
+        let engine = plan.engine;
+        self.batch_transcriber(engine)?
+            .transcribe_with_observer(plan, observer)
+            .await
     }
 }
 
@@ -81,20 +114,71 @@ impl BatchTranscriberPort for LocalBatchTranscriberRouter {
 mod tests {
     use super::*;
     use sona_core::export::ExportFormat;
+    use sona_core::ports::asr::StreamingAsrFactoryPort;
     use sona_core::transcription::runtime::OutputTarget;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    struct RecordingTranscriber(AtomicUsize);
+    struct CountingTranscriber {
+        calls: Arc<AtomicUsize>,
+    }
 
     #[async_trait]
-    impl BatchTranscriberPort for RecordingTranscriber {
+    impl BatchTranscriberPort for CountingTranscriber {
         async fn transcribe(
             &self,
             _plan: BatchTranscribePlan,
         ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-            self.0.fetch_add(1, Ordering::SeqCst);
+            self.calls.fetch_add(1, Ordering::SeqCst);
             Ok(Vec::new())
+        }
+    }
+
+    struct FakeAdapter {
+        engine: LocalAsrEngine,
+        calls: Arc<AtomicUsize>,
+        streaming: bool,
+    }
+
+    impl LocalAsrAdapter for FakeAdapter {
+        fn engine(&self) -> LocalAsrEngine {
+            self.engine
+        }
+
+        fn capabilities(&self) -> EngineCapabilities {
+            if self.streaming {
+                EngineCapabilities::BATCH | EngineCapabilities::STREAMING
+            } else {
+                EngineCapabilities::BATCH
+            }
+        }
+
+        fn batch_transcriber(&self) -> Arc<dyn BatchTranscriberPort> {
+            Arc::new(CountingTranscriber {
+                calls: self.calls.clone(),
+            })
+        }
+
+        fn streaming_factory(&self) -> Option<Arc<dyn StreamingAsrFactoryPort>> {
+            None
+        }
+    }
+
+    impl FakeAdapter {
+        fn sherpa(calls: Arc<AtomicUsize>) -> Self {
+            Self {
+                engine: LocalAsrEngine::SherpaOnnx,
+                calls,
+                streaming: true,
+            }
+        }
+
+        fn llama(calls: Arc<AtomicUsize>) -> Self {
+            Self {
+                engine: LocalAsrEngine::LlamaCpp,
+                calls,
+                streaming: false,
+            }
         }
     }
 
@@ -122,30 +206,34 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn routes_each_local_engine_to_its_adapter() {
-        let sherpa = Arc::new(RecordingTranscriber(AtomicUsize::new(0)));
-        let llama = Arc::new(RecordingTranscriber(AtomicUsize::new(0)));
-        let router = LocalBatchTranscriberRouter::new(sherpa.clone(), llama.clone());
-
-        router
-            .transcribe(plan(LocalAsrEngine::SherpaOnnx))
-            .await
-            .unwrap();
-        router
-            .transcribe(plan(LocalAsrEngine::LlamaCpp))
-            .await
-            .unwrap();
-
-        assert_eq!(sherpa.0.load(Ordering::SeqCst), 1);
-        assert_eq!(llama.0.load(Ordering::SeqCst), 1);
+    fn two_engine_registry() -> (LocalAsrRegistry, Arc<AtomicUsize>, Arc<AtomicUsize>) {
+        let sherpa_calls = Arc::new(AtomicUsize::new(0));
+        let llama_calls = Arc::new(AtomicUsize::new(0));
+        let registry = LocalAsrRegistry::empty()
+            .register(Arc::new(FakeAdapter::sherpa(sherpa_calls.clone())))
+            .register(Arc::new(FakeAdapter::llama(llama_calls.clone())));
+        (registry, sherpa_calls, llama_calls)
     }
 
     #[tokio::test]
-    async fn reports_unavailable_llama_engine_on_sherpa_only_hosts() {
-        let router = LocalBatchTranscriberRouter::sherpa_only(Arc::new(RecordingTranscriber(
-            AtomicUsize::new(0),
+    async fn routes_each_local_engine_to_its_adapter() {
+        let (registry, sherpa_calls, llama_calls) = two_engine_registry();
+        let router = LocalBatchTranscriberRouter::new(registry);
+
+        router.transcribe(plan(LocalAsrEngine::SherpaOnnx)).await.unwrap();
+        router.transcribe(plan(LocalAsrEngine::LlamaCpp)).await.unwrap();
+
+        assert_eq!(sherpa_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(llama_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn reports_unavailable_engines_as_unsupported() {
+        // Simulate a host that only ships sherpa.
+        let sherpa_only = LocalAsrRegistry::empty().register(Arc::new(FakeAdapter::sherpa(
+            Arc::new(AtomicUsize::new(0)),
         )));
+        let router = LocalBatchTranscriberRouter::new(sherpa_only);
 
         let error = router
             .transcribe(plan(LocalAsrEngine::LlamaCpp))
@@ -153,5 +241,18 @@ mod tests {
             .unwrap_err();
 
         assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
+    }
+
+    #[test]
+    fn available_reports_registered_capabilities() {
+        let (registry, _, _) = two_engine_registry();
+        let mut infos = registry.available();
+        infos.sort_by_key(|info| info.engine.as_str());
+
+        assert_eq!(infos.len(), 2);
+        let llama_info = infos.iter().find(|i| i.engine == LocalAsrEngine::LlamaCpp).unwrap();
+        assert_eq!(llama_info.capabilities, EngineCapabilities::BATCH);
+        let sherpa_info = infos.iter().find(|i| i.engine == LocalAsrEngine::SherpaOnnx).unwrap();
+        assert!(sherpa_info.capabilities.contains(EngineCapabilities::STREAMING));
     }
 }

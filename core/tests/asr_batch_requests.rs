@@ -282,7 +282,7 @@ fn local_sherpa_streaming_rejects_llama_engine_with_shared_error() {
         None,
         None,
     );
-    let AsrEngineConfig::LocalSherpa { local_engine, .. } = &mut request.engine_config else {
+    let AsrEngineConfig::Local { local_engine, .. } = &mut request.engine_config else {
         unreachable!();
     };
     *local_engine = LocalAsrEngine::LlamaCpp;

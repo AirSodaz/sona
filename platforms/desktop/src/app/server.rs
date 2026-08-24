@@ -14,8 +14,7 @@ pub const DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Online ASR batch is unav
 
 fn local_batch_transcriber() -> sona_application::local_asr::LocalBatchTranscriberRouter {
     sona_application::local_asr::LocalBatchTranscriberRouter::new(
-        Arc::new(sona_sherpa_onnx::batch::LocalBatchAsrAdapter),
-        Arc::new(sona_llama_cpp::batch::LlamaBatchAsrAdapter),
+        crate::integrations::asr::local_asr_registry_default(),
     )
 }
 

@@ -1,32 +1,61 @@
 use async_trait::async_trait;
 use sona_application::live_transcription::LiveTranscriptionCoordinator;
+use sona_application::local_asr::LocalAsrRegistry;
 use sona_core::ports::asr::{
-    AsrPortError, AsrRuntimeObserver, AsrStreamingSession, NoopAsrRuntimeObserver,
-    StreamingAsrFactoryPort, StreamingInferenceSpec,
+    AsrEngine, AsrPortError, AsrPortErrorKind, AsrRuntimeObserver, AsrStreamingSession,
+    NoopAsrRuntimeObserver, StreamingAsrFactoryPort, StreamingInferenceSpec,
 };
-use sona_sherpa_onnx::runtime::RecognizerPool;
 use std::sync::Arc;
 
 /// Desktop composition root for streaming ASR. The application coordinator owns
-/// lifecycle and sharing; this adapter only selects and creates engine sessions.
+/// lifecycle and sharing; this adapter only selects and creates engine sessions
+/// through the local engine registry.
 pub struct DesktopStreamingAsrFactory {
-    recognizer_pool: RecognizerPool,
+    registry: LocalAsrRegistry,
 }
 
 impl DesktopStreamingAsrFactory {
-    pub fn new(recognizer_pool: RecognizerPool) -> Self {
-        Self { recognizer_pool }
+    pub fn new(registry: LocalAsrRegistry) -> Self {
+        Self { registry }
     }
 
     pub fn coordinator(&self) -> LiveTranscriptionCoordinator {
         LiveTranscriptionCoordinator::new(Arc::new(self.clone()), Arc::new(NoopAsrRuntimeObserver))
+    }
+
+    fn local_streaming_factory(
+        &self,
+        spec: &StreamingInferenceSpec,
+    ) -> Result<Arc<dyn StreamingAsrFactoryPort>, AsrPortError> {
+        let request = spec.engine_request();
+        let engine = request.engine_config.local_engine().ok_or_else(|| {
+            AsrPortError::invalid_request("Local streaming requires a local engine selection")
+        })?;
+        let adapter = self.registry.get(engine).ok_or_else(|| {
+            AsrPortError::new(
+                AsrPortErrorKind::Unsupported,
+                format!(
+                    "The {} local ASR engine is not available on this host.",
+                    engine.as_str()
+                ),
+            )
+        })?;
+        adapter.streaming_factory().ok_or_else(|| {
+            AsrPortError::new(
+                AsrPortErrorKind::Unsupported,
+                format!(
+                    "The {} local ASR engine does not support streaming transcription.",
+                    engine.as_str()
+                ),
+            )
+        })
     }
 }
 
 impl Clone for DesktopStreamingAsrFactory {
     fn clone(&self) -> Self {
         Self {
-            recognizer_pool: self.recognizer_pool.clone(),
+            registry: self.registry.clone(),
         }
     }
 }
@@ -34,22 +63,13 @@ impl Clone for DesktopStreamingAsrFactory {
 #[async_trait]
 impl StreamingAsrFactoryPort for DesktopStreamingAsrFactory {
     async fn prepare(&self, spec: &StreamingInferenceSpec) -> Result<(), AsrPortError> {
-        let request = spec.engine_request();
         match spec.engine() {
-            sona_core::ports::asr::AsrEngine::LocalSherpa => {
-                let request =
-                    sona_core::ports::asr::LocalSherpaStreamingRequest::from_local_sherpa_request(
-                        "prepare".to_string(),
-                        request,
-                    )?;
-                sona_sherpa_onnx::streaming::prepare_streaming_resources(
-                    self.recognizer_pool.clone(),
-                    &request,
-                )
-                .await?;
-                Ok(())
+            AsrEngine::Local => {
+                let factory = self.local_streaming_factory(spec)?;
+                factory.prepare(spec).await
             }
-            sona_core::ports::asr::AsrEngine::Online => {
+            AsrEngine::Online => {
+                let request = spec.engine_request();
                 sona_online_asr::resolve_online_asr_provider_id(&request)?;
                 Ok(())
             }
@@ -62,21 +82,13 @@ impl StreamingAsrFactoryPort for DesktopStreamingAsrFactory {
         spec: &StreamingInferenceSpec,
         observer: Arc<dyn AsrRuntimeObserver>,
     ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
-        let request = spec.engine_request();
         match spec.engine() {
-            sona_core::ports::asr::AsrEngine::LocalSherpa => {
-                sona_sherpa_onnx::streaming::create_streaming_session(
-                    self.recognizer_pool.clone(),
-                    sona_core::ports::asr::LocalSherpaStreamingRequest::from_local_sherpa_request(
-                        pipeline_id.to_string(),
-                        request,
-                    )?,
-                    observer,
-                )
-                .await
-                .map(|session| session as Arc<dyn AsrStreamingSession>)
+            AsrEngine::Local => {
+                let factory = self.local_streaming_factory(spec)?;
+                factory.create(pipeline_id, spec, observer).await
             }
-            sona_core::ports::asr::AsrEngine::Online => {
+            AsrEngine::Online => {
+                let request = spec.engine_request();
                 sona_online_asr::resolve_online_asr_provider_id(&request)?;
                 sona_online_asr::OnlineAsrAdapter.create_streaming_session(
                     pipeline_id.to_string(),

@@ -1,10 +1,12 @@
 use super::factory::DesktopStreamingAsrFactory;
+use super::local_asr_registry;
 use super::metrics::{
     AsrInferenceMetric, AsrMetricsStore, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
     new_metrics_store, set_batch_inference_metric, set_live_inference_metric,
     set_model_load_metric, snapshot_metrics,
 };
 use sona_application::live_transcription::LiveTranscriptionCoordinator;
+use sona_application::local_asr::LocalAsrRegistry;
 use sona_core::ports::asr::{
     AsrPortError, AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest,
     StreamingAsrFactoryPort, StreamingInferenceSpec,
@@ -17,6 +19,7 @@ use tokio::sync::Mutex;
 
 pub struct AsrState {
     pub(crate) recognizer_pool: RecognizerPool,
+    pub(crate) registry: LocalAsrRegistry,
     pub(crate) metrics: AsrMetricsStore,
     pub(crate) live_coordinator: LiveTranscriptionCoordinator,
     external_sources: Mutex<HashMap<String, ExternalSourceState>>,
@@ -47,9 +50,11 @@ impl Default for AsrState {
 impl AsrState {
     pub fn new() -> Self {
         let recognizer_pool = RecognizerPool::new();
-        let factory = DesktopStreamingAsrFactory::new(recognizer_pool.clone());
+        let registry = local_asr_registry(recognizer_pool.clone());
+        let factory = DesktopStreamingAsrFactory::new(registry.clone());
         Self {
             recognizer_pool,
+            registry,
             metrics: new_metrics_store(),
             live_coordinator: factory.coordinator(),
             external_sources: Mutex::new(HashMap::new()),
@@ -76,7 +81,7 @@ impl AsrState {
         observer: Arc<dyn AsrRuntimeObserver>,
     ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
         let spec = StreamingInferenceSpec::from_request(request)?;
-        DesktopStreamingAsrFactory::new(self.recognizer_pool.clone())
+        DesktopStreamingAsrFactory::new(self.registry.clone())
             .create(session_id, &spec, observer)
             .await
     }

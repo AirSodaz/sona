@@ -55,7 +55,10 @@ impl LocalAsrEngine {
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "kebab-case")]
 pub enum AsrEngine {
-    LocalSherpa,
+    /// Local offline transcription; the serialized value stays
+    /// `local-sherpa` for compatibility with existing clients.
+    #[serde(rename = "local-sherpa")]
+    Local,
     Online,
 }
 
@@ -388,7 +391,7 @@ impl BatchTranscriptionRequest {
         } = request;
 
         match engine_config {
-            AsrEngineConfig::LocalSherpa {
+            AsrEngineConfig::Local {
                 local_engine,
                 model_path,
                 num_threads,
@@ -465,7 +468,7 @@ impl LocalSherpaStreamingRequest {
         } = request;
 
         match engine_config {
-            AsrEngineConfig::LocalSherpa {
+            AsrEngineConfig::Local {
                 local_engine,
                 model_path,
                 num_threads,
@@ -549,8 +552,14 @@ pub struct AsrTranscriptionRequest {
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(tag = "engine")]
 pub enum AsrEngineConfig {
+    /// Local offline transcription through a provider-crate engine.
+    ///
+    /// The wire tag stays `local-sherpa` for compatibility with persisted
+    /// configs and existing clients; the Rust-side variant name is
+    /// engine-neutral. Migration to a neutral wire tag is tracked for the
+    /// config-compat release.
     #[serde(rename = "local-sherpa", rename_all = "camelCase")]
-    LocalSherpa {
+    Local {
         #[serde(default)]
         local_engine: LocalAsrEngine,
         #[serde(default)]
@@ -576,6 +585,16 @@ pub enum AsrEngineConfig {
         #[serde(rename = "onlineProvider")]
         provider: OnlineAsrProviderRequest,
     },
+}
+
+impl AsrEngineConfig {
+    /// The selected local engine, or `None` for online configs.
+    pub fn local_engine(&self) -> Option<LocalAsrEngine> {
+        match self {
+            AsrEngineConfig::Local { local_engine, .. } => Some(*local_engine),
+            AsrEngineConfig::Online { .. } => None,
+        }
+    }
 }
 
 impl AsrTranscriptionRequest {
@@ -605,7 +624,7 @@ impl AsrTranscriptionRequest {
             postprocess_options,
             hotwords,
             speaker_processing,
-            engine_config: AsrEngineConfig::LocalSherpa {
+            engine_config: AsrEngineConfig::Local {
                 local_engine: LocalAsrEngine::SherpaOnnx,
                 model_id: None,
                 model_path,
@@ -623,14 +642,14 @@ impl AsrTranscriptionRequest {
 
     pub fn engine(&self) -> AsrEngine {
         match &self.engine_config {
-            AsrEngineConfig::LocalSherpa { .. } => AsrEngine::LocalSherpa,
+            AsrEngineConfig::Local { .. } => AsrEngine::Local,
             AsrEngineConfig::Online { .. } => AsrEngine::Online,
         }
     }
 
     pub fn provider_id(&self) -> &str {
         match &self.engine_config {
-            AsrEngineConfig::LocalSherpa { .. } => LOCAL_SHERPA_PROVIDER_ID,
+            AsrEngineConfig::Local { .. } => LOCAL_SHERPA_PROVIDER_ID,
             AsrEngineConfig::Online { provider } => provider.provider_id.as_str(),
         }
     }
@@ -746,7 +765,7 @@ pub fn validate_local_asr_mode(
     request: &AsrTranscriptionRequest,
     expected: AsrMode,
 ) -> Result<(), AsrPortError> {
-    if request.engine() != AsrEngine::LocalSherpa {
+    if request.engine() != AsrEngine::Local {
         return Err(AsrPortError::new(
             AsrPortErrorKind::Unsupported,
             "Unsupported ASR engine for local ASR adapter",
@@ -1006,10 +1025,10 @@ mod tests {
             None,
         );
 
-        assert_eq!(request.engine(), AsrEngine::LocalSherpa);
+        assert_eq!(request.engine(), AsrEngine::Local);
         assert!(matches!(
             request.engine_config,
-            AsrEngineConfig::LocalSherpa {
+            AsrEngineConfig::Local {
                 batch_segmentation_mode: BatchSegmentationMode::Vad,
                 ..
             }

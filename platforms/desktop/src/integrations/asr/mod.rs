@@ -1,3 +1,4 @@
+use sona_application::local_asr::LocalAsrRegistry;
 use sona_core::ports::asr::LOCAL_SHERPA_PROVIDER_ID;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
@@ -19,7 +20,7 @@ fn recognizer_output_event(instance_id: &str) -> String {
     format!("recognizer-output-{instance_id}")
 }
 
-pub use adapter::LocalAsrAdapter;
+pub use adapter::DesktopLocalProviderAdapter;
 pub use factory::DesktopStreamingAsrFactory;
 pub(crate) use observer::TauriAsrRuntimeObserver;
 pub use sona_core::models::config::ModelFileConfig;
@@ -55,7 +56,7 @@ fn asr_adapters() -> &'static HashMap<&'static str, Arc<dyn AsrProviderAdapter>>
     static ADAPTERS: OnceLock<HashMap<&'static str, Arc<dyn AsrProviderAdapter>>> = OnceLock::new();
     ADAPTERS.get_or_init(|| {
         let mut map: HashMap<&'static str, Arc<dyn AsrProviderAdapter>> = HashMap::new();
-        let local = LocalAsrAdapter;
+        let local = DesktopLocalProviderAdapter;
         map.insert(local.provider_id(), Arc::new(local));
         for capability in sona_online_asr::ONLINE_ASR_PROVIDER_CAPABILITIES {
             let adapter = online::DesktopOnlineAsrAdapter::new(capability.provider_id);
@@ -73,7 +74,7 @@ pub(crate) fn ensure_adapter(
     request: &AsrTranscriptionRequest,
 ) -> Result<Arc<dyn AsrProviderAdapter>, AsrPortError> {
     let provider_id = match request.engine() {
-        AsrEngine::LocalSherpa => LOCAL_SHERPA_PROVIDER_ID,
+        AsrEngine::Local => LOCAL_SHERPA_PROVIDER_ID,
         AsrEngine::Online => sona_online_asr::resolve_online_asr_provider_id(request)?,
     };
     asr_adapters().get(provider_id).cloned().ok_or_else(|| {
@@ -83,6 +84,18 @@ pub(crate) fn ensure_adapter(
         )
         .with_code("UNSUPPORTED_ONLINE_PROVIDER")
     })
+}
+
+pub(crate) fn local_asr_registry(recognizer_pool: RecognizerPool) -> LocalAsrRegistry {
+    LocalAsrRegistry::empty()
+        .register(Arc::new(sona_sherpa_onnx::SherpaOnnxAdapter::new(
+            recognizer_pool,
+        )))
+        .register(Arc::new(sona_llama_cpp::LlamaCppAdapter))
+}
+
+pub(crate) fn local_asr_registry_default() -> LocalAsrRegistry {
+    local_asr_registry(RecognizerPool::default())
 }
 
 pub(crate) fn recognizer_pool_for_app(app: Option<&AppHandle>) -> RecognizerPool {

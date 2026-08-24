@@ -38,7 +38,7 @@ fn local_engine_defaults_to_sherpa_for_legacy_requests() {
 
     assert!(matches!(
         request.engine_config,
-        AsrEngineConfig::LocalSherpa {
+        AsrEngineConfig::Local {
             local_engine: LocalAsrEngine::SherpaOnnx,
             ..
         }
@@ -70,14 +70,14 @@ fn local_sherpa_request_builder_preserves_shared_contract_fields() {
         Some("cuda".to_string()),
     );
 
-    assert_eq!(request.engine(), AsrEngine::LocalSherpa);
+    assert_eq!(request.engine(), AsrEngine::Local);
     assert_eq!(request.mode, AsrMode::Batch);
     assert_eq!(request.language, "ja");
     assert!(request.enable_itn);
     assert_eq!(request.hotwords.as_deref(), Some("hotwords"));
     assert!(matches!(
         request.engine_config,
-        AsrEngineConfig::LocalSherpa {
+        AsrEngineConfig::Local {
             ref model_path,
             num_threads,
             ref punctuation_model,

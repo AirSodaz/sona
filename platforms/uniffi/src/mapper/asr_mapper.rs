@@ -77,7 +77,7 @@ pub struct FfiVolcengineDoubaoAsrConfig {
 #[expect(dead_code)]
 pub fn asr_engine_to_ffi(engine: AsrEngine) -> FfiAsrEngine {
     match engine {
-        AsrEngine::LocalSherpa => FfiAsrEngine::LocalSherpa,
+        AsrEngine::Local => FfiAsrEngine::LocalSherpa,
         AsrEngine::Online => FfiAsrEngine::Online,
     }
 }

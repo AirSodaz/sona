@@ -217,9 +217,23 @@ export type AppLogLevel = "trace" | "debug" | "info" | "warn" | "error";
 
 export type AppTheme = "auto" | "light" | "dark";
 
-export type AsrEngine = "local-sherpa" | "online";
+export type AsrEngine =
+/**
+ *  Local offline transcription; the serialized value stays
+ *  `local-sherpa` for compatibility with existing clients.
+ */
+"local-sherpa" | "online";
 
-export type AsrEngineConfig = { engine: "local-sherpa"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
+export type AsrEngineConfig =
+/**
+ *  Local offline transcription through a provider-crate engine.
+ *
+ *  The wire tag stays `local-sherpa` for compatibility with persisted
+ *  configs and existing clients; the Rust-side variant name is
+ *  engine-neutral. Migration to a neutral wire tag is tracked for the
+ *  config-compat release.
+ */
+{ engine: "local-sherpa"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
 	encoder: string | null,
 	decoder: string | null,
 	model: string | null,

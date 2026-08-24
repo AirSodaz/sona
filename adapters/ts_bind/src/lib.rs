@@ -165,7 +165,20 @@ pub fn render_desktop_typescript_bindings() -> Result<String, TypescriptBindingE
         })?;
     output.push('\n');
     output.push_str(&render_rust_tauri_command_contract_map());
-    Ok(output)
+    Ok(trim_trailing_line_whitespace(&output))
+}
+
+/// The upstream renderer emits JSDoc blocks with trailing whitespace, which
+/// the repository whitespace guard rejects. Normalize once here so the
+/// committed bindings and the renderer output always agree byte-for-byte.
+fn trim_trailing_line_whitespace(rendered: &str) -> String {
+    let mut cleaned = rendered
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join("\n");
+    cleaned.push('\n');
+    cleaned
 }
 
 pub fn validate_typescript_safe_integers<T>(value: &T) -> Result<(), TypescriptBindingError>
