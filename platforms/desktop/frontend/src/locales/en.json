@@ -312,8 +312,10 @@
         "redo": "Redo",
         "bold": "Bold",
         "italic": "Italic",
-        "underline": "Underline",
-        "split_segment": "Split segment"
+  "underline": "Underline",
+  "strikethrough": "Strikethrough",
+  "code": "Code",
+  "split_segment": "Split segment"
     },
     "export": {
         "button": "Export",

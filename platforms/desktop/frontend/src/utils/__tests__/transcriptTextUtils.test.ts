@@ -103,6 +103,16 @@ describe('transcriptTextUtils', () => {
     expect(sanitizeTranscriptHtml('Line1<br>Line2')).toBe('Line1<br>Line2');
   });
 
+  it('preserves <s> and <code> tags while stripping non-class attributes', () => {
+    expect(sanitizeTranscriptHtml('<s>gone</s>')).toBe('<s>gone</s>');
+    expect(
+      sanitizeTranscriptHtml('<code spellcheck="false" style="color: red">x=1</code>')
+    ).toBe('<code>x=1</code>');
+    expect(
+      sanitizeTranscriptHtml('<code class="editor-code" spellcheck="false">x=1</code>')
+    ).toBe('<code class="editor-code">x=1</code>');
+  });
+
   it('escapes literal < followed by non-tag content', () => {
     expect(sanitizeTranscriptHtml('2 < 3 and < something > else')).toBe(
       '2 &lt; 3 and &lt; something &gt; else',
@@ -146,6 +156,19 @@ describe('transcriptTextUtils', () => {
       { text: 'Hello', timing: { timestamp: 5 } },
       { text: ' ', timing: { timestamp: 5 } },
       { text: 'extra', timing: { timestamp: 5 } },
+    ]);
+  });
+
+  it('aligns words wrapped in strikethrough and code tags', () => {
+    const result = alignTextToTimedTokens('<s>old</s> <code>value</code>', [
+      { text: 'old', timing: { timestamp: 1 } },
+      { text: 'value', timing: { timestamp: 2 } },
+    ]);
+
+    expect(result).toEqual([
+      { text: '<s>old</s>', timing: { timestamp: 1 } },
+      { text: ' ', timing: { timestamp: 2 } },
+      { text: '<code>value</code>', timing: { timestamp: 2 } },
     ]);
   });
 });

@@ -264,6 +264,45 @@ describe('SegmentEditor', () => {
     }
   });
 
+  it('serializes strikethrough and code formatting into saved HTML', async () => {
+    const { input } = renderEditor();
+    const editor = await waitFor(() => getActiveEditor()!);
+
+    await act(async () => {
+      await new Promise<void>((resolve) => editor.update(() => {
+        const text = $getRoot().getFirstDescendant();
+        if ($isTextNode(text)) text.select(6, 11);
+      }, { onUpdate: resolve }));
+    });
+
+    await act(async () => {
+      editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough');
+      editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'code');
+    });
+
+    fireEvent.blur(input);
+
+    expect(onSave).toHaveBeenCalledOnce();
+    const savedHtml = vi.mocked(onSave).mock.calls[0][0];
+    expect(savedHtml).toContain('<s>');
+    expect(savedHtml).toContain('<code');
+    expect(savedHtml.replace(/<[^>]+>/g, '').trim()).toBe('Hello world');
+  });
+
+  it('restores strikethrough and code formats from saved HTML', async () => {
+    renderEditor('<p>Hello <s>world</s> <code>x=1</code></p>');
+    const editor = await waitFor(() => getActiveEditor()!);
+
+    await waitFor(() => editor.getEditorState().read(() => {
+      const texts = $getRoot().getAllTextNodes();
+      expect(texts.map((node) => node.getTextContent())).toEqual(['Hello ', 'world', ' ', 'x=1']);
+      expect(texts[1].hasFormat('strikethrough')).toBe(true);
+      expect(texts[1].hasFormat('code')).toBe(false);
+      expect(texts[3].hasFormat('code')).toBe(true);
+      expect(texts[3].hasFormat('strikethrough')).toBe(false);
+    }));
+  });
+
   it('keeps text unchanged and logs when cutting cannot write to the clipboard', async () => {
     const cutError = new Error('clipboard denied');
     vi.mocked(navigator.clipboard.writeText).mockRejectedValueOnce(cutError);

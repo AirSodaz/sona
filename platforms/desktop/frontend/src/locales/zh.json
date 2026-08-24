@@ -312,8 +312,10 @@
         "redo": "重做",
         "bold": "加粗",
         "italic": "斜体",
-        "underline": "下划线",
-        "split_segment": "拆分段落"
+  "underline": "下划线",
+  "strikethrough": "删除线",
+  "code": "行内代码",
+  "split_segment": "拆分段落"
     },
     "export": {
         "button": "导出",

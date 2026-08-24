@@ -1,7 +1,7 @@
 const NORMALIZE_REGEX = /[^\p{L}\p{N}]/gu;
 const PUNCTUATION_ONLY_REGEX = /^[^\p{L}\p{N}]+$/u;
 const WHITESPACE_ONLY_REGEX = /^\s+$/;
-const LEXER_REGEX = /(<\/?(?:b|i|u|strong|em)>)|(<\/?p>)|(\s+)|([\p{sc=Han}])|([^<\s\p{sc=Han}]+)|(<)/gui;
+const LEXER_REGEX = /(<\/?(?:b|i|u|s|strong|em|code)>)|(<\/?p>)|(\s+)|([\p{sc=Han}])|([^<\s\p{sc=Han}]+)|(<)/gui;
 
 export interface TimedTextToken<Timing> {
   text: string;
@@ -18,7 +18,7 @@ interface FormattedTextUnit {
   normalizedText: string;
 }
 
-const SAFE_TAGS = new Set(['strong', 'em', 'u', 'b', 'i', 'span', 'p', 'br']);
+const SAFE_TAGS = new Set(['strong', 'em', 'u', 'b', 'i', 's', 'code', 'span', 'p', 'br']);
 
 /**
  * Sanitizes HTML for safe rendering via dangerouslySetInnerHTML.

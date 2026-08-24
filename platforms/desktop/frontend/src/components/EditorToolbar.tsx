@@ -17,6 +17,8 @@ import {
     BoldIcon,
     ItalicIcon,
     UnderlineIcon,
+    StrikethroughIcon,
+    CodeIcon,
     ReturnIcon
 } from './Icons';
 
@@ -59,6 +61,12 @@ export function EditorToolbar(): React.JSX.Element | null {
                 break;
             case 'underline':
                 editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'underline');
+                break;
+            case 'strikethrough':
+                editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough');
+                break;
+            case 'code':
+                editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'code');
                 break;
             case 'insertLineBreak':
                 if (editingSegmentId) {
@@ -178,6 +186,26 @@ export function EditorToolbar(): React.JSX.Element | null {
                         aria-label={t('editor.underline', 'Underline')}
                     >
                         <UnderlineIcon />
+                    </button>
+                    <button
+                        className="btn-icon toolbar-btn"
+                        onMouseDown={handleMouseDown}
+                        onClick={() => handleAction('strikethrough')}
+                        data-tooltip={t('editor.strikethrough', 'Strikethrough')}
+                        data-tooltip-pos="top"
+                        aria-label={t('editor.strikethrough', 'Strikethrough')}
+                    >
+                        <StrikethroughIcon />
+                    </button>
+                    <button
+                        className="btn-icon toolbar-btn"
+                        onMouseDown={handleMouseDown}
+                        onClick={() => handleAction('code')}
+                        data-tooltip={t('editor.code', 'Code')}
+                        data-tooltip-pos="top"
+                        aria-label={t('editor.code', 'Code')}
+                    >
+                        <CodeIcon />
                     </button>
 
                     <div className="toolbar-divider" />

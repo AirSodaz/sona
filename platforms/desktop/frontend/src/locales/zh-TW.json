@@ -313,6 +313,8 @@
         "bold": "加粗",
         "italic": "斜體",
         "underline": "底線",
+        "strikethrough": "刪除線",
+        "code": "行內程式碼",
         "split_segment": "拆分段落"
     },
     "export": {

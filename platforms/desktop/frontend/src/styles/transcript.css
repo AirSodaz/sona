@@ -510,6 +510,22 @@
   text-decoration: underline;
 }
 
+.editor-strikethrough {
+  text-decoration: line-through;
+}
+
+.editor-underline-strikethrough {
+  text-decoration: underline line-through;
+}
+
+.editor-code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--color-bg-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0 0.25em;
+}
+
 .segment-input:focus {
   outline: none;
   box-shadow: none;

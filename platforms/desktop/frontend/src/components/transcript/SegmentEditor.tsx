@@ -51,7 +51,7 @@ export interface SegmentEditorProps {
 /**
  * Lexical-based rich text editor for a single transcript segment.
  * Replaces the deprecated ContentEditable + execCommand approach.
- * Supports bold, italic, underline formatting with built-in undo/redo.
+ * Supports bold, italic, underline, strikethrough and code formatting with built-in undo/redo.
  */
 export function SegmentEditor({
   segmentId,
@@ -83,6 +83,9 @@ export function SegmentEditor({
         bold: 'editor-bold',
         italic: 'editor-italic',
         underline: 'editor-underline',
+        strikethrough: 'editor-strikethrough',
+        underlineStrikethrough: 'editor-underline-strikethrough',
+        code: 'editor-code',
       },
     },
     onError: (error: Error) => {

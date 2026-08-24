@@ -176,6 +176,12 @@ describe('EditorToolbar', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Underline' }));
         expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'underline');
 
+        fireEvent.click(screen.getByRole('button', { name: 'Strikethrough' }));
+        expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'strikethrough');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Code' }));
+        expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'code');
+
         fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
         expect(dispatchMock).toHaveBeenCalledWith(UNDO_COMMAND, undefined);
 
