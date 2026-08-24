@@ -51,7 +51,7 @@ export class RetranscribeService {
         }
 
         // Configure transcription service for batch mode
-        if (batchAsr.engine === 'local-sherpa') {
+        if (batchAsr.engine === 'local') {
             this.ports.transcriptionService.setModelPath(batchAsr.modelPath);
         }
         this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);

@@ -497,19 +497,19 @@ describe('TranscriptionService voice typing diagnostics', () => {
                         profileId: 'volcengine-doubao-default',
                     },
                     caption: {
-                        engine: 'local-sherpa',
+                        engine: 'local',
                         mode: 'streaming',
                         modelId: null,
                         modelPath: '',
                     },
                     voiceTyping: {
-                        engine: 'local-sherpa',
+                        engine: 'local',
                         mode: 'streaming',
                         modelId: null,
                         modelPath: '',
                     },
                     batch: {
-                        engine: 'local-sherpa',
+                        engine: 'local',
                         mode: 'batch',
                         modelId: null,
                         modelPath: '',
@@ -565,19 +565,19 @@ describe('TranscriptionService voice typing diagnostics', () => {
             asr: {
                 selections: {
                     live: {
-                        engine: 'local-sherpa',
+                        engine: 'local',
                         mode: 'streaming',
                         modelId: null,
                         modelPath: '',
                     },
                     caption: {
-                        engine: 'local-sherpa',
+                        engine: 'local',
                         mode: 'streaming',
                         modelId: null,
                         modelPath: '',
                     },
                     voiceTyping: {
-                        engine: 'local-sherpa',
+                        engine: 'local',
                         mode: 'streaming',
                         modelId: null,
                         modelPath: '',

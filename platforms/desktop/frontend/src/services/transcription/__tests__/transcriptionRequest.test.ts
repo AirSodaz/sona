@@ -67,7 +67,7 @@ describe('transcriptionRequest helpers', () => {
     });
 
     expect(asrRequest).toEqual(expect.objectContaining({
-      engine: 'local-sherpa',
+      engine: 'local',
       mode: 'streaming',
       modelPath: '/models/runtime-streaming',
       language: 'ja',
@@ -182,7 +182,7 @@ describe('transcriptionRequest helpers', () => {
       asr: {
         selections: {
           batch: {
-            engine: 'local-sherpa',
+            engine: 'local',
             mode: 'batch',
             modelId: 'qwen3-asr-0.6b-q8-gguf',
             modelPath: '/models/qwen3-asr-0.6b-q8-gguf',

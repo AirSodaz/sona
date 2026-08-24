@@ -33,7 +33,7 @@ export function resolveVoiceTypingAsr(config: AppConfig): AsrTranscriptionReques
 }
 
 export function buildVoiceTypingAsrSignature(asr: AsrTranscriptionRequest): string {
-  if (asr.engine === 'local-sherpa') {
+  if (asr.engine === 'local') {
     return JSON.stringify({
       engine: asr.engine,
       mode: asr.mode,

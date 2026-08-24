@@ -1,6 +1,7 @@
 use sona_core::ports::asr::{
     AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,
-    GROQ_WHISPER_PROVIDER_ID, LocalAsrEngine, MISTRAL_VOXTRAL_PROVIDER_ID,
+    GROQ_WHISPER_PROVIDER_ID, LocalAsrEngine, LOCAL_SHERPA_ONNX_PROVIDER_ID,
+    MISTRAL_VOXTRAL_PROVIDER_ID,
     OnlineAsrProviderRequest, VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
     online_asr_providers,
 };
@@ -44,6 +45,38 @@ fn local_engine_defaults_to_sherpa_for_legacy_requests() {
         }
     ));
 }
+#[test]
+fn local_engine_serializes_neutral_tag_and_accepts_legacy_alias() {
+    let request = AsrTranscriptionRequest::local_sherpa(
+        AsrMode::Batch,
+        "models/legacy".to_string(),
+        4,
+        false,
+        "auto".to_string(),
+        None,
+        None,
+        5.0,
+        "sensevoice".to_string(),
+        None,
+        None,
+        TranscriptNormalizationOptions { enable_timeline: false },
+        TranscriptPostprocessOptions::default(),
+        None,
+        None,
+    );
+
+    let json = serde_json::to_value(&request).unwrap();
+    assert_eq!(json["engine"], "local");
+    let decoded: AsrTranscriptionRequest = serde_json::from_value(json).unwrap();
+    assert_eq!(decoded.engine(), AsrEngine::Local);
+
+    // The legacy wire tag keeps deserializing until the alias is retired.
+    let mut legacy = serde_json::to_value(&request).unwrap();
+    legacy["engine"] = serde_json::json!("local-sherpa");
+    let decoded_legacy: AsrTranscriptionRequest = serde_json::from_value(legacy).unwrap();
+    assert_eq!(decoded_legacy.engine(), AsrEngine::Local);
+}
+
 use sona_core::transcription::postprocess::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions,
 };
@@ -197,6 +230,6 @@ fn asr_request_provider_id_is_derived_from_core_engine_config() {
         },
     };
 
-    assert_eq!(local.provider_id(), "local_sherpa");
+    assert_eq!(local.provider_id(), LOCAL_SHERPA_ONNX_PROVIDER_ID);
     assert_eq!(online.provider_id(), GROQ_WHISPER_PROVIDER_ID);
 }

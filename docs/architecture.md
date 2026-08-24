@@ -202,6 +202,13 @@ These items are explicit and allowed during the current compatibility window. Th
   - Desktop frontend product paths still named Project: `platforms/desktop/frontend/src/types/project.ts`, `services/projectService.ts`, `stores/projectStore.ts`, `components/projects/*`, and `components/ProjectsView.tsx`.
 - **Policy:** keep public Project names during the compatibility window; physical frontend/API renames are a later slice.
 
+### Local ASR wire tag alias
+
+- **Canonical tag:** `local` (`AsrEngineConfig::Local`, `AsrEngine::Local`).
+- **Deserialization alias:** `local-sherpa` keeps configs and API payloads written by older versions parseable. Every write path emits `local`; persisted selections self-heal on the next config save.
+- **Derived provider ids:** local requests resolve to `local_sherpa_onnx` or `local_llama_cpp` instead of the former `local_sherpa`.
+- **Removal policy:** drop the serde aliases in a dedicated migration slice once telemetry/issue reports show no persisted `local-sherpa` selections remain in the wild; contract tests must cover both tags until then.
+
 ### UniFFI typed-contract inventory
 
 Every `*_json` UniFFI export is classified in `scripts/multisurface-contracts.test.js` (`UNIFFI_JSON_ONLY_EXPORTS`). A new `*_json` export without a `*_v1` sibling fails that test until it is classified.

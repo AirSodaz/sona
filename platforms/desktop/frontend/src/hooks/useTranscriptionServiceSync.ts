@@ -24,13 +24,13 @@ export function useTranscriptionServiceSync() {
             }
 
             try {
-                if (liveAsr.engine === 'local-sherpa') {
+                if (liveAsr.engine === 'local') {
                     transcriptionService.setModelPath(liveAsr.modelPath);
                 }
                 transcriptionService.setLanguage(config.language);
                 transcriptionService.setEnableITN(config.enableITN ?? false);
 
-                if (captionAsr.engine === 'local-sherpa') {
+                if (captionAsr.engine === 'local') {
                     captionTranscriptionService.setModelPath(captionAsr.modelPath);
                 }
                 captionTranscriptionService.setLanguage(config.language);

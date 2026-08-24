@@ -124,7 +124,7 @@ pub async fn handle_transcribe(
     let file_path = temp_file_path.ok_or((StatusCode::BAD_REQUEST, "Missing file".to_string()))?;
     let m_id = model_id.ok_or((StatusCode::BAD_REQUEST, "Missing model_id".to_string()))?;
 
-    let mut engine = "LocalSherpa".to_string();
+    let mut engine = "Local".to_string();
     let mut online_provider_id = None;
     let mut online_provider_config = None;
 

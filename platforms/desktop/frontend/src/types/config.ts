@@ -77,7 +77,7 @@ export interface AudioConfig {
 // Local model paths and management
 // ---------------------------------------------------------------------------
 
-export type AsrEngine = 'local-sherpa' | 'online';
+export type AsrEngine = 'local' | 'online';
 export type AsrMode = 'streaming' | 'batch';
 export type AsrSelectionSlot = 'live' | 'caption' | 'voiceTyping' | 'batch';
 export type OnlineAsrProviderId = string;

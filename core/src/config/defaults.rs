@@ -91,7 +91,7 @@ pub fn default_asr_config() -> Value {
         selections.insert(
             key.to_string(),
             json!({
-                "engine": "local-sherpa",
+                "engine": "local",
                 "mode": "streaming",
                 "modelId": null,
                 "modelPath": ""
@@ -101,7 +101,7 @@ pub fn default_asr_config() -> Value {
     selections.insert(
         "batch".to_string(),
         json!({
-            "engine": "local-sherpa",
+            "engine": "local",
             "mode": "batch",
             "modelId": null,
             "modelPath": ""

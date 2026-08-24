@@ -66,14 +66,14 @@ export function buildModelRemovalConfigPatch(
 
   if (config.streamingModelPath === deletedPath) {
     updates.streamingModelPath = '';
-    asr.selections.live = { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' };
-    asr.selections.caption = { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' };
-    asr.selections.voiceTyping = { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' };
+    asr.selections.live = { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' };
+    asr.selections.caption = { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' };
+    asr.selections.voiceTyping = { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' };
   }
 
   if (config.batchModelPath === deletedPath) {
     updates.batchModelPath = '';
-    asr.selections.batch = { engine: 'local-sherpa', mode: 'batch', modelId: null, modelPath: '' };
+    asr.selections.batch = { engine: 'local', mode: 'batch', modelId: null, modelPath: '' };
   }
 
   if (config.punctuationModelPath === deletedPath) {

@@ -46,7 +46,7 @@ function applyRuntimeOptions(
   modelPathOverride: string | undefined,
   enableItn: boolean,
 ): AsrTranscriptionRequest {
-  if (request.engine === 'local-sherpa') {
+  if (request.engine === 'local') {
     return {
       ...request,
       modelPath: modelPathOverride ? modelPathOverride : request.modelPath,

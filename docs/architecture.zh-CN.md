@@ -201,6 +201,13 @@ CLI 定位为无状态转写 Host：应用持久化、History/Tag、Online LLM�
   - Desktop 前端仍使用 Project 产品路径： `platforms/desktop/frontend/src/types/project.ts`、 `services/projectService.ts`、`stores/projectStore.ts`、 `components/projects/*`、以及 `components/ProjectsView.tsx`。
 - **策略：** 兼容窗口内保留公开 Project 名称；前端/API 物理重命名属于后续切片。
 
+### 本地 ASR wire tag 别名
+
+- **规范 tag：** `local`（`AsrEngineConfig::Local`、`AsrEngine::Local`）。
+- **反序列化别名：** `local-sherpa` 保证旧版本写入的配置与 API 载荷仍可解析。所有写路径输出 `local`；持久化的选择会在下次配置保存时自愈为新 tag。
+- **派生 provider id：** 本地请求解析为 `local_sherpa_onnx` 或 `local_llama_cpp`，取代旧的 `local_sherpa`。
+- **移除策略：** 在专门的迁移切片中移除 serde 别名，前提是遥测/issue 表明野外已无 `local-sherpa` 持久化选择；在此之前契约测试必须同时覆盖两种 tag。
+
 ### UniFFI 类型化契约清单
 
 每个 `*_json` UniFFI 导出都在 `scripts/multisurface-contracts.test.js` 的 `UNIFFI_JSON_ONLY_EXPORTS` 中分类。新增没有 `*_v1` 兄弟函数的 `*_json` 导出会让该测试失败，直到它被分类为止。

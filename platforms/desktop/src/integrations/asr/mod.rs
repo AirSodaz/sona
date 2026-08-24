@@ -1,5 +1,5 @@
 use sona_application::local_asr::LocalAsrRegistry;
-use sona_core::ports::asr::LOCAL_SHERPA_PROVIDER_ID;
+use sona_core::ports::asr::LOCAL_LLAMA_CPP_PROVIDER_ID;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use tauri::{AppHandle, Manager};
@@ -58,6 +58,9 @@ fn asr_adapters() -> &'static HashMap<&'static str, Arc<dyn AsrProviderAdapter>>
         let mut map: HashMap<&'static str, Arc<dyn AsrProviderAdapter>> = HashMap::new();
         let local = DesktopLocalProviderAdapter;
         map.insert(local.provider_id(), Arc::new(local));
+        // The local provider adapter dispatches by inner engine, so register
+        // it under every derived local engine id.
+        map.insert(LOCAL_LLAMA_CPP_PROVIDER_ID, Arc::new(DesktopLocalProviderAdapter));
         for capability in sona_online_asr::ONLINE_ASR_PROVIDER_CAPABILITIES {
             let adapter = online::DesktopOnlineAsrAdapter::new(capability.provider_id);
             map.insert(adapter.provider_id(), Arc::new(adapter));
@@ -74,13 +77,13 @@ pub(crate) fn ensure_adapter(
     request: &AsrTranscriptionRequest,
 ) -> Result<Arc<dyn AsrProviderAdapter>, AsrPortError> {
     let provider_id = match request.engine() {
-        AsrEngine::Local => LOCAL_SHERPA_PROVIDER_ID,
+        AsrEngine::Local => request.provider_id(),
         AsrEngine::Online => sona_online_asr::resolve_online_asr_provider_id(request)?,
     };
     asr_adapters().get(provider_id).cloned().ok_or_else(|| {
         AsrPortError::new(
             sona_core::ports::asr::AsrPortErrorKind::Unsupported,
-            format!("不支持的在线 ASR provider：{provider_id}"),
+            format!("不支持的 ASR provider：{provider_id}"),
         )
         .with_code("UNSUPPORTED_ONLINE_PROVIDER")
     })
@@ -107,7 +110,7 @@ pub(crate) fn recognizer_pool_for_app(app: Option<&AppHandle>) -> RecognizerPool
 mod tests {
     use super::*;
     use sona_core::ports::asr::{
-        AsrEngineConfig, AsrMode, GROQ_WHISPER_PROVIDER_ID, LOCAL_SHERPA_PROVIDER_ID,
+        AsrEngineConfig, AsrMode, GROQ_WHISPER_PROVIDER_ID, LOCAL_SHERPA_ONNX_PROVIDER_ID,
         OnlineAsrProviderRequest, VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
 
@@ -170,7 +173,7 @@ mod tests {
     #[test]
     fn desktop_registry_selects_local_streaming() {
         let adapter = ensure_adapter(&local_request()).unwrap();
-        assert_eq!(adapter.provider_id(), LOCAL_SHERPA_PROVIDER_ID);
+        assert_eq!(adapter.provider_id(), LOCAL_SHERPA_ONNX_PROVIDER_ID);
     }
 
     #[test]

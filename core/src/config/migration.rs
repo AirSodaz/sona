@@ -872,7 +872,7 @@ fn has_valid_asr_config(config: &Value) -> bool {
             return false;
         };
         let engine = selection.get("engine").and_then(Value::as_str);
-        if !matches!(engine, Some("local-sherpa") | Some("online")) {
+        if !matches!(engine, Some("local") | Some("local-sherpa") | Some("online")) {
             return false;
         }
         if selection.get("mode").and_then(Value::as_str) != Some(expected_mode) {

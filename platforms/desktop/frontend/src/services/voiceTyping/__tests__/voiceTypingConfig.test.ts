@@ -16,7 +16,7 @@ describe('voiceTypingConfig', () => {
       asr: {
         selections: {
           voiceTyping: {
-            engine: 'local-sherpa',
+            engine: 'local',
             mode: 'streaming',
             modelId: 'live-model',
             modelPath: '/models/live',
@@ -27,7 +27,7 @@ describe('voiceTypingConfig', () => {
     const asr = resolveAsrTranscriptionRequest(config, 'voiceTyping');
 
     expect(buildVoiceTypingAsrSignature(asr)).toBe(JSON.stringify({
-      engine: 'local-sherpa',
+      engine: 'local',
       mode: 'streaming',
       modelPath: '/models/live',
 

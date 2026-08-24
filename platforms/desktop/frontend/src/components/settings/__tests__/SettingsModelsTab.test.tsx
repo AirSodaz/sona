@@ -415,9 +415,9 @@ describe('SettingsModelsTab speaker model selections', () => {
                     }
                 },
                 selections: {
-                    live: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
-                    caption: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
-                    voiceTyping: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                    live: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+                    caption: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+                    voiceTyping: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
                     batch: {
                         engine: 'online',
                         mode: 'batch',
@@ -443,9 +443,9 @@ describe('SettingsModelsTab speaker model selections', () => {
         setTestConfig({
             asr: {
                 selections: {
-                    live: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
-                    caption: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
-                    voiceTyping: { engine: 'local-sherpa', mode: 'streaming', modelId: null, modelPath: '' },
+                    live: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+                    caption: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+                    voiceTyping: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
                     batch: {
                         engine: 'online',
                         mode: 'batch',

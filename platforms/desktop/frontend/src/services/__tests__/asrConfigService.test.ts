@@ -75,25 +75,25 @@ function buildAsrConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     asr: {
       selections: {
         live: {
-          engine: 'local-sherpa',
+          engine: 'local',
           mode: 'streaming',
           modelId: 'local-live',
           modelPath: 'C:/models/local-live',
         },
         caption: {
-          engine: 'local-sherpa',
+          engine: 'local',
           mode: 'streaming',
           modelId: 'local-live',
           modelPath: 'C:/models/local-live',
         },
         voiceTyping: {
-          engine: 'local-sherpa',
+          engine: 'local',
           mode: 'streaming',
           modelId: 'local-live',
           modelPath: 'C:/models/local-live',
         },
         batch: {
-          engine: 'local-sherpa',
+          engine: 'local',
           mode: 'batch',
           modelId: 'local-batch',
           modelPath: 'C:/models/local-batch',
@@ -137,7 +137,7 @@ describe('asrConfigService', () => {
     const request = resolveAsrTranscriptionRequest(buildAsrConfig(), 'live');
 
     expect(request).toMatchObject({
-      engine: 'local-sherpa',
+      engine: 'local',
       mode: 'streaming',
       modelId: 'local-live',
       modelPath: 'C:/models/local-live',
@@ -177,7 +177,7 @@ describe('asrConfigService', () => {
     const request = resolveAsrTranscriptionRequest(buildAsrConfig(), 'batch');
 
     expect(request).toMatchObject({
-      engine: 'local-sherpa',
+      engine: 'local',
       mode: 'batch',
       modelId: 'local-batch',
       modelPath: 'C:/models/local-batch',
@@ -210,7 +210,7 @@ describe('asrConfigService', () => {
     }), 'batch');
 
     expect(request).toMatchObject({
-      engine: 'local-sherpa',
+      engine: 'local',
       mode: 'batch',
       modelId: 'local-batch',
       modelPath: 'C:/models/local-batch',
@@ -230,7 +230,7 @@ describe('asrConfigService', () => {
     }), 'voiceTyping');
 
     expect(request).toMatchObject({
-      engine: 'local-sherpa',
+      engine: 'local',
       mode: 'streaming',
       modelPath: 'C:/legacy/live',
       modelType: 'sensevoice',
@@ -247,7 +247,7 @@ describe('asrConfigService', () => {
     expect(patch.batchModelPath).toBe('D:/models/local-batch');
     expect(patch.streamingModelPath).toBeUndefined();
     expect(patch.asr?.selections.batch).toMatchObject({
-      engine: 'local-sherpa',
+      engine: 'local',
       mode: 'batch',
       modelId: 'local-batch',
       modelPath: 'D:/models/local-batch',
@@ -382,7 +382,7 @@ describe('asrConfigService', () => {
           caption: createVolcengineDoubaoSelection('streaming'),
           voiceTyping: createVolcengineDoubaoSelection('streaming'),
           batch: {
-            engine: 'local-sherpa',
+            engine: 'local',
             mode: 'batch',
             modelId: 'local-batch',
             modelPath: 'C:/models/local-batch',

@@ -1404,7 +1404,7 @@ describe('tauri boundary wrappers', () => {
         }],
       },
       asrRequest: {
-        engine: 'local-sherpa',
+        engine: 'local',
         mode: 'batch',
         modelId: null,
         modelPath: 'C:/models/batch',
@@ -1443,7 +1443,7 @@ describe('tauri boundary wrappers', () => {
         }],
       },
       asrRequest: expect.objectContaining({
-        engine: 'local-sherpa',
+        engine: 'local',
         localEngine: 'sherpa-onnx',
         mode: 'batch',
         speakerProcessing: null,
@@ -1717,6 +1717,9 @@ describe('tauri boundary wrappers', () => {
       updatedAt: 100,
       hasSourceFile: true,
       canResume: true,
+      attemptCount: 0,
+      lastError: null,
+      retryable: false,
       exportConfig: null,
       stageConfig: null,
     };
@@ -1728,6 +1731,8 @@ describe('tauri boundary wrappers', () => {
       progress: 10,
       segments: [segment],
       projectId: null,
+      attemptCount: 0,
+      retryable: false,
     };
     vi.mocked(invoke).mockResolvedValueOnce({ version: 1, updatedAt: 100, items: [item] });
 

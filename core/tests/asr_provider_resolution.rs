@@ -1,6 +1,6 @@
 use sona_core::ports::asr::{
     AsrEngineConfig, AsrMode, AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID,
-    LOCAL_SHERPA_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest,
+    LOCAL_SHERPA_ONNX_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest,
     VOLCENGINE_DOUBAO_PROVIDER_ID,
 };
 use sona_core::transcription::postprocess::{
@@ -11,7 +11,7 @@ use sona_core::transcription::provider_resolution::{
 };
 
 const DESKTOP_CAPABILITIES: [AsrProviderCapability<'static>; 4] = [
-    AsrProviderCapability::new(LOCAL_SHERPA_PROVIDER_ID, true),
+    AsrProviderCapability::new(LOCAL_SHERPA_ONNX_PROVIDER_ID, true),
     AsrProviderCapability::new(VOLCENGINE_DOUBAO_PROVIDER_ID, true),
     AsrProviderCapability::new(GROQ_WHISPER_PROVIDER_ID, false),
     AsrProviderCapability::new(MISTRAL_VOXTRAL_PROVIDER_ID, false),
@@ -73,7 +73,7 @@ fn selects_declared_local_provider() {
     assert_eq!(
         resolve_asr_provider_id(&local_request(AsrMode::Streaming), &DESKTOP_CAPABILITIES,)
             .unwrap(),
-        LOCAL_SHERPA_PROVIDER_ID,
+        LOCAL_SHERPA_ONNX_PROVIDER_ID,
     );
 }
 

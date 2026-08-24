@@ -50,25 +50,25 @@ export const DEFAULT_CONFIG: AppConfig = {
   asr: {
     selections: {
       live: {
-        engine: 'local-sherpa',
+        engine: 'local',
         mode: 'streaming',
         modelId: null,
         modelPath: '',
       },
       caption: {
-        engine: 'local-sherpa',
+        engine: 'local',
         mode: 'streaming',
         modelId: null,
         modelPath: '',
       },
       voiceTyping: {
-        engine: 'local-sherpa',
+        engine: 'local',
         mode: 'streaming',
         modelId: null,
         modelPath: '',
       },
       batch: {
-        engine: 'local-sherpa',
+        engine: 'local',
         mode: 'batch',
         modelId: null,
         modelPath: '',

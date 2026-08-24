@@ -29,7 +29,7 @@ function finiteNumber(value: number, path: string): number {
 }
 
 function normalizeModelFileConfig(
-  config: Extract<AsrTranscriptionRequest, { engine: 'local-sherpa' }>['fileConfig'],
+  config: Extract<AsrTranscriptionRequest, { engine: 'local' }>['fileConfig'],
 ): CoreModelFileConfig | undefined {
   if (!config) {
     return undefined;
@@ -74,22 +74,18 @@ export function normalizeAsrRequest(
   const fileConfig = normalizeModelFileConfig(request.fileConfig);
   return {
     ...common,
-    engine: 'local-sherpa',
+    engine: 'local',
     localEngine: request.localEngine ?? 'sherpa-onnx',
-    ...(request.modelId !== undefined ? { modelId: request.modelId } : {}),
+    modelId: request.modelId ?? null,
     modelPath: request.modelPath,
     numThreads: request.numThreads,
     punctuationModel: request.punctuationModel,
     vadModel: request.vadModel,
     vadBuffer: finiteNumber(request.vadBuffer, 'asrRequest.vadBuffer'),
-    ...(request.batchSegmentationMode !== undefined
-      ? { batchSegmentationMode: request.batchSegmentationMode }
-      : {}),
+    batchSegmentationMode: request.batchSegmentationMode ?? 'vad',
     modelType: request.modelType,
-    ...(fileConfig ? { fileConfig } : {}),
-    ...(request.gpuAcceleration !== undefined
-      ? { gpuAcceleration: request.gpuAcceleration }
-      : {}),
+    fileConfig: fileConfig ?? null,
+    gpuAcceleration: request.gpuAcceleration ?? null,
   };
 }
 

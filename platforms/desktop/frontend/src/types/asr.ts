@@ -31,7 +31,7 @@ export type AsrTranscriptionRequestBase = {
 };
 
 export type LocalAsrRequest = AsrTranscriptionRequestBase & {
-  engine: 'local-sherpa';
+  engine: 'local';
   localEngine?: LocalAsrEngine;
   modelId: string | null;
   modelPath: string;
@@ -49,7 +49,5 @@ export type OnlineAsrRequest = AsrTranscriptionRequestBase & {
   engine: 'online';
   onlineProvider: OnlineAsrProviderRequest;
 };
-
-export type LocalSherpaAsrRequest = LocalAsrRequest;
 
 export type AsrTranscriptionRequest = LocalAsrRequest | OnlineAsrRequest;

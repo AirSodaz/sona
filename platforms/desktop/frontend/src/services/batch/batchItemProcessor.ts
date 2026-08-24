@@ -94,7 +94,7 @@ export class BatchItemProcessor {
         item.filePath,
         currentSegments,
         this.calculateDuration(currentSegments),
-        batchAsr.engine === 'local-sherpa' && !isLlamaCpp ? tempWavPath : undefined,
+        batchAsr.engine === 'local' && !isLlamaCpp ? tempWavPath : undefined,
         item.tagIds ?? (item.projectId ? [item.projectId] : []),
         item.id,
       );
@@ -126,7 +126,7 @@ export class BatchItemProcessor {
     };
 
     try {
-      if (batchAsr.engine === 'local-sherpa') {
+      if (batchAsr.engine === 'local') {
         this.ports.transcriptionService.setModelPath(batchAsr.modelPath);
       }
       this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);

@@ -352,7 +352,7 @@ mod tests {
             hotwords: None,
             webhook_url: None,
             webhook_secret: None,
-            engine: "LocalSherpa".to_string(),
+            engine: "Local".to_string(),
             online_provider_id: None,
             online_provider_config: None,
         };
@@ -473,7 +473,7 @@ mod tests {
             hotwords: None,
             webhook_url: None,
             webhook_secret: None,
-            engine: "LocalSherpa".to_string(),
+            engine: "Local".to_string(),
             online_provider_id: None,
             online_provider_config: None,
         };
@@ -666,7 +666,7 @@ mod tests {
             hotwords: Some("Sona".to_string()),
             webhook_url: None,
             webhook_secret: None,
-            engine: "LocalSherpa".to_string(),
+            engine: "Local".to_string(),
             online_provider_id: None,
             online_provider_config: None,
         };

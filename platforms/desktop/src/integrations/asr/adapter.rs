@@ -6,7 +6,8 @@ use super::{AsrBatchProcessor, AsrPortError, AsrProviderAdapter, AsrState};
 use async_trait::async_trait;
 use sona_core::export::ExportFormat;
 use sona_core::ports::asr::{
-    BatchTranscriberPort, BatchTranscriptionObserver, validate_local_asr_mode,
+    BatchTranscriberPort, BatchTranscriptionObserver, LOCAL_SHERPA_ONNX_PROVIDER_ID,
+    validate_local_asr_mode,
 };
 use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
 use std::sync::Arc;
@@ -17,7 +18,7 @@ pub struct DesktopLocalProviderAdapter;
 #[async_trait]
 impl AsrProviderAdapter for DesktopLocalProviderAdapter {
     fn provider_id(&self) -> &'static str {
-        "local_sherpa"
+        LOCAL_SHERPA_ONNX_PROVIDER_ID
     }
 
     fn create_batch_processor(

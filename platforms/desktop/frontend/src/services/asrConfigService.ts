@@ -50,13 +50,12 @@ export type {
   AsrTranscriptionRequest,
   AsrTranscriptionRequestBase,
   LocalAsrRequest,
-  LocalSherpaAsrRequest,
   OnlineAsrRequest,
   TranscriptPostprocessOptions,
 } from '../types/asr';
 
 export function isLlamaCppBatchRequest(request: AsrTranscriptionRequest): boolean {
-  return request.engine === 'local-sherpa'
+  return request.engine === 'local'
     && request.mode === 'batch'
     && request.localEngine === 'llama-cpp';
 }
@@ -86,10 +85,10 @@ export class AsrConfigService {
   ): AsrConfig => {
     return {
       selections: {
-        live: this.createLocalSherpaSelection('streaming', streamingModelPath),
-        caption: this.createLocalSherpaSelection('streaming', streamingModelPath),
-        voiceTyping: this.createLocalSherpaSelection('streaming', streamingModelPath),
-        batch: this.createLocalSherpaSelection('batch', batchModelPath),
+        live: this.createLocalSelection('streaming', streamingModelPath),
+        caption: this.createLocalSelection('streaming', streamingModelPath),
+        voiceTyping: this.createLocalSelection('streaming', streamingModelPath),
+        batch: this.createLocalSelection('batch', batchModelPath),
       },
       providers: this.createDefaultAsrProviders(),
     };
@@ -147,7 +146,7 @@ export class AsrConfigService {
 
     return {
       ...baseRequest,
-      engine: 'local-sherpa',
+      engine: 'local',
       localEngine: modelInfo?.engine ?? 'sherpa-onnx',
       modelId: selection.modelId ?? modelInfo?.id ?? null,
       modelPath: selection.modelPath,
@@ -163,7 +162,7 @@ export class AsrConfigService {
   }
 
   isAsrRequestConfigured = (request: AsrTranscriptionRequest): boolean => {
-    if (request.engine === 'local-sherpa') {
+    if (request.engine === 'local') {
       return Boolean(request.modelPath.trim());
     }
 
@@ -256,7 +255,7 @@ export class AsrConfigService {
     const asr = this.normalizeAsrConfig(config);
     const mode = SLOT_MODE[slot];
     asr.selections[slot] = {
-      engine: 'local-sherpa',
+      engine: 'local',
       mode,
       modelId: updates.modelId ?? null,
       modelPath: updates.modelPath,
@@ -295,9 +294,9 @@ export class AsrConfigService {
 
   // --- Private helpers ---
 
-  private createLocalSherpaSelection = (mode: AsrMode, modelPath: string): AsrModelSelection => {
+  private createLocalSelection = (mode: AsrMode, modelPath: string): AsrModelSelection => {
     return {
-      engine: 'local-sherpa',
+      engine: 'local',
       mode,
       modelId: null,
       modelPath,
@@ -363,7 +362,7 @@ export class AsrConfigService {
     }
 
     return {
-      engine: 'local-sherpa',
+      engine: 'local',
       mode,
       modelId: selection?.modelId ?? null,
       modelPath: selection?.modelPath?.trim() ? selection.modelPath : fallbackPath,
@@ -379,11 +378,11 @@ export class AsrConfigService {
     if (selection.modelPath.trim()) {
       return selection;
     }
-    return this.createLocalSherpaSelection(mode, this.getLegacyModelPath(config, mode));
+    return this.createLocalSelection(mode, this.getLegacyModelPath(config, mode));
   }
 
   private resolveModelInfo = (selection: AsrModelSelection): ModelInfo | null => {
-    if (selection.engine !== 'local-sherpa') {
+    if (selection.engine !== 'local') {
       return null;
     }
     if (selection.modelId) {

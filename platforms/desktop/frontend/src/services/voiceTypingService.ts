@@ -204,7 +204,7 @@ export class VoiceTypingService {
 
     private configureTranscriptionService() {
         const asr = resolveVoiceTypingAsr(this.ports.getEffectiveConfigSnapshot());
-        if (asr.engine === 'local-sherpa') {
+        if (asr.engine === 'local') {
             this.transcriptionService.setModelPath(asr.modelPath);
         }
         this.transcriptionService.setLanguage(asr.language);

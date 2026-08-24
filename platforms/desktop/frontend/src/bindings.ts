@@ -14,7 +14,7 @@ export type AppAsrConfig_Serialize = {
 export type AppAsrModelSelection = AppAsrModelSelection_Serialize | AppAsrModelSelection_Deserialize;
 
 export type AppAsrModelSelection_Deserialize = {
-	engine: AsrEngine,
+	engine: AsrEngine_Deserialize,
 	mode: AsrMode_Deserialize,
 	modelId?: string | null,
 	modelPath: string,
@@ -23,7 +23,7 @@ export type AppAsrModelSelection_Deserialize = {
 };
 
 export type AppAsrModelSelection_Serialize = {
-	engine: AsrEngine,
+	engine: AsrEngine_Serialize,
 	mode: AsrMode_Serialize,
 	modelId?: string | null,
 	modelPath: string,
@@ -217,23 +217,18 @@ export type AppLogLevel = "trace" | "debug" | "info" | "warn" | "error";
 
 export type AppTheme = "auto" | "light" | "dark";
 
-export type AsrEngine =
-/**
- *  Local offline transcription; the serialized value stays
- *  `local-sherpa` for compatibility with existing clients.
- */
-"local-sherpa" | "online";
+export type AsrEngine = AsrEngine_Serialize | AsrEngine_Deserialize;
 
-export type AsrEngineConfig =
+export type AsrEngineConfig = AsrEngineConfig_Serialize | AsrEngineConfig_Deserialize;
+
+export type AsrEngineConfig_Deserialize =
 /**
  *  Local offline transcription through a provider-crate engine.
  *
- *  The wire tag stays `local-sherpa` for compatibility with persisted
- *  configs and existing clients; the Rust-side variant name is
- *  engine-neutral. Migration to a neutral wire tag is tracked for the
- *  config-compat release.
+ *  The `local-sherpa` alias keeps configs persisted by older versions
+ *  deserializable; every write path emits the neutral `local` tag.
  */
-{ engine: "local-sherpa"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
+({ engine: "local"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
 	encoder: string | null,
 	decoder: string | null,
 	model: string | null,
@@ -245,7 +240,57 @@ export type AsrEngineConfig =
 	embedding: string | null,
 	tokenizer: string | null,
 	mmproj: string | null,
-} | null; gpuAcceleration?: string | null } | { engine: "online"; onlineProvider: OnlineAsrProviderRequest };
+} | null; gpuAcceleration?: string | null }) & { onlineProvider?: never } |
+/**
+ *  Local offline transcription through a provider-crate engine.
+ *
+ *  The `local-sherpa` alias keeps configs persisted by older versions
+ *  deserializable; every write path emits the neutral `local` tag.
+ */
+({ engine: "local-sherpa"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
+	encoder: string | null,
+	decoder: string | null,
+	model: string | null,
+	joiner: string | null,
+	tokens: string | null,
+	convFrontend: string | null,
+	encoderAdaptor: string | null,
+	llm: string | null,
+	embedding: string | null,
+	tokenizer: string | null,
+	mmproj: string | null,
+} | null; gpuAcceleration?: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { batchSegmentationMode?: never; fileConfig?: never; gpuAcceleration?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
+
+export type AsrEngineConfig_Serialize =
+/**
+ *  Local offline transcription through a provider-crate engine.
+ *
+ *  The `local-sherpa` alias keeps configs persisted by older versions
+ *  deserializable; every write path emits the neutral `local` tag.
+ */
+({ engine: "local"; localEngine: LocalAsrEngine; modelId: string | null; modelPath: string; numThreads: number; punctuationModel: string | null; vadModel: string | null; vadBuffer: number; batchSegmentationMode: BatchSegmentationMode; modelType: string; fileConfig: {
+	encoder: string | null,
+	decoder: string | null,
+	model: string | null,
+	joiner: string | null,
+	tokens: string | null,
+	convFrontend: string | null,
+	encoderAdaptor: string | null,
+	llm: string | null,
+	embedding: string | null,
+	tokenizer: string | null,
+	mmproj: string | null,
+} | null; gpuAcceleration: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { batchSegmentationMode?: never; fileConfig?: never; gpuAcceleration?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
+
+export type AsrEngine_Deserialize =
+/**  Local offline transcription. */
+"local" |
+/**  Local offline transcription. */
+"local-sherpa" | "online";
+
+export type AsrEngine_Serialize =
+/**  Local offline transcription. */
+"local" | "online";
 
 export type AsrInferenceMetric = {
 	occurredAtMs: number,
@@ -301,7 +346,7 @@ export type AsrTranscriptionRequest_Deserialize = {
 	postprocessOptions: TranscriptPostprocessOptions,
 	hotwords: string | null,
 	speakerProcessing: SpeakerProcessingConfig | null,
-} & AsrEngineConfig;
+} & AsrEngineConfig_Deserialize;
 
 export type AsrTranscriptionRequest_Serialize = {
 	mode: AsrMode_Serialize,
@@ -311,7 +356,7 @@ export type AsrTranscriptionRequest_Serialize = {
 	postprocessOptions: TranscriptPostprocessOptions,
 	hotwords: string | null,
 	speakerProcessing: SpeakerProcessingConfig | null,
-} & AsrEngineConfig;
+} & AsrEngineConfig_Serialize;
 
 export type AudioUsageCategory = {
 	bytes: number,

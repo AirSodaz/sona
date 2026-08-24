@@ -19,7 +19,8 @@ use std::sync::{Arc, OnceLock};
 
 const ONLINE_ASR_PROVIDERS_JSON: &str = include_str!("online-asr-providers.json");
 
-pub const LOCAL_SHERPA_PROVIDER_ID: &str = "local_sherpa";
+pub const LOCAL_SHERPA_ONNX_PROVIDER_ID: &str = "local_sherpa_onnx";
+pub const LOCAL_LLAMA_CPP_PROVIDER_ID: &str = "local_llama_cpp";
 pub const VOLCENGINE_DOUBAO_PROVIDER_ID: &str = "volcengine-doubao";
 pub const VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY: &str = "volcengineDoubao";
 pub const GROQ_WHISPER_PROVIDER_ID: &str = "groq-whisper";
@@ -42,6 +43,13 @@ impl LocalAsrEngine {
         }
     }
 
+    pub const fn provider_id(self) -> &'static str {
+        match self {
+            Self::SherpaOnnx => LOCAL_SHERPA_ONNX_PROVIDER_ID,
+            Self::LlamaCpp => LOCAL_LLAMA_CPP_PROVIDER_ID,
+        }
+    }
+
     pub fn from_name(value: &str) -> Option<Self> {
         match value {
             "sherpa-onnx" => Some(Self::SherpaOnnx),
@@ -55,9 +63,8 @@ impl LocalAsrEngine {
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "kebab-case")]
 pub enum AsrEngine {
-    /// Local offline transcription; the serialized value stays
-    /// `local-sherpa` for compatibility with existing clients.
-    #[serde(rename = "local-sherpa")]
+    /// Local offline transcription.
+    #[serde(rename = "local", alias = "local-sherpa")]
     Local,
     Online,
 }
@@ -554,11 +561,13 @@ pub struct AsrTranscriptionRequest {
 pub enum AsrEngineConfig {
     /// Local offline transcription through a provider-crate engine.
     ///
-    /// The wire tag stays `local-sherpa` for compatibility with persisted
-    /// configs and existing clients; the Rust-side variant name is
-    /// engine-neutral. Migration to a neutral wire tag is tracked for the
-    /// config-compat release.
-    #[serde(rename = "local-sherpa", rename_all = "camelCase")]
+    /// The `local-sherpa` alias keeps configs persisted by older versions
+    /// deserializable; every write path emits the neutral `local` tag.
+    #[serde(
+        rename = "local",
+        alias = "local-sherpa",
+        rename_all = "camelCase"
+    )]
     Local {
         #[serde(default)]
         local_engine: LocalAsrEngine,
@@ -649,7 +658,7 @@ impl AsrTranscriptionRequest {
 
     pub fn provider_id(&self) -> &str {
         match &self.engine_config {
-            AsrEngineConfig::Local { .. } => LOCAL_SHERPA_PROVIDER_ID,
+            AsrEngineConfig::Local { local_engine, .. } => local_engine.provider_id(),
             AsrEngineConfig::Online { provider } => provider.provider_id.as_str(),
         }
     }
