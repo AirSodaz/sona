@@ -1,5 +1,5 @@
 use sona_core::ports::asr::AsrPortErrorKind;
-use sona_local_asr::punctuation::load_punctuation_from_path;
+use sona_sherpa_onnx::punctuation::load_punctuation_from_path;
 
 #[test]
 fn load_punctuation_from_path_ignores_missing_configuration() {

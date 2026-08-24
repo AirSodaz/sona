@@ -185,7 +185,7 @@ pub(crate) async fn transcribe_local_asr_batch(
     request: FfiLocalAsrBatchRequest,
 ) -> SonaCoreBindingResult<FfiLocalAsrBatchResult> {
     let plan = build_local_batch_plan(request)?;
-    sona_local_asr::batch::LocalBatchAsrAdapter
+    sona_sherpa_onnx::batch::LocalBatchAsrAdapter
         .transcribe(plan)
         .await
         .map(|segments| FfiLocalAsrBatchResult {

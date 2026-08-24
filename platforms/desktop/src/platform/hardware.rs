@@ -1,8 +1,8 @@
-pub(crate) use sona_local_asr::gpu::GpuAccelerationPlan;
+pub(crate) use sona_sherpa_onnx::gpu::GpuAccelerationPlan;
 
 /// Checks whether the local ASR adapter runtime can use a compatible GPU backend.
 pub async fn check_gpu_availability() -> Result<bool, String> {
-    sona_local_asr::gpu::check_gpu_availability()
+    sona_sherpa_onnx::gpu::check_gpu_availability()
         .await
         .map_err(|error| error.to_string())
 }
@@ -10,7 +10,7 @@ pub async fn check_gpu_availability() -> Result<bool, String> {
 pub(crate) async fn resolve_gpu_acceleration_plan(
     gpu_acceleration: Option<&str>,
 ) -> GpuAccelerationPlan {
-    sona_local_asr::gpu::resolve_gpu_acceleration_plan(gpu_acceleration).await
+    sona_sherpa_onnx::gpu::resolve_gpu_acceleration_plan(gpu_acceleration).await
 }
 
 pub async fn resolve_gpu_acceleration(gpu_acceleration: Option<&str>) -> Option<String> {

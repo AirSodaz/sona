@@ -1,6 +1,6 @@
 use sona_core::models::config::ModelFileConfig;
 use sona_core::ports::asr::AsrPortErrorKind;
-use sona_local_asr::recognizer::{
+use sona_sherpa_onnx::recognizer::{
     ModelType, OfflineDecodeResult, build_model_config, build_offline_model_config,
     create_offline_recognizer,
 };

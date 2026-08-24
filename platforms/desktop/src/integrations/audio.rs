@@ -6,7 +6,7 @@ use rubato::audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler};
 use sona_application::live_transcription::LiveSourceEpoch;
 use sona_core::ports::asr::AsrAudioFrame;
-use sona_local_asr::audio::LiveWavRecorder;
+use sona_sherpa_onnx::audio::LiveWavRecorder;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::sync::Mutex;

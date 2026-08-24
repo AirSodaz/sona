@@ -9,7 +9,7 @@ use sona_core::ports::asr::{
     AsrPortError, AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest,
     StreamingAsrFactoryPort, StreamingInferenceSpec,
 };
-use sona_local_asr::runtime::RecognizerPool;
+use sona_sherpa_onnx::runtime::RecognizerPool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};

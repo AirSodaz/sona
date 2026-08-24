@@ -19,11 +19,11 @@ rubato = "5"
 ringbuf = "0.4"
 sona-application = { path = "../../application" }
 sona-api-server = { path = "../../adapters/api_server" }
-sona-local-asr = { path = "../../adapters/local_asr" }
-sona-llama-asr = { path = "../../adapters/llama_asr" }
+sona-sherpa-onnx = { path = "../../providers/asr/local/sherpa_onnx" }
+sona-llama-cpp = { path = "../../providers/asr/local/llama_cpp" }
 sona-media-detector = { path = "../../adapters/media_detector" }
 sona-model-downloads = { path = "../../adapters/model_downloads" }
-sona-online-asr = { path = "../../adapters/online_asr" }
+sona-online-asr = { path = "../../providers/asr/online" }
 sona-runtime-fs = { path = "../../adapters/runtime_fs" }
 sona-core = { path = "../../core" }
 sona-export = { path = "../../adapters/export" }

@@ -5999,14 +5999,14 @@ dependencies = [
  "sona-archive",
  "sona-core",
  "sona-export",
- "sona-llama-asr",
- "sona-local-asr",
+ "sona-llama-cpp",
  "sona-media-detector",
  "sona-model-downloads",
  "sona-online-asr",
  "sona-online-llm",
  "sona-recovery-fs",
  "sona-runtime-fs",
+ "sona-sherpa-onnx",
  "sona-sqlite",
  "sona-sync",
  "sona-sync-webdav",
@@ -6112,12 +6112,12 @@ dependencies = [
  "sona-application",
  "sona-core",
  "sona-export",
- "sona-llama-asr",
- "sona-local-asr",
+ "sona-llama-cpp",
  "sona-media-detector",
  "sona-model-downloads",
  "sona-online-asr",
  "sona-runtime-fs",
+ "sona-sherpa-onnx",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -6160,7 +6160,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sona-llama-asr"
+name = "sona-llama-cpp"
 version = "0.8.1"
 dependencies = [
  "async-trait",
@@ -6169,25 +6169,6 @@ dependencies = [
  "sona-core",
  "tokio",
  "uuid",
-]
-
-[[package]]
-name = "sona-local-asr"
-version = "0.8.1"
-dependencies = [
- "async-trait",
- "glob",
- "hound",
- "log",
- "regex",
- "serde_json",
- "sha2 0.11.0",
- "sherpa-onnx",
- "sona-core",
- "sysinfo",
- "tokio",
- "uuid",
- "walkdir",
 ]
 
 [[package]]
@@ -6277,6 +6258,25 @@ dependencies = [
  "sona-core",
  "tempfile",
  "thiserror 2.0.20",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
+name = "sona-sherpa-onnx"
+version = "0.8.1"
+dependencies = [
+ "async-trait",
+ "glob",
+ "hound",
+ "log",
+ "regex",
+ "serde_json",
+ "sha2 0.11.0",
+ "sherpa-onnx",
+ "sona-core",
+ "sysinfo",
+ "tokio",
  "uuid",
  "walkdir",
 ]
@@ -6376,12 +6376,12 @@ dependencies = [
  "sona-archive",
  "sona-core",
  "sona-export",
- "sona-local-asr",
  "sona-model-downloads",
  "sona-online-asr",
  "sona-online-llm",
  "sona-recovery-fs",
  "sona-runtime-fs",
+ "sona-sherpa-onnx",
  "sona-sqlite",
  "sona-sync",
  "sona-sync-webdav",

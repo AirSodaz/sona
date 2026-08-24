@@ -1,7 +1,7 @@
-﻿use super::types::{TranscriptNormalizationOptions, TranscriptSegment};
+use super::types::{TranscriptNormalizationOptions, TranscriptSegment};
 #[cfg(test)]
 use super::types::{TranscriptTimingLevel, TranscriptTimingSource};
-use sona_local_asr::punctuation::Punctuation;
+use sona_sherpa_onnx::punctuation::Punctuation;
 
 pub(crate) use sona_core::transcription::transcript::{
     normalize_recognizer_text, select_final_transcript_text, synthesize_durations,

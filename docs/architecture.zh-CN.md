@@ -5,7 +5,7 @@
 <a id="architecture-roles"></a>
 ## 架构角色
 
-Sona 使用六种稳定角色。角色是经过评审的依赖契约；工作区路径与该契约保持一致，因此目录树本身也是可靠的导航入口。
+Sona 使用七种稳定角色。角色是经过评审的依赖契约；工作区路径与该契约保持一致，因此目录树本身也是可靠的导航入口。
 
 | 包 | 角色 |
 | --- | --- |
@@ -16,11 +16,11 @@ Sona 使用六种稳定角色。角色是经过评审的依赖契约；工作区
 | `sona-ts-bind` | inbound-adapter |
 | `sona-archive` | outbound-adapter |
 | `sona-export` | outbound-adapter |
-| `sona-local-asr` | outbound-adapter |
-| `sona-llama-asr` | outbound-adapter |
+| `sona-sherpa-onnx` | provider |
+| `sona-llama-cpp` | provider |
 | `sona-media-detector` | outbound-adapter |
 | `sona-model-downloads` | outbound-adapter |
-| `sona-online-asr` | outbound-adapter |
+| `sona-online-asr` | provider |
 | `sona-online-llm` | outbound-adapter |
 | `sona-recovery-fs` | outbound-adapter |
 | `sona-runtime-fs` | outbound-adapter |
@@ -31,7 +31,7 @@ Sona 使用六种稳定角色。角色是经过评审的依赖契约；工作区
 | `sona-uniffi-bind` | host |
 | `sona-uniffi-bindgen` | tool |
 
-Core 包含领域契约和由 Core 所有的端口。Application 通过这些契约协调用例。Inbound Adapter 转换调用方输入；Outbound Adapter 实现由 Core 所有的端口。Host 为运行时组合应用程序，Tool 支持开发或代码生成。
+Core 包含领域契约和由 Core 所有的端口。Application 通过这些契约协调用例。Inbound Adapter 转换调用方输入；Outbound Adapter 实现由 Core 所有的端口；Provider 在 Core 端口之后实现特定引擎的 ASR 后端。Host 为运行时组合应用程序，Tool 支持开发或代码生成。
 
 <a id="dependency-direction"></a>
 ## 依赖方向
@@ -59,11 +59,11 @@ Core <- Outbound Adapter <------------- Host
 | `adapters/ts_bind/` | `sona-ts-bind` | inbound-adapter | |
 | `adapters/archive/` | `sona-archive` | outbound-adapter | |
 | `adapters/export/` | `sona-export` | outbound-adapter | |
-| `adapters/local_asr/` | `sona-local-asr` | outbound-adapter | |
-| `adapters/llama_asr/` | `sona-llama-asr` | outbound-adapter | 通过 llama.cpp 执行 Qwen3-ASR 批量推理 |
+| `providers/asr/local/sherpa_onnx/` | `sona-sherpa-onnx` | provider | |
+| `providers/asr/local/llama_cpp/` | `sona-llama-cpp` | provider | 通过 llama.cpp 执行 Qwen3-ASR 批量推理 |
 | `adapters/media_detector/` | `sona-media-detector` | outbound-adapter | |
 | `adapters/model_downloads/` | `sona-model-downloads` | outbound-adapter | |
-| `adapters/online_asr/` | `sona-online-asr` | outbound-adapter | |
+| `providers/asr/online/` | `sona-online-asr` | provider | |
 | `adapters/online_llm/` | `sona-online-llm` | outbound-adapter | |
 | `adapters/recovery_fs/` | `sona-recovery-fs` | outbound-adapter | |
 | `adapters/runtime_fs/` | `sona-runtime-fs` | outbound-adapter | |
@@ -74,7 +74,7 @@ Core <- Outbound Adapter <------------- Host
 | `platforms/uniffi/` | `sona-uniffi-bind` | host | 移动端 / UniFFI 组合根 |
 | `tools/uniffi_bindgen/` | `sona-uniffi-bindgen` | tool | |
 
-角色根目录分别为 `core/`、`application/`、`adapters/`、`platforms/` 和 `tools/`。Inbound 与 Outbound Adapter 共用 `adapters/` 根目录，并通过 manifest 元数据区分。
+角色根目录分别为 `core/`、`application/`、`adapters/`、`providers/`、`platforms/` 和 `tools/`。Inbound 与 Outbound Adapter 共用 `adapters/` 根目录，并通过 manifest 元数据区分；`providers/` 下的 Provider crate 在 Core 端口之后实现特定引擎的 ASR 后端。
 
 <a id="composition-roots"></a>
 ## 组合根

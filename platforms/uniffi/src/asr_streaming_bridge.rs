@@ -13,7 +13,7 @@ use sona_core::ports::asr::{
     LocalSherpaStreamingRequest,
 };
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
-use sona_local_asr::runtime::RecognizerPool;
+use sona_sherpa_onnx::runtime::RecognizerPool;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, OnceLock};
 
@@ -147,7 +147,7 @@ pub(crate) async fn create_asr_streaming_session(
         AsrEngine::LocalSherpa => {
             let request =
                 LocalSherpaStreamingRequest::from_local_sherpa_request(instance_id, request)?;
-            sona_local_asr::streaming::create_streaming_session(
+            sona_sherpa_onnx::streaming::create_streaming_session(
                 LOCAL_RECOGNIZER_POOL
                     .get_or_init(RecognizerPool::new)
                     .clone(),

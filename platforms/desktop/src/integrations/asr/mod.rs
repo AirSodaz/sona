@@ -29,14 +29,14 @@ pub use sona_core::transcription::asr_metrics::{
     AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
 };
 pub use sona_core::transcription::postprocess::TranscriptPostprocessor;
-pub(crate) use sona_local_asr::audio::{accept_vad_samples, vad_detected};
-pub use sona_local_asr::punctuation::{Punctuation, load_punctuation};
-pub use sona_local_asr::recognizer::Recognizer;
-pub(crate) use sona_local_asr::recognizer::{
+pub(crate) use sona_sherpa_onnx::audio::{accept_vad_samples, vad_detected};
+pub use sona_sherpa_onnx::punctuation::{Punctuation, load_punctuation};
+pub use sona_sherpa_onnx::recognizer::Recognizer;
+pub(crate) use sona_sherpa_onnx::recognizer::{
     build_model_config, create_recognizer_with_gpu_plan, decode_offline_samples,
 };
-pub(crate) use sona_local_asr::runtime::ModelConfigKey;
-pub use sona_local_asr::runtime::RecognizerPool;
+pub(crate) use sona_sherpa_onnx::runtime::ModelConfigKey;
+pub use sona_sherpa_onnx::runtime::RecognizerPool;
 pub use state::AsrState;
 pub use state::ExternalLiveSource;
 pub use traits::{AsrBatchProcessor, AsrProviderAdapter};

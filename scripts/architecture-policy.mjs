@@ -20,16 +20,16 @@ export const EXPECTED_ROLES = new Map([
   ['sona-ts-bind', 'inbound-adapter'],
   ['sona-archive', 'outbound-adapter'],
   ['sona-export', 'outbound-adapter'],
-  ['sona-local-asr', 'outbound-adapter'],
-  ['sona-llama-asr', 'outbound-adapter'],
   ['sona-media-detector', 'outbound-adapter'],
   ['sona-model-downloads', 'outbound-adapter'],
-  ['sona-online-asr', 'outbound-adapter'],
   ['sona-online-llm', 'outbound-adapter'],
   ['sona-recovery-fs', 'outbound-adapter'],
   ['sona-runtime-fs', 'outbound-adapter'],
   ['sona-sqlite', 'outbound-adapter'],
   ['sona-sync-webdav', 'outbound-adapter'],
+  ['sona-sherpa-onnx', 'provider'],
+  ['sona-llama-cpp', 'provider'],
+  ['sona-online-asr', 'provider'],
   ['sona', 'host'],
   ['sona-cli', 'host'],
   ['sona-uniffi-bind', 'host'],
@@ -43,8 +43,9 @@ export const ALLOWED_TARGET_ROLES = new Map([
   ['outbound-adapter', new Set(['core', 'application'])],
   [
     'host',
-    new Set(['core', 'application', 'inbound-adapter', 'outbound-adapter']),
+    new Set(['core', 'application', 'inbound-adapter', 'outbound-adapter', 'provider']),
   ],
+  ['provider', new Set(['core'])],
   ['tool', new Set()],
 ]);
 
@@ -55,6 +56,7 @@ export const ROLE_DIRECTORY_ROOTS = new Map([
   ['application', 'application'],
   ['inbound-adapter', 'adapters'],
   ['outbound-adapter', 'adapters'],
+  ['provider', 'providers'],
   ['host', 'platforms'],
   ['tool', 'tools'],
 ]);
@@ -99,8 +101,8 @@ export const HOST_CAPABILITY_MATRIX = [
       'sona-cli': 'yes',
       'sona-uniffi-bind': 'yes',
     },
-    packages: ['sona-local-asr'],
-    wiringPatterns: ['\\bsona_local_asr\\b'],
+    packages: ['sona-sherpa-onnx'],
+    wiringPatterns: ['\\bsona_sherpa_onnx\\b'],
   },
   {
     id: 'local-asr-llama-cpp',
@@ -111,8 +113,8 @@ export const HOST_CAPABILITY_MATRIX = [
       'sona-cli': 'yes',
       'sona-uniffi-bind': 'no',
     },
-    packages: ['sona-llama-asr'],
-    wiringPatterns: ['\\bsona_llama_asr\\b'],
+    packages: ['sona-llama-cpp'],
+    wiringPatterns: ['\\bsona_llama_cpp\\b'],
   },
   {
     id: 'online-asr',
@@ -622,7 +624,7 @@ export function findPublicStringErrors() {
   validateAxumHandlerExemptions();
   const errors = workspacePackages()
     .filter(({ role }) =>
-      ['core', 'application', 'inbound-adapter', 'outbound-adapter'].includes(role))
+      ['core', 'application', 'inbound-adapter', 'outbound-adapter', 'provider'].includes(role))
     .flatMap(scanPackagePublicStringErrors);
   return excludeReviewedApiServerStringErrors(errors);
 }

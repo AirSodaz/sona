@@ -104,7 +104,7 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
             online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             batch_transcriber: Arc::new(crate::asr_adapter::local_batch_transcriber()),
             media_validator: Arc::new(sona_media_detector::MagicNumberMediaFileValidator),
-            gpu_availability: Arc::new(sona_local_asr::gpu::LocalGpuAvailabilityProvider),
+            gpu_availability: Arc::new(sona_sherpa_onnx::gpu::LocalGpuAvailabilityProvider),
             model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),
             batch_plan_resolver: Arc::new(sona_runtime_fs::RuntimeBatchTranscribePlanResolver),
             platform: Arc::new(DefaultApiServerPlatform),

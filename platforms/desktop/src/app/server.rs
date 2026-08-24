@@ -14,8 +14,8 @@ pub const DESKTOP_ONLINE_ASR_BATCH_UNAVAILABLE: &str = "Online ASR batch is unav
 
 fn local_batch_transcriber() -> sona_application::local_asr::LocalBatchTranscriberRouter {
     sona_application::local_asr::LocalBatchTranscriberRouter::new(
-        Arc::new(sona_local_asr::batch::LocalBatchAsrAdapter),
-        Arc::new(sona_llama_asr::batch::LlamaBatchAsrAdapter),
+        Arc::new(sona_sherpa_onnx::batch::LocalBatchAsrAdapter),
+        Arc::new(sona_llama_cpp::batch::LlamaBatchAsrAdapter),
     )
 }
 
@@ -217,7 +217,7 @@ pub async fn start_api_server(
         online_asr_config,
         batch_transcriber: Arc::new(local_batch_transcriber()),
         media_validator: Arc::new(sona_media_detector::MagicNumberMediaFileValidator),
-        gpu_availability: Arc::new(sona_local_asr::gpu::LocalGpuAvailabilityProvider),
+        gpu_availability: Arc::new(sona_sherpa_onnx::gpu::LocalGpuAvailabilityProvider),
         model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),
         batch_plan_resolver: Arc::new(sona_runtime_fs::RuntimeBatchTranscribePlanResolver),
         platform,
@@ -295,7 +295,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                 online_asr_config,
                 batch_transcriber: Arc::new(local_batch_transcriber()),
                 media_validator: Arc::new(sona_media_detector::MagicNumberMediaFileValidator),
-                gpu_availability: Arc::new(sona_local_asr::gpu::LocalGpuAvailabilityProvider),
+                gpu_availability: Arc::new(sona_sherpa_onnx::gpu::LocalGpuAvailabilityProvider),
                 model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),
                 batch_plan_resolver: Arc::new(sona_runtime_fs::RuntimeBatchTranscribePlanResolver),
                 platform,

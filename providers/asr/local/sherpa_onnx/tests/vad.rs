@@ -1,4 +1,4 @@
-use sona_local_asr::audio::load_vad;
+use sona_sherpa_onnx::audio::load_vad;
 
 #[test]
 fn load_vad_ignores_missing_configuration() {

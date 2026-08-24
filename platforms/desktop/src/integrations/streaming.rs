@@ -15,7 +15,7 @@ use crate::integrations::asr::TauriAsrRuntimeObserver;
 use crate::platform::event::{EventEmitterPort, TauriEventEmitter};
 use sona_api_server::{ServerState, authorize_streaming_request};
 use sona_core::ports::asr::AsrRuntimeObserver;
-use sona_local_asr::audio::{load_vad, pcm_s16le_bytes_to_f32};
+use sona_sherpa_onnx::audio::{load_vad, pcm_s16le_bytes_to_f32};
 
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -389,7 +389,7 @@ async fn handle_local_streaming_socket(
         .await;
 
     // Phase 2: Audio streaming
-    let mut offline_state = sona_local_asr::runtime::OfflineState::default();
+    let mut offline_state = sona_sherpa_onnx::runtime::OfflineState::default();
     let mut total_samples = 0;
     let mut current_segment_id: Option<String> = None;
     let mut last_inference_time = std::time::Instant::now();

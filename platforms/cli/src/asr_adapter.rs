@@ -1,4 +1,4 @@
-﻿use sona_core::ports::asr::BatchTranscriberPort;
+use sona_core::ports::asr::BatchTranscriberPort;
 use sona_core::ports::asr::{AsrRuntimeObserver, AsrStreamingSession};
 use sona_core::ports::asr::{AsrTranscriptionRequest, OnlineBatchTranscriptionRequest};
 use sona_core::transcription::runtime::LiveTranscribePlan;
@@ -8,8 +8,8 @@ use std::sync::Arc;
 
 pub(crate) fn local_batch_transcriber() -> impl BatchTranscriberPort {
     sona_application::local_asr::LocalBatchTranscriberRouter::new(
-        Arc::new(sona_local_asr::batch::LocalBatchAsrAdapter),
-        Arc::new(sona_llama_asr::batch::LlamaBatchAsrAdapter),
+        Arc::new(sona_sherpa_onnx::batch::LocalBatchAsrAdapter),
+        Arc::new(sona_llama_cpp::batch::LlamaBatchAsrAdapter),
     )
 }
 
@@ -18,8 +18,8 @@ pub(crate) async fn local_streaming_session(
     instance_id: &str,
     observer: Arc<dyn AsrRuntimeObserver>,
 ) -> Result<Arc<dyn AsrStreamingSession>, String> {
-    let session = sona_local_asr::streaming::create_streaming_session(
-        sona_local_asr::runtime::RecognizerPool::default(),
+    let session = sona_sherpa_onnx::streaming::create_streaming_session(
+        sona_sherpa_onnx::runtime::RecognizerPool::default(),
         plan.to_local_streaming_request(instance_id),
         observer,
     )

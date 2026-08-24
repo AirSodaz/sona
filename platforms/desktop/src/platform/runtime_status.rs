@@ -1,4 +1,4 @@
-﻿use tauri::Manager;
+use tauri::Manager;
 
 pub use sona_core::runtime::environment::{
     RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus,
@@ -34,7 +34,7 @@ pub fn resolve_runtime_environment_status_for_log_dir(
     log_dir: std::path::PathBuf,
 ) -> Result<RuntimeEnvironmentStatus, String> {
     let ffmpeg_path =
-        sona_local_asr::audio::resolve_ffmpeg_sidecar_path().map_err(|error| error.to_string())?;
+        sona_sherpa_onnx::audio::resolve_ffmpeg_sidecar_path().map_err(|error| error.to_string())?;
 
     Ok(RuntimeEnvironmentStatus {
         ffmpeg_path: ffmpeg_path.to_string_lossy().into_owned(),

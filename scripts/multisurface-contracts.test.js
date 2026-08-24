@@ -373,7 +373,7 @@ test('API server preserves typed failures and receives local ASR through the Cor
   );
   assert.doesNotMatch(
     apiServer,
-    /sona_local_asr::batch::LocalBatchAsrAdapter/u,
+    /sona_sherpa_onnx::batch::LocalBatchAsrAdapter/u,
     'API server orchestration must receive the Core BatchTranscriberPort port',
   );
   assert.match(apiServer, /Arc<dyn\s+BatchTranscriberPort>/u);
@@ -396,7 +396,7 @@ test('API server consumes runtime capability ports from host composition roots',
   const cli = read('platforms', 'cli', 'src', 'serve.rs');
   const adapters = [
     ['media_validator', 'sona_media_detector::MagicNumberMediaFileValidator'],
-    ['gpu_availability', 'sona_local_asr::gpu::LocalGpuAvailabilityProvider'],
+    ['gpu_availability', 'sona_sherpa_onnx::gpu::LocalGpuAvailabilityProvider'],
     ['model_catalog', 'sona_runtime_fs::RuntimeModelCatalogProvider'],
     ['batch_plan_resolver', 'sona_runtime_fs::RuntimeBatchTranscribePlanResolver'],
   ];
@@ -441,14 +441,14 @@ test('API server depends only on Core runtime capability ports', () => {
   }
 
   for (const dependency of [
-    'sona-local-asr',
+    'sona-sherpa-onnx',
     'sona-media-detector',
     'sona-runtime-fs',
   ]) {
     assert.doesNotMatch(apiServerManifest, new RegExp(dependency, 'u'));
   }
   for (const moduleName of [
-    'sona_local_asr',
+    'sona_sherpa_onnx',
     'sona_media_detector',
     'sona_runtime_fs',
   ]) {

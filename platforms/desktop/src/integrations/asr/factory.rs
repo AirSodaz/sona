@@ -4,7 +4,7 @@ use sona_core::ports::asr::{
     AsrPortError, AsrRuntimeObserver, AsrStreamingSession, NoopAsrRuntimeObserver,
     StreamingAsrFactoryPort, StreamingInferenceSpec,
 };
-use sona_local_asr::runtime::RecognizerPool;
+use sona_sherpa_onnx::runtime::RecognizerPool;
 use std::sync::Arc;
 
 /// Desktop composition root for streaming ASR. The application coordinator owns
@@ -42,7 +42,7 @@ impl StreamingAsrFactoryPort for DesktopStreamingAsrFactory {
                         "prepare".to_string(),
                         request,
                     )?;
-                sona_local_asr::streaming::prepare_streaming_resources(
+                sona_sherpa_onnx::streaming::prepare_streaming_resources(
                     self.recognizer_pool.clone(),
                     &request,
                 )
@@ -65,7 +65,7 @@ impl StreamingAsrFactoryPort for DesktopStreamingAsrFactory {
         let request = spec.engine_request();
         match spec.engine() {
             sona_core::ports::asr::AsrEngine::LocalSherpa => {
-                sona_local_asr::streaming::create_streaming_session(
+                sona_sherpa_onnx::streaming::create_streaming_session(
                     self.recognizer_pool.clone(),
                     sona_core::ports::asr::LocalSherpaStreamingRequest::from_local_sherpa_request(
                         pipeline_id.to_string(),

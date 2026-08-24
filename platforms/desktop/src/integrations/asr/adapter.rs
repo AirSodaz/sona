@@ -113,8 +113,8 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
             quiet: true,
         };
         let transcriber = sona_application::local_asr::LocalBatchTranscriberRouter::new(
-            Arc::new(sona_local_asr::batch::LocalBatchAsrAdapter),
-            Arc::new(sona_llama_asr::batch::LlamaBatchAsrAdapter),
+            Arc::new(sona_sherpa_onnx::batch::LocalBatchAsrAdapter),
+            Arc::new(sona_llama_cpp::batch::LlamaBatchAsrAdapter),
         );
         let segments = transcriber
             .transcribe_with_observer(plan, observer.clone())

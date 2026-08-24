@@ -16,8 +16,8 @@ Sona uses six stable roles. The role is the reviewed dependency contract; worksp
 | `sona-ts-bind` | inbound-adapter |
 | `sona-archive` | outbound-adapter |
 | `sona-export` | outbound-adapter |
-| `sona-local-asr` | outbound-adapter |
-| `sona-llama-asr` | outbound-adapter |
+| `sona-sherpa-onnx` | outbound-adapter |
+| `sona-llama-cpp` | outbound-adapter |
 | `sona-media-detector` | outbound-adapter |
 | `sona-model-downloads` | outbound-adapter |
 | `sona-online-asr` | outbound-adapter |
@@ -59,11 +59,11 @@ Each workspace package lives under the root for its reviewed role. The `[package
 | `adapters/ts_bind/` | `sona-ts-bind` | inbound-adapter | |
 | `adapters/archive/` | `sona-archive` | outbound-adapter | |
 | `adapters/export/` | `sona-export` | outbound-adapter | |
-| `adapters/local_asr/` | `sona-local-asr` | outbound-adapter | |
-| `adapters/llama_asr/` | `sona-llama-asr` | outbound-adapter | Qwen3-ASR batch inference through llama.cpp |
+| `providers/asr/local/sherpa_onnx/` | `sona-sherpa-onnx` | provider | |
+| `providers/asr/local/llama_cpp/` | `sona-llama-cpp` | provider | Qwen3-ASR batch inference through llama.cpp |
 | `adapters/media_detector/` | `sona-media-detector` | outbound-adapter | |
 | `adapters/model_downloads/` | `sona-model-downloads` | outbound-adapter | |
-| `adapters/online_asr/` | `sona-online-asr` | outbound-adapter | |
+| `providers/asr/online/` | `sona-online-asr` | provider | |
 | `adapters/online_llm/` | `sona-online-llm` | outbound-adapter | |
 | `adapters/recovery_fs/` | `sona-recovery-fs` | outbound-adapter | |
 | `adapters/runtime_fs/` | `sona-runtime-fs` | outbound-adapter | |
@@ -74,7 +74,7 @@ Each workspace package lives under the root for its reviewed role. The `[package
 | `platforms/uniffi/` | `sona-uniffi-bind` | host | Mobile / UniFFI composition root |
 | `tools/uniffi_bindgen/` | `sona-uniffi-bindgen` | tool | |
 
-Role roots are `core/`, `application/`, `adapters/`, `platforms/`, and `tools/`. Inbound and outbound adapters share the `adapters/` root and remain distinguished by manifest metadata.
+Role roots are `core/`, `application/`, `adapters/`, `providers/`, `platforms/`, and `tools/`. Inbound and outbound adapters share the `adapters/` root and remain distinguished by manifest metadata. Provider crates under `providers/` implement engine-specific ASR backends behind Core ports.
 
 <a id="composition-roots"></a>
 ## Composition roots
