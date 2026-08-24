@@ -3,7 +3,8 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::HeapRb;
 use ringbuf::traits::Producer;
 use ringbuf::traits::{Consumer, Split};
-use rubato::{FftFixedOut, Resampler};
+use rubato::audioadapter_buffers::direct::InterleavedSlice;
+use rubato::{Fft, FixedSync, Indexing, Resampler};
 use std::io::Read;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -450,8 +451,9 @@ pub(crate) fn downmix_u16(samples: &[u16], channels: usize) -> Result<Vec<f32>, 
 }
 
 pub(crate) struct MonoResampler {
-    inner: Option<FftFixedOut<f32>>,
+    inner: Option<Fft<f32>>,
     pending: Vec<f32>,
+    out_scratch: Vec<f32>,
 }
 
 impl MonoResampler {
@@ -459,62 +461,79 @@ impl MonoResampler {
         if input_sample_rate == 0 {
             return Err("audio input reported a zero sample rate".to_string());
         }
-        let inner = if input_sample_rate as usize == TARGET_SAMPLE_RATE {
-            None
+        let (inner, out_scratch) = if input_sample_rate as usize == TARGET_SAMPLE_RATE {
+            (None, Vec::new())
         } else {
-            Some(
-                FftFixedOut::<f32>::new(
-                    input_sample_rate as usize,
-                    TARGET_SAMPLE_RATE,
-                    RESAMPLER_OUTPUT_CHUNK,
-                    2,
-                    1,
-                )
-                .map_err(|error| format!("Failed to create microphone resampler: {error}"))?,
+            let resampler = Fft::<f32>::new(
+                input_sample_rate as usize,
+                TARGET_SAMPLE_RATE,
+                RESAMPLER_OUTPUT_CHUNK,
+                1,
+                FixedSync::Output,
             )
+            .map_err(|error| format!("Failed to create microphone resampler: {error}"))?;
+            let out_scratch = vec![0.0; resampler.output_frames_max()];
+            (Some(resampler), out_scratch)
         };
         Ok(Self {
             inner,
             pending: Vec::new(),
+            out_scratch,
         })
     }
 
     pub(crate) fn push(&mut self, samples: &[f32]) -> Result<Vec<f32>, String> {
-        let Some(resampler) = self.inner.as_mut() else {
+        if self.inner.is_none() {
             return Ok(samples.to_vec());
-        };
-        self.pending.extend_from_slice(samples);
-        let mut output = Vec::new();
-        loop {
-            let input_frames = resampler.input_frames_next();
-            if self.pending.len() < input_frames {
-                break;
-            }
-            let input = self.pending.drain(..input_frames).collect::<Vec<_>>();
-            let rendered = resampler
-                .process(&[input], None)
-                .map_err(|error| format!("Failed to resample microphone audio: {error}"))?;
-            output.extend_from_slice(&rendered[0]);
         }
-        Ok(output)
+        self.pending.extend_from_slice(samples);
+        self.drain_pending(false)
     }
 
     pub(crate) fn finish(mut self) -> Result<Vec<f32>, String> {
+        let Some(resampler) = self.inner.as_ref() else {
+            return Ok(Vec::new());
+        };
+        // Pad with silence for the full filter delay (plus one chunk of
+        // margin), so every buffered input sample passes through before the
+        // stream is reported finished.
+        let tail_padding = (resampler.output_delay() as f64 / resampler.resample_ratio()).ceil()
+            as usize
+            + RESAMPLER_OUTPUT_CHUNK;
+        self.pending.resize(self.pending.len() + tail_padding, 0.0);
+        self.drain_pending(true)
+    }
+
+    /// Resample buffered input into whole output chunks. With `allow_partial`
+    /// a final short input chunk is accepted and padded with silence via
+    /// `Indexing::partial_len`; otherwise it stays buffered for the next call.
+    fn drain_pending(&mut self, allow_partial: bool) -> Result<Vec<f32>, String> {
         let Some(resampler) = self.inner.as_mut() else {
             return Ok(Vec::new());
         };
         let mut output = Vec::new();
-        if !self.pending.is_empty() {
-            let input = std::mem::take(&mut self.pending);
-            let rendered = resampler
-                .process_partial(Some(&[input]), None)
-                .map_err(|error| format!("Failed to flush microphone resampler: {error}"))?;
-            output.extend_from_slice(&rendered[0]);
+        loop {
+            let needed = resampler.input_frames_next();
+            let available = self.pending.len();
+            if available == 0 || (available < needed && !allow_partial) {
+                break;
+            }
+            let frames = needed.min(available);
+            let indexing = (frames < needed).then(|| Indexing::new().partial_len(frames));
+            let input = InterleavedSlice::new(&self.pending, 1, frames).map_err(|error| {
+                format!("Failed to buffer microphone audio for resampling: {error}")
+            })?;
+            let out_capacity = self.out_scratch.len();
+            let mut output_adapter =
+                InterleavedSlice::new_mut(&mut self.out_scratch, 1, out_capacity).map_err(
+                    |error| format!("Failed to prepare microphone resampling output: {error}"),
+                )?;
+            let (_consumed, written) = resampler
+                .process_into_buffer(&input, &mut output_adapter, indexing.as_ref())
+                .map_err(|error| format!("Failed to resample microphone audio: {error}"))?;
+            output.extend_from_slice(&self.out_scratch[..written]);
+            self.pending.drain(..frames);
         }
-        let delayed = resampler
-            .process_partial::<Vec<f32>>(None, None)
-            .map_err(|error| format!("Failed to flush microphone resampler: {error}"))?;
-        output.extend_from_slice(&delayed[0]);
         Ok(output)
     }
 }

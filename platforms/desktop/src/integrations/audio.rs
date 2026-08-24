@@ -2,7 +2,8 @@ use cpal::SampleFormat;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::HeapRb;
 use ringbuf::traits::{Consumer, Producer, Split};
-use rubato::{FftFixedOut, Resampler};
+use rubato::audioadapter_buffers::direct::InterleavedSlice;
+use rubato::{Fft, FixedSync, Resampler};
 use sona_application::live_transcription::LiveSourceEpoch;
 use sona_core::ports::asr::AsrAudioFrame;
 use sona_local_asr::audio::LiveWavRecorder;
@@ -907,20 +908,25 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
         let channels = config.channels;
         let chunk_size_out = 1024;
 
-        let mut resampler =
-            match FftFixedOut::<f32>::new(sample_rate as usize, 16000, chunk_size_out, 2, 1) {
-                Ok(r) => r,
-                Err(e) => {
-                    fail_start(kind.resampler_error_message(e));
-                    return;
-                }
-            };
+        let mut resampler = match Fft::<f32>::new(
+            sample_rate as usize,
+            16000,
+            chunk_size_out,
+            1,
+            FixedSync::Output,
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                fail_start(kind.resampler_error_message(e));
+                return;
+            }
+        };
 
         let input_frames_next = resampler.input_frames_next();
         let rb = HeapRb::<f32>::new(input_frames_next * 4);
         let (mut producer, mut consumer) = rb.split();
-        let mut input_buffer: Vec<Vec<f32>> = vec![vec![0.0; input_frames_next]; 1];
-        let mut output_buffer: Vec<Vec<f32>> = vec![vec![0.0; chunk_size_out]; 1];
+        let mut input_buffer = vec![0.0_f32; resampler.input_frames_max()];
+        let mut output_buffer = vec![0.0_f32; resampler.output_frames_max()];
 
         let stream_result = match sample_format {
             SampleFormat::F32 => {
@@ -1175,9 +1181,9 @@ fn process_capture_audio<R: Runtime>(
     channels: usize,
     producer: &mut impl Producer<Item = f32>,
     consumer: &mut impl Consumer<Item = f32>,
-    resampler: &mut FftFixedOut<f32>,
-    input_buffer: &mut [Vec<f32>],
-    output_buffer: &mut [Vec<f32>],
+    resampler: &mut Fft<f32>,
+    input_buffer: &mut [f32],
+    output_buffer: &mut [f32],
     window: &Window<R>,
     data_tx: &tokio::sync::mpsc::Sender<()>,
     task_producer: &mut impl Producer<Item = f32>,
@@ -1194,16 +1200,36 @@ fn process_capture_audio<R: Runtime>(
 
     while consumer.occupied_len() >= resampler.input_frames_next() {
         let input_frames_needed = resampler.input_frames_next();
-        input_buffer[0].resize(input_frames_needed, 0.0);
-        let chunk_slice = &mut input_buffer[0];
-        let _read = consumer.pop_slice(chunk_slice);
+        let _read = consumer.pop_slice(&mut input_buffer[..input_frames_needed]);
 
-        let result = resampler.process_into_buffer(input_buffer, output_buffer, None);
+        let input_adapter = match InterleavedSlice::new(input_buffer, 1, input_frames_needed) {
+            Ok(adapter) => adapter,
+            Err(error) => {
+                eprintln!(
+                    "[Audio] {} resampler input error: {}",
+                    kind.resampler_error_label(),
+                    error
+                );
+                continue;
+            }
+        };
+        let out_capacity = output_buffer.len();
+        let mut output_adapter = match InterleavedSlice::new_mut(output_buffer, 1, out_capacity) {
+            Ok(adapter) => adapter,
+            Err(error) => {
+                eprintln!(
+                    "[Audio] {} resampler output error: {}",
+                    kind.resampler_error_label(),
+                    error
+                );
+                continue;
+            }
+        };
 
-        match result {
+        match resampler.process_into_buffer(&input_adapter, &mut output_adapter, None) {
             Ok((_in_len, out_len)) => {
                 if out_len > 0 {
-                    let output_f32 = &output_buffer[0][..out_len];
+                    let output_f32 = &output_buffer[..out_len];
 
                     let _ = task_producer.push_slice(output_f32);
                     let _ = data_tx.try_send(());
