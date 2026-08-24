@@ -29,10 +29,10 @@
     "check:staged": "node scripts/check-staged.js"
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.1.0",
-    "@commitlint/config-conventional": "^21.1.0",
+    "@commitlint/cli": "^21.2.2",
+    "@commitlint/config-conventional": "^21.2.2",
     "husky": "^9.1.7",
-    "lint-staged": "^17.0.8"
+    "lint-staged": "^17.3.0"
   },
   "lint-staged": {
     "*.{cjs,css,html,js,json,jsx,md,mjs,ps1,rs,sh,ts,tsx,toml,yaml,yml}": "pnpm run lint:staged --"
