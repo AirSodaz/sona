@@ -21,7 +21,7 @@ function decodeHtmlEntities(html: string): string {
 
 function htmlToPlainText(html: string): string {
     if (!html) return '';
-    let text = html.replace(/<br\s*\/?>/gi, '\n');
+    let text = html.replace(/<br\b[^>]*>/gi, '\n');
     text = text.replace(/<\/(p|div)>/gi, '\n');
     text = text.replace(/<\/?[^>]+(>|$)/g, '');
     return decodeHtmlEntities(text).trim();
