@@ -60,7 +60,10 @@ fn asr_adapters() -> &'static HashMap<&'static str, Arc<dyn AsrProviderAdapter>>
         map.insert(local.provider_id(), Arc::new(local));
         // The local provider adapter dispatches by inner engine, so register
         // it under every derived local engine id.
-        map.insert(LOCAL_LLAMA_CPP_PROVIDER_ID, Arc::new(DesktopLocalProviderAdapter));
+        map.insert(
+            LOCAL_LLAMA_CPP_PROVIDER_ID,
+            Arc::new(DesktopLocalProviderAdapter),
+        );
         for capability in sona_online_asr::ONLINE_ASR_PROVIDER_CAPABILITIES {
             let adapter = online::DesktopOnlineAsrAdapter::new(capability.provider_id);
             map.insert(adapter.provider_id(), Arc::new(adapter));
@@ -90,11 +93,14 @@ pub(crate) fn ensure_adapter(
 }
 
 pub(crate) fn local_asr_registry(recognizer_pool: RecognizerPool) -> LocalAsrRegistry {
+    let vad_engines = sona_core::ports::vad::VadEngineSet::empty()
+        .register(Arc::new(sona_sherpa_vad::SherpaVadEngine));
     LocalAsrRegistry::empty()
         .register(Arc::new(sona_sherpa_onnx::SherpaOnnxAdapter::new(
             recognizer_pool,
+            vad_engines.clone(),
         )))
-        .register(Arc::new(sona_llama_cpp::LlamaCppAdapter))
+        .register(Arc::new(sona_llama_cpp::LlamaCppAdapter::new(vad_engines)))
 }
 
 pub(crate) fn local_asr_registry_default() -> LocalAsrRegistry {

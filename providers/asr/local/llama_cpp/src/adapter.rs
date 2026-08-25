@@ -4,16 +4,25 @@ use sona_core::ports::asr::{
     BatchTranscriberPort, EngineCapabilities, LocalAsrAdapter, LocalAsrEngine,
     StreamingAsrFactoryPort,
 };
+use sona_core::ports::vad::VadEngineSet;
 
 use crate::batch::LlamaBatchAsrAdapter;
 
 /// Provider facade for the llama.cpp local ASR engine (Qwen3-ASR and
 /// Granite Speech batch inference).
 ///
-/// The engine currently supports file transcription only; live streaming
-/// sessions remain exclusive to engines that declare the `STREAMING`
-/// capability.
-pub struct LlamaCppAdapter;
+/// The engine supports file transcription only; live streaming sessions
+/// remain exclusive to engines that declare the `STREAMING` capability.
+#[derive(Clone, Default)]
+pub struct LlamaCppAdapter {
+    vad_engines: VadEngineSet,
+}
+
+impl LlamaCppAdapter {
+    pub fn new(vad_engines: VadEngineSet) -> Self {
+        Self { vad_engines }
+    }
+}
 
 impl LocalAsrAdapter for LlamaCppAdapter {
     fn engine(&self) -> LocalAsrEngine {
@@ -28,7 +37,7 @@ impl LocalAsrAdapter for LlamaCppAdapter {
     }
 
     fn batch_transcriber(&self) -> Arc<dyn BatchTranscriberPort> {
-        Arc::new(LlamaBatchAsrAdapter)
+        Arc::new(LlamaBatchAsrAdapter::new(self.vad_engines.clone()))
     }
 
     fn streaming_factory(&self) -> Option<Arc<dyn StreamingAsrFactoryPort>> {
@@ -42,7 +51,7 @@ mod tests {
 
     #[test]
     fn llama_adapter_is_batch_only() {
-        let adapter = LlamaCppAdapter;
+        let adapter = LlamaCppAdapter::default();
 
         assert_eq!(adapter.engine(), LocalAsrEngine::LlamaCpp);
         assert_eq!(

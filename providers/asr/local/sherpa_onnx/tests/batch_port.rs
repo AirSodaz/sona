@@ -28,7 +28,7 @@ fn missing_input_plan() -> BatchTranscribePlan {
 
 #[tokio::test]
 async fn local_batch_adapter_implements_core_transcriber_port_and_validates_missing_input() {
-    let transcriber = sona_sherpa_onnx::batch::LocalBatchAsrAdapter;
+    let transcriber = sona_sherpa_onnx::batch::LocalBatchAsrAdapter::default();
     let result = transcriber.transcribe(missing_input_plan()).await;
     assert!(result.is_err(), "expected Err for missing input file");
     let error = result.unwrap_err();
@@ -49,7 +49,7 @@ async fn local_batch_adapter_preserves_model_configuration_errors() {
     let mut plan = missing_input_plan();
     plan.input_path = input.clone();
 
-    let error = sona_sherpa_onnx::batch::LocalBatchAsrAdapter
+    let error = sona_sherpa_onnx::batch::LocalBatchAsrAdapter::default()
         .transcribe(plan)
         .await
         .unwrap_err();

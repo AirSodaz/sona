@@ -3,6 +3,7 @@ mod error;
 pub mod postprocess;
 pub mod provider_resolution;
 pub mod runtime;
+pub mod segmentation;
 pub mod speaker;
 pub mod speaker_correction;
 pub mod speaker_review;

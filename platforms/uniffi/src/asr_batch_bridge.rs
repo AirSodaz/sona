@@ -185,7 +185,9 @@ pub(crate) async fn transcribe_local_asr_batch(
     request: FfiLocalAsrBatchRequest,
 ) -> SonaCoreBindingResult<FfiLocalAsrBatchResult> {
     let plan = build_local_batch_plan(request)?;
-    sona_sherpa_onnx::batch::LocalBatchAsrAdapter
+    let vad_engines = sona_core::ports::vad::VadEngineSet::empty()
+        .register(std::sync::Arc::new(sona_sherpa_vad::SherpaVadEngine));
+    sona_sherpa_onnx::batch::LocalBatchAsrAdapter::new(vad_engines)
         .transcribe(plan)
         .await
         .map(|segments| FfiLocalAsrBatchResult {

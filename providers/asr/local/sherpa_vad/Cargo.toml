@@ -1,0 +1,14 @@
+[package]
+name = "sona-sherpa-vad"
+version.workspace = true
+description = "Silero ONNX voice activity detection provider for Sona"
+authors.workspace = true
+edition.workspace = true
+
+[package.metadata.sona]
+role = "provider"
+
+[dependencies]
+log = "0.4.22"
+sherpa-onnx = { version = "=1.13.5", default-features = false, features = ["shared"] }
+sona-core = { path = "../../../../core" }

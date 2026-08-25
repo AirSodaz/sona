@@ -1,6 +1,6 @@
 use hound::{SampleFormat, WavSpec, WavWriter};
 use sherpa_onnx::{SileroVadModelConfig, VadModelConfig, VoiceActivityDetector};
-use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind, BatchSegmentationMode};
+use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 use std::path::{Path, PathBuf};
 
 pub(crate) type VadConfig = VadModelConfig;
@@ -30,29 +30,6 @@ impl Default for VadDetectorOptions {
             sample_rate: 16000,
             num_threads: 1,
         }
-    }
-}
-
-impl VadDetectorOptions {
-    pub fn batch_segmentation() -> Self {
-        Self {
-            threshold: 0.35,
-            min_silence_duration: 1.0,
-            ..Self::default()
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct AudioSegment {
-    pub samples: Vec<f32>,
-    pub start_time: f32,
-    pub duration: f32,
-}
-
-impl AudioSegment {
-    pub fn end_time(&self) -> f32 {
-        self.start_time + self.duration
     }
 }
 
@@ -232,69 +209,6 @@ pub async fn extract_and_resample_audio(
     Ok(pcm_s16le_bytes_to_f32(&output.stdout))
 }
 
-pub fn fixed_chunk_audio(
-    samples: &[f32],
-    sample_rate: u32,
-    chunk_duration: f32,
-) -> Vec<AudioSegment> {
-    let chunk_size = (sample_rate as f32 * chunk_duration) as usize;
-    if chunk_size == 0 {
-        return Vec::new();
-    }
-
-    samples
-        .chunks(chunk_size)
-        .enumerate()
-        .map(|(index, chunk)| {
-            let start_sample = index * chunk_size;
-            AudioSegment {
-                samples: chunk.to_vec(),
-                start_time: start_sample as f32 / sample_rate as f32,
-                duration: chunk.len() as f32 / sample_rate as f32,
-            }
-        })
-        .collect()
-}
-
-pub fn whole_audio_segment(samples: &[f32], sample_rate: u32) -> Vec<AudioSegment> {
-    if samples.is_empty() {
-        return Vec::new();
-    }
-
-    vec![AudioSegment {
-        samples: samples.to_vec(),
-        start_time: 0.0,
-        duration: samples.len() as f32 / sample_rate as f32,
-    }]
-}
-
-pub fn segment_batch_audio(
-    samples: &[f32],
-    vad_model: Option<&Path>,
-    vad_buffer: f32,
-    batch_segmentation_mode: BatchSegmentationMode,
-) -> Vec<AudioSegment> {
-    if batch_segmentation_mode == BatchSegmentationMode::Whole {
-        return whole_audio_segment(samples, 16000);
-    }
-
-    let Some(vad_model) = vad_model else {
-        return fixed_chunk_audio(samples, 16000, 30.0);
-    };
-
-    if vad_model.as_os_str().is_empty() || !vad_model.exists() {
-        return fixed_chunk_audio(samples, 16000, 30.0);
-    }
-
-    let vad_config = match create_vad_config(vad_model, VadDetectorOptions::batch_segmentation()) {
-        Ok(config) => config,
-        Err(_) => return fixed_chunk_audio(samples, 16000, 30.0),
-    };
-
-    vad_segment_audio(samples, 16000, &vad_config, vad_buffer)
-        .unwrap_or_else(|_| fixed_chunk_audio(samples, 16000, 30.0))
-}
-
 pub(crate) fn create_vad_config(
     vad_model: &Path,
     options: VadDetectorOptions,
@@ -366,89 +280,10 @@ pub fn vad_detected(vad: &SafeVad) -> bool {
     vad.0.detected()
 }
 
-pub fn vad_segment_audio(
-    samples: &[f32],
-    sample_rate: u32,
-    vad_config: &VadConfig,
-    buffer_size_seconds: f32,
-) -> Result<Vec<AudioSegment>, AsrPortError> {
-    let detector_capacity_seconds = if buffer_size_seconds > 0.0 {
-        buffer_size_seconds
-    } else {
-        60.0
-    };
-    vad_segment_audio_with_capacity(samples, sample_rate, vad_config, detector_capacity_seconds)
-}
-
-pub(crate) fn vad_segment_audio_with_capacity(
-    samples: &[f32],
-    sample_rate: u32,
-    vad_config: &VadConfig,
-    detector_capacity_seconds: f32,
-) -> Result<Vec<AudioSegment>, AsrPortError> {
-    let detector_capacity_seconds = if detector_capacity_seconds > 0.0 {
-        detector_capacity_seconds
-    } else {
-        60.0
-    };
-    let mut vad = VoiceActivityDetector::create(vad_config, detector_capacity_seconds)
-        .ok_or_else(|| AsrPortError::runtime("Failed to create VoiceActivityDetector"))?;
-
-    let window_size = vad_config.silero_vad.window_size as usize;
-    let chunk_size = if window_size > 0 { window_size } else { 512 };
-    let mut segments = Vec::new();
-
-    for chunk in samples.chunks(chunk_size) {
-        vad.accept_waveform(chunk);
-        extract_vad_segments(&mut vad, sample_rate, &mut segments, false);
-    }
-
-    vad.flush();
-    extract_vad_segments(&mut vad, sample_rate, &mut segments, true);
-
-    Ok(segments)
-}
-
-fn extract_vad_segments(
-    vad: &mut VoiceActivityDetector,
-    sample_rate: u32,
-    segments: &mut Vec<AudioSegment>,
-    is_flush: bool,
-) {
-    while !vad.is_empty() {
-        if let Some(segment) = vad.front() {
-            let start_sample = segment.start() as usize;
-            let seg_samples = segment.samples().to_vec();
-            let start_time = start_sample as f32 / sample_rate as f32;
-            let duration = seg_samples.len() as f32 / sample_rate as f32;
-
-            let tag = if is_flush { "(flush)" } else { "" };
-            log::debug!(
-                "[Sona VAD] segment {} start_sample={} duration={:.2}s samples={}",
-                tag,
-                start_sample,
-                duration,
-                seg_samples.len()
-            );
-
-            segments.push(AudioSegment {
-                samples: seg_samples,
-                start_time,
-                duration,
-            });
-        }
-        vad.pop();
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        LiveWavRecorder, resolve_ffmpeg_sidecar_path_from_exe, resolve_model_onnx_path,
-        segment_batch_audio,
-    };
+    use super::{LiveWavRecorder, resolve_ffmpeg_sidecar_path_from_exe, resolve_model_onnx_path};
     use crate::audio::{pcm_i16_to_f32, pcm_s16le_bytes_to_f32};
-    use sona_core::ports::asr::BatchSegmentationMode;
     use std::fs;
     use std::path::Path;
 
@@ -507,31 +342,6 @@ mod tests {
         );
 
         fs::remove_file(filepath).unwrap();
-    }
-
-    #[test]
-    fn batch_whole_segmentation_uses_one_full_audio_segment() {
-        let samples = vec![0.0; 16000 * 65];
-        let segments = segment_batch_audio(&samples, None, 5.0, BatchSegmentationMode::Whole);
-
-        assert_eq!(segments.len(), 1);
-        assert_eq!(segments[0].start_time, 0.0);
-        assert_eq!(segments[0].duration, 65.0);
-        assert_eq!(segments[0].samples.len(), samples.len());
-    }
-
-    #[test]
-    fn batch_vad_segmentation_falls_back_to_fixed_chunks_without_vad_model() {
-        let samples = vec![0.0; 16000 * 65];
-        let segments = segment_batch_audio(&samples, None, 5.0, BatchSegmentationMode::Vad);
-
-        assert_eq!(segments.len(), 3);
-        assert_eq!(segments[0].start_time, 0.0);
-        assert_eq!(segments[0].duration, 30.0);
-        assert_eq!(segments[1].start_time, 30.0);
-        assert_eq!(segments[1].duration, 30.0);
-        assert_eq!(segments[2].start_time, 60.0);
-        assert_eq!(segments[2].duration, 5.0);
     }
 
     #[test]

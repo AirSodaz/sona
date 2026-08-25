@@ -5,3 +5,4 @@ pub mod llm;
 pub mod path;
 pub mod runtime;
 pub mod time;
+pub mod vad;

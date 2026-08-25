@@ -1,9 +1,8 @@
 use sona_core::ports::asr::{
     AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,
-    GROQ_WHISPER_PROVIDER_ID, LocalAsrEngine, LOCAL_SHERPA_ONNX_PROVIDER_ID,
-    MISTRAL_VOXTRAL_PROVIDER_ID,
-    OnlineAsrProviderRequest, VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
-    online_asr_providers,
+    GROQ_WHISPER_PROVIDER_ID, LOCAL_SHERPA_ONNX_PROVIDER_ID, LocalAsrEngine,
+    MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest, VOLCENGINE_DOUBAO_PROVIDER_ID,
+    find_online_asr_provider, online_asr_providers,
 };
 
 #[test]
@@ -59,7 +58,9 @@ fn local_engine_serializes_neutral_tag_and_accepts_legacy_alias() {
         "sensevoice".to_string(),
         None,
         None,
-        TranscriptNormalizationOptions { enable_timeline: false },
+        TranscriptNormalizationOptions {
+            enable_timeline: false,
+        },
         TranscriptPostprocessOptions::default(),
         None,
         None,

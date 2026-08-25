@@ -563,11 +563,7 @@ pub enum AsrEngineConfig {
     ///
     /// The `local-sherpa` alias keeps configs persisted by older versions
     /// deserializable; every write path emits the neutral `local` tag.
-    #[serde(
-        rename = "local",
-        alias = "local-sherpa",
-        rename_all = "camelCase"
-    )]
+    #[serde(rename = "local", alias = "local-sherpa", rename_all = "camelCase")]
     Local {
         #[serde(default)]
         local_engine: LocalAsrEngine,

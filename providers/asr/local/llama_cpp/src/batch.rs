@@ -16,10 +16,15 @@ use llama_cpp_2::mtmd::{
 use llama_cpp_2::sampling::LlamaSampler;
 use sona_core::models::config::ModelFileConfig;
 use sona_core::ports::asr::{
-    AsrPortError, AsrPortErrorKind, BatchTranscriberPort, BatchTranscriptionObserver,
-    LocalAsrEngine, NoopBatchTranscriptionObserver, local_asr_engine_mismatch,
+    AsrPortError, AsrPortErrorKind, BatchSegmentationMode, BatchTranscriberPort,
+    BatchTranscriptionObserver, LocalAsrEngine, NoopBatchTranscriptionObserver,
+    local_asr_engine_mismatch,
 };
+use sona_core::ports::vad::{VadDetectionOptions, VadEngineSet};
 use sona_core::transcription::runtime::BatchTranscribePlan;
+use sona_core::transcription::segmentation::{
+    AudioSegment, BATCH_SEGMENTATION_SAMPLE_RATE, segment_batch_audio,
+};
 use sona_core::transcription::transcript::{
     TranscriptSegment, TranscriptUpdate, ensure_transcript_segment_timing,
     normalize_recognizer_text,
@@ -40,8 +45,16 @@ const GRANITE_SPEECH_HOTWORDS_MAX_CHARS: usize = 256;
 static BACKEND: OnceLock<Result<LlamaBackend, String>> = OnceLock::new();
 static MODEL_CACHE: OnceLock<Mutex<HashMap<PathBuf, Arc<LlamaModel>>>> = OnceLock::new();
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct LlamaBatchAsrAdapter;
+#[derive(Clone, Default)]
+pub struct LlamaBatchAsrAdapter {
+    vad_engines: VadEngineSet,
+}
+
+impl LlamaBatchAsrAdapter {
+    pub fn new(vad_engines: VadEngineSet) -> Self {
+        Self { vad_engines }
+    }
+}
 
 #[async_trait]
 impl BatchTranscriberPort for LlamaBatchAsrAdapter {
@@ -49,7 +62,7 @@ impl BatchTranscriberPort for LlamaBatchAsrAdapter {
         &self,
         plan: BatchTranscribePlan,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        let job = LlamaBatchTranscriptionJob::from_plan(plan)?;
+        let job = LlamaBatchTranscriptionJob::from_plan(plan, &self.vad_engines)?;
         tokio::task::spawn_blocking(move || {
             job.transcribe(Arc::new(NoopBatchTranscriptionObserver))
         })
@@ -67,7 +80,7 @@ impl BatchTranscriberPort for LlamaBatchAsrAdapter {
         plan: BatchTranscribePlan,
         observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        let job = LlamaBatchTranscriptionJob::from_plan(plan)?;
+        let job = LlamaBatchTranscriptionJob::from_plan(plan, &self.vad_engines)?;
         tokio::task::spawn_blocking(move || job.transcribe(observer))
             .await
             .map_err(|error| {
@@ -91,10 +104,17 @@ struct LlamaBatchTranscriptionJob {
     /// Trained Qwen3-ASR prefill name (`Some("Chinese")`, ...); `None`
     /// lets the model auto-detect.
     language_prefill: Option<&'static str>,
+    vad_model: Option<PathBuf>,
+    vad_buffer: f32,
+    batch_segmentation_mode: BatchSegmentationMode,
+    vad_engines: VadEngineSet,
 }
 
 impl LlamaBatchTranscriptionJob {
-    fn from_plan(plan: BatchTranscribePlan) -> Result<Self, AsrPortError> {
+    fn from_plan(
+        plan: BatchTranscribePlan,
+        vad_engines: &VadEngineSet,
+    ) -> Result<Self, AsrPortError> {
         if plan.engine != LocalAsrEngine::LlamaCpp {
             return Err(local_asr_engine_mismatch(
                 LocalAsrEngine::LlamaCpp,
@@ -147,6 +167,10 @@ impl LlamaBatchTranscriptionJob {
             model_type: plan.model_type,
             hotwords: options.hotwords,
             language_prefill: options.language_prefill,
+            vad_model: plan.vad_model.map(PathBuf::from),
+            vad_buffer: plan.vad_buffer,
+            batch_segmentation_mode: plan.batch_segmentation_mode,
+            vad_engines: vad_engines.clone(),
         })
     }
 
@@ -184,37 +208,8 @@ impl LlamaBatchTranscriptionJob {
         let sample_rate = mtmd.get_audio_sample_rate().unwrap_or(16_000).max(1);
         let samples = decode_audio_input(&self.input_path, sample_rate)?;
         observer.on_progress(10.0);
-        let audio = MtmdBitmap::from_audio_data(&samples).map_err(|error| {
-            AsrPortError::new(
-                AsrPortErrorKind::InvalidRequest,
-                format!(
-                    "Failed to create llama.cpp audio input {}: {error}",
-                    self.input_path.display()
-                ),
-            )
-        })?;
-        if !audio.is_audio() {
-            return Err(AsrPortError::invalid_request(format!(
-                "Input is not a supported audio file: {}",
-                self.input_path.display()
-            )));
-        }
 
-        let context_size = NonZeroU32::new(model.n_ctx_train().max(32_768));
-        let context_params = LlamaContextParams::default()
-            .with_n_ctx(context_size)
-            .with_n_batch(N_BATCH as u32)
-            .with_n_threads(self.num_threads)
-            .with_n_threads_batch(self.num_threads);
-        let mut context = model
-            .new_context(backend, context_params)
-            .map_err(|error| {
-                AsrPortError::new(
-                    AsrPortErrorKind::Runtime,
-                    format!("Failed to create llama.cpp inference context: {error}"),
-                )
-            })?;
-
+        let audio_segments = self.plan_audio_segments(&samples, sample_rate)?;
         let prompt = build_transcription_prompt(
             &self.model_type,
             &model,
@@ -222,139 +217,285 @@ impl LlamaBatchTranscriptionJob {
             self.language_prefill,
         )?;
         let add_special = self.model_type != MODEL_TYPE_GRANITE_SPEECH;
-        let chunks = mtmd
-            .tokenize(
-                MtmdInputText {
-                    text: prompt,
-                    add_special,
-                    parse_special: true,
-                },
-                &[&audio],
-            )
-            .map_err(|error| {
-                AsrPortError::new(
-                    AsrPortErrorKind::Model,
-                    format!("Failed to tokenize llama.cpp ASR audio prompt: {error}"),
-                )
-            })?;
-        let n_past = chunks
-            .eval_chunks(&mtmd, &context, 0, 0, N_BATCH, true)
-            .map_err(|error| {
-                AsrPortError::new(
-                    AsrPortErrorKind::Runtime,
-                    format!("Failed to evaluate llama.cpp ASR audio: {error}"),
-                )
-            })?;
-        observer.on_progress(60.0);
+        let language_forced = self.language_prefill.is_some();
+        let segment_total = audio_segments.len();
 
-        let mut sampler = LlamaSampler::greedy();
-        let mut decoder = encoding_rs::UTF_8.new_decoder();
-        let mut generated = String::new();
-        let segment_id = uuid::Uuid::new_v4().to_string();
-        let duration = samples.len() as f64 / f64::from(sample_rate);
-        let mut generated_tokens = 0usize;
-        let available = context.n_ctx().saturating_sub(n_past.max(0) as u32) as usize;
-        let generation_limit = MAX_GENERATED_TOKENS.min(available);
-        let generation_end =
-            n_past.saturating_add(i32::try_from(generation_limit).unwrap_or(i32::MAX));
-        for token_position in n_past..generation_end {
-            let token = sampler.sample(&context, -1);
-            if model.is_eog_token(token) {
-                break;
+        let mut results = Vec::new();
+        for (segment_index, segment) in audio_segments.into_iter().enumerate() {
+            let (start_sample, end_sample) = segment_bounds(&segment, sample_rate, samples.len());
+            if end_sample <= start_sample {
+                continue;
             }
-            sampler.accept(token);
-            generated.push_str(
-                &model
-                    .token_to_piece(token, &mut decoder, false, None)
-                    .map_err(|error| {
-                        AsrPortError::new(
-                            AsrPortErrorKind::Protocol,
-                            format!(
-                                "Failed to decode llama.cpp output token (id={}): {error}",
-                                token.0
-                            ),
-                        )
-                    })?,
-            );
-            generated_tokens = generated_tokens.saturating_add(1);
-
-            if generated_tokens.is_multiple_of(8) {
-                emit_partial_transcript(
-                    observer.as_ref(),
-                    &self.model_type,
-                    self.language_prefill.is_some(),
-                    &segment_id,
-                    duration,
-                    &generated,
-                    generated_tokens,
-                );
+            let segment_samples = samples[start_sample..end_sample].to_vec();
+            if let Some(segment_result) = transcribe_segment(
+                backend,
+                &model,
+                &mtmd,
+                &prompt,
+                add_special,
+                language_forced,
+                self.num_threads,
+                &self.model_type,
+                &segment_samples,
+                &segment,
+                segment_index,
+                segment_total,
+                observer.as_ref(),
+            )? {
+                observer.on_transcript_update(&TranscriptUpdate {
+                    remove_ids: Vec::new(),
+                    upsert_segments: vec![segment_result.clone()],
+                });
+                results.push(segment_result);
             }
-
-            let mut batch = LlamaBatch::new(1, 1);
-            batch
-                .add(token, token_position, &[0], true)
-                .map_err(|error| {
-                    AsrPortError::new(
-                        AsrPortErrorKind::Runtime,
-                        format!("Failed to prepare llama.cpp decode batch: {error}"),
-                    )
-                })?;
-            context.decode(&mut batch).map_err(|error| {
-                AsrPortError::new(
-                    AsrPortErrorKind::Runtime,
-                    format!("llama.cpp token generation failed: {error}"),
-                )
-            })?;
         }
 
-        let text = parse_transcript_output(&self.model_type, &generated);
-        if text.is_empty() {
-            observer.on_progress(100.0);
-            return Ok(Vec::new());
-        }
-        let mut segment = TranscriptSegment {
-            id: segment_id,
-            text,
-            start: 0.0,
-            end: duration,
-            is_final: true,
-            timing: None,
-            tokens: None,
-            timestamps: None,
-            durations: None,
-            translation: None,
-            speaker: None,
-            speaker_attribution: None,
-        };
-        ensure_transcript_segment_timing(&mut segment);
-        observer.on_transcript_update(&TranscriptUpdate {
-            remove_ids: Vec::new(),
-            upsert_segments: vec![segment.clone()],
-        });
         observer.on_progress(100.0);
-        Ok(vec![segment])
+        Ok(results)
+    }
+
+    /// Splits the decoded audio into inference segments.
+    ///
+    /// Detection always runs on the 16 kHz timeline VAD engines expect; when
+    /// the model requests a different rate the segments are expressed as
+    /// seconds and mapped back onto the model-rate samples by the caller.
+    fn plan_audio_segments(
+        &self,
+        samples: &[f32],
+        sample_rate: u32,
+    ) -> Result<Vec<AudioSegment>, AsrPortError> {
+        if self.batch_segmentation_mode == BatchSegmentationMode::Whole {
+            return Ok(vec![AudioSegment {
+                samples: Vec::new(),
+                start_time: 0.0,
+                duration: samples.len() as f32 / (sample_rate.max(1) as f32),
+            }]);
+        }
+
+        let vad_engine = self.vad_engines.resolve(self.vad_model.as_deref());
+        let Some(engine) = vad_engine else {
+            return Ok(segment_batch_audio(
+                samples,
+                sample_rate,
+                BatchSegmentationMode::Vad,
+                None,
+                &self.vad_options(),
+            ));
+        };
+
+        if sample_rate == BATCH_SEGMENTATION_SAMPLE_RATE {
+            return Ok(segment_batch_audio(
+                samples,
+                sample_rate,
+                BatchSegmentationMode::Vad,
+                Some(engine.as_ref()),
+                &self.vad_options(),
+            ));
+        }
+
+        let detection_samples =
+            decode_audio_input(&self.input_path, BATCH_SEGMENTATION_SAMPLE_RATE)?;
+        Ok(segment_batch_audio(
+            &detection_samples,
+            BATCH_SEGMENTATION_SAMPLE_RATE,
+            BatchSegmentationMode::Vad,
+            Some(engine.as_ref()),
+            &self.vad_options(),
+        ))
+    }
+
+    fn vad_options(&self) -> VadDetectionOptions {
+        let mut options =
+            VadDetectionOptions::batch_defaults(self.vad_model.as_deref().unwrap_or(Path::new("")));
+        options.buffer_seconds = self.vad_buffer;
+        options
     }
 }
 
+/// Maps a second-based [`AudioSegment`] back onto model-rate sample indices.
+fn segment_bounds(
+    segment: &AudioSegment,
+    sample_rate: u32,
+    total_samples: usize,
+) -> (usize, usize) {
+    let rate = sample_rate.max(1) as f32;
+    let start = ((segment.start_time * rate).round() as usize).min(total_samples);
+    let end = ((segment.end_time() * rate).round() as usize).clamp(start, total_samples);
+    (start, end)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn transcribe_segment(
+    backend: &'static LlamaBackend,
+    model: &Arc<LlamaModel>,
+    mtmd: &MtmdContext,
+    prompt: &str,
+    add_special: bool,
+    language_forced: bool,
+    num_threads: i32,
+    model_type: &str,
+    samples: &[f32],
+    segment: &AudioSegment,
+    segment_index: usize,
+    segment_total: usize,
+    observer: &dyn BatchTranscriptionObserver,
+) -> Result<Option<TranscriptSegment>, AsrPortError> {
+    let audio = MtmdBitmap::from_audio_data(samples).map_err(|error| {
+        AsrPortError::new(
+            AsrPortErrorKind::InvalidRequest,
+            format!("Failed to create llama.cpp audio input: {error}"),
+        )
+    })?;
+    if !audio.is_audio() {
+        return Err(AsrPortError::invalid_request(
+            "Input is not a supported audio file.",
+        ));
+    }
+
+    let context_size = NonZeroU32::new(model.n_ctx_train().max(32_768));
+    let context_params = LlamaContextParams::default()
+        .with_n_ctx(context_size)
+        .with_n_batch(N_BATCH as u32)
+        .with_n_threads(num_threads)
+        .with_n_threads_batch(num_threads);
+    let mut context = model
+        .new_context(backend, context_params)
+        .map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::Runtime,
+                format!("Failed to create llama.cpp inference context: {error}"),
+            )
+        })?;
+
+    let chunks = mtmd
+        .tokenize(
+            MtmdInputText {
+                text: prompt.to_string(),
+                add_special,
+                parse_special: true,
+            },
+            &[&audio],
+        )
+        .map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::Model,
+                format!("Failed to tokenize llama.cpp ASR audio prompt: {error}"),
+            )
+        })?;
+    let n_past = chunks
+        .eval_chunks(mtmd, &context, 0, 0, N_BATCH, true)
+        .map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::Runtime,
+                format!("Failed to evaluate llama.cpp ASR audio: {error}"),
+            )
+        })?;
+    observer.on_progress(audio_ingest_progress(segment_index, segment_total));
+
+    let mut sampler = LlamaSampler::greedy();
+    let mut decoder = encoding_rs::UTF_8.new_decoder();
+    let mut generated = String::new();
+    let segment_id = uuid::Uuid::new_v4().to_string();
+    let mut generated_tokens = 0usize;
+    let available = context.n_ctx().saturating_sub(n_past.max(0) as u32) as usize;
+    let generation_limit = MAX_GENERATED_TOKENS.min(available);
+    let generation_end = n_past.saturating_add(i32::try_from(generation_limit).unwrap_or(i32::MAX));
+    for token_position in n_past..generation_end {
+        let token = sampler.sample(&context, -1);
+        if model.is_eog_token(token) {
+            break;
+        }
+        sampler.accept(token);
+        generated.push_str(
+            &model
+                .token_to_piece(token, &mut decoder, false, None)
+                .map_err(|error| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Protocol,
+                        format!(
+                            "Failed to decode llama.cpp output token (id={}): {error}",
+                            token.0
+                        ),
+                    )
+                })?,
+        );
+        generated_tokens = generated_tokens.saturating_add(1);
+
+        if generated_tokens.is_multiple_of(8) {
+            emit_partial_transcript(
+                observer,
+                model_type,
+                language_forced,
+                &segment_id,
+                segment,
+                &generated,
+                generated_tokens,
+                segment_index,
+                segment_total,
+            );
+        }
+
+        let mut batch = LlamaBatch::new(1, 1);
+        batch
+            .add(token, token_position, &[0], true)
+            .map_err(|error| {
+                AsrPortError::new(
+                    AsrPortErrorKind::Runtime,
+                    format!("Failed to prepare llama.cpp decode batch: {error}"),
+                )
+            })?;
+        context.decode(&mut batch).map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::Runtime,
+                format!("llama.cpp token generation failed: {error}"),
+            )
+        })?;
+    }
+
+    let text = parse_transcript_output(model_type, &generated);
+    if text.is_empty() {
+        return Ok(None);
+    }
+    let mut segment_result = TranscriptSegment {
+        id: segment_id,
+        text,
+        start: f64::from(segment.start_time),
+        end: f64::from(segment.end_time()),
+        is_final: true,
+        timing: None,
+        tokens: None,
+        timestamps: None,
+        durations: None,
+        translation: None,
+        speaker: None,
+        speaker_attribution: None,
+    };
+    ensure_transcript_segment_timing(&mut segment_result);
+    Ok(Some(segment_result))
+}
+
+#[allow(clippy::too_many_arguments)]
 fn emit_partial_transcript(
     observer: &dyn BatchTranscriptionObserver,
     model_type: &str,
     language_forced: bool,
     segment_id: &str,
-    duration: f64,
+    segment: &AudioSegment,
     generated: &str,
     generated_tokens: usize,
+    segment_index: usize,
+    segment_total: usize,
 ) {
     let text = parse_partial_transcript_output(model_type, generated, language_forced);
     if text.is_empty() {
         return;
     }
 
-    let mut segment = TranscriptSegment {
+    let mut partial = TranscriptSegment {
         id: segment_id.to_string(),
         text,
-        start: 0.0,
-        end: duration,
+        start: f64::from(segment.start_time),
+        end: f64::from(segment.end_time()),
         is_final: false,
         timing: None,
         tokens: None,
@@ -364,21 +505,40 @@ fn emit_partial_transcript(
         speaker: None,
         speaker_attribution: None,
     };
-    ensure_transcript_segment_timing(&mut segment);
+    ensure_transcript_segment_timing(&mut partial);
     observer.on_transcript_update(&TranscriptUpdate {
         remove_ids: Vec::new(),
-        upsert_segments: vec![segment],
+        upsert_segments: vec![partial],
     });
-    observer.on_progress(llama_generation_progress(generated_tokens));
+    observer.on_progress(llama_generation_progress(
+        generated_tokens,
+        segment_index,
+        segment_total,
+    ));
 }
 
-fn llama_generation_progress(generated_tokens: usize) -> f32 {
+/// Audio-ingest progress spans 10%..60% across segments; generation then owns
+/// 60%..95% through [`llama_generation_progress`].
+fn audio_ingest_progress(segment_index: usize, segment_total: usize) -> f32 {
+    const INGEST_START: f32 = 10.0;
+    const INGEST_SPAN: f32 = 50.0;
+    let total = segment_total.max(1) as f32;
+    INGEST_START + INGEST_SPAN * (segment_index.min(segment_total) as f32 + 1.0) / total
+}
+
+fn llama_generation_progress(
+    generated_tokens: usize,
+    segment_index: usize,
+    segment_total: usize,
+) -> f32 {
     const GENERATION_START: f32 = 60.0;
     const GENERATION_SPAN: f32 = 35.0;
     const TOKEN_SCALE: f32 = 160.0;
 
+    let total = segment_total.max(1) as f32;
+    let completed = segment_index.min(segment_total.max(1) - 1) as f32;
     let completion_curve = 1.0 - (-(generated_tokens as f32) / TOKEN_SCALE).exp();
-    (GENERATION_START + GENERATION_SPAN * completion_curve).min(95.0)
+    (GENERATION_START + GENERATION_SPAN * (completed + completion_curve) / total).min(95.0)
 }
 
 fn decode_audio_input(path: &Path, sample_rate: u32) -> Result<Vec<f32>, AsrPortError> {
@@ -488,9 +648,6 @@ fn validate_supported_options(
     }
     if plan.punctuation_model.is_some() {
         unsupported.push("punctuation model");
-    }
-    if plan.vad_model.is_some() {
-        unsupported.push("VAD model");
     }
     if plan.speaker_processing.is_some() {
         unsupported.push("speaker processing");
@@ -907,15 +1064,22 @@ fn is_qwen3_asr_language_name(candidate: &str) -> bool {
 mod tests {
     use super::{
         LlamaBatchTranscriptionJob, MODEL_TYPE_GRANITE_SPEECH, MODEL_TYPE_QWEN3_ASR,
-        granite_speech_prompt, llama_generation_progress, normalize_hotwords,
-        parse_partial_transcript_output, parse_qwen3_asr_output, parse_qwen3_asr_partial_output,
-        parse_transcript_output, pcm_s16le_bytes_to_f32, qwen3_asr_language,
-        resolve_ffmpeg_sidecar_path_from_exe, truncate_hotwords, validate_supported_options,
+        audio_ingest_progress, granite_speech_prompt, llama_generation_progress,
+        normalize_hotwords, parse_partial_transcript_output, parse_qwen3_asr_output,
+        parse_qwen3_asr_partial_output, parse_transcript_output, pcm_s16le_bytes_to_f32,
+        qwen3_asr_language, resolve_ffmpeg_sidecar_path_from_exe, segment_bounds,
+        truncate_hotwords, validate_supported_options,
     };
     use sona_core::export::ExportFormat;
     use sona_core::ports::asr::{AsrPortErrorKind, LocalAsrEngine};
+    use sona_core::ports::vad::VadEngineSet;
     use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
+    use sona_core::transcription::segmentation::AudioSegment;
     use std::path::PathBuf;
+
+    fn empty_vad_engines() -> VadEngineSet {
+        VadEngineSet::empty()
+    }
 
     fn plan() -> BatchTranscribePlan {
         BatchTranscribePlan {
@@ -979,7 +1143,7 @@ mod tests {
 
         // The guard passes; the job then fails on the missing input file,
         // proving model type was accepted by dispatch.
-        let error = LlamaBatchTranscriptionJob::from_plan(plan).unwrap_err();
+        let error = LlamaBatchTranscriptionJob::from_plan(plan, &empty_vad_engines()).unwrap_err();
 
         assert_eq!(error.kind, AsrPortErrorKind::InvalidRequest);
         assert!(
@@ -990,11 +1154,32 @@ mod tests {
     }
 
     #[test]
+    fn vad_configuration_is_accepted_for_segmented_batch_runs() {
+        let mut plan = plan();
+        let input = std::env::temp_dir().join(format!(
+            "sona-llama-vad-accept-{}.wav",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::write(&input, b"not-a-real-wav").unwrap();
+        plan.input_path = input.clone();
+        plan.vad_model = Some("/models/silero-vad".to_string());
+        plan.batch_segmentation_mode = sona_core::ports::asr::BatchSegmentationMode::Vad;
+
+        // VAD options pass validation; the job then fails on the missing
+        // model/mmproj file configuration instead.
+        let error = LlamaBatchTranscriptionJob::from_plan(plan, &empty_vad_engines()).unwrap_err();
+
+        assert_eq!(error.kind, AsrPortErrorKind::Model);
+        assert!(error.message.contains("file configuration"));
+        std::fs::remove_file(input).unwrap();
+    }
+
+    #[test]
     fn unknown_model_types_name_the_supported_set() {
         let mut plan = plan();
         plan.model_type = "whisper-large".to_string();
 
-        let error = LlamaBatchTranscriptionJob::from_plan(plan).unwrap_err();
+        let error = LlamaBatchTranscriptionJob::from_plan(plan, &empty_vad_engines()).unwrap_err();
 
         assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
         assert!(error.message.contains(MODEL_TYPE_QWEN3_ASR));
@@ -1023,13 +1208,45 @@ mod tests {
 
     #[test]
     fn token_generation_progress_is_monotonic_and_capped() {
-        let first = llama_generation_progress(8);
-        let later = llama_generation_progress(160);
-        let much_later = llama_generation_progress(10_000);
+        let first = llama_generation_progress(8, 0, 1);
+        let later = llama_generation_progress(160, 0, 1);
+        let much_later = llama_generation_progress(10_000, 0, 1);
 
         assert!(first > 60.0);
         assert!(later > first);
         assert_eq!(much_later, 95.0);
+    }
+
+    #[test]
+    fn generation_and_ingest_progress_span_across_segments() {
+        let curve = 1.0 - (-(8f32) / 160.0).exp();
+        let single = llama_generation_progress(8, 0, 1);
+        let first_of_two = llama_generation_progress(8, 0, 2);
+        let second_of_two = llama_generation_progress(8, 1, 2);
+
+        assert_eq!(single, 60.0 + 35.0 * curve);
+        assert_eq!(first_of_two, 60.0 + 35.0 * curve / 2.0);
+        assert_eq!(second_of_two, 60.0 + 35.0 * (1.0 + curve) / 2.0);
+
+        let ingest_first = audio_ingest_progress(0, 2);
+        let ingest_last = audio_ingest_progress(1, 2);
+        assert_eq!(ingest_first, 35.0);
+        assert_eq!(ingest_last, 60.0);
+    }
+
+    #[test]
+    fn segment_bounds_map_seconds_onto_model_rate_samples() {
+        let segment = AudioSegment {
+            samples: Vec::new(),
+            start_time: 1.0,
+            duration: 2.0,
+        };
+
+        assert_eq!(segment_bounds(&segment, 16_000, 100_000), (16_000, 48_000));
+        // A 44.1 kHz source maps through the same seconds.
+        assert_eq!(segment_bounds(&segment, 44_100, 200_000), (44_100, 132_300));
+        // Bounds clamp to the available sample range.
+        assert_eq!(segment_bounds(&segment, 16_000, 20_000), (16_000, 20_000));
     }
 
     #[test]
@@ -1071,7 +1288,7 @@ mod tests {
         let mut plan = plan();
         plan.engine = LocalAsrEngine::SherpaOnnx;
 
-        let error = LlamaBatchTranscriptionJob::from_plan(plan).unwrap_err();
+        let error = LlamaBatchTranscriptionJob::from_plan(plan, &empty_vad_engines()).unwrap_err();
         assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
         assert_eq!(
             error.message,

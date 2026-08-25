@@ -101,8 +101,6 @@ export function buildBatchTranscriptionRequest({
         enableItn: false,
         hotwords: null,
         punctuationModel: null,
-        vadModel: null,
-        batchSegmentationMode: 'whole' as const,
       }
     : runtimeRequest;
   const isLlamaCpp = isLlamaCppBatchRequest(asrRequest);

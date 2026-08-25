@@ -1,4 +1,4 @@
-use crate::audio::{extract_and_resample_audio, save_wav_file, segment_batch_audio};
+use crate::audio::{extract_and_resample_audio, save_wav_file};
 use crate::gpu::{GpuFallbackNotice, resolve_gpu_acceleration_plan};
 use crate::punctuation::{Punctuation, load_punctuation_from_path};
 use crate::recognizer::{
@@ -12,7 +12,9 @@ use sona_core::ports::asr::{
     BatchTranscriptionObserver, LocalAsrEngine, NoopBatchTranscriptionObserver,
     local_asr_engine_mismatch,
 };
+use sona_core::ports::vad::{VadDetectionOptions, VadEngineSet};
 use sona_core::transcription::runtime::BatchTranscribePlan;
+use sona_core::transcription::segmentation::{BATCH_SEGMENTATION_SAMPLE_RATE, segment_batch_audio};
 use sona_core::transcription::transcript::{
     TranscriptSegment, TranscriptUpdate, ensure_transcript_segment_timing,
     normalize_recognizer_text, synthesize_durations,
@@ -20,8 +22,16 @@ use sona_core::transcription::transcript::{
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct LocalBatchAsrAdapter;
+#[derive(Clone, Default)]
+pub struct LocalBatchAsrAdapter {
+    vad_engines: VadEngineSet,
+}
+
+impl LocalBatchAsrAdapter {
+    pub fn new(vad_engines: VadEngineSet) -> Self {
+        Self { vad_engines }
+    }
+}
 
 #[async_trait]
 impl BatchTranscriberPort for LocalBatchAsrAdapter {
@@ -29,7 +39,7 @@ impl BatchTranscriberPort for LocalBatchAsrAdapter {
         &self,
         plan: BatchTranscribePlan,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        let job = BatchTranscriptionJob::from_plan(plan)?;
+        let job = BatchTranscriptionJob::from_plan(plan, &self.vad_engines)?;
         job.transcribe(Arc::new(NoopBatchTranscriptionObserver))
             .await
     }
@@ -39,12 +49,12 @@ impl BatchTranscriberPort for LocalBatchAsrAdapter {
         plan: BatchTranscribePlan,
         observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        let job = BatchTranscriptionJob::from_plan(plan)?;
+        let job = BatchTranscriptionJob::from_plan(plan, &self.vad_engines)?;
         job.transcribe(observer).await
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct BatchTranscriptionJob {
     input_path: PathBuf,
     save_to_path: Option<PathBuf>,
@@ -62,10 +72,14 @@ struct BatchTranscriptionJob {
     speaker_processing: Option<sona_core::transcription::speaker::SpeakerProcessingConfig>,
     gpu_acceleration: Option<String>,
     quiet: bool,
+    vad_engines: VadEngineSet,
 }
 
 impl BatchTranscriptionJob {
-    fn from_plan(plan: BatchTranscribePlan) -> Result<Self, AsrPortError> {
+    fn from_plan(
+        plan: BatchTranscribePlan,
+        vad_engines: &VadEngineSet,
+    ) -> Result<Self, AsrPortError> {
         if plan.engine != LocalAsrEngine::SherpaOnnx {
             return Err(local_asr_engine_mismatch(
                 LocalAsrEngine::SherpaOnnx,
@@ -98,6 +112,7 @@ impl BatchTranscriptionJob {
             speaker_processing: plan.speaker_processing,
             gpu_acceleration: plan.gpu_acceleration,
             quiet: plan.quiet,
+            vad_engines: vad_engines.clone(),
         })
     }
 
@@ -172,6 +187,7 @@ impl BatchTranscriptionJob {
             &samples,
             &recognizer,
             punctuation.as_ref(),
+            &self.vad_engines,
             self.vad_model.as_deref(),
             self.vad_buffer,
             self.batch_segmentation_mode,
@@ -191,17 +207,27 @@ impl BatchTranscriptionJob {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn transcribe_samples(
     samples: &[f32],
     recognizer: &SafeOfflineRecognizer,
     punctuation: Option<&Punctuation>,
+    vad_engines: &VadEngineSet,
     vad_model: Option<&Path>,
     vad_buffer: f32,
     batch_segmentation_mode: BatchSegmentationMode,
     observer: &dyn BatchTranscriptionObserver,
 ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-    let audio_segments =
-        segment_batch_audio(samples, vad_model, vad_buffer, batch_segmentation_mode);
+    let vad_engine = vad_engines.resolve(vad_model);
+    let mut vad_options = VadDetectionOptions::batch_defaults(vad_model.unwrap_or(Path::new("")));
+    vad_options.buffer_seconds = vad_buffer;
+    let audio_segments = segment_batch_audio(
+        samples,
+        BATCH_SEGMENTATION_SAMPLE_RATE,
+        batch_segmentation_mode,
+        vad_engine.as_deref(),
+        &vad_options,
+    );
 
     let total_duration = samples.len() as f32 / 16_000.0;
     let mut results = Vec::new();
@@ -305,7 +331,10 @@ mod tests {
             quiet: true,
         };
 
-        let error = LocalBatchAsrAdapter.transcribe(plan).await.unwrap_err();
+        let error = LocalBatchAsrAdapter::default()
+            .transcribe(plan)
+            .await
+            .unwrap_err();
         assert_eq!(
             error.kind,
             sona_core::ports::asr::AsrPortErrorKind::InvalidRequest
@@ -338,7 +367,10 @@ mod tests {
         };
         plan.engine = sona_core::ports::asr::LocalAsrEngine::LlamaCpp;
 
-        let error = LocalBatchAsrAdapter.transcribe(plan).await.unwrap_err();
+        let error = LocalBatchAsrAdapter::default()
+            .transcribe(plan)
+            .await
+            .unwrap_err();
         assert_eq!(
             error.kind,
             sona_core::ports::asr::AsrPortErrorKind::Unsupported

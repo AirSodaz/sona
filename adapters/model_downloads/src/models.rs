@@ -333,8 +333,12 @@ where
                 total_bytes: expected_total,
             },
         );
-        crate::downloads::complete_download_file(&temp_path, &staged_path, artifact.sha256.as_deref())
-            .await?;
+        crate::downloads::complete_download_file(
+            &temp_path,
+            &staged_path,
+            artifact.sha256.as_deref(),
+        )
+        .await?;
         completed_bytes = completed_bytes.saturating_add(artifact_size);
     }
 

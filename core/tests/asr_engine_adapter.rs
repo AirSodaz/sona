@@ -116,9 +116,17 @@ async fn adapter_routes_batch_through_its_port() {
     let adapter = FakeEngineAdapter;
     assert_eq!(adapter.engine(), LocalAsrEngine::SherpaOnnx);
     assert!(adapter.capabilities().contains(EngineCapabilities::BATCH));
-    assert!(!adapter.capabilities().contains(EngineCapabilities::STREAMING));
+    assert!(
+        !adapter
+            .capabilities()
+            .contains(EngineCapabilities::STREAMING)
+    );
 
-    let segments = adapter.batch_transcriber().transcribe(demo_plan()).await.unwrap();
+    let segments = adapter
+        .batch_transcriber()
+        .transcribe(demo_plan())
+        .await
+        .unwrap();
     assert!(segments.is_empty());
 }
 

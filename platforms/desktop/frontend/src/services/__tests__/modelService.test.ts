@@ -532,7 +532,7 @@ describe('ModelService', () => {
             expect(batchModelIds).toContain(qwen3ModelId);
             expect(streamingModelIds).not.toContain(qwen3ModelId);
             expect(modelService.getModelRules(qwen3ModelId)).toEqual({
-                requiresVad: false,
+                requiresVad: true,
                 requiresPunctuation: false,
                 timestampSupportHint: 'segment',
             });

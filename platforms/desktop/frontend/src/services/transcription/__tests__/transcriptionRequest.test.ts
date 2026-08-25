@@ -28,7 +28,7 @@ vi.mock('../../modelService', () => ({
   modelService: {
     getModelRules: vi.fn(() => ({
       requiresPunctuation: false,
-      requiresVad: false,
+      requiresVad: true,
     })),
   },
 }));
@@ -171,7 +171,7 @@ describe('transcriptionRequest helpers', () => {
     expect(request.asrRequest).toBe(asrRequest);
   });
 
-  it('removes unsupported options from llama.cpp Qwen batch requests', () => {
+  it('strips unsupported llama.cpp options but keeps VAD segmentation for Qwen batch requests', () => {
     const config = buildTestConfig({
       language: 'zh',
       enableITN: true,
@@ -206,9 +206,9 @@ describe('transcriptionRequest helpers', () => {
       language: 'auto',
       enableItn: false,
       hotwords: null,
-      vadModel: null,
+      vadModel: '/models/vad.onnx',
       punctuationModel: null,
-      batchSegmentationMode: 'whole',
+      batchSegmentationMode: 'vad',
       modelType: 'qwen3-asr',
       fileConfig: expect.objectContaining({
         mmproj: 'mmproj-Qwen3-ASR-0.6B-Q8_0.gguf',

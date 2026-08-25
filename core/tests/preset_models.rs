@@ -35,6 +35,9 @@ fn qwen_gguf_presets_replace_the_sherpa_qwen_catalog_entry() {
         assert_eq!(model.engine.as_deref(), Some("llama-cpp"));
         assert!(model.supports_mode("batch"));
         assert!(!model.supports_mode("streaming"));
+        let rules = model.resolved_rules();
+        assert!(rules.requires_vad);
+        assert!(!rules.requires_punctuation);
         assert_eq!(model.artifacts.len(), 2);
         assert_eq!(
             model.file_config.as_ref().unwrap().model.as_deref(),
@@ -45,11 +48,12 @@ fn qwen_gguf_presets_replace_the_sherpa_qwen_catalog_entry() {
             Some(expected_mmproj)
         );
         assert!(model.artifacts.iter().all(|artifact| {
-            artifact
-                .sha256
-                .as_ref()
-                .is_some_and(|sha256| sha256.len() == 64
-                    && sha256.chars().all(|character| character.is_ascii_hexdigit()))
+            artifact.sha256.as_ref().is_some_and(|sha256| {
+                sha256.len() == 64
+                    && sha256
+                        .chars()
+                        .all(|character| character.is_ascii_hexdigit())
+            })
         }));
     }
 }
@@ -75,7 +79,7 @@ fn granite_speech_gguf_preset_is_a_verified_llama_cpp_batch_bundle() {
     assert_eq!(
         model.resolved_rules(),
         ModelRules {
-            requires_vad: false,
+            requires_vad: true,
             requires_punctuation: false,
             timestamp_support_hint: Some(TimestampSupportHint::Segment),
         }

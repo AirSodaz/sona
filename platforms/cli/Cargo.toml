@@ -20,6 +20,7 @@ ringbuf = "0.4"
 sona-application = { path = "../../application" }
 sona-api-server = { path = "../../adapters/api_server" }
 sona-sherpa-onnx = { path = "../../providers/asr/local/sherpa_onnx" }
+sona-sherpa-vad = { path = "../../providers/asr/local/sherpa_vad" }
 sona-llama-cpp = { path = "../../providers/asr/local/llama_cpp" }
 sona-media-detector = { path = "../../adapters/media_detector" }
 sona-model-downloads = { path = "../../adapters/model_downloads" }

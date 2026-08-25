@@ -10,6 +10,7 @@ use sona_core::ports::asr::{
 use crate::batch::LocalBatchAsrAdapter;
 use crate::runtime::RecognizerPool;
 use crate::streaming::{create_streaming_session, prepare_streaming_resources};
+use sona_core::ports::vad::VadEngineSet;
 
 /// Provider facade for the sherpa-onnx local ASR engine.
 ///
@@ -19,17 +20,21 @@ use crate::streaming::{create_streaming_session, prepare_streaming_resources};
 #[derive(Clone)]
 pub struct SherpaOnnxAdapter {
     recognizer_pool: RecognizerPool,
+    vad_engines: VadEngineSet,
 }
 
 impl SherpaOnnxAdapter {
-    pub fn new(recognizer_pool: RecognizerPool) -> Self {
-        Self { recognizer_pool }
+    pub fn new(recognizer_pool: RecognizerPool, vad_engines: VadEngineSet) -> Self {
+        Self {
+            recognizer_pool,
+            vad_engines,
+        }
     }
 }
 
 impl Default for SherpaOnnxAdapter {
     fn default() -> Self {
-        Self::new(RecognizerPool::default())
+        Self::new(RecognizerPool::default(), VadEngineSet::empty())
     }
 }
 
@@ -48,7 +53,7 @@ impl LocalAsrAdapter for SherpaOnnxAdapter {
     }
 
     fn batch_transcriber(&self) -> Arc<dyn BatchTranscriberPort> {
-        Arc::new(LocalBatchAsrAdapter)
+        Arc::new(LocalBatchAsrAdapter::new(self.vad_engines.clone()))
     }
 
     fn streaming_factory(&self) -> Option<Arc<dyn StreamingAsrFactoryPort>> {
@@ -67,10 +72,8 @@ struct SherpaOnnxStreamingFactory {
 impl StreamingAsrFactoryPort for SherpaOnnxStreamingFactory {
     async fn prepare(&self, spec: &StreamingInferenceSpec) -> Result<(), AsrPortError> {
         let request = spec.engine_request();
-        let request = LocalSherpaStreamingRequest::from_local_sherpa_request(
-            "prepare".to_string(),
-            request,
-        )?;
+        let request =
+            LocalSherpaStreamingRequest::from_local_sherpa_request("prepare".to_string(), request)?;
         prepare_streaming_resources(self.recognizer_pool.clone(), &request).await
     }
 

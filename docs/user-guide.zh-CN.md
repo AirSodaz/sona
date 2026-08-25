@@ -141,6 +141,7 @@ Sona 首次打开时，可能会直接进入 `首次运行设置`。如果您暂
 
 - 如果未配置离线批量模型，Sona 会重新打开引导，而不是直接开始转录。
 - `设置 > 模型设置` 中的 `批量 VAD 分割`、`VAD Buffer Size` 与 `Max Concurrent Transcriptions` 会影响批处理体验。关闭批量 VAD 后，本地批量转录会整段识别文件。
+- 批量 VAD 分割适用于所有本地引擎，包括 llama.cpp 预设（Qwen3-ASR、Granite Speech）；这些模型需要先安装 Silero VAD 伴生模型。
 
 ## 6. 转录编辑与播放
 

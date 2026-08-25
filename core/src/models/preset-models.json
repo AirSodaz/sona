@@ -39,7 +39,7 @@
     "isArchive": false,
     "engine": "llama-cpp",
     "rules": {
-      "requiresVad": false,
+      "requiresVad": true,
       "requiresPunctuation": false,
       "timestampSupportHint": "segment"
     },
@@ -75,7 +75,7 @@
     "isArchive": false,
     "engine": "llama-cpp",
     "rules": {
-      "requiresVad": false,
+      "requiresVad": true,
       "requiresPunctuation": false,
       "timestampSupportHint": "segment"
     },
@@ -111,7 +111,7 @@
     "isArchive": false,
     "engine": "llama-cpp",
     "rules": {
-      "requiresVad": false,
+      "requiresVad": true,
       "requiresPunctuation": false,
       "timestampSupportHint": "segment"
     },
