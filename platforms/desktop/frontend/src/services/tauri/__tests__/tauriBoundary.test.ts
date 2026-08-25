@@ -258,7 +258,6 @@ describe('tauri boundary wrappers', () => {
           id: 'live-model',
           name: 'Live Model',
           description: 'Streaming ASR model',
-          url: 'https://example.com/live-model.tar.bz2',
           type: 'zipformer',
           modes: null,
           language: 'zh',
@@ -270,6 +269,14 @@ describe('tauri boundary wrappers', () => {
             requiresPunctuation: false,
             timestampSupportHint: null,
           },
+          artifacts: [
+            {
+              url: 'https://example.com/live-model.tar.bz2',
+              filename: 'live-model.tar.bz2',
+              sha256: null,
+              sizeBytes: null,
+            },
+          ],
           installPath: 'C:/models/live-model',
           downloadPath: 'C:/models/live-model.tar.bz2',
           isInstalled: false,

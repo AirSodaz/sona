@@ -707,20 +707,15 @@ pub fn is_preset_model_installed_at(model: &PresetModel, models_dir: &Path) -> b
         };
         return metadata.is_dir()
             && !metadata.file_type().is_symlink()
-            && model
-                .artifacts
-                .as_deref()
-                .unwrap_or_default()
-                .iter()
-                .all(|artifact| {
-                    std::fs::symlink_metadata(install_path.join(&artifact.filename)).is_ok_and(
-                        |metadata| {
-                            metadata.is_file()
-                                && !metadata.file_type().is_symlink()
-                                && metadata.len() > 0
-                        },
-                    )
-                });
+            && model.artifacts.iter().all(|artifact| {
+                std::fs::symlink_metadata(install_path.join(&artifact.filename)).is_ok_and(
+                    |metadata| {
+                        metadata.is_file()
+                            && !metadata.file_type().is_symlink()
+                            && metadata.len() > 0
+                    },
+                )
+            });
     }
     is_preset_model_install_path_complete(model, &install_path)
 }

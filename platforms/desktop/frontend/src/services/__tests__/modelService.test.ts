@@ -386,7 +386,6 @@ describe('ModelService', () => {
                 id: 'catalog-download-model',
                 name: 'Catalog Download',
                 description: 'settings.descriptions.catalog_download',
-                url: 'https://example.com/catalog-download.tar.bz2',
                 type: 'sensevoice',
                 modes: ['batch'],
                 language: 'zh,en',
@@ -397,6 +396,12 @@ describe('ModelService', () => {
                     requiresVad: false,
                     requiresPunctuation: false,
                 },
+                artifacts: [
+                    {
+                        url: 'https://example.com/catalog-download.tar.bz2',
+                        filename: 'catalog-download.tar.bz2',
+                    },
+                ],
                 installPath: '/snapshot/models/catalog-download-model',
                 downloadPath: '/snapshot/models/downloads/catalog-download.tar.bz2',
                 isInstalled: false,
@@ -475,27 +480,25 @@ describe('ModelService', () => {
             await modelService.downloadModel(itnModel.id);
 
             expect(invoke).toHaveBeenCalledWith('download_file', expect.objectContaining({
-                url: expect.stringContaining(itnModel.url)
+                url: expect.stringContaining(itnModel.artifacts?.[0]?.url ?? 'unreachable'),
             }));
         });
     });
 
     describe('single-file model metadata', () => {
-        it('exposes sha256 hashes for non-archive models', () => {
-            const singleFileModels = PRESET_MODELS.filter(model => (
-                model.isArchive === false && !model.artifacts?.length
-            ));
+        it('exposes sha256 hashes on artifacts for non-archive models', () => {
+            const singleFileModels = PRESET_MODELS.filter(model => model.isArchive === false);
             const silero = PRESET_MODELS.find(model => model.id === 'silero-vad');
 
-            expect(silero).toMatchObject({
+            expect(silero?.artifacts?.[0]).toMatchObject({
                 sha256: '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
             });
             expect(singleFileModels.length).toBeGreaterThan(0);
             expect(singleFileModels.every(model => (
-                typeof (model as any).sha256 === 'string'
-                && /^[a-f0-9]{64}$/.test((model as any).sha256)
-                && !('sizeBytes' in model)
+                typeof model.artifacts?.[0]?.sha256 === 'string'
+                && /^[a-f0-9]{64}$/.test(model.artifacts[0].sha256 as string)
             ))).toBe(true);
+            expect(PRESET_MODELS.every(model => !('url' in model) && !('sha256' in model))).toBe(true);
         });
     });
 
@@ -565,19 +568,25 @@ describe('ModelService', () => {
                 expect.objectContaining({
                     id: 'sherpa-onnx-pyannote-segmentation-3-0',
                     name: 'Pyannote 3.0',
-                    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2',
+                    artifacts: [expect.objectContaining({
+                        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2',
+                    })],
                     type: 'speaker-segmentation',
                 }),
                 expect.objectContaining({
                     id: 'sherpa-onnx-reverb-diarization-v1',
                     name: 'Reverb Diarization V1',
-                    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v1.tar.bz2',
+                    artifacts: [expect.objectContaining({
+                        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v1.tar.bz2',
+                    })],
                     type: 'speaker-segmentation',
                 }),
                 expect.objectContaining({
                     id: 'sherpa-onnx-reverb-diarization-v2',
                     name: 'Reverb Diarization V2',
-                    url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v2.tar.bz2',
+                    artifacts: [expect.objectContaining({
+                        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v2.tar.bz2',
+                    })],
                     type: 'speaker-segmentation',
                 }),
             ]);

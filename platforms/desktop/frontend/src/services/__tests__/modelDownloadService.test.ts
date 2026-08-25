@@ -25,13 +25,15 @@ function makeModel(overrides: Partial<ModelInfo> = {}): ModelInfo {
     id: 'model-a',
     name: 'Model A',
     description: '',
-    url: 'https://example.com/model-a.tar.bz2',
     type: 'sensevoice',
     modes: ['streaming'],
     language: 'en',
     size: '1 MB',
     isArchive: true,
     engine: 'sherpa-onnx',
+    artifacts: [
+      { url: 'https://example.com/model-a.tar.bz2', filename: 'model-a.tar.bz2' },
+    ],
     ...overrides,
   };
 }
@@ -171,7 +173,13 @@ describe('modelDownloadService', () => {
     await service.downloadModel({
       modelId: 'model-a',
       model: makeModel({
-        sha256: '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
+        artifacts: [
+          {
+            url: 'https://example.com/model-a.tar.bz2',
+            filename: 'model-a.tar.bz2',
+            sha256: '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
+          },
+        ],
       }),
     });
 
@@ -196,7 +204,6 @@ describe('modelDownloadService', () => {
       isArchive: false,
       filename: 'speaker.onnx',
       type: 'speaker-embedding',
-      url: 'https://example.com/speaker.onnx',
     });
 
     await expect(service.downloadModel({
@@ -224,8 +231,13 @@ describe('modelDownloadService', () => {
       isArchive: false,
       filename: 'speaker.onnx',
       type: 'speaker-embedding',
-      url: 'https://example.com/speaker.onnx',
-      sha256: '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
+      artifacts: [
+        {
+          url: 'https://example.com/speaker.onnx',
+          filename: 'speaker.onnx',
+          sha256: '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
+        },
+      ],
     });
 
     await service.downloadModel({

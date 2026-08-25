@@ -2595,7 +2595,10 @@ mod tests {
             .find(|model| model.id == "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17")
             .expect("installed ASR model should be exported");
         assert!(installed_asr.is_installed);
-        assert_eq!(installed_asr.rules.timestamp_support_hint, None);
+        assert_eq!(
+            installed_asr.rules.timestamp_support_hint,
+            Some(FfiTimestampSupportHint::Token)
+        );
         assert!(installed_asr.install_path.ends_with("2024-07-17"));
 
         let streaming_option = snapshot

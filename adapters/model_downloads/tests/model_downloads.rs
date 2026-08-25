@@ -77,16 +77,20 @@ async fn downloads_single_file_model_and_validates_existing_hash() {
         axum::serve(listener, app).await.unwrap();
     });
 
-    let mut model = find_preset_model("silero-vad").unwrap().clone();
-    model.url = format!("http://{addr}/model.onnx");
-    model.sha256 = Some(hash);
+    let model = find_preset_model("silero-vad").unwrap().clone();
     let install_path = models_dir.join("silero_vad.onnx");
     let resolved = ResolvedModelDownload {
         model,
         models_dir: models_dir.clone(),
         download_path: install_path.clone(),
         install_path: install_path.clone(),
-        artifacts: Vec::new(),
+        artifacts: vec![ResolvedModelArtifact {
+            url: format!("http://{addr}/model.onnx"),
+            filename: "silero_vad.onnx".to_string(),
+            sha256: Some(hash),
+            size_bytes: Some(body.len() as u64),
+            install_path: install_path.clone(),
+        }],
     };
 
     assert!(!installed_model_is_valid(&resolved).await.unwrap());
@@ -111,16 +115,20 @@ async fn cancellable_model_download_reports_download_verify_and_install_stages()
         axum::serve(listener, app).await.unwrap();
     });
 
-    let mut model = find_preset_model("silero-vad").unwrap().clone();
-    model.url = format!("http://{addr}/model.onnx");
-    model.sha256 = Some(hash);
+    let model = find_preset_model("silero-vad").unwrap().clone();
     let install_path = models_dir.join("silero_vad.onnx");
     let resolved = ResolvedModelDownload {
         model,
         models_dir,
         download_path: install_path.clone(),
-        install_path,
-        artifacts: Vec::new(),
+        install_path: install_path.clone(),
+        artifacts: vec![ResolvedModelArtifact {
+            url: format!("http://{addr}/model.onnx"),
+            filename: "silero_vad.onnx".to_string(),
+            sha256: Some(hash),
+            size_bytes: Some(body.len() as u64),
+            install_path: install_path.clone(),
+        }],
     };
     let stages = Arc::new(Mutex::new(Vec::new()));
     let recorded_stages = stages.clone();
@@ -166,15 +174,15 @@ async fn downloads_and_atomically_publishes_multi_file_model() {
             ResolvedModelArtifact {
                 url: format!("http://{addr}/model.gguf"),
                 filename: "model.gguf".to_string(),
-                sha256: sha256_hex(model_body),
-                size_bytes: model_body.len() as u64,
+                sha256: Some(sha256_hex(model_body)),
+                size_bytes: Some(model_body.len() as u64),
                 install_path: install_path.join("model.gguf"),
             },
             ResolvedModelArtifact {
                 url: format!("http://{addr}/mmproj.gguf"),
                 filename: "mmproj.gguf".to_string(),
-                sha256: sha256_hex(mmproj_body),
-                size_bytes: mmproj_body.len() as u64,
+                sha256: Some(sha256_hex(mmproj_body)),
+                size_bytes: Some(mmproj_body.len() as u64),
                 install_path: install_path.join("mmproj.gguf"),
             },
         ],
@@ -224,8 +232,8 @@ async fn multi_file_hash_failure_preserves_previous_install() {
         artifacts: vec![ResolvedModelArtifact {
             url: format!("http://{addr}/model.gguf"),
             filename: "model.gguf".to_string(),
-            sha256: sha256_hex(b"expected-model"),
-            size_bytes: model_body.len() as u64,
+            sha256: Some(sha256_hex(b"expected-model")),
+            size_bytes: Some(model_body.len() as u64),
             install_path: install_path.join("model.gguf"),
         }],
     };

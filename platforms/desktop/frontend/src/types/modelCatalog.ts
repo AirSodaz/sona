@@ -12,15 +12,14 @@ export interface ModelRules {
 export interface ModelArtifact {
   url: string;
   filename: string;
-  sha256: string;
-  sizeBytes: number;
+  sha256?: string;
+  sizeBytes?: number;
 }
 
 export interface ModelInfo {
   id: string;
   name: string;
   description: string;
-  url: string;
   type:
     | 'zipformer'
     | 'sensevoice'
@@ -38,7 +37,6 @@ export interface ModelInfo {
   modes?: ('streaming' | 'batch')[];
   language: string;
   size: string;
-  sha256?: string;
   artifacts?: ModelArtifact[];
   isRecommended?: boolean;
   isArchive?: boolean;

@@ -18,8 +18,8 @@ pub struct ResolvedModelDownload {
 pub struct ResolvedModelArtifact {
     pub url: String,
     pub filename: String,
-    pub sha256: String,
-    pub size_bytes: u64,
+    pub sha256: Option<String>,
+    pub size_bytes: Option<u64>,
     pub install_path: PathBuf,
 }
 
@@ -40,10 +40,14 @@ pub fn resolve_model_download(
         .clone();
     let download_path = model.resolve_download_path(models_dir);
     let install_path = model.resolve_install_path(models_dir);
+    if model.artifacts.is_empty() {
+        return Err(RuntimeValidationError::new(
+            "model_id",
+            format!("Model '{model_id}' has no download artifacts"),
+        ));
+    }
     let artifacts = model
         .artifacts
-        .as_deref()
-        .unwrap_or_default()
         .iter()
         .map(|artifact| {
             validate_artifact_filename(model_id, &artifact.filename)?;

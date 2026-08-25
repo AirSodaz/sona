@@ -3,8 +3,9 @@ use std::path::{Path, PathBuf};
 
 use sona_core::models::preset_models::{
     DEFAULT_MODEL_RULES, DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID,
-    ModelCatalogSectionType, ModelDependencyConfigKey, ModelDependencyRequest, ModelSelectionPaths,
-    build_model_catalog_snapshot_with_installed_ids, find_preset_model, preset_models,
+    ModelCatalogSectionType, ModelDependencyConfigKey, ModelDependencyRequest, ModelRules,
+    ModelSelectionPaths, TimestampSupportHint, build_model_catalog_snapshot_with_installed_ids,
+    find_preset_model, preset_models,
 };
 
 #[test]
@@ -34,7 +35,7 @@ fn qwen_gguf_presets_replace_the_sherpa_qwen_catalog_entry() {
         assert_eq!(model.engine.as_deref(), Some("llama-cpp"));
         assert!(model.supports_mode("batch"));
         assert!(!model.supports_mode("streaming"));
-        assert_eq!(model.artifacts.as_ref().unwrap().len(), 2);
+        assert_eq!(model.artifacts.len(), 2);
         assert_eq!(
             model.file_config.as_ref().unwrap().model.as_deref(),
             Some(expected_model)
@@ -43,14 +44,42 @@ fn qwen_gguf_presets_replace_the_sherpa_qwen_catalog_entry() {
             model.file_config.as_ref().unwrap().mmproj.as_deref(),
             Some(expected_mmproj)
         );
-        assert!(model.artifacts.as_ref().unwrap().iter().all(|artifact| {
-            artifact.sha256.len() == 64
-                && artifact
-                    .sha256
-                    .chars()
-                    .all(|character| character.is_ascii_hexdigit())
+        assert!(model.artifacts.iter().all(|artifact| {
+            artifact
+                .sha256
+                .as_ref()
+                .is_some_and(|sha256| sha256.len() == 64
+                    && sha256.chars().all(|character| character.is_ascii_hexdigit()))
         }));
     }
+}
+
+#[test]
+fn granite_speech_gguf_preset_is_a_verified_llama_cpp_batch_bundle() {
+    let model = find_preset_model("granite-speech-4.1-2b-q8-gguf").unwrap();
+
+    assert_eq!(model.model_type, "granite-speech");
+    assert_eq!(model.engine.as_deref(), Some("llama-cpp"));
+    assert!(model.supports_mode("batch"));
+    assert!(!model.supports_mode("streaming"));
+    assert_eq!(model.language, "en,fr,de,es,pt,ja");
+    assert_eq!(model.artifacts.len(), 2);
+    assert_eq!(
+        model.file_config.as_ref().unwrap().model.as_deref(),
+        Some("granite-speech-4.1-2b-Q8_0.gguf")
+    );
+    assert_eq!(
+        model.file_config.as_ref().unwrap().mmproj.as_deref(),
+        Some("mmproj-model-f16.gguf")
+    );
+    assert_eq!(
+        model.resolved_rules(),
+        ModelRules {
+            requires_vad: false,
+            requires_punctuation: false,
+            timestamp_support_hint: Some(TimestampSupportHint::Segment),
+        }
+    );
 }
 
 #[test]

@@ -64,21 +64,26 @@ pub async fn installed_model_is_valid(
 
     if resolved.model.is_multi_file() {
         for artifact in &resolved.artifacts {
+            let Some(expected_sha) = artifact.sha256.as_deref() else {
+                continue;
+            };
             let actual_sha = sha256_file(&artifact.install_path).await?;
-            if !actual_sha.eq_ignore_ascii_case(&artifact.sha256) {
+            if !actual_sha.eq_ignore_ascii_case(expected_sha) {
                 return Ok(false);
             }
         }
         return Ok(true);
     }
 
-    match &resolved.model.sha256 {
-        Some(expected_sha) => {
-            let actual_sha = sha256_file(&resolved.install_path).await?;
-            Ok(actual_sha.eq_ignore_ascii_case(expected_sha))
-        }
-        None => Ok(true),
-    }
+    let Some(expected_sha) = resolved
+        .artifacts
+        .first()
+        .and_then(|artifact| artifact.sha256.as_deref())
+    else {
+        return Ok(true);
+    };
+    let actual_sha = sha256_file(&resolved.install_path).await?;
+    Ok(actual_sha.eq_ignore_ascii_case(expected_sha))
 }
 
 pub fn remove_model_install_path(install_path: &Path) -> Result<(), DownloadError> {
@@ -162,13 +167,23 @@ where
     if resolved.model.is_multi_file() {
         return download_multi_file_model(resolved, cancel, progress, install_lock).await;
     }
+    let Some(primary_artifact) = resolved.artifacts.first() else {
+        drop(install_lock);
+        return Err(DownloadError::file_system(
+            DownloadFileOperation::InspectInstall,
+            &resolved.install_path,
+            format!("Model '{}' has no download artifacts", resolved.model.id),
+        ));
+    };
+    let primary_url = primary_artifact.url.clone();
+    let expected_sha = primary_artifact.sha256.clone();
     let download_progress = progress.clone();
     let temp_download_path = temporary_download_path(&resolved.download_path);
 
     let client = DownloadClient::try_new()?;
     let result = client
         .download_file(
-            &resolved.model.url,
+            &primary_url,
             &temp_download_path,
             cancel,
             Some(Box::new(move |downloaded_bytes, total_bytes| {
@@ -194,7 +209,7 @@ where
         },
     );
 
-    if let Some(expected_sha) = &resolved.model.sha256 {
+    if let Some(expected_sha) = expected_sha {
         let actual_sha = match sha256_file(&temp_download_path).await {
             Ok(sha) => sha,
             Err(error) => {
@@ -202,7 +217,7 @@ where
                 return Err(error);
             }
         };
-        if !actual_sha.eq_ignore_ascii_case(expected_sha) {
+        if !actual_sha.eq_ignore_ascii_case(&expected_sha) {
             let _ = tokio::fs::remove_file(&temp_download_path).await;
             return Err(DownloadError::HashMismatch {
                 path: temp_download_path,
@@ -267,15 +282,16 @@ where
     let expected_total = resolved
         .artifacts
         .iter()
-        .map(|artifact| artifact.size_bytes)
+        .map(|artifact| artifact.size_bytes.unwrap_or(0))
         .sum::<u64>();
     let client = DownloadClient::try_new()?;
     let mut completed_bytes = 0_u64;
 
     for artifact in &resolved.artifacts {
         let staged_path = staging_path.join(&artifact.filename);
-        if staged_artifact_is_valid(&staged_path, &artifact.sha256).await? {
-            completed_bytes = completed_bytes.saturating_add(artifact.size_bytes);
+        let artifact_size = artifact.size_bytes.unwrap_or(0);
+        if staged_artifact_is_valid(&staged_path, artifact.sha256.as_deref()).await? {
+            completed_bytes = completed_bytes.saturating_add(artifact_size);
             report_progress(
                 &progress,
                 ModelDownloadProgress {
@@ -290,7 +306,6 @@ where
         let temp_path = temporary_download_path(&staged_path);
         let artifact_progress = progress.clone();
         let completed_before_artifact = completed_bytes;
-        let artifact_size = artifact.size_bytes;
         client
             .download_file(
                 &artifact.url,
@@ -318,9 +333,9 @@ where
                 total_bytes: expected_total,
             },
         );
-        crate::downloads::complete_download_file(&temp_path, &staged_path, Some(&artifact.sha256))
+        crate::downloads::complete_download_file(&temp_path, &staged_path, artifact.sha256.as_deref())
             .await?;
-        completed_bytes = completed_bytes.saturating_add(artifact.size_bytes);
+        completed_bytes = completed_bytes.saturating_add(artifact_size);
     }
 
     report_progress(
@@ -350,7 +365,7 @@ where
 
 async fn staged_artifact_is_valid(
     path: &Path,
-    expected_sha256: &str,
+    expected_sha256: Option<&str>,
 ) -> Result<bool, DownloadError> {
     let Ok(metadata) = tokio::fs::symlink_metadata(path).await else {
         return Ok(false);
@@ -358,6 +373,9 @@ async fn staged_artifact_is_valid(
     if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() == 0 {
         return Ok(false);
     }
+    let Some(expected_sha256) = expected_sha256 else {
+        return Ok(true);
+    };
     Ok(sha256_file(path)
         .await?
         .eq_ignore_ascii_case(expected_sha256))

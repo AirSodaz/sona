@@ -3,7 +3,6 @@
     "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
     "name": "SenseVoice",
     "description": "settings.descriptions.sensevoice",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2",
     "type": "sensevoice",
     "modes": ["streaming", "batch"],
     "language": "zh,en,ja,ko,yue",
@@ -12,8 +11,15 @@
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": false
+      "requiresPunctuation": false,
+      "timestampSupportHint": "token"
     },
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2",
+        "filename": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2"
+      }
+    ],
     "fileConfig": {
       "model": "model.int8.onnx",
       "tokens": "tokens.txt"
@@ -25,11 +31,10 @@
     "id": "qwen3-asr-0.6b-q8-gguf",
     "name": "Qwen3 ASR",
     "description": "settings.descriptions.qwen3_asr",
-    "url": "https://huggingface.co/ggml-org/Qwen3-ASR-0.6B-GGUF/resolve/928ab958557df9aa2ef1c93e0e83c7ad0933fae2/Qwen3-ASR-0.6B-Q8_0.gguf?download=true",
     "type": "qwen3-asr",
     "modes": ["batch"],
     "language": "multi",
-    "size": "~972 MiB",
+    "size": "~1.02 GB",
     "isRecommended": true,
     "isArchive": false,
     "engine": "llama-cpp",
@@ -63,11 +68,10 @@
     "id": "qwen3-asr-1.7b-q8-gguf",
     "name": "Qwen3 ASR",
     "description": "settings.descriptions.qwen3_asr",
-    "url": "https://huggingface.co/ggml-org/Qwen3-ASR-1.7B-GGUF/resolve/36a678687ba7d07a74ca70ccb0e36902e005fb80/Qwen3-ASR-1.7B-Q8_0.gguf?download=true",
     "type": "qwen3-asr",
     "modes": ["batch"],
     "language": "multi",
-    "size": "~2.35 GiB",
+    "size": "~2.52 GB",
     "isArchive": false,
     "engine": "llama-cpp",
     "rules": {
@@ -97,10 +101,45 @@
     "versionLabel": "1.7B Q8_0"
   },
   {
+    "id": "granite-speech-4.1-2b-q8-gguf",
+    "name": "Granite Speech",
+    "description": "settings.descriptions.granite_speech",
+    "type": "granite-speech",
+    "modes": ["batch"],
+    "language": "en,fr,de,es,pt,ja",
+    "size": "~3.12 GB",
+    "isArchive": false,
+    "engine": "llama-cpp",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment"
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/ibm-granite/granite-speech-4.1-2b-GGUF/resolve/8267dad2adc84209b0efd2702ec68a98356125eb/granite-speech-4.1-2b-Q8_0.gguf?download=true",
+        "filename": "granite-speech-4.1-2b-Q8_0.gguf",
+        "sha256": "87320ee80cc6e638837bd2e9b7920252a87148613930bcdc11fcafad0b00beea",
+        "sizeBytes": 1956154944
+      },
+      {
+        "url": "https://huggingface.co/ibm-granite/granite-speech-4.1-2b-GGUF/resolve/8267dad2adc84209b0efd2702ec68a98356125eb/mmproj-model-f16.gguf?download=true",
+        "filename": "mmproj-model-f16.gguf",
+        "sha256": "0d3615076cbe1d35c3f60c43a60a4047b3e2eeee1b2c233580be60186faab5c5",
+        "sizeBytes": 1159354752
+      }
+    ],
+    "fileConfig": {
+      "model": "granite-speech-4.1-2b-Q8_0.gguf",
+      "mmproj": "mmproj-model-f16.gguf"
+    },
+    "groupId": "granite-speech",
+    "versionLabel": "2B Q8_0"
+  },
+  {
     "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
     "name": "SenseVoice",
     "description": "settings.descriptions.sensevoice",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2",
     "type": "sensevoice",
     "modes": ["streaming", "batch"],
     "language": "zh,en,ja,ko,yue",
@@ -108,8 +147,15 @@
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": false
+      "requiresPunctuation": false,
+      "timestampSupportHint": "token"
     },
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2",
+        "filename": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2"
+      }
+    ],
     "fileConfig": {
       "model": "model.onnx",
       "tokens": "tokens.txt"
@@ -121,7 +167,6 @@
     "id": "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en",
     "name": "Paraformer",
     "description": "settings.descriptions.paraformer",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en.tar.bz2",
     "type": "paraformer",
     "modes": ["streaming"],
     "language": "zh,yue,en",
@@ -129,8 +174,15 @@
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": false,
-      "requiresPunctuation": true
+      "requiresPunctuation": true,
+      "timestampSupportHint": "token"
     },
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en.tar.bz2",
+        "filename": "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en.tar.bz2"
+      }
+    ],
     "fileConfig": {
       "encoder": "encoder.onnx",
       "decoder": "decoder.onnx",
@@ -141,7 +193,6 @@
     "id": "sherpa-onnx-whisper-turbo",
     "name": "Whisper",
     "description": "settings.descriptions.whisper_turbo",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-turbo.tar.bz2",
     "type": "whisper",
     "modes": ["batch"],
     "language": "zh,en,ja,ko,yue",
@@ -149,8 +200,15 @@
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": false
+      "requiresPunctuation": false,
+      "timestampSupportHint": "token"
     },
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-turbo.tar.bz2",
+        "filename": "sherpa-onnx-whisper-turbo.tar.bz2"
+      }
+    ],
     "fileConfig": {
       "encoder": "turbo-encoder.int8.onnx",
       "decoder": "turbo-decoder.int8.onnx",
@@ -163,16 +221,22 @@
     "id": "sherpa-onnx-whisper-large-v3",
     "name": "Whisper",
     "description": "settings.descriptions.whisper_large",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-large-v3.tar.bz2",
     "type": "whisper",
     "modes": ["batch"],
     "language": "zh,en,ja,ko,yue",
-    "size": "~1020 MB",
+    "size": "~1.02 GB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": false
+      "requiresPunctuation": false,
+      "timestampSupportHint": "token"
     },
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-large-v3.tar.bz2",
+        "filename": "sherpa-onnx-whisper-large-v3.tar.bz2"
+      }
+    ],
     "fileConfig": {
       "encoder": "large-v3-encoder.int8.onnx",
       "decoder": "large-v3-decoder.int8.onnx",
@@ -185,7 +249,6 @@
     "id": "sherpa-onnx-whisper-medium-aishell",
     "name": "Whisper",
     "description": "settings.descriptions.whisper_medium_aishell",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-medium-aishell.tar.bz2",
     "type": "whisper",
     "modes": ["batch"],
     "language": "zh,en",
@@ -193,8 +256,15 @@
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": false
+      "requiresPunctuation": false,
+      "timestampSupportHint": "token"
     },
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-medium-aishell.tar.bz2",
+        "filename": "sherpa-onnx-whisper-medium-aishell.tar.bz2"
+      }
+    ],
     "fileConfig": {
       "encoder": "medium-aishell-encoder.int8.onnx",
       "decoder": "medium-aishell-decoder.int8.onnx",
@@ -207,7 +277,6 @@
     "id": "sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30",
     "name": "Streaming Zipformer - ZH XLarge (Int8)",
     "description": "settings.descriptions.zipformer_xlarge",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2",
     "type": "zipformer",
     "modes": ["streaming"],
     "language": "zh",
@@ -215,8 +284,15 @@
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": false,
-      "requiresPunctuation": true
+      "requiresPunctuation": true,
+      "timestampSupportHint": "token"
     },
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2",
+        "filename": "sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2"
+      }
+    ],
     "fileConfig": {
       "encoder": "encoder.int8.onnx",
       "decoder": "decoder.onnx",
@@ -228,7 +304,6 @@
     "id": "sherpa-onnx-funasr-nano-int8-2025-12-30",
     "name": "FunASR Nano",
     "description": "settings.descriptions.funasr_nano",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2",
     "type": "funasr-nano",
     "modes": ["batch"],
     "language": "zh,en,ja,ko,yue",
@@ -236,8 +311,15 @@
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": true
+      "requiresPunctuation": true,
+      "timestampSupportHint": "segment"
     },
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2",
+        "filename": "sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2"
+      }
+    ],
     "fileConfig": {
       "encoderAdaptor": "encoder_adaptor.int8.onnx",
       "llm": "llm.int8.onnx",
@@ -251,7 +333,6 @@
     "id": "sherpa-onnx-funasr-nano-fp16-2025-12-30",
     "name": "FunASR Nano",
     "description": "settings.descriptions.funasr_nano",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-fp16-2025-12-30.tar.bz2",
     "type": "funasr-nano",
     "modes": ["batch"],
     "language": "zh,en,ja,ko,yue",
@@ -259,8 +340,15 @@
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": true
+      "requiresPunctuation": true,
+      "timestampSupportHint": "segment"
     },
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-fp16-2025-12-30.tar.bz2",
+        "filename": "sherpa-onnx-funasr-nano-fp16-2025-12-30.tar.bz2"
+      }
+    ],
     "fileConfig": {
       "encoderAdaptor": "encoder_adaptor.int8.onnx",
       "llm": "llm.fp16.onnx",
@@ -274,7 +362,6 @@
     "id": "sherpa-onnx-funasr-nano-2025-12-30",
     "name": "FunASR Nano",
     "description": "settings.descriptions.funasr_nano",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-2025-12-30.tar.bz2",
     "type": "funasr-nano",
     "modes": ["batch"],
     "language": "zh,en,ja,ko,yue",
@@ -282,8 +369,15 @@
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": true
+      "requiresPunctuation": true,
+      "timestampSupportHint": "segment"
     },
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-2025-12-30.tar.bz2",
+        "filename": "sherpa-onnx-funasr-nano-2025-12-30.tar.bz2"
+      }
+    ],
     "fileConfig": {
       "encoderAdaptor": "encoder_adaptor.onnx",
       "llm": "llm.fp32.onnx",
@@ -297,7 +391,6 @@
     "id": "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26",
     "name": "FireRedASR",
     "description": "settings.descriptions.firered_asr",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26.tar.bz2",
     "type": "fire-red-asr",
     "modes": ["batch"],
     "language": "zh,en",
@@ -305,8 +398,15 @@
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": true
+      "requiresPunctuation": true,
+      "timestampSupportHint": "segment"
     },
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26.tar.bz2",
+        "filename": "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26.tar.bz2"
+      }
+    ],
     "fileConfig": {
       "encoder": "encoder.int8.onnx",
       "decoder": "decoder.int8.onnx",
@@ -317,7 +417,6 @@
     "id": "sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02",
     "name": "Dolphin",
     "description": "settings.descriptions.dolphin",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02.tar.bz2",
     "type": "dolphin",
     "modes": ["streaming", "batch"],
     "language": "zh,ja,ko",
@@ -325,8 +424,15 @@
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": true
+      "requiresPunctuation": true,
+      "timestampSupportHint": "token"
     },
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02.tar.bz2",
+        "filename": "sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02.tar.bz2"
+      }
+    ],
     "fileConfig": {
       "model": "model.int8.onnx",
       "tokens": "tokens.txt"
@@ -338,7 +444,6 @@
     "id": "sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02",
     "name": "Dolphin",
     "description": "settings.descriptions.dolphin",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02.tar.bz2",
     "type": "dolphin",
     "modes": ["streaming", "batch"],
     "language": "zh,ja,ko",
@@ -346,8 +451,15 @@
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": true
+      "requiresPunctuation": true,
+      "timestampSupportHint": "token"
     },
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02.tar.bz2",
+        "filename": "sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02.tar.bz2"
+      }
+    ],
     "fileConfig": {
       "model": "model.onnx",
       "tokens": "tokens.txt"
@@ -359,133 +471,178 @@
     "id": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8",
     "name": "Punctuation - CT Transformer (Int8)",
     "description": "settings.descriptions.ct_punctuation",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2",
     "type": "punctuation",
     "language": "zh,en",
     "size": "~62 MB",
-    "engine": "sherpa-onnx"
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2",
+        "filename": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2"
+      }
+    ]
   },
   {
     "id": "sherpa-onnx-pyannote-segmentation-3-0",
     "name": "Pyannote 3.0",
     "description": "settings.descriptions.speaker_segmentation",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
     "type": "speaker-segmentation",
     "language": "multi",
-    "size": "6.64 MB",
+    "size": "~6.64 MB",
     "rules": {
       "requiresVad": false,
       "requiresPunctuation": false
     },
-    "engine": "sherpa-onnx"
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
+        "filename": "sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
+      }
+    ]
   },
   {
     "id": "sherpa-onnx-reverb-diarization-v1",
     "name": "Reverb Diarization V1",
     "description": "settings.descriptions.speaker_segmentation",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v1.tar.bz2",
     "type": "speaker-segmentation",
     "language": "multi",
-    "size": "10.4 MB",
+    "size": "~10.4 MB",
     "rules": {
       "requiresVad": false,
       "requiresPunctuation": false
     },
-    "engine": "sherpa-onnx"
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v1.tar.bz2",
+        "filename": "sherpa-onnx-reverb-diarization-v1.tar.bz2"
+      }
+    ]
   },
   {
     "id": "sherpa-onnx-reverb-diarization-v2",
     "name": "Reverb Diarization V2",
     "description": "settings.descriptions.speaker_segmentation",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v2.tar.bz2",
     "type": "speaker-segmentation",
     "language": "multi",
-    "size": "242 MB",
+    "size": "~242 MB",
     "rules": {
       "requiresVad": false,
       "requiresPunctuation": false
     },
-    "engine": "sherpa-onnx"
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v2.tar.bz2",
+        "filename": "sherpa-onnx-reverb-diarization-v2.tar.bz2"
+      }
+    ]
   },
   {
     "id": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
     "name": "3DSpeaker CAMPPlus",
     "description": "settings.descriptions.speaker_embedding",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
     "type": "speaker-embedding",
     "language": "zh,en",
-    "size": "27 MB",
-    "sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
+    "size": "~27 MB",
     "isArchive": false,
     "filename": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
     "rules": {
       "requiresVad": false,
       "requiresPunctuation": false
     },
-    "engine": "sherpa-onnx"
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+        "filename": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+        "sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2"
+      }
+    ]
   },
   {
     "id": "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
     "name": "3DSpeaker ERes2NetV2",
     "description": "settings.descriptions.speaker_embedding",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
     "type": "speaker-embedding",
     "language": "zh",
-    "size": "68.1 MB",
-    "sha256": "bf1a75b9930474cf3389ef415e6e5d38ca96fea4a3a00f7e301d080a58ee2239",
+    "size": "~68.1 MB",
     "isArchive": false,
     "filename": "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
     "rules": {
       "requiresVad": false,
       "requiresPunctuation": false
     },
-    "engine": "sherpa-onnx"
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
+        "filename": "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
+        "sha256": "bf1a75b9930474cf3389ef415e6e5d38ca96fea4a3a00f7e301d080a58ee2239"
+      }
+    ]
   },
   {
     "id": "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
     "name": "3DSpeaker ERes2Net Large",
     "description": "settings.descriptions.speaker_embedding",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
     "type": "speaker-embedding",
     "language": "zh",
-    "size": "111 MB",
-    "sha256": "19547e85b6c14ec44b8add4e7cb9ce353c7e995d4f1c9ffd408176ac3a2d6895",
+    "size": "~111 MB",
     "isArchive": false,
     "filename": "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
     "rules": {
       "requiresVad": false,
       "requiresPunctuation": false
     },
-    "engine": "sherpa-onnx"
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
+        "filename": "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
+        "sha256": "19547e85b6c14ec44b8add4e7cb9ce353c7e995d4f1c9ffd408176ac3a2d6895"
+      }
+    ]
   },
   {
     "id": "3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
     "name": "3DSpeaker ERes2Net",
     "description": "settings.descriptions.speaker_embedding",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
     "type": "speaker-embedding",
     "language": "zh",
-    "size": "210 MB",
-    "sha256": "2b9c4219b25326473524f006f1a09050ac28ccaf58c1f7dbc53e7631fa2fb1df",
+    "size": "~210 MB",
     "isArchive": false,
     "filename": "3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
     "rules": {
       "requiresVad": false,
       "requiresPunctuation": false
     },
-    "engine": "sherpa-onnx"
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
+        "filename": "3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
+        "sha256": "2b9c4219b25326473524f006f1a09050ac28ccaf58c1f7dbc53e7631fa2fb1df"
+      }
+    ]
   },
   {
     "id": "silero-vad",
     "name": "Silero - VAD",
     "description": "settings.descriptions.silero_vad",
-    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
     "type": "vad",
     "language": "zh,en",
-    "size": "629KB",
-    "sha256": "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6",
+    "size": "~0.63 MB",
     "isArchive": false,
     "filename": "silero_vad.onnx",
-    "engine": "sherpa-onnx"
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
+        "filename": "silero_vad.onnx",
+        "sha256": "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"
+      }
+    ]
   }
 ]

@@ -88,16 +88,21 @@ class ModelDownloadService {
     mirror,
   }: DownloadModelInput): Promise<string> {
     const targetModelsDir = modelsDir ?? await this.ports.getModelsDir();
-    if (model.artifacts?.length) {
+    const artifacts = model.artifacts ?? [];
+    if (artifacts.length > 1) {
       return await this.downloadMultiFilePreset(modelId, onProgress, signal);
+    }
+    const primaryArtifact = artifacts[0];
+    if (!primaryArtifact) {
+      throw new Error(`Model '${modelId}' has no download artifacts`);
     }
     const targetFilename = model.filename || `${modelId}.tar.bz2`;
     const tempFilePath = isCatalogModel(model)
       ? model.downloadPath
       : await this.ports.join(targetModelsDir, targetFilename);
 
-    const expectedSha256 = model.sha256;
-    await this.downloadFile(model.url, tempFilePath, onProgress, signal, 'Downloading', expectedSha256, mirror);
+    const expectedSha256 = primaryArtifact.sha256;
+    await this.downloadFile(primaryArtifact.url, tempFilePath, onProgress, signal, 'Downloading', expectedSha256, mirror);
 
     if (model.isArchive === false) {
       onProgress?.(100, i18n.t('settings.model_download_status.done'), true);

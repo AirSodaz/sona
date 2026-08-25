@@ -211,10 +211,24 @@ function normalizeModelRules(modelRules: CoreModelCatalogModel['rules']): ModelR
   };
 }
 
+function normalizeModelArtifacts(
+  artifacts: CoreModelCatalogModel['artifacts'],
+): NonNullable<ModelInfo['artifacts']> {
+  return (artifacts ?? []).map((artifact) => ({
+    url: artifact.url,
+    filename: artifact.filename,
+    ...(artifact.sha256 === null || artifact.sha256 === undefined
+      ? {}
+      : { sha256: artifact.sha256 }),
+    ...(artifact.sizeBytes === null || artifact.sizeBytes === undefined
+      ? {}
+      : { sizeBytes: artifact.sizeBytes }),
+  }));
+}
+
 function normalizeCatalogModel(model: CoreModelCatalogModel): ModelCatalogModel {
   const modes = normalizeModelModes(model.modes);
-  const sha256 = optionalString(model.sha256);
-  const artifacts = model.artifacts ?? [];
+  const artifacts = normalizeModelArtifacts(model.artifacts);
   const isRecommended = model.isRecommended ?? undefined;
   const filename = optionalString(model.filename);
   const groupId = optionalString(model.groupId);
@@ -228,12 +242,10 @@ function normalizeCatalogModel(model: CoreModelCatalogModel): ModelCatalogModel 
     id: model.id,
     name: model.name,
     description: model.description,
-    url: model.url,
     type: normalizeModelType(model.type),
     ...(modes === undefined ? {} : { modes }),
     language: model.language,
     size: model.size,
-    ...(sha256 === undefined ? {} : { sha256 }),
     ...(artifacts.length === 0 ? {} : { artifacts }),
     ...(isRecommended === undefined ? {} : { isRecommended }),
     isArchive: model.isArchive,

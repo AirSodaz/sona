@@ -1524,12 +1524,10 @@ export type ModelCatalogModel_Deserialize = {
 	id: string,
 	name: string,
 	description: string,
-	url: string,
 	type: string,
 	modes: string[] | null,
 	language: string,
 	size: string,
-	sha256: string | null,
 	artifacts: PresetModelArtifact[],
 	isRecommended: boolean | null,
 	isArchive: boolean,
@@ -1547,12 +1545,10 @@ export type ModelCatalogModel_Serialize = {
 	id: string,
 	name: string,
 	description: string,
-	url: string,
 	type: string,
 	modes?: string[] | null,
 	language: string,
 	size: string,
-	sha256?: string | null,
 	artifacts?: PresetModelArtifact[],
 	isRecommended?: boolean | null,
 	isArchive: boolean,
@@ -1868,8 +1864,10 @@ export type PreparedBackupImport_Serialize = {
 export type PresetModelArtifact = {
 	url: string,
 	filename: string,
-	sha256: string,
-	sizeBytes: number,
+	/**  Present when the published file has a known integrity hash. */
+	sha256: string | null,
+	/**  Exact byte size when known; archives publish without one. */
+	sizeBytes: number | null,
 };
 
 export type ProjectsViewMode = "list" | "grid" | "table";

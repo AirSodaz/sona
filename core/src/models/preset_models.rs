@@ -30,9 +30,11 @@ pub const DEFAULT_MODEL_RULES: ModelRules = ModelRules {
 pub struct PresetModelArtifact {
     pub url: String,
     pub filename: String,
-    pub sha256: String,
-    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
-    pub size_bytes: u64,
+    /// Present when the published file has a known integrity hash.
+    pub sha256: Option<String>,
+    /// Exact byte size when known; archives publish without one.
+    #[cfg_attr(feature = "specta", specta(type = Option<specta_typescript::Number>))]
+    pub size_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
@@ -61,14 +63,13 @@ pub struct PresetModel {
     pub id: String,
     pub name: String,
     pub description: String,
-    pub url: String,
     #[serde(rename = "type")]
     pub model_type: String,
     pub modes: Option<Vec<String>>,
     pub language: String,
     pub size: String,
-    pub sha256: Option<String>,
-    pub artifacts: Option<Vec<PresetModelArtifact>>,
+    #[serde(default)]
+    pub artifacts: Vec<PresetModelArtifact>,
     pub is_recommended: Option<bool>,
     pub is_archive: Option<bool>,
     pub filename: Option<String>,
@@ -118,15 +119,12 @@ pub struct ModelCatalogModel {
     pub id: String,
     pub name: String,
     pub description: String,
-    pub url: String,
     #[serde(rename = "type")]
     pub model_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modes: Option<Vec<String>>,
     pub language: String,
     pub size: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sha256: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub artifacts: Vec<PresetModelArtifact>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -356,9 +354,12 @@ impl PresetModel {
     /// Returns true when the preset is installed from multiple independently
     /// verified files into one model directory.
     pub fn is_multi_file(&self) -> bool {
-        self.artifacts
-            .as_ref()
-            .is_some_and(|files| !files.is_empty())
+        self.artifacts.len() > 1
+    }
+
+    /// Returns the single artifact backing archive and single-file presets.
+    pub fn primary_artifact(&self) -> Option<&PresetModelArtifact> {
+        self.artifacts.first()
     }
 
     /// Pure completeness rule for a resolved install path.
@@ -625,15 +626,13 @@ impl ModelCatalogModel {
             id: model.id.clone(),
             name: model.name.clone(),
             description: model.description.clone(),
-            url: model.url.clone(),
             model_type: model.model_type.clone(),
             modes: model.modes.clone(),
             language: model.language.clone(),
             size: model.size.clone(),
             is_recommended: model.is_recommended,
             is_archive: model.is_archive(),
-            sha256: model.sha256.clone(),
-            artifacts: model.artifacts.clone().unwrap_or_default(),
+            artifacts: model.artifacts.clone(),
             filename: model.filename.clone(),
             engine: model
                 .engine

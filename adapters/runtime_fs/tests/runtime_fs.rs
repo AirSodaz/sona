@@ -685,7 +685,7 @@ fn multi_file_preset_requires_every_non_empty_artifact() {
     let install_path = model.resolve_install_path(models_dir);
     std::fs::create_dir_all(&install_path).unwrap();
 
-    let artifacts = model.artifacts.as_ref().unwrap();
+    let artifacts = &model.artifacts;
     std::fs::write(install_path.join(&artifacts[0].filename), b"model").unwrap();
     assert!(!is_preset_model_installed_at(model, models_dir));
 
