@@ -138,6 +138,7 @@ mod tests {
         engine: LocalAsrEngine,
         calls: Arc<AtomicUsize>,
         streaming: bool,
+        hotwords: bool,
     }
 
     impl LocalAsrAdapter for FakeAdapter {
@@ -146,11 +147,15 @@ mod tests {
         }
 
         fn capabilities(&self) -> EngineCapabilities {
-            if self.streaming {
+            let mut capabilities = if self.streaming {
                 EngineCapabilities::BATCH | EngineCapabilities::STREAMING
             } else {
                 EngineCapabilities::BATCH
+            };
+            if self.hotwords {
+                capabilities |= EngineCapabilities::HOTWORDS;
             }
+            capabilities
         }
 
         fn batch_transcriber(&self) -> Arc<dyn BatchTranscriberPort> {
@@ -170,6 +175,7 @@ mod tests {
                 engine: LocalAsrEngine::SherpaOnnx,
                 calls,
                 streaming: true,
+                hotwords: true,
             }
         }
 
@@ -178,6 +184,7 @@ mod tests {
                 engine: LocalAsrEngine::LlamaCpp,
                 calls,
                 streaming: false,
+                hotwords: true,
             }
         }
     }
@@ -220,8 +227,14 @@ mod tests {
         let (registry, sherpa_calls, llama_calls) = two_engine_registry();
         let router = LocalBatchTranscriberRouter::new(registry);
 
-        router.transcribe(plan(LocalAsrEngine::SherpaOnnx)).await.unwrap();
-        router.transcribe(plan(LocalAsrEngine::LlamaCpp)).await.unwrap();
+        router
+            .transcribe(plan(LocalAsrEngine::SherpaOnnx))
+            .await
+            .unwrap();
+        router
+            .transcribe(plan(LocalAsrEngine::LlamaCpp))
+            .await
+            .unwrap();
 
         assert_eq!(sherpa_calls.load(Ordering::SeqCst), 1);
         assert_eq!(llama_calls.load(Ordering::SeqCst), 1);
@@ -230,9 +243,8 @@ mod tests {
     #[tokio::test]
     async fn reports_unavailable_engines_as_unsupported() {
         // Simulate a host that only ships sherpa.
-        let sherpa_only = LocalAsrRegistry::empty().register(Arc::new(FakeAdapter::sherpa(
-            Arc::new(AtomicUsize::new(0)),
-        )));
+        let sherpa_only = LocalAsrRegistry::empty()
+            .register(Arc::new(FakeAdapter::sherpa(Arc::new(AtomicUsize::new(0)))));
         let router = LocalBatchTranscriberRouter::new(sherpa_only);
 
         let error = router
@@ -250,9 +262,22 @@ mod tests {
         infos.sort_by_key(|info| info.engine.as_str());
 
         assert_eq!(infos.len(), 2);
-        let llama_info = infos.iter().find(|i| i.engine == LocalAsrEngine::LlamaCpp).unwrap();
-        assert_eq!(llama_info.capabilities, EngineCapabilities::BATCH);
-        let sherpa_info = infos.iter().find(|i| i.engine == LocalAsrEngine::SherpaOnnx).unwrap();
-        assert!(sherpa_info.capabilities.contains(EngineCapabilities::STREAMING));
+        let llama_info = infos
+            .iter()
+            .find(|i| i.engine == LocalAsrEngine::LlamaCpp)
+            .unwrap();
+        assert_eq!(
+            llama_info.capabilities,
+            EngineCapabilities::BATCH | EngineCapabilities::HOTWORDS
+        );
+        let sherpa_info = infos
+            .iter()
+            .find(|i| i.engine == LocalAsrEngine::SherpaOnnx)
+            .unwrap();
+        assert!(
+            sherpa_info
+                .capabilities
+                .contains(EngineCapabilities::STREAMING)
+        );
     }
 }

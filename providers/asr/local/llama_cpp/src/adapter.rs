@@ -7,8 +7,8 @@ use sona_core::ports::asr::{
 
 use crate::batch::LlamaBatchAsrAdapter;
 
-/// Provider facade for the llama.cpp local ASR engine (Qwen3-ASR batch
-/// inference).
+/// Provider facade for the llama.cpp local ASR engine (Qwen3-ASR and
+/// Granite Speech batch inference).
 ///
 /// The engine currently supports file transcription only; live streaming
 /// sessions remain exclusive to engines that declare the `STREAMING`
@@ -21,7 +21,10 @@ impl LocalAsrAdapter for LlamaCppAdapter {
     }
 
     fn capabilities(&self) -> EngineCapabilities {
-        EngineCapabilities::BATCH
+        // Both supported models consume hotwords through their trained
+        // prompt mechanisms (Qwen3 system-message context; Granite Speech
+        // `Keywords:` suffixes).
+        EngineCapabilities::BATCH | EngineCapabilities::HOTWORDS
     }
 
     fn batch_transcriber(&self) -> Arc<dyn BatchTranscriberPort> {
@@ -42,7 +45,10 @@ mod tests {
         let adapter = LlamaCppAdapter;
 
         assert_eq!(adapter.engine(), LocalAsrEngine::LlamaCpp);
-        assert_eq!(adapter.capabilities(), EngineCapabilities::BATCH);
+        assert_eq!(
+            adapter.capabilities(),
+            EngineCapabilities::BATCH | EngineCapabilities::HOTWORDS
+        );
         assert!(adapter.streaming_factory().is_none());
     }
 }
