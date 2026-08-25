@@ -383,7 +383,7 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 
 ### Notes
 
-- In `Settings > Vocabulary`, `Hotwords` are entered one per line. Weighted entries such as `Term :2.0` are supported, and hotwords currently apply to compatible sherpa-onnx Transducer models. The llama.cpp ASR presets (Qwen3-ASR, Granite Speech) do not use hotwords.
+- In `Settings > Vocabulary`, `Hotwords` are entered one per line. Hotwords apply to sherpa-onnx Transducer and Qwen3-ASR models and to the llama.cpp presets (Qwen3-ASR, Granite Speech). Weighted entries such as `Term :2.0` apply to sherpa-onnx Transducer models only.
 - In `Settings > Vocabulary`, `Text Replacement` can fix repeated terminology or spelling after transcription.
 - In `Settings > Vocabulary`, `Speaker Profiles` store local reference samples for known speakers. A profile can be `Ready`, `Limited`, or `Not ready` depending on usable sample count and duration; these states guide matching confidence, not whether you can manually assign the profile.
 

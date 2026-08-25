@@ -441,7 +441,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
       <RuleSetSection
         title={t('settings.hotwords_title', { defaultValue: 'Hotwords' })}
         icon={<BookIcon width={20} height={20} />}
-        description={t('settings.hotwords_description', { defaultValue: 'Enhance recognition for specific terms. One per line. (Supported by Transducer and Qwen3 models)' })}
+        description={t('settings.hotwords_description', { defaultValue: 'Enhance recognition for specific terms. One per line.' })}
         sets={hotwordSets}
         newSetName={hotwordUi.newSetName}
         newSetPlaceholder={t('settings.rule_set_name_placeholder', { defaultValue: 'e.g. Technical Terms' })}
@@ -474,7 +474,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                 style={TEXTAREA_STYLE}
               />
               <p style={HINT_STYLE}>
-                {t('settings.hotwords_hint', { defaultValue: 'Tip: You can add weight by appending " :weight" (e.g. "Term :2.0"). Default weight is 1.0.' })}
+                {t('settings.hotwords_hint', { defaultValue: 'Tip: Optional weight suffix " :2.0" applies to sherpa-onnx Transducer models only; other engines ignore it.' })}
               </p>
             </>
           ) : (
@@ -511,7 +511,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                 {t('common.add')}
               </button>
               <p style={HINT_STYLE}>
-                {t('settings.hotwords_hint', { defaultValue: 'Tip: You can add weight by appending " :weight" (e.g. "Term :2.0"). Default weight is 1.0.' })}
+                {t('settings.hotwords_hint', { defaultValue: 'Tip: Optional weight suffix " :2.0" applies to sherpa-onnx Transducer models only; other engines ignore it.' })}
               </p>
             </>
           )
