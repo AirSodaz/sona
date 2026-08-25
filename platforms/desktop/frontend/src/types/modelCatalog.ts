@@ -32,6 +32,7 @@ export interface ModelInfo {
     | 'fire-red-asr'
     | 'dolphin'
     | 'qwen3-asr'
+    | 'granite-speech'
     | 'speaker-segmentation'
     | 'speaker-embedding';
   modes?: ('streaming' | 'batch')[];

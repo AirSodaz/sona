@@ -26,6 +26,7 @@ use sona_core::transcription::transcript::{
 };
 
 const MODEL_TYPE_QWEN3_ASR: &str = "qwen3-asr";
+const MODEL_TYPE_GRANITE_SPEECH: &str = "granite-speech";
 const N_BATCH: i32 = 512;
 const MAX_GENERATED_TOKENS: usize = 4096;
 
@@ -77,6 +78,7 @@ struct LlamaBatchTranscriptionJob {
     model_path: PathBuf,
     mmproj_path: PathBuf,
     num_threads: i32,
+    model_type: String,
 }
 
 impl LlamaBatchTranscriptionJob {
@@ -87,11 +89,14 @@ impl LlamaBatchTranscriptionJob {
                 plan.engine,
             ));
         }
-        if plan.model_type != MODEL_TYPE_QWEN3_ASR {
+        if !matches!(
+            plan.model_type.as_str(),
+            MODEL_TYPE_QWEN3_ASR | MODEL_TYPE_GRANITE_SPEECH
+        ) {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::Unsupported,
                 format!(
-                    "llama.cpp batch ASR currently supports only model type '{MODEL_TYPE_QWEN3_ASR}', got '{}'.",
+                    "llama.cpp batch ASR supports model types '{MODEL_TYPE_QWEN3_ASR}' and '{MODEL_TYPE_GRANITE_SPEECH}', got '{}'.",
                     plan.model_type
                 ),
             ));
@@ -115,7 +120,7 @@ impl LlamaBatchTranscriptionJob {
         let file_config = plan.file_config.as_ref().ok_or_else(|| {
             AsrPortError::new(
                 AsrPortErrorKind::Model,
-                "Qwen3-ASR llama.cpp models require model and mmproj file configuration.",
+                "llama.cpp batch ASR models require model and mmproj file configuration.",
             )
         })?;
         let model_root = Path::new(&plan.model_path);
@@ -127,6 +132,7 @@ impl LlamaBatchTranscriptionJob {
             model_path,
             mmproj_path,
             num_threads: plan.num_threads,
+            model_type: plan.model_type,
         })
     }
 
@@ -146,7 +152,7 @@ impl LlamaBatchTranscriptionJob {
             AsrPortError::new(
                 AsrPortErrorKind::Model,
                 format!(
-                    "Failed to initialize Qwen3-ASR mmproj {}: {error}",
+                    "Failed to initialize llama.cpp ASR mmproj {}: {error}",
                     self.mmproj_path.display()
                 ),
             )
@@ -195,12 +201,13 @@ impl LlamaBatchTranscriptionJob {
                 )
             })?;
 
-        let prompt = qwen3_asr_prompt(&model)?;
+        let prompt = build_transcription_prompt(&self.model_type, &model)?;
+        let add_special = self.model_type != MODEL_TYPE_GRANITE_SPEECH;
         let chunks = mtmd
             .tokenize(
                 MtmdInputText {
                     text: prompt,
-                    add_special: true,
+                    add_special,
                     parse_special: true,
                 },
                 &[&audio],
@@ -208,7 +215,7 @@ impl LlamaBatchTranscriptionJob {
             .map_err(|error| {
                 AsrPortError::new(
                     AsrPortErrorKind::Model,
-                    format!("Failed to tokenize Qwen3-ASR audio prompt: {error}"),
+                    format!("Failed to tokenize llama.cpp ASR audio prompt: {error}"),
                 )
             })?;
         let n_past = chunks
@@ -216,7 +223,7 @@ impl LlamaBatchTranscriptionJob {
             .map_err(|error| {
                 AsrPortError::new(
                     AsrPortErrorKind::Runtime,
-                    format!("Failed to evaluate Qwen3-ASR audio: {error}"),
+                    format!("Failed to evaluate llama.cpp ASR audio: {error}"),
                 )
             })?;
         observer.on_progress(60.0);
@@ -243,7 +250,10 @@ impl LlamaBatchTranscriptionJob {
                     .map_err(|error| {
                         AsrPortError::new(
                             AsrPortErrorKind::Protocol,
-                            format!("Failed to decode llama.cpp output token: {error}"),
+                            format!(
+                                "Failed to decode llama.cpp output token (id={}): {error}",
+                                token.0
+                            ),
                         )
                     })?,
             );
@@ -252,6 +262,7 @@ impl LlamaBatchTranscriptionJob {
             if generated_tokens.is_multiple_of(8) {
                 emit_partial_transcript(
                     observer.as_ref(),
+                    &self.model_type,
                     &segment_id,
                     duration,
                     &generated,
@@ -276,7 +287,7 @@ impl LlamaBatchTranscriptionJob {
             })?;
         }
 
-        let text = parse_qwen3_asr_output(&generated);
+        let text = parse_transcript_output(&self.model_type, &generated);
         if text.is_empty() {
             observer.on_progress(100.0);
             return Ok(Vec::new());
@@ -307,12 +318,13 @@ impl LlamaBatchTranscriptionJob {
 
 fn emit_partial_transcript(
     observer: &dyn BatchTranscriptionObserver,
+    model_type: &str,
     segment_id: &str,
     duration: f64,
     generated: &str,
     generated_tokens: usize,
 ) {
-    let text = parse_qwen3_asr_partial_output(generated);
+    let text = parse_partial_transcript_output(model_type, generated);
     if text.is_empty() {
         return;
     }
@@ -470,7 +482,7 @@ fn validate_supported_options(plan: &BatchTranscribePlan) -> Result<(), AsrPortE
         Err(AsrPortError::new(
             AsrPortErrorKind::Unsupported,
             format!(
-                "Qwen3-ASR llama.cpp batch transcription does not yet support: {}.",
+                "llama.cpp batch transcription does not yet support: {}.",
                 unsupported.join(", ")
             ),
         ))
@@ -526,18 +538,43 @@ fn load_model(backend: &LlamaBackend, model_path: &Path) -> Result<Arc<LlamaMode
     Ok(model)
 }
 
-fn qwen3_asr_prompt(model: &LlamaModel) -> Result<String, AsrPortError> {
-    let message = LlamaChatMessage::new("user".to_string(), mtmd_default_marker().to_string())
-        .map_err(|error| {
+const GRANITE_SPEECH_TRANSCRIBE_PROMPT: &str =
+    "transcribe the speech with proper punctuation and capitalization.";
+
+fn build_transcription_prompt(
+    model_type: &str,
+    model: &LlamaModel,
+) -> Result<String, AsrPortError> {
+    match model_type {
+        MODEL_TYPE_GRANITE_SPEECH => {
+            // Granite Speech GGUFs embed the upstream repository chat
+            // template, which renders single-turn requests as plain-text
+            // role markers. Rendered literally here because llama-cpp-2's
+            // apply_chat_template fails on this GGUF (ffi error -1).
+            // The tokenizer sets add_bos_token=false, so no special token
+            // may be prepended to the rendered prompt.
+            Ok(format!(
+                "USER: {}{}\n ASSISTANT:",
+                mtmd_default_marker(),
+                GRANITE_SPEECH_TRANSCRIBE_PROMPT
+            ))
+        }
+        _ => chat_template_prompt(model, mtmd_default_marker()),
+    }
+}
+
+fn chat_template_prompt(model: &LlamaModel, user_content: &str) -> Result<String, AsrPortError> {
+    let message =
+        LlamaChatMessage::new("user".to_string(), user_content.to_string()).map_err(|error| {
             AsrPortError::new(
                 AsrPortErrorKind::Protocol,
-                format!("Failed to construct Qwen3-ASR prompt: {error}"),
+                format!("Failed to construct llama.cpp ASR prompt: {error}"),
             )
         })?;
     let template = model.chat_template(None).map_err(|error| {
         AsrPortError::new(
             AsrPortErrorKind::Model,
-            format!("Qwen3-ASR GGUF does not provide a usable chat template: {error}"),
+            format!("llama.cpp ASR GGUF does not provide a usable chat template: {error}"),
         )
     })?;
     model
@@ -545,7 +582,7 @@ fn qwen3_asr_prompt(model: &LlamaModel) -> Result<String, AsrPortError> {
         .map_err(|error| {
             AsrPortError::new(
                 AsrPortErrorKind::Protocol,
-                format!("Failed to apply Qwen3-ASR chat template: {error}"),
+                format!("Failed to apply llama.cpp ASR chat template: {error}"),
             )
         })
 }
@@ -563,7 +600,7 @@ fn resolve_required_model_file(
     let configured = configured.ok_or_else(|| {
         AsrPortError::new(
             AsrPortErrorKind::Model,
-            format!("Qwen3-ASR llama.cpp file configuration is missing '{label}'."),
+            format!("llama.cpp batch ASR file configuration is missing '{label}'."),
         )
     })?;
     let configured_path = Path::new(configured);
@@ -575,7 +612,10 @@ fn resolve_required_model_file(
     if !path.is_file() {
         return Err(AsrPortError::new(
             AsrPortErrorKind::Model,
-            format!("Qwen3-ASR {label} file was not found: {}", path.display()),
+            format!(
+                "llama.cpp batch ASR {label} file was not found: {}",
+                path.display()
+            ),
         ));
     }
     Ok(path)
@@ -588,6 +628,20 @@ fn path_to_str<'a>(path: &'a Path, label: &str) -> Result<&'a str, AsrPortError>
             format!("{label} path is not valid UTF-8: {}", path.display()),
         )
     })
+}
+
+fn parse_transcript_output(model_type: &str, output: &str) -> String {
+    if model_type == MODEL_TYPE_GRANITE_SPEECH {
+        return normalize_recognizer_text(output.trim());
+    }
+    parse_qwen3_asr_output(output)
+}
+
+fn parse_partial_transcript_output(model_type: &str, output: &str) -> String {
+    if model_type == MODEL_TYPE_GRANITE_SPEECH {
+        return normalize_recognizer_text(output.trim());
+    }
+    parse_qwen3_asr_partial_output(output)
 }
 
 fn parse_qwen3_asr_output(output: &str) -> String {
@@ -607,8 +661,9 @@ fn parse_qwen3_asr_partial_output(output: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        LlamaBatchTranscriptionJob, MODEL_TYPE_QWEN3_ASR, llama_generation_progress,
-        parse_qwen3_asr_output, parse_qwen3_asr_partial_output, pcm_s16le_bytes_to_f32,
+        LlamaBatchTranscriptionJob, MODEL_TYPE_GRANITE_SPEECH, MODEL_TYPE_QWEN3_ASR,
+        llama_generation_progress, parse_partial_transcript_output, parse_qwen3_asr_output,
+        parse_qwen3_asr_partial_output, parse_transcript_output, pcm_s16le_bytes_to_f32,
         resolve_ffmpeg_sidecar_path_from_exe, validate_supported_options,
     };
     use sona_core::export::ExportFormat;
@@ -659,6 +714,55 @@ mod tests {
         assert_eq!(
             parse_qwen3_asr_partial_output("language Chinese<asr_text>你好"),
             "你好"
+        );
+    }
+
+    #[test]
+    fn granite_speech_type_passes_the_model_type_guard() {
+        let mut plan = plan();
+        plan.model_type = MODEL_TYPE_GRANITE_SPEECH.to_string();
+
+        // The guard passes; the job then fails on the missing input file,
+        // proving model type was accepted by dispatch.
+        let error = LlamaBatchTranscriptionJob::from_plan(plan).unwrap_err();
+
+        assert_eq!(error.kind, AsrPortErrorKind::InvalidRequest);
+        assert!(
+            error
+                .message
+                .contains("Input file must be an existing file")
+        );
+    }
+
+    #[test]
+    fn unknown_model_types_name_the_supported_set() {
+        let mut plan = plan();
+        plan.model_type = "whisper-large".to_string();
+
+        let error = LlamaBatchTranscriptionJob::from_plan(plan).unwrap_err();
+
+        assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
+        assert!(error.message.contains(MODEL_TYPE_QWEN3_ASR));
+        assert!(error.message.contains(MODEL_TYPE_GRANITE_SPEECH));
+    }
+
+    #[test]
+    fn output_parsing_dispatches_by_model_type() {
+        assert_eq!(
+            parse_transcript_output(MODEL_TYPE_GRANITE_SPEECH, "  Hello, world!  "),
+            "Hello, world!"
+        );
+        assert_eq!(
+            parse_transcript_output(MODEL_TYPE_QWEN3_ASR, "<asr_text>你好"),
+            "你好"
+        );
+        assert_eq!(
+            parse_partial_transcript_output(MODEL_TYPE_GRANITE_SPEECH, " Partial text "),
+            "Partial text"
+        );
+        assert_eq!(
+            parse_partial_transcript_output(MODEL_TYPE_QWEN3_ASR, "no marker yet"),
+            ""
         );
     }
 

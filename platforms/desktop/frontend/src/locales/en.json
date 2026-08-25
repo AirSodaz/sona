@@ -1130,6 +1130,7 @@
             "zipformer_xlarge": "Developed by K2-FSA. A highly accurate and efficient streaming model specialized for Chinese recognition.",
             "funasr_nano": "Developed by Alibaba FunASR. A large and highly accurate local model, supporting multiple dialects and complex transcription tasks.",
             "qwen3_asr": "Developed by Alibaba Qwen. A local Qwen3-based ASR model for high-quality batch transcription.",
+            "granite_speech": "Developed by IBM Granite. A local speech model ranked first on the Open ASR Leaderboard for batch transcription in English, French, German, Spanish, Portuguese, and Japanese.",
             "firered_asr": "Developed by Xiaohongshu (FireRed Team). An advanced local model delivering strong performance for Chinese and English mixed-language tasks.",
             "dolphin": "Developed by Dataocean AI and Tsinghua University. A multilingual, multitask ASR model supporting 40 Eastern languages and 22 Chinese dialects.",
             "ct_punctuation": "Adds accurate punctuation and capitalization to raw speech transcripts. Optimized with Int8 quantization.",

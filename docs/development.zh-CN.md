@@ -9,7 +9,7 @@
 - Node.js 20 或更高版本
 - Corepack，以及仓库锁定版本的 pnpm
 - Rust stable 工具链
-- 用于构建 llama.cpp 本地 ASR 适配器的 CMake 与 C/C++ 编译器。桌面端与 CLI 构建会动态链接生成的 ggml 与 llama 共享库，发布安装包会将这些库暂存到宿主运行时目录。
+- 用于构建 llama.cpp 本地 ASR 适配器的 CMake 与 C/C++ 编译器。桌面端与 CLI 构建会动态链接生成的 ggml 与 llama 共享库，发布安装包会将这些库暂存到宿主运行时目录。请基于较新的 llama.cpp master 构建——Granite Speech GGUF 需要 b9045 或更新版本（已在 b10615 验证）；过旧的本地构建会让 Granite 转写质量静默劣化。
 - Tauri 在当前平台所需的系统依赖
 
 在 Ubuntu 或 Debian 上，可通过以下命令安装桌面端系统依赖：

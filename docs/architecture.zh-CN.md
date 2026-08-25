@@ -164,8 +164,9 @@ pnpm run generate:sona-context
 | Archive / recovery | yes | out of scope | yes |
 | Export / runtime-fs | yes | yes | yes |
 
-Desktop 与 CLI 的模型下载器会将 `ggml-org/Qwen3-ASR-0.6B-GGUF` 和
-`ggml-org/Qwen3-ASR-1.7B-GGUF` 的 Q8_0 预设作为经过校验的多文件模型包安装。
+Desktop 与 CLI 的模型下载器会将 `ggml-org/Qwen3-ASR-0.6B-GGUF`、
+`ggml-org/Qwen3-ASR-1.7B-GGUF` 与 `ibm-granite/granite-speech-4.1-2b-GGUF`
+的 Q8_0 预设作为经过校验的多文件模型包安装。
 主 GGUF 与匹配的 mmproj 会先下载到暂存目录，再整体发布，因此文件不完整时不会被标记为已安装。
 UniFFI 与 Android 仍只暴露 sherpa-onnx 本地 ASR 模型。
 
