@@ -54,7 +54,8 @@ export function getRecommendedOnboardingConfig(
   return {
     streamingModelPath: paths.streamingModelPath,
     batchModelPath: paths.batchModelPath,
-    vadModelPath: paths.vadModelPath,
+    liveVadModelPath: paths.vadModelPath,
+    batchVadModelPath: paths.vadModelPath,
     enableITN: true,
   };
 }

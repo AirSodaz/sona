@@ -167,8 +167,14 @@ function renderTab(installedModels: Set<string>, managerOverrides: Record<string
             selectedModelIds: {
                 streaming: null,
                 batch: null,
-                speakerSegmentation: config.speakerSegmentationModelPath ? speakerSegmentationModelBase.id : null,
-                speakerEmbedding: config.speakerEmbeddingModelPath ? speakerEmbeddingModelBase.id : null,
+                liveSpeakerSegmentation: config.liveSpeakerSegmentationModelPath ? speakerSegmentationModelBase.id : null,
+                batchSpeakerSegmentation: config.batchSpeakerSegmentationModelPath ? speakerSegmentationModelBase.id : null,
+                liveSpeakerEmbedding: config.liveSpeakerEmbeddingModelPath ? speakerEmbeddingModelBase.id : null,
+                batchSpeakerEmbedding: config.batchSpeakerEmbeddingModelPath ? speakerEmbeddingModelBase.id : null,
+                livePunctuation: null,
+                batchPunctuation: null,
+                liveVad: null,
+                batchVad: null,
             },
             catalogLoadState: 'ready',
             catalogLoadError: null,
@@ -179,11 +185,15 @@ function renderTab(installedModels: Set<string>, managerOverrides: Record<string
             restoreDefaultModelSettings: () => {
                 useConfigStore.getState().setConfig({
                     batchVadEnabled: true,
-                    punctuationModelPath: '',
-                    speakerSegmentationModelPath: '',
-                    speakerEmbeddingModelPath: '',
+                    livePunctuationModelPath: '',
+                    batchPunctuationModelPath: '',
+                    liveSpeakerSegmentationModelPath: '',
+                    batchSpeakerSegmentationModelPath: '',
+                    liveSpeakerEmbeddingModelPath: '',
+                    batchSpeakerEmbeddingModelPath: '',
                     enableITN: true,
-                    vadBufferSize: 5,
+                    liveVadBufferSize: 5,
+                    batchVadBufferSize: 5,
                     maxConcurrent: 2,
                 });
             },
@@ -200,18 +210,32 @@ function renderTab(installedModels: Set<string>, managerOverrides: Record<string
     return render(<Harness />);
 }
 
+async function activateBatchScenarioAndExpandAdvanced() {
+    fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
+
+    const advancedHeader = await screen.findByRole('button', { name: /高级设置/ });
+    const expanded = advancedHeader.getAttribute('aria-expanded') === 'true';
+    if (!expanded) {
+        fireEvent.click(advancedHeader);
+    }
+}
+
 describe('SettingsModelsTab speaker model selections', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         setTestConfig({
-            speakerSegmentationModelPath: '',
-            speakerEmbeddingModelPath: '',
+            liveSpeakerSegmentationModelPath: '',
+            liveSpeakerEmbeddingModelPath: '',
+            batchSpeakerSegmentationModelPath: '',
+            batchSpeakerEmbeddingModelPath: '',
             batchVadEnabled: true,
         });
     });
 
-    it('toggles the batch VAD setting from the transcription settings section', async () => {
+    it('toggles the batch VAD setting from the advanced section of the batch scenario', async () => {
         renderTab(new Set());
+
+        await activateBatchScenarioAndExpandAdvanced();
 
         expect(screen.getByText('settings.batch_vad_enabled')).toBeDefined();
         expect(screen.getByText('settings.batch_vad_enabled_hint')).toBeDefined();
@@ -229,12 +253,26 @@ describe('SettingsModelsTab speaker model selections', () => {
         });
     });
 
+    it('hides the batch VAD toggle on the live scenario', async () => {
+        renderTab(new Set());
+
+        await screen.findByRole('button', { name: /高级设置/ });
+        const advancedHeader = screen.getByRole('button', { name: /高级设置/ });
+        if (advancedHeader.getAttribute('aria-expanded') !== 'true') {
+            fireEvent.click(advancedHeader);
+        }
+
+        expect(screen.queryByText('settings.batch_vad_enabled')).toBeNull();
+    });
+
     it('restores batch VAD setting to true when restoring default settings', async () => {
         setTestConfig({
             batchVadEnabled: false,
         });
 
         renderTab(new Set());
+
+        await activateBatchScenarioAndExpandAdvanced();
 
         const row = screen.getByText('settings.batch_vad_enabled').closest('.settings-item-container');
         const batchVadSwitch = within(row as HTMLElement).getByRole('switch');
@@ -303,6 +341,8 @@ describe('SettingsModelsTab speaker model selections', () => {
         const apiKeyInput = screen.getByPlaceholderText('X-Api-Key') as HTMLInputElement;
         expect(apiKeyInput.disabled).toBe(false);
 
+        await activateBatchScenarioAndExpandAdvanced();
+
         const row = screen.getByText('settings.batch_vad_enabled').closest('.settings-item-container');
         const batchVadSwitch = within(row as HTMLElement).getByRole('switch');
         fireEvent.click(batchVadSwitch);
@@ -333,8 +373,8 @@ describe('SettingsModelsTab speaker model selections', () => {
 
     it('clears selected speaker model paths when Off is chosen', async () => {
         setTestConfig({
-            speakerSegmentationModelPath: '/models/sherpa-onnx-pyannote-segmentation-3-0',
-            speakerEmbeddingModelPath: '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+            liveSpeakerSegmentationModelPath: '/models/sherpa-onnx-pyannote-segmentation-3-0',
+            liveSpeakerEmbeddingModelPath: '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
         });
 
         renderTab(new Set([
@@ -354,8 +394,8 @@ describe('SettingsModelsTab speaker model selections', () => {
         fireEvent.click(screen.getByRole('option', { name: 'Off' }));
 
         await waitFor(() => {
-            expect(useConfigStore.getState().config.speakerSegmentationModelPath).toBe('');
-            expect(useConfigStore.getState().config.speakerEmbeddingModelPath).toBe('');
+            expect(useConfigStore.getState().config.liveSpeakerSegmentationModelPath).toBe('');
+            expect(useConfigStore.getState().config.liveSpeakerEmbeddingModelPath).toBe('');
             expect(screen.getByRole('button', { name: 'Speaker Segmentation Model' }).textContent).toContain('Off');
             expect(screen.getByRole('button', { name: 'Speaker Embedding Model' }).textContent).toContain('Off');
         });
@@ -432,6 +472,8 @@ describe('SettingsModelsTab speaker model selections', () => {
         } as any);
 
         renderTab(new Set());
+
+        fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
 
         await waitFor(() => {
             expect(screen.getByRole('button', { name: '豆包语音 (火山)' })).not.toBeNull();

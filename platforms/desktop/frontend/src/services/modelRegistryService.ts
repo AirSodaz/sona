@@ -1,4 +1,6 @@
 import { logger } from '../utils/logger';
+import type { ScenarioModelPathConfig, ScenarioModelKind } from '../utils/scenarioModels';
+import { scenarioModelFieldKey } from '../utils/scenarioModels';
 import type {
   ModelCatalogModel,
   ModelCatalogSelectedIds,
@@ -6,6 +8,7 @@ import type {
   ModelInfo,
   ModelRules,
   ModelSelectionPaths,
+  ScenarioSelectedModelIds,
 } from '../types/modelCatalog';
 
 interface ModelRegistryServicePorts {
@@ -62,6 +65,60 @@ class ModelRegistryService {
         snapshot.selectionOptions.speakerEmbedding,
       ),
     };
+  }
+
+  resolveAsrSelectedModelIdsFromSnapshot(
+    snapshot: ModelCatalogSnapshot,
+    paths: Pick<ModelSelectionPaths, 'streamingModelPath' | 'batchModelPath'>,
+  ): Pick<ModelCatalogSelectedIds, 'streaming' | 'batch'> {
+    return {
+      streaming: resolveSelectedModelId(
+        snapshot,
+        paths.streamingModelPath,
+        snapshot.selectionOptions.streaming,
+      ),
+      batch: resolveSelectedModelId(
+        snapshot,
+        paths.batchModelPath,
+        snapshot.selectionOptions.batch,
+      ),
+    };
+  }
+
+  resolveScenarioSelectedModelIdsFromSnapshot(
+    snapshot: ModelCatalogSnapshot,
+    config: ScenarioModelPathConfig,
+  ): ScenarioSelectedModelIds {
+    const sectionModelsByType = new Map<string, Array<{ id: string }>>();
+    for (const section of snapshot.sections) {
+      sectionModelsByType.set(
+        section.type,
+        section.groups.flatMap((group) => group.models),
+      );
+    }
+
+    const kindToSectionType: Record<ScenarioModelKind, string> = {
+      punctuationModelPath: 'punctuation',
+      vadModelPath: 'vad',
+      speakerSegmentationModelPath: 'speaker-segmentation',
+      speakerEmbeddingModelPath: 'speaker-embedding',
+    };
+
+    const ids = {} as ScenarioSelectedModelIds;
+    for (const scenario of ['live', 'batch'] as const) {
+      for (const kind of Object.keys(kindToSectionType) as ScenarioModelKind[]) {
+        const key = `${scenario}${kind
+          .replace('ModelPath', '')
+          .replace(/^./, (ch) => ch.toUpperCase())}` as keyof ScenarioSelectedModelIds;
+        const options = sectionModelsByType.get(kindToSectionType[kind]) ?? [];
+        ids[key] = resolveSelectedModelId(
+          snapshot,
+          config[scenarioModelFieldKey(kind, scenario)] ?? '',
+          options,
+        );
+      }
+    }
+    return ids;
   }
 
   async resolveCatalogModel(modelId: string): Promise<ModelCatalogModel | undefined> {

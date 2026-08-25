@@ -4,11 +4,13 @@ import type {
   AsrMode,
   AsrModelSelection,
   AsrProviderConfig,
+  AsrScenario,
   AsrSelectionSlot,
   ModelConfig,
   OnlineAsrProviderId,
   OnlineAsrProviderConfig,
 } from '../types/config';
+import { getScenarioPunctuationModelPath, getScenarioVadBufferSize, getScenarioVadModelPath } from '../utils/scenarioModels';
 import type {
   AsrTranscriptionRequest,
   AsrTranscriptionRequestBase,
@@ -117,12 +119,15 @@ export class AsrConfigService {
       ? this.ports.modelService.getModelRules(modelInfo.id)
       : { requiresPunctuation: false, requiresVad: false };
 
-    const batchVadEnabled = slot !== 'batch' || config.batchVadEnabled !== false;
-    const vadModel = batchVadEnabled && rules.requiresVad && config.vadModelPath
-      ? config.vadModelPath
+    const scenario: AsrScenario = slot === 'batch' ? 'batch' : 'live';
+    const batchVadEnabled = scenario !== 'batch' || config.batchVadEnabled !== false;
+    const vadModelPath = getScenarioVadModelPath(config, scenario);
+    const punctuationModelPath = getScenarioPunctuationModelPath(config, scenario);
+    const vadModel = batchVadEnabled && rules.requiresVad && vadModelPath
+      ? vadModelPath
       : null;
-    const punctuationModel = rules.requiresPunctuation && config.punctuationModelPath
-      ? config.punctuationModelPath
+    const punctuationModel = rules.requiresPunctuation && punctuationModelPath
+      ? punctuationModelPath
       : null;
 
     const baseRequest: AsrTranscriptionRequestBase = {
@@ -153,8 +158,8 @@ export class AsrConfigService {
       numThreads: 4,
       punctuationModel,
       vadModel,
-      vadBuffer: config.vadBufferSize || 5,
-      ...(slot === 'batch' ? { batchSegmentationMode: batchVadEnabled ? 'vad' : 'whole' } : {}),
+      vadBuffer: getScenarioVadBufferSize(config, scenario),
+      ...(scenario === 'batch' ? { batchSegmentationMode: batchVadEnabled ? 'vad' : 'whole' } : {}),
       modelType: modelInfo?.type || 'sensevoice',
       fileConfig: modelInfo?.fileConfig,
       gpuAcceleration: config.gpuAcceleration ?? 'auto',

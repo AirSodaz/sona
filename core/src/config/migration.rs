@@ -110,20 +110,8 @@ fn should_upgrade_config(config: &Value, is_config_migrated: bool) -> bool {
         return true;
     }
 
-    for key in [
-        "speakerSegmentationModelPath",
-        "speakerEmbeddingModelPath",
-        "polishPresetId",
-        "summaryTemplateId",
-    ] {
-        if config.get(key).and_then(flatten_id_value).is_none()
-            && (key == "polishPresetId" || key == "summaryTemplateId")
-        {
-            return true;
-        }
-        if (key == "speakerSegmentationModelPath" || key == "speakerEmbeddingModelPath")
-            && !config.get(key).is_some_and(Value::is_string)
-        {
+    for key in ["polishPresetId", "summaryTemplateId"] {
+        if config.get(key).and_then(flatten_id_value).is_none() {
             return true;
         }
     }
@@ -164,10 +152,6 @@ fn normalize_current_config(existing: Value) -> Value {
         .map(Value::Bool)
         .unwrap_or(json!(true));
     let log_level = normalize_log_level(config.get("logLevel"));
-    let speaker_segmentation_model_path =
-        string_at(&config, "speakerSegmentationModelPath").unwrap_or_default();
-    let speaker_embedding_model_path =
-        string_at(&config, "speakerEmbeddingModelPath").unwrap_or_default();
     let speaker_profiles = normalize_speaker_profiles(config.get("speakerProfiles"));
     let asr_config = normalize_asr_config(&config);
 
@@ -184,16 +168,6 @@ fn normalize_current_config(existing: Value) -> Value {
     set(&mut config, "polishCustomPresets", polish_custom_presets);
     set(&mut config, "polishKeywordSets", polish_keyword_sets);
     set(&mut config, "logLevel", json!(log_level));
-    set(
-        &mut config,
-        "speakerSegmentationModelPath",
-        json!(speaker_segmentation_model_path),
-    );
-    set(
-        &mut config,
-        "speakerEmbeddingModelPath",
-        json!(speaker_embedding_model_path),
-    );
     let http_server_enabled = bool_at(&config, "httpServerEnabled").unwrap_or(false);
     let http_server_port = number_or_default(&config, "httpServerPort", 14200);
     let http_server_host = string_or_default(&config, "httpServerHost", "127.0.0.1");
@@ -262,14 +236,7 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
     {
         return true;
     }
-    if existing.get("speakerProfiles") != normalized.get("speakerProfiles")
-        || !existing
-            .get("speakerSegmentationModelPath")
-            .is_some_and(Value::is_string)
-        || !existing
-            .get("speakerEmbeddingModelPath")
-            .is_some_and(Value::is_string)
-    {
+    if existing.get("speakerProfiles") != normalized.get("speakerProfiles") {
         return true;
     }
     if asr_config_needs_persist(existing.get("asr"), normalized.get("asr")) {
@@ -560,14 +527,6 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             json!(string_or_default(&parsed, "voiceTypingMode", "hold")),
         ),
         (
-            "speakerSegmentationModelPath",
-            json!(string_at(&parsed, "speakerSegmentationModelPath").unwrap_or_default()),
-        ),
-        (
-            "speakerEmbeddingModelPath",
-            json!(string_at(&parsed, "speakerEmbeddingModelPath").unwrap_or_default()),
-        ),
-        (
             "httpServerEnabled",
             json!(bool_at(&parsed, "httpServerEnabled").unwrap_or(false)),
         ),
@@ -680,10 +639,14 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "systemAudioDeviceId",
         "streamingModelPath",
         "batchModelPath",
-        "punctuationModelPath",
-        "vadModelPath",
-        "speakerSegmentationModelPath",
-        "speakerEmbeddingModelPath",
+        "livePunctuationModelPath",
+        "liveVadModelPath",
+        "liveSpeakerSegmentationModelPath",
+        "liveSpeakerEmbeddingModelPath",
+        "batchPunctuationModelPath",
+        "batchVadModelPath",
+        "batchSpeakerSegmentationModelPath",
+        "batchSpeakerEmbeddingModelPath",
         "modelDownloadMirror",
         "captionFontColor",
         "language",
@@ -739,7 +702,8 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "captionWindowWidth",
         "captionFontSize",
         "captionBackgroundOpacity",
-        "vadBufferSize",
+        "liveVadBufferSize",
+        "batchVadBufferSize",
         "llmRequestTimeoutSeconds",
     ] {
         repair_field_type(config, &defaults, key, Value::is_number);

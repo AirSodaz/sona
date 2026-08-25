@@ -39,13 +39,19 @@ export function buildModelPathConfigPatch(
 
   switch (model.type) {
     case 'vad':
-      return { vadModelPath: path };
+      return { liveVadModelPath: path, batchVadModelPath: path };
     case 'punctuation':
-      return { punctuationModelPath: path };
+      return { livePunctuationModelPath: path, batchPunctuationModelPath: path };
     case 'speaker-segmentation':
-      return { speakerSegmentationModelPath: path };
+      return {
+        liveSpeakerSegmentationModelPath: path,
+        batchSpeakerSegmentationModelPath: path,
+      };
     case 'speaker-embedding':
-      return { speakerEmbeddingModelPath: path };
+      return {
+        liveSpeakerEmbeddingModelPath: path,
+        batchSpeakerEmbeddingModelPath: path,
+      };
     case 'itn':
       return {};
     default:
@@ -76,20 +82,36 @@ export function buildModelRemovalConfigPatch(
     asr.selections.batch = { engine: 'local', mode: 'batch', modelId: null, modelPath: '' };
   }
 
-  if (config.punctuationModelPath === deletedPath) {
-    updates.punctuationModelPath = '';
+  if (config.livePunctuationModelPath === deletedPath) {
+    updates.livePunctuationModelPath = '';
   }
 
-  if (config.vadModelPath === deletedPath) {
-    updates.vadModelPath = '';
+  if (config.batchPunctuationModelPath === deletedPath) {
+    updates.batchPunctuationModelPath = '';
   }
 
-  if (config.speakerSegmentationModelPath === deletedPath) {
-    updates.speakerSegmentationModelPath = '';
+  if (config.liveVadModelPath === deletedPath) {
+    updates.liveVadModelPath = '';
   }
 
-  if (config.speakerEmbeddingModelPath === deletedPath) {
-    updates.speakerEmbeddingModelPath = '';
+  if (config.batchVadModelPath === deletedPath) {
+    updates.batchVadModelPath = '';
+  }
+
+  if (config.liveSpeakerSegmentationModelPath === deletedPath) {
+    updates.liveSpeakerSegmentationModelPath = '';
+  }
+
+  if (config.batchSpeakerSegmentationModelPath === deletedPath) {
+    updates.batchSpeakerSegmentationModelPath = '';
+  }
+
+  if (config.liveSpeakerEmbeddingModelPath === deletedPath) {
+    updates.liveSpeakerEmbeddingModelPath = '';
+  }
+
+  if (config.batchSpeakerEmbeddingModelPath === deletedPath) {
+    updates.batchSpeakerEmbeddingModelPath = '';
   }
 
   return {
@@ -103,13 +125,19 @@ export function buildRestoreDefaultModelConfigPatch(
   defaults: ModelCatalogRestoreDefaults,
 ): Partial<AppConfig> {
   const updates: Partial<AppConfig> = {
-    punctuationModelPath: defaults.punctuationModelPath ?? '',
+    livePunctuationModelPath: defaults.punctuationModelPath ?? '',
+    batchPunctuationModelPath: defaults.punctuationModelPath ?? '',
+    liveVadModelPath: defaults.vadModelPath ?? '',
+    batchVadModelPath: defaults.vadModelPath ?? '',
+    liveSpeakerSegmentationModelPath: defaults.speakerSegmentationModelPath ?? '',
+    batchSpeakerSegmentationModelPath: defaults.speakerSegmentationModelPath ?? '',
+    liveSpeakerEmbeddingModelPath: defaults.speakerEmbeddingModelPath ?? '',
+    batchSpeakerEmbeddingModelPath: defaults.speakerEmbeddingModelPath ?? '',
     batchVadEnabled: defaults.batchVadEnabled ?? true,
-    vadBufferSize: Number.isFinite(defaults.vadBufferSize) ? defaults.vadBufferSize : 5,
+    liveVadBufferSize: Number.isFinite(defaults.vadBufferSize) ? defaults.vadBufferSize : 5,
+    batchVadBufferSize: Number.isFinite(defaults.vadBufferSize) ? defaults.vadBufferSize : 5,
     maxConcurrent: Number.isFinite(defaults.maxConcurrent) ? defaults.maxConcurrent : 2,
     enableITN: defaults.enableITN,
-    speakerSegmentationModelPath: defaults.speakerSegmentationModelPath ?? '',
-    speakerEmbeddingModelPath: defaults.speakerEmbeddingModelPath ?? '',
   };
 
   if (defaults.streamingModelPath !== undefined) {
@@ -131,10 +159,6 @@ export function buildRestoreDefaultModelConfigPatch(
         modelPath: defaults.batchModelPath,
       },
     ));
-  }
-
-  if (defaults.vadModelPath !== undefined) {
-    updates.vadModelPath = defaults.vadModelPath;
   }
 
   Object.assign(updates, syncOnlineAsrProviderConfig(

@@ -99,8 +99,8 @@ describe('transcriptionRequest helpers', () => {
   it('builds batch process requests with speaker processing and save target', () => {
     const config = buildTestConfig({
       batchModelPath: '/models/batch',
-      speakerSegmentationModelPath: '/models/speaker-segmentation',
-      speakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
+      batchSpeakerSegmentationModelPath: '/models/speaker-segmentation',
+      batchSpeakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
       speakerProfiles: [
         { id: 'profile-1', name: 'Alice', enabled: true, samples: [] },
       ],
@@ -176,9 +176,11 @@ describe('transcriptionRequest helpers', () => {
       language: 'zh',
       enableITN: true,
       hotwords: ['Sona'],
-      vadModelPath: '/models/vad.onnx',
-      punctuationModelPath: '/models/punctuation.onnx',
-      speakerSegmentationModelPath: '/models/speaker-segmentation',
+      liveVadModelPath: '/models/vad.onnx',
+      batchVadModelPath: '/models/vad.onnx',
+      livePunctuationModelPath: '/models/punctuation.onnx',
+      batchPunctuationModelPath: '/models/punctuation.onnx',
+      batchSpeakerSegmentationModelPath: '/models/speaker-segmentation',
       asr: {
         selections: {
           batch: {

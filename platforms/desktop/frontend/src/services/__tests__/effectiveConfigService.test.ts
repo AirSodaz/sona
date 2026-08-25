@@ -17,8 +17,8 @@ function createBaseConfig(): AppConfig {
     theme: 'light',
     streamingModelPath: '/models/live',
     batchModelPath: '/models/batch',
-    punctuationModelPath: '',
-    vadModelPath: '',
+    livePunctuationModelPath: '',
+    liveVadModelPath: '',
     llmSettings: createLlmSettings(),
     polishPresetId: 'general',
     polishCustomPresets: [

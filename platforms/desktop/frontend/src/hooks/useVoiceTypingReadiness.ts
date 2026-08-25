@@ -22,7 +22,7 @@ export function useVoiceTypingReadiness(): VoiceTypingReadinessSnapshot {
             voiceTypingEnabled: state.config.voiceTypingEnabled ?? false,
             voiceTypingShortcut: state.config.voiceTypingShortcut ?? '',
             streamingModelPath: state.config.streamingModelPath ?? '',
-            vadModelPath: state.config.vadModelPath ?? '',
+            liveVadModelPath: state.config.liveVadModelPath ?? '',
             microphoneId: state.config.microphoneId ?? 'default',
         }))
     );

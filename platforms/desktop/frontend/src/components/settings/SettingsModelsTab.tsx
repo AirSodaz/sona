@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type {
+    ModelCatalogModel,
     ModelCatalogSectionType,
     ModelSelectionOption,
 } from '../../types/modelCatalog';
@@ -16,14 +17,20 @@ import {
     syncLegacyAsrSelectionFields,
     syncStreamingAsrSelectionFields,
 } from '../../services/asrConfigService';
+import { modelService } from '../../services/modelService';
 import { isOnlineAsrProviderId } from '../../services/onlineAsrProviders';
+import { scenarioModelFieldKey, getScenarioVadBufferSize, type ScenarioModelKind } from '../../utils/scenarioModels';
+import { findSelectedModelByMode } from '../../utils/modelSelection';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader, SettingsAccordion } from './SettingsLayout';
+import { SegmentedControl } from './SegmentedControl';
 import { Settings2, PlaySquare } from 'lucide-react';
 import { ModelIcon, RestoreIcon, OnlineIcon } from '../Icons';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import { Switch } from '../Switch';
 import { DynamicProviderSettings, VolcengineSettingsCard, GroqWhisperSettingsCard, type ProviderSettingsProps } from './OnlineAsrSettingsCards';
 import { markSettingsPerf } from '../../utils/settingsPerf';
+
+type ModelScenario = 'live' | 'batch';
 
 const CUSTOM_PROVIDER_COMPONENTS: Record<string, React.ComponentType<ProviderSettingsProps>> = {
     [VOLCENGINE_DOUBAO_PROVIDER_ID]: VolcengineSettingsCard,
@@ -235,6 +242,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     const transcriptionConfig = useTranscriptionConfig();
     const updateConfig = useSetConfig();
     const [showLocalModelContent, setShowLocalModelContent] = useState(false);
+    const [activeScenario, setActiveScenario] = useState<ModelScenario>('live');
     const {
         installedModels,
         modelCatalog,
@@ -248,13 +256,14 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
         restoreDefaultModelSettings
     } = useModelManagerContext();
 
-    const vadBufferSize = transcriptionConfig.vadBufferSize || 5;
     const maxConcurrent = transcriptionConfig.maxConcurrent || 2;
     const enableITN = transcriptionConfig.enableITN ?? true;
     const batchVadEnabled = transcriptionConfig.batchVadEnabled ?? true;
     const gpuAcceleration = transcriptionConfig.gpuAcceleration ?? 'auto';
     const isCatalogReady = catalogLoadState === 'ready';
     const localModelActionsDisabled = !isCatalogReady;
+    const isBatchScenario = activeScenario === 'batch';
+    const activeVadBufferSize = getScenarioVadBufferSize(transcriptionConfig, activeScenario);
 
     useEffect(() => {
         if (!_isActive) {
@@ -308,27 +317,25 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
             : selectedModelIds.batch ?? '',
         [modelConfig.asr?.selections.batch, selectedModelIds.batch],
     );
-    const selectedSpeakerSegmentationModelId = useMemo(
-        () => selectedModelIds.speakerSegmentation ?? '',
-        [selectedModelIds.speakerSegmentation],
-    );
-    const selectedSpeakerEmbeddingModelId = useMemo(
-        () => selectedModelIds.speakerEmbedding ?? '',
-        [selectedModelIds.speakerEmbedding],
-    );
+    const selectedAsrModelId = isBatchScenario ? selectedBatchModelId : selectedStreamingModelId;
 
     const applyDependencyRequests = (modelId: string) => {
         const dependencyUpdates: Partial<typeof modelConfig> = {};
         const dependencies = modelCatalog.dependencyRequestsByModelId[modelId] ?? [];
         for (const dependency of dependencies) {
-            const currentPath = dependency.configKey === 'vadModelPath'
-                ? modelConfig.vadModelPath
-                : modelConfig.punctuationModelPath;
-            if (currentPath) {
+            const fieldKeys = [
+                scenarioModelFieldKey(dependency.configKey, 'live'),
+                scenarioModelFieldKey(dependency.configKey, 'batch'),
+            ] as const;
+            if (fieldKeys.every((key) => modelConfig[key])) {
                 continue;
             }
             if (dependency.isInstalled) {
-                dependencyUpdates[dependency.configKey] = dependency.installPath;
+                for (const key of fieldKeys) {
+                    if (!modelConfig[key]) {
+                        dependencyUpdates[key] = dependency.installPath;
+                    }
+                }
             } else {
                 document.dispatchEvent(new CustomEvent('download-background-model', {
                     detail: { modelId: dependency.modelId },
@@ -342,17 +349,9 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     };
 
     const handleModelChange = async (
-        type: 'streaming' | 'batch' | 'speakerSegmentation' | 'speakerEmbedding',
+        type: 'streaming' | 'batch',
         modelId: string,
     ) => {
-        const configKey = type === 'streaming'
-            ? 'streamingModelPath'
-            : type === 'batch'
-                ? 'batchModelPath'
-                : type === 'speakerSegmentation'
-                    ? 'speakerSegmentationModelPath'
-                    : 'speakerEmbeddingModelPath';
-
         if (!modelId) {
             if (type === 'streaming') {
                 const patch = syncStreamingAsrSelectionFields(modelConfig, {
@@ -362,21 +361,17 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 updateConfig(patch);
                 return;
             }
-            if (type === 'batch') {
-                updateConfig(syncLegacyAsrSelectionFields(modelConfig, 'batch', {
-                    modelId: null,
-                    modelPath: '',
-                }));
-                return;
-            }
-            updateConfig({ [configKey]: '' });
+            updateConfig(syncLegacyAsrSelectionFields(modelConfig, 'batch', {
+                modelId: null,
+                modelPath: '',
+            }));
             return;
         }
 
         if (isOnlineAsrProviderId(modelId)) {
             if (type === 'streaming') {
                 updateConfig(syncStreamingOnlineAsrSelectionFields(modelConfig, modelId));
-            } else if (type === 'batch') {
+            } else {
                 updateConfig(syncOnlineAsrSelectionFields(modelConfig, 'batch', modelId));
             }
             return;
@@ -394,15 +389,32 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 modelPath: path,
             });
             updateConfig(patch);
-        } else if (type === 'batch') {
+        } else {
             updateConfig(syncLegacyAsrSelectionFields(modelConfig, 'batch', {
                 modelId,
                 modelPath: path,
             }));
-        } else {
-            updateConfig({ [configKey]: path });
         }
         applyDependencyRequests(modelId);
+    };
+
+    const handleCompanionModelChange = (
+        kind: ScenarioModelKind,
+        modelId: string,
+    ) => {
+        const configKey = scenarioModelFieldKey(kind, activeScenario);
+        if (!modelId) {
+            updateConfig({ [configKey]: '' });
+            return;
+        }
+
+        const path = modelCatalog.modelPathById[modelId]
+            || modelCatalog.models.find((model) => model.id === modelId)?.installPath
+            || '';
+        if (!path) {
+            return;
+        }
+        updateConfig({ [configKey]: path });
     };
 
     const sectionProps = {
@@ -503,18 +515,71 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     const speakerSegmentationOptions = useMemo(() => {
         const installedOptions = toDropdownOptions(
             selectionOptions.speakerSegmentation,
-            selectedSpeakerSegmentationModelId,
+            selectedModelIds.liveSpeakerSegmentation ?? '',
         );
         return [speakerDisabledOption, ...installedOptions];
-    }, [selectedSpeakerSegmentationModelId, selectionOptions.speakerSegmentation, speakerDisabledOption]);
+    }, [selectedModelIds.liveSpeakerSegmentation, selectionOptions.speakerSegmentation, speakerDisabledOption]);
 
     const speakerEmbeddingOptions = useMemo(() => {
         const installedOptions = toDropdownOptions(
             selectionOptions.speakerEmbedding,
-            selectedSpeakerEmbeddingModelId,
+            selectedModelIds.liveSpeakerEmbedding ?? '',
         );
         return [speakerDisabledOption, ...installedOptions];
-    }, [selectedSpeakerEmbeddingModelId, selectionOptions.speakerEmbedding, speakerDisabledOption]);
+    }, [selectedModelIds.liveSpeakerEmbedding, selectionOptions.speakerEmbedding, speakerDisabledOption]);
+
+    const sectionModelDropdownOptions = useCallback((
+        type: ModelCatalogSectionType,
+        selectedId: string,
+    ): Array<{ value: string; label: string }> => {
+        const models = getSectionGroups(type)
+            .flatMap((group) => group.models as ModelCatalogModel[]);
+        return models
+            .filter((model) => model.isInstalled || model.id === selectedId)
+            .map((model) => ({ value: model.id, label: model.name }));
+    }, [getSectionGroups]);
+
+    const punctuationOptions = useMemo(
+        () => [
+            speakerDisabledOption,
+            ...sectionModelDropdownOptions('punctuation', selectedModelIds.livePunctuation ?? ''),
+        ],
+        [sectionModelDropdownOptions, selectedModelIds.livePunctuation, speakerDisabledOption],
+    );
+
+    const vadOptions = useMemo(
+        () => [
+            speakerDisabledOption,
+            ...sectionModelDropdownOptions('vad', selectedModelIds.liveVad ?? ''),
+        ],
+        [sectionModelDropdownOptions, selectedModelIds.liveVad, speakerDisabledOption],
+    );
+
+    const activeAsrRulesBadge = useMemo(() => {
+        const selection = isBatchScenario
+            ? modelConfig.asr?.selections.batch
+            : modelConfig.asr?.selections.live;
+        if (!selection || selection.engine !== 'local' || !selection.modelPath.trim()) {
+            return null;
+        }
+        const modelInfo = selection.modelId
+            ? undefined
+            : findSelectedModelByMode(selection.modelPath, isBatchScenario ? 'batch' : 'streaming');
+        const modelId = selection.modelId ?? modelInfo?.id;
+        if (!modelId) {
+            return null;
+        }
+        const rules = modelService.getModelRules(modelId);
+        const parts = [
+            rules.requiresVad
+                ? t('settings.advanced_requires_vad', { defaultValue: '需要 VAD' })
+                : t('settings.advanced_no_vad', { defaultValue: '不需要 VAD' }),
+            rules.requiresPunctuation
+                ? t('settings.advanced_requires_punct', { defaultValue: '需要标点' })
+                : t('settings.advanced_no_punct', { defaultValue: '不需要标点' }),
+        ];
+        return parts.join(' · ');
+    }, [isBatchScenario, modelConfig.asr?.selections.batch, modelConfig.asr?.selections.live, t]);
 
     return (
         <SettingsTabContainer id="settings-panel-models" ariaLabelledby="settings-tab-models">
@@ -528,34 +593,30 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 description={t('settings.model_selection_desc')}
                 icon={<Settings2 size={20} />}
             >
-                <SettingsItem
-                    title={t('settings.streaming_model_label')}
-                    hint={t('settings.streaming_model_hint')}
-                >
-                    <div style={{ width: '220px' }}>
-                        <Dropdown
-                            id="settings-streaming-path"
-                            value={selectedStreamingModelId}
-                            onChange={(value) => handleModelChange('streaming', value)}
-                            placeholder={t('settings.select_streaming_model')}
-                            options={streamingOptions}
-                            style={{ flex: 1 }}
-                            disabled={localModelActionsDisabled}
-                        />
-                    </div>
-                </SettingsItem>
+                <SegmentedControl
+                    id="settings-model-scenario"
+                    ariaLabel={t('settings.scenario_selector_label', { defaultValue: 'Model scenario' })}
+                    value={activeScenario}
+                    onChange={setActiveScenario}
+                    options={[
+                        { value: 'live', label: t('settings.scenario_live', { defaultValue: '实时录音' }) },
+                        { value: 'batch', label: t('settings.scenario_batch', { defaultValue: '批量导入' }) },
+                    ]}
+                />
 
                 <SettingsItem
-                    title={t('settings.batch_model_label')}
-                    hint={t('settings.batch_model_hint')}
+                    title={t('settings.asr_model_label', { defaultValue: '识别模型' })}
+                    hint={isBatchScenario ? t('settings.batch_model_hint') : t('settings.streaming_model_hint')}
                 >
                     <div style={{ width: '220px' }}>
                         <Dropdown
-                            id="settings-batch-path"
-                            value={selectedBatchModelId}
-                            onChange={(value) => handleModelChange('batch', value)}
-                            placeholder={t('settings.select_batch_model')}
-                            options={batchOptions}
+                            id={isBatchScenario ? 'settings-batch-path' : 'settings-streaming-path'}
+                            value={selectedAsrModelId}
+                            onChange={(value) => handleModelChange(isBatchScenario ? 'batch' : 'streaming', value)}
+                            placeholder={isBatchScenario
+                                ? t('settings.select_batch_model')
+                                : t('settings.select_streaming_model')}
+                            options={isBatchScenario ? batchOptions : streamingOptions}
                             style={{ flex: 1 }}
                             disabled={localModelActionsDisabled}
                         />
@@ -564,13 +625,15 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
 
                 <SettingsItem
                     title={t('settings.speaker_segmentation_model_label', { defaultValue: 'Speaker Segmentation Model' })}
-                    hint={t('settings.speaker_segmentation_model_hint', { defaultValue: 'Used to split batch recordings into anonymous speaker turns.' })}
+                    hint={t('settings.speaker_segmentation_model_hint', { defaultValue: 'Used to split recordings into anonymous speaker turns.' })}
                 >
                     <div style={{ width: '220px' }}>
                         <Dropdown
                             id="settings-speaker-segmentation-path"
-                            value={selectedSpeakerSegmentationModelId}
-                            onChange={(value) => handleModelChange('speakerSegmentation', value)}
+                            value={(isBatchScenario
+                                ? selectedModelIds.batchSpeakerSegmentation
+                                : selectedModelIds.liveSpeakerSegmentation) ?? ''}
+                            onChange={(value) => handleCompanionModelChange('speakerSegmentationModelPath', value)}
                             placeholder={t('settings.select_speaker_segmentation_model', { defaultValue: 'Select speaker segmentation model' })}
                             options={speakerSegmentationOptions}
                             style={{ flex: 1 }}
@@ -587,8 +650,10 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                     <div style={{ width: '220px' }}>
                         <Dropdown
                             id="settings-speaker-embedding-path"
-                            value={selectedSpeakerEmbeddingModelId}
-                            onChange={(value) => handleModelChange('speakerEmbedding', value)}
+                            value={(isBatchScenario
+                                ? selectedModelIds.batchSpeakerEmbedding
+                                : selectedModelIds.liveSpeakerEmbedding) ?? ''}
+                            onChange={(value) => handleCompanionModelChange('speakerEmbeddingModelPath', value)}
                             placeholder={t('settings.select_speaker_embedding_model', { defaultValue: 'Select speaker embedding model' })}
                             options={speakerEmbeddingOptions}
                             style={{ flex: 1 }}
@@ -597,6 +662,86 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                         />
                     </div>
                 </SettingsItem>
+
+                <SettingsAccordion
+                    title={t('settings.advanced_settings_title', { defaultValue: '高级设置' })}
+                    status={activeAsrRulesBadge
+                        ? <span className="status-badge ready">{activeAsrRulesBadge}</span>
+                        : undefined}
+                >
+                    <SettingsItem
+                        title={t('settings.punctuation_model_label', { defaultValue: '标点模型' })}
+                        hint={t('settings.punctuation_rule_hint', { defaultValue: '仅当所选识别模型需要标点时才会启用。' })}
+                    >
+                        <div style={{ width: '220px' }}>
+                            <Dropdown
+                                id="settings-punctuation-path"
+                                value={(isBatchScenario
+                                    ? selectedModelIds.batchPunctuation
+                                    : selectedModelIds.livePunctuation) ?? ''}
+                                onChange={(value) => handleCompanionModelChange('punctuationModelPath', value)}
+                                placeholder={t('settings.select_punctuation_model', { defaultValue: 'Select punctuation model' })}
+                                options={punctuationOptions}
+                                style={{ flex: 1 }}
+                                aria-label={t('settings.punctuation_model_label', { defaultValue: '标点模型' })}
+                                disabled={localModelActionsDisabled}
+                            />
+                        </div>
+                    </SettingsItem>
+
+                    <SettingsItem
+                        title={t('settings.vad_model_label', { defaultValue: 'VAD 模型' })}
+                        hint={t('settings.vad_rule_hint', { defaultValue: '仅当所选识别模型需要 VAD 时才会启用。' })}
+                    >
+                        <div style={{ width: '220px' }}>
+                            <Dropdown
+                                id="settings-vad-path"
+                                value={(isBatchScenario
+                                    ? selectedModelIds.batchVad
+                                    : selectedModelIds.liveVad) ?? ''}
+                                onChange={(value) => handleCompanionModelChange('vadModelPath', value)}
+                                placeholder={t('settings.select_vad_model', { defaultValue: 'Select VAD model' })}
+                                options={vadOptions}
+                                style={{ flex: 1 }}
+                                aria-label={t('settings.vad_model_label', { defaultValue: 'VAD 模型' })}
+                                disabled={localModelActionsDisabled}
+                            />
+                        </div>
+                    </SettingsItem>
+
+                    <SettingsItem
+                        title={t('settings.vad_buffer_size')}
+                        hint={t('settings.vad_buffer_hint')}
+                    >
+                        <div style={{ width: '120px' }}>
+                            <input
+                                id="settings-vad-buffer"
+                                type="number"
+                                className="settings-input"
+                                value={activeVadBufferSize}
+                                onChange={(e) => updateConfig(isBatchScenario
+                                    ? { batchVadBufferSize: Number(e.target.value) }
+                                    : { liveVadBufferSize: Number(e.target.value) })}
+                                min={0}
+                                max={30}
+                                step={0.5}
+                                style={{ textAlign: 'center' }}
+                            />
+                        </div>
+                    </SettingsItem>
+
+                    {isBatchScenario && (
+                        <SettingsItem
+                            title={t('settings.batch_vad_enabled')}
+                            hint={t('settings.batch_vad_enabled_hint')}
+                        >
+                            <Switch
+                                checked={batchVadEnabled}
+                                onChange={(checked) => updateConfig({ batchVadEnabled: checked })}
+                            />
+                        </SettingsItem>
+                    )}
+                </SettingsAccordion>
 
                 {isVolcengineSelected && (
                     <div className="settings-hint">
@@ -659,35 +804,6 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                         checked={enableITN}
                         onChange={(checked) => updateConfig({ enableITN: checked })}
                     />
-                </SettingsItem>
-
-                <SettingsItem
-                    title={t('settings.batch_vad_enabled')}
-                    hint={t('settings.batch_vad_enabled_hint')}
-                >
-                    <Switch
-                        checked={batchVadEnabled}
-                        onChange={(checked) => updateConfig({ batchVadEnabled: checked })}
-                    />
-                </SettingsItem>
-
-                <SettingsItem
-                    title={t('settings.vad_buffer_size')}
-                    hint={t('settings.vad_buffer_hint')}
-                >
-                    <div style={{ width: '120px' }}>
-                        <input
-                            id="settings-vad-buffer"
-                            type="number"
-                            className="settings-input"
-                            value={vadBufferSize}
-                            onChange={(e) => updateConfig({ vadBufferSize: Number(e.target.value) })}
-                            min={0}
-                            max={30}
-                            step={0.5}
-                            style={{ textAlign: 'center' }}
-                        />
-                    </div>
                 </SettingsItem>
 
                 <SettingsItem

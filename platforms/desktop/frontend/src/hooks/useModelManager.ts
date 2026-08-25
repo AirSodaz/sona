@@ -11,12 +11,14 @@ import {
     buildRestoreDefaultModelConfigPatch,
 } from '../services/modelConfigPatches';
 import type {
-    ModelCatalogSelectedIds,
     ModelCatalogModel,
     ModelCatalogSnapshot,
     ModelInfo,
     ProgressCallback,
+    ScenarioSelectedModelIds,
 } from '../types/modelCatalog';
+import { EMPTY_SCENARIO_SELECTED_MODEL_IDS } from '../types/modelCatalog';
+import { scenarioModelFieldKey } from '../utils/scenarioModels';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { getSettingsPerfErrorDetail, markSettingsPerf } from '../utils/settingsPerf';
@@ -53,11 +55,15 @@ const EMPTY_MODEL_CATALOG_SNAPSHOT: ModelCatalogSnapshot = {
     },
 };
 
-const EMPTY_MODEL_CATALOG_SELECTED_IDS: ModelCatalogSelectedIds = {
+export interface UiSelectedModelIds extends ScenarioSelectedModelIds {
+    streaming: string | null;
+    batch: string | null;
+}
+
+const EMPTY_SELECTED_MODEL_IDS: UiSelectedModelIds = {
+    ...EMPTY_SCENARIO_SELECTED_MODEL_IDS,
     streaming: null,
     batch: null,
-    speakerSegmentation: null,
-    speakerEmbedding: null,
 };
 
 export type ModelManagerContextType = ReturnType<typeof useModelManager>;
@@ -187,21 +193,16 @@ export function useModelManager(isOpen: boolean) {
 
     const selectedModelIds = useMemo(() => {
         if (!isOpen || catalogLoadState !== 'ready') {
-            return EMPTY_MODEL_CATALOG_SELECTED_IDS;
+            return EMPTY_SELECTED_MODEL_IDS;
         }
 
-        return modelService.resolveModelCatalogSelectedIdsFromSnapshot(modelCatalog, {
-            streamingModelPath: config.streamingModelPath || '',
-            batchModelPath: config.batchModelPath || '',
-            speakerSegmentationModelPath: config.speakerSegmentationModelPath || '',
-            speakerEmbeddingModelPath: config.speakerEmbeddingModelPath || '',
-        });
+        return {
+            ...modelService.resolveAsrSelectedModelIdsFromSnapshot(modelCatalog, config),
+            ...modelService.resolveScenarioSelectedModelIdsFromSnapshot(modelCatalog, config),
+        };
     }, [
         catalogLoadState,
-        config.batchModelPath,
-        config.speakerEmbeddingModelPath,
-        config.speakerSegmentationModelPath,
-        config.streamingModelPath,
+        config,
         isOpen,
         modelCatalog,
     ]);
@@ -318,11 +319,19 @@ export function useModelManager(isOpen: boolean) {
             const dependencyUpdates: Partial<typeof config> = {};
             const dependencies = modelCatalog.dependencyRequestsByModelId[model.id] ?? [];
             for (const dependency of dependencies) {
-                if (config[dependency.configKey]) {
+                const fieldKeys = [
+                    scenarioModelFieldKey(dependency.configKey, 'live'),
+                    scenarioModelFieldKey(dependency.configKey, 'batch'),
+                ];
+                if (fieldKeys.every((key) => config[key])) {
                     continue;
                 }
                 if (dependency.isInstalled) {
-                    dependencyUpdates[dependency.configKey] = dependency.installPath;
+                    for (const key of fieldKeys) {
+                        if (!config[key]) {
+                            dependencyUpdates[key] = dependency.installPath;
+                        }
+                    }
                 } else {
                     document.dispatchEvent(new CustomEvent('download-background-model', {
                         detail: { modelId: dependency.modelId },

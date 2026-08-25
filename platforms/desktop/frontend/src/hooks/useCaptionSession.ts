@@ -75,9 +75,9 @@ export function useCaptionSession(
     config.asr,
     config.language,
     config.enableITN,
-    config.punctuationModelPath,
-    config.vadModelPath,
-    config.vadBufferSize,
+    config.livePunctuationModelPath,
+    config.liveVadModelPath,
+    config.liveVadBufferSize,
     isCaptionMode,
     isInitializing,
   ]);

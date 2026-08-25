@@ -2,7 +2,7 @@ use serde_json::{Map, Value, json};
 
 use crate::ports::asr::online_asr_providers;
 
-pub const CURRENT_CONFIG_VERSION: i64 = 7;
+pub const CURRENT_CONFIG_VERSION: i64 = 8;
 pub const DEFAULT_POLISH_PRESET_ID: &str = "general";
 pub const DEFAULT_SUMMARY_TEMPLATE_ID: &str = "general";
 pub const DEFAULT_LLM_PROVIDER: &str = "google_translate_free";
@@ -37,10 +37,14 @@ pub fn default_config() -> Value {
         ("asr", default_asr_config()),
         ("streamingModelPath", json!("")),
         ("batchModelPath", json!("")),
-        ("punctuationModelPath", json!("")),
-        ("vadModelPath", json!("")),
-        ("speakerSegmentationModelPath", json!("")),
-        ("speakerEmbeddingModelPath", json!("")),
+        ("livePunctuationModelPath", json!("")),
+        ("liveVadModelPath", json!("")),
+        ("liveSpeakerSegmentationModelPath", json!("")),
+        ("liveSpeakerEmbeddingModelPath", json!("")),
+        ("batchPunctuationModelPath", json!("")),
+        ("batchVadModelPath", json!("")),
+        ("batchSpeakerSegmentationModelPath", json!("")),
+        ("batchSpeakerEmbeddingModelPath", json!("")),
         ("lockWindow", json!(false)),
         ("alwaysOnTop", json!(true)),
         ("startOnLaunch", json!(false)),
@@ -52,7 +56,8 @@ pub fn default_config() -> Value {
         ("enableTimeline", json!(false)),
         ("enableITN", json!(true)),
         ("batchVadEnabled", json!(true)),
-        ("vadBufferSize", json!(5)),
+        ("liveVadBufferSize", json!(5)),
+        ("batchVadBufferSize", json!(5)),
         ("maxConcurrent", json!(2)),
         ("gpuAcceleration", json!("auto")),
         ("llmSettings", create_llm_settings()),

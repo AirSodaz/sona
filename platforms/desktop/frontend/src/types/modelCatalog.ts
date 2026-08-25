@@ -140,6 +140,30 @@ export interface ModelCatalogSelectedIds {
   speakerEmbedding: string | null;
 }
 
+/** Selected preset-model ids for per-scenario (live/batch) companion models. */
+export type ScenarioSelectedModelIds = Record<
+  | 'liveSpeakerSegmentation'
+  | 'batchSpeakerSegmentation'
+  | 'liveSpeakerEmbedding'
+  | 'batchSpeakerEmbedding'
+  | 'livePunctuation'
+  | 'batchPunctuation'
+  | 'liveVad'
+  | 'batchVad',
+  string | null
+>;
+
+export const EMPTY_SCENARIO_SELECTED_MODEL_IDS: ScenarioSelectedModelIds = {
+  liveSpeakerSegmentation: null,
+  batchSpeakerSegmentation: null,
+  liveSpeakerEmbedding: null,
+  batchSpeakerEmbedding: null,
+  livePunctuation: null,
+  batchPunctuation: null,
+  liveVad: null,
+  batchVad: null,
+};
+
 export const DEFAULT_MODEL_RULES: ModelRules = {
   requiresVad: true,
   requiresPunctuation: false,

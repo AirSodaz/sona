@@ -106,6 +106,14 @@ export interface AsrConfig {
   providers?: AsrProviderConfig;
 }
 
+/**
+ * Scenario scope for per-scenario model settings.
+ *
+ * - `live`: real-time recording (also followed by caption & voice typing).
+ * - `batch`: batch file import.
+ */
+export type AsrScenario = 'live' | 'batch';
+
 /** Model paths and related management settings. */
 export interface ModelConfig {
   /** ASR engine/profile selections. */
@@ -114,14 +122,22 @@ export interface ModelConfig {
   streamingModelPath: string;
   /** Path to batch model (e.g. sherpa-onnx batch sensevoice). */
   batchModelPath: string;
-  /** Path to punctuation model. */
-  punctuationModelPath?: string;
-  /** Path to VAD model. */
-  vadModelPath?: string;
-  /** Path to the speaker segmentation model. */
-  speakerSegmentationModelPath?: string;
-  /** Path to the speaker embedding model. */
-  speakerEmbeddingModelPath?: string;
+  /** Path to punctuation model used by live recording. */
+  livePunctuationModelPath?: string;
+  /** Path to VAD model used by live recording. */
+  liveVadModelPath?: string;
+  /** Path to the speaker segmentation model used by live recording. */
+  liveSpeakerSegmentationModelPath?: string;
+  /** Path to the speaker embedding model used by live recording. */
+  liveSpeakerEmbeddingModelPath?: string;
+  /** Path to punctuation model used by batch import. */
+  batchPunctuationModelPath?: string;
+  /** Path to VAD model used by batch import. */
+  batchVadModelPath?: string;
+  /** Path to the speaker segmentation model used by batch import. */
+  batchSpeakerSegmentationModelPath?: string;
+  /** Path to the speaker embedding model used by batch import. */
+  batchSpeakerEmbeddingModelPath?: string;
   /** Download mirror to use for preset models. */
   modelDownloadMirror?: string;
 }
@@ -162,8 +178,10 @@ export interface TranscriptionConfig {
   enableITN?: boolean;
   /** Whether batch transcription uses VAD speech segmentation. Default: true. */
   batchVadEnabled?: boolean;
-  /** VAD buffer size in seconds. Default: 5. */
-  vadBufferSize?: number;
+  /** VAD buffer size in seconds for live recording. Default: 5. */
+  liveVadBufferSize?: number;
+  /** VAD buffer size in seconds for batch import. Default: 5. */
+  batchVadBufferSize?: number;
   /** Max concurrent transcription tasks. Default: 2. */
   maxConcurrent?: number;
   /** GPU Acceleration for sherpa-onnx (local models). Default: 'auto' */

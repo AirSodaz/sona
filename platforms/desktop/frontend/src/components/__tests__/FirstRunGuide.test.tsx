@@ -97,7 +97,7 @@ describe('FirstRunGuide', () => {
     vi.mocked(getRecommendedOnboardingConfig).mockReturnValue({
       streamingModelPath: '/models/live',
       batchModelPath: '/models/batch',
-      vadModelPath: '/models/vad',
+      liveVadModelPath: '/models/vad',
     });
     vi.mocked(requestMicrophonePermission).mockResolvedValue(true);
     vi.mocked(listMicrophoneDeviceOptions).mockResolvedValue([

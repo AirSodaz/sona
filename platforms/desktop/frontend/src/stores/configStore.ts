@@ -84,10 +84,14 @@ export const DEFAULT_CONFIG: AppConfig = {
   },
   streamingModelPath: '',
   batchModelPath: '',
-  punctuationModelPath: '',
-  vadModelPath: '',
-  speakerSegmentationModelPath: '',
-  speakerEmbeddingModelPath: '',
+  livePunctuationModelPath: '',
+  liveVadModelPath: '',
+  liveSpeakerSegmentationModelPath: '',
+  liveSpeakerEmbeddingModelPath: '',
+  batchPunctuationModelPath: '',
+  batchVadModelPath: '',
+  batchSpeakerSegmentationModelPath: '',
+  batchSpeakerEmbeddingModelPath: '',
   modelDownloadMirror: 'direct',
 
   // Caption
@@ -104,7 +108,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   enableTimeline: false,
   enableITN: true,
   batchVadEnabled: true,
-  vadBufferSize: 5,
+  liveVadBufferSize: 5,
+  batchVadBufferSize: 5,
   maxConcurrent: 2,
   gpuAcceleration: 'auto',
 
@@ -188,10 +193,14 @@ const MODEL_KEYS: (keyof ModelConfig)[] = [
   'asr',
   'streamingModelPath',
   'batchModelPath',
-  'punctuationModelPath',
-  'vadModelPath',
-  'speakerSegmentationModelPath',
-  'speakerEmbeddingModelPath',
+  'livePunctuationModelPath',
+  'liveVadModelPath',
+  'liveSpeakerSegmentationModelPath',
+  'liveSpeakerEmbeddingModelPath',
+  'batchPunctuationModelPath',
+  'batchVadModelPath',
+  'batchSpeakerSegmentationModelPath',
+  'batchSpeakerEmbeddingModelPath',
 ];
 
 const CAPTION_KEYS: (keyof CaptionConfig)[] = [
@@ -201,7 +210,7 @@ const CAPTION_KEYS: (keyof CaptionConfig)[] = [
 
 const TRANSCRIPTION_KEYS: (keyof TranscriptionConfig)[] = [
   'language', 'enableTimeline', 'enableITN',
-  'batchVadEnabled', 'vadBufferSize', 'maxConcurrent', 'gpuAcceleration',
+  'batchVadEnabled', 'liveVadBufferSize', 'batchVadBufferSize', 'maxConcurrent', 'gpuAcceleration',
 ];
 
 const LLM_KEYS: (keyof LlmAssistantConfig)[] = [

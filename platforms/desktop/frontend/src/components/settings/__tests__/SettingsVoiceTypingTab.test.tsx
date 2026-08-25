@@ -87,7 +87,7 @@ describe('SettingsSubtitleTab voice typing section', () => {
             voiceTypingEnabled: true,
             voiceTypingShortcut: 'Alt + V',
             streamingModelPath: '/models/streaming-test-model',
-            vadModelPath: '/models/vad.onnx',
+            liveVadModelPath: '/models/vad.onnx',
         });
         useVoiceTypingRuntimeStore.getState().setShortcutRegistrationStatus('ready');
         useVoiceTypingRuntimeStore.getState().setWarmupStatus('ready');
@@ -102,7 +102,7 @@ describe('SettingsSubtitleTab voice typing section', () => {
             voiceTypingEnabled: true,
             voiceTypingShortcut: 'Alt + V',
             streamingModelPath: '/models/streaming-test-model',
-            vadModelPath: '/models/vad.onnx',
+            liveVadModelPath: '/models/vad.onnx',
         });
         useVoiceTypingRuntimeStore
             .getState()

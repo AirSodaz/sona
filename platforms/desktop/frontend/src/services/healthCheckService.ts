@@ -9,7 +9,17 @@ import { logger } from '../utils/logger';
 import { BaseDirectory, exists } from './tauri/platform/fs';
 
 const HISTORY_DIR = 'history';
-type ModelConfigKey = 'batchModelPath' | 'streamingModelPath' | 'punctuationModelPath' | 'vadModelPath';
+type ModelConfigKey =
+  | 'batchModelPath'
+  | 'streamingModelPath'
+  | 'livePunctuationModelPath'
+  | 'liveVadModelPath'
+  | 'liveSpeakerSegmentationModelPath'
+  | 'liveSpeakerEmbeddingModelPath'
+  | 'batchPunctuationModelPath'
+  | 'batchVadModelPath'
+  | 'batchSpeakerSegmentationModelPath'
+  | 'batchSpeakerEmbeddingModelPath';
 type ConfiguredModelField = { key: ModelConfigKey; path: string };
 
 export interface HealthCheckServicePorts {
@@ -104,8 +114,14 @@ export class HealthCheckService {
     const modelFields = [
       { key: 'batchModelPath', path: config.batchModelPath },
       { key: 'streamingModelPath', path: config.streamingModelPath },
-      { key: 'punctuationModelPath', path: config.punctuationModelPath },
-      { key: 'vadModelPath', path: config.vadModelPath }
+      { key: 'livePunctuationModelPath', path: config.livePunctuationModelPath },
+      { key: 'liveVadModelPath', path: config.liveVadModelPath },
+      { key: 'liveSpeakerSegmentationModelPath', path: config.liveSpeakerSegmentationModelPath },
+      { key: 'liveSpeakerEmbeddingModelPath', path: config.liveSpeakerEmbeddingModelPath },
+      { key: 'batchPunctuationModelPath', path: config.batchPunctuationModelPath },
+      { key: 'batchVadModelPath', path: config.batchVadModelPath },
+      { key: 'batchSpeakerSegmentationModelPath', path: config.batchSpeakerSegmentationModelPath },
+      { key: 'batchSpeakerEmbeddingModelPath', path: config.batchSpeakerEmbeddingModelPath },
     ] as const;
 
     const configuredModelFields: ConfiguredModelField[] = modelFields

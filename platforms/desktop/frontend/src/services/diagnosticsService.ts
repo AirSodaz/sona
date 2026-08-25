@@ -1,4 +1,5 @@
 import { getResumeOnboardingStep } from '../utils/onboarding';
+import { getScenarioPunctuationModelPath, getScenarioVadModelPath } from '../utils/scenarioModels';
 import {
   getMicrophonePermissionState,
   probeMicrophoneDeviceOptions,
@@ -47,7 +48,7 @@ export class DiagnosticsService {
         voiceTypingEnabled: config.voiceTypingEnabled ?? false,
         voiceTypingShortcut: config.voiceTypingShortcut ?? '',
         streamingModelPath: config.streamingModelPath ?? '',
-        vadModelPath: config.vadModelPath ?? '',
+        liveVadModelPath: getScenarioVadModelPath(config, 'live'),
         microphoneId: config.microphoneId ?? 'default',
       },
       voiceTypingRuntime,
@@ -57,8 +58,8 @@ export class DiagnosticsService {
       config: {
         streamingModelPath: config.streamingModelPath,
         batchModelPath: config.batchModelPath,
-        vadModelPath: config.vadModelPath ?? '',
-        punctuationModelPath: config.punctuationModelPath ?? '',
+        vadModelPath: getScenarioVadModelPath(config, 'live'),
+        punctuationModelPath: getScenarioPunctuationModelPath(config, 'live'),
         microphoneId: config.microphoneId ?? 'default',
       },
       permissionState,

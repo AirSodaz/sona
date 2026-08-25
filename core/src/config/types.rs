@@ -196,13 +196,21 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub batch_model_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub punctuation_model_path: Option<String>,
+    pub live_punctuation_model_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub vad_model_path: Option<String>,
+    pub live_vad_model_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub speaker_segmentation_model_path: Option<String>,
+    pub live_speaker_segmentation_model_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub speaker_embedding_model_path: Option<String>,
+    pub live_speaker_embedding_model_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_punctuation_model_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_vad_model_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_speaker_segmentation_model_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_speaker_embedding_model_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_download_mirror: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -233,7 +241,9 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub batch_vad_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub vad_buffer_size: Option<f64>,
+    pub live_vad_buffer_size: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_vad_buffer_size: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         feature = "specta",

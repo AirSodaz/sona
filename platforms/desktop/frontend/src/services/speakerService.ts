@@ -1,4 +1,4 @@
-import type { AppConfig } from '../types/config';
+import type { AppConfig, AsrScenario } from '../types/config';
 import type { TranscriptSegment } from '../types/transcript';
 import type {
   SpeakerProcessingConfig,
@@ -6,14 +6,16 @@ import type {
 } from '../types/speaker';
 import { normalizeSpeakerProfiles } from '../types/speakerNormalization';
 import {
+  getScenarioSpeakerEmbeddingModelPath,
+  getScenarioSpeakerSegmentationModelPath,
+  type ScenarioModelPathConfig,
+} from '../utils/scenarioModels';
+import {
   annotateSpeakerSegmentsFromFile,
   importSpeakerProfileSample,
 } from './tauri/speaker';
 
-type SpeakerConfigInput = Pick<
-  AppConfig,
-  'speakerSegmentationModelPath' | 'speakerEmbeddingModelPath' | 'speakerProfiles'
->;
+type SpeakerConfigInput = Pick<AppConfig, 'speakerProfiles'> & Partial<ScenarioModelPathConfig>;
 
 export interface SpeakerServicePorts {
   annotateSpeakerSegmentsFromFile: typeof annotateSpeakerSegmentsFromFile;
@@ -23,16 +25,16 @@ export interface SpeakerServicePorts {
 export class SpeakerService {
   constructor(private readonly ports: SpeakerServicePorts) {}
 
-  isConfigured(config: SpeakerConfigInput): boolean {
+  isConfigured(config: SpeakerConfigInput, scenario: AsrScenario): boolean {
     return Boolean(
-      config.speakerSegmentationModelPath?.trim()
-      && config.speakerEmbeddingModelPath?.trim(),
+      getScenarioSpeakerSegmentationModelPath(config, scenario)
+      && getScenarioSpeakerEmbeddingModelPath(config, scenario),
     );
   }
 
-  buildProcessingConfig(config: SpeakerConfigInput): SpeakerProcessingConfig | null {
-    const segmentationModelPath = config.speakerSegmentationModelPath?.trim();
-    const embeddingModelPath = config.speakerEmbeddingModelPath?.trim();
+  buildProcessingConfig(config: SpeakerConfigInput, scenario: AsrScenario): SpeakerProcessingConfig | null {
+    const segmentationModelPath = getScenarioSpeakerSegmentationModelPath(config, scenario);
+    const embeddingModelPath = getScenarioSpeakerEmbeddingModelPath(config, scenario);
     if (!segmentationModelPath || !embeddingModelPath) {
       return null;
     }
@@ -48,12 +50,13 @@ export class SpeakerService {
     filePath: string,
     segments: TranscriptSegment[],
     config: SpeakerConfigInput,
+    scenario: AsrScenario = 'live',
   ): Promise<TranscriptSegment[]> {
     if (!filePath || segments.length === 0) {
       return segments;
     }
 
-    const speakerProcessing = this.buildProcessingConfig(config);
+    const speakerProcessing = this.buildProcessingConfig(config, scenario);
     if (!speakerProcessing) {
       return segments;
     }

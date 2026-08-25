@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use serde_json::{Value, json};
@@ -147,7 +147,7 @@ fn state(base_config: Value, library: AppConfigLibrary) -> AppConfigStoredState 
     AppConfigStoredState {
         base_config_json: serde_json::to_string(&base_config).unwrap(),
         library,
-        config_version: 7,
+        config_version: 8,
         updated_at: 101,
         startup_projection: empty_projection(),
     }
@@ -865,7 +865,7 @@ fn save_uses_projection_and_version_defaults_for_wrong_types() {
         .unwrap();
 
     let stored = store.state.lock().unwrap().clone().unwrap();
-    assert_eq!(stored.config_version, 7);
+    assert_eq!(stored.config_version, 8);
     assert_eq!(stored.startup_projection, empty_projection());
 }
 
@@ -1085,7 +1085,7 @@ fn inspection_contains_complete_config_metadata_and_exact_counts() {
             "polishKeywordSets": [{"id":"k","name":"K","enabled":true,"keywords":"x"}],
             "speakerProfiles": [{"id":"sp","name":"SP","enabled":true,"samples":[]}]
         }),
-        config_version: 7,
+        config_version: 8,
         updated_at: 101,
         summary_template_count: 1,
         polish_preset_count: 1,
@@ -1098,7 +1098,7 @@ fn inspection_contains_complete_config_metadata_and_exact_counts() {
         serde_json::to_value(&snapshot).unwrap(),
         json!({
             "config": expected.config,
-            "configVersion": 7,
+            "configVersion": 8,
             "updatedAt": 101,
             "summaryTemplateCount": 1,
             "polishPresetCount": 1,
@@ -1114,7 +1114,7 @@ fn malformed_base_json_uses_serialization_prefix() {
     let malformed = AppConfigStoredState {
         base_config_json: "{".into(),
         library: AppConfigLibrary::default(),
-        config_version: 7,
+        config_version: 8,
         updated_at: 0,
         startup_projection: empty_projection(),
     };

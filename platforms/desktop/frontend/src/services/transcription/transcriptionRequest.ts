@@ -112,7 +112,7 @@ export function buildBatchTranscriptionRequest({
     request: {
       filePath,
       saveToPath: isLlamaCpp ? null : saveToPath || null,
-      speakerProcessing: isLlamaCpp ? null : speakerService.buildProcessingConfig(appConfig),
+      speakerProcessing: isLlamaCpp ? null : speakerService.buildProcessingConfig(appConfig, 'batch'),
       asrRequest,
       ...(instanceId ? { instanceId } : {}),
     },

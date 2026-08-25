@@ -70,11 +70,12 @@ describe('modelConfigPatches', () => {
     }));
   });
 
-  it('builds direct model path patches for auxiliary models', () => {
+  it('builds per-scenario patches for auxiliary models', () => {
     const config = buildTestConfig();
 
     expect(buildModelPathConfigPatch(config, vadModel, '/models/vad')).toEqual({
-      vadModelPath: '/models/vad',
+      liveVadModelPath: '/models/vad',
+      batchVadModelPath: '/models/vad',
     });
   });
 
@@ -82,19 +83,27 @@ describe('modelConfigPatches', () => {
     const config = buildTestConfig({
       streamingModelPath: '/models/deleted',
       batchModelPath: '/models/deleted',
-      punctuationModelPath: '/models/deleted',
-      vadModelPath: '/models/deleted',
-      speakerSegmentationModelPath: '/models/deleted',
-      speakerEmbeddingModelPath: '/models/deleted',
+      livePunctuationModelPath: '/models/deleted',
+      batchPunctuationModelPath: '/models/deleted',
+      liveVadModelPath: '/models/deleted',
+      batchVadModelPath: '/models/deleted',
+      liveSpeakerSegmentationModelPath: '/models/deleted',
+      batchSpeakerSegmentationModelPath: '/models/deleted',
+      liveSpeakerEmbeddingModelPath: '/models/deleted',
+      batchSpeakerEmbeddingModelPath: '/models/deleted',
     });
 
     expect(buildModelRemovalConfigPatch(config, '/models/deleted')).toEqual(expect.objectContaining({
       streamingModelPath: '',
       batchModelPath: '',
-      punctuationModelPath: '',
-      vadModelPath: '',
-      speakerSegmentationModelPath: '',
-      speakerEmbeddingModelPath: '',
+      livePunctuationModelPath: '',
+      batchPunctuationModelPath: '',
+      liveVadModelPath: '',
+      batchVadModelPath: '',
+      liveSpeakerSegmentationModelPath: '',
+      batchSpeakerSegmentationModelPath: '',
+      liveSpeakerEmbeddingModelPath: '',
+      batchSpeakerEmbeddingModelPath: '',
       asr: expect.objectContaining({
         selections: expect.objectContaining({
           live: expect.objectContaining({ modelPath: '' }),
@@ -110,8 +119,9 @@ describe('modelConfigPatches', () => {
     const config = buildTestConfig({
       streamingModelPath: '/current/live',
       batchModelPath: '/current/batch',
-      vadModelPath: '/current/vad',
-      vadBufferSize: 9,
+      liveVadModelPath: '/current/vad',
+      batchVadModelPath: '/current/vad',
+      liveVadBufferSize: 9,
       maxConcurrent: 4,
       enableITN: false,
     });
@@ -125,8 +135,11 @@ describe('modelConfigPatches', () => {
     expect(nextConfig).toEqual(expect.objectContaining({
       streamingModelPath: '/models/default-live',
       batchModelPath: '/models/default-batch',
-      vadModelPath: '/current/vad',
-      vadBufferSize: 5,
+      // Restore defaults apply the catalog default VAD path to both scenarios.
+      liveVadModelPath: '',
+      batchVadModelPath: '',
+      liveVadBufferSize: 5,
+      batchVadBufferSize: 5,
       maxConcurrent: 2,
       enableITN: true,
       asr: expect.objectContaining({

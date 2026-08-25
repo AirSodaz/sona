@@ -6,11 +6,12 @@ import type {
   VoiceTypingRuntimeStatus,
 } from '../types/voiceTyping';
 import { findSelectedModelByMode } from '../utils/modelSelection';
+import { getScenarioVadModelPath } from '../utils/scenarioModels';
 
 export function resolveVoiceTypingReadinessSnapshot(
   config: Pick<
     AppConfig,
-    'voiceTypingEnabled' | 'voiceTypingShortcut' | 'streamingModelPath' | 'vadModelPath' | 'microphoneId'
+    'voiceTypingEnabled' | 'voiceTypingShortcut' | 'streamingModelPath' | 'liveVadModelPath' | 'microphoneId'
   >,
   runtime: VoiceTypingRuntimeStatus,
 ): VoiceTypingReadinessSnapshot {
@@ -22,7 +23,7 @@ export function resolveVoiceTypingReadinessSnapshot(
   const requiresVad = selectedStreamingModel
     ? modelService.getModelRules(selectedStreamingModel.id).requiresVad
     : false;
-  const vadConfigured = !requiresVad || (config.vadModelPath ?? '').trim().length > 0;
+  const vadConfigured = !requiresVad || getScenarioVadModelPath(config, 'live').length > 0;
   const hasRuntimeFailure =
     runtime.shortcutRegistration === 'error'
     || runtime.warmup === 'error'

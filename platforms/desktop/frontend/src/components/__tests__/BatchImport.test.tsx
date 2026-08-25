@@ -124,7 +124,7 @@ describe('BatchImport Integration', () => {
                 ...useConfigStore.getState().config,
                 streamingModelPath: "/path/to/model",
                 batchModelPath: '/mock/batch/model',
-                punctuationModelPath: '',
+                livePunctuationModelPath: '',
                 enableITN: false,
                 theme: 'auto',
                 font: 'system',

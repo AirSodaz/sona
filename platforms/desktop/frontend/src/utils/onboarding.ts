@@ -20,6 +20,8 @@ export type {
 type LegacyConfig = Partial<AppConfig> & {
   recognitionModelPath?: string;
   modelPath?: string;
+  /** @deprecated Pre-scenario global VAD path kept for onboarding migration reads. */
+  vadModelPath?: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -69,7 +71,6 @@ export function parseStoredConfig(rawValue: string | null): Partial<AppConfig> {
         config.recognitionModelPath ||
         config.modelPath ||
         '',
-      vadModelPath: config.vadModelPath || '',
       microphoneId: config.microphoneId || 'default',
     };
   } catch (error) {

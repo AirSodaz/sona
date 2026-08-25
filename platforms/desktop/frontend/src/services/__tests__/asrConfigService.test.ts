@@ -102,9 +102,12 @@ function buildAsrConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     },
     streamingModelPath: 'C:/legacy/live',
     batchModelPath: 'C:/legacy/batch',
-    vadModelPath: 'C:/models/silero_vad.onnx',
-    punctuationModelPath: 'C:/models/punct',
-    vadBufferSize: 8,
+    liveVadModelPath: 'C:/models/silero_vad.onnx',
+    batchVadModelPath: 'C:/models/silero_vad.onnx',
+    livePunctuationModelPath: 'C:/models/punct',
+    batchPunctuationModelPath: 'C:/models/punct',
+    liveVadBufferSize: 8,
+    batchVadBufferSize: 8,
     enableITN: true,
     language: 'zh',
     enableTimeline: true,
@@ -225,7 +228,7 @@ describe('asrConfigService', () => {
     const request = resolveAsrTranscriptionRequest(buildTestConfig({
       streamingModelPath: 'C:/legacy/live',
       batchModelPath: 'C:/legacy/batch',
-      vadBufferSize: 5,
+      liveVadBufferSize: 5,
       asr: undefined,
     }), 'voiceTyping');
 

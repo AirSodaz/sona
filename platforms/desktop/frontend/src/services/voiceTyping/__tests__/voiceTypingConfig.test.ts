@@ -38,7 +38,7 @@ describe('voiceTypingConfig', () => {
     const previous = resolveVoiceTypingConfigSnapshot(buildTestConfig({
       voiceTypingEnabled: true,
       voiceTypingShortcut: 'Alt+V',
-      vadModelPath: '/models/vad',
+      liveVadModelPath: '/models/vad',
       microphoneId: 'default',
       keepMicrophoneActive: true,
       language: 'auto',
@@ -48,7 +48,7 @@ describe('voiceTypingConfig', () => {
       voiceTypingEnabled: true,
       voiceTypingShortcut: 'Ctrl+Space',
       streamingModelPath: '/models/live-next',
-      vadModelPath: '/models/vad-next',
+      liveVadModelPath: '/models/vad-next',
       microphoneId: 'usb',
       keepMicrophoneActive: false,
       language: 'zh',

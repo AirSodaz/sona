@@ -40,7 +40,7 @@ fn config_core_migrates_legacy_config_to_current_shape() {
     let result = migrate_app_config(None, Some(legacy), "Default Rules".to_string());
 
     assert!(result.migrated);
-    assert_eq!(result.config["configVersion"], 7);
+    assert_eq!(result.config["configVersion"], 8);
     assert_eq!(result.config["streamingModelPath"], "models/recognition");
     assert_eq!(result.config["batchModelPath"], "models/recognition");
     assert_eq!(
@@ -123,7 +123,7 @@ fn config_core_migrates_legacy_config_to_current_shape() {
 #[test]
 fn config_core_normalizes_saved_current_config_without_false_migration() {
     let saved = json!({
-        "configVersion": 7,
+        "configVersion": 8,
         "asr": {
             "selections": {
                 "live": { "engine": "local-sherpa", "mode": "streaming", "modelId": null, "modelPath": "C:/models/live" },
@@ -171,7 +171,7 @@ fn config_core_normalizes_saved_current_config_without_false_migration() {
     let result = migrate_app_config(Some(saved), None, "Default Rules".to_string());
 
     assert!(!result.migrated);
-    assert_eq!(result.config["configVersion"], 7);
+    assert_eq!(result.config["configVersion"], 8);
     assert_eq!(
         result.config["asr"]["selections"]["voiceTyping"]["modelPath"],
         "C:/models/live"
@@ -215,7 +215,7 @@ fn config_core_upgrades_current_config_without_asr_to_new_asr_shape() {
     let result = migrate_app_config(Some(saved), None, "Default Rules".to_string());
 
     assert!(result.migrated);
-    assert_eq!(result.config["configVersion"], 7);
+    assert_eq!(result.config["configVersion"], 8);
     assert_eq!(
         result.config["asr"]["selections"]["caption"]["modelPath"],
         "C:/models/live"
@@ -231,7 +231,7 @@ fn config_core_upgrades_current_config_without_asr_to_new_asr_shape() {
 #[test]
 fn config_core_migrates_volcengine_asr_selection_to_online_provider_shape() {
     let saved = json!({
-        "configVersion": 7,
+        "configVersion": 8,
         "asr": {
             "selections": {
                 "live": {
@@ -334,7 +334,7 @@ fn config_core_migrates_volcengine_asr_selection_to_online_provider_shape() {
 #[test]
 fn config_core_normalizes_saved_volcengine_async_batch_provider_to_flash() {
     let saved = json!({
-        "configVersion": 7,
+        "configVersion": 8,
         "asr": {
             "selections": {
                 "batch": {
@@ -597,7 +597,7 @@ fn config_core_migrates_legacy_openai_compatible_to_custom_provider() {
 #[test]
 fn config_core_cleans_up_dirty_data_in_online_providers_and_falls_back_to_defaults() {
     let saved = json!({
-        "configVersion": 7,
+        "configVersion": 8,
         "asr": {
             "selections": {
                 "live": { "engine": "online", "mode": "streaming", "modelId": null, "modelPath": "", "providerId": "volcengine-doubao", "profileId": "volcengine-doubao-default" },

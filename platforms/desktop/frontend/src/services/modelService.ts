@@ -18,6 +18,7 @@ import {
 import { createModelDownloadService } from './modelDownloadService';
 import { createModelFileService } from './modelFileService';
 import { createModelRegistryService } from './modelRegistryService';
+import type { ScenarioModelPathConfig } from '../utils/scenarioModels';
 import { listen } from './tauri/platform/events';
 import { exists, mkdir, remove } from './tauri/platform/fs';
 import { appLocalDataDir, join } from './tauri/platform/path';
@@ -81,6 +82,20 @@ export class ModelService {
         paths: ModelSelectionPaths,
     ): ModelCatalogSelectedIds {
         return this.ports.registryService.resolveModelCatalogSelectedIdsFromSnapshot(snapshot, paths);
+    }
+
+    resolveAsrSelectedModelIdsFromSnapshot(
+        snapshot: ModelCatalogSnapshot,
+        paths: Pick<ModelSelectionPaths, 'streamingModelPath' | 'batchModelPath'>,
+    ): Pick<ModelCatalogSelectedIds, 'streaming' | 'batch'> {
+        return this.ports.registryService.resolveAsrSelectedModelIdsFromSnapshot(snapshot, paths);
+    }
+
+    resolveScenarioSelectedModelIdsFromSnapshot(
+        snapshot: ModelCatalogSnapshot,
+        config: ScenarioModelPathConfig,
+    ) {
+        return this.ports.registryService.resolveScenarioSelectedModelIdsFromSnapshot(snapshot, config);
     }
 
     /**

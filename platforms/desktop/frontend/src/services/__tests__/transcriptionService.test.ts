@@ -299,7 +299,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
     it('sends null speakerProcessing for batch transcription when either speaker model is off', async () => {
         mocks.config = {
             ...mocks.config,
-            speakerSegmentationModelPath: '/models/speaker-segmentation',
+            batchSpeakerSegmentationModelPath: '/models/speaker-segmentation',
             speakerEmbeddingModelPath: '',
             speakerProfiles: [
                 { id: 'profile-1', name: 'Alice', enabled: true, samples: [] },
@@ -328,8 +328,8 @@ describe('TranscriptionService voice typing diagnostics', () => {
     it('sends speakerProcessing for batch transcription when both speaker models are configured', async () => {
         mocks.config = {
             ...mocks.config,
-            speakerSegmentationModelPath: '/models/speaker-segmentation',
-            speakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
+            batchSpeakerSegmentationModelPath: '/models/speaker-segmentation',
+            batchSpeakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
             speakerProfiles: [
                 { id: 'profile-1', name: 'Alice', enabled: true, samples: [] },
             ],

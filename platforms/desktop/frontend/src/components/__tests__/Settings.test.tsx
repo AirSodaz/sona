@@ -111,7 +111,8 @@ vi.mock('../../services/modelService', () => ({
             speakerSegmentation: null,
             speakerEmbedding: null,
         }),
-        resolveModelCatalogSelectedIdsFromSnapshot: vi.fn(),
+        resolveAsrSelectedModelIdsFromSnapshot: vi.fn(),
+        resolveScenarioSelectedModelIdsFromSnapshot: vi.fn(),
     }
 }));
 
@@ -214,7 +215,7 @@ describe('Settings', () => {
         mockListSystemAudioDeviceOptions.mockResolvedValue([{ label: 'Auto', value: 'default' }]);
         mockListLlmModels.mockResolvedValue(['gpt-4o']);
         vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(createModelCatalogSnapshot() as any);
-        vi.mocked(modelService.resolveModelCatalogSelectedIdsFromSnapshot).mockImplementation((snapshot, paths) => {
+        vi.mocked(modelService.resolveAsrSelectedModelIdsFromSnapshot).mockImplementation((snapshot, paths) => {
             const resolve = (path: string, options: Array<{ id: string }>) => {
                 if (!path.trim()) return null;
                 const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
@@ -230,10 +231,18 @@ describe('Settings', () => {
             return {
                 streaming: resolve(paths.streamingModelPath, snapshot.selectionOptions.streaming),
                 batch: resolve(paths.batchModelPath, snapshot.selectionOptions.batch),
-                speakerSegmentation: resolve(paths.speakerSegmentationModelPath, snapshot.selectionOptions.speakerSegmentation),
-                speakerEmbedding: resolve(paths.speakerEmbeddingModelPath, snapshot.selectionOptions.speakerEmbedding),
             };
         });
+        vi.mocked(modelService.resolveScenarioSelectedModelIdsFromSnapshot).mockImplementation(() => ({
+            liveSpeakerSegmentation: null,
+            batchSpeakerSegmentation: null,
+            liveSpeakerEmbedding: null,
+            batchSpeakerEmbedding: null,
+            livePunctuation: null,
+            batchPunctuation: null,
+            liveVad: null,
+            batchVad: null,
+        }));
         // Reset store state
         useTranscriptStore.setState({
             config: {
@@ -243,11 +252,12 @@ describe('Settings', () => {
                 enableITN: true,
                 appLanguage: 'auto',
                 language: 'en',
-                punctuationModelPath: '',
-                vadModelPath: '',
+                livePunctuationModelPath: '',
+                liveVadModelPath: '',
                 theme: 'auto',
                 font: 'system',
-                vadBufferSize: 5
+                liveVadBufferSize: 5,
+                batchVadBufferSize: 5
             }
         });
     });
@@ -370,7 +380,7 @@ describe('Settings', () => {
         render(<Settings isOpen={true} onClose={onClose} />);
         await openModelsTab();
 
-        const streamingModel = await screen.findByText('settings.streaming_model_label');
+        const streamingModel = await screen.findByText('settings.asr_model_label');
         const vadModels = screen.getByText('settings.vad_models');
         const transcriptionSettings = screen.getByText('settings.transcription_settings');
         const restoreDefaults = screen.getByText('settings.restore_defaults');
@@ -418,7 +428,7 @@ describe('Settings', () => {
         render(<Settings isOpen={true} onClose={onClose} />);
         await openModelsTab();
 
-        const dropdownLabel = await screen.findByText('settings.streaming_model_label');
+        const dropdownLabel = await screen.findByText('settings.asr_model_label');
         expect(dropdownLabel).toBeDefined();
 
         // Let's use getByText or fallback to direct invocation if UI is tricky

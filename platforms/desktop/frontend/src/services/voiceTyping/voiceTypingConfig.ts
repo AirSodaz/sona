@@ -1,6 +1,7 @@
 import type { AppConfig } from '../../types/config';
 import type { AsrTranscriptionRequest } from '../asrConfigService';
 import { resolveAsrTranscriptionRequest } from '../asrConfigService';
+import { getScenarioVadModelPath } from '../../utils/scenarioModels';
 
 export type VoiceTypingShortcutModifier = 'control' | 'alt' | 'shift' | 'meta';
 
@@ -52,7 +53,7 @@ export function resolveVoiceTypingConfigSnapshot(config: AppConfig): VoiceTyping
     enabled: config.voiceTypingEnabled || false,
     shortcut: config.voiceTypingShortcut ?? 'Alt+V',
     asrSignature: buildVoiceTypingAsrSignature(resolveVoiceTypingAsr(config)),
-    vadModelPath: config.vadModelPath || '',
+    vadModelPath: getScenarioVadModelPath(config, 'live'),
     microphoneId: config.microphoneId || 'default',
     keepMicrophoneActive: config.keepMicrophoneActive ?? false,
     language: config.language || 'auto',

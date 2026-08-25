@@ -8,8 +8,7 @@ import { setTestConfig } from '../../test-utils/configTestUtils';
 
 const SENSEVOICE_INT8_ID = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
 const SENSEVOICE_FP32_ID = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17';
-const SILERO_VAD_ID = 'silero-vad';
-const catalogModel = {
+const SILERO_VAD_ID = 'silero-vad';const catalogModel = {
     id: 'preset-a',
     name: 'Preset A',
     description: 'settings.descriptions.preset_a',
@@ -166,9 +165,42 @@ vi.mock('../../services/modelService', () => ({
         getModelRules: vi.fn(),
         getModelCatalogSnapshot: vi.fn(),
         resolveModelCatalogSelectedIds: vi.fn(),
-        resolveModelCatalogSelectedIdsFromSnapshot: vi.fn(),
+        resolveAsrSelectedModelIdsFromSnapshot: vi.fn(),
+        resolveScenarioSelectedModelIdsFromSnapshot: vi.fn(),
     }
 }));
+
+function createScenarioIdResolver() {
+    return (snapshot: any, config: Record<string, string | undefined>) => {
+        const sectionOptionsByType: Record<string, Array<{ id: string }>> = {};
+        for (const section of snapshot.sections) {
+            sectionOptionsByType[section.type] = section.groups.flatMap((group: any) => group.models);
+        }
+
+        const resolve = (path: string | undefined, options: Array<{ id: string }>) => {
+            if (!path?.trim()) return null;
+            const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
+            const exact = snapshot.modelIdByNormalizedPath[normalizedPath];
+            if (exact && options.some((option) => option.id === exact)) return exact;
+            const tokenMatch = options.find((option) => {
+                const token = snapshot.pathMatchTokens.find((item: any) => item.id === option.id);
+                return token?.token && normalizedPath.includes(token.token);
+            });
+            return tokenMatch?.id ?? null;
+        };
+
+        return {
+            liveSpeakerSegmentation: resolve(config.liveSpeakerSegmentationModelPath, snapshot.selectionOptions.speakerSegmentation),
+            batchSpeakerSegmentation: resolve(config.batchSpeakerSegmentationModelPath, snapshot.selectionOptions.speakerSegmentation),
+            liveSpeakerEmbedding: resolve(config.liveSpeakerEmbeddingModelPath, snapshot.selectionOptions.speakerEmbedding),
+            batchSpeakerEmbedding: resolve(config.batchSpeakerEmbeddingModelPath, snapshot.selectionOptions.speakerEmbedding),
+            livePunctuation: resolve(config.livePunctuationModelPath, sectionOptionsByType.punctuation ?? []),
+            batchPunctuation: resolve(config.batchPunctuationModelPath, sectionOptionsByType.punctuation ?? []),
+            liveVad: resolve(config.liveVadModelPath, sectionOptionsByType.vad ?? []),
+            batchVad: resolve(config.batchVadModelPath, sectionOptionsByType.vad ?? []),
+        };
+    };
+}
 
 describe('useModelManager restoreDefaultModelSettings', () => {
     beforeEach(() => {
@@ -180,18 +212,19 @@ describe('useModelManager restoreDefaultModelSettings', () => {
         vi.mocked(modelService.getModelRules).mockReset();
         vi.mocked(modelService.getModelCatalogSnapshot).mockReset();
         vi.mocked(modelService.resolveModelCatalogSelectedIds).mockReset();
-        vi.mocked(modelService.resolveModelCatalogSelectedIdsFromSnapshot).mockReset();
+        vi.mocked(modelService.resolveAsrSelectedModelIdsFromSnapshot).mockReset();
+        vi.mocked(modelService.resolveScenarioSelectedModelIdsFromSnapshot).mockReset();
 
         setTestConfig({
             streamingModelPath: '/current/live',
             batchModelPath: '/current/batch',
-            vadModelPath: '/current/vad',
-            punctuationModelPath: '/current/punctuation',
-            speakerSegmentationModelPath: '/current/speaker-segmentation',
-            speakerEmbeddingModelPath: '/current/speaker-embedding',
+            liveVadModelPath: '/current/vad',
+            livePunctuationModelPath: '/current/punctuation',
+            liveSpeakerSegmentationModelPath: '/current/speaker-segmentation',
+            liveSpeakerEmbeddingModelPath: '/current/speaker-embedding',
             enableITN: false,
             batchVadEnabled: false,
-            vadBufferSize: 9,
+            liveVadBufferSize: 9,
             maxConcurrent: 4,
             asr: {
                 providers: {
@@ -224,14 +257,14 @@ describe('useModelManager restoreDefaultModelSettings', () => {
             speakerSegmentation: null,
             speakerEmbedding: null,
         });
-        vi.mocked(modelService.resolveModelCatalogSelectedIdsFromSnapshot).mockImplementation((snapshot, paths) => {
+        vi.mocked(modelService.resolveAsrSelectedModelIdsFromSnapshot).mockImplementation((snapshot, paths) => {
             const resolve = (path: string, options: Array<{ id: string }>) => {
                 if (!path.trim()) return null;
                 const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
                 const exact = snapshot.modelIdByNormalizedPath[normalizedPath];
                 if (exact && options.some((option) => option.id === exact)) return exact;
                 const tokenMatch = options.find((option) => {
-                    const token = snapshot.pathMatchTokens.find((item) => item.id === option.id);
+                    const token = snapshot.pathMatchTokens.find((item: any) => item.id === option.id);
                     return token?.token && normalizedPath.includes(token.token);
                 });
                 return tokenMatch?.id ?? null;
@@ -240,10 +273,11 @@ describe('useModelManager restoreDefaultModelSettings', () => {
             return {
                 streaming: resolve(paths.streamingModelPath, snapshot.selectionOptions.streaming),
                 batch: resolve(paths.batchModelPath, snapshot.selectionOptions.batch),
-                speakerSegmentation: resolve(paths.speakerSegmentationModelPath, snapshot.selectionOptions.speakerSegmentation),
-                speakerEmbedding: resolve(paths.speakerEmbeddingModelPath, snapshot.selectionOptions.speakerEmbedding),
             };
         });
+        vi.mocked(modelService.resolveScenarioSelectedModelIdsFromSnapshot).mockImplementation(
+            createScenarioIdResolver() as any,
+        );
     });
 
     it('does not load the model catalog while inactive for settings tab prewarm', async () => {
@@ -333,8 +367,8 @@ describe('useModelManager restoreDefaultModelSettings', () => {
         setTestConfig({
             streamingModelPath: '/models/preset-a',
             batchModelPath: 'D:\\portable\\preset-a',
-            speakerSegmentationModelPath: '',
-            speakerEmbeddingModelPath: '',
+            liveSpeakerSegmentationModelPath: '',
+            liveSpeakerEmbeddingModelPath: '',
         });
 
         const { result, rerender } = renderHook(({ isOpen }) => useModelManager(isOpen), {
@@ -371,13 +405,18 @@ describe('useModelManager restoreDefaultModelSettings', () => {
         expect(useConfigStore.getState().config).toMatchObject({
             streamingModelPath: `/models/${SENSEVOICE_INT8_ID}`,
             batchModelPath: `/models/${SENSEVOICE_INT8_ID}`,
-            vadModelPath: `/models/${SILERO_VAD_ID}`,
-            punctuationModelPath: '',
-            speakerSegmentationModelPath: '',
-            speakerEmbeddingModelPath: '',
+            liveVadModelPath: `/models/${SILERO_VAD_ID}`,
+            batchVadModelPath: `/models/${SILERO_VAD_ID}`,
+            livePunctuationModelPath: '',
+            batchPunctuationModelPath: '',
+            liveSpeakerSegmentationModelPath: '',
+            batchSpeakerSegmentationModelPath: '',
+            liveSpeakerEmbeddingModelPath: '',
+            batchSpeakerEmbeddingModelPath: '',
             enableITN: true,
             batchVadEnabled: true,
-            vadBufferSize: 5,
+            liveVadBufferSize: 5,
+            batchVadBufferSize: 5,
             maxConcurrent: 2,
             asr: {
                 providers: {
@@ -406,18 +445,23 @@ describe('useModelManager restoreDefaultModelSettings', () => {
         expect(useConfigStore.getState().config).toMatchObject({
             streamingModelPath: `/models/${SENSEVOICE_FP32_ID}`,
             batchModelPath: `/models/${SENSEVOICE_FP32_ID}`,
-            vadModelPath: '/current/vad',
-            punctuationModelPath: '',
-            speakerSegmentationModelPath: '',
-            speakerEmbeddingModelPath: '',
+            liveVadModelPath: '',
+            batchVadModelPath: '',
+            livePunctuationModelPath: '',
+            batchPunctuationModelPath: '',
+            liveSpeakerSegmentationModelPath: '',
+            batchSpeakerSegmentationModelPath: '',
+            liveSpeakerEmbeddingModelPath: '',
+            batchSpeakerEmbeddingModelPath: '',
             enableITN: true,
             batchVadEnabled: true,
-            vadBufferSize: 5,
+            liveVadBufferSize: 5,
+            batchVadBufferSize: 5,
             maxConcurrent: 2,
         });
     });
 
-    it('keeps the current ASR models when neither SenseVoice default is installed', async () => {
+    it('keeps the current ASR models and clears scenario VAD paths when no defaults resolve', async () => {
         vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
             buildInstalledCatalogSnapshot([])
         );
@@ -431,18 +475,23 @@ describe('useModelManager restoreDefaultModelSettings', () => {
         expect(useConfigStore.getState().config).toMatchObject({
             streamingModelPath: '/current/live',
             batchModelPath: '/current/batch',
-            vadModelPath: '/current/vad',
-            punctuationModelPath: '',
-            speakerSegmentationModelPath: '',
-            speakerEmbeddingModelPath: '',
+            liveVadModelPath: '',
+            batchVadModelPath: '',
+            livePunctuationModelPath: '',
+            batchPunctuationModelPath: '',
+            liveSpeakerSegmentationModelPath: '',
+            batchSpeakerSegmentationModelPath: '',
+            liveSpeakerEmbeddingModelPath: '',
+            batchSpeakerEmbeddingModelPath: '',
             enableITN: true,
             batchVadEnabled: true,
-            vadBufferSize: 5,
+            liveVadBufferSize: 5,
+            batchVadBufferSize: 5,
             maxConcurrent: 2,
         });
     });
 
-    it('keeps the current VAD model when Silero VAD is not installed', async () => {
+    it('clears scenario VAD paths to the catalog default when Silero VAD is not installed', async () => {
         vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
             buildInstalledCatalogSnapshot([SENSEVOICE_INT8_ID])
         );
@@ -456,13 +505,18 @@ describe('useModelManager restoreDefaultModelSettings', () => {
         expect(useConfigStore.getState().config).toMatchObject({
             streamingModelPath: `/models/${SENSEVOICE_INT8_ID}`,
             batchModelPath: `/models/${SENSEVOICE_INT8_ID}`,
-            vadModelPath: '/current/vad',
-            punctuationModelPath: '',
-            speakerSegmentationModelPath: '',
-            speakerEmbeddingModelPath: '',
+            liveVadModelPath: '',
+            batchVadModelPath: '',
+            livePunctuationModelPath: '',
+            batchPunctuationModelPath: '',
+            liveSpeakerSegmentationModelPath: '',
+            batchSpeakerSegmentationModelPath: '',
+            liveSpeakerEmbeddingModelPath: '',
+            batchSpeakerEmbeddingModelPath: '',
             enableITN: true,
             batchVadEnabled: true,
-            vadBufferSize: 5,
+            liveVadBufferSize: 5,
+            batchVadBufferSize: 5,
             maxConcurrent: 2,
         });
     });

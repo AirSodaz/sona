@@ -12,22 +12,22 @@ describe('speakerService', () => {
 
     it('treats speaker processing as disabled when either model path is empty', () => {
         expect(speakerService.isConfigured({
-            speakerSegmentationModelPath: '/models/seg',
-            speakerEmbeddingModelPath: '',
+            liveSpeakerSegmentationModelPath: '/models/seg',
+            liveSpeakerEmbeddingModelPath: '',
             speakerProfiles: [],
-        })).toBe(false);
+        }, 'live')).toBe(false);
 
         expect(speakerService.buildProcessingConfig({
-            speakerSegmentationModelPath: '',
-            speakerEmbeddingModelPath: '/models/embed.onnx',
+            liveSpeakerSegmentationModelPath: '',
+            liveSpeakerEmbeddingModelPath: '/models/embed.onnx',
             speakerProfiles: [],
-        })).toBeNull();
+        }, 'live')).toBeNull();
     });
 
     it('builds speaker processing config only when both model paths are configured', () => {
         expect(speakerService.buildProcessingConfig({
-            speakerSegmentationModelPath: '/models/seg',
-            speakerEmbeddingModelPath: '/models/embed.onnx',
+            liveSpeakerSegmentationModelPath: '/models/seg',
+            liveSpeakerEmbeddingModelPath: '/models/embed.onnx',
             speakerProfiles: [
                 {
                     id: 'profile-1',
@@ -43,7 +43,7 @@ describe('speakerService', () => {
                     ],
                 },
             ],
-        })).toEqual({
+        }, 'live')).toEqual({
             speakerSegmentationModelPath: '/models/seg',
             speakerEmbeddingModelPath: '/models/embed.onnx',
             speakerProfiles: [
@@ -61,6 +61,20 @@ describe('speakerService', () => {
                     ],
                 },
             ],
+        });
+    });
+
+    it('resolves batch scenario paths independently from live paths', () => {
+        expect(speakerService.buildProcessingConfig({
+            liveSpeakerSegmentationModelPath: '',
+            liveSpeakerEmbeddingModelPath: '',
+            batchSpeakerSegmentationModelPath: '/models/batch-seg',
+            batchSpeakerEmbeddingModelPath: '/models/batch-embed.onnx',
+            speakerProfiles: [],
+        }, 'batch')).toEqual({
+            speakerSegmentationModelPath: '/models/batch-seg',
+            speakerEmbeddingModelPath: '/models/batch-embed.onnx',
+            speakerProfiles: [],
         });
     });
 });
