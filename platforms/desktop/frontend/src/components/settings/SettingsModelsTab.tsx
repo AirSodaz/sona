@@ -22,8 +22,7 @@ import { isOnlineAsrProviderId } from '../../services/onlineAsrProviders';
 import { scenarioModelFieldKey, getScenarioVadBufferSize, type ScenarioModelKind } from '../../utils/scenarioModels';
 import { findSelectedModelByMode } from '../../utils/modelSelection';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader, SettingsAccordion } from './SettingsLayout';
-import { SegmentedControl } from './SegmentedControl';
-import { Settings2, PlaySquare } from 'lucide-react';
+import { Settings2, PlaySquare, Mic } from 'lucide-react';
 import { ModelIcon, RestoreIcon, OnlineIcon } from '../Icons';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import { Switch } from '../Switch';
@@ -540,19 +539,13 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     }, [getSectionGroups]);
 
     const punctuationOptions = useMemo(
-        () => [
-            speakerDisabledOption,
-            ...sectionModelDropdownOptions('punctuation', selectedModelIds.livePunctuation ?? ''),
-        ],
-        [sectionModelDropdownOptions, selectedModelIds.livePunctuation, speakerDisabledOption],
+        () => sectionModelDropdownOptions('punctuation', selectedModelIds.livePunctuation ?? ''),
+        [sectionModelDropdownOptions, selectedModelIds.livePunctuation],
     );
 
     const vadOptions = useMemo(
-        () => [
-            speakerDisabledOption,
-            ...sectionModelDropdownOptions('vad', selectedModelIds.liveVad ?? ''),
-        ],
-        [sectionModelDropdownOptions, selectedModelIds.liveVad, speakerDisabledOption],
+        () => sectionModelDropdownOptions('vad', selectedModelIds.liveVad ?? ''),
+        [sectionModelDropdownOptions, selectedModelIds.liveVad],
     );
 
     const activeAsrRulesBadge = useMemo(() => {
@@ -593,16 +586,43 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                 description={t('settings.model_selection_desc')}
                 icon={<Settings2 size={20} />}
             >
-                <SegmentedControl
+                <div
                     id="settings-model-scenario"
-                    ariaLabel={t('settings.scenario_selector_label', { defaultValue: 'Model scenario' })}
-                    value={activeScenario}
-                    onChange={setActiveScenario}
-                    options={[
-                        { value: 'live', label: t('settings.scenario_live', { defaultValue: '实时录音' }) },
-                        { value: 'batch', label: t('settings.scenario_batch', { defaultValue: '批量导入' }) },
-                    ]}
-                />
+                    className="settings-scenario-cards"
+                    role="tablist"
+                    aria-label={t('settings.scenario_selector_label', { defaultValue: 'Model scenario' })}
+                >
+                    {([
+                        {
+                            value: 'live' as ModelScenario,
+                            icon: <Mic size={18} />,
+                            label: t('settings.scenario_live', { defaultValue: '实时录音' }),
+                            description: t('settings.scenario_live_desc', { defaultValue: '麦克风说话，实时出字' }),
+                        },
+                        {
+                            value: 'batch' as ModelScenario,
+                            icon: <PlaySquare size={18} />,
+                            label: t('settings.scenario_batch', { defaultValue: '批量导入' }),
+                            description: t('settings.scenario_batch_desc', { defaultValue: '导入音视频文件，离线批量转写' }),
+                        },
+                    ]).map((option) => (
+                        <button
+                            key={option.value}
+                            type="button"
+                            role="tab"
+                            aria-selected={activeScenario === option.value}
+                            aria-label={option.label}
+                            className={`settings-scenario-card${activeScenario === option.value ? ' active' : ''}`}
+                            onClick={() => setActiveScenario(option.value)}
+                        >
+                            <span className="settings-scenario-card-icon">{option.icon}</span>
+                            <span className="settings-scenario-card-text">
+                                <span className="settings-scenario-card-label">{option.label}</span>
+                                <span className="settings-scenario-card-description">{option.description}</span>
+                            </span>
+                        </button>
+                    ))}
+                </div>
 
                 <SettingsItem
                     title={t('settings.asr_model_label', { defaultValue: '识别模型' })}

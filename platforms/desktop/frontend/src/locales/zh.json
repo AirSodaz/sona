@@ -1064,6 +1064,8 @@
         "scenario_selector_label": "模型场景",
         "scenario_live": "实时录音",
         "scenario_batch": "批量导入",
+        "scenario_live_desc": "麦克风说话，实时出字",
+        "scenario_batch_desc": "导入音视频文件，离线批量转写",
         "asr_model_label": "识别模型",
         "advanced_settings_title": "高级设置",
         "punctuation_model_label": "标点模型",

@@ -1064,6 +1064,8 @@
         "scenario_selector_label": "モデルシナリオ",
         "scenario_live": "リアルタイム録音",
         "scenario_batch": "一括インポート",
+        "scenario_live_desc": "マイクで話すと即時に文字起こし",
+        "scenario_batch_desc": "音声・動画ファイルをオフラインで一括文字起こし",
         "asr_model_label": "認識モデル",
         "advanced_settings_title": "詳細設定",
         "punctuation_model_label": "句読点モデル",

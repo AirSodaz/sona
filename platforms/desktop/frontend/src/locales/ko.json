@@ -1064,6 +1064,8 @@
         "scenario_selector_label": "모델 시나리오",
         "scenario_live": "실시간 녹음",
         "scenario_batch": "일괄 가져오기",
+        "scenario_live_desc": "마이크로 말하면 실시간으로 변환됩니다",
+        "scenario_batch_desc": "오디오·영상 파일을 오프라인으로 일괄 변환합니다",
         "asr_model_label": "인식 모델",
         "advanced_settings_title": "고급 설정",
         "punctuation_model_label": "문장부호 모델",

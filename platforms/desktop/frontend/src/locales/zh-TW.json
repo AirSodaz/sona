@@ -1064,6 +1064,8 @@
         "scenario_selector_label": "模型場景",
         "scenario_live": "即時錄音",
         "scenario_batch": "批次匯入",
+        "scenario_live_desc": "麥克風說話，即時出字",
+        "scenario_batch_desc": "匯入音視訊檔案，離線批次轉寫",
         "asr_model_label": "辨識模型",
         "advanced_settings_title": "進階設定",
         "punctuation_model_label": "標點模型",

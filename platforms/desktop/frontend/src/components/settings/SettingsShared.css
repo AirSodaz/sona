@@ -141,43 +141,88 @@
   border-radius: var(--radius-sm);
 }
 
-/* --- Segmented control --- */
-.settings-segmented-control {
+/* --- Scenario cards --- */
+.settings-scenario-cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-  width: min(320px, 100%);
-  padding: 4px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-bg-secondary);
+  gap: 12px;
+  padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
+  background: var(--color-bg-primary);
 }
 
-.settings-segmented-control button {
-  min-width: 0;
-  min-height: 32px;
-  display: inline-flex;
+.settings-scenario-card {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border: 0;
-  border-radius: 6px;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 12px);
   background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
+  text-align: left;
+  transition:
+    background var(--transition-fast, 0.15s) ease,
+    border-color var(--transition-fast, 0.15s) ease,
+    box-shadow var(--transition-fast, 0.15s) ease,
+    color var(--transition-fast, 0.15s) ease;
 }
 
-.settings-segmented-control button:hover {
+.settings-scenario-card:hover {
   background: var(--color-bg-hover);
+}
+
+.settings-scenario-card.active {
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border);
+  box-shadow: var(--apple-control-shadow-rest, 0 1px 2px rgba(0, 0, 0, 0.06));
+}
+
+.settings-scenario-card:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent-primary) 48%, transparent);
+  outline-offset: 2px;
+}
+
+.settings-scenario-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm, 10px);
+  background: color-mix(in srgb, var(--color-accent-primary) 8%, transparent);
+  color: var(--color-text-secondary);
+}
+
+.settings-scenario-card.active .settings-scenario-card-icon {
+  background: var(--color-accent-primary);
+  color: var(--color-bg-elevated);
+}
+
+.settings-scenario-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-scenario-card-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.settings-scenario-card-description {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+}
+
+.settings-scenario-card.active .settings-scenario-card-label {
   color: var(--color-text-primary);
 }
 
-.settings-segmented-control button.active {
-  background: var(--color-bg-elevated);
-  color: var(--color-text-primary);
-  box-shadow: var(--shadow-sm);
-}
 
 /* --- Accordion --- */
 .accordion-wrapper {

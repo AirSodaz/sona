@@ -1064,6 +1064,8 @@
         "scenario_selector_label": "Model scenario",
         "scenario_live": "Live recording",
         "scenario_batch": "Batch import",
+        "scenario_live_desc": "Dictate from your microphone and see text instantly",
+        "scenario_batch_desc": "Import audio or video files for offline transcription",
         "asr_model_label": "Recognition model",
         "advanced_settings_title": "Advanced",
         "punctuation_model_label": "Punctuation model",
