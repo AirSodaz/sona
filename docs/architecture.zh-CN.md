@@ -17,7 +17,7 @@ Sona 使用七种稳定角色。角色是经过评审的依赖契约；工作区
 | `sona-archive` | outbound-adapter |
 | `sona-export` | outbound-adapter |
 | `sona-sherpa-onnx` | provider |
-| `sona-sherpa-vad` | provider |
+| `sona-vad` | provider |
 | `sona-llama-cpp` | provider |
 | `sona-media-detector` | outbound-adapter |
 | `sona-model-downloads` | outbound-adapter |
@@ -61,7 +61,7 @@ Core <- Outbound Adapter <------------- Host
 | `adapters/archive/` | `sona-archive` | outbound-adapter | |
 | `adapters/export/` | `sona-export` | outbound-adapter | |
 | `providers/asr/local/sherpa_onnx/` | `sona-sherpa-onnx` | provider | |
-| `providers/asr/local/sherpa_vad/` | `sona-sherpa-vad` | provider | Core `VadEnginePort` 之后的 Silero ONNX VAD |
+| `providers/asr/local/vad/` | `sona-vad` \| provider \| Core `VadEnginePort` 之后的 Silero/TEN ONNX VAD \|
 | `providers/asr/local/llama_cpp/` | `sona-llama-cpp` | provider | 通过 llama.cpp 执行 Qwen3-ASR 批量推理 |
 | `adapters/media_detector/` | `sona-media-detector` | outbound-adapter | |
 | `adapters/model_downloads/` | `sona-model-downloads` | outbound-adapter | |

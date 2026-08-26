@@ -92,7 +92,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   batchVadModelPath: '',
   batchSpeakerSegmentationModelPath: '',
   batchSpeakerEmbeddingModelPath: '',
-  modelDownloadMirror: 'direct',
+  modelDownloadMirror: 'auto',
 
   // Caption
   lockWindow: false,

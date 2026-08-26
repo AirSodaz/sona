@@ -17,7 +17,7 @@ Sona uses six stable roles. The role is the reviewed dependency contract; worksp
 | `sona-archive` | outbound-adapter |
 | `sona-export` | outbound-adapter |
 | `sona-sherpa-onnx` | outbound-adapter |
-| `sona-sherpa-vad` | outbound-adapter |
+| `sona-vad` | outbound-adapter |
 | `sona-llama-cpp` | outbound-adapter |
 | `sona-media-detector` | outbound-adapter |
 | `sona-model-downloads` | outbound-adapter |
@@ -61,7 +61,7 @@ Each workspace package lives under the root for its reviewed role. The `[package
 | `adapters/archive/` | `sona-archive` | outbound-adapter | |
 | `adapters/export/` | `sona-export` | outbound-adapter | |
 | `providers/asr/local/sherpa_onnx/` | `sona-sherpa-onnx` | provider | |
-| `providers/asr/local/sherpa_vad/` | `sona-sherpa-vad` | provider | Silero ONNX VAD behind the Core `VadEnginePort` |
+| `providers/asr/local/vad/` | `sona-vad` | provider | Silero/TEN ONNX VAD behind the Core `VadEnginePort` |
 | `providers/asr/local/llama_cpp/` | `sona-llama-cpp` | provider | Qwen3-ASR batch inference through llama.cpp |
 | `adapters/media_detector/` | `sona-media-detector` | outbound-adapter | |
 | `adapters/model_downloads/` | `sona-model-downloads` | outbound-adapter | |

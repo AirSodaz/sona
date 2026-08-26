@@ -7,8 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 pub(crate) fn local_batch_transcriber() -> impl BatchTranscriberPort {
-    let vad_engines = sona_core::ports::vad::VadEngineSet::empty()
-        .register(Arc::new(sona_sherpa_vad::SherpaVadEngine));
+    let vad_engines = sona_vad::built_in_engines();
     let registry = sona_application::local_asr::LocalAsrRegistry::empty()
         .register(Arc::new(sona_sherpa_onnx::SherpaOnnxAdapter::new(
             sona_sherpa_onnx::runtime::RecognizerPool::default(),

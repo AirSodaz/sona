@@ -1,7 +1,7 @@
 [package]
-name = "sona-sherpa-vad"
+name = "sona-vad"
 version.workspace = true
-description = "Silero ONNX voice activity detection provider for Sona"
+description = "Voice activity detection provider for Sona"
 authors.workspace = true
 edition.workspace = true
 

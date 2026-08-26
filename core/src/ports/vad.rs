@@ -8,6 +8,7 @@ use std::sync::Arc;
 pub enum VadEngineKind {
     #[default]
     SileroOnnx,
+    TenVadOnnx,
 }
 
 /// Tuning parameters for one voice activity detection pass.

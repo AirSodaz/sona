@@ -29,7 +29,7 @@ sona-api-server = { path = "../../adapters/api_server" }
 sona-core = { path = "../../core" }
 sona-export = { path = "../../adapters/export" }
 sona-sherpa-onnx = { path = "../../providers/asr/local/sherpa_onnx" }
-sona-sherpa-vad = { path = "../../providers/asr/local/sherpa_vad" }
+sona-vad = { path = "../../providers/asr/local/vad" }
 sona-llama-cpp = { path = "../../providers/asr/local/llama_cpp" }
 sona-media-detector = { path = "../../adapters/media_detector" }
 sona-model-downloads = { path = "../../adapters/model_downloads" }

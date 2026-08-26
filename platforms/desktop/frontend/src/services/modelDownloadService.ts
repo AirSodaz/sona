@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { TauriEvent } from './tauri/events';
 import type { ModelCatalogModel, ModelInfo, ProgressCallback } from '../types/modelCatalog';
+import { downloadCandidates, modelscopeMirrorUrl } from '../utils/mirrorCandidates';
 
 interface DownloadProgressPayloadObject {
   0?: number;
@@ -14,7 +15,7 @@ interface DownloadProgressPayloadObject {
 }
 
 type DownloadFile = (input: { url: string; outputPath: string; id: string; expectedSha256?: string }) => Promise<void>;
-type DownloadPresetModel = (input: { modelId: string; downloadId: string }) => Promise<string>;
+type DownloadPresetModel = (input: { modelId: string; downloadId: string; mirror?: string }) => Promise<string>;
 type ExtractTarBz2 = (input: { archivePath: string; targetDir: string }) => Promise<void>;
 type Listen = <T>(event: string, handler: (event: { payload: T }) => void) => Promise<() => void>;
 
@@ -90,7 +91,7 @@ class ModelDownloadService {
     const targetModelsDir = modelsDir ?? await this.ports.getModelsDir();
     const artifacts = model.artifacts ?? [];
     if (artifacts.length > 1) {
-      return await this.downloadMultiFilePreset(modelId, onProgress, signal);
+      return await this.downloadMultiFilePreset(modelId, onProgress, signal, mirror);
     }
     const primaryArtifact = artifacts[0];
     if (!primaryArtifact) {
@@ -102,7 +103,31 @@ class ModelDownloadService {
       : await this.ports.join(targetModelsDir, targetFilename);
 
     const expectedSha256 = primaryArtifact.sha256;
-    await this.downloadFile(primaryArtifact.url, tempFilePath, onProgress, signal, 'Downloading', expectedSha256, mirror);
+    const alternateUrl = modelscopeMirrorUrl(model.id, primaryArtifact.filename);
+    const candidates = downloadCandidates(primaryArtifact.url, mirror ?? 'auto', alternateUrl);
+
+    let lastError: unknown = null;
+    for (const [candidateIndex, candidateUrl] of candidates.entries()) {
+      if (candidateIndex > 0) {
+        // Never resume a partial file across different sources; the Rust
+        // downloader keeps the in-flight file at `<outputPath>.download`
+        // (see `temporary_download_path`).
+        await this.ports.remove(`${tempFilePath}.download`).catch(() => undefined);
+      }
+      try {
+        await this.downloadFile(candidateUrl, tempFilePath, onProgress, signal, 'Downloading', expectedSha256, candidateIndex > 0);
+        lastError = null;
+        break;
+      } catch (error) {
+        if (signal?.aborted || extractErrorMessage(error).includes('cancelled')) {
+          throw Object.assign(new Error('Download cancelled'), { cause: error });
+        }
+        lastError = error;
+      }
+    }
+    if (lastError !== null) {
+      throw lastError;
+    }
 
     if (model.isArchive === false) {
       onProgress?.(100, i18n.t('settings.model_download_status.done'), true);
@@ -160,6 +185,7 @@ class ModelDownloadService {
     modelId: string,
     onProgress?: ProgressCallback,
     signal?: AbortSignal,
+    mirror?: string,
   ): Promise<string> {
     if (!this.ports.downloadPresetModel) {
       throw new Error('Multi-file model downloads are unavailable in this host');
@@ -211,7 +237,7 @@ class ModelDownloadService {
       onProgress?.(0, i18n.t('settings.model_download_status.downloading_only', {
         label: 'Downloading',
       }));
-      const path = await this.ports.downloadPresetModel({ modelId, downloadId });
+      const path = await this.ports.downloadPresetModel({ modelId, downloadId, mirror });
       onProgress?.(100, i18n.t('settings.model_download_status.done'), true);
       return path;
     } catch (error) {
@@ -232,17 +258,8 @@ class ModelDownloadService {
     signal?: AbortSignal,
     label: string = i18n.t('settings.model_download_status.download_label'),
     expectedSha256?: string,
-    mirrorKey: string = 'direct',
+    fromMirror: boolean = false,
   ): Promise<void> {
-    const mirrorMap: Record<string, string> = {
-      direct: '',
-      ghproxy: 'https://mirror.ghproxy.com/',
-      ghnet: 'https://ghproxy.net/',
-    };
-
-    const mirrorPrefix = mirrorMap[mirrorKey] ?? '';
-    const downloadUrl = `${mirrorPrefix}${url}`;
-
     let lastError: unknown = null;
     let lastDownloaded = 0;
     let uiLastDownloaded = 0;
@@ -308,16 +325,16 @@ class ModelDownloadService {
         try {
           if (onProgress) {
             onProgress(0, i18n.t(
-              mirrorPrefix
+              fromMirror
                 ? 'settings.model_download_status.downloading_from_mirror'
                 : 'settings.model_download_status.downloading_only',
               { label },
             ));
           }
 
-          logger.info(`Attempting download from: ${downloadUrl} with ID: ${downloadId}`);
+          logger.info(`Attempting download from: ${url} with ID: ${downloadId}`);
           await this.ports.downloadFile({
-            url: downloadUrl,
+            url,
             outputPath,
             id: downloadId,
             ...(expectedSha256 ? { expectedSha256 } : {}),
@@ -333,10 +350,10 @@ class ModelDownloadService {
           if (lastDownloaded > downloadedAtStartOfAttempt) {
             // We made progress! Reset consecutive failures to 1 (this was a failed attempt but fruitful)
             consecutiveFailures = 1;
-            logger.warn(`Download attempt ${attempt} failed via ${mirrorPrefix || 'direct'}, but progress was made. Resetting consecutive failures.`, error);
+            logger.warn(`Download attempt ${attempt} failed via ${fromMirror ? 'mirror' : 'direct'}, but progress was made. Resetting consecutive failures.`, error);
           } else {
             consecutiveFailures++;
-            logger.warn(`Download attempt ${attempt} failed via ${mirrorPrefix || 'direct'}. Consecutive failures: ${consecutiveFailures}`, error);
+            logger.warn(`Download attempt ${attempt} failed via ${fromMirror ? 'mirror' : 'direct'}. Consecutive failures: ${consecutiveFailures}`, error);
           }
 
           lastError = error;

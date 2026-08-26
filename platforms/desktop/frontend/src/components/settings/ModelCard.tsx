@@ -4,6 +4,11 @@ import type { ModelInfo } from '../../types/modelCatalog';
 import { TrashIcon, DownloadIcon, XIcon } from '../Icons';
 import { LanguageBadges } from '../LanguageBadges';
 
+const ENGINE_LABEL: Record<ModelInfo['engine'], string> = {
+    'sherpa-onnx': 'ONNX',
+    'llama-cpp': 'GGUF'
+};
+
 interface ModelCardProps {
     models: ModelInfo[];
     installedModels: Set<string>;
@@ -94,13 +99,14 @@ export const ModelCard = React.memo(function ModelCard({
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div className="model-name">{baseModel.name}{!isMultiVersion && baseModel.versionLabel ? ` (${baseModel.versionLabel})` : ''}</div>
                         <LanguageBadges languages={baseModel.languages} />
-                        {baseModel.modes && baseModel.modes.length > 0 && (
+                        {((baseModel.modes && baseModel.modes.length > 0) || !!baseModel.engine) && (
                             <div className="model-tags" style={{ marginTop: '0' }}>
-                                {baseModel.modes.map(mode => (
+                                {baseModel.modes?.map(mode => (
                                     <span key={mode} className="model-tag">
                                         {mode.charAt(0).toUpperCase() + mode.slice(1)}
                                     </span>
                                 ))}
+                                <span className="model-tag">{ENGINE_LABEL[baseModel.engine]}</span>
                                 {baseModel.isRecommended && <span className="model-tag">{t('common.recommended')}</span>}
                             </div>
                         )}
@@ -156,6 +162,7 @@ export const ModelCard = React.memo(function ModelCard({
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                             <span style={{ fontWeight: 500, color: 'var(--color-text)' }}>{model.versionLabel || model.name}</span>
+                                            <span className="model-tag">{ENGINE_LABEL[model.engine]}</span>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                             <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{model.size}</span>

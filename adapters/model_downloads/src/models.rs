@@ -6,7 +6,9 @@ use crate::downloads::{
     DownloadClient, DownloadError, DownloadFileOperation, publish_download_file, sha256_file,
     temporary_download_path,
 };
+use crate::mirror::{DownloadMirror, download_candidates};
 use sona_core::models::downloads::ResolvedModelDownload;
+use sona_core::models::mirrors::modelscope_mirror_url;
 
 const MAX_ARCHIVE_ENTRIES: usize = 20_000;
 const MAX_ARCHIVE_FILE_BYTES: u64 = 4 * 1024 * 1024 * 1024;
@@ -152,6 +154,20 @@ pub async fn download_model_with_cancel<F>(
 where
     F: FnMut(ModelDownloadProgress) + Send + 'static,
 {
+    download_model_with_cancel_and_mirror(resolved, cancel, DownloadMirror::Auto, on_progress).await
+}
+
+/// Downloads a preset model, trying direct first and falling back per the
+/// mirror strategy (see [`crate::mirror::download_candidates`]).
+pub async fn download_model_with_cancel_and_mirror<F>(
+    resolved: &ResolvedModelDownload,
+    cancel: Arc<tokio::sync::Notify>,
+    mirror: DownloadMirror,
+    on_progress: F,
+) -> Result<PathBuf, DownloadError>
+where
+    F: FnMut(ModelDownloadProgress) + Send + 'static,
+{
     tokio::fs::create_dir_all(&resolved.models_dir)
         .await
         .map_err(|error| {
@@ -165,7 +181,7 @@ where
 
     let progress = Arc::new(Mutex::new(on_progress));
     if resolved.model.is_multi_file() {
-        return download_multi_file_model(resolved, cancel, progress, install_lock).await;
+        return download_multi_file_model(resolved, cancel, progress, install_lock, mirror).await;
     }
     let Some(primary_artifact) = resolved.artifacts.first() else {
         drop(install_lock);
@@ -177,28 +193,47 @@ where
     };
     let primary_url = primary_artifact.url.clone();
     let expected_sha = primary_artifact.sha256.clone();
-    let download_progress = progress.clone();
     let temp_download_path = temporary_download_path(&resolved.download_path);
+    let alternate_url = modelscope_mirror_url(&resolved.model.id, &primary_artifact.filename);
+    let candidates = download_candidates(&primary_url, mirror, alternate_url);
 
     let client = DownloadClient::try_new()?;
-    let result = client
-        .download_file(
-            &primary_url,
-            &temp_download_path,
-            cancel,
-            Some(Box::new(move |downloaded_bytes, total_bytes| {
-                report_progress(
-                    &download_progress,
-                    ModelDownloadProgress {
-                        stage: ModelDownloadStage::Downloading,
-                        downloaded_bytes,
-                        total_bytes,
-                    },
-                );
-            })),
-        )
-        .await;
-    result?;
+    let mut download_error = None;
+    for (candidate_index, candidate_url) in candidates.iter().enumerate() {
+        if candidate_index > 0 {
+            // Never resume a partial file across different sources.
+            let _ = tokio::fs::remove_file(&temp_download_path).await;
+        }
+        let download_progress = progress.clone();
+        let result = client
+            .download_file(
+                candidate_url,
+                &temp_download_path,
+                cancel.clone(),
+                Some(Box::new(move |downloaded_bytes, total_bytes| {
+                    report_progress(
+                        &download_progress,
+                        ModelDownloadProgress {
+                            stage: ModelDownloadStage::Downloading,
+                            downloaded_bytes,
+                            total_bytes,
+                        },
+                    );
+                })),
+            )
+            .await;
+        match result {
+            Ok(()) => {
+                download_error = None;
+                break;
+            }
+            Err(DownloadError::Cancelled) => return Err(DownloadError::Cancelled),
+            Err(error) => download_error = Some(error),
+        }
+    }
+    if let Some(error) = download_error {
+        return Err(error);
+    }
 
     report_progress(
         &progress,
@@ -259,6 +294,7 @@ async fn download_multi_file_model<F>(
     cancel: Arc<tokio::sync::Notify>,
     progress: Arc<Mutex<F>>,
     install_lock: InstallLock,
+    mirror: DownloadMirror,
 ) -> Result<PathBuf, DownloadError>
 where
     F: FnMut(ModelDownloadProgress) + Send + 'static,
@@ -304,26 +340,46 @@ where
         }
 
         let temp_path = temporary_download_path(&staged_path);
-        let artifact_progress = progress.clone();
         let completed_before_artifact = completed_bytes;
-        client
-            .download_file(
-                &artifact.url,
-                &temp_path,
-                cancel.clone(),
-                Some(Box::new(move |downloaded_bytes, _| {
-                    report_progress(
-                        &artifact_progress,
-                        ModelDownloadProgress {
-                            stage: ModelDownloadStage::Downloading,
-                            downloaded_bytes: completed_before_artifact
-                                .saturating_add(downloaded_bytes.min(artifact_size)),
-                            total_bytes: expected_total,
-                        },
-                    );
-                })),
-            )
-            .await?;
+        let alternate_url = modelscope_mirror_url(&resolved.model.id, &artifact.filename);
+        let candidates = download_candidates(&artifact.url, mirror, alternate_url);
+        let mut download_error = None;
+        for (candidate_index, candidate_url) in candidates.iter().enumerate() {
+            if candidate_index > 0 {
+                // Never resume a partial file across different sources.
+                let _ = tokio::fs::remove_file(&temp_path).await;
+            }
+            let artifact_progress = progress.clone();
+            let result = client
+                .download_file(
+                    candidate_url,
+                    &temp_path,
+                    cancel.clone(),
+                    Some(Box::new(move |downloaded_bytes, _| {
+                        report_progress(
+                            &artifact_progress,
+                            ModelDownloadProgress {
+                                stage: ModelDownloadStage::Downloading,
+                                downloaded_bytes: completed_before_artifact
+                                    .saturating_add(downloaded_bytes.min(artifact_size)),
+                                total_bytes: expected_total,
+                            },
+                        );
+                    })),
+                )
+                .await;
+            match result {
+                Ok(()) => {
+                    download_error = None;
+                    break;
+                }
+                Err(DownloadError::Cancelled) => return Err(DownloadError::Cancelled),
+                Err(error) => download_error = Some(error),
+            }
+        }
+        if let Some(error) = download_error {
+            return Err(error);
+        }
 
         report_progress(
             &progress,

@@ -28,7 +28,7 @@ export const EXPECTED_ROLES = new Map([
   ['sona-sqlite', 'outbound-adapter'],
   ['sona-sync-webdav', 'outbound-adapter'],
   ['sona-sherpa-onnx', 'provider'],
-  ['sona-sherpa-vad', 'provider'],
+  ['sona-vad', 'provider'],
   ['sona-llama-cpp', 'provider'],
   ['sona-online-asr', 'provider'],
   ['sona', 'host'],
@@ -102,7 +102,7 @@ export const HOST_CAPABILITY_MATRIX = [
       'sona-cli': 'yes',
       'sona-uniffi-bind': 'yes',
     },
-    packages: ['sona-sherpa-onnx', 'sona-sherpa-vad'],
+    packages: ['sona-sherpa-onnx', 'sona-vad'],
     wiringPatterns: ['\\bsona_sherpa_onnx\\b'],
   },
   {

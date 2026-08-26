@@ -1,0 +1,10 @@
+{
+  "modelscope": {
+    "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8": {
+      "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2": "https://www.modelscope.cn/models/zhaochaoqun/sherpa-onnx-asr-models/resolve/master/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2"
+    },
+    "silero-vad": {
+      "silero_vad.onnx": "https://www.modelscope.cn/models/liaowenbin/silero_vad/resolve/master/silero_vad.onnx"
+    }
+  }
+}

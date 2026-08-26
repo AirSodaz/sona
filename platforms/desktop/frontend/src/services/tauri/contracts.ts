@@ -122,6 +122,8 @@ type DownloadFileArgs = {
 type DownloadPresetModelArgs = {
   modelId: string;
   downloadId: string;
+  /** Mirror strategy: `auto` | `direct` | `ghproxy` | `ghnet` | `hf-mirror`. */
+  mirror?: string;
 };
 
 type UpdateTrayMenuArgs = {

@@ -1094,5 +1094,43 @@
         "sha256": "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"
       }
     ]
+  },
+  {
+    "id": "ten-vad",
+    "name": "TEN - VAD",
+    "description": "settings.descriptions.ten_vad",
+    "type": "vad",
+    "languages": [],
+    "languageMode": "none",
+    "size": "~0.32 MB",
+    "isArchive": false,
+    "filename": "ten-vad.onnx",
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/ten-vad.onnx",
+        "filename": "ten-vad.onnx",
+        "sha256": "718cb7eef47e3cf5ddbe7e967a7503f46b8b469c0706872f494dfa921b486206"
+      }
+    ]
+  },
+  {
+    "id": "silero-v5-vad",
+    "name": "Silero V5 - VAD",
+    "description": "settings.descriptions.silero_v5_vad",
+    "type": "vad",
+    "languages": [],
+    "languageMode": "none",
+    "size": "~2.21 MB",
+    "isArchive": false,
+    "filename": "silero_vad_v5.onnx",
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad_v5.onnx",
+        "filename": "silero_vad_v5.onnx",
+        "sha256": "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396"
+      }
+    ]
   }
 ]

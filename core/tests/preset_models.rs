@@ -2,10 +2,10 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use sona_core::models::preset_models::{
-    DEFAULT_MODEL_RULES, DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID,
-    LanguageMode, ModelCatalogSectionType, ModelDependencyConfigKey, ModelDependencyRequest,
-    ModelRules, ModelSelectionPaths, TimestampSupportHint,
-    build_model_catalog_snapshot_with_installed_ids, find_preset_model, preset_models,
+    DEFAULT_MODEL_RULES, DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, LanguageMode,
+    ModelCatalogSectionType, ModelDependencyConfigKey, ModelDependencyRequest, ModelRules,
+    ModelSelectionPaths, TimestampSupportHint, build_model_catalog_snapshot_with_installed_ids,
+    find_preset_model, preset_models,
 };
 
 #[test]
@@ -66,10 +66,7 @@ fn granite_speech_gguf_preset_is_a_verified_llama_cpp_batch_bundle() {
     assert_eq!(model.engine.as_deref(), Some("llama-cpp"));
     assert!(model.supports_mode("batch"));
     assert!(!model.supports_mode("streaming"));
-    assert_eq!(
-        model.languages,
-        ["de", "en", "es", "fr", "ja", "pt"]
-    );
+    assert_eq!(model.languages, ["de", "en", "es", "fr", "ja", "pt"]);
     assert_eq!(model.language_mode, LanguageMode::Auto);
     assert!(!model.language_mode.supports_language_selection());
     assert_eq!(model.artifacts.len(), 2);
@@ -102,11 +99,11 @@ fn resolves_model_paths_without_filesystem_status_checks() {
     let file_model = find_preset_model(DEFAULT_SILERO_VAD_MODEL_ID).unwrap();
     assert_eq!(
         file_model.resolve_install_path(Path::new("C:/models")),
-        PathBuf::from("C:/models/silero_vad.onnx")
+        PathBuf::from("C:/models/silero_vad_v5.onnx")
     );
     assert_eq!(
         file_model.resolve_download_path(Path::new("C:/models")),
-        PathBuf::from("C:/models/silero_vad.onnx")
+        PathBuf::from("C:/models/silero_vad_v5.onnx")
     );
 
     let archive_model = find_preset_model("sherpa-onnx-whisper-turbo").unwrap();
@@ -143,7 +140,7 @@ fn builds_catalog_snapshot_from_injected_install_status() {
         .find(|model| model.id == DEFAULT_SILERO_VAD_MODEL_ID)
         .unwrap();
     assert!(silero.is_installed);
-    assert!(silero.install_path.ends_with("silero_vad.onnx"));
+    assert!(silero.install_path.ends_with("silero_vad_v5.onnx"));
 
     let asr_section = snapshot
         .sections
@@ -247,14 +244,21 @@ fn resolves_catalog_selection_ids_without_adapter_state() {
 fn language_metadata_is_normalized_across_all_presets() {
     for model in preset_models() {
         assert!(
-            model.languages.iter().all(|code| !code.eq_ignore_ascii_case("multi")),
+            model
+                .languages
+                .iter()
+                .all(|code| !code.eq_ignore_ascii_case("multi")),
             "{} must not use the legacy multi marker",
             model.id
         );
         let mut sorted = model.languages.clone();
         sorted.sort_unstable();
         sorted.dedup();
-        assert_eq!(model.languages, sorted, "{} languages must be sorted+unique", model.id);
+        assert_eq!(
+            model.languages, sorted,
+            "{} languages must be sorted+unique",
+            model.id
+        );
         for code in &model.languages {
             assert!(
                 (2..=3).contains(&code.len()) && code.chars().all(|c| c.is_ascii_lowercase()),
@@ -295,23 +299,47 @@ fn asr_language_modes_match_engine_capabilities() {
     let mode = |id: &str| find_preset_model(id).unwrap().language_mode;
 
     // Engines accepting a language parameter.
-    assert_eq!(selectable("sherpa-onnx-whisper-large-v3"), LanguageMode::Selectable);
-    assert_eq!(mode("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"), LanguageMode::Selectable);
-    assert_eq!(mode("sherpa-onnx-funasr-nano-int8-2025-12-30"), LanguageMode::Selectable);
+    assert_eq!(
+        selectable("sherpa-onnx-whisper-large-v3"),
+        LanguageMode::Selectable
+    );
+    assert_eq!(
+        mode("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"),
+        LanguageMode::Selectable
+    );
+    assert_eq!(
+        mode("sherpa-onnx-funasr-nano-int8-2025-12-30"),
+        LanguageMode::Selectable
+    );
 
     // Engines ignoring or rejecting language overrides.
     assert_eq!(mode("qwen3-asr-0.6b-q8-gguf"), LanguageMode::Auto);
     assert_eq!(mode("granite-speech-4.1-2b-q8-gguf"), LanguageMode::Auto);
-    assert_eq!(mode("sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en"), LanguageMode::Auto);
-    assert_eq!(mode("sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02"), LanguageMode::Auto);
-    assert_eq!(mode("sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26"), LanguageMode::Auto);
+    assert_eq!(
+        mode("sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en"),
+        LanguageMode::Auto
+    );
+    assert_eq!(
+        mode("sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02"),
+        LanguageMode::Auto
+    );
+    assert_eq!(
+        mode("sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26"),
+        LanguageMode::Auto
+    );
 
     // Single-language engines.
-    assert_eq!(mode("sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30"), LanguageMode::Fixed);
+    assert_eq!(
+        mode("sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30"),
+        LanguageMode::Fixed
+    );
 
     // Companion models carry no language semantics anymore.
     assert_eq!(mode("silero-vad"), LanguageMode::None);
-    assert_eq!(mode("sherpa-onnx-pyannote-segmentation-3-0"), LanguageMode::None);
+    assert_eq!(
+        mode("sherpa-onnx-pyannote-segmentation-3-0"),
+        LanguageMode::None
+    );
 }
 
 #[test]
@@ -321,11 +349,16 @@ fn supports_language_follows_mode_rules() {
     assert!(whisper.supports_language("ja"));
     assert!(!whisper.supports_language("xx"));
 
-    let zipformer = find_preset_model("sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30").unwrap();
+    let zipformer =
+        find_preset_model("sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30").unwrap();
     assert!(zipformer.supports_language("auto"));
     assert!(zipformer.supports_language("zh"));
     assert!(!zipformer.supports_language("en"));
 
     let vad = find_preset_model("silero-vad").unwrap();
     assert!(!vad.supports_language("auto"));
+
+    let v5_vad = find_preset_model(DEFAULT_SILERO_VAD_MODEL_ID).unwrap();
+    assert_eq!(v5_vad.id, "silero-v5-vad");
+    assert!(!v5_vad.supports_language("auto"));
 }

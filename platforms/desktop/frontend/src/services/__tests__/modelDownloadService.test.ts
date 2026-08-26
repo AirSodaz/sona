@@ -252,7 +252,7 @@ describe('modelDownloadService', () => {
     }));
   });
 
-  it('retries the same mirror up to 3 times on failure', async () => {
+  it('retries the same candidate up to 3 times on failure', async () => {
     const service = createModelDownloadService({
       downloadFile,
       extractTarBz2,
@@ -273,15 +273,14 @@ describe('modelDownloadService', () => {
       mirror: 'ghproxy',
     })).rejects.toThrow('attempt 3 failed');
 
+    // example.com is not GitHub, so the ghproxy mirror does not apply and the
+    // candidate chain is direct-only; the inner retry loop still runs 3 times.
     expect(downloadFile).toHaveBeenCalledTimes(3);
     expect(downloadFile).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      url: 'https://mirror.ghproxy.com/https://example.com/model-a.tar.bz2',
-    }));
-    expect(downloadFile).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      url: 'https://mirror.ghproxy.com/https://example.com/model-a.tar.bz2',
+      url: 'https://example.com/model-a.tar.bz2',
     }));
     expect(downloadFile).toHaveBeenNthCalledWith(3, expect.objectContaining({
-      url: 'https://mirror.ghproxy.com/https://example.com/model-a.tar.bz2',
+      url: 'https://example.com/model-a.tar.bz2',
     }));
   });
 
@@ -307,8 +306,44 @@ describe('modelDownloadService', () => {
 
     expect(downloadFile).toHaveBeenCalledTimes(2);
     expect(downloadFile).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      url: 'https://ghproxy.net/https://example.com/model-a.tar.bz2',
+      url: 'https://example.com/model-a.tar.bz2',
     }));
+  });
+
+  it('falls back to the source mirror after direct fails', async () => {
+    const service = createModelDownloadService({
+      downloadFile,
+      extractTarBz2,
+      cancelDownload,
+      remove,
+      listen,
+      join,
+      getModelsDir,
+    });
+    downloadFile
+      .mockRejectedValueOnce(new Error('direct attempt 1'))
+      .mockRejectedValueOnce(new Error('direct attempt 2'))
+      .mockRejectedValueOnce(new Error('direct attempt 3'))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(service.downloadModel({
+      modelId: 'github-model',
+      model: makeModel({
+        id: 'github-model',
+        artifacts: [
+          { url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/github-model.tar.bz2', filename: 'github-model.tar.bz2' },
+        ],
+      }),
+    })).resolves.toBe('/models/github-model');
+
+    // Three direct attempts exhaust the inner retry loop, then the ghnet
+    // mirror candidate succeeds.
+    expect(downloadFile).toHaveBeenCalledTimes(4);
+    expect(downloadFile).toHaveBeenNthCalledWith(4, expect.objectContaining({
+      url: 'https://ghproxy.net/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/github-model.tar.bz2',
+    }));
+    // The partial file from the failed candidate must not be resumed.
+    expect(remove).toHaveBeenCalledWith('/models/github-model.tar.bz2.download');
   });
 
   it('resets consecutive failures counter if progress is made', async () => {

@@ -5,6 +5,7 @@ import type {
     ModelCatalogSectionType,
     ModelSelectionOption,
 } from '../../types/modelCatalog';
+import type { LocalAsrEngine } from '../../types/asr';
 import { ModelCard } from './ModelCard';
 import { Dropdown } from '../Dropdown';
 import { useModelConfig, useSetConfig, useTranscriptionConfig } from '../../stores/configStore';
@@ -87,11 +88,58 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
     const modelConfig = useModelConfig();
     const updateConfig = useSetConfig();
 
+    const [engineFilter, setEngineFilter] = useState<'all' | LocalAsrEngine>('all');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'installed' | 'not-installed' | 'downloading'>('all');
+    const [searchQuery, setSearchQuery] = useState('');
+
     const mirrorOptions = [
+        { value: 'auto', label: t('settings.model_download_mirror_auto', { defaultValue: '自动' }) },
         { value: 'direct', label: t('settings.model_download_mirror_direct') },
         { value: 'ghproxy', label: t('settings.model_download_mirror_ghproxy') },
         { value: 'ghnet', label: t('settings.model_download_mirror_ghnet') },
+        { value: 'hf-mirror', label: t('settings.model_download_mirror_hfmirror', { defaultValue: 'HF 镜像' }) },
     ];
+
+    const engineFilterOptions = [
+        { value: 'all', label: t('settings.model_filter_engine_all', { defaultValue: '全部引擎' }) },
+        { value: 'sherpa-onnx', label: 'ONNX' },
+        { value: 'llama-cpp', label: 'GGUF' },
+    ];
+
+    const statusFilterOptions = [
+        { value: 'all', label: t('settings.model_filter_status_all', { defaultValue: '全部状态' }) },
+        { value: 'installed', label: t('settings.model_filter_status_installed', { defaultValue: '已安装' }) },
+        { value: 'not-installed', label: t('settings.model_filter_status_not_installed', { defaultValue: '未安装' }) },
+        { value: 'downloading', label: t('settings.model_filter_status_downloading', { defaultValue: '下载中' }) },
+    ];
+
+    const filterModels = useCallback((models: ModelCatalogModel[]) => {
+        const query = searchQuery.trim().toLowerCase();
+        return models.filter((model) => {
+            if (engineFilter !== 'all' && model.engine !== engineFilter) return false;
+            const isInstalled = sectionProps.installedModels.has(model.id);
+            const isDownloading = !!sectionProps.downloads[model.id];
+            if (statusFilter === 'installed' && !isInstalled) return false;
+            if (statusFilter === 'not-installed' && (isInstalled || isDownloading)) return false;
+            if (statusFilter === 'downloading' && !isDownloading) return false;
+            if (query
+                && !model.name.toLowerCase().includes(query)
+                && !(model.versionLabel ?? '').toLowerCase().includes(query)) {
+                return false;
+            }
+            return true;
+        });
+    }, [engineFilter, searchQuery, statusFilter, sectionProps.downloads, sectionProps.installedModels]);
+
+    const filteredGroupsByType = useMemo(() => {
+        const types: ModelCatalogSectionType[] = ['asr', 'punctuation', 'vad', 'speaker-segmentation', 'speaker-embedding'];
+        return new Map(types.map((type) => [
+            type,
+            getSectionGroups(type)
+                .map((group) => ({ ...group, models: filterModels(group.models as ModelCatalogModel[]) }))
+                .filter((group) => group.models.length > 0),
+        ]));
+    }, [filterModels, getSectionGroups]);
 
     const isCatalogLoading = catalogLoadState === 'loading';
     const isCatalogReady = catalogLoadState === 'ready';
@@ -109,21 +157,43 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
             title={t('settings.batch_model_management', { defaultValue: '离线模型管理' })}
             icon={<RestoreIcon />}
         >
-            <SettingsItem
-                title={t('settings.model_download_mirror')}
-                hint={t('settings.model_download_mirror_hint')}
-            >
-                <div style={{ width: '220px' }}>
+            {isCatalogReady && (
+                <div className="settings-model-toolbar">
+                    <Dropdown
+                        id="settings-model-engine-filter"
+                        aria-label={t('settings.model_filter_engine_label', { defaultValue: '按引擎筛选' })}
+                        value={engineFilter}
+                        onChange={(value) => setEngineFilter(value as 'all' | LocalAsrEngine)}
+                        options={engineFilterOptions}
+                        style={{ width: '130px' }}
+                    />
+                    <Dropdown
+                        id="settings-model-status-filter"
+                        aria-label={t('settings.model_filter_status_label', { defaultValue: '按状态筛选' })}
+                        value={statusFilter}
+                        onChange={(value) => setStatusFilter(value as typeof statusFilter)}
+                        options={statusFilterOptions}
+                        style={{ width: '130px' }}
+                    />
+                    <input
+                        id="settings-model-search"
+                        className="settings-input settings-model-search"
+                        type="search"
+                        value={searchQuery}
+                        onChange={(event) => setSearchQuery(event.target.value)}
+                        placeholder={t('settings.model_filter_search_placeholder', { defaultValue: '搜索模型…' })}
+                        aria-label={t('settings.model_filter_search_placeholder', { defaultValue: '搜索模型…' })}
+                    />
                     <Dropdown
                         id="settings-download-mirror"
-                        value={modelConfig.modelDownloadMirror || 'direct'}
+                        aria-label={t('settings.model_download_mirror')}
+                        value={modelConfig.modelDownloadMirror || 'auto'}
                         onChange={(value) => updateConfig({ modelDownloadMirror: value })}
                         options={mirrorOptions}
-                        style={{ flex: 1 }}
+                        style={{ width: '170px', marginLeft: 'auto' }}
                     />
                 </div>
-            </SettingsItem>
-
+            )}
             {isCatalogLoading && (
                 <div className="settings-hint" role="status">
                     {t('settings.models_checking_local', { defaultValue: 'Checking local models...' })}
@@ -144,7 +214,7 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
                         status={<span className={`status-badge ${getSectionStatus('asr').type}`}>{getSectionStatus('asr').text}</span>}
                         defaultOpen={true}
                     >
-                        {getSectionGroups('asr').map(group => (
+                        {(filteredGroupsByType.get('asr') ?? []).map(group => (
                             <ModelCard
                                 key={group.key}
                                 models={group.models}
@@ -156,13 +226,16 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
                                 actionsDisabled={localModelActionsDisabled}
                             />
                         ))}
+                        {(filteredGroupsByType.get('asr')?.length ?? 0) === 0 && (
+                            <div className="settings-model-empty">{t('settings.model_filter_no_match', { defaultValue: '没有匹配的模型' })}</div>
+                        )}
                     </SettingsAccordion>
 
                     <SettingsAccordion
                         title={t('settings.punctuation_models')}
                         status={<span className={`status-badge ${getSectionStatus('punctuation').type}`}>{getSectionStatus('punctuation').text}</span>}
                     >
-                        {getSectionGroups('punctuation').map(group => (
+                        {(filteredGroupsByType.get('punctuation') ?? []).map(group => (
                             <ModelCard
                                 key={group.key}
                                 models={group.models}
@@ -174,13 +247,16 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
                                 actionsDisabled={localModelActionsDisabled}
                             />
                         ))}
+                        {(filteredGroupsByType.get('punctuation')?.length ?? 0) === 0 && (
+                            <div className="settings-model-empty">{t('settings.model_filter_no_match', { defaultValue: '没有匹配的模型' })}</div>
+                        )}
                     </SettingsAccordion>
 
                     <SettingsAccordion
                         title={t('settings.vad_models')}
                         status={<span className={`status-badge ${getSectionStatus('vad').type}`}>{getSectionStatus('vad').text}</span>}
                     >
-                        {getSectionGroups('vad').map(group => (
+                        {(filteredGroupsByType.get('vad') ?? []).map(group => (
                             <ModelCard
                                 key={group.key}
                                 models={group.models}
@@ -192,13 +268,16 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
                                 actionsDisabled={localModelActionsDisabled}
                             />
                         ))}
+                        {(filteredGroupsByType.get('vad')?.length ?? 0) === 0 && (
+                            <div className="settings-model-empty">{t('settings.model_filter_no_match', { defaultValue: '没有匹配的模型' })}</div>
+                        )}
                     </SettingsAccordion>
 
                     <SettingsAccordion
                         title={t('settings.speaker_segmentation_models', { defaultValue: 'Speaker Segmentation Models' })}
                         status={<span className={`status-badge ${getSectionStatus('speaker-segmentation').type}`}>{getSectionStatus('speaker-segmentation').text}</span>}
                     >
-                        {getSectionGroups('speaker-segmentation').map(group => (
+                        {(filteredGroupsByType.get('speaker-segmentation') ?? []).map(group => (
                             <ModelCard
                                 key={group.key}
                                 models={group.models}
@@ -210,13 +289,16 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
                                 actionsDisabled={localModelActionsDisabled}
                             />
                         ))}
+                        {(filteredGroupsByType.get('speaker-segmentation')?.length ?? 0) === 0 && (
+                            <div className="settings-model-empty">{t('settings.model_filter_no_match', { defaultValue: '没有匹配的模型' })}</div>
+                        )}
                     </SettingsAccordion>
 
                     <SettingsAccordion
                         title={t('settings.speaker_embedding_models', { defaultValue: 'Speaker Embedding Models' })}
                         status={<span className={`status-badge ${getSectionStatus('speaker-embedding').type}`}>{getSectionStatus('speaker-embedding').text}</span>}
                     >
-                        {getSectionGroups('speaker-embedding').map(group => (
+                        {(filteredGroupsByType.get('speaker-embedding') ?? []).map(group => (
                             <ModelCard
                                 key={group.key}
                                 models={group.models}
@@ -228,6 +310,9 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
                                 actionsDisabled={localModelActionsDisabled}
                             />
                         ))}
+                        {(filteredGroupsByType.get('speaker-embedding')?.length ?? 0) === 0 && (
+                            <div className="settings-model-empty">{t('settings.model_filter_no_match', { defaultValue: '没有匹配的模型' })}</div>
+                        )}
                     </SettingsAccordion>
                 </>
             )}

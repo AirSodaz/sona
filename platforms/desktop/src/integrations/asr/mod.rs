@@ -93,8 +93,7 @@ pub(crate) fn ensure_adapter(
 }
 
 pub(crate) fn local_asr_registry(recognizer_pool: RecognizerPool) -> LocalAsrRegistry {
-    let vad_engines = sona_core::ports::vad::VadEngineSet::empty()
-        .register(Arc::new(sona_sherpa_vad::SherpaVadEngine));
+    let vad_engines = sona_vad::built_in_engines();
     LocalAsrRegistry::empty()
         .register(Arc::new(sona_sherpa_onnx::SherpaOnnxAdapter::new(
             recognizer_pool,

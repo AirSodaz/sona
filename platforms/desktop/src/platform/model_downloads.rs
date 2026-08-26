@@ -110,10 +110,13 @@ pub async fn download_preset_model<R: tauri::Runtime>(
     state: tauri::State<'_, DownloadState>,
     model_id: String,
     download_id: String,
+    mirror: Option<String>,
 ) -> Result<String, String> {
     use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
     use sona_core::models::downloads::resolve_model_download;
-    use sona_model_downloads::{download_model_with_cancel, installed_model_is_valid};
+    use sona_model_downloads::{
+        download_model_with_cancel_and_mirror, installed_model_is_valid, parse_download_mirror,
+    };
     use tauri::Emitter;
 
     let models_dir = TauriPathProvider::from_app(&app)
@@ -140,18 +143,23 @@ pub async fn download_preset_model<R: tauri::Runtime>(
         .await;
     let app_clone = app.clone();
     let event_download_id = download_id.clone();
-    let result = download_model_with_cancel(&resolved, notify, move |progress| {
-        if progress.stage == sona_model_downloads::ModelDownloadStage::Downloading {
-            let _ = app_clone.emit(
-                DOWNLOAD_PROGRESS_EVENT,
-                (
-                    progress.downloaded_bytes,
-                    progress.total_bytes,
-                    &event_download_id,
-                ),
-            );
-        }
-    })
+    let result = download_model_with_cancel_and_mirror(
+        &resolved,
+        notify,
+        parse_download_mirror(mirror.as_deref().unwrap_or("auto")),
+        move |progress| {
+            if progress.stage == sona_model_downloads::ModelDownloadStage::Downloading {
+                let _ = app_clone.emit(
+                    DOWNLOAD_PROGRESS_EVENT,
+                    (
+                        progress.downloaded_bytes,
+                        progress.total_bytes,
+                        &event_download_id,
+                    ),
+                );
+            }
+        },
+    )
     .await;
     state.remove_download(&download_id).await;
 

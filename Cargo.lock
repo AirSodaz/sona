@@ -6007,11 +6007,11 @@ dependencies = [
  "sona-recovery-fs",
  "sona-runtime-fs",
  "sona-sherpa-onnx",
- "sona-sherpa-vad",
  "sona-sqlite",
  "sona-sync",
  "sona-sync-webdav",
  "sona-ts-bind",
+ "sona-vad",
  "sysinfo",
  "tauri",
  "tauri-build",
@@ -6119,7 +6119,7 @@ dependencies = [
  "sona-online-asr",
  "sona-runtime-fs",
  "sona-sherpa-onnx",
- "sona-sherpa-vad",
+ "sona-vad",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -6286,15 +6286,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sona-sherpa-vad"
-version = "0.8.1"
-dependencies = [
- "log",
- "sherpa-onnx",
- "sona-core",
-]
-
-[[package]]
 name = "sona-sqlite"
 version = "0.8.1"
 dependencies = [
@@ -6395,10 +6386,10 @@ dependencies = [
  "sona-recovery-fs",
  "sona-runtime-fs",
  "sona-sherpa-onnx",
- "sona-sherpa-vad",
  "sona-sqlite",
  "sona-sync",
  "sona-sync-webdav",
+ "sona-vad",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -6411,6 +6402,15 @@ name = "sona-uniffi-bindgen"
 version = "0.8.1"
 dependencies = [
  "uniffi",
+]
+
+[[package]]
+name = "sona-vad"
+version = "0.8.1"
+dependencies = [
+ "log",
+ "sherpa-onnx",
+ "sona-core",
 ]
 
 [[package]]
