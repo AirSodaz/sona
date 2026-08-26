@@ -122,7 +122,7 @@ Submit a local audio or video file for high-performance speech-to-text processin
 | :--- | :--- | :--- | :--- |
 | `file` | Binary | **Yes** | The audio or video file to be transcribed. |
 | `model_id` | String | **Yes** | The identifier of a local ASR model (e.g., `sensevoice`) OR a configured Cloud ASR provider (e.g., `volcengine-doubao`). |
-| `language` | String | No | Target language code (e.g., `zh`, `en`, `ja`, `ko`, `yue`). Defaults to `"auto"`. |
+| `language` | String | No | Target language code (ISO 639-1, e.g. `zh`, `en`, `ja`). Defaults to `"auto"` for automatic detection. Only codes the target model actually supports take effect; unsupported values are coerced back to `"auto"`. Each model's supported list is exposed via `GET /v1/info` (`onlineAsrProviders[].languages` / `languageMode`) and the model catalog. |
 | `hotwords` | String | No | Custom vocabulary/keywords to enhance recognition, separated by newlines. |
 | `webhook_url` | String | No | HTTP URL to receive a POST notification once the transcription is finished or fails. |
 | `webhook_secret` | String | No | Secret key used to sign the webhook payload using HMAC-SHA256. |

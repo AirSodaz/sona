@@ -281,6 +281,11 @@
   color: var(--color-text-muted);
 }
 
+.model-tag-overflow {
+  cursor: help;
+  border-style: dashed;
+}
+
 .model-actions {
   display: flex;
   gap: 8px;

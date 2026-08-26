@@ -18,6 +18,7 @@ import type {
   TranscriptPostprocessOptions,
 } from '../types/asr';
 import { findSelectedModelByMode } from '../utils/modelSelection';
+import { coerceLanguage, type LanguageCapable } from '../utils/languages';
 import { modelService, PRESET_MODELS_MAP } from './modelService';
 import type { ModelInfo } from '../types/modelCatalog';
 import {
@@ -107,6 +108,41 @@ export class AsrConfigService {
     };
   }
 
+  /**
+   * Resolves the language capability of whatever model currently backs `slot`
+   * (local model or online provider), driving language pickers and coercion.
+   */
+  resolveActiveLanguageCapability = (
+    config: AppConfig,
+    slot: AsrSelectionSlot,
+  ): LanguageCapable | null => {
+    const selection = this.getSelection({ ...config, asr: this.normalizeAsrConfig(config) }, slot);
+    if (selection.engine === 'online') {
+      const definition = getOnlineAsrProviderDefinition(selection.providerId);
+      if (!definition) {
+        return null;
+      }
+      return {
+        languages: definition.manifestEntry.languages as string[],
+        languageMode: definition.manifestEntry.languageMode as LanguageCapable['languageMode'],
+      };
+    }
+    const modelInfo = this.resolveModelInfo(selection);
+    if (!modelInfo) {
+      return null;
+    }
+    return { languages: modelInfo.languages, languageMode: modelInfo.languageMode };
+  }
+
+  /** Coerces a persisted language selection onto the active model's real capabilities. */
+  coerceConfiguredLanguage = (
+    config: AppConfig,
+    slot: AsrSelectionSlot,
+    configured: string | null | undefined,
+  ): string => {
+    return coerceLanguage(this.resolveActiveLanguageCapability(config, slot), configured);
+  }
+
   resolveAsrTranscriptionRequest = (
     config: AppConfig,
     slot: AsrSelectionSlot,
@@ -132,7 +168,8 @@ export class AsrConfigService {
 
     const baseRequest: AsrTranscriptionRequestBase = {
       mode: selection.mode,
-      language: overrides.language || config.language || 'auto',
+      language: overrides.language
+        || this.coerceConfiguredLanguage(config, slot, config.language),
       enableItn: config.enableITN ?? false,
       normalizationOptions: {
         enableTimeline: config.enableTimeline ?? false,

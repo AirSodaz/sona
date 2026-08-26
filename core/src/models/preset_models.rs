@@ -56,6 +56,35 @@ pub struct ModelRules {
     pub timestamp_support_hint: Option<TimestampSupportHint>,
 }
 
+/// How a model handles ASR language selection.
+///
+/// Drives which options clients may offer in their language pickers:
+/// - [`LanguageMode::Selectable`]: `auto` plus every entry of `languages`
+/// - [`LanguageMode::Auto`]: `auto` only (the model detects language itself)
+/// - [`LanguageMode::Fixed`]: the single language in `languages` only
+/// - [`LanguageMode::None`]: not a speech-recognition model; no picker
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "lowercase")]
+pub enum LanguageMode {
+    /// The engine accepts an explicit language parameter.
+    Selectable,
+    /// The engine ignores language overrides and detects language itself.
+    Auto,
+    /// The engine always recognizes its single supported language.
+    Fixed,
+    /// Not applicable (companion models such as VAD or speaker diarization).
+    #[default]
+    None,
+}
+
+impl LanguageMode {
+    /// Returns true when callers may pass a non-`auto` language to this model.
+    pub fn supports_language_selection(&self) -> bool {
+        matches!(self, LanguageMode::Selectable)
+    }
+}
+
 /// Shared preset metadata consumed by the GUI, CLI, and future bindings.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,7 +95,10 @@ pub struct PresetModel {
     #[serde(rename = "type")]
     pub model_type: String,
     pub modes: Option<Vec<String>>,
-    pub language: String,
+    /// All languages the model can recognize, sorted ascending ISO 639 codes
+    /// (`yue` covers Cantonese). Empty for non-ASR models.
+    pub languages: Vec<String>,
+    pub language_mode: LanguageMode,
     pub size: String,
     #[serde(default)]
     pub artifacts: Vec<PresetModelArtifact>,
@@ -123,7 +155,10 @@ pub struct ModelCatalogModel {
     pub model_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modes: Option<Vec<String>>,
-    pub language: String,
+    /// All languages the model can recognize, sorted ascending ISO 639 codes
+    /// (`yue` covers Cantonese). Empty for non-ASR models.
+    pub languages: Vec<String>,
+    pub language_mode: LanguageMode,
     pub size: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub artifacts: Vec<PresetModelArtifact>,
@@ -394,6 +429,17 @@ impl PresetModel {
             .map(|modes| modes.iter().any(|item| item == mode))
             .unwrap_or(false)
     }
+
+    /// Returns true when the given ISO 639 language code is recognized by this
+    /// model. `auto` is valid for every ASR model.
+    pub fn supports_language(&self, code: &str) -> bool {
+        if code.eq_ignore_ascii_case("auto") {
+            return self.language_mode != LanguageMode::None;
+        }
+        self.languages
+            .iter()
+            .any(|item| item.eq_ignore_ascii_case(code))
+    }
 }
 
 fn build_catalog_sections(models: &[ModelCatalogModel]) -> Vec<ModelCatalogSection> {
@@ -628,7 +674,8 @@ impl ModelCatalogModel {
             description: model.description.clone(),
             model_type: model.model_type.clone(),
             modes: model.modes.clone(),
-            language: model.language.clone(),
+            languages: model.languages.clone(),
+            language_mode: model.language_mode,
             size: model.size.clone(),
             is_recommended: model.is_recommended,
             is_archive: model.is_archive(),

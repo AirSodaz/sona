@@ -7,6 +7,8 @@ import { ParameterSettingsModal } from './ParameterSettingsModal';
 interface TranscriptionOptionsProps {
     className?: string;
     disabled?: boolean;
+    /** Which surface's active model governs the language picker inside the modal. */
+    surface?: 'live' | 'batch';
 }
 
 /**
@@ -18,7 +20,8 @@ interface TranscriptionOptionsProps {
  */
 export const TranscriptionOptions = React.memo(function TranscriptionOptions({
     className = '',
-    disabled = false
+    disabled = false,
+    surface = 'live'
 }: TranscriptionOptionsProps): React.JSX.Element {
     const { t } = useTranslation();
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -47,6 +50,7 @@ export const TranscriptionOptions = React.memo(function TranscriptionOptions({
             <ParameterSettingsModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
+                surface={surface}
                 disabled={disabled}
             />
         </div>

@@ -23,6 +23,8 @@ pub struct HealthResponse {
 #[serde(rename_all = "camelCase")]
 pub struct OnlineAsrProviderInfo {
     pub id: String,
+    pub languages: Vec<String>,
+    pub language_mode: sona_core::models::preset_models::LanguageMode,
     pub configured: bool,
     pub supports_batch: bool,
     pub supports_streaming: bool,
@@ -79,6 +81,8 @@ pub async fn build_info_response(
                 .is_some_and(|api_key| !api_key.is_empty());
             OnlineAsrProviderInfo {
                 id: provider.id.clone(),
+                languages: provider.languages.clone(),
+                language_mode: provider.language_mode,
                 configured,
                 supports_batch: provider.batch.local_file_mode.supported,
                 supports_streaming: provider.streaming.supported.unwrap_or(false),

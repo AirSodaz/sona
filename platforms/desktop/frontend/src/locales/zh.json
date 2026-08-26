@@ -216,6 +216,8 @@
         "auto_polish_frequency": "自动润色频率 (分段)",
         "language": "语言",
         "language_hint": "选择音频语言",
+        "language_hint_auto_detect": "该模型会自动识别语言，无需指定",
+        "language_hint_fixed": "该模型仅支持其内置语言，不可更改",
         "unsupported_format": "不支持的文件格式。请使用：{{formats}}",
         "no_model_error": "请先在设置中配置模型。",
         "transcription_failed": "转录失败：{{error}}",
@@ -1829,5 +1831,8 @@
             "translating": "翻译中",
             "exporting": "导出中"
         }
-    }
+    },
+  "languages": {
+    "common": "常用语言"
+  }
 }

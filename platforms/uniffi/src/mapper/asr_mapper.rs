@@ -1,4 +1,5 @@
 use crate::FfiOnlineAsrApiKey;
+use crate::mapper::model_mapper::{FfiLanguageMode, language_mode_to_ffi};
 use sona_core::ports::asr::{
     AsrEngine, AsrMode, BatchSegmentationMode, OnlineAsrBatchCapability, OnlineAsrCapability,
     OnlineAsrLocalFileBatchMode, OnlineAsrProvider, OnlineAsrProviderRequest,
@@ -56,6 +57,8 @@ pub struct FfiOnlineAsrBatchCapability {
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
 pub struct FfiOnlineAsrProvider {
     pub id: String,
+    pub languages: Vec<String>,
+    pub language_mode: FfiLanguageMode,
     pub profile_id: String,
     pub defaults_json: String,
     pub streaming: FfiOnlineAsrCapability,
@@ -139,6 +142,8 @@ fn online_asr_batch_capability_to_ffi(
 pub fn online_asr_provider_to_ffi(provider: &OnlineAsrProvider) -> FfiOnlineAsrProvider {
     FfiOnlineAsrProvider {
         id: provider.id.clone(),
+        languages: provider.languages.clone(),
+        language_mode: language_mode_to_ffi(provider.language_mode),
         profile_id: provider.profile_id.clone(),
         defaults_json: provider.defaults.to_string(),
         streaming: online_asr_capability_to_ffi(&provider.streaming),

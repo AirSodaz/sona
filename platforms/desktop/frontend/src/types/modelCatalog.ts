@@ -3,6 +3,9 @@ import type { ModelFileConfig } from './model';
 
 export type TimestampSupportHint = 'token' | 'segment' | 'unknown';
 
+/** How a model handles ASR language selection; drives client language pickers. */
+export type LanguageMode = 'selectable' | 'auto' | 'fixed' | 'none';
+
 export interface ModelRules {
   requiresVad: boolean;
   requiresPunctuation: boolean;
@@ -36,7 +39,9 @@ export interface ModelInfo {
     | 'speaker-segmentation'
     | 'speaker-embedding';
   modes?: ('streaming' | 'batch')[];
-  language: string;
+  /** All recognizable languages, sorted ascending ISO 639 codes (`yue` = Cantonese). */
+  languages: string[];
+  languageMode: LanguageMode;
   size: string;
   artifacts?: ModelArtifact[];
   isRecommended?: boolean;

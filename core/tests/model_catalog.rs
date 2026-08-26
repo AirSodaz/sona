@@ -3,13 +3,15 @@ use std::path::PathBuf;
 use sona_core::models::catalog::{
     ModelListFilter, ModelSummary, list_models_with_installed_ids, select_models,
 };
+use sona_core::models::preset_models::LanguageMode;
 
-fn model_summary(id: &str, model_type: &str, language: &str, installed: bool) -> ModelSummary {
+fn model_summary(id: &str, languages: &[&str], installed: bool) -> ModelSummary {
     ModelSummary {
         id: id.to_string(),
         name: format!("{id} name"),
-        model_type: model_type.to_string(),
-        language: language.to_string(),
+        model_type: "whisper".to_string(),
+        languages: languages.iter().map(|code| code.to_string()).collect(),
+        language_mode: LanguageMode::Selectable,
         size: "1 MB".to_string(),
         modes: vec!["batch".to_string()],
         installed,
@@ -43,15 +45,29 @@ fn selects_models_by_mode_type_language_and_install_status() {
     let models = vec![
         ModelSummary {
             modes: vec!["batch".to_string()],
-            ..model_summary("whisper-zh", "whisper", "zh,en", true)
+            ..model_summary("whisper-zh", &["en", "zh"], true)
         },
         ModelSummary {
             modes: vec!["streaming".to_string()],
-            ..model_summary("stream-zh", "zipformer", "zh", true)
+            model_type: "zipformer".to_string(),
+            language_mode: LanguageMode::Fixed,
+            languages: vec!["zh".to_string()],
+            installed: true,
+            id: "stream-zh".to_string(),
+            name: "stream-zh name".to_string(),
+            size: "1 MB".to_string(),
+            install_path: PathBuf::from("C:/models/stream-zh"),
         },
         ModelSummary {
             modes: vec!["batch".to_string()],
-            ..model_summary("vad-all", "vad", "all", false)
+            model_type: "vad".to_string(),
+            language_mode: LanguageMode::None,
+            languages: vec![],
+            installed: false,
+            id: "vad-none".to_string(),
+            name: "vad-none name".to_string(),
+            size: "1 MB".to_string(),
+            install_path: PathBuf::from("C:/models/vad-none"),
         },
     ];
 

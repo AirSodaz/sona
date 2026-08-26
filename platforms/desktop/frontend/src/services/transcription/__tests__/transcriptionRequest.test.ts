@@ -16,7 +16,8 @@ vi.mock('../../modelService', () => ({
       url: 'https://example.com/qwen.gguf',
       type: 'qwen3-asr',
       modes: ['batch'],
-      language: 'multi',
+      languages: ['en', 'zh'],
+      languageMode: 'auto',
       size: '1 GB',
       engine: 'llama-cpp',
       fileConfig: {

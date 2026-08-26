@@ -461,6 +461,12 @@ impl OnlineBatchTranscriberPort for WhisperCompatibleBatchTranscriber {
             .text("model", config.model.clone())
             .text("response_format", "verbose_json");
 
+        // Both Groq and Mistral accept an optional ISO 639-1 `language` hint
+        // that boosts accuracy; omit it for automatic language detection.
+        if let Some(language) = whisper_language_form_field(&input.request.language) {
+            form = form.text("language", language);
+        }
+
         if let Some(hotwords) = input
             .request
             .hotwords
@@ -565,8 +571,18 @@ impl OnlineBatchTranscriberPort for MistralVoxtralBatchTranscriber {
     }
 }
 
-pub fn resolve_whisper_config(
-    request: &sona_core::ports::asr::AsrTranscriptionRequest,
+/// Returns the normalized `language` multipart field for Whisper-compatible
+/// providers, or `None` when the request asks for automatic detection.
+fn whisper_language_form_field(language: &str) -> Option<String> {
+    let language = language.trim();
+    if language.is_empty() || language.eq_ignore_ascii_case("auto") {
+        None
+    } else {
+        Some(language.to_string())
+    }
+}
+
+pub fn resolve_whisper_config(    request: &sona_core::ports::asr::AsrTranscriptionRequest,
     provider: WhisperCompatibleProvider,
 ) -> Result<WhisperCompatibleConfigFields, SherpaError> {
     let provider_request = if let AsrEngineConfig::Online { provider } = &request.engine_config {
@@ -1195,7 +1211,7 @@ mod tests {
         resolve_online_asr_provider_id, resolve_volcengine_config,
         resolve_volcengine_config_checked, resolve_whisper_config,
         segments_from_volcengine_response, segments_from_whisper_response,
-        volcengine_streaming_segments_from_response,
+        volcengine_streaming_segments_from_response, whisper_language_form_field,
     };
 
     #[test]
@@ -1442,6 +1458,36 @@ mod tests {
         assert_eq!(segments[0].end, 0.5);
         assert!(segments[0].is_final);
         assert_eq!(segments[1].text, "world");
+    }
+
+    #[test]
+    fn whisper_compatible_language_field_follows_auto_detection_rules() {
+        use sona_core::models::preset_models::LanguageMode;
+        use sona_core::ports::asr::{find_online_asr_provider, online_asr_providers};
+
+        // Groq (Whisper) and Mistral (Voxtral) both accept an ISO 639-1 hint.
+        assert_eq!(
+            whisper_language_form_field("ja"),
+            Some("ja".to_string())
+        );
+        assert_eq!(
+            whisper_language_form_field(" JA "),
+            Some("JA".to_string())
+        );
+        assert_eq!(whisper_language_form_field("auto"), None);
+        assert_eq!(whisper_language_form_field(""), None);
+
+        // Both providers are advertised as language-selectable with explicit
+        // catalogs so clients only offer supported options.
+        for provider_id in [GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID] {
+            let provider = find_online_asr_provider(provider_id)
+                .unwrap_or_else(|| panic!("{provider_id} should exist in the manifest"));
+            assert_eq!(provider.language_mode, LanguageMode::Selectable);
+            assert!(!provider.languages.is_empty());
+        }
+        assert_eq!(online_asr_providers().len(), 3);
+        let volcengine = find_online_asr_provider(VOLCENGINE_DOUBAO_PROVIDER_ID).unwrap();
+        assert!(volcengine.languages.contains(&"zh".to_string()));
     }
 
     #[test]

@@ -1,12 +1,30 @@
 use sona_core::models::config::ModelFileConfig;
 use sona_core::models::downloads::{RequiredCompanionModels, ResolvedModelDownload};
 use sona_core::models::preset_models::{
-    ModelCatalogGroup, ModelCatalogModel, ModelCatalogPathMatchToken, ModelCatalogRestoreDefaults,
-    ModelCatalogSection, ModelCatalogSectionType, ModelCatalogSelectedIds,
-    ModelCatalogSelectionOptions, ModelCatalogSnapshot, ModelDependencyConfigKey,
-    ModelDependencyRequest, ModelRules, ModelSelectionOption, ModelSelectionPaths, PresetModel,
-    TimestampSupportHint,
+    LanguageMode, ModelCatalogGroup, ModelCatalogModel, ModelCatalogPathMatchToken,
+    ModelCatalogRestoreDefaults, ModelCatalogSection, ModelCatalogSectionType,
+    ModelCatalogSelectedIds, ModelCatalogSelectionOptions, ModelCatalogSnapshot,
+    ModelDependencyConfigKey, ModelDependencyRequest, ModelRules, ModelSelectionOption,
+    ModelSelectionPaths, PresetModel, TimestampSupportHint,
 };
+
+/// How a model handles ASR language selection; drives client language pickers.
+#[derive(Clone, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum FfiLanguageMode {
+    Selectable,
+    Auto,
+    Fixed,
+    None,
+}
+
+pub fn language_mode_to_ffi(mode: LanguageMode) -> FfiLanguageMode {
+    match mode {
+        LanguageMode::Selectable => FfiLanguageMode::Selectable,
+        LanguageMode::Auto => FfiLanguageMode::Auto,
+        LanguageMode::Fixed => FfiLanguageMode::Fixed,
+        LanguageMode::None => FfiLanguageMode::None,
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Enum)]
 pub enum FfiTimestampSupportHint {
@@ -37,7 +55,8 @@ pub struct FfiPresetModel {
     pub description: String,
     pub model_type: String,
     pub modes: Vec<String>,
-    pub language: String,
+    pub languages: Vec<String>,
+    pub language_mode: FfiLanguageMode,
     pub size: String,
     pub artifacts: Vec<FfiModelArtifact>,
     pub is_recommended: bool,
@@ -56,7 +75,8 @@ pub struct FfiModelCatalogModel {
     pub description: String,
     pub model_type: String,
     pub modes: Vec<String>,
-    pub language: String,
+    pub languages: Vec<String>,
+    pub language_mode: FfiLanguageMode,
     pub size: String,
     pub artifacts: Vec<FfiModelArtifact>,
     pub is_recommended: bool,
@@ -288,7 +308,8 @@ pub fn preset_model_to_ffi(model: &PresetModel) -> FfiPresetModel {
         description: model.description.clone(),
         model_type: model.model_type.clone(),
         modes: model.modes.clone().unwrap_or_default(),
-        language: model.language.clone(),
+        languages: model.languages.clone(),
+        language_mode: language_mode_to_ffi(model.language_mode),
         size: model.size.clone(),
         artifacts: model_artifacts_to_ffi(&model.artifacts),
         is_recommended: model.is_recommended.unwrap_or(false),
@@ -474,7 +495,8 @@ pub fn model_catalog_model_to_ffi(model: ModelCatalogModel) -> FfiModelCatalogMo
         description: model.description,
         model_type: model.model_type,
         modes: model.modes.unwrap_or_default(),
-        language: model.language,
+        languages: model.languages,
+        language_mode: language_mode_to_ffi(model.language_mode),
         size: model.size,
         artifacts: model_artifacts_to_ffi(&model.artifacts),
         is_recommended: model.is_recommended.unwrap_or(false),

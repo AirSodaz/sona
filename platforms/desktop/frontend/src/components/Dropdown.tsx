@@ -9,6 +9,12 @@ export interface DropdownOption {
     disabled?: boolean;
     ariaLabel?: string;
     style?: React.CSSProperties;
+    /**
+     * Display label of the section this option belongs to. Options sharing the
+     * same group label render under one sticky-free heading; options without a
+     * group render above grouped ones in list order.
+     */
+    group?: string;
 }
 
 interface DropdownProps {
@@ -293,29 +299,40 @@ export function Dropdown({
                                 />
                             </div>
                         )}
-                        {filteredOptions.map((option) => (
-                            <button
-                                key={option.value}
-                                type="button"
-                                className={`dropdown-item ${option.value === value ? 'selected' : ''}`}
-                                onClick={() => handleSelect(option)}
-                                role="option"
-                                aria-selected={option.value === value}
-                                aria-label={option.ariaLabel}
-                                aria-disabled={option.disabled || undefined}
-                                disabled={option.disabled}
-                                tabIndex={-1}
-                                style={option.style}
-                                title={option.description}
-                            >
-                                <span className="dropdown-item-content">
-                                    <span>{option.label}</span>
-                                    {option.description && (
-                                        <span className="dropdown-item-description">{option.description}</span>
-                                    )}
-                                </span>
-                            </button>
-                        ))}
+                        {(() => {
+                            let lastGroup: string | undefined = '';
+                            return filteredOptions.map((option) => {
+                                const header = option.group && option.group !== lastGroup
+                                    ? <div key={`group-${option.group}`} className="dropdown-group-header">{option.group}</div>
+                                    : null;
+                                lastGroup = option.group;
+                                return (
+                                    <React.Fragment key={option.value}>
+                                        {header}
+                                        <button
+                                            type="button"
+                                            className={`dropdown-item ${option.value === value ? 'selected' : ''}`}
+                                            onClick={() => handleSelect(option)}
+                                            role="option"
+                                            aria-selected={option.value === value}
+                                            aria-label={option.ariaLabel}
+                                            aria-disabled={option.disabled || undefined}
+                                            disabled={option.disabled}
+                                            tabIndex={-1}
+                                            style={option.style}
+                                            title={option.description}
+                                        >
+                                            <span className="dropdown-item-content">
+                                                <span>{option.label}</span>
+                                                {option.description && (
+                                                    <span className="dropdown-item-description">{option.description}</span>
+                                                )}
+                                            </span>
+                                        </button>
+                                    </React.Fragment>
+                                );
+                            });
+                        })()}
                     </div>
                 </ModalPortal>
             )}

@@ -335,6 +335,22 @@ where
     runtime.block_on(factory())
 }
 
+/// Terminal-friendly language column: full lists would blow up the table for
+/// 100-language models, so show up to four codes plus a `+N` tail.
+fn render_language_column(languages: &[String]) -> String {
+    const MAX_VISIBLE: usize = 4;
+    if languages.is_empty() {
+        return "-".to_string();
+    }
+    let visible = languages.len().min(MAX_VISIBLE);
+    let mut label = languages[..visible].join(",");
+    let rest = languages.len() - visible;
+    if rest > 0 {
+        label.push_str(&format!("+{rest}"));
+    }
+    label
+}
+
 fn render_model_table(models: &[ModelSummary]) -> String {
     let rows = models
         .iter()
@@ -342,7 +358,7 @@ fn render_model_table(models: &[ModelSummary]) -> String {
             [
                 model.id.clone(),
                 model.model_type.clone(),
-                model.language.clone(),
+                render_language_column(&model.languages),
                 model.size.clone(),
                 if model.installed { "yes" } else { "no" }.to_string(),
                 model.modes.join(","),
@@ -399,12 +415,13 @@ fn append_table_separator(output: &mut String, widths: &[usize; 6]) {
 mod tests {
     use super::*;
 
-    fn model_summary(id: &str, model_type: &str, language: &str, installed: bool) -> ModelSummary {
+    fn model_summary(id: &str, languages: &[&str], installed: bool) -> ModelSummary {
         ModelSummary {
             id: id.to_string(),
             name: format!("{id} name"),
-            model_type: model_type.to_string(),
-            language: language.to_string(),
+            model_type: "whisper".to_string(),
+            languages: languages.iter().map(|code| code.to_string()).collect(),
+            language_mode: sona_core::models::preset_models::LanguageMode::Selectable,
             size: "1 MB".to_string(),
             modes: vec!["batch".to_string()],
             installed,
@@ -415,8 +432,12 @@ mod tests {
     #[test]
     fn renders_model_list_as_table_with_headers() {
         let table = render_model_table(&[
-            model_summary("short", "vad", "all", true),
-            model_summary("longer-model-id", "whisper", "zh,en", false),
+            model_summary("short", &["en"], true),
+            model_summary(
+                "longer-model-id",
+                &["af", "am", "ar", "as", "az", "ba", "zh"],
+                false,
+            ),
         ]);
 
         assert!(table.contains("ID"));
@@ -429,6 +450,19 @@ mod tests {
         assert!(table.contains("yes"));
         assert!(table.contains("no"));
         assert!(!table.contains("install_path"));
+        // 7 languages collapse to four visible codes plus an overflow tail.
+        assert!(table.contains("af,am,ar,as+3"));
+    }
+
+    #[test]
+    fn language_column_collapses_long_lists_and_marks_empty() {
+        assert_eq!(render_language_column(&[]), "-");
+        assert_eq!(
+            render_language_column(&["en".to_string(), "zh".to_string()]),
+            "en,zh"
+        );
+        let many: Vec<String> = (0..6).map(|index| format!("l{index}")).collect();
+        assert_eq!(render_language_column(&many), "l0,l1,l2,l3+2");
     }
 
     #[test]

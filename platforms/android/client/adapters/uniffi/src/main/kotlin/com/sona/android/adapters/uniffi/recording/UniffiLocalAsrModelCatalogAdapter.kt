@@ -1,9 +1,11 @@
 package com.sona.android.adapters.uniffi.recording
 
+import com.sona.android.application.recording.LanguageMode
 import com.sona.android.application.recording.LocalAsrCatalogModel
 import com.sona.android.application.recording.LocalAsrModelCatalogPort
 import com.sona.android.application.recording.LocalSherpaConfig
 import com.sona.android.application.recording.AsrMode
+import uniffi.sona_uniffi_bind.FfiLanguageMode
 import uniffi.sona_uniffi_bind.FfiPresetModel
 import uniffi.sona_uniffi_bind.presetModels
 
@@ -23,7 +25,8 @@ class UniffiLocalAsrModelCatalogAdapter : LocalAsrModelCatalogPort {
             id = id,
             displayName = listOfNotNull(name, versionLabel).distinct().joinToString(" "),
             modelType = modelType,
-            language = language,
+            languages = languages,
+            languageMode = languageMode.toApplication(),
             sizeLabel = size,
             estimatedSizeBytes = parseSizeBytes(size),
             isRecommended = isRecommended,
@@ -53,4 +56,11 @@ internal fun parseSizeBytes(value: String): Long {
         else -> return 0
     }
     return (amount * multiplier).toLong()
+}
+
+private fun FfiLanguageMode.toApplication(): LanguageMode = when (this) {
+    FfiLanguageMode.SELECTABLE -> LanguageMode.SELECTABLE
+    FfiLanguageMode.AUTO -> LanguageMode.AUTO
+    FfiLanguageMode.FIXED -> LanguageMode.FIXED
+    FfiLanguageMode.NONE -> LanguageMode.NONE
 }

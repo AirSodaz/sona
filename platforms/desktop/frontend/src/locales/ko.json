@@ -216,6 +216,8 @@
         "auto_polish_frequency": "자동 정리 빈도(세그먼트)",
         "language": "언어",
         "language_hint": "오디오 언어 선택",
+        "language_hint_auto_detect": "이 모델은 언어를 자동으로 인식합니다",
+        "language_hint_fixed": "이 모델은 내장 언어만 인식합니다",
         "unsupported_format": "지원되지 않는 파일 형식입니다. 다음 형식을 사용하세요: {{formats}}",
         "no_model_error": "먼저 설정에서 모델을 구성하세요.",
         "transcription_failed": "전사 실패: {{error}}",
@@ -1829,5 +1831,8 @@
             "translating": "번역 중",
             "exporting": "내보내는 중"
         }
-    }
+    },
+  "languages": {
+    "common": "자주 사용하는 언어"
+  }
 }

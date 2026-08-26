@@ -124,7 +124,7 @@ Authorization: Bearer your_secure_key
 | :--- | :--- | :--- | :--- |
 | `file` | 二进制 | **是** | 要转录的音频或视频文件。 |
 | `model_id` | 字符串 | **是** | 本地已安装的 ASR 模型 ID（例如 `sensevoice`） 或已配置的云端 ASR 引擎 ID（例如 `volcengine-doubao`）。 |
-| `language` | 字符串 | 否 | 目标识别语言（例如：`zh`、`en`、`ja`、`ko`、`yue`），默认为 `"auto"` 自动检测。 |
+| `language` | 字符串 | 否 | 目标识别语言（ISO 639-1 代码，例如：`zh`、`en`、`ja`），默认 `"auto"` 自动检测。仅目标模型实际支持的语言代码会生效，不支持的取值会被回退为 `"auto"`。各模型支持的语言清单可通过 `GET /v1/info`（`onlineAsrProviders[].languages` / `languageMode`）与模型目录获取。 |
 | `hotwords` | 字符串 | 否 | 自定义热词词汇表，用于提高特定术语识别率。每行一个热词。 |
 | `webhook_url` | 字符串 | 否 | 当转录任务成功结束或失败时，用于接收结果 POST 推送的 URL。 |
 | `webhook_secret` | 字符串 | 否 | 用于对 Webhook 推送报文进行 HMAC-SHA256 签名的密钥。 |

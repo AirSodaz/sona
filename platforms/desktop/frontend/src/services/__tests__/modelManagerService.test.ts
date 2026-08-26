@@ -13,7 +13,8 @@ const streamingModel: ModelInfo = {
   description: '',
   type: 'sensevoice',
   modes: ['streaming', 'batch'],
-  language: 'en',
+  languages: ['en'],
+  languageMode: 'selectable',
   size: '1 MB',
   engine: 'sherpa-onnx',
 };
@@ -23,7 +24,8 @@ const vadModel: ModelInfo = {
   name: 'VAD Model',
   description: '',
   type: 'vad',
-  language: 'en',
+  languages: [],
+  languageMode: 'none',
   size: '1 MB',
   engine: 'sherpa-onnx',
 };

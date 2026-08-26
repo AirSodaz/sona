@@ -359,7 +359,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                 </div>
 
                 {/* Options */}
-                <TranscriptionOptions />
+                <TranscriptionOptions surface="batch" />
             </div>
         );
     }
@@ -396,7 +396,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
                     {t('batch.supports', { formats: SUPPORTED_MEDIA_EXTENSIONS.join(', ') })}
                 </p>
             </div>
-            <TranscriptionOptions />
+            <TranscriptionOptions surface="batch" />
         </div>
     );
 }

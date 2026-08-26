@@ -1,8 +1,10 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "providers": [
     {
       "id": "volcengine-doubao",
+      "languages": ["ar", "bn", "de", "el", "en", "es", "fil", "fr", "id", "it", "ja", "ko", "ms", "ne", "nl", "pl", "pt", "ro", "ru", "th", "tr", "vi", "zh"],
+      "languageMode": "selectable",
       "profileId": "volcengine-doubao-default",
       "ui": {
         "optionLabelKey": "settings.asr.volcengine_doubao_option",
@@ -43,6 +45,8 @@
     },
     {
       "id": "groq-whisper",
+      "languages": ["af", "am", "ar", "as", "az", "ba", "be", "bg", "bn", "bo", "br", "bs", "ca", "cs", "cy", "da", "de", "el", "en", "es", "et", "eu", "fa", "fi", "fo", "fr", "gl", "gu", "ha", "haw", "he", "hi", "hr", "ht", "hu", "hy", "id", "is", "it", "ja", "jw", "ka", "kk", "km", "kn", "ko", "la", "lb", "ln", "lo", "lt", "lv", "mg", "mi", "mk", "ml", "mn", "mr", "ms", "mt", "my", "ne", "nl", "nn", "no", "oc", "pa", "pl", "ps", "pt", "ro", "ru", "sa", "sd", "si", "sk", "sl", "sn", "so", "sq", "sr", "su", "sv", "sw", "ta", "te", "tg", "th", "tk", "tl", "tr", "tt", "uk", "ur", "uz", "vi", "yi", "yo", "yue", "zh"],
+      "languageMode": "selectable",
       "profileId": "groq-whisper-default",
       "ui": {
         "optionLabelKey": "settings.asr.groq_whisper_option",
@@ -83,6 +87,8 @@
     },
     {
       "id": "mistral-voxtral",
+      "languages": ["ar", "de", "en", "es", "fr", "hi", "it", "ja", "ko", "nl", "pt", "ru", "zh"],
+      "languageMode": "selectable",
       "profileId": "mistral-voxtral-default",
       "ui": {
         "optionLabelKey": "settings.asr.mistral_voxtral_option",

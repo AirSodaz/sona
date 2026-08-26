@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Dropdown } from './Dropdown';
 import { CheckIcon, DownloadIcon } from './Icons';
 import { Modal } from './Modal';
+import { LanguageBadges } from './LanguageBadges';
 import { useFirstRunGuide, type ModelStepStatus } from '../hooks/useFirstRunGuide';
 import type { OnboardingStep } from '../types/onboarding';
 
@@ -331,7 +332,7 @@ export function FirstRunGuide(): React.JSX.Element | null {
                         <strong>{model.name}</strong>
                         <div className="onboarding-model-badges">
                           <span className="model-tag">{model.size}</span>
-                          {model.language && <span className="model-tag">{model.language.toUpperCase()}</span>}
+                          <LanguageBadges languages={model.languages} />
                         </div>
                       </div>
                       <span>{t(model.description)}</span>

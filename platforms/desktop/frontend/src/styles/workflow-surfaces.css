@@ -272,6 +272,20 @@
   opacity: 0.68;
 }
 
+.dropdown-group-header {
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
 .dropdown-item:disabled:hover,
 .dropdown-item[aria-disabled='true']:hover {
   background: transparent;

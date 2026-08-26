@@ -1259,6 +1259,25 @@ export type HybridLogicalClock = {
 	logical: number,
 };
 
+/**
+ *  How a model handles ASR language selection.
+ *
+ *  Drives which options clients may offer in their language pickers:
+ *  - [`LanguageMode::Selectable`]: `auto` plus every entry of `languages`
+ *  - [`LanguageMode::Auto`]: `auto` only (the model detects language itself)
+ *  - [`LanguageMode::Fixed`]: the single language in `languages` only
+ *  - [`LanguageMode::None`]: not a speech-recognition model; no picker
+ */
+export type LanguageMode =
+/**  The engine accepts an explicit language parameter. */
+"selectable" |
+/**  The engine ignores language overrides and detects language itself. */
+"auto" |
+/**  The engine always recognizes its single supported language. */
+"fixed" |
+/**  Not applicable (companion models such as VAD or speaker diarization). */
+"none";
+
 export type LiveRecordingDraftResult = {
 	item: HistoryItemRecord,
 	audioAbsolutePath: string,
@@ -1536,7 +1555,12 @@ export type ModelCatalogModel_Deserialize = {
 	description: string,
 	type: string,
 	modes: string[] | null,
-	language: string,
+	/**
+	 *  All languages the model can recognize, sorted ascending ISO 639 codes
+	 *  (`yue` covers Cantonese). Empty for non-ASR models.
+	 */
+	languages: string[],
+	languageMode: LanguageMode,
 	size: string,
 	artifacts: PresetModelArtifact[],
 	isRecommended: boolean | null,
@@ -1557,7 +1581,12 @@ export type ModelCatalogModel_Serialize = {
 	description: string,
 	type: string,
 	modes?: string[] | null,
-	language: string,
+	/**
+	 *  All languages the model can recognize, sorted ascending ISO 639 codes
+	 *  (`yue` covers Cantonese). Empty for non-ASR models.
+	 */
+	languages: string[],
+	languageMode: LanguageMode,
 	size: string,
 	artifacts?: PresetModelArtifact[],
 	isRecommended?: boolean | null,
@@ -1739,6 +1768,12 @@ export type OnlineAsrLocalFileBatchMode = {
 
 export type OnlineAsrProvider = {
 	id: string,
+	/**
+	 *  Languages the hosted model can recognize, sorted ascending ISO 639
+	 *  codes (`yue` covers Cantonese).
+	 */
+	languages: string[],
+	languageMode: LanguageMode,
 	profileId: string,
 	defaults: unknown,
 	streaming: OnlineAsrCapability,

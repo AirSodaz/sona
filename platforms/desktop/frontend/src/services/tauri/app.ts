@@ -212,6 +212,12 @@ function normalizeModelRules(modelRules: CoreModelCatalogModel['rules']): ModelR
   };
 }
 
+const LANGUAGE_MODES = ['selectable', 'auto', 'fixed', 'none'] as const;
+
+function normalizeLanguageMode(value: string): (typeof LANGUAGE_MODES)[number] {
+  return (LANGUAGE_MODES as readonly string[]).includes(value) ? value as (typeof LANGUAGE_MODES)[number] : 'none';
+}
+
 function normalizeModelArtifacts(
   artifacts: CoreModelCatalogModel['artifacts'],
 ): NonNullable<ModelInfo['artifacts']> {
@@ -245,7 +251,8 @@ function normalizeCatalogModel(model: CoreModelCatalogModel): ModelCatalogModel 
     description: model.description,
     type: normalizeModelType(model.type),
     ...(modes === undefined ? {} : { modes }),
-    language: model.language,
+    languages: Array.isArray(model.languages) ? model.languages : [],
+    languageMode: normalizeLanguageMode(model.languageMode),
     size: model.size,
     ...(artifacts.length === 0 ? {} : { artifacts }),
     ...(isRecommended === undefined ? {} : { isRecommended }),

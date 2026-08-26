@@ -3,14 +3,15 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use crate::models::preset_models::preset_models;
+use crate::models::preset_models::{LanguageMode, preset_models};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModelSummary {
     pub id: String,
     pub name: String,
     pub model_type: String,
-    pub language: String,
+    pub languages: Vec<String>,
+    pub language_mode: LanguageMode,
     pub size: String,
     pub modes: Vec<String>,
     pub installed: bool,
@@ -31,7 +32,8 @@ pub struct ModelListEntry {
     pub name: String,
     #[serde(rename = "type")]
     pub model_type: String,
-    pub language: String,
+    pub languages: Vec<String>,
+    pub language_mode: LanguageMode,
     pub size: String,
     pub modes: Vec<String>,
     pub installed: bool,
@@ -50,7 +52,8 @@ pub fn list_models_with_installed_ids(
                 id: model.id.clone(),
                 name: model.name.clone(),
                 model_type: model.model_type.clone(),
-                language: model.language.clone(),
+                languages: model.languages.clone(),
+                language_mode: model.language_mode,
                 size: model.size.clone(),
                 modes: model.modes.clone().unwrap_or_default(),
                 installed: installed_model_ids.contains(&model.id),
@@ -83,9 +86,9 @@ pub fn select_models(models: Vec<ModelSummary>, filter: &ModelListFilter) -> Vec
                 .as_deref()
                 .map(|language| {
                     model
-                        .language
-                        .split(',')
-                        .any(|item| item.trim().eq_ignore_ascii_case(language))
+                        .languages
+                        .iter()
+                        .any(|item| item.eq_ignore_ascii_case(language))
                 })
                 .unwrap_or(true)
         })
@@ -99,7 +102,8 @@ impl From<ModelSummary> for ModelListEntry {
             id: model.id,
             name: model.name,
             model_type: model.model_type,
-            language: model.language,
+            languages: model.languages,
+            language_mode: model.language_mode,
             size: model.size,
             modes: model.modes,
             installed: model.installed,

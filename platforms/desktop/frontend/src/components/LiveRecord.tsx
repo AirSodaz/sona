@@ -328,6 +328,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
             </div>
 
             <TranscriptionOptions
+                surface="live"
                 disabled={isRecording}
             />
         </div>

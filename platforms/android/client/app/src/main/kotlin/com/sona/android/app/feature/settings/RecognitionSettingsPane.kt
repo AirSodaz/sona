@@ -387,7 +387,7 @@ private fun LocalRecognitionSettings(
                         Text(
                             text = stringResource(
                                 R.string.local_catalog_model_details,
-                                model.language,
+                                model.languageSummary(),
                                 model.sizeLabel,
                             ),
                             style = MaterialTheme.typography.bodySmall,

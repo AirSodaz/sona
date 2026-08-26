@@ -216,6 +216,8 @@
         "auto_polish_frequency": "自動潤飾頻率 (分段)",
         "language": "語言",
         "language_hint": "選擇音訊語言",
+        "language_hint_auto_detect": "此模型會自動辨識語言，無需指定",
+        "language_hint_fixed": "此模型僅支援其內建語言，不可變更",
         "unsupported_format": "不支援的檔案格式。請使用：{{formats}}",
         "no_model_error": "請先在設定中設定模型。",
         "transcription_failed": "轉錄失敗：{{error}}",
@@ -1829,5 +1831,8 @@
             "translating": "翻譯中",
             "exporting": "匯出中"
         }
-    }
+    },
+  "languages": {
+    "common": "常用語言"
+  }
 }

@@ -33,11 +33,21 @@ enum class LocalAsrModelSource {
     IMPORTED,
 }
 
+/** How a model handles ASR language selection; mirrors the core `languageMode`. */
+enum class LanguageMode {
+    SELECTABLE,
+    AUTO,
+    FIXED,
+    NONE,
+}
+
 data class LocalAsrCatalogModel(
     val id: String,
     val displayName: String,
     val modelType: String,
-    val language: String,
+    /** All recognizable languages, sorted ascending ISO 639 codes (`yue` = Cantonese). */
+    val languages: List<String> = emptyList(),
+    val languageMode: LanguageMode = LanguageMode.NONE,
     val sizeLabel: String,
     val estimatedSizeBytes: Long,
     val isRecommended: Boolean,
@@ -47,7 +57,23 @@ data class LocalAsrCatalogModel(
         numThreads = 2,
         modelType = modelType,
     ),
-)
+) {
+    /**
+     * Compact localized summary for catalog rows: the first few language names
+     * plus a "+N" tail, so 100-language models stay readable.
+     */
+    fun languageSummary(locale: java.util.Locale = java.util.Locale.getDefault()): String {
+        if (languages.isEmpty() || languageMode == LanguageMode.NONE) return ""
+        val visible = languages.take(3).map { code -> languageDisplayName(code, locale) }
+        val rest = languages.size - visible.size
+        val joined = visible.joinToString(", ")
+        return if (rest > 0) "$joined +$rest" else joined
+    }
+}
+
+private fun languageDisplayName(code: String, locale: java.util.Locale): String =
+    java.util.Locale.forLanguageTag(code).getDisplayLanguage(locale)
+        .ifEmpty { code.uppercase(locale) }
 
 enum class LocalAsrDownloadStage {
     DOWNLOADING,

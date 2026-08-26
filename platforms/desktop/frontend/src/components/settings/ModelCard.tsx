@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ModelInfo } from '../../types/modelCatalog';
 import { TrashIcon, DownloadIcon, XIcon } from '../Icons';
+import { LanguageBadges } from '../LanguageBadges';
 
 interface ModelCardProps {
     models: ModelInfo[];
@@ -92,15 +93,17 @@ export const ModelCard = React.memo(function ModelCard({
                 <div style={{ flex: 1, width: '100%' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div className="model-name">{baseModel.name}{!isMultiVersion && baseModel.versionLabel ? ` (${baseModel.versionLabel})` : ''}</div>
-                        <div className="model-tags" style={{ marginTop: '0' }}>
-                            <span className="model-tag">{baseModel.language.toUpperCase()}</span>
-                            {baseModel.modes && baseModel.modes.length > 0 && (
-                                <span className="model-tag">
-                                    {baseModel.modes.map(mode => mode.charAt(0).toUpperCase() + mode.slice(1)).join(',')}
-                                </span>
-                            )}
-                            {baseModel.isRecommended && <span className="model-tag">{t('common.recommended')}</span>}
-                        </div>
+                        <LanguageBadges languages={baseModel.languages} />
+                        {baseModel.modes && baseModel.modes.length > 0 && (
+                            <div className="model-tags" style={{ marginTop: '0' }}>
+                                {baseModel.modes.map(mode => (
+                                    <span key={mode} className="model-tag">
+                                        {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                                    </span>
+                                ))}
+                                {baseModel.isRecommended && <span className="model-tag">{t('common.recommended')}</span>}
+                            </div>
+                        )}
                     </div>
                     <div className="model-description">{t(baseModel.description)}</div>
                     {!isMultiVersion && (

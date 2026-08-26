@@ -1,4 +1,5 @@
 use crate::models::config::ModelFileConfig;
+use crate::models::preset_models::LanguageMode;
 use crate::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 use crate::transcription::postprocess::TranscriptPostprocessor;
 pub use crate::transcription::postprocess::{
@@ -839,6 +840,10 @@ struct OnlineAsrProviderManifest {
 #[serde(rename_all = "camelCase")]
 pub struct OnlineAsrProvider {
     pub id: String,
+    /// Languages the hosted model can recognize, sorted ascending ISO 639
+    /// codes (`yue` covers Cantonese).
+    pub languages: Vec<String>,
+    pub language_mode: LanguageMode,
     pub profile_id: String,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Unknown))]
     pub defaults: Value,
@@ -881,7 +886,7 @@ fn online_asr_provider_manifest() -> &'static OnlineAsrProviderManifest {
         let manifest: OnlineAsrProviderManifest = serde_json::from_str(ONLINE_ASR_PROVIDERS_JSON)
             .expect("shared online ASR providers JSON should be valid");
         assert_eq!(
-            manifest.schema_version, 1,
+            manifest.schema_version, 2,
             "shared online ASR providers schema version should be supported"
         );
         assert!(

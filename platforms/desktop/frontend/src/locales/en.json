@@ -216,6 +216,8 @@
         "auto_polish_frequency": "Auto-Polish Frequency (segments)",
         "language": "Language",
         "language_hint": "Select audio language",
+        "language_hint_auto_detect": "This model detects the language automatically",
+        "language_hint_fixed": "This model only recognizes its built-in language",
         "unsupported_format": "Unsupported file format. Please use: {{formats}}",
         "no_model_error": "Please configure a model in Settings first.",
         "transcription_failed": "Transcription failed: {{error}}",
@@ -1829,5 +1831,8 @@
             "translating": "Translating",
             "exporting": "Exporting"
         }
-    }
+    },
+  "languages": {
+    "common": "Common languages"
+  }
 }

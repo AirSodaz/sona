@@ -216,6 +216,8 @@
         "auto_polish_frequency": "Auto-Polish の頻度（セグメント）",
         "language": "言語",
         "language_hint": "音声言語を選択してください",
+        "language_hint_auto_detect": "このモデルは言語を自動判別します",
+        "language_hint_fixed": "このモデルは組み込み言語のみ認識します",
         "unsupported_format": "サポートされていないファイル形式です。 {{formats}} を使用してください。",
         "no_model_error": "最初に設定でモデルを設定してください。",
         "transcription_failed": "転写に失敗しました: {{error}}",
@@ -1829,5 +1831,8 @@
             "translating": "翻訳中",
             "exporting": "エクスポート中"
         }
-    }
+    },
+  "languages": {
+    "common": "よく使う言語"
+  }
 }

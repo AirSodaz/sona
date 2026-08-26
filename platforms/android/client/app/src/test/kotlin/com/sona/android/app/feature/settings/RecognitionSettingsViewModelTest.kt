@@ -1,6 +1,7 @@
 package com.sona.android.app.feature.settings
 
 import com.sona.android.app.MainDispatcherRule
+import com.sona.android.application.recording.LanguageMode
 import com.sona.android.application.recording.LocalAsrCatalogModel
 import com.sona.android.application.recording.LocalAsrDeviceCapabilities
 import com.sona.android.application.recording.LocalAsrDeviceCapabilitiesPort
@@ -140,7 +141,8 @@ private fun catalogModel() = LocalAsrCatalogModel(
     id = "sensevoice",
     displayName = "SenseVoice",
     modelType = "sensevoice",
-    language = "zh,en",
+    languages = listOf("en", "ja", "ko", "yue", "zh"),
+    languageMode = LanguageMode.SELECTABLE,
     sizeLabel = "155 MB",
     estimatedSizeBytes = 155L * 1_024 * 1_024,
     isRecommended = true,

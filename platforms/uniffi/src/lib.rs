@@ -2685,7 +2685,7 @@ mod tests {
         let config: serde_json::Value =
             serde_json::from_str(&config_bridge::default_config_json()).unwrap();
 
-        assert_eq!(config["configVersion"], 7);
+        assert_eq!(config["configVersion"], 8);
         assert_eq!(
             config["asr"]["selections"]["batch"]["mode"],
             serde_json::json!("batch")
@@ -2735,7 +2735,7 @@ mod tests {
             serde_json::from_str(&migrated.config_json).unwrap();
 
         assert!(migrated.migrated);
-        assert_eq!(migrated_config["configVersion"], 7);
+        assert_eq!(migrated_config["configVersion"], 8);
         assert_eq!(migrated_config["summaryEnabled"], true);
 
         let effective = config_bridge::resolve_effective_config_json(
