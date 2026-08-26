@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import presetModelsData from '../../../../../../../core/src/models/preset-models.json';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { invoke } from '@tauri-apps/api/core';
@@ -318,6 +319,75 @@ describe('tauri boundary wrappers', () => {
       vadBufferSize: 0.5,
       maxConcurrent: 2,
     });
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.app.getModelCatalogSnapshot);
+  });
+
+  it('normalizes a snapshot built from every preset-models.json type', async () => {
+    const presetTypeFlags: Record<string, true> = {};
+    for (const preset of presetModelsData) {
+        presetTypeFlags[preset.type] = true;
+    }
+    const presetTypes = Object.keys(presetTypeFlags);
+    expect(presetTypes.length).toBeGreaterThan(0);
+
+    const snapshot = {
+      modelsDir: 'C:/models',
+      models: presetModelsData.map((preset) => ({
+        id: preset.id,
+        name: preset.name,
+        description: '',
+        type: preset.type,
+        modes: preset.modes ?? null,
+        languageMode: 'none',
+        languages: [],
+        size: '',
+        artifacts: [],
+        isRecommended: null,
+        isArchive: true,
+        filename: null,
+        groupId: null,
+        versionLabel: null,
+        engine: typeof preset.engine === 'string' ? preset.engine : 'sherpa-onnx',
+        rules: {
+          requiresVad: false,
+          requiresPunctuation: false,
+          timestampSupportHint: null,
+        },
+        installPath: `C:/models/${preset.id}`,
+        downloadPath: `C:/models/${preset.id}`,
+        isInstalled: false,
+      })),
+      sections: [],
+      selectionOptions: {
+        streaming: [],
+        batch: [],
+        speakerSegmentation: [],
+        speakerEmbedding: [],
+      },
+      modelPathById: {},
+      modelIdByNormalizedPath: {},
+      pathMatchTokens: [],
+      dependencyRequestsByModelId: {},
+      restoreDefaults: {
+        streamingModelPath: null,
+        batchModelPath: null,
+        vadModelPath: null,
+        punctuationModelPath: null,
+        speakerSegmentationModelPath: null,
+        speakerEmbeddingModelPath: null,
+        enableItn: true,
+        batchVadEnabled: true,
+        vadBufferSize: 5,
+        maxConcurrent: 2,
+      },
+    };
+    vi.mocked(invoke).mockResolvedValueOnce(snapshot);
+
+    const result = await getModelCatalogSnapshot();
+
+    expect(result.models.map((model) => model.type)).toEqual(
+      expect.arrayContaining(presetTypes),
+    );
     expect(invoke).toHaveBeenCalledWith(TauriCommand.app.getModelCatalogSnapshot);
   });
 

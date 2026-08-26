@@ -134,7 +134,7 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
                 <div className="settings-hint" role="status">
                     {t('settings.models_check_failed', {
                         error: catalogLoadError ?? '',
-                        defaultValue: 'Could not check local models. Download status may be stale.',
+                        defaultValue: 'Could not check local models: {{error}}. Download status may be stale.',
                     })}
                 </div>
             )}
@@ -774,7 +774,7 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                         <div className="settings-hint" role="status">
                             {t('settings.models_check_failed', {
                                 error: catalogLoadError ?? '',
-                                defaultValue: 'Could not check local models. Download status may be stale.',
+                                defaultValue: 'Could not check local models: {{error}}. Download status may be stale.',
                             })}
                         </div>
                     )}
