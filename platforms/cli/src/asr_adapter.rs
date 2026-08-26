@@ -8,12 +8,17 @@ use std::sync::Arc;
 
 pub(crate) fn local_batch_transcriber() -> impl BatchTranscriberPort {
     let vad_engines = sona_vad::built_in_engines();
+    let punct_engines = sona_punct::built_in_engines();
     let registry = sona_application::local_asr::LocalAsrRegistry::empty()
         .register(Arc::new(sona_sherpa_onnx::SherpaOnnxAdapter::new(
             sona_sherpa_onnx::runtime::RecognizerPool::default(),
             vad_engines.clone(),
+            punct_engines.clone(),
         )))
-        .register(Arc::new(sona_llama_cpp::LlamaCppAdapter::new(vad_engines)));
+        .register(Arc::new(sona_llama_cpp::LlamaCppAdapter::new(
+            vad_engines,
+            punct_engines,
+        )));
     sona_application::local_asr::LocalBatchTranscriberRouter::new(registry)
 }
 

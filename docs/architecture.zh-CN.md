@@ -61,7 +61,8 @@ Core <- Outbound Adapter <------------- Host
 | `adapters/archive/` | `sona-archive` | outbound-adapter | |
 | `adapters/export/` | `sona-export` | outbound-adapter | |
 | `providers/asr/local/sherpa_onnx/` | `sona-sherpa-onnx` | provider | |
-| `providers/asr/local/vad/` | `sona-vad` \| provider \| Core `VadEnginePort` 之后的 Silero/TEN ONNX VAD \|
+| `providers/asr/local/vad/` | `sona-vad` | provider | Core `VadEnginePort` 之后的 Silero/TEN ONNX VAD |
+| `providers/asr/local/punct/` | `sona-punct` | provider | Core `PunctuationEnginePort` 之后的文本标点 |
 | `providers/asr/local/llama_cpp/` | `sona-llama-cpp` | provider | 通过 llama.cpp 执行 Qwen3-ASR 批量推理 |
 | `adapters/media_detector/` | `sona-media-detector` | outbound-adapter | |
 | `adapters/model_downloads/` | `sona-model-downloads` | outbound-adapter | |

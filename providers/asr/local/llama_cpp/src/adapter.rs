@@ -4,6 +4,7 @@ use sona_core::ports::asr::{
     BatchTranscriberPort, EngineCapabilities, LocalAsrAdapter, LocalAsrEngine,
     StreamingAsrFactoryPort,
 };
+use sona_core::ports::punctuation::PunctuationEngineSet;
 use sona_core::ports::vad::VadEngineSet;
 
 use crate::batch::{LlamaBatchAsrAdapter, gpu_backend_available};
@@ -16,11 +17,15 @@ use crate::batch::{LlamaBatchAsrAdapter, gpu_backend_available};
 #[derive(Clone, Default)]
 pub struct LlamaCppAdapter {
     vad_engines: VadEngineSet,
+    punct_engines: PunctuationEngineSet,
 }
 
 impl LlamaCppAdapter {
-    pub fn new(vad_engines: VadEngineSet) -> Self {
-        Self { vad_engines }
+    pub fn new(vad_engines: VadEngineSet, punct_engines: PunctuationEngineSet) -> Self {
+        Self {
+            vad_engines,
+            punct_engines,
+        }
     }
 }
 
@@ -42,7 +47,10 @@ impl LocalAsrAdapter for LlamaCppAdapter {
     }
 
     fn batch_transcriber(&self) -> Arc<dyn BatchTranscriberPort> {
-        Arc::new(LlamaBatchAsrAdapter::new(self.vad_engines.clone()))
+        Arc::new(LlamaBatchAsrAdapter::new(
+            self.vad_engines.clone(),
+            self.punct_engines.clone(),
+        ))
     }
 
     fn streaming_factory(&self) -> Option<Arc<dyn StreamingAsrFactoryPort>> {

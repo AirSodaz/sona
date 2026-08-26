@@ -13,7 +13,7 @@ const DEFAULT_SENSEVOICE_INT8_MODEL_ID: &str =
     "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17";
 const DEFAULT_SENSEVOICE_FP32_MODEL_ID: &str = "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17";
 
-pub const DEFAULT_SILERO_VAD_MODEL_ID: &str = "silero-vad";
+pub const DEFAULT_SILERO_VAD_MODEL_ID: &str = "silero-v5-vad";
 pub const DEFAULT_PUNCTUATION_MODEL_ID: &str =
     "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8";
 

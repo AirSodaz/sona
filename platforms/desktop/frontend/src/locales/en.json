@@ -1155,6 +1155,7 @@
             "ct_punctuation": "Adds accurate punctuation and capitalization to raw speech transcripts. Optimized with Int8 quantization.",
             "silero_vad": "Developed by Silero. Highly accurate Voice Activity Detection (VAD) model to segment audio into speech and silence.",
             "ten_vad": "Developed by TEN. Lightweight, high-precision Voice Activity Detection (VAD) model that segments audio into speech and silence.",
+            "silero_v5_vad": "Developed by Silero. Version 5 of the highly accurate Voice Activity Detection (VAD) model that segments audio into speech and silence.",
             "speaker_segmentation": "Pyannote-based local speaker segmentation model for splitting a recording into anonymous speaker turns.",
             "speaker_embedding": "3D-Speaker embedding model for matching diarized speakers against your known speaker profile library.",
             "itn_zh": "Inverse Text Normalization model for Chinese. Converts spoken numbers (e.g., '一二三') into digits ('123')."

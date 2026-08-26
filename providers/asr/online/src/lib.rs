@@ -1,4 +1,4 @@
-﻿use async_trait::async_trait;
+use async_trait::async_trait;
 use base64::Engine;
 use reqwest::multipart;
 use serde_json::Value;
@@ -582,7 +582,8 @@ fn whisper_language_form_field(language: &str) -> Option<String> {
     }
 }
 
-pub fn resolve_whisper_config(    request: &sona_core::ports::asr::AsrTranscriptionRequest,
+pub fn resolve_whisper_config(
+    request: &sona_core::ports::asr::AsrTranscriptionRequest,
     provider: WhisperCompatibleProvider,
 ) -> Result<WhisperCompatibleConfigFields, SherpaError> {
     let provider_request = if let AsrEngineConfig::Online { provider } = &request.engine_config {
@@ -1466,14 +1467,8 @@ mod tests {
         use sona_core::ports::asr::{find_online_asr_provider, online_asr_providers};
 
         // Groq (Whisper) and Mistral (Voxtral) both accept an ISO 639-1 hint.
-        assert_eq!(
-            whisper_language_form_field("ja"),
-            Some("ja".to_string())
-        );
-        assert_eq!(
-            whisper_language_form_field(" JA "),
-            Some("JA".to_string())
-        );
+        assert_eq!(whisper_language_form_field("ja"), Some("ja".to_string()));
+        assert_eq!(whisper_language_form_field(" JA "), Some("JA".to_string()));
         assert_eq!(whisper_language_form_field("auto"), None);
         assert_eq!(whisper_language_form_field(""), None);
 

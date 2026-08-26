@@ -62,6 +62,7 @@ Each workspace package lives under the root for its reviewed role. The `[package
 | `adapters/export/` | `sona-export` | outbound-adapter | |
 | `providers/asr/local/sherpa_onnx/` | `sona-sherpa-onnx` | provider | |
 | `providers/asr/local/vad/` | `sona-vad` | provider | Silero/TEN ONNX VAD behind the Core `VadEnginePort` |
+| `providers/asr/local/punct/` | `sona-punct` | provider | Transcript punctuation behind the Core `PunctuationEnginePort` |
 | `providers/asr/local/llama_cpp/` | `sona-llama-cpp` | provider | Qwen3-ASR batch inference through llama.cpp |
 | `adapters/media_detector/` | `sona-media-detector` | outbound-adapter | |
 | `adapters/model_downloads/` | `sona-model-downloads` | outbound-adapter | |

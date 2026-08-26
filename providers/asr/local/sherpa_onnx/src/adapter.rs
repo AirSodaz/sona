@@ -10,6 +10,7 @@ use sona_core::ports::asr::{
 use crate::batch::LocalBatchAsrAdapter;
 use crate::runtime::RecognizerPool;
 use crate::streaming::{create_streaming_session, prepare_streaming_resources};
+use sona_core::ports::punctuation::PunctuationEngineSet;
 use sona_core::ports::vad::VadEngineSet;
 
 /// Provider facade for the sherpa-onnx local ASR engine.
@@ -21,20 +22,30 @@ use sona_core::ports::vad::VadEngineSet;
 pub struct SherpaOnnxAdapter {
     recognizer_pool: RecognizerPool,
     vad_engines: VadEngineSet,
+    punct_engines: PunctuationEngineSet,
 }
 
 impl SherpaOnnxAdapter {
-    pub fn new(recognizer_pool: RecognizerPool, vad_engines: VadEngineSet) -> Self {
+    pub fn new(
+        recognizer_pool: RecognizerPool,
+        vad_engines: VadEngineSet,
+        punct_engines: PunctuationEngineSet,
+    ) -> Self {
         Self {
             recognizer_pool,
             vad_engines,
+            punct_engines,
         }
     }
 }
 
 impl Default for SherpaOnnxAdapter {
     fn default() -> Self {
-        Self::new(RecognizerPool::default(), VadEngineSet::empty())
+        Self::new(
+            RecognizerPool::default(),
+            VadEngineSet::empty(),
+            PunctuationEngineSet::empty(),
+        )
     }
 }
 
@@ -53,7 +64,10 @@ impl LocalAsrAdapter for SherpaOnnxAdapter {
     }
 
     fn batch_transcriber(&self) -> Arc<dyn BatchTranscriberPort> {
-        Arc::new(LocalBatchAsrAdapter::new(self.vad_engines.clone()))
+        Arc::new(LocalBatchAsrAdapter::new(
+            self.vad_engines.clone(),
+            self.punct_engines.clone(),
+        ))
     }
 
     fn streaming_factory(&self) -> Option<Arc<dyn StreamingAsrFactoryPort>> {

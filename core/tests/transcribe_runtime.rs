@@ -180,6 +180,7 @@ fn installed_whisper_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
     fs::write(&input_path, "").unwrap();
     fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
     fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+    fs::write(models_dir.join("silero_vad_v5.onnx"), "").unwrap();
     (dir, input_path, models_dir)
 }
 
@@ -189,7 +190,7 @@ fn installed_funasr_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
     let models_dir = dir.path().join("models");
     fs::write(&input_path, "").unwrap();
     fs::create_dir_all(models_dir.join("sherpa-onnx-funasr-nano-int8-2025-12-30")).unwrap();
-    fs::write(models_dir.join("silero_vad.onnx"), "").unwrap();
+    fs::write(models_dir.join("silero_vad_v5.onnx"), "").unwrap();
     fs::create_dir_all(
         models_dir.join("sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"),
     )
@@ -378,7 +379,7 @@ fn batch_plan_defaults_required_companions_when_omitted() {
         resolved.vad_model.as_deref(),
         Some(
             models_dir
-                .join("silero_vad.onnx")
+                .join("silero_vad_v5.onnx")
                 .to_string_lossy()
                 .as_ref()
         )

@@ -1,8 +1,6 @@
 use sherpa_onnx::{TenVadModelConfig, VadModelConfig};
 use sona_core::ports::asr::AsrPortError;
-use sona_core::ports::vad::{
-    SpeechSpan, VadDetectionOptions, VadEngineKind, VadEnginePort,
-};
+use sona_core::ports::vad::{SpeechSpan, VadDetectionOptions, VadEngineKind, VadEnginePort};
 use std::path::Path;
 
 use super::shared::{SUPPORTED_SAMPLE_RATE, detect_with_config, reject_unsupported_rate};
@@ -80,7 +78,11 @@ mod tests {
     #[test]
     fn detect_rejects_unsupported_sample_rates() {
         let error = TenVadOnnxEngine
-            .detect(&[0.0], 44_100, &VadDetectionOptions::batch_defaults("unused"))
+            .detect(
+                &[0.0],
+                44_100,
+                &VadDetectionOptions::batch_defaults("unused"),
+            )
             .unwrap_err();
 
         assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
@@ -89,8 +91,7 @@ mod tests {
 
     #[test]
     fn detect_reports_missing_models_as_model_errors() {
-        let missing =
-            std::env::temp_dir().join(format!("sona-ten-missing-{}", std::process::id()));
+        let missing = std::env::temp_dir().join(format!("sona-ten-missing-{}", std::process::id()));
         let options = VadDetectionOptions::batch_defaults(&missing);
 
         let error = TenVadOnnxEngine

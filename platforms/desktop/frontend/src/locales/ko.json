@@ -1155,6 +1155,7 @@
             "ct_punctuation": "원시 음성 전사에 정확한 구두점과 대소문자를 추가합니다. Int8 양자화에 최적화되어 있습니다.",
             "silero_vad": "Silero가 개발한 정확도 높은 Voice Activity Detection(VAD) 모델로, 오디오를 음성과 침묵 구간으로 나눕니다.",
             "ten_vad": "TEN이 개발한 경량의 정밀한 Voice Activity Detection(VAD) 모델로, 오디오를 음성과 침묵 구간으로 나눕니다.",
+            "silero_v5_vad": "Silero가 개발한 정밀한 Voice Activity Detection(VAD) 모델의 v5로, 오디오를 음성과 침묵 구간으로 나눕니다.",
             "speaker_segmentation": "녹음을 익명 화자 발화 단위로 나누는 Pyannote 기반 로컬 화자 세그먼트 분리 모델입니다.",
             "speaker_embedding": "분리된 화자를 알려진 화자 프로필 라이브러리와 매칭하는 3D-Speaker embedding 모델입니다.",
             "itn_zh": "Inverse Text Normalization 모델 for Chinese. Converts spoken numbers (e.g., '一二三') into digits ('123')."

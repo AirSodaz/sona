@@ -94,12 +94,17 @@ pub(crate) fn ensure_adapter(
 
 pub(crate) fn local_asr_registry(recognizer_pool: RecognizerPool) -> LocalAsrRegistry {
     let vad_engines = sona_vad::built_in_engines();
+    let punct_engines = sona_punct::built_in_engines();
     LocalAsrRegistry::empty()
         .register(Arc::new(sona_sherpa_onnx::SherpaOnnxAdapter::new(
             recognizer_pool,
             vad_engines.clone(),
+            punct_engines.clone(),
         )))
-        .register(Arc::new(sona_llama_cpp::LlamaCppAdapter::new(vad_engines)))
+        .register(Arc::new(sona_llama_cpp::LlamaCppAdapter::new(
+            vad_engines,
+            punct_engines,
+        )))
 }
 
 pub(crate) fn local_asr_registry_default() -> LocalAsrRegistry {

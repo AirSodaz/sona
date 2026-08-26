@@ -8,6 +8,7 @@ members = [
     "adapters/export",
     "providers/asr/local/sherpa_onnx",
     "providers/asr/local/vad",
+    "providers/asr/local/punct",
     "providers/asr/local/llama_cpp",
     "adapters/media_detector",
     "adapters/model_downloads",

@@ -6004,6 +6004,7 @@ dependencies = [
  "sona-model-downloads",
  "sona-online-asr",
  "sona-online-llm",
+ "sona-punct",
  "sona-recovery-fs",
  "sona-runtime-fs",
  "sona-sherpa-onnx",
@@ -6117,6 +6118,7 @@ dependencies = [
  "sona-media-detector",
  "sona-model-downloads",
  "sona-online-asr",
+ "sona-punct",
  "sona-runtime-fs",
  "sona-sherpa-onnx",
  "sona-vad",
@@ -6236,6 +6238,15 @@ dependencies = [
  "sona-core",
  "tokio",
  "urlencoding",
+]
+
+[[package]]
+name = "sona-punct"
+version = "0.8.1"
+dependencies = [
+ "log",
+ "sherpa-onnx",
+ "sona-core",
 ]
 
 [[package]]
@@ -6383,6 +6394,7 @@ dependencies = [
  "sona-model-downloads",
  "sona-online-asr",
  "sona-online-llm",
+ "sona-punct",
  "sona-recovery-fs",
  "sona-runtime-fs",
  "sona-sherpa-onnx",

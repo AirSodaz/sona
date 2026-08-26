@@ -4,7 +4,7 @@ import { PRESET_MODELS, type ModelInfo } from '../types/modelCatalog';
 
 export const RECOMMENDED_RECOGNITION_MODEL_ID =
   'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
-export const RECOMMENDED_VAD_MODEL_ID = 'silero-vad';
+export const RECOMMENDED_VAD_MODEL_ID = 'silero-v5-vad';
 
 export interface OnboardingDownloadUpdate {
   modelId: string;

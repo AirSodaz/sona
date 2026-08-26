@@ -141,7 +141,7 @@ Use `Batch Import` when you already have audio or video files and want Sona to t
 
 - If no offline batch model is configured, Sona reopens onboarding instead of starting import.
 - `Settings > Model Settings` includes `Batch VAD Segmentation`, `VAD Buffer Size`, and `Max Concurrent Transcriptions`, which affect batch behavior. Turning off batch VAD makes local batch transcription recognize the whole file at once.
-- Batch VAD segmentation applies to every local engine, including the llama.cpp presets (Qwen3-ASR, Granite Speech); those models require the Silero VAD companion to be installed.
+- Batch VAD segmentation applies to every local engine, including the llama.cpp presets (Qwen3-ASR, Granite Speech). The default companion is Silero VAD v5; Silero v4 and TEN VAD are also available in the model catalog.
 
 ## 6. Transcript Editing And Playback
 

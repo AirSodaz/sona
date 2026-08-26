@@ -1,6 +1,5 @@
 use crate::audio::{extract_and_resample_audio, save_wav_file};
 use crate::gpu::{GpuFallbackNotice, resolve_gpu_acceleration_plan};
-use crate::punctuation::{Punctuation, load_punctuation_from_path};
 use crate::recognizer::{
     SafeOfflineRecognizer, build_offline_model_config, create_offline_recognizer,
     decode_offline_samples,
@@ -11,6 +10,9 @@ use sona_core::ports::asr::{
     AsrPortError, AsrPortErrorKind, BatchSegmentationMode, BatchTranscriberPort,
     BatchTranscriptionObserver, LocalAsrEngine, NoopBatchTranscriptionObserver,
     local_asr_engine_mismatch,
+};
+use sona_core::ports::punctuation::{
+    PunctuationEngineSet, PunctuationModel, apply_optional_punctuation, load_configured_punctuation,
 };
 use sona_core::ports::vad::{VadDetectionOptions, VadEngineSet};
 use sona_core::transcription::runtime::BatchTranscribePlan;
@@ -25,11 +27,15 @@ use std::sync::Arc;
 #[derive(Clone, Default)]
 pub struct LocalBatchAsrAdapter {
     vad_engines: VadEngineSet,
+    punctuation_engines: PunctuationEngineSet,
 }
 
 impl LocalBatchAsrAdapter {
-    pub fn new(vad_engines: VadEngineSet) -> Self {
-        Self { vad_engines }
+    pub fn new(vad_engines: VadEngineSet, punctuation_engines: PunctuationEngineSet) -> Self {
+        Self {
+            vad_engines,
+            punctuation_engines,
+        }
     }
 }
 
@@ -39,7 +45,8 @@ impl BatchTranscriberPort for LocalBatchAsrAdapter {
         &self,
         plan: BatchTranscribePlan,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        let job = BatchTranscriptionJob::from_plan(plan, &self.vad_engines)?;
+        let job =
+            BatchTranscriptionJob::from_plan(plan, &self.vad_engines, &self.punctuation_engines)?;
         job.transcribe(Arc::new(NoopBatchTranscriptionObserver))
             .await
     }
@@ -49,7 +56,8 @@ impl BatchTranscriberPort for LocalBatchAsrAdapter {
         plan: BatchTranscribePlan,
         observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        let job = BatchTranscriptionJob::from_plan(plan, &self.vad_engines)?;
+        let job =
+            BatchTranscriptionJob::from_plan(plan, &self.vad_engines, &self.punctuation_engines)?;
         job.transcribe(observer).await
     }
 }
@@ -73,12 +81,14 @@ struct BatchTranscriptionJob {
     gpu_acceleration: Option<String>,
     quiet: bool,
     vad_engines: VadEngineSet,
+    punct_engines: PunctuationEngineSet,
 }
 
 impl BatchTranscriptionJob {
     fn from_plan(
         plan: BatchTranscribePlan,
         vad_engines: &VadEngineSet,
+        punct_engines: &PunctuationEngineSet,
     ) -> Result<Self, AsrPortError> {
         if plan.engine != LocalAsrEngine::SherpaOnnx {
             return Err(local_asr_engine_mismatch(
@@ -113,6 +123,7 @@ impl BatchTranscriptionJob {
             gpu_acceleration: plan.gpu_acceleration,
             quiet: plan.quiet,
             vad_engines: vad_engines.clone(),
+            punct_engines: punct_engines.clone(),
         })
     }
 
@@ -171,7 +182,8 @@ impl BatchTranscriptionJob {
         )?;
 
         let recognizer = create_offline_recognizer(model_type, self.num_threads, provider)?;
-        let punctuation = load_punctuation_from_path(self.punctuation_model.as_deref())?;
+        let punctuation =
+            load_configured_punctuation(&self.punct_engines, self.punctuation_model.as_deref())?;
         let samples = extract_and_resample_audio(&self.input_path, 16000).await?;
         observer.on_progress(5.0);
         if let Some(path) = self.save_to_path.as_ref() {
@@ -186,7 +198,7 @@ impl BatchTranscriptionJob {
         let segments = transcribe_samples(
             &samples,
             &recognizer,
-            punctuation.as_ref(),
+            punctuation.as_deref(),
             &self.vad_engines,
             self.vad_model.as_deref(),
             self.vad_buffer,
@@ -211,7 +223,7 @@ impl BatchTranscriptionJob {
 fn transcribe_samples(
     samples: &[f32],
     recognizer: &SafeOfflineRecognizer,
-    punctuation: Option<&Punctuation>,
+    punctuation: Option<&dyn PunctuationModel>,
     vad_engines: &VadEngineSet,
     vad_model: Option<&Path>,
     vad_buffer: f32,
@@ -286,17 +298,16 @@ fn transcribe_samples(
     Ok(results)
 }
 
-fn finalize_transcript_text(cleaned_text: &str, punctuation: Option<&Punctuation>) -> String {
-    let mut result = cleaned_text.trim().to_string();
+fn finalize_transcript_text(
+    cleaned_text: &str,
+    punctuation: Option<&dyn PunctuationModel>,
+) -> String {
+    let result = cleaned_text.trim().to_string();
     if result.is_empty() {
         return result;
     }
 
-    if let Some(punctuation) = punctuation {
-        result = punctuation.add_punct(&result);
-    }
-
-    result
+    apply_optional_punctuation(punctuation, &result)
 }
 
 #[cfg(test)]

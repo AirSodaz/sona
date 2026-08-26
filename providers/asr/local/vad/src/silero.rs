@@ -69,7 +69,10 @@ pub(super) fn is_ten_vad_model_path(model_path: &Path) -> bool {
 
 fn resolve_display_stem(model_path: &Path) -> Option<String> {
     if model_path.is_file() {
-        return model_path.file_stem().and_then(|s| s.to_str()).map(String::from);
+        return model_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(String::from);
     }
 
     // Directories fall back to the single contained .onnx file when readable.
@@ -77,7 +80,13 @@ fn resolve_display_stem(model_path: &Path) -> Option<String> {
         .ok()?
         .flatten()
         .find(|entry| entry.path().extension().is_some_and(|ext| ext == "onnx"))
-        .and_then(|entry| entry.path().file_stem().and_then(|s| s.to_str()).map(String::from))
+        .and_then(|entry| {
+            entry
+                .path()
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(String::from)
+        })
 }
 
 #[cfg(test)]
@@ -123,7 +132,11 @@ mod tests {
     #[test]
     fn detect_rejects_unsupported_sample_rates() {
         let error = SileroOnnxEngine
-            .detect(&[0.0], 44_100, &VadDetectionOptions::batch_defaults("unused"))
+            .detect(
+                &[0.0],
+                44_100,
+                &VadDetectionOptions::batch_defaults("unused"),
+            )
             .unwrap_err();
 
         assert_eq!(error.kind, AsrPortErrorKind::Unsupported);

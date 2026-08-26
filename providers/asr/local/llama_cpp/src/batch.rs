@@ -20,6 +20,9 @@ use sona_core::ports::asr::{
     BatchTranscriptionObserver, LocalAsrEngine, NoopBatchTranscriptionObserver,
     local_asr_engine_mismatch,
 };
+use sona_core::ports::punctuation::{
+    PunctuationEngineSet, apply_optional_punctuation, load_configured_punctuation,
+};
 use sona_core::ports::vad::{VadDetectionOptions, VadEngineSet};
 use sona_core::transcription::runtime::BatchTranscribePlan;
 use sona_core::transcription::segmentation::{
@@ -50,11 +53,15 @@ static MODEL_CACHE: OnceLock<Mutex<HashMap<ModelCacheKey, Arc<LlamaModel>>>> = O
 #[derive(Clone, Default)]
 pub struct LlamaBatchAsrAdapter {
     vad_engines: VadEngineSet,
+    punct_engines: PunctuationEngineSet,
 }
 
 impl LlamaBatchAsrAdapter {
-    pub fn new(vad_engines: VadEngineSet) -> Self {
-        Self { vad_engines }
+    pub fn new(vad_engines: VadEngineSet, punct_engines: PunctuationEngineSet) -> Self {
+        Self {
+            vad_engines,
+            punct_engines,
+        }
     }
 }
 
@@ -64,7 +71,8 @@ impl BatchTranscriberPort for LlamaBatchAsrAdapter {
         &self,
         plan: BatchTranscribePlan,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        let job = LlamaBatchTranscriptionJob::from_plan(plan, &self.vad_engines)?;
+        let job =
+            LlamaBatchTranscriptionJob::from_plan(plan, &self.vad_engines, &self.punct_engines)?;
         tokio::task::spawn_blocking(move || {
             job.transcribe(Arc::new(NoopBatchTranscriptionObserver))
         })
@@ -82,7 +90,8 @@ impl BatchTranscriberPort for LlamaBatchAsrAdapter {
         plan: BatchTranscribePlan,
         observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        let job = LlamaBatchTranscriptionJob::from_plan(plan, &self.vad_engines)?;
+        let job =
+            LlamaBatchTranscriptionJob::from_plan(plan, &self.vad_engines, &self.punct_engines)?;
         tokio::task::spawn_blocking(move || job.transcribe(observer))
             .await
             .map_err(|error| {
@@ -94,7 +103,7 @@ impl BatchTranscriberPort for LlamaBatchAsrAdapter {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct LlamaBatchTranscriptionJob {
     input_path: PathBuf,
     model_path: PathBuf,
@@ -111,13 +120,16 @@ struct LlamaBatchTranscriptionJob {
     vad_model: Option<PathBuf>,
     vad_buffer: f32,
     batch_segmentation_mode: BatchSegmentationMode,
+    punctuation_model: Option<PathBuf>,
     vad_engines: VadEngineSet,
+    punct_engines: PunctuationEngineSet,
 }
 
 impl LlamaBatchTranscriptionJob {
     fn from_plan(
         plan: BatchTranscribePlan,
         vad_engines: &VadEngineSet,
+        punct_engines: &PunctuationEngineSet,
     ) -> Result<Self, AsrPortError> {
         if plan.engine != LocalAsrEngine::LlamaCpp {
             return Err(local_asr_engine_mismatch(
@@ -175,7 +187,9 @@ impl LlamaBatchTranscriptionJob {
             vad_model: plan.vad_model.map(PathBuf::from),
             vad_buffer: plan.vad_buffer,
             batch_segmentation_mode: plan.batch_segmentation_mode,
+            punctuation_model: plan.punctuation_model.map(PathBuf::from),
             vad_engines: vad_engines.clone(),
+            punct_engines: punct_engines.clone(),
         })
     }
 
@@ -224,6 +238,8 @@ impl LlamaBatchTranscriptionJob {
         observer.on_progress(10.0);
 
         let audio_segments = self.plan_audio_segments(&samples, sample_rate)?;
+        let punctuation =
+            load_configured_punctuation(&self.punct_engines, self.punctuation_model.as_deref())?;
         let prompt = build_transcription_prompt(
             &self.model_type,
             &model,
@@ -241,7 +257,7 @@ impl LlamaBatchTranscriptionJob {
                 continue;
             }
             let segment_samples = samples[start_sample..end_sample].to_vec();
-            if let Some(segment_result) = transcribe_segment(
+            if let Some(mut segment_result) = transcribe_segment(
                 backend,
                 &model,
                 &mtmd,
@@ -256,11 +272,15 @@ impl LlamaBatchTranscriptionJob {
                 segment_total,
                 observer.as_ref(),
             )? {
-                observer.on_transcript_update(&TranscriptUpdate {
-                    remove_ids: Vec::new(),
-                    upsert_segments: vec![segment_result.clone()],
-                });
-                results.push(segment_result);
+                segment_result.text =
+                    apply_optional_punctuation(punctuation.as_deref(), &segment_result.text);
+                if !segment_result.text.is_empty() {
+                    observer.on_transcript_update(&TranscriptUpdate {
+                        remove_ids: Vec::new(),
+                        upsert_segments: vec![segment_result.clone()],
+                    });
+                    results.push(segment_result);
+                }
             }
         }
 
@@ -708,9 +728,6 @@ fn validate_supported_options(
     }
     if plan.enable_itn {
         unsupported.push("enable_itn");
-    }
-    if plan.punctuation_model.is_some() {
-        unsupported.push("punctuation model");
     }
     if plan.speaker_processing.is_some() {
         unsupported.push("speaker processing");
@@ -1185,6 +1202,7 @@ mod tests {
     };
     use sona_core::export::ExportFormat;
     use sona_core::ports::asr::{AsrPortErrorKind, LocalAsrEngine};
+    use sona_core::ports::punctuation::PunctuationEngineSet;
     use sona_core::ports::vad::VadEngineSet;
     use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
     use sona_core::transcription::segmentation::AudioSegment;
@@ -1192,6 +1210,10 @@ mod tests {
 
     fn empty_vad_engines() -> VadEngineSet {
         VadEngineSet::empty()
+    }
+
+    fn empty_punct_engines() -> PunctuationEngineSet {
+        PunctuationEngineSet::empty()
     }
 
     fn plan() -> BatchTranscribePlan {
@@ -1256,7 +1278,12 @@ mod tests {
 
         // The guard passes; the job then fails on the missing input file,
         // proving model type was accepted by dispatch.
-        let error = LlamaBatchTranscriptionJob::from_plan(plan, &empty_vad_engines()).unwrap_err();
+        let error = LlamaBatchTranscriptionJob::from_plan(
+            plan,
+            &empty_vad_engines(),
+            &empty_punct_engines(),
+        )
+        .unwrap_err();
 
         assert_eq!(error.kind, AsrPortErrorKind::InvalidRequest);
         assert!(
@@ -1280,7 +1307,37 @@ mod tests {
 
         // VAD options pass validation; the job then fails on the missing
         // model/mmproj file configuration instead.
-        let error = LlamaBatchTranscriptionJob::from_plan(plan, &empty_vad_engines()).unwrap_err();
+        let error = LlamaBatchTranscriptionJob::from_plan(
+            plan,
+            &empty_vad_engines(),
+            &empty_punct_engines(),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.kind, AsrPortErrorKind::Model);
+        assert!(error.message.contains("file configuration"));
+        std::fs::remove_file(input).unwrap();
+    }
+
+    #[test]
+    fn punctuation_configuration_is_accepted_for_batch_runs() {
+        let mut plan = plan();
+        let input = std::env::temp_dir().join(format!(
+            "sona-llama-punct-accept-{}.wav",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::write(&input, b"not-a-real-wav").unwrap();
+        plan.input_path = input.clone();
+        plan.punctuation_model = Some("/models/punct".to_string());
+
+        // Punctuation options pass validation; the job then fails on the
+        // missing model/mmproj file configuration instead.
+        let error = LlamaBatchTranscriptionJob::from_plan(
+            plan,
+            &empty_vad_engines(),
+            &empty_punct_engines(),
+        )
+        .unwrap_err();
 
         assert_eq!(error.kind, AsrPortErrorKind::Model);
         assert!(error.message.contains("file configuration"));
@@ -1292,7 +1349,12 @@ mod tests {
         let mut plan = plan();
         plan.model_type = "whisper-large".to_string();
 
-        let error = LlamaBatchTranscriptionJob::from_plan(plan, &empty_vad_engines()).unwrap_err();
+        let error = LlamaBatchTranscriptionJob::from_plan(
+            plan,
+            &empty_vad_engines(),
+            &empty_punct_engines(),
+        )
+        .unwrap_err();
 
         assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
         assert!(error.message.contains(MODEL_TYPE_QWEN3_ASR));
@@ -1399,7 +1461,12 @@ mod tests {
         let mut plan = plan();
         plan.engine = LocalAsrEngine::SherpaOnnx;
 
-        let error = LlamaBatchTranscriptionJob::from_plan(plan, &empty_vad_engines()).unwrap_err();
+        let error = LlamaBatchTranscriptionJob::from_plan(
+            plan,
+            &empty_vad_engines(),
+            &empty_punct_engines(),
+        )
+        .unwrap_err();
         assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
         assert_eq!(
             error.message,

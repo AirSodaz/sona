@@ -185,13 +185,16 @@ pub(crate) async fn transcribe_local_asr_batch(
     request: FfiLocalAsrBatchRequest,
 ) -> SonaCoreBindingResult<FfiLocalAsrBatchResult> {
     let plan = build_local_batch_plan(request)?;
-    sona_sherpa_onnx::batch::LocalBatchAsrAdapter::new(sona_vad::built_in_engines())
-        .transcribe(plan)
-        .await
-        .map(|segments| FfiLocalAsrBatchResult {
-            segments: segments.iter().map(transcript_segment_to_ffi).collect(),
-        })
-        .map_err(Into::into)
+    sona_sherpa_onnx::batch::LocalBatchAsrAdapter::new(
+        sona_vad::built_in_engines(),
+        sona_punct::built_in_engines(),
+    )
+    .transcribe(plan)
+    .await
+    .map(|segments| FfiLocalAsrBatchResult {
+        segments: segments.iter().map(transcript_segment_to_ffi).collect(),
+    })
+    .map_err(Into::into)
 }
 
 pub(crate) fn validate_request(request: &FfiOnlineAsrBatchRequest) -> SonaCoreBindingResult<()> {

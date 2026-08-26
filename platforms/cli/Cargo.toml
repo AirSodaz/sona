@@ -21,6 +21,7 @@ sona-application = { path = "../../application" }
 sona-api-server = { path = "../../adapters/api_server" }
 sona-sherpa-onnx = { path = "../../providers/asr/local/sherpa_onnx" }
 sona-vad = { path = "../../providers/asr/local/vad" }
+sona-punct = { path = "../../providers/asr/local/punct" }
 sona-llama-cpp = { path = "../../providers/asr/local/llama_cpp" }
 sona-media-detector = { path = "../../adapters/media_detector" }
 sona-model-downloads = { path = "../../adapters/model_downloads" }

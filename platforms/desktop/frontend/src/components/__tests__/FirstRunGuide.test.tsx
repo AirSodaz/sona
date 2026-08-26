@@ -82,9 +82,9 @@ describe('FirstRunGuide', () => {
         language: 'zh,en',
       },
       {
-        id: 'silero-vad',
-        name: 'Silero VAD',
-        description: 'settings.descriptions.silero_vad',
+        id: 'silero-v5-vad',
+        name: 'Silero V5 VAD',
+        description: 'settings.descriptions.silero_v5_vad',
         size: '629KB',
         language: 'zh,en',
       },

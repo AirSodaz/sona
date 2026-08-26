@@ -27,10 +27,8 @@ pub(crate) fn detect_with_config(
     }
 
     let capacity = detector_capacity_seconds(buffer_seconds);
-    let mut detector =
-        VoiceActivityDetector::create(config, capacity).ok_or_else(|| {
-            AsrPortError::runtime("Failed to create VoiceActivityDetector")
-        })?;
+    let mut detector = VoiceActivityDetector::create(config, capacity)
+        .ok_or_else(|| AsrPortError::runtime("Failed to create VoiceActivityDetector"))?;
 
     let window_size = detector_window_size(config);
     let mut spans = Vec::new();
@@ -95,7 +93,9 @@ pub(crate) fn reject_unsupported_rate(
     } else {
         Err(AsrPortError::new(
             AsrPortErrorKind::Unsupported,
-            format!("{engine_label} supports {SUPPORTED_SAMPLE_RATE} Hz input, got {sample_rate} Hz."),
+            format!(
+                "{engine_label} supports {SUPPORTED_SAMPLE_RATE} Hz input, got {sample_rate} Hz."
+            ),
         ))
     }
 }
@@ -125,7 +125,10 @@ pub fn resolve_model_onnx_path(path: &Path) -> Result<PathBuf, AsrPortError> {
         .ok_or_else(|| {
             AsrPortError::new(
                 AsrPortErrorKind::Model,
-                format!("No .onnx file found in VAD model directory {}", path.display()),
+                format!(
+                    "No .onnx file found in VAD model directory {}",
+                    path.display()
+                ),
             )
         })
 }
@@ -142,7 +145,10 @@ mod tests {
     #[test]
     fn non_positive_buffer_falls_back_to_default_capacity() {
         assert_eq!(detector_capacity_seconds(0.0), 60.0);
-        assert_eq!(detector_capacity_seconds(-1.0), DEFAULT_DETECTOR_CAPACITY_SECONDS);
+        assert_eq!(
+            detector_capacity_seconds(-1.0),
+            DEFAULT_DETECTOR_CAPACITY_SECONDS
+        );
         assert_eq!(detector_capacity_seconds(5.0), 5.0);
     }
 
