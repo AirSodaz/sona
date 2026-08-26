@@ -333,6 +333,67 @@ test('desktop bundle preparer fails when a llama.cpp shared library is missing',
   );
 });
 
+test('desktop bundle preparer stages and requires ggml-vulkan when the Vulkan build is enabled', async () => {
+  const { prepareDesktopBundle } = await loadDesktopBundlePreparer();
+  const root = makeTempRepo();
+  const target = 'x86_64-pc-windows-msvc';
+  const releaseDir = path.join(root, 'target', target, 'release');
+  const sherpaLibDir = path.join(root, 'native-libs');
+  const configPath = path.join(root, 'base-tauri.conf.json');
+  fs.mkdirSync(releaseDir, { recursive: true });
+  fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
+  writeSherpaRuntimeLibraries(sherpaLibDir, target);
+  writeLlamaCppRuntimeLibraries(releaseDir, target);
+  fs.writeFileSync(path.join(releaseDir, 'ggml-vulkan.dll'), 'vulkan');
+  fs.writeFileSync(configPath, JSON.stringify({ bundle: {} }));
+
+  process.env.LLAMA_ENABLE_VULKAN = '1';
+  try {
+    const prepared = await prepareDesktopBundle({
+      repoRoot: root,
+      target,
+      configPath,
+      ffmpegLockPath: writeTestFfmpegLock(root, target),
+      sherpaLibDir,
+      runCommand() {},
+    });
+    assert.equal(fs.existsSync(path.join(prepared.runtimeLibDir, 'ggml-vulkan.dll')), true);
+  } finally {
+    delete process.env.LLAMA_ENABLE_VULKAN;
+  }
+});
+
+test('desktop bundle preparer fails when the Vulkan build is enabled but ggml-vulkan is missing', async () => {
+  const { prepareDesktopBundle } = await loadDesktopBundlePreparer();
+  const root = makeTempRepo();
+  const target = 'x86_64-pc-windows-msvc';
+  const releaseDir = path.join(root, 'target', target, 'release');
+  const sherpaLibDir = path.join(root, 'native-libs');
+  const configPath = path.join(root, 'base-tauri.conf.json');
+  fs.mkdirSync(releaseDir, { recursive: true });
+  fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
+  writeSherpaRuntimeLibraries(sherpaLibDir, target);
+  writeLlamaCppRuntimeLibraries(releaseDir, target);
+  fs.writeFileSync(configPath, JSON.stringify({ bundle: {} }));
+
+  process.env.LLAMA_ENABLE_VULKAN = '1';
+  try {
+    await assert.rejects(
+      prepareDesktopBundle({
+        repoRoot: root,
+        target,
+        configPath,
+        ffmpegLockPath: writeTestFfmpegLock(root, target),
+        sherpaLibDir,
+        runCommand() {},
+      }),
+      /llama\.cpp dynamic build is missing runtime library anchors.*ggml-vulkan/u,
+    );
+  } finally {
+    delete process.env.LLAMA_ENABLE_VULKAN;
+  }
+});
+
 test('desktop bundle preparer collects llama.cpp libraries from Cargo build output', async () => {
   const { stageLlamaCppRuntimeLibraries } = await loadDesktopBundlePreparer();
   const root = makeTempRepo();

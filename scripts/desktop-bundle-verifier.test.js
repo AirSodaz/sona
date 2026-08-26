@@ -177,3 +177,44 @@ test('tauri bundle verification does not mix native and target-qualified Windows
   assert.notEqual(result.status, 0, result.stdout);
   assert.match(result.stderr, /No installer artifact was found/u);
 });
+
+test('tauri bundle verification requires ggml-vulkan only for Vulkan-enabled Windows builds', () => {
+  const target = 'x86_64-pc-windows-msvc';
+  const root = makeTempRepo();
+  const stagingRoot = path.join(root, 'target', 'desktop-bundle', target);
+  const sidecarsDir = path.join(stagingRoot, 'sidecars');
+  const runtimeLibDir = path.join(stagingRoot, 'runtime-libs');
+  const configPath = path.join(stagingRoot, 'tauri.bundle.conf.json');
+  fs.mkdirSync(sidecarsDir, { recursive: true });
+  fs.mkdirSync(runtimeLibDir, { recursive: true });
+  fs.writeFileSync(path.join(sidecarsDir, `ffmpeg-${target}.exe`), 'ffmpeg');
+  fs.writeFileSync(path.join(sidecarsDir, `sona-cli-${target}.exe`), 'cli');
+  writeRuntimeLibraries(runtimeLibDir, target);
+  writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
+  writeCanonicalAppBundle(root, target);
+
+  const runVerifier = (environment) => spawnSync(
+    node,
+    [
+      path.join(repoRoot, 'platforms', 'desktop', 'scripts', 'verify-tauri-bundle.js'),
+      '--repo-root',
+      root,
+      '--target',
+      target,
+      '--config',
+      configPath,
+    ],
+    { cwd: repoRoot, encoding: 'utf8', env: environment },
+  );
+
+  // Default CPU-only build: ggml-vulkan.dll must not be required.
+  const cpuResult = runVerifier({ ...process.env });
+  assert.equal(cpuResult.status, 0, cpuResult.stderr || cpuResult.stdout);
+
+  // Vulkan-enabled build with the library staged: verification passes.
+  const canonicalRuntimeDir = path.join(root, 'target', target, 'release');
+  fs.writeFileSync(path.join(canonicalRuntimeDir, 'ggml-vulkan.dll'), 'vulkan');
+  fs.writeFileSync(path.join(runtimeLibDir, 'ggml-vulkan.dll'), 'vulkan');
+  const vulkanResult = runVerifier({ ...process.env, LLAMA_ENABLE_VULKAN: '1' });
+  assert.equal(vulkanResult.status, 0, vulkanResult.stderr || vulkanResult.stdout);
+});

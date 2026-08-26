@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, LazyLock, Mutex, OnceLock};
 
 use async_trait::async_trait;
 use llama_cpp_2::context::params::LlamaContextParams;
@@ -43,7 +43,9 @@ const QWEN3_ASR_HOTWORDS_MAX_CHARS: usize = 2048;
 const GRANITE_SPEECH_HOTWORDS_MAX_CHARS: usize = 256;
 
 static BACKEND: OnceLock<Result<LlamaBackend, String>> = OnceLock::new();
-static MODEL_CACHE: OnceLock<Mutex<HashMap<PathBuf, Arc<LlamaModel>>>> = OnceLock::new();
+/// Cache key: canonical model path plus the resolved GPU layer count.
+type ModelCacheKey = (PathBuf, u32);
+static MODEL_CACHE: OnceLock<Mutex<HashMap<ModelCacheKey, Arc<LlamaModel>>>> = OnceLock::new();
 
 #[derive(Clone, Default)]
 pub struct LlamaBatchAsrAdapter {
@@ -104,6 +106,8 @@ struct LlamaBatchTranscriptionJob {
     /// Trained Qwen3-ASR prefill name (`Some("Chinese")`, ...); `None`
     /// lets the model auto-detect.
     language_prefill: Option<&'static str>,
+    /// Resolved GPU offload intent for this run.
+    gpu_offload: GpuOffload,
     vad_model: Option<PathBuf>,
     vad_buffer: f32,
     batch_segmentation_mode: BatchSegmentationMode,
@@ -167,6 +171,7 @@ impl LlamaBatchTranscriptionJob {
             model_type: plan.model_type,
             hotwords: options.hotwords,
             language_prefill: options.language_prefill,
+            gpu_offload: options.gpu_offload,
             vad_model: plan.vad_model.map(PathBuf::from),
             vad_buffer: plan.vad_buffer,
             batch_segmentation_mode: plan.batch_segmentation_mode,
@@ -179,22 +184,31 @@ impl LlamaBatchTranscriptionJob {
         observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
         let backend = backend()?;
-        let model = load_model(backend, &self.model_path)?;
-        let mtmd_params = MtmdContextParams {
-            use_gpu: false,
-            n_threads: self.num_threads,
-            ..MtmdContextParams::default()
+        let requested = match self.gpu_offload {
+            GpuOffload::Auto => resolve_auto_gpu_offload(gpu_backend_available()),
+            explicit => explicit,
         };
-        let mmproj = path_to_str(&self.mmproj_path, "mmproj")?;
-        let mtmd = MtmdContext::init_from_file(mmproj, &model, &mtmd_params).map_err(|error| {
-            AsrPortError::new(
-                AsrPortErrorKind::Model,
-                format!(
-                    "Failed to initialize llama.cpp ASR mmproj {}: {error}",
-                    self.mmproj_path.display()
-                ),
-            )
-        })?;
+        let enable_gpu = requested == GpuOffload::Enabled;
+        let (model, mtmd) = match init_inference(
+            backend,
+            &self.model_path,
+            &self.mmproj_path,
+            self.num_threads,
+            enable_gpu,
+        ) {
+            Ok(pair) => pair,
+            Err(error) if enable_gpu => {
+                log::warn!("llama.cpp GPU offload failed; retrying on CPU: {error}");
+                init_inference(
+                    backend,
+                    &self.model_path,
+                    &self.mmproj_path,
+                    self.num_threads,
+                    false,
+                )?
+            }
+            Err(error) => return Err(error),
+        };
         if !mtmd.support_audio() {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::Model,
@@ -634,6 +648,55 @@ struct ValidatedOptions {
     hotwords: Vec<String>,
     /// Trained Qwen3-ASR prefill name; `None` lets the model auto-detect.
     language_prefill: Option<&'static str>,
+    /// Resolved GPU offload intent for this run.
+    gpu_offload: GpuOffload,
+}
+
+/// GPU offload request resolved from the engine-neutral `gpu_acceleration`
+/// value. Vulkan is the only bundled llama.cpp backend; `cuda` is accepted
+/// as an alias because CUDA-enabled builds behave identically for these
+/// small models.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GpuOffload {
+    Disabled,
+    Enabled,
+    /// Decide at model-load time from the devices the linked runtime exposes.
+    Auto,
+}
+
+/// Whether the linked ggml runtime registered a non-CPU device — a bundled
+/// Vulkan/CUDA backend backed by a usable driver. CPU-only builds always
+/// report `false`.
+pub(crate) fn gpu_backend_available() -> bool {
+    static GPU_BACKEND_AVAILABLE: LazyLock<bool> =
+        LazyLock::new(|| LlamaModelParams::default().devices().len() > 1);
+    *GPU_BACKEND_AVAILABLE
+}
+
+/// Full-offload layer count; every supported model fits comfortably in the
+/// VRAM implied by any present accelerator.
+const GPU_OFFLOAD_ALL_LAYERS: u32 = u32::MAX;
+
+fn resolve_gpu_offload(value: Option<&str>) -> Result<GpuOffload, AsrPortError> {
+    match value.map(str::trim).filter(|value| !value.is_empty()) {
+        None | Some("cpu") => Ok(GpuOffload::Disabled),
+        Some("auto") => Ok(GpuOffload::Auto),
+        Some("cuda") | Some("vulkan") => Ok(GpuOffload::Enabled),
+        Some(other) => Err(AsrPortError::new(
+            AsrPortErrorKind::Unsupported,
+            format!(
+                "llama.cpp batch transcription supports gpu_acceleration 'auto', 'cpu', 'cuda', or 'vulkan'; got '{other}'."
+            ),
+        )),
+    }
+}
+
+fn resolve_auto_gpu_offload(gpu_present: bool) -> GpuOffload {
+    if gpu_present {
+        GpuOffload::Enabled
+    } else {
+        GpuOffload::Disabled
+    }
 }
 
 fn validate_supported_options(
@@ -652,12 +715,17 @@ fn validate_supported_options(
     if plan.speaker_processing.is_some() {
         unsupported.push("speaker processing");
     }
-    if !matches!(
-        plan.gpu_acceleration.as_deref(),
-        None | Some("auto" | "cpu")
-    ) {
-        unsupported.push("GPU acceleration");
+    if !unsupported.is_empty() {
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::Unsupported,
+            format!(
+                "llama.cpp batch transcription does not yet support: {}.",
+                unsupported.join(", ")
+            ),
+        ));
     }
+
+    let gpu_requested = resolve_gpu_offload(plan.gpu_acceleration.as_deref())?;
 
     if !unsupported.is_empty() {
         return Err(AsrPortError::new(
@@ -699,6 +767,7 @@ fn validate_supported_options(
     Ok(ValidatedOptions {
         hotwords,
         language_prefill,
+        gpu_offload: gpu_requested,
     })
 }
 
@@ -714,7 +783,45 @@ fn backend() -> Result<&'static LlamaBackend, AsrPortError> {
         })
 }
 
-fn load_model(backend: &LlamaBackend, model_path: &Path) -> Result<Arc<LlamaModel>, AsrPortError> {
+/// Loads the model and multimodal projector. `n_gpu_layers` is explicit so
+/// CPU runs stay on CPU even when a GPU backend is registered
+/// (`LlamaModelParams` defaults to auto-offload).
+fn init_inference(
+    backend: &'static LlamaBackend,
+    model_path: &Path,
+    mmproj_path: &Path,
+    num_threads: i32,
+    enable_gpu: bool,
+) -> Result<(Arc<LlamaModel>, MtmdContext), AsrPortError> {
+    let n_gpu_layers = if enable_gpu {
+        GPU_OFFLOAD_ALL_LAYERS
+    } else {
+        0
+    };
+    let model = load_model(backend, model_path, n_gpu_layers)?;
+    let mtmd_params = MtmdContextParams {
+        use_gpu: enable_gpu,
+        n_threads: num_threads,
+        ..MtmdContextParams::default()
+    };
+    let mmproj = path_to_str(mmproj_path, "mmproj")?;
+    let mtmd = MtmdContext::init_from_file(mmproj, &model, &mtmd_params).map_err(|error| {
+        AsrPortError::new(
+            AsrPortErrorKind::Model,
+            format!(
+                "Failed to initialize llama.cpp ASR mmproj {}: {error}",
+                mmproj_path.display()
+            ),
+        )
+    })?;
+    Ok((model, mtmd))
+}
+
+fn load_model(
+    backend: &LlamaBackend,
+    model_path: &Path,
+    n_gpu_layers: u32,
+) -> Result<Arc<LlamaModel>, AsrPortError> {
     let canonical_path = model_path.canonicalize().map_err(|error| {
         AsrPortError::new(
             AsrPortErrorKind::FileSystem,
@@ -724,6 +831,9 @@ fn load_model(backend: &LlamaBackend, model_path: &Path) -> Result<Arc<LlamaMode
             ),
         )
     })?;
+    // The layer count participates in the key so switching between CPU and
+    // GPU runs never reuses a model loaded for the other mode.
+    let cache_key = (canonical_path, n_gpu_layers);
     let cache = MODEL_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let mut cache = cache.lock().map_err(|_| {
         AsrPortError::new(
@@ -731,23 +841,26 @@ fn load_model(backend: &LlamaBackend, model_path: &Path) -> Result<Arc<LlamaMode
             "llama.cpp model cache lock was poisoned.",
         )
     })?;
-    if let Some(model) = cache.get(&canonical_path) {
+    if let Some(model) = cache.get(&cache_key) {
         return Ok(Arc::clone(model));
     }
 
+    // An explicit count is required: `LlamaModelParams::default()` carries
+    // n_gpu_layers=-1, which auto-offloads as soon as any GPU backend is
+    // registered — silently ignoring an explicit 'cpu' request.
+    let params = LlamaModelParams::default().with_n_gpu_layers(n_gpu_layers);
     let model = Arc::new(
-        LlamaModel::load_from_file(backend, &canonical_path, &LlamaModelParams::default())
-            .map_err(|error| {
-                AsrPortError::new(
-                    AsrPortErrorKind::Model,
-                    format!(
-                        "Failed to load llama.cpp model {}: {error}",
-                        canonical_path.display()
-                    ),
-                )
-            })?,
+        LlamaModel::load_from_file(backend, &cache_key.0, &params).map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::Model,
+                format!(
+                    "Failed to load llama.cpp model {}: {error}",
+                    cache_key.0.display()
+                ),
+            )
+        })?,
     );
-    cache.insert(canonical_path, Arc::clone(&model));
+    cache.insert(cache_key, Arc::clone(&model));
     Ok(model)
 }
 
@@ -1063,12 +1176,12 @@ fn is_qwen3_asr_language_name(candidate: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        LlamaBatchTranscriptionJob, MODEL_TYPE_GRANITE_SPEECH, MODEL_TYPE_QWEN3_ASR,
+        GpuOffload, LlamaBatchTranscriptionJob, MODEL_TYPE_GRANITE_SPEECH, MODEL_TYPE_QWEN3_ASR,
         audio_ingest_progress, granite_speech_prompt, llama_generation_progress,
         normalize_hotwords, parse_partial_transcript_output, parse_qwen3_asr_output,
         parse_qwen3_asr_partial_output, parse_transcript_output, pcm_s16le_bytes_to_f32,
-        qwen3_asr_language, resolve_ffmpeg_sidecar_path_from_exe, segment_bounds,
-        truncate_hotwords, validate_supported_options,
+        qwen3_asr_language, resolve_auto_gpu_offload, resolve_ffmpeg_sidecar_path_from_exe,
+        resolve_gpu_offload, segment_bounds, truncate_hotwords, validate_supported_options,
     };
     use sona_core::export::ExportFormat;
     use sona_core::ports::asr::{AsrPortErrorKind, LocalAsrEngine};
@@ -1273,14 +1386,12 @@ mod tests {
         let mut plan = plan();
         plan.save_to_path = Some(PathBuf::from("copy.wav"));
         plan.enable_itn = true;
-        plan.gpu_acceleration = Some("cuda".to_string());
 
         let error = validate_supported_options(&plan).unwrap_err();
 
         assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
         assert!(error.message.contains("save_wav"));
         assert!(error.message.contains("enable_itn"));
-        assert!(error.message.contains("GPU acceleration"));
     }
 
     #[test]
@@ -1393,5 +1504,42 @@ mod tests {
             parse_qwen3_asr_output("language barriers exist everywhere"),
             "language barriers exist everywhere"
         );
+    }
+
+    #[test]
+    fn gpu_offload_mapping_covers_supported_values() {
+        assert_eq!(resolve_gpu_offload(None).unwrap(), GpuOffload::Disabled);
+        assert_eq!(
+            resolve_gpu_offload(Some("cpu")).unwrap(),
+            GpuOffload::Disabled
+        );
+        assert_eq!(resolve_gpu_offload(Some("auto")).unwrap(), GpuOffload::Auto);
+        assert_eq!(
+            resolve_gpu_offload(Some("cuda")).unwrap(),
+            GpuOffload::Enabled
+        );
+        assert_eq!(
+            resolve_gpu_offload(Some(" vulkan ")).unwrap(),
+            GpuOffload::Enabled
+        );
+        assert_eq!(resolve_gpu_offload(Some("")).unwrap(), GpuOffload::Disabled);
+
+        let error = resolve_gpu_offload(Some("directml")).unwrap_err();
+        assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
+        assert!(error.message.contains("'directml'"));
+    }
+
+    #[test]
+    fn auto_gpu_offload_follows_the_runtime_probe() {
+        assert_eq!(resolve_auto_gpu_offload(true), GpuOffload::Enabled);
+        assert_eq!(resolve_auto_gpu_offload(false), GpuOffload::Disabled);
+    }
+
+    #[test]
+    fn validated_options_carry_the_gpu_intent() {
+        let mut plan = plan();
+        plan.gpu_acceleration = Some("vulkan".to_string());
+        let options = validate_supported_options(&plan).unwrap();
+        assert_eq!(options.gpu_offload, GpuOffload::Enabled);
     }
 }

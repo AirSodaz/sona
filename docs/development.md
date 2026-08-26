@@ -10,6 +10,7 @@ This guide covers local setup, development, testing, and source builds. See the 
 - Corepack with the repository-pinned pnpm version
 - The stable Rust toolchain
 - CMake and a C/C++ compiler for the llama.cpp local ASR adapter. Desktop and CLI builds dynamically link its generated ggml and llama libraries; release bundles stage those libraries beside the host runtime. Build llama.cpp from a recent master — the Granite Speech GGUF requires b9045 or newer (verified against b10615); older local builds silently degrade Granite transcription quality.
+- Optional (Windows GPU builds): the Vulkan SDK. Local development builds stay CPU-only by default; bundled Windows x64 release builds enable the `llama-vulkan` feature (env `LLAMA_ENABLE_VULKAN=1` drives the packaging scripts) and require the SDK so CMake can compile the `ggml-vulkan` backend.
 - The platform dependencies required by Tauri
 
 On Ubuntu or Debian, install the desktop system dependencies with:

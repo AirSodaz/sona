@@ -16,3 +16,6 @@ log = "0.4"
 sona-core = { path = "../../../../core" }
 tokio = { version = "1", features = ["rt", "sync"] }
 uuid = { version = "1", features = ["v4", "fast-rng"] }
+
+[features]
+vulkan = ["llama-cpp-2/vulkan"]

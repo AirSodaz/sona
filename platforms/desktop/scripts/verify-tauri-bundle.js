@@ -245,7 +245,13 @@ function requiredRuntimeLibraries(target) {
 
 function llamaCppRuntimeLibraries(target) {
   if (process.env.LLAMA_BUILD_SHARED_LIBS === '0') return [];
-  if (target.includes('windows')) return ['ggml.dll', 'ggml-base.dll', 'ggml-cpu.dll', 'llama.dll'];
+  if (target.includes('windows')) {
+    const libraries = ['ggml.dll', 'ggml-base.dll', 'ggml-cpu.dll', 'llama.dll'];
+    if (process.env.LLAMA_ENABLE_VULKAN === '1') {
+      libraries.push('ggml-vulkan.dll');
+    }
+    return libraries;
+  }
   if (target.includes('apple')) {
     return [
       /^libggml(?:\.\d+)*\.dylib$/u,

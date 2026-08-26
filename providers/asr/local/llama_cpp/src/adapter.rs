@@ -6,7 +6,7 @@ use sona_core::ports::asr::{
 };
 use sona_core::ports::vad::VadEngineSet;
 
-use crate::batch::LlamaBatchAsrAdapter;
+use crate::batch::{LlamaBatchAsrAdapter, gpu_backend_available};
 
 /// Provider facade for the llama.cpp local ASR engine (Qwen3-ASR and
 /// Granite Speech batch inference).
@@ -32,8 +32,13 @@ impl LocalAsrAdapter for LlamaCppAdapter {
     fn capabilities(&self) -> EngineCapabilities {
         // Both supported models consume hotwords through their trained
         // prompt mechanisms (Qwen3 system-message context; Granite Speech
-        // `Keywords:` suffixes).
-        EngineCapabilities::BATCH | EngineCapabilities::HOTWORDS
+        // `Keywords:` suffixes). The GPU bit reflects the backends the
+        // linked ggml runtime actually registered at runtime.
+        let mut capabilities = EngineCapabilities::BATCH | EngineCapabilities::HOTWORDS;
+        if gpu_backend_available() {
+            capabilities |= EngineCapabilities::GPU;
+        }
+        capabilities
     }
 
     fn batch_transcriber(&self) -> Arc<dyn BatchTranscriberPort> {
@@ -54,10 +59,11 @@ mod tests {
         let adapter = LlamaCppAdapter::default();
 
         assert_eq!(adapter.engine(), LocalAsrEngine::LlamaCpp);
-        assert_eq!(
-            adapter.capabilities(),
-            EngineCapabilities::BATCH | EngineCapabilities::HOTWORDS
-        );
+        let mut expected = EngineCapabilities::BATCH | EngineCapabilities::HOTWORDS;
+        if gpu_backend_available() {
+            expected |= EngineCapabilities::GPU;
+        }
+        assert_eq!(adapter.capabilities(), expected);
         assert!(adapter.streaming_factory().is_none());
     }
 }

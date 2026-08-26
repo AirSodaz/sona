@@ -76,7 +76,13 @@ function buildStandaloneCli(repoRoot, target, runtimeLibDir, runCommand) {
   if (target.includes('apple')) {
     options.env = { ...process.env, SHERPA_ONNX_LIB_DIR: runtimeLibDir };
   }
-  runCommand('cargo', ['build', '-p', 'sona-cli', '--release', '--target', target], options);
+  const cargoArgs = ['build', '-p', 'sona-cli', '--release', '--target', target];
+  // Keep the standalone CLI on the same llama.cpp build variant as the app
+  // so both share one staged set of ggml runtime libraries.
+  if (vulkanEnabled() && target.includes('windows')) {
+    cargoArgs.push('--features', 'sona-cli/llama-vulkan');
+  }
+  runCommand('cargo', cargoArgs, options);
 }
 
 function stageCliSidecar(repoRoot, target, sidecarsDir) {
@@ -334,6 +340,9 @@ function isLlamaCppDynamicLibrary(name, target) {
 
 function requiredLlamaCppRuntimeLibraryAnchors(target) {
   const names = ['ggml', 'ggml-base', 'ggml-cpu', 'llama'];
+  if (vulkanEnabled() && target.includes('windows')) {
+    names.push('ggml-vulkan');
+  }
   if (target.includes('windows')) {
     return names.map((name) => new RegExp(`^${name}\\.dll$`, 'iu'));
   }
@@ -344,6 +353,10 @@ function requiredLlamaCppRuntimeLibraryAnchors(target) {
     return names.map((name) => new RegExp(`^lib${name}\\.so(?:\\.\\d+)*$`, 'u'));
   }
   throw new Error(`Unsupported desktop bundle target: ${target}`);
+}
+
+function vulkanEnabled() {
+  return process.env.LLAMA_ENABLE_VULKAN === '1';
 }
 
 function isPlatformDynamicLibrary(name, target) {
