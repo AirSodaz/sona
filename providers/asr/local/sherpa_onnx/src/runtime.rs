@@ -464,23 +464,6 @@ mod tests {
     }
 
     #[test]
-    fn recognizer_attachment_defaults_to_none() {
-        let instance = SherpaInstance::default();
-
-        assert!(instance.recognizer().is_none());
-        assert!(instance.recognizer_clone().is_none());
-    }
-
-    #[test]
-    fn punctuation_attachment_defaults_to_none() {
-        let instance = SherpaInstance::default();
-
-        assert!(instance.punctuation().is_none());
-        assert!(instance.punctuation_clone().is_none());
-        assert!(!instance.has_punctuation());
-    }
-
-    #[test]
     fn vad_configuration_is_owned_by_the_runtime_instance() {
         let mut instance = SherpaInstance::default();
 

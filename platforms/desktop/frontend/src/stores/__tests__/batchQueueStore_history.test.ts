@@ -151,23 +151,14 @@ describe('batchQueueStore History Integration', () => {
             { id: 'seg2', start: 1, end: 2, text: 'World', isFinal: true }
         ];
 
-        // Mock transcription success
-        (transcriptionService.transcribeFile as any).mockImplementation(async () => {
-            console.log('Mock transcription called');
-            return mockSegments;
-        });
+        vi.mocked(transcriptionService.transcribeFile).mockResolvedValue(mockSegments);
 
-        // Action: Add file (which auto-starts processing because config is set)
-        console.log('Adding files...');
         useBatchQueueStore.getState().addFiles([file]);
 
-        // Wait for async processing
-        console.log('Waiting for processing...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        console.log('Wait complete');
+        await vi.waitFor(() => {
+            expect(historyService.saveImportedFile).toHaveBeenCalledTimes(1);
+        });
 
-        // Assert History Save
-        expect(historyService.saveImportedFile).toHaveBeenCalledTimes(1);
         expect(historyService.saveImportedFile).toHaveBeenCalledWith(
             file,
             mockSegments,
@@ -177,7 +168,6 @@ describe('batchQueueStore History Integration', () => {
             'test-uuid-123',
         );
 
-        // Assert Item Status
         const queueState = useBatchQueueStore.getState();
         expect(queueState.queueItems[0].status).toBe('complete');
     });
@@ -220,20 +210,20 @@ describe('batchQueueStore History Integration', () => {
                 },
             },
         });
-        (transcriptionService.transcribeFile as any).mockResolvedValue(mockSegments);
+        vi.mocked(transcriptionService.transcribeFile).mockResolvedValue(mockSegments);
 
         useBatchQueueStore.getState().addFiles([file]);
 
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
-        expect(historyService.saveImportedFile).toHaveBeenCalledWith(
-            file,
-            mockSegments,
-            2,
-            undefined,
-            [],
-            'test-uuid-123',
-        );
+        await vi.waitFor(() => {
+            expect(historyService.saveImportedFile).toHaveBeenCalledWith(
+                file,
+                mockSegments,
+                2,
+                undefined,
+                [],
+                'test-uuid-123',
+            );
+        });
         expect(useBatchQueueStore.getState().queueItems[0]).toEqual(expect.objectContaining({
             historyId: 'history-1',
             status: 'complete',
@@ -245,19 +235,16 @@ describe('batchQueueStore History Integration', () => {
         const mockSegments = [
             { id: 'seg1', start: 0, end: 1, text: 'Hello', isFinal: true },
         ];
-        let resolveSave!: (value: { id: string; title: string; projectId: null }) => void;
+        const { promise: savePromise, resolve: resolveSave } = Promise.withResolvers<{
+            id: string;
+            title: string;
+            projectId: null;
+        }>();
 
-        (transcriptionService.transcribeFile as any).mockResolvedValue(mockSegments);
-        (historyService.saveImportedFile as any).mockImplementation(() => new Promise((resolve) => {
-            resolveSave = resolve;
-        }));
-
+        vi.mocked(transcriptionService.transcribeFile).mockResolvedValue(mockSegments);
+        vi.mocked(historyService.saveImportedFile).mockImplementation(() => savePromise as unknown as never);
         useBatchQueueStore.getState().addFiles([file]);
 
-        expect(useTranscriptStore.getState().title).toBe('meeting.wav');
-        expect(useTranscriptStore.getState().sourceHistoryId).toBeNull();
-
-        await new Promise((resolve) => setTimeout(resolve, 0));
         expect(useTranscriptStore.getState().title).toBe('meeting.wav');
         expect(useTranscriptStore.getState().sourceHistoryId).toBeNull();
 
@@ -267,11 +254,10 @@ describe('batchQueueStore History Integration', () => {
             projectId: null,
         });
 
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        expect(useTranscriptStore.getState().sourceHistoryId).toBe('history-1');
-        expect(useTranscriptStore.getState().title).toBe('Batch meeting.wav');
-
+        await vi.waitFor(() => {
+            expect(useTranscriptStore.getState().sourceHistoryId).toBe('history-1');
+            expect(useTranscriptStore.getState().title).toBe('Batch meeting.wav');
+        });
         const queueItemId = useBatchQueueStore.getState().queueItems[0].id;
         useBatchQueueStore.getState().setActiveItem(null);
         expect(useTranscriptStore.getState().title).toBe('');
@@ -292,7 +278,7 @@ describe('batchQueueStore History Integration', () => {
                 enableTimeline: false,
             }
         });
-        (transcriptionService.transcribeFile as any).mockResolvedValue(mockSegments);
+        vi.mocked(transcriptionService.transcribeFile).mockResolvedValue(mockSegments);
         vi.mocked(historyService.saveImportedFile).mockResolvedValueOnce({
             id: 'history-player',
             timestamp: 1,
@@ -309,8 +295,9 @@ describe('batchQueueStore History Integration', () => {
 
         useBatchQueueStore.getState().addFiles([file]);
 
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
+        await vi.waitFor(() => {
+            expect(historyService.getAudioUrl).toHaveBeenCalledWith('history-player');
+        });
         expect(historyService.getAudioUrl).toHaveBeenCalledWith('history-player');
         expect(useTranscriptStore.getState()).toEqual(expect.objectContaining({
             sourceHistoryId: 'history-player',
@@ -331,7 +318,7 @@ describe('batchQueueStore History Integration', () => {
                 enableTimeline: false,
             }
         });
-        (transcriptionService.transcribeFile as any).mockResolvedValue(mockSegments);
+        vi.mocked(transcriptionService.transcribeFile).mockResolvedValue(mockSegments);
         vi.mocked(historyService.saveImportedFile).mockResolvedValueOnce({
             id: 'history-fallback',
             timestamp: 1,
@@ -348,8 +335,9 @@ describe('batchQueueStore History Integration', () => {
 
         useBatchQueueStore.getState().addFiles([file]);
 
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
+        await vi.waitFor(() => {
+            expect(useTranscriptStore.getState().sourceHistoryId).toBe('history-fallback');
+        });
         expect(useTranscriptStore.getState()).toEqual(expect.objectContaining({
             sourceHistoryId: 'history-fallback',
             title: 'Batch fallback.wav',
@@ -418,7 +406,7 @@ describe('batchQueueStore History Integration', () => {
                 enableTimeline: false,
             }
         });
-        (transcriptionService.transcribeFile as any).mockResolvedValue(finalSegments);
+        vi.mocked(transcriptionService.transcribeFile).mockResolvedValue(finalSegments);
 
         useBatchQueueStore.getState().enqueueRecoveredItems([{
             id: 'recovery-1',
@@ -441,9 +429,9 @@ describe('batchQueueStore History Integration', () => {
             lastError: null,
             retryable: false,
         }]);
-
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
+        await vi.waitFor(() => {
+            expect(historyService.updateTranscript).toHaveBeenCalledWith('history-1', finalSegments);
+        });
         expect(historyService.saveImportedFile).not.toHaveBeenCalled();
         expect(historyService.updateTranscript).toHaveBeenCalledWith('history-1', finalSegments);
         expect(useBatchQueueStore.getState().queueItems[0]).toEqual(expect.objectContaining({
@@ -460,10 +448,10 @@ describe('batchQueueStore History Integration', () => {
                 enableTimeline: false,
             }
         });
-        (transcriptionService.transcribeFile as any).mockResolvedValue([
+        vi.mocked(transcriptionService.transcribeFile).mockResolvedValue([
             { id: 'seg1', start: 0, end: 1, text: 'Done', isFinal: true },
         ]);
-        (historyService.saveImportedFile as any).mockResolvedValueOnce(null);
+        vi.mocked(historyService.saveImportedFile).mockResolvedValueOnce(null as unknown as never);
 
         useBatchQueueStore.setState({
             queueItems: [{
@@ -505,7 +493,7 @@ describe('batchQueueStore History Integration', () => {
                 enableTimeline: false,
             }
         });
-        (transcriptionService.transcribeFile as any).mockRejectedValue(new Error('Transcription failed'));
+        vi.mocked(transcriptionService.transcribeFile).mockRejectedValue(new Error('Transcription failed'));
 
         useBatchQueueStore.setState({
             queueItems: [{

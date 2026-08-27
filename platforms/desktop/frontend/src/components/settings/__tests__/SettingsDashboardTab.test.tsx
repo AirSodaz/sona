@@ -431,7 +431,7 @@ describe('SettingsDashboardTab', () => {
 
     render(<SettingsDashboardTab />);
 
-    expect(screen.getByTestId('dashboard-loading')).toBeDefined();
+    screen.getByTestId('dashboard-loading');
   });
 
   it('renders fast data first and keeps speaker stats in partial loading while deep scan runs', async () => {
@@ -442,12 +442,12 @@ describe('SettingsDashboardTab', () => {
     render(<SettingsDashboardTab />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('dashboard-partial')).toBeDefined();
-      expect(screen.getByTestId('dashboard-speaker-loading')).toBeDefined();
+      screen.getByTestId('dashboard-partial');
+      screen.getByTestId('dashboard-speaker-loading');
     });
 
-    expect(screen.getByText('settings.dashboard.global_content')).toBeDefined();
-    expect(screen.getByText('settings.dashboard.llm_usage')).toBeDefined();
+    screen.getByText('settings.dashboard.global_content');
+    screen.getByText('settings.dashboard.llm_usage');
   });
 
   it('renders Recharts trend surfaces and KPI sparklines without trend summary copy', async () => {
@@ -463,7 +463,7 @@ describe('SettingsDashboardTab', () => {
     render(<SettingsDashboardTab />);
 
     await waitFor(() => {
-      expect(screen.getByText('Alice')).toBeDefined();
+      screen.getByText('Alice');
     });
 
     expect(screen.getAllByTestId('dashboard-trend-anchor-start')).toHaveLength(3);
@@ -486,7 +486,7 @@ describe('SettingsDashboardTab', () => {
     render(<SettingsDashboardTab />);
 
     await waitFor(() => {
-      expect(screen.getByText('Alice')).toBeDefined();
+      screen.getByText('Alice');
     });
 
     const tokenTrendTitle = screen.getAllByText('settings.dashboard.recent_token_trend')
@@ -512,7 +512,7 @@ describe('SettingsDashboardTab', () => {
     render(<SettingsDashboardTab />);
 
     await waitFor(() => {
-      expect(screen.getByText('Alice')).toBeDefined();
+      screen.getByText('Alice');
     });
 
     expect(screen.getAllByTestId('dashboard-trend-anchor-start')).toHaveLength(3);
@@ -527,14 +527,14 @@ describe('SettingsDashboardTab', () => {
     render(<SettingsDashboardTab />);
 
     await waitFor(() => {
-      expect(screen.getByText('Alice')).toBeDefined();
+      screen.getByText('Alice');
     });
 
     expect(screen.queryByTestId('dashboard-speaker-loading')).toBeNull();
-    expect(screen.getByText('settings.dashboard.top_identified_speakers')).toBeDefined();
+    screen.getByText('settings.dashboard.top_identified_speakers');
     expect(screen.getAllByTestId('dashboard-recharts-coverage')).toHaveLength(2);
-    expect(screen.getByTestId('dashboard-recharts-speaker-split')).toBeDefined();
-    expect(screen.getByTestId('dashboard-recharts-ranking')).toBeDefined();
+    screen.getByTestId('dashboard-recharts-speaker-split');
+    screen.getByTestId('dashboard-recharts-ranking');
   });
 
   it('renders Recharts provider and category breakdown charts for tracked LLM usage', async () => {
@@ -549,12 +549,12 @@ describe('SettingsDashboardTab', () => {
     render(<SettingsDashboardTab />);
 
     await waitFor(() => {
-      expect(screen.getByText('Alice')).toBeDefined();
+      screen.getByText('Alice');
     });
 
     expect(screen.getAllByTestId('dashboard-recharts-breakdown')).toHaveLength(2);
-    expect(screen.getByText('open_ai')).toBeDefined();
-    expect(screen.getByText('summary')).toBeDefined();
+    screen.getByText('open_ai');
+    screen.getByText('summary');
   });
 
   it('keeps top identified speakers in an empty state when only anonymous speakers exist', async () => {
@@ -564,10 +564,10 @@ describe('SettingsDashboardTab', () => {
     render(<SettingsDashboardTab />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('dashboard-top-speakers-empty')).toBeDefined();
+      screen.getByTestId('dashboard-top-speakers-empty');
     });
 
-    expect(screen.getByText('settings.dashboard.identified_vs_anonymous')).toBeDefined();
+    screen.getByText('settings.dashboard.identified_vs_anonymous');
   });
 
   it('renders a stable speaker overview when deep-loaded transcripts have no speaker tags', async () => {
@@ -577,11 +577,11 @@ describe('SettingsDashboardTab', () => {
     render(<SettingsDashboardTab />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('dashboard-speaker-overview-card')).toBeDefined();
+      screen.getByTestId('dashboard-speaker-overview-card');
     });
 
-    expect(screen.getByText('settings.dashboard.coverage_and_attribution')).toBeDefined();
-    expect(screen.getByTestId('dashboard-top-speakers-empty')).toBeDefined();
+    screen.getByText('settings.dashboard.coverage_and_attribution');
+    screen.getByTestId('dashboard-top-speakers-empty');
   });
 
   it('renders the dashboard empty state when there is no saved content or usage yet', async () => {
@@ -609,7 +609,7 @@ describe('SettingsDashboardTab', () => {
     render(<SettingsDashboardTab />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('dashboard-empty')).toBeDefined();
+      screen.getByTestId('dashboard-empty');
     });
   });
 
@@ -620,9 +620,9 @@ describe('SettingsDashboardTab', () => {
     render(<SettingsDashboardTab />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('dashboard-error')).toBeDefined();
+      screen.getByTestId('dashboard-error');
     });
 
-    expect(screen.getByText('broken index')).toBeDefined();
+    screen.getByText('broken index');
   });
 });

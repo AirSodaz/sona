@@ -76,7 +76,7 @@ describe('SettingsSubtitleTab voice typing section', () => {
     it('shows unavailable when voice typing is disabled without dependency diagnostics', () => {
         renderCombinedSettings();
 
-        expect(screen.getByText('Unavailable')).toBeDefined();
+        screen.getByText('Unavailable');
         expect(screen.queryByText('Readiness And Dependencies')).toBeNull();
         expect(screen.queryByRole('button', { name: 'Open Model Hub' })).toBeNull();
         expect(screen.queryByRole('button', { name: 'Open Input Device' })).toBeNull();
@@ -94,7 +94,7 @@ describe('SettingsSubtitleTab voice typing section', () => {
 
         renderCombinedSettings();
 
-        expect(screen.getByText('Available')).toBeDefined();
+        screen.getByText('Available');
     });
 
     it('shows only the failed runtime reason when voice typing fails', () => {
@@ -110,8 +110,8 @@ describe('SettingsSubtitleTab voice typing section', () => {
 
         renderCombinedSettings();
 
-        expect(screen.getByText('Unavailable')).toBeDefined();
-        expect(screen.getByText('Failure reason: Input device: Microphone is unavailable.')).toBeDefined();
+        screen.getByText('Unavailable');
+        screen.getByText('Failure reason: Input device: Microphone is unavailable.');
         expect(screen.queryByText('Voice Typing hit a runtime problem.')).toBeNull();
         expect(screen.queryByText('Source: Input device')).toBeNull();
         expect(screen.queryByRole('button', { name: 'Open Input Device' })).toBeNull();

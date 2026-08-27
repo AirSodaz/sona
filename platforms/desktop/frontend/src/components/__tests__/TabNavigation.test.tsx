@@ -62,45 +62,49 @@ describe('TabNavigation', () => {
 
     it('scrolls projects containers to top when active Projects tab is clicked', () => {
         testContext.runtimeState.mode = 'projects';
-        const mockScrollTo = vi.fn();
-        const mockElement = { scrollTo: mockScrollTo };
-        const querySelectorSpy = vi.spyOn(document, 'querySelector').mockReturnValue(mockElement as any);
+        const mainScroll = document.createElement('div');
+        mainScroll.className = 'projects-main-scroll';
+        const mainScrollTo = vi.fn();
+        mainScroll.scrollTo = mainScrollTo;
+        const railList = document.createElement('div');
+        railList.className = 'projects-rail-list';
+        const railScrollTo = vi.fn();
+        railList.scrollTo = railScrollTo;
+        document.body.append(mainScroll, railList);
 
-        render(<TabNavigation />);
+        try {
+            render(<TabNavigation />);
 
-        const tabs = screen.getAllByRole('tab');
-        const projectsTab = tabs[2]; // projects is index 2
+            const tabs = screen.getAllByRole('tab');
+            fireEvent.click(tabs[2]); // projects is index 2
 
-        fireEvent.click(projectsTab);
-
-        expect(testContext.runtimeState.setMode).not.toHaveBeenCalled();
-        expect(querySelectorSpy).toHaveBeenCalledWith('.projects-main-scroll');
-        expect(querySelectorSpy).toHaveBeenCalledWith('.projects-rail-list');
-        expect(mockScrollTo).toHaveBeenCalledTimes(2);
-        expect(mockScrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
-
-        querySelectorSpy.mockRestore();
+            expect(testContext.runtimeState.setMode).not.toHaveBeenCalled();
+            expect(mainScrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+            expect(railScrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+        } finally {
+            mainScroll.remove();
+            railList.remove();
+        }
     });
 
     it('scrolls batch queue to top when active Batch Import tab is clicked', () => {
         testContext.runtimeState.mode = 'batch';
-        const mockScrollTo = vi.fn();
-        const mockElement = { scrollTo: mockScrollTo };
-        const querySelectorSpy = vi.spyOn(document, 'querySelector').mockReturnValue(mockElement as any);
+        const queueList = document.createElement('div');
+        queueList.className = 'queue-list';
+        const queueScrollTo = vi.fn();
+        queueList.scrollTo = queueScrollTo;
+        document.body.append(queueList);
 
-        render(<TabNavigation />);
+        try {
+            render(<TabNavigation />);
 
-        const tabs = screen.getAllByRole('tab');
-        const batchTab = tabs[1]; // batch is index 1
+            const tabs = screen.getAllByRole('tab');
+            fireEvent.click(tabs[1]); // batch is index 1
 
-        fireEvent.click(batchTab);
-
-        expect(testContext.runtimeState.setMode).not.toHaveBeenCalled();
-        expect(querySelectorSpy).toHaveBeenCalledWith('.queue-list');
-        expect(mockScrollTo).toHaveBeenCalledTimes(1);
-        expect(mockScrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
-
-        querySelectorSpy.mockRestore();
+            expect(testContext.runtimeState.setMode).not.toHaveBeenCalled();
+            expect(queueScrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+        } finally {
+            queueList.remove();
+        }
     });
 });
-

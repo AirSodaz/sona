@@ -1895,10 +1895,13 @@ mod tests {
             runtime_bridge::normalize_export_format("SRT".to_string()).unwrap(),
             "srt"
         );
-        assert_eq!(model_bridge::default_vad_model_id(), "silero-vad");
         assert_eq!(
-            model_bridge::preset_model_name("silero-vad".to_string()).as_deref(),
-            find_preset_model("silero-vad").map(|model| model.name.as_str())
+            model_bridge::default_vad_model_id(),
+            DEFAULT_SILERO_VAD_MODEL_ID
+        );
+        assert_eq!(
+            model_bridge::preset_model_name(DEFAULT_SILERO_VAD_MODEL_ID.to_string()).as_deref(),
+            find_preset_model(DEFAULT_SILERO_VAD_MODEL_ID).map(|model| model.name.as_str())
         );
     }
 
@@ -1954,16 +1957,6 @@ mod tests {
         assert_eq!(azure.defaults.api_version.as_deref(), Some("2024-10-21"));
         assert!(
             llm_bridge::find_llm_provider_by_id_or_alias("missing-provider".to_string()).is_none()
-        );
-    }
-
-    #[test]
-    fn top_level_exports_delegate_to_bridges() {
-        assert_eq!(normalize_export_format("VTT".to_string()).unwrap(), "vtt");
-        assert_eq!(default_punctuation_model_id(), DEFAULT_PUNCTUATION_MODEL_ID);
-        assert_eq!(
-            preset_model_name("missing-model".to_string()).as_deref(),
-            None
         );
     }
 

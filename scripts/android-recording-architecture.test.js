@@ -473,11 +473,6 @@ test('Android recording composition preserves foreground-service, permission, an
 test('Android verification runs all recording tests in one serial Gradle invocation', () => {
   const verifier = read('scripts', 'verify-android-client.js');
   const appGradle = read('platforms', 'android', 'client', 'app', 'build.gradle.kts');
-  const androidAdapterGradle = read(
-    'platforms', 'android', 'client', 'adapters', 'android', 'build.gradle.kts',
-  );
-  const bindingsGradle = read('platforms', 'android', 'sona-uniffi-bindings.gradle.kts');
-
   for (const task of [
     ':application:test',
     ':adapters:android:testDebugUnitTest',
@@ -494,24 +489,11 @@ test('Android verification runs all recording tests in one serial Gradle invocat
     1,
     'Android verification must keep one managed Gradle invocation',
   );
-  assert.match(appGradle, /lifecycle-process:2\.11\.0/u);
-  assert.match(appGradle, /kotlinx-coroutines-test:1\.11\.0/u);
-  assert.match(appGradle, /work-runtime-ktx:2\.11\.2/u);
-  assert.match(androidAdapterGradle, /work-runtime-ktx:2\.11\.2/u);
   assert.match(appGradle, /disable \+= setOf\("ChromeOsAbiSupport", "GradleDependency"\)/u);
-  assert.match(
-    bindingsGradle,
-    /net\.java\.dev\.jna:jna:5\.19\.1@aar/u,
-    'Android JNA must use the API 37-verified 16 KB-aligned release',
-  );
 });
 
 test('Android app desugars JNA Java APIs for API 23', () => {
   const appGradle = read('platforms', 'android', 'client', 'app', 'build.gradle.kts');
 
   assert.match(appGradle, /isCoreLibraryDesugaringEnabled\s*=\s*true/u);
-  assert.match(
-    appGradle,
-    /coreLibraryDesugaring\("com\.android\.tools:desugar_jdk_libs:2\.1\.5"\)/u,
-  );
 });

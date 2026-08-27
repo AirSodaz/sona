@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, it, vi } from 'vitest';
 import { FormField } from '../FormField';
 import { Switch } from '../Switch';
 
@@ -11,6 +11,6 @@ describe('FormField', () => {
       </FormField>,
     );
 
-    expect(screen.getByRole('switch', { name: 'Timeline mode' })).toBeDefined();
+    screen.getByRole('switch', { name: 'Timeline mode' });
   });
 });

@@ -147,9 +147,9 @@ describe('Sync & Recovery settings', () => {
   it('replaces the archive upload UI with create and join flows', () => {
     render(<BackupSettingsSection />);
 
-    expect(screen.getByText('Sync & Recovery')).toBeDefined();
-    expect(screen.getByRole('tab', { name: 'Create vault' })).toBeDefined();
-    expect(screen.getByRole('tab', { name: 'Join vault' })).toBeDefined();
+    screen.getByText('Sync & Recovery');
+    screen.getByRole('tab', { name: 'Create vault' });
+    screen.getByRole('tab', { name: 'Join vault' });
     expect(screen.queryByRole('button', { name: 'Upload Backup' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Refresh Cloud Backups' })).toBeNull();
   });
@@ -180,8 +180,8 @@ describe('Sync & Recovery settings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Preview join' }));
 
     await waitFor(() => expect(testContext.previewJoin).toHaveBeenCalledTimes(1));
-    expect(screen.getByText('12')).toBeDefined();
-    expect(screen.getByText('2')).toBeDefined();
+    screen.getByText('12');
+    screen.getByText('2');
     expect(testContext.joinVault).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Confirm join' }));
@@ -193,7 +193,7 @@ describe('Sync & Recovery settings', () => {
     setStatus(status({ state: 'locked' }));
     render(<BackupSettingsSection />);
 
-    expect(screen.getByText('Sync vault locked')).toBeDefined();
+    screen.getByText('Sync vault locked');
     expect(screen.queryByRole('button', { name: 'Sync now' })).toBeNull();
     fireEvent.change(screen.getByLabelText('WebDAV password'), { target: { value: 'provider-secret' } });
     fireEvent.change(screen.getByLabelText('Master password'), { target: { value: 'x' } });
@@ -213,15 +213,15 @@ describe('Sync & Recovery settings', () => {
     }));
     render(<BackupSettingsSection />);
 
-    expect(screen.getByRole('button', { name: 'Sync now' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Pause' })).toBeDefined();
-    expect(screen.getByText('Pending upload')).toBeDefined();
-    expect(screen.getByText('4')).toBeDefined();
+    screen.getByRole('button', { name: 'Sync now' });
+    screen.getByRole('button', { name: 'Pause' });
+    screen.getByText('Pending upload');
+    screen.getByText('4');
 
     fireEvent.click(screen.getByRole('button', { name: /Advanced recovery/ }));
-    expect(screen.getByRole('button', { name: 'Export Backup' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Import Backup' })).toBeDefined();
-    expect(screen.getByText('Legacy WebDAV archives')).toBeDefined();
+    screen.getByRole('button', { name: 'Export Backup' });
+    screen.getByRole('button', { name: 'Import Backup' });
+    screen.getByText('Legacy WebDAV archives');
     expect(screen.queryByRole('button', { name: 'Upload Backup' })).toBeNull();
   });
 

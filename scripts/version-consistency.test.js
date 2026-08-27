@@ -47,3 +47,25 @@ test('release version metadata stays aligned with the root package version', () 
     2,
   );
 });
+
+test('Android Gradle dependencies stay on the reviewed versions', () => {
+  const appGradle = read('platforms', 'android', 'client', 'app', 'build.gradle.kts');
+  const androidAdapterGradle = read(
+    'platforms', 'android', 'client', 'adapters', 'android', 'build.gradle.kts',
+  );
+  const bindingsGradle = read('platforms', 'android', 'sona-uniffi-bindings.gradle.kts');
+
+  assert.match(appGradle, /lifecycle-process:2\.11\.0/u);
+  assert.match(appGradle, /kotlinx-coroutines-test:1\.11\.0/u);
+  assert.match(appGradle, /work-runtime-ktx:2\.11\.2/u);
+  assert.match(androidAdapterGradle, /work-runtime-ktx:2\.11\.2/u);
+  assert.match(
+    bindingsGradle,
+    /net\.java\.dev\.jna:jna:5\.19\.1@aar/u,
+    'Android JNA must use the API 37-verified 16 KB-aligned release',
+  );
+  assert.match(
+    appGradle,
+    /coreLibraryDesugaring\("com\.android\.tools:desugar_jdk_libs:2\.1\.5"\)/u,
+  );
+});

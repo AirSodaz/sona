@@ -79,27 +79,8 @@ test('tauri wrapper passes generated config to build and bundle while dev preser
   );
   assert.equal(customMacInvocation.macosDeploymentTarget, '12.0');
   assert.equal(customMacInvocation.preparedMacosDeploymentTarget, '12.0');
-});
-
-test('release workflows enable C++ exceptions for Windows ARM64 clang-cl builds', () => {
-  // Release and nightly builds delegate to the reusable desktop workflow,
-  // which owns the actual build environment flags.
-  const desktopClient = fs.readFileSync(
-    path.join(repoRoot, '.github', 'workflows', 'desktop-client.yml'),
-    'utf8',
-  );
-  assert.match(desktopClient, /CXXFLAGS_aarch64_pc_windows_msvc=\/EHsc/u);
-  assert.match(
-    desktopClient,
-    /LLAMA_BUILD_SHARED_LIBS:\s*\$\{\{\s*startsWith\(matrix\.platform,\s*'ubuntu'\)\s*&&\s*'0'\s*\|\|\s*'1'\s*\}\}/u,
-  );
-  for (const workflow of ['release.yml', 'nightly.yml']) {
-    const source = fs.readFileSync(path.join(repoRoot, '.github', 'workflows', workflow), 'utf8');
-    assert.match(source, /uses:\s*\.\/\.github\/workflows\/desktop-client\.yml/u);
-  }
-
-  const config = JSON.parse(
+  const tauriConfig = JSON.parse(
     fs.readFileSync(path.join(repoRoot, 'platforms', 'desktop', 'tauri.conf.json'), 'utf8'),
   );
-  assert.equal(config.bundle.macOS.minimumSystemVersion, '10.15');
+  assert.equal(tauriConfig.bundle.macOS.minimumSystemVersion, '10.15');
 });

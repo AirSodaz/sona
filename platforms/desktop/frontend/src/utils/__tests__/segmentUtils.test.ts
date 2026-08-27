@@ -131,33 +131,6 @@ describe('splitByPunctuation', () => {
         expect(worldSegment!.start).toBe(1.0);
     });
 
-    it('correctly handles non-zero segment start time (absolute timestamp conversion)', () => {
-        // Test ensures that relative token timestamps are converted to absolute
-        const segment: TranscriptSegment = {
-            id: 'offset-1',
-            text: 'Hello. World.',
-            start: 100.0,
-            end: 105.0,
-            isFinal: true,
-            tokens: ['Hello', '.', 'World', '.'],
-            // Absolute timestamps: 100.0, 100.5, 102.0, 102.5
-            timestamps: [100.0, 100.5, 102.0, 102.5]
-        };
-
-        const result = splitByPunctuation([segment]);
-
-        expect(result).toHaveLength(2);
-
-        // First segment "Hello."
-        // Start should be token[0] + segment.start = 0 + 100 = 100
-        expect(result[0].text.trim()).toBe('Hello.');
-        expect(result[0].start).toBe(100.0);
-
-        // Second segment "World."
-        // Start should be token[2] ("World") + segment.start = 2.0 + 100 = 102.0
-        expect(result[1].text.trim()).toBe('World.');
-        expect(result[1].start).toBe(102.0);
-    });
 });
 
 describe('performSegmentSplit', () => {

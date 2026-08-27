@@ -54,16 +54,16 @@ describe('SettingsApiServerTab', () => {
       render(<SettingsApiServerTab />);
     });
 
-    expect(screen.getByText('Enable API Server')).toBeDefined();
-    expect(screen.getByText('Host')).toBeDefined();
-    expect(screen.getByText('Port')).toBeDefined();
-    expect(screen.getByText('API Key')).toBeDefined();
+    screen.getByText('Enable API Server');
+    screen.getByText('Host');
+    screen.getByText('Port');
+    screen.getByText('API Key');
 
     // Verify sub-label hints render
-    expect(screen.getByText('Start an HTTP server to control Sona via external applications.')).toBeDefined();
-    expect(screen.getByText(/Bind address for the server/)).toBeDefined();
-    expect(screen.getByText('TCP port for the API server. Must be between 1 and 65535 (default: 14200).')).toBeDefined();
-    expect(screen.getByText('Optional Bearer token for authenticating HTTP requests.')).toBeDefined();
+    screen.getByText('Start an HTTP server to control Sona via external applications.');
+    screen.getByText(/Bind address for the server/);
+    screen.getByText('TCP port for the API server. Must be between 1 and 65535 (default: 14200).');
+    screen.getByText('Optional Bearer token for authenticating HTTP requests.');
   });
 
   it('correctly maps the active inputs to the configuration store', async () => {
@@ -175,13 +175,13 @@ describe('SettingsApiServerTab', () => {
       render(<SettingsApiServerTab />);
     });
 
-    expect(screen.getByText('Server Status')).toBeDefined();
-    expect(screen.getByText('Job Queue')).toBeDefined();
+    screen.getByText('Server Status');
+    screen.getByText('Job Queue');
 
     await waitFor(() => {
-        expect(screen.getByText('Running')).toBeDefined();
-        expect(screen.getByText('1h 0m 0s')).toBeDefined();
-        expect(screen.getByText('Processing')).toBeDefined();
+        screen.getByText('Running');
+        screen.getByText('1h 0m 0s');
+        screen.getByText('Processing');
     });
     expect(invokeTauri).toHaveBeenCalledWith('get_api_server_dashboard_snapshot');
     expect(browserFetch).not.toHaveBeenCalled();

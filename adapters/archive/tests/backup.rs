@@ -5,8 +5,7 @@ use std::path::{Path, PathBuf};
 use bzip2::write::BzEncoder;
 use serde_json::{Value, json};
 use sona_archive::{
-    FsBackupAdapter, FsBackupArchiveRepository, MAX_BACKUP_ENTRIES, MAX_BACKUP_EXPANDED_BYTES,
-    MAX_BACKUP_FILE_BYTES,
+    FsBackupAdapter, FsBackupArchiveRepository, MAX_BACKUP_ENTRIES, MAX_BACKUP_FILE_BYTES,
 };
 use sona_core::automation::repository::{
     AutomationProcessedRecord, AutomationRepositoryState, AutomationRuleRecord,
@@ -476,13 +475,6 @@ fn filesystem_backup_adapter_composes_archive_state_and_clock() {
 
     assert_eq!(preview.manifest.app_version, TEST_APP_VERSION);
     assert_eq!(preview.manifest.counts.tags, 1);
-}
-
-#[test]
-fn exposes_documented_archive_limits() {
-    assert_eq!(MAX_BACKUP_ENTRIES, 100_000);
-    assert_eq!(MAX_BACKUP_FILE_BYTES, 64 * 1024 * 1024);
-    assert_eq!(MAX_BACKUP_EXPANDED_BYTES, 4 * 1024 * 1024 * 1024);
 }
 
 #[test]

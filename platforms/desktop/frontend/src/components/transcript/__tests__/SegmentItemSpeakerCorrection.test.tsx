@@ -176,13 +176,13 @@ describe('SegmentItem speaker correction', () => {
 
     fireEvent.click(screen.getByTestId('speaker-badge-seg-1'));
 
-    expect(screen.getByTestId('speaker-correction-menu-seg-1')).toBeDefined();
-    expect(screen.getByRole('menuitem', { name: 'Alice' })).toBeDefined();
+    screen.getByTestId('speaker-correction-menu-seg-1');
+    screen.getByRole('menuitem', { name: 'Alice' });
     expect(screen.queryByRole('menuitem', { name: 'Bob' })).toBeNull();
 
     fireEvent.click(screen.getByTestId('speaker-correction-expand-seg-1'));
 
-    expect(screen.getByRole('menuitem', { name: 'Bob' })).toBeDefined();
+    screen.getByRole('menuitem', { name: 'Bob' });
   });
 
   it('keeps the timestamp in the text row when a speaker badge is shown', () => {

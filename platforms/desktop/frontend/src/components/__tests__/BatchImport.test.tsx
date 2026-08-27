@@ -151,8 +151,8 @@ describe('BatchImport Integration', () => {
 
     it('renders drop zone initially', () => {
         render(<BatchImport />);
-        expect(screen.getByText('batch.drop_title')).toBeDefined();
-        expect(screen.getByText('batch.drop_desc')).toBeDefined();
+        screen.getByText('batch.drop_title');
+        screen.getByText('batch.drop_desc');
         expect(screen.queryByRole('button', { name: 'automation.open_settings' })).toBeNull();
     });
 
@@ -183,7 +183,7 @@ describe('BatchImport Integration', () => {
 
         // 1. Check if sidebar appears
         await waitFor(() => {
-            expect(screen.getByText('Queue (1)')).toBeDefined();
+            screen.getByText('Queue (1)');
         });
 
         // 2. Check if processing view appears
@@ -208,7 +208,7 @@ describe('BatchImport Integration', () => {
 
         // 5. Verify the full history persistence contract succeeds
         await waitFor(() => {
-            expect(screen.getByText('batch.file_complete')).toBeDefined();
+            screen.getByText('batch.file_complete');
         });
 
         expect(historyService.saveImportedFile).toHaveBeenCalledWith(
@@ -279,7 +279,7 @@ describe('BatchImport Integration', () => {
         });
 
         await waitFor(() => {
-            expect(screen.getByText('Queue (1)')).toBeDefined();
+            screen.getByText('Queue (1)');
         });
 
         const clearBtn = screen.getByLabelText('batch.clear_queue');
@@ -288,7 +288,7 @@ describe('BatchImport Integration', () => {
         await waitFor(() => {
             expect(screen.queryByText('Queue (1)')).toBeNull();
             // Should revert to drop zone
-            expect(screen.getByText('batch.drop_title')).toBeDefined();
+            screen.getByText('batch.drop_title');
         });
     });
 
@@ -312,7 +312,7 @@ describe('BatchImport Integration', () => {
         render(<BatchImport />);
 
         // Check if processing view is shown
-        expect(screen.getByText('batch.processing_title')).toBeDefined();
+        screen.getByText('batch.processing_title');
         expect(screen.queryByRole('button', { name: 'automation.open_settings' })).toBeNull();
 
         // Check if "Add more files" button is present and NOT disabled

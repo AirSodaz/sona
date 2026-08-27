@@ -18,7 +18,7 @@ use sona_core::models::config::ModelFileConfig;
 use sona_core::ports::asr::{
     AsrPortError, AsrPortErrorKind, BatchSegmentationMode, BatchTranscriberPort,
     BatchTranscriptionObserver, LocalAsrEngine, NoopBatchTranscriptionObserver,
-    local_asr_engine_mismatch,
+    local_asr_engine_mismatch, pcm_s16le_bytes_to_f32, resolve_ffmpeg_sidecar_path,
 };
 use sona_core::ports::punctuation::{
     PunctuationEngineSet, apply_optional_punctuation, load_configured_punctuation,
@@ -628,39 +628,6 @@ fn decode_audio_input(path: &Path, sample_rate: u32) -> Result<Vec<f32>, AsrPort
     Ok(samples)
 }
 
-fn resolve_ffmpeg_sidecar_path() -> Result<PathBuf, AsrPortError> {
-    let executable = std::env::current_exe().map_err(|error| {
-        AsrPortError::new(
-            AsrPortErrorKind::FileSystem,
-            format!("Failed to locate the current executable: {error}"),
-        )
-    })?;
-    resolve_ffmpeg_sidecar_path_from_exe(&executable)
-}
-
-fn resolve_ffmpeg_sidecar_path_from_exe(executable: &Path) -> Result<PathBuf, AsrPortError> {
-    let directory = executable.parent().ok_or_else(|| {
-        AsrPortError::new(
-            AsrPortErrorKind::FileSystem,
-            "Failed to locate the executable directory.",
-        )
-    })?;
-
-    #[cfg(windows)]
-    let filename = "ffmpeg.exe";
-    #[cfg(not(windows))]
-    let filename = "ffmpeg";
-
-    Ok(directory.join(filename))
-}
-
-fn pcm_s16le_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
-    bytes
-        .chunks_exact(2)
-        .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / 32768.0)
-        .collect()
-}
-
 /// Engine-ready forms derived from a [`BatchTranscribePlan`] after option
 /// validation.
 #[derive(Debug)]
@@ -1196,9 +1163,9 @@ mod tests {
         GpuOffload, LlamaBatchTranscriptionJob, MODEL_TYPE_GRANITE_SPEECH, MODEL_TYPE_QWEN3_ASR,
         audio_ingest_progress, granite_speech_prompt, llama_generation_progress,
         normalize_hotwords, parse_partial_transcript_output, parse_qwen3_asr_output,
-        parse_qwen3_asr_partial_output, parse_transcript_output, pcm_s16le_bytes_to_f32,
-        qwen3_asr_language, resolve_auto_gpu_offload, resolve_ffmpeg_sidecar_path_from_exe,
-        resolve_gpu_offload, segment_bounds, truncate_hotwords, validate_supported_options,
+        parse_qwen3_asr_partial_output, parse_transcript_output, qwen3_asr_language,
+        resolve_auto_gpu_offload, resolve_gpu_offload, segment_bounds, truncate_hotwords,
+        validate_supported_options,
     };
     use sona_core::export::ExportFormat;
     use sona_core::ports::asr::{AsrPortErrorKind, LocalAsrEngine};
@@ -1422,25 +1389,6 @@ mod tests {
         assert_eq!(segment_bounds(&segment, 44_100, 200_000), (44_100, 132_300));
         // Bounds clamp to the available sample range.
         assert_eq!(segment_bounds(&segment, 16_000, 20_000), (16_000, 20_000));
-    }
-
-    #[test]
-    fn converts_little_endian_pcm_to_normalized_samples() {
-        assert_eq!(
-            pcm_s16le_bytes_to_f32(&[0x00, 0x80, 0x00, 0x00, 0xff, 0x7f]),
-            vec![-1.0, 0.0, 32767.0 / 32768.0]
-        );
-    }
-
-    #[test]
-    fn resolves_ffmpeg_next_to_host_executable() {
-        let executable = PathBuf::from("C:/sona/sona.exe");
-        let ffmpeg = resolve_ffmpeg_sidecar_path_from_exe(&executable).unwrap();
-
-        #[cfg(windows)]
-        assert_eq!(ffmpeg, PathBuf::from("C:/sona/ffmpeg.exe"));
-        #[cfg(not(windows))]
-        assert_eq!(ffmpeg, PathBuf::from("C:/sona/ffmpeg"));
     }
 
     #[test]

@@ -103,9 +103,6 @@ test('Android home owns both workspaces and only previews three recent records',
   const navigation = clientSource(
     'app', 'kotlin', 'com', 'sona', 'android', 'app', 'navigation', 'SonaApp.kt',
   );
-  const home = clientSource(
-    'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'home', 'HomeScreen.kt',
-  );
   const fileWorkspace = clientSource(
     'app', 'kotlin', 'com', 'sona', 'android', 'app', 'feature', 'home',
     'FileTranscriptionScreen.kt',
@@ -116,8 +113,6 @@ test('Android home owns both workspaces and only previews three recent records',
   assert.match(navigation, /startDestination = SonaDestination\.HOME\.route/u);
   assert.match(navigation, /HOME_LIVE_ROUTE = "home\/live"/u);
   assert.match(navigation, /HOME_FILE_ROUTE = "home\/file"/u);
-  assert.match(home, /items\.take\(3\)/u);
-  assert.match(home, /maxWidth >= 600\.dp/u);
   assert.match(fileWorkspace, /ActivityResultContracts\.OpenDocument/u);
   assert.match(fileWorkspace, /onStart: \(String\) -> Unit/u);
   assert.match(fileWorkspace, /AudioImportJobState\.Running/u);

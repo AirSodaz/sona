@@ -78,11 +78,11 @@ describe('TranslateButton', () => {
         const button = screen.getByRole('button', { expanded: false });
         fireEvent.click(button);
 
-        expect(screen.getByText('translation.start')).toBeDefined();
-        expect(screen.getByText('translation.show_bilingual')).toBeDefined();
-        expect(screen.getByPlaceholderText('translation.search_placeholder')).toBeDefined();
-        expect(screen.getByText('translation.commonly_used')).toBeDefined();
-        expect(screen.getByText('translation.all_languages')).toBeDefined();
+        screen.getByText('translation.start');
+        screen.getByText('translation.show_bilingual');
+        screen.getByPlaceholderText('translation.search_placeholder');
+        screen.getByText('translation.commonly_used');
+        screen.getByText('translation.all_languages');
     });
 
     it('filters languages by search query', () => {
@@ -94,9 +94,9 @@ describe('TranslateButton', () => {
         // Let's filter to Spanish
         fireEvent.change(searchInput, { target: { value: 'spanish' } });
 
-        expect(screen.getByText('translation.search_results')).toBeDefined();
+        screen.getByText('translation.search_results');
         expect(screen.queryByText('translation.commonly_used')).toBeNull();
-        expect(screen.getByText('Spanish')).toBeDefined();
+        screen.getByText('Spanish');
     });
 
     it('displays no results when search query has no match', () => {
@@ -106,7 +106,7 @@ describe('TranslateButton', () => {
         const searchInput = screen.getByPlaceholderText('translation.search_placeholder');
         fireEvent.change(searchInput, { target: { value: 'nonexistentlanguagequery' } });
 
-        expect(screen.getByText('translation.no_results')).toBeDefined();
+        screen.getByText('translation.no_results');
     });
 
     it('persists selected language to recent languages on selection', async () => {

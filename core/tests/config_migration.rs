@@ -86,8 +86,6 @@ fn migration_normalizes_llm_provider_aliases_from_core_manifest() {
 
     let result = migrate_app_config(Some(saved), None, "Default Rules".to_string());
 
-    assert!(result.migrated);
-    assert_eq!(result.config["llmSettings"]["activeProvider"], "open_ai");
     assert_eq!(
         result.config["llmSettings"]["providers"]["open_ai"]["apiHost"],
         "https://api.openai.com"

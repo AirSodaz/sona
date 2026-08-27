@@ -1,4 +1,4 @@
-﻿use std::path::PathBuf;
+use std::path::PathBuf;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -35,73 +35,5 @@ pub trait PathPort: Send + Sync {
 impl<T: PathPort + ?Sized> PathPort for Arc<T> {
     fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathPortError> {
         (**self).resolve_path(kind)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::HashMap;
-
-    struct TestPathProvider {
-        entries: HashMap<PathKind, Result<PathBuf, PathPortError>>,
-    }
-
-    impl TestPathProvider {
-        fn new() -> Self {
-            let mut entries = HashMap::new();
-            entries.insert(PathKind::AppData, Ok(PathBuf::from("/sona-test/app_data")));
-            entries.insert(
-                PathKind::AppLocalData,
-                Ok(PathBuf::from("/sona-test/app_local_data")),
-            );
-            entries.insert(
-                PathKind::AppLogData,
-                Ok(PathBuf::from("/sona-test/app_log")),
-            );
-            Self { entries }
-        }
-
-        fn from_map(entries: HashMap<PathKind, Result<PathBuf, PathPortError>>) -> Self {
-            Self { entries }
-        }
-    }
-
-    impl PathPort for TestPathProvider {
-        fn resolve_path(&self, kind: PathKind) -> Result<PathBuf, PathPortError> {
-            self.entries.get(&kind).cloned().unwrap_or_else(|| {
-                Err(PathPortError::new(
-                    kind,
-                    format!("path kind {kind:?} not configured"),
-                ))
-            })
-        }
-    }
-
-    #[test]
-    fn provider_resolves_configured_path() {
-        let tmp = PathBuf::from("/sona-mock-test");
-        let mut map = std::collections::HashMap::new();
-        map.insert(PathKind::AppLocalData, Ok(tmp.clone()));
-        let provider = TestPathProvider::from_map(map);
-
-        let result = provider.resolve_path(PathKind::AppLocalData);
-        assert_eq!(result.unwrap(), tmp);
-    }
-
-    #[test]
-    fn provider_errors_on_unconfigured_kind() {
-        let map = std::collections::HashMap::new();
-        let provider = TestPathProvider::from_map(map);
-
-        let result = provider.resolve_path(PathKind::AppData);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn provider_new_has_sensible_defaults() {
-        let provider = TestPathProvider::new();
-        assert!(provider.resolve_path(PathKind::AppData).is_ok());
-        assert!(provider.resolve_path(PathKind::AppLocalData).is_ok());
     }
 }

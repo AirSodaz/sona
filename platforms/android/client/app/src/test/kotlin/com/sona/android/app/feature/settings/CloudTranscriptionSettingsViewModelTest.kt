@@ -128,16 +128,6 @@ class CloudTranscriptionSettingsViewModelTest {
             assertFalse(viewModel.uiState.value.toString().contains("sk-live-secret"))
             assertFalse(viewModel.uiState.value.toString().contains(sensitiveMessage))
         }
-
-    @Test
-    fun `constructor accepts only the batch credential port`() {
-        val constructor = CloudTranscriptionSettingsViewModel::class.java.constructors.single()
-
-        assertEquals(
-            listOf(BatchCredentialSettingsPort::class.java),
-            constructor.parameterTypes.toList(),
-        )
-    }
 }
 
 private class FakeBatchCredentialSettingsPort(

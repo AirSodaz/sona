@@ -186,7 +186,7 @@ describe('VoiceTypingOverlay', () => {
     it('shows the listening placeholder by default and sets a transparent background', () => {
         render(<VoiceTypingOverlay />);
 
-        expect(screen.getByText('正在聆听...')).toBeTruthy();
+        screen.getByText('正在聆听...');
         expect(document.documentElement.style.background).toBe('transparent');
         expect(document.body.style.background).toBe('transparent');
     });
@@ -262,7 +262,7 @@ describe('VoiceTypingOverlay', () => {
             });
         });
 
-        expect(screen.getByText('测试转录结果')).toBeTruthy();
+        screen.getByText('测试转录结果');
         expect(screen.getByTestId('voice-typing-bubble').style.background).toBe(
             'var(--color-bg-elevated)'
         );
@@ -284,7 +284,7 @@ describe('VoiceTypingOverlay', () => {
             });
         });
 
-        expect(screen.getByText('。')).toBeTruthy();
+        screen.getByText('。');
         expect(mocks.loggerInfo).toHaveBeenCalledWith(
             '[VoiceTypingOverlay] Rendered segment state',
             expect.objectContaining({
@@ -308,7 +308,7 @@ describe('VoiceTypingOverlay', () => {
             });
         });
 
-        expect(screen.getByText('识别失败')).toBeTruthy();
+        screen.getByText('识别失败');
     });
 
     it('uses the shared snapshot as the initial source of truth and ignores older revisions', async () => {
@@ -341,7 +341,7 @@ describe('VoiceTypingOverlay', () => {
             });
         });
 
-        expect(screen.getByText('快照里的整句')).toBeTruthy();
+        screen.getByText('快照里的整句');
     });
 
     it('falls back to polling the shared snapshot when no event arrives', async () => {
@@ -371,7 +371,7 @@ describe('VoiceTypingOverlay', () => {
             await vi.advanceTimersByTimeAsync(140);
         });
 
-        expect(screen.getByText('轮询拿到的候选条')).toBeTruthy();
+        screen.getByText('轮询拿到的候选条');
     });
 
     it('keeps snapshot polling active even if event listener registration fails', async () => {
@@ -403,7 +403,7 @@ describe('VoiceTypingOverlay', () => {
             await vi.advanceTimersByTimeAsync(140);
         });
 
-        expect(screen.getByText('监听失败后仍可见')).toBeTruthy();
+        screen.getByText('监听失败后仍可见');
         expect(mocks.loggerWarn).toHaveBeenCalledWith(
             '[useAuxWindowState] Failed to register app-level listener',
             expect.objectContaining({

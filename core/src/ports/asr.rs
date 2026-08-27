@@ -14,7 +14,7 @@ use serde_json::Value;
 #[cfg(feature = "specta")]
 use specta::Type;
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 
@@ -1011,39 +1011,49 @@ pub trait LocalAsrAdapter: Send + Sync {
     fn streaming_factory(&self) -> Option<Arc<dyn StreamingAsrFactoryPort>>;
 }
 
+pub fn pcm_i16_to_f32(samples: &[i16]) -> Vec<f32> {
+    samples
+        .iter()
+        .map(|&sample| sample as f32 / 32768.0)
+        .collect()
+}
+
+pub fn pcm_s16le_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
+    bytes
+        .chunks_exact(2)
+        .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / 32768.0)
+        .collect()
+}
+
+pub fn resolve_ffmpeg_sidecar_path_from_exe(exe_path: &Path) -> Result<PathBuf, AsrPortError> {
+    let exe_dir = exe_path.parent().ok_or_else(|| {
+        AsrPortError::new(
+            AsrPortErrorKind::FileSystem,
+            "Could not determine directory of current executable",
+        )
+    })?;
+
+    #[cfg(windows)]
+    let sidecar_name = "ffmpeg.exe";
+    #[cfg(not(windows))]
+    let sidecar_name = "ffmpeg";
+
+    Ok(exe_dir.join(sidecar_name))
+}
+
+pub fn resolve_ffmpeg_sidecar_path() -> Result<PathBuf, AsrPortError> {
+    let exe_path = std::env::current_exe().map_err(|error| {
+        AsrPortError::new(
+            AsrPortErrorKind::FileSystem,
+            format!("Could not determine path to current executable: {error}"),
+        )
+    })?;
+    resolve_ffmpeg_sidecar_path_from_exe(&exe_path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn local_sherpa_request_builder_sets_defaults() {
-        let request = AsrTranscriptionRequest::local_sherpa(
-            AsrMode::Batch,
-            "model".to_string(),
-            4,
-            true,
-            "auto".to_string(),
-            None,
-            None,
-            5.0,
-            "whisper".to_string(),
-            None,
-            None,
-            TranscriptNormalizationOptions::default(),
-            TranscriptPostprocessOptions::default(),
-            None,
-            None,
-        );
-
-        assert_eq!(request.engine(), AsrEngine::Local);
-        assert!(matches!(
-            request.engine_config,
-            AsrEngineConfig::Local {
-                batch_segmentation_mode: BatchSegmentationMode::Vad,
-                ..
-            }
-        ));
-    }
 
     #[test]
     fn online_request_serializes_in_camel_case() {
@@ -1068,5 +1078,30 @@ mod tests {
         assert_eq!(json["engine"], "online");
         assert_eq!(json["mode"], "streaming");
         assert_eq!(json["onlineProvider"]["providerId"], "volcengine");
+    }
+
+    #[test]
+    fn converts_pcm_i16_to_f32_samples() {
+        let samples = pcm_i16_to_f32(&[0, 16384, -32768]);
+        assert_eq!(samples[0], 0.0);
+        assert!((samples[1] - 0.5).abs() < 0.01);
+        assert_eq!(samples[2], -1.0);
+    }
+
+    #[test]
+    fn converts_pcm_s16le_bytes_to_f32_samples() {
+        let samples = pcm_s16le_bytes_to_f32(&[0x00, 0x00, 0x00, 0x40, 0x00, 0x80, 0xff]);
+        assert_eq!(samples.len(), 3);
+        assert_eq!(samples[0], 0.0);
+    }
+
+    #[test]
+    fn resolves_ffmpeg_sidecar_path_from_exe_path() {
+        let exe = Path::new("/tmp/sona-cli");
+        let ffmpeg = resolve_ffmpeg_sidecar_path_from_exe(exe).unwrap();
+        #[cfg(windows)]
+        assert!(ffmpeg.ends_with("ffmpeg.exe"));
+        #[cfg(not(windows))]
+        assert!(ffmpeg.ends_with("ffmpeg"));
     }
 }

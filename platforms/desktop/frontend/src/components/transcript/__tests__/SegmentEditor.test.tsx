@@ -174,17 +174,17 @@ describe('SegmentEditor', () => {
 
     fireEvent.contextMenu(input, { clientX: 32, clientY: 48 });
     expect(screen.getByLabelText('Active context').textContent).toBe('editor:editing:seg-1');
-    expect(screen.getByRole('menu', { name: 'editor.context_menu_label' })).toBeDefined();
+    screen.getByRole('menu', { name: 'editor.context_menu_label' });
     expect((screen.getByRole('menuitem', { name: 'common.cut' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('menuitem', { name: 'common.copy' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('menuitem', { name: 'common.paste' }) as HTMLButtonElement).disabled).toBe(false);
 
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     fireEvent.keyDown(input, { key: 'F10', shiftKey: true });
-    expect(screen.getByRole('menu')).toBeDefined();
+    screen.getByRole('menu');
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     fireEvent.keyDown(input, { key: 'ContextMenu' });
-    expect(screen.getByRole('menu')).toBeDefined();
+    screen.getByRole('menu');
   });
 
   it('copies and cuts the captured selection as plain text', async () => {
@@ -394,7 +394,7 @@ describe('SegmentEditor', () => {
   it('closes an open menu when the editor unmounts without committing stale content', () => {
     const result = renderEditor();
     fireEvent.contextMenu(result.input, { clientX: 12, clientY: 12 });
-    expect(screen.getByRole('menu')).toBeDefined();
+    screen.getByRole('menu');
 
     result.rerender(
       <ContextMenuProvider>
@@ -433,7 +433,7 @@ describe('SegmentEditor', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Replace editor menu' }));
 
-    expect(screen.getByRole('menu', { name: 'Replacement menu' })).toBeDefined();
+    screen.getByRole('menu', { name: 'Replacement menu' });
     expect(screen.getByLabelText('Active context').textContent).toBe('replacement-menu');
   });
 

@@ -104,11 +104,11 @@ describe('SettingsVocabularyTab', () => {
   it('renders text replacement, hotwords, polish keywords, context presets, and summary templates while letting users add a custom preset', () => {
     render(<SettingsVocabularyTab />);
 
-    expect(screen.getByText('Text Replacement')).toBeDefined();
-    expect(screen.getByText('Hotwords')).toBeDefined();
-    expect(screen.getByText('Polish Keywords')).toBeDefined();
-    expect(screen.getByText('Built-in Presets')).toBeDefined();
-    expect(screen.getByText('Built-in Summary Templates')).toBeDefined();
+    screen.getByText('Text Replacement');
+    screen.getByText('Hotwords');
+    screen.getByText('Polish Keywords');
+    screen.getByText('Built-in Presets');
+    screen.getByText('Built-in Summary Templates');
     expect(screen.getAllByText('General').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Meeting').length).toBeGreaterThan(0);
 
@@ -320,8 +320,8 @@ describe('SettingsVocabularyTab', () => {
 
     render(<SettingsVocabularyTab />);
 
-    expect(screen.getByText('Ready for automatic matching')).toBeDefined();
-    expect(screen.getByText('Can appear as a suggestion, but needs more usable samples before automatic matching.')).toBeDefined();
-    expect(screen.getByText('Needs more usable samples before it can participate in speaker recognition.')).toBeDefined();
+    screen.getByText('Ready for automatic matching');
+    screen.getByText('Can appear as a suggestion, but needs more usable samples before automatic matching.');
+    screen.getByText('Needs more usable samples before it can participate in speaker recognition.');
   });
 });

@@ -234,8 +234,6 @@ test('desktop bundle preparer rebases staged macOS dylibs before linking the CLI
 
 test('desktop bundle preparer rejects FFmpeg checksum and native header mismatches', async () => {
   const { verifySha256, verifyNativeBinary } = await loadDesktopBundlePreparer();
-  assert.equal(typeof verifySha256, 'function');
-  assert.equal(typeof verifyNativeBinary, 'function');
   assert.throws(
     () => verifySha256(Buffer.from('ffmpeg'), '0'.repeat(64), 'https://example.invalid/ffmpeg'),
     /SHA-256 mismatch/u,

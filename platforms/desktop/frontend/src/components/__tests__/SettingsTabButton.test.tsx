@@ -24,8 +24,8 @@ describe('SettingsTabButton', () => {
         expect(button).toBeDefined();
         expect(button.getAttribute('aria-selected')).toBe('false');
         expect(button.className).not.toContain('active');
-        expect(screen.getByTestId('icon')).toBeDefined();
-        expect(screen.getByText('General Settings')).toBeDefined();
+        screen.getByTestId('icon');
+        screen.getByText('General Settings');
     });
 
     it('calls setActiveTab when clicking an inactive tab', () => {

@@ -80,13 +80,6 @@ describe('normalizeSpeakerAttribution', () => {
 });
 
 describe('speaker runtime facade', () => {
-  it('keeps runtime helpers re-exported from the type facade', () => {
-    expect(typeof deriveSpeakerProfileReadiness).toBe('function');
-    expect(typeof normalizeSpeakerAttribution).toBe('function');
-    expect(typeof normalizeSpeakerProfiles).toBe('function');
-    expect(typeof areSpeakerTagsEqual).toBe('function');
-  });
-
   it('normalizes speaker profiles through the facade', () => {
     expect(normalizeSpeakerProfiles([
       {

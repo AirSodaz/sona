@@ -1,6 +1,10 @@
 use hound::{SampleFormat, WavSpec, WavWriter};
 use sherpa_onnx::{SileroVadModelConfig, VadModelConfig, VoiceActivityDetector};
 use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
+pub use sona_core::ports::asr::{
+    pcm_i16_to_f32, pcm_s16le_bytes_to_f32, resolve_ffmpeg_sidecar_path,
+    resolve_ffmpeg_sidecar_path_from_exe,
+};
 use std::path::{Path, PathBuf};
 
 pub(crate) type VadConfig = VadModelConfig;
@@ -33,32 +37,6 @@ impl Default for VadDetectorOptions {
     }
 }
 
-pub fn resolve_ffmpeg_sidecar_path_from_exe(exe_path: &Path) -> Result<PathBuf, AsrPortError> {
-    let exe_dir = exe_path.parent().ok_or_else(|| {
-        AsrPortError::new(
-            AsrPortErrorKind::FileSystem,
-            "Failed to get parent directory of executable",
-        )
-    })?;
-
-    #[cfg(windows)]
-    let ffmpeg_filename = "ffmpeg.exe";
-    #[cfg(not(windows))]
-    let ffmpeg_filename = "ffmpeg";
-
-    Ok(exe_dir.join(ffmpeg_filename))
-}
-
-pub fn resolve_ffmpeg_sidecar_path() -> Result<PathBuf, AsrPortError> {
-    let exe_path = std::env::current_exe().map_err(|error| {
-        AsrPortError::new(
-            AsrPortErrorKind::FileSystem,
-            format!("Failed to get current executable path: {error}"),
-        )
-    })?;
-    resolve_ffmpeg_sidecar_path_from_exe(&exe_path)
-}
-
 pub fn resolve_model_onnx_path(path: &Path) -> Result<PathBuf, AsrPortError> {
     if !path.exists() {
         return Err(AsrPortError::new(
@@ -87,20 +65,6 @@ pub fn resolve_model_onnx_path(path: &Path) -> Result<PathBuf, AsrPortError> {
                 format!("No .onnx file found in model directory {}", path.display()),
             )
         })
-}
-
-pub fn pcm_i16_to_f32(data: &[i16]) -> Vec<f32> {
-    data.iter().map(|&sample| sample as f32 / 32768.0).collect()
-}
-
-pub fn pcm_s16le_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
-    bytes
-        .chunks_exact(2)
-        .map(|chunk| {
-            let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
-            sample as f32 / 32768.0
-        })
-        .collect()
 }
 
 fn mono_pcm16_wav_spec(sample_rate: u32) -> WavSpec {
@@ -282,40 +246,8 @@ pub fn vad_detected(vad: &SafeVad) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{LiveWavRecorder, resolve_ffmpeg_sidecar_path_from_exe, resolve_model_onnx_path};
-    use crate::audio::{pcm_i16_to_f32, pcm_s16le_bytes_to_f32};
+    use super::{LiveWavRecorder, resolve_model_onnx_path};
     use std::fs;
-    use std::path::Path;
-
-    #[test]
-    fn resolves_ffmpeg_sidecar_path_next_to_cli_executable() {
-        let exe = Path::new("/tmp/sona-cli");
-        let ffmpeg = resolve_ffmpeg_sidecar_path_from_exe(exe).unwrap();
-
-        #[cfg(windows)]
-        assert!(ffmpeg.ends_with("ffmpeg.exe"));
-
-        #[cfg(not(windows))]
-        assert!(ffmpeg.ends_with("ffmpeg"));
-    }
-
-    #[test]
-    fn converts_pcm_i16_to_f32_samples() {
-        let samples = pcm_i16_to_f32(&[0, 16384, -32768]);
-        assert_eq!(samples[0], 0.0);
-        assert!((samples[1] - 0.5).abs() < 0.01);
-        assert_eq!(samples[2], -1.0);
-    }
-
-    #[test]
-    fn converts_pcm_s16le_bytes_to_f32_samples() {
-        let samples = pcm_s16le_bytes_to_f32(&[0x00, 0x00, 0x00, 0x40, 0x00, 0x80, 0xff]);
-
-        assert_eq!(samples.len(), 3);
-        assert_eq!(samples[0], 0.0);
-        assert!((samples[1] - 0.5).abs() < 0.01);
-        assert_eq!(samples[2], -1.0);
-    }
 
     #[test]
     fn live_wav_recorder_writes_clamped_samples_and_reports_path() {

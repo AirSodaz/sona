@@ -51,19 +51,11 @@ describe('TranscriptVersionPanel', () => {
   it('renders an empty snapshot state', async () => {
     vi.mocked(transcriptSnapshotService.listSnapshots).mockResolvedValue([]);
 
-    const { container } = render(<TranscriptVersionPanel isOpen historyId="history-a" onClose={vi.fn()} />);
+    render(<TranscriptVersionPanel isOpen historyId="history-a" onClose={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('versions.empty')).toBeDefined();
+      screen.getByText('versions.empty');
     });
-
-    expect(container.querySelector('.panel-modal-shell.transcript-version-modal')).toBeTruthy();
-    expect(container.querySelector('.panel-modal-shell.panel-modal-size-settings.transcript-version-modal')).toBeTruthy();
-    expect(container.querySelector('.panel-modal-header.transcript-version-header')).toBeTruthy();
-    expect(container.querySelector('.panel-modal-badge.transcript-version-badge')).toBeTruthy();
-    expect(container.querySelector('.panel-modal-toolbar.transcript-version-actions')).toBeTruthy();
-    expect(container.querySelector('.panel-modal-meta-row.transcript-version-meta-row')).toBeTruthy();
-    expect(container.querySelector('.panel-modal-content.transcript-version-content')).toBeTruthy();
   });
 
   it('restores selected diff rows and snapshots current content first', async () => {
@@ -110,7 +102,7 @@ describe('TranscriptVersionPanel', () => {
     render(<TranscriptVersionPanel isOpen historyId="history-a" onClose={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('old')).toBeDefined();
+      screen.getByText('old');
     });
 
     await act(async () => {

@@ -158,7 +158,7 @@ describe('Settings Focus Trap & Navigation', () => {
         const onClose = vi.fn();
         render(<Settings isOpen={true} onClose={onClose} />);
 
-        expect(screen.getByText('settings.vocabulary')).toBeDefined();
+        screen.getByText('settings.vocabulary');
         expect(screen.queryByText('settings.context_title')).toBeNull();
         expect(screen.queryByText('settings.local_path')).toBeNull();
 
@@ -199,7 +199,7 @@ describe('Settings Focus Trap & Navigation', () => {
         const onClose = vi.fn();
         render(<Settings isOpen={true} onClose={onClose} />);
 
-        expect(screen.getByText('settings.subtitle_voice_typing_title')).toBeDefined();
+        screen.getByText('settings.subtitle_voice_typing_title');
         expect(screen.queryByText('settings.voice_typing')).toBeNull();
 
         const tabLabels = screen
@@ -257,7 +257,7 @@ describe('Settings Focus Trap & Navigation', () => {
         rerender(<Settings isOpen={true} onClose={onClose} />);
 
         await waitFor(() => {
-            expect(screen.getByRole('dialog')).toBeDefined();
+            screen.getByRole('dialog');
         });
 
         const inactivePropsAfterOpen = modelPanePropsMock.mock.calls.map(([props]) => props);

@@ -20,6 +20,30 @@ vi.mock('@tauri-apps/api/event', () => ({
 }));
 
 // Hoist mocks to share between singleton and class instances
+const transcriptionMocks = vi.hoisted(() => {
+    const start = vi.fn().mockResolvedValue(undefined);
+    const stop = vi.fn().mockResolvedValue(undefined);
+    return {
+        mockStart: start,
+        mockStartNative: vi.fn((...args: unknown[]) => start(...args)),
+        mockStartExternal: vi.fn((...args: unknown[]) => start(...args)),
+        mockStop: stop,
+        mockStopNativeCapture: vi.fn(async () => {
+            await stop();
+            return '/mock/path/to/audio.wav';
+        }),
+        mockSoftStop: vi.fn().mockResolvedValue(undefined),
+        mockPauseStream: vi.fn().mockResolvedValue(undefined),
+        mockResumeStream: vi.fn().mockResolvedValue(undefined),
+        mockPrepare: vi.fn().mockResolvedValue(undefined),
+        mockSendAudioInt16: vi.fn(),
+        mockSetModelPath: vi.fn(),
+        mockSetLanguage: vi.fn(),
+        mockSetEnableITN: vi.fn(),
+        mockSetITNModelPaths: vi.fn(),
+        mockTerminate: vi.fn().mockResolvedValue(undefined),
+    };
+});
 const {
     mockStart,
     mockStartNative,
@@ -30,95 +54,14 @@ const {
     mockPauseStream,
     mockResumeStream,
     mockPrepare,
-    mockSendAudioInt16,
-    mockSetModelPath,
-    mockSetLanguage,
-    mockSetEnableITN,
-    mockSetITNModelPaths,
-    mockTerminate
-} = vi.hoisted(() => {
-    const start = vi.fn().mockResolvedValue(undefined);
-    const stop = vi.fn().mockResolvedValue(undefined);
-    return {
-    mockStart: start,
-    mockStartNative: vi.fn((...args: any[]) => start(...args)),
-    mockStartExternal: vi.fn((...args: any[]) => start(...args)),
-    mockStop: stop,
-    mockStopNativeCapture: vi.fn(async () => {
-        await stop();
-        return '/mock/path/to/audio.wav';
-    }),
-    mockSoftStop: vi.fn().mockResolvedValue(undefined),
-    mockPauseStream: vi.fn().mockResolvedValue(undefined),
-    mockResumeStream: vi.fn().mockResolvedValue(undefined),
-    mockPrepare: vi.fn().mockResolvedValue(undefined),
-    mockSendAudioInt16: vi.fn(),
-    mockSetModelPath: vi.fn(),
-    mockSetLanguage: vi.fn(),
-    mockSetEnableITN: vi.fn(),
-    mockSetITNModelPaths: vi.fn(),
-    mockTerminate: vi.fn().mockResolvedValue(undefined),
-    };
-});
+} = transcriptionMocks;
 
 // Mock transcription service
-vi.mock('../../services/transcriptionService', () => {
-    return {
-        transcriptionService: {
-            start: mockStart,
-            startNative: mockStartNative,
-            startExternal: mockStartExternal,
-            stopNativeCapture: mockStopNativeCapture,
-            restartStream: mockPrepare,
-            stop: mockStop,
-            softStop: mockSoftStop,
-            pauseStream: mockPauseStream,
-            resumeStream: mockResumeStream,
-            sendAudioInt16: mockSendAudioInt16,
-            setModelPath: mockSetModelPath,
-            setLanguage: mockSetLanguage,
-            setEnableITN: mockSetEnableITN,
-            setITNModelPaths: mockSetITNModelPaths,
-            prepare: mockPrepare,
-            terminate: mockTerminate,
-        },
-        captionTranscriptionService: {
-            start: mockStart,
-            startNative: mockStartNative,
-            startExternal: mockStartExternal,
-            stopNativeCapture: mockStopNativeCapture,
-            restartStream: mockPrepare,
-            stop: mockStop,
-            softStop: mockSoftStop,
-            pauseStream: mockPauseStream,
-            resumeStream: mockResumeStream,
-            sendAudioInt16: mockSendAudioInt16,
-            setModelPath: mockSetModelPath,
-            setLanguage: mockSetLanguage,
-            setEnableITN: mockSetEnableITN,
-            setITNModelPaths: mockSetITNModelPaths,
-            prepare: mockPrepare,
-            terminate: mockTerminate,
-        },
-        TranscriptionService: class {
-            start = mockStart;
-            startNative = mockStartNative;
-            startExternal = mockStartExternal;
-            stopNativeCapture = mockStopNativeCapture;
-            restartStream = mockPrepare;
-            stop = mockStop;
-            softStop = mockSoftStop;
-            pauseStream = mockPauseStream;
-            resumeStream = mockResumeStream;
-            sendAudioInt16 = mockSendAudioInt16;
-            setModelPath = mockSetModelPath;
-            setLanguage = mockSetLanguage;
-            setEnableITN = mockSetEnableITN;
-            setITNModelPaths = mockSetITNModelPaths;
-            prepare = mockPrepare;
-            terminate = mockTerminate;
-        }
-    };
+vi.mock('../../services/transcriptionService', async () => {
+    const { createLiveRecordTranscriptionServiceMockModule } = await vi.importActual<
+        typeof import('../../__tests__/testUtils/liveRecord')
+    >('../../__tests__/testUtils/liveRecord');
+    return createLiveRecordTranscriptionServiceMockModule(transcriptionMocks);
 });
 
 // Mock model service

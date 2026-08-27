@@ -54,7 +54,6 @@ function createSherpaArchiveFixture({ abis = ['arm64-v8a'], omittedLibraries = [
 }
 
 async function loadAndroidSherpaRuntime() {
-  assert.equal(fs.existsSync(androidSherpaRuntimePath), true);
   return import(pathToFileURL(androidSherpaRuntimePath).href);
 }
 

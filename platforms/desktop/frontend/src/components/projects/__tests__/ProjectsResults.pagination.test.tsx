@@ -91,7 +91,7 @@ it('shows a retry action instead of an empty state when the first page fails', (
   });
 
   expect(screen.queryByText('No items in this workspace yet.')).toBeNull();
-  expect(screen.getByText('Workspace items could not be loaded')).toBeDefined();
+  screen.getByText('Workspace items could not be loaded');
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
   expect(props.onRetryInitialLoad).toHaveBeenCalledTimes(1);
@@ -100,7 +100,7 @@ it('shows a retry action instead of an empty state when the first page fails', (
 it('keeps loaded results and exposes a retry action after pagination fails', () => {
   const props = renderResults({ loadMoreError: true });
 
-  expect(screen.getByText('First item')).toBeDefined();
+  screen.getByText('First item');
   fireEvent.click(screen.getByRole('button', { name: 'Retry loading more items' }));
 
   expect(props.onLoadMore).toHaveBeenCalledTimes(1);

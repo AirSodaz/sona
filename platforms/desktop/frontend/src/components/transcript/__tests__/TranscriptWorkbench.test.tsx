@@ -117,7 +117,7 @@ describe('TranscriptWorkbench', () => {
       fireEvent.click(renameButton);
     });
 
-    expect(screen.getByText('RenameModal')).toBeDefined();
+    screen.getByText('RenameModal');
 
     await act(async () => {
       fireEvent.click(closeButton);
@@ -147,7 +147,7 @@ describe('TranscriptWorkbench', () => {
       fireEvent.click(screen.getByRole('button', { name: 'versions.title' }));
     });
 
-    expect(screen.getByText('TranscriptVersionPanel')).toBeDefined();
+    screen.getByText('TranscriptVersionPanel');
   });
 
   it('opens the speaker review panel from the detail header', async () => {
@@ -157,7 +157,7 @@ describe('TranscriptWorkbench', () => {
       fireEvent.click(screen.getByRole('button', { name: 'editor.speaker_review_title' }));
     });
 
-    expect(screen.getByText('TranscriptSpeakerReviewPanel')).toBeDefined();
+    screen.getByText('TranscriptSpeakerReviewPanel');
   });
 
   it('uses the saved batch history type as the default icon while projects mode is active', () => {
@@ -176,7 +176,7 @@ describe('TranscriptWorkbench', () => {
 
     render(<TranscriptWorkbench onClose={() => undefined} />);
 
-    expect(screen.getByTestId('icon-file-text')).toBeDefined();
+    screen.getByTestId('icon-file-text');
     expect(screen.queryByTestId('icon-mic')).toBeNull();
   });
 
@@ -241,7 +241,7 @@ describe('TranscriptWorkbench', () => {
       fireEvent.click(screen.getByRole('button', { name: 'common.rename' }));
     });
 
-    expect(screen.getByText('RenameModal')).toBeDefined();
+    screen.getByText('RenameModal');
 
     await act(async () => {
       useTranscriptStore.setState({

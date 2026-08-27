@@ -93,7 +93,7 @@ describe('PolishButton', () => {
         render(<PolishButton />);
         const button = screen.getByRole('button', { expanded: false });
         fireEvent.click(button);
-        expect(screen.getByText('polish.start')).toBeDefined();
+        screen.getByText('polish.start');
     });
 
     it('starts polishing when start option clicked', async () => {
@@ -114,7 +114,7 @@ describe('PolishButton', () => {
         // Re-open menu
         fireEvent.click(screen.getByRole('button', { expanded: false }));
 
-        expect(screen.getByText('polish.undo')).toBeDefined();
+        screen.getByText('polish.undo');
     });
 
     it('undo restores segments and shows redo', async () => {
@@ -147,7 +147,7 @@ describe('PolishButton', () => {
 
         // 3. Verify Redo appears
         fireEvent.click(screen.getByRole('button', { expanded: false })); // Open menu
-        expect(screen.getByText('polish.redo')).toBeDefined();
+        screen.getByText('polish.redo');
     });
 
     it('redo restores polished segments', async () => {
@@ -189,9 +189,9 @@ describe('PolishButton', () => {
         fireEvent.click(screen.getByText('polish.advanced_settings'));
 
         // Check if modal elements appear (using localized keys from mock)
-        expect(screen.getByText('polish.keywords')).toBeDefined();
-        expect(screen.getByText('Brand Terms')).toBeDefined();
-        expect(screen.getByText('polish.preset_label')).toBeDefined();
+        screen.getByText('polish.keywords');
+        screen.getByText('Brand Terms');
+        screen.getByText('polish.preset_label');
     });
 
     it('renders advanced settings overlay at document body level when opened from the detail header', () => {
@@ -209,7 +209,7 @@ describe('PolishButton', () => {
         );
 
         expect(bodyOverlay).toBeDefined();
-        expect(screen.getByText('polish.advanced_settings')).toBeDefined();
-        expect(screen.getByText('polish.keywords')).toBeDefined();
+        screen.getByText('polish.advanced_settings');
+        screen.getByText('polish.keywords');
     });
 });

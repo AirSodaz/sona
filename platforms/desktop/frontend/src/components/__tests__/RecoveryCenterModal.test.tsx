@@ -145,16 +145,14 @@ describe('RecoveryCenterModal', () => {
   });
 
   it('renders grouped recovery overview and item sections', async () => {
-    const { container } = render(<RecoveryCenterModal isOpen={true} onClose={vi.fn()} />);
+    render(<RecoveryCenterModal isOpen={true} onClose={vi.fn()} />);
 
-    expect(screen.getByText('Interrupted Batch Recovery')).toBeDefined();
-    expect(container.querySelector('.panel-modal-shell')).toBeTruthy();
-    expect(container.querySelector('.panel-modal-header')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Close' })).toBeDefined();
+    screen.getByText('Interrupted Batch Recovery');
+    screen.getByRole('button', { name: 'Close' });
     expect(screen.getAllByText('Batch Import').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Automation').length).toBeGreaterThan(0);
-    expect(screen.getByText('meeting.wav')).toBeDefined();
-    expect(screen.getByText('automation.wav')).toBeDefined();
+    screen.getByText('meeting.wav');
+    screen.getByText('automation.wav');
   });
 
   it('triggers resume all, resume item, and discard item actions', async () => {

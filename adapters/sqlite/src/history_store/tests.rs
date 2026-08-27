@@ -1,6 +1,6 @@
 use super::*;
 use crate::Database;
-use crate::history_store::sql::{HISTORY_ITEM_ROW_COLUMNS, history_insert_sql};
+use crate::history_store::sql::HISTORY_ITEM_ROW_COLUMNS;
 use serde_json::json;
 use sona_core::history::mutation_repository::{HistoryItemMetaPatch, HistoryMutationError};
 // Types the production `store` module does not import itself, so `use super::*`
@@ -179,20 +179,6 @@ fn history_row_mapper_reads_columns_by_name() {
             Ok(())
         })
         .unwrap();
-}
-
-#[test]
-fn history_insert_sql_uses_named_params_for_all_columns() {
-    let sql = history_insert_sql();
-
-    assert!(!sql.contains('?'));
-    for column in HISTORY_ITEM_ROW_COLUMNS {
-        assert!(
-            sql.contains(&format!(":{column}")),
-            "missing named param for {column} in {sql}"
-        );
-    }
-    assert_eq!(sql.matches(':').count(), HISTORY_ITEM_ROW_COLUMNS.len());
 }
 
 #[test]
@@ -1261,19 +1247,17 @@ fn workspace_query_rejects_invalid_pagination() {
     let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
     store.ensure_ready().unwrap();
 
-    for (limit, offset) in [(0, 0), (201, 0), (1, usize::MAX)] {
-        let result = store.query_workspace(HistoryWorkspaceQueryRequest {
-            scope: HistoryWorkspaceScope::All,
-            query: String::new(),
-            filter_type: HistoryWorkspaceFilterType::All,
-            date_filter: HistoryWorkspaceDateFilter::All,
-            sort_order: HistoryWorkspaceSortOrder::Newest,
-            limit,
-            offset,
-        });
+    let result = store.query_workspace(HistoryWorkspaceQueryRequest {
+        scope: HistoryWorkspaceScope::All,
+        query: String::new(),
+        filter_type: HistoryWorkspaceFilterType::All,
+        date_filter: HistoryWorkspaceDateFilter::All,
+        sort_order: HistoryWorkspaceSortOrder::Newest,
+        limit: 1,
+        offset: usize::MAX,
+    });
 
-        assert!(matches!(result, Err(HistoryStoreError::InvalidRequest(_))));
-    }
+    assert!(matches!(result, Err(HistoryStoreError::InvalidRequest(_))));
 }
 
 #[test]

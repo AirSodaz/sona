@@ -62,8 +62,8 @@ describe('SearchUI', () => {
 
   it('renders search input when open', () => {
     render(<SearchUI />);
-    expect(screen.getByRole('search')).not.toBeNull();
-    expect(screen.getByPlaceholderText('Find in transcript...')).not.toBeNull();
+    screen.getByRole('search');
+    screen.getByPlaceholderText('Find in transcript...');
   });
 
   it('updates query on input change', () => {
@@ -82,7 +82,7 @@ describe('SearchUI', () => {
     });
     render(<SearchUI />);
     // "0/0" is rendered when query exists but matches is empty
-    expect(screen.getByText('0/0')).not.toBeNull();
+    screen.getByText('0/0');
   });
 
   it('displays match count correctly with matches (1/5)', () => {
@@ -93,7 +93,7 @@ describe('SearchUI', () => {
       currentMatchIndex: 0
     });
     render(<SearchUI />);
-    expect(screen.getByText('1/5')).not.toBeNull();
+    screen.getByText('1/5');
   });
 
   it('displays empty string when no query', () => {

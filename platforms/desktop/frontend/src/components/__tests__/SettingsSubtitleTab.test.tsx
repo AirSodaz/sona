@@ -71,16 +71,16 @@ describe('SettingsSubtitleTab', () => {
     it('renders all controls', () => {
         render(<SettingsSubtitleTab />);
 
-        expect(screen.getByText('live.start_on_launch')).toBeDefined();
-        expect(screen.getByText('live.lock_window')).toBeDefined();
-        expect(screen.getByText('live.always_on_top')).toBeDefined();
-        expect(screen.getByText('live.window_width')).toBeDefined();
-        expect(screen.getByText('live.font_size')).toBeDefined();
-        expect(screen.getByText('live.font_color')).toBeDefined();
-        expect(screen.getByText('settings.enable_voice_typing')).toBeDefined();
-        expect(screen.getByText('settings.voice_typing_shortcut')).toBeDefined();
-        expect(screen.getByText('settings.voice_typing_mode')).toBeDefined();
-        expect(screen.getByText('settings.voice_typing_availability')).toBeDefined();
+        screen.getByText('live.start_on_launch');
+        screen.getByText('live.lock_window');
+        screen.getByText('live.always_on_top');
+        screen.getByText('live.window_width');
+        screen.getByText('live.font_size');
+        screen.getByText('live.font_color');
+        screen.getByText('settings.enable_voice_typing');
+        screen.getByText('settings.voice_typing_shortcut');
+        screen.getByText('settings.voice_typing_mode');
+        screen.getByText('settings.voice_typing_availability');
     });
 
     it('renders width input with correct values and classes', () => {
@@ -160,8 +160,8 @@ describe('SettingsSubtitleTab', () => {
 
         render(<SettingsSubtitleTab />);
 
-        expect(screen.getByText('settings.voice_typing_unavailable')).toBeDefined();
-        expect(screen.getByText('settings.voice_typing_failure_reason_with_source')).toBeDefined();
+        screen.getByText('settings.voice_typing_unavailable');
+        screen.getByText('settings.voice_typing_failure_reason_with_source');
         expect(screen.queryByText('settings.voice_typing_dependencies')).toBeNull();
         expect(screen.queryByText('settings.voice_typing_open_model_hub')).toBeNull();
         expect(screen.queryByText('settings.voice_typing_open_input_device')).toBeNull();

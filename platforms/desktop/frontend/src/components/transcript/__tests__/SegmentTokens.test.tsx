@@ -85,8 +85,8 @@ describe('SegmentTokens', () => {
       />
     );
 
-    expect(screen.getByText('Hello')).not.toBeNull();
-    expect(screen.getByText('world')).not.toBeNull();
+    screen.getByText('Hello');
+    screen.getByText('world');
   });
 
   it('renders edited segment text when timing text is stale', () => {
@@ -101,7 +101,7 @@ describe('SegmentTokens', () => {
       />
     );
 
-    expect(screen.getByText('Edited text')).not.toBeNull();
+    screen.getByText('Edited text');
     expect(screen.queryByText('Hello')).toBeNull();
     expect(screen.queryByText('world')).toBeNull();
   });
@@ -118,7 +118,7 @@ describe('SegmentTokens', () => {
       />
     );
 
-    expect(screen.getByText('Hello, world')).not.toBeNull();
+    screen.getByText('Hello, world');
   });
 
   it('applies "partial" class when segment is not final', () => {
@@ -355,7 +355,7 @@ describe('SegmentTokens', () => {
     const result = renderWithContextMenu();
     const root = getSegmentRoot(result.container);
     fireEvent.contextMenu(root, { clientX: 80, clientY: 120 });
-    expect(screen.getByRole('menu')).not.toBeNull();
+    screen.getByRole('menu');
 
     result.rerender(
       <ContextMenuProvider>

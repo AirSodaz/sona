@@ -537,11 +537,6 @@ describe('ModelService', () => {
                 timestampSupportHint: 'segment',
             });
         });
-
-        it('adds qwen3-asr description keys to both locale files', () => {
-            expect(enLocale.settings.descriptions.qwen3_asr).toBeTruthy();
-            expect(zhLocale.settings.descriptions.qwen3_asr).toBeTruthy();
-        });
     });
 
     describe('speaker model metadata', () => {

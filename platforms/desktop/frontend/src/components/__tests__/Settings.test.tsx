@@ -280,7 +280,7 @@ describe('Settings', () => {
         render(<Settings isOpen={true} onClose={onClose} />);
 
         expect(await screen.findByText('settings.log_level')).toBeDefined();
-        expect(screen.getByText('settings.log_level_info')).toBeDefined();
+        screen.getByText('settings.log_level_info');
     });
 
     it('prewarms the hidden general pane without exposing a dialog or checking models', async () => {
@@ -367,7 +367,7 @@ describe('Settings', () => {
 
         // Check for progress bar
         await waitFor(() => {
-            expect(screen.getByRole('progressbar')).toBeDefined();
+            screen.getByRole('progressbar');
         });
 
         // Wait for completion (modelService.downloadModel resolves)
@@ -386,9 +386,9 @@ describe('Settings', () => {
         const restoreDefaults = screen.getByText('settings.restore_defaults');
 
         expect(streamingModel).toBeDefined();
-        expect(screen.getByText('settings.enable_itn')).toBeDefined();
-        expect(screen.getByText('settings.max_concurrent_label')).toBeDefined();
-        expect(screen.getByLabelText('settings.restore_defaults')).toBeDefined();
+        screen.getByText('settings.enable_itn');
+        screen.getByText('settings.max_concurrent_label');
+        screen.getByLabelText('settings.restore_defaults');
         expect(Boolean(vadModels.compareDocumentPosition(transcriptionSettings) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
         expect(Boolean(transcriptionSettings.compareDocumentPosition(restoreDefaults) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
         expect(screen.queryByText('settings.local_path')).toBeNull();

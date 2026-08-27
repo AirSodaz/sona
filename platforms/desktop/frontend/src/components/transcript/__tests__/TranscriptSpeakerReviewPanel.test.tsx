@@ -74,266 +74,180 @@ function expectGroupActive(group: HTMLElement, isActive = true): void {
   expect(group.classList.contains('is-active')).toBe(isActive);
 }
 
-function resolveSegmentGroupId(segment: TranscriptSegment): string {
-  return segment.speakerAttribution?.groupId || segment.speaker?.id || '';
-}
+const GROUP_SUGGESTED = {
+  groupId: 'anonymous-1',
+  displayLabel: 'Speaker 1',
+  anonymousLabel: 'Speaker 1',
+  state: 'suggested',
+  source: 'auto',
+  confidence: 'medium',
+  reviewStatus: 'pending' as const,
+  riskReason: 'suggested' as const,
+  priority: 0,
+  candidates: [
+    { profileId: 'alice', profileName: 'Alice', score: 0.79, rank: 1, displayScore: 'rust-score-alice' },
+    { profileId: 'bob', profileName: 'Bob', score: 0.72, rank: 2, displayScore: 'rust-score-bob' },
+  ],
+  speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' as const },
+  segmentCount: 2,
+  durationSeconds: 8,
+  displayDuration: '8 sec from Rust',
+  firstSegmentId: 'seg-1',
+  firstStart: 12,
+  displayStart: 'rust-group-start-seg-1',
+  previewSegments: [
+    { id: 'seg-1', start: 12, end: 18, displayStart: 'rust-start-seg-1', displayDuration: 'rust-duration-seg-1', text: 'Hello there' },
+    { id: 'seg-1b', start: 20, end: 22, displayStart: 'rust-start-seg-1b', displayDuration: 'rust-duration-seg-1b', text: 'Follow up' },
+  ],
+};
 
-function resolveReviewStatus(
-  state: string,
-  source: string,
-  confidence: string,
-): 'pending' | 'auto' | 'reviewed' {
-  if (source === 'manual') {
-    return 'reviewed';
-  }
-  if (state === 'suggested' || state === 'anonymous' || confidence !== 'high') {
-    return 'pending';
-  }
-  return 'auto';
-}
+const GROUP_ANONYMOUS = {
+  groupId: 'anonymous-2',
+  displayLabel: 'Speaker 2',
+  anonymousLabel: 'Speaker 2',
+  state: 'anonymous',
+  source: 'auto',
+  confidence: 'low',
+  reviewStatus: 'pending' as const,
+  riskReason: 'anonymous' as const,
+  priority: 1,
+  candidates: [],
+  speaker: { id: 'anonymous-2', label: 'Speaker 2', kind: 'anonymous' as const },
+  segmentCount: 1,
+  durationSeconds: 4,
+  displayDuration: '8 sec from Rust',
+  firstSegmentId: 'seg-2',
+  firstStart: 30,
+  displayStart: 'rust-group-start-seg-2',
+  previewSegments: [
+    { id: 'seg-2', start: 30, end: 34, displayStart: 'rust-start-seg-2', displayDuration: 'rust-duration-seg-2', text: 'Unknown voice' },
+  ],
+};
 
-function resolveRiskReason(
-  state: string,
-  source: string,
-  confidence: string,
-): 'suggested' | 'anonymous' | 'low_confidence' | 'medium_confidence' | 'auto_identified' | 'reviewed' {
-  if (source === 'manual') {
-    return 'reviewed';
-  }
-  if (state === 'suggested') {
-    return 'suggested';
-  }
-  if (state === 'anonymous') {
-    return 'anonymous';
-  }
-  if (confidence === 'low') {
-    return 'low_confidence';
-  }
-  if (confidence === 'medium') {
-    return 'medium_confidence';
-  }
-  return 'auto_identified';
-}
+const GROUP_IDENTIFIED = {
+  groupId: 'anonymous-3',
+  displayLabel: 'Alice',
+  anonymousLabel: 'Speaker 3',
+  state: 'identified',
+  source: 'auto',
+  confidence: 'high',
+  reviewStatus: 'auto' as const,
+  riskReason: 'auto_identified' as const,
+  priority: 4,
+  candidates: [],
+  speaker: { id: 'alice', label: 'Alice', kind: 'identified' as const },
+  segmentCount: 1,
+  durationSeconds: 4,
+  displayDuration: '8 sec from Rust',
+  firstSegmentId: 'seg-3',
+  firstStart: 40,
+  displayStart: 'rust-group-start-seg-3',
+  previewSegments: [
+    { id: 'seg-3', start: 40, end: 44, displayStart: 'rust-start-seg-3', displayDuration: 'rust-duration-seg-3', text: 'Known Alice' },
+  ],
+};
 
-function riskPriority(reason: ReturnType<typeof resolveRiskReason>): number {
-  return [
-    'suggested',
-    'anonymous',
-    'low_confidence',
-    'medium_confidence',
-    'auto_identified',
-    'reviewed',
-  ].indexOf(reason);
-}
+const GROUP_REVIEWED = {
+  groupId: 'anonymous-4',
+  displayLabel: 'Bob',
+  anonymousLabel: 'Speaker 4',
+  state: 'identified',
+  source: 'manual',
+  confidence: 'high',
+  reviewStatus: 'reviewed' as const,
+  riskReason: 'reviewed' as const,
+  priority: 5,
+  candidates: [],
+  speaker: { id: 'bob', label: 'Bob', kind: 'identified' as const },
+  segmentCount: 1,
+  durationSeconds: 4,
+  displayDuration: '8 sec from Rust',
+  firstSegmentId: 'seg-4',
+  firstStart: 50,
+  displayStart: 'rust-group-start-seg-4',
+  previewSegments: [
+    { id: 'seg-4', start: 50, end: 54, displayStart: 'rust-start-seg-4', displayDuration: 'rust-duration-seg-4', text: 'Confirmed Bob' },
+  ],
+};
+
+const FILTER_OPTIONS = [
+  { id: 'pending', labelKey: 'editor.speaker_review_filter_pending', countKey: 'pending' },
+  { id: 'suggested', labelKey: 'editor.speaker_review_filter_suggested', countKey: 'suggested' },
+  { id: 'anonymous', labelKey: 'editor.speaker_review_filter_anonymous', countKey: 'anonymous' },
+  { id: 'identified', labelKey: 'editor.speaker_review_filter_identified', countKey: 'identified' },
+  { id: 'reviewed', labelKey: 'editor.speaker_review_filter_reviewed', countKey: 'reviewed' },
+  { id: 'all', labelKey: 'editor.speaker_review_filter_all', countKey: 'total' },
+];
 
 function buildReviewSnapshot(segments: TranscriptSegment[], activeFilter: string) {
-  const groupsById = new Map<string, any>();
+  const isAnonymous1Reviewed = segments.some(
+    (s) => (s.speakerAttribution?.groupId === 'anonymous-1' || s.id === 'seg-1') && s.speakerAttribution?.source === 'manual',
+  );
 
-  segments.forEach((segment) => {
-    const attribution = segment.speakerAttribution;
-    if (!attribution) {
-      return;
-    }
+  const groups = [
+    ...(isAnonymous1Reviewed ? [] : [GROUP_SUGGESTED]),
+    GROUP_ANONYMOUS,
+    GROUP_IDENTIFIED,
+    GROUP_REVIEWED,
+  ];
 
-    const existing = groupsById.get(attribution.groupId);
-    if (existing) {
-      existing.segmentCount += 1;
-      existing.durationSeconds += Math.max(0, segment.end - segment.start);
-      existing.displayDuration = '8 sec from Rust';
-      existing.firstStart = Math.min(existing.firstStart, segment.start);
-      existing.previewSegments.push({
-        id: segment.id,
-        start: segment.start,
-        end: segment.end,
-        displayStart: `rust-start-${segment.id}`,
-        displayDuration: `rust-duration-${segment.id}`,
-        text: segment.text,
-      });
-      if (attribution.source === 'manual') {
-        existing.source = 'manual';
-      }
-      return;
-    }
+  const pendingCount = isAnonymous1Reviewed ? 1 : 2;
+  const counts = {
+    total: isAnonymous1Reviewed ? 3 : 4,
+    pending: pendingCount,
+    suggested: isAnonymous1Reviewed ? 0 : 1,
+    anonymous: 1,
+    identified: 2,
+    reviewed: 1,
+  };
 
-    const reviewStatus = resolveReviewStatus(
-      attribution.state,
-      attribution.source,
-      attribution.confidence,
-    );
-    const riskReason = resolveRiskReason(
-      attribution.state,
-      attribution.source,
-      attribution.confidence,
-    );
-
-    groupsById.set(attribution.groupId, {
-      groupId: attribution.groupId,
-      displayLabel: segment.speaker?.label || attribution.anonymousLabel,
-      anonymousLabel: attribution.anonymousLabel,
-      state: attribution.state,
-      source: attribution.source,
-      confidence: attribution.confidence,
-      reviewStatus,
-      riskReason,
-      priority: riskPriority(riskReason),
-      candidates: attribution.candidates.map((candidate) => ({
-        ...candidate,
-        displayScore: `rust-score-${candidate.profileId}`,
-      })),
-      speaker: segment.speaker,
-      segmentCount: 1,
-      durationSeconds: Math.max(0, segment.end - segment.start),
-      displayDuration: '8 sec from Rust',
-      firstSegmentId: segment.id,
-      firstStart: segment.start,
-      displayStart: `rust-group-start-${segment.id}`,
-      previewSegments: [{
-        id: segment.id,
-        start: segment.start,
-        end: segment.end,
-        displayStart: `rust-start-${segment.id}`,
-        displayDuration: `rust-duration-${segment.id}`,
-        text: segment.text,
-      }],
-    });
-  });
-
-  const groups = [...groupsById.values()]
-    .map((group) => {
-      const reviewStatus = resolveReviewStatus(group.state, group.source, group.confidence);
-      const riskReason = resolveRiskReason(group.state, group.source, group.confidence);
-      return {
-        ...group,
-        reviewStatus,
-        riskReason,
-        priority: riskPriority(riskReason),
-        previewSegments: [...group.previewSegments]
-          .sort((left, right) => left.start - right.start)
-          .slice(0, 3),
-      };
-    })
-    .sort((left, right) => left.priority - right.priority || left.firstStart - right.firstStart);
-
-  const counts = groups.reduce((accumulator, group) => ({
-    total: accumulator.total + 1,
-    pending: accumulator.pending + (group.reviewStatus === 'pending' ? 1 : 0),
-    suggested: accumulator.suggested + (group.state === 'suggested' ? 1 : 0),
-    anonymous: accumulator.anonymous + (group.state === 'anonymous' ? 1 : 0),
-    identified: accumulator.identified + (group.state === 'identified' ? 1 : 0),
-    reviewed: accumulator.reviewed + (group.reviewStatus === 'reviewed' ? 1 : 0),
-  }), {
-    total: 0,
-    pending: 0,
-    suggested: 0,
-    anonymous: 0,
-    identified: 0,
-    reviewed: 0,
-  });
-
-  const visibleGroups = groups.filter((group) => {
-    switch (activeFilter) {
-      case 'pending':
-        return group.reviewStatus === 'pending';
-      case 'suggested':
-        return group.state === 'suggested';
-      case 'anonymous':
-        return group.state === 'anonymous';
-      case 'identified':
-        return group.state === 'identified';
-      case 'reviewed':
-        return group.reviewStatus === 'reviewed';
-      case 'all':
-      default:
-        return true;
-    }
-  });
+  const filterMap: Record<string, typeof groups> = {
+    pending: isAnonymous1Reviewed ? [GROUP_ANONYMOUS] : [GROUP_SUGGESTED, GROUP_ANONYMOUS],
+    suggested: isAnonymous1Reviewed ? [] : [GROUP_SUGGESTED],
+    anonymous: [GROUP_ANONYMOUS],
+    identified: [GROUP_IDENTIFIED, GROUP_REVIEWED],
+    reviewed: [GROUP_REVIEWED],
+    all: [GROUP_SUGGESTED, GROUP_ANONYMOUS, GROUP_IDENTIFIED, GROUP_REVIEWED],
+  };
 
   return {
     groups,
     counts,
-    visibleGroups,
-    filterOptions: [
-      { id: 'pending', labelKey: 'editor.speaker_review_filter_pending', countKey: 'pending' },
-      { id: 'suggested', labelKey: 'editor.speaker_review_filter_suggested', countKey: 'suggested' },
-      { id: 'anonymous', labelKey: 'editor.speaker_review_filter_anonymous', countKey: 'anonymous' },
-      { id: 'identified', labelKey: 'editor.speaker_review_filter_identified', countKey: 'identified' },
-      { id: 'reviewed', labelKey: 'editor.speaker_review_filter_reviewed', countKey: 'reviewed' },
-      { id: 'all', labelKey: 'editor.speaker_review_filter_all', countKey: 'total' },
-    ],
+    visibleGroups: filterMap[activeFilter] ?? groups,
+    filterOptions: FILTER_OPTIONS,
   };
 }
 
-function assignProfileToGroup(
-  segments: TranscriptSegment[],
-  groupId: string,
-  targetProfileId: string,
-  speakerProfiles: SpeakerProfile[],
-): TranscriptSegment[] {
-  const targetProfile = speakerProfiles.find((profile) => profile.id === targetProfileId);
-  if (!targetProfile) {
-    return segments;
-  }
-
-  return segments.map((segment) => {
-    if (resolveSegmentGroupId(segment) !== groupId) {
-      return segment;
-    }
-
+function assignProfileToGroup(segments: TranscriptSegment[], groupId: string, targetProfileId: string, profiles: SpeakerProfile[]): TranscriptSegment[] {
+  const target = profiles.find((p) => p.id === targetProfileId);
+  return segments.map((s) => {
+    if (s.speakerAttribution?.groupId !== groupId && s.speaker?.id !== groupId) return s;
     return {
-      ...segment,
-      speaker: { id: targetProfile.id, label: targetProfile.name, kind: 'identified' },
-      speakerAttribution: {
-        groupId,
-        anonymousLabel: segment.speakerAttribution?.anonymousLabel || segment.speaker?.label || 'Speaker',
-        state: 'identified',
-        source: 'manual',
-        confidence: 'high',
-        candidates: segment.speakerAttribution?.candidates || [],
-      },
-    } as TranscriptSegment;
+      ...s,
+      speaker: target ? { id: target.id, label: target.name, kind: 'identified' as const } : s.speaker,
+      speakerAttribution: s.speakerAttribution ? { ...s.speakerAttribution, state: 'identified' as const, source: 'manual' as const } : undefined,
+    };
   });
 }
 
 function resetGroupToAnonymous(segments: TranscriptSegment[], groupId: string): TranscriptSegment[] {
-  return segments.map((segment) => {
-    if (resolveSegmentGroupId(segment) !== groupId) {
-      return segment;
-    }
-
-    const anonymousLabel = segment.speakerAttribution?.anonymousLabel || segment.speaker?.label || 'Speaker';
+  return segments.map((s) => {
+    if (s.speakerAttribution?.groupId !== groupId && s.speaker?.id !== groupId) return s;
     return {
-      ...segment,
-      speaker: { id: groupId, label: anonymousLabel, kind: 'anonymous' },
-      speakerAttribution: {
-        groupId,
-        anonymousLabel,
-        state: 'anonymous',
-        source: 'manual',
-        confidence: 'low',
-        candidates: segment.speakerAttribution?.candidates || [],
-      },
-    } as TranscriptSegment;
+      ...s,
+      speaker: { id: groupId, label: s.speakerAttribution?.anonymousLabel || 'Speaker 1', kind: 'anonymous' as const },
+      speakerAttribution: s.speakerAttribution ? { ...s.speakerAttribution, state: 'anonymous' as const, source: 'manual' as const } : undefined,
+    };
   });
 }
 
 function confirmGroupReview(segments: TranscriptSegment[], groupId: string): TranscriptSegment[] {
-  return segments.map((segment) => {
-    if (resolveSegmentGroupId(segment) !== groupId) {
-      return segment;
-    }
-
-    const isIdentified = segment.speaker?.kind === 'identified';
+  return segments.map((s) => {
+    if (s.speakerAttribution?.groupId !== groupId && s.speaker?.id !== groupId) return s;
     return {
-      ...segment,
-      speakerAttribution: {
-        groupId,
-        anonymousLabel: segment.speakerAttribution?.anonymousLabel || segment.speaker?.label || 'Speaker',
-        state: isIdentified ? 'identified' : 'anonymous',
-        source: 'manual',
-        confidence: isIdentified ? 'high' : 'low',
-        candidates: segment.speakerAttribution?.candidates || [],
-      },
-    } as TranscriptSegment;
+      ...s,
+      speakerAttribution: s.speakerAttribution ? { ...s.speakerAttribution, state: 'anonymous' as const, source: 'manual' as const } : undefined,
+    };
   });
 }
 
@@ -490,10 +404,7 @@ describe('TranscriptSpeakerReviewPanel', () => {
   it('renders inside the shared panel modal shell', async () => {
     await renderReviewPanel();
 
-    const dialog = screen.getByRole('dialog', { name: 'Speaker Review' });
-    expect(dialog.classList.contains('panel-modal-shell')).toBe(true);
-    expect(dialog.querySelector('.panel-modal-header')).toBeTruthy();
-    expect(dialog.querySelector('.panel-modal-content')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Speaker Review' })).toBeDefined();
   });
 
   it('opens on the pending queue with counts, previews, candidates, and profile actions', async () => {
@@ -701,12 +612,10 @@ describe('TranscriptSpeakerReviewPanel', () => {
   });
 
   it('does not submit duplicate shortcut actions while a group is busy', async () => {
-    let resolveAction: (() => void) | undefined;
+    const { promise: actionPromise, resolve: resolveAction } = Promise.withResolvers<TranscriptSegment[]>();
     const confirmSpy = vi
       .spyOn(speakerCorrectionService, 'confirmSpeakerGroupReview')
-      .mockImplementation(() => new Promise((resolve) => {
-        resolveAction = () => resolve(useTranscriptSessionStore.getState().segments);
-      }));
+      .mockImplementation(() => actionPromise);
 
     await renderReviewPanel();
     await waitFor(() => {
@@ -721,7 +630,7 @@ describe('TranscriptSpeakerReviewPanel', () => {
     expect(confirmSpy).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      resolveAction?.();
+      resolveAction(useTranscriptSessionStore.getState().segments);
     });
   });
 

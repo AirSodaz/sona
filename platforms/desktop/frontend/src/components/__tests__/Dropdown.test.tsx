@@ -23,7 +23,7 @@ describe('Dropdown', () => {
                 placeholder="Select something"
             />
         );
-        expect(screen.getByText('Select something')).toBeDefined();
+        screen.getByText('Select something');
 
         rerender(
             <Dropdown
@@ -32,7 +32,7 @@ describe('Dropdown', () => {
                 options={options}
             />
         );
-        expect(screen.getByText('Option 1')).toBeDefined();
+        screen.getByText('Option 1');
     });
 
     it('opens menu when clicked', () => {
@@ -46,7 +46,7 @@ describe('Dropdown', () => {
         const trigger = screen.getByRole('button', { expanded: false });
         fireEvent.click(trigger);
 
-        expect(screen.getByRole('listbox')).toBeDefined();
+        screen.getByRole('listbox');
         expect(screen.getAllByRole('option')).toHaveLength(3);
     });
 
@@ -119,7 +119,7 @@ describe('Dropdown', () => {
             trigger.focus();
             fireEvent.click(trigger);
 
-            expect(screen.getByRole('listbox')).toBeDefined();
+            screen.getByRole('listbox');
 
             // Press Escape
             const optionsList = screen.getAllByRole('option');

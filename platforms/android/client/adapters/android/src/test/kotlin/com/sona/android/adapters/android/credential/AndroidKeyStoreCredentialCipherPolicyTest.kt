@@ -66,11 +66,4 @@ class AndroidKeyStoreCredentialCipherPolicyTest {
             }
         }
     }
-
-    @Test
-    fun `cipher encryption API accepts plaintext only so provider owns iv creation`() {
-        val encrypt = CredentialCipher::class.java.declaredMethods.single { it.name == "encrypt" }
-
-        assertEquals(listOf(ByteArray::class.java), encrypt.parameterTypes.toList())
-    }
 }

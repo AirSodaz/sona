@@ -96,86 +96,75 @@ describe('batchQueueStore Concurrency', () => {
     it('should process multiple items up to maxConcurrent', async () => {
         const store = useBatchQueueStore.getState();
 
-        // Mock transcribeFile to return a promise that we control
-        let resolveTask1: (val: any) => void;
-        let resolveTask2: (val: any) => void;
-        let resolveTask3: (val: any) => void;
-        const task1Promise = new Promise(r => resolveTask1 = r);
-        const task2Promise = new Promise(r => resolveTask2 = r);
-        const task3Promise = new Promise(r => resolveTask3 = r);
+        const task1 = Promise.withResolvers<Array<{ id: string; start: number; end: number; text: string; isFinal: boolean }>>();
+        const task2 = Promise.withResolvers<Array<{ id: string; start: number; end: number; text: string; isFinal: boolean }>>();
+        const task3 = Promise.withResolvers<Array<{ id: string; start: number; end: number; text: string; isFinal: boolean }>>();
 
-        const tasks = {
-            'file1.wav': task1Promise,
-            'file2.wav': task2Promise,
-            'file3.wav': task3Promise
+        const tasks: Record<string, Promise<Array<{ id: string; start: number; end: number; text: string; isFinal: boolean }>>> = {
+            'file1.wav': task1.promise,
+            'file2.wav': task2.promise,
+            'file3.wav': task3.promise,
         };
 
-        (transcriptionService.transcribeFile as any).mockImplementation((filePath: string) => {
+        vi.mocked(transcriptionService.transcribeFile).mockImplementation((filePath: string) => {
             const filename = filePath.split(/[/\\]/).pop() || '';
-            return tasks[filename as keyof typeof tasks] || Promise.resolve([]);
+            return (tasks[filename] || Promise.resolve([])) as unknown as never;
         });
 
         // Add 3 files
         store.addFiles(['/path/to/file1.wav', '/path/to/file2.wav', '/path/to/file3.wav']);
 
-        // Wait a bit for the async processQueue to kick in
-        await new Promise(r => setTimeout(r, 50));
+        // Wait for concurrency limit to be reached
+        await vi.waitFor(() => {
+            const state = useBatchQueueStore.getState();
+            const processingItems = state.queueItems.filter(i => i.status === 'processing');
+            expect(processingItems.length).toBe(2); // Should cap at 2
+        });
 
-        // Check status
-        const state = useBatchQueueStore.getState();
-        const processingItems = state.queueItems.filter(i => i.status === 'processing');
-        const pendingItems = state.queueItems.filter(i => i.status === 'pending');
-
-        expect(processingItems.length).toBe(2); // Should cap at 2
-        expect(pendingItems.length).toBe(1);
+        expect(useBatchQueueStore.getState().queueItems.filter(i => i.status === 'pending').length).toBe(1);
 
         // Finish task 1
-        resolveTask1!([{ id: '1', start: 0, end: 1, text: 'test', isFinal: true }]);
+        task1.resolve([{ id: '1', start: 0, end: 1, text: 'test', isFinal: true }]);
 
         // Wait for state update and next task trigger
-        await new Promise(r => setTimeout(r, 50));
-
-        const stateAfter1 = useBatchQueueStore.getState();
-        const processingAfter1 = stateAfter1.queueItems.filter(i => i.status === 'processing');
-        const completeAfter1 = stateAfter1.queueItems.filter(i => i.status === 'complete');
-
-        expect(completeAfter1.length).toBe(1);
-        expect(processingAfter1.length).toBe(2); // file2 still running, file3 started
+        await vi.waitFor(() => {
+            const state = useBatchQueueStore.getState();
+            expect(state.queueItems.filter(i => i.status === 'complete').length).toBe(1);
+            expect(state.queueItems.filter(i => i.status === 'processing').length).toBe(2); // file2 still running, file3 started
+        });
 
         // Finish remaining
-        resolveTask2!([{ id: '2', start: 0, end: 1, text: 'test', isFinal: true }]);
-        resolveTask3!([{ id: '3', start: 0, end: 1, text: 'test', isFinal: true }]);
+        task2.resolve([{ id: '2', start: 0, end: 1, text: 'test', isFinal: true }]);
+        task3.resolve([{ id: '3', start: 0, end: 1, text: 'test', isFinal: true }]);
 
-        await new Promise(r => setTimeout(r, 50));
-
-        const finalState = useBatchQueueStore.getState();
-        expect(finalState.queueItems.every(i => i.status === 'complete')).toBe(true);
-        expect(finalState.isQueueProcessing).toBe(false);
+        await vi.waitFor(() => {
+            const finalState = useBatchQueueStore.getState();
+            expect(finalState.queueItems.every(i => i.status === 'complete')).toBe(true);
+            expect(finalState.isQueueProcessing).toBe(false);
+        });
     });
 
     it('should respect maxConcurrent config change', async () => {
         useConfigStore.setState({
             config: {
                 ...useConfigStore.getState().config,
-                maxConcurrent: 3
-            }
+                maxConcurrent: 3,
+            },
         });
 
         const store = useBatchQueueStore.getState();
 
-        // Mock simple delay
-        (transcriptionService.transcribeFile as any).mockImplementation(async () => {
-            await new Promise(r => setTimeout(r, 10));
-            return [];
-        });
+        const deferred = Promise.withResolvers<never[]>();
+        vi.mocked(transcriptionService.transcribeFile).mockImplementation(() => deferred.promise as unknown as never);
 
         store.addFiles(['1.wav', '2.wav', '3.wav', '4.wav']);
 
-        await new Promise(r => setTimeout(r, 5));
+        await vi.waitFor(() => {
+            const state = useBatchQueueStore.getState();
+            const processing = state.queueItems.filter(i => i.status === 'processing');
+            expect(processing.length).toBe(3);
+        });
 
-        const state = useBatchQueueStore.getState();
-        const processing = state.queueItems.filter(i => i.status === 'processing');
-
-        expect(processing.length).toBe(3);
+        deferred.resolve([]);
     });
 });

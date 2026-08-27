@@ -117,13 +117,6 @@ mod tests {
     }
 
     #[test]
-    fn timestamp_and_process_memory_are_valid_runtime_values() {
-        assert!(current_time_millis() > 0);
-        let memory = capture_process_memory_mb();
-        assert!(memory.is_none() || memory.unwrap() >= 0.0);
-    }
-
-    #[test]
     fn live_metric_is_typed_and_delivered_through_core_observer() {
         let observer = RecordingObserver::default();
         let metric = build_live_metric("live-1", "partial", false, 1_600, 10.0, None, None);

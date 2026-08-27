@@ -3,19 +3,12 @@ package com.sona.android.app.feature.recording
 import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import com.sona.android.application.bootstrap.SonaBootstrapSnapshot
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BootstrapStatusTest {
     @Test
     fun `ready runtime does not render a recording status notice`() {
         assertFalse(shouldShowBootstrapStatus(ready(localRuntimePackaged = true)))
-    }
-
-    @Test
-    fun `loading and errors still render a recording status notice`() {
-        assertTrue(shouldShowBootstrapStatus(SonaBootstrapUiState.Loading))
-        assertTrue(shouldShowBootstrapStatus(SonaBootstrapUiState.Error("failed")))
     }
 
     private fun ready(localRuntimePackaged: Boolean) = SonaBootstrapUiState.Ready(

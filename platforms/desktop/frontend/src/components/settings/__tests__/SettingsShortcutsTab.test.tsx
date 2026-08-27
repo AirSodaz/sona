@@ -20,7 +20,7 @@ describe('SettingsShortcutsTab', () => {
     it('keeps only generic shortcut references and removes voice typing controls', () => {
         render(<SettingsShortcutsTab />);
 
-        expect(screen.getByText('shortcuts.record_start_stop')).toBeDefined();
+        screen.getByText('shortcuts.record_start_stop');
         expect(screen.queryByText('settings.enable_voice_typing')).toBeNull();
         expect(screen.queryByText('settings.voice_typing_shortcut')).toBeNull();
         expect(screen.queryByText('settings.voice_typing_mode')).toBeNull();

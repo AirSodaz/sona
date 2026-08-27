@@ -180,11 +180,11 @@ describe('SettingsStorageTab', () => {
   it('renders the data usage overview from the storage snapshot', async () => {
     render(<SettingsStorageTab />);
 
-    expect(screen.getByText('Data & Storage')).toBeTruthy();
+    screen.getByText('Data & Storage');
     expect(await screen.findByText('Audio')).toBeTruthy();
-    expect(screen.getByText('Database')).toBeTruthy();
-    expect(screen.getByText('SQLite indexes')).toBeTruthy();
-    expect(screen.getByText('WebView Cache')).toBeTruthy();
+    screen.getByText('Database');
+    screen.getByText('SQLite indexes');
+    screen.getByText('WebView Cache');
     expect(mocks.getUsageSnapshot).toHaveBeenCalledTimes(1);
   });
 
@@ -194,7 +194,7 @@ describe('SettingsStorageTab', () => {
     render(<SettingsStorageTab />);
 
     expect(await screen.findByText('Storage usage unavailable')).toBeTruthy();
-    expect(screen.getByText(/SQLite dbstat capability is unavailable/)).toBeTruthy();
+    screen.getByText(/SQLite dbstat capability is unavailable/);
   });
 
   it('refreshes the storage usage snapshot on demand', async () => {

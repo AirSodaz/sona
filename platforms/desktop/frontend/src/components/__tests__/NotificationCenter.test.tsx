@@ -235,8 +235,8 @@ describe('NotificationCenter task center', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
 
-    expect(screen.getByRole('dialog', { name: 'Task Center' })).toBeDefined();
-    expect(screen.getByText('No active tasks right now.')).toBeDefined();
+    screen.getByRole('dialog', { name: 'Task Center' });
+    screen.getByText('No active tasks right now.');
   });
 
   it('groups task ledger records into Needs action, Active, and Recent sections', () => {
@@ -263,13 +263,13 @@ describe('NotificationCenter task center', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
 
-    expect(screen.getByText('Needs action')).toBeDefined();
-    expect(screen.getByText('Active')).toBeDefined();
-    expect(screen.getByText('Recent')).toBeDefined();
-    expect(screen.getByText('failed.wav')).toBeDefined();
-    expect(screen.getByText('active.wav')).toBeDefined();
-    expect(screen.getByText('done.wav')).toBeDefined();
-    expect(screen.getByText('Transcription failed')).toBeDefined();
+    screen.getByText('Needs action');
+    screen.getByText('Active');
+    screen.getByText('Recent');
+    screen.getByText('failed.wav');
+    screen.getByText('active.wav');
+    screen.getByText('done.wav');
+    screen.getByText('Transcription failed');
   });
 
   it('requests soft cancellation for active ledger tasks', () => {
@@ -310,7 +310,7 @@ describe('NotificationCenter task center', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
 
-    expect(screen.getByText('Stops after the current step and skips the final writeback.')).toBeDefined();
+    screen.getByText('Stops after the current step and skips the final writeback.');
   });
 
   it('resumes and discards individual recovery tasks from the task center', () => {
@@ -401,7 +401,7 @@ describe('NotificationCenter task center', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
 
     expect(screen.getAllByText('recover.wav')).toHaveLength(1);
-    expect(screen.getByText(/Recovery .* Recoverable/)).toBeDefined();
+    screen.getByText(/Recovery .* Recoverable/);
     expect(screen.queryByText(/Batch import .* Pending/)).toBeNull();
   });
 
@@ -445,7 +445,7 @@ describe('NotificationCenter task center', () => {
 
     expect(screen.queryByText('recover.wav')).toBeNull();
     expect(screen.queryByText('automation.wav')).toBeNull();
-    expect(screen.getByText('Summary')).toBeDefined();
+    screen.getByText('Summary');
   });
 
   it('retries failed batch ledger tasks through the batch queue', async () => {
@@ -528,9 +528,9 @@ describe('NotificationCenter task center', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
 
-    expect(screen.getByText('Update 1.2.3')).toBeDefined();
-    expect(screen.getByText('Release notes')).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Install Update' })).toBeDefined();
+    screen.getByText('Update 1.2.3');
+    screen.getByText('Release notes');
+    screen.getByRole('button', { name: 'Install Update' });
   });
 
   it('disables update actions while an update is downloading', () => {
@@ -585,7 +585,7 @@ describe('NotificationCenter task center', () => {
 
     expect(screen.queryByText('Failure Rule needs attention')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Retry Failed' })).toBeNull();
-    expect(screen.getByText('No active tasks right now.')).toBeDefined();
+    screen.getByText('No active tasks right now.');
   });
 
   it('retries failed automation ledger file tasks through the task retry service', async () => {
@@ -648,8 +648,8 @@ describe('NotificationCenter task center', () => {
     await waitFor(() => {
       expect(downloadAndInstall).toHaveBeenCalled();
       expect(useAppUpdaterStore.getState().status).toBe('downloaded');
-      expect(screen.getByText('Relaunch to update')).toBeDefined();
-      expect(screen.getByRole('button', { name: 'Relaunch' })).toBeDefined();
+      screen.getByText('Relaunch to update');
+      screen.getByRole('button', { name: 'Relaunch' });
     });
   });
 
@@ -668,9 +668,9 @@ describe('NotificationCenter task center', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
 
-    expect(screen.getByText('Complete Setup')).toBeDefined();
-    expect(screen.getByText('Recommended local models are missing.')).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Continue Setup' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeDefined();
+    screen.getByText('Complete Setup');
+    screen.getByText('Recommended local models are missing.');
+    screen.getByRole('button', { name: 'Continue Setup' });
+    screen.getByRole('button', { name: 'Dismiss' });
   });
 });

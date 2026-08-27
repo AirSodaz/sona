@@ -237,8 +237,8 @@ describe('SettingsModelsTab speaker model selections', () => {
 
         await activateBatchScenarioAndExpandAdvanced();
 
-        expect(screen.getByText('settings.batch_vad_enabled')).toBeDefined();
-        expect(screen.getByText('settings.batch_vad_enabled_hint')).toBeDefined();
+        screen.getByText('settings.batch_vad_enabled');
+        screen.getByText('settings.batch_vad_enabled_hint');
 
         const row = screen.getByText('settings.batch_vad_enabled').closest('.settings-item-container');
         expect(row).not.toBeNull();
@@ -331,7 +331,7 @@ describe('SettingsModelsTab speaker model selections', () => {
             catalogLoadState: 'loading',
         });
 
-        expect(screen.getByText('Checking local models...')).toBeDefined();
+        screen.getByText('Checking local models...');
         expect((screen.getByRole('button', { name: 'settings.select_streaming_model' }) as HTMLButtonElement).disabled).toBe(true);
         expect((screen.getByLabelText('settings.restore_defaults') as HTMLButtonElement).disabled).toBe(true);
         expect(screen.queryByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).toBeNull();
@@ -364,7 +364,7 @@ describe('SettingsModelsTab speaker model selections', () => {
         expect(screen.queryByRole('button', { name: /Speaker Segmentation Models/ })).toBeNull();
 
         await waitFor(() => {
-            expect(screen.getByRole('button', { name: /Speaker Segmentation Models/ })).toBeDefined();
+            screen.getByRole('button', { name: /Speaker Segmentation Models/ });
         });
         fireEvent.click(screen.getByRole('button', { name: /Speaker Segmentation Models/ }));
         expect(screen.getByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0').textContent).toContain('Pyannote 3.0');
@@ -437,7 +437,7 @@ describe('SettingsModelsTab speaker model selections', () => {
             expect(config.asr?.selections.voiceTyping.engine).toBe('online');
         });
 
-        expect(screen.queryByText('音频会发送到火山引擎进行识别。')).not.toBeNull();
+        screen.getByText('音频会发送到火山引擎进行识别。');
     });
 
     it('keeps a selected Volcengine batch slot when local ASR models are not installed', async () => {
@@ -476,7 +476,7 @@ describe('SettingsModelsTab speaker model selections', () => {
         fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
 
         await waitFor(() => {
-            expect(screen.getByRole('button', { name: '豆包语音 (火山)' })).not.toBeNull();
+            screen.getByRole('button', { name: '豆包语音 (火山)' });
             expect(useConfigStore.getState().config.asr?.selections.batch.engine).toBe('online');
         });
     });

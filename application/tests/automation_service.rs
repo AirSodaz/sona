@@ -223,18 +223,6 @@ fn optional_processed_fields_are_omitted_when_none() {
 }
 
 #[test]
-fn replace_rules_calls_only_replace_rules() {
-    let store = MemoryStore::default();
-    let ids = SequenceIds(Mutex::new(vec![]));
-
-    AutomationRepositoryService::new(&store, &ids)
-        .replace_rules(vec![rule_input(json!({"id": "rule-1"}))])
-        .unwrap();
-
-    assert_eq!(store.calls.lock().unwrap().as_slice(), ["replace_rules"]);
-}
-
-#[test]
 fn replace_processed_entries_calls_only_replace_processed_entries() {
     let store = MemoryStore::default();
     let ids = SequenceIds(Mutex::new(vec![]));

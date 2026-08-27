@@ -103,10 +103,10 @@ pub fn download_candidates(
     match mirror {
         DownloadMirror::Direct => {}
         DownloadMirror::Auto => {
-            if let Some(auto_mirror) = auto_mirror_for(detect_download_source(url)) {
-                if let Some(mirrored) = apply_download_mirror(url, auto_mirror) {
-                    candidates.push(mirrored);
-                }
+            if let Some(auto_mirror) = auto_mirror_for(detect_download_source(url))
+                && let Some(mirrored) = apply_download_mirror(url, auto_mirror)
+            {
+                candidates.push(mirrored);
             }
         }
         explicit => {
@@ -116,12 +116,11 @@ pub fn download_candidates(
         }
     }
 
-    if let Some(alternate) = alternate_url {
-        if detect_download_source(url) != DownloadSource::ModelScope
-            && !candidates.iter().any(|candidate| candidate == alternate)
-        {
-            candidates.push(alternate.to_string());
-        }
+    if let Some(alternate) = alternate_url
+        && detect_download_source(url) != DownloadSource::ModelScope
+        && !candidates.iter().any(|candidate| candidate == alternate)
+    {
+        candidates.push(alternate.to_string());
     }
 
     candidates

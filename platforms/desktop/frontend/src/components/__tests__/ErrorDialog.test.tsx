@@ -34,9 +34,9 @@ describe('ErrorDialog', () => {
 
     render(<ErrorDialog />);
 
-    expect(screen.getByRole('alertdialog')).toBeDefined();
-    expect(screen.getByText('Update failed.')).toBeDefined();
-    expect(screen.getByText('network timeout')).toBeDefined();
+    screen.getByRole('alertdialog');
+    screen.getByText('Update failed.');
+    screen.getByText('network timeout');
 
     fireEvent.keyDown(window, { key: 'Escape' });
 

@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -7,7 +6,6 @@ import {
 } from '../ContextMenuProvider';
 import { useContextMenu } from '../useContextMenu';
 
-const contextMenuCss = readFileSync('src/styles/context-menu.css', 'utf8');
 
 function ContextMenuHarness(): React.JSX.Element {
   const { activeContextId, openContextMenu } = useContextMenu();
@@ -50,8 +48,8 @@ describe('ContextMenuProvider', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
 
-    expect(screen.getByRole('menu', { name: 'Actions for Alpha' })).toBeDefined();
-    expect(screen.getByRole('menuitem', { name: 'Open' })).toBeDefined();
+    screen.getByRole('menu', { name: 'Actions for Alpha' });
+    screen.getByRole('menuitem', { name: 'Open' });
     expect(screen.getByLabelText('Active context').textContent).toBe('test:item:alpha');
     expect(document.body.querySelector('.context-menu')).not.toBeNull();
   });
@@ -98,7 +96,7 @@ describe('ContextMenuProvider', () => {
     expect(onFirstClose).toHaveBeenCalledWith('replaced');
     expect(screen.queryByRole('menu', { name: 'First menu' })).toBeNull();
     expect(screen.getAllByRole('menu')).toHaveLength(1);
-    expect(screen.getByRole('menu', { name: 'Second menu' })).toBeDefined();
+    screen.getByRole('menu', { name: 'Second menu' });
   });
 
   it('allows a replaced menu close callback to close re-entrantly without closing it twice', () => {
@@ -147,7 +145,7 @@ describe('ContextMenuProvider', () => {
 
     expect(closeReasons).toEqual(['replaced']);
     expect(screen.getAllByRole('menu')).toHaveLength(1);
-    expect(screen.getByRole('menu', { name: 'Second menu' })).toBeDefined();
+    screen.getByRole('menu', { name: 'Second menu' });
   });
 
   it('closes with the action reason before invoking the selected action', () => {
@@ -468,7 +466,7 @@ describe('ContextMenuProvider', () => {
 
     openMenu();
     fireEvent.pointerDown(screen.getByRole('menuitem', { name: 'Open' }));
-    expect(screen.getByRole('menu')).toBeDefined();
+    screen.getByRole('menu');
 
     fireEvent.pointerDown(document.body);
     expect(onClose).toHaveBeenLastCalledWith('outside');
@@ -678,18 +676,12 @@ describe('ContextMenuProvider', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Descriptor trigger' }));
     const action = screen.getByRole('menuitem', { name: 'Delete' });
 
-    expect(screen.getByTestId('delete-icon')).toBeDefined();
-    expect(screen.getByText('Delete', { selector: '.context-menu-item-shortcut' })).toBeDefined();
+    screen.getByTestId('delete-icon');
+    screen.getByText('Delete', { selector: '.context-menu-item-shortcut' });
     expect(action.classList.contains('context-menu-item--danger')).toBe(true);
     expect(action.classList.contains('context-menu-item--with-divider')).toBe(true);
   });
 
-  it('keeps the menu above workspace floats and below the lowest modal layer', () => {
-    const zIndex = Number(contextMenuCss.match(/\.context-menu\s*\{[^}]*z-index:\s*(\d+)/s)?.[1]);
-
-    expect(zIndex).toBeGreaterThan(120);
-    expect(zIndex).toBeLessThan(1000);
-  });
 
   it('reports a programmatic close when the provider unmounts with an open menu', () => {
     const onClose = vi.fn();

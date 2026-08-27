@@ -520,7 +520,7 @@ describe('ProjectsView', () => {
     });
     expect(aiRenameModuleState.loadCount).toBe(1);
     await waitFor(() => {
-      expect(screen.getByDisplayValue('AI Project Title')).toBeDefined();
+      screen.getByDisplayValue('AI Project Title');
     });
   });
 
@@ -531,10 +531,10 @@ describe('ProjectsView', () => {
     const historyItem = screen.getByTestId('history-item-hist-inbox');
     fireEvent.contextMenu(historyItem, { clientX: 160, clientY: 220 });
 
-    expect(screen.getByRole('menu', { name: 'Actions for Inbox Item' })).toBeDefined();
-    expect(screen.getByRole('menuitem', { name: 'Open' })).toBeDefined();
-    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeDefined();
-    expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeDefined();
+    screen.getByRole('menu', { name: 'Actions for Inbox Item' });
+    screen.getByRole('menuitem', { name: 'Open' });
+    screen.getByRole('menuitem', { name: 'Rename' });
+    screen.getByRole('menuitem', { name: 'Delete' });
     expect(historyItem.dataset.contextMenuOpen).toBe('true');
     expect(useTranscriptStore.getState().sourceHistoryId).toBeNull();
 
@@ -607,15 +607,15 @@ describe('ProjectsView', () => {
     const projectButton = getButtonByContent('Alpha');
     fireEvent.contextMenu(projectButton, { clientX: 92, clientY: 148 });
 
-    expect(screen.getByRole('menu', { name: 'Actions for Alpha' })).toBeDefined();
-    expect(screen.getByRole('menuitem', { name: 'Open' })).toBeDefined();
-    expect(screen.getByRole('menuitem', { name: 'Tag Settings' })).toBeDefined();
+    screen.getByRole('menu', { name: 'Actions for Alpha' });
+    screen.getByRole('menuitem', { name: 'Open' });
+    screen.getByRole('menuitem', { name: 'Tag Settings' });
 
     fireEvent.click(screen.getByRole('menuitem', { name: 'Tag Settings' }));
 
     await waitFor(() => {
       expect(projectService.setActiveProjectId).toHaveBeenCalledWith('project-1');
-      expect(screen.getByText('Tag settings')).toBeDefined();
+      screen.getByText('Tag settings');
     });
   });
 
@@ -627,7 +627,7 @@ describe('ProjectsView', () => {
       clientX: 120,
       clientY: 180,
     });
-    expect(screen.getByRole('menu', { name: 'Actions for Inbox Item' })).toBeDefined();
+    screen.getByRole('menu', { name: 'Actions for Inbox Item' });
 
     act(() => {
       useHistoryStore.setState({ items: [] });
@@ -646,7 +646,7 @@ describe('ProjectsView', () => {
       clientX: 120,
       clientY: 180,
     });
-    expect(screen.getByRole('menu', { name: 'Actions for Inbox Item' })).toBeDefined();
+    screen.getByRole('menu', { name: 'Actions for Inbox Item' });
 
     act(() => {
       const currentItem = useHistoryStore.getState().items[0];
@@ -917,7 +917,7 @@ describe('ProjectsView', () => {
       clientX: 120,
       clientY: 180,
     });
-    expect(screen.getByRole('menu', { name: 'Actions for Inbox Item' })).toBeDefined();
+    screen.getByRole('menu', { name: 'Actions for Inbox Item' });
 
     fireEvent.scroll(screen.getByTestId('projects-virtuoso-list'));
 
@@ -943,63 +943,6 @@ describe('ProjectsView', () => {
     expect(screen.queryByTestId('history-item-hist-0')).toBeNull();
   });
 
-  it('windows large workspace result sets instead of rendering every history item', async () => {
-    useHistoryStore.setState({
-      items: createHistoryItems(150, null),
-    } as any);
-
-    render(<ProjectsView />);
-    await waitForInitialHistoryLoad();
-
-    expect(screen.getByTestId('history-item-hist-0')).toBeDefined();
-    expect(screen.queryByTestId('history-item-hist-149')).toBeNull();
-    expect(screen.getAllByTestId(/history-item-/)).toHaveLength(20);
-  });
-
-  it('keeps list and grid gutters while letting table start flush with its header', async () => {
-    useHistoryStore.setState({
-      items: createHistoryItems(3, null),
-    } as any);
-
-    render(<ProjectsView />);
-    await waitForInitialHistoryLoad();
-
-    const list = screen.getByTestId('projects-virtuoso-list');
-    expect(list.classList.contains('projects-results-scroll')).toBe(true);
-    expect(list.classList.contains('projects-results-scroll--list')).toBe(true);
-    expect(list.classList.contains('projects-main-scroll--virtual')).toBe(true);
-    expect(list.querySelector('.projects-layout-list')?.classList.contains('projects-layout-guttered')).toBe(true);
-    expect(list.querySelector('.projects-virtual-spacer--top')).not.toBeNull();
-    expect(list.querySelector('.projects-virtual-spacer--bottom')).not.toBeNull();
-
-    await clickAsync(screen.getByRole('button', { name: 'Grid View' }));
-    await waitFor(() => {
-      expect(screen.getByTestId('projects-virtuoso-grid')).toBeDefined();
-    });
-
-    const grid = screen.getByTestId('projects-virtuoso-grid');
-    expect(grid.classList.contains('projects-results-scroll')).toBe(true);
-    expect(grid.classList.contains('projects-results-scroll--grid')).toBe(true);
-    expect(grid.querySelector('.projects-layout-grid')?.classList.contains('projects-layout-guttered')).toBe(true);
-    expect(grid.querySelector('.projects-virtual-spacer--top')).not.toBeNull();
-    expect(grid.querySelector('.projects-virtual-spacer--bottom')).not.toBeNull();
-
-    await clickAsync(screen.getByRole('button', { name: 'Table View' }));
-    await waitFor(() => {
-      expect(screen.getByRole('columnheader', { name: 'Name' })).toBeDefined();
-    });
-
-    const table = screen.getByTestId('projects-virtuoso-list');
-    expect(table.classList.contains('projects-results-scroll')).toBe(true);
-    expect(table.classList.contains('projects-results-scroll--table')).toBe(true);
-    expect(table.querySelector('.projects-layout-table')?.classList.contains('projects-layout-guttered')).toBe(false);
-    expect(table.querySelector('.projects-virtual-spacer--top')).toBeNull();
-    expect(table.querySelector('.projects-virtual-spacer--bottom')).toBeNull();
-    expect(table.querySelector('.projects-table-header-title')).not.toBeNull();
-    expect(table.querySelector('.projects-table-header-meta')).not.toBeNull();
-    expect(table.querySelector('.projects-table-header-actions')).not.toBeNull();
-    expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeDefined();
-  });
 
   it('hides repeated project badges outside the All Items scope', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
@@ -1022,13 +965,13 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
-    expect(screen.getByText('Project Item')).toBeDefined();
+    screen.getByText('Project Item');
     expect(screen.queryByText('Project project-1')).toBeNull();
 
     await clickAsync(getButtonByContent('All Items'));
 
     await waitFor(() => {
-      expect(screen.getByText('Project project-1')).toBeDefined();
+      screen.getByText('Project project-1');
     });
   });
 
@@ -1047,7 +990,7 @@ describe('ProjectsView', () => {
     const input = screen.getByRole('textbox', { name: 'Search in Alpha...' });
     fireEvent.change(input, { target: { value: 'roadmap' } });
     await waitFor(() => {
-      expect(screen.getByTestId('history-item-hist-0')).toBeDefined();
+      screen.getByTestId('history-item-hist-0');
     });
     for (let index = 0; index < 25; index += 1) {
       fireEvent.keyDown(input, { key: 'ArrowDown' });
@@ -1074,19 +1017,19 @@ describe('ProjectsView', () => {
 
     await clickAsync(allItemsButton);
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'All Items' })).toBeDefined();
+      screen.getByRole('heading', { name: 'All Items' });
       expect(getMainTitleIcon()).not.toBeNull();
     });
 
     await clickAsync(inboxButton);
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Untagged' })).toBeDefined();
+      screen.getByRole('heading', { name: 'Untagged' });
       expect(getMainTitleIcon()).not.toBeNull();
     });
 
     await clickAsync(projectButton);
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Alpha' })).toBeDefined();
+      screen.getByRole('heading', { name: 'Alpha' });
       expect(getMainTitleIcon()).not.toBeNull();
       expect(getMainTitleIcon()?.textContent).toContain('🧪');
     });
@@ -1096,17 +1039,17 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
-    expect(screen.getByTestId('projects-toolbar-default')).toBeDefined();
+    screen.getByTestId('projects-toolbar-default');
     expect(screen.queryByTestId('projects-fab')).toBeNull();
-    expect(screen.getByRole('textbox', { name: 'Search Untagged...' })).toBeDefined();
+    screen.getByRole('textbox', { name: 'Search Untagged...' });
     expect(screen.queryByTestId('projects-results-count')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Filter' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'Open File Directory' })).toBeDefined();
+    screen.getByRole('button', { name: 'Filter' });
+    screen.getByRole('button', { name: 'Open File Directory' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Select' }));
 
-    expect(screen.getByTestId('projects-fab')).toBeDefined();
-    expect(screen.getByText('0 selected')).toBeDefined();
+    screen.getByTestId('projects-fab');
+    screen.getByText('0 selected');
     expect(screen.queryByTestId('projects-results-count')).toBeNull();
   });
 
@@ -1203,7 +1146,7 @@ describe('ProjectsView', () => {
       expect(confirmSpy).toHaveBeenCalledTimes(1);
     });
     expect(useProjectStore.getState().activeProjectId).toBe('project-1');
-    expect(screen.getByText('Tag settings')).toBeDefined();
+    screen.getByText('Tag settings');
 
     fireEvent.click(getButtonByContent('Untagged'));
     await waitFor(() => {
@@ -1236,7 +1179,7 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalledTimes(1);
     });
-    expect(screen.getByText('Tag settings')).toBeDefined();
+    screen.getByText('Tag settings');
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     await waitFor(() => {
@@ -1324,15 +1267,15 @@ describe('ProjectsView', () => {
 
     await clickAsync(getButtonByContent('All Items'));
     await waitFor(() => {
-      expect(screen.getByRole('textbox', { name: 'Search All Items...' })).toBeDefined();
+      screen.getByRole('textbox', { name: 'Search All Items...' });
     });
 
-    expect(screen.getByTestId('projects-summary-chips')).toBeDefined();
-    expect(screen.getByText('Project Item')).toBeDefined();
-    expect(screen.getByText('Inbox Item')).toBeDefined();
-    expect(screen.getByText('Project project-1')).toBeDefined();
-    expect(screen.getByText('Project inbox')).toBeDefined();
-    expect(screen.getByRole('textbox', { name: 'Search All Items...' })).toBeDefined();
+    screen.getByTestId('projects-summary-chips');
+    screen.getByText('Project Item');
+    screen.getByText('Inbox Item');
+    screen.getByText('Project project-1');
+    screen.getByText('Project inbox');
+    screen.getByRole('textbox', { name: 'Search All Items...' });
     expect(screen.getByTestId('projects-summary-total-items').textContent).toBe('2');
     expect(screen.getByTestId('projects-summary-type-split').textContent).toBe('1 recordings / 1 imports');
     expect(screen.queryByTestId('projects-results-count')).toBeNull();
@@ -1362,7 +1305,7 @@ describe('ProjectsView', () => {
     const allItemsButton = getButtonByContent('All Items');
     await clickAsync(allItemsButton);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Project Item' })).toBeDefined();
+      screen.getByRole('button', { name: 'Project Item' });
     });
     await clickAsync(screen.getByRole('button', { name: 'Project Item' }));
 
@@ -1450,7 +1393,7 @@ describe('ProjectsView', () => {
 
     await waitFor(() => {
       expect(getDetailPlaceholder()).toBeNull();
-      expect(screen.getByRole('textbox', { name: 'Search in Alpha...' })).toBeDefined();
+      screen.getByRole('textbox', { name: 'Search in Alpha...' });
     });
   });
 
@@ -1518,8 +1461,8 @@ describe('ProjectsView', () => {
     expect(historyItem.dataset.renameDisabled).toBe('true');
 
     fireEvent.contextMenu(historyItem, { clientX: 160, clientY: 220 });
-    expect(screen.getByRole('menuitem', { name: 'Restore' })).toBeDefined();
-    expect(screen.getByRole('menuitem', { name: 'Delete Permanently' })).toBeDefined();
+    screen.getByRole('menuitem', { name: 'Restore' });
+    screen.getByRole('menuitem', { name: 'Delete Permanently' });
     expect(screen.queryByRole('menuitem', { name: 'Open' })).toBeNull();
 
     fireEvent.click(screen.getByRole('menuitem', { name: 'Restore' }));
@@ -1599,7 +1542,7 @@ describe('ProjectsView', () => {
 
     await clickAsync(getButtonByContent('All Items'));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Project Item' })).toBeDefined();
+      screen.getByRole('button', { name: 'Project Item' });
     });
     fireEvent.click(screen.getByRole('button', { name: 'Select' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select hist-project' }));
@@ -1723,10 +1666,10 @@ describe('ProjectsView', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Client Call')).toBeDefined();
+      screen.getByText('Client Call');
       expect(screen.queryByText('Imported Deck')).toBeNull();
-      expect(screen.getByText('Query roadmap')).toBeDefined();
-      expect(screen.getByText(/Snippet Quarterly roadmap follow up/i)).toBeDefined();
+      screen.getByText('Query roadmap');
+      screen.getByText(/Snippet Quarterly roadmap follow up/i);
       expect(screen.queryByText('Inbox Item')).toBeNull();
     });
 
@@ -1737,8 +1680,8 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       expect(screen.getAllByText(/Batch imports/i).length).toBeGreaterThan(0);
       expect(screen.queryByText('Client Call')).toBeNull();
-      expect(screen.getByText('Imported Deck')).toBeDefined();
-      expect(screen.getByText('Workshop Import')).toBeDefined();
+      screen.getByText('Imported Deck');
+      screen.getByText('Workshop Import');
     });
 
     openFilterMenu();
@@ -1746,7 +1689,7 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Filter' }).textContent).toContain('2');
       expect(screen.queryByText('Imported Deck')).toBeNull();
-      expect(screen.getByText('Workshop Import')).toBeDefined();
+      screen.getByText('Workshop Import');
     });
 
     selectDropdownOption('Sort items', 'Title A-Z');
@@ -1795,7 +1738,7 @@ describe('ProjectsView', () => {
     await waitForInitialHistoryLoad();
 
     openFilterMenu();
-    expect(screen.getByText('Refine the current workspace view by type or time.')).toBeDefined();
+    screen.getByText('Refine the current workspace view by type or time.');
 
     selectDropdownOption('Filter by type', 'Batch imports');
     await waitFor(() => {
@@ -1806,11 +1749,11 @@ describe('ProjectsView', () => {
     openFilterMenu();
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
 
-    expect(screen.getByText(/All items/i)).toBeDefined();
+    screen.getByText(/All items/i);
     await waitFor(() => {
-      expect(screen.getByText('Client Call')).toBeDefined();
+      screen.getByText('Client Call');
     });
-    expect(screen.getByRole('button', { name: 'Sort items' })).toBeDefined();
+    screen.getByRole('button', { name: 'Sort items' });
   });
 
   it('focuses the workspace search with Ctrl+F when the detail pane is not focused', async () => {
@@ -1900,7 +1843,7 @@ describe('ProjectsView', () => {
     const input = screen.getByRole('textbox', { name: 'Search in Alpha...' });
     fireEvent.change(input, { target: { value: 'roadmap' } });
     await waitFor(() => {
-      expect(screen.getByTestId('history-item-hist-1')).toBeDefined();
+      screen.getByTestId('history-item-hist-1');
     });
     fireEvent.keyDown(input, { key: 'ArrowDown' });
 
@@ -1968,7 +1911,7 @@ describe('ProjectsView', () => {
     fireEvent.change(input, { target: { value: 'roadmap' } });
 
     await waitFor(() => {
-      expect(screen.getByText('No matching items')).toBeDefined();
+      screen.getByText('No matching items');
     });
 
     await act(async () => {
@@ -1979,8 +1922,8 @@ describe('ProjectsView', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('No matching items')).toBeNull();
-      expect(screen.getByRole('button', { name: 'Alpha Plan' })).toBeDefined();
-      expect(screen.getByText('Snippet Fresh roadmap notes...')).toBeDefined();
+      screen.getByRole('button', { name: 'Alpha Plan' });
+      screen.getByText('Snippet Fresh roadmap notes...');
     });
   });
 
@@ -2010,7 +1953,7 @@ describe('ProjectsView', () => {
     const input = screen.getByRole('textbox', { name: 'Search in Alpha...' });
     fireEvent.change(input, { target: { value: 'roadmap' } });
     await waitFor(() => {
-      expect(screen.getByTestId('history-item-hist-1')).toBeDefined();
+      screen.getByTestId('history-item-hist-1');
     });
     fireEvent.keyDown(input, { key: 'ArrowDown' });
 
@@ -2097,14 +2040,14 @@ describe('ProjectsView', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('No matching items')).toBeDefined();
+      screen.getByText('No matching items');
       expect(screen.queryByText('No items in this workspace yet.')).toBeNull();
       expect(screen.getByRole('button', { name: 'Edit Tags' }).hasAttribute('disabled')).toBe(true);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Project Item' })).toBeDefined();
+      screen.getByRole('button', { name: 'Project Item' });
     });
   });
 });

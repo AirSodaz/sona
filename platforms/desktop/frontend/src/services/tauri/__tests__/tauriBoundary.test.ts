@@ -6,10 +6,9 @@ import { invoke } from '@tauri-apps/api/core';
 import type {
   RecoveredQueueItem_Serialize,
   RecoveryItemInput_Serialize,
-  RustTauriCommandContractMap,
+  RecoverySnapshot_Serialize,
 } from '../../../bindings';
 import { TauriCommand } from '../commands';
-import { TauriEvent, buildRecognizerOutputEvent } from '../events';
 import { invokeTauri } from '../invoke';
 import {
   getAsrRuntimeMetrics,
@@ -62,6 +61,7 @@ import {
   automationPersistRepositoryState,
   automationPersistRules,
   automationValidateRuleActivation,
+  type AutomationRepositoryState,
 } from '../automationRepository';
 import { applyPreparedHistoryImport } from '../backup';
 import { getDashboardSnapshot } from '../dashboard';
@@ -102,17 +102,12 @@ import {
   taskLedgerUpsertTask,
 } from '../taskLedger';
 import { tagList, tagSaveAll } from '../tag';
-import type { TaskLedgerRecord } from '../../../types/taskLedger';
+import type { TaskLedgerRecord, TaskLedgerSnapshot } from '../../../types/taskLedger';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-const rustOwnedHistoryUpdateArgs: RustTauriCommandContractMap['history_update_transcript']['args'] = {
-  historyId: 'history-typed-contract',
-  segments: [],
-};
-void rustOwnedHistoryUpdateArgs;
 
 const uiLlmConfig = {
   provider: 'open_ai',
@@ -223,18 +218,319 @@ describe('tauri boundary wrappers', () => {
     });
   });
 
-  it('app wrappers call the centralized command names', async () => {
-    await openLogFolder();
-    await setMinimizeToTray(false);
-    await setLogLevel('debug');
+  it('forwards pure pass-through wrappers to their centralized command ids', async () => {
+    const segment = {
+      id: 'segment-1',
+      text: 'hello',
+      start: 0,
+      end: 1,
+      isFinal: true,
+    };
+    const rule = {
+      id: 'rule-1',
+      name: 'Inbox',
+      saveHistory: true,
+      tagIds: ['project-1'],
+      presetId: 'custom',
+      watchDirectory: 'C:/watch',
+      recursive: true,
+      enabled: true,
+      stageConfig: {
+        autoPolish: false,
+        autoTranslate: false,
+        exportEnabled: true,
+      },
+      exportConfig: {
+        directory: 'C:/exports',
+        format: 'srt',
+        mode: 'original',
+      },
+      createdAt: 1,
+      updatedAt: 2,
+    };
+    const ruleInput = {
+      ...rule,
+      kind: 'file',
+      priority: 0,
+      profileSource: 'tag_match',
+      actions: { autoPolish: false, autoTranslate: false, autoSummary: false },
+    };
+    const processedEntry = {
+      id: 'entry-1',
+      ruleId: 'rule-1',
+      filePath: 'C:/watch/meeting.wav',
+      sourceFingerprint: 'fingerprint',
+      size: 10,
+      mtimeMs: 20,
+      status: 'complete',
+      processedAt: 30,
+    };
+    const item: RecoveredQueueItem_Serialize = {
+      id: 'recovery-1',
+      filename: 'meeting.wav',
+      filePath: 'C:/watch/meeting.wav',
+      source: 'batch_import',
+      resolution: 'pending',
+      progress: 10,
+      segments: [segment],
+      tagIds: [],
+      lastKnownStage: 'queued',
+      updatedAt: 100,
+      hasSourceFile: true,
+      canResume: true,
+      attemptCount: 0,
+      lastError: null,
+      retryable: false,
+      exportConfig: null,
+      stageConfig: null,
+    };
+    const queueItem: RecoveryItemInput_Serialize = {
+      id: 'queue-1',
+      filename: 'meeting.wav',
+      filePath: 'C:/watch/meeting.wav',
+      status: 'pending',
+      progress: 10,
+      segments: [segment],
+      projectId: null,
+      attemptCount: 0,
+      retryable: false,
+    };
+    const record: TaskLedgerRecord = {
+      id: 'task-1',
+      kind: 'batchImport',
+      status: 'running',
+      title: 'meeting.wav',
+      progress: 50,
+      createdAt: 100,
+      updatedAt: 101,
+      retryable: true,
+      cancelable: true,
+      recoverable: false,
+      projectId: 'tag-1',
+    };
+    const { projectId, ...recordWithoutProjectId } = record;
+    const wireRecord = {
+      ...recordWithoutProjectId,
+      stage: null,
+      historyId: null,
+      tagIds: projectId ? [projectId] : [],
+      filePath: null,
+      automationRuleId: null,
+      tagAutomationRuleId: null,
+      automationProfileId: null,
+      automationProfileSource: null,
+      sourceFingerprint: null,
+      errorMessage: null,
+      templateId: null,
+      targetLanguage: null,
+    };
 
-    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.app.openLogFolder);
-    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.app.setMinimizeToTray, {
-      enabled: false,
-    });
-    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.app.setLogLevel, {
-      level: 'debug',
-    });
+    let repoState!: AutomationRepositoryState;
+    let recoverySnapshot!: RecoverySnapshot_Serialize;
+    let ledgerSnapshot!: TaskLedgerSnapshot;
+    const cases: Array<{
+      name: string;
+      arrange?: () => void;
+      act: () => Promise<unknown>;
+      expected: unknown[];
+      verify?: () => void;
+    }> = [
+      {
+        name: 'app wrappers',
+        act: async () => {
+          await openLogFolder();
+          await setMinimizeToTray(false);
+          await setLogLevel('debug');
+        },
+        expected: [
+          [TauriCommand.app.openLogFolder],
+          [TauriCommand.app.setMinimizeToTray, { enabled: false }],
+          [TauriCommand.app.setLogLevel, { level: 'debug' }],
+        ],
+      },
+      {
+        name: 'automation repository forwards repository commands',
+        arrange: () => {
+          vi.mocked(invoke).mockResolvedValueOnce({
+            profiles: [],
+            rules: [{
+              ...rule,
+              stageConfig: {
+                ...rule.stageConfig,
+                polishPresetId: '',
+                translationLanguage: '',
+              },
+              exportConfig: { ...rule.exportConfig, prefix: '' },
+            }],
+            processedEntries: [{
+              ...processedEntry,
+              historyId: null,
+              exportPath: null,
+              errorMessage: null,
+            }],
+          });
+        },
+        act: async () => {
+          repoState = await automationLoadRepositoryState();
+          await automationPersistRules([rule as unknown as AutomationRule]);
+          await automationPersistProcessedEntries([processedEntry as unknown as AutomationProcessedEntry]);
+          await automationPersistRepositoryState([], [rule as unknown as AutomationRule], [processedEntry as unknown as AutomationProcessedEntry]);
+          await automationValidateRuleActivation(rule as unknown as AutomationRule, {} as unknown as AppConfig, []);
+        },
+        expected: [
+          [TauriCommand.automationRepository.loadState],
+          [TauriCommand.automationRepository.persistRules, { rules: [ruleInput] }],
+          [TauriCommand.automationRepository.persistProcessedEntries, { processedEntries: [processedEntry] }],
+          [TauriCommand.automationRepository.persistState, { profiles: [], rules: [ruleInput], processedEntries: [processedEntry] }],
+          [TauriCommand.automationRepository.validateActivation, { rule: ruleInput, globalConfig: {}, tags: [] }],
+        ],
+        verify: () => expect(repoState).toEqual({
+          profiles: [],
+          rules: [{
+            ...rule,
+            kind: 'file',
+            priority: 0,
+            profileId: undefined,
+            profileSource: 'tag_match',
+            actions: { autoPolish: false, autoTranslate: false, autoSummary: false },
+            migrationNotice: undefined,
+            stageConfig: {
+              ...rule.stageConfig,
+              polishPresetId: undefined,
+              translationLanguage: undefined,
+            },
+            exportConfig: { ...rule.exportConfig, prefix: undefined },
+          }],
+          processedEntries: [{
+            ...processedEntry,
+            kind: 'file',
+            inputVersion: 'fingerprint',
+            attempt: 1,
+            historyId: undefined,
+            exportPath: undefined,
+            errorMessage: undefined,
+          }],
+        }),
+      },
+      {
+        name: 'recovery wrappers forward repository commands',
+        arrange: () => {
+          vi.mocked(invoke).mockResolvedValueOnce({ version: 1, updatedAt: 100, items: [item] });
+        },
+        act: async () => {
+          recoverySnapshot = await recoveryLoadSnapshot();
+          await recoverySaveSnapshot([item]);
+          await recoveryPersistQueueSnapshot([queueItem]);
+        },
+        expected: [
+          [TauriCommand.recovery.loadSnapshot],
+          [TauriCommand.recovery.saveSnapshot, {
+            items: [{
+              ...item,
+              segments: [{
+                ...segment,
+                tokens: null,
+                timestamps: null,
+                durations: null,
+                translation: null,
+                speaker: null,
+                speakerAttribution: null,
+              }],
+            }],
+          }],
+          [TauriCommand.recovery.persistQueueSnapshot, {
+            queueItems: [{
+              ...queueItem,
+              segments: [{
+                ...segment,
+                tokens: null,
+                timestamps: null,
+                durations: null,
+                translation: null,
+                speaker: null,
+                speakerAttribution: null,
+              }],
+            }],
+          }],
+        ],
+        verify: () => expect(recoverySnapshot).toEqual({ version: 1, updatedAt: 100, items: [item] }),
+      },
+      {
+        name: 'task ledger wrappers forward repository commands',
+        arrange: () => {
+          vi.mocked(invoke).mockResolvedValue({ version: 1, updatedAt: 101, tasks: [wireRecord] } as unknown as never);
+        },
+        act: async () => {
+          ledgerSnapshot = await taskLedgerLoadSnapshot();
+          await taskLedgerUpsertTask(record);
+          await taskLedgerPatchTask('task-1', {
+            status: 'cancelRequested',
+            projectId: 'tag-2',
+          });
+          await taskLedgerRemoveTask('task-1');
+          await taskLedgerClearResolved();
+        },
+        expected: [
+          [TauriCommand.taskLedger.loadSnapshot],
+          [TauriCommand.taskLedger.upsertTask, { record: wireRecord }],
+          [TauriCommand.taskLedger.patchTask, {
+            id: 'task-1',
+            patch: { status: 'cancelRequested', tagIds: ['tag-2'] },
+          }],
+          [TauriCommand.taskLedger.removeTask, { id: 'task-1' }],
+          [TauriCommand.taskLedger.clearResolved],
+        ],
+        verify: () => expect(ledgerSnapshot).toEqual({
+          version: 1,
+          updatedAt: 101,
+          tasks: [{
+            ...record,
+            projectId: undefined,
+            tagIds: ['tag-1'],
+          }],
+        }),
+      },
+      {
+        name: 'llm usage wrappers forward analytics repository commands',
+        act: async () => {
+          await llmUsageEnsureStorage();
+          await llmUsageReadRaw();
+          await llmUsageReplaceRaw('{"schemaVersion":1}');
+        },
+        expected: [
+          [TauriCommand.llmUsage.ensureStorage],
+          [TauriCommand.llmUsage.readRaw],
+          [TauriCommand.llmUsage.replaceRaw, { content: '{"schemaVersion":1}' }],
+        ],
+      },
+      {
+        name: 'dashboard snapshot forwards request payload',
+        act: () => getDashboardSnapshot({ deep: true }),
+        expected: [
+          [TauriCommand.dashboard.getSnapshot, { request: { deep: true } }],
+        ],
+      },
+      {
+        name: 'backup wrappers centralize import commands',
+        act: () => applyPreparedHistoryImport('import-1'),
+        expected: [
+          [TauriCommand.backup.applyPreparedImport, { importId: 'import-1' }],
+        ],
+      },
+    ];
+
+    let callOffset = 0;
+    for (const { name, arrange, act, expected, verify } of cases) {
+      arrange?.();
+      await act();
+
+      const recorded = vi.mocked(invoke).mock.calls
+        .slice(callOffset)
+        .map(([command, args]) => (args === undefined ? [command] : [command, args]));
+      expect(recorded, name).toEqual(expected);
+      verify?.();
+      callOffset += expected.length;
+    }
   });
 
   it('app wrappers expose ASR runtime metrics', async () => {
@@ -980,14 +1276,6 @@ describe('tauri boundary wrappers', () => {
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.storage.clearWebviewBrowsingData);
   });
 
-  it('dashboard snapshot wrapper wraps request args under request', async () => {
-    await getDashboardSnapshot({ deep: true });
-
-    expect(invoke).toHaveBeenCalledWith(TauriCommand.dashboard.getSnapshot, {
-      request: { deep: true },
-    });
-  });
-
   it('export transcript wrapper forwards flat export args', async () => {
     await exportTranscriptFile({
       segments: [],
@@ -1661,278 +1949,6 @@ describe('tauri boundary wrappers', () => {
     });
   });
 
-  it('automation repository wrappers forward repository commands', async () => {
-    const rule = {
-      id: 'rule-1',
-      name: 'Inbox',
-      saveHistory: true,
-      tagIds: ['project-1'],
-      presetId: 'custom',
-      watchDirectory: 'C:/watch',
-      recursive: true,
-      enabled: true,
-      stageConfig: {
-        autoPolish: false,
-        autoTranslate: false,
-        exportEnabled: true,
-      },
-      exportConfig: {
-        directory: 'C:/exports',
-        format: 'srt',
-        mode: 'original',
-      },
-      createdAt: 1,
-      updatedAt: 2,
-    };
-    const ruleInput = {
-      ...rule,
-      kind: 'file',
-      priority: 0,
-      profileSource: 'tag_match',
-      actions: { autoPolish: false, autoTranslate: false, autoSummary: false },
-    };
-    const processedEntry = {
-      id: 'entry-1',
-      ruleId: 'rule-1',
-      filePath: 'C:/watch/meeting.wav',
-      sourceFingerprint: 'fingerprint',
-      size: 10,
-      mtimeMs: 20,
-      status: 'complete',
-      processedAt: 30,
-    };
-    vi.mocked(invoke).mockResolvedValueOnce({
-      profiles: [],
-      rules: [{
-        ...rule,
-        stageConfig: {
-          ...rule.stageConfig,
-          polishPresetId: '',
-          translationLanguage: '',
-        },
-        exportConfig: { ...rule.exportConfig, prefix: '' },
-      }],
-      processedEntries: [{
-        ...processedEntry,
-        historyId: null,
-        exportPath: null,
-        errorMessage: null,
-      }],
-    });
-
-    const state = await automationLoadRepositoryState();
-    await automationPersistRules([rule as any]);
-    await automationPersistProcessedEntries([processedEntry as any]);
-    await automationPersistRepositoryState([rule as any], [processedEntry as any]);
-    await automationValidateRuleActivation(rule as any, {} as any, null);
-
-    expect(state).toEqual({
-      profiles: [],
-      rules: [{
-        ...rule,
-        kind: 'file',
-        priority: 0,
-        profileId: undefined,
-        profileSource: 'tag_match',
-        actions: { autoPolish: false, autoTranslate: false, autoSummary: false },
-        migrationNotice: undefined,
-        stageConfig: {
-          ...rule.stageConfig,
-          polishPresetId: undefined,
-          translationLanguage: undefined,
-        },
-        exportConfig: { ...rule.exportConfig, prefix: undefined },
-      }],
-      processedEntries: [{
-        ...processedEntry,
-        kind: 'file',
-        inputVersion: 'fingerprint',
-        attempt: 1,
-        historyId: undefined,
-        exportPath: undefined,
-        errorMessage: undefined,
-      }],
-    });
-
-    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.automationRepository.loadState);
-    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.automationRepository.persistRules, {
-      rules: [ruleInput],
-    });
-    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.automationRepository.persistProcessedEntries, {
-      processedEntries: [processedEntry],
-    });
-    expect(invoke).toHaveBeenNthCalledWith(4, TauriCommand.automationRepository.persistState, {
-      profiles: [],
-      rules: [ruleInput],
-      processedEntries: [processedEntry],
-    });
-    expect(invoke).toHaveBeenNthCalledWith(5, TauriCommand.automationRepository.validateActivation, {
-      rule: ruleInput,
-      globalConfig: {},
-      tags: [],
-    });
-  });
-
-  it('recovery wrappers forward repository commands', async () => {
-    const segment = {
-      id: 'segment-1',
-      text: 'hello',
-      start: 0,
-      end: 1,
-      isFinal: true,
-    };
-    const item: RecoveredQueueItem_Serialize = {
-      id: 'recovery-1',
-      filename: 'meeting.wav',
-      filePath: 'C:/watch/meeting.wav',
-      source: 'batch_import',
-      resolution: 'pending',
-      progress: 10,
-      segments: [segment],
-      tagIds: [],
-      lastKnownStage: 'queued',
-      updatedAt: 100,
-      hasSourceFile: true,
-      canResume: true,
-      attemptCount: 0,
-      lastError: null,
-      retryable: false,
-      exportConfig: null,
-      stageConfig: null,
-    };
-    const queueItem: RecoveryItemInput_Serialize = {
-      id: 'queue-1',
-      filename: 'meeting.wav',
-      filePath: 'C:/watch/meeting.wav',
-      status: 'pending',
-      progress: 10,
-      segments: [segment],
-      projectId: null,
-      attemptCount: 0,
-      retryable: false,
-    };
-    vi.mocked(invoke).mockResolvedValueOnce({ version: 1, updatedAt: 100, items: [item] });
-
-    const snapshot = await recoveryLoadSnapshot();
-    await recoverySaveSnapshot([item]);
-    await recoveryPersistQueueSnapshot([queueItem]);
-
-    expect(snapshot).toEqual({ version: 1, updatedAt: 100, items: [item] });
-    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.recovery.loadSnapshot);
-    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.recovery.saveSnapshot, {
-      items: [{
-        ...item,
-        segments: [{
-          ...segment,
-          tokens: null,
-          timestamps: null,
-          durations: null,
-          translation: null,
-          speaker: null,
-          speakerAttribution: null,
-        }],
-      }],
-    });
-    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.recovery.persistQueueSnapshot, {
-      queueItems: [{
-        ...queueItem,
-        segments: [{
-          ...segment,
-          tokens: null,
-          timestamps: null,
-          durations: null,
-          translation: null,
-          speaker: null,
-          speakerAttribution: null,
-        }],
-      }],
-    });
-  });
-
-  it('task ledger wrappers forward repository commands', async () => {
-    const record: TaskLedgerRecord = {
-      id: 'task-1',
-      kind: 'batchImport',
-      status: 'running',
-      title: 'meeting.wav',
-      progress: 50,
-      createdAt: 100,
-      updatedAt: 101,
-      retryable: true,
-      cancelable: true,
-      recoverable: false,
-      projectId: 'tag-1',
-    };
-    const { projectId, ...recordWithoutProjectId } = record;
-    const wireRecord = {
-      ...recordWithoutProjectId,
-      stage: null,
-      historyId: null,
-      tagIds: projectId ? [projectId] : [],
-      filePath: null,
-      automationRuleId: null,
-      tagAutomationRuleId: null,
-      automationProfileId: null,
-      automationProfileSource: null,
-      sourceFingerprint: null,
-      errorMessage: null,
-      templateId: null,
-      targetLanguage: null,
-    };
-    vi.mocked(invoke).mockResolvedValue({ version: 1, updatedAt: 101, tasks: [wireRecord] });
-
-    const snapshot = await taskLedgerLoadSnapshot();
-    await taskLedgerUpsertTask(record);
-    await taskLedgerPatchTask('task-1', {
-      status: 'cancelRequested',
-      projectId: 'tag-2',
-    });
-    await taskLedgerRemoveTask('task-1');
-    await taskLedgerClearResolved();
-
-    expect(snapshot).toEqual({
-      version: 1,
-      updatedAt: 101,
-      tasks: [{
-        ...record,
-        projectId: undefined,
-        tagIds: ['tag-1'],
-      }],
-    });
-    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.taskLedger.loadSnapshot);
-    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.taskLedger.upsertTask, {
-      record: wireRecord,
-    });
-    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.taskLedger.patchTask, {
-      id: 'task-1',
-      patch: { status: 'cancelRequested', tagIds: ['tag-2'] },
-    });
-    expect(invoke).toHaveBeenNthCalledWith(4, TauriCommand.taskLedger.removeTask, {
-      id: 'task-1',
-    });
-    expect(invoke).toHaveBeenNthCalledWith(5, TauriCommand.taskLedger.clearResolved);
-  });
-
-  it('llm usage wrappers forward analytics repository commands', async () => {
-    await llmUsageEnsureStorage();
-    await llmUsageReadRaw();
-    await llmUsageReplaceRaw('{"schemaVersion":1}');
-
-    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.llmUsage.ensureStorage);
-    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.llmUsage.readRaw);
-    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.llmUsage.replaceRaw, {
-      content: '{"schemaVersion":1}',
-    });
-  });
-
-  it('backup wrappers centralize import commands', async () => {
-    await applyPreparedHistoryImport('import-1');
-
-    expect(invoke).toHaveBeenCalledWith(TauriCommand.backup.applyPreparedImport, {
-      importId: 'import-1',
-    });
-  });
-
   it('speaker wrappers centralize speaker processing commands', async () => {
     await annotateSpeakerSegmentsFromFile('C:/audio.wav', [], {} as any);
     await buildSpeakerReviewSnapshot([], 'pending');
@@ -2018,10 +2034,4 @@ describe('tauri boundary wrappers', () => {
     });
   });
 
-  it('exposes stable fixed events and the recognizer event builder', () => {
-    expect(TauriEvent.tray.checkUpdates).toBe('check-updates');
-    expect(TauriEvent.audio.microphonePeak).toBe('microphone-audio');
-    expect(TauriEvent.llm.usageRecorded).toBe('llm-usage-recorded');
-    expect(buildRecognizerOutputEvent('voice-typing')).toBe('recognizer-output-voice-typing');
-  });
 });

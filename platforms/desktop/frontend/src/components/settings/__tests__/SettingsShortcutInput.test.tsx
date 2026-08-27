@@ -17,6 +17,6 @@ describe('SettingsShortcutInput', () => {
 
         fireEvent.click(editButton);
 
-        expect(screen.getByRole('textbox', { name: 'Edit manually' })).toBeDefined();
+        screen.getByRole('textbox', { name: 'Edit manually' });
     });
 });

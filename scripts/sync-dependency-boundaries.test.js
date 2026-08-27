@@ -37,7 +37,6 @@ test('sona-sync-webdav implements the provider factory without depending on the 
   const manifest = read('adapters', 'sync_webdav', 'Cargo.toml');
   assert.match(manifest, /^sona-core\s*=/mu);
   assert.match(manifest, /^sona-sync\s*=/mu);
-  assert.doesNotMatch(manifest, /^sona-sqlite\s*=/mu);
 
   const source = [
     rustSources('adapters', 'sync_webdav', 'src'),

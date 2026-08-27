@@ -94,7 +94,7 @@ describe('SettingsAboutTab', () => {
 
     await waitFor(() => {
       expect(checkMock).toHaveBeenCalledWith();
-      expect(screen.getByText('settings.update_available:1.2.3')).toBeDefined();
+      screen.getByText('settings.update_available:1.2.3');
     });
 
     expect(useAppUpdaterStore.getState().notificationVisible).toBe(false);

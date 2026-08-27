@@ -132,7 +132,7 @@ describe('FirstRunGuide', () => {
       expect((screen.getByRole('button', { name: 'first_run.actions.continue' }) as HTMLButtonElement).disabled).toBe(false);
     });
 
-    expect(screen.getByRole('button', { name: 'first_run.actions.later' })).toBeDefined();
+    screen.getByRole('button', { name: 'first_run.actions.later' });
     expect(screen.queryByRole('button', { name: 'first_run.actions.back' })).toBeNull();
   });
 
@@ -140,20 +140,20 @@ describe('FirstRunGuide', () => {
     render(<FirstRunGuide />);
 
     await waitFor(() => {
-      expect(screen.getByText('first_run.microphone.heading')).toBeDefined();
+      screen.getByText('first_run.microphone.heading');
       expect((screen.getByRole('button', { name: 'first_run.actions.continue' }) as HTMLButtonElement).disabled).toBe(false);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.continue' }));
     
     await waitFor(() => {
-      expect(screen.getByText('first_run.models.heading')).toBeDefined();
+      screen.getByText('first_run.models.heading');
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.download_recommended' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'first_run.actions.finish' })).toBeDefined();
+      screen.getByRole('button', { name: 'first_run.actions.finish' });
       expect((screen.getByRole('button', { name: 'first_run.actions.finish' }) as HTMLButtonElement).disabled).toBe(false);
     });
 
@@ -180,11 +180,11 @@ describe('FirstRunGuide', () => {
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.continue' }));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'first_run.actions.back' })).toBeDefined();
+      screen.getByRole('button', { name: 'first_run.actions.back' });
     });
 
-    expect(screen.getByRole('button', { name: 'first_run.actions.later' })).toBeDefined();
-    expect(screen.getByRole('button', { name: 'first_run.actions.download_recommended' })).toBeDefined();
+    screen.getByRole('button', { name: 'first_run.actions.later' });
+    screen.getByRole('button', { name: 'first_run.actions.download_recommended' });
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.download_recommended' }));
 
@@ -204,14 +204,14 @@ describe('FirstRunGuide', () => {
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.continue' }));
 
     await waitFor(() => {
-      expect(screen.getByText('first_run.models.heading')).toBeDefined();
+      screen.getByText('first_run.models.heading');
       expect((screen.getByRole('button', { name: 'first_run.actions.back' }) as HTMLButtonElement).disabled).toBe(false);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.back' }));
 
     await waitFor(() => {
-      expect(screen.getByText('first_run.microphone.heading')).toBeDefined();
+      screen.getByText('first_run.microphone.heading');
     });
   });
 

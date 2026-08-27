@@ -118,11 +118,11 @@ describe('SettingsAutomationTab', () => {
     it('separates profile, Tag, and file automation and keeps export only in file rules', () => {
         render(<SettingsAutomationTab />);
 
-        expect(screen.getByRole('tab', { name: 'Profiles' })).toBeDefined();
-        expect(screen.getByRole('tab', { name: 'Tag Automation' })).toBeDefined();
+        screen.getByRole('tab', { name: 'Profiles' });
+        screen.getByRole('tab', { name: 'Tag Automation' });
         expect(screen.getByRole('tab', { name: 'File Automation' }).getAttribute('aria-selected')).toBe('true');
         expandRule();
-        expect(screen.getByRole('switch', { name: 'Auto-Export' })).toBeDefined();
+        screen.getByRole('switch', { name: 'Auto-Export' });
         expect(screen.queryByRole('switch', { name: 'Auto-Polish' })).toBeNull();
         expect(screen.queryByRole('switch', { name: 'Auto-Translate' })).toBeNull();
     });

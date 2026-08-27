@@ -7,14 +7,6 @@ import org.junit.Test
 
 class UuidRecordingIdPortTest {
     @Test
-    fun `UUID supplier remains injectable and produces canonical text`() {
-        val expected = UUID.fromString("123E4567-E89B-12D3-A456-426614174000")
-        val ids = UuidRecordingIdPort(uuidSupplier = { expected })
-
-        assertEquals("123e4567-e89b-12d3-a456-426614174000", ids.nextRecordingId())
-    }
-
-    @Test
     fun `default supplier returns distinct parseable UUIDs`() {
         val ids = UuidRecordingIdPort()
 

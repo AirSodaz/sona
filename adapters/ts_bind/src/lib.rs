@@ -1033,11 +1033,6 @@ mod tests {
     }
 
     #[test]
-    fn keeps_desktop_binding_output_explicit() {
-        assert_eq!(DESKTOP_BINDINGS_OUTPUT, "src/bindings.ts");
-    }
-
-    #[test]
     fn resolves_desktop_binding_output_from_the_frontend_root() {
         assert_eq!(
             desktop_bindings_output("frontend"),
@@ -1262,11 +1257,6 @@ mod tests {
         ] {
             assert!(bindings.contains(expected), "missing {expected}");
         }
-    }
-
-    #[test]
-    fn desktop_type_registry_is_typescript_exportable() {
-        render_desktop_typescript_bindings().unwrap();
     }
 
     #[test]

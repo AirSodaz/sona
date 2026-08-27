@@ -43,9 +43,9 @@ describe('AudioPlayer', () => {
 
     it('renders mute and volume controls', () => {
         render(<AudioPlayer />);
-        expect(screen.getByLabelText('player.play')).toBeDefined();
-        expect(screen.getByLabelText('player.mute')).toBeDefined();
-        expect(screen.getByLabelText('player.volume')).toBeDefined();
+        screen.getByLabelText('player.play');
+        screen.getByLabelText('player.mute');
+        screen.getByLabelText('player.volume');
     });
 
     it('toggles mute state', () => {
@@ -54,18 +54,18 @@ describe('AudioPlayer', () => {
 
         // Click to mute
         fireEvent.click(muteButton);
-        expect(screen.getByLabelText('player.unmute')).toBeDefined();
+        screen.getByLabelText('player.unmute');
 
         // Click to unmute
         fireEvent.click(muteButton);
-        expect(screen.getByLabelText('player.mute')).toBeDefined();
+        screen.getByLabelText('player.mute');
     });
 
     it('renders time display and slider', () => {
         render(<AudioPlayer />);
         const times = screen.getAllByText('00:00.0');
         expect(times.length).toBeGreaterThan(0);
-        expect(screen.getByLabelText('player.seek')).toBeDefined();
+        screen.getByLabelText('player.seek');
     });
 
     it('updates time display when store updates', async () => {

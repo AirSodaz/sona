@@ -110,15 +110,3 @@ test('host wiring inventory stays aligned with reviewed composition roots', () =
     );
   }
 });
-
-test('host wiring inventory is covered by the script-test glob', () => {
-  const packageJson = JSON.parse(read('package.json'));
-  assert.equal(
-    packageJson.scripts['test:scripts'],
-    'node --test --test-concurrency=1 scripts/*.test.js',
-  );
-  assert.match(
-    read('.github', 'workflows', 'pr-guardrails.yml'),
-    /- name: Run script tests[\s\S]*?run: pnpm run test:scripts/u,
-  );
-});

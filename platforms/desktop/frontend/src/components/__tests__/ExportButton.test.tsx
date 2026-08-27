@@ -48,8 +48,8 @@ describe('ExportButton', () => {
         fireEvent.click(screen.getByRole('button', { name: /export.button/i }));
 
         await waitFor(() => {
-            expect(screen.getByRole('dialog')).toBeDefined();
-            expect(screen.getByDisplayValue('Test Recording')).toBeDefined();
+            screen.getByRole('dialog');
+            screen.getByDisplayValue('Test Recording');
         });
     };
 
@@ -86,13 +86,13 @@ describe('ExportButton', () => {
 
     it('renders the export button', () => {
         render(<ExportButton />);
-        expect(screen.getByRole('button', { name: /export.button/i })).toBeDefined();
+        screen.getByRole('button', { name: /export.button/i });
     });
 
     it('opens modal when clicked', async () => {
         await openExportModal();
 
-        expect(screen.getByText('export.modal_title')).toBeDefined();
+        screen.getByText('export.modal_title');
     });
 
     it('renders the modal overlay at document body level when opened from the detail header', async () => {
@@ -105,7 +105,7 @@ describe('ExportButton', () => {
         fireEvent.click(screen.getByRole('button', { name: /export.button/i }));
 
         await waitFor(() => {
-            expect(screen.getByRole('dialog')).toBeDefined();
+            screen.getByRole('dialog');
         });
 
         const bodyOverlay = Array.from(document.body.children).find((element) =>
@@ -113,7 +113,7 @@ describe('ExportButton', () => {
         );
 
         expect(bodyOverlay).toBeDefined();
-        expect(screen.getByText('export.modal_title')).toBeDefined();
+        screen.getByText('export.modal_title');
     });
 
     it('hides button when no segments', () => {
@@ -136,8 +136,8 @@ describe('ExportButton', () => {
     it('shows translation modes if translation available', async () => {
         await openExportModal();
 
-        expect(screen.getByLabelText('export.mode_translation')).toBeDefined();
-        expect(screen.getByLabelText('export.mode_bilingual')).toBeDefined();
+        screen.getByLabelText('export.mode_translation');
+        screen.getByLabelText('export.mode_bilingual');
     });
 
     it('disables translation modes if no translation available', async () => {
@@ -173,7 +173,7 @@ describe('ExportButton', () => {
             });
 
             expect(mockWriteText).toHaveBeenCalledWith('Hello\n\nWorld');
-            expect(screen.getByTestId('copy-success-check')).toBeDefined();
+            screen.getByTestId('copy-success-check');
 
             // Advance by 2000ms to trigger the timeout callback
             await act(async () => {

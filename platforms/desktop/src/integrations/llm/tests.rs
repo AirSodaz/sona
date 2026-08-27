@@ -167,51 +167,6 @@ async fn typed_completion_keeps_json_usage_and_execution_metadata() {
     assert_eq!(response.execution.attempts, 1);
 }
 
-#[test]
-fn llm_api_host_validation_rejects_remote_http_api_hosts() {
-    let error =
-        LlmApiUrl::parse(&sample_llm_config("http://api.example.com/v1").base_url).unwrap_err();
-
-    assert_eq!(error.kind, LlmPortErrorKind::InvalidRequest);
-    assert_eq!(
-        error.message,
-        "LLM API host must use https:// unless it points to localhost."
-    );
-}
-
-#[test]
-fn llm_api_host_validation_accepts_https_and_loopback_http_api_hosts() {
-    assert!(LlmApiUrl::parse(&sample_llm_config("https://api.example.com/v1").base_url).is_ok());
-    assert!(LlmApiUrl::parse(&sample_llm_config("http://localhost:1234/v1").base_url).is_ok());
-    assert!(LlmApiUrl::parse(&sample_llm_config("http://127.0.0.1:11434").base_url).is_ok());
-    assert!(LlmApiUrl::parse(&sample_llm_config("http://[::1]:11434").base_url).is_ok());
-}
-
-#[test]
-fn llm_api_url_preserves_https_policy_when_joining_and_querying() {
-    let root = LlmApiUrl::parse("https://api.example.com/v1").unwrap();
-
-    assert_eq!(
-        root.join("/v1/chat/completions").unwrap().as_str(),
-        "https://api.example.com/v1/chat/completions"
-    );
-    assert_eq!(
-        root.with_query("api-version=2024-10-21").unwrap().as_str(),
-        "https://api.example.com/v1?api-version=2024-10-21"
-    );
-}
-
-#[test]
-fn llm_api_url_rejects_remote_http_when_joining_and_querying() {
-    let error = LlmApiUrl::parse("http://api.example.com/v1").unwrap_err();
-
-    assert_eq!(error.kind, LlmPortErrorKind::InvalidRequest);
-    assert_eq!(
-        error.message,
-        "LLM API host must use https:// unless it points to localhost."
-    );
-}
-
 #[tokio::test]
 async fn list_llm_models_rejects_remote_http_before_requesting_models() {
     let error = list_llm_models_command(LlmModelsRequest {

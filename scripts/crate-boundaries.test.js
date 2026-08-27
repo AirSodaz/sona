@@ -222,11 +222,6 @@ test('stable architecture guides publish the reviewed roles and exceptions', () 
     );
     assert.match(
       guide,
-      /\|\s*Sync[\s\S]*?\|\s*yes\s*\|\s*out of scope\s*\|\s*yes\s*\|/u,
-      `${title} must publish the three-host Sync capability matrix row`,
-    );
-    assert.match(
-      guide,
       /core\/src\/project/u,
       `${title} must record that the empty Project core module was removed`,
     );

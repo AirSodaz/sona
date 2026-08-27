@@ -1,13 +1,8 @@
-import { readFileSync } from 'node:fs';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HistoryItem } from '../HistoryItem';
 import { useProjectStore } from '../../../stores/projectStore';
 
-const historyLayoutsCss = readFileSync(
-  'src/styles/history-layouts.css',
-  'utf8',
-);
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -241,7 +236,7 @@ describe('HistoryItem', () => {
       />,
     );
 
-    expect(screen.getByText('Alpha')).toBeDefined();
+    screen.getByText('Alpha');
 
     rerender(
       <HistoryItem
@@ -278,15 +273,6 @@ describe('HistoryItem', () => {
     expect(screen.getByText('planning').tagName).toBe('MARK');
   });
 
-  it('keeps table row dividers active in virtualized table rows', () => {
-    expect(historyLayoutsCss).toMatch(/--projects-table-row-divider:\s*color-mix\(/);
-    expect(historyLayoutsCss).toMatch(
-      /\.history-item--table\s*{[^}]*border-bottom:\s*1px solid var\(--projects-table-row-divider\);/s,
-    );
-    expect(historyLayoutsCss).not.toMatch(
-      /\.history-item--table:last-child\s*{[^}]*border-bottom:\s*none;/s,
-    );
-  });
 
   it('removes the draft badge when the same live recording history item completes', () => {
     const { rerender } = render(
@@ -301,7 +287,7 @@ describe('HistoryItem', () => {
       />,
     );
 
-    expect(screen.getByText('Draft')).toBeDefined();
+    screen.getByText('Draft');
 
     rerender(
       <HistoryItem

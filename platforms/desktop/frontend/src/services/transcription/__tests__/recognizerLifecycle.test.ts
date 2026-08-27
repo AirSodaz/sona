@@ -1,3 +1,4 @@
+import { buildRecognizerOutputEvent } from '../../tauri/events';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
@@ -146,6 +147,10 @@ describe('RecognizerLifecycle', () => {
     expect(mocks.retireExternalLiveSource).toHaveBeenCalledWith('source-token');
     expect(onError).toHaveBeenCalledWith(expect.stringContaining('start failed'));
     expect(lifecycle.running).toBe(false);
+  });
+
+  it('builds the recognizer output event name from the instance id', () => {
+    expect(buildRecognizerOutputEvent('voice-typing')).toBe('recognizer-output-voice-typing');
   });
 
 });

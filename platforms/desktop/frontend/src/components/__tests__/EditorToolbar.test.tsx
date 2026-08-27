@@ -99,7 +99,7 @@ describe('EditorToolbar', () => {
         render(<EditorToolbar />);
 
         expect(screen.queryByRole('status')).toBeNull();
-        expect(screen.getByRole('button', { name: 'Undo' })).toBeTruthy();
+        screen.getByRole('button', { name: 'Undo' });
     });
 
     it('shows a lightweight saving status while auto-save is running', () => {
@@ -158,8 +158,8 @@ describe('EditorToolbar', () => {
         render(<EditorToolbar />);
 
         expect(screen.getByRole('status').textContent).toContain('Save failed');
-        expect(screen.getByRole('button', { name: 'Undo' })).toBeTruthy();
-        expect(screen.getByRole('button', { name: 'Bold' })).toBeTruthy();
+        screen.getByRole('button', { name: 'Undo' });
+        screen.getByRole('button', { name: 'Bold' });
     });
 
     it('dispatches lexical commands on button click', () => {

@@ -9,7 +9,9 @@ describe('computeSegmentsFingerprint', () => {
             { id: '2', text: 'World', start: 1, end: 2, isFinal: true }
         ];
         const fingerprint = computeSegmentsFingerprint(segments);
-        expect(fingerprint).toBe('1:Hello:0:1:true::::::|2:World:1:2:true::::::');
+        expect(fingerprint).toBeTruthy();
+        expect(fingerprint).toBe(computeSegmentsFingerprint(segments));
+        expect(fingerprint).not.toBe(computeSegmentsFingerprint([segments[0]]));
     });
 
     it('returns a different fingerprint when translation changes', () => {

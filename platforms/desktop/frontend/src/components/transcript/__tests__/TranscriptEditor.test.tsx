@@ -2,15 +2,15 @@ import { render, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import TranscriptEditor from '../TranscriptEditor';
 import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
-import { SegmentItem } from '../SegmentItem';
 import { DEFAULT_CONFIG } from '../../../stores/configStore';
 
 // Mock scrollTo
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
 // Mock Virtuoso
-const { mockScrollToIndex } = vi.hoisted(() => ({
+const { mockScrollToIndex, segmentRenderCounts } = vi.hoisted(() => ({
     mockScrollToIndex: vi.fn(),
+    segmentRenderCounts: new Map<string, number>(),
 }));
 
 vi.mock('react-virtuoso', async () => {
@@ -60,13 +60,14 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
     ask: vi.fn(),
 }));
 
-// Mock SegmentItem for performance tracking
+// Mock SegmentItem for per-segment render tracking
 vi.mock('../SegmentItem', async () => {
     const React = await import('react');
-    const mockFn = vi.fn(() => <div>Segment</div>);
+    const mockFn = vi.fn((props: { segment: { id: string } }) => {
+        segmentRenderCounts.set(props.segment.id, (segmentRenderCounts.get(props.segment.id) ?? 0) + 1);
+        return <div>Segment</div>;
+    });
     const Memoized = React.memo(mockFn);
-    // Attach mock to the component for access in tests
-    (Memoized as any).mock = mockFn;
     return {
         SegmentItem: Memoized
     };
@@ -161,24 +162,23 @@ describe('TranscriptEditor', () => {
             useTranscriptStore.setState({ segments });
         });
 
+        segmentRenderCounts.clear();
         render(<TranscriptEditor />);
 
-        const mockFn = (SegmentItem as any).mock;
-
-        // Initial render should trigger 3 renders (one for each segment)
-        expect(mockFn).toHaveBeenCalledTimes(3);
-        mockFn.mockClear();
+        // Initial mount renders each segment exactly once.
+        expect(segmentRenderCounts.get('1')).toBe(1);
+        expect(segmentRenderCounts.get('2')).toBe(1);
+        expect(segmentRenderCounts.get('3')).toBe(1);
 
         // Update text of first segment
         act(() => {
              useTranscriptStore.getState().updateSegment('1', { text: 'One Updated' });
         });
 
-        // With optimization, context is stable.
-        // Segment 1: props changed (segment update).
-        // Segment 2: props stable (same segment ref, same context).
-        // Segment 3: props stable.
-        // Expectation: 1
-        expect(mockFn).toHaveBeenCalledTimes(1);
+        // With optimization, context is stable:
+        // segment 1 re-renders exactly once, siblings stay memoized.
+        expect(segmentRenderCounts.get('1')).toBe(2);
+        expect(segmentRenderCounts.get('2')).toBe(1);
+        expect(segmentRenderCounts.get('3')).toBe(1);
     });
 });

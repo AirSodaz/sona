@@ -23,9 +23,20 @@ describe('logger utility', () => {
     expect(tauriDebug).not.toHaveBeenCalled();
   });
 
-  it('formats info messages without args correctly', async () => {
-    await logger.info('Test info');
-    expect(tauriInfo).toHaveBeenCalledWith('Test info');
+  it('formats and forwards plain messages at every level', async () => {
+    const cases = [
+      { level: 'trace', run: () => logger.trace('Test trace'), plugin: tauriTrace, expected: 'Test trace' },
+      { level: 'debug', run: () => logger.debug('Test debug', { data: 123 }), plugin: tauriDebug, expected: 'Test debug [{"data":123}]' },
+      { level: 'info', run: () => logger.info('Test info'), plugin: tauriInfo, expected: 'Test info' },
+      { level: 'warn', run: () => logger.warn('Test warn', 'warning', 42), plugin: tauriWarn, expected: 'Test warn ["warning",42]' },
+      { level: 'error', run: () => logger.error('Test error', new Error('test')), plugin: tauriError, expected: expect.stringContaining('Test error') },
+    ] as const;
+
+    for (const { level, run, plugin, expected } of cases) {
+      setLoggerLevel(level);
+      await run();
+      expect(plugin).toHaveBeenCalledWith(expected);
+    }
   });
 
   it('allows debug messages when configured for debug', async () => {
@@ -58,15 +69,5 @@ describe('logger utility', () => {
     expect(tauriInfo).not.toHaveBeenCalled();
     expect(tauriWarn).toHaveBeenCalledWith('Warn written');
     expect(tauriError).toHaveBeenCalledWith('Error written');
-  });
-
-  it('formats warn messages correctly', async () => {
-    await logger.warn('Test warn', 'warning', 42);
-    expect(tauriWarn).toHaveBeenCalledWith('Test warn ["warning",42]');
-  });
-
-  it('formats error messages correctly', async () => {
-    await logger.error('Test error', new Error('test'));
-    expect(tauriError).toHaveBeenCalled();
   });
 });

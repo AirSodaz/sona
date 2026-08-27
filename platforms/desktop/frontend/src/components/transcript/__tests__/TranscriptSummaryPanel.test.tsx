@@ -112,14 +112,14 @@ describe('TranscriptSummaryPanel', () => {
       expect(mockLoadSummary).toHaveBeenCalledWith('history-1');
     });
 
-    expect(screen.getByText('summary.title')).toBeDefined();
-    expect(screen.getByDisplayValue('History summary')).toBeDefined();
+    screen.getByText('summary.title');
+    screen.getByDisplayValue('History summary');
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'summary.templates.general' }));
     });
     await waitFor(() => {
-      expect(screen.getByRole('option', { name: 'summary.templates.meeting' })).toBeDefined();
+      screen.getByRole('option', { name: 'summary.templates.meeting' });
     });
     await act(async () => {
       fireEvent.click(screen.getByRole('option', { name: 'summary.templates.meeting' }));
@@ -137,7 +137,7 @@ describe('TranscriptSummaryPanel', () => {
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('History summary');
     await waitFor(() => {
-      expect(screen.getByText('summary.copied')).toBeDefined();
+      screen.getByText('summary.copied');
     });
 
     await act(async () => {
@@ -185,7 +185,7 @@ describe('TranscriptSummaryPanel', () => {
       fireEvent.click(screen.getByRole('button', { name: 'summary.templates.general' }));
     });
     await waitFor(() => {
-      expect(screen.getByRole('option', { name: 'summary.templates.meeting' })).toBeDefined();
+      screen.getByRole('option', { name: 'summary.templates.meeting' });
     });
     await act(async () => {
       fireEvent.click(screen.getByRole('option', { name: 'summary.templates.meeting' }));
@@ -235,11 +235,11 @@ describe('TranscriptSummaryPanel', () => {
       await Promise.resolve();
     });
 
-    expect(screen.getByText('summary.generating_progress:42')).toBeDefined();
-    expect(screen.getByText('summary.generating_short')).toBeDefined();
+    screen.getByText('summary.generating_progress:42');
+    screen.getByText('summary.generating_short');
     expect((screen.getByRole('button', { name: 'summary.generating_short' }) as HTMLButtonElement).disabled).toBe(true);
     await waitFor(() => {
-      expect(screen.getByDisplayValue('Streaming summary text')).toBeDefined();
+      screen.getByDisplayValue('Streaming summary text');
     });
   });
 
@@ -261,7 +261,7 @@ describe('TranscriptSummaryPanel', () => {
 
     render(<TranscriptSummaryPanel isOpen={true} onClose={mockOnClose} />);
 
-    expect(screen.getByRole('textbox')).toBeDefined();
+    screen.getByRole('textbox');
     expect(screen.queryByRole('button', { name: 'summary.start_writing' })).toBeNull();
   });
 
@@ -287,7 +287,7 @@ describe('TranscriptSummaryPanel', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByDisplayValue('Recoverable streamed summary')).toBeDefined();
+      screen.getByDisplayValue('Recoverable streamed summary');
     });
   });
 
@@ -308,8 +308,8 @@ describe('TranscriptSummaryPanel', () => {
 
     render(<TranscriptSummaryPanel isOpen={true} onClose={mockOnClose} />);
 
-    expect(screen.getByText('summary.manual_only_hint')).toBeDefined();
+    screen.getByText('summary.manual_only_hint');
     expect((screen.getByRole('button', { name: 'summary.generate' }) as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByRole('textbox')).toBeDefined();
+    screen.getByRole('textbox');
   });
 });

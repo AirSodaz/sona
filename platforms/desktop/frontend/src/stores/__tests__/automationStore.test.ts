@@ -611,9 +611,7 @@ describe('automationStore', () => {
         expect(resolveEffectiveConfigMock).not.toHaveBeenCalled();
     });
 
-    it('benchmarks retry candidate handling with synchronous snapshots', async () => {
-        vi.useRealTimers();
-
+    it('enqueues one candidate per failed entry', async () => {
         const rule = createRule({ enabled: false });
         const candidateCount = 8;
         const failedEntries = Array.from({ length: candidateCount }, (_, index) => ({
@@ -666,16 +664,9 @@ describe('automationStore', () => {
                 mtimeMs: entry.mtimeMs,
             },
         })));
-
-        const startTime = performance.now();
         await useAutomationStore.getState().retryFailed(rule.id);
-        const elapsedMs = performance.now() - startTime;
 
-        console.log(
-            `retryFailed handled ${candidateCount} delayed candidates in ${elapsedMs.toFixed(1)}ms`,
-        );
         expect(addFilesMock).toHaveBeenCalledTimes(candidateCount);
-        expect(resolveEffectiveConfigMock).not.toHaveBeenCalled();
     });
 
     it('retries failure notifications through the rule-level retry flow', async () => {
