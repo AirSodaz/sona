@@ -253,21 +253,28 @@ function llamaCppRuntimeLibraries(target) {
     return libraries;
   }
   if (target.includes('apple')) {
-    return [
+    const libraries = [
       /^libggml(?:\.\d+)*\.dylib$/u,
       /^libggml-base(?:\.\d+)*\.dylib$/u,
       /^libggml-cpu(?:\.\d+)*\.dylib$/u,
       /^libllama(?:\.\d+)*\.dylib$/u,
     ];
+    if (process.env.LLAMA_ENABLE_METAL === '1') {
+      libraries.push(/^libggml-metal(?:\.\d+)*\.dylib$/u);
+    }
+    return libraries;
   }
-  return [
+  const libraries = [
     /^libggml\.so(?:\.\d+)*$/u,
     /^libggml-base\.so(?:\.\d+)*$/u,
     /^libggml-cpu\.so(?:\.\d+)*$/u,
     /^libllama\.so(?:\.\d+)*$/u,
   ];
+  if (process.env.LLAMA_ENABLE_VULKAN === '1') {
+    libraries.push(/^libggml-vulkan\.so(?:\.\d+)*$/u);
+  }
+  return libraries;
 }
-
 function hasLegacyResourcePath(value) {
   const normalized = normalizeConfigPath(value);
   return normalized.includes('resources/cli') || normalized.includes('resources/shared_libs');

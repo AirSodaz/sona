@@ -42,3 +42,4 @@ tempfile = "3"
 
 [features]
 llama-vulkan = ["sona-llama-cpp/vulkan"]
+llama-metal = ["sona-llama-cpp/metal"]

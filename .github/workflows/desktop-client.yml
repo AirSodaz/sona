@@ -37,11 +37,11 @@ jobs:
       matrix:
         include:
           - platform: "macos-latest"
-            args: "--target aarch64-apple-darwin"
+            args: "--target aarch64-apple-darwin --features llama-metal"
           - platform: "macos-latest"
-            args: "--target x86_64-apple-darwin"
+            args: "--target x86_64-apple-darwin --features llama-metal"
           - platform: "ubuntu-22.04"
-            args: ""
+            args: "--features llama-vulkan"
           - platform: "windows-latest"
             args: "--features llama-vulkan"
           - platform: "windows-latest"
@@ -49,8 +49,9 @@ jobs:
     env:
       SHERPA_ONNX_VERSION: 1.13.5
       SHERPA_ONNX_TAG: v1.13.5
-      LLAMA_BUILD_SHARED_LIBS: ${{ startsWith(matrix.platform, 'ubuntu') && '0' || '1' }}
-      LLAMA_ENABLE_VULKAN: ${{ matrix.args == '--features llama-vulkan' && '1' || '0' }}
+      LLAMA_BUILD_SHARED_LIBS: 1
+      LLAMA_ENABLE_VULKAN: ${{ contains(matrix.args, 'llama-vulkan') && '1' || '0' }}
+      LLAMA_ENABLE_METAL: ${{ contains(matrix.args, 'llama-metal') && '1' || '0' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -60,17 +61,21 @@ jobs:
         shell: pwsh
         run: |
           $version = "1.3.296.0"
-          Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/$version/windows/VulkanSDK-$version-Installer.exe" -OutFile VulkanSDK-Installer.exe
-          $process = Start-Process -FilePath ".\VulkanSDK-Installer.exe" -ArgumentList "--accept-licenses","--default","--quiet" -Wait -PassThru
-          if ($process.ExitCode -ne 0) { throw "Vulkan SDK installer failed with exit code $($process.ExitCode)" }
-          "VULKAN_SDK=C:\VulkanSDK\$version" >> $env:GITHUB_ENV
-          "C:\VulkanSDK\$version\bin" >> $env:GITHUB_PATH
+          $vulkanDir = "C:\VulkanSDK\$version"
+          New-Item -ItemType Directory -Force -Path $vulkanDir | Out-Null
+          Invoke-WebRequest -Uri "https://sdk.lunarg.com/sdk/download/$version/windows/VulkanSDK-$version-Installer.exe" -OutFile "VulkanSDK-Installer.exe"
+          $7z = if (Get-Command 7z -ErrorAction SilentlyContinue) { "7z" } elseif (Test-Path "C:\Program Files\7-Zip\7z.exe") { "C:\Program Files\7-Zip\7z.exe" } else { "7z" }
+          & $7z x VulkanSDK-Installer.exe -aoa -o"$vulkanDir"
+          if ($LASTEXITCODE -ne 0) { throw "7z extraction of Vulkan SDK failed with exit code $LASTEXITCODE" }
+          Remove-Item -Force "VulkanSDK-Installer.exe"
+          "VULKAN_SDK=$vulkanDir" >> $env:GITHUB_ENV
+          "$vulkanDir\Bin" >> $env:GITHUB_PATH
 
       - name: Install dependencies (Linux)
         if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config libsoup-3.0-dev javascriptcoregtk-4.1 libjavascriptcoregtk-4.1-dev libnm-dev xdg-utils libasound2-dev llvm-dev libclang-dev clang
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config libsoup-3.0-dev javascriptcoregtk-4.1 libjavascriptcoregtk-4.1-dev libnm-dev xdg-utils libasound2-dev llvm-dev libclang-dev clang libvulkan-dev glslang-tools
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
@@ -116,7 +121,7 @@ jobs:
           echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared-lib/lib" >> $GITHUB_ENV
 
       - name: Download and extract sherpa-onnx shared libraries (Windows x64)
-        if: startsWith(matrix.platform, 'windows') && matrix.args == ''
+        if: startsWith(matrix.platform, 'windows') && !contains(matrix.args, 'aarch64-pc-windows-msvc')
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/$env:SHERPA_ONNX_TAG/sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-x64-shared-MT-Release-lib.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
@@ -125,7 +130,7 @@ jobs:
           "SHERPA_ONNX_LIB_DIR=$libDir" >> $env:GITHUB_ENV
 
       - name: Download and extract sherpa-onnx shared libraries (Windows ARM64)
-        if: startsWith(matrix.platform, 'windows') && matrix.args == '--target aarch64-pc-windows-msvc'
+        if: startsWith(matrix.platform, 'windows') && contains(matrix.args, 'aarch64-pc-windows-msvc')
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/$env:SHERPA_ONNX_TAG/sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-arm64-shared-MT-Release-lib.tar.bz2" -OutFile "sherpa-onnx-win.tar.bz2"
@@ -139,7 +144,7 @@ jobs:
           echo "RUSTFLAGS=-L native=$SHERPA_ONNX_LIB_DIR" >> $GITHUB_ENV
 
       - name: Configure Windows ARM64 Clang
-        if: matrix.args == '--target aarch64-pc-windows-msvc'
+        if: contains(matrix.args, 'aarch64-pc-windows-msvc')
         shell: pwsh
         run: |
           "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV

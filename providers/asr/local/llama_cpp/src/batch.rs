@@ -640,9 +640,8 @@ struct ValidatedOptions {
 }
 
 /// GPU offload request resolved from the engine-neutral `gpu_acceleration`
-/// value. Vulkan is the only bundled llama.cpp backend; `cuda` is accepted
-/// as an alias because CUDA-enabled builds behave identically for these
-/// small models.
+/// value. Supported backends are Metal (macOS) and Vulkan (Windows, Linux);
+/// `cuda` is accepted as an alias for compatible builds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum GpuOffload {
     Disabled,
@@ -652,7 +651,7 @@ enum GpuOffload {
 }
 
 /// Whether the linked ggml runtime registered a non-CPU device — a bundled
-/// Vulkan/CUDA backend backed by a usable driver. CPU-only builds always
+/// Metal/Vulkan/CUDA backend backed by a usable driver. CPU-only builds always
 /// report `false`.
 pub(crate) fn gpu_backend_available() -> bool {
     static GPU_BACKEND_AVAILABLE: LazyLock<bool> =
@@ -668,11 +667,11 @@ fn resolve_gpu_offload(value: Option<&str>) -> Result<GpuOffload, AsrPortError> 
     match value.map(str::trim).filter(|value| !value.is_empty()) {
         None | Some("cpu") => Ok(GpuOffload::Disabled),
         Some("auto") => Ok(GpuOffload::Auto),
-        Some("cuda") | Some("vulkan") => Ok(GpuOffload::Enabled),
+        Some("cuda") | Some("metal") | Some("vulkan") => Ok(GpuOffload::Enabled),
         Some(other) => Err(AsrPortError::new(
             AsrPortErrorKind::Unsupported,
             format!(
-                "llama.cpp batch transcription supports gpu_acceleration 'auto', 'cpu', 'cuda', or 'vulkan'; got '{other}'."
+                "llama.cpp batch transcription supports gpu_acceleration 'auto', 'cpu', 'cuda', 'metal', or 'vulkan'; got '{other}'."
             ),
         )),
     }
@@ -1531,6 +1530,10 @@ mod tests {
         assert_eq!(resolve_gpu_offload(Some("auto")).unwrap(), GpuOffload::Auto);
         assert_eq!(
             resolve_gpu_offload(Some("cuda")).unwrap(),
+            GpuOffload::Enabled
+        );
+        assert_eq!(
+            resolve_gpu_offload(Some("metal")).unwrap(),
             GpuOffload::Enabled
         );
         assert_eq!(

@@ -79,8 +79,10 @@ function buildStandaloneCli(repoRoot, target, runtimeLibDir, runCommand) {
   const cargoArgs = ['build', '-p', 'sona-cli', '--release', '--target', target];
   // Keep the standalone CLI on the same llama.cpp build variant as the app
   // so both share one staged set of ggml runtime libraries.
-  if (vulkanEnabled() && target.includes('windows')) {
+  if (vulkanEnabled() && (target.includes('windows') || target.includes('linux'))) {
     cargoArgs.push('--features', 'sona-cli/llama-vulkan');
+  } else if (metalEnabled() && target.includes('apple')) {
+    cargoArgs.push('--features', 'sona-cli/llama-metal');
   }
   runCommand('cargo', cargoArgs, options);
 }
@@ -340,8 +342,11 @@ function isLlamaCppDynamicLibrary(name, target) {
 
 function requiredLlamaCppRuntimeLibraryAnchors(target) {
   const names = ['ggml', 'ggml-base', 'ggml-cpu', 'llama'];
-  if (vulkanEnabled() && target.includes('windows')) {
+  if (vulkanEnabled() && (target.includes('windows') || target.includes('linux'))) {
     names.push('ggml-vulkan');
+  }
+  if (metalEnabled() && target.includes('apple')) {
+    names.push('ggml-metal');
   }
   if (target.includes('windows')) {
     return names.map((name) => new RegExp(`^${name}\\.dll$`, 'iu'));
@@ -358,6 +363,10 @@ function requiredLlamaCppRuntimeLibraryAnchors(target) {
 function vulkanEnabled() {
   return process.env.LLAMA_ENABLE_VULKAN === '1';
 }
+function metalEnabled() {
+  return process.env.LLAMA_ENABLE_METAL === '1';
+}
+
 
 function isPlatformDynamicLibrary(name, target) {
   const lowerName = name.toLowerCase();

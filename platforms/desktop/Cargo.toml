@@ -102,3 +102,4 @@ tower = { version = "0.5", features = ["util"] }
 
 [features]
 llama-vulkan = ["sona-llama-cpp/vulkan"]
+llama-metal = ["sona-llama-cpp/metal"]

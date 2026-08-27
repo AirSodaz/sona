@@ -8,6 +8,8 @@ import type {
   RecoveryItemInput_Serialize,
   RecoverySnapshot_Serialize,
 } from '../../../bindings';
+import type { AutomationProcessedEntry, AutomationRule } from '../../../types/automation';
+import type { AppConfig } from '../../../types/config';
 import { TauriCommand } from '../commands';
 import { invokeTauri } from '../invoke';
 import {

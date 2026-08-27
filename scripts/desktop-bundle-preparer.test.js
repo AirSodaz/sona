@@ -392,6 +392,99 @@ test('desktop bundle preparer fails when the Vulkan build is enabled but ggml-vu
   }
 });
 
+test('desktop bundle preparer stages and requires ggml-vulkan on Linux when the Vulkan build is enabled', async () => {
+  const { prepareDesktopBundle } = await loadDesktopBundlePreparer();
+  const root = makeTempRepo();
+  const target = 'x86_64-unknown-linux-gnu';
+  const releaseDir = path.join(root, 'target', target, 'release');
+  const sherpaLibDir = path.join(root, 'native-libs');
+  const configPath = path.join(root, 'base-tauri.conf.json');
+  fs.mkdirSync(releaseDir, { recursive: true });
+  fs.writeFileSync(path.join(releaseDir, 'sona-cli'), 'cli');
+  writeSherpaRuntimeLibraries(sherpaLibDir, target);
+  writeLlamaCppRuntimeLibraries(releaseDir, target);
+  fs.writeFileSync(path.join(releaseDir, 'libggml-vulkan.so'), 'vulkan');
+  fs.writeFileSync(configPath, JSON.stringify({ bundle: {} }));
+
+  process.env.LLAMA_ENABLE_VULKAN = '1';
+  try {
+    const prepared = await prepareDesktopBundle({
+      repoRoot: root,
+      target,
+      configPath,
+      ffmpegLockPath: writeTestFfmpegLock(root, target),
+      sherpaLibDir,
+      runCommand() {},
+    });
+    assert.equal(fs.existsSync(path.join(prepared.runtimeLibDir, 'libggml-vulkan.so')), true);
+  } finally {
+    delete process.env.LLAMA_ENABLE_VULKAN;
+  }
+});
+
+test('desktop bundle preparer stages and requires ggml-metal on macOS when the Metal build is enabled', async () => {
+  const { prepareDesktopBundle } = await loadDesktopBundlePreparer();
+  const root = makeTempRepo();
+  const target = 'aarch64-apple-darwin';
+  const releaseDir = path.join(root, 'target', target, 'release');
+  const sherpaLibDir = path.join(root, 'native-libs');
+  const configPath = path.join(root, 'base-tauri.conf.json');
+  fs.mkdirSync(releaseDir, { recursive: true });
+  fs.writeFileSync(path.join(releaseDir, 'sona-cli'), 'cli');
+  writeSherpaRuntimeLibraries(sherpaLibDir, target);
+  writeLlamaCppRuntimeLibraries(releaseDir, target);
+  fs.writeFileSync(path.join(releaseDir, 'libggml-metal.dylib'), 'metal');
+  fs.writeFileSync(configPath, JSON.stringify({ bundle: {} }));
+
+  process.env.LLAMA_ENABLE_METAL = '1';
+  try {
+    const prepared = await prepareDesktopBundle({
+      repoRoot: root,
+      target,
+      configPath,
+      ffmpegLockPath: writeTestFfmpegLock(root, target),
+      sherpaLibDir,
+      runCommand() {},
+      readMacDylibDependencies: () => [],
+    });
+    assert.equal(fs.existsSync(path.join(prepared.runtimeLibDir, 'libggml-metal.dylib')), true);
+  } finally {
+    delete process.env.LLAMA_ENABLE_METAL;
+  }
+});
+
+test('desktop bundle preparer fails when the Metal build is enabled but ggml-metal is missing', async () => {
+  const { prepareDesktopBundle } = await loadDesktopBundlePreparer();
+  const root = makeTempRepo();
+  const target = 'aarch64-apple-darwin';
+  const releaseDir = path.join(root, 'target', target, 'release');
+  const sherpaLibDir = path.join(root, 'native-libs');
+  const configPath = path.join(root, 'base-tauri.conf.json');
+  fs.mkdirSync(releaseDir, { recursive: true });
+  fs.writeFileSync(path.join(releaseDir, 'sona-cli'), 'cli');
+  writeSherpaRuntimeLibraries(sherpaLibDir, target);
+  writeLlamaCppRuntimeLibraries(releaseDir, target);
+  fs.writeFileSync(configPath, JSON.stringify({ bundle: {} }));
+
+  process.env.LLAMA_ENABLE_METAL = '1';
+  try {
+    await assert.rejects(
+      prepareDesktopBundle({
+        repoRoot: root,
+        target,
+        configPath,
+        ffmpegLockPath: writeTestFfmpegLock(root, target),
+        sherpaLibDir,
+        runCommand() {},
+        readMacDylibDependencies: () => [],
+      }),
+      /llama\.cpp dynamic build is missing runtime library anchors.*ggml-metal/u,
+    );
+  } finally {
+    delete process.env.LLAMA_ENABLE_METAL;
+  }
+});
+
 test('desktop bundle preparer collects llama.cpp libraries from Cargo build output', async () => {
   const { stageLlamaCppRuntimeLibraries } = await loadDesktopBundlePreparer();
   const root = makeTempRepo();

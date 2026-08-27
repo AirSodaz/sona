@@ -19,3 +19,4 @@ uuid = { version = "1", features = ["v4", "fast-rng"] }
 
 [features]
 vulkan = ["llama-cpp-2/vulkan"]
+metal = ["llama-cpp-2/metal"]

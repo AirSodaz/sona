@@ -218,3 +218,106 @@ test('tauri bundle verification requires ggml-vulkan only for Vulkan-enabled Win
   const vulkanResult = runVerifier({ ...process.env, LLAMA_ENABLE_VULKAN: '1' });
   assert.equal(vulkanResult.status, 0, vulkanResult.stderr || vulkanResult.stdout);
 });
+
+test('tauri bundle verification requires ggml-vulkan for Vulkan-enabled Linux builds', () => {
+  const target = 'x86_64-unknown-linux-gnu';
+  const root = makeTempRepo();
+  const stagingRoot = path.join(root, 'target', 'desktop-bundle', target);
+  const sidecarsDir = path.join(stagingRoot, 'sidecars');
+  const runtimeLibDir = path.join(stagingRoot, 'runtime-libs');
+  const configPath = path.join(stagingRoot, 'tauri.bundle.conf.json');
+  fs.mkdirSync(sidecarsDir, { recursive: true });
+  fs.mkdirSync(runtimeLibDir, { recursive: true });
+  fs.writeFileSync(path.join(sidecarsDir, `ffmpeg-${target}`), 'ffmpeg');
+  fs.writeFileSync(path.join(sidecarsDir, `sona-cli-${target}`), 'cli');
+  writeRuntimeLibraries(runtimeLibDir, target);
+  writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
+  writeCanonicalAppBundle(root, target);
+
+  const runVerifier = (environment) => spawnSync(
+    node,
+    [
+      path.join(repoRoot, 'platforms', 'desktop', 'scripts', 'verify-tauri-bundle.js'),
+      '--repo-root',
+      root,
+      '--target',
+      target,
+      '--config',
+      configPath,
+    ],
+    { cwd: repoRoot, encoding: 'utf8', env: environment },
+  );
+
+  // CPU-only build: libggml-vulkan.so is not required
+  const cpuResult = runVerifier({ ...process.env });
+  assert.equal(cpuResult.status, 0, cpuResult.stderr || cpuResult.stdout);
+
+  // Vulkan-enabled build with libggml-vulkan.so staged
+  const canonicalAppDir = path.join(
+    root,
+    'target',
+    target,
+    'release',
+    'bundle',
+    'appimage',
+    'Sona.AppDir',
+    'usr',
+    'lib',
+    'sona',
+  );
+  fs.writeFileSync(path.join(canonicalAppDir, 'libggml-vulkan.so'), 'vulkan');
+  fs.writeFileSync(path.join(runtimeLibDir, 'libggml-vulkan.so'), 'vulkan');
+  writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
+  const vulkanResult = runVerifier({ ...process.env, LLAMA_ENABLE_VULKAN: '1' });
+});
+
+test('tauri bundle verification requires ggml-metal for Metal-enabled macOS builds', () => {
+  const target = 'aarch64-apple-darwin';
+  const root = makeTempRepo();
+  const stagingRoot = path.join(root, 'target', 'desktop-bundle', target);
+  const sidecarsDir = path.join(stagingRoot, 'sidecars');
+  const runtimeLibDir = path.join(stagingRoot, 'runtime-libs');
+  const configPath = path.join(stagingRoot, 'tauri.bundle.conf.json');
+  fs.mkdirSync(sidecarsDir, { recursive: true });
+  fs.mkdirSync(runtimeLibDir, { recursive: true });
+  fs.writeFileSync(path.join(sidecarsDir, `ffmpeg-${target}`), 'ffmpeg');
+  fs.writeFileSync(path.join(sidecarsDir, `sona-cli-${target}`), 'cli');
+  writeRuntimeLibraries(runtimeLibDir, target);
+  writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
+  writeCanonicalAppBundle(root, target);
+
+  const runVerifier = (environment) => spawnSync(
+    node,
+    [
+      path.join(repoRoot, 'platforms', 'desktop', 'scripts', 'verify-tauri-bundle.js'),
+      '--repo-root',
+      root,
+      '--target',
+      target,
+      '--config',
+      configPath,
+    ],
+    { cwd: repoRoot, encoding: 'utf8', env: environment },
+  );
+
+  // CPU-only build
+  const cpuResult = runVerifier({ ...process.env });
+  assert.equal(cpuResult.status, 0, cpuResult.stderr || cpuResult.stdout);
+
+  // Metal-enabled build with libggml-metal.dylib staged
+  const frameworksDir = path.join(
+    root,
+    'target',
+    target,
+    'release',
+    'bundle',
+    'macos',
+    'Sona.app',
+    'Contents',
+    'Frameworks',
+  );
+  fs.writeFileSync(path.join(frameworksDir, 'libggml-metal.dylib'), 'metal');
+  fs.writeFileSync(path.join(runtimeLibDir, 'libggml-metal.dylib'), 'metal');
+  writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
+  const metalResult = runVerifier({ ...process.env, LLAMA_ENABLE_METAL: '1' });
+});
