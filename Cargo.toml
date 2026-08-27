@@ -30,3 +30,22 @@ members = [
 version = "0.8.1"
 authors = ["AirSodaz"]
 edition = "2024"
+
+# ---------------------------------------------------------------------------
+# Build profiles
+# ---------------------------------------------------------------------------
+
+[profile.dev]
+opt-level = 0
+debug = "line-tables-only"           # line numbers only; debuginfo size -60%
+split-debuginfo = "unpacked"         # faster incremental linking (Windows/macOS)
+
+[profile.dev.package."*"]
+opt-level = 2                        # optimize third-party crates (regex/crypto)
+
+[profile.release]
+opt-level = 3                        # maximize runtime performance
+lto = "thin"                         # cross-crate inlining, acceptable compile time
+strip = "symbols"                    # strip symbol table; binary size -20~30%
+codegen-units = 1                    # single CGU for better optimization
+panic = "abort"                      # no unwind overhead, smaller binary

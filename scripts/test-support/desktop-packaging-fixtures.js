@@ -180,7 +180,7 @@ function writeTauriWrapperStubs(root) {
   const preparerPath = path.join(root, 'prepare-stub.mjs');
   fs.writeFileSync(
     loggerPath,
-    "import fs from 'node:fs'; const args = process.argv.slice(2); const configPath = args[args.indexOf('--config') + 1]; const config = configPath && fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {}; fs.writeFileSync(process.env.SONA_TAURI_ARGS_LOG, JSON.stringify({ args, cmakeDisableFindPackageOpenSsl: process.env.CMAKE_DISABLE_FIND_PACKAGE_OpenSSL, macosDeploymentTarget: process.env.MACOSX_DEPLOYMENT_TARGET, preparedCmakeDisableFindPackageOpenSsl: config.cmakeDisableFindPackageOpenSsl, preparedMacosDeploymentTarget: config.macosDeploymentTarget, sherpaLibDir: process.env.SHERPA_ONNX_LIB_DIR }));\n",
+    "import fs from 'node:fs'; const args = process.argv.slice(2); const configPath = args[args.indexOf('--config') + 1]; const config = configPath && fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf8')) : {}; fs.writeFileSync(process.env.SONA_TAURI_ARGS_LOG, JSON.stringify({ args, cmakeDisableFindPackageOpenSsl: process.env.CMAKE_DISABLE_FIND_PACKAGE_OpenSSL, macosDeploymentTarget: process.env.MACOSX_DEPLOYMENT_TARGET, preparedCmakeDisableFindPackageOpenSsl: config.cmakeDisableFindPackageOpenSsl, preparedMacosDeploymentTarget: config.macosDeploymentTarget, sherpaLibDir: process.env.SHERPA_ONNX_LIB_DIR, ldLibraryPath: process.env.LD_LIBRARY_PATH }));\n",
   );
   fs.writeFileSync(
     preparerPath,

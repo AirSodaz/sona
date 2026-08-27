@@ -94,10 +94,32 @@ function prepareDesktopBundle(commandArgs) {
     target,
     'tauri.bundle.conf.json',
   );
+  const runtimeLibDir = path.join(
+    repoRoot,
+    'target',
+    'desktop-bundle',
+    target,
+    'runtime-libs',
+  );
+  const releaseDir = readFlagValue(commandArgs, '--target')
+    ? path.join(repoRoot, 'target', target, 'release')
+    : path.join(repoRoot, 'target', 'release');
+  const linuxLdLibraryPath = [
+    runtimeLibDir,
+    releaseDir,
+    process.env.LD_LIBRARY_PATH,
+  ].filter(Boolean).join(':');
+
   const environment = target.includes('apple')
     ? {
         ...preparerEnvironment,
-        SHERPA_ONNX_LIB_DIR: path.join(repoRoot, 'target', 'desktop-bundle', target, 'runtime-libs'),
+        SHERPA_ONNX_LIB_DIR: runtimeLibDir,
+      }
+    : target.includes('linux')
+    ? {
+        ...preparerEnvironment,
+        SHERPA_ONNX_LIB_DIR: runtimeLibDir,
+        LD_LIBRARY_PATH: linuxLdLibraryPath,
       }
     : process.env;
   return {

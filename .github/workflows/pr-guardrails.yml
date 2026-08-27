@@ -63,16 +63,18 @@ jobs:
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config libsoup-3.0-dev javascriptcoregtk-4.1 libjavascriptcoregtk-4.1-dev libnm-dev xdg-utils libasound2-dev llvm-dev libclang-dev clang
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config libsoup-3.0-dev javascriptcoregtk-4.1 libjavascriptcoregtk-4.1-dev libnm-dev xdg-utils libasound2-dev llvm-dev libclang-dev clang mold
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: ". -> target"
-          cache-on-failure: true
+      - name: Configure sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Set sccache environment
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
 
       - name: Enable Corepack
         run: corepack enable
@@ -93,26 +95,18 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Build standalone CLI
-        run: cargo build -p sona-cli --release
+      - name: Run workspace tests (excluding desktop host crate)
+        run: cargo test -p sona-core -p sona-application -p sona-api-server -p sona-archive -p sona-export -p sona-sherpa-onnx -p sona-vad -p sona-punct -p sona-llama-cpp -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-recovery-fs -p sona-runtime-fs -p sona-sqlite -p sona-sync -p sona-sync-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli
 
-      - name: Run core, application, adapters, bindings, and standalone CLI tests
-        run: cargo test -p sona-core -p sona-application -p sona-api-server -p sona-archive -p sona-export -p sona-local-asr -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-recovery-fs -p sona-runtime-fs -p sona-sqlite -p sona-sync -p sona-sync-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli
-
-      - name: Compile Rust tests
+      - name: Compile desktop tests
         run: cargo test --manifest-path platforms/desktop/Cargo.toml --no-run
 
-      - name: Run desktop recovery integration tests
-        run: cargo test -p sona --test recovery_repository
-
-      - name: Run desktop entry tests
-        run: cargo test --manifest-path platforms/desktop/Cargo.toml --test desktop_entry
-
-      - name: Run preset model tests
-        run: cargo test -p sona-core --test preset_models
-
-      - name: Run API server tests
-        run: cargo test --manifest-path platforms/desktop/Cargo.toml --lib app::server::tests
+      - name: Run desktop tests
+        run: |
+          cargo test -p sona --test recovery_repository
+          cargo test --manifest-path platforms/desktop/Cargo.toml --test desktop_entry
+          cargo test -p sona-core --test preset_models
+          cargo test --manifest-path platforms/desktop/Cargo.toml --lib app::server::tests
 
   android-backend:
     name: Android Backend
@@ -127,11 +121,13 @@ jobs:
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: ". -> target"
-          cache-on-failure: true
+      - name: Configure sccache
+        uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Set sccache environment
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
 
       - name: Enable Corepack
         run: corepack enable

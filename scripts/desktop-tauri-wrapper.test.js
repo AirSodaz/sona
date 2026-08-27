@@ -50,6 +50,8 @@ test('tauri wrapper passes generated config to build and bundle while dev preser
   const macTarget = 'aarch64-apple-darwin';
   t.after(() => fs.rmSync(path.join(repoRoot, 'target', 'desktop-bundle', target), { recursive: true, force: true }));
   t.after(() => fs.rmSync(path.join(repoRoot, 'target', 'desktop-bundle', macTarget), { recursive: true, force: true }));
+  const linuxTarget = 'x86_64-unknown-linux-gnu';
+  t.after(() => fs.rmSync(path.join(repoRoot, 'target', 'desktop-bundle', linuxTarget), { recursive: true, force: true }));
   for (const command of ['build', 'bundle']) {
     const invocation = run(command, ['--target', target]);
     assert.deepEqual(invocation.args.slice(0, 3), [command, '--config', generatedConfig]);
@@ -79,6 +81,23 @@ test('tauri wrapper passes generated config to build and bundle while dev preser
   );
   assert.equal(customMacInvocation.macosDeploymentTarget, '12.0');
   assert.equal(customMacInvocation.preparedMacosDeploymentTarget, '12.0');
+  const linuxInvocation = run(
+    'build',
+    ['--target', linuxTarget],
+    { LD_LIBRARY_PATH: '/custom/system/lib' },
+  );
+  assert.equal(
+    linuxInvocation.sherpaLibDir,
+    path.join(repoRoot, 'target', 'desktop-bundle', linuxTarget, 'runtime-libs'),
+  );
+  assert.equal(
+    linuxInvocation.ldLibraryPath,
+    [
+      path.join(repoRoot, 'target', 'desktop-bundle', linuxTarget, 'runtime-libs'),
+      path.join(repoRoot, 'target', linuxTarget, 'release'),
+      '/custom/system/lib',
+    ].join(':'),
+  );
   const tauriConfig = JSON.parse(
     fs.readFileSync(path.join(repoRoot, 'platforms', 'desktop', 'tauri.conf.json'), 'utf8'),
   );
