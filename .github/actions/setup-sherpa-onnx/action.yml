@@ -1,0 +1,91 @@
+name: 'Setup sherpa-onnx shared libraries'
+description: 'Download and cache prebuilt sherpa-onnx shared libraries'
+inputs:
+  version:
+    description: 'sherpa-onnx version'
+    required: false
+    default: '1.13.5'
+  tag:
+    description: 'sherpa-onnx release tag'
+    required: false
+    default: 'v1.13.5'
+  target:
+    description: 'Target triple or args (e.g. to detect aarch64 on Windows)'
+    required: false
+    default: ''
+  cache-key:
+    description: 'Optional explicit cache key'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache sherpa-onnx shared libraries
+      id: cache-sherpa
+      uses: actions/cache@v4
+      with:
+        path: sherpa-onnx-v${{ inputs.version }}-*
+        key: ${{ inputs.cache-key != '' && inputs.cache-key || format('sherpa-onnx-{0}-{1}-{2}', inputs.version, runner.os, runner.arch) }}
+
+    - name: Download and extract sherpa-onnx (Linux)
+      if: runner.os == 'Linux' && steps.cache-sherpa.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        archive="sherpa-onnx-v${{ inputs.version }}-linux-x64-shared-lib.tar.bz2"
+        wget -q "https://github.com/k2-fsa/sherpa-onnx/releases/download/${{ inputs.tag }}/${archive}"
+        tar -xjf "${archive}"
+        rm -f "${archive}"
+
+    - name: Download and extract sherpa-onnx (macOS)
+      if: runner.os == 'macOS' && steps.cache-sherpa.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        archive="sherpa-onnx-v${{ inputs.version }}-osx-universal2-shared-lib.tar.bz2"
+        wget -q "https://github.com/k2-fsa/sherpa-onnx/releases/download/${{ inputs.tag }}/${archive}"
+        tar -xjf "${archive}"
+        rm -f "${archive}"
+
+    - name: Download and extract sherpa-onnx (Windows x64)
+      if: runner.os == 'Windows' && !contains(inputs.target, 'aarch64-pc-windows-msvc') && steps.cache-sherpa.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        $ProgressPreference = 'SilentlyContinue'
+        $archive = "sherpa-onnx-v${{ inputs.version }}-win-x64-shared-MT-Release-lib.tar.bz2"
+        curl.exe -sSfL --retry 5 --retry-connrefused --connect-timeout 30 "https://github.com/k2-fsa/sherpa-onnx/releases/download/${{ inputs.tag }}/$archive" -o "sherpa-onnx-win.tar.bz2"
+        tar -xjf sherpa-onnx-win.tar.bz2
+        Remove-Item -Force "sherpa-onnx-win.tar.bz2"
+
+    - name: Download and extract sherpa-onnx (Windows ARM64)
+      if: runner.os == 'Windows' && contains(inputs.target, 'aarch64-pc-windows-msvc') && steps.cache-sherpa.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        $ProgressPreference = 'SilentlyContinue'
+        $archive = "sherpa-onnx-v${{ inputs.version }}-win-arm64-shared-MT-Release-lib.tar.bz2"
+        curl.exe -sSfL --retry 5 --retry-connrefused --connect-timeout 30 "https://github.com/k2-fsa/sherpa-onnx/releases/download/${{ inputs.tag }}/$archive" -o "sherpa-onnx-win.tar.bz2"
+        tar -xjf sherpa-onnx-win.tar.bz2
+        Remove-Item -Force "sherpa-onnx-win.tar.bz2"
+
+    - name: Set sherpa-onnx library directory (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        if [ "${{ runner.os }}" = "Linux" ]; then
+          LIB_DIR="${GITHUB_WORKSPACE}/sherpa-onnx-v${{ inputs.version }}-linux-x64-shared-lib/lib"
+        else
+          LIB_DIR="${GITHUB_WORKSPACE}/sherpa-onnx-v${{ inputs.version }}-osx-universal2-shared-lib/lib"
+        fi
+        echo "SHERPA_ONNX_LIB_DIR=${LIB_DIR}" >> "$GITHUB_ENV"
+        echo "RUSTFLAGS=-L native=${LIB_DIR}" >> "$GITHUB_ENV"
+
+    - name: Set sherpa-onnx library directory (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $folder = if ("${{ inputs.target }}".Contains("aarch64-pc-windows-msvc")) {
+          "sherpa-onnx-v${{ inputs.version }}-win-arm64-shared-MT-Release-lib\lib"
+        } else {
+          "sherpa-onnx-v${{ inputs.version }}-win-x64-shared-MT-Release-lib\lib"
+        }
+        $libDir = Join-Path $env:GITHUB_WORKSPACE $folder
+        "SHERPA_ONNX_LIB_DIR=$libDir" >> $env:GITHUB_ENV

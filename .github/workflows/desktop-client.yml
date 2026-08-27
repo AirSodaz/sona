@@ -56,37 +56,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Install Vulkan SDK (Windows x64 Vulkan build)
-        if: startsWith(matrix.platform, 'windows') && contains(matrix.args, 'llama-vulkan')
-        shell: pwsh
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          $version = "1.3.296.0"
-          $vulkanDir = "C:\VulkanSDK\$version"
-          curl.exe -sSfL --retry 5 --retry-connrefused --connect-timeout 30 "https://sdk.lunarg.com/sdk/download/$version/windows/VulkanSDK-$version-Installer.exe" -o "VulkanSDK-Installer.exe"
-          $process = Start-Process -FilePath ".\VulkanSDK-Installer.exe" -ArgumentList "--root", $vulkanDir, "--accept-licenses", "--default-answer", "--confirm-command", "install" -Wait -PassThru
-          if ($process.ExitCode -ne 0) { throw "Vulkan SDK installer failed with exit code $($process.ExitCode)" }
-          Remove-Item -Force "VulkanSDK-Installer.exe"
-          New-Item -ItemType Directory -Force -Path "$vulkanDir\Lib\cmake\SPIRV-Headers" | Out-Null
-          Copy-Item "$vulkanDir\Lib\cmake\SPIRV-Headers*.cmake" "$vulkanDir\Lib\cmake\SPIRV-Headers\"
-          New-Item -ItemType Directory -Force -Path "$vulkanDir\share\cmake\SPIRV-Headers" | Out-Null
-          Copy-Item "$vulkanDir\Lib\cmake\SPIRV-Headers*.cmake" "$vulkanDir\share\cmake\SPIRV-Headers\"
-          "VULKAN_SDK=$vulkanDir" >> $env:GITHUB_ENV
-          "SPIRV-Headers_DIR=$vulkanDir\Lib\cmake" >> $env:GITHUB_ENV
-          "CMAKE_PREFIX_PATH=$vulkanDir;$vulkanDir\Lib\cmake" >> $env:GITHUB_ENV
-          "$vulkanDir\Bin" >> $env:GITHUB_PATH
-
-      - name: Install Vulkan SDK (Linux x64 Vulkan build)
-        if: startsWith(matrix.platform, 'ubuntu') && contains(matrix.args, 'llama-vulkan')
-        run: |
-          VERSION="1.3.296.0"
-          VULKAN_DIR="${HOME}/vulkan/${VERSION}/x86_64"
-          mkdir -p "${HOME}/vulkan"
-          wget -q "https://sdk.lunarg.com/sdk/download/${VERSION}/linux/vulkansdk-linux-x86_64-${VERSION}.tar.xz" -O vulkansdk-linux.tar.xz
-          tar -xf vulkansdk-linux.tar.xz -C "${HOME}/vulkan"
-          rm -f vulkansdk-linux.tar.xz
-          echo "VULKAN_SDK=${VULKAN_DIR}" >> $GITHUB_ENV
-          echo "${VULKAN_DIR}/bin" >> $GITHUB_PATH
+      - name: Install Vulkan SDK
+        if: contains(matrix.args, 'llama-vulkan')
+        uses: ./.github/actions/setup-vulkan-sdk
 
       - name: Install dependencies (Linux)
         if: startsWith(matrix.platform, 'ubuntu')
@@ -95,131 +67,33 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config libsoup-3.0-dev javascriptcoregtk-4.1 libjavascriptcoregtk-4.1-dev libnm-dev xdg-utils libasound2-dev llvm-dev libclang-dev clang libvulkan-dev libfuse2 zsync
           echo "CC=clang" >> $GITHUB_ENV
           echo "CXX=clang++" >> $GITHUB_ENV
+
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || (contains(matrix.args, 'aarch64-pc-windows-msvc') && 'aarch64-pc-windows-msvc' || (contains(matrix.args, 'aarch64') && 'aarch64-unknown-linux-gnu' || '')) }}
 
-      - name: Configure sccache
-        uses: mozilla-actions/sccache-action@v0.0.11
+      - name: Setup sccache
+        uses: ./.github/actions/setup-sccache
 
-      - name: Set sccache environment
-        shell: bash
-        run: |
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
-
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Node.js setup
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: "pnpm"
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Node.js and dependencies
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Patch channel version & identifiers
         if: inputs.channel != ''
         run: node platforms/desktop/scripts/patch-channel.js --channel "${{ inputs.channel }}" --version "${{ inputs.version_name }}"
 
-      - name: Cache sherpa-onnx shared libraries
-        id: cache-sherpa
-        uses: actions/cache@v4
+      - name: Setup sherpa-onnx libraries
+        uses: ./.github/actions/setup-sherpa-onnx
         with:
-          path: sherpa-onnx-v${{ env.SHERPA_ONNX_VERSION }}-*
-          key: sherpa-onnx-${{ env.SHERPA_ONNX_VERSION }}-${{ runner.os }}-${{ runner.arch }}-${{ strategy.job-index }}
-
-      - name: Download and extract sherpa-onnx shared libraries (Linux)
-        if: startsWith(matrix.platform, 'ubuntu') && steps.cache-sherpa.outputs.cache-hit != 'true'
-        run: |
-          wget -q https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_ONNX_TAG}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared-lib.tar.bz2
-          tar -xjf sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared-lib.tar.bz2
-          rm -f sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared-lib.tar.bz2
-
-      - name: Set sherpa-onnx lib dir (Linux)
-        if: startsWith(matrix.platform, 'ubuntu')
-        run: echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared-lib/lib" >> $GITHUB_ENV
-
-
-      - name: Download and extract sherpa-onnx shared libraries (macOS)
-        if: startsWith(matrix.platform, 'macos') && steps.cache-sherpa.outputs.cache-hit != 'true'
-        run: |
-          wget -q https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_ONNX_TAG}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared-lib.tar.bz2
-          tar -xjf sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared-lib.tar.bz2
-          rm -f sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared-lib.tar.bz2
-
-      - name: Set sherpa-onnx lib dir (macOS)
-        if: startsWith(matrix.platform, 'macos')
-        run: echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared-lib/lib" >> $GITHUB_ENV
-
-
-      - name: Download and extract sherpa-onnx shared libraries (Windows x64)
-        if: startsWith(matrix.platform, 'windows') && !contains(matrix.args, 'aarch64-pc-windows-msvc') && steps.cache-sherpa.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          curl.exe -sSfL --retry 5 --retry-connrefused --connect-timeout 30 "https://github.com/k2-fsa/sherpa-onnx/releases/download/$env:SHERPA_ONNX_TAG/sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-x64-shared-MT-Release-lib.tar.bz2" -o "sherpa-onnx-win.tar.bz2"
-          tar -xjf sherpa-onnx-win.tar.bz2
-          Remove-Item -Force "sherpa-onnx-win.tar.bz2"
-
-      - name: Set sherpa-onnx lib dir (Windows x64)
-        if: startsWith(matrix.platform, 'windows') && !contains(matrix.args, 'aarch64-pc-windows-msvc')
-        shell: pwsh
-        run: |
-          $libDir = Join-Path $env:GITHUB_WORKSPACE "sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-x64-shared-MT-Release-lib\lib"
-          "SHERPA_ONNX_LIB_DIR=$libDir" >> $env:GITHUB_ENV
-
-
-      - name: Download and extract sherpa-onnx shared libraries (Windows ARM64)
-        if: startsWith(matrix.platform, 'windows') && contains(matrix.args, 'aarch64-pc-windows-msvc') && steps.cache-sherpa.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
-          curl.exe -sSfL --retry 5 --retry-connrefused --connect-timeout 30 "https://github.com/k2-fsa/sherpa-onnx/releases/download/$env:SHERPA_ONNX_TAG/sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-arm64-shared-MT-Release-lib.tar.bz2" -o "sherpa-onnx-win.tar.bz2"
-          tar -xjf sherpa-onnx-win.tar.bz2
-          Remove-Item -Force "sherpa-onnx-win.tar.bz2"
-
-      - name: Set sherpa-onnx lib dir (Windows ARM64)
-        if: startsWith(matrix.platform, 'windows') && contains(matrix.args, 'aarch64-pc-windows-msvc')
-        shell: pwsh
-        run: |
-          $libDir = Join-Path $env:GITHUB_WORKSPACE "sherpa-onnx-v$env:SHERPA_ONNX_VERSION-win-arm64-shared-MT-Release-lib\lib"
-          "SHERPA_ONNX_LIB_DIR=$libDir" >> $env:GITHUB_ENV
-
-      - name: Configure RUSTFLAGS
-        if: startsWith(matrix.platform, 'ubuntu') || startsWith(matrix.platform, 'macos')
-        run: |
-          echo "RUSTFLAGS=-L native=$SHERPA_ONNX_LIB_DIR" >> $GITHUB_ENV
+          version: ${{ env.SHERPA_ONNX_VERSION }}
+          tag: ${{ env.SHERPA_ONNX_TAG }}
+          target: ${{ matrix.args }}
+          cache-key: sherpa-onnx-${{ env.SHERPA_ONNX_VERSION }}-${{ runner.os }}-${{ runner.arch }}-${{ strategy.job-index }}
 
       - name: Configure Windows build environment
         if: startsWith(matrix.platform, 'windows')
-        shell: pwsh
-        run: |
-          Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -ErrorAction SilentlyContinue
-          "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
-          "CMAKE_OBJECT_PATH_MAX=1024" >> $env:GITHUB_ENV
-          "CC=clang-cl" >> $env:GITHUB_ENV
-          "CXX=clang-cl" >> $env:GITHUB_ENV
-          "CXXFLAGS=/EHsc" >> $env:GITHUB_ENV
-          "CC_aarch64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
-          "CXX_aarch64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
-          "CXXFLAGS_aarch64_pc_windows_msvc=/EHsc" >> $env:GITHUB_ENV
-          "CC_x86_64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
-          "CXX_x86_64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
-          "CXXFLAGS_x86_64_pc_windows_msvc=/EHsc" >> $env:GITHUB_ENV
-          New-Item -ItemType Directory -Force -Path "C:\t" | Out-Null
-          if (Test-Path "target") { Remove-Item -Recurse -Force "target" }
-          cmd.exe /c "mklink /J target C:\t"
-          subst T: C:\t
-          "CARGO_TARGET_DIR=T:\" >> $env:GITHUB_ENV
-          clang-cl --version
-          ninja --version
+        uses: ./.github/actions/setup-windows-build-env
 
       - name: Cache llama.cpp CMake build directory
         id: cache-llama-cpp

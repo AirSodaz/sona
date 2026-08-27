@@ -1,0 +1,16 @@
+name: 'Setup sccache'
+description: 'Configure sccache with GitHub Actions cache backend for Rust and C/C++'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Configure sccache binary
+      uses: mozilla-actions/sccache-action@v0.0.11
+
+    - name: Set sccache environment
+      shell: bash
+      run: |
+        echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+        echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+        echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
+        echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"

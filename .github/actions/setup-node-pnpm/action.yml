@@ -1,0 +1,30 @@
+name: 'Setup Node.js and pnpm'
+description: 'Enable Corepack, setup Node.js with pnpm cache, and optionally install dependencies'
+inputs:
+  node-version:
+    description: 'Node.js version'
+    required: false
+    default: '24'
+  install:
+    description: 'Whether to run pnpm install --frozen-lockfile'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Enable Corepack
+      shell: bash
+      run: corepack enable
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'pnpm'
+        cache-dependency-path: pnpm-lock.yaml
+
+    - name: Install frontend dependencies
+      if: inputs.install == 'true'
+      shell: bash
+      run: pnpm install --frozen-lockfile

@@ -61,14 +61,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Node.js setup
-        uses: actions/setup-node@v6
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node-pnpm
         with:
-          node-version: 24
-
+          install: 'false'
       - name: Java setup
         uses: actions/setup-java@v5
         with:
@@ -87,24 +83,16 @@ jobs:
         with:
           targets: aarch64-linux-android,x86_64-linux-android
 
-      - name: Configure sccache
-        uses: mozilla-actions/sccache-action@v0.0.11
-
-      - name: Set sccache environment
-        run: |
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
+      - name: Setup sccache
+        uses: ./.github/actions/setup-sccache
       - name: Configure Android NDK
         run: echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
 
       - name: Prepare host sherpa-onnx shared libraries
-        run: |
-          archive="sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared-lib.tar.bz2"
-          wget "https://github.com/k2-fsa/sherpa-onnx/releases/download/${SHERPA_ONNX_TAG}/${archive}"
-          tar -xjf "${archive}"
-          echo "SHERPA_ONNX_LIB_DIR=${GITHUB_WORKSPACE}/${archive%.tar.bz2}/lib" >> "$GITHUB_ENV"
+        uses: ./.github/actions/setup-sherpa-onnx
+        with:
+          version: ${{ env.SHERPA_ONNX_VERSION }}
+          tag: ${{ env.SHERPA_ONNX_TAG }}
 
       - name: Build and verify Android client
         env:

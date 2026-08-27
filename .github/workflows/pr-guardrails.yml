@@ -25,18 +25,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Node.js setup
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: "pnpm"
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Node.js and dependencies
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Run lint
         run: pnpm run lint:ci
@@ -68,29 +58,11 @@ jobs:
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Configure sccache
-        uses: mozilla-actions/sccache-action@v0.0.11
+      - name: Setup sccache
+        uses: ./.github/actions/setup-sccache
 
-      - name: Set sccache environment
-        run: |
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
-          echo "CC=clang" >> $GITHUB_ENV
-          echo "CXX=clang++" >> $GITHUB_ENV
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Node.js setup
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: "pnpm"
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Setup Node.js and dependencies
+        uses: ./.github/actions/setup-node-pnpm
 
       - name: Check Rust formatting
         run: cargo fmt --all -- --check
@@ -138,25 +110,11 @@ jobs:
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Configure sccache
-        uses: mozilla-actions/sccache-action@v0.0.11
+      - name: Setup sccache
+        uses: ./.github/actions/setup-sccache
 
-      - name: Set sccache environment
-        run: |
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-          echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
-          echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Node.js setup
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: "pnpm"
-          cache-dependency-path: pnpm-lock.yaml
-
+      - name: Setup Node.js and dependencies
+        uses: ./.github/actions/setup-node-pnpm
       - name: Java setup
         uses: actions/setup-java@v5
         with:
@@ -175,9 +133,6 @@ jobs:
 
       - name: Configure Android NDK
         run: echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/29.0.14206865" >> "$GITHUB_ENV"
-
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Run Android UniFFI Gradle smoke
         env:

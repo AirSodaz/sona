@@ -1,0 +1,29 @@
+name: 'Setup Windows build environment'
+description: 'Configure long paths, Ninja, Clang-cl, and short target directory junction on Windows'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Configure Windows build environment
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -ErrorAction SilentlyContinue
+        "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
+        "CMAKE_OBJECT_PATH_MAX=1024" >> $env:GITHUB_ENV
+        "CC=clang-cl" >> $env:GITHUB_ENV
+        "CXX=clang-cl" >> $env:GITHUB_ENV
+        "CXXFLAGS=/EHsc" >> $env:GITHUB_ENV
+        "CC_aarch64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
+        "CXX_aarch64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
+        "CXXFLAGS_aarch64_pc_windows_msvc=/EHsc" >> $env:GITHUB_ENV
+        "CC_x86_64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
+        "CXX_x86_64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
+        "CXXFLAGS_x86_64_pc_windows_msvc=/EHsc" >> $env:GITHUB_ENV
+        New-Item -ItemType Directory -Force -Path "C:\t" | Out-Null
+        if (Test-Path "target") { Remove-Item -Recurse -Force "target" }
+        cmd.exe /c "mklink /J target C:\t"
+        subst T: C:\t
+        "CARGO_TARGET_DIR=T:\" >> $env:GITHUB_ENV
+        clang-cl --version
+        ninja --version
