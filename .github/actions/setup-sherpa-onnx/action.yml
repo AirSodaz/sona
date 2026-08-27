@@ -23,7 +23,7 @@ runs:
   steps:
     - name: Cache sherpa-onnx shared libraries
       id: cache-sherpa
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: sherpa-onnx-v${{ inputs.version }}-*
         key: ${{ inputs.cache-key != '' && inputs.cache-key || format('sherpa-onnx-{0}-{1}-{2}', inputs.version, runner.os, runner.arch) }}
