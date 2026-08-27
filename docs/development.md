@@ -9,7 +9,7 @@ This guide covers local setup, development, testing, and source builds. See the 
 - Node.js 20 or later
 - Corepack with the repository-pinned pnpm version
 - The stable Rust toolchain
-- CMake and a C/C++ compiler for the llama.cpp local ASR adapter. Desktop and CLI builds dynamically link its generated ggml and llama libraries; release bundles stage those libraries beside the host runtime. Build llama.cpp from a recent master — the Granite Speech GGUF requires b9045 or newer (verified against b10615); older local builds silently degrade Granite transcription quality.
+- CMake and a C/C++ compiler for the llama.cpp local ASR adapter (the Clang toolchain is recommended, e.g. `clang`/`clang++` on Linux and `clang-cl` + Ninja on Windows). Desktop and CLI builds dynamically link its generated ggml and llama libraries; release bundles stage those libraries beside the host runtime. Build llama.cpp from a recent master — the Granite Speech GGUF requires b9045 or newer (verified against b10615); older local builds silently degrade Granite transcription quality.
 - Optional (GPU builds): for Windows/Linux Vulkan builds, the LunarG Vulkan SDK (providing `glslc` and `SPIRV-Headers`); for macOS, the built-in Metal framework from Xcode Command Line Tools is used automatically. Local development builds stay CPU-only by default; bundled release builds enable `llama-vulkan` on Windows x64 and Linux (env `LLAMA_ENABLE_VULKAN=1`) and `llama-metal` on macOS (env `LLAMA_ENABLE_METAL=1`).
 - The platform dependencies required by Tauri
 
@@ -19,6 +19,9 @@ On Ubuntu or Debian, install the desktop system dependencies with:
 sudo apt-get update
 sudo apt-get install libwebkit2gtk-4.1-dev \
     build-essential \
+    clang \
+    llvm-dev \
+    libclang-dev \
     cmake \
     curl \
     wget \
@@ -28,7 +31,6 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
     libayatana-appindicator3-dev \
     librsvg2-dev \
     libasound2-dev
-```
 
 ## Install
 

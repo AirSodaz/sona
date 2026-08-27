@@ -93,6 +93,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf pkg-config libsoup-3.0-dev javascriptcoregtk-4.1 libjavascriptcoregtk-4.1-dev libnm-dev xdg-utils libasound2-dev llvm-dev libclang-dev clang libvulkan-dev libfuse2 zsync
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -106,6 +108,8 @@ jobs:
         run: |
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+          echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> $GITHUB_ENV
 
       - name: Enable Corepack
         run: corepack enable
@@ -200,18 +204,33 @@ jobs:
           Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -ErrorAction SilentlyContinue
           "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
           "CMAKE_OBJECT_PATH_MAX=1024" >> $env:GITHUB_ENV
+          "CC=clang-cl" >> $env:GITHUB_ENV
+          "CXX=clang-cl" >> $env:GITHUB_ENV
+          "CXXFLAGS=/EHsc" >> $env:GITHUB_ENV
+          "CC_aarch64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
+          "CXX_aarch64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
+          "CXXFLAGS_aarch64_pc_windows_msvc=/EHsc" >> $env:GITHUB_ENV
+          "CC_x86_64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
+          "CXX_x86_64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
+          "CXXFLAGS_x86_64_pc_windows_msvc=/EHsc" >> $env:GITHUB_ENV
           New-Item -ItemType Directory -Force -Path "C:\t" | Out-Null
           if (Test-Path "target") { Remove-Item -Recurse -Force "target" }
           cmd.exe /c "mklink /J target C:\t"
           subst T: C:\t
           "CARGO_TARGET_DIR=T:\" >> $env:GITHUB_ENV
-          if ("${{ matrix.args }}".Contains("aarch64-pc-windows-msvc")) {
-            "CC_aarch64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
-            "CXX_aarch64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
-            "CXXFLAGS_aarch64_pc_windows_msvc=/EHsc" >> $env:GITHUB_ENV
-            clang-cl --version
-          }
+          clang-cl --version
           ninja --version
+
+      - name: Cache llama.cpp CMake build directory
+        id: cache-llama-cpp
+        uses: actions/cache@v4
+        with:
+          path: |
+            target/**/build/llama-cpp-sys-*
+          key: llama-cpp-${{ matrix.platform }}-${{ strategy.job-index }}-${{ hashFiles('Cargo.lock') }}-${{ contains(matrix.args, 'llama-vulkan') && 'vulkan' || (contains(matrix.args, 'llama-metal') && 'metal' || 'cpu') }}
+          restore-keys: |
+            llama-cpp-${{ matrix.platform }}-${{ strategy.job-index }}-${{ hashFiles('Cargo.lock') }}-
+            llama-cpp-${{ matrix.platform }}-${{ strategy.job-index }}-
       - name: Build the app
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -266,3 +285,8 @@ jobs:
             target/**/release/bundle/nsis/*.sig
             target/**/release/bundle/rpm/*.sig
           if-no-files-found: warn
+
+      - name: Show sccache statistics
+        if: always()
+        shell: bash
+        run: sccache --show-stats
