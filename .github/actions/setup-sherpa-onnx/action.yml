@@ -76,7 +76,6 @@ runs:
           LIB_DIR="${GITHUB_WORKSPACE}/sherpa-onnx-v${{ inputs.version }}-osx-universal2-shared-lib/lib"
         fi
         echo "SHERPA_ONNX_LIB_DIR=${LIB_DIR}" >> "$GITHUB_ENV"
-        echo "RUSTFLAGS=-L native=${LIB_DIR}" >> "$GITHUB_ENV"
 
     - name: Set sherpa-onnx library directory (Windows)
       if: runner.os == 'Windows'

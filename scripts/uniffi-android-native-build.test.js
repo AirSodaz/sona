@@ -13,6 +13,8 @@ import {
   runAndroidNdkPrint,
 } from './test-support/android-ndk-fixtures.js';
 
+import { sanitizeRustflagsForAndroid } from './build-uniffi-android-libs.js';
+
 test('UniFFI Android native build script supports a no-toolchain dry run', () => {
   const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-uniffi-android-dry-run-'));
   const targetDir = path.join(fixtureRoot, 'target');
@@ -187,4 +189,15 @@ test('UniFFI Android native build script rejects host overrides outside print mo
 
   assert.notEqual(result.status, 0, output);
   assert.match(output, /--host-platform is only supported with --print-linker-env/u);
+});
+
+test('sanitizeRustflagsForAndroid strips host search paths and preserves safe flags', () => {
+  assert.equal(sanitizeRustflagsForAndroid(undefined), undefined);
+  assert.equal(sanitizeRustflagsForAndroid(''), undefined);
+  assert.equal(sanitizeRustflagsForAndroid('-L native=/some/host/sherpa/lib'), undefined);
+  assert.equal(sanitizeRustflagsForAndroid('-L /some/host/sherpa/lib'), undefined);
+  assert.equal(
+    sanitizeRustflagsForAndroid('-C target-cpu=generic -L native=/some/host/lib -C link-arg=-s'),
+    '-C target-cpu=generic -C link-arg=-s',
+  );
 });

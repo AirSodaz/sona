@@ -163,6 +163,14 @@ function toolchainEnvForTarget(target, minSdk, hostPlatform) {
   };
 }
 
+export function sanitizeRustflagsForAndroid(flags) {
+  if (!flags) return undefined;
+  const cleaned = flags
+    .replace(/(?:^|\s+)-L\s*(?:native=)?[^\s]+/gu, '')
+    .trim();
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
 function runCargoBuild(target, profile, minSdk, sherpaLibDir, targetDir) {
   const releaseFlag = profile === 'release' ? ['--release'] : [];
   const cargo = process.env.CARGO ?? 'cargo';
@@ -171,6 +179,12 @@ function runCargoBuild(target, profile, minSdk, sherpaLibDir, targetDir) {
     ...toolchainEnvForTarget(target, minSdk, process.platform),
     SHERPA_ONNX_LIB_DIR: sherpaLibDir,
   };
+  const sanitizedRustflags = sanitizeRustflagsForAndroid(process.env.RUSTFLAGS);
+  if (sanitizedRustflags !== undefined) {
+    env.RUSTFLAGS = sanitizedRustflags;
+  } else {
+    delete env.RUSTFLAGS;
+  }
   const result = spawnSync(cargo, [
     'build',
     '-p',
@@ -219,56 +233,64 @@ function prepareOutputDirectory(outDir) {
   fs.mkdirSync(outDir, { recursive: true });
 }
 
-const profile = readOption('--profile', 'release');
-const minSdk = readOption('--min-sdk', process.env.SONA_ANDROID_MIN_SDK ?? '23');
-const targetDir = path.resolve(
-  readOption('--target-dir', process.env.CARGO_TARGET_DIR ?? path.join(repoRoot, 'target')),
-);
-const outDir = path.resolve(
-  readOption('--out-dir', path.join(repoRoot, 'platforms', 'android', 'generated', 'jniLibs', 'main')),
-);
-const dryRun = args.includes('--dry-run');
-const printLinkerEnv = args.includes('--print-linker-env');
-const hostPlatformOverride = readOption('--host-platform', null);
+export async function main() {
+  const profile = readOption('--profile', 'release');
+  const minSdk = readOption('--min-sdk', process.env.SONA_ANDROID_MIN_SDK ?? '23');
+  const targetDir = path.resolve(
+    readOption('--target-dir', process.env.CARGO_TARGET_DIR ?? path.join(repoRoot, 'target')),
+  );
+  const outDir = path.resolve(
+    readOption('--out-dir', path.join(repoRoot, 'platforms', 'android', 'generated', 'jniLibs', 'main')),
+  );
+  const dryRun = args.includes('--dry-run');
+  const printLinkerEnv = args.includes('--print-linker-env');
+  const hostPlatformOverride = readOption('--host-platform', null);
 
-if (hostPlatformOverride && !printLinkerEnv) {
-  throw new Error('--host-platform is only supported with --print-linker-env');
-}
-const printHostPlatform = hostPlatformOverride ?? process.platform;
-const abis = selectedAbis();
-const preparedSherpaRuntime = (!dryRun && !printLinkerEnv)
-  ? await prepareAndroidSherpaRuntime({
-    source: sherpaSource,
-    cacheRoot: path.join(targetDir, 'android-sherpa'),
-    selectedAbis: abis,
-    archiveOverride: process.env.SONA_SHERPA_ONNX_ANDROID_ARCHIVE,
-  })
-  : null;
+  if (hostPlatformOverride && !printLinkerEnv) {
+    throw new Error('--host-platform is only supported with --print-linker-env');
+  }
+  const printHostPlatform = hostPlatformOverride ?? process.platform;
+  const abis = selectedAbis();
+  const preparedSherpaRuntime = (!dryRun && !printLinkerEnv)
+    ? await prepareAndroidSherpaRuntime({
+      source: sherpaSource,
+      cacheRoot: path.join(targetDir, 'android-sherpa'),
+      selectedAbis: abis,
+      archiveOverride: process.env.SONA_SHERPA_ONNX_ANDROID_ARCHIVE,
+    })
+    : null;
 
-if (!dryRun && !printLinkerEnv) {
-  prepareOutputDirectory(outDir);
-}
+  if (!dryRun && !printLinkerEnv) {
+    prepareOutputDirectory(outDir);
+  }
 
-for (const abi of abis) {
-  const target = ABI_TARGETS[abi];
-  if (printLinkerEnv) {
-    console.error(formatAndroidBuildPlan(abi, target));
-    const toolchainEnv = toolchainEnvForTarget(target, minSdk, printHostPlatform);
-    for (const [name, value] of Object.entries(toolchainEnv)) {
-      console.log(`${name}=${value}`);
+  for (const abi of abis) {
+    const target = ABI_TARGETS[abi];
+    if (printLinkerEnv) {
+      console.error(formatAndroidBuildPlan(abi, target));
+      const toolchainEnv = toolchainEnvForTarget(target, minSdk, printHostPlatform);
+      for (const [name, value] of Object.entries(toolchainEnv)) {
+        console.log(`${name}=${value}`);
+      }
+      continue;
     }
-    continue;
+    if (dryRun) {
+      console.log(formatAndroidBuildPlan(abi, target));
+      continue;
+    }
+    const sherpaLibDir = path.join(preparedSherpaRuntime.rootDir, 'jniLibs', abi);
+    runCargoBuild(target, profile, minSdk, sherpaLibDir, targetDir);
+    copyAndroidLibrary(targetDir, target, profile, abi, outDir);
+    stageAndroidSherpaRuntime(preparedSherpaRuntime, abi, outDir);
   }
-  if (dryRun) {
-    console.log(formatAndroidBuildPlan(abi, target));
-    continue;
+
+  if (!printLinkerEnv) {
+    console.log(`${dryRun ? 'Planned' : 'Staged'} Sona UniFFI Android JNI libraries in ${outDir}`);
   }
-  const sherpaLibDir = path.join(preparedSherpaRuntime.rootDir, 'jniLibs', abi);
-  runCargoBuild(target, profile, minSdk, sherpaLibDir, targetDir);
-  copyAndroidLibrary(targetDir, target, profile, abi, outDir);
-  stageAndroidSherpaRuntime(preparedSherpaRuntime, abi, outDir);
 }
 
-if (!printLinkerEnv) {
-  console.log(`${dryRun ? 'Planned' : 'Staged'} Sona UniFFI Android JNI libraries in ${outDir}`);
+const isDirectExecution = process.argv[1]
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isDirectExecution) {
+  await main();
 }
