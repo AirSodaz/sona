@@ -232,7 +232,7 @@ function buildLlamaCppGgmlCuda({
   ];
 
   if (platform === 'win32') {
-    cmakeConfigArgs.push('-G', 'Ninja');
+    cmakeConfigArgs.push('-G', 'Ninja', '-DCMAKE_CUDA_FLAGS=--allow-unsupported-compiler');
   }
 
   const configRes = spawnSync('cmake', cmakeConfigArgs, { stdio: 'inherit' });
@@ -268,11 +268,11 @@ function stageCudaAddonFiles({
 
   const copiedFiles = [];
 
-  // 1. Copy ONNX Runtime GPU provider libraries
+  // 1. Copy sherpa-onnx and ONNX Runtime GPU libraries
   if (ortLibDir && fs.existsSync(ortLibDir)) {
     const ortEntries = fs.readdirSync(ortLibDir);
     for (const file of ortEntries) {
-      if (/onnxruntime_providers_(?:cuda|shared)/iu.test(file)) {
+      if (/\.(?:dll|so(?:\.\d+)*)$/iu.test(file)) {
         const src = path.join(ortLibDir, file);
         const dest = path.join(stagedDir, file);
         fs.copyFileSync(src, dest);

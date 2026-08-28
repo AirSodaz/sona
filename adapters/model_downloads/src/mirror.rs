@@ -52,7 +52,10 @@ fn host_of(url: &str) -> &str {
 }
 
 fn is_host_or_subdomain(host: &str, domain: &str) -> bool {
-    host == domain || host.strip_suffix(domain).is_some_and(|prefix| prefix.ends_with('.'))
+    host == domain
+        || host
+            .strip_suffix(domain)
+            .is_some_and(|prefix| prefix.ends_with('.'))
 }
 
 /// Classifies a download URL by its host family.

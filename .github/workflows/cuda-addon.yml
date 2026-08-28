@@ -27,9 +27,9 @@ on:
         default: "b4500"
         type: string
       publish_release:
-        description: "Publish to GitHub Releases"
+        description: "Publish to GitHub Releases (only tag pushes publish automatically)"
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -48,10 +48,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
-
+          node-version: 24
       - name: Resolve Addon Version
         id: resolve
         run: |
@@ -62,18 +61,22 @@ jobs:
             echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
             echo "should_publish=true" >> "$GITHUB_OUTPUT"
           else
-            VERSION="${{ inputs.addon_version }}"
+            VERSION="${{ inputs.addon_version || '0.1.0' }}"
             node scripts/cuda-addon-manifest.js validate-tag --tag "cuda-addon-v${VERSION}" --version "$VERSION"
             echo "addon_version=$VERSION" >> "$GITHUB_OUTPUT"
             echo "release_tag=cuda-addon-v${VERSION}" >> "$GITHUB_OUTPUT"
-            echo "should_publish=${{ inputs.publish_release }}" >> "$GITHUB_OUTPUT"
+            SHOULD_PUB="${{ inputs.publish_release }}"
+            if [[ "$SHOULD_PUB" == "true" ]]; then
+              echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
   build-windows-cuda:
     name: Build CUDA Addon (Windows x64)
     needs: prepare-version
     runs-on: windows-latest
-    timeout-minutes: 90
     env:
       ADDON_VERSION: ${{ needs.prepare-version.outputs.addon_version }}
       CUDA_VERSION: ${{ inputs.cuda_version || '12.4.1' }}
@@ -97,17 +100,17 @@ jobs:
 
       - name: Set up MSVC Developer Command Prompt
         uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Download and Extract ONNX Runtime GPU (Windows)
+        with:
+          vsversion: "2022"
+      - name: Download and Extract sherpa-onnx CUDA Prebuilt (Windows)
         shell: pwsh
         run: |
-          $ortVer = "${{ env.ORT_VERSION }}"
-          $url = "https://github.com/microsoft/onnxruntime/releases/download/v${ortVer}/onnxruntime-win-x64-gpu-${ortVer}.zip"
-          Write-Host "Downloading ONNX Runtime GPU from $url"
-          curl.exe -sSfL --retry 3 "$url" -o "onnxruntime-gpu.zip"
-          Expand-Archive -Path "onnxruntime-gpu.zip" -DestinationPath "ort-gpu"
-          Remove-Item "onnxruntime-gpu.zip"
-
+          $sherpaVer = "1.13.5"
+          $url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${sherpaVer}/sherpa-onnx-v${sherpaVer}-cuda-12.x-cudnn-9.x-onnxruntime1.27.1-win-x64-cuda.tar.bz2"
+          Write-Host "Downloading sherpa-onnx CUDA prebuilt from $url"
+          curl.exe -sSfL --retry 5 --retry-connrefused "$url" -o "sherpa-onnx-cuda.tar.bz2"
+          tar.exe -xjf "sherpa-onnx-cuda.tar.bz2"
+          Remove-Item "sherpa-onnx-cuda.tar.bz2"
       - name: Build llama.cpp ggml-cuda (Windows)
         shell: pwsh
         run: |
@@ -117,6 +120,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release `
             -DGGML_CUDA=ON `
             -DBUILD_SHARED_LIBS=ON `
+            -DCMAKE_CUDA_FLAGS="--allow-unsupported-compiler" `
             -DCMAKE_CUDA_ARCHITECTURES="60;70;75;80;86;89;90"
           cmake --build build --config Release --target ggml-cuda -j $env:NUMBER_OF_PROCESSORS
           cd ..
@@ -128,11 +132,15 @@ jobs:
           $stageDir = "sona-cuda-addon-v${version}-windows-x64"
           New-Item -ItemType Directory -Force -Path "$stageDir" | Out-Null
 
-          # Copy ONNX Runtime CUDA provider libraries
-          $ortLibDir = (Get-ChildItem -Path "ort-gpu\onnxruntime-win-x64-gpu-*\lib").FullName
-          Copy-Item "$ortLibDir\onnxruntime_providers_cuda.dll" "$stageDir\" -Force
-          Copy-Item "$ortLibDir\onnxruntime_providers_shared.dll" "$stageDir\" -Force
-
+          # Copy sherpa-onnx CUDA prebuilt libraries (c-api, onnxruntime, providers, cudnn)
+          $sherpaLibDir = (Get-ChildItem -Path "sherpa-onnx-*-win-x64-cuda\lib").FullName
+          if ($sherpaLibDir) {
+            Copy-Item "$sherpaLibDir\*.dll" "$stageDir\" -Force
+          }
+          $sherpaBinDir = (Get-ChildItem -Path "sherpa-onnx-*-win-x64-cuda\bin").FullName
+          if ($sherpaBinDir) {
+            Copy-Item "$sherpaBinDir\*.dll" "$stageDir\" -Force -ErrorAction SilentlyContinue
+          }
           # Copy ggml-cuda from llama.cpp build
           Copy-Item "llama-cpp-src\build\bin\ggml-cuda.dll" "$stageDir\" -Force -ErrorAction SilentlyContinue
           if (-not (Test-Path "$stageDir\ggml-cuda.dll")) {
@@ -185,23 +193,22 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-
-      - name: Install CUDA Toolkit
-        uses: Jimver/cuda-toolkit@v0.2.22
-        with:
-          cuda: ${{ env.CUDA_VERSION }}
-          method: network
-          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev"]'
-
-      - name: Download and Extract ONNX Runtime GPU (Linux)
+      - name: Install CUDA Toolkit and cuBLAS
         run: |
-          ORT_VER="${{ env.ORT_VERSION }}"
-          URL="https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VER}/onnxruntime-linux-x64-gpu-${ORT_VER}.tgz"
-          wget -q "$URL" -O onnxruntime-gpu.tgz
-          mkdir -p ort-gpu
-          tar -xzf onnxruntime-gpu.tgz -C ort-gpu
-          rm onnxruntime-gpu.tgz
-
+          wget -q -O cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+          sudo dpkg -i cuda-keyring.deb
+          sudo apt-get update
+          sudo apt-get install -y cuda-nvcc-12-4 cuda-cudart-dev-12-4 libcublas-dev-12-4 libcublas-12-4
+          echo "/usr/local/cuda-12.4/bin" >> $GITHUB_PATH
+          echo "CUDA_PATH=/usr/local/cuda-12.4" >> $GITHUB_ENV
+      - name: Download and Extract sherpa-onnx CUDA Prebuilt (Linux)
+        run: |
+          SHERPA_VER="1.13.5"
+          URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_VER}/sherpa-onnx-v${SHERPA_VER}-cuda-12.x-cudnn-9.x-onnxruntime1.27.1-linux-x64-gpu.tar.bz2"
+          echo "Downloading sherpa-onnx CUDA prebuilt from $URL"
+          wget -q --tries=5 "$URL" -O sherpa-onnx-cuda.tar.bz2
+          tar -xjf sherpa-onnx-cuda.tar.bz2
+          rm -f sherpa-onnx-cuda.tar.bz2
       - name: Build llama.cpp ggml-cuda (Linux)
         run: |
           git clone --depth 1 --branch "${{ env.LLAMA_REF }}" https://github.com/ggerganov/llama.cpp.git llama-cpp-src
@@ -219,21 +226,22 @@ jobs:
           VERSION="${{ env.ADDON_VERSION }}"
           STAGE_DIR="sona-cuda-addon-v${VERSION}-linux-x64"
           mkdir -p "$STAGE_DIR"
-
-          # Copy ONNX Runtime CUDA provider libraries
-          ORT_LIB_DIR=$(find ort-gpu -name "lib" -type d | head -1)
-          cp -a "$ORT_LIB_DIR"/libonnxruntime_providers_cuda.so* "$STAGE_DIR/"
-          cp -a "$ORT_LIB_DIR"/libonnxruntime_providers_shared.so* "$STAGE_DIR/"
-
+          # Copy sherpa-onnx CUDA prebuilt libraries (c-api, onnxruntime, providers, cudnn)
+          SHERPA_LIB_DIR=$(find . -maxdepth 2 -name "lib" -path "*/sherpa-onnx*/*" -type d | head -1)
+          if [ -n "$SHERPA_LIB_DIR" ]; then
+            cp -a "$SHERPA_LIB_DIR"/*.so* "$STAGE_DIR/" 2>/dev/null || true
+          fi
           # Copy ggml-cuda library from llama.cpp build
           cp -a llama-cpp-src/build/bin/libggml-cuda.so* "$STAGE_DIR/" 2>/dev/null || cp -a llama-cpp-src/build/libggml-cuda.so* "$STAGE_DIR/"
 
           # Copy CUDA Runtime and cuBLAS shared objects
           CUDA_LIB="/usr/local/cuda/lib64"
-          cp -a "$CUDA_LIB"/libcudart.so* "$STAGE_DIR/"
-          cp -a "$CUDA_LIB"/libcublas.so* "$STAGE_DIR/"
-          cp -a "$CUDA_LIB"/libcublasLt.so* "$STAGE_DIR/"
-
+          cp -a "$CUDA_LIB"/libcudart.so* "$STAGE_DIR/" 2>/dev/null || true
+          cp -a "$CUDA_LIB"/libcublas.so* "$STAGE_DIR/" 2>/dev/null || true
+          cp -a "$CUDA_LIB"/libcublasLt.so* "$STAGE_DIR/" 2>/dev/null || true
+          cp -a /usr/lib/x86_64-linux-gnu/libcublas.so* "$STAGE_DIR/" 2>/dev/null || true
+          cp -a /usr/lib/x86_64-linux-gnu/libcublasLt.so* "$STAGE_DIR/" 2>/dev/null || true
+          cp -a /usr/lib/x86_64-linux-gnu/libcudart.so* "$STAGE_DIR/" 2>/dev/null || true
 
           # Write version metadata
           echo "$VERSION" > "$STAGE_DIR/version.txt"
@@ -271,10 +279,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
-
+          node-version: 24
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:

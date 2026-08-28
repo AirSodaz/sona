@@ -358,7 +358,6 @@ fn test_created_vault() -> CreatedVault {
     .unwrap()
 }
 
-
 #[tokio::test]
 async fn two_devices_exchange_incremental_segments_without_provider_specific_logic() {
     let created = test_created_vault();

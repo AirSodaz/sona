@@ -1,4 +1,4 @@
-﻿use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -13,11 +13,11 @@ use sona_core::sync::{
 };
 use sona_sqlite::{Database, SqliteSyncRepositoryFactory as RealSqliteSyncRepositoryFactory};
 use sona_sync::{
-    JsonFileSyncConfigStore, SyncApplication, SyncApplicationConfig, SyncApplicationEnvironment,
-    SyncApplicationError, SyncConfigStore, SyncPresetChangeError, SyncProvider,
-    SyncProviderFactory, SyncProviderInput, SyncProviderRegistry, SyncRetryState,
+    JsonFileSyncConfigStore, OpenedRemoteVault, SyncApplication, SyncApplicationConfig,
+    SyncApplicationEnvironment, SyncApplicationError, SyncConfigStore, SyncPresetChangeError,
+    SyncProvider, SyncProviderFactory, SyncProviderInput, SyncProviderRegistry, SyncRetryState,
     SyncStatusContext, apply_sync_run_result, build_sync_status, change_sync_preset,
-    create_remote_vault, disabled_sync_status, OpenedRemoteVault,
+    create_remote_vault, disabled_sync_status,
 };
 use tokio::sync::Notify;
 const TEST_MASTER_PASSWORD: &str = "test-sync-master-password";
@@ -34,7 +34,6 @@ async fn create_standard_test_vault(store: &MemoryStore) -> OpenedRemoteVault {
     .unwrap()
     .opened
 }
-
 
 struct RepositoryClock;
 
