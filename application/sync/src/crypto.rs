@@ -27,6 +27,21 @@ const ARGON2_TIME_COST: u32 = 3;
 const ARGON2_PARALLELISM: u32 = 1;
 const ENVELOPE_MAGIC: &[u8] = b"SONASYNC1";
 
+fn generate_random_bytes<const N: usize>() -> [u8; N] {
+    let mut bytes = [0_u8; N];
+    SysRng
+        .try_fill_bytes(&mut bytes)
+        .expect("unexpected failure from SysRng");
+    bytes
+}
+
+fn generate_random_secret(len: usize) -> Zeroizing<Vec<u8>> {
+    let mut bytes = Zeroizing::new(vec![0_u8; len]);
+    SysRng
+        .try_fill_bytes(&mut bytes)
+        .expect("unexpected failure from SysRng");
+    bytes
+}
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PasswordKeySlotV1 {
@@ -71,16 +86,10 @@ pub fn create_vault(
     require_master_password(master_password)?;
     require_identifier(vault_id, "vault ID")?;
 
-    let mut vault_key = Zeroizing::new(vec![0_u8; VAULT_KEY_BYTES]);
-    SysRng
-        .try_fill_bytes(&mut vault_key)
-        .expect("unexpected failure from SysRng");
+    let vault_key = generate_random_secret(VAULT_KEY_BYTES);
     let password_slot = wrap_with_master_password(vault_id, &vault_key, master_password)?;
     let (recovery_slot, recovery_key) = if create_recovery_key {
-        let mut recovery_secret = Zeroizing::new(vec![0_u8; VAULT_KEY_BYTES]);
-        SysRng
-            .try_fill_bytes(&mut recovery_secret)
-            .expect("unexpected failure from SysRng");
+        let recovery_secret = generate_random_secret(VAULT_KEY_BYTES);
         let slot = wrap_with_recovery_secret(vault_id, &vault_key, &recovery_secret)?;
         let encoded = URL_SAFE_NO_PAD.encode(&*recovery_secret);
         (Some(slot), Some(encoded))
@@ -172,10 +181,7 @@ pub fn seal_json<T: Serialize>(
     let compressed = encoder
         .finish()
         .map_err(|error| crypto_error(format!("Sync compression failed: {error}")))?;
-    let mut nonce = [0_u8; NONCE_BYTES];
-    SysRng
-        .try_fill_bytes(&mut nonce)
-        .expect("unexpected failure from SysRng");
+    let nonce = generate_random_bytes::<NONCE_BYTES>();
     let cipher = XChaCha20Poly1305::new_from_slice(vault_key)
         .map_err(|_| crypto_error("Vault key has an invalid size."))?;
     let ciphertext = cipher
@@ -239,14 +245,8 @@ fn wrap_with_master_password(
     master_password: &str,
 ) -> Result<PasswordKeySlotV1, SyncError> {
     require_master_password(master_password)?;
-    let mut salt = [0_u8; SALT_BYTES];
-    SysRng
-        .try_fill_bytes(&mut salt)
-        .expect("unexpected failure from SysRng");
-    let mut nonce = [0_u8; NONCE_BYTES];
-    SysRng
-        .try_fill_bytes(&mut nonce)
-        .expect("unexpected failure from SysRng");
+    let salt = generate_random_bytes::<SALT_BYTES>();
+    let nonce = generate_random_bytes::<NONCE_BYTES>();
     let template = PasswordKeySlotV1 {
         memory_kib: ARGON2_MEMORY_KIB,
         time_cost: ARGON2_TIME_COST,
@@ -270,10 +270,7 @@ pub(crate) fn wrap_with_recovery_secret(
     recovery_secret: &[u8],
 ) -> Result<RecoveryKeySlotV1, SyncError> {
     let key = derive_recovery_key(vault_id, recovery_secret)?;
-    let mut nonce = [0_u8; NONCE_BYTES];
-    SysRng
-        .try_fill_bytes(&mut nonce)
-        .expect("unexpected failure from SysRng");
+    let nonce = generate_random_bytes::<NONCE_BYTES>();
     let ciphertext = encrypt_key(&key, &nonce, vault_key, vault_key_aad(vault_id))?;
     Ok(RecoveryKeySlotV1 {
         nonce: URL_SAFE_NO_PAD.encode(nonce),

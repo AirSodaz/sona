@@ -12,7 +12,7 @@ use sona_core::sync::{
     SyncPublishedCheckpoint, SyncPublishedSegment, SyncPutResult, SyncRemoteApplyResult,
     SyncRemoteSegment, SyncVersion,
 };
-use sona_sync::{SyncRuntime, create_vault, load_remote_state_for_join};
+use sona_sync::{CreatedVault, SyncRuntime, create_vault, load_remote_state_for_join};
 
 type MemoryObjects = Arc<Mutex<BTreeMap<String, (Vec<u8>, String)>>>;
 
@@ -348,16 +348,20 @@ fn operation_with(
         },
     }
 }
+fn test_created_vault() -> CreatedVault {
+    create_vault(
+        "vault-a",
+        SyncPresetV1::Standard,
+        "test-sync-password",
+        false,
+    )
+    .unwrap()
+}
+
 
 #[tokio::test]
 async fn two_devices_exchange_incremental_segments_without_provider_specific_logic() {
-    let created = create_vault(
-        "vault-a",
-        SyncPresetV1::Standard,
-        "correct horse battery staple",
-        false,
-    )
-    .unwrap();
+    let created = test_created_vault();
     let store = MemoryStore::default();
     let device_a = FakeLocalRepository::new("device-a", vec![operation()]);
     let device_b = FakeLocalRepository::new("device-b", Vec::new());
@@ -388,13 +392,7 @@ async fn two_devices_exchange_incremental_segments_without_provider_specific_log
 
 #[tokio::test]
 async fn runtime_publishes_a_checkpoint_when_the_operation_threshold_is_reached() {
-    let created = create_vault(
-        "vault-a",
-        SyncPresetV1::Standard,
-        "correct horse battery staple",
-        false,
-    )
-    .unwrap();
+    let created = test_created_vault();
     let store = MemoryStore::default();
     let device = FakeLocalRepository::new("device-a", vec![operation()]);
     device.set_checkpoint_progress(999, 0);
@@ -411,13 +409,7 @@ async fn runtime_publishes_a_checkpoint_when_the_operation_threshold_is_reached(
 
 #[tokio::test]
 async fn runtime_publishes_the_initial_checkpoint_below_the_regular_threshold() {
-    let created = create_vault(
-        "vault-a",
-        SyncPresetV1::Standard,
-        "correct horse battery staple",
-        false,
-    )
-    .unwrap();
+    let created = test_created_vault();
     let store = MemoryStore::default();
     let device = FakeLocalRepository::new("device-a", vec![operation()]);
     device.require_checkpoint();
@@ -433,13 +425,7 @@ async fn runtime_publishes_the_initial_checkpoint_below_the_regular_threshold() 
 
 #[tokio::test]
 async fn retry_after_an_ambiguous_upload_reuses_the_same_immutable_object() {
-    let created = create_vault(
-        "vault-a",
-        SyncPresetV1::Standard,
-        "correct horse battery staple",
-        false,
-    )
-    .unwrap();
+    let created = test_created_vault();
     let store = MemoryStore::default();
     store.fail_next_put_after_create();
     let device = FakeLocalRepository::new(
@@ -458,13 +444,7 @@ async fn retry_after_an_ambiguous_upload_reuses_the_same_immutable_object() {
 
 #[tokio::test]
 async fn published_operations_use_their_segment_sequence() {
-    let created = create_vault(
-        "vault-a",
-        SyncPresetV1::Standard,
-        "correct horse battery staple",
-        false,
-    )
-    .unwrap();
+    let created = test_created_vault();
     let store = MemoryStore::default();
     let device = FakeLocalRepository::new(
         "device-a",
@@ -488,13 +468,7 @@ async fn published_operations_use_their_segment_sequence() {
 
 #[tokio::test]
 async fn a_new_device_recovers_from_a_checkpoint_after_covered_segments_are_removed() {
-    let created = create_vault(
-        "vault-a",
-        SyncPresetV1::Standard,
-        "correct horse battery staple",
-        false,
-    )
-    .unwrap();
+    let created = test_created_vault();
     let store = MemoryStore::default();
     let device_a = FakeLocalRepository::new("device-a", vec![operation()]);
     device_a.set_checkpoint_progress(999, 0);
@@ -524,13 +498,7 @@ async fn a_new_device_recovers_from_a_checkpoint_after_covered_segments_are_remo
 
 #[tokio::test]
 async fn join_preview_loader_returns_checkpoint_and_tail_without_applying_them() {
-    let created = create_vault(
-        "vault-a",
-        SyncPresetV1::Standard,
-        "correct horse battery staple",
-        false,
-    )
-    .unwrap();
+    let created = test_created_vault();
     let store = MemoryStore::default();
     let device = FakeLocalRepository::new("device-a", vec![operation()]);
     device.set_checkpoint_progress(999, 0);
@@ -567,13 +535,7 @@ async fn join_preview_loader_returns_checkpoint_and_tail_without_applying_them()
 async fn garbage_collection_keeps_two_checkpoints_and_only_recent_or_uncovered_segments() {
     const DAY_MS: u64 = 24 * 60 * 60 * 1_000;
 
-    let created = create_vault(
-        "vault-a",
-        SyncPresetV1::Standard,
-        "correct horse battery staple",
-        false,
-    )
-    .unwrap();
+    let created = test_created_vault();
     let store = MemoryStore::default();
     let device = FakeLocalRepository::new("device-a", vec![operation()]);
     device.set_checkpoint_progress(999, 0);
@@ -617,13 +579,7 @@ async fn garbage_collection_keeps_two_checkpoints_and_only_recent_or_uncovered_s
 async fn garbage_collection_skips_objects_without_etags() {
     const DAY_MS: u64 = 24 * 60 * 60 * 1_000;
 
-    let created = create_vault(
-        "vault-a",
-        SyncPresetV1::Standard,
-        "correct horse battery staple",
-        false,
-    )
-    .unwrap();
+    let created = test_created_vault();
     let store = MemoryStore::default();
     let device = FakeLocalRepository::new("device-a", vec![operation()]);
     device.set_checkpoint_progress(999, 0);

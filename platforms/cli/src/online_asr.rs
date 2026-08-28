@@ -100,7 +100,7 @@ impl OnlineAsrArgs {
             ))
         })?;
         if let Some(path) = self.online_config.as_deref() {
-            merge_non_secret_config(config_object, path)?;
+            merge_config_overrides(config_object, path)?;
         }
 
         let env_name = self
@@ -143,7 +143,7 @@ impl OnlineAsrArgs {
     }
 }
 
-fn merge_non_secret_config(target: &mut Map<String, Value>, path: &Path) -> CliResult<()> {
+fn merge_config_overrides(target: &mut Map<String, Value>, path: &Path) -> CliResult<()> {
     let bytes = std::fs::read(path).map_err(|error| {
         CliError::Io(format!(
             "Failed to read online ASR config {}: {error}",
@@ -238,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn merges_non_secret_overrides_and_rejects_api_keys() {
+    fn merges_config_overrides_and_rejects_api_keys() {
         let directory = tempdir().unwrap();
         let config_path = directory.path().join("online.json");
         std::fs::write(

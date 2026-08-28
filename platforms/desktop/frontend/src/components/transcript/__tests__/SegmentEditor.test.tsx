@@ -286,7 +286,9 @@ describe('SegmentEditor', () => {
     const savedHtml = vi.mocked(onSave).mock.calls[0][0];
     expect(savedHtml).toContain('<s>');
     expect(savedHtml).toContain('<code');
-    expect(savedHtml.replace(/<[^>]+>/g, '').trim()).toBe('Hello world');
+    const container = document.createElement('div');
+    container.innerHTML = savedHtml;
+    expect(container.textContent?.trim()).toBe('Hello world');
   });
 
   it('restores strikethrough and code formats from saved HTML', async () => {

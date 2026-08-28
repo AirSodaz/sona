@@ -51,17 +51,20 @@ fn host_of(url: &str) -> &str {
         .trim_end_matches('.')
 }
 
+fn is_host_or_subdomain(host: &str, domain: &str) -> bool {
+    host == domain || host.strip_suffix(domain).is_some_and(|prefix| prefix.ends_with('.'))
+}
+
 /// Classifies a download URL by its host family.
 pub fn detect_download_source(url: &str) -> DownloadSource {
     let host = host_of(url);
-    if host == "github.com"
-        || host.ends_with(".github.com")
-        || host.ends_with("githubusercontent.com")
+    if is_host_or_subdomain(host, "github.com")
+        || is_host_or_subdomain(host, "githubusercontent.com")
     {
         DownloadSource::GitHub
-    } else if host == "huggingface.co" || host.ends_with(".huggingface.co") {
+    } else if is_host_or_subdomain(host, "huggingface.co") {
         DownloadSource::HuggingFace
-    } else if host == "modelscope.cn" || host.ends_with(".modelscope.cn") {
+    } else if is_host_or_subdomain(host, "modelscope.cn") {
         DownloadSource::ModelScope
     } else {
         DownloadSource::Other
@@ -74,9 +77,16 @@ pub fn apply_download_mirror(url: &str, mirror: DownloadMirror) -> Option<String
     match (mirror, detect_download_source(url)) {
         (DownloadMirror::GhProxy, DownloadSource::GitHub) => Some(format!("{GHPROXY_PREFIX}{url}")),
         (DownloadMirror::GhNet, DownloadSource::GitHub) => Some(format!("{GHNET_PREFIX}{url}")),
-        (DownloadMirror::HfMirror, DownloadSource::HuggingFace) => url
-            .strip_prefix(HUGGINGFACE_ORIGIN)
-            .map(|path_and_query| format!("{HF_MIRROR_ORIGIN}{path_and_query}")),
+        (DownloadMirror::HfMirror, DownloadSource::HuggingFace) => {
+            let path_and_query = url.strip_prefix(HUGGINGFACE_ORIGIN)?;
+            if !path_and_query.starts_with('/')
+                && !path_and_query.starts_with('?')
+                && !path_and_query.starts_with('#')
+            {
+                return None;
+            }
+            Some(format!("{HF_MIRROR_ORIGIN}{path_and_query}"))
+        }
         _ => None,
     }
 }
@@ -165,6 +175,26 @@ mod tests {
         );
         assert_eq!(
             detect_download_source("https://example.com/model.tar.bz2"),
+            DownloadSource::Other
+        );
+    }
+
+    #[test]
+    fn detect_rejects_spoofed_domains() {
+        assert_eq!(
+            detect_download_source("https://evilgithubusercontent.com/file"),
+            DownloadSource::Other
+        );
+        assert_eq!(
+            detect_download_source("https://evilgithub.com/file"),
+            DownloadSource::Other
+        );
+        assert_eq!(
+            detect_download_source("https://huggingface.co.evil.com/file"),
+            DownloadSource::Other
+        );
+        assert_eq!(
+            detect_download_source("https://modelscope.cn.evil.com/file"),
             DownloadSource::Other
         );
     }

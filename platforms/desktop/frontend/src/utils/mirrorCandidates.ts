@@ -31,20 +31,29 @@ export function modelscopeMirrorUrl(modelId: string, filename: string): string |
 }
 
 function hostOf(url: string): string {
-    const withoutScheme = url.includes('://') ? url.slice(url.indexOf('://') + 3) : url;
-    return (withoutScheme.split(/[/?#]/)[0] ?? '').replace(/\.$/, '').toLowerCase();
+    try {
+        const parsed = new URL(url);
+        return parsed.hostname.replace(/\.$/, '').toLowerCase();
+    } catch {
+        const withoutScheme = url.includes('://') ? url.slice(url.indexOf('://') + 3) : url;
+        return (withoutScheme.split(/[/?#]/)[0] ?? '').replace(/\.$/, '').toLowerCase();
+    }
+}
+
+function isHostOrSubdomain(host: string, domain: string): boolean {
+    return host === domain || host.endsWith(`.${domain}`);
 }
 
 /** Classifies a download URL by its host family. */
 export function detectDownloadSource(url: string): DownloadSource {
     const host = hostOf(url);
-    if (host === 'github.com' || host.endsWith('.github.com') || host.endsWith('githubusercontent.com')) {
+    if (isHostOrSubdomain(host, 'github.com') || isHostOrSubdomain(host, 'githubusercontent.com')) {
         return 'github';
     }
-    if (host === 'huggingface.co' || host.endsWith('.huggingface.co')) {
+    if (isHostOrSubdomain(host, 'huggingface.co')) {
         return 'huggingface';
     }
-    if (host === 'modelscope.cn' || host.endsWith('.modelscope.cn')) {
+    if (isHostOrSubdomain(host, 'modelscope.cn')) {
         return 'modelscope';
     }
     return 'other';
@@ -58,10 +67,20 @@ export function applyDownloadMirror(url: string, mirror: string): string | null 
             return source === 'github' ? `${GHPROXY_PREFIX}${url}` : null;
         case 'ghnet':
             return source === 'github' ? `${GHNET_PREFIX}${url}` : null;
-        case 'hf-mirror':
-            return url.startsWith(HUGGINGFACE_ORIGIN)
-                ? `${HF_MIRROR_ORIGIN}${url.slice(HUGGINGFACE_ORIGIN.length)}`
-                : null;
+        case 'hf-mirror': {
+            if (source !== 'huggingface') {
+                return null;
+            }
+            try {
+                const parsed = new URL(url);
+                return `${HF_MIRROR_ORIGIN}${parsed.pathname}${parsed.search}${parsed.hash}`;
+            } catch {
+                if (url.startsWith(HUGGINGFACE_ORIGIN + '/') || url.startsWith(HUGGINGFACE_ORIGIN + '?') || url.startsWith(HUGGINGFACE_ORIGIN + '#')) {
+                    return `${HF_MIRROR_ORIGIN}${url.slice(HUGGINGFACE_ORIGIN.length)}`;
+                }
+                return null;
+            }
+        }
         default:
             return null;
     }

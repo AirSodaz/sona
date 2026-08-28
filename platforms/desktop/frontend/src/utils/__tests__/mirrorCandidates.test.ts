@@ -19,6 +19,13 @@ describe('detectDownloadSource', () => {
         expect(detectDownloadSource(MODELSCOPE_URL)).toBe('modelscope');
         expect(detectDownloadSource('https://example.com/model.tar.bz2')).toBe('other');
     });
+
+    it('rejects spoofed domains with suffix collisions', () => {
+        expect(detectDownloadSource('https://evilgithubusercontent.com/file')).toBe('other');
+        expect(detectDownloadSource('https://evilgithub.com/file')).toBe('other');
+        expect(detectDownloadSource('https://huggingface.co.evil.com/file')).toBe('other');
+        expect(detectDownloadSource('https://modelscope.cn.evil.com/file')).toBe('other');
+    });
 });
 
 describe('applyDownloadMirror', () => {

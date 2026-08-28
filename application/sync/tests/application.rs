@@ -17,9 +17,24 @@ use sona_sync::{
     SyncApplicationError, SyncConfigStore, SyncPresetChangeError, SyncProvider,
     SyncProviderFactory, SyncProviderInput, SyncProviderRegistry, SyncRetryState,
     SyncStatusContext, apply_sync_run_result, build_sync_status, change_sync_preset,
-    create_remote_vault, disabled_sync_status,
+    create_remote_vault, disabled_sync_status, OpenedRemoteVault,
 };
 use tokio::sync::Notify;
+const TEST_MASTER_PASSWORD: &str = "test-sync-master-password";
+
+async fn create_standard_test_vault(store: &MemoryStore) -> OpenedRemoteVault {
+    create_remote_vault(
+        store,
+        "vault-a",
+        SyncPresetV1::Standard,
+        TEST_MASTER_PASSWORD,
+        false,
+    )
+    .await
+    .unwrap()
+    .opened
+}
+
 
 struct RepositoryClock;
 
@@ -336,16 +351,7 @@ fn successful_run_clears_retry_state() {
 #[tokio::test]
 async fn preset_change_updates_remote_and_local_state() {
     let store = MemoryStore::default();
-    let mut opened = create_remote_vault(
-        &store,
-        "vault-a",
-        SyncPresetV1::Standard,
-        "master-password",
-        false,
-    )
-    .await
-    .unwrap()
-    .opened;
+    let mut opened = create_standard_test_vault(&store).await;
     let repository = PresetRepository::new(false);
 
     change_sync_preset(&repository, &store, &mut opened, SyncPresetV1::Full, true)
@@ -359,16 +365,7 @@ async fn preset_change_updates_remote_and_local_state() {
 #[tokio::test]
 async fn preset_change_rolls_remote_state_back_after_local_failure() {
     let store = MemoryStore::default();
-    let mut opened = create_remote_vault(
-        &store,
-        "vault-a",
-        SyncPresetV1::Standard,
-        "master-password",
-        false,
-    )
-    .await
-    .unwrap()
-    .opened;
+    let mut opened = create_standard_test_vault(&store).await;
     let repository = PresetRepository::new(true);
 
     let error = change_sync_preset(&repository, &store, &mut opened, SyncPresetV1::Full, true)
@@ -386,16 +383,7 @@ async fn preset_change_rolls_remote_state_back_after_local_failure() {
 async fn preset_change_reports_local_and_remote_rollback_failures() {
     let store = MemoryStore::default();
     store.fail_compare_call(2);
-    let mut opened = create_remote_vault(
-        &store,
-        "vault-a",
-        SyncPresetV1::Standard,
-        "master-password",
-        false,
-    )
-    .await
-    .unwrap()
-    .opened;
+    let mut opened = create_standard_test_vault(&store).await;
     let repository = PresetRepository::new(true);
 
     let error = change_sync_preset(&repository, &store, &mut opened, SyncPresetV1::Full, true)
@@ -683,7 +671,7 @@ async fn application_manual_lock_suppresses_restore_until_restart() {
                 }),
             },
             SyncPresetV1::Standard,
-            "master-password",
+            TEST_MASTER_PASSWORD,
             true,
         )
         .await
@@ -869,7 +857,7 @@ async fn application_changes_preset_and_delegates_conflicts() {
                 }),
             },
             SyncPresetV1::Standard,
-            "master-password",
+            TEST_MASTER_PASSWORD,
             false,
         )
         .await
@@ -935,7 +923,7 @@ async fn secret_write_is_best_effort_but_delete_failure_stops_disconnect() {
                 }),
             },
             SyncPresetV1::Standard,
-            "master-password",
+            TEST_MASTER_PASSWORD,
             false,
         )
         .await
@@ -991,7 +979,7 @@ async fn config_failure_does_not_roll_back_remote_or_local_vault_creation() {
                     }),
                 },
                 SyncPresetV1::Standard,
-                "master-password",
+                TEST_MASTER_PASSWORD,
                 false,
             )
             .await,
@@ -1080,7 +1068,7 @@ async fn concurrent_run_reports_syncing_and_rejects_the_second_run() {
                 }),
             },
             SyncPresetV1::Standard,
-            "master-password",
+            TEST_MASTER_PASSWORD,
             false,
         )
         .await
@@ -1130,7 +1118,7 @@ async fn disconnect_waits_for_an_active_run_and_cannot_be_undone_by_retry_persis
                 }),
             },
             SyncPresetV1::Standard,
-            "master-password",
+            TEST_MASTER_PASSWORD,
             false,
         )
         .await
