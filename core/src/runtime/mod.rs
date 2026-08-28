@@ -1,4 +1,5 @@
 pub mod config;
+pub mod cuda_addon;
 pub mod diagnostics;
 pub mod environment;
 pub mod error;

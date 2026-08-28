@@ -168,6 +168,113 @@ pub async fn download_preset_model<R: tauri::Runtime>(
         .map_err(|error| error.to_string())
 }
 
+pub fn get_cuda_addon_status<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
+    use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
+    use sona_core::runtime::cuda_addon::{CUDA_ADDON_SUBPATH, inspect_cuda_addon_directory};
+
+    let base_dir = TauriPathProvider::from_app(app)
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
+    let cuda_dir = base_dir.join(CUDA_ADDON_SUBPATH);
+    Ok(inspect_cuda_addon_directory(&cuda_dir))
+}
+
+pub fn try_auto_activate_cuda_addon<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
+    use sona_core::runtime::cuda_addon::{
+        CUDA_ADDON_SUBPATH, activate_cuda_addon_directory, inspect_cuda_addon_directory,
+    };
+
+    if let Ok(base_dir) = TauriPathProvider::from_app(app).resolve_path(PathKind::AppLocalData) {
+        let cuda_dir = base_dir.join(CUDA_ADDON_SUBPATH);
+        let inspection = inspect_cuda_addon_directory(&cuda_dir);
+        if inspection.is_installed {
+            let _ = activate_cuda_addon_directory(&cuda_dir);
+        }
+    }
+}
+
+pub async fn activate_cuda_addon<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
+    use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
+    use sona_core::runtime::cuda_addon::{CUDA_ADDON_SUBPATH, activate_cuda_addon_directory};
+
+    let base_dir = TauriPathProvider::from_app(&app)
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
+    let cuda_dir = base_dir.join(CUDA_ADDON_SUBPATH);
+    activate_cuda_addon_directory(&cuda_dir).map_err(|error| error.to_string())
+}
+
+pub async fn download_and_install_cuda_addon<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    state: tauri::State<'_, DownloadState>,
+    download_id: String,
+    mirror: Option<String>,
+    version: Option<String>,
+    custom_url: Option<String>,
+    expected_sha256: Option<String>,
+) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
+    use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
+    use sona_core::runtime::cuda_addon::CUDA_ADDON_SUBPATH;
+    use sona_model_downloads::{
+        default_cuda_addon_download_url, download_and_install_cuda_addon as download_addon,
+        parse_download_mirror,
+    };
+    use tauri::Emitter;
+
+    let base_dir = TauriPathProvider::from_app(&app)
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
+    let cuda_dir = base_dir.join(CUDA_ADDON_SUBPATH);
+
+    let download_url = match custom_url {
+        Some(url) if !url.trim().is_empty() => url,
+        _ => default_cuda_addon_download_url(version.as_deref(), None, std::env::consts::OS)
+            .ok_or_else(|| {
+                format!(
+                    "CUDA addon is not available for platform: {}",
+                    std::env::consts::OS
+                )
+            })?,
+    };
+
+    let notify = Arc::new(Notify::new());
+    state
+        .insert_download(download_id.clone(), notify.clone())
+        .await;
+    let app_clone = app.clone();
+    let event_download_id = download_id.clone();
+
+    let result = download_addon(
+        state.client(),
+        &cuda_dir,
+        &download_url,
+        expected_sha256.as_deref(),
+        parse_download_mirror(mirror.as_deref().unwrap_or("auto")),
+        notify,
+        move |progress| {
+            if progress.stage == sona_model_downloads::ModelDownloadStage::Downloading {
+                let _ = app_clone.emit(
+                    DOWNLOAD_PROGRESS_EVENT,
+                    (
+                        progress.downloaded_bytes,
+                        progress.total_bytes,
+                        &event_download_id,
+                    ),
+                );
+            }
+        },
+    )
+    .await;
+
+    state.remove_download(&download_id).await;
+    result.map_err(|error| error.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

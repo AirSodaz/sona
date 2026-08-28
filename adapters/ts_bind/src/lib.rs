@@ -101,6 +101,7 @@ pub use sona_core::recovery::types::{
     RecoveredTranscriptTimingUnit, RecoveryFileStat, RecoveryItemInput, RecoveryItemStage,
     RecoveryResolution, RecoverySnapshot, RecoverySnapshotInput, RecoverySource,
 };
+pub use sona_core::runtime::cuda_addon::CudaAddonInspection;
 pub use sona_core::runtime::diagnostics::{
     DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
     DiagnosticsCoreSnapshot, LiveTranscriptionDiagnosticsSnapshot, ModelRuleInput, ModelRulesInput,
@@ -525,6 +526,7 @@ pub fn desktop_types() -> specta::Types {
         .register::<ProjectsViewMode>()
         .register::<VoiceTypingMode>()
         .register::<GpuAcceleration>()
+        .register::<CudaAddonInspection>()
         .register::<AppAsrModelSelection>()
         .register::<AppAsrSelections>()
         .register::<AppAsrProviderConfig>()
@@ -767,6 +769,7 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "ProjectsViewMode",
     "VoiceTypingMode",
     "GpuAcceleration",
+    "CudaAddonInspection",
     "AppAsrModelSelection",
     "AppAsrSelections",
     "AppAsrProviderConfig",
@@ -1800,5 +1803,6 @@ mod tests {
         assert_specta_type::<OnlineAsrBatchCapability>();
         assert_specta_type::<OnlineAsrLocalFileBatchMode>();
         assert_specta_type::<VolcengineDoubaoAsrConfig>();
+        assert_specta_type::<CudaAddonInspection>();
     }
 }

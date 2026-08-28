@@ -2,6 +2,7 @@ import type { BackupManifestV1, PreparedBackupImport } from "../../types/backup"
 import type { DashboardSnapshot } from "../../types/dashboard";
 import type {
   AsrTranscriptionRequest_Serialize as CoreAsrTranscriptionRequest,
+  CudaAddonInspection,
   DiagnosticsCoreInput,
   DiagnosticsCoreSnapshot,
   ExportTranscriptFileRequest_Serialize,
@@ -613,6 +614,24 @@ type ManualTauriCommandContractMap = {
   [TauriCommand.apiServer.dashboardSnapshot]: {
     args: undefined;
     result: ApiServerDashboardSnapshot;
+  };
+  [TauriCommand.cudaAddon.getStatus]: {
+    args: undefined;
+    result: CudaAddonInspection;
+  };
+  [TauriCommand.cudaAddon.activate]: {
+    args: undefined;
+    result: CudaAddonInspection;
+  };
+  [TauriCommand.cudaAddon.download]: {
+    args: {
+      downloadId: string;
+      mirror?: string;
+      version?: string;
+      customUrl?: string;
+      expectedSha256?: string;
+    };
+    result: CudaAddonInspection;
   };
 };
 

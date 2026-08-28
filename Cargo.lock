@@ -6193,6 +6193,7 @@ version = "0.8.1"
 dependencies = [
  "axum",
  "bzip2",
+ "flate2",
  "fs3",
  "futures-util",
  "hex",

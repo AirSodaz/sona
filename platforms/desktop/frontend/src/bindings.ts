@@ -832,6 +832,15 @@ export type ContentTrendPoint = {
 	durationDisplay: string,
 };
 
+export type CudaAddonInspection = {
+	isInstalled: boolean,
+	isActive: boolean,
+	path: string,
+	missingFiles: string[],
+	version: string | null,
+	cudaVersion: string | null,
+};
+
 export type DashboardSnapshotDomainModel = DashboardSnapshotDomainModel_Serialize | DashboardSnapshotDomainModel_Deserialize;
 
 export type DashboardSnapshotDomainModel_Deserialize = {

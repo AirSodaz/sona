@@ -1,0 +1,335 @@
+name: CUDA Addon Build & Release
+
+on:
+  push:
+    tags:
+      - "cuda-addon-v*"
+  workflow_dispatch:
+    inputs:
+      addon_version:
+        description: "CUDA addon version (e.g. 0.1.0)"
+        required: true
+        default: "0.1.0"
+        type: string
+      cuda_version:
+        description: "Target CUDA Toolkit version"
+        required: false
+        default: "12.4.1"
+        type: string
+      onnxruntime_version:
+        description: "ONNX Runtime GPU version"
+        required: false
+        default: "1.20.1"
+        type: string
+      llama_cpp_ref:
+        description: "llama.cpp git ref (branch/tag/commit)"
+        required: false
+        default: "b4500"
+        type: string
+      publish_release:
+        description: "Publish to GitHub Releases"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-version:
+    name: Prepare CUDA Addon Version
+    runs-on: ubuntu-latest
+    outputs:
+      addon_version: ${{ steps.resolve.outputs.addon_version }}
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
+      should_publish: ${{ steps.resolve.outputs.should_publish }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Resolve Addon Version
+        id: resolve
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/cuda-addon-v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+            VERSION=$(node scripts/cuda-addon-manifest.js validate-tag --tag "$TAG" | awk '{print $NF}')
+            echo "addon_version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          else
+            VERSION="${{ inputs.addon_version }}"
+            node scripts/cuda-addon-manifest.js validate-tag --tag "cuda-addon-v${VERSION}" --version "$VERSION"
+            echo "addon_version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "release_tag=cuda-addon-v${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "should_publish=${{ inputs.publish_release }}" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-windows-cuda:
+    name: Build CUDA Addon (Windows x64)
+    needs: prepare-version
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      ADDON_VERSION: ${{ needs.prepare-version.outputs.addon_version }}
+      CUDA_VERSION: ${{ inputs.cuda_version || '12.4.1' }}
+      ORT_VERSION: ${{ inputs.onnxruntime_version || '1.20.1' }}
+      LLAMA_REF: ${{ inputs.llama_cpp_ref || 'b4500' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.22
+        with:
+          cuda: ${{ env.CUDA_VERSION }}
+          method: network
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev"]'
+
+      - name: Setup Ninja
+        uses: ashutoshvarma/setup-ninja@master
+        with:
+          version: 1.11.1
+
+      - name: Set up MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Download and Extract ONNX Runtime GPU (Windows)
+        shell: pwsh
+        run: |
+          $ortVer = "${{ env.ORT_VERSION }}"
+          $url = "https://github.com/microsoft/onnxruntime/releases/download/v${ortVer}/onnxruntime-win-x64-gpu-${ortVer}.zip"
+          Write-Host "Downloading ONNX Runtime GPU from $url"
+          curl.exe -sSfL --retry 3 "$url" -o "onnxruntime-gpu.zip"
+          Expand-Archive -Path "onnxruntime-gpu.zip" -DestinationPath "ort-gpu"
+          Remove-Item "onnxruntime-gpu.zip"
+
+      - name: Build llama.cpp ggml-cuda (Windows)
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch "${{ env.LLAMA_REF }}" https://github.com/ggerganov/llama.cpp.git llama-cpp-src
+          cd llama-cpp-src
+          cmake -B build -G "Ninja" `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DGGML_CUDA=ON `
+            -DBUILD_SHARED_LIBS=ON `
+            -DCMAKE_CUDA_ARCHITECTURES="60;70;75;80;86;89;90"
+          cmake --build build --config Release --target ggml-cuda -j $env:NUMBER_OF_PROCESSORS
+          cd ..
+
+      - name: Stage and Package Windows CUDA Addon
+        shell: pwsh
+        run: |
+          $version = "${{ env.ADDON_VERSION }}"
+          $stageDir = "sona-cuda-addon-v${version}-windows-x64"
+          New-Item -ItemType Directory -Force -Path "$stageDir" | Out-Null
+
+          # Copy ONNX Runtime CUDA provider libraries
+          $ortLibDir = (Get-ChildItem -Path "ort-gpu\onnxruntime-win-x64-gpu-*\lib").FullName
+          Copy-Item "$ortLibDir\onnxruntime_providers_cuda.dll" "$stageDir\" -Force
+          Copy-Item "$ortLibDir\onnxruntime_providers_shared.dll" "$stageDir\" -Force
+
+          # Copy ggml-cuda from llama.cpp build
+          Copy-Item "llama-cpp-src\build\bin\ggml-cuda.dll" "$stageDir\" -Force -ErrorAction SilentlyContinue
+          if (-not (Test-Path "$stageDir\ggml-cuda.dll")) {
+            Copy-Item "llama-cpp-src\build\ggml-cuda.dll" "$stageDir\" -Force
+          }
+
+          # Copy CUDA Runtime and cuBLAS DLLs from CUDA Toolkit
+          $cudaBin = "$env:CUDA_PATH\bin"
+          Copy-Item "$cudaBin\cudart64_*.dll" "$stageDir\" -Force
+          Copy-Item "$cudaBin\cublas64_*.dll" "$stageDir\" -Force
+          Copy-Item "$cudaBin\cublasLt64_*.dll" "$stageDir\" -Force
+
+          # Write version metadata
+          Set-Content -Path "$stageDir\version.txt" -Value "$version"
+          $manifestJson = @{
+            schemaVersion = "1.0"
+            addonVersion = "$version"
+            cudaVersion = "12.4"
+            targetOs = "windows"
+            targetArch = "x86_64"
+            publishedAt = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+          } | ConvertTo-Json
+          Set-Content -Path "$stageDir\cuda-addon-manifest.json" -Value $manifestJson
+
+          # Create tar.gz package
+          $archiveName = "sona-cuda-addon-v${version}-windows-x64.tar.gz"
+          tar.exe -czf "$archiveName" -C "$stageDir" .
+
+          # Generate SHA256 checksum
+          $hash = (Get-FileHash -Path "$archiveName" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $archiveName" | Out-File -FilePath "${archiveName}.sha256" -Encoding ascii
+      - name: Upload Windows Addon Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cuda-addon-windows-x64
+          path: |
+            sona-cuda-addon-v*-windows-x64.tar.gz
+            sona-cuda-addon-v*-windows-x64.tar.gz.sha256
+
+  build-linux-cuda:
+    name: Build CUDA Addon (Linux x64)
+    needs: prepare-version
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      ADDON_VERSION: ${{ needs.prepare-version.outputs.addon_version }}
+      CUDA_VERSION: ${{ inputs.cuda_version || '12.4.1' }}
+      ORT_VERSION: ${{ inputs.onnxruntime_version || '1.20.1' }}
+      LLAMA_REF: ${{ inputs.llama_cpp_ref || 'b4500' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.22
+        with:
+          cuda: ${{ env.CUDA_VERSION }}
+          method: network
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev"]'
+
+      - name: Download and Extract ONNX Runtime GPU (Linux)
+        run: |
+          ORT_VER="${{ env.ORT_VERSION }}"
+          URL="https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VER}/onnxruntime-linux-x64-gpu-${ORT_VER}.tgz"
+          wget -q "$URL" -O onnxruntime-gpu.tgz
+          mkdir -p ort-gpu
+          tar -xzf onnxruntime-gpu.tgz -C ort-gpu
+          rm onnxruntime-gpu.tgz
+
+      - name: Build llama.cpp ggml-cuda (Linux)
+        run: |
+          git clone --depth 1 --branch "${{ env.LLAMA_REF }}" https://github.com/ggerganov/llama.cpp.git llama-cpp-src
+          cd llama-cpp-src
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGGML_CUDA=ON \
+            -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_CUDA_ARCHITECTURES="60;70;75;80;86;89;90"
+          cmake --build build --config Release --target ggml-cuda -j $(nproc)
+          cd ..
+
+      - name: Stage and Package Linux CUDA Addon
+        run: |
+          VERSION="${{ env.ADDON_VERSION }}"
+          STAGE_DIR="sona-cuda-addon-v${VERSION}-linux-x64"
+          mkdir -p "$STAGE_DIR"
+
+          # Copy ONNX Runtime CUDA provider libraries
+          ORT_LIB_DIR=$(find ort-gpu -name "lib" -type d | head -1)
+          cp -a "$ORT_LIB_DIR"/libonnxruntime_providers_cuda.so* "$STAGE_DIR/"
+          cp -a "$ORT_LIB_DIR"/libonnxruntime_providers_shared.so* "$STAGE_DIR/"
+
+          # Copy ggml-cuda library from llama.cpp build
+          cp -a llama-cpp-src/build/bin/libggml-cuda.so* "$STAGE_DIR/" 2>/dev/null || cp -a llama-cpp-src/build/libggml-cuda.so* "$STAGE_DIR/"
+
+          # Copy CUDA Runtime and cuBLAS shared objects
+          CUDA_LIB="/usr/local/cuda/lib64"
+          cp -a "$CUDA_LIB"/libcudart.so* "$STAGE_DIR/"
+          cp -a "$CUDA_LIB"/libcublas.so* "$STAGE_DIR/"
+          cp -a "$CUDA_LIB"/libcublasLt.so* "$STAGE_DIR/"
+
+
+          # Write version metadata
+          echo "$VERSION" > "$STAGE_DIR/version.txt"
+          cat <<'EOF' > "$STAGE_DIR/cuda-addon-manifest.json"
+          {
+            "schemaVersion": "1.0",
+            "addonVersion": "0.1.0",
+            "cudaVersion": "12.4",
+            "targetOs": "linux",
+            "targetArch": "x86_64"
+          }
+          EOF
+          # Create tar.gz package
+          ARCHIVE_NAME="sona-cuda-addon-v${VERSION}-linux-x64.tar.gz"
+          tar -czf "$ARCHIVE_NAME" -C "$STAGE_DIR" .
+
+          # Generate SHA256 checksum
+          sha256sum "$ARCHIVE_NAME" > "${ARCHIVE_NAME}.sha256"
+
+      - name: Upload Linux Addon Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cuda-addon-linux-x64
+          path: |
+            sona-cuda-addon-v*-linux-x64.tar.gz
+            sona-cuda-addon-v*-linux-x64.tar.gz.sha256
+
+  publish-cuda-addon:
+    name: Publish CUDA Addon Release
+    needs: [prepare-version, build-windows-cuda, build-linux-cuda]
+    runs-on: ubuntu-latest
+    if: needs.prepare-version.outputs.should_publish == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts
+          pattern: "cuda-addon-*"
+          merge-multiple: true
+
+      - name: Generate CUDA Addon Manifest
+        run: |
+          VERSION="${{ needs.prepare-version.outputs.addon_version }}"
+          node scripts/cuda-addon-manifest.js generate \
+            --version "$VERSION" \
+            --cuda-version "${{ inputs.cuda_version || '12.4' }}" \
+            --repo "${{ github.repository }}" \
+            --artifacts-dir all-artifacts \
+            --output cuda-addon-manifest.json
+
+          echo "Generated cuda-addon-manifest.json:"
+          cat cuda-addon-manifest.json
+
+      - name: Generate Release Notes
+        run: |
+          VERSION="${{ needs.prepare-version.outputs.addon_version }}"
+          cat <<EOF > release_notes.md
+          # Sona CUDA Acceleration Addon v${VERSION}
+
+          Hardware acceleration addon for NVIDIA GPUs on Windows and Linux.
+
+          ### Included Components
+          - **llama.cpp**: `ggml-cuda` GPU matrix acceleration backend
+          - **sherpa-onnx**: ONNX Runtime CUDA Execution Provider
+          - **CUDA Runtime**: Minimal cuBLAS 12 and CUDA 12 runtime libraries
+
+          ### Installation
+          This package is downloaded and managed automatically inside Sona via **Settings > Model Settings > GPU Acceleration**.
+          EOF
+
+      - name: Collect Release Files
+        id: release-files
+        run: |
+          {
+            echo "files<<EOF"
+            find all-artifacts -type f -print
+            echo "cuda-addon-manifest.json"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create or Update GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          name: "Sona CUDA Addon v${{ needs.prepare-version.outputs.addon_version }}"
+          tag: "${{ needs.prepare-version.outputs.release_tag }}"
+          bodyFile: "release_notes.md"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: ${{ steps.release-files.outputs.files }}
+          artifactErrorsFailBuild: true
+          replacesArtifacts: true

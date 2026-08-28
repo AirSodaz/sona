@@ -4,6 +4,7 @@ import { SettingsModelsTab } from '../SettingsModelsTab';
 import { useConfigStore } from '../../../stores/configStore';
 import { ModelManagerContext } from '../../../hooks/useModelManager';
 import { setTestConfig } from '../../../test-utils/configTestUtils';
+import { useDialogStore } from '../../../stores/dialogStore';
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
@@ -41,6 +42,36 @@ vi.mock('../../../services/modelService', () => ({
     modelService: {
         getModelPath: vi.fn(async (id: string) => `/models/${id}`),
         getModelRules: vi.fn(() => ({ requiresVad: false, requiresPunctuation: false })),
+    },
+}));
+
+vi.mock('../../../services/cudaAddonService', () => ({
+    cudaAddonService: {
+        getStatus: vi.fn(async () => ({
+            isInstalled: false,
+            isActive: false,
+            path: '/runtimes/cuda',
+            missingFiles: ['cudart64_12.dll'],
+            version: null,
+            cudaVersion: null,
+        })),
+        activate: vi.fn(async () => ({
+            isInstalled: true,
+            isActive: true,
+            path: '/runtimes/cuda',
+            missingFiles: [],
+            version: '0.1.0',
+            cudaVersion: '12.4',
+        })),
+        downloadAndInstall: vi.fn(async () => ({
+            isInstalled: true,
+            isActive: true,
+            path: '/runtimes/cuda',
+            missingFiles: [],
+            version: '0.1.0',
+            cudaVersion: '12.4',
+        })),
+        cancelDownload: vi.fn(async () => {}),
     },
 }));
 
@@ -560,6 +591,31 @@ describe('SettingsModelsTab speaker model selections', () => {
 
         await waitFor(() => {
             expect(useConfigStore.getState().config.gpuAcceleration).toBe('vulkan');
+        });
+    });
+
+    it('prompts user to download and install CUDA addon when selecting uninstalled CUDA', async () => {
+        const confirmSpy = vi.spyOn(useDialogStore.getState(), 'confirm').mockResolvedValueOnce(true);
+        const alertSpy = vi.spyOn(useDialogStore.getState(), 'alert').mockResolvedValueOnce(undefined);
+
+        setTestConfig({
+            gpuAcceleration: 'auto',
+        });
+
+        renderTab(new Set());
+
+        await activateBatchScenarioAndExpandAdvanced();
+
+        const gpuDropdownButton = screen.getByRole('button', { name: 'Auto' });
+        fireEvent.click(gpuDropdownButton);
+
+        const cudaOption = screen.getByRole('option', { name: /^CUDA/ });
+        fireEvent.click(cudaOption);
+
+        await waitFor(() => {
+            expect(confirmSpy).toHaveBeenCalledTimes(1);
+            expect(useConfigStore.getState().config.gpuAcceleration).toBe('cuda');
+            expect(alertSpy).toHaveBeenCalledTimes(1);
         });
     });
 });

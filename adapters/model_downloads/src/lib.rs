@@ -1,7 +1,9 @@
+pub mod cuda_addon;
 pub mod downloads;
 pub mod mirror;
 mod models;
 
+pub use cuda_addon::{default_cuda_addon_download_url, download_and_install_cuda_addon};
 pub use downloads::{
     DownloadClient, DownloadError, DownloadFileOperation, DownloadFileSystemError,
     complete_download_file, download_file, publish_download_file, remove_download_file,

@@ -50,3 +50,39 @@ pub async fn download_preset_model<R: tauri::Runtime>(
     )
     .await
 }
+
+#[tauri::command]
+pub async fn get_cuda_addon_status<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
+    crate::platform::model_downloads::get_cuda_addon_status(&app)
+}
+
+#[tauri::command]
+pub async fn activate_cuda_addon<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
+    crate::platform::model_downloads::activate_cuda_addon(app).await
+}
+
+#[tauri::command]
+pub async fn download_cuda_addon<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    state: tauri::State<'_, DownloadState>,
+    download_id: String,
+    mirror: Option<String>,
+    version: Option<String>,
+    custom_url: Option<String>,
+    expected_sha256: Option<String>,
+) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
+    crate::platform::model_downloads::download_and_install_cuda_addon(
+        app,
+        state,
+        download_id,
+        mirror,
+        version,
+        custom_url,
+        expected_sha256,
+    )
+    .await
+}

@@ -29,6 +29,9 @@ use sona_core::recovery::normalization::{SourcePathStatus, SourcePathStatusProvi
 use sona_core::runtime::config::{
     ServeConfigSection, TranscribeConfigSection, TranscribeLiveConfigSection,
 };
+use sona_core::runtime::cuda_addon::{
+    CUDA_ADDON_SUBPATH, CudaAddonInspection, inspect_cuda_addon_directory,
+};
 use sona_core::runtime::environment::{RuntimePathKind, RuntimePathStatus};
 use sona_core::runtime::error::{RuntimeConfigError, RuntimeValidationError};
 use sona_core::tag::TagIdGenerator;
@@ -456,6 +459,32 @@ where
 
 pub fn default_desktop_models_dir() -> Option<PathBuf> {
     select_desktop_models_dir_from_app_roots(default_desktop_app_data_roots())
+}
+
+pub fn select_desktop_cuda_addon_dir_from_app_roots<I>(app_roots: I) -> Option<PathBuf>
+where
+    I: IntoIterator<Item = PathBuf>,
+{
+    let app_roots = app_roots.into_iter().collect::<Vec<_>>();
+
+    app_roots
+        .iter()
+        .map(|path| path.join(CUDA_ADDON_SUBPATH))
+        .find(|path| path.exists())
+        .or_else(|| {
+            app_roots
+                .into_iter()
+                .next()
+                .map(|path| path.join(CUDA_ADDON_SUBPATH))
+        })
+}
+
+pub fn default_desktop_cuda_addon_dir() -> Option<PathBuf> {
+    select_desktop_cuda_addon_dir_from_app_roots(default_desktop_app_data_roots())
+}
+
+pub fn inspect_default_desktop_cuda_addon() -> Option<CudaAddonInspection> {
+    default_desktop_cuda_addon_dir().map(|dir| inspect_cuda_addon_directory(&dir))
 }
 
 pub fn models_dir_status(path: &Path) -> ModelsDirStatus {

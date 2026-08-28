@@ -196,6 +196,11 @@ export const TauriCommand = {
     stop: 'stop_api_server',
     dashboardSnapshot: 'get_api_server_dashboard_snapshot',
   },
+  cudaAddon: {
+    getStatus: 'get_cuda_addon_status',
+    activate: 'activate_cuda_addon',
+    download: 'download_cuda_addon',
+  },
 } as const;
 
 export type TauriCommandName = DeepValueOf<typeof TauriCommand>;

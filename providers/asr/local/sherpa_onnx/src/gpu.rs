@@ -92,27 +92,12 @@ impl GpuAccelerationPlan {
             };
         }
 
-        if is_windows {
-            if cuda_available {
-                return Self {
-                    providers: vec![Some("cuda".to_string())],
-                    auto_windows_directml_fallback: false,
-                };
-            }
-
-            if directml_available {
-                return Self {
-                    providers: vec![Some("directml".to_string()), Some("cpu".to_string())],
-                    auto_windows_directml_fallback: true,
-                };
-            }
-        } else if cuda_available {
+        if is_windows && directml_available {
             return Self {
-                providers: vec![Some("cuda".to_string())],
-                auto_windows_directml_fallback: false,
+                providers: vec![Some("directml".to_string()), Some("cpu".to_string())],
+                auto_windows_directml_fallback: true,
             };
         }
-
         Self {
             providers: vec![Some("cpu".to_string())],
             auto_windows_directml_fallback: false,
@@ -133,9 +118,11 @@ pub async fn check_gpu_availability() -> Result<bool, sona_core::ports::asr::Asr
     {
         Ok(std::env::consts::ARCH == "aarch64")
     }
-
     #[cfg(not(target_os = "macos"))]
     {
+        if sona_core::runtime::cuda_addon::is_cuda_addon_active() {
+            return Ok(true);
+        }
         let is_available = tokio::process::Command::new("nvidia-smi")
             .output()
             .await
@@ -145,7 +132,6 @@ pub async fn check_gpu_availability() -> Result<bool, sona_core::ports::asr::Asr
         Ok(is_available)
     }
 }
-
 pub async fn resolve_gpu_acceleration_plan(gpu_acceleration: Option<&str>) -> GpuAccelerationPlan {
     GpuAccelerationPlan::for_current_platform(gpu_acceleration).await
 }

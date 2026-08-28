@@ -8,6 +8,9 @@ import type {
 import type { LocalAsrEngine } from '../../types/asr';
 import { ModelCard } from './ModelCard';
 import { Dropdown } from '../Dropdown';
+import { cudaAddonService } from '../../services/cudaAddonService';
+import { useDialogStore } from '../../stores/dialogStore';
+import type { CudaAddonInspection } from '../../bindings';
 import { useModelConfig, useSetConfig, useTranscriptionConfig } from '../../stores/configStore';
 import {
     GROQ_WHISPER_PROVIDER_ID,
@@ -348,6 +351,70 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
     const localModelActionsDisabled = !isCatalogReady;
     const isBatchScenario = activeScenario === 'batch';
     const activeVadBufferSize = getScenarioVadBufferSize(transcriptionConfig, activeScenario);
+
+    const [cudaStatus, setCudaStatus] = useState<CudaAddonInspection | null>(null);
+    const [cudaDownloading, setCudaDownloading] = useState(false);
+    const [cudaProgress, setCudaProgress] = useState(0);
+
+    useEffect(() => {
+        let mounted = true;
+        cudaAddonService
+            .getStatus()
+            .then((status) => {
+                if (mounted) {
+                    setCudaStatus(status);
+                }
+            })
+            .catch(() => {});
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    const handleGpuAccelerationChange = useCallback(
+        async (value: string) => {
+            if (value === 'cuda') {
+                const currentStatus = cudaStatus ?? (await cudaAddonService.getStatus().catch(() => null));
+                if (currentStatus && !currentStatus.isInstalled) {
+                    const confirmed = await useDialogStore.getState().confirm(
+                        t('settings.cuda_addon_download_confirm'),
+                        {
+                            title: t('settings.cuda_addon_download_title'),
+                            confirmLabel: t('common.download', { defaultValue: 'Download' }),
+                        },
+                    );
+                    if (!confirmed) {
+                        return;
+                    }
+                    setCudaDownloading(true);
+                    setCudaProgress(0);
+                    try {
+                        const newStatus = await cudaAddonService.downloadAndInstall({
+                            onProgress: (p) => setCudaProgress(p.progressPercent),
+                        });
+                        setCudaStatus(newStatus);
+                        updateConfig({ gpuAcceleration: 'cuda' });
+                        useDialogStore.getState().alert(t('settings.cuda_addon_install_success'), {
+                            title: t('settings.cuda_addon_download_title'),
+                            variant: 'success',
+                        });
+                    } catch (err) {
+                        useDialogStore.getState().alert(String(err), {
+                            title: t('settings.cuda_addon_download_title'),
+                            variant: 'error',
+                        });
+                    } finally {
+                        setCudaDownloading(false);
+                    }
+                    return;
+                }
+            }
+            updateConfig({
+                gpuAcceleration: value as 'auto' | 'cpu' | 'vulkan' | 'metal' | 'cuda',
+            });
+        },
+        [cudaStatus, t, updateConfig],
+    );
 
     useEffect(() => {
         if (!_isActive) {
@@ -946,7 +1013,8 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                                 <Dropdown
                                     id="settings-gpu-acceleration"
                                     value={gpuAcceleration}
-                                    onChange={(value) => updateConfig({ gpuAcceleration: value as 'auto' | 'cpu' | 'vulkan' | 'metal' | 'cuda' })}
+                                    disabled={cudaDownloading}
+                                    onChange={handleGpuAccelerationChange}
                                     options={[
                                         {
                                             value: 'auto',
@@ -977,12 +1045,22 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
                                             label: 'CUDA',
                                             description: isMac
                                                 ? t('settings.gpu_acceleration_not_supported_on_macos', { defaultValue: 'Not supported on macOS' })
-                                                : t('settings.gpu_acceleration_cuda_desc', { defaultValue: 'NVIDIA dedicated acceleration' }),
+                                                : cudaStatus?.isInstalled
+                                                  ? `${t('settings.gpu_acceleration_cuda_desc', { defaultValue: 'NVIDIA dedicated acceleration' })} (${t('settings.cuda_addon_status_installed', { defaultValue: 'Ready' })})`
+                                                  : `${t('settings.gpu_acceleration_cuda_desc', { defaultValue: 'NVIDIA dedicated acceleration' })} (${t('settings.cuda_addon_status_not_installed', { defaultValue: 'Not Installed (Click to Download)' })})`,
                                             disabled: isMac,
                                         },
                                     ]}
                                     style={{ flex: 1 }}
                                 />
+                                {cudaDownloading && (
+                                    <div style={{ marginTop: '6px', fontSize: '0.75rem', color: 'var(--color-text-muted)', width: '220px' }}>
+                                        {t('settings.cuda_addon_downloading', { percent: cudaProgress, defaultValue: `Downloading (${cudaProgress}%)...` })}
+                                        <div style={{ width: '100%', height: '4px', background: 'var(--border)', borderRadius: '2px', marginTop: '4px', overflow: 'hidden' }}>
+                                            <div style={{ width: `${cudaProgress}%`, height: '100%', background: 'var(--color-primary)', transition: 'width 0.2s ease' }} />
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         );
                     })()}
