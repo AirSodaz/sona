@@ -8,9 +8,16 @@ runs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
+        # 1. Disable Windows Defender real-time scanning & add exclusions for build tools/paths
         Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name "LongPathsEnabled" -Value 1 -ErrorAction SilentlyContinue
+        Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
+        Add-MpPreference -ExclusionPath "C:\", "D:\", "T:\" -ErrorAction SilentlyContinue
+        Add-MpPreference -ExclusionProcess "cargo.exe", "rustc.exe", "sccache.exe", "clang-cl.exe", "lld-link.exe", "link.exe", "ninja.exe", "cmake.exe" -ErrorAction SilentlyContinue
+
+        # 2. Configure C/C++ compiler and CMake/Ninja settings
         "CMAKE_GENERATOR=Ninja" >> $env:GITHUB_ENV
         "CMAKE_OBJECT_PATH_MAX=1024" >> $env:GITHUB_ENV
+        "CMAKE_BUILD_PARALLEL_LEVEL=4" >> $env:GITHUB_ENV
         "CC=clang-cl" >> $env:GITHUB_ENV
         "CXX=clang-cl" >> $env:GITHUB_ENV
         "CXXFLAGS=/EHsc" >> $env:GITHUB_ENV
@@ -21,6 +28,9 @@ runs:
         "CXX_x86_64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
         "CXXFLAGS_x86_64_pc_windows_msvc=/EHsc" >> $env:GITHUB_ENV
 
+        # 3. Use lld-link (fast LLVM linker) for 3-5x faster linking on Windows
+        "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=lld-link" >> $env:GITHUB_ENV
+        "CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_LINKER=lld-link" >> $env:GITHUB_ENV
         # Short path junction: target/ → C:\t avoids MAX_PATH issues with
         # deeply nested Cargo/CMake build trees on Windows.
         # Preserve any pre-existing target/ contents (e.g. restored cache).
