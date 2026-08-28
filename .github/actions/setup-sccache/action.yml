@@ -14,7 +14,3 @@ runs:
         echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
         echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
         echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
-
-        # .cargo/config.toml sets target-dir to a local dev path (D:/...).
-        # Override to the standard ./target so CI paths are predictable.
-        echo "CARGO_TARGET_DIR=target" >> "$GITHUB_ENV"
