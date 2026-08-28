@@ -4,9 +4,6 @@ description: 'Configure sccache with GitHub Actions cache backend for Rust and C
 runs:
   using: 'composite'
   steps:
-    - name: Configure sccache binary
-      uses: mozilla-actions/sccache-action@v0.0.11
-
     - name: Set sccache environment
       shell: bash
       run: |
@@ -15,4 +12,17 @@ runs:
         echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
         echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
         echo "SCCACHE_SERVER_PORT=4226" >> "$GITHUB_ENV"
-        sccache --start-server || true
+
+    - name: Configure sccache binary
+      uses: mozilla-actions/sccache-action@v0.0.11
+      env:
+        SCCACHE_GHA_ENABLED: "true"
+        SCCACHE_SERVER_PORT: "4226"
+
+    - name: Ensure sccache server running with GHA backend
+      shell: bash
+      run: |
+        sccache --stop-server 2>/dev/null || true
+        export SCCACHE_GHA_ENABLED=true
+        export SCCACHE_SERVER_PORT=4226
+        sccache --start-server
