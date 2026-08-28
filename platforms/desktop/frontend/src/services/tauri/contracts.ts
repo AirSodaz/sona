@@ -602,7 +602,7 @@ type ManualTauriCommandContractMap = {
       jobTtlMinutes: number;
       maxStreaming: number;
       ipWhitelist: string;
-      gpuAcceleration: "auto" | "cpu" | "cuda" | "coreml" | "directml";
+      gpuAcceleration: "auto" | "cpu" | "vulkan" | "metal" | "cuda";
     };
     result: string;
   };

@@ -476,14 +476,14 @@ fn batch_plan_cli_gpu_overrides_config_file() {
 fn batch_plan_invalid_gpu_fails_before_model_resolution() {
     let mut cli = temp_transcribe_options();
     cli.model_id = Some("not-a-real-model".to_string());
-    cli.gpu_acceleration = Some("vulkan".to_string());
+    cli.gpu_acceleration = Some("invalid_accel".to_string());
 
     let error = resolve_batch_transcribe_plan_with_install_checker(cli, None, test_model_exists)
         .unwrap_err();
 
     assert_eq!(error.subject, "gpu_acceleration");
     assert!(error.message.contains("gpu_acceleration"));
-    assert!(error.message.contains("auto, cpu, cuda, coreml, directml"));
+    assert!(error.message.contains("auto, cpu, vulkan, metal, cuda"));
     assert!(!error.message.contains("Unknown model id"));
 }
 

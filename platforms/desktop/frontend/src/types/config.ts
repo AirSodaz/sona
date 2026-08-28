@@ -184,8 +184,8 @@ export interface TranscriptionConfig {
   batchVadBufferSize?: number;
   /** Max concurrent transcription tasks. Default: 2. */
   maxConcurrent?: number;
-  /** GPU Acceleration for sherpa-onnx (local models). Default: 'auto' */
-  gpuAcceleration?: 'auto' | 'cpu' | 'cuda' | 'coreml' | 'directml';
+  /** GPU Acceleration for local models. Default: 'auto' */
+  gpuAcceleration?: 'auto' | 'cpu' | 'vulkan' | 'metal' | 'cuda';
 }
 
 // ---------------------------------------------------------------------------
@@ -351,7 +351,7 @@ export interface ApiServerConfig {
   /** IP Whitelist for the API server (comma-separated, default: 'localhost'). */
   httpServerIpWhitelist?: string;
   /** Server-level GPU acceleration default for local API transcription. Default: 'auto'. */
-  gpuAcceleration?: 'auto' | 'cpu' | 'cuda' | 'coreml' | 'directml';
+  gpuAcceleration?: 'auto' | 'cpu' | 'vulkan' | 'metal' | 'cuda';
 }
 
 // ---------------------------------------------------------------------------

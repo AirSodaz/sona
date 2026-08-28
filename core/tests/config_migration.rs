@@ -111,3 +111,24 @@ fn effective_config_resolution_ignores_legacy_project_defaults() {
     assert_eq!(resolved["polishPresetId"], "general");
     assert_eq!(resolved["translationLanguage"], "zh");
 }
+
+#[test]
+fn migration_normalizes_legacy_gpu_acceleration_options() {
+    let mut config_coreml = default_config();
+    config_coreml["gpuAcceleration"] = json!("coreml");
+    let result_coreml = migrate_app_config(Some(config_coreml), None, "Default Rules".to_string());
+    assert_eq!(result_coreml.config["gpuAcceleration"], "metal");
+    assert!(result_coreml.migrated);
+
+    let mut config_directml = default_config();
+    config_directml["gpuAcceleration"] = json!("directml");
+    let result_directml =
+        migrate_app_config(Some(config_directml), None, "Default Rules".to_string());
+    assert_eq!(result_directml.config["gpuAcceleration"], "auto");
+    assert!(result_directml.migrated);
+
+    let mut config_vulkan = default_config();
+    config_vulkan["gpuAcceleration"] = json!("vulkan");
+    let result_vulkan = migrate_app_config(Some(config_vulkan), None, "Default Rules".to_string());
+    assert_eq!(result_vulkan.config["gpuAcceleration"], "vulkan");
+}

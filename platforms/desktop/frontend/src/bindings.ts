@@ -103,7 +103,7 @@ export type AppConfig_Deserialize = {
 	liveVadBufferSize?: number | null,
 	batchVadBufferSize?: number | null,
 	maxConcurrent?: number | null,
-	gpuAcceleration?: GpuAcceleration | null,
+	gpuAcceleration?: GpuAcceleration_Deserialize | null,
 	llmSettings?: unknown | null,
 	summaryEnabled?: boolean | null,
 	summaryTemplateId?: string | null,
@@ -183,7 +183,7 @@ export type AppConfig_Serialize = {
 	liveVadBufferSize?: number | null,
 	batchVadBufferSize?: number | null,
 	maxConcurrent?: number | null,
-	gpuAcceleration?: GpuAcceleration | null,
+	gpuAcceleration?: GpuAcceleration_Serialize | null,
 	llmSettings?: unknown | null,
 	summaryEnabled?: boolean | null,
 	summaryTemplateId?: string | null,
@@ -950,7 +950,11 @@ export type FileUsageCategory = {
 	fileCount: number,
 };
 
-export type GpuAcceleration = "auto" | "cpu" | "cuda" | "coreml" | "directml";
+export type GpuAcceleration = GpuAcceleration_Serialize | GpuAcceleration_Deserialize;
+
+export type GpuAcceleration_Deserialize = "auto" | "directml" | "cpu" | "vulkan" | "metal" | "coreml" | "cuda";
+
+export type GpuAcceleration_Serialize = "auto" | "cpu" | "vulkan" | "metal" | "cuda";
 
 export type HistoryAudioCleanupReport = {
 	eligibleCount: number,

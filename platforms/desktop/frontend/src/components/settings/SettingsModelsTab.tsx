@@ -937,25 +937,56 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({ isActiv
 
                 <SettingsItem
                     title={t('settings.gpu_acceleration_label', { defaultValue: 'GPU Acceleration' })}
-                    hint={t('settings.gpu_acceleration_hint', { defaultValue: 'Hardware acceleration for local models. Note: CoreML is for Apple Silicon.' })}
+                    hint={t('settings.gpu_acceleration_hint', { defaultValue: 'Hardware acceleration for local models. Vulkan is for Windows/Linux, Metal is for Apple Silicon.' })}
                 >
-                    <div style={{ width: '120px' }}>
-                        <Dropdown
-                            id="settings-gpu-acceleration"
-                            value={gpuAcceleration}
-                            onChange={(value) => updateConfig({ gpuAcceleration: value as 'auto' | 'cpu' | 'cuda' | 'coreml' | 'directml' })}
-                            options={[
-                                { value: 'auto', label: t('settings.gpu_acceleration_auto', { defaultValue: 'Auto' }) },
-                                { value: 'cpu', label: t('settings.value_off', { defaultValue: 'Off' }) },
-                                { value: 'cuda', label: 'CUDA' },
-                                { value: 'coreml', label: 'CoreML' },
-                                { value: 'directml', label: 'DirectML' },
-                            ]}
-                            style={{ flex: 1 }}
-                        />
-                    </div>
+                    {(() => {
+                        const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
+                        return (
+                            <div style={{ width: '140px' }}>
+                                <Dropdown
+                                    id="settings-gpu-acceleration"
+                                    value={gpuAcceleration}
+                                    onChange={(value) => updateConfig({ gpuAcceleration: value as 'auto' | 'cpu' | 'vulkan' | 'metal' | 'cuda' })}
+                                    options={[
+                                        {
+                                            value: 'auto',
+                                            label: t('settings.gpu_acceleration_auto', { defaultValue: 'Auto' }),
+                                        },
+                                        {
+                                            value: 'cpu',
+                                            label: t('settings.value_off', { defaultValue: 'Off' }),
+                                        },
+                                        {
+                                            value: 'vulkan',
+                                            label: 'Vulkan',
+                                            description: isMac
+                                                ? t('settings.gpu_acceleration_not_supported_on_macos', { defaultValue: 'Not supported on macOS' })
+                                                : t('settings.gpu_acceleration_vulkan_desc', { defaultValue: 'Cross-vendor GPU acceleration' }),
+                                            disabled: isMac,
+                                        },
+                                        {
+                                            value: 'metal',
+                                            label: 'Metal',
+                                            description: isMac
+                                                ? t('settings.gpu_acceleration_metal_desc', { defaultValue: 'Apple native GPU acceleration' })
+                                                : t('settings.gpu_acceleration_macos_only', { defaultValue: 'macOS only' }),
+                                            disabled: !isMac,
+                                        },
+                                        {
+                                            value: 'cuda',
+                                            label: 'CUDA',
+                                            description: isMac
+                                                ? t('settings.gpu_acceleration_not_supported_on_macos', { defaultValue: 'Not supported on macOS' })
+                                                : t('settings.gpu_acceleration_cuda_desc', { defaultValue: 'NVIDIA dedicated acceleration' }),
+                                            disabled: isMac,
+                                        },
+                                    ]}
+                                    style={{ flex: 1 }}
+                                />
+                            </div>
+                        );
+                    })()}
                 </SettingsItem>
-
             </SettingsSection>
 
             <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: '8px' }}>

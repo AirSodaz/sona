@@ -1,4 +1,4 @@
-﻿#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuFallbackNotice {
     pub from_provider: String,
     pub to_provider: String,
@@ -46,8 +46,33 @@ impl GpuAccelerationPlan {
         };
 
         if gpu != "auto" {
+            let provider = match gpu {
+                "metal" | "coreml" => {
+                    if is_windows {
+                        "cpu".to_string()
+                    } else {
+                        #[cfg(target_os = "macos")]
+                        {
+                            "coreml".to_string()
+                        }
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            "cpu".to_string()
+                        }
+                    }
+                }
+                "vulkan" => "cpu".to_string(),
+                "directml" => {
+                    if is_windows {
+                        "directml".to_string()
+                    } else {
+                        "cpu".to_string()
+                    }
+                }
+                other => other.to_string(),
+            };
             return Self {
-                providers: vec![Some(gpu.to_string())],
+                providers: vec![Some(provider)],
                 auto_windows_directml_fallback: false,
             };
         }
@@ -149,6 +174,22 @@ mod tests {
         assert_eq!(notice.from_provider, "directml");
         assert_eq!(notice.to_provider, "cpu");
         assert_eq!(notice.error, "init failed");
+    }
+
+    #[test]
+    fn metal_and_vulkan_gpu_plans_resolve_safely_for_platform() {
+        let plan_windows_metal =
+            GpuAccelerationPlan::for_platform(Some("metal"), true, false, false);
+        assert_eq!(
+            plan_windows_metal.provider_options(),
+            vec![Some("cpu".to_string())]
+        );
+
+        let plan_vulkan = GpuAccelerationPlan::for_platform(Some("vulkan"), true, true, false);
+        assert_eq!(
+            plan_vulkan.provider_options(),
+            vec![Some("cpu".to_string())]
+        );
     }
 }
 

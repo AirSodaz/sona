@@ -82,11 +82,13 @@ pub enum VoiceTypingMode {
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "lowercase")]
 pub enum GpuAcceleration {
+    #[serde(alias = "directml")]
     Auto,
     Cpu,
+    Vulkan,
+    #[serde(alias = "coreml")]
+    Metal,
     Cuda,
-    Coreml,
-    Directml,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

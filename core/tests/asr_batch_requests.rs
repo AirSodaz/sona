@@ -117,7 +117,7 @@ fn local_batch_request_mapping_from_asr_request_is_core_owned() {
         },
         TranscriptPostprocessOptions::default(),
         None,
-        Some("directml".to_string()),
+        Some("metal".to_string()),
     );
 
     let batch_request = BatchTranscriptionRequest::from_local_asr_request(
@@ -150,7 +150,7 @@ fn local_batch_request_mapping_from_asr_request_is_core_owned() {
     );
     assert_eq!(batch_request.hotwords.as_deref(), Some("Sona, meeting"));
     assert!(batch_request.normalization_options.enable_timeline);
-    assert_eq!(batch_request.gpu_acceleration.as_deref(), Some("directml"));
+    assert_eq!(batch_request.gpu_acceleration.as_deref(), Some("metal"));
     assert_eq!(batch_request.engine, LocalAsrEngine::SherpaOnnx);
 }
 

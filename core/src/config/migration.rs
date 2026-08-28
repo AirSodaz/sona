@@ -252,6 +252,11 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
     if existing.get("keepMicrophoneActive") != normalized.get("keepMicrophoneActive") {
         return true;
     }
+    if existing.get("gpuAcceleration").is_some()
+        && existing.get("gpuAcceleration") != normalized.get("gpuAcceleration")
+    {
+        return true;
+    }
     existing.get("logLevel") != normalized.get("logLevel")
 }
 
@@ -610,6 +615,18 @@ fn sanitize_typed_config_fields(config: &mut Value) {
     };
     let defaults = default_config().as_object().cloned().unwrap_or_default();
 
+    if let Some(gpu) = config.get("gpuAcceleration").and_then(Value::as_str) {
+        match gpu {
+            "coreml" => {
+                config.insert("gpuAcceleration".to_string(), json!("metal"));
+            }
+            "directml" => {
+                config.insert("gpuAcceleration".to_string(), json!("auto"));
+            }
+            _ => {}
+        }
+    }
+
     for (key, allowed) in [
         (
             "appLanguage",
@@ -625,7 +642,7 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         ("voiceTypingMode", &["hold", "toggle"][..]),
         (
             "gpuAcceleration",
-            &["auto", "cpu", "cuda", "coreml", "directml"][..],
+            &["auto", "cpu", "vulkan", "metal", "cuda"][..],
         ),
     ] {
         repair_field_type(config, &defaults, key, |value| {

@@ -1,5 +1,5 @@
 pub const DEFAULT_GPU_ACCELERATION: &str = "auto";
-pub const GPU_ACCELERATION_VALUES: &[&str] = &["auto", "cpu", "cuda", "coreml", "directml"];
+pub const GPU_ACCELERATION_VALUES: &[&str] = &["auto", "cpu", "vulkan", "metal", "cuda"];
 
 pub fn resolve_gpu_acceleration(
     value: Option<String>,
@@ -7,8 +7,14 @@ pub fn resolve_gpu_acceleration(
     let value = value.unwrap_or_else(|| DEFAULT_GPU_ACCELERATION.to_string());
     let normalized = value.trim().to_ascii_lowercase();
 
-    if GPU_ACCELERATION_VALUES.contains(&normalized.as_str()) {
-        Ok(Some(normalized))
+    let mapped = match normalized.as_str() {
+        "coreml" => "metal",
+        "directml" => "auto",
+        other => other,
+    };
+
+    if GPU_ACCELERATION_VALUES.contains(&mapped) {
+        Ok(Some(mapped.to_string()))
     } else {
         Err(RuntimeValidationError::new(
             "gpu_acceleration",

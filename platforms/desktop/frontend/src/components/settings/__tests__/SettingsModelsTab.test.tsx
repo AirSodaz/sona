@@ -531,4 +531,35 @@ describe('SettingsModelsTab speaker model selections', () => {
             });
         });
     });
+
+    it('renders GPU acceleration dropdown options and disables platform-unsupported options', async () => {
+        setTestConfig({
+            gpuAcceleration: 'auto',
+        });
+
+        renderTab(new Set());
+
+        await activateBatchScenarioAndExpandAdvanced();
+
+        const gpuDropdownButton = screen.getByRole('button', { name: 'Auto' });
+        fireEvent.click(gpuDropdownButton);
+
+        const autoOption = screen.getByRole('option', { name: 'Auto' });
+        const cpuOption = screen.getByRole('option', { name: 'Off' });
+        const vulkanOption = screen.getByRole('option', { name: /^Vulkan/ });
+        const metalOption = screen.getByRole('option', { name: /^Metal/ });
+        const cudaOption = screen.getByRole('option', { name: /^CUDA/ });
+
+        expect((autoOption as HTMLButtonElement).disabled).toBe(false);
+        expect((cpuOption as HTMLButtonElement).disabled).toBe(false);
+        expect((vulkanOption as HTMLButtonElement).disabled).toBe(false);
+        expect((metalOption as HTMLButtonElement).disabled).toBe(true);
+        expect((cudaOption as HTMLButtonElement).disabled).toBe(false);
+
+        fireEvent.click(vulkanOption);
+
+        await waitFor(() => {
+            expect(useConfigStore.getState().config.gpuAcceleration).toBe('vulkan');
+        });
+    });
 });
