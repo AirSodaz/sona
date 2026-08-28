@@ -1925,15 +1925,21 @@ mod tests {
                 .as_deref(),
             Some("cuda")
         );
+        assert_eq!(
+            model_bridge::resolve_gpu_acceleration(Some("metal".to_string()))
+                .unwrap()
+                .as_deref(),
+            Some("metal")
+        );
 
-        let error = model_bridge::resolve_gpu_acceleration(Some("metal".to_string())).unwrap_err();
+        let error =
+            model_bridge::resolve_gpu_acceleration(Some("invalid_accel".to_string())).unwrap_err();
         assert!(
             error
                 .to_string()
                 .contains("gpu_acceleration must be one of")
         );
     }
-
     #[test]
     fn binding_exposes_llm_provider_manifest_for_mobile() {
         let providers = llm_bridge::llm_providers();

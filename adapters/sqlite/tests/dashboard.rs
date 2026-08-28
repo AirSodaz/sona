@@ -86,7 +86,7 @@ fn file_hashes(root: &Path) -> BTreeMap<PathBuf, String> {
             } else {
                 let relative = path.strip_prefix(root).unwrap().to_path_buf();
                 let digest = Sha256::digest(fs::read(&path).unwrap());
-                files.insert(relative, format!("{digest:x}"));
+                files.insert(relative, hex::encode(digest));
             }
         }
     }

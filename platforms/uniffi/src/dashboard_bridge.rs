@@ -89,7 +89,7 @@ mod tests {
                     let digest = Sha256::digest(fs::read(&path).unwrap());
                     files.insert(
                         path.strip_prefix(root).unwrap().to_path_buf(),
-                        format!("{digest:x}"),
+                        hex::encode(digest),
                     );
                 }
             }
