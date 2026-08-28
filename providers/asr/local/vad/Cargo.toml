@@ -9,6 +9,6 @@ edition.workspace = true
 role = "provider"
 
 [dependencies]
-log = "0.4.22"
-sherpa-onnx = { version = "=1.13.5", default-features = false, features = ["shared"] }
-sona-core = { path = "../../../../core" }
+log = { workspace = true }
+sherpa-onnx = { workspace = true }
+sona-core = { workspace = true }

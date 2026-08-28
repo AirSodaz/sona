@@ -9,9 +9,9 @@ edition.workspace = true
 role = "outbound-adapter"
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-sona-core = { path = "../../core" }
-sona-application = { path = "../../application" }
+serde = { workspace = true }
+sona-core = { workspace = true }
+sona-application = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }

@@ -9,24 +9,24 @@ edition.workspace = true
 role = "application"
 
 [dependencies]
-async-trait = "0.1"
+async-trait = { workspace = true }
 argon2 = "0.5"
-base64 = "0.22"
+base64 = { workspace = true }
 chacha20poly1305 = { version = "0.10", features = ["std"] }
-flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
-hex = "0.4"
-hkdf = "0.13"
-rand = "0.10"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-sha2 = "0.11"
-sona-core = { path = "../../core" }
-thiserror = "2"
-tokio = { version = "1", features = ["sync"] }
-uuid = { version = "1", features = ["v4", "fast-rng"] }
-zeroize = "1"
+flate2 = { workspace = true, features = ["rust_backend"] }
+hex = { workspace = true }
+hkdf = { workspace = true }
+rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sona-core = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+zeroize = { workspace = true }
 
 [dev-dependencies]
-sona-sqlite = { path = "../../adapters/sqlite" }
-tempfile = "3"
-tokio = { version = "1", features = ["macros", "rt"] }
+sona-sqlite = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

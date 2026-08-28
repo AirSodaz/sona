@@ -13,31 +13,31 @@ name = "sona_uniffi_bind"
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
-async-trait = "0.1"
-log = "0.4.22"
-serde = "1"
-serde_json = "1"
-sona-application = { path = "../../application" }
-sona-archive = { path = "../../adapters/archive" }
-sona-core = { path = "../../core" }
-sona-export = { path = "../../adapters/export" }
-sona-sherpa-onnx = { path = "../../providers/asr/local/sherpa_onnx" }
-sona-vad = { path = "../../providers/asr/local/vad" }
-sona-punct = { path = "../../providers/asr/local/punct" }
-sona-model-downloads = { path = "../../adapters/model_downloads" }
-sona-online-asr = { path = "../../providers/asr/online" }
-sona-online-llm = { path = "../../adapters/online_llm" }
-sona-recovery-fs = { path = "../../adapters/recovery_fs" }
-sona-runtime-fs = { path = "../../adapters/runtime_fs" }
-sona-sqlite = { path = "../../adapters/sqlite" }
-sona-sync = { path = "../../application/sync" }
-sona-sync-webdav = { path = "../../adapters/sync_webdav" }
-thiserror = "2.0.18"
-tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
-uniffi = { version = "0.32", features = ["tokio"] }
-uuid = { version = "1", features = ["v4", "fast-rng"] }
+async-trait = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sona-application = { workspace = true }
+sona-archive = { workspace = true }
+sona-core = { workspace = true }
+sona-export = { workspace = true }
+sona-sherpa-onnx = { workspace = true }
+sona-vad = { workspace = true }
+sona-punct = { workspace = true }
+sona-model-downloads = { workspace = true }
+sona-online-asr = { workspace = true }
+sona-online-llm = { workspace = true }
+sona-recovery-fs = { workspace = true }
+sona-runtime-fs = { workspace = true }
+sona-sqlite = { workspace = true }
+sona-sync = { workspace = true }
+sona-sync-webdav = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+uniffi = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
-hex = "0.4"
-sha2 = "0.11"
-tempfile = "3"
+hex = { workspace = true }
+sha2 = { workspace = true }
+tempfile = { workspace = true }

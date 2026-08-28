@@ -9,10 +9,10 @@ edition.workspace = true
 role = "outbound-adapter"
 
 [dependencies]
-async-trait = "0.1"
-sona-core = { path = "../../core" }
-tokio = { version = "1", features = ["fs", "io-util"] }
+async-trait = { workspace = true }
+sona-core = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util"] }
 
 [dev-dependencies]
-tempfile = "3"
-tokio = { version = "1", features = ["macros", "rt"] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

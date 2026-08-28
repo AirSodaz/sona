@@ -10,4 +10,4 @@ publish = false
 role = "tool"
 
 [dependencies]
-uniffi = { version = "0.32", features = ["cli"] }
+uniffi = { workspace = true, features = ["cli"] }

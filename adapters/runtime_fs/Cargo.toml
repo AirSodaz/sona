@@ -9,15 +9,15 @@ edition.workspace = true
 role = "outbound-adapter"
 
 [dependencies]
-chrono = { version = "0.4.42", default-features = false, features = ["clock", "std"] }
-glob = "0.3"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-sona-core = { path = "../../core" }
-sona-application = { path = "../../application" }
-thiserror = "2.0.18"
-uuid = { version = "1", features = ["v4"] }
-walkdir = "2.5.0"
+chrono = { workspace = true }
+glob = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sona-core = { workspace = true }
+sona-application = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+walkdir = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = { workspace = true }

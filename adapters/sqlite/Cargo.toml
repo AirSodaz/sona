@@ -17,22 +17,22 @@ role = "outbound-adapter"
 test-support = []
 
 [dependencies]
-async-trait = "0.1"
-chrono = { version = "0.4.42", default-features = false, features = ["clock", "std"] }
-fs3 = "0.5"
-log = "0.4.22"
-rusqlite = { version = "0.40.1", features = ["bundled", "backup", "functions"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-sona-core = { path = "../../core" }
-sona-application = { path = "../../application" }
-thiserror = "2.0.18"
-tempfile = "3"
-uuid = { version = "1", features = ["v4", "fast-rng"] }
-walkdir = "2.5.0"
+async-trait = { workspace = true }
+chrono = { workspace = true }
+fs3 = { workspace = true }
+log = { workspace = true }
+rusqlite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sona-core = { workspace = true }
+sona-application = { workspace = true }
+thiserror = { workspace = true }
+tempfile = { workspace = true }
+uuid = { workspace = true }
+walkdir = { workspace = true }
 
 [dev-dependencies]
-hex = "0.4"
-sha2 = "0.11"
-sona-sqlite = { path = ".", features = ["test-support"] }
-tokio = { version = "1", features = ["rt"] }
+hex = { workspace = true }
+sha2 = { workspace = true }
+sona-sqlite = { workspace = true, features = ["test-support"] }
+tokio = { workspace = true, features = ["rt"] }

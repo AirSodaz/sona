@@ -23,58 +23,58 @@ tauri-build = { version = "2", features = [] }
 
 
 [dependencies]
-sona-application = { path = "../../application" }
-sona-archive = { path = "../../adapters/archive" }
-sona-api-server = { path = "../../adapters/api_server" }
-sona-core = { path = "../../core" }
-sona-export = { path = "../../adapters/export" }
-sona-sherpa-onnx = { path = "../../providers/asr/local/sherpa_onnx" }
-sona-vad = { path = "../../providers/asr/local/vad" }
-sona-punct = { path = "../../providers/asr/local/punct" }
-sona-llama-cpp = { path = "../../providers/asr/local/llama_cpp" }
-sona-media-detector = { path = "../../adapters/media_detector" }
-sona-model-downloads = { path = "../../adapters/model_downloads" }
-sona-online-llm = { path = "../../adapters/online_llm" }
-sona-online-asr = { path = "../../providers/asr/online" }
-sona-recovery-fs = { path = "../../adapters/recovery_fs" }
-sona-runtime-fs = { path = "../../adapters/runtime_fs" }
-sona-sqlite = { path = "../../adapters/sqlite" }
-sona-sync = { path = "../../application/sync" }
-sona-sync-webdav = { path = "../../adapters/sync_webdav" }
-sona-ts-bind = { path = "../../adapters/ts_bind" }
+sona-application = { workspace = true }
+sona-archive = { workspace = true }
+sona-api-server = { workspace = true }
+sona-core = { workspace = true }
+sona-export = { workspace = true }
+sona-sherpa-onnx = { workspace = true }
+sona-vad = { workspace = true }
+sona-punct = { workspace = true }
+sona-llama-cpp = { workspace = true }
+sona-media-detector = { workspace = true }
+sona-model-downloads = { workspace = true }
+sona-online-llm = { workspace = true }
+sona-online-asr = { workspace = true }
+sona-recovery-fs = { workspace = true }
+sona-runtime-fs = { workspace = true }
+sona-sqlite = { workspace = true }
+sona-sync = { workspace = true }
+sona-sync-webdav = { workspace = true }
+sona-ts-bind = { workspace = true }
 tauri = { version = "2", features = ["protocol-asset", "tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-serde_with = { version = "3", features = ["macros"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-http = "2"
-toml = "1.1"
-async-trait = "0.1"
-regex = "1"
-futures-util = "0.3"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
-base64 = "0.22"
-cpal = "0.18"
-rubato = "5"
-ringbuf = "0.4"
+toml = { workspace = true }
+async-trait = { workspace = true }
+regex = { workspace = true }
+futures-util = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+base64 = { workspace = true }
+cpal = { workspace = true }
+rubato = { workspace = true }
+ringbuf = { workspace = true }
 tauri-plugin-process = "2"
-uuid = { version = "1", features = ["v4", "fast-rng"] }
+uuid = { workspace = true }
 tauri-plugin-log = "2"
-log = "0.4.22"
+log = { workspace = true }
 tauri-plugin-single-instance = "2"
 tauri-plugin-store = "2"
 enigo = "0.6"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-prevent-default = "5.0.0"
-chrono = { version = "0.4.42", default-features = false, features = ["clock", "std"] }
-notify = "8.2"
-sysinfo = { version = "0.38.4", default-features = false, features = ["system"] }
-unicode-normalization = "0.1"
-thiserror = "2.0.18"
-axum = { version = "0.8", features = ["multipart", "macros", "ws"] }
+chrono = { workspace = true }
+notify = { workspace = true }
+sysinfo = { workspace = true }
+unicode-normalization = { workspace = true }
+thiserror = { workspace = true }
+axum = { workspace = true, features = ["multipart", "macros", "ws"] }
 keyring = "4.1.5"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
@@ -96,9 +96,9 @@ windows = { version = "0.61", features = [
 ] }
 
 [dev-dependencies]
-reqwest = { version = "0.13", default-features = false }
-tempfile = "3.20.0"
-tower = { version = "0.5", features = ["util"] }
+reqwest = { workspace = true }
+tempfile = { workspace = true }
+tower = { workspace = true }
 
 [features]
 llama-vulkan = ["sona-llama-cpp/vulkan"]

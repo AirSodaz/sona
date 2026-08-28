@@ -9,13 +9,13 @@ edition.workspace = true
 role = "provider"
 
 [dependencies]
-async-trait = "0.1"
-encoding_rs = "0.8"
+async-trait = { workspace = true }
+encoding_rs = { workspace = true }
 llama-cpp-2 = { version = "=0.1.153", default-features = false, features = ["dynamic-link", "mtmd"] }
-log = "0.4"
-sona-core = { path = "../../../../core" }
-tokio = { version = "1", features = ["rt", "sync"] }
-uuid = { version = "1", features = ["v4", "fast-rng"] }
+log = { workspace = true }
+sona-core = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync"] }
+uuid = { workspace = true }
 
 [features]
 vulkan = ["llama-cpp-2/vulkan"]

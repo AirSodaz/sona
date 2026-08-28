@@ -32,12 +32,92 @@ authors = ["AirSodaz"]
 edition = "2024"
 
 # ---------------------------------------------------------------------------
+# Workspace dependencies
+# ---------------------------------------------------------------------------
+
+[workspace.dependencies]
+# Internal workspace crates
+sona = { path = "platforms/desktop" }
+sona-api-server = { path = "adapters/api_server" }
+sona-application = { path = "application" }
+sona-archive = { path = "adapters/archive" }
+sona-cli = { path = "platforms/cli" }
+sona-core = { path = "core" }
+sona-export = { path = "adapters/export" }
+sona-llama-cpp = { path = "providers/asr/local/llama_cpp" }
+sona-media-detector = { path = "adapters/media_detector" }
+sona-model-downloads = { path = "adapters/model_downloads" }
+sona-online-asr = { path = "providers/asr/online" }
+sona-online-llm = { path = "adapters/online_llm" }
+sona-punct = { path = "providers/asr/local/punct" }
+sona-recovery-fs = { path = "adapters/recovery_fs" }
+sona-runtime-fs = { path = "adapters/runtime_fs" }
+sona-sherpa-onnx = { path = "providers/asr/local/sherpa_onnx" }
+sona-sqlite = { path = "adapters/sqlite" }
+sona-sync = { path = "application/sync" }
+sona-sync-webdav = { path = "adapters/sync_webdav" }
+sona-ts-bind = { path = "adapters/ts_bind" }
+sona-uniffi-bind = { path = "platforms/uniffi" }
+sona-uniffi-bindgen = { path = "tools/uniffi_bindgen" }
+sona-vad = { path = "providers/asr/local/vad" }
+
+# External shared dependencies
+async-trait = "0.1"
+axum = "0.8"
+base64 = "0.22"
+bitflags = "2.13"
+bzip2 = "0.4"
+chrono = { version = "0.4.42", default-features = false, features = ["clock", "std"] }
+clap = { version = "4", features = ["derive", "wrap_help"] }
+cpal = "0.18"
+crossterm = "0.29"
+encoding_rs = "0.8"
+flate2 = { version = "1", default-features = false }
+fs3 = "0.5"
+futures-util = "0.3"
+glob = "0.3"
+hex = "0.4"
+hkdf = "0.13"
+infer = "0.19"
+jsonschema = { version = "0.37", default-features = false }
+log = "0.4.22"
+notify = "8.2"
+rand = "0.10"
+regex = "1"
+reqwest = { version = "0.13", default-features = false }
+ringbuf = "0.4"
+rubato = "5"
+rusqlite = { version = "0.40.1", features = ["bundled", "backup", "functions"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_with = { version = "3", features = ["macros"] }
+sha2 = "0.11"
+sherpa-onnx = { version = "=1.13.5", default-features = false, features = ["shared"] }
+specta = { version = "=2.0.0-rc.25" }
+specta-serde = "0.0.12"
+specta-typescript = "0.0.12"
+strum = { version = "0.28", features = ["derive"] }
+sysinfo = { version = "0.38.4", default-features = false, features = ["system"] }
+tar = "0.4"
+tempfile = "3"
+thiserror = "2.0.18"
+tokio = { version = "1", features = ["sync"] }
+toml = "1.1"
+tower = { version = "0.5", features = ["util"] }
+unicode-normalization = "0.1"
+uniffi = { version = "0.32", features = ["tokio"] }
+urlencoding = "2.1.3"
+uuid = { version = "1", features = ["v4", "fast-rng"] }
+walkdir = "2.5.0"
+zeroize = "1"
+
+# ---------------------------------------------------------------------------
 # Build profiles
 # ---------------------------------------------------------------------------
 
 [profile.dev]
 opt-level = 0
-debug = "line-tables-only"           # line numbers only; debuginfo size -60%
+debug = "line-tables-only"           # line numbers only
 split-debuginfo = "unpacked"         # faster incremental linking (Windows/macOS)
 
 [profile.dev.package."*"]
