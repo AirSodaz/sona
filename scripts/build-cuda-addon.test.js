@@ -9,6 +9,7 @@ import {
   resolveLocalCudaRuntimeDir,
   detectCudaEnvironment,
   collectCudaToolkitLibraries,
+  downloadLlamaCppCuda,
   stageCudaAddonFiles,
   packageCudaAddonArchive,
 } from './build-cuda-addon.js';
@@ -119,6 +120,36 @@ test('packageCudaAddonArchive creates package and sha256 checksum', () => {
     const shaContent = fs.readFileSync(`${archivePath}.sha256`, 'utf8');
     assert.ok(shaContent.includes(info.sha256));
     assert.ok(shaContent.includes('test-addon.tar.gz'));
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('downloadLlamaCppCuda returns null on unsupported platform', () => {
+  const cacheDir = path.join(repoRoot, 'target', 'mock-cache');
+  assert.equal(downloadLlamaCppCuda({ cacheDir, platform: 'darwin' }), null);
+});
+
+test('stageCudaAddonFiles discovers and copies libraries in nested subdirectories', () => {
+  const testBaseDir = path.join(repoRoot, 'target', 'test-temp');
+  fs.mkdirSync(testBaseDir, { recursive: true });
+  const tempRoot = fs.mkdtempSync(path.join(testBaseDir, 'cuda-nested-stage-'));
+  try {
+    const llamaBuildDir = path.join(tempRoot, 'llama-cpp-src', 'build', 'ggml', 'src', 'ggml-cuda');
+    const stagedDir = path.join(tempRoot, 'staged');
+    fs.mkdirSync(llamaBuildDir, { recursive: true });
+    fs.writeFileSync(path.join(llamaBuildDir, 'libggml-cuda.so'), 'fake ggml cuda so');
+
+    const copied = stageCudaAddonFiles({
+      stagedDir,
+      llamaLibDir: path.join(tempRoot, 'llama-cpp-src', 'build'),
+      platform: 'linux',
+      version: '0.1.0',
+    });
+
+    assert.ok(copied.includes('libggml-cuda.so'));
+    assert.ok(fs.existsSync(path.join(stagedDir, 'libggml-cuda.so')));
+    assert.equal(fs.readFileSync(path.join(stagedDir, 'libggml-cuda.so'), 'utf8'), 'fake ggml cuda so');
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }

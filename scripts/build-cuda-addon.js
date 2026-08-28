@@ -186,14 +186,81 @@ function downloadOnnxRuntimeGpu({
 
   throw new Error(`Unsupported platform for ONNX Runtime GPU: ${platform}`);
 }
+function downloadLlamaCppCuda({
+  llamaRef = 'b4500',
+  cudaVersion = '12.4',
+  cacheDir,
+  platform = process.platform,
+}) {
+  const normPlatform = normalizePlatform(platform);
+  fs.mkdirSync(cacheDir, { recursive: true });
+
+  if (normPlatform === 'windows-x86_64') {
+    const cuTag = cudaVersion.startsWith('11') ? 'cu11.7' : 'cu12.4';
+    const archiveName = `llama-${llamaRef}-bin-win-cuda-${cuTag}-x64.zip`;
+    const cudartArchiveName = `cudart-llama-bin-win-${cuTag}-x64.zip`;
+    const extractDir = path.join(cacheDir, `llama-win-${llamaRef}-${cuTag}`);
+    const archivePath = path.join(cacheDir, archiveName);
+    const cudartArchivePath = path.join(cacheDir, cudartArchiveName);
+
+    if (!fs.existsSync(extractDir)) {
+      fs.mkdirSync(extractDir, { recursive: true });
+      const url = `https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/${archiveName}`;
+      console.log(`[llama.cpp CUDA] Downloading from ${url}...`);
+      const curlRes = spawnSync('curl.exe', ['-sSfL', '--retry', '3', url, '-o', archivePath], {
+        stdio: 'inherit',
+      });
+      if (curlRes.status === 0) {
+        console.log(`[llama.cpp CUDA] Extracting ${archiveName}...`);
+        const powershellCmd = `Expand-Archive -Path "${archivePath}" -DestinationPath "${extractDir}" -Force`;
+        spawnSync('powershell', ['-NoProfile', '-Command', powershellCmd], { stdio: 'inherit' });
+        fs.rmSync(archivePath, { force: true });
+      }
+
+      const cudartUrl = `https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/${cudartArchiveName}`;
+      console.log(`[CUDA Runtime] Downloading from ${cudartUrl}...`);
+      const cudartRes = spawnSync('curl.exe', ['-sSfL', '--retry', '3', cudartUrl, '-o', cudartArchivePath], {
+        stdio: 'inherit',
+      });
+      if (cudartRes.status === 0) {
+        console.log(`[CUDA Runtime] Extracting ${cudartArchiveName}...`);
+        const powershellCmd = `Expand-Archive -Path "${cudartArchivePath}" -DestinationPath "${extractDir}" -Force`;
+        spawnSync('powershell', ['-NoProfile', '-Command', powershellCmd], { stdio: 'inherit' });
+        fs.rmSync(cudartArchivePath, { force: true });
+      }
+    }
+
+    return extractDir;
+  }
+
+  return null;
+}
+
+function collectFilesRecursively(dir, filterRegex) {
+  if (!dir || !fs.existsSync(dir)) return [];
+  const results = [];
+  function scan(current) {
+    const entries = fs.readdirSync(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        scan(fullPath);
+      } else if (entry.isFile() && filterRegex.test(entry.name)) {
+        results.push(fullPath);
+      }
+    }
+  }
+  scan(dir);
+  return results;
+}
 
 function buildLlamaCppGgmlCuda({
   llamaRef = 'b4500',
   buildRoot,
-  cudaArchitectures = '60;70;75;80;86;89;90',
+  cudaArchitectures = '75;80;86;89',
   platform = process.platform,
 }) {
-  const env = detectCudaEnvironment();
+  const env = detectCudaEnvironment(process.env, platform);
   if (!env.hasCmake) {
     throw new Error('CMake is required to build llama.cpp ggml-cuda');
   }
@@ -228,11 +295,32 @@ function buildLlamaCppGgmlCuda({
     '-DCMAKE_BUILD_TYPE=Release',
     '-DGGML_CUDA=ON',
     '-DBUILD_SHARED_LIBS=ON',
+    '-DGGML_CUDA_FORCE_CUBLAS=ON',
+    '-DGGML_CUDA_FA_ALL_QUANTS=OFF',
+    '-DLLAMA_BUILD_EXAMPLES=OFF',
+    '-DLLAMA_BUILD_TESTS=OFF',
+    '-DLLAMA_BUILD_SERVER=OFF',
+    '-DGGML_BUILD_EXAMPLES=OFF',
+    '-DGGML_BUILD_TESTS=OFF',
     `-DCMAKE_CUDA_ARCHITECTURES=${cudaArchitectures}`,
   ];
 
   if (platform === 'win32') {
-    cmakeConfigArgs.push('-G', 'Ninja', '-DCMAKE_CUDA_FLAGS=--allow-unsupported-compiler');
+    cmakeConfigArgs.push('-G', 'Ninja', '-DCMAKE_CUDA_FLAGS=--allow-unsupported-compiler --threads 4');
+  } else {
+    const hasNinja = spawnSync('ninja', ['--version']).status === 0;
+    if (hasNinja) {
+      cmakeConfigArgs.push('-G', 'Ninja');
+    }
+    cmakeConfigArgs.push('-DCMAKE_CUDA_FLAGS=--threads 4');
+    const hasCcache = spawnSync('ccache', ['--version']).status === 0;
+    if (hasCcache) {
+      cmakeConfigArgs.push(
+        '-DCMAKE_C_COMPILER_LAUNCHER=ccache',
+        '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
+        '-DCMAKE_CUDA_COMPILER_LAUNCHER=ccache',
+      );
+    }
   }
 
   const configRes = spawnSync('cmake', cmakeConfigArgs, { stdio: 'inherit' });
@@ -248,10 +336,6 @@ function buildLlamaCppGgmlCuda({
     throw new Error('Failed to build ggml-cuda target');
   }
 
-  const binDir = path.join(buildDir, 'bin');
-  if (fs.existsSync(binDir)) {
-    return binDir;
-  }
   return buildDir;
 }
 
@@ -281,15 +365,15 @@ function stageCudaAddonFiles({
     }
   }
 
-  // 2. Copy ggml-cuda from llama.cpp build
+  // 2. Copy ggml-cuda and companion libraries from llama.cpp build or prebuilt
   if (llamaLibDir && fs.existsSync(llamaLibDir)) {
-    const llamaEntries = fs.readdirSync(llamaLibDir);
-    for (const file of llamaEntries) {
-      if (/ggml-cuda/iu.test(file)) {
-        const src = path.join(llamaLibDir, file);
-        const dest = path.join(stagedDir, file);
+    const llamaFiles = collectFilesRecursively(llamaLibDir, /\.(?:dll|so(?:\.\d+)*)$/iu);
+    for (const src of llamaFiles) {
+      const filename = path.basename(src);
+      if (/ggml|llama/iu.test(filename) && !copiedFiles.includes(filename)) {
+        const dest = path.join(stagedDir, filename);
         fs.copyFileSync(src, dest);
-        copiedFiles.push(file);
+        copiedFiles.push(filename);
       }
     }
   }
@@ -298,11 +382,14 @@ function stageCudaAddonFiles({
   for (const src of cudaLibPaths) {
     if (fs.existsSync(src)) {
       const filename = path.basename(src);
-      const dest = path.join(stagedDir, filename);
-      fs.copyFileSync(src, dest);
-      copiedFiles.push(filename);
+      if (!copiedFiles.includes(filename)) {
+        const dest = path.join(stagedDir, filename);
+        fs.copyFileSync(src, dest);
+        copiedFiles.push(filename);
+      }
     }
   }
+
   // Write version and manifest
   const versionFile = path.join(stagedDir, 'version.txt');
   fs.writeFileSync(versionFile, `${version}\n`, 'utf8');
@@ -406,7 +493,9 @@ function runCli() {
   }
 
   let llamaLibDir = options['llama-lib-dir'] ? path.resolve(options['llama-lib-dir']) : null;
-  if (!llamaLibDir && options.build) {
+  if (!llamaLibDir && options.download && process.platform === 'win32') {
+    llamaLibDir = downloadLlamaCppCuda({ llamaRef, cudaVersion, cacheDir });
+  } else if (!llamaLibDir && options.build) {
     llamaLibDir = buildLlamaCppGgmlCuda({ llamaRef, buildRoot: cacheDir });
   }
 
@@ -464,6 +553,7 @@ export {
   detectCudaEnvironment,
   collectCudaToolkitLibraries,
   downloadOnnxRuntimeGpu,
+  downloadLlamaCppCuda,
   buildLlamaCppGgmlCuda,
   stageCudaAddonFiles,
   packageCudaAddonArchive,

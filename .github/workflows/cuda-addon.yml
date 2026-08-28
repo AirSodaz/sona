@@ -76,7 +76,7 @@ jobs:
   build-windows-cuda:
     name: Build CUDA Addon (Windows x64)
     needs: prepare-version
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       ADDON_VERSION: ${{ needs.prepare-version.outputs.addon_version }}
       CUDA_VERSION: ${{ inputs.cuda_version || '12.4.1' }}
@@ -86,22 +86,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Install CUDA Toolkit
-        uses: Jimver/cuda-toolkit@v0.2.22
-        with:
-          cuda: ${{ env.CUDA_VERSION }}
-          method: network
-          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev"]'
-
-      - name: Setup Ninja
-        uses: ashutoshvarma/setup-ninja@master
-        with:
-          version: 1.11.1
-
-      - name: Set up MSVC Developer Command Prompt
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          vsversion: "2022"
       - name: Download and Extract sherpa-onnx CUDA Prebuilt (Windows)
         shell: pwsh
         run: |
@@ -109,21 +93,29 @@ jobs:
           $url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${sherpaVer}/sherpa-onnx-v${sherpaVer}-cuda-12.x-cudnn-9.x-onnxruntime1.27.1-win-x64-cuda.tar.bz2"
           Write-Host "Downloading sherpa-onnx CUDA prebuilt from $url"
           curl.exe -sSfL --retry 5 --retry-connrefused "$url" -o "sherpa-onnx-cuda.tar.bz2"
-          tar.exe -xjf "sherpa-onnx-cuda.tar.bz2"
-          Remove-Item "sherpa-onnx-cuda.tar.bz2"
-      - name: Build llama.cpp ggml-cuda (Windows)
+          7z x sherpa-onnx-cuda.tar.bz2 -y
+          7z x sherpa-onnx-cuda.tar -y
+          Remove-Item sherpa-onnx-cuda.tar* -Force
+
+      - name: Download llama.cpp and CUDA Runtime Prebuilt (Windows)
         shell: pwsh
         run: |
-          git clone --depth 1 --branch "${{ env.LLAMA_REF }}" https://github.com/ggerganov/llama.cpp.git llama-cpp-src
-          cd llama-cpp-src
-          cmake -B build -G "Ninja" `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DGGML_CUDA=ON `
-            -DBUILD_SHARED_LIBS=ON `
-            -DCMAKE_CUDA_FLAGS="--allow-unsupported-compiler" `
-            -DCMAKE_CUDA_ARCHITECTURES="60;70;75;80;86;89;90"
-          cmake --build build --config Release --target ggml-cuda -j $env:NUMBER_OF_PROCESSORS
-          cd ..
+          $llamaRef = "${{ env.LLAMA_REF }}"
+          $cuTag = if ("${{ env.CUDA_VERSION }}".StartsWith("11")) { "cu11.7" } else { "cu12.4" }
+
+          # Download llama.cpp Windows CUDA prebuilt (contains ggml-cuda.dll, ggml.dll, llama.dll, etc.)
+          $llamaUrl = "https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/llama-${llamaRef}-bin-win-cuda-${cuTag}-x64.zip"
+          Write-Host "Downloading llama.cpp prebuilt from $llamaUrl"
+          curl.exe -sSfL --retry 5 --retry-connrefused "$llamaUrl" -o "llama-win.zip"
+          Expand-Archive -Path "llama-win.zip" -DestinationPath "llama-win" -Force
+          Remove-Item "llama-win.zip"
+
+          # Download CUDA Runtime & cuBLAS DLLs (contains cudart64_12.dll, cublas64_12.dll, cublasLt64_12.dll)
+          $cudartUrl = "https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/cudart-llama-bin-win-${cuTag}-x64.zip"
+          Write-Host "Downloading CUDA runtime from $cudartUrl"
+          curl.exe -sSfL --retry 5 --retry-connrefused "$cudartUrl" -o "cudart-win.zip"
+          Expand-Archive -Path "cudart-win.zip" -DestinationPath "cudart-win" -Force
+          Remove-Item "cudart-win.zip"
 
       - name: Stage and Package Windows CUDA Addon
         shell: pwsh
@@ -132,26 +124,27 @@ jobs:
           $stageDir = "sona-cuda-addon-v${version}-windows-x64"
           New-Item -ItemType Directory -Force -Path "$stageDir" | Out-Null
 
-          # Copy sherpa-onnx CUDA prebuilt libraries (c-api, onnxruntime, providers, cudnn)
-          $sherpaLibDir = (Get-ChildItem -Path "sherpa-onnx-*-win-x64-cuda\lib").FullName
+          # 1. Copy sherpa-onnx CUDA prebuilt libraries (c-api, onnxruntime, providers, cudnn)
+          $sherpaLibDir = (Get-ChildItem -Path "sherpa-onnx-*-win-x64-cuda\lib" -ErrorAction SilentlyContinue).FullName
           if ($sherpaLibDir) {
             Copy-Item "$sherpaLibDir\*.dll" "$stageDir\" -Force
           }
-          $sherpaBinDir = (Get-ChildItem -Path "sherpa-onnx-*-win-x64-cuda\bin").FullName
+          $sherpaBinDir = (Get-ChildItem -Path "sherpa-onnx-*-win-x64-cuda\bin" -ErrorAction SilentlyContinue).FullName
           if ($sherpaBinDir) {
             Copy-Item "$sherpaBinDir\*.dll" "$stageDir\" -Force -ErrorAction SilentlyContinue
           }
-          # Copy ggml-cuda from llama.cpp build
-          Copy-Item "llama-cpp-src\build\bin\ggml-cuda.dll" "$stageDir\" -Force -ErrorAction SilentlyContinue
-          if (-not (Test-Path "$stageDir\ggml-cuda.dll")) {
-            Copy-Item "llama-cpp-src\build\ggml-cuda.dll" "$stageDir\" -Force
+
+          # 2. Copy ggml-cuda and companion DLLs from llama.cpp
+          Get-ChildItem -Path "llama-win" -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+            Copy-Item $_.FullName "$stageDir\" -Force
           }
 
-          # Copy CUDA Runtime and cuBLAS DLLs from CUDA Toolkit
-          $cudaBin = "$env:CUDA_PATH\bin"
-          Copy-Item "$cudaBin\cudart64_*.dll" "$stageDir\" -Force
-          Copy-Item "$cudaBin\cublas64_*.dll" "$stageDir\" -Force
-          Copy-Item "$cudaBin\cublasLt64_*.dll" "$stageDir\" -Force
+          # 3. Copy CUDA Runtime and cuBLAS DLLs
+          Get-ChildItem -Path "cudart-win" -Filter "*.dll" -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+            if ($_.Name -match '^(cudart64_|cublas64_|cublasLt64_)') {
+              Copy-Item $_.FullName "$stageDir\" -Force
+            }
+          }
 
           # Write version metadata
           Set-Content -Path "$stageDir\version.txt" -Value "$version"
@@ -172,8 +165,9 @@ jobs:
           # Generate SHA256 checksum
           $hash = (Get-FileHash -Path "$archiveName" -Algorithm SHA256).Hash.ToLower()
           "$hash  $archiveName" | Out-File -FilePath "${archiveName}.sha256" -Encoding ascii
+
       - name: Upload Windows Addon Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cuda-addon-windows-x64
           path: |
@@ -184,7 +178,7 @@ jobs:
     name: Build CUDA Addon (Linux x64)
     needs: prepare-version
     runs-on: ubuntu-22.04
-    timeout-minutes: 90
+    timeout-minutes: 45
     env:
       ADDON_VERSION: ${{ needs.prepare-version.outputs.addon_version }}
       CUDA_VERSION: ${{ inputs.cuda_version || '12.4.1' }}
@@ -193,31 +187,54 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-      - name: Install CUDA Toolkit and cuBLAS
+
+      - name: Install CUDA Toolkit, cuBLAS, Ninja, and ccache
         run: |
           wget -q -O cuda-keyring.deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
           sudo dpkg -i cuda-keyring.deb
           sudo apt-get update
-          sudo apt-get install -y cuda-nvcc-12-4 cuda-cudart-dev-12-4 libcublas-dev-12-4 libcublas-12-4
+          sudo apt-get install -y cuda-nvcc-12-4 cuda-cudart-dev-12-4 libcublas-dev-12-4 libcublas-12-4 ninja-build ccache
           echo "/usr/local/cuda-12.4/bin" >> $GITHUB_PATH
           echo "CUDA_PATH=/usr/local/cuda-12.4" >> $GITHUB_ENV
+
+      - name: Setup ccache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/ccache
+          key: cuda-addon-linux-ccache-${{ env.LLAMA_REF }}-${{ env.CUDA_VERSION }}-${{ github.sha }}
+          restore-keys: |
+            cuda-addon-linux-ccache-${{ env.LLAMA_REF }}-${{ env.CUDA_VERSION }}-
+            cuda-addon-linux-ccache-
+
       - name: Download and Extract sherpa-onnx CUDA Prebuilt (Linux)
         run: |
           SHERPA_VER="1.13.5"
           URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_VER}/sherpa-onnx-v${SHERPA_VER}-cuda-12.x-cudnn-9.x-onnxruntime1.27.1-linux-x64-gpu.tar.bz2"
           echo "Downloading sherpa-onnx CUDA prebuilt from $URL"
-          wget -q --tries=5 "$URL" -O sherpa-onnx-cuda.tar.bz2
+          curl -sSfL --retry 5 "$URL" -o sherpa-onnx-cuda.tar.bz2
           tar -xjf sherpa-onnx-cuda.tar.bz2
           rm -f sherpa-onnx-cuda.tar.bz2
+
       - name: Build llama.cpp ggml-cuda (Linux)
         run: |
           git clone --depth 1 --branch "${{ env.LLAMA_REF }}" https://github.com/ggerganov/llama.cpp.git llama-cpp-src
           cd llama-cpp-src
-          cmake -B build \
+          cmake -B build -G "Ninja" \
             -DCMAKE_BUILD_TYPE=Release \
             -DGGML_CUDA=ON \
             -DBUILD_SHARED_LIBS=ON \
-            -DCMAKE_CUDA_ARCHITECTURES="60;70;75;80;86;89;90"
+            -DGGML_CUDA_FORCE_CUBLAS=ON \
+            -DGGML_CUDA_FA_ALL_QUANTS=OFF \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_SERVER=OFF \
+            -DGGML_BUILD_EXAMPLES=OFF \
+            -DGGML_BUILD_TESTS=OFF \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CUDA_FLAGS="--threads 4" \
+            -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89"
           cmake --build build --config Release --target ggml-cuda -j $(nproc)
           cd ..
 
@@ -226,16 +243,26 @@ jobs:
           VERSION="${{ env.ADDON_VERSION }}"
           STAGE_DIR="sona-cuda-addon-v${VERSION}-linux-x64"
           mkdir -p "$STAGE_DIR"
-          # Copy sherpa-onnx CUDA prebuilt libraries (c-api, onnxruntime, providers, cudnn)
+
+          # 1. Copy sherpa-onnx CUDA prebuilt libraries (c-api, onnxruntime, providers, cudnn)
           SHERPA_LIB_DIR=$(find . -maxdepth 2 -name "lib" -path "*/sherpa-onnx*/*" -type d | head -1)
           if [ -n "$SHERPA_LIB_DIR" ]; then
             cp -a "$SHERPA_LIB_DIR"/*.so* "$STAGE_DIR/" 2>/dev/null || true
           fi
-          # Copy ggml-cuda library from llama.cpp build
-          cp -a llama-cpp-src/build/bin/libggml-cuda.so* "$STAGE_DIR/" 2>/dev/null || cp -a llama-cpp-src/build/libggml-cuda.so* "$STAGE_DIR/"
 
-          # Copy CUDA Runtime and cuBLAS shared objects
-          CUDA_LIB="/usr/local/cuda/lib64"
+          # 2. Copy ggml-cuda and companion libraries from llama.cpp build
+          find llama-cpp-src/build -name "libggml*.so*" -exec cp -a {} "$STAGE_DIR/" \; 2>/dev/null || true
+          find llama-cpp-src/build -name "libllama*.so*" -exec cp -a {} "$STAGE_DIR/" \; 2>/dev/null || true
+
+          # 3. Copy CUDA Runtime and cuBLAS shared objects
+          CUDA_LIB="/usr/local/cuda-12.4/targets/x86_64-linux/lib"
+          if [ ! -d "$CUDA_LIB" ]; then
+            CUDA_LIB="/usr/local/cuda-12.4/lib64"
+          fi
+          if [ ! -d "$CUDA_LIB" ]; then
+            CUDA_LIB="/usr/local/cuda/lib64"
+          fi
+
           cp -a "$CUDA_LIB"/libcudart.so* "$STAGE_DIR/" 2>/dev/null || true
           cp -a "$CUDA_LIB"/libcublas.so* "$STAGE_DIR/" 2>/dev/null || true
           cp -a "$CUDA_LIB"/libcublasLt.so* "$STAGE_DIR/" 2>/dev/null || true
@@ -245,15 +272,16 @@ jobs:
 
           # Write version metadata
           echo "$VERSION" > "$STAGE_DIR/version.txt"
-          cat <<'EOF' > "$STAGE_DIR/cuda-addon-manifest.json"
+          cat <<EOF > "$STAGE_DIR/cuda-addon-manifest.json"
           {
             "schemaVersion": "1.0",
-            "addonVersion": "0.1.0",
+            "addonVersion": "$VERSION",
             "cudaVersion": "12.4",
             "targetOs": "linux",
             "targetArch": "x86_64"
           }
           EOF
+
           # Create tar.gz package
           ARCHIVE_NAME="sona-cuda-addon-v${VERSION}-linux-x64.tar.gz"
           tar -czf "$ARCHIVE_NAME" -C "$STAGE_DIR" .
@@ -262,13 +290,12 @@ jobs:
           sha256sum "$ARCHIVE_NAME" > "${ARCHIVE_NAME}.sha256"
 
       - name: Upload Linux Addon Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cuda-addon-linux-x64
           path: |
             sona-cuda-addon-v*-linux-x64.tar.gz
             sona-cuda-addon-v*-linux-x64.tar.gz.sha256
-
   publish-cuda-addon:
     name: Publish CUDA Addon Release
     needs: [prepare-version, build-windows-cuda, build-linux-cuda]
@@ -283,7 +310,7 @@ jobs:
         with:
           node-version: 24
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: all-artifacts
           pattern: "cuda-addon-*"
