@@ -42,7 +42,7 @@ function dynamicLibraryName(crateName) {
   return `lib${crateName}.so`;
 }
 
-const profile = readOption('--profile', 'release');
+const profile = readOption('--profile', 'debug');
 const releaseFlag = profile === 'release' ? ['--release'] : [];
 const targetDir = path.resolve(
   readOption('--target-dir', process.env.CARGO_TARGET_DIR ?? path.join(repoRoot, 'target')),

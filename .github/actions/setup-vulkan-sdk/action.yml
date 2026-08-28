@@ -9,8 +9,24 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Install Vulkan SDK (Windows)
+    - name: Cache Vulkan SDK (Windows)
       if: runner.os == 'Windows'
+      id: cache-vulkan-win
+      uses: actions/cache@v5
+      with:
+        path: C:\VulkanSDK\${{ inputs.version }}
+        key: vulkan-sdk-${{ inputs.version }}-windows
+
+    - name: Cache Vulkan SDK (Linux)
+      if: runner.os == 'Linux'
+      id: cache-vulkan-linux
+      uses: actions/cache@v5
+      with:
+        path: ~/vulkan/${{ inputs.version }}
+        key: vulkan-sdk-${{ inputs.version }}-linux-x86_64
+
+    - name: Install Vulkan SDK (Windows)
+      if: runner.os == 'Windows' && steps.cache-vulkan-win.outputs.cache-hit != 'true'
       shell: pwsh
       run: |
         $ProgressPreference = 'SilentlyContinue'
@@ -24,20 +40,33 @@ runs:
         Copy-Item "$vulkanDir\Lib\cmake\SPIRV-Headers*.cmake" "$vulkanDir\Lib\cmake\SPIRV-Headers\"
         New-Item -ItemType Directory -Force -Path "$vulkanDir\share\cmake\SPIRV-Headers" | Out-Null
         Copy-Item "$vulkanDir\Lib\cmake\SPIRV-Headers*.cmake" "$vulkanDir\share\cmake\SPIRV-Headers\"
+
+    - name: Configure Vulkan SDK environment (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $version = "${{ inputs.version }}"
+        $vulkanDir = "C:\VulkanSDK\$version"
         "VULKAN_SDK=$vulkanDir" >> $env:GITHUB_ENV
         "SPIRV-Headers_DIR=$vulkanDir\Lib\cmake" >> $env:GITHUB_ENV
         "CMAKE_PREFIX_PATH=$vulkanDir;$vulkanDir\Lib\cmake" >> $env:GITHUB_ENV
         "$vulkanDir\Bin" >> $env:GITHUB_PATH
 
     - name: Install Vulkan SDK (Linux)
+      if: runner.os == 'Linux' && steps.cache-vulkan-linux.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        mkdir -p "${HOME}/vulkan"
+        wget -q "https://sdk.lunarg.com/sdk/download/${VERSION}/linux/vulkansdk-linux-x86_64-${VERSION}.tar.xz" -O vulkansdk-linux.tar.xz
+        tar -xf vulkansdk-linux.tar.xz -C "${HOME}/vulkan"
+        rm -f vulkansdk-linux.tar.xz
+
+    - name: Configure Vulkan SDK environment (Linux)
       if: runner.os == 'Linux'
       shell: bash
       run: |
         VERSION="${{ inputs.version }}"
         VULKAN_DIR="${HOME}/vulkan/${VERSION}/x86_64"
-        mkdir -p "${HOME}/vulkan"
-        wget -q "https://sdk.lunarg.com/sdk/download/${VERSION}/linux/vulkansdk-linux-x86_64-${VERSION}.tar.xz" -O vulkansdk-linux.tar.xz
-        tar -xf vulkansdk-linux.tar.xz -C "${HOME}/vulkan"
-        rm -f vulkansdk-linux.tar.xz
         echo "VULKAN_SDK=${VULKAN_DIR}" >> "$GITHUB_ENV"
         echo "${VULKAN_DIR}/bin" >> "$GITHUB_PATH"

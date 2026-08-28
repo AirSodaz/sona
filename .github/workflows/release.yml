@@ -93,7 +93,7 @@ jobs:
           VERSION="${{ github.ref_name }}"
           RAW_VERSION="${VERSION#v}"
           echo "Extracting release notes for version $VERSION"
-          
+
           cat <<EOF > release_notes.md
           ## Download
 

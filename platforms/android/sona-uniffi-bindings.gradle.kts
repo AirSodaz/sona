@@ -79,6 +79,8 @@ val generateSonaUniffiKotlin = tasks.register<Exec>("generateSonaUniffiKotlin") 
     commandLine(
         "node",
         File(repoRoot, "scripts/generate-uniffi-kotlin.js").path,
+        "--profile",
+        "debug",
         "--out-dir",
         outDir.path,
     )

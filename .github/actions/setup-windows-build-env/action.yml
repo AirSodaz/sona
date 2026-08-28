@@ -20,10 +20,27 @@ runs:
         "CC_x86_64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
         "CXX_x86_64_pc_windows_msvc=clang-cl" >> $env:GITHUB_ENV
         "CXXFLAGS_x86_64_pc_windows_msvc=/EHsc" >> $env:GITHUB_ENV
+
+        # Short path junction: target/ → C:\t avoids MAX_PATH issues with
+        # deeply nested Cargo/CMake build trees on Windows.
+        # Preserve any pre-existing target/ contents (e.g. restored cache).
         New-Item -ItemType Directory -Force -Path "C:\t" | Out-Null
-        if (Test-Path "target") { Remove-Item -Recurse -Force "target" }
-        cmd.exe /c "mklink /J target C:\t"
+        if (Test-Path "target") {
+          if ((Get-Item "target").Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            Write-Host "target/ is already a junction — keeping it"
+          } else {
+            # Move restored cache contents into the junction target
+            Write-Host "Moving existing target/ contents into C:\t"
+            Get-ChildItem -Path "target" -Force | Move-Item -Destination "C:\t" -Force
+            Remove-Item -Path "target" -Force
+            cmd.exe /c "mklink /J target C:\t"
+          }
+        } else {
+          cmd.exe /c "mklink /J target C:\t"
+        }
+        # subst is kept for tools that need a drive letter, but
+        # CARGO_TARGET_DIR stays as "target" (set by setup-sccache)
+        # so sccache hashes are stable across platforms.
         subst T: C:\t
-        "CARGO_TARGET_DIR=T:\" >> $env:GITHUB_ENV
         clang-cl --version
         ninja --version
