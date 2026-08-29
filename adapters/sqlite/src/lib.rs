@@ -43,6 +43,7 @@ pub use history_store::SqliteHistoryStore;
 pub use storage_usage_repository::LazySqliteStorageUsageRepository;
 pub use storage_usage_repository::{
     load_storage_usage_snapshot, load_storage_usage_snapshot_with_database,
+    load_storage_usage_snapshot_with_database_and_models_dir,
 };
 pub use sync_repository::{
     SqliteSyncRepository, SqliteSyncRepositoryFactory, record_sync_operation_in_transaction,

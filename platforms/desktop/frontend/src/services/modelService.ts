@@ -22,6 +22,7 @@ import type { ScenarioModelPathConfig } from '../utils/scenarioModels';
 import { listen } from './tauri/platform/events';
 import { exists, mkdir, remove } from './tauri/platform/fs';
 import { appLocalDataDir, join } from './tauri/platform/path';
+import { storageGetDirectories } from './tauri/storage';
 
 export type { ModelFileConfig } from '../types/model';
 export {
@@ -199,6 +200,7 @@ const fileService = createModelFileService({
     exists,
     mkdir,
     remove,
+    getStorageDirectories: storageGetDirectories,
 });
 
 const registryService = createModelRegistryService({

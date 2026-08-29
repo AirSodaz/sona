@@ -42,6 +42,21 @@ pub fn load_storage_usage_snapshot_with_database(
     database: Arc<Database>,
     generated_at: String,
 ) -> Result<StorageUsageSnapshot, StorageUsageError> {
-    let repository = SqliteStorageUsageRepository::new(app_local_data_dir, database);
+    load_storage_usage_snapshot_with_database_and_models_dir(
+        app_local_data_dir,
+        database,
+        None,
+        generated_at,
+    )
+}
+
+pub fn load_storage_usage_snapshot_with_database_and_models_dir(
+    app_local_data_dir: PathBuf,
+    database: Arc<Database>,
+    models_dir: Option<PathBuf>,
+    generated_at: String,
+) -> Result<StorageUsageSnapshot, StorageUsageError> {
+    let repository =
+        SqliteStorageUsageRepository::with_models_dir(app_local_data_dir, database, models_dir);
     StorageUsageService::new(Arc::new(repository)).load_snapshot_at(generated_at)
 }

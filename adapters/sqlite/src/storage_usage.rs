@@ -54,6 +54,7 @@ pub struct SqliteStorageUsageRepository {
     app_local_data_dir: PathBuf,
     db: Arc<Database>,
     webview_cache_path: Option<PathBuf>,
+    models_dir: Option<PathBuf>,
 }
 
 impl SqliteStorageUsageRepository {
@@ -63,6 +64,21 @@ impl SqliteStorageUsageRepository {
             app_local_data_dir,
             db,
             webview_cache_path,
+            models_dir: None,
+        }
+    }
+
+    pub fn with_models_dir(
+        app_local_data_dir: PathBuf,
+        db: Arc<Database>,
+        models_dir: Option<PathBuf>,
+    ) -> Self {
+        let webview_cache_path = default_webview_cache_path(&app_local_data_dir);
+        Self {
+            app_local_data_dir,
+            db,
+            webview_cache_path,
+            models_dir,
         }
     }
 
@@ -76,6 +92,7 @@ impl SqliteStorageUsageRepository {
             app_local_data_dir,
             db,
             webview_cache_path,
+            models_dir: None,
         }
     }
 
@@ -84,6 +101,7 @@ impl SqliteStorageUsageRepository {
             &self.app_local_data_dir,
             self.db.as_ref(),
             self.webview_cache_path.as_deref(),
+            self.models_dir.as_deref(),
         )
     }
 }
@@ -98,12 +116,14 @@ fn collect_storage_usage_measurements(
     app_local_data_dir: &Path,
     db: &Database,
     webview_cache_path: Option<&Path>,
+    custom_models_dir: Option<&Path>,
 ) -> Result<StorageUsageMeasurements, StorageUsageError> {
     let history_dir = app_local_data_dir.join(HISTORY_DIR_NAME);
     let speaker_profiles_dir = app_local_data_dir.join(SPEAKER_PROFILES_DIR_NAME);
-    let models_dir = app_local_data_dir.join(MODELS_DIR_NAME);
+    let models_dir = custom_models_dir
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| app_local_data_dir.join(MODELS_DIR_NAME));
     let temporary_dir = app_local_data_dir.join(API_TEMP_DIR_NAME);
-
     let history_audio = scan_existing_path(&history_dir)?;
     let speaker_samples = scan_existing_path(&speaker_profiles_dir)?;
     let models = scan_existing_path(&models_dir)?;
@@ -129,7 +149,10 @@ fn collect_storage_usage_measurements(
     .into_iter()
     .fold(0_u64, u64::saturating_add);
 
-    let mut excluded_paths = vec![history_dir, speaker_profiles_dir, models_dir, temporary_dir];
+    let mut excluded_paths = vec![history_dir, speaker_profiles_dir, temporary_dir];
+    if custom_models_dir.is_none() || models_dir.starts_with(app_local_data_dir) {
+        excluded_paths.push(models_dir);
+    }
     if let Some(path) = webview_cache_path {
         excluded_paths.push(path.to_path_buf());
     }

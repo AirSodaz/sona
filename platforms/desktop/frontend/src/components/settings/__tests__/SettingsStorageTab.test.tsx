@@ -30,6 +30,15 @@ const mocks = vi.hoisted(() => {
       retentionDays = patch.historyAudioRetentionDays;
     }),
     showError: vi.fn(),
+    getDirectories: vi.fn(),
+    selectDirectory: vi.fn(),
+    migrateDataDirectory: vi.fn(),
+    resetDataDirectory: vi.fn(),
+    setModelsDirectory: vi.fn(),
+    resetModelsDirectory: vi.fn(),
+    openPath: vi.fn(),
+    relaunchApp: vi.fn(),
+    getModelCatalogSnapshot: vi.fn(),
   };
 });
 
@@ -54,6 +63,25 @@ vi.mock('../../../services/storageUsageService', () => ({
   storageUsageService: {
     clearWebviewBrowsingData: (...args: unknown[]) => mocks.clearWebviewBrowsingData(...args),
     getUsageSnapshot: (...args: unknown[]) => mocks.getUsageSnapshot(...args),
+  },
+}));
+
+vi.mock('../../../services/storageLocationService', () => ({
+  storageLocationService: {
+    getDirectories: (...args: unknown[]) => mocks.getDirectories(...args),
+    selectDirectory: (...args: unknown[]) => mocks.selectDirectory(...args),
+    migrateDataDirectory: (...args: unknown[]) => mocks.migrateDataDirectory(...args),
+    resetDataDirectory: (...args: unknown[]) => mocks.resetDataDirectory(...args),
+    setModelsDirectory: (...args: unknown[]) => mocks.setModelsDirectory(...args),
+    resetModelsDirectory: (...args: unknown[]) => mocks.resetModelsDirectory(...args),
+    openPath: (...args: unknown[]) => mocks.openPath(...args),
+    relaunchApp: (...args: unknown[]) => mocks.relaunchApp(...args),
+  },
+}));
+
+vi.mock('../../../services/modelService', () => ({
+  modelService: {
+    getModelCatalogSnapshot: (...args: unknown[]) => mocks.getModelCatalogSnapshot(...args),
   },
 }));
 
@@ -162,8 +190,51 @@ describe('SettingsStorageTab', () => {
     mocks.previewAudioCleanup.mockResolvedValue(report());
     mocks.refreshHistory.mockResolvedValue(undefined);
     mocks.showError.mockResolvedValue(undefined);
+    mocks.getDirectories.mockResolvedValue({
+      dataDir: '/default/data',
+      defaultDataDir: '/default/data',
+      isCustomDataDir: false,
+      modelsDir: '/default/data/models',
+      defaultModelsDir: '/default/data/models',
+      isCustomModelsDir: false,
+    });
+    mocks.selectDirectory.mockResolvedValue('/new/path');
+    mocks.migrateDataDirectory.mockResolvedValue({
+      dataDir: '/new/path',
+      defaultDataDir: '/default/data',
+      isCustomDataDir: true,
+      modelsDir: '/default/data/models',
+      defaultModelsDir: '/default/data/models',
+      isCustomModelsDir: false,
+    });
+    mocks.resetDataDirectory.mockResolvedValue({
+      dataDir: '/default/data',
+      defaultDataDir: '/default/data',
+      isCustomDataDir: false,
+      modelsDir: '/default/data/models',
+      defaultModelsDir: '/default/data/models',
+      isCustomModelsDir: false,
+    });
+    mocks.setModelsDirectory.mockResolvedValue({
+      dataDir: '/default/data',
+      defaultDataDir: '/default/data',
+      isCustomDataDir: false,
+      modelsDir: '/new/models',
+      defaultModelsDir: '/default/data/models',
+      isCustomModelsDir: true,
+    });
+    mocks.resetModelsDirectory.mockResolvedValue({
+      dataDir: '/default/data',
+      defaultDataDir: '/default/data',
+      isCustomDataDir: false,
+      modelsDir: '/default/data/models',
+      defaultModelsDir: '/default/data/models',
+      isCustomModelsDir: false,
+    });
+    mocks.openPath.mockResolvedValue(undefined);
+    mocks.relaunchApp.mockResolvedValue(undefined);
+    mocks.getModelCatalogSnapshot.mockResolvedValue({});
   });
-
   it('accepts disabled storage capabilities from the core contract', () => {
     const snapshot: StorageUsageSnapshot = usageSnapshot();
     snapshot.categories.database.sqlite.dbstatAvailable = false;
@@ -328,6 +399,159 @@ describe('SettingsStorageTab', () => {
       expect(mocks.showError).toHaveBeenCalledWith(expect.objectContaining({
         code: 'history.audio_cleanup_failed',
       }));
+    });
+  });
+
+  it('renders storage locations with data directory and models directory', async () => {
+    render(<SettingsStorageTab />);
+
+    expect(await screen.findByText('Storage Locations')).toBeTruthy();
+    expect(screen.getByTestId('settings-storage-data-dir-card')).toBeTruthy();
+    expect(screen.getByTestId('settings-storage-models-dir-card')).toBeTruthy();
+    expect(screen.getByText('/default/data')).toBeTruthy();
+    expect(screen.getByText('/default/data/models')).toBeTruthy();
+  });
+
+  it('allows changing data directory and confirms before relaunch', async () => {
+    render(<SettingsStorageTab />);
+    await screen.findByText('/default/data');
+
+    const dataCard = screen.getByTestId('settings-storage-data-dir-card');
+    const changeBtn = dataCard.querySelector('button') as HTMLButtonElement;
+    fireEvent.click(changeBtn);
+
+    await waitFor(() => {
+      expect(mocks.selectDirectory).toHaveBeenCalledWith('/default/data');
+    });
+
+    await waitFor(() => {
+      expect(mocks.confirm).toHaveBeenCalledWith(
+        expect.stringContaining('/new/path'),
+        expect.objectContaining({
+          title: 'Change Data Directory?',
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(mocks.migrateDataDirectory).toHaveBeenCalledWith('/new/path', true);
+    });
+
+    await waitFor(() => {
+      expect(mocks.relaunchApp).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('allows changing models directory and refreshes snapshot without relaunch', async () => {
+    render(<SettingsStorageTab />);
+    await screen.findByText('/default/data/models');
+
+    const modelsCard = screen.getByTestId('settings-storage-models-dir-card');
+    const changeBtn = modelsCard.querySelector('button') as HTMLButtonElement;
+    fireEvent.click(changeBtn);
+
+    await waitFor(() => {
+      expect(mocks.selectDirectory).toHaveBeenCalledWith('/default/data/models');
+    });
+
+    await waitFor(() => {
+      expect(mocks.confirm).toHaveBeenCalledWith(
+        expect.stringContaining('/new/path'),
+        expect.objectContaining({
+          title: 'Change Models Directory?',
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(mocks.setModelsDirectory).toHaveBeenCalledWith('/new/path', true);
+    });
+
+    await waitFor(() => {
+      expect(mocks.getModelCatalogSnapshot).toHaveBeenCalledTimes(1);
+    });
+    expect(mocks.relaunchApp).not.toHaveBeenCalled();
+  });
+
+  it('opens storage directory in system file explorer', async () => {
+    render(<SettingsStorageTab />);
+    await screen.findByText('/default/data');
+
+    const dataCard = screen.getByTestId('settings-storage-data-dir-card');
+    const openBtn = dataCard.querySelectorAll('button')[1] as HTMLButtonElement;
+    fireEvent.click(openBtn);
+
+    await waitFor(() => {
+      expect(mocks.openPath).toHaveBeenCalledWith('/default/data');
+    });
+  });
+
+  it('resets custom data directory to default and relaunches', async () => {
+    mocks.getDirectories.mockResolvedValue({
+      dataDir: '/custom/data',
+      defaultDataDir: '/default/data',
+      isCustomDataDir: true,
+      modelsDir: '/default/data/models',
+      defaultModelsDir: '/default/data/models',
+      isCustomModelsDir: false,
+    });
+
+    render(<SettingsStorageTab />);
+    await screen.findByText('/custom/data');
+
+    const dataCard = screen.getByTestId('settings-storage-data-dir-card');
+    const resetBtn = dataCard.querySelectorAll('button')[2] as HTMLButtonElement;
+    fireEvent.click(resetBtn);
+
+    await waitFor(() => {
+      expect(mocks.confirm).toHaveBeenCalledWith(
+        expect.stringContaining('/default/data'),
+        expect.objectContaining({
+          title: 'Restore Default Data Directory?',
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(mocks.resetDataDirectory).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(mocks.relaunchApp).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('resets custom models directory to default', async () => {
+    mocks.getDirectories.mockResolvedValue({
+      dataDir: '/default/data',
+      defaultDataDir: '/default/data',
+      isCustomDataDir: false,
+      modelsDir: '/custom/models',
+      defaultModelsDir: '/default/data/models',
+      isCustomModelsDir: true,
+    });
+
+    render(<SettingsStorageTab />);
+    await screen.findByText('/custom/models');
+
+    const modelsCard = screen.getByTestId('settings-storage-models-dir-card');
+    const resetBtn = modelsCard.querySelectorAll('button')[2] as HTMLButtonElement;
+    fireEvent.click(resetBtn);
+
+    await waitFor(() => {
+      expect(mocks.confirm).toHaveBeenCalledWith(
+        expect.stringContaining('/default/data/models'),
+        expect.objectContaining({
+          title: 'Restore Default Models Directory?',
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(mocks.resetModelsDirectory).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(mocks.getModelCatalogSnapshot).toHaveBeenCalledTimes(1);
     });
   });
 });

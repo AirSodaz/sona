@@ -112,17 +112,13 @@ pub async fn download_preset_model<R: tauri::Runtime>(
     download_id: String,
     mirror: Option<String>,
 ) -> Result<String, String> {
-    use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
     use sona_core::models::downloads::resolve_model_download;
     use sona_model_downloads::{
         download_model_with_cancel_and_mirror, installed_model_is_valid, parse_download_mirror,
     };
     use tauri::Emitter;
 
-    let models_dir = TauriPathProvider::from_app(&app)
-        .resolve_path(PathKind::AppLocalData)
-        .map_err(|error| error.to_string())?
-        .join("models");
+    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
     let resolved =
         resolve_model_download(&model_id, &models_dir).map_err(|error| error.to_string())?;
     if !resolved.model.is_multi_file() {

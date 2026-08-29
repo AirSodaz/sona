@@ -1,4 +1,4 @@
-﻿pub use sona_core::ports::path::{PathKind, PathPort, PathPortError};
+pub use sona_core::ports::path::{PathKind, PathPort, PathPortError};
 pub use sona_runtime_fs::{
     default_desktop_app_data_roots, default_desktop_models_dir,
     select_desktop_models_dir_from_app_roots,
@@ -43,11 +43,16 @@ impl<R: Runtime> PathPort for TauriPathProvider<R> {
                 .path()
                 .app_data_dir()
                 .map_err(|error| PathPortError::new(kind, error.to_string())),
-            PathKind::AppLocalData => self
-                .app
-                .path()
-                .app_local_data_dir()
-                .map_err(|error| PathPortError::new(kind, error.to_string())),
+            PathKind::AppLocalData => {
+                let default_dir = self
+                    .app
+                    .path()
+                    .app_local_data_dir()
+                    .map_err(|error| PathPortError::new(kind, error.to_string()))?;
+                Ok(crate::platform::storage_location::resolve_active_data_dir(
+                    &default_dir,
+                ))
+            }
             PathKind::AppLogData => self
                 .app
                 .path()

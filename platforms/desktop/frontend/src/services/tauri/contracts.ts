@@ -43,6 +43,7 @@ import type {
   SpeakerProfileSample,
   SpeakerProcessingConfig,
 } from "../../types/speaker";
+import type { StorageDirectoriesInfo } from "../../types/storage";
 import type {
   ApplySpeakerProfileToGroupRequest,
   SpeakerCorrectionResponse,
@@ -302,6 +303,38 @@ type ManualTauriCommandContractMap = {
   [TauriCommand.storage.clearWebviewBrowsingData]: {
     args: undefined;
     result: WebviewBrowsingDataClearResult;
+  };
+  [TauriCommand.storage.getDirectories]: {
+    args: undefined;
+    result: StorageDirectoriesInfo;
+  };
+  [TauriCommand.storage.migrateDataDirectory]: {
+    args: {
+      targetDir: string;
+      copyExisting: boolean;
+    };
+    result: StorageDirectoriesInfo;
+  };
+  [TauriCommand.storage.resetDataDirectory]: {
+    args: undefined;
+    result: StorageDirectoriesInfo;
+  };
+  [TauriCommand.storage.setModelsDirectory]: {
+    args: {
+      targetDir: string;
+      moveExisting: boolean;
+    };
+    result: StorageDirectoriesInfo;
+  };
+  [TauriCommand.storage.resetModelsDirectory]: {
+    args: undefined;
+    result: StorageDirectoriesInfo;
+  };
+  [TauriCommand.storage.openPath]: {
+    args: {
+      path: string;
+    };
+    result: void;
   };
   [TauriCommand.dashboard.getSnapshot]: {
     args: { request: { deep: boolean } };

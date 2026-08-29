@@ -24,6 +24,7 @@ pub mod speaker_processing;
 pub mod startup_console;
 pub mod startup_dialog;
 pub mod startup_env;
+pub mod storage_location;
 pub mod storage_usage;
 pub mod sync;
 pub mod sync_secret_store;

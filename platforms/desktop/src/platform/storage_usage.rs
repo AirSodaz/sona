@@ -7,10 +7,12 @@ pub use sona_core::storage_usage::{StorageUsageSnapshot, WebviewBrowsingDataClea
 pub async fn get_usage_snapshot<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<StorageUsageSnapshot, String> {
+    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(app)?;
     let snapshot = with_sqlite_context(app, move |context| {
-        sona_sqlite::load_storage_usage_snapshot_with_database(
+        sona_sqlite::load_storage_usage_snapshot_with_database_and_models_dir(
             context.app_data_dir().to_path_buf(),
             context.database(),
+            Some(models_dir),
             sona_runtime_fs::storage_usage_generated_at_now(),
         )
     })

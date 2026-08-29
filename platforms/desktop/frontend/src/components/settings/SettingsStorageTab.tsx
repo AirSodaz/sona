@@ -1,16 +1,36 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Box, Clock, Database, Globe2, HardDrive, Music, RefreshCw, Trash2 } from 'lucide-react';
+import {
+    Box,
+    Clock,
+    Database,
+    ExternalLink,
+    Folder,
+    FolderOpen,
+    Globe2,
+    HardDrive,
+    Music,
+    RefreshCw,
+    RotateCcw,
+    Trash2,
+} from 'lucide-react';
 import { Dropdown } from '../Dropdown';
 import type { DropdownOption } from '../Dropdown';
 import { historyService } from '../../services/historyService';
+import { storageLocationService } from '../../services/storageLocationService';
 import { storageUsageService } from '../../services/storageUsageService';
+import { modelService } from '../../services/modelService';
+import { logger } from '../../utils/logger';
 import { useHistoryStorageConfig, useSetConfig } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import type { HistoryAudioCleanupReport } from '../../types/history';
-import type { StorageUsageSnapshot, WebviewBrowsingDataClearResult } from '../../types/storage';
+import type {
+    StorageDirectoriesInfo,
+    StorageUsageSnapshot,
+    WebviewBrowsingDataClearResult,
+} from '../../types/storage';
 import { SettingsItem, SettingsPageHeader, SettingsSection, SettingsTabContainer } from './SettingsLayout';
 
 const RETENTION_PRESETS = [
@@ -199,6 +219,203 @@ export function SettingsStorageTab(): React.JSX.Element {
     const [usageError, setUsageError] = React.useState<string | null>(null);
     const [isClearingWebview, setIsClearingWebview] = React.useState(false);
     const [webviewResultMessage, setWebviewResultMessage] = React.useState<string | null>(null);
+    const [directoriesInfo, setDirectoriesInfo] = React.useState<StorageDirectoriesInfo | null>(null);
+    const [isLocationBusy, setIsLocationBusy] = React.useState(false);
+
+    const loadDirectories = React.useCallback(async () => {
+        try {
+            const info = await storageLocationService.getDirectories();
+            setDirectoriesInfo(info);
+        } catch (error) {
+            logger.error('Failed to load storage directories:', error);
+        }
+    }, []);
+
+    React.useEffect(() => {
+        const timer = window.setTimeout(() => {
+            void loadDirectories();
+        }, 0);
+        return () => window.clearTimeout(timer);
+    }, [loadDirectories]);
+
+    const handleChangeDataDir = async () => {
+        try {
+            const selected = await storageLocationService.selectDirectory(directoriesInfo?.dataDir);
+            if (!selected || selected === directoriesInfo?.dataDir) {
+                return;
+            }
+
+            const confirmed = await confirm(
+                t('settings.storage.data_dir_change_confirm_message', {
+                    defaultValue: 'Switch data directory to:\n{{path}}\n\nSona will restart to safely reopen the database.',
+                    path: selected,
+                }),
+                {
+                    title: t('settings.storage.data_dir_change_confirm_title', { defaultValue: 'Change Data Directory?' }),
+                    confirmLabel: t('settings.storage.data_dir_confirm_btn', { defaultValue: 'Confirm & Restart' }),
+                    cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+                },
+            );
+
+            if (!confirmed) {
+                return;
+            }
+
+            setIsLocationBusy(true);
+            await storageLocationService.migrateDataDirectory(selected, true);
+            await storageLocationService.relaunchApp();
+        } catch (error) {
+            await showError({
+                code: 'storage.dir_update_failed',
+                messageKey: 'settings.storage.dir_update_failed',
+                cause: error,
+            });
+        } finally {
+            setIsLocationBusy(false);
+        }
+    };
+
+    const handleResetDataDir = async () => {
+        if (!directoriesInfo?.defaultDataDir) return;
+        try {
+            const confirmed = await confirm(
+                t('settings.storage.data_dir_reset_confirm_message', {
+                    defaultValue: 'Restore system default data directory:\n{{path}}\n\nSona will restart to apply the change.',
+                    path: directoriesInfo.defaultDataDir,
+                }),
+                {
+                    title: t('settings.storage.data_dir_reset_confirm_title', { defaultValue: 'Restore Default Data Directory?' }),
+                    confirmLabel: t('settings.storage.data_dir_confirm_btn', { defaultValue: 'Confirm & Restart' }),
+                    cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+                },
+            );
+
+            if (!confirmed) {
+                return;
+            }
+
+            setIsLocationBusy(true);
+            await storageLocationService.resetDataDirectory();
+            await storageLocationService.relaunchApp();
+        } catch (error) {
+            await showError({
+                code: 'storage.dir_update_failed',
+                messageKey: 'settings.storage.dir_update_failed',
+                cause: error,
+            });
+        } finally {
+            setIsLocationBusy(false);
+        }
+    };
+
+    const handleOpenDataDir = async () => {
+        if (!directoriesInfo?.dataDir) return;
+        try {
+            await storageLocationService.openPath(directoriesInfo.dataDir);
+        } catch (error) {
+            await showError({
+                code: 'storage.open_folder_failed',
+                messageKey: 'errors.storage.open_folder_failed',
+                cause: error,
+            });
+        }
+    };
+
+    const handleChangeModelsDir = async () => {
+        try {
+            const selected = await storageLocationService.selectDirectory(directoriesInfo?.modelsDir);
+            if (!selected || selected === directoriesInfo?.modelsDir) {
+                return;
+            }
+
+            const confirmed = await confirm(
+                t('settings.storage.models_dir_change_confirm_message', {
+                    defaultValue: 'Switch model storage directory to:\n{{path}}\n\nFuture model downloads and recognition will use the new directory.',
+                    path: selected,
+                }),
+                {
+                    title: t('settings.storage.models_dir_change_confirm_title', { defaultValue: 'Change Models Directory?' }),
+                    confirmLabel: t('settings.storage.models_dir_confirm_btn', { defaultValue: 'Confirm' }),
+                    cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+                },
+            );
+
+            if (!confirmed) {
+                return;
+            }
+
+            setIsLocationBusy(true);
+            const updated = await storageLocationService.setModelsDirectory(selected, true);
+            setDirectoriesInfo(updated);
+            try {
+                await modelService.getModelCatalogSnapshot();
+            } catch (err) {
+                logger.warn('Failed to refresh model catalog snapshot:', err);
+            }
+            await loadUsageSnapshot(true);
+        } catch (error) {
+            await showError({
+                code: 'storage.dir_update_failed',
+                messageKey: 'settings.storage.dir_update_failed',
+                cause: error,
+            });
+        } finally {
+            setIsLocationBusy(false);
+        }
+    };
+
+    const handleResetModelsDir = async () => {
+        if (!directoriesInfo?.defaultModelsDir) return;
+        try {
+            const confirmed = await confirm(
+                t('settings.storage.models_dir_reset_confirm_message', {
+                    defaultValue: 'Restore default models directory:\n{{path}}\n\nRestore default location?',
+                    path: directoriesInfo.defaultModelsDir,
+                }),
+                {
+                    title: t('settings.storage.models_dir_reset_confirm_title', { defaultValue: 'Restore Default Models Directory?' }),
+                    confirmLabel: t('settings.storage.restore_default', { defaultValue: 'Restore Default' }),
+                    cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+                },
+            );
+
+            if (!confirmed) {
+                return;
+            }
+
+            setIsLocationBusy(true);
+            const updated = await storageLocationService.resetModelsDirectory();
+            setDirectoriesInfo(updated);
+            try {
+                await modelService.getModelCatalogSnapshot();
+            } catch (err) {
+                logger.warn('Failed to refresh model catalog snapshot:', err);
+            }
+            await loadUsageSnapshot(true);
+        } catch (error) {
+            await showError({
+                code: 'storage.dir_update_failed',
+                messageKey: 'settings.storage.dir_update_failed',
+                cause: error,
+            });
+        } finally {
+            setIsLocationBusy(false);
+        }
+    };
+
+    const handleOpenModelsDir = async () => {
+        if (!directoriesInfo?.modelsDir) return;
+        try {
+            await storageLocationService.openPath(directoriesInfo.modelsDir);
+        } catch (error) {
+            await showError({
+                code: 'storage.open_folder_failed',
+                messageKey: 'errors.storage.open_folder_failed',
+                cause: error,
+            });
+        }
+    };
+
 
     const loadUsageSnapshot = React.useCallback(async (quiet = false) => {
         if (!quiet) {
@@ -351,6 +568,126 @@ export function SettingsStorageTab(): React.JSX.Element {
                     defaultValue: 'Review local data usage and clean managed storage without deleting transcript text.',
                 })}
             />
+
+            <SettingsSection
+                title={t('settings.storage.locations_title', { defaultValue: 'Storage Locations' })}
+                description={t('settings.storage.locations_description', {
+                    defaultValue: 'Manage the storage directories for application data and AI speech recognition models.',
+                })}
+                icon={<Folder size={20} />}
+            >
+                <div className="settings-storage-locations-grid">
+                    <div className="settings-storage-location-card" data-testid="settings-storage-data-dir-card">
+                        <div className="settings-storage-location-header">
+                            <div className="settings-storage-location-title-row">
+                                <span className="settings-storage-location-title">
+                                    {t('settings.storage.data_dir_title', { defaultValue: 'Data Directory' })}
+                                </span>
+                                <span className={`settings-storage-location-badge ${directoriesInfo?.isCustomDataDir ? 'custom' : 'default'}`}>
+                                    {directoriesInfo?.isCustomDataDir
+                                        ? t('settings.storage.badge_custom', { defaultValue: 'Custom' })
+                                        : t('settings.storage.badge_default', { defaultValue: 'Default' })}
+                                </span>
+                            </div>
+                            <p className="settings-storage-location-hint">
+                                {t('settings.storage.data_dir_hint', {
+                                    defaultValue: 'Stores SQLite databases, history recordings, speaker voice profiles, and recovery snapshots. Changing this requires restarting Sona.',
+                                })}
+                            </p>
+                        </div>
+                        <div className="settings-storage-path-box" title={directoriesInfo?.dataDir}>
+                            <code>{directoriesInfo?.dataDir || t('common.loading', { defaultValue: 'Loading...' })}</code>
+                        </div>
+                        <div className="settings-storage-location-actions">
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => { void handleChangeDataDir(); }}
+                                disabled={isLocationBusy}
+                            >
+                                <FolderOpen size={14} aria-hidden="true" />
+                                {t('settings.storage.browse', { defaultValue: 'Change Directory...' })}
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => { void handleOpenDataDir(); }}
+                                disabled={!directoriesInfo?.dataDir}
+                                title={t('settings.storage.open_folder', { defaultValue: 'Open in Explorer' })}
+                            >
+                                <ExternalLink size={14} aria-hidden="true" />
+                                {t('settings.storage.open_folder', { defaultValue: 'Open Folder' })}
+                            </button>
+                            {directoriesInfo?.isCustomDataDir && (
+                                <button
+                                    type="button"
+                                    className="btn btn-ghost btn-sm"
+                                    onClick={() => { void handleResetDataDir(); }}
+                                    disabled={isLocationBusy}
+                                >
+                                    <RotateCcw size={14} aria-hidden="true" />
+                                    {t('settings.storage.restore_default', { defaultValue: 'Restore Default' })}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="settings-storage-location-card" data-testid="settings-storage-models-dir-card">
+                        <div className="settings-storage-location-header">
+                            <div className="settings-storage-location-title-row">
+                                <span className="settings-storage-location-title">
+                                    {t('settings.storage.models_dir_title', { defaultValue: 'Models Directory' })}
+                                </span>
+                                <span className={`settings-storage-location-badge ${directoriesInfo?.isCustomModelsDir ? 'custom' : 'default'}`}>
+                                    {directoriesInfo?.isCustomModelsDir
+                                        ? t('settings.storage.badge_custom', { defaultValue: 'Custom' })
+                                        : t('settings.storage.badge_default', { defaultValue: 'Default' })}
+                                </span>
+                            </div>
+                            <p className="settings-storage-location-hint">
+                                {t('settings.storage.models_dir_hint', {
+                                    defaultValue: 'Stores offline ASR speech recognition, VAD, and punctuation models. Newly downloaded models will be saved here.',
+                                })}
+                            </p>
+                        </div>
+                        <div className="settings-storage-path-box" title={directoriesInfo?.modelsDir}>
+                            <code>{directoriesInfo?.modelsDir || t('common.loading', { defaultValue: 'Loading...' })}</code>
+                        </div>
+                        <div className="settings-storage-location-actions">
+                            <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => { void handleChangeModelsDir(); }}
+                                disabled={isLocationBusy}
+                            >
+                                <FolderOpen size={14} aria-hidden="true" />
+                                {t('settings.storage.browse', { defaultValue: 'Change Directory...' })}
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => { void handleOpenModelsDir(); }}
+                                disabled={!directoriesInfo?.modelsDir}
+                                title={t('settings.storage.open_folder', { defaultValue: 'Open in Explorer' })}
+                            >
+                                <ExternalLink size={14} aria-hidden="true" />
+                                {t('settings.storage.open_folder', { defaultValue: 'Open Folder' })}
+                            </button>
+                            {directoriesInfo?.isCustomModelsDir && (
+                                <button
+                                    type="button"
+                                    className="btn btn-ghost btn-sm"
+                                    onClick={() => { void handleResetModelsDir(); }}
+                                    disabled={isLocationBusy}
+                                >
+                                    <RotateCcw size={14} aria-hidden="true" />
+                                    {t('settings.storage.restore_default', { defaultValue: 'Restore Default' })}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </SettingsSection>
 
             <SettingsSection
                 title={t('settings.storage.usage_title', { defaultValue: 'Data Usage' })}

@@ -8,6 +8,7 @@ use sona_core::storage_usage::{StorageUsageError, StorageUsageRepository};
 use sona_sqlite::{
     Database, LazySqliteStorageUsageRepository, load_storage_usage_snapshot,
     load_storage_usage_snapshot_with_database,
+    load_storage_usage_snapshot_with_database_and_models_dir,
 };
 
 fn file_hashes(root: &Path) -> BTreeMap<PathBuf, String> {
@@ -122,4 +123,25 @@ fn valid_collection_reads_active_wal_and_analytics_without_modifying_source_file
         );
     }
     drop(writer);
+}
+
+#[test]
+fn storage_usage_scans_custom_models_directory_outside_data_dir() {
+    let data_dir = tempfile::tempdir().unwrap();
+    let custom_models_dir = tempfile::tempdir().unwrap();
+    let writer = Arc::new(Database::open(data_dir.path()).unwrap());
+
+    let model_file = custom_models_dir.path().join("sensevoice.onnx");
+    std::fs::write(&model_file, b"1234567890").unwrap();
+
+    let snapshot = load_storage_usage_snapshot_with_database_and_models_dir(
+        data_dir.path().to_path_buf(),
+        writer,
+        Some(custom_models_dir.path().to_path_buf()),
+        "2026-07-15T20:01:00.000Z".to_string(),
+    )
+    .unwrap();
+
+    assert_eq!(snapshot.categories.models.bytes, 10);
+    assert_eq!(snapshot.categories.models.file_count, 1);
 }

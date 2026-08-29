@@ -18,8 +18,8 @@ pub async fn get_model_catalog_snapshot(
 pub async fn get_model_catalog_snapshot_for_app<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> Result<ModelCatalogSnapshot, String> {
-    let provider = crate::platform::paths::TauriPathProvider::from_app(app);
-    get_model_catalog_snapshot(&provider).await
+    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(app)?;
+    build_model_catalog_snapshot_for_models_dir(models_dir).await
 }
 
 pub async fn resolve_model_catalog_selected_ids_command(
@@ -39,8 +39,9 @@ pub async fn resolve_model_catalog_selected_ids_for_app<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
     paths: ModelSelectionPaths,
 ) -> Result<ModelCatalogSelectedIds, String> {
-    let provider = crate::platform::paths::TauriPathProvider::from_app(app);
-    resolve_model_catalog_selected_ids_command(&provider, paths).await
+    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(app)?;
+    let snapshot = build_model_catalog_snapshot_for_models_dir(models_dir).await?;
+    Ok(resolve_model_catalog_selected_ids(&snapshot, &paths))
 }
 
 async fn build_model_catalog_snapshot_for_models_dir(

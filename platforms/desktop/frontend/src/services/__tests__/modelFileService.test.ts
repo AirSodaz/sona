@@ -27,6 +27,29 @@ describe('modelFileService', () => {
     expect(mkdir).toHaveBeenCalledWith('/app/data/models', { recursive: true });
   });
 
+  it('uses custom models directory from getStorageDirectories when provided', async () => {
+    const getStorageDirectories = vi.fn().mockResolvedValue({
+      dataDir: '/app/data',
+      defaultDataDir: '/app/data',
+      isCustomDataDir: false,
+      modelsDir: '/custom/models/dir',
+      defaultModelsDir: '/app/data/models',
+      isCustomModelsDir: true,
+    });
+    const service = createModelFileService({
+      appLocalDataDir,
+      join,
+      exists,
+      mkdir,
+      remove,
+      getStorageDirectories,
+    });
+
+    await expect(service.getModelsDir()).resolves.toBe('/custom/models/dir');
+    expect(getStorageDirectories).toHaveBeenCalledTimes(1);
+    expect(mkdir).toHaveBeenCalledWith('/custom/models/dir', { recursive: true });
+  });
+
   it('does not recreate the models directory when it already exists', async () => {
     exists.mockResolvedValueOnce(true);
     const service = createModelFileService({ appLocalDataDir, join, exists, mkdir, remove });

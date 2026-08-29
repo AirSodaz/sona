@@ -80,7 +80,13 @@ import {
 } from '../recovery';
 import {
   storageClearWebviewBrowsingData,
+  storageGetDirectories,
   storageGetUsageSnapshot,
+  storageMigrateDataDirectory,
+  storageOpenPath,
+  storageResetDataDirectory,
+  storageResetModelsDirectory,
+  storageSetModelsDirectory,
 } from '../storage';
 import {
   annotateSpeakerSegmentsFromFile,
@@ -1276,6 +1282,47 @@ describe('tauri boundary wrappers', () => {
 
     expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.storage.getUsageSnapshot);
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.storage.clearWebviewBrowsingData);
+  });
+
+  it('storage directory wrappers forward path and migration options', async () => {
+    const directoriesInfo = {
+      dataDir: 'C:/SonaData',
+      defaultDataDir: 'C:/AppData/Sona',
+      isCustomDataDir: true,
+      modelsDir: 'D:/Models',
+      defaultModelsDir: 'C:/AppData/Sona/models',
+      isCustomModelsDir: true,
+    };
+
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(directoriesInfo)
+      .mockResolvedValueOnce(directoriesInfo)
+      .mockResolvedValueOnce(directoriesInfo)
+      .mockResolvedValueOnce(directoriesInfo)
+      .mockResolvedValueOnce(directoriesInfo)
+      .mockResolvedValueOnce(undefined);
+
+    await expect(storageGetDirectories()).resolves.toEqual(directoriesInfo);
+    await expect(storageMigrateDataDirectory('C:/SonaData', true)).resolves.toEqual(directoriesInfo);
+    await expect(storageResetDataDirectory()).resolves.toEqual(directoriesInfo);
+    await expect(storageSetModelsDirectory('D:/Models', false)).resolves.toEqual(directoriesInfo);
+    await expect(storageResetModelsDirectory()).resolves.toEqual(directoriesInfo);
+    await expect(storageOpenPath('D:/Models')).resolves.toBeUndefined();
+
+    expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.storage.getDirectories);
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.storage.migrateDataDirectory, {
+      targetDir: 'C:/SonaData',
+      copyExisting: true,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.storage.resetDataDirectory);
+    expect(invoke).toHaveBeenNthCalledWith(4, TauriCommand.storage.setModelsDirectory, {
+      targetDir: 'D:/Models',
+      moveExisting: false,
+    });
+    expect(invoke).toHaveBeenNthCalledWith(5, TauriCommand.storage.resetModelsDirectory);
+    expect(invoke).toHaveBeenNthCalledWith(6, TauriCommand.storage.openPath, {
+      path: 'D:/Models',
+    });
   });
 
   it('export transcript wrapper forwards flat export args', async () => {

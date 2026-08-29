@@ -864,6 +864,103 @@
   line-height: 1.45;
 }
 
+.settings-storage-locations-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: var(--spacing-lg, 24px);
+  background: var(--color-bg-primary);
+}
+
+.settings-storage-location-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  background: var(--color-bg-secondary, var(--color-bg-elevated));
+}
+
+.settings-storage-location-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-storage-location-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.settings-storage-location-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.settings-storage-location-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.settings-storage-location-badge.default {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
+.settings-storage-location-badge.custom {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  color: var(--color-primary);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.settings-storage-location-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+
+.settings-storage-path-box {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.settings-storage-path-box code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.76rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+
+.settings-storage-location-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+
 @media (max-width: 720px) {
   .settings-storage-overview-header,
   .settings-storage-detail-row {
