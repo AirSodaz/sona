@@ -11,7 +11,7 @@ role = "provider"
 [dependencies]
 async-trait = { workspace = true }
 encoding_rs = { workspace = true }
-llama-cpp-2 = { version = "=0.1.153", default-features = false, features = ["dynamic-link", "mtmd"] }
+llama-cpp-2 = { version = "=0.1.154", default-features = false, features = ["dynamic-link", "mtmd"] }
 log = { workspace = true }
 sona-core = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }

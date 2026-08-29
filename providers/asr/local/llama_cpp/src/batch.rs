@@ -34,16 +34,11 @@ use sona_core::transcription::transcript::{
 };
 
 const MODEL_TYPE_QWEN3_ASR: &str = "qwen3-asr";
-const MODEL_TYPE_GRANITE_SPEECH: &str = "granite-speech";
 const N_BATCH: i32 = 512;
 const MAX_GENERATED_TOKENS: usize = 4096;
 /// Qwen3-ASR GGUFs ship a 65536-token context, so a generous hotword budget
 /// stays negligible against audio and generation tokens.
 const QWEN3_ASR_HOTWORDS_MAX_CHARS: usize = 2048;
-/// Granite Speech 4.1 caps text positions at 4096 while consuming ~10 audio
-/// tokens per second, leaving only a few hundred prompt tokens for a
-/// six-minute clip; keep keyword lists small.
-const GRANITE_SPEECH_HOTWORDS_MAX_CHARS: usize = 256;
 
 static BACKEND: OnceLock<Result<LlamaBackend, String>> = OnceLock::new();
 /// Cache key: canonical model path plus the resolved GPU layer count.
@@ -137,14 +132,11 @@ impl LlamaBatchTranscriptionJob {
                 plan.engine,
             ));
         }
-        if !matches!(
-            plan.model_type.as_str(),
-            MODEL_TYPE_QWEN3_ASR | MODEL_TYPE_GRANITE_SPEECH
-        ) {
+        if plan.model_type != MODEL_TYPE_QWEN3_ASR {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::Unsupported,
                 format!(
-                    "llama.cpp batch ASR supports model types '{MODEL_TYPE_QWEN3_ASR}' and '{MODEL_TYPE_GRANITE_SPEECH}', got '{}'.",
+                    "llama.cpp batch ASR supports model type '{MODEL_TYPE_QWEN3_ASR}', got '{}'.",
                     plan.model_type
                 ),
             ));
@@ -240,13 +232,8 @@ impl LlamaBatchTranscriptionJob {
         let audio_segments = self.plan_audio_segments(&samples, sample_rate)?;
         let punctuation =
             load_configured_punctuation(&self.punct_engines, self.punctuation_model.as_deref())?;
-        let prompt = build_transcription_prompt(
-            &self.model_type,
-            &model,
-            &self.hotwords,
-            self.language_prefill,
-        )?;
-        let add_special = self.model_type != MODEL_TYPE_GRANITE_SPEECH;
+        let prompt = qwen3_asr_prompt(&model, &self.hotwords, self.language_prefill)?;
+        let add_special = true;
         let language_forced = self.language_prefill.is_some();
         let segment_total = audio_segments.len();
 
@@ -265,7 +252,6 @@ impl LlamaBatchTranscriptionJob {
                 add_special,
                 language_forced,
                 self.num_threads,
-                &self.model_type,
                 &segment_samples,
                 &segment,
                 segment_index,
@@ -367,7 +353,6 @@ fn transcribe_segment(
     add_special: bool,
     language_forced: bool,
     num_threads: i32,
-    model_type: &str,
     samples: &[f32],
     segment: &AudioSegment,
     segment_index: usize,
@@ -454,11 +439,9 @@ fn transcribe_segment(
                 })?,
         );
         generated_tokens = generated_tokens.saturating_add(1);
-
         if generated_tokens.is_multiple_of(8) {
             emit_partial_transcript(
                 observer,
-                model_type,
                 language_forced,
                 &segment_id,
                 segment,
@@ -486,7 +469,7 @@ fn transcribe_segment(
         })?;
     }
 
-    let text = parse_transcript_output(model_type, &generated);
+    let text = parse_qwen3_asr_output(&generated);
     if text.is_empty() {
         return Ok(None);
     }
@@ -511,7 +494,6 @@ fn transcribe_segment(
 #[allow(clippy::too_many_arguments)]
 fn emit_partial_transcript(
     observer: &dyn BatchTranscriptionObserver,
-    model_type: &str,
     language_forced: bool,
     segment_id: &str,
     segment: &AudioSegment,
@@ -520,7 +502,7 @@ fn emit_partial_transcript(
     segment_index: usize,
     segment_total: usize,
 ) {
-    let text = parse_partial_transcript_output(model_type, generated, language_forced);
+    let text = parse_qwen3_asr_partial_output(generated, language_forced);
     if text.is_empty() {
         return;
     }
@@ -722,18 +704,6 @@ fn validate_supported_options(
 
     let language_prefill = match plan.model_type.as_str() {
         MODEL_TYPE_QWEN3_ASR => qwen3_asr_language(&plan.language)?,
-        MODEL_TYPE_GRANITE_SPEECH => {
-            if !plan.language.eq_ignore_ascii_case("auto") {
-                return Err(AsrPortError::new(
-                    AsrPortErrorKind::Unsupported,
-                    format!(
-                        "Granite Speech llama.cpp transcription detects language automatically and does not support '{}'.",
-                        plan.language
-                    ),
-                ));
-            }
-            None
-        }
         other => {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::Unsupported,
@@ -744,7 +714,7 @@ fn validate_supported_options(
 
     let hotwords = normalize_hotwords(
         plan.hotwords.as_deref().unwrap_or_default(),
-        hotword_char_budget(plan.model_type.as_str()),
+        QWEN3_ASR_HOTWORDS_MAX_CHARS,
     );
 
     Ok(ValidatedOptions {
@@ -846,47 +816,6 @@ fn load_model(
     cache.insert(cache_key, Arc::clone(&model));
     Ok(model)
 }
-
-const GRANITE_SPEECH_TRANSCRIBE_PROMPT: &str =
-    "transcribe the speech with proper punctuation and capitalization.";
-/// Official keyword-biased ASR prompt from the Granite Speech model card.
-/// Keyword runs use this documented pairing verbatim instead of appending
-/// `Keywords:` to the punctuated variant.
-const GRANITE_SPEECH_KEYWORD_PROMPT: &str = "transcribe the speech to text.";
-
-fn build_transcription_prompt(
-    model_type: &str,
-    model: &LlamaModel,
-    hotwords: &[String],
-    language_prefill: Option<&str>,
-) -> Result<String, AsrPortError> {
-    match model_type {
-        MODEL_TYPE_GRANITE_SPEECH => Ok(granite_speech_prompt(hotwords)),
-        _ => qwen3_asr_prompt(model, hotwords, language_prefill),
-    }
-}
-
-/// Granite Speech renders its embedded chat template literally
-/// (`USER: ...\n ASSISTANT:`), so build it by hand: llama-cpp-2's heuristic
-/// template engine rejects this GGUF, and the tokenizer sets
-/// add_bos_token=false so the caller skips special-token prepending.
-/// Hotwords ride the trained keyword-biasing suffix inside the same user
-/// turn, joined with ", " exactly as documented.
-fn granite_speech_prompt(hotwords: &[String]) -> String {
-    let task = if hotwords.is_empty() {
-        GRANITE_SPEECH_TRANSCRIBE_PROMPT
-    } else {
-        GRANITE_SPEECH_KEYWORD_PROMPT
-    };
-    let mut prompt = format!("USER: {}{}", mtmd_default_marker(), task);
-    if !hotwords.is_empty() {
-        prompt.push_str(" Keywords: ");
-        prompt.push_str(&hotwords.join(", "));
-    }
-    prompt.push_str("\n ASSISTANT:");
-    prompt
-}
-
 /// Qwen3-ASR consumes hotwords as background knowledge inside the ChatML
 /// system message — the channel the model was trained on for context
 /// biasing — and forces a language by prefilling
@@ -976,24 +905,6 @@ fn path_to_str<'a>(path: &'a Path, label: &str) -> Result<&'a str, AsrPortError>
     })
 }
 
-fn parse_transcript_output(model_type: &str, output: &str) -> String {
-    if model_type == MODEL_TYPE_GRANITE_SPEECH {
-        return normalize_recognizer_text(output.trim());
-    }
-    parse_qwen3_asr_output(output)
-}
-
-fn parse_partial_transcript_output(
-    model_type: &str,
-    output: &str,
-    language_forced: bool,
-) -> String {
-    if model_type == MODEL_TYPE_GRANITE_SPEECH {
-        return normalize_recognizer_text(output.trim());
-    }
-    parse_qwen3_asr_partial_output(output, language_forced)
-}
-
 fn parse_qwen3_asr_output(output: &str) -> String {
     let transcript = match output.split_once("<asr_text>") {
         Some((_, transcript)) => transcript,
@@ -1077,15 +988,6 @@ fn truncate_hotwords(mut terms: Vec<String>, max_chars: usize) -> Vec<String> {
     }
     kept
 }
-
-fn hotword_char_budget(model_type: &str) -> usize {
-    if model_type == MODEL_TYPE_GRANITE_SPEECH {
-        GRANITE_SPEECH_HOTWORDS_MAX_CHARS
-    } else {
-        QWEN3_ASR_HOTWORDS_MAX_CHARS
-    }
-}
-
 /// Trained Qwen3-ASR language names paired with the ISO codes Sona's
 /// selectors emit; the prefill expects the canonical names verbatim.
 const QWEN3_ASR_LANGUAGES: &[(&str, &str)] = &[
@@ -1159,12 +1061,10 @@ fn is_qwen3_asr_language_name(candidate: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        GpuOffload, LlamaBatchTranscriptionJob, MODEL_TYPE_GRANITE_SPEECH, MODEL_TYPE_QWEN3_ASR,
-        audio_ingest_progress, granite_speech_prompt, llama_generation_progress,
-        normalize_hotwords, parse_partial_transcript_output, parse_qwen3_asr_output,
-        parse_qwen3_asr_partial_output, parse_transcript_output, qwen3_asr_language,
-        resolve_auto_gpu_offload, resolve_gpu_offload, segment_bounds, truncate_hotwords,
-        validate_supported_options,
+        GpuOffload, LlamaBatchTranscriptionJob, MODEL_TYPE_QWEN3_ASR, audio_ingest_progress,
+        llama_generation_progress, normalize_hotwords, parse_qwen3_asr_output,
+        parse_qwen3_asr_partial_output, qwen3_asr_language, resolve_auto_gpu_offload,
+        resolve_gpu_offload, segment_bounds, truncate_hotwords, validate_supported_options,
     };
     use sona_core::export::ExportFormat;
     use sona_core::ports::asr::{AsrPortErrorKind, LocalAsrEngine};
@@ -1238,28 +1138,6 @@ mod tests {
     }
 
     #[test]
-    fn granite_speech_type_passes_the_model_type_guard() {
-        let mut plan = plan();
-        plan.model_type = MODEL_TYPE_GRANITE_SPEECH.to_string();
-
-        // The guard passes; the job then fails on the missing input file,
-        // proving model type was accepted by dispatch.
-        let error = LlamaBatchTranscriptionJob::from_plan(
-            plan,
-            &empty_vad_engines(),
-            &empty_punct_engines(),
-        )
-        .unwrap_err();
-
-        assert_eq!(error.kind, AsrPortErrorKind::InvalidRequest);
-        assert!(
-            error
-                .message
-                .contains("Input file must be an existing file")
-        );
-    }
-
-    #[test]
     fn vad_configuration_is_accepted_for_segmented_batch_runs() {
         let mut plan = plan();
         let input = std::env::temp_dir().join(format!(
@@ -1324,29 +1202,17 @@ mod tests {
 
         assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
         assert!(error.message.contains(MODEL_TYPE_QWEN3_ASR));
-        assert!(error.message.contains(MODEL_TYPE_GRANITE_SPEECH));
     }
 
     #[test]
-    fn output_parsing_dispatches_by_model_type() {
+    fn output_parsing_handles_qwen3_asr_markers() {
+        assert_eq!(parse_qwen3_asr_output("<asr_text>你好"), "你好");
+        assert_eq!(parse_qwen3_asr_partial_output("no marker yet", false), "");
         assert_eq!(
-            parse_transcript_output(MODEL_TYPE_GRANITE_SPEECH, "  Hello, world!  "),
-            "Hello, world!"
-        );
-        assert_eq!(
-            parse_transcript_output(MODEL_TYPE_QWEN3_ASR, "<asr_text>你好"),
+            parse_qwen3_asr_partial_output("<asr_text>你好", false),
             "你好"
         );
-        assert_eq!(
-            parse_partial_transcript_output(MODEL_TYPE_GRANITE_SPEECH, " Partial text ", false),
-            "Partial text"
-        );
-        assert_eq!(
-            parse_partial_transcript_output(MODEL_TYPE_QWEN3_ASR, "no marker yet", false),
-            ""
-        );
     }
-
     #[test]
     fn token_generation_progress_is_monotonic_and_capped() {
         let first = llama_generation_progress(8, 0, 1);
@@ -1445,18 +1311,6 @@ mod tests {
     }
 
     #[test]
-    fn granite_speech_rejects_language_override() {
-        let mut plan = plan();
-        plan.model_type = MODEL_TYPE_GRANITE_SPEECH.to_string();
-        plan.language = "en".to_string();
-
-        let error = validate_supported_options(&plan).unwrap_err();
-
-        assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
-        assert!(error.message.contains("detects language automatically"));
-    }
-
-    #[test]
     fn qwen3_language_mapping_covers_selector_codes() {
         assert_eq!(qwen3_asr_language("auto").unwrap(), None);
         assert_eq!(qwen3_asr_language("").unwrap(), None);
@@ -1493,18 +1347,6 @@ mod tests {
         );
         // A budget smaller than the first term yields no usable keywords.
         assert!(truncate_hotwords(terms, 4).is_empty());
-    }
-
-    #[test]
-    fn granite_speech_prompts_match_documented_templates() {
-        assert_eq!(
-            granite_speech_prompt(&[]),
-            "USER: <__media__>transcribe the speech with proper punctuation and capitalization.\n ASSISTANT:"
-        );
-        assert_eq!(
-            granite_speech_prompt(&["Acme".to_string(), "TCP".to_string()]),
-            "USER: <__media__>transcribe the speech to text. Keywords: Acme, TCP\n ASSISTANT:"
-        );
     }
 
     #[test]

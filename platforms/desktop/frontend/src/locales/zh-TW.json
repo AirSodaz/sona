@@ -1149,7 +1149,6 @@
             "zipformer_xlarge": "由 K2-FSA 開發。針對中文辨識進行最佳化的高度準確且高效的流式模型。",
             "funasr_nano": "由阿里巴巴 FunASR 開發。大型且高度準確的本機模型，支援多種方言和複雜的轉錄任務。",
             "qwen3_asr": "由阿里巴巴 Qwen 團隊開發。基於 Qwen3 的本機 ASR 模型，用於高品質的批次轉錄。",
-            "granite_speech": "由 IBM Granite 開發。Open ASR 排行榜第一的本機語音模型，支援英語、法語、德語、西班牙語、葡萄牙語和日語的高品質批次轉錄。",
             "firered_asr": "由小紅書（FireRed 團隊）開發。先進的本機模型，在中英混認任務中表現出色。",
             "dolphin": "由 DataOcean AI 和清華大學開發。支援 40 種東方語言和 22 種中文方言的多語言、多工 ASR 模型。",
             "ct_punctuation": "為原始語音轉錄結果添加準確的標點符號。使用 Int8 量化進行了最佳化。",

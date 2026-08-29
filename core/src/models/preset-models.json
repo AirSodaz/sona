@@ -179,52 +179,6 @@
     "versionLabel": "1.7B Q8_0"
   },
   {
-    "id": "granite-speech-4.1-2b-q8-gguf",
-    "name": "Granite Speech",
-    "description": "settings.descriptions.granite_speech",
-    "type": "granite-speech",
-    "modes": [
-      "batch"
-    ],
-    "languages": [
-      "de",
-      "en",
-      "es",
-      "fr",
-      "ja",
-      "pt"
-    ],
-    "languageMode": "auto",
-    "size": "~3.12 GB",
-    "isArchive": false,
-    "engine": "llama-cpp",
-    "rules": {
-      "requiresVad": true,
-      "requiresPunctuation": false,
-      "timestampSupportHint": "segment"
-    },
-    "artifacts": [
-      {
-        "url": "https://huggingface.co/ibm-granite/granite-speech-4.1-2b-GGUF/resolve/8267dad2adc84209b0efd2702ec68a98356125eb/granite-speech-4.1-2b-Q8_0.gguf?download=true",
-        "filename": "granite-speech-4.1-2b-Q8_0.gguf",
-        "sha256": "87320ee80cc6e638837bd2e9b7920252a87148613930bcdc11fcafad0b00beea",
-        "sizeBytes": 1956154944
-      },
-      {
-        "url": "https://huggingface.co/ibm-granite/granite-speech-4.1-2b-GGUF/resolve/8267dad2adc84209b0efd2702ec68a98356125eb/mmproj-model-f16.gguf?download=true",
-        "filename": "mmproj-model-f16.gguf",
-        "sha256": "0d3615076cbe1d35c3f60c43a60a4047b3e2eeee1b2c233580be60186faab5c5",
-        "sizeBytes": 1159354752
-      }
-    ],
-    "fileConfig": {
-      "model": "granite-speech-4.1-2b-Q8_0.gguf",
-      "mmproj": "mmproj-model-f16.gguf"
-    },
-    "groupId": "granite-speech",
-    "versionLabel": "2B Q8_0"
-  },
-  {
     "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
     "name": "SenseVoice",
     "description": "settings.descriptions.sensevoice",

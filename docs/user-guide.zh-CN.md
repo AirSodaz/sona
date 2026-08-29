@@ -141,7 +141,7 @@ Sona 首次打开时，可能会直接进入 `首次运行设置`。如果您暂
 
 - 如果未配置离线批量模型，Sona 会重新打开引导，而不是直接开始转录。
 - `设置 > 模型设置` 中的 `批量 VAD 分割`、`VAD Buffer Size` 与 `Max Concurrent Transcriptions` 会影响批处理体验。关闭批量 VAD 后，本地批量转录会整段识别文件。
-- 批量 VAD 分割适用于所有本地引擎，包括 llama.cpp 预设（Qwen3-ASR、Granite Speech）。默认伴生模型为 Silero VAD v5；模型目录中亦提供 Silero v4 与 TEN VAD。
+- 批量 VAD 分割适用于所有本地引擎，包括 llama.cpp 预设（Qwen3-ASR）。默认伴生模型为 Silero VAD v5；模型目录中亦提供 Silero v4 与 TEN VAD。
 
 ## 6. 转录编辑与播放
 
@@ -384,7 +384,7 @@ Sona 的 LLM 功能是可选能力。离线转录本身不依赖它，但 `LLM �
 
 ### 说明
 
-- 在 `设置 > 词汇` 中，`热词` 按每行一个的方式填写；热词适用于 sherpa-onnx 的 Transducer 与 Qwen3-ASR 模型，以及 llama.cpp 预设（Qwen3-ASR、Granite Speech）。`关键词 :2.0` 这类带权重的写法仅对 sherpa-onnx Transducer 模型生效。
+- 在 `设置 > 词汇` 中，`热词` 按每行一个的方式填写；热词适用于 sherpa-onnx 的 Transducer 与 Qwen3-ASR 模型，以及 llama.cpp 预设（Qwen3-ASR）。`关键词 :2.0` 这类带权重的写法仅对 sherpa-onnx Transducer 模型生效。
 - 在 `设置 > 词汇` 中，`文本替换` 适合用来统一术语或修正重复出现的识别结果。
 - 在 `设置 > 词汇` 中，`说话人档案` 会保存已知说话人的本地参考样本。档案会根据可用样本数量和时长显示为可自动匹配、可作为候选建议或尚未就绪；这些状态影响匹配置信度，不影响您手动绑定档案。
 

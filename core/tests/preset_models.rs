@@ -3,9 +3,8 @@ use std::path::{Path, PathBuf};
 
 use sona_core::models::preset_models::{
     DEFAULT_MODEL_RULES, DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, LanguageMode,
-    ModelCatalogSectionType, ModelDependencyConfigKey, ModelDependencyRequest, ModelRules,
-    ModelSelectionPaths, TimestampSupportHint, build_model_catalog_snapshot_with_installed_ids,
-    find_preset_model, preset_models,
+    ModelCatalogSectionType, ModelDependencyConfigKey, ModelDependencyRequest, ModelSelectionPaths,
+    build_model_catalog_snapshot_with_installed_ids, find_preset_model, preset_models,
 };
 
 #[test]
@@ -56,36 +55,6 @@ fn qwen_gguf_presets_replace_the_sherpa_qwen_catalog_entry() {
             })
         }));
     }
-}
-
-#[test]
-fn granite_speech_gguf_preset_is_a_verified_llama_cpp_batch_bundle() {
-    let model = find_preset_model("granite-speech-4.1-2b-q8-gguf").unwrap();
-
-    assert_eq!(model.model_type, "granite-speech");
-    assert_eq!(model.engine.as_deref(), Some("llama-cpp"));
-    assert!(model.supports_mode("batch"));
-    assert!(!model.supports_mode("streaming"));
-    assert_eq!(model.languages, ["de", "en", "es", "fr", "ja", "pt"]);
-    assert_eq!(model.language_mode, LanguageMode::Auto);
-    assert!(!model.language_mode.supports_language_selection());
-    assert_eq!(model.artifacts.len(), 2);
-    assert_eq!(
-        model.file_config.as_ref().unwrap().model.as_deref(),
-        Some("granite-speech-4.1-2b-Q8_0.gguf")
-    );
-    assert_eq!(
-        model.file_config.as_ref().unwrap().mmproj.as_deref(),
-        Some("mmproj-model-f16.gguf")
-    );
-    assert_eq!(
-        model.resolved_rules(),
-        ModelRules {
-            requires_vad: true,
-            requires_punctuation: false,
-            timestamp_support_hint: Some(TimestampSupportHint::Segment),
-        }
-    );
 }
 
 #[test]
@@ -314,7 +283,6 @@ fn asr_language_modes_match_engine_capabilities() {
 
     // Engines ignoring or rejecting language overrides.
     assert_eq!(mode("qwen3-asr-0.6b-q8-gguf"), LanguageMode::Auto);
-    assert_eq!(mode("granite-speech-4.1-2b-q8-gguf"), LanguageMode::Auto);
     assert_eq!(
         mode("sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en"),
         LanguageMode::Auto

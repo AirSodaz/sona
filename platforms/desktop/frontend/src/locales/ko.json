@@ -1149,7 +1149,6 @@
             "zipformer_xlarge": "Developed by K2-FSA. A highly accurate and efficient streaming 모델 specialized for Chinese recognition.",
             "funasr_nano": "Developed by Alibaba FunASR. A large and highly accurate 로컬 모델, supporting multiple dialects and complex 전사 tasks.",
             "qwen3_asr": "Developed by Alibaba Qwen. A 로컬 Qwen3-based ASR 모델 for high-quality batch 전사.",
-            "granite_speech": "IBM Granite에서 개발한 Open ASR 리더보드 1위 로컬 음성 모델로, 영어, 프랑스어, 독일어, 스페인어, 포르투갈어, 일본어의 고품질 배치 전사를 지원합니다.",
             "firered_asr": "Developed by Xiaohongshu (FireRed Team). An advanced 로컬 모델 delivering strong performance for Chinese and 영어 mixed-language tasks.",
             "dolphin": "Developed by Dataocean AI and Tsinghua University. A multilingual, multitask ASR 모델 supporting 40 Eastern languages and 22 Chinese dialects.",
             "ct_punctuation": "원시 음성 전사에 정확한 구두점과 대소문자를 추가합니다. Int8 양자화에 최적화되어 있습니다.",

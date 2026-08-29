@@ -141,7 +141,7 @@ Use `Batch Import` when you already have audio or video files and want Sona to t
 
 - If no offline batch model is configured, Sona reopens onboarding instead of starting import.
 - `Settings > Model Settings` includes `Batch VAD Segmentation`, `VAD Buffer Size`, and `Max Concurrent Transcriptions`, which affect batch behavior. Turning off batch VAD makes local batch transcription recognize the whole file at once.
-- Batch VAD segmentation applies to every local engine, including the llama.cpp presets (Qwen3-ASR, Granite Speech). The default companion is Silero VAD v5; Silero v4 and TEN VAD are also available in the model catalog.
+- Batch VAD segmentation applies to every local engine, including the llama.cpp presets (Qwen3-ASR). The default companion is Silero VAD v5; Silero v4 and TEN VAD are also available in the model catalog.
 
 ## 6. Transcript Editing And Playback
 
@@ -384,7 +384,7 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 
 ### Notes
 
-- In `Settings > Vocabulary`, `Hotwords` are entered one per line. Hotwords apply to sherpa-onnx Transducer and Qwen3-ASR models and to the llama.cpp presets (Qwen3-ASR, Granite Speech). Weighted entries such as `Term :2.0` apply to sherpa-onnx Transducer models only.
+- In `Settings > Vocabulary`, `Hotwords` are entered one per line. Hotwords apply to sherpa-onnx Transducer and Qwen3-ASR models and to the llama.cpp presets (Qwen3-ASR). Weighted entries such as `Term :2.0` apply to sherpa-onnx Transducer models only.
 - In `Settings > Vocabulary`, `Text Replacement` can fix repeated terminology or spelling after transcription.
 - In `Settings > Vocabulary`, `Speaker Profiles` store local reference samples for known speakers. A profile can be `Ready`, `Limited`, or `Not ready` depending on usable sample count and duration; these states guide matching confidence, not whether you can manually assign the profile.
 

@@ -167,9 +167,8 @@ Capabilities are derived from current workspace dependencies and product scope. 
 | Archive / recovery | yes | out of scope | yes |
 | Export / runtime-fs | yes | yes | yes |
 
-The Desktop and CLI model downloader installs the `ggml-org/Qwen3-ASR-0.6B-GGUF`,
-`ggml-org/Qwen3-ASR-1.7B-GGUF`, and
-`ibm-granite/granite-speech-4.1-2b-GGUF` Q8_0 presets as verified multi-file bundles.
+The Desktop and CLI model downloader installs the `ggml-org/Qwen3-ASR-0.6B-GGUF` and
+`ggml-org/Qwen3-ASR-1.7B-GGUF` Q8_0 presets as verified multi-file bundles.
 The main GGUF and matching mmproj are downloaded into a staging directory and
 published together, so an incomplete pair is never reported as installed.
 UniFFI and Android continue to expose sherpa-onnx local ASR models only.
