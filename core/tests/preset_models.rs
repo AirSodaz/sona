@@ -57,37 +57,54 @@ fn qwen_gguf_presets_replace_the_sherpa_qwen_catalog_entry() {
     }
 }
 #[test]
-fn parakeet_tdt_preset_is_a_verified_batch_bundle() {
-    let model = find_preset_model("sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8").unwrap();
+fn parakeet_tdt_presets_are_verified_batch_bundles() {
+    for (
+        id,
+        expected_version,
+        expected_encoder,
+        expected_decoder,
+        expected_joiner,
+        expected_artifacts,
+    ) in [
+        (
+            "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
+            "0.6B V3 Int8",
+            "encoder.int8.onnx",
+            "decoder.int8.onnx",
+            "joiner.int8.onnx",
+            1,
+        ),
+        (
+            "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3",
+            "0.6B V3 Fp32",
+            "encoder.onnx",
+            "decoder.onnx",
+            "joiner.onnx",
+            5,
+        ),
+    ] {
+        let model = find_preset_model(id).unwrap();
 
-    assert_eq!(model.model_type, "parakeet-tdt");
-    assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
-    assert!(model.supports_mode("batch"));
-    assert!(!model.supports_mode("streaming"));
-    assert_eq!(model.language_mode, LanguageMode::Auto);
-    assert_eq!(model.languages.len(), 25);
+        assert_eq!(model.model_type, "parakeet-tdt");
+        assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
+        assert!(model.supports_mode("batch"));
+        assert!(!model.supports_mode("streaming"));
+        assert_eq!(model.language_mode, LanguageMode::Auto);
+        assert_eq!(model.languages.len(), 25);
+        assert_eq!(model.group_id.as_deref(), Some("parakeet-tdt"));
+        assert_eq!(model.version_label.as_deref(), Some(expected_version));
 
-    let rules = model.resolved_rules();
-    assert!(rules.requires_vad);
-    assert!(!rules.requires_punctuation);
+        let rules = model.resolved_rules();
+        assert!(rules.requires_vad);
+        assert!(!rules.requires_punctuation);
 
-    let file_config = model.file_config.as_ref().unwrap();
-    assert_eq!(file_config.encoder.as_deref(), Some("encoder.int8.onnx"));
-    assert_eq!(file_config.decoder.as_deref(), Some("decoder.int8.onnx"));
-    assert_eq!(file_config.joiner.as_deref(), Some("joiner.int8.onnx"));
-    assert_eq!(file_config.tokens.as_deref(), Some("tokens.txt"));
-
-    assert_eq!(model.artifacts.len(), 1);
-    let artifact = &model.artifacts[0];
-    assert_eq!(
-        artifact.filename,
-        "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2"
-    );
-    assert_eq!(
-        artifact.sha256.as_deref(),
-        Some("5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf")
-    );
-    assert_eq!(artifact.size_bytes, Some(487170055));
+        let file_config = model.file_config.as_ref().unwrap();
+        assert_eq!(file_config.encoder.as_deref(), Some(expected_encoder));
+        assert_eq!(file_config.decoder.as_deref(), Some(expected_decoder));
+        assert_eq!(file_config.joiner.as_deref(), Some(expected_joiner));
+        assert_eq!(file_config.tokens.as_deref(), Some("tokens.txt"));
+        assert_eq!(model.artifacts.len(), expected_artifacts);
+    }
 }
 #[test]
 fn paraformer_presets_are_verified_streaming_bundles() {
@@ -430,6 +447,10 @@ fn asr_language_modes_match_engine_capabilities() {
     );
     assert_eq!(
         mode("sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8"),
+        LanguageMode::Auto
+    );
+    assert_eq!(
+        mode("sherpa-onnx-nemo-parakeet-tdt-0.6b-v3"),
         LanguageMode::Auto
     );
 

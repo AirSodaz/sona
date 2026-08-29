@@ -247,6 +247,90 @@
     "versionLabel": "0.6B V3 Int8"
   },
   {
+    "id": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3",
+    "name": "Parakeet TDT",
+    "description": "settings.descriptions.parakeet_tdt",
+    "type": "parakeet-tdt",
+    "modes": [
+      "batch"
+    ],
+    "languages": [
+      "bg",
+      "cs",
+      "da",
+      "de",
+      "el",
+      "en",
+      "es",
+      "et",
+      "fi",
+      "fr",
+      "hr",
+      "hu",
+      "it",
+      "lt",
+      "lv",
+      "mt",
+      "nl",
+      "pl",
+      "pt",
+      "ro",
+      "ru",
+      "sk",
+      "sl",
+      "sv",
+      "uk"
+    ],
+    "languageMode": "auto",
+    "size": "~2.55 GB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment"
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main/encoder.onnx",
+        "filename": "encoder.onnx",
+        "sha256": "3eed7ce424bf8339ad09233533c687e2dbd07e74ccf5027b5e7344019ea373b0",
+        "sizeBytes": 41766257
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main/encoder.weights",
+        "filename": "encoder.weights",
+        "sha256": "3af3f51af5f2d01dbbf5af47d42c7962a2c205f11004254bb4f2b979862f39a8",
+        "sizeBytes": 2435420160
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main/decoder.onnx",
+        "filename": "decoder.onnx",
+        "sha256": "d593cdb0e571f5a457ec2219af9968cbf6b0e8198e8f7839b40a8754593bf68c",
+        "sizeBytes": 47233743
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main/joiner.onnx",
+        "filename": "joiner.onnx",
+        "sha256": "b9b0bcf88ac571902e69a6536223ed2d94885e981b85045410f1403d53121a63",
+        "sizeBytes": 25286330
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+        "sizeBytes": 93939
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder.onnx",
+      "decoder": "decoder.onnx",
+      "joiner": "joiner.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "parakeet-tdt",
+    "versionLabel": "0.6B V3 Fp32"
+  },
+  {
     "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
     "name": "SenseVoice",
     "description": "settings.descriptions.sensevoice",
