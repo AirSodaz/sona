@@ -89,6 +89,75 @@ fn parakeet_tdt_preset_is_a_verified_batch_bundle() {
     );
     assert_eq!(artifact.size_bytes, Some(487170055));
 }
+#[test]
+fn paraformer_presets_are_verified_streaming_bundles() {
+    for (id, expected_version, expected_encoder, expected_decoder) in [
+        (
+            "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en-int8",
+            "Int8",
+            "encoder.int8.onnx",
+            "decoder.int8.onnx",
+        ),
+        (
+            "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en",
+            "Fp32",
+            "encoder.onnx",
+            "decoder.onnx",
+        ),
+    ] {
+        let model = find_preset_model(id).unwrap();
+        assert_eq!(model.model_type, "paraformer");
+        assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
+        assert!(model.supports_mode("streaming"));
+        assert!(!model.supports_mode("batch"));
+        assert_eq!(model.language_mode, LanguageMode::Auto);
+        assert_eq!(model.group_id.as_deref(), Some("paraformer"));
+        assert_eq!(model.version_label.as_deref(), Some(expected_version));
+
+        let rules = model.resolved_rules();
+        assert!(!rules.requires_vad);
+        assert!(rules.requires_punctuation);
+
+        let file_config = model.file_config.as_ref().unwrap();
+        assert_eq!(file_config.encoder.as_deref(), Some(expected_encoder));
+        assert_eq!(file_config.decoder.as_deref(), Some(expected_decoder));
+        assert_eq!(file_config.tokens.as_deref(), Some("tokens.txt"));
+        assert_eq!(model.artifacts.len(), 3);
+    }
+}
+#[test]
+fn sensevoice_presets_are_verified_bundles() {
+    for (id, expected_version, expected_model) in [
+        (
+            "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+            "Int8",
+            "model.int8.onnx",
+        ),
+        (
+            "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
+            "Fp32",
+            "model.onnx",
+        ),
+    ] {
+        let model = find_preset_model(id).unwrap();
+        assert_eq!(model.model_type, "sensevoice");
+        assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
+        assert!(model.supports_mode("streaming"));
+        assert!(model.supports_mode("batch"));
+        assert_eq!(model.language_mode, LanguageMode::Selectable);
+        assert_eq!(model.group_id.as_deref(), Some("sensevoice"));
+        assert_eq!(model.version_label.as_deref(), Some(expected_version));
+
+        let rules = model.resolved_rules();
+        assert!(rules.requires_vad);
+        assert!(!rules.requires_punctuation);
+
+        let file_config = model.file_config.as_ref().unwrap();
+        assert_eq!(file_config.model.as_deref(), Some(expected_model));
+        assert_eq!(file_config.tokens.as_deref(), Some("tokens.txt"));
+        assert_eq!(model.artifacts.len(), 2);
+    }
+}
 
 #[test]
 fn all_preset_artifacts_have_valid_sha256_and_positive_size() {
@@ -345,6 +414,10 @@ fn asr_language_modes_match_engine_capabilities() {
     assert_eq!(mode("qwen3-asr-0.6b-q8-gguf"), LanguageMode::Auto);
     assert_eq!(
         mode("sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en"),
+        LanguageMode::Auto
+    );
+    assert_eq!(
+        mode("sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en-int8"),
         LanguageMode::Auto
     );
     assert_eq!(

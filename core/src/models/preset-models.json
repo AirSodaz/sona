@@ -16,7 +16,7 @@
       "zh"
     ],
     "languageMode": "selectable",
-    "size": "~155 MB",
+    "size": "~228 MB",
     "isRecommended": true,
     "engine": "sherpa-onnx",
     "rules": {
@@ -26,10 +26,16 @@
     },
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2",
-        "filename": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2",
-        "sha256": "7d1efa2138a65b0b488df37f8b89e3d91a60676e416f515b952358d83dfd347e",
-        "sizeBytes": 163002883
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.int8.onnx",
+        "filename": "model.int8.onnx",
+        "sha256": "c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51",
+        "sizeBytes": 239233841
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc",
+        "sizeBytes": 315894
       }
     ],
     "fileConfig": {
@@ -257,7 +263,7 @@
       "zh"
     ],
     "languageMode": "selectable",
-    "size": "~999 MB",
+    "size": "~894 MB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -266,10 +272,16 @@
     },
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2",
-        "filename": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2",
-        "sha256": "f6b2a72ebcb1ac7a764d4cfccd886e6bcb2a95c4657c2199d0ba95ed4b9ea71a",
-        "sizeBytes": 1047870769
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx",
+        "filename": "model.onnx",
+        "sha256": "977016bd9c79f9eb343430b5cc305e07ab64d5212dff41b0dcfa1694bee9a8cb",
+        "sizeBytes": 937617178
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc",
+        "sizeBytes": 315894
       }
     ],
     "fileConfig": {
@@ -278,6 +290,55 @@
     },
     "groupId": "sensevoice",
     "versionLabel": "Fp32"
+  },
+  {
+    "id": "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en-int8",
+    "name": "Paraformer",
+    "description": "settings.descriptions.paraformer",
+    "type": "paraformer",
+    "modes": [
+      "streaming"
+    ],
+    "languages": [
+      "en",
+      "yue",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~227 MB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": true,
+      "timestampSupportHint": "token"
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/encoder.int8.onnx",
+        "filename": "encoder.int8.onnx",
+        "sha256": "6047a644b41b236d9d8e89e3b94ef39d1b7037daab028131b722ca52e10b0357",
+        "sizeBytes": 166362800
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/decoder.int8.onnx",
+        "filename": "decoder.int8.onnx",
+        "sha256": "545427acf508452b7d89969be082c8128c681e3432ff43aef09f6159f4b61a7e",
+        "sizeBytes": 72062549
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "45b31504211675dd52aa88f998a6f6161703a2834e86760c1cda645a22538085",
+        "sizeBytes": 81289
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder.int8.onnx",
+      "decoder": "decoder.int8.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "paraformer",
+    "versionLabel": "Int8"
   },
   {
     "id": "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en",
@@ -293,7 +354,7 @@
       "zh"
     ],
     "languageMode": "auto",
-    "size": "~999 MB",
+    "size": "~825 MB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": false,
@@ -302,17 +363,31 @@
     },
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en.tar.bz2",
-        "filename": "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en.tar.bz2",
-        "sha256": "d479167d8752628d9032d29de1060493865389d1e295a1c2e8e011e7062f1932",
-        "sizeBytes": 1047671211
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/encoder.onnx",
+        "filename": "encoder.onnx",
+        "sha256": "f2a433bc1a24dd89bcbc48237cdc0c901646c17521f0a9f783d9f80d241ae85f",
+        "sizeBytes": 636349018
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/decoder.onnx",
+        "filename": "decoder.onnx",
+        "sha256": "c70d89e394a6ab082953a8807006b69e4d511fe0ed4d0e5e6254c9e5fad2464e",
+        "sizeBytes": 228663089
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "45b31504211675dd52aa88f998a6f6161703a2834e86760c1cda645a22538085",
+        "sizeBytes": 81289
       }
     ],
     "fileConfig": {
       "encoder": "encoder.onnx",
       "decoder": "decoder.onnx",
       "tokens": "tokens.txt"
-    }
+    },
+    "groupId": "paraformer",
+    "versionLabel": "Fp32"
   },
   {
     "id": "sherpa-onnx-whisper-turbo",
