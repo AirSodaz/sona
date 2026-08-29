@@ -53,6 +53,7 @@ export async function prepareDesktopBundle({
   stageRuntimeLibraries(sherpaLibDir, target, runtimeLibDir);
   buildStandaloneCli(repoRoot, target, runtimeLibDir, runCommand);
   stageLlamaCppRuntimeLibraries(repoRoot, target, runtimeLibDir);
+  cleanupDanglingRuntimeSymlinks(repoRoot, target);
   if (target.includes('apple')) {
     rebaseMacDylibs(runtimeLibDir, runCommand, readMacDylibDependencies);
   }
@@ -325,6 +326,28 @@ export function stageLlamaCppRuntimeLibraries(
     throw new Error(
       `llama.cpp dynamic build is missing runtime library anchors for ${target}: ${missingAnchors.map(String).join(', ')}`,
     );
+  }
+}
+
+export function cleanupDanglingRuntimeSymlinks(repoRoot, target) {
+  if (!target.includes('linux')) return;
+
+  const releaseDir = path.join(repoRoot, 'target', target, 'release');
+  const checkDirs = [releaseDir, path.join(releaseDir, 'deps'), path.join(releaseDir, 'examples')];
+
+  for (const dir of checkDirs) {
+    if (!fs.existsSync(dir)) continue;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isSymbolicLink()) continue;
+      const fullPath = path.join(dir, entry.name);
+      try {
+        fs.statSync(fullPath);
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          fs.unlinkSync(fullPath);
+        }
+      }
+    }
   }
 }
 

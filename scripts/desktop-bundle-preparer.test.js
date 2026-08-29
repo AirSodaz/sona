@@ -549,3 +549,28 @@ test('desktop bundle preparer skips broken release symlinks in favor of CMake ou
     ['libggml-base.so', 'libggml-cpu.so', 'libggml.so', 'libllama.so'],
   );
 });
+
+test('desktop bundle preparer cleans up dangling runtime symlinks in target release and deps directories', async () => {
+  const { cleanupDanglingRuntimeSymlinks } = await loadDesktopBundlePreparer();
+  const root = makeTempRepo();
+  const target = 'x86_64-unknown-linux-gnu';
+  const releaseDir = path.join(root, 'target', target, 'release');
+  const depsDir = path.join(releaseDir, 'deps');
+  fs.mkdirSync(depsDir, { recursive: true });
+
+  const validFile = path.join(releaseDir, 'real.txt');
+  fs.writeFileSync(validFile, 'content');
+  const validSymlink = path.join(releaseDir, 'valid.so');
+  fs.symlinkSync(validFile, validSymlink, 'file');
+  const brokenReleaseSymlink = path.join(releaseDir, 'libllama.so');
+  fs.symlinkSync('libllama.so.0', brokenReleaseSymlink, 'file');
+  const brokenDepsSymlink = path.join(depsDir, 'libllama.so');
+  fs.symlinkSync('libllama.so.0', brokenDepsSymlink, 'file');
+
+  cleanupDanglingRuntimeSymlinks(root, target);
+
+  assert.equal(fs.existsSync(validSymlink), true);
+  assert.equal(fs.existsSync(validFile), true);
+  assert.equal(fs.readdirSync(depsDir).includes('libllama.so'), false);
+  assert.equal(fs.readdirSync(releaseDir).includes('libllama.so'), false);
+});
