@@ -331,6 +331,148 @@
     "versionLabel": "0.6B V3 Fp32"
   },
   {
+    "id": "sherpa-onnx-moonshine-base-zh-quantized-2026-02-27",
+    "name": "Moonshine",
+    "description": "settings.descriptions.moonshine",
+    "type": "moonshine",
+    "modes": [
+      "batch"
+    ],
+    "languages": [
+      "en",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~141 MB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment"
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-zh-quantized-2026-02-27/resolve/main/encoder_model.ort",
+        "filename": "encoder_model.ort",
+        "sha256": "c725a24b58595905921ea2a47e2bcf0f18c78f4d171d96136f2dcbc8c77a58a6",
+        "sizeBytes": 31326816
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-zh-quantized-2026-02-27/resolve/main/decoder_model_merged.ort",
+        "filename": "decoder_model_merged.ort",
+        "sha256": "bf79fce626e123739ec37eceb2b2a010a93d720da266dd5d8ef9a47ef9a7dc36",
+        "sizeBytes": 109424520
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-zh-quantized-2026-02-27/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+        "sizeBytes": 549350
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder_model.ort",
+      "decoder": "decoder_model_merged.ort",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "moonshine-v2",
+    "versionLabel": "Base Zh Quantized"
+  },
+  {
+    "id": "sherpa-onnx-moonshine-base-en-quantized-2026-02-27",
+    "name": "Moonshine",
+    "description": "settings.descriptions.moonshine",
+    "type": "moonshine",
+    "modes": [
+      "batch"
+    ],
+    "languages": [
+      "en"
+    ],
+    "languageMode": "fixed",
+    "size": "~141 MB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment"
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-en-quantized-2026-02-27/resolve/main/encoder_model.ort",
+        "filename": "encoder_model.ort",
+        "sha256": "7c66495948d0d08ec1af454cd4b5514862ae6511e94712a60e6d83eaec8dc8cf",
+        "sizeBytes": 31326816
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-en-quantized-2026-02-27/resolve/main/decoder_model_merged.ort",
+        "filename": "decoder_model_merged.ort",
+        "sha256": "d9d7b333af34bc552580576ddcf248a1c6c839e0d3b43b09afb9376ed009899d",
+        "sizeBytes": 109424400
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-en-quantized-2026-02-27/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+        "sizeBytes": 549350
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder_model.ort",
+      "decoder": "decoder_model_merged.ort",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "moonshine-v2",
+    "versionLabel": "Base En Quantized"
+  },
+  {
+    "id": "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27",
+    "name": "Moonshine",
+    "description": "settings.descriptions.moonshine",
+    "type": "moonshine",
+    "modes": [
+      "batch"
+    ],
+    "languages": [
+      "en"
+    ],
+    "languageMode": "fixed",
+    "size": "~44 MB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment"
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/resolve/main/encoder_model.ort",
+        "filename": "encoder_model.ort",
+        "sha256": "94e90a4654fc45cdfedb77c4c08e1739f48862998e58fada384b25118134f221",
+        "sizeBytes": 13281600
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/resolve/main/decoder_model_merged.ort",
+        "filename": "decoder_model_merged.ort",
+        "sha256": "cf524c4862d36e9e5ab032eddc73637efd822d70e868ac575cf1a46e1e4708a0",
+        "sizeBytes": 30412256
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+        "sizeBytes": 549350
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder_model.ort",
+      "decoder": "decoder_model_merged.ort",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "moonshine-v2",
+    "versionLabel": "Tiny En Quantized"
+  },
+  {
     "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
     "name": "SenseVoice",
     "description": "settings.descriptions.sensevoice",

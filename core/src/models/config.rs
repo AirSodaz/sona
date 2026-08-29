@@ -17,4 +17,8 @@ pub struct ModelFileConfig {
     pub embedding: Option<String>,
     pub tokenizer: Option<String>,
     pub mmproj: Option<String>,
+    pub preprocessor: Option<String>,
+    pub uncached_decoder: Option<String>,
+    pub cached_decoder: Option<String>,
+    pub merged_decoder: Option<String>,
 }

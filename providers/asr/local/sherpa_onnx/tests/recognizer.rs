@@ -72,6 +72,82 @@ fn build_model_config_supports_parakeet_tdt() {
         other => panic!("expected OfflineParakeetTdt, got {other:?}"),
     }
 }
+#[test]
+fn build_model_config_supports_moonshine_v2() {
+    let model_path = Path::new("C:/models/moonshine-v2");
+    let file_config = Some(ModelFileConfig {
+        encoder: Some("encoder_model.ort".to_string()),
+        decoder: Some("decoder_model_merged.ort".to_string()),
+        tokens: Some("tokens.txt".to_string()),
+        ..Default::default()
+    });
+
+    let model = build_model_config(model_path, "moonshine", &file_config, false, "auto", None)
+        .expect("moonshine model should build");
+
+    match model {
+        ModelType::OfflineMoonshine {
+            preprocessor,
+            encoder,
+            uncached_decoder,
+            cached_decoder,
+            merged_decoder,
+            tokens,
+        } => {
+            assert!(preprocessor.is_none());
+            assert_eq!(encoder, model_path.join("encoder_model.ort"));
+            assert!(uncached_decoder.is_none());
+            assert!(cached_decoder.is_none());
+            assert_eq!(
+                merged_decoder,
+                Some(model_path.join("decoder_model_merged.ort"))
+            );
+            assert_eq!(tokens, model_path.join("tokens.txt"));
+        }
+        other => panic!("expected OfflineMoonshine, got {other:?}"),
+    }
+}
+
+#[test]
+fn build_model_config_supports_moonshine_v1() {
+    let model_path = Path::new("C:/models/moonshine-v1");
+    let file_config = Some(ModelFileConfig {
+        preprocessor: Some("preprocess.onnx".to_string()),
+        encoder: Some("encode.int8.onnx".to_string()),
+        uncached_decoder: Some("uncached_decode.int8.onnx".to_string()),
+        cached_decoder: Some("cached_decode.int8.onnx".to_string()),
+        tokens: Some("tokens.txt".to_string()),
+        ..Default::default()
+    });
+
+    let model = build_model_config(model_path, "moonshine", &file_config, false, "auto", None)
+        .expect("moonshine v1 model should build");
+
+    match model {
+        ModelType::OfflineMoonshine {
+            preprocessor,
+            encoder,
+            uncached_decoder,
+            cached_decoder,
+            merged_decoder,
+            tokens,
+        } => {
+            assert_eq!(preprocessor, Some(model_path.join("preprocess.onnx")));
+            assert_eq!(encoder, model_path.join("encode.int8.onnx"));
+            assert_eq!(
+                uncached_decoder,
+                Some(model_path.join("uncached_decode.int8.onnx"))
+            );
+            assert_eq!(
+                cached_decoder,
+                Some(model_path.join("cached_decode.int8.onnx"))
+            );
+            assert!(merged_decoder.is_none());
+            assert_eq!(tokens, model_path.join("tokens.txt"));
+        }
+        other => panic!("expected OfflineMoonshine, got {other:?}"),
+    }
+}
 
 #[test]
 fn build_model_config_supports_funasr_nano_without_tokens() {

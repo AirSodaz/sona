@@ -36,6 +36,7 @@ export interface ModelInfo {
     | 'dolphin'
     | 'qwen3-asr'
     | 'parakeet-tdt'
+    | 'moonshine'
     | 'speaker-segmentation'
     | 'speaker-embedding';
   modes?: ('streaming' | 'batch')[];

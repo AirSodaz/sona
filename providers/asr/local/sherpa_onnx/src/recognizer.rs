@@ -63,6 +63,14 @@ pub enum ModelType {
         joiner: PathBuf,
         tokens: PathBuf,
     },
+    OfflineMoonshine {
+        preprocessor: Option<PathBuf>,
+        encoder: PathBuf,
+        uncached_decoder: Option<PathBuf>,
+        cached_decoder: Option<PathBuf>,
+        merged_decoder: Option<PathBuf>,
+        tokens: PathBuf,
+    },
 }
 
 impl ModelType {
@@ -77,6 +85,7 @@ impl ModelType {
             ModelType::OfflineDolphin { .. } => "dolphin",
             ModelType::OfflineQwen3Asr { .. } => "qwen3-asr",
             ModelType::OfflineParakeetTdt { .. } => "parakeet-tdt",
+            ModelType::OfflineMoonshine { .. } => "moonshine",
         }
     }
 
@@ -90,6 +99,7 @@ impl ModelType {
                 | ModelType::OfflineDolphin { .. }
                 | ModelType::OfflineQwen3Asr { .. }
                 | ModelType::OfflineParakeetTdt { .. }
+                | ModelType::OfflineMoonshine { .. }
         )
     }
 }
@@ -104,6 +114,7 @@ fn is_offline_model_type(model_type: &str) -> bool {
             | "dolphin"
             | "qwen3-asr"
             | "parakeet-tdt"
+            | "moonshine"
     )
 }
 
@@ -242,6 +253,35 @@ pub fn build_model_config(
                 encoder,
                 decoder,
                 joiner,
+                tokens,
+            })
+        }
+        "moonshine" => {
+            let encoder = get_path(&fc.encoder)?;
+            let tokens = get_path(&fc.tokens)?;
+            let preprocessor = fc.preprocessor.as_ref().map(|p| model_path.join(p));
+            let uncached_decoder = fc.uncached_decoder.as_ref().map(|p| model_path.join(p));
+            let cached_decoder = fc.cached_decoder.as_ref().map(|p| model_path.join(p));
+            let merged_decoder = fc
+                .merged_decoder
+                .as_ref()
+                .or(fc.decoder.as_ref())
+                .map(|p| model_path.join(p));
+
+            if merged_decoder.is_none() && (uncached_decoder.is_none() || cached_decoder.is_none())
+            {
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::Model,
+                    "Moonshine model requires either 'mergedDecoder' / 'decoder', or both 'uncachedDecoder' and 'cachedDecoder'.",
+                ));
+            }
+
+            Ok(ModelType::OfflineMoonshine {
+                preprocessor,
+                encoder,
+                uncached_decoder,
+                cached_decoder,
+                merged_decoder,
                 tokens,
             })
         }
@@ -603,6 +643,37 @@ impl Recognizer {
                     )
                 })?;
                 debug!("Successfully created OfflineRecognizer (OfflineParakeetTdt)");
+                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+            }
+            ModelType::OfflineMoonshine {
+                preprocessor,
+                encoder,
+                uncached_decoder,
+                cached_decoder,
+                merged_decoder,
+                tokens,
+            } => {
+                info!("[Recognizer::new] branch=OfflineMoonshine");
+                let mut config =
+                    get_base_offline_config(num_threads, Some(&tokens), provider.clone());
+                config.model_config.moonshine.preprocessor =
+                    preprocessor.map(|p| p.to_string_lossy().to_string());
+                config.model_config.moonshine.encoder = Some(encoder.to_string_lossy().to_string());
+                config.model_config.moonshine.uncached_decoder =
+                    uncached_decoder.map(|p| p.to_string_lossy().to_string());
+                config.model_config.moonshine.cached_decoder =
+                    cached_decoder.map(|p| p.to_string_lossy().to_string());
+                config.model_config.moonshine.merged_decoder =
+                    merged_decoder.map(|p| p.to_string_lossy().to_string());
+
+                debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineMoonshine)");
+                let recognizer = OfflineRecognizer::create(&config).ok_or_else(|| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Model,
+                        "Failed to create OfflineRecognizer",
+                    )
+                })?;
+                debug!("Successfully created OfflineRecognizer (OfflineMoonshine)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
         };

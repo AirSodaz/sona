@@ -107,6 +107,63 @@ fn parakeet_tdt_presets_are_verified_batch_bundles() {
     }
 }
 #[test]
+fn moonshine_presets_are_verified_batch_bundles() {
+    for (
+        id,
+        expected_version,
+        expected_encoder,
+        expected_decoder,
+        expected_languages,
+        expected_mode,
+    ) in [
+        (
+            "sherpa-onnx-moonshine-base-zh-quantized-2026-02-27",
+            "Base Zh Quantized",
+            "encoder_model.ort",
+            "decoder_model_merged.ort",
+            vec!["en", "zh"],
+            LanguageMode::Auto,
+        ),
+        (
+            "sherpa-onnx-moonshine-base-en-quantized-2026-02-27",
+            "Base En Quantized",
+            "encoder_model.ort",
+            "decoder_model_merged.ort",
+            vec!["en"],
+            LanguageMode::Fixed,
+        ),
+        (
+            "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27",
+            "Tiny En Quantized",
+            "encoder_model.ort",
+            "decoder_model_merged.ort",
+            vec!["en"],
+            LanguageMode::Fixed,
+        ),
+    ] {
+        let model = find_preset_model(id).unwrap();
+
+        assert_eq!(model.model_type, "moonshine");
+        assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
+        assert!(model.supports_mode("batch"));
+        assert!(!model.supports_mode("streaming"));
+        assert_eq!(model.language_mode, expected_mode);
+        assert_eq!(model.languages, expected_languages);
+        assert_eq!(model.group_id.as_deref(), Some("moonshine-v2"));
+        assert_eq!(model.version_label.as_deref(), Some(expected_version));
+
+        let rules = model.resolved_rules();
+        assert!(rules.requires_vad);
+        assert!(!rules.requires_punctuation);
+
+        let file_config = model.file_config.as_ref().unwrap();
+        assert_eq!(file_config.encoder.as_deref(), Some(expected_encoder));
+        assert_eq!(file_config.decoder.as_deref(), Some(expected_decoder));
+        assert_eq!(file_config.tokens.as_deref(), Some("tokens.txt"));
+        assert_eq!(model.artifacts.len(), 3);
+    }
+}
+#[test]
 fn paraformer_presets_are_verified_streaming_bundles() {
     for (id, expected_version, expected_encoder, expected_decoder) in [
         (
@@ -453,8 +510,20 @@ fn asr_language_modes_match_engine_capabilities() {
         mode("sherpa-onnx-nemo-parakeet-tdt-0.6b-v3"),
         LanguageMode::Auto
     );
+    assert_eq!(
+        mode("sherpa-onnx-moonshine-base-zh-quantized-2026-02-27"),
+        LanguageMode::Auto
+    );
 
     // Single-language engines.
+    assert_eq!(
+        mode("sherpa-onnx-moonshine-base-en-quantized-2026-02-27"),
+        LanguageMode::Fixed
+    );
+    assert_eq!(
+        mode("sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27"),
+        LanguageMode::Fixed
+    );
     assert_eq!(
         mode("sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30"),
         LanguageMode::Fixed
