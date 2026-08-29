@@ -146,6 +146,7 @@ function normalizeModelType(value: string): ModelInfo['type'] {
     case 'fire-red-asr':
     case 'dolphin':
     case 'qwen3-asr':
+    case 'parakeet-tdt':
     case 'speaker-segmentation':
     case 'speaker-embedding':
       return value;

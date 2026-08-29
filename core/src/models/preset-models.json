@@ -179,6 +179,64 @@
     "versionLabel": "1.7B Q8_0"
   },
   {
+    "id": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
+    "name": "Parakeet TDT",
+    "description": "settings.descriptions.parakeet_tdt",
+    "type": "parakeet-tdt",
+    "modes": [
+      "batch"
+    ],
+    "languages": [
+      "bg",
+      "cs",
+      "da",
+      "de",
+      "el",
+      "en",
+      "es",
+      "et",
+      "fi",
+      "fr",
+      "hr",
+      "hu",
+      "it",
+      "lt",
+      "lv",
+      "mt",
+      "nl",
+      "pl",
+      "pt",
+      "ro",
+      "ru",
+      "sk",
+      "sl",
+      "sv",
+      "uk"
+    ],
+    "languageMode": "auto",
+    "size": "~487 MB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment"
+    },
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
+        "filename": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2"
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder.int8.onnx",
+      "decoder": "decoder.int8.onnx",
+      "joiner": "joiner.int8.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "parakeet-tdt",
+    "versionLabel": "0.6B V3 Int8"
+  },
+  {
     "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
     "name": "SenseVoice",
     "description": "settings.descriptions.sensevoice",

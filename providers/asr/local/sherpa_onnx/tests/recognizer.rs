@@ -36,6 +36,42 @@ fn build_model_config_supports_qwen3_asr_without_tokens() {
         other => panic!("expected OfflineQwen3Asr, got {other:?}"),
     }
 }
+#[test]
+fn build_model_config_supports_parakeet_tdt() {
+    let model_path = Path::new("C:/models/parakeet-tdt");
+    let file_config = Some(ModelFileConfig {
+        encoder: Some("encoder.int8.onnx".to_string()),
+        decoder: Some("decoder.int8.onnx".to_string()),
+        joiner: Some("joiner.int8.onnx".to_string()),
+        tokens: Some("tokens.txt".to_string()),
+        ..Default::default()
+    });
+
+    let model = build_model_config(
+        model_path,
+        "parakeet-tdt",
+        &file_config,
+        false,
+        "auto",
+        None,
+    )
+    .expect("parakeet-tdt model should build");
+
+    match model {
+        ModelType::OfflineParakeetTdt {
+            encoder,
+            decoder,
+            joiner,
+            tokens,
+        } => {
+            assert_eq!(encoder, model_path.join("encoder.int8.onnx"));
+            assert_eq!(decoder, model_path.join("decoder.int8.onnx"));
+            assert_eq!(joiner, model_path.join("joiner.int8.onnx"));
+            assert_eq!(tokens, model_path.join("tokens.txt"));
+        }
+        other => panic!("expected OfflineParakeetTdt, got {other:?}"),
+    }
+}
 
 #[test]
 fn build_model_config_supports_funasr_nano_without_tokens() {

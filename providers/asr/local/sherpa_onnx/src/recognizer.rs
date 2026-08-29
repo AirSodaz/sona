@@ -57,6 +57,12 @@ pub enum ModelType {
         tokenizer: PathBuf,
         hotwords: Option<String>,
     },
+    OfflineParakeetTdt {
+        encoder: PathBuf,
+        decoder: PathBuf,
+        joiner: PathBuf,
+        tokens: PathBuf,
+    },
 }
 
 impl ModelType {
@@ -70,6 +76,7 @@ impl ModelType {
             ModelType::OfflineFireRedAsr { .. } => "fire-red-asr",
             ModelType::OfflineDolphin { .. } => "dolphin",
             ModelType::OfflineQwen3Asr { .. } => "qwen3-asr",
+            ModelType::OfflineParakeetTdt { .. } => "parakeet-tdt",
         }
     }
 
@@ -82,6 +89,7 @@ impl ModelType {
                 | ModelType::OfflineFireRedAsr { .. }
                 | ModelType::OfflineDolphin { .. }
                 | ModelType::OfflineQwen3Asr { .. }
+                | ModelType::OfflineParakeetTdt { .. }
         )
     }
 }
@@ -89,7 +97,13 @@ impl ModelType {
 fn is_offline_model_type(model_type: &str) -> bool {
     matches!(
         model_type,
-        "sensevoice" | "whisper" | "funasr-nano" | "fire-red-asr" | "dolphin" | "qwen3-asr"
+        "sensevoice"
+            | "whisper"
+            | "funasr-nano"
+            | "fire-red-asr"
+            | "dolphin"
+            | "qwen3-asr"
+            | "parakeet-tdt"
     )
 }
 
@@ -217,6 +231,18 @@ pub fn build_model_config(
                 decoder,
                 tokenizer,
                 hotwords,
+            })
+        }
+        "parakeet-tdt" => {
+            let encoder = get_path(&fc.encoder)?;
+            let decoder = get_path(&fc.decoder)?;
+            let joiner = get_path(&fc.joiner)?;
+            let tokens = get_path(&fc.tokens)?;
+            Ok(ModelType::OfflineParakeetTdt {
+                encoder,
+                decoder,
+                joiner,
+                tokens,
             })
         }
         _ => Err(AsrPortError::new(
@@ -551,6 +577,32 @@ impl Recognizer {
                     )
                 })?;
                 debug!("Successfully created OfflineRecognizer (OfflineQwen3Asr)");
+                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+            }
+            ModelType::OfflineParakeetTdt {
+                encoder,
+                decoder,
+                joiner,
+                tokens,
+            } => {
+                info!("[Recognizer::new] branch=OfflineParakeetTdt");
+                let mut config =
+                    get_base_offline_config(num_threads, Some(&tokens), provider.clone());
+                config.model_config.model_type = Some("nemo_transducer".to_string());
+                config.model_config.transducer.encoder =
+                    Some(encoder.to_string_lossy().to_string());
+                config.model_config.transducer.decoder =
+                    Some(decoder.to_string_lossy().to_string());
+                config.model_config.transducer.joiner = Some(joiner.to_string_lossy().to_string());
+
+                debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineParakeetTdt)");
+                let recognizer = OfflineRecognizer::create(&config).ok_or_else(|| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Model,
+                        "Failed to create OfflineRecognizer",
+                    )
+                })?;
+                debug!("Successfully created OfflineRecognizer (OfflineParakeetTdt)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
         };

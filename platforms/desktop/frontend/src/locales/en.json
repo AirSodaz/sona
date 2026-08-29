@@ -1151,6 +1151,7 @@
             "qwen3_asr": "Developed by Alibaba Qwen. A local Qwen3-based ASR model for high-quality batch transcription.",
             "firered_asr": "Developed by Xiaohongshu (FireRed Team). An advanced local model delivering strong performance for Chinese and English mixed-language tasks.",
             "dolphin": "Developed by Dataocean AI and Tsinghua University. A multilingual, multitask ASR model supporting 40 Eastern languages and 22 Chinese dialects.",
+            "parakeet_tdt": "Developed by NVIDIA. A high-performance multilingual ASR model based on FastConformer and Token-and-Duration Transducer (TDT), featuring ultra-fast batch transcription and built-in punctuation for 25 European languages.",
             "ct_punctuation": "Adds accurate punctuation and capitalization to raw speech transcripts. Optimized with Int8 quantization.",
             "silero_vad": "Developed by Silero. Highly accurate Voice Activity Detection (VAD) model to segment audio into speech and silence.",
             "ten_vad": "Developed by TEN. Lightweight, high-precision Voice Activity Detection (VAD) model that segments audio into speech and silence.",

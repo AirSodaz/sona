@@ -56,6 +56,27 @@ fn qwen_gguf_presets_replace_the_sherpa_qwen_catalog_entry() {
         }));
     }
 }
+#[test]
+fn parakeet_tdt_preset_is_a_verified_batch_bundle() {
+    let model = find_preset_model("sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8").unwrap();
+
+    assert_eq!(model.model_type, "parakeet-tdt");
+    assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
+    assert!(model.supports_mode("batch"));
+    assert!(!model.supports_mode("streaming"));
+    assert_eq!(model.language_mode, LanguageMode::Auto);
+    assert_eq!(model.languages.len(), 25);
+
+    let rules = model.resolved_rules();
+    assert!(rules.requires_vad);
+    assert!(!rules.requires_punctuation);
+
+    let file_config = model.file_config.as_ref().unwrap();
+    assert_eq!(file_config.encoder.as_deref(), Some("encoder.int8.onnx"));
+    assert_eq!(file_config.decoder.as_deref(), Some("decoder.int8.onnx"));
+    assert_eq!(file_config.joiner.as_deref(), Some("joiner.int8.onnx"));
+    assert_eq!(file_config.tokens.as_deref(), Some("tokens.txt"));
+}
 
 #[test]
 fn resolves_model_paths_without_filesystem_status_checks() {
@@ -293,6 +314,10 @@ fn asr_language_modes_match_engine_capabilities() {
     );
     assert_eq!(
         mode("sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26"),
+        LanguageMode::Auto
+    );
+    assert_eq!(
+        mode("sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8"),
         LanguageMode::Auto
     );
 

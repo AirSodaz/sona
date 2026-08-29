@@ -104,7 +104,6 @@ struct LlamaBatchTranscriptionJob {
     model_path: PathBuf,
     mmproj_path: PathBuf,
     num_threads: i32,
-    model_type: String,
     /// Normalized hotword terms ready for the model-specific rendering.
     hotwords: Vec<String>,
     /// Trained Qwen3-ASR prefill name (`Some("Chinese")`, ...); `None`
@@ -172,7 +171,6 @@ impl LlamaBatchTranscriptionJob {
             model_path,
             mmproj_path,
             num_threads: plan.num_threads,
-            model_type: plan.model_type,
             hotwords: options.hotwords,
             language_prefill: options.language_prefill,
             gpu_offload: options.gpu_offload,
