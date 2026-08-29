@@ -200,6 +200,45 @@ fn paraformer_presets_are_verified_streaming_bundles() {
     }
 }
 #[test]
+fn firered_asr2_aed_presets_are_verified_batch_bundles() {
+    for (id, expected_version, expected_encoder, expected_decoder, expected_artifacts) in [
+        (
+            "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26",
+            "Int8",
+            "encoder.int8.onnx",
+            "decoder.int8.onnx",
+            3,
+        ),
+        (
+            "sherpa-onnx-fire-red-asr2-zh_en-2026-02-26",
+            "Fp32",
+            "encoder.onnx",
+            "decoder.onnx",
+            4,
+        ),
+    ] {
+        let model = find_preset_model(id).unwrap();
+        assert_eq!(model.model_type, "fire-red-asr");
+        assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
+        assert!(model.supports_mode("batch"));
+        assert!(!model.supports_mode("streaming"));
+        assert_eq!(model.language_mode, LanguageMode::Auto);
+        assert_eq!(model.languages, vec!["en", "zh"]);
+        assert_eq!(model.group_id.as_deref(), Some("firered-asr2-aed"));
+        assert_eq!(model.version_label.as_deref(), Some(expected_version));
+
+        let rules = model.resolved_rules();
+        assert!(rules.requires_vad);
+        assert!(rules.requires_punctuation);
+
+        let file_config = model.file_config.as_ref().unwrap();
+        assert_eq!(file_config.encoder.as_deref(), Some(expected_encoder));
+        assert_eq!(file_config.decoder.as_deref(), Some(expected_decoder));
+        assert_eq!(file_config.tokens.as_deref(), Some("tokens.txt"));
+        assert_eq!(model.artifacts.len(), expected_artifacts);
+    }
+}
+#[test]
 fn sensevoice_presets_are_verified_bundles() {
     for (id, expected_version, expected_model) in [
         (
@@ -500,6 +539,10 @@ fn asr_language_modes_match_engine_capabilities() {
     );
     assert_eq!(
         mode("sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26"),
+        LanguageMode::Auto
+    );
+    assert_eq!(
+        mode("sherpa-onnx-fire-red-asr2-zh_en-2026-02-26"),
         LanguageMode::Auto
     );
     assert_eq!(

@@ -1069,7 +1069,7 @@
   },
   {
     "id": "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26",
-    "name": "FireRedASR",
+    "name": "FireRedASR2-AED",
     "description": "settings.descriptions.firered_asr",
     "type": "fire-red-asr",
     "modes": [
@@ -1080,7 +1080,7 @@
       "zh"
     ],
     "languageMode": "auto",
-    "size": "~800 MB",
+    "size": "~1.23 GB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -1089,17 +1089,85 @@
     },
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26.tar.bz2",
-        "filename": "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26.tar.bz2",
-        "sha256": "43015b3f1643a5688b4821e8ed323473d38b798c4ec291471fe00df1bcfc4f1c",
-        "sizeBytes": 838589068
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26/resolve/main/encoder.int8.onnx",
+        "filename": "encoder.int8.onnx",
+        "sha256": "54048d66b6e8f3c80ea7ce95efe794587b0fd81d7271651d0decd3803852ae82",
+        "sizeBytes": 817286833
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26/resolve/main/decoder.int8.onnx",
+        "filename": "decoder.int8.onnx",
+        "sha256": "b840ce7196ae4a14d05ae84bbf56082b6b61ccec5610fda907dddbcea37354ff",
+        "sizeBytes": 417291928
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "1bc613de2112d257e61a349c3e72d1b1a9cf19c33d3ca954197ad2171e5ea07b",
+        "sizeBytes": 79172
       }
     ],
     "fileConfig": {
       "encoder": "encoder.int8.onnx",
       "decoder": "decoder.int8.onnx",
       "tokens": "tokens.txt"
-    }
+    },
+    "groupId": "firered-asr2-aed",
+    "versionLabel": "Int8"
+  },
+  {
+    "id": "sherpa-onnx-fire-red-asr2-zh_en-2026-02-26",
+    "name": "FireRedASR2-AED",
+    "description": "settings.descriptions.firered_asr",
+    "type": "fire-red-asr",
+    "modes": [
+      "batch"
+    ],
+    "languages": [
+      "en",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~4.69 GB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": true,
+      "timestampSupportHint": "segment"
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-2026-02-26/resolve/main/encoder.onnx",
+        "filename": "encoder.onnx",
+        "sha256": "26b73ad336ef17ec79a778d5e5021c2d40d246a497fc603b0e092a5a5cbe2fb9",
+        "sizeBytes": 696607
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-2026-02-26/resolve/main/encoder.weights",
+        "filename": "encoder.weights",
+        "sha256": "6774fd9b68017f4ddd3dcf3bbb34c791f5825cfa04f306cd0b120223c2c13053",
+        "sizeBytes": 3103167616
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-2026-02-26/resolve/main/decoder.onnx",
+        "filename": "decoder.onnx",
+        "sha256": "c67df92a5dcccec7d0f6b1527706c9f08d21ca18ca37b7b29f32cc68801c6c51",
+        "sizeBytes": 1584394636
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-2026-02-26/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "1bc613de2112d257e61a349c3e72d1b1a9cf19c33d3ca954197ad2171e5ea07b",
+        "sizeBytes": 79172
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder.onnx",
+      "decoder": "decoder.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "firered-asr2-aed",
+    "versionLabel": "Fp32"
   },
   {
     "id": "sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02",
