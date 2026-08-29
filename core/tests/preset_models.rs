@@ -76,6 +76,45 @@ fn parakeet_tdt_preset_is_a_verified_batch_bundle() {
     assert_eq!(file_config.decoder.as_deref(), Some("decoder.int8.onnx"));
     assert_eq!(file_config.joiner.as_deref(), Some("joiner.int8.onnx"));
     assert_eq!(file_config.tokens.as_deref(), Some("tokens.txt"));
+
+    assert_eq!(model.artifacts.len(), 1);
+    let artifact = &model.artifacts[0];
+    assert_eq!(
+        artifact.filename,
+        "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2"
+    );
+    assert_eq!(
+        artifact.sha256.as_deref(),
+        Some("5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf")
+    );
+    assert_eq!(artifact.size_bytes, Some(487170055));
+}
+
+#[test]
+fn all_preset_artifacts_have_valid_sha256_and_positive_size() {
+    for model in preset_models() {
+        assert!(
+            !model.artifacts.is_empty(),
+            "model '{}' should have at least one artifact",
+            model.id
+        );
+        for artifact in &model.artifacts {
+            assert!(
+                artifact.size_bytes.is_some_and(|size| size > 0),
+                "artifact '{}' in model '{}' should have positive sizeBytes",
+                artifact.filename,
+                model.id
+            );
+            assert!(
+                artifact.sha256.as_ref().is_some_and(|sha256| {
+                    sha256.len() == 64 && sha256.chars().all(|c| c.is_ascii_hexdigit())
+                }),
+                "artifact '{}' in model '{}' should have a valid 64-char hex sha256",
+                artifact.filename,
+                model.id
+            );
+        }
+    }
 }
 
 #[test]

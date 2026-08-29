@@ -27,7 +27,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2",
-        "filename": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2"
+        "filename": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2",
+        "sha256": "7d1efa2138a65b0b488df37f8b89e3d91a60676e416f515b952358d83dfd347e",
+        "sizeBytes": 163002883
       }
     ],
     "fileConfig": {
@@ -224,7 +226,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
-        "filename": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2"
+        "filename": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
+        "sha256": "5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf",
+        "sizeBytes": 487170055
       }
     ],
     "fileConfig": {
@@ -263,7 +267,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2",
-        "filename": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2"
+        "filename": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2",
+        "sha256": "f6b2a72ebcb1ac7a764d4cfccd886e6bcb2a95c4657c2199d0ba95ed4b9ea71a",
+        "sizeBytes": 1047870769
       }
     ],
     "fileConfig": {
@@ -297,7 +303,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en.tar.bz2",
-        "filename": "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en.tar.bz2"
+        "filename": "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en.tar.bz2",
+        "sha256": "d479167d8752628d9032d29de1060493865389d1e295a1c2e8e011e7062f1932",
+        "sizeBytes": 1047671211
       }
     ],
     "fileConfig": {
@@ -427,7 +435,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-turbo.tar.bz2",
-        "filename": "sherpa-onnx-whisper-turbo.tar.bz2"
+        "filename": "sherpa-onnx-whisper-turbo.tar.bz2",
+        "sha256": "b11acbbcd660b44a8e0df33724feb5aaa709cf65668f2823d59f656312544f22",
+        "sizeBytes": 563790207
       }
     ],
     "fileConfig": {
@@ -559,7 +569,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-large-v3.tar.bz2",
-        "filename": "sherpa-onnx-whisper-large-v3.tar.bz2"
+        "filename": "sherpa-onnx-whisper-large-v3.tar.bz2",
+        "sha256": "2d0e134b3b5fc4a0533baf24a0c9d473b629aa47f030af0a165a05f461df7a03",
+        "sizeBytes": 1068482488
       }
     ],
     "fileConfig": {
@@ -593,7 +605,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-medium-aishell.tar.bz2",
-        "filename": "sherpa-onnx-whisper-medium-aishell.tar.bz2"
+        "filename": "sherpa-onnx-whisper-medium-aishell.tar.bz2",
+        "sha256": "84c358461ade32f36798733b1d046cb669522f9832ef5d183772e89b1cc0eb91",
+        "sizeBytes": 686537184
       }
     ],
     "fileConfig": {
@@ -626,7 +640,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2",
-        "filename": "sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2"
+        "filename": "sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2",
+        "sha256": "30437d84dc4861740d40166212ab05f3728945443d53691620075c4031fb88e1",
+        "sizeBytes": 597755927
       }
     ],
     "fileConfig": {
@@ -660,7 +676,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2",
-        "filename": "sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2"
+        "filename": "sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2",
+        "sha256": "eb43d7ccc2e86b243f6a03b7df361033dda66db9523d1a92bf6aca2b50c9476b",
+        "sizeBytes": 841730611
       }
     ],
     "fileConfig": {
@@ -696,7 +714,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-fp16-2025-12-30.tar.bz2",
-        "filename": "sherpa-onnx-funasr-nano-fp16-2025-12-30.tar.bz2"
+        "filename": "sherpa-onnx-funasr-nano-fp16-2025-12-30.tar.bz2",
+        "sha256": "a07a996361aa2f8b2c4f47861fe01953b5509664efa3392b734580b1eeb362e3",
+        "sizeBytes": 1030076153
       }
     ],
     "fileConfig": {
@@ -732,7 +752,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-2025-12-30.tar.bz2",
-        "filename": "sherpa-onnx-funasr-nano-2025-12-30.tar.bz2"
+        "filename": "sherpa-onnx-funasr-nano-2025-12-30.tar.bz2",
+        "sha256": "92ac72f74ce5e621564f7693de5d383fa11b1ad836fc0bbfc14ed7cb4cc68509",
+        "sizeBytes": 1317656544
       }
     ],
     "fileConfig": {
@@ -767,7 +789,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26.tar.bz2",
-        "filename": "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26.tar.bz2"
+        "filename": "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26.tar.bz2",
+        "sha256": "43015b3f1643a5688b4821e8ed323473d38b798c4ec291471fe00df1bcfc4f1c",
+        "sizeBytes": 838589068
       }
     ],
     "fileConfig": {
@@ -838,7 +862,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02.tar.bz2",
-        "filename": "sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02.tar.bz2"
+        "filename": "sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02.tar.bz2",
+        "sha256": "7346b00ffe42396fff5c96d11892f0d4d72ac11418d47c5a8ada2b0f6ac8d27b",
+        "sizeBytes": 191534345
       }
     ],
     "fileConfig": {
@@ -910,7 +936,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02.tar.bz2",
-        "filename": "sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02.tar.bz2"
+        "filename": "sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02.tar.bz2",
+        "sha256": "8a6acff859c53a699d46a8662a153634e9c1de1548aeef78b1edb35cafcdc558",
+        "sizeBytes": 775077198
       }
     ],
     "fileConfig": {
@@ -932,7 +960,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2",
-        "filename": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2"
+        "filename": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2",
+        "sha256": "c0d5aa5f8eeb686032345e180bedf39319dc2e0556781c6264bcadba8328a6e1",
+        "sizeBytes": 64717756
       }
     ]
   },
@@ -952,7 +982,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
-        "filename": "sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
+        "filename": "sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
+        "sha256": "24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488",
+        "sizeBytes": 6958444
       }
     ]
   },
@@ -972,7 +1004,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v1.tar.bz2",
-        "filename": "sherpa-onnx-reverb-diarization-v1.tar.bz2"
+        "filename": "sherpa-onnx-reverb-diarization-v1.tar.bz2",
+        "sha256": "615761e980be1688da0ef81618c056134d63aa55ea0a5f1494c47393b9398eab",
+        "sizeBytes": 10918585
       }
     ]
   },
@@ -992,7 +1026,9 @@
     "artifacts": [
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v2.tar.bz2",
-        "filename": "sherpa-onnx-reverb-diarization-v2.tar.bz2"
+        "filename": "sherpa-onnx-reverb-diarization-v2.tar.bz2",
+        "sha256": "2ca21f73eac8adb698fe538eaf4a25f69f614131c876772a8d26213cf648c851",
+        "sizeBytes": 254075989
       }
     ]
   },
@@ -1015,7 +1051,8 @@
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
         "filename": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
-        "sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2"
+        "sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
+        "sizeBytes": 28281164
       }
     ]
   },
@@ -1038,7 +1075,8 @@
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
         "filename": "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
-        "sha256": "bf1a75b9930474cf3389ef415e6e5d38ca96fea4a3a00f7e301d080a58ee2239"
+        "sha256": "bf1a75b9930474cf3389ef415e6e5d38ca96fea4a3a00f7e301d080a58ee2239",
+        "sizeBytes": 71441526
       }
     ]
   },
@@ -1061,7 +1099,8 @@
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
         "filename": "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
-        "sha256": "19547e85b6c14ec44b8add4e7cb9ce353c7e995d4f1c9ffd408176ac3a2d6895"
+        "sha256": "19547e85b6c14ec44b8add4e7cb9ce353c7e995d4f1c9ffd408176ac3a2d6895",
+        "sizeBytes": 116058710
       }
     ]
   },
@@ -1084,7 +1123,8 @@
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
         "filename": "3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
-        "sha256": "2b9c4219b25326473524f006f1a09050ac28ccaf58c1f7dbc53e7631fa2fb1df"
+        "sha256": "2b9c4219b25326473524f006f1a09050ac28ccaf58c1f7dbc53e7631fa2fb1df",
+        "sizeBytes": 220623485
       }
     ]
   },
@@ -1103,7 +1143,8 @@
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
         "filename": "silero_vad.onnx",
-        "sha256": "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"
+        "sha256": "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6",
+        "sizeBytes": 643854
       }
     ]
   },
@@ -1122,7 +1163,8 @@
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/ten-vad.onnx",
         "filename": "ten-vad.onnx",
-        "sha256": "718cb7eef47e3cf5ddbe7e967a7503f46b8b469c0706872f494dfa921b486206"
+        "sha256": "718cb7eef47e3cf5ddbe7e967a7503f46b8b469c0706872f494dfa921b486206",
+        "sizeBytes": 332211
       }
     ]
   },
@@ -1141,7 +1183,8 @@
       {
         "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad_v5.onnx",
         "filename": "silero_vad_v5.onnx",
-        "sha256": "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396"
+        "sha256": "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396",
+        "sizeBytes": 2313101
       }
     ]
   }
