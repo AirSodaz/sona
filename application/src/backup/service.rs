@@ -125,8 +125,7 @@ impl<'a> BackupService<'a> {
             automation,
             analytics_content,
         } = dataset;
-        let migration =
-            migrate_app_config(Some(config), None, request.default_rule_set_name.clone());
+        let migration = migrate_app_config(Some(config), request.default_rule_set_name.clone());
         let config_state = app_config_stored_state_from_value(&migration.config, self.now_ms()?)
             .map_err(|error| BackupError::Config(error.to_string()))?;
         self.state.replace_all(BackupRestoreDataset {

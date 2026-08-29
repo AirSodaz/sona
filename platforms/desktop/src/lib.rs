@@ -152,7 +152,6 @@ pub fn run_app() -> Result<(), tauri::Error> {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(prevent_default)
         .invoke_handler(crate::commands::get_handlers())

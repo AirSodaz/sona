@@ -15,8 +15,6 @@ import {
 import { migrateConfig } from '../configMigrationService';
 import { settingsStore, STORE_KEY_CONFIG, STORE_KEY_ONBOARDING } from '../storageService';
 
-const LEGACY_CONFIG_STORAGE_KEY = STORE_KEY_CONFIG;
-
 interface HydratedOnboardingResult {
   state: OnboardingState;
   migrated: boolean;
@@ -27,25 +25,8 @@ interface HydratedOnboardingResult {
 interface StartupPersistencePlan {
   configToPersist: AppConfig | null;
   onboardingToPersist: OnboardingState | null;
-  configLegacyKeyToClear: boolean;
   onboardingLegacyKeyToClear: boolean;
   firstRunLegacyKeyToClear: boolean;
-}
-
-function parseLegacyConfigValue(rawValue: string | null): Record<string, unknown> | null {
-  if (!rawValue) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(rawValue);
-    return typeof parsed === 'object' && parsed !== null
-      ? parsed as Record<string, unknown>
-      : null;
-  } catch (error) {
-    logger.error('[Startup] Failed to parse legacy config:', error);
-    return null;
-  }
 }
 
 function applyHydratedConfig(config: AppConfig): void {
@@ -119,10 +100,6 @@ async function persistHydratedState(plan: StartupPersistencePlan): Promise<void>
     return;
   }
 
-  if (plan.configLegacyKeyToClear && plan.configToPersist) {
-    localStorage.removeItem(LEGACY_CONFIG_STORAGE_KEY);
-  }
-
   if (plan.onboardingLegacyKeyToClear && plan.onboardingToPersist) {
     localStorage.removeItem(ONBOARDING_STORAGE_KEY);
   }
@@ -135,10 +112,7 @@ async function persistHydratedState(plan: StartupPersistencePlan): Promise<void>
 export async function hydrateAppStartupState(): Promise<void> {
   try {
     const savedConfig = await settingsStore.get<AppConfig | null>(STORE_KEY_CONFIG);
-    const legacyConfigValue = savedConfig ? null : localStorage.getItem(LEGACY_CONFIG_STORAGE_KEY);
-    const legacyConfig = savedConfig ? null : parseLegacyConfigValue(legacyConfigValue);
-
-    const { config: loadedConfig, migrated: configMigrated } = await migrateConfig(savedConfig, legacyConfig);
+    const { config: loadedConfig, migrated: configMigrated } = await migrateConfig(savedConfig);
     applyHydratedConfig(loadedConfig);
 
     const onboarding = await hydrateOnboardingState(loadedConfig, configMigrated);
@@ -152,7 +126,6 @@ export async function hydrateAppStartupState(): Promise<void> {
     await persistHydratedState({
       configToPersist: configMigrated ? loadedConfig : null,
       onboardingToPersist: onboarding.migrated ? onboarding.state : null,
-      configLegacyKeyToClear: Boolean(legacyConfigValue),
       onboardingLegacyKeyToClear: onboarding.clearLegacyOnboarding,
       firstRunLegacyKeyToClear: onboarding.clearLegacyFirstRun,
     });

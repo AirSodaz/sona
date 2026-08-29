@@ -65,7 +65,6 @@ uuid = { workspace = true }
 tauri-plugin-log = "2"
 log = { workspace = true }
 tauri-plugin-single-instance = "2"
-tauri-plugin-store = "2"
 enigo = "0.6"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-prevent-default = "5.0.0"

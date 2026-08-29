@@ -390,24 +390,6 @@ pub fn load_serve_config_file(path: &Path) -> Result<ServeConfigSection, Runtime
     )?)
 }
 
-pub fn load_legacy_settings_app_config(
-    app_data_dir: &Path,
-) -> Result<Option<serde_json::Value>, RuntimeFsError> {
-    let settings_path = app_data_dir.join("settings.json");
-    if RealFileSystem.metadata(&settings_path)?.is_none() {
-        return Ok(None);
-    }
-    let contents = RealFileSystem.read_to_string(&settings_path)?;
-    let parsed =
-        serde_json::from_str(&contents).map_err(|error| RuntimeFsError::Serialization {
-            path: settings_path,
-            reason: error.to_string(),
-        })?;
-    Ok(Some(sona_core::runtime::serve::app_config_payload_owned(
-        parsed,
-    )))
-}
-
 pub fn default_desktop_app_data_roots() -> Vec<PathBuf> {
     #[cfg(target_os = "windows")]
     {

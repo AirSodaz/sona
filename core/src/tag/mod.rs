@@ -137,12 +137,3 @@ pub fn non_empty_trimmed_string(value: Option<&Value>) -> Option<String> {
 }
 
 pub const ACTIVE_TAG_SETTINGS_KEY: &str = "sona-active-tag-id";
-pub const LEGACY_ACTIVE_PROJECT_SETTINGS_KEY: &str = "sona-active-project-id";
-
-pub fn active_tag_id_from_value(value: &Value) -> Option<String> {
-    value
-        .as_str()
-        .map(str::trim)
-        .map(ToOwned::to_owned)
-        .filter(|value| !value.is_empty())
-}

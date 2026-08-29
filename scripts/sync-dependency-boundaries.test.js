@@ -56,7 +56,7 @@ test('the workspace uses the renamed sync WebDAV adapter only', () => {
 
 test('desktop and UniFFI delegate the complete sync lifecycle to SyncApplication', () => {
   const hosts = [
-    read('platforms', 'desktop', 'src', 'platform', 'sync.rs'),
+    read('platforms', 'desktop', 'src', 'platform', 'repositories', 'sync.rs'),
     read('platforms', 'uniffi', 'src', 'sync_bridge.rs'),
   ];
 

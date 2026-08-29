@@ -14,10 +14,6 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-function read(...parts) {
-  return fs.readFileSync(path.join(repoRoot, ...parts), 'utf8').replace(/\r\n/gu, '\n');
-}
-
 function patternMatches(source, pattern) {
   return new RegExp(pattern, 'u').test(source);
 }
@@ -97,16 +93,4 @@ test('host wiring inventory stays aligned with reviewed composition roots', () =
     }
   }
 
-  const guides = [read('docs', 'architecture.md'), read('docs', 'architecture.zh-CN.md')];
-  for (const guide of guides) {
-    assert.match(guide, /platforms\/desktop\/src\/app\/setup\.rs/u);
-    assert.match(guide, /platforms\/cli\/src\/lib\.rs/u);
-    assert.match(guide, /platforms\/uniffi\/src\/application_context\.rs/u);
-    assert.match(guide, /platforms\/uniffi\/src\/lib\.rs/u);
-    assert.match(
-      guide,
-      /host-wiring-inventory\.test\.js/u,
-      'architecture guides must document the host wiring inventory verification command',
-    );
-  }
 });

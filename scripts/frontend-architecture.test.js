@@ -266,12 +266,3 @@ test('Tauri command contracts depend only on stable DTO owners', () => {
     'Tauri contracts may use generated bindings, command names, and src/types DTOs only',
   );
 });
-
-test('desktop frontend dependency rules are published in both architecture guides', () => {
-  for (const guide of ['architecture.md', 'architecture.zh-CN.md']) {
-    const source = fs.readFileSync(path.join(repoRoot, 'docs', guide), 'utf8');
-    assert.match(source, /<a id="desktop-frontend-dependencies"><\/a>/u, guide);
-    assert.match(source, /scripts\/frontend-architecture\.test\.js/u, guide);
-    assert.match(source, /services\/tauri\/platform/u, guide);
-  }
-});

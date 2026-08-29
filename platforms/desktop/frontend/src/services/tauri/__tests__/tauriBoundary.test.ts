@@ -910,12 +910,11 @@ describe('tauri boundary wrappers', () => {
       .mockResolvedValueOnce(migrationResult)
       .mockResolvedValueOnce(effectiveConfig);
 
-    await expect(migrateAppConfig(globalConfig, null, 'Default Rules')).resolves.toEqual(migrationResult);
+    await expect(migrateAppConfig(globalConfig, 'Default Rules')).resolves.toEqual(migrationResult);
     await expect(resolveEffectiveConfig(globalConfig, project)).resolves.toEqual(effectiveConfig);
 
     expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.app.migrateAppConfig, {
       savedConfig: globalConfig,
-      legacyConfig: null,
       defaultRuleSetName: 'Default Rules',
     });
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.app.resolveEffectiveConfig, {

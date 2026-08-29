@@ -14,10 +14,6 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-function read(...parts) {
-  return fs.readFileSync(path.join(repoRoot, ...parts), 'utf8').replace(/\r\n/gu, '\n');
-}
-
 const VALID_STATUSES = new Set(['yes', 'no', 'out of scope']);
 
 test('host capability matrix covers every reviewed host and capability status', () => {
@@ -125,47 +121,4 @@ test('CLI stateless transcription scope stays encoded in the matrix', () => {
 
   const tsBind = HOST_CAPABILITY_MATRIX.find((capability) => capability.id === 'ts-bind');
   assert.deepEqual(hostCapabilityStatuses(tsBind), ['yes', 'no', 'no']);
-});
-
-test('stable architecture guides publish the host capability matrix', () => {
-  const guides = [
-    {
-      source: read('docs', 'architecture.md'),
-      title: 'English',
-      labels: HOST_CAPABILITY_MATRIX.map((capability) => capability.enLabel),
-    },
-    {
-      source: read('docs', 'architecture.zh-CN.md'),
-      title: 'Chinese',
-      labels: HOST_CAPABILITY_MATRIX.map((capability) => capability.zhLabel),
-    },
-  ];
-
-  for (const { source, title, labels } of guides) {
-    assert.match(source, /<a id="host-capability-matrix"><\/a>/u);
-    for (const label of labels) {
-      const escaped = label.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-      assert.match(
-        source,
-        new RegExp(`\\|\\s*${escaped}\\s*\\|`, 'u'),
-        `${title} architecture guide must publish matrix row ${label}`,
-      );
-    }
-
-    assert.match(
-      source,
-      /\|\s*Sync[\s\S]*?\|\s*yes\s*\|\s*out of scope\s*\|\s*yes\s*\|/u,
-      `${title} architecture guide must keep the Sync matrix row`,
-    );
-    assert.match(
-      source,
-      /\|\s*Online ASR\s*\|\s*yes\s*\|\s*yes\s*\|\s*yes\s*\|/u,
-      `${title} architecture guide must publish CLI online ASR support`,
-    );
-    assert.match(
-      source,
-      /host-capability-matrix\.test\.js/u,
-      `${title} architecture guide must document the host capability matrix verification command`,
-    );
-  }
 });

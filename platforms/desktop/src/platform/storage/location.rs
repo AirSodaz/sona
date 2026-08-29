@@ -198,7 +198,6 @@ pub fn migrate_data_directory<R: Runtime>(
             "sona-analytics.db",
             "sona-analytics.db-wal",
             "sona-analytics.db-shm",
-            "settings.json",
             "sync.json",
         ];
         for file_name in file_names {

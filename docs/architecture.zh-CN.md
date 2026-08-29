@@ -44,7 +44,7 @@ Core <- Outbound Adapter <------------- Host
              +-- Application may call outbound ports through Core-owned traits
 ```
 
-依赖只能指向这个模型所示的角色。Core 不依赖其他工作区运行时角色。Application 依赖 Core；适配器依赖 Core 或 Application；Host 可以组合 Core、Application、Inbound Adapter 和 Outbound Adapter。Tool 没有运行时角色依赖。
+依赖只能指向这个模型所示的角色。Core 不依赖其他工作区运行时角色。Application 依赖 Core；适配器依赖 Core 或 Application；Provider 依赖 Core；Host 可以组合 Core、Application、Inbound Adapter、Outbound Adapter 和 Provider。Tool 没有运行时角色依赖。
 
 <a id="directory-vs-role"></a>
 ## 目录与角色
@@ -185,6 +185,12 @@ CLI 定位为无状态转写 Host：应用持久化、History/Tag、Online LLM�
 
 公开调用方契约可能需要字符串、状态码与字符串元组或特定语言的错误值。将这类转换保留在最终的 Tauri、UniFFI、CLI 或 HTTP 边界，才能保持既有契约。新的领域和应用 API 必须公开类型化错误；适配器和 Host 不得把兼容性字符串移入内部。外部契约需要变更时，应增加明确的边界映射与聚焦的契约测试，而不是削弱内部类型化 API。
 
+### 存储基线
+
+Desktop 与 UniFFI 的最低支持版本为 v0.8.0。新数据库直接创建为 SQLite schema 7；低于该
+schema 的数据库以及 v0.8.0 之前的 JSON 存储布局不再在运行时升级。配置迁移只负责归一化
+当前 SQLite 载荷，并处理 v0.8.0 之后的字段升级。
+
 <a id="reviewed-exceptions"></a>
 ## 已评审例外
 
@@ -193,7 +199,8 @@ CLI 定位为无状态转写 Host：应用持久化、History/Tag、Online LLM�
 <a id="compatibility-debt"></a>
 ## 兼容债务清单
 
-下列项在当前兼容窗口内是显式允许的。它们不是“顺手清理”对象；没有专门迁移切片与契约测试时，不要重命名或删除。
+下列项是显式保留的公开兼容叶节点。只有在有意版本化对应公开契约时才移除；它们与已删除的
+v0.8.0 之前存储迁移无关。
 
 ### Project 到 Tag
 

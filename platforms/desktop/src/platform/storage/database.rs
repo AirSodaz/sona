@@ -13,33 +13,6 @@ pub fn open_and_migrate_sqlite_for_app<R: Runtime>(
         .map_err(std::io::Error::other)?;
 
     let db = Arc::new(sona_sqlite::Database::open(&app_local_data_dir)?);
-    let migration_result =
-        sona_sqlite::legacy_migration::migrate_legacy_to_sqlite(db.as_ref(), &app_local_data_dir)?;
-    if migration_result.migrated {
-        log::info!(
-            "Migrated legacy data: {} history items, {} projects",
-            migration_result.history_count,
-            migration_result.project_count,
-        );
-
-        if !migration_result.errors.is_empty() {
-            for err in &migration_result.errors {
-                log::error!("[Migration] {err}");
-            }
-            log::warn!(
-                "[Migration] {} error(s) occurred; legacy data preserved at original location",
-                migration_result.errors.len(),
-            );
-        }
-
-        if migration_result.errors.is_empty() {
-            sona_sqlite::legacy_migration::move_legacy_domains_to_backup(
-                &app_local_data_dir,
-                migration_result.domains,
-            )?;
-        }
-    }
-
     Ok((db, app_local_data_dir))
 }
 

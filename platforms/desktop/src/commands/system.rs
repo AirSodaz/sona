@@ -371,10 +371,9 @@ pub fn set_app_setting<R: Runtime>(
 #[tauri::command(rename_all = "camelCase")]
 pub fn migrate_app_config(
     saved_config: Option<Value>,
-    legacy_config: Option<Value>,
     default_rule_set_name: String,
 ) -> sona_core::config::MigrationResult {
-    sona_core::config::migrate_app_config(saved_config, legacy_config, default_rule_set_name)
+    sona_core::config::migrate_app_config(saved_config, default_rule_set_name)
 }
 
 #[tauri::command(rename_all = "camelCase")]

@@ -13,7 +13,6 @@ pub mod history_mutation_repository;
 mod history_query_repository;
 pub mod history_store;
 mod legacy_change_time;
-pub mod legacy_migration;
 pub mod llm_usage;
 pub mod ports;
 pub mod schema;

@@ -4,10 +4,6 @@ const loadAppConfigMock = vi.fn();
 const saveAppConfigMock = vi.fn();
 const getAppSettingMock = vi.fn();
 const setAppSettingMock = vi.fn();
-const legacyGetMock = vi.fn();
-const legacySetMock = vi.fn();
-const legacySaveMock = vi.fn();
-const legacyOnKeyChangeMock = vi.fn();
 const emitMock = vi.fn();
 const listenMock = vi.fn();
 
@@ -23,17 +19,6 @@ vi.mock('../tauri/platform/events', () => ({
   listen: (...args: unknown[]) => listenMock(...args),
 }));
 
-vi.mock('@tauri-apps/plugin-store', () => ({
-  LazyStore: vi.fn().mockImplementation(function LazyStore() {
-    return {
-      get: (...args: unknown[]) => legacyGetMock(...args),
-      set: (...args: unknown[]) => legacySetMock(...args),
-      save: (...args: unknown[]) => legacySaveMock(...args),
-      onKeyChange: (...args: unknown[]) => legacyOnKeyChangeMock(...args),
-    };
-  }),
-}));
-
 describe('settingsStore SQLite adapter', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -42,10 +27,6 @@ describe('settingsStore SQLite adapter', () => {
     saveAppConfigMock.mockResolvedValue(undefined);
     getAppSettingMock.mockResolvedValue(null);
     setAppSettingMock.mockResolvedValue(undefined);
-    legacyGetMock.mockResolvedValue(null);
-    legacySetMock.mockResolvedValue(undefined);
-    legacySaveMock.mockResolvedValue(undefined);
-    legacyOnKeyChangeMock.mockResolvedValue(() => undefined);
     emitMock.mockResolvedValue(undefined);
     listenMock.mockResolvedValue(() => undefined);
   });
@@ -62,18 +43,6 @@ describe('settingsStore SQLite adapter', () => {
     expect(loadAppConfigMock).toHaveBeenCalledTimes(1);
     expect(saveAppConfigMock).toHaveBeenCalledWith(config);
     expect(setAppSettingMock).not.toHaveBeenCalled();
-  });
-
-  it('falls back to legacy settings.json once and backfills SQLite settings', async () => {
-    const { settingsStore, STORE_KEY_ONBOARDING } = await import('../storageService');
-    const onboarding = { version: 1, status: 'completed' };
-    getAppSettingMock.mockResolvedValueOnce(null);
-    legacyGetMock.mockResolvedValueOnce(onboarding);
-
-    await expect(settingsStore.get(STORE_KEY_ONBOARDING)).resolves.toEqual(onboarding);
-
-    expect(legacyGetMock).toHaveBeenCalledWith(STORE_KEY_ONBOARDING);
-    expect(setAppSettingMock).toHaveBeenCalledWith(STORE_KEY_ONBOARDING, onboarding);
   });
 
   it('notifies onKeyChange subscribers from SQLite setting events', async () => {

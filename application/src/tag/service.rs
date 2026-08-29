@@ -5,8 +5,7 @@ use sona_core::tag::TagIdGenerator;
 
 use sona_core::tag::{
     ActiveTagSelection, TagCreateInput, TagError, TagListOptions, TagPatch, TagRecord,
-    TagRepositorySnapshot, TagStore, TagStoredState, TagUpdateInput, active_tag_id_from_value,
-    normalize_tag_value,
+    TagRepositorySnapshot, TagStore, TagStoredState, TagUpdateInput, normalize_tag_value,
 };
 
 pub struct TagRepositoryService<'a> {
@@ -142,7 +141,13 @@ fn active_selection_from_setting_json(
         .transpose()
         .map_err(TagError::Serialization)?
         .as_ref()
-        .and_then(active_tag_id_from_value);
+        .and_then(|value| {
+            value
+                .as_str()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned)
+        });
     Ok(ActiveTagSelection {
         setting_exists: setting_json.is_some(),
         tag_id,

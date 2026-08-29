@@ -54,7 +54,7 @@ fn typed_app_config_validation_rejects_invalid_known_fields() {
 
 #[test]
 fn current_config_migration_emits_typed_string_ids() {
-    let result = migrate_app_config(Some(default_config()), None, "Default Rules".to_string());
+    let result = migrate_app_config(Some(default_config()), "Default Rules".to_string());
 
     validate_app_config(&result.config).expect("normalized config should match AppConfig");
     assert_eq!(result.config["summaryTemplateId"], "general");
@@ -69,7 +69,7 @@ fn current_config_migration_repairs_invalid_typed_scalar_fields() {
     config["captionWindowWidth"] = json!("wide");
     config["voiceTypingMode"] = json!("press");
 
-    let result = migrate_app_config(Some(config), None, "Default Rules".to_string());
+    let result = migrate_app_config(Some(config), "Default Rules".to_string());
 
     validate_app_config(&result.config).expect("migration output should match AppConfig");
     assert_eq!(result.config["appLanguage"], "auto");
@@ -81,10 +81,10 @@ fn current_config_migration_repairs_invalid_typed_scalar_fields() {
 #[test]
 fn migration_normalizes_llm_provider_aliases_from_core_manifest() {
     let mut saved = default_config();
-    saved["configVersion"] = json!(1);
+    saved["configVersion"] = json!(7);
     saved["llmSettings"]["activeProvider"] = json!("openai");
 
-    let result = migrate_app_config(Some(saved), None, "Default Rules".to_string());
+    let result = migrate_app_config(Some(saved), "Default Rules".to_string());
 
     assert_eq!(
         result.config["llmSettings"]["providers"]["open_ai"]["apiHost"],
@@ -116,19 +116,18 @@ fn effective_config_resolution_ignores_legacy_project_defaults() {
 fn migration_normalizes_legacy_gpu_acceleration_options() {
     let mut config_coreml = default_config();
     config_coreml["gpuAcceleration"] = json!("coreml");
-    let result_coreml = migrate_app_config(Some(config_coreml), None, "Default Rules".to_string());
+    let result_coreml = migrate_app_config(Some(config_coreml), "Default Rules".to_string());
     assert_eq!(result_coreml.config["gpuAcceleration"], "metal");
     assert!(result_coreml.migrated);
 
     let mut config_directml = default_config();
     config_directml["gpuAcceleration"] = json!("directml");
-    let result_directml =
-        migrate_app_config(Some(config_directml), None, "Default Rules".to_string());
+    let result_directml = migrate_app_config(Some(config_directml), "Default Rules".to_string());
     assert_eq!(result_directml.config["gpuAcceleration"], "auto");
     assert!(result_directml.migrated);
 
     let mut config_vulkan = default_config();
     config_vulkan["gpuAcceleration"] = json!("vulkan");
-    let result_vulkan = migrate_app_config(Some(config_vulkan), None, "Default Rules".to_string());
+    let result_vulkan = migrate_app_config(Some(config_vulkan), "Default Rules".to_string());
     assert_eq!(result_vulkan.config["gpuAcceleration"], "vulkan");
 }

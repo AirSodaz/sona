@@ -1,35 +1,12 @@
 use super::{Database, DatabaseError};
 
 pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 7;
-type MigrationFn = fn(&rusqlite::Transaction) -> Result<(), rusqlite::Error>;
+const MIN_SUPPORTED_SCHEMA_VERSION: i64 = CURRENT_SCHEMA_VERSION;
 
-const MIGRATIONS: &[(i64, &str, MigrationFn)] = &[
-    (1, "Initial complete SQLite schema", migrate_v1),
-    (2, "Preserve detailed LLM token usage", migrate_v2),
-    (3, "Add provider-neutral sync state", migrate_v3),
-    (4, "Replace projects with tags and add trash", migrate_v4),
-    (
-        5,
-        "Move tag defaults into typed automation profiles",
-        migrate_v5,
-    ),
-    (
-        6,
-        "Persist resolved automation metadata in task ledger",
-        migrate_v6,
-    ),
-    (
-        7,
-        "Track generic automation runs and Tag idempotency",
-        migrate_v7,
-    ),
-];
-
-/// Runs pending schema migrations in version order.
+/// Initializes a new database at the v0.8.0 schema baseline.
 ///
-/// Sona's public SQLite baseline starts after the v0.7.4 JSON storage era, so
-/// historical in-development SQLite migrations are intentionally squashed into
-/// v1. Future schema changes must be appended as v2, v3, etc.
+/// Databases created before v0.8.0 are intentionally no longer upgraded. Future
+/// schema changes must be appended after the current baseline.
 pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
     db.with_transaction(|tx| {
         bootstrap_schema_version(tx)?;
@@ -42,14 +19,19 @@ pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
             });
         }
 
-        for &(version, _description, migration) in MIGRATIONS {
-            if version > applied_version {
-                migration(tx)?;
-                tx.execute(
-                    "INSERT INTO schema_version (version) VALUES (?1)",
-                    [version],
-                )?;
-            }
+        if applied_version > 0 && applied_version < MIN_SUPPORTED_SCHEMA_VERSION {
+            return Err(DatabaseError::UnsupportedLegacySchemaVersion {
+                found: applied_version,
+                minimum: MIN_SUPPORTED_SCHEMA_VERSION,
+            });
+        }
+
+        if applied_version == 0 {
+            initialize_current_schema(tx)?;
+            tx.execute(
+                "INSERT INTO schema_version (version) VALUES (?1)",
+                [CURRENT_SCHEMA_VERSION],
+            )?;
         }
         Ok(())
     })
@@ -71,6 +53,12 @@ pub(crate) fn validate_current_schema(
             current: CURRENT_SCHEMA_VERSION,
         });
     }
+    if applied_version > 0 && applied_version < MIN_SUPPORTED_SCHEMA_VERSION {
+        return Err(DatabaseError::UnsupportedLegacySchemaVersion {
+            found: applied_version,
+            minimum: MIN_SUPPORTED_SCHEMA_VERSION,
+        });
+    }
     if applied_version < CURRENT_SCHEMA_VERSION {
         return Err(DatabaseError::SchemaMigrationRequired {
             found: applied_version,
@@ -78,6 +66,18 @@ pub(crate) fn validate_current_schema(
         });
     }
     Ok(())
+}
+
+fn initialize_current_schema(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+    // Keep the schema-building phases together so the baseline remains easy to
+    // audit while avoiding runtime support for pre-v0.8.0 databases.
+    migrate_v1(tx)?;
+    migrate_v2(tx)?;
+    migrate_v3(tx)?;
+    migrate_v4(tx)?;
+    migrate_v5(tx)?;
+    migrate_v6(tx)?;
+    migrate_v7(tx)
 }
 
 fn bootstrap_schema_version(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
@@ -182,13 +182,13 @@ fn migrate_v1(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
 
         CREATE INDEX idx_snapshots_history_id ON transcript_snapshots(history_id);
 
-        -- App Settings (replaces settings.json KV pairs except sona-config)
+        -- App Settings (SQLite key/value settings)
         CREATE TABLE app_settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
 
-        -- App Config (replaces settings.json sona-config)
+        -- App Config (SQLite application configuration)
         CREATE TABLE app_config (
             id INTEGER PRIMARY KEY CHECK (id = 1),
             config TEXT NOT NULL DEFAULT '{}',
@@ -686,7 +686,7 @@ mod tests {
         // Migrations already ran during open_in_memory. Running again should be a no-op.
         run_migrations(&db).unwrap();
 
-        assert_eq!(schema_versions(&db), vec![1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(schema_versions(&db), vec![7]);
     }
 
     #[test]
@@ -875,21 +875,27 @@ mod tests {
                 current: 7
             }
         ));
-        assert_eq!(schema_versions(&db), vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(schema_versions(&db), vec![7, 8]);
     }
 
     #[test]
-    fn test_lower_schema_version_records_are_preserved() {
+    fn test_pre_v0_8_schema_is_rejected() {
         let db = Database::open_in_memory().unwrap();
         db.with_connection(|conn| {
-            conn.execute("INSERT INTO schema_version (version) VALUES (0)", [])?;
+            conn.execute("DELETE FROM schema_version", [])?;
+            conn.execute("INSERT INTO schema_version (version) VALUES (6)", [])?;
             Ok(())
         })
         .unwrap();
 
-        run_migrations(&db).unwrap();
-
-        assert_eq!(schema_versions(&db), vec![0, 1, 2, 3, 4, 5, 6, 7]);
+        let err = run_migrations(&db).unwrap_err();
+        assert!(matches!(
+            err,
+            DatabaseError::UnsupportedLegacySchemaVersion {
+                found: 6,
+                minimum: 7
+            }
+        ));
     }
 
     #[test]

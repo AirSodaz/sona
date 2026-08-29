@@ -60,7 +60,6 @@ describe('hydrateAppStartupState', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    localStorage.setItem('sona-config', JSON.stringify({ recognitionModelPath: '/legacy/model' }));
     localStorage.setItem('sona-onboarding', JSON.stringify({ version: 1, status: 'deferred' }));
     localStorage.setItem('sona-first-run-completed', 'true');
     mockSettingsGet.mockResolvedValue(null);

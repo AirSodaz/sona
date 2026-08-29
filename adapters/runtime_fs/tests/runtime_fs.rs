@@ -26,12 +26,11 @@ use sona_runtime_fs::{
     RealFileSystem, RuntimeBatchTranscribePlanResolver, RuntimeFsError,
     RuntimeModelCatalogProvider, SystemClock, UuidGenerator,
     collect_automation_runtime_candidate_paths, ensure_directory_exists,
-    is_preset_model_installed_at, load_legacy_settings_app_config, load_transcribe_config_file,
-    load_transcribe_live_config_file, path_exists, plan_batch_output_files, remove_path_if_exists,
-    resolve_batch_input_source, resolve_live_transcribe_plan_with_runtime_paths,
-    resolve_runtime_path_status, select_desktop_models_dir_from_app_roots,
-    validate_native_automation_rule_activation, write_cli_config_template_file,
-    write_json_pretty_atomic, write_transcript_output_file,
+    is_preset_model_installed_at, load_transcribe_config_file, load_transcribe_live_config_file,
+    path_exists, plan_batch_output_files, remove_path_if_exists, resolve_batch_input_source,
+    resolve_live_transcribe_plan_with_runtime_paths, resolve_runtime_path_status,
+    select_desktop_models_dir_from_app_roots, validate_native_automation_rule_activation,
+    write_cli_config_template_file, write_json_pretty_atomic, write_transcript_output_file,
 };
 use std::sync::Arc;
 use uuid::{Uuid, Version};
@@ -338,35 +337,6 @@ fn load_transcribe_config_file_preserves_filesystem_operation_and_path() {
             ..
         }) if path == config_path
     ));
-}
-
-#[test]
-fn load_legacy_settings_app_config_unwraps_object_payloads() {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(
-        dir.path().join("settings.json"),
-        r#"{"sona-config":{"asr":{"providers":{"online":{"volcengine":{"apiKey":"legacy-key"}}}}}}"#,
-    )
-    .unwrap();
-
-    let config = load_legacy_settings_app_config(dir.path())
-        .unwrap()
-        .unwrap();
-
-    assert_eq!(
-        config["asr"]["providers"]["online"]["volcengine"]["apiKey"],
-        "legacy-key"
-    );
-    assert!(config.get("sona-config").is_none());
-}
-
-#[test]
-fn load_legacy_settings_app_config_returns_none_for_missing_file() {
-    let dir = tempfile::tempdir().unwrap();
-
-    let config = load_legacy_settings_app_config(dir.path()).unwrap();
-
-    assert!(config.is_none());
 }
 
 #[test]

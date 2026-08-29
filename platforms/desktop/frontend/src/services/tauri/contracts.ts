@@ -209,7 +209,6 @@ type ManualTauriCommandContractMap = {
   [TauriCommand.app.migrateAppConfig]: {
     args: {
       savedConfig: AppConfig | null;
-      legacyConfig: unknown;
       defaultRuleSetName: string;
     };
     result: {

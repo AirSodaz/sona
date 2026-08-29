@@ -66,17 +66,6 @@ fn load_sqlite_serve_startup_settings(
     .flatten()
 }
 
-fn load_legacy_settings_config(provider: &dyn PathPort) -> Option<serde_json::Value> {
-    let app_data_dir = provider.resolve_path(PathKind::AppData).ok()?;
-    sona_runtime_fs::load_legacy_settings_app_config(&app_data_dir)
-        .map_err(|error| {
-            log::warn!("[API Server] Failed to load legacy settings: {error}");
-            error
-        })
-        .ok()
-        .flatten()
-}
-
 fn load_app_config_for_server(provider: &dyn PathPort) -> Option<serde_json::Value> {
     load_app_config_for_server_with_database(provider, None)
 }
@@ -86,7 +75,6 @@ fn load_app_config_for_server_with_database(
     database: Option<Arc<Database>>,
 ) -> Option<serde_json::Value> {
     load_sqlite_app_config_payload(provider, database)
-        .or_else(|| load_legacy_settings_config(provider))
 }
 
 pub fn load_online_asr_config(provider: &dyn PathPort) -> HashMap<String, serde_json::Value> {
@@ -195,7 +183,7 @@ mod tests {
     }
 
     #[test]
-    fn load_online_asr_config_reads_sqlite_app_config_before_legacy_settings_file() {
+    fn load_online_asr_config_reads_sqlite_app_config() {
         let app_data = tempfile::tempdir().unwrap();
         let app_local_data = tempfile::tempdir().unwrap();
         let provider = provider_for_config_test(app_data.path(), app_local_data.path());
@@ -214,12 +202,6 @@ mod tests {
                 }
             }),
         );
-        std::fs::write(
-            app_data.path().join("settings.json"),
-            r#"{"sona-config":{"asr":{"providers":{"online":{"volcengine":{"apiKey":"legacy-key"}}}}}}"#,
-        )
-        .unwrap();
-
         let config = load_online_asr_config(&provider);
 
         assert_eq!(
@@ -228,30 +210,6 @@ mod tests {
                 .and_then(|value| value.get("apiKey"))
                 .and_then(serde_json::Value::as_str),
             Some("sqlite-key")
-        );
-    }
-
-    #[test]
-    fn load_online_asr_config_falls_back_to_legacy_when_sqlite_open_fails() {
-        let app_data = tempfile::tempdir().unwrap();
-        let app_local_data_parent = tempfile::tempdir().unwrap();
-        let app_local_data_file = app_local_data_parent.path().join("app-local-data-file");
-        std::fs::write(&app_local_data_file, "not a directory").unwrap();
-        let provider = provider_for_config_test(app_data.path(), &app_local_data_file);
-        std::fs::write(
-            app_data.path().join("settings.json"),
-            r#"{"sona-config":{"asr":{"providers":{"online":{"volcengine":{"apiKey":"legacy-key"}}}}}}"#,
-        )
-        .unwrap();
-
-        let config = load_online_asr_config(&provider);
-
-        assert_eq!(
-            config
-                .get("volcengine")
-                .and_then(|value| value.get("apiKey"))
-                .and_then(serde_json::Value::as_str),
-            Some("legacy-key")
         );
     }
 

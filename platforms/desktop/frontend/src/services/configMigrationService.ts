@@ -13,11 +13,9 @@ export interface MigrationResult {
  */
 export async function migrateConfig(
   savedConfig: AppConfig | null | undefined,
-  legacyConfig?: unknown,
 ): Promise<MigrationResult> {
   return migrateAppConfig(
     savedConfig ?? null,
-    legacyConfig ?? null,
     i18n.t('settings.default_rule_set_name', { defaultValue: 'Default Rules' }),
   );
 }

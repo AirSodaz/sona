@@ -27,6 +27,9 @@ pub enum DatabaseError {
     #[error("Database schema version {found} requires migration to {current}")]
     SchemaMigrationRequired { found: i64, current: i64 },
 
+    #[error("Database schema version {found} is below the minimum supported version {minimum}")]
+    UnsupportedLegacySchemaVersion { found: i64, minimum: i64 },
+
     #[error("{0}")]
     Internal(String),
 }

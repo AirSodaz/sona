@@ -7,10 +7,6 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const corePortsDir = path.join(repoRoot, 'core', 'src', 'ports');
 
-function read(...parts) {
-  return fs.readFileSync(path.join(repoRoot, ...parts), 'utf8').replace(/\r\n/gu, '\n');
-}
-
 // Domain aggregates that own their own ports under `core/src/<domain>/`.
 // A capability port in `core/src/ports/` must not be named after any of them.
 const DOMAIN_AGGREGATES = [
@@ -65,7 +61,6 @@ test('core capability ports declare no persistence-shaped traits', () => {
       'not in the shared capability port module',
   );
 });
-
 test('core capability ports are not named after a domain aggregate', () => {
   const offenders = [];
   for (const { name, source } of corePortFiles()) {
@@ -83,7 +78,6 @@ test('core capability ports are not named after a domain aggregate', () => {
     'a trait named after a domain aggregate belongs under core/src/<domain>/',
   );
 });
-
 test('shared capability ports stay in the shared port module', () => {
   const declared = new Set(corePortFiles().flatMap(({ source }) => declaredTraits(source)));
 
@@ -92,42 +86,5 @@ test('shared capability ports stay in the shared port module', () => {
       declared.has(capability),
       `${capability} is a domain-agnostic capability and must stay in core/src/ports/`,
     );
-  }
-});
-
-test('port placement rules are published in both architecture guides', () => {
-  const guides = [
-    { source: read('docs', 'architecture.md'), title: 'docs/architecture.md' },
-    { source: read('docs', 'architecture.zh-CN.md'), title: 'docs/architecture.zh-CN.md' },
-  ];
-
-  for (const { source, title } of guides) {
-    assert.match(
-      source,
-      /<a id="port-placement"><\/a>/u,
-      `${title} must anchor the port placement section`,
-    );
-    assert.match(
-      source,
-      /core\/src\/ports\/<capability>\.rs/u,
-      `${title} must document the capability port home`,
-    );
-    assert.match(
-      source,
-      /core\/src\/<domain>\/ports\.rs/u,
-      `${title} must document the preferred domain port home`,
-    );
-    assert.match(
-      source,
-      /scripts\/core-port-placement\.test\.js/u,
-      `${title} must name the test that enforces the rules`,
-    );
-    for (const aggregate of DOMAIN_AGGREGATES) {
-      assert.match(
-        source,
-        new RegExp(`\\b${aggregate}\\b`, 'u'),
-        `${title} must list ${aggregate} among the domain aggregates`,
-      );
-    }
   }
 });

@@ -8,23 +8,16 @@ use std::collections::HashSet;
 
 pub(crate) fn migrate_app_config_inner(
     saved_config: Option<Value>,
-    legacy_config: Option<Value>,
     default_rule_set_name: &str,
 ) -> MigrationResult {
-    let mut is_legacy_migration = false;
-    let Some(source) = saved_config.or_else(|| {
-        if legacy_config.as_ref().is_some_and(Value::is_object) {
-            is_legacy_migration = true;
-        }
-        legacy_config
-    }) else {
+    let Some(source) = saved_config else {
         return MigrationResult {
             config: default_config(),
             migrated: false,
         };
     };
 
-    let needs_upgrade = should_upgrade_config(&source, is_legacy_migration);
+    let needs_upgrade = should_upgrade_config(&source);
     if !needs_upgrade {
         let normalized = normalize_current_config(source.clone());
         let config = remove_internal_marker(normalized);
@@ -65,11 +58,7 @@ pub(crate) fn resolve_effective_config_inner(
     Value::Object(config)
 }
 
-fn should_upgrade_config(config: &Value, is_config_migrated: bool) -> bool {
-    if is_config_migrated {
-        return true;
-    }
-
+fn should_upgrade_config(config: &Value) -> bool {
     let version = config
         .get("configVersion")
         .and_then(Value::as_i64)
@@ -2219,7 +2208,3 @@ fn merge_object_values(first: Value, second: Option<Value>) -> Option<Value> {
     }
     Some(Value::Object(object))
 }
-
-#[cfg(test)]
-#[path = "migration_tests.rs"]
-mod tests;

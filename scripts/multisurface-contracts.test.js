@@ -338,7 +338,7 @@ test('SQLite Sync receives its clock through the repository factory', () => {
   );
 
   assert.match(
-    read('platforms', 'desktop', 'src', 'platform', 'sync.rs'),
+    read('platforms', 'desktop', 'src', 'platform', 'repositories', 'sync.rs'),
     /sync_repository_factory\(Arc::new\(SystemClock\)\)/u,
   );
   assert.match(
@@ -432,7 +432,14 @@ test('API server depends only on Core runtime capability ports', () => {
 
 test('Desktop Sync lifecycle requests are provider-neutral behind WebDAV compatibility', () => {
   const syncApplication = read('application', 'sync', 'src', 'application.rs');
-  const desktopSync = read('platforms', 'desktop', 'src', 'platform', 'sync.rs');
+  const desktopSync = read(
+    'platforms',
+    'desktop',
+    'src',
+    'platform',
+    'repositories',
+    'sync.rs',
+  );
   const desktopCommands = read('platforms', 'desktop', 'src', 'commands', 'sync.rs');
   const frontendCommands = read(
     'platforms',
@@ -682,7 +689,14 @@ test('stateful hosts reuse SQLite while the CLI stays stateless', () => {
   }
 
   const desktopSetup = read('platforms', 'desktop', 'src', 'app', 'setup.rs');
-  const desktopDatabase = read('platforms', 'desktop', 'src', 'platform', 'database.rs');
+  const desktopDatabase = read(
+    'platforms',
+    'desktop',
+    'src',
+    'platform',
+    'storage',
+    'database.rs',
+  );
   assert.match(desktopSetup, /\bSqliteApplicationContext::from_database\b/u);
   assert.match(desktopSetup, /manage\(sqlite_context\)/u);
   assert.doesNotMatch(desktopSetup, /manage\(db\)/u);

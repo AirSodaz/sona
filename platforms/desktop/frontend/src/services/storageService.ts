@@ -1,4 +1,3 @@
-import { LazyStore } from './tauri/platform/store';
 import type { AppConfig } from '../types/config';
 import {
   getAppSetting,
@@ -15,20 +14,9 @@ export const STORE_KEY_BACKUP_WEBDAV = 'sona-backup-webdav';
 
 export const APP_SETTING_UPDATED_EVENT = 'app-setting-updated';
 
-const legacySettingsStore = new LazyStore('settings.json');
-
 interface SettingUpdatePayload<T = unknown> {
   key: string;
   value: T;
-}
-
-async function readLegacySetting<T>(key: string): Promise<T | null> {
-  try {
-    const value = await legacySettingsStore.get<T>(key);
-    return value ?? null;
-  } catch {
-    return null;
-  }
 }
 
 async function emitSettingUpdated(key: string, value: unknown): Promise<void> {
@@ -39,27 +27,10 @@ export const settingsStore = {
   async get<T>(key: string): Promise<T | null> {
     if (key === STORE_KEY_CONFIG) {
       const config = await loadAppConfig();
-      if (config) {
-        return config as T;
-      }
-
-      const legacyConfig = await readLegacySetting<T>(key);
-      if (legacyConfig !== null) {
-        await saveAppConfig(legacyConfig as unknown as AppConfig);
-      }
-      return legacyConfig;
+      return config as T | null;
     }
 
-    const value = await getAppSetting<T>(key);
-    if (value !== null && value !== undefined) {
-      return value;
-    }
-
-    const legacyValue = await readLegacySetting<T>(key);
-    if (legacyValue !== null && legacyValue !== undefined) {
-      await setAppSetting(key, legacyValue);
-    }
-    return legacyValue;
+    return getAppSetting<T>(key);
   },
 
   async set(key: string, value: unknown): Promise<void> {
@@ -73,7 +44,7 @@ export const settingsStore = {
   },
 
   async save(): Promise<void> {
-    // SQLite writes are committed by set(); kept for LazyStore API compatibility.
+    // SQLite writes are committed by set(); retained for existing callers.
   },
 
   async notifyExternalUpdate(key: string, value: unknown): Promise<void> {

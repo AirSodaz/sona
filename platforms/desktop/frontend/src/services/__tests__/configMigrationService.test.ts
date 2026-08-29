@@ -24,13 +24,10 @@ describe('configMigrationService', () => {
     vi.clearAllMocks();
   });
 
-  it('delegates saved and legacy config normalization to Rust with the localized default rule-set name', async () => {
+  it('delegates saved config normalization to Rust with the localized default rule-set name', async () => {
     const savedConfig: AppConfig = {
       ...DEFAULT_CONFIG,
       logLevel: 'debug',
-    };
-    const legacyConfig = {
-      recognitionModelPath: '/legacy/model',
     };
     vi.mocked(migrateAppConfig).mockResolvedValueOnce({
       config: {
@@ -40,13 +37,12 @@ describe('configMigrationService', () => {
       migrated: true,
     });
 
-    const result = await migrateConfig(savedConfig, legacyConfig);
+    const result = await migrateConfig(savedConfig);
 
     expect(result.migrated).toBe(true);
     expect(result.config.streamingModelPath).toBe('/legacy/model');
     expect(migrateAppConfig).toHaveBeenCalledWith(
       savedConfig,
-      legacyConfig,
       'Default Rules',
     );
   });
@@ -59,6 +55,6 @@ describe('configMigrationService', () => {
 
     await migrateConfig(undefined);
 
-    expect(migrateAppConfig).toHaveBeenCalledWith(null, null, 'Default Rules');
+    expect(migrateAppConfig).toHaveBeenCalledWith(null, 'Default Rules');
   });
 });

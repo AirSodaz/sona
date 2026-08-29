@@ -387,12 +387,10 @@ export async function setAppSetting(key: string, value: unknown): Promise<void> 
 
 export async function migrateAppConfig(
   savedConfig: AppConfig | null | undefined,
-  legacyConfig: unknown,
   defaultRuleSetName: string,
 ): Promise<AppConfigMigrationResult> {
   const res = await invokeTauri(TauriCommand.app.migrateAppConfig, {
     savedConfig: savedConfig ?? null,
-    legacyConfig: legacyConfig ?? null,
     defaultRuleSetName,
   });
   return {

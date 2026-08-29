@@ -5,7 +5,7 @@
 <a id="architecture-roles"></a>
 ## Architecture roles
 
-Sona uses six stable roles. The role is the reviewed dependency contract; workspace paths mirror that contract so the directory tree is also a reliable navigation aid.
+Sona uses seven stable roles. The role is the reviewed dependency contract; workspace paths mirror that contract so the directory tree is also a reliable navigation aid.
 
 | Package | Role |
 | --- | --- |
@@ -16,12 +16,12 @@ Sona uses six stable roles. The role is the reviewed dependency contract; worksp
 | `sona-ts-bind` | inbound-adapter |
 | `sona-archive` | outbound-adapter |
 | `sona-export` | outbound-adapter |
-| `sona-sherpa-onnx` | outbound-adapter |
-| `sona-vad` | outbound-adapter |
-| `sona-llama-cpp` | outbound-adapter |
+| `sona-sherpa-onnx` | provider |
+| `sona-vad` | provider |
+| `sona-llama-cpp` | provider |
 | `sona-media-detector` | outbound-adapter |
 | `sona-model-downloads` | outbound-adapter |
-| `sona-online-asr` | outbound-adapter |
+| `sona-online-asr` | provider |
 | `sona-online-llm` | outbound-adapter |
 | `sona-recovery-fs` | outbound-adapter |
 | `sona-runtime-fs` | outbound-adapter |
@@ -44,7 +44,7 @@ Core <- Outbound Adapter <------------- Host
              +-- Application may call outbound ports through Core-owned traits
 ```
 
-Dependencies point only toward the roles shown by this model. Core has no runtime dependency on another workspace role. Application depends on Core; adapters depend on Core or Application; Hosts may compose Core, Application, Inbound Adapter, and Outbound Adapter. Tools have no runtime role dependencies.
+Dependencies point only toward the roles shown by this model. Core has no runtime dependency on another workspace role. Application depends on Core; adapters depend on Core or Application; Providers depend on Core; Hosts may compose Core, Application, Inbound Adapter, Outbound Adapter, and Provider. Tools have no runtime role dependencies.
 
 <a id="directory-vs-role"></a>
 ## Directory versus role
@@ -186,6 +186,13 @@ Domain and application errors remain typed across Core, Application, and adapter
 
 Public caller contracts may require strings, status-and-string tuples, or language-specific error values. Keep that conversion at the final Tauri, UniFFI, CLI, or HTTP boundary, where it can preserve the established contract. New domain and application APIs must expose typed errors; adapters and hosts must not move compatibility strings inward. When an external contract changes, add an explicit boundary mapping and a focused contract test rather than weakening the inner typed API.
 
+### Storage baseline
+
+Desktop and UniFFI support starts at v0.8.0. New databases are created directly at
+SQLite schema 7; databases with an older schema or the pre-v0.8.0 JSON storage
+layout are not upgraded at runtime. Configuration migration only normalizes the
+current SQLite payload and applies post-v0.8.0 field upgrades.
+
 <a id="reviewed-exceptions"></a>
 ## Reviewed exceptions
 
@@ -194,7 +201,9 @@ There are currently no registered outbound-adapter-to-outbound-adapter exception
 <a id="compatibility-debt"></a>
 ## Compatibility debt inventory
 
-These items are explicit and allowed during the current compatibility window. They are not free cleanups; do not rename or delete them without a dedicated migration slice and contract tests.
+These items are explicit public compatibility leaves. Remove them only when the
+owning public contract is intentionally versioned; they are separate from the
+removed pre-v0.8.0 storage migrations.
 
 ### Project to Tag
 

@@ -12,7 +12,6 @@
     "window-state:default",
     "updater:default",
     "process:default",
-    "store:default",
     "global-shortcut:default",
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",

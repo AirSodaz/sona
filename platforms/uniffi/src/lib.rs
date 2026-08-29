@@ -1260,14 +1260,9 @@ pub fn default_config_json() -> String {
 #[uniffi::export]
 pub fn migrate_app_config_json(
     saved_config_json: Option<String>,
-    legacy_config_json: Option<String>,
     default_rule_set_name: String,
 ) -> SonaCoreBindingResult<FfiConfigMigrationResult> {
-    config_bridge::migrate_app_config_json(
-        saved_config_json,
-        legacy_config_json,
-        default_rule_set_name,
-    )
+    config_bridge::migrate_app_config_json(saved_config_json, default_rule_set_name)
 }
 
 #[uniffi::export]
@@ -2726,7 +2721,6 @@ mod tests {
                 }"#
                 .to_string(),
             ),
-            None,
             "Default Rules".to_string(),
         )
         .unwrap();
@@ -2762,7 +2756,6 @@ mod tests {
     fn binding_rejects_invalid_config_json() {
         let error = config_bridge::migrate_app_config_json(
             Some("{bad-json".to_string()),
-            None,
             "Default Rules".to_string(),
         )
         .unwrap_err();
