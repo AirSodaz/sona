@@ -59,17 +59,15 @@ pub fn save_bootstrap_config(
 
 pub fn resolve_active_data_dir(default_app_local_data_dir: &Path) -> PathBuf {
     let config = load_bootstrap_config(default_app_local_data_dir);
-    if let Some(custom) = config.custom_data_dir {
-        if !custom.as_os_str().is_empty() {
-            if custom.exists() || std::fs::create_dir_all(&custom).is_ok() {
-                return custom;
-            }
-            log::warn!(
-                "Custom data directory '{}' is inaccessible; falling back to default '{}'",
-                custom.display(),
-                default_app_local_data_dir.display()
-            );
+    if let Some(custom) = config.custom_data_dir.filter(|p| !p.as_os_str().is_empty()) {
+        if custom.exists() || std::fs::create_dir_all(&custom).is_ok() {
+            return custom;
         }
+        log::warn!(
+            "Custom data directory '{}' is inaccessible; falling back to default '{}'",
+            custom.display(),
+            default_app_local_data_dir.display()
+        );
     }
     default_app_local_data_dir.to_path_buf()
 }
@@ -79,16 +77,17 @@ pub fn resolve_active_models_dir(
     active_data_dir: &Path,
 ) -> PathBuf {
     let config = load_bootstrap_config(default_app_local_data_dir);
-    if let Some(custom) = config.custom_models_dir {
-        if !custom.as_os_str().is_empty() {
-            if custom.exists() || std::fs::create_dir_all(&custom).is_ok() {
-                return custom;
-            }
-            log::warn!(
-                "Custom models directory '{}' is inaccessible; falling back to default",
-                custom.display()
-            );
+    if let Some(custom) = config
+        .custom_models_dir
+        .filter(|p| !p.as_os_str().is_empty())
+    {
+        if custom.exists() || std::fs::create_dir_all(&custom).is_ok() {
+            return custom;
         }
+        log::warn!(
+            "Custom models directory '{}' is inaccessible; falling back to default",
+            custom.display()
+        );
     }
     active_data_dir.join("models")
 }

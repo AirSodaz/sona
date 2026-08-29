@@ -35,7 +35,7 @@ impl GpuAccelerationPlan {
     pub fn for_platform(
         gpu_acceleration: Option<&str>,
         is_windows: bool,
-        cuda_available: bool,
+        _cuda_available: bool,
         directml_available: bool,
     ) -> Self {
         let Some(gpu) = gpu_acceleration else {

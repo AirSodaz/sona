@@ -103,23 +103,22 @@ pub fn inspect_cuda_addon_directory(dir: &Path) -> CudaAddonInspection {
     let mut cuda_version = None;
 
     let manifest_path = dir.join(CUDA_ADDON_MANIFEST_FILENAME);
-    if manifest_path.is_file() {
-        if let Ok(content) = std::fs::read_to_string(&manifest_path) {
-            if let Ok(manifest) = serde_json::from_str::<CudaAddonManifest>(&content) {
-                version = Some(manifest.addon_version);
-                cuda_version = Some(manifest.cuda_version);
-            }
-        }
+    if manifest_path.is_file()
+        && let Ok(content) = std::fs::read_to_string(&manifest_path)
+        && let Ok(manifest) = serde_json::from_str::<CudaAddonManifest>(&content)
+    {
+        version = Some(manifest.addon_version);
+        cuda_version = Some(manifest.cuda_version);
     }
 
     if version.is_none() {
         let version_path = dir.join("version.txt");
-        if version_path.is_file() {
-            if let Ok(content) = std::fs::read_to_string(&version_path) {
-                let trimmed = content.trim().to_string();
-                if !trimmed.is_empty() {
-                    version = Some(trimmed);
-                }
+        if version_path.is_file()
+            && let Ok(content) = std::fs::read_to_string(&version_path)
+        {
+            let trimmed = content.trim().to_string();
+            if !trimmed.is_empty() {
+                version = Some(trimmed);
             }
         }
     }
