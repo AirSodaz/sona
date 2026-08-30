@@ -187,6 +187,101 @@
     "versionLabel": "1.7B Q8_0"
   },
   {
+    "id": "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25",
+    "name": "Qwen3 ASR",
+    "description": "settings.descriptions.qwen3_asr",
+    "type": "qwen3-asr",
+    "modes": [
+      "batch"
+    ],
+    "languages": [
+      "ar",
+      "cs",
+      "da",
+      "de",
+      "el",
+      "en",
+      "es",
+      "fa",
+      "fi",
+      "fil",
+      "fr",
+      "hi",
+      "hu",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "mk",
+      "ms",
+      "nl",
+      "pl",
+      "pt",
+      "ro",
+      "ru",
+      "sv",
+      "th",
+      "tr",
+      "vi",
+      "yue",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~987 MB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment"
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/main/conv_frontend.onnx",
+        "filename": "conv_frontend.onnx",
+        "sha256": "d22dc4423e0940e49884e903d2ea2f7e5567c14fc1aed97e4e26d6b8f208ef9e",
+        "sizeBytes": 44148281
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/main/encoder.int8.onnx",
+        "filename": "encoder.int8.onnx",
+        "sha256": "60748d3e6744a57c9c91e1b17424a6c2990567e8adceb0783940c03ed98fa9d9",
+        "sizeBytes": 182491662
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/main/decoder.int8.onnx",
+        "filename": "decoder.int8.onnx",
+        "sha256": "4f6885be5959ae26af3089d38ee7972c5fafbeeb1cf8d5e76eab6d8b61ca5771",
+        "sizeBytes": 755914231
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/main/tokenizer/vocab.json",
+        "filename": "tokenizer/vocab.json",
+        "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+        "sizeBytes": 2776833
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/main/tokenizer/merges.txt",
+        "filename": "tokenizer/merges.txt",
+        "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+        "sizeBytes": 1671853
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25/resolve/main/tokenizer/tokenizer_config.json",
+        "filename": "tokenizer/tokenizer_config.json",
+        "sha256": "4942d005604266809309cabc9f4e9cb89ce855d59b14681fdc0e1cc62ea26c4c",
+        "sizeBytes": 12487
+      }
+    ],
+    "fileConfig": {
+      "convFrontend": "conv_frontend.onnx",
+      "encoder": "encoder.int8.onnx",
+      "decoder": "decoder.int8.onnx",
+      "tokenizer": "tokenizer"
+    },
+    "groupId": "qwen3-asr",
+    "versionLabel": "0.6B Int8 (ONNX)"
+  },
+  {
     "id": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
     "name": "Parakeet TDT",
     "description": "settings.descriptions.parakeet_tdt",

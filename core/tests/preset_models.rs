@@ -15,8 +15,17 @@ fn shared_preset_metadata_lives_in_core() {
 }
 
 #[test]
-fn qwen_gguf_presets_replace_the_sherpa_qwen_catalog_entry() {
-    assert!(find_preset_model("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25").is_none());
+fn qwen_presets_are_verified_batch_bundles() {
+    let onnx_model = find_preset_model("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25").unwrap();
+    assert_eq!(onnx_model.engine.as_deref(), Some("sherpa-onnx"));
+    assert!(onnx_model.supports_mode("batch"));
+    assert!(!onnx_model.supports_mode("streaming"));
+    assert_eq!(onnx_model.artifacts.len(), 6);
+    let onnx_fc = onnx_model.file_config.as_ref().unwrap();
+    assert_eq!(onnx_fc.conv_frontend.as_deref(), Some("conv_frontend.onnx"));
+    assert_eq!(onnx_fc.encoder.as_deref(), Some("encoder.int8.onnx"));
+    assert_eq!(onnx_fc.decoder.as_deref(), Some("decoder.int8.onnx"));
+    assert_eq!(onnx_fc.tokenizer.as_deref(), Some("tokenizer"));
 
     for (id, expected_model, expected_mmproj) in [
         (
@@ -560,6 +569,10 @@ fn asr_language_modes_match_engine_capabilities() {
 
     // Engines ignoring or rejecting language overrides.
     assert_eq!(mode("qwen3-asr-0.6b-q8-gguf"), LanguageMode::Auto);
+    assert_eq!(
+        mode("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25"),
+        LanguageMode::Auto
+    );
     assert_eq!(
         mode("sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en"),
         LanguageMode::Auto
