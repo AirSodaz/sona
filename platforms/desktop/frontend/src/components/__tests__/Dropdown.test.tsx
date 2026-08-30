@@ -64,6 +64,32 @@ describe('Dropdown', () => {
         expect(mockOnChange).toHaveBeenCalledWith('option2');
     });
 
+    it('renders grouped options with section headers', () => {
+        const groupedOptions = [
+            { value: 'auto', label: 'Auto' },
+            { value: 'gh-direct', label: 'Direct', group: 'GitHub' },
+            { value: 'gh-proxy', label: 'Proxy', group: 'GitHub' },
+            { value: 'hf-mirror', label: 'HF Mirror', group: 'Hugging Face' },
+        ];
+
+        render(
+            <Dropdown
+                value="auto"
+                onChange={mockOnChange}
+                options={groupedOptions}
+            />
+        );
+
+        fireEvent.click(screen.getByRole('button', { expanded: false }));
+
+        expect(screen.getByText('GitHub').classList.contains('dropdown-group-header')).toBe(true);
+        expect(screen.getByText('Hugging Face').classList.contains('dropdown-group-header')).toBe(true);
+        expect(screen.getAllByRole('option')).toHaveLength(4);
+
+        fireEvent.click(screen.getByRole('option', { name: 'HF Mirror' }));
+        expect(mockOnChange).toHaveBeenCalledWith('hf-mirror');
+    });
+
     describe('Keyboard Navigation (options.length <= 10)', () => {
         it('focuses first item or selected item when opened via keyboard', async () => {
             render(

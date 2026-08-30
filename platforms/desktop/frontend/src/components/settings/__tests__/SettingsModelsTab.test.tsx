@@ -618,4 +618,27 @@ describe('SettingsModelsTab speaker model selections', () => {
             expect(alertSpy).toHaveBeenCalledTimes(1);
         });
     });
+
+    it('renders download mirror options with GitHub and Hugging Face groups and updates config on change', async () => {
+        setTestConfig({
+            modelDownloadMirror: 'auto',
+        });
+
+        renderTab(new Set());
+        const mirrorDropdownTrigger = await screen.findByRole('button', { name: 'settings.model_download_mirror' });
+        expect(mirrorDropdownTrigger.textContent).toContain('自动');
+
+        fireEvent.click(mirrorDropdownTrigger);
+
+        expect(screen.getByText('GitHub').classList.contains('dropdown-group-header')).toBe(true);
+        expect(screen.getByText('Hugging Face').classList.contains('dropdown-group-header')).toBe(true);
+        const directOption = screen.getByRole('option', { name: '官方直连' });
+        expect(directOption).not.toBeNull();
+        const hfOption = screen.getByRole('option', { name: '镜像站 (hf-mirror.com)' });
+        fireEvent.click(hfOption);
+
+        await waitFor(() => {
+            expect(useConfigStore.getState().config.modelDownloadMirror).toBe('hf-mirror');
+        });
+    });
 });

@@ -7,7 +7,7 @@ import type {
 } from '../../types/modelCatalog';
 import type { LocalAsrEngine } from '../../types/asr';
 import { ModelCard } from './ModelCard';
-import { Dropdown } from '../Dropdown';
+import { Dropdown, type DropdownOption } from '../Dropdown';
 import { cudaAddonService } from '../../services/cudaAddonService';
 import { useDialogStore } from '../../stores/dialogStore';
 import type { CudaAddonInspection } from '../../bindings';
@@ -95,13 +95,31 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
     const [statusFilter, setStatusFilter] = useState<'all' | 'installed' | 'not-installed' | 'downloading'>('all');
     const [searchQuery, setSearchQuery] = useState('');
 
-    const mirrorOptions = [
-        { value: 'auto', label: t('settings.model_download_mirror_auto', { defaultValue: '自动' }) },
-        { value: 'direct', label: t('settings.model_download_mirror_direct') },
-        { value: 'ghproxy', label: t('settings.model_download_mirror_ghproxy') },
-        { value: 'ghnet', label: t('settings.model_download_mirror_ghnet') },
-        { value: 'hf-mirror', label: t('settings.model_download_mirror_hfmirror', { defaultValue: 'HF 镜像' }) },
-    ];
+    const mirrorOptions: DropdownOption[] = useMemo(() => [
+        {
+            value: 'auto',
+            label: t('settings.model_download_mirror_auto', { defaultValue: '自动' }),
+        },
+        {
+            value: 'direct',
+            label: t('settings.model_download_mirror_direct', { defaultValue: '官方直连' }),
+        },
+        {
+            value: 'ghproxy',
+            label: t('settings.model_download_mirror_ghproxy'),
+            group: t('settings.model_download_mirror_group_github', { defaultValue: 'GitHub' }),
+        },
+        {
+            value: 'ghnet',
+            label: t('settings.model_download_mirror_ghnet'),
+            group: t('settings.model_download_mirror_group_github', { defaultValue: 'GitHub' }),
+        },
+        {
+            value: 'hf-mirror',
+            label: t('settings.model_download_mirror_hfmirror', { defaultValue: '镜像站 (hf-mirror.com)' }),
+            group: t('settings.model_download_mirror_group_hf', { defaultValue: 'Hugging Face' }),
+        },
+    ], [t]);
 
     const engineFilterOptions = [
         { value: 'all', label: t('settings.model_filter_engine_all', { defaultValue: '全部引擎' }) },
@@ -193,7 +211,7 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
                         value={modelConfig.modelDownloadMirror || 'auto'}
                         onChange={(value) => updateConfig({ modelDownloadMirror: value })}
                         options={mirrorOptions}
-                        style={{ width: '170px', marginLeft: 'auto' }}
+                        style={{ width: '180px', marginLeft: 'auto' }}
                     />
                 </div>
             )}
