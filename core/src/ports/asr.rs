@@ -456,6 +456,7 @@ pub struct LocalSherpaStreamingRequest {
     pub normalization_options: TranscriptNormalizationOptions,
     pub postprocess_options: TranscriptPostprocessOptions,
     pub gpu_acceleration: Option<String>,
+    pub initial_refresh_rate_ms: Option<u32>,
 }
 
 impl LocalSherpaStreamingRequest {
@@ -478,6 +479,7 @@ impl LocalSherpaStreamingRequest {
         match engine_config {
             AsrEngineConfig::Local {
                 local_engine,
+                model_id,
                 model_path,
                 num_threads,
                 punctuation_model,
@@ -486,6 +488,7 @@ impl LocalSherpaStreamingRequest {
                 model_type,
                 file_config,
                 gpu_acceleration,
+                initial_refresh_rate_ms,
                 ..
             } => {
                 if local_engine != LocalAsrEngine::SherpaOnnx {
@@ -509,6 +512,12 @@ impl LocalSherpaStreamingRequest {
                     normalization_options,
                     postprocess_options,
                     gpu_acceleration,
+                    initial_refresh_rate_ms: initial_refresh_rate_ms.or_else(|| {
+                        model_id
+                            .as_deref()
+                            .and_then(crate::models::preset_models::find_preset_model)
+                            .and_then(|m| m.resolved_rules().initial_refresh_rate_ms)
+                    }),
                 })
             }
             _ => Err(AsrPortError::invalid_request(
@@ -585,6 +594,8 @@ pub enum AsrEngineConfig {
         file_config: Box<Option<ModelFileConfig>>,
         #[serde(default)]
         gpu_acceleration: Option<String>,
+        #[serde(default)]
+        initial_refresh_rate_ms: Option<u32>,
     },
     #[serde(rename = "online", rename_all = "camelCase")]
     Online {
@@ -642,6 +653,7 @@ impl AsrTranscriptionRequest {
                 model_type,
                 file_config: Box::new(file_config),
                 gpu_acceleration,
+                initial_refresh_rate_ms: None,
             },
         }
     }

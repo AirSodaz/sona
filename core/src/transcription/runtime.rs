@@ -137,6 +137,7 @@ impl LiveTranscribePlan {
             normalization_options: Default::default(),
             postprocess_options: Default::default(),
             gpu_acceleration: self.gpu_acceleration.clone(),
+            initial_refresh_rate_ms: None,
         }
     }
 }

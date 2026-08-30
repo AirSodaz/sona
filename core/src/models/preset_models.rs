@@ -22,6 +22,7 @@ pub const DEFAULT_MODEL_RULES: ModelRules = ModelRules {
     requires_vad: true,
     requires_punctuation: false,
     timestamp_support_hint: None,
+    initial_refresh_rate_ms: None,
 };
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -54,6 +55,7 @@ pub struct ModelRules {
     pub requires_vad: bool,
     pub requires_punctuation: bool,
     pub timestamp_support_hint: Option<TimestampSupportHint>,
+    pub initial_refresh_rate_ms: Option<u32>,
 }
 
 /// How a model handles ASR language selection.

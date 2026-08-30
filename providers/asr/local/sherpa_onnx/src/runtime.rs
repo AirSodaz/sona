@@ -130,9 +130,10 @@ pub fn stop_instance_runtime(instance: &mut SherpaInstance) {
 }
 
 fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
+    let initial_refresh_rate = instance.offline_state.backoff().initial_interval_ms();
     instance.total_samples = 0;
     instance.segment_start_time = 0.0;
-    instance.offline_state = OfflineState::default();
+    instance.offline_state = OfflineState::with_initial_refresh_rate(initial_refresh_rate);
     instance.current_segment_id = None;
     instance.clear_partial_metric_sample();
     instance.record_diagnostics = RecordDiagnosticsState::default();
@@ -249,15 +250,174 @@ impl SherpaInstance {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackoffLevel {
+    /// Level 0: baseline refresh rate (e.g. 200ms)
+    Normal = 0,
+    /// Level 1: 1.5x baseline (e.g. 300ms)
+    Relaxed = 1,
+    /// Level 2: 2.5x baseline (e.g. 500ms)
+    Conservative = 2,
+    /// Level 3: 4.0x baseline (e.g. 800ms)
+    Sparse = 3,
+    /// Level 4: SentenceOnly (0 partial refreshes during speech, only VAD segment final)
+    SentenceOnly = 4,
+}
+
+impl BackoffLevel {
+    pub fn step_down(self) -> Self {
+        match self {
+            Self::Normal => Self::Relaxed,
+            Self::Relaxed => Self::Conservative,
+            Self::Conservative => Self::Sparse,
+            Self::Sparse | Self::SentenceOnly => Self::SentenceOnly,
+        }
+    }
+
+    pub fn step_up(self) -> Self {
+        match self {
+            Self::SentenceOnly => Self::Sparse,
+            Self::Sparse => Self::Conservative,
+            Self::Conservative => Self::Relaxed,
+            Self::Relaxed | Self::Normal => Self::Normal,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DynamicBackoffState {
+    initial_interval_ms: u64,
+    level: BackoffLevel,
+    consecutive_clean_utterances: u32,
+    overrun_in_current_utterance: bool,
+}
+
+impl Default for DynamicBackoffState {
+    fn default() -> Self {
+        Self::new(200)
+    }
+}
+
+impl DynamicBackoffState {
+    pub fn new(initial_interval_ms: u64) -> Self {
+        Self {
+            initial_interval_ms: initial_interval_ms.max(50),
+            level: BackoffLevel::Normal,
+            consecutive_clean_utterances: 0,
+            overrun_in_current_utterance: false,
+        }
+    }
+
+    pub fn initial_interval_ms(&self) -> u64 {
+        self.initial_interval_ms
+    }
+
+    pub fn set_initial_interval_ms(&mut self, interval_ms: u64) {
+        self.initial_interval_ms = interval_ms.max(50);
+    }
+
+    pub fn level(&self) -> BackoffLevel {
+        self.level
+    }
+
+    pub fn is_sentence_only(&self) -> bool {
+        self.level == BackoffLevel::SentenceOnly
+    }
+
+    pub fn current_interval_ms(&self) -> Option<u64> {
+        match self.level {
+            BackoffLevel::Normal => Some(self.initial_interval_ms),
+            BackoffLevel::Relaxed => Some((self.initial_interval_ms * 3) / 2),
+            BackoffLevel::Conservative => Some((self.initial_interval_ms * 5) / 2),
+            BackoffLevel::Sparse => Some(self.initial_interval_ms * 4),
+            BackoffLevel::SentenceOnly => None,
+        }
+    }
+
+    pub fn should_run_partial(&self, elapsed: std::time::Duration) -> bool {
+        match self.current_interval_ms() {
+            Some(interval_ms) => elapsed.as_millis() as u64 >= interval_ms,
+            None => false,
+        }
+    }
+
+    pub fn record_overrun(&mut self) {
+        self.overrun_in_current_utterance = true;
+        self.consecutive_clean_utterances = 0;
+        self.level = self.level.step_down();
+    }
+
+    pub fn record_decode_duration(&mut self, decode_ms: u64) {
+        if let Some(target_interval) = self.current_interval_ms() {
+            // If decode time exceeds 85% of target interval, step down
+            if decode_ms * 100 > target_interval * 85 {
+                self.overrun_in_current_utterance = true;
+                self.consecutive_clean_utterances = 0;
+                self.level = self.level.step_down();
+            }
+        }
+    }
+
+    pub fn on_utterance_end(&mut self, clean: bool) {
+        if clean && !self.overrun_in_current_utterance {
+            self.consecutive_clean_utterances = self.consecutive_clean_utterances.saturating_add(1);
+            if self.consecutive_clean_utterances >= 2 {
+                self.level = self.level.step_up();
+                self.consecutive_clean_utterances = 0;
+            }
+        } else {
+            self.consecutive_clean_utterances = 0;
+        }
+        self.overrun_in_current_utterance = false;
+    }
+}
+
 pub struct OfflineState {
     speech_buffer: Vec<Vec<f32>>,
     ring_buffer: VecDeque<Vec<f32>>,
     is_speaking: bool,
     last_inference_time: Instant,
     utterance_start_sample: usize,
+    backoff: DynamicBackoffState,
+}
+
+impl Default for OfflineState {
+    fn default() -> Self {
+        Self {
+            speech_buffer: Vec::new(),
+            ring_buffer: VecDeque::new(),
+            is_speaking: false,
+            last_inference_time: Instant::now(),
+            utterance_start_sample: 0,
+            backoff: DynamicBackoffState::default(),
+        }
+    }
 }
 
 impl OfflineState {
+    pub fn with_initial_refresh_rate(initial_refresh_rate_ms: u64) -> Self {
+        Self {
+            speech_buffer: Vec::new(),
+            ring_buffer: VecDeque::new(),
+            is_speaking: false,
+            last_inference_time: Instant::now(),
+            utterance_start_sample: 0,
+            backoff: DynamicBackoffState::new(initial_refresh_rate_ms),
+        }
+    }
+
+    pub fn backoff(&self) -> &DynamicBackoffState {
+        &self.backoff
+    }
+
+    pub fn backoff_mut(&mut self) -> &mut DynamicBackoffState {
+        &mut self.backoff
+    }
+
+    pub fn set_initial_refresh_rate(&mut self, rate_ms: u64) {
+        self.backoff.set_initial_interval_ms(rate_ms);
+    }
+
     pub fn is_speech_active(&self) -> bool {
         self.is_speaking
     }
@@ -336,12 +496,25 @@ impl OfflineState {
         self.utterance_start_sample as f64 / sample_rate
     }
 
+    pub fn should_run_partial(&self, now: Instant) -> bool {
+        let elapsed = now.duration_since(self.last_inference_time);
+        self.backoff.should_run_partial(elapsed)
+    }
+
     pub fn should_run_inference(&self, now: Instant, min_interval_ms: u128) -> bool {
         now.duration_since(self.last_inference_time).as_millis() > min_interval_ms
     }
 
     pub fn mark_inference_time(&mut self, now: Instant) {
         self.last_inference_time = now;
+    }
+
+    pub fn record_overrun(&mut self) {
+        self.backoff.record_overrun();
+    }
+
+    pub fn on_utterance_end(&mut self, clean: bool) {
+        self.backoff.on_utterance_end(clean);
     }
 
     fn ring_context(&self, samples_to_keep: usize) -> Vec<f32> {
@@ -381,18 +554,6 @@ impl RecordDiagnosticsState {
 
     pub fn first_segment_emitted_flag(&self) -> &Arc<AtomicBool> {
         &self.first_segment_emitted
-    }
-}
-
-impl Default for OfflineState {
-    fn default() -> Self {
-        Self {
-            speech_buffer: Vec::new(),
-            ring_buffer: VecDeque::new(),
-            is_speaking: false,
-            utterance_start_sample: 0,
-            last_inference_time: Instant::now(),
-        }
     }
 }
 
@@ -598,5 +759,78 @@ mod tests {
         state.mark_inference_time(now);
 
         assert!(!state.should_run_inference(now, 200));
+    }
+
+    #[test]
+    fn dynamic_backoff_steps_down_on_overrun_and_recovers_after_clean_utterances() {
+        let mut backoff = DynamicBackoffState::new(200);
+        assert_eq!(backoff.level(), BackoffLevel::Normal);
+        assert_eq!(backoff.current_interval_ms(), Some(200));
+        assert!(!backoff.is_sentence_only());
+
+        // Overrun 1: Relaxed (1.5x -> 300ms)
+        backoff.record_overrun();
+        assert_eq!(backoff.level(), BackoffLevel::Relaxed);
+        assert_eq!(backoff.current_interval_ms(), Some(300));
+
+        // Overrun 2: Conservative (2.5x -> 500ms)
+        backoff.record_overrun();
+        assert_eq!(backoff.level(), BackoffLevel::Conservative);
+        assert_eq!(backoff.current_interval_ms(), Some(500));
+
+        // Overrun 3: Sparse (4.0x -> 800ms)
+        backoff.record_overrun();
+        assert_eq!(backoff.level(), BackoffLevel::Sparse);
+        assert_eq!(backoff.current_interval_ms(), Some(800));
+
+        // Overrun 4: SentenceOnly (None)
+        backoff.record_overrun();
+        assert_eq!(backoff.level(), BackoffLevel::SentenceOnly);
+        assert_eq!(backoff.current_interval_ms(), None);
+        assert!(backoff.is_sentence_only());
+        assert!(!backoff.should_run_partial(std::time::Duration::from_secs(10)));
+
+        // Overrun occurred in current utterance
+        backoff.record_overrun();
+        assert_eq!(backoff.level(), BackoffLevel::SentenceOnly);
+
+        // Utterance with overrun ends (cleans overrun flag, clean count = 0)
+        backoff.on_utterance_end(true);
+        assert_eq!(backoff.level(), BackoffLevel::SentenceOnly);
+
+        // Clean utterance 1: clean count = 1 (needs 2 consecutive clean utterances to step up)
+        backoff.on_utterance_end(true);
+        assert_eq!(backoff.level(), BackoffLevel::SentenceOnly);
+
+        // Clean utterance 2: clean count = 2 -> recovers to Sparse
+        backoff.on_utterance_end(true);
+        assert_eq!(backoff.level(), BackoffLevel::Sparse);
+        assert_eq!(backoff.current_interval_ms(), Some(800));
+
+        // Clean utterance 3: clean count = 1
+        backoff.on_utterance_end(true);
+        assert_eq!(backoff.level(), BackoffLevel::Sparse);
+
+        // Clean utterance 4: clean count = 2 -> recovers to Conservative
+        backoff.on_utterance_end(true);
+        assert_eq!(backoff.level(), BackoffLevel::Conservative);
+        backoff.on_utterance_end(false);
+        backoff.on_utterance_end(true);
+        assert_eq!(backoff.level(), BackoffLevel::Conservative);
+    }
+
+    #[test]
+    fn dynamic_backoff_steps_down_on_high_decode_duration() {
+        let mut backoff = DynamicBackoffState::new(200);
+        assert_eq!(backoff.level(), BackoffLevel::Normal);
+
+        // Decode time 150ms <= 200 * 0.85 (170ms) -> no step down
+        backoff.record_decode_duration(150);
+        assert_eq!(backoff.level(), BackoffLevel::Normal);
+
+        // Decode time 180ms > 200 * 0.85 -> steps down to Relaxed (300ms)
+        backoff.record_decode_duration(180);
+        assert_eq!(backoff.level(), BackoffLevel::Relaxed);
+        assert_eq!(backoff.current_interval_ms(), Some(300));
     }
 }

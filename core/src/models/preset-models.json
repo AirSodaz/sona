@@ -287,6 +287,7 @@
     "description": "settings.descriptions.parakeet_tdt",
     "type": "parakeet-tdt",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -322,7 +323,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": false,
-      "timestampSupportHint": "segment"
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 200
     },
     "artifacts": [
       {
@@ -365,6 +367,7 @@
     "description": "settings.descriptions.parakeet_tdt",
     "type": "parakeet-tdt",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -400,7 +403,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": false,
-      "timestampSupportHint": "segment"
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 200
     },
     "artifacts": [
       {
@@ -449,6 +453,7 @@
     "description": "settings.descriptions.moonshine",
     "type": "moonshine",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -461,7 +466,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": false,
-      "timestampSupportHint": "segment"
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 200
     },
     "artifacts": [
       {
@@ -497,6 +503,7 @@
     "description": "settings.descriptions.moonshine",
     "type": "moonshine",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -508,7 +515,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": false,
-      "timestampSupportHint": "segment"
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 200
     },
     "artifacts": [
       {
@@ -544,6 +552,7 @@
     "description": "settings.descriptions.moonshine",
     "type": "moonshine",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -555,7 +564,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": false,
-      "timestampSupportHint": "segment"
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 200
     },
     "artifacts": [
       {

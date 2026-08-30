@@ -285,6 +285,7 @@ pub async fn create_streaming_session(
         vad_buffer,
         normalization_options,
         postprocess_options,
+        initial_refresh_rate_ms,
         ..
     } = request;
     let mut session_instance = SherpaInstance::default();
@@ -292,9 +293,12 @@ pub async fn create_streaming_session(
     session_instance.set_punctuation(resources.punctuation);
     session_instance.configure_vad(vad_model.clone(), vad_buffer);
     session_instance.normalization_options = normalization_options;
+    let initial_refresh = initial_refresh_rate_ms.unwrap_or(200) as u64;
+    session_instance
+        .offline_state
+        .set_initial_refresh_rate(initial_refresh);
     session_instance.postprocessor = TranscriptPostprocessor::compile(postprocess_options)
         .map_err(|error| AsrPortError::new(AsrPortErrorKind::InvalidRequest, error.to_string()))?;
-
     let session = std::sync::Arc::new(LocalSherpaSession {
         instance_id,
         observer,
@@ -647,65 +651,75 @@ async fn feed_audio_samples_inner(
             instance.offline_state.push_speech_chunk(samples.to_vec());
 
             let now = std::time::Instant::now();
-            if instance.offline_state.should_run_inference(now, 200)
-                && prepare_partial_inference_slot(pending_inference).await?
-            {
-                let global_start = instance.offline_state.utterance_start_seconds(16000.0);
-
-                let offline_copy = instance.offline_state.speech_chunks().to_vec();
-                let observer_copy = observer.clone();
-                let punct_copy = instance.punctuation_clone();
-                let seg_id_copy = seg_id.clone();
-                let instance_id_copy = instance_id.to_string();
-                let recognizer_copy = recognizer.clone();
-                let first_segment_emitted =
-                    diagnostics_instance_label(instance_id).is_some().then(|| {
-                        instance
-                            .record_diagnostics
-                            .first_segment_emitted_flag()
-                            .clone()
-                    });
-                let normalization_options = instance.normalization_options;
-                let postprocessor = instance.postprocessor.clone();
-                let should_record_partial_metric =
-                    instance.should_record_partial_metric(PARTIAL_METRIC_INTERVAL_SAMPLES);
-                if should_record_partial_metric {
-                    instance.mark_partial_metric_sample();
-                }
-                let triggered_at = Instant::now();
-
-                if let Some(label) = diagnostics_instance_label(instance_id) {
-                    info!(
-                        "[Sherpa] {label} triggering offline inference. stage=partial segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
-                        seg_id,
-                        offline_copy.len(),
-                        buffered_sample_count(&offline_copy),
-                        global_start
-                    );
-                }
-
-                let task = move || {
-                    if let Some(safe_r) = recognizer_copy.offline() {
-                        run_offline_inference(
-                            &offline_copy,
-                            observer_copy.as_ref(),
-                            safe_r,
-                            punct_copy.as_deref(),
-                            &seg_id_copy,
-                            global_start,
-                            false,
-                            &instance_id_copy,
-                            "partial",
-                            first_segment_emitted,
-                            normalization_options,
-                            postprocessor,
-                            should_record_partial_metric,
-                            triggered_at,
+            if instance.offline_state.should_run_partial(now) {
+                let slot_available = prepare_partial_inference_slot(pending_inference).await?;
+                if !slot_available {
+                    instance.offline_state.record_overrun();
+                    if let Some(label) = diagnostics_instance_label(instance_id) {
+                        info!(
+                            "[Sherpa] {label} partial inference slot busy, stepping down refresh rate. level={:?} interval={:?}",
+                            instance.offline_state.backoff().level(),
+                            instance.offline_state.backoff().current_interval_ms()
                         );
                     }
-                };
-                *pending_inference = Some(queue_inference_task(None, task));
-                instance.offline_state.mark_inference_time(now);
+                } else {
+                    let global_start = instance.offline_state.utterance_start_seconds(16000.0);
+
+                    let offline_copy = instance.offline_state.speech_chunks().to_vec();
+                    let observer_copy = observer.clone();
+                    let punct_copy = instance.punctuation_clone();
+                    let seg_id_copy = seg_id.clone();
+                    let instance_id_copy = instance_id.to_string();
+                    let recognizer_copy = recognizer.clone();
+                    let first_segment_emitted =
+                        diagnostics_instance_label(instance_id).is_some().then(|| {
+                            instance
+                                .record_diagnostics
+                                .first_segment_emitted_flag()
+                                .clone()
+                        });
+                    let normalization_options = instance.normalization_options;
+                    let postprocessor = instance.postprocessor.clone();
+                    let should_record_partial_metric =
+                        instance.should_record_partial_metric(PARTIAL_METRIC_INTERVAL_SAMPLES);
+                    if should_record_partial_metric {
+                        instance.mark_partial_metric_sample();
+                    }
+                    let triggered_at = Instant::now();
+
+                    if let Some(label) = diagnostics_instance_label(instance_id) {
+                        info!(
+                            "[Sherpa] {label} triggering offline inference. stage=partial segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
+                            seg_id,
+                            offline_copy.len(),
+                            buffered_sample_count(&offline_copy),
+                            global_start
+                        );
+                    }
+
+                    let task = move || {
+                        if let Some(safe_r) = recognizer_copy.offline() {
+                            run_offline_inference(
+                                &offline_copy,
+                                observer_copy.as_ref(),
+                                safe_r,
+                                punct_copy.as_deref(),
+                                &seg_id_copy,
+                                global_start,
+                                false,
+                                &instance_id_copy,
+                                "partial",
+                                first_segment_emitted,
+                                normalization_options,
+                                postprocessor,
+                                should_record_partial_metric,
+                                triggered_at,
+                            );
+                        }
+                    };
+                    *pending_inference = Some(queue_inference_task(None, task));
+                    instance.offline_state.mark_inference_time(now);
+                }
             }
         }
 
@@ -781,6 +795,7 @@ async fn feed_audio_samples_inner(
                 };
                 *pending_inference = Some(queue_inference_task(pending_inference.take(), task));
 
+                instance.offline_state.on_utterance_end(true);
                 instance.offline_state.clear_speech_buffer();
                 instance.clear_partial_metric_sample();
                 instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
@@ -1010,6 +1025,7 @@ mod tests {
                 normalization_options: TranscriptNormalizationOptions::default(),
                 postprocess_options: TranscriptPostprocessOptions::default(),
                 gpu_acceleration: None,
+                initial_refresh_rate_ms: None,
             },
             Arc::new(NoopAsrRuntimeObserver),
         )

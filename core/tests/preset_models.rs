@@ -97,7 +97,7 @@ fn parakeet_tdt_presets_are_verified_batch_bundles() {
         assert_eq!(model.model_type, "parakeet-tdt");
         assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
         assert!(model.supports_mode("batch"));
-        assert!(!model.supports_mode("streaming"));
+        assert!(model.supports_mode("streaming"));
         assert_eq!(model.language_mode, LanguageMode::Auto);
         assert_eq!(model.languages.len(), 25);
         assert_eq!(model.group_id.as_deref(), Some("parakeet-tdt"));
@@ -106,7 +106,7 @@ fn parakeet_tdt_presets_are_verified_batch_bundles() {
         let rules = model.resolved_rules();
         assert!(rules.requires_vad);
         assert!(!rules.requires_punctuation);
-
+        assert_eq!(rules.initial_refresh_rate_ms, Some(200));
         let file_config = model.file_config.as_ref().unwrap();
         assert_eq!(file_config.encoder.as_deref(), Some(expected_encoder));
         assert_eq!(file_config.decoder.as_deref(), Some(expected_decoder));
@@ -155,7 +155,7 @@ fn moonshine_presets_are_verified_batch_bundles() {
         assert_eq!(model.model_type, "moonshine");
         assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
         assert!(model.supports_mode("batch"));
-        assert!(!model.supports_mode("streaming"));
+        assert!(model.supports_mode("streaming"));
         assert_eq!(model.language_mode, expected_mode);
         assert_eq!(model.languages, expected_languages);
         assert_eq!(model.group_id.as_deref(), Some("moonshine-v2"));
@@ -164,7 +164,7 @@ fn moonshine_presets_are_verified_batch_bundles() {
         let rules = model.resolved_rules();
         assert!(rules.requires_vad);
         assert!(!rules.requires_punctuation);
-
+        assert_eq!(rules.initial_refresh_rate_ms, Some(200));
         let file_config = model.file_config.as_ref().unwrap();
         assert_eq!(file_config.encoder.as_deref(), Some(expected_encoder));
         assert_eq!(file_config.decoder.as_deref(), Some(expected_decoder));
