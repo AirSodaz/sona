@@ -78,7 +78,11 @@ fn models_list_can_filter_by_mode_type_and_language() {
 fn models_list_can_filter_installed_only() {
     let dir = tempfile::tempdir().unwrap();
     let models_dir = dir.path().join("models");
-    std::fs::create_dir_all(models_dir.join("sherpa-onnx-whisper-turbo")).unwrap();
+    let install_path = models_dir.join("sherpa-onnx-whisper-turbo");
+    std::fs::create_dir_all(&install_path).unwrap();
+    std::fs::write(install_path.join("turbo-encoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(install_path.join("turbo-decoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(install_path.join("turbo-tokens.txt"), b"fake").unwrap();
 
     let output = sona_cli::run_cli_from_args([
         "sona-cli",

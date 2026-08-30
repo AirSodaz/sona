@@ -700,11 +700,13 @@ mod tests {
     }
 
     fn archive_download(models_dir: &Path) -> ResolvedModelDownload {
-        resolve_model_download(
+        let mut resolved = resolve_model_download(
             "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
             models_dir,
         )
-        .unwrap()
+        .unwrap();
+        resolved.download_path = models_dir.join(format!("{}.tar.bz2", resolved.model.id));
+        resolved
     }
 
     #[test]

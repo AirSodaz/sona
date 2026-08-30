@@ -250,6 +250,10 @@ export type AsrEngineConfig_Deserialize =
 	embedding: string | null,
 	tokenizer: string | null,
 	mmproj: string | null,
+	preprocessor: string | null,
+	uncachedDecoder: string | null,
+	cachedDecoder: string | null,
+	mergedDecoder: string | null,
 } | null; gpuAcceleration?: string | null }) & { onlineProvider?: never } |
 /**
  *  Local offline transcription through a provider-crate engine.
@@ -269,6 +273,10 @@ export type AsrEngineConfig_Deserialize =
 	embedding: string | null,
 	tokenizer: string | null,
 	mmproj: string | null,
+	preprocessor: string | null,
+	uncachedDecoder: string | null,
+	cachedDecoder: string | null,
+	mergedDecoder: string | null,
 } | null; gpuAcceleration?: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { batchSegmentationMode?: never; fileConfig?: never; gpuAcceleration?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngineConfig_Serialize =
@@ -290,6 +298,10 @@ export type AsrEngineConfig_Serialize =
 	embedding: string | null,
 	tokenizer: string | null,
 	mmproj: string | null,
+	preprocessor: string | null,
+	uncachedDecoder: string | null,
+	cachedDecoder: string | null,
+	mergedDecoder: string | null,
 } | null; gpuAcceleration: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { batchSegmentationMode?: never; fileConfig?: never; gpuAcceleration?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngine_Deserialize =
@@ -1722,6 +1734,10 @@ export type ModelFileConfig = {
 	embedding: string | null,
 	tokenizer: string | null,
 	mmproj: string | null,
+	preprocessor: string | null,
+	uncachedDecoder: string | null,
+	cachedDecoder: string | null,
+	mergedDecoder: string | null,
 };
 
 export type ModelRuleInput = {

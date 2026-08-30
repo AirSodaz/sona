@@ -2807,7 +2807,7 @@ mod tests {
         assert!(
             download
                 .download_path
-                .ends_with("sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2")
+                .ends_with("sherpa-onnx-funasr-nano-int8-2025-12-30")
         );
         assert!(
             download

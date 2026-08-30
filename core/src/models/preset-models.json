@@ -222,7 +222,7 @@
       "uk"
     ],
     "languageMode": "auto",
-    "size": "~487 MB",
+    "size": "~670 MB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -231,10 +231,28 @@
     },
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
-        "filename": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
-        "sha256": "5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf",
-        "sizeBytes": 487170055
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/encoder.int8.onnx",
+        "filename": "encoder.int8.onnx",
+        "sha256": "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247",
+        "sizeBytes": 652184281
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/decoder.int8.onnx",
+        "filename": "decoder.int8.onnx",
+        "sha256": "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e",
+        "sizeBytes": 11845275
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/joiner.int8.onnx",
+        "filename": "joiner.int8.onnx",
+        "sha256": "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3",
+        "sizeBytes": 6355277
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+        "sizeBytes": 93939
       }
     ],
     "fileConfig": {
@@ -726,7 +744,7 @@
       "zh"
     ],
     "languageMode": "selectable",
-    "size": "~538 MB",
+    "size": "~1.04 GB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -735,10 +753,22 @@
     },
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-turbo.tar.bz2",
-        "filename": "sherpa-onnx-whisper-turbo.tar.bz2",
-        "sha256": "b11acbbcd660b44a8e0df33724feb5aaa709cf65668f2823d59f656312544f22",
-        "sizeBytes": 563790207
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/main/turbo-encoder.int8.onnx",
+        "filename": "turbo-encoder.int8.onnx",
+        "sha256": "b02dcdf54f348741e93fe732b67d933c8dcb6735655f710640143081db38878b",
+        "sizeBytes": 674716297
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/main/turbo-decoder.int8.onnx",
+        "filename": "turbo-decoder.int8.onnx",
+        "sha256": "20accd02388482eb3a46bd615631adfdc85e1eb2c7db9ea3f02a40ffe6b81547",
+        "sizeBytes": 361080764
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/main/turbo-tokens.txt",
+        "filename": "turbo-tokens.txt",
+        "sha256": "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
+        "sizeBytes": 816730
       }
     ],
     "fileConfig": {
@@ -860,7 +890,7 @@
       "zh"
     ],
     "languageMode": "selectable",
-    "size": "~1.02 GB",
+    "size": "~1.78 GB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -869,10 +899,22 @@
     },
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-large-v3.tar.bz2",
-        "filename": "sherpa-onnx-whisper-large-v3.tar.bz2",
-        "sha256": "2d0e134b3b5fc4a0533baf24a0c9d473b629aa47f030af0a165a05f461df7a03",
-        "sizeBytes": 1068482488
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-large-v3/resolve/main/large-v3-encoder.int8.onnx",
+        "filename": "large-v3-encoder.int8.onnx",
+        "sha256": "d531cf17248acc43e8c09b472a0877055e770877857a5332fc1304b36534ec85",
+        "sizeBytes": 766671985
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-large-v3/resolve/main/large-v3-decoder.int8.onnx",
+        "filename": "large-v3-decoder.int8.onnx",
+        "sha256": "ebc6bfd88e162a46cb3edee8a7e727e1dcbc65cabecb19e2573695e4d495e1af",
+        "sizeBytes": 1008265203
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-large-v3/resolve/main/large-v3-tokens.txt",
+        "filename": "large-v3-tokens.txt",
+        "sha256": "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
+        "sizeBytes": 816730
       }
     ],
     "fileConfig": {
@@ -896,7 +938,7 @@
       "zh"
     ],
     "languageMode": "selectable",
-    "size": "~655 MB",
+    "size": "~946 MB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -905,10 +947,22 @@
     },
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-medium-aishell.tar.bz2",
-        "filename": "sherpa-onnx-whisper-medium-aishell.tar.bz2",
-        "sha256": "84c358461ade32f36798733b1d046cb669522f9832ef5d183772e89b1cc0eb91",
-        "sizeBytes": 686537184
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-medium-aishell/resolve/main/medium-aishell-encoder.int8.onnx",
+        "filename": "medium-aishell-encoder.int8.onnx",
+        "sha256": "d0d3c17b13d204b0be66cfbf9dc8e59f846b2dd61ac8441f84f4ffef48304c7b",
+        "sizeBytes": 374196291
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-medium-aishell/resolve/main/medium-aishell-decoder.int8.onnx",
+        "filename": "medium-aishell-decoder.int8.onnx",
+        "sha256": "9367f7e3baecdc70499cf6bff8873913acbd0ac84854d2c0fccb5376d349a4c0",
+        "sizeBytes": 571059257
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-medium-aishell/resolve/main/medium-aishell-tokens.txt",
+        "filename": "medium-aishell-tokens.txt",
+        "sha256": "b34b360dbb493e781e479794586d661700670d65564001f23024971d1f2fa126",
+        "sizeBytes": 816730
       }
     ],
     "fileConfig": {
@@ -931,7 +985,7 @@
       "zh"
     ],
     "languageMode": "fixed",
-    "size": "~570 MB",
+    "size": "~771 MB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": false,
@@ -940,10 +994,34 @@
     },
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2",
-        "filename": "sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30.tar.bz2",
-        "sha256": "30437d84dc4861740d40166212ab05f3728945443d53691620075c4031fb88e1",
-        "sizeBytes": 597755927
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/main/encoder.int8.onnx",
+        "filename": "encoder.int8.onnx",
+        "sha256": "f2c543a0330e1ed0bd09c82e4ae7d3f1cbee10a15feca638fcc4f88083a36b8a",
+        "sizeBytes": 761133737
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/main/decoder.onnx",
+        "filename": "decoder.onnx",
+        "sha256": "8f9c903da2818f207304a3f30b9eeb30028e30398f333c1e95e12c97704173e6",
+        "sizeBytes": 8533022
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/main/joiner.int8.onnx",
+        "filename": "joiner.int8.onnx",
+        "sha256": "f76ffce14b6ef80098cfdbce8846896ff68133970abc314eafab632f910df0d7",
+        "sizeBytes": 1545417
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "6722bd1585f46f84456b29c3550a343a3cc375b971645773c02ed8e0b4e2405c",
+        "sizeBytes": 18626
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/main/bpe.model",
+        "filename": "bpe.model",
+        "sha256": "867a7355801cb43939962ad757ba1cb7941b6171b5a6902772483b4e3a623377",
+        "sizeBytes": 263956
       }
     ],
     "fileConfig": {
@@ -967,7 +1045,7 @@
       "zh"
     ],
     "languageMode": "selectable",
-    "size": "~716 MB",
+    "size": "~1.01 GB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -976,10 +1054,40 @@
     },
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2",
-        "filename": "sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2",
-        "sha256": "eb43d7ccc2e86b243f6a03b7df361033dda66db9523d1a92bf6aca2b50c9476b",
-        "sizeBytes": 841730611
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-int8-2025-12-30/resolve/main/encoder_adaptor.int8.onnx",
+        "filename": "encoder_adaptor.int8.onnx",
+        "sha256": "f36dea2e30fbc33b5db1d7a7265cc976c5e5586c77b042d5adb1ad27c72db422",
+        "sizeBytes": 237792748
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-int8-2025-12-30/resolve/main/llm.int8.onnx",
+        "filename": "llm.int8.onnx",
+        "sha256": "dfbf9aa3be41bccc257587f151e15c63fbe1b549f2b517f5ccd5bdce3bf4322a",
+        "sizeBytes": 600356593
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-int8-2025-12-30/resolve/main/embedding.int8.onnx",
+        "filename": "embedding.int8.onnx",
+        "sha256": "95e61cd0c9c3b9543339a4cf973c95c116815e745ccc1e0285cbd81f76d18644",
+        "sizeBytes": 155584380
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-int8-2025-12-30/resolve/main/Qwen3-0.6B/vocab.json",
+        "filename": "Qwen3-0.6B/vocab.json",
+        "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+        "sizeBytes": 2776833
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-int8-2025-12-30/resolve/main/Qwen3-0.6B/merges.txt",
+        "filename": "Qwen3-0.6B/merges.txt",
+        "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+        "sizeBytes": 1671853
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-int8-2025-12-30/resolve/main/Qwen3-0.6B/tokenizer.json",
+        "filename": "Qwen3-0.6B/tokenizer.json",
+        "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+        "sizeBytes": 11422654
       }
     ],
     "fileConfig": {
@@ -1005,7 +1113,7 @@
       "zh"
     ],
     "languageMode": "selectable",
-    "size": "~982 MB",
+    "size": "~1.60 GB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -1014,10 +1122,40 @@
     },
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-fp16-2025-12-30.tar.bz2",
-        "filename": "sherpa-onnx-funasr-nano-fp16-2025-12-30.tar.bz2",
-        "sha256": "a07a996361aa2f8b2c4f47861fe01953b5509664efa3392b734580b1eeb362e3",
-        "sizeBytes": 1030076153
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-fp16-2025-12-30/resolve/main/encoder_adaptor.int8.onnx",
+        "filename": "encoder_adaptor.int8.onnx",
+        "sha256": "f36dea2e30fbc33b5db1d7a7265cc976c5e5586c77b042d5adb1ad27c72db422",
+        "sizeBytes": 237792748
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-fp16-2025-12-30/resolve/main/llm.fp16.onnx",
+        "filename": "llm.fp16.onnx",
+        "sha256": "2bb5d74cc735a5f1b23163203b5b9528bfac4285ebb89e2f38db7d1fdb30bb2c",
+        "sizeBytes": 1192981814
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-fp16-2025-12-30/resolve/main/embedding.int8.onnx",
+        "filename": "embedding.int8.onnx",
+        "sha256": "95e61cd0c9c3b9543339a4cf973c95c116815e745ccc1e0285cbd81f76d18644",
+        "sizeBytes": 155584380
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-fp16-2025-12-30/resolve/main/Qwen3-0.6B/vocab.json",
+        "filename": "Qwen3-0.6B/vocab.json",
+        "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+        "sizeBytes": 2776833
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-fp16-2025-12-30/resolve/main/Qwen3-0.6B/merges.txt",
+        "filename": "Qwen3-0.6B/merges.txt",
+        "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+        "sizeBytes": 1671853
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-fp16-2025-12-30/resolve/main/Qwen3-0.6B/tokenizer.json",
+        "filename": "Qwen3-0.6B/tokenizer.json",
+        "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+        "sizeBytes": 11422654
       }
     ],
     "fileConfig": {
@@ -1043,7 +1181,7 @@
       "zh"
     ],
     "languageMode": "selectable",
-    "size": "~1.23 GB",
+    "size": "~3.95 GB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -1052,10 +1190,46 @@
     },
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-2025-12-30.tar.bz2",
-        "filename": "sherpa-onnx-funasr-nano-2025-12-30.tar.bz2",
-        "sha256": "92ac72f74ce5e621564f7693de5d383fa11b1ad836fc0bbfc14ed7cb4cc68509",
-        "sizeBytes": 1317656544
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-2025-12-30/resolve/main/encoder_adaptor.onnx",
+        "filename": "encoder_adaptor.onnx",
+        "sha256": "8a8e7dd0613db206d19390c19423aa1eb2a41f35805183d7acfb46f916a6b824",
+        "sizeBytes": 930411625
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-2025-12-30/resolve/main/llm.fp32.onnx",
+        "filename": "llm.fp32.onnx",
+        "sha256": "8c700466a7e83ba1ddf58f94b373f2d96e01f3b7646ad45b97db14d1ce2405d9",
+        "sizeBytes": 1034258
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-2025-12-30/resolve/main/llm.fp32.data",
+        "filename": "llm.fp32.data",
+        "sha256": "27766d723f396958ee5d7434dcd94d89649e376db30f253fcbf2c0d13a41538e",
+        "sizeBytes": 2384171008
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-2025-12-30/resolve/main/embedding.onnx",
+        "filename": "embedding.onnx",
+        "sha256": "bd47bf16bf73627b0d77719ab39fb4342e430ac706bc17e1731905ef2ca06f53",
+        "sizeBytes": 622331615
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-2025-12-30/resolve/main/Qwen3-0.6B/vocab.json",
+        "filename": "Qwen3-0.6B/vocab.json",
+        "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+        "sizeBytes": 2776833
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-2025-12-30/resolve/main/Qwen3-0.6B/merges.txt",
+        "filename": "Qwen3-0.6B/merges.txt",
+        "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+        "sizeBytes": 1671853
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-funasr-nano-2025-12-30/resolve/main/Qwen3-0.6B/tokenizer.json",
+        "filename": "Qwen3-0.6B/tokenizer.json",
+        "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+        "sizeBytes": 11422654
       }
     ],
     "fileConfig": {
@@ -1221,7 +1395,7 @@
       "zh"
     ],
     "languageMode": "auto",
-    "size": "~238 MB",
+    "size": "~250 MB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -1230,10 +1404,16 @@
     },
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02.tar.bz2",
-        "filename": "sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02.tar.bz2",
-        "sha256": "7346b00ffe42396fff5c96d11892f0d4d72ac11418d47c5a8ada2b0f6ac8d27b",
-        "sizeBytes": 191534345
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02/resolve/main/model.int8.onnx",
+        "filename": "model.int8.onnx",
+        "sha256": "c1afcb9265de0ebd853eb8f570b371f399a6f9b2b9af9a3cb17c2e509171e697",
+        "sizeBytes": 249658954
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "c3788261a51df1899ea4b210b552cd42139204de72c0ad60f6cebb199078872e",
+        "sizeBytes": 504662
       }
     ],
     "fileConfig": {
@@ -1295,7 +1475,7 @@
       "zh"
     ],
     "languageMode": "auto",
-    "size": "~783 MB",
+    "size": "~821 MB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -1304,10 +1484,16 @@
     },
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02.tar.bz2",
-        "filename": "sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02.tar.bz2",
-        "sha256": "8a6acff859c53a699d46a8662a153634e9c1de1548aeef78b1edb35cafcdc558",
-        "sizeBytes": 775077198
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02/resolve/main/model.onnx",
+        "filename": "model.onnx",
+        "sha256": "18fbe954bc67761066c07153a71b2d71590fc3a0bcf5e06a3bfad87c2b5368a4",
+        "sizeBytes": 820945619
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "c3788261a51df1899ea4b210b552cd42139204de72c0ad60f6cebb199078872e",
+        "sizeBytes": 504662
       }
     ],
     "fileConfig": {
@@ -1324,14 +1510,20 @@
     "type": "punctuation",
     "languages": [],
     "languageMode": "none",
-    "size": "~62 MB",
+    "size": "~299 MB",
     "engine": "sherpa-onnx",
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/punctuation-models/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2",
-        "filename": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8.tar.bz2",
-        "sha256": "c0d5aa5f8eeb686032345e180bedf39319dc2e0556781c6264bcadba8328a6e1",
-        "sizeBytes": 64717756
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12/resolve/main/model.onnx",
+        "filename": "model.onnx",
+        "sha256": "3b8ef4a444a77e9bc4bc0a67977462cb3d950ec63ad46cf67f62dff788cb974b",
+        "sizeBytes": 294372519
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12/resolve/main/tokens.json",
+        "filename": "tokens.json",
+        "sha256": "c960ab87bccea4aa15cf49a59f71973c2c330b46668048cd8da253749ec71ee3",
+        "sizeBytes": 4207480
       }
     ]
   },
@@ -1342,7 +1534,7 @@
     "type": "speaker-segmentation",
     "languages": [],
     "languageMode": "none",
-    "size": "~6.64 MB",
+    "size": "~6.0 MB",
     "rules": {
       "requiresVad": false,
       "requiresPunctuation": false
@@ -1350,10 +1542,10 @@
     "engine": "sherpa-onnx",
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
-        "filename": "sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
-        "sha256": "24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488",
-        "sizeBytes": 6958444
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/main/model.onnx",
+        "filename": "model.onnx",
+        "sha256": "64a78189679f29ae0069c9b4e3e3b33df1972b22bb8db33aa9655f466472fa41",
+        "sizeBytes": 5992913
       }
     ]
   },
@@ -1364,7 +1556,7 @@
     "type": "speaker-segmentation",
     "languages": [],
     "languageMode": "none",
-    "size": "~10.4 MB",
+    "size": "~9.5 MB",
     "rules": {
       "requiresVad": false,
       "requiresPunctuation": false
@@ -1372,10 +1564,10 @@
     "engine": "sherpa-onnx",
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v1.tar.bz2",
-        "filename": "sherpa-onnx-reverb-diarization-v1.tar.bz2",
-        "sha256": "615761e980be1688da0ef81618c056134d63aa55ea0a5f1494c47393b9398eab",
-        "sizeBytes": 10918585
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-reverb-diarization-v1/resolve/main/model.onnx",
+        "filename": "model.onnx",
+        "sha256": "6b889396f42c161947fb72a29ef19baeeecdbf27a692a831e5083ef2882aa7ad",
+        "sizeBytes": 9512223
       }
     ]
   },
@@ -1386,7 +1578,7 @@
     "type": "speaker-segmentation",
     "languages": [],
     "languageMode": "none",
-    "size": "~242 MB",
+    "size": "~393 MB",
     "rules": {
       "requiresVad": false,
       "requiresPunctuation": false
@@ -1394,10 +1586,10 @@
     "engine": "sherpa-onnx",
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v2.tar.bz2",
-        "filename": "sherpa-onnx-reverb-diarization-v2.tar.bz2",
-        "sha256": "2ca21f73eac8adb698fe538eaf4a25f69f614131c876772a8d26213cf648c851",
-        "sizeBytes": 254075989
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-reverb-diarization-v2/resolve/main/model.onnx",
+        "filename": "model.onnx",
+        "sha256": "7f171060938ff5d5ca3518a287fa327c1f8a846c434cf092780e816a7f50a80e",
+        "sizeBytes": 392921403
       }
     ]
   },
@@ -1408,7 +1600,7 @@
     "type": "speaker-embedding",
     "languages": [],
     "languageMode": "none",
-    "size": "~27 MB",
+    "size": "~28 MB",
     "isArchive": false,
     "filename": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
     "rules": {
@@ -1418,9 +1610,9 @@
     "engine": "sherpa-onnx",
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+        "url": "https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
         "filename": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
-        "sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
+        "sha256": "2a98f192b02f83d9aa17865c3bb56093959c5d1223945d8b8a07ad99c15d4fc2",
         "sizeBytes": 28281164
       }
     ]
@@ -1432,7 +1624,7 @@
     "type": "speaker-embedding",
     "languages": [],
     "languageMode": "none",
-    "size": "~68.1 MB",
+    "size": "~71 MB",
     "isArchive": false,
     "filename": "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
     "rules": {
@@ -1442,9 +1634,9 @@
     "engine": "sherpa-onnx",
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
+        "url": "https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
         "filename": "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
-        "sha256": "bf1a75b9930474cf3389ef415e6e5d38ca96fea4a3a00f7e301d080a58ee2239",
+        "sha256": "18f7fba0b9a6fe402d28bb5a6dfceb2a472c694a15993708a283b8d601b099d0",
         "sizeBytes": 71441526
       }
     ]
@@ -1456,7 +1648,7 @@
     "type": "speaker-embedding",
     "languages": [],
     "languageMode": "none",
-    "size": "~111 MB",
+    "size": "~116 MB",
     "isArchive": false,
     "filename": "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
     "rules": {
@@ -1466,9 +1658,9 @@
     "engine": "sherpa-onnx",
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
+        "url": "https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
         "filename": "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
-        "sha256": "19547e85b6c14ec44b8add4e7cb9ce353c7e995d4f1c9ffd408176ac3a2d6895",
+        "sha256": "b91f09cfa35a49c6934c9c34f2d93e15b5e39695669527f078d46df34ffea210",
         "sizeBytes": 116058710
       }
     ]
@@ -1480,7 +1672,7 @@
     "type": "speaker-embedding",
     "languages": [],
     "languageMode": "none",
-    "size": "~210 MB",
+    "size": "~221 MB",
     "isArchive": false,
     "filename": "3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
     "rules": {
@@ -1490,9 +1682,9 @@
     "engine": "sherpa-onnx",
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
+        "url": "https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
         "filename": "3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
-        "sha256": "2b9c4219b25326473524f006f1a09050ac28ccaf58c1f7dbc53e7631fa2fb1df",
+        "sha256": "d9fa2435d886981881735d4f3b7db2eb2aa0ba09c55b62b168925239e2c668ec",
         "sizeBytes": 220623485
       }
     ]
@@ -1504,16 +1696,16 @@
     "type": "vad",
     "languages": [],
     "languageMode": "none",
-    "size": "~0.63 MB",
+    "size": "~1.8 MB",
     "isArchive": false,
     "filename": "silero_vad.onnx",
     "engine": "sherpa-onnx",
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx",
+        "url": "https://huggingface.co/csukuangfj/vad/resolve/main/silero_vad.onnx",
         "filename": "silero_vad.onnx",
-        "sha256": "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6",
-        "sizeBytes": 643854
+        "sha256": "ad338b7d41f39185a0ca06b3a3ab8ba1a8626f212267f8152541c8fc02804b40",
+        "sizeBytes": 1807522
       }
     ]
   },
@@ -1524,16 +1716,16 @@
     "type": "vad",
     "languages": [],
     "languageMode": "none",
-    "size": "~0.32 MB",
+    "size": "~315 KB",
     "isArchive": false,
     "filename": "ten-vad.onnx",
     "engine": "sherpa-onnx",
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/ten-vad.onnx",
+        "url": "https://huggingface.co/TigreGotico/ten-vad-onnx/resolve/main/ten-vad.onnx",
         "filename": "ten-vad.onnx",
-        "sha256": "718cb7eef47e3cf5ddbe7e967a7503f46b8b469c0706872f494dfa921b486206",
-        "sizeBytes": 332211
+        "sha256": "145942475a8a1eb2a0e28d5786ba1ea94fe3d1ce0340dbdb4066916893e36e1b",
+        "sizeBytes": 315449
       }
     ]
   },
@@ -1544,15 +1736,15 @@
     "type": "vad",
     "languages": [],
     "languageMode": "none",
-    "size": "~2.21 MB",
+    "size": "~2.3 MB",
     "isArchive": false,
     "filename": "silero_vad_v5.onnx",
     "engine": "sherpa-onnx",
     "artifacts": [
       {
-        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad_v5.onnx",
+        "url": "https://huggingface.co/csukuangfj/vad/resolve/main/silero_vad_v5.onnx",
         "filename": "silero_vad_v5.onnx",
-        "sha256": "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396",
+        "sha256": "e06c7104b2b62145e54d3cb863779e563adfa955f269a84a6fbfe4d87cf0a604",
         "sizeBytes": 2313101
       }
     ]

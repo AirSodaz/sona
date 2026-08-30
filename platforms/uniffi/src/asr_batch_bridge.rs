@@ -102,6 +102,11 @@ pub struct FfiLocalAsrModelFiles {
     pub llm: Option<String>,
     pub embedding: Option<String>,
     pub tokenizer: Option<String>,
+    pub mmproj: Option<String>,
+    pub preprocessor: Option<String>,
+    pub uncached_decoder: Option<String>,
+    pub cached_decoder: Option<String>,
+    pub merged_decoder: Option<String>,
 }
 
 #[derive(Clone, Debug, uniffi::Record)]
@@ -138,7 +143,11 @@ impl From<FfiLocalAsrModelFiles> for ModelFileConfig {
             llm: value.llm,
             embedding: value.embedding,
             tokenizer: value.tokenizer,
-            mmproj: None,
+            mmproj: value.mmproj,
+            preprocessor: value.preprocessor,
+            uncached_decoder: value.uncached_decoder,
+            cached_decoder: value.cached_decoder,
+            merged_decoder: value.merged_decoder,
         }
     }
 }

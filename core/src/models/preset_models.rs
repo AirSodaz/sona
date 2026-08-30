@@ -383,7 +383,13 @@ impl PresetModel {
 
     /// Returns true when the preset ships as an archive.
     pub fn is_archive(&self) -> bool {
-        self.is_archive.unwrap_or(true)
+        self.is_archive.unwrap_or_else(|| {
+            self.artifacts.first().is_some_and(|artifact| {
+                artifact.filename.ends_with(".tar.bz2")
+                    || artifact.filename.ends_with(".tar.gz")
+                    || artifact.filename.ends_with(".zip")
+            })
+        })
     }
 
     /// Returns true when the preset is installed from multiple independently
@@ -411,7 +417,7 @@ impl PresetModel {
         if !path_exists {
             return false;
         }
-        if self.is_archive() {
+        if self.is_archive() || self.filename.is_none() {
             return true;
         }
         is_file && file_len > 0

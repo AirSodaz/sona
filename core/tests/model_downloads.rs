@@ -14,7 +14,7 @@ fn resolves_model_download_paths_and_required_companions() {
     );
     assert_eq!(
         resolved.download_path,
-        models_dir.join("sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2")
+        models_dir.join("sherpa-onnx-funasr-nano-int8-2025-12-30")
     );
 
     let companions = required_companion_models(&resolved.model);

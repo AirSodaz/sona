@@ -72,7 +72,7 @@ fn parakeet_tdt_presets_are_verified_batch_bundles() {
             "encoder.int8.onnx",
             "decoder.int8.onnx",
             "joiner.int8.onnx",
-            1,
+            4,
         ),
         (
             "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3",
@@ -317,10 +317,10 @@ fn resolves_model_paths_without_filesystem_status_checks() {
         PathBuf::from("C:/models/silero_vad_v5.onnx")
     );
 
-    let archive_model = find_preset_model("sherpa-onnx-whisper-turbo").unwrap();
+    let multi_file_model = find_preset_model("sherpa-onnx-whisper-turbo").unwrap();
     assert_eq!(
-        archive_model.resolve_download_path(Path::new("C:/models")),
-        PathBuf::from("C:/models/sherpa-onnx-whisper-turbo.tar.bz2")
+        multi_file_model.resolve_download_path(Path::new("C:/models")),
+        PathBuf::from("C:/models/sherpa-onnx-whisper-turbo")
     );
 }
 

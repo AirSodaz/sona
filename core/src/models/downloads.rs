@@ -75,12 +75,12 @@ fn validate_artifact_filename(
     filename: &str,
 ) -> Result<(), RuntimeValidationError> {
     let path = Path::new(filename);
-    let mut components = path.components();
-    let is_single_normal_component = matches!(
-        (components.next(), components.next()),
-        (Some(std::path::Component::Normal(_)), None)
-    );
-    if filename.trim().is_empty() || !is_single_normal_component {
+    let is_valid_relative_path = !filename.trim().is_empty()
+        && path.is_relative()
+        && path
+            .components()
+            .all(|component| matches!(component, std::path::Component::Normal(_)));
+    if !is_valid_relative_path {
         return Err(RuntimeValidationError::new(
             "model_id",
             format!("Model '{model_id}' has an invalid artifact filename: {filename}"),
