@@ -90,6 +90,7 @@ export function normalizeAsrRequest(
     modelType: request.modelType,
     fileConfig: fileConfig ?? null,
     gpuAcceleration: request.gpuAcceleration ?? null,
+    initialRefreshRateMs: request.initialRefreshRateMs ?? null,
   };
 }
 

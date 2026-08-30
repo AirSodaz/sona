@@ -43,6 +43,7 @@ export type LocalAsrRequest = AsrTranscriptionRequestBase & {
   modelType: string;
   fileConfig?: ModelFileConfig;
   gpuAcceleration?: string;
+  initialRefreshRateMs?: number | null;
 };
 
 export type OnlineAsrRequest = AsrTranscriptionRequestBase & {
