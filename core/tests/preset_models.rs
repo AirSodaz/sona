@@ -271,6 +271,41 @@ fn sensevoice_presets_are_verified_bundles() {
         assert_eq!(model.artifacts.len(), 2);
     }
 }
+#[test]
+fn omnilingual_presets_are_verified_batch_bundles() {
+    for (id, expected_version, expected_model, expected_artifacts) in [
+        (
+            "sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05",
+            "1B Int8",
+            "model.int8.onnx",
+            2,
+        ),
+        (
+            "sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05",
+            "1B Fp32",
+            "model.onnx",
+            3,
+        ),
+    ] {
+        let model = find_preset_model(id).unwrap();
+        assert_eq!(model.model_type, "omnilingual");
+        assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
+        assert!(!model.supports_mode("streaming"));
+        assert!(model.supports_mode("batch"));
+        assert_eq!(model.language_mode, LanguageMode::Auto);
+        assert_eq!(model.group_id.as_deref(), Some("omnilingual-asr"));
+        assert_eq!(model.version_label.as_deref(), Some(expected_version));
+
+        let rules = model.resolved_rules();
+        assert!(rules.requires_vad);
+        assert!(rules.requires_punctuation);
+
+        let file_config = model.file_config.as_ref().unwrap();
+        assert_eq!(file_config.model.as_deref(), Some(expected_model));
+        assert_eq!(file_config.tokens.as_deref(), Some("tokens.txt"));
+        assert_eq!(model.artifacts.len(), expected_artifacts);
+    }
+}
 
 #[test]
 fn all_preset_artifacts_have_valid_sha256_and_positive_size() {
@@ -555,6 +590,14 @@ fn asr_language_modes_match_engine_capabilities() {
     );
     assert_eq!(
         mode("sherpa-onnx-moonshine-base-zh-quantized-2026-02-27"),
+        LanguageMode::Auto
+    );
+    assert_eq!(
+        mode("sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05"),
+        LanguageMode::Auto
+    );
+    assert_eq!(
+        mode("sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05"),
         LanguageMode::Auto
     );
 

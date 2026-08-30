@@ -71,6 +71,10 @@ pub enum ModelType {
         merged_decoder: Option<PathBuf>,
         tokens: PathBuf,
     },
+    OfflineOmnilingual {
+        model: PathBuf,
+        tokens: PathBuf,
+    },
 }
 
 impl ModelType {
@@ -86,6 +90,7 @@ impl ModelType {
             ModelType::OfflineQwen3Asr { .. } => "qwen3-asr",
             ModelType::OfflineParakeetTdt { .. } => "parakeet-tdt",
             ModelType::OfflineMoonshine { .. } => "moonshine",
+            ModelType::OfflineOmnilingual { .. } => "omnilingual",
         }
     }
 
@@ -100,6 +105,7 @@ impl ModelType {
                 | ModelType::OfflineQwen3Asr { .. }
                 | ModelType::OfflineParakeetTdt { .. }
                 | ModelType::OfflineMoonshine { .. }
+                | ModelType::OfflineOmnilingual { .. }
         )
     }
 }
@@ -115,6 +121,7 @@ fn is_offline_model_type(model_type: &str) -> bool {
             | "qwen3-asr"
             | "parakeet-tdt"
             | "moonshine"
+            | "omnilingual"
     )
 }
 
@@ -284,6 +291,11 @@ pub fn build_model_config(
                 merged_decoder,
                 tokens,
             })
+        }
+        "omnilingual" => {
+            let model = get_path(&fc.model)?;
+            let tokens = get_path(&fc.tokens)?;
+            Ok(ModelType::OfflineOmnilingual { model, tokens })
         }
         _ => Err(AsrPortError::new(
             AsrPortErrorKind::Unsupported,
@@ -581,8 +593,6 @@ impl Recognizer {
                 let mut config =
                     get_base_offline_config(num_threads, Some(&tokens), provider.clone());
                 config.model_config.dolphin.model = Some(model.to_string_lossy().to_string());
-
-                debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineDolphin)");
                 let recognizer = OfflineRecognizer::create(&config).ok_or_else(|| {
                     AsrPortError::new(
                         AsrPortErrorKind::Model,
@@ -674,6 +684,22 @@ impl Recognizer {
                     )
                 })?;
                 debug!("Successfully created OfflineRecognizer (OfflineMoonshine)");
+                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+            }
+            ModelType::OfflineOmnilingual { model, tokens } => {
+                info!("[Recognizer::new] branch=OfflineOmnilingual");
+                let mut config =
+                    get_base_offline_config(num_threads, Some(&tokens), provider.clone());
+                config.model_config.omnilingual.model = Some(model.to_string_lossy().to_string());
+
+                debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineOmnilingual)");
+                let recognizer = OfflineRecognizer::create(&config).ok_or_else(|| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Model,
+                        "Failed to create OfflineRecognizer",
+                    )
+                })?;
+                debug!("Successfully created OfflineRecognizer (OfflineOmnilingual)");
                 RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
             }
         };

@@ -1504,6 +1504,146 @@
     "versionLabel": "Fp32"
   },
   {
+    "id": "sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05",
+    "name": "Omnilingual ASR",
+    "description": "settings.descriptions.omnilingual_asr",
+    "type": "omnilingual",
+    "modes": [
+      "batch"
+    ],
+    "languages": [
+      "ar",
+      "bn",
+      "de",
+      "el",
+      "en",
+      "es",
+      "fa",
+      "fil",
+      "fr",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "ms",
+      "my",
+      "nl",
+      "pl",
+      "pt",
+      "ro",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "ur",
+      "vi",
+      "yue",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~1.03 GB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": true,
+      "timestampSupportHint": "token"
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05/resolve/main/model.int8.onnx",
+        "filename": "model.int8.onnx",
+        "sha256": "8af72da192fc2c8567c328d4f8059bdf47f182a0369077893c295ef39740c637",
+        "sizeBytes": 1032239439
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "7d99997ef207ff14c2cfe825f2aa037528ea250113cc3c6392bfe49326884ba6",
+        "sizeBytes": 90630
+      }
+    ],
+    "fileConfig": {
+      "model": "model.int8.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "omnilingual-asr",
+    "versionLabel": "1B Int8"
+  },
+  {
+    "id": "sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05",
+    "name": "Omnilingual ASR",
+    "description": "settings.descriptions.omnilingual_asr",
+    "type": "omnilingual",
+    "modes": [
+      "batch"
+    ],
+    "languages": [
+      "ar",
+      "bn",
+      "de",
+      "el",
+      "en",
+      "es",
+      "fa",
+      "fil",
+      "fr",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "ms",
+      "my",
+      "nl",
+      "pl",
+      "pt",
+      "ro",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "ur",
+      "vi",
+      "yue",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~3.90 GB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": true,
+      "timestampSupportHint": "token"
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05/resolve/main/model.onnx",
+        "filename": "model.onnx",
+        "sha256": "3d08282016bdf2055bfbe6f8f7c36f59ee4d2d924e5106689675ee31e848730a",
+        "sizeBytes": 1417766
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05/resolve/main/model.weights",
+        "filename": "model.weights",
+        "sha256": "27289649ac05b6db8275a8c437f4766a8a40991fb272c74e51542729bbdf0446",
+        "sizeBytes": 3902699712
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "7d99997ef207ff14c2cfe825f2aa037528ea250113cc3c6392bfe49326884ba6",
+        "sizeBytes": 90630
+      }
+    ],
+    "fileConfig": {
+      "model": "model.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "omnilingual-asr",
+    "versionLabel": "1B Fp32"
+  },
+  {
     "id": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8",
     "name": "Punctuation - CT Transformer (Int8)",
     "description": "settings.descriptions.ct_punctuation",

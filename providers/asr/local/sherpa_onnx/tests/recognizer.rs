@@ -231,3 +231,24 @@ fn offline_decode_result_reports_empty_text() {
 
     assert!(result.is_empty_text());
 }
+#[test]
+fn build_model_config_constructs_offline_omnilingual_when_files_present() {
+    let model_path = Path::new("C:/models/omniasr");
+    let file_config = Some(ModelFileConfig {
+        model: Some("model.int8.onnx".to_string()),
+        tokens: Some("tokens.txt".to_string()),
+        ..Default::default()
+    });
+
+    let model_type =
+        build_offline_model_config(model_path, "omnilingual", &file_config, false, "auto", None)
+            .expect("omnilingual config should succeed with valid files");
+
+    match model_type {
+        ModelType::OfflineOmnilingual { model, tokens } => {
+            assert_eq!(model, model_path.join("model.int8.onnx"));
+            assert_eq!(tokens, model_path.join("tokens.txt"));
+        }
+        other => panic!("expected OfflineOmnilingual, got {other:?}"),
+    }
+}
