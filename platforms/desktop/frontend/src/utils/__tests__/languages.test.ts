@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildLanguagePickerOptions,
   coerceLanguage,
+  formatLanguagesTooltip,
   languageDisplayName,
+  MAX_TOOLTIP_LANGUAGES,
   type LanguageCapable,
 } from '../languages';
 
@@ -68,5 +70,44 @@ describe('languageDisplayName', () => {
     expect(languageDisplayName('zh', 'en').toLowerCase()).toContain('chinese');
     expect(languageDisplayName('yue', 'en').length).toBeGreaterThan(1);
     expect(languageDisplayName('zh', 'zh')).toBe('中文');
+  });
+});
+
+describe('formatLanguagesTooltip', () => {
+  it('returns empty string for empty or undefined input', () => {
+    expect(formatLanguagesTooltip(undefined, 'zh')).toBe('');
+    expect(formatLanguagesTooltip([], 'zh')).toBe('');
+  });
+
+  it('formats single language to localized name', () => {
+    expect(formatLanguagesTooltip(['zh'], 'zh')).toBe('中文');
+    expect(formatLanguagesTooltip(['zh'], 'en')).toBe('Chinese');
+  });
+
+  it('formats small list of languages cleanly', () => {
+    const result = formatLanguagesTooltip(['zh', 'en'], 'zh');
+    expect(result).toBe('中文, 英语');
+  });
+
+  it('summarizes long language list when exceeding MAX_TOOLTIP_LANGUAGES', () => {
+    const longLanguages = [
+      'af', 'am', 'ar', 'as', 'az', 'ba', 'be', 'bg', 'bn', 'bo',
+      'br', 'bs', 'ca', 'cs', 'cy', 'da', 'de', 'el', 'en', 'es',
+      'et', 'eu', 'fa', 'fi', 'fil', 'fo', 'fr', 'gl', 'gu', 'ha',
+    ];
+    expect(longLanguages.length).toBeGreaterThan(MAX_TOOLTIP_LANGUAGES);
+
+    const formattedZh = formatLanguagesTooltip(longLanguages, 'zh');
+    expect(formattedZh).toContain('等共 30 种语言');
+
+    const formattedEn = formatLanguagesTooltip(longLanguages, 'en');
+    expect(formattedEn).toContain('(30 languages in total)');
+  });
+
+  it('uses t translation function when provided', () => {
+    const longLanguages = Array.from({ length: 30 }, (_, i) => `lang-${i}`);
+    const mockT = (_key: string, opts?: Record<string, unknown>) => `${String(opts?.sample ?? '')} | total:${String(opts?.count ?? '')}`;
+    const result = formatLanguagesTooltip(longLanguages, 'zh', mockT);
+    expect(result).toContain('| total:30');
   });
 });

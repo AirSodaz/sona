@@ -1881,6 +1881,8 @@
         }
     },
   "languages": {
-    "common": "Common languages"
+    "common": "Common languages",
+    "total_count": "{{count}} languages in total",
+    "tooltip_summary": "{{sample}} ... ({{count}} languages in total)"
   }
 }

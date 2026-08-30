@@ -1881,6 +1881,8 @@
         }
     },
   "languages": {
-    "common": "常用语言"
+    "common": "常用语言",
+    "total_count": "共 {{count}} 种语言",
+    "tooltip_summary": "{{sample}} 等共 {{count}} 种语言"
   }
 }

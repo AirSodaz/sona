@@ -552,6 +552,20 @@
   transform: translateY(4px);
 }
 
+/* Tooltip Modifiers */
+[data-tooltip-multiline]::after,
+[data-tooltip-wide]::after {
+  white-space: normal;
+  max-width: 320px;
+  width: max-content;
+  line-height: 1.45;
+  text-align: left;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  padding: 6px 10px;
+  box-shadow: var(--shadow-md, var(--shadow-sm));
+}
+
 @keyframes spin {
   0% {
     transform: rotate(0deg);

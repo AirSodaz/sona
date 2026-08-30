@@ -1881,6 +1881,8 @@
         }
     },
   "languages": {
-    "common": "자주 사용하는 언어"
+    "common": "자주 사용하는 언어",
+    "total_count": "총 {{count}}개 언어",
+    "tooltip_summary": "{{sample}} 등 총 {{count}}개 언어"
   }
 }

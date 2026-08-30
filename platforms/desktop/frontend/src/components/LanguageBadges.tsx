@@ -1,5 +1,6 @@
-import React from 'react';
-import { VISIBLE_LANGUAGE_TAGS } from '../utils/languages';
+import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { VISIBLE_LANGUAGE_TAGS, formatLanguagesTooltip } from '../utils/languages';
 
 interface LanguageBadgesProps {
   languages: string[] | undefined;
@@ -7,12 +8,21 @@ interface LanguageBadgesProps {
 
 /**
  * Compact language-tag cluster for model cards: shows the first few ISO codes
- * plus a `+N` overflow chip whose tooltip carries the full list, so catalogs
- * with ~100-language models stay on one line.
+ * plus a `+N` overflow chip, with a styled custom tooltip showing the full or
+ * summarized localized languages list.
  */
 export const LanguageBadges = React.memo(function LanguageBadges({
   languages,
 }: LanguageBadgesProps): React.JSX.Element | null {
+  const { t, i18n } = useTranslation();
+
+  const tooltipText = useMemo(() => {
+    if (!languages || languages.length === 0) {
+      return '';
+    }
+    return formatLanguagesTooltip(languages, i18n?.language ?? 'zh', t);
+  }, [languages, i18n?.language, t]);
+
   if (!languages || languages.length === 0) {
     return null;
   }
@@ -22,9 +32,14 @@ export const LanguageBadges = React.memo(function LanguageBadges({
 
   return (
     <span
-      className="model-tags"
+      className="model-tags language-badges"
       style={{ marginTop: '0' }}
-      title={languages.join(', ')}
+      data-tooltip={tooltipText}
+      data-tooltip-pos="top"
+      data-tooltip-multiline
+      tabIndex={0}
+      role="note"
+      aria-label={tooltipText}
     >
       {visible.map((code) => (
         <span key={code} className="model-tag">{code.toUpperCase()}</span>

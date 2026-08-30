@@ -286,6 +286,30 @@
   border-style: dashed;
 }
 
+.language-badges {
+  cursor: default;
+  align-items: center;
+}
+
+.language-badges:focus-visible {
+  outline: 2px solid var(--color-primary, #6366f1);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.language-badges[data-tooltip]::after {
+  max-width: min(340px, 80vw);
+  width: max-content;
+  white-space: normal;
+  line-height: 1.5;
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  font-weight: normal;
+  letter-spacing: normal;
+}
+
 .model-actions {
   display: flex;
   gap: 8px;
