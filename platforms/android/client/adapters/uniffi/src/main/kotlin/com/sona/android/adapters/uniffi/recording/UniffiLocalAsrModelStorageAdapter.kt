@@ -110,6 +110,11 @@ internal fun FfiInstalledLocalAsrModel.toApplication(): LocalAsrModel = LocalAsr
             llm = files.llm,
             embedding = files.embedding,
             tokenizer = files.tokenizer,
+            mmproj = files.mmproj,
+            preprocessor = files.preprocessor,
+            uncachedDecoder = files.uncachedDecoder,
+            cachedDecoder = files.cachedDecoder,
+            mergedDecoder = files.mergedDecoder,
         ),
     ),
     supportedModes = modes.mapNotNullTo(mutableSetOf()) {

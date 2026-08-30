@@ -237,6 +237,10 @@ pub struct FfiModelFileConfig {
     pub embedding: Option<String>,
     pub tokenizer: Option<String>,
     pub mmproj: Option<String>,
+    pub preprocessor: Option<String>,
+    pub uncached_decoder: Option<String>,
+    pub cached_decoder: Option<String>,
+    pub merged_decoder: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
@@ -266,6 +270,10 @@ pub fn model_file_config_to_ffi(config: ModelFileConfig) -> FfiModelFileConfig {
         embedding: config.embedding,
         tokenizer: config.tokenizer,
         mmproj: config.mmproj,
+        preprocessor: config.preprocessor,
+        uncached_decoder: config.uncached_decoder,
+        cached_decoder: config.cached_decoder,
+        merged_decoder: config.merged_decoder,
     }
 }
 

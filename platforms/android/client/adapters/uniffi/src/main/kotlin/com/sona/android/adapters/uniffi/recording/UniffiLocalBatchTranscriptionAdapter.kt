@@ -49,4 +49,9 @@ private fun LocalSherpaModelFiles.toUniffi() = FfiLocalAsrModelFiles(
     llm = llm,
     embedding = embedding,
     tokenizer = tokenizer,
+    mmproj = mmproj,
+    preprocessor = preprocessor,
+    uncachedDecoder = uncachedDecoder,
+    cachedDecoder = cachedDecoder,
+    mergedDecoder = mergedDecoder,
 )

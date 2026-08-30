@@ -43,6 +43,11 @@ data class LocalSherpaModelFiles(
     val llm: String? = null,
     val embedding: String? = null,
     val tokenizer: String? = null,
+    val mmproj: String? = null,
+    val preprocessor: String? = null,
+    val uncachedDecoder: String? = null,
+    val cachedDecoder: String? = null,
+    val mergedDecoder: String? = null,
 )
 
 sealed interface StreamingEngineConfig {

@@ -99,5 +99,9 @@ private fun installedModel(numThreads: UInt) = FfiInstalledLocalAsrModel(
         embedding = null,
         tokenizer = null,
         mmproj = null,
+        preprocessor = null,
+        uncachedDecoder = null,
+        cachedDecoder = null,
+        mergedDecoder = null,
     ),
 )
