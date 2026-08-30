@@ -150,6 +150,7 @@ function normalizeModelType(value: string): ModelInfo['type'] {
     case 'moonshine':
     case 'speaker-segmentation':
     case 'speaker-embedding':
+    case 'omnilingual':
       return value;
     default:
       throw new Error(`Unexpected model catalog type: ${value}`);

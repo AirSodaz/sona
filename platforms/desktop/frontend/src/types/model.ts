@@ -10,4 +10,8 @@ export interface ModelFileConfig {
   embedding?: string;
   tokenizer?: string;
   mmproj?: string;
+  preprocessor?: string;
+  uncachedDecoder?: string;
+  cachedDecoder?: string;
+  mergedDecoder?: string;
 }

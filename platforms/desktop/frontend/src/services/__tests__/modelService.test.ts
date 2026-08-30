@@ -22,7 +22,7 @@ vi.mock('@tauri-apps/api/path', () => ({
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
-    listen: vi.fn(),
+    listen: vi.fn().mockResolvedValue(() => {}),
 }));
 
 describe('ModelService', () => {
@@ -333,7 +333,8 @@ describe('ModelService', () => {
     });
 
     describe('downloadModel', () => {
-        const modelId = PRESET_MODELS[0].id; // Use first available model
+        const singleFileModel = PRESET_MODELS.find(m => m.artifacts?.length === 1)!;
+        const modelId = singleFileModel.id;
 
         it('downloads a model successfully', async () => {
             const onProgress = vi.fn();
@@ -491,7 +492,7 @@ describe('ModelService', () => {
             const silero = PRESET_MODELS.find(model => model.id === 'silero-vad');
 
             expect(silero?.artifacts?.[0]).toMatchObject({
-                sha256: '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
+                sha256: 'ad338b7d41f39185a0ca06b3a3ab8ba1a8626f212267f8152541c8fc02804b40',
             });
             expect(singleFileModels.length).toBeGreaterThan(0);
             expect(singleFileModels.every(model => (
@@ -564,7 +565,8 @@ describe('ModelService', () => {
                     id: 'sherpa-onnx-pyannote-segmentation-3-0',
                     name: 'Pyannote 3.0',
                     artifacts: [expect.objectContaining({
-                        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2',
+                        filename: 'model.onnx',
+                        sha256: '64a78189679f29ae0069c9b4e3e3b33df1972b22bb8db33aa9655f466472fa41',
                     })],
                     type: 'speaker-segmentation',
                 }),
@@ -572,7 +574,8 @@ describe('ModelService', () => {
                     id: 'sherpa-onnx-reverb-diarization-v1',
                     name: 'Reverb Diarization V1',
                     artifacts: [expect.objectContaining({
-                        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v1.tar.bz2',
+                        filename: 'model.onnx',
+                        sha256: '6b889396f42c161947fb72a29ef19baeeecdbf27a692a831e5083ef2882aa7ad',
                     })],
                     type: 'speaker-segmentation',
                 }),
@@ -580,7 +583,8 @@ describe('ModelService', () => {
                     id: 'sherpa-onnx-reverb-diarization-v2',
                     name: 'Reverb Diarization V2',
                     artifacts: [expect.objectContaining({
-                        url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-reverb-diarization-v2.tar.bz2',
+                        filename: 'model.onnx',
+                        sha256: '7f171060938ff5d5ca3518a287fa327c1f8a846c434cf092780e816a7f50a80e',
                     })],
                     type: 'speaker-segmentation',
                 }),

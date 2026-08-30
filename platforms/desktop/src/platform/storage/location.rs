@@ -12,7 +12,23 @@ pub struct StorageBootstrapConfig {
     pub custom_data_dir: Option<PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub custom_models_dir: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending_cleanup_dirs: Vec<PathBuf>,
 }
+
+pub const DATA_MIGRATION_FILE_NAMES: [&str; 8] = [
+    "sona.db",
+    "sona.db-wal",
+    "sona.db-shm",
+    "sona-analytics.db",
+    "sona-analytics.db-wal",
+    "sona-analytics.db-shm",
+    "sync.json",
+    ".history.lock",
+];
+
+pub const DATA_MIGRATION_SUBDIRECTORIES: [&str; 4] =
+    ["history", "speaker-profiles", "recovery", "api_temp"];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -172,6 +188,141 @@ pub fn copy_directory_contents(src: &Path, dst: &Path) -> Result<(), std::io::Er
     Ok(())
 }
 
+pub fn check_path_overlap(src: &Path, dst: &Path) -> Result<(), String> {
+    let src_canonical = src.canonicalize().unwrap_or_else(|_| src.to_path_buf());
+    let dst_canonical = dst.canonicalize().unwrap_or_else(|_| dst.to_path_buf());
+
+    if src_canonical == dst_canonical {
+        return Ok(());
+    }
+    if dst_canonical.starts_with(&src_canonical) {
+        return Err(format!(
+            "Target directory '{}' cannot be inside the current directory '{}'",
+            dst.display(),
+            src.display()
+        ));
+    }
+    if src_canonical.starts_with(&dst_canonical) {
+        return Err(format!(
+            "Target directory '{}' cannot contain the current directory '{}'",
+            dst.display(),
+            src.display()
+        ));
+    }
+    Ok(())
+}
+
+pub fn cleanup_data_directory_contents(
+    src_data_dir: &Path,
+    default_data_dir: &Path,
+    models_were_copied: bool,
+) -> Vec<PathBuf> {
+    if !src_data_dir.exists() {
+        return Vec::new();
+    }
+
+    let mut unremoved_files = Vec::new();
+
+    for dir_name in DATA_MIGRATION_SUBDIRECTORIES {
+        let sub = src_data_dir.join(dir_name);
+        if sub.exists() {
+            match std::fs::remove_dir_all(&sub) {
+                Ok(()) => {}
+                Err(e) => {
+                    log::warn!("Failed to remove old subdirectory {}: {}", sub.display(), e);
+                    unremoved_files.push(sub);
+                }
+            }
+        }
+    }
+
+    if models_were_copied {
+        let models_dir = src_data_dir.join("models");
+        if models_dir.exists() {
+            match std::fs::remove_dir_all(&models_dir) {
+                Ok(()) => {}
+                Err(e) => {
+                    log::warn!(
+                        "Failed to remove old models directory {}: {}",
+                        models_dir.display(),
+                        e
+                    );
+                    unremoved_files.push(models_dir);
+                }
+            }
+        }
+    }
+
+    for file_name in DATA_MIGRATION_FILE_NAMES {
+        let file = src_data_dir.join(file_name);
+        if file.exists() {
+            match std::fs::remove_file(&file) {
+                Ok(()) => {}
+                Err(e) => {
+                    log::warn!("Failed to remove old file {}: {}", file.display(), e);
+                    unremoved_files.push(file);
+                }
+            }
+        }
+    }
+    if src_data_dir != default_data_dir && unremoved_files.is_empty() {
+        let _ = std::fs::remove_dir(src_data_dir);
+    }
+
+    unremoved_files
+}
+
+pub fn cleanup_pending_storage_locations(default_app_local_data_dir: &Path) {
+    let mut bootstrap = load_bootstrap_config(default_app_local_data_dir);
+    let active_data_dir = resolve_active_data_dir(default_app_local_data_dir);
+    let active_models_dir = resolve_active_models_dir(default_app_local_data_dir, &active_data_dir);
+
+    let mut changed = false;
+
+    if !bootstrap.pending_cleanup_dirs.is_empty() {
+        let pending = std::mem::take(&mut bootstrap.pending_cleanup_dirs);
+        let mut still_pending = Vec::new();
+
+        for dir in pending {
+            if dir == active_data_dir || dir == active_models_dir {
+                continue;
+            }
+            if dir.exists() {
+                let unremoved =
+                    cleanup_data_directory_contents(&dir, default_app_local_data_dir, true);
+                if !unremoved.is_empty() {
+                    still_pending.push(dir);
+                }
+            }
+        }
+
+        bootstrap.pending_cleanup_dirs = still_pending;
+        changed = true;
+    }
+
+    if bootstrap.custom_data_dir.is_some() && active_data_dir != default_app_local_data_dir {
+        let old_db = default_app_local_data_dir.join("sona.db");
+        if old_db.exists() {
+            let _ = cleanup_data_directory_contents(
+                default_app_local_data_dir,
+                default_app_local_data_dir,
+                bootstrap.custom_models_dir.is_some()
+                    || active_models_dir != default_app_local_data_dir.join("models"),
+            );
+        }
+    }
+
+    if changed {
+        let _ = save_bootstrap_config(default_app_local_data_dir, &bootstrap);
+    }
+}
+
+pub fn cleanup_pending_storage_locations_for_app<R: Runtime>(app: &AppHandle<R>) {
+    if let Ok(default_dir) = default_app_local_data_dir_for_app(app) {
+        cleanup_pending_storage_locations(&default_dir);
+    }
+}
+
 pub fn migrate_data_directory<R: Runtime>(
     app: &AppHandle<R>,
     target_dir_str: String,
@@ -187,20 +338,13 @@ pub fn migrate_data_directory<R: Runtime>(
         return get_storage_directories_info(app);
     }
 
+    check_path_overlap(&active_data_dir, &target_path)?;
+
+    let mut unremoved = Vec::new();
     if copy_existing && active_data_dir.exists() {
         std::fs::create_dir_all(&target_path).map_err(|e| e.to_string())?;
 
-        // Database and config files to copy
-        let file_names = [
-            "sona.db",
-            "sona.db-wal",
-            "sona.db-shm",
-            "sona-analytics.db",
-            "sona-analytics.db-wal",
-            "sona-analytics.db-shm",
-            "sync.json",
-        ];
-        for file_name in file_names {
+        for file_name in DATA_MIGRATION_FILE_NAMES {
             let src_file = active_data_dir.join(file_name);
             if src_file.exists() && src_file.is_file() {
                 let dst_file = target_path.join(file_name);
@@ -209,9 +353,7 @@ pub fn migrate_data_directory<R: Runtime>(
             }
         }
 
-        // Subdirectories to copy
-        let subdirectories = ["history", "speaker-profiles", "recovery"];
-        for dir_name in subdirectories {
+        for dir_name in DATA_MIGRATION_SUBDIRECTORIES {
             let src_sub = active_data_dir.join(dir_name);
             if src_sub.exists() && src_sub.is_dir() {
                 let dst_sub = target_path.join(dir_name);
@@ -221,16 +363,23 @@ pub fn migrate_data_directory<R: Runtime>(
             }
         }
 
-        // If models folder was inside active_data_dir and no custom models dir is set, copy models too
         let bootstrap = load_bootstrap_config(&default_data_dir);
+        let mut models_were_copied = false;
         if bootstrap.custom_models_dir.is_none() {
             let src_models = active_data_dir.join("models");
             if src_models.exists() && src_models.is_dir() {
                 let dst_models = target_path.join("models");
                 copy_directory_contents(&src_models, &dst_models)
                     .map_err(|e| format!("Failed to copy models directory: {}", e))?;
+                models_were_copied = true;
             }
         }
+
+        unremoved = cleanup_data_directory_contents(
+            &active_data_dir,
+            &default_data_dir,
+            models_were_copied,
+        );
     }
 
     let mut bootstrap = load_bootstrap_config(&default_data_dir);
@@ -238,6 +387,9 @@ pub fn migrate_data_directory<R: Runtime>(
         bootstrap.custom_data_dir = None;
     } else {
         bootstrap.custom_data_dir = Some(target_path);
+    }
+    if !unremoved.is_empty() && !bootstrap.pending_cleanup_dirs.contains(&active_data_dir) {
+        bootstrap.pending_cleanup_dirs.push(active_data_dir);
     }
     save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
 
@@ -267,9 +419,23 @@ pub fn set_models_directory<R: Runtime>(
     let active_data_dir = resolve_active_data_dir(&default_data_dir);
     let active_models_dir = resolve_active_models_dir(&default_data_dir, &active_data_dir);
 
-    if active_models_dir != target_path && move_existing && active_models_dir.exists() {
+    if active_models_dir == target_path {
+        return get_storage_directories_info(app);
+    }
+
+    check_path_overlap(&active_models_dir, &target_path)?;
+
+    if move_existing && active_models_dir.exists() {
         copy_directory_contents(&active_models_dir, &target_path)
             .map_err(|e| format!("Failed to copy model files: {}", e))?;
+
+        if let Err(e) = std::fs::remove_dir_all(&active_models_dir) {
+            log::warn!(
+                "Failed to remove old models directory {}: {}",
+                active_models_dir.display(),
+                e
+            );
+        }
     }
 
     let default_models_dir = default_data_dir.join("models");
@@ -324,6 +490,7 @@ mod tests {
         let config = StorageBootstrapConfig {
             custom_data_dir: Some(custom_data.clone()),
             custom_models_dir: Some(custom_models.clone()),
+            pending_cleanup_dirs: Vec::new(),
         };
 
         save_bootstrap_config(default_dir, &config).unwrap();
@@ -347,6 +514,7 @@ mod tests {
         let config = StorageBootstrapConfig {
             custom_data_dir: Some(PathBuf::from("")),
             custom_models_dir: Some(PathBuf::from("")),
+            pending_cleanup_dirs: Vec::new(),
         };
         save_bootstrap_config(default_dir, &config).unwrap();
 
@@ -387,5 +555,107 @@ mod tests {
             std::fs::read(dst.join("sub").join("b.txt")).unwrap(),
             b"bbb"
         );
+    }
+    #[test]
+    fn check_path_overlap_detects_nesting() {
+        let temp = TempDir::new().unwrap();
+        let dir_a = temp.path().join("dir_a");
+        let dir_b = temp.path().join("dir_b");
+        let dir_a_sub = dir_a.join("nested");
+
+        std::fs::create_dir_all(&dir_a_sub).unwrap();
+        std::fs::create_dir_all(&dir_b).unwrap();
+
+        assert!(check_path_overlap(&dir_a, &dir_b).is_ok());
+        assert!(check_path_overlap(&dir_a, &dir_a).is_ok());
+        assert!(check_path_overlap(&dir_a, &dir_a_sub).is_err());
+        assert!(check_path_overlap(&dir_a_sub, &dir_a).is_err());
+    }
+
+    #[test]
+    fn cleanup_data_directory_contents_removes_old_files_and_preserves_bootstrap() {
+        let temp = TempDir::new().unwrap();
+        let default_dir = temp.path().join("default_data");
+        std::fs::create_dir_all(&default_dir).unwrap();
+
+        // Setup bootstrap file and data files in default_dir
+        let bootstrap = StorageBootstrapConfig::default();
+        save_bootstrap_config(&default_dir, &bootstrap).unwrap();
+
+        let history_dir = default_dir.join("history");
+        std::fs::create_dir_all(&history_dir).unwrap();
+        std::fs::write(history_dir.join("rec1.wav"), b"wav_data").unwrap();
+
+        let models_dir = default_dir.join("models");
+        std::fs::create_dir_all(&models_dir).unwrap();
+        std::fs::write(models_dir.join("model.bin"), b"model_data").unwrap();
+
+        std::fs::write(default_dir.join("sona.db"), b"db_data").unwrap();
+        std::fs::write(default_dir.join("sync.json"), b"{}").unwrap();
+
+        let unremoved = cleanup_data_directory_contents(&default_dir, &default_dir, true);
+        assert!(unremoved.is_empty());
+
+        // Check that data files are removed
+        assert!(!default_dir.join("sona.db").exists());
+        assert!(!default_dir.join("sync.json").exists());
+        assert!(!history_dir.exists());
+        assert!(!models_dir.exists());
+
+        // Check that bootstrap file and default_dir still exist
+        assert!(default_dir.exists());
+        assert!(default_dir.join(STORAGE_BOOTSTRAP_FILE_NAME).exists());
+    }
+
+    #[test]
+    fn cleanup_data_directory_contents_removes_custom_directory_when_empty() {
+        let temp = TempDir::new().unwrap();
+        let default_dir = temp.path().join("default_data");
+        let custom_dir = temp.path().join("custom_data");
+        std::fs::create_dir_all(&default_dir).unwrap();
+        std::fs::create_dir_all(&custom_dir).unwrap();
+
+        std::fs::write(custom_dir.join("sona.db"), b"db_data").unwrap();
+        let history_dir = custom_dir.join("history");
+        std::fs::create_dir_all(&history_dir).unwrap();
+        std::fs::write(history_dir.join("rec1.wav"), b"wav_data").unwrap();
+
+        let unremoved = cleanup_data_directory_contents(&custom_dir, &default_dir, false);
+        assert!(unremoved.is_empty());
+
+        // Custom directory itself should be removed when empty
+        assert!(!custom_dir.exists());
+    }
+
+    #[test]
+    fn cleanup_pending_storage_locations_cleans_orphaned_dirs() {
+        let temp = TempDir::new().unwrap();
+        let default_dir = temp.path().join("default_data");
+        let custom_dir = temp.path().join("custom_data");
+        let old_orphan_dir = temp.path().join("old_custom_data");
+        std::fs::create_dir_all(&default_dir).unwrap();
+        std::fs::create_dir_all(&custom_dir).unwrap();
+        std::fs::create_dir_all(&old_orphan_dir).unwrap();
+
+        std::fs::write(old_orphan_dir.join("sona.db"), b"db_data").unwrap();
+        std::fs::write(custom_dir.join("sona.db"), b"new_db_data").unwrap();
+
+        let config = StorageBootstrapConfig {
+            custom_data_dir: Some(custom_dir.clone()),
+            custom_models_dir: None,
+            pending_cleanup_dirs: vec![old_orphan_dir.clone()],
+        };
+        save_bootstrap_config(&default_dir, &config).unwrap();
+
+        cleanup_pending_storage_locations(&default_dir);
+
+        // Old orphan dir should be gone
+        assert!(!old_orphan_dir.exists());
+        // Current custom dir should be untouched
+        assert!(custom_dir.join("sona.db").exists());
+
+        // Config should have cleared pending_cleanup_dirs
+        let loaded = load_bootstrap_config(&default_dir);
+        assert!(loaded.pending_cleanup_dirs.is_empty());
     }
 }

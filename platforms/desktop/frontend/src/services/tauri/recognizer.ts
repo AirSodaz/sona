@@ -47,6 +47,10 @@ function normalizeModelFileConfig(
     embedding: config.embedding ?? null,
     tokenizer: config.tokenizer ?? null,
     mmproj: config.mmproj ?? null,
+    preprocessor: config.preprocessor ?? null,
+    uncachedDecoder: config.uncachedDecoder ?? null,
+    cachedDecoder: config.cachedDecoder ?? null,
+    mergedDecoder: config.mergedDecoder ?? null,
   };
 }
 

@@ -3,6 +3,9 @@ use tauri::{Listener, Manager};
 
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle_for_listener = app.handle().clone();
+    crate::platform::storage_location::cleanup_pending_storage_locations_for_app(
+        &app_handle_for_listener,
+    );
 
     let (db, app_local_data_dir) =
         crate::platform::database::open_and_migrate_sqlite_for_app(&app_handle_for_listener)?;

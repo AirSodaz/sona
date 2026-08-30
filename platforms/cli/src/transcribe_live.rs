@@ -145,8 +145,8 @@ struct ResolvedLiveCommand {
 }
 
 enum ResolvedLiveAsr {
-    Local(LiveTranscribePlan),
-    Online(ResolvedOnlineLiveAsr),
+    Local(Box<LiveTranscribePlan>),
+    Online(Box<ResolvedOnlineLiveAsr>),
 }
 
 struct ResolvedOnlineLiveAsr {
@@ -288,12 +288,12 @@ fn resolve_live_command(
             })
             .transpose()
             .map_err(|error| CliError::Validation(error.to_string()))?;
-        ResolvedLiveAsr::Online(ResolvedOnlineLiveAsr {
+        ResolvedLiveAsr::Online(Box::new(ResolvedOnlineLiveAsr {
             provider_id: request.provider_id().to_string(),
             request,
             export_format,
             output_path: args.output,
-        })
+        }))
     } else {
         let plan = sona_runtime_fs::resolve_live_transcribe_plan_with_runtime_paths(
             LiveTranscribeOptions {
@@ -315,7 +315,7 @@ fn resolve_live_command(
             Some(config),
         )
         .map_err(crate::map_runtime_fs_error)?;
-        ResolvedLiveAsr::Local(plan)
+        ResolvedLiveAsr::Local(Box::new(plan))
     };
     Ok(ResolvedLiveCommand {
         input,

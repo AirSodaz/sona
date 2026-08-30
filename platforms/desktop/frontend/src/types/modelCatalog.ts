@@ -38,7 +38,8 @@ export interface ModelInfo {
     | 'parakeet-tdt'
     | 'moonshine'
     | 'speaker-segmentation'
-    | 'speaker-embedding';
+    | 'speaker-embedding'
+    | 'omnilingual';
   modes?: ('streaming' | 'batch')[];
   /** All recognizable languages, sorted ascending ISO 639 codes (`yue` = Cantonese). */
   languages: string[];
