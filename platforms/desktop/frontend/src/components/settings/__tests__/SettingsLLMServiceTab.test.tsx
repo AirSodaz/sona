@@ -63,6 +63,13 @@ function buildConfig(provider: LlmProvider = 'open_ai', includeApiKey = true): A
 const mockUpdateConfig = vi.fn();
 let currentConfig = buildConfig();
 
+function clickProviderHeader(providerLabel: string) {
+  const header = Array.from(document.querySelectorAll<HTMLElement>('.accordion-header'))
+    .find((candidate) => candidate.textContent?.includes(providerLabel));
+  expect(header).toBeTruthy();
+  fireEvent.click(header!);
+}
+
 vi.mock('../../../stores/configStore', async () => {
   const actual = await vi.importActual<typeof import('../../../stores/configStore')>('../../../stores/configStore');
   return {
@@ -98,13 +105,16 @@ describe('SettingsLLMServiceTab', () => {
     expect(tauriApi.invoke).not.toHaveBeenCalledWith('list_llm_models', expect.anything());
   });
 
-  it('shows details for non-google providers and keeps test connection for google providers', async () => {
+  it('shows provider details only after expanding a configured provider', async () => {
     await act(async () => {
       render(
         <SettingsLLMServiceTab />,
       );
     });
 
+    await act(async () => {
+      clickProviderHeader('OpenAI');
+    });
     screen.getByRole('button', { name: 'settings.llm.details' });
 
     currentConfig = buildConfig('google_translate_free', false);
@@ -120,7 +130,7 @@ describe('SettingsLLMServiceTab', () => {
       );
     });
 
-    screen.getByRole('button', { name: 'settings.llm.test_connection' });
+    expect(screen.queryByRole('button', { name: 'settings.llm.test_connection' })).toBeNull();
   });
 
   it('uses the llm_service tabpanel id expected by the settings tab button', async () => {
@@ -145,15 +155,29 @@ describe('SettingsLLMServiceTab', () => {
 
     screen.getByText('settings.llm.title');
     screen.getByText('settings.llm.feature_models');
-    screen.getByText('settings.llm.enable_summary');
-    screen.getByText('settings.llm.polish_model');
-    screen.getByText('settings.llm.translation_model');
-    screen.getByText('settings.llm.summary_model');
     screen.getByText('settings.llm.credentials_section');
 
-    expect(
-      Array.from(container.querySelectorAll('[data-feature-id]')).map((node) => node.getAttribute('data-feature-id')),
-    ).toEqual(['polish', 'translation', 'summary']);
+    expect(screen.getAllByRole('tab').map((tab) => tab.getAttribute('aria-label'))).toEqual([
+      'settings.llm.polish_model',
+      'settings.llm.translation_model',
+      'settings.llm.summary_model',
+    ]);
+
+    for (const [featureId, label] of [
+      ['polish', 'settings.llm.polish_model'],
+      ['translation', 'settings.llm.translation_model'],
+      ['summary', 'settings.llm.summary_model'],
+    ] as const) {
+      await act(async () => {
+        fireEvent.click(screen.getByRole('tab', { name: label }));
+      });
+      const featureCard = container.querySelector(`[data-feature-id="${featureId}"]`);
+      expect(featureCard).not.toBeNull();
+      expect(container.querySelectorAll('[data-feature-id]')).toHaveLength(1);
+      expect(featureCard?.closest('.llm-feature-panel')).not.toBeNull();
+      expect(featureCard?.querySelector('.feature-card-title-group')).toBeNull();
+      expect(screen.getAllByText(label)).toHaveLength(1);
+    }
   });
 
   it('renders active provider fields from llmSettings in accordion', async () => {
@@ -167,7 +191,10 @@ describe('SettingsLLMServiceTab', () => {
       );
     });
 
-    // OpenAI is the active provider and so its accordion is expanded by default.
+    expect(screen.queryByTestId('provider-accordion-content-open_ai')).toBeNull();
+    await act(async () => {
+      clickProviderHeader('OpenAI');
+    });
     screen.getByDisplayValue('test-host');
     screen.getByDisplayValue('test-key');
   });
@@ -183,13 +210,17 @@ describe('SettingsLLMServiceTab', () => {
       );
     });
 
+    expect(screen.queryByTestId('provider-accordion-content-open_ai')).toBeNull();
+    await act(async () => {
+      clickProviderHeader('OpenAI');
+    });
     const content = screen.getByTestId('provider-accordion-content-open_ai');
     expect(content.querySelector('#llm-open_ai-host')).not.toBeNull();
     expect(content.querySelector('#llm-open_ai-key')).not.toBeNull();
     expect(screen.queryByTestId('provider-accordion-content-gemini')).toBeNull();
   });
 
-  it('shows missing api key status', async () => {
+  it('hides providers that are not configured', async () => {
     await act(async () => {
       render(
         <SettingsLLMServiceTab />,
@@ -197,7 +228,8 @@ describe('SettingsLLMServiceTab', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getAllByText('settings.llm.status_missing_api_key').length).toBeGreaterThan(0);
+      expect(screen.queryByText('settings.llm.status_missing_api_key')).toBeNull();
+      expect(screen.getByRole('button', { name: 'settings.llm.add_custom_provider' })).toBeTruthy();
     });
   });
 
@@ -212,8 +244,36 @@ describe('SettingsLLMServiceTab', () => {
       );
     });
 
-    // Gemini is the active provider and expanded by default.
+    await act(async () => {
+      clickProviderHeader('Gemini');
+    });
     screen.getByDisplayValue('gemini-host');
+  });
+
+  it('hides the free Google Translate provider from credentials and allows all accordions to collapse', async () => {
+    const conf = buildConfig('open_ai');
+    conf.llmSettings!.providers.google_translate_free = {
+      apiHost: 'https://translate.googleapis.com/translate_a/single',
+      apiKey: '',
+    };
+    currentConfig = conf;
+
+    await act(async () => {
+      render(
+        <SettingsLLMServiceTab />,
+      );
+    });
+
+    expect(screen.queryByText('Google Translate (Free)')).toBeNull();
+    expect(screen.queryByTestId('provider-accordion-content-open_ai')).toBeNull();
+    await act(async () => {
+      clickProviderHeader('OpenAI');
+    });
+    expect(screen.getByTestId('provider-accordion-content-open_ai')).toBeTruthy();
+    await act(async () => {
+      clickProviderHeader('OpenAI');
+    });
+    expect(screen.queryByTestId('provider-accordion-content-open_ai')).toBeNull();
   });
 
   it('shows candidates only while the model input is focused', async () => {
@@ -364,8 +424,16 @@ describe('SettingsLLMServiceTab', () => {
     });
 
     expect(screen.queryByTestId('provider-temperature-number')).toBeNull();
-    expect(screen.getAllByText('settings.llm.temperature')).toHaveLength(3);
-    expect(screen.getAllByRole('spinbutton')).toHaveLength(4);
+    expect(screen.getAllByText('settings.llm.temperature')).toHaveLength(1);
+    expect(screen.getAllByRole('spinbutton')).toHaveLength(2);
+
+    for (const label of ['settings.llm.translation_model', 'settings.llm.summary_model']) {
+      await act(async () => {
+        fireEvent.click(screen.getByRole('tab', { name: label }));
+      });
+      expect(screen.getAllByText('settings.llm.temperature')).toHaveLength(1);
+      expect(screen.getAllByRole('spinbutton')).toHaveLength(2);
+    }
   });
 
   it('updates polish temperature independently', async () => {
@@ -396,9 +464,13 @@ describe('SettingsLLMServiceTab', () => {
       );
     });
 
+    await act(async () => {
+      fireEvent.click(screen.getByRole('tab', { name: 'settings.llm.translation_model' }));
+    });
+
     const sliders = screen.getAllByRole('spinbutton');
     await act(async () => {
-      fireEvent.change(sliders[1], { target: { value: '1.1' } });
+      fireEvent.change(sliders[0], { target: { value: '1.1' } });
     });
 
     expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
@@ -417,9 +489,13 @@ describe('SettingsLLMServiceTab', () => {
       );
     });
 
+    await act(async () => {
+      fireEvent.click(screen.getByRole('tab', { name: 'settings.llm.summary_model' }));
+    });
+
     const sliders = screen.getAllByRole('spinbutton');
     await act(async () => {
-      fireEvent.change(sliders[2], { target: { value: '0.6' } });
+      fireEvent.change(sliders[0], { target: { value: '0.6' } });
     });
 
     expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
@@ -471,7 +547,7 @@ describe('SettingsLLMServiceTab', () => {
     }));
   });
 
-  it('shows the summary toggle and marks the summary card as off when disabled', async () => {
+  it('does not render a summary enable toggle or feature status tag', async () => {
     currentConfig = {
       ...buildConfig(),
       summaryEnabled: false,
@@ -483,20 +559,68 @@ describe('SettingsLLMServiceTab', () => {
       );
     });
 
-    const summarySwitch = screen.getByRole('switch', { name: 'settings.llm.enable_summary' });
-    expect(summarySwitch.getAttribute('aria-checked')).toBe('false');
-    screen.getByText('settings.llm.status_off');
-
     await act(async () => {
-      fireEvent.click(summarySwitch);
+      fireEvent.click(screen.getByRole('tab', { name: 'settings.llm.summary_model' }));
     });
 
-    expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
-      summaryEnabled: true,
-    }));
+    expect(screen.queryByRole('switch', { name: 'settings.llm.enable_summary' })).toBeNull();
+    const featurePanel = document.querySelector('.llm-feature-panel');
+    expect(featurePanel?.querySelector('.status-badge')).toBeNull();
   });
 
-  it('shows missing model status when a feature is unassigned', async () => {
+  it('defaults an unassigned feature to the first configured provider and keeps free translation on Google Translate', async () => {
+    const config = buildTestConfig({
+      summaryEnabled: true,
+      llmSettings: createLlmSettings('gemini'),
+    });
+    config.llmSettings = updateProviderSetting(config.llmSettings, 'gemini', { apiKey: 'gemini-key' });
+    currentConfig = config;
+
+    await act(async () => {
+      render(<SettingsLLMServiceTab />);
+    });
+
+    expect(screen.getByRole('button', { name: 'Gemini' })).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('tab', { name: 'settings.llm.translation_model' }));
+    });
+    expect(screen.getByRole('button', { name: 'Google Translate (Free)' })).toBeTruthy();
+  });
+
+  it('marks providers without model listing support while retaining manual model entry', async () => {
+    currentConfig = buildConfig('azure_openai');
+
+    await act(async () => {
+      render(<SettingsLLMServiceTab />);
+    });
+
+    expect(screen.queryByText('settings.llm.model_selection_unsupported')).toBeNull();
+    const modelInput = screen.getByDisplayValue('settings.llm.model_selection_unsupported') as HTMLInputElement;
+    expect(modelInput.disabled).toBe(true);
+    expect(modelInput.readOnly).toBe(true);
+    expect(modelInput.classList.contains('feature-model-unsupported-input')).toBe(true);
+  });
+
+  it('hides temperature controls for models that explicitly do not support temperature', async () => {
+    let llmSettings = createLlmSettings('open_ai');
+    llmSettings = updateProviderSetting(llmSettings, 'open_ai', { apiKey: 'test-key' });
+    llmSettings = addLlmModel(llmSettings, {
+      provider: 'open_ai',
+      model: 'o1-mini',
+      metadata: { supportsTemperature: false },
+    });
+    llmSettings = setFeatureModelSelection(llmSettings, 'polish', llmSettings.modelOrder[0]);
+    currentConfig = { ...buildTestConfig({ summaryEnabled: true }), ...buildLlmConfigPatch(llmSettings) };
+
+    await act(async () => {
+      render(<SettingsLLMServiceTab />);
+    });
+
+    expect(screen.queryByText('settings.llm.temperature')).toBeNull();
+    expect(screen.queryByRole('slider')).toBeNull();
+  });
+
+  it('does not render a missing-model status tag when a feature is unassigned', async () => {
     const config = buildConfig();
     config.llmSettings!.selections.translationModelId = undefined;
     currentConfig = config;
@@ -507,7 +631,11 @@ describe('SettingsLLMServiceTab', () => {
       );
     });
 
-    expect(screen.getAllByText('settings.llm.status_missing_model').length).toBeGreaterThan(0);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('tab', { name: 'settings.llm.translation_model' }));
+    });
+
+    expect(screen.queryByText('settings.llm.status_missing_model')).toBeNull();
   });
 
   it('surfaces normalized connection errors', async () => {
@@ -518,6 +646,9 @@ describe('SettingsLLMServiceTab', () => {
       );
     });
 
+    await act(async () => {
+      clickProviderHeader('OpenAI');
+    });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'settings.llm.details' }));
     });
@@ -533,6 +664,9 @@ describe('SettingsLLMServiceTab', () => {
       );
     });
 
+    await act(async () => {
+      clickProviderHeader('OpenAI');
+    });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'settings.llm.details' }));
     });
@@ -553,6 +687,9 @@ describe('SettingsLLMServiceTab', () => {
     });
 
     await act(async () => {
+      clickProviderHeader('Gemini');
+    });
+    await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'settings.llm.details' }));
     });
 
@@ -566,6 +703,9 @@ describe('SettingsLLMServiceTab', () => {
       );
     });
 
+    await act(async () => {
+      clickProviderHeader('OpenAI');
+    });
     expect(screen.getAllByRole('button', { name: 'settings.llm.details' }).length).toBeGreaterThan(0);
   });
 
@@ -577,6 +717,9 @@ describe('SettingsLLMServiceTab', () => {
       );
     });
 
+    await act(async () => {
+      clickProviderHeader('OpenAI');
+    });
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'settings.llm.details' }));
     });
@@ -1029,7 +1172,7 @@ describe('SettingsLLMServiceTab', () => {
     screen.getByText('settings.llm.model_metadata_invalid_number');
   });
 
-  it('adds a custom provider and expands its credentials panel', async () => {
+  it('adds a custom provider and opens credential configuration', async () => {
     await act(async () => {
       render(
         <SettingsLLMServiceTab />,
@@ -1071,19 +1214,7 @@ describe('SettingsLLMServiceTab', () => {
       }),
     }));
 
-    currentConfig = {
-      ...currentConfig,
-      llmSettings: mockUpdateConfig.mock.calls[mockUpdateConfig.mock.calls.length - 1]?.[0].llmSettings,
-    };
-
-    await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
-    });
-
-    screen.getByText('Private Gateway');
-    screen.getByTestId('provider-accordion-content-custom-private-gateway');
+    expect(screen.getAllByLabelText('settings.llm.api_key').at(-1)).toBeTruthy();
   });
 
   it('keeps configured custom providers at the bottom of the credentials list', async () => {
@@ -1101,6 +1232,10 @@ describe('SettingsLLMServiceTab', () => {
       apiHost: 'https://gateway.example.com/v1',
       apiKey: 'gateway-key',
       apiPath: '/v1/chat/completions',
+    };
+    conf.llmSettings!.providers['chatglm'] = {
+      apiHost: 'https://open.bigmodel.cn/api/paas/v4/',
+      apiKey: 'chatglm-key',
     };
     currentConfig = conf;
 

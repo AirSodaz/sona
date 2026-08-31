@@ -130,6 +130,8 @@ export interface LlmModelMetadata {
   supportsTools?: boolean;
   /** Whether the model supports deeper reasoning modes. */
   supportsReasoning?: boolean;
+  /** Whether the model accepts a temperature sampling parameter. */
+  supportsTemperature?: boolean;
   /** Whether the model supports a native structured-output schema. */
   supportsStructuredOutput?: boolean;
   /** Whether the provider supports managed prompt caching for this model. */

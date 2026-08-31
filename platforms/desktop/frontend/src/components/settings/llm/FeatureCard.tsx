@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Loader2, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Dropdown } from '../../Dropdown';
-import { LlmFeature, LlmProvider } from '../../../types/transcript';
+import { LlmFeature, LlmModelEntry, LlmProvider } from '../../../types/transcript';
 import { LlmAssistantConfig } from '../../../types/config';
 import {
   addLlmModel,
@@ -17,7 +17,6 @@ import {
   setFeatureReasoningLevel,
   syncProviderDiscoveredModels,
 } from '../../../services/llm/state';
-import { isFeatureLlmConfigComplete } from '../../../services/llm/configUtils';
 import {
   buildLlmConfig,
   DEFAULT_LLM_TEMPERATURE,
@@ -36,8 +35,7 @@ interface FeatureCardProps {
   applyLlmSettings: (s: LlmAssistantConfig['llmSettings']) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
   isActive?: boolean;
-  featureEnabled?: boolean;
-  headerAction?: React.ReactNode;
+  showHeaderTitle?: boolean;
 }
 
 export const FeatureCard = React.memo(function FeatureCard({
@@ -49,8 +47,7 @@ export const FeatureCard = React.memo(function FeatureCard({
   applyLlmSettings,
   t,
   isActive = true,
-  featureEnabled = true,
-  headerAction,
+  showHeaderTitle = true,
 }: FeatureCardProps) {
   const currentLlmState = getCurrentLlmSettings(config);
   const latestLlmStateRef = useRef(currentLlmState);
@@ -69,7 +66,19 @@ export const FeatureCard = React.memo(function FeatureCard({
     };
   }, []);
   const modelEntry = getFeatureModelEntry(config, featureId);
-  const selectedProvider = modelEntry?.provider || 'open_ai';
+  const configuredProvider = useMemo(() => {
+    if (featureId === 'translation') {
+      return 'google_translate_free' as LlmProvider;
+    }
+
+    const definitions = listProviderDefinitions(currentLlmState.customProviders);
+    return definitions.find((definition) => (
+      definition.id !== 'google_translate'
+      && definition.id !== 'google_translate_free'
+      && isProviderConfiguredForConfig(config, definition.id, currentLlmState.providers[definition.id])
+    ))?.id ?? 'open_ai';
+  }, [config, currentLlmState.customProviders, currentLlmState.providers, featureId]);
+  const selectedProvider = modelEntry?.provider || configuredProvider;
   const selectedModel = modelEntry?.model || '';
   const temperature = featureId === 'polish'
     ? (currentLlmState.selections.polishTemperature ?? DEFAULT_LLM_TEMPERATURE)
@@ -104,6 +113,23 @@ export const FeatureCard = React.memo(function FeatureCard({
     );
   }, [modelEntry]);
 
+  const supportsTemperatureForModel = (provider: LlmProvider, model: string, metadata?: LlmModelEntry['metadata']) => {
+    const explicit = metadata?.supportsTemperature;
+    if (typeof explicit === 'boolean') {
+      return explicit;
+    }
+    if (provider === 'google_translate' || provider === 'google_translate_free') {
+      return false;
+    }
+    const normalizedModel = model.toLowerCase();
+    return !(
+      /(^|[-:])o1(?:$|[-:])/.test(normalizedModel)
+      || /(^|[-:])o3(?:$|[-:])/.test(normalizedModel)
+      || normalizedModel.includes('deepseek-reasoner')
+      || normalizedModel.includes('deepseek-r1')
+    );
+  };
+
   const handleReasoningEnabledChange = (enabled: boolean) => {
     applyTrackedLlmSettings(setFeatureReasoningEnabled(latestLlmStateRef.current, featureId, enabled));
   };
@@ -123,6 +149,15 @@ export const FeatureCard = React.memo(function FeatureCard({
   const [isCandidateMenuOpen, setIsCandidateMenuOpen] = useState(false);
   const [highlightedCandidateIndex, setHighlightedCandidateIndex] = useState(-1);
   const candidateContainerRef = useRef<HTMLDivElement>(null);
+  const localProviderDefinition = useMemo(
+    () => getProviderDefinition(localProvider, currentLlmState.customProviders),
+    [currentLlmState.customProviders, localProvider],
+  );
+  const supportsTemperature = supportsTemperatureForModel(
+    localProvider,
+    localProvider === selectedProvider ? localModelName || selectedModel : localModelName,
+    localProvider === selectedProvider ? modelEntry?.metadata : undefined,
+  );
   const providerApiHost = currentLlmState.providers[localProvider]?.apiHost;
   const providerApiKey = currentLlmState.providers[localProvider]?.apiKey;
 
@@ -322,37 +357,22 @@ export const FeatureCard = React.memo(function FeatureCard({
     applyTrackedLlmSettings(setFeatureTemperature(latestLlmStateRef.current, featureId, val));
   };
 
-  const isComplete = isFeatureLlmConfigComplete(config, featureId);
-  const featureTitleId = `feature-title-${featureId}`;
   const temperatureLabelId = `feature-temperature-label-${featureId}`;
-  const statusBadge = !featureEnabled ? (
-    <span className="status-badge off"><X size={12}/> {t('settings.llm.status_off')}</span>
-  ) : isComplete ? (
-    <span className="status-badge ready"><Check size={12}/> {t('settings.llm.status_ready')}</span>
-  ) : (
-    <span className="status-badge missing">
-      <X size={12}/> {selectedProvider && localModelName ? t('settings.llm.status_missing_api_key') : t('settings.llm.status_missing_model')}
-    </span>
-  );
 
   return (
     <div
-      className={`feature-card ${featureEnabled ? '' : 'feature-card-off'}`.trim()}
+      className="feature-card"
       data-feature-id={featureId}
     >
-      <div className="feature-card-header">
-        <div className="feature-card-title-group">
-          <span className="feature-card-step">{String(stepNumber).padStart(2, '0')}</span>
-          <span className="feature-card-icon">{icon}</span>
-          <span className="feature-card-title-text" id={featureTitleId}>{title}</span>
+      {showHeaderTitle && (
+        <div className="feature-card-header">
+          <div className="feature-card-title-group">
+            <span className="feature-card-step">{String(stepNumber).padStart(2, '0')}</span>
+            <span className="feature-card-icon">{icon}</span>
+            <span className="feature-card-title-text">{title}</span>
+          </div>
         </div>
-        <div className="feature-card-header-meta">
-          <div className="feature-card-status">{statusBadge}</div>
-          {headerAction ? (
-            <div className="feature-card-header-action">{headerAction}</div>
-          ) : null}
-        </div>
-      </div>
+      )}
 
       <div className="feature-card-content">
         <div className="feature-card-row feature-card-row-primary">
@@ -367,7 +387,7 @@ export const FeatureCard = React.memo(function FeatureCard({
             />
           </div>
 
-          {localProvider !== 'google_translate' && (
+          {localProviderDefinition.supportsModelListing ? (
             <div ref={candidateContainerRef} className="feature-field model-combobox-wrapper">
               <label className="settings-label" htmlFor={`feature-model-${featureId}`}>{t('settings.llm.model_library')}</label>
               <div className="dropdown-container" style={{ margin: 0 }}>
@@ -404,6 +424,18 @@ export const FeatureCard = React.memo(function FeatureCard({
                   </div>
                 )}
               </div>
+            </div>
+          ) : (
+            <div className="feature-field model-combobox-wrapper">
+              <label className="settings-label" htmlFor={`feature-model-${featureId}`}>{t('settings.llm.model_library')}</label>
+              <input
+                id={`feature-model-${featureId}`}
+                type="text"
+                className="settings-input feature-model-unsupported-input"
+                value={t('settings.llm.model_selection_unsupported', { defaultValue: 'Model selection unsupported' })}
+                disabled
+                readOnly
+              />
             </div>
           )}
         </div>
@@ -443,7 +475,7 @@ export const FeatureCard = React.memo(function FeatureCard({
           </div>
         )}
 
-        {localProvider !== 'google_translate' && (
+        {supportsTemperature && (
           <div className="feature-card-row feature-card-row-secondary">
             <div className="feature-field">
               <div className="feature-temperature-row">
@@ -460,7 +492,7 @@ export const FeatureCard = React.memo(function FeatureCard({
                     step={0.05}
                     value={temperature}
                     onChange={(e) => handleTempChange(parseFloat(e.target.value))}
-                    aria-labelledby={`${featureTitleId} ${temperatureLabelId}`}
+                    aria-label={`${title} ${t('settings.llm.temperature')}`}
                     style={{ '--temperature-progress': `${(temperature / 2) * 100}%` } as React.CSSProperties}
                   />
                   <input
@@ -475,7 +507,7 @@ export const FeatureCard = React.memo(function FeatureCard({
                       const val = parseFloat(e.target.value);
                       if (!Number.isNaN(val) && val >= 0 && val <= 2) handleTempChange(val);
                     }}
-                    aria-labelledby={`${featureTitleId} ${temperatureLabelId}`}
+                    aria-label={`${title} ${t('settings.llm.temperature')}`}
                   />
                 </div>
               </div>

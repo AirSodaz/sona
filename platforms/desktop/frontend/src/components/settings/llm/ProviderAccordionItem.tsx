@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Loader2, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Loader2, Pencil, Trash2, X } from 'lucide-react';
 import { LlmProvider, LlmProviderSetting } from '../../../types/transcript';
 import { LlmAssistantConfig } from '../../../types/config';
 import type { LlmGenerateCommandRequest } from '../../../types/dashboard';
@@ -19,6 +19,8 @@ interface ProviderAccordionItemProps {
   onToggle: () => void;
   applyProviderUpdates: (updates: Partial<LlmProviderSetting>) => void;
   onOpenDetails?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }
 
@@ -29,6 +31,8 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
   onToggle,
   applyProviderUpdates,
   onOpenDetails,
+  onEdit,
+  onDelete,
   t,
 }: ProviderAccordionItemProps) {
   const currentLlmState = getCurrentLlmSettings(config);
@@ -67,7 +71,19 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
 
   return (
     <div className="accordion-item">
-      <div className="accordion-header" onClick={onToggle}>
+      <div
+        className="accordion-header"
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        onClick={onToggle}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onToggle();
+          }
+        }}
+      >
         <div className="accordion-title-container">
           {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
           <span>{t(def.labelKey, { defaultValue: def.labelDefault })}</span>
@@ -80,6 +96,12 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
              <span className="status-badge missing"><X size={12}/> {t('settings.llm.status_missing_api_key')}</span>
           )}
         </div>
+        {(onEdit || onDelete) && (
+          <div className="provider-header-actions">
+            {onEdit && <button type="button" className="btn btn-icon btn-secondary-soft" aria-label={t('settings.llm.edit_provider', { defaultValue: 'Edit provider' })} onClick={(event) => { event.stopPropagation(); onEdit(); }}><Pencil size={14} /></button>}
+            {onDelete && <button type="button" className="btn btn-icon btn-secondary-soft" aria-label={t('settings.llm.delete_provider', { defaultValue: 'Delete provider' })} onClick={(event) => { event.stopPropagation(); onDelete(); }}><Trash2 size={14} /></button>}
+          </div>
+        )}
       </div>
       {isOpen && (
         <div className="accordion-content" data-testid={`provider-accordion-content-${provider}`}>

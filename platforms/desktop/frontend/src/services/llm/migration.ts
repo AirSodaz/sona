@@ -90,6 +90,7 @@ function sanitizeModelMetadata(metadata: unknown): LlmModelMetadata | undefined 
     supportsMultimodal: sanitizeOptionalBoolean(candidate.supportsMultimodal),
     supportsTools: sanitizeOptionalBoolean(candidate.supportsTools),
     supportsReasoning: sanitizeOptionalBoolean(candidate.supportsReasoning),
+    supportsTemperature: sanitizeOptionalBoolean(candidate.supportsTemperature),
     supportsStructuredOutput: sanitizeOptionalBoolean(candidate.supportsStructuredOutput),
     supportsPromptCaching: sanitizeOptionalBoolean(candidate.supportsPromptCaching),
     metadataSources,

@@ -4,6 +4,8 @@ import {
   buildLlmConfigPatch,
   createLlmSettings,
   addCustomProvider,
+  updateCustomProvider,
+  removeCustomProvider,
   ensureProviderSetting,
   enrichLlmModelMetadata,
   findLlmModelId,
@@ -116,6 +118,49 @@ describe('llm state', () => {
       apiKey: '',
       apiPath: '/v1/responses',
     }));
+  });
+
+  it('updates custom provider metadata without changing its id', () => {
+    let llmSettings = addCustomProvider(createLlmSettings(), {
+      name: 'Private Gateway',
+      strategy: 'openai_compatible',
+    });
+
+    llmSettings = updateCustomProvider(llmSettings, 'custom-private-gateway', {
+      name: 'Team Gateway',
+      strategy: 'anthropic',
+    });
+
+    expect(llmSettings.customProviders?.['custom-private-gateway']).toEqual(expect.objectContaining({
+      id: 'custom-private-gateway',
+      name: 'Team Gateway',
+      strategy: 'anthropic',
+    }));
+    expect(llmSettings.providers['custom-private-gateway']?.apiPath).toBeUndefined();
+  });
+
+  it('removes custom provider settings, models, and feature selections', () => {
+    let llmSettings = addCustomProvider(createLlmSettings(), {
+      name: 'Private Gateway',
+      strategy: 'openai_compatible',
+    });
+    const provider = llmSettings.activeProvider as `custom-${string}`;
+    llmSettings = addLlmModel(llmSettings, { provider, model: 'team-model' });
+    const modelId = llmSettings.modelOrder[0];
+    llmSettings = setFeatureModelSelection(llmSettings, 'polish', modelId);
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', modelId);
+    llmSettings = setFeatureModelSelection(llmSettings, 'summary', modelId);
+
+    const nextSettings = removeCustomProvider(llmSettings, provider);
+
+    expect(nextSettings.activeProvider).toBe(DEFAULT_LLM_PROVIDER);
+    expect(nextSettings.customProviders?.[provider]).toBeUndefined();
+    expect(nextSettings.providers[provider]).toBeUndefined();
+    expect(nextSettings.models[modelId]).toBeUndefined();
+    expect(nextSettings.modelOrder).toEqual([]);
+    expect(nextSettings.selections.polishModelId).toBeUndefined();
+    expect(nextSettings.selections.translationModelId).toBeUndefined();
+    expect(nextSettings.selections.summaryModelId).toBeUndefined();
   });
 
   it('finds provider models by provider and preserves metadata for manual additions', () => {

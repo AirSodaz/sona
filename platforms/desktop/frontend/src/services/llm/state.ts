@@ -59,6 +59,7 @@ const MODEL_METADATA_KEYS = [
   'supportsMultimodal',
   'supportsTools',
   'supportsReasoning',
+  'supportsTemperature',
   'supportsStructuredOutput',
   'supportsPromptCaching',
   'metadataSources',
@@ -243,6 +244,62 @@ export function addCustomProvider(
         [provider.id]: provider,
       }),
     },
+  };
+}
+
+export function updateCustomProvider(
+  llmSettings: LlmSettings | undefined,
+  providerId: LlmProvider,
+  updates: Partial<Pick<CustomLlmProvider, 'name' | 'strategy'>>,
+): LlmSettings {
+  const current = llmSettings ?? createLlmSettings();
+  const existing = current.customProviders?.[providerId as keyof NonNullable<LlmSettings['customProviders']>];
+  if (!existing) return current;
+  const nextProvider = { ...existing, ...updates, name: (updates.name ?? existing.name).trim() };
+  const customProviders = { ...current.customProviders, [providerId]: nextProvider };
+  const providers = { ...current.providers };
+  if (updates.strategy && updates.strategy !== existing.strategy) {
+    const defaults = createProviderSetting(providerId, customProviders);
+    const existingSetting = ensureProviderSetting(current, providerId);
+    providers[providerId] = {
+      ...existingSetting,
+      apiPath: defaults.apiPath,
+      apiVersion: defaults.apiVersion,
+    };
+  }
+  return {
+    ...current,
+    customProviders,
+    providers,
+  };
+}
+
+export function removeCustomProvider(
+  llmSettings: LlmSettings | undefined,
+  providerId: LlmProvider,
+): LlmSettings {
+  const current = llmSettings ?? createLlmSettings();
+  if (!current.customProviders?.[providerId as keyof NonNullable<LlmSettings['customProviders']>]) return current;
+  const customProviders = { ...current.customProviders };
+  delete customProviders[providerId as keyof typeof customProviders];
+  const providers = { ...current.providers };
+  delete providers[providerId];
+  const removedModelIds = new Set(current.modelOrder.filter((id) => current.models[id]?.provider === providerId));
+  const models = { ...current.models };
+  removedModelIds.forEach((id) => delete models[id]);
+  const selections = { ...current.selections };
+  (Object.keys(FEATURE_MODEL_SELECTION_KEYS) as LlmFeature[]).forEach((feature) => {
+    const key = FEATURE_MODEL_SELECTION_KEYS[feature];
+    if (selections[key] && removedModelIds.has(selections[key]!)) delete selections[key];
+  });
+  return {
+    ...current,
+    activeProvider: current.activeProvider === providerId ? DEFAULT_LLM_PROVIDER : current.activeProvider,
+    customProviders,
+    providers,
+    models,
+    modelOrder: current.modelOrder.filter((id) => !removedModelIds.has(id)),
+    selections,
   };
 }
 

@@ -7,8 +7,41 @@
   transition: background-color var(--transition-fast), opacity var(--transition-fast);
 }
 
-.feature-card:hover {
-  background: var(--color-bg-hover);
+.llm-feature-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
+}
+
+.llm-feature-tabs .settings-scenario-card {
+  min-width: 0;
+}
+
+.llm-feature-panel {
+  background: var(--color-bg-primary);
+  border-top: 1px solid var(--color-border);
+  border-bottom-left-radius: calc(var(--radius-lg, 16px) - 1px);
+  border-bottom-right-radius: calc(var(--radius-lg, 16px) - 1px);
+}
+
+.llm-feature-panel .feature-card {
+  padding: var(--spacing-lg, 24px);
+  border-radius: 0 0 calc(var(--radius-lg, 16px) - 1px) calc(var(--radius-lg, 16px) - 1px);
+}
+
+.llm-feature-panel .feature-card-step {
+  display: none;
+}
+
+.llm-feature-panel .feature-card-title-group {
+  gap: 12px;
+}
+
+.llm-feature-panel .feature-card-header-no-title {
+  justify-content: flex-end;
+}
+
+.llm-feature-panel .feature-card:hover {
+  background: var(--color-bg-primary);
 }
 
 .feature-card-off {
@@ -106,12 +139,14 @@
 .feature-card-content {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 0;
 }
 
 .feature-card-row {
   display: grid;
   gap: 16px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .feature-card-row-primary {
@@ -120,6 +155,7 @@
 
 .feature-card-row-secondary {
   grid-template-columns: minmax(0, 1fr);
+  border-bottom: 0;
 }
 
 .feature-field {
@@ -134,7 +170,13 @@
   top: 10px;
 }
 
+.feature-model-unsupported-input {
+  color: var(--color-text-muted);
+  -webkit-text-fill-color: var(--color-text-muted);
+}
+
 @media (max-width: 768px) {
+  .llm-feature-tabs { grid-template-columns: 1fr; }
   .feature-card {
     padding: 20px;
     gap: 20px;
@@ -151,6 +193,10 @@
 
   .feature-card-row-primary,
   .feature-card-row-reasoning {
+    grid-template-columns: 1fr;
+  }
+
+  .provider-picker-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -230,6 +276,13 @@
   flex-shrink: 0;
 }
 
+.provider-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .accordion-content {
   padding:
     var(--spacing-lg, 24px)
@@ -270,6 +323,52 @@
   gap: 8px;
 }
 
+.provider-empty-state {
+  padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
+  background: var(--color-bg-secondary);
+}
+
+.provider-picker-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.provider-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.provider-picker-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.provider-picker-option:hover,
+.provider-picker-option:focus-visible {
+  border-color: var(--color-primary);
+  background: var(--color-bg-hover);
+}
+
+.provider-picker-meta {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .provider-picker-grid { grid-template-columns: 1fr; }
+}
+
 .provider-modal-backdrop {
   align-items: center;
   background: rgba(0, 0, 0, 0.34);
@@ -291,6 +390,40 @@
   max-width: 520px;
   overflow: hidden;
   width: min(100%, 520px);
+}
+
+.provider-modal-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.provider-modal-header h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.provider-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: min(560px, 68vh);
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.provider-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
 }
 
 .provider-details-header-copy {
