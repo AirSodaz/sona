@@ -1,5 +1,6 @@
 import {
     cancelDownload,
+    deletePresetModel as deletePresetModelFromRust,
     downloadFile,
     downloadPresetModel,
     extractTarBz2,
@@ -46,6 +47,7 @@ export interface ModelServicePorts {
     fileService: ReturnType<typeof createModelFileService>;
     registryService: ReturnType<typeof createModelRegistryService>;
     downloadService: ReturnType<typeof createModelDownloadService>;
+    deletePresetModel?: (modelId: string) => Promise<void>;
 }
 
 /**
@@ -163,9 +165,12 @@ export class ModelService {
         }
 
         const modelPath = await this.getModelPath(modelId);
-        return await exists(modelPath);
+        try {
+            return await exists(modelPath);
+        } catch {
+            return false;
+        }
     }
-
     /**
      * Deletes an installed model.
      *
@@ -173,6 +178,10 @@ export class ModelService {
      * @return A promise resolving when deletion is complete.
      */
     async deleteModel(modelId: string): Promise<void> {
+        if (this.ports.deletePresetModel) {
+            await this.ports.deletePresetModel(modelId);
+            return;
+        }
         const modelPath = await this.getModelPath(modelId);
         await this.ports.fileService.removeIfExists(modelPath);
     }
@@ -231,4 +240,5 @@ export const modelService = createModelService({
     fileService,
     registryService,
     downloadService,
+    deletePresetModel: deletePresetModelFromRust,
 });

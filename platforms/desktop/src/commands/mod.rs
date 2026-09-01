@@ -75,6 +75,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::history::dispose_prepared_backup_import,
         crate::commands::downloads::download_file,
         crate::commands::downloads::download_preset_model,
+        crate::commands::downloads::delete_preset_model,
         crate::commands::downloads::get_cuda_addon_status,
         crate::commands::downloads::activate_cuda_addon,
         crate::commands::downloads::download_cuda_addon,

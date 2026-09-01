@@ -121,11 +121,6 @@ pub async fn download_preset_model<R: tauri::Runtime>(
     let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
     let resolved =
         resolve_model_download(&model_id, &models_dir).map_err(|error| error.to_string())?;
-    if !resolved.model.is_multi_file() {
-        return Err(format!(
-            "Model '{model_id}' is not a multi-file preset download"
-        ));
-    }
     if installed_model_is_valid(&resolved)
         .await
         .map_err(|error| error.to_string())?
@@ -162,6 +157,33 @@ pub async fn download_preset_model<R: tauri::Runtime>(
     result
         .map(|path| path.to_string_lossy().into_owned())
         .map_err(|error| error.to_string())
+}
+
+pub async fn delete_preset_model<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    model_id: &str,
+) -> Result<(), String> {
+    use sona_core::models::downloads::resolve_model_download;
+    use sona_model_downloads::{remove_model_install_path, temporary_download_path};
+
+    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(app)?;
+    let resolved =
+        resolve_model_download(model_id, &models_dir).map_err(|error| error.to_string())?;
+
+    remove_model_install_path(&resolved.install_path).map_err(|error| error.to_string())?;
+
+    let mut staging = resolved.install_path.as_os_str().to_os_string();
+    staging.push(".installing");
+    let staging_path = std::path::PathBuf::from(staging);
+    let _ = remove_model_install_path(&staging_path);
+
+    if resolved.download_path != resolved.install_path {
+        let _ = remove_model_install_path(&resolved.download_path);
+    }
+    let temp_download = temporary_download_path(&resolved.download_path);
+    let _ = remove_model_install_path(&temp_download);
+
+    Ok(())
 }
 
 pub fn get_cuda_addon_status<R: tauri::Runtime>(

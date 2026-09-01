@@ -27,16 +27,24 @@ export class ModelFileService {
       const appDataDir = await this.ports.appLocalDataDir();
       modelsDir = await this.ports.join(appDataDir, 'models');
     }
-    if (!(await this.ports.exists(modelsDir))) {
-      await this.ports.mkdir(modelsDir, { recursive: true });
+    try {
+      if (!(await this.ports.exists(modelsDir))) {
+        await this.ports.mkdir(modelsDir, { recursive: true });
+      }
+    } catch (error) {
+      logger.debug('[ModelFileService] Could not check or create models directory via frontend fs plugin:', error);
     }
     logger.info('[ModelService] Models directory:', modelsDir);
     return modelsDir;
   }
 
   async removeIfExists(path: string): Promise<void> {
-    if (await this.ports.exists(path)) {
-      await this.ports.remove(path, { recursive: true });
+    try {
+      if (await this.ports.exists(path)) {
+        await this.ports.remove(path, { recursive: true });
+      }
+    } catch (error) {
+      logger.warn('[ModelFileService] Failed to remove path via frontend fs plugin:', error);
     }
   }
 }

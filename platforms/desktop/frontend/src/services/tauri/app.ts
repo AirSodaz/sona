@@ -341,6 +341,10 @@ export async function downloadPresetModel(
   return await invokeTauri(TauriCommand.app.downloadPresetModel, request);
 }
 
+export async function deletePresetModel(modelId: string): Promise<void> {
+  await invokeTauri(TauriCommand.app.deletePresetModel, { modelId });
+}
+
 export async function cancelDownload(id: string): Promise<void> {
   await invokeTauri(TauriCommand.app.cancelDownload, { id });
 }

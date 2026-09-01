@@ -339,7 +339,7 @@ describe('ModelService', () => {
         it('downloads a model successfully', async () => {
             const onProgress = vi.fn();
 
-            // Mock download_file invoke
+            // Mock download_preset_model invoke
             (invoke as any).mockImplementation((cmd: string) => {
                 if (cmd === 'get_model_catalog_snapshot') {
                     return Promise.resolve({
@@ -367,16 +367,14 @@ describe('ModelService', () => {
                         },
                     });
                 }
-                if (cmd === 'download_file') return Promise.resolve();
+                if (cmd === 'download_preset_model') return Promise.resolve('/app/data/models/test-model');
                 return Promise.resolve();
             });
 
-
             await modelService.downloadModel(modelId, onProgress);
 
-            expect(invoke).toHaveBeenCalledWith('download_file', expect.objectContaining({
-                url: expect.stringContaining('http'),
-                outputPath: expect.stringContaining('/app/data/models/'),
+            expect(invoke).toHaveBeenCalledWith('download_preset_model', expect.objectContaining({
+                modelId,
             }));
             expect(onProgress).toHaveBeenCalledWith(100, 'Done', true);
         });
@@ -435,30 +433,43 @@ describe('ModelService', () => {
                         },
                     });
                 }
+                if (cmd === 'download_preset_model') {
+                    return Promise.resolve(catalogModel.installPath);
+                }
                 return Promise.resolve();
             });
 
             const path = await modelService.downloadModel('catalog-download-model', onProgress);
 
             expect(path).toBe('/snapshot/models/catalog-download-model');
-            expect(invoke).toHaveBeenCalledWith('download_file', expect.objectContaining({
-                url: 'https://example.com/catalog-download.tar.bz2',
-                outputPath: '/snapshot/models/downloads/catalog-download.tar.bz2',
+            expect(invoke).toHaveBeenCalledWith('download_preset_model', expect.objectContaining({
+                modelId: 'catalog-download-model',
             }));
-            expect(invoke).toHaveBeenCalledWith('extract_tar_bz2', {
-                archivePath: '/snapshot/models/downloads/catalog-download.tar.bz2',
-                targetDir: '/snapshot/models',
-            });
         });
     });
 
     describe('deleteModel', () => {
-        it('removes the model directory/file if it exists', async () => {
+        it('deletes the model through the Rust delete_preset_model command', async () => {
+            const modelId = PRESET_MODELS[0].id;
+            (invoke as any).mockResolvedValue(undefined);
+
+            await modelService.deleteModel(modelId);
+
+            expect(invoke).toHaveBeenCalledWith('delete_preset_model', { modelId });
+        });
+
+        it('falls back to fileService.removeIfExists when deletePresetModel is unavailable', async () => {
             const modelId = PRESET_MODELS[0].id;
             (exists as any).mockResolvedValue(true);
             (remove as any).mockResolvedValue(undefined);
 
-            await modelService.deleteModel(modelId);
+            const fallbackService = (await import('../modelService')).createModelService({
+                fileService: (modelService as any).ports.fileService,
+                registryService: (modelService as any).ports.registryService,
+                downloadService: (modelService as any).ports.downloadService,
+            });
+
+            await fallbackService.deleteModel(modelId);
 
             expect(remove).toHaveBeenCalled();
         });
@@ -477,14 +488,18 @@ describe('ModelService', () => {
         it('downloads ITN model', async () => {
             if (!itnModel) return;
             (exists as any).mockResolvedValue(false);
-            (invoke as any).mockResolvedValue(undefined);
+            (invoke as any).mockImplementation((cmd: string) => {
+                if (cmd === 'download_preset_model') return Promise.resolve('/models/itn');
+                return Promise.resolve();
+            });
             await modelService.downloadModel(itnModel.id);
 
-            expect(invoke).toHaveBeenCalledWith('download_file', expect.objectContaining({
-                url: expect.stringContaining(itnModel.artifacts?.[0]?.url ?? 'unreachable'),
+            expect(invoke).toHaveBeenCalledWith('download_preset_model', expect.objectContaining({
+                modelId: itnModel.id,
             }));
         });
     });
+
 
     describe('single-file model metadata', () => {
         it('exposes sha256 hashes on artifacts for non-archive models', () => {

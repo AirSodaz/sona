@@ -170,6 +170,10 @@ type ManualTauriCommandContractMap = {
     args: DownloadPresetModelArgs;
     result: string;
   };
+  [TauriCommand.app.deletePresetModel]: {
+    args: { modelId: string };
+    result: void;
+  };
   [TauriCommand.app.cancelDownload]: {
     args: { id: string };
     result: void;

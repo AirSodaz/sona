@@ -52,6 +52,14 @@ pub async fn download_preset_model<R: tauri::Runtime>(
 }
 
 #[tauri::command]
+pub async fn delete_preset_model<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    model_id: String,
+) -> Result<(), String> {
+    crate::platform::model_downloads::delete_preset_model(&app, &model_id).await
+}
+
+#[tauri::command]
 pub async fn get_cuda_addon_status<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {

@@ -88,10 +88,13 @@ class ModelDownloadService {
     signal,
     mirror,
   }: DownloadModelInput): Promise<string> {
+    if (this.ports.downloadPresetModel) {
+      return await this.downloadPresetModel(modelId, onProgress, signal, mirror);
+    }
     const targetModelsDir = modelsDir ?? await this.ports.getModelsDir();
     const artifacts = model.artifacts ?? [];
     if (artifacts.length > 1) {
-      return await this.downloadMultiFilePreset(modelId, onProgress, signal, mirror);
+      return await this.downloadPresetModel(modelId, onProgress, signal, mirror);
     }
     const primaryArtifact = artifacts[0];
     if (!primaryArtifact) {
@@ -181,14 +184,14 @@ class ModelDownloadService {
     return await this.ports.join(targetModelsDir, modelId);
   }
 
-  private async downloadMultiFilePreset(
+  private async downloadPresetModel(
     modelId: string,
     onProgress?: ProgressCallback,
     signal?: AbortSignal,
     mirror?: string,
   ): Promise<string> {
     if (!this.ports.downloadPresetModel) {
-      throw new Error('Multi-file model downloads are unavailable in this host');
+      throw new Error('Preset model downloads are unavailable in this host');
     }
 
     const downloadId = Math.random().toString(36).substring(7);
