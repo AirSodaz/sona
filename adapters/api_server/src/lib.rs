@@ -180,6 +180,7 @@ mod tests {
             export_format: sona_core::export::ExportFormat::Json,
             output_target: OutputTarget::Stdout,
             quiet: true,
+            ffmpeg_path: None,
         }
     }
 

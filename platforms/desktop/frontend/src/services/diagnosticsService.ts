@@ -61,6 +61,7 @@ export class DiagnosticsService {
         vadModelPath: getScenarioVadModelPath(config, 'live'),
         punctuationModelPath: getScenarioPunctuationModelPath(config, 'live'),
         microphoneId: config.microphoneId ?? 'default',
+        ffmpegPath: config.ffmpegPath || '',
       },
       permissionState,
       microphoneProbe,

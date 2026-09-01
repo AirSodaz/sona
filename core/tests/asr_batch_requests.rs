@@ -30,6 +30,7 @@ fn local_batch_transcription_request_is_a_core_owned_runtime_contract() {
         postprocessor: TranscriptPostprocessor::default(),
         gpu_acceleration: Some("cpu".to_string()),
         engine: LocalAsrEngine::SherpaOnnx,
+        ffmpeg_path: Some("C:/custom/ffmpeg.exe".to_string()),
     };
 
     let cloned = request.clone();

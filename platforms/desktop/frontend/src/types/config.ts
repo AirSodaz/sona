@@ -71,6 +71,8 @@ export interface AudioConfig {
   muteDuringRecording?: boolean;
   /** Whether to keep microphone capture warm when voice typing is idle. Default: false. */
   keepMicrophoneActive?: boolean;
+  /** Custom FFmpeg executable path. Default: '' (bundled sidecar). */
+  ffmpegPath?: string;
 }
 
 // ---------------------------------------------------------------------------

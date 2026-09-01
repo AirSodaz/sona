@@ -78,6 +78,7 @@ export type AppConfig_Deserialize = {
 	systemAudioDeviceId?: string | null,
 	muteDuringRecording?: boolean | null,
 	keepMicrophoneActive?: boolean | null,
+	ffmpegPath?: string | null,
 	asr?: AppAsrConfig_Deserialize | null,
 	streamingModelPath?: string | null,
 	batchModelPath?: string | null,
@@ -157,6 +158,7 @@ export type AppConfig_Serialize = {
 	systemAudioDeviceId?: string | null,
 	muteDuringRecording?: boolean | null,
 	keepMicrophoneActive?: boolean | null,
+	ffmpegPath?: string | null,
 	asr?: AppAsrConfig_Serialize | null,
 	streamingModelPath?: string | null,
 	batchModelPath?: string | null,
@@ -254,7 +256,7 @@ export type AsrEngineConfig_Deserialize =
 	uncachedDecoder: string | null,
 	cachedDecoder: string | null,
 	mergedDecoder: string | null,
-} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null }) & { onlineProvider?: never } |
+} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; ffmpegPath?: string | null }) & { onlineProvider?: never } |
 /**
  *  Local offline transcription through a provider-crate engine.
  *
@@ -277,7 +279,7 @@ export type AsrEngineConfig_Deserialize =
 	uncachedDecoder: string | null,
 	cachedDecoder: string | null,
 	mergedDecoder: string | null,
-} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { batchSegmentationMode?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
+} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; ffmpegPath?: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { batchSegmentationMode?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngineConfig_Serialize =
 /**
@@ -302,7 +304,7 @@ export type AsrEngineConfig_Serialize =
 	uncachedDecoder: string | null,
 	cachedDecoder: string | null,
 	mergedDecoder: string | null,
-} | null; gpuAcceleration: string | null; initialRefreshRateMs: number | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { batchSegmentationMode?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
+} | null; gpuAcceleration: string | null; initialRefreshRateMs: number | null; ffmpegPath: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { batchSegmentationMode?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngine_Deserialize =
 /**  Local offline transcription. */
@@ -904,6 +906,7 @@ export type DiagnosticsConfigInput = {
 	vadModelPath?: string,
 	punctuationModelPath?: string,
 	microphoneId?: string,
+	ffmpegPath?: string,
 };
 
 export type DiagnosticsCoreInput = {

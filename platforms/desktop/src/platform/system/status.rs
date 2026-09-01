@@ -30,17 +30,33 @@ pub fn resolve_runtime_environment_status(
     resolve_runtime_environment_status_for_log_dir(log_dir)
 }
 
+pub fn resolve_runtime_environment_status_for_log_dir_and_custom_ffmpeg(
+    log_dir: std::path::PathBuf,
+    custom_ffmpeg_path: Option<&str>,
+) -> Result<RuntimeEnvironmentStatus, String> {
+    let custom_trimmed = custom_ffmpeg_path.map(str::trim).filter(|s| !s.is_empty());
+    let (ffmpeg_path_buf, exists) = if let Some(custom) = custom_trimmed {
+        let path = std::path::PathBuf::from(custom);
+        let exists = path.is_file();
+        (path, exists)
+    } else {
+        let path = sona_sherpa_onnx::audio::resolve_ffmpeg_sidecar_path()
+            .map_err(|error| error.to_string())?;
+        let exists = path.is_file();
+        (path, exists)
+    };
+
+    Ok(RuntimeEnvironmentStatus {
+        ffmpeg_path: ffmpeg_path_buf.to_string_lossy().into_owned(),
+        ffmpeg_exists: exists,
+        log_dir_path: log_dir.to_string_lossy().into_owned(),
+    })
+}
+
 pub fn resolve_runtime_environment_status_for_log_dir(
     log_dir: std::path::PathBuf,
 ) -> Result<RuntimeEnvironmentStatus, String> {
-    let ffmpeg_path = sona_sherpa_onnx::audio::resolve_ffmpeg_sidecar_path()
-        .map_err(|error| error.to_string())?;
-
-    Ok(RuntimeEnvironmentStatus {
-        ffmpeg_path: ffmpeg_path.to_string_lossy().into_owned(),
-        ffmpeg_exists: ffmpeg_path.exists(),
-        log_dir_path: log_dir.to_string_lossy().into_owned(),
-    })
+    resolve_runtime_environment_status_for_log_dir_and_custom_ffmpeg(log_dir, None)
 }
 
 pub async fn get_runtime_environment_status(

@@ -91,6 +91,7 @@ export function normalizeAsrRequest(
     fileConfig: fileConfig ?? null,
     gpuAcceleration: request.gpuAcceleration ?? null,
     initialRefreshRateMs: request.initialRefreshRateMs ?? null,
+    ffmpegPath: request.ffmpegPath ?? null,
   };
 }
 

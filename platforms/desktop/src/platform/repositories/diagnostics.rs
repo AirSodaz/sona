@@ -54,9 +54,11 @@ pub async fn get_diagnostics_core_snapshot_with_models_dir(
     };
 
     let snapshot = tauri::async_runtime::spawn_blocking(move || {
+        let custom_ffmpeg = input.config.ffmpeg_path.as_str();
         input.runtime_environment =
-            crate::platform::runtime_status::resolve_runtime_environment_status_for_log_dir(
+            crate::platform::runtime_status::resolve_runtime_environment_status_for_log_dir_and_custom_ffmpeg(
                 log_dir,
+                Some(custom_ffmpeg),
             )?;
         let repository = FsDiagnosticsEnrichmentRepository::new(models_dir);
         DiagnosticsService::new(std::sync::Arc::new(repository))

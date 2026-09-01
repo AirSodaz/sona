@@ -79,6 +79,7 @@ pub struct BatchTranscribePlan {
     pub export_format: ExportFormat,
     pub output_target: OutputTarget,
     pub quiet: bool,
+    pub ffmpeg_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -467,6 +468,7 @@ pub fn resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
         export_format,
         output_target,
         quiet: options.quiet || config.quiet.unwrap_or(false),
+        ffmpeg_path: None,
     })
 }
 

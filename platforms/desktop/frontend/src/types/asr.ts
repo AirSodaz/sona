@@ -44,6 +44,7 @@ export type LocalAsrRequest = AsrTranscriptionRequestBase & {
   fileConfig?: ModelFileConfig;
   gpuAcceleration?: string;
   initialRefreshRateMs?: number | null;
+  ffmpegPath?: string | null;
 };
 
 export type OnlineAsrRequest = AsrTranscriptionRequestBase & {

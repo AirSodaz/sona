@@ -378,6 +378,7 @@ pub struct BatchTranscriptionRequest {
     pub postprocessor: TranscriptPostprocessor,
     pub gpu_acceleration: Option<String>,
     pub engine: LocalAsrEngine,
+    pub ffmpeg_path: Option<String>,
 }
 
 impl BatchTranscriptionRequest {
@@ -410,6 +411,7 @@ impl BatchTranscriptionRequest {
                 model_type,
                 file_config,
                 gpu_acceleration,
+                ffmpeg_path,
                 ..
             } => Ok(Self {
                 instance_id,
@@ -432,6 +434,7 @@ impl BatchTranscriptionRequest {
                     .map_err(|error| AsrPortError::invalid_request(error.to_string()))?,
                 gpu_acceleration,
                 engine: local_engine,
+                ffmpeg_path,
             }),
             _ => Err(AsrPortError::invalid_request(
                 "Expected local ASR engine config",
@@ -596,6 +599,8 @@ pub enum AsrEngineConfig {
         gpu_acceleration: Option<String>,
         #[serde(default)]
         initial_refresh_rate_ms: Option<u32>,
+        #[serde(default)]
+        ffmpeg_path: Option<String>,
     },
     #[serde(rename = "online", rename_all = "camelCase")]
     Online {
@@ -654,6 +659,7 @@ impl AsrTranscriptionRequest {
                 file_config: Box::new(file_config),
                 gpu_acceleration,
                 initial_refresh_rate_ms: None,
+                ffmpeg_path: None,
             },
         }
     }
@@ -1053,6 +1059,43 @@ pub fn resolve_ffmpeg_sidecar_path_from_exe(exe_path: &Path) -> Result<PathBuf, 
     Ok(exe_dir.join(sidecar_name))
 }
 
+pub fn resolve_ffmpeg_path_from_exe(
+    custom_path: Option<&Path>,
+    exe_path: &Path,
+) -> Result<PathBuf, AsrPortError> {
+    if let Some(path) = custom_path {
+        let trimmed = path.to_string_lossy().trim().to_string();
+        if !trimmed.is_empty() {
+            let candidate = PathBuf::from(trimmed);
+            if candidate.exists() {
+                return Ok(candidate);
+            }
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::FileSystem,
+                format!("Custom FFmpeg path does not exist: {}", path.display()),
+            ));
+        }
+    }
+    resolve_ffmpeg_sidecar_path_from_exe(exe_path)
+}
+
+pub fn resolve_ffmpeg_path(custom_path: Option<&Path>) -> Result<PathBuf, AsrPortError> {
+    if let Some(path) = custom_path {
+        let trimmed = path.to_string_lossy().trim().to_string();
+        if !trimmed.is_empty() {
+            let candidate = PathBuf::from(trimmed);
+            if candidate.exists() {
+                return Ok(candidate);
+            }
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::FileSystem,
+                format!("Custom FFmpeg path does not exist: {}", path.display()),
+            ));
+        }
+    }
+    resolve_ffmpeg_sidecar_path()
+}
+
 pub fn resolve_ffmpeg_sidecar_path() -> Result<PathBuf, AsrPortError> {
     let exe_path = std::env::current_exe().map_err(|error| {
         AsrPortError::new(
@@ -1115,5 +1158,31 @@ mod tests {
         assert!(ffmpeg.ends_with("ffmpeg.exe"));
         #[cfg(not(windows))]
         assert!(ffmpeg.ends_with("ffmpeg"));
+    }
+
+    #[test]
+    fn resolves_custom_ffmpeg_path_when_present_and_exists() {
+        let current_exe = std::env::current_exe().unwrap();
+        let resolved = resolve_ffmpeg_path(Some(&current_exe)).unwrap();
+        assert_eq!(resolved, current_exe);
+    }
+
+    #[test]
+    fn rejects_nonexistent_custom_ffmpeg_path() {
+        let invalid_path = Path::new("/path/that/definitely/does/not/exist/ffmpeg");
+        let error = resolve_ffmpeg_path(Some(invalid_path)).unwrap_err();
+        assert_eq!(error.kind, AsrPortErrorKind::FileSystem);
+        assert!(error.message.contains("Custom FFmpeg path does not exist"));
+    }
+
+    #[test]
+    fn falls_back_to_sidecar_when_custom_path_is_empty() {
+        let empty_path = Path::new("   ");
+        let exe = Path::new("/tmp/sona-cli");
+        let resolved = resolve_ffmpeg_path_from_exe(Some(empty_path), exe).unwrap();
+        #[cfg(windows)]
+        assert!(resolved.ends_with("ffmpeg.exe"));
+        #[cfg(not(windows))]
+        assert!(resolved.ends_with("ffmpeg"));
     }
 }

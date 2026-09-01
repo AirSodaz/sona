@@ -457,6 +457,7 @@ fn diagnostics_repository_collects_unicode_catalog_and_trimmed_path_statuses() {
         vad_model_path: vad_path.to_string_lossy().into_owned(),
         punctuation_model_path: "   ".to_string(),
         microphone_id: "default".to_string(),
+        ffmpeg_path: "".to_string(),
     };
     let repository = FsDiagnosticsEnrichmentRepository::new(models_dir.clone());
 

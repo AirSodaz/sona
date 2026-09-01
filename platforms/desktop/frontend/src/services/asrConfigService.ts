@@ -200,6 +200,7 @@ export class AsrConfigService {
       modelType: modelInfo?.type || 'sensevoice',
       fileConfig: modelInfo?.fileConfig,
       gpuAcceleration: config.gpuAcceleration ?? 'auto',
+      ffmpegPath: config.ffmpegPath || undefined,
     };
   }
 

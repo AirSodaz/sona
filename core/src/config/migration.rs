@@ -162,6 +162,7 @@ fn normalize_current_config(existing: Value) -> Value {
     let http_server_host = string_or_default(&config, "httpServerHost", "127.0.0.1");
     let http_server_api_key = string_or_default(&config, "httpServerApiKey", "");
     let keep_microphone_active = bool_at(&config, "keepMicrophoneActive").unwrap_or(false);
+    let ffmpeg_path = string_or_default(&config, "ffmpegPath", "");
 
     set(&mut config, "speakerProfiles", speaker_profiles);
     set(&mut config, "asr", asr_config);
@@ -174,6 +175,7 @@ fn normalize_current_config(existing: Value) -> Value {
         "keepMicrophoneActive",
         json!(keep_microphone_active),
     );
+    set(&mut config, "ffmpegPath", json!(ffmpeg_path));
     sanitize_typed_config_fields(&mut config);
     set(&mut config, "__original", original);
     config
@@ -239,6 +241,9 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
         return true;
     }
     if existing.get("keepMicrophoneActive") != normalized.get("keepMicrophoneActive") {
+        return true;
+    }
+    if existing.get("ffmpegPath") != normalized.get("ffmpegPath") {
         return true;
     }
     if existing.get("gpuAcceleration").is_some()
@@ -398,6 +403,10 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         (
             "keepMicrophoneActive",
             json!(bool_at(&parsed, "keepMicrophoneActive").unwrap_or(false)),
+        ),
+        (
+            "ffmpegPath",
+            json!(string_or_default(&parsed, "ffmpegPath", "")),
         ),
         (
             "startOnLaunch",
@@ -643,6 +652,7 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "liveRecordShortcut",
         "microphoneId",
         "systemAudioDeviceId",
+        "ffmpegPath",
         "streamingModelPath",
         "batchModelPath",
         "livePunctuationModelPath",

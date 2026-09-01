@@ -1,4 +1,4 @@
-use crate::audio::{extract_and_resample_audio, save_wav_file};
+use crate::audio::{extract_and_resample_audio_with_ffmpeg, save_wav_file};
 use crate::gpu::{GpuFallbackNotice, resolve_gpu_acceleration_plan};
 use crate::recognizer::{
     SafeOfflineRecognizer, build_offline_model_config, create_offline_recognizer,
@@ -82,6 +82,7 @@ struct BatchTranscriptionJob {
     quiet: bool,
     vad_engines: VadEngineSet,
     punct_engines: PunctuationEngineSet,
+    ffmpeg_path: Option<PathBuf>,
 }
 
 impl BatchTranscriptionJob {
@@ -124,6 +125,7 @@ impl BatchTranscriptionJob {
             quiet: plan.quiet,
             vad_engines: vad_engines.clone(),
             punct_engines: punct_engines.clone(),
+            ffmpeg_path: plan.ffmpeg_path.map(PathBuf::from),
         })
     }
 
@@ -184,7 +186,12 @@ impl BatchTranscriptionJob {
         let recognizer = create_offline_recognizer(model_type, self.num_threads, provider)?;
         let punctuation =
             load_configured_punctuation(&self.punct_engines, self.punctuation_model.as_deref())?;
-        let samples = extract_and_resample_audio(&self.input_path, 16000).await?;
+        let samples = extract_and_resample_audio_with_ffmpeg(
+            &self.input_path,
+            16000,
+            self.ffmpeg_path.as_deref(),
+        )
+        .await?;
         observer.on_progress(5.0);
         if let Some(path) = self.save_to_path.as_ref() {
             save_wav_file(&samples, 16000, path).map_err(|error| {
@@ -340,6 +347,7 @@ mod tests {
             export_format: ExportFormat::Json,
             output_target: OutputTarget::Stdout,
             quiet: true,
+            ffmpeg_path: None,
         };
 
         let error = LocalBatchAsrAdapter::default()
@@ -370,6 +378,7 @@ mod tests {
             model_type: "whisper".to_string(),
             file_config: None,
             hotwords: None,
+            ffmpeg_path: None,
             speaker_processing: None,
             gpu_acceleration: Some("cpu".to_string()),
             export_format: ExportFormat::Json,

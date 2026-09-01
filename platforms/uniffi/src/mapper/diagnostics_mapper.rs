@@ -136,6 +136,7 @@ impl From<FfiDiagnosticsConfigV1> for DiagnosticsConfigInput {
             vad_model_path: value.vad_model_path,
             punctuation_model_path: value.punctuation_model_path,
             microphone_id: value.microphone_id,
+            ffmpeg_path: "".to_string(),
         }
     }
 }

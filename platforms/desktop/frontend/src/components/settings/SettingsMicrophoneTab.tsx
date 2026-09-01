@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Volume2, SlidersHorizontal } from 'lucide-react';
+import { Volume2, SlidersHorizontal, FileAudio } from 'lucide-react';
 import { MicIcon } from '../Icons';
 import { Dropdown } from '../Dropdown';
 import { Switch } from '../Switch';
@@ -19,10 +19,15 @@ import {
 import { TauriEvent } from '../../services/tauri/events';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import { useVoiceTypingRuntimeStatus } from '../../stores/voiceTypingRuntimeStore';
-import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
+import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader, SettingsLocationCard } from './SettingsLayout';
 import { logger } from '../../utils/logger';
 import { listen, type UnlistenFn } from '../../services/tauri/platform/events';
 import { remove } from '../../services/tauri/platform/fs';
+import { openDialog } from '../../services/tauri/platform/dialog';
+import { storageOpenPath } from '../../services/tauri/storage';
+import { getRuntimeEnvironmentStatus, getPathStatuses } from '../../services/tauri/app';
+import type { RuntimeEnvironmentStatus } from '../../types/runtime';
+import './SettingsShared.css';
 
 interface SettingsMicrophoneTabProps {
     isActiveTab?: boolean;
@@ -49,6 +54,80 @@ export function SettingsMicrophoneTab({
     const keepMicrophoneActive = config.keepMicrophoneActive ?? false;
     const voiceTypingEnabled = voiceTypingConfig.voiceTypingEnabled ?? false;
     const voiceTypingRuntime = useVoiceTypingRuntimeStatus();
+
+    const ffmpegPath = config.ffmpegPath || '';
+    const isCustomFfmpeg = Boolean(ffmpegPath.trim());
+    const [runtimeEnv, setRuntimeEnv] = useState<RuntimeEnvironmentStatus | null>(null);
+    const [isFfmpegValid, setIsFfmpegValid] = useState<boolean | null>(null);
+    const [isFfmpegBusy, setIsFfmpegBusy] = useState(false);
+
+    const displayFfmpegPath = isCustomFfmpeg ? ffmpegPath : (runtimeEnv?.ffmpegPath || '');
+
+    useEffect(() => {
+        let isMounted = true;
+        const checkFfmpegStatus = async () => {
+            try {
+                const env = await getRuntimeEnvironmentStatus();
+                if (!isMounted) return;
+                setRuntimeEnv(env);
+
+                if (isCustomFfmpeg) {
+                    const statuses = await getPathStatuses([ffmpegPath.trim()]);
+                    if (!isMounted) return;
+                    setIsFfmpegValid(statuses[0]?.kind === 'file');
+                } else {
+                    setIsFfmpegValid(env.ffmpegExists);
+                }
+            } catch (err) {
+                logger.warn('Failed to check FFmpeg runtime status:', err);
+                if (isMounted) {
+                    setIsFfmpegValid(false);
+                }
+            }
+        };
+
+        void checkFfmpegStatus();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [ffmpegPath, isCustomFfmpeg]);
+
+    const handleBrowseFfmpeg = async () => {
+        try {
+            setIsFfmpegBusy(true);
+            const selected = await openDialog({
+                multiple: false,
+                directory: false,
+                filters: [
+                    {
+                        name: 'FFmpeg Executable',
+                        extensions: ['exe', '*'],
+                    },
+                ],
+            });
+            if (selected && typeof selected === 'string') {
+                updateConfig({ ffmpegPath: selected });
+            }
+        } catch (err) {
+            logger.error('Failed to select FFmpeg path:', err);
+        } finally {
+            setIsFfmpegBusy(false);
+        }
+    };
+
+    const handleResetFfmpeg = () => {
+        updateConfig({ ffmpegPath: '' });
+    };
+
+    const handleOpenFfmpegFolder = async () => {
+        if (!displayFfmpegPath) return;
+        try {
+            await storageOpenPath(displayFfmpegPath);
+        } catch (err) {
+            logger.error('Failed to open FFmpeg folder:', err);
+        }
+    };
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const systemCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -501,6 +580,39 @@ export function SettingsMicrophoneTab({
                         onChange={(enabled) => updateConfig({ muteDuringRecording: enabled })}
                     />
                 </SettingsItem>
+            </SettingsSection>
+
+            <SettingsSection
+                title={t('settings.ffmpeg_title', '音频解码工具 (FFmpeg)')}
+                icon={<FileAudio size={20} />}
+                description={t(
+                    'settings.ffmpeg_description',
+                    '用于批量导入音视频文件时进行格式解封装与音频重采样，以及提取说话人音色样本。默认使用内置 FFmpeg。'
+                )}
+            >
+                <SettingsLocationCard
+                    testId="settings-microphone-ffmpeg-card"
+                    title={t('settings.ffmpeg_path_title', { defaultValue: 'FFmpeg Executable Path' })}
+                    hint={t('settings.ffmpeg_path_hint', {
+                        defaultValue: 'Specify a local FFmpeg executable on your system. Leave empty to use the bundled version.',
+                    })}
+                    path={displayFfmpegPath}
+                    isCustom={isCustomFfmpeg}
+                    isValid={isFfmpegValid}
+                    isBusy={isFfmpegBusy}
+                    changeLabel={t('common.change_path', { defaultValue: 'Change Path...' })}
+                    onChangePath={handleBrowseFfmpeg}
+                    openFolderLabel={t('common.open_folder', { defaultValue: 'Open Folder' })}
+                    onOpenFolder={handleOpenFfmpegFolder}
+                    restoreDefaultLabel={t('common.restore_default', { defaultValue: 'Restore Default' })}
+                    onRestoreDefault={isCustomFfmpeg ? handleResetFfmpeg : undefined}
+                    bottomHint={
+                        isFfmpegValid
+                            ? t('settings.ffmpeg_hint_ready', { defaultValue: 'A valid FFmpeg executable is detected and ready.' })
+                            : t('settings.ffmpeg_hint_missing', { defaultValue: 'No valid FFmpeg executable found. Media decoding and batch imports may fail.' })
+                    }
+                    bottomHintColor={isFfmpegValid ? undefined : 'var(--color-danger, #ef4444)'}
+                />
             </SettingsSection>
         </SettingsTabContainer>
     );

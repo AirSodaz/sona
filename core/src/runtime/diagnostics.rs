@@ -62,6 +62,8 @@ pub struct DiagnosticsConfigInput {
     pub punctuation_model_path: String,
     #[serde(default = "default_microphone_id")]
     pub microphone_id: String,
+    #[serde(default)]
+    pub ffmpeg_path: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]

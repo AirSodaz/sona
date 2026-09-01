@@ -37,7 +37,16 @@
         "deselect_all": "전체 선택 해제",
         "clear_search": "검색 지우기",
         "parameter_settings": "매개변수 설정",
-        "recommended": "권장"
+        "recommended": "권장",
+        "ready": "준비됨",
+        "not_found": "찾을 수 없음",
+        "default": "기본값",
+        "custom": "사용자 지정",
+        "browse": "찾아보기...",
+        "change_path": "경로 변경...",
+        "change_directory": "디렉터리 변경...",
+        "open_folder": "폴더 열기",
+        "restore_default": "기본값으로 복원"
     },
     "errors": {
         "ai": {
@@ -1240,6 +1249,13 @@
         "mic_auto_hint": "선택 the microphone input device.",
         "mute_during_recording": "Mute during recording",
         "mute_during_recording_hint": "자동으로 mute the system 화자 during recording. This 중지s the microphone from recording system sounds.",
+        "ffmpeg_title": "오디오 디코딩 도구 (FFmpeg)",
+        "ffmpeg_description": "배치 파일 가져오기 시 미디어 디코딩/리샘플링 및 화자 샘플 추출에 사용됩니다. 기본적으로 번들된 FFmpeg를 사용합니다.",
+        "ffmpeg_path_title": "FFmpeg 실행 파일 경로",
+        "ffmpeg_path_hint": "시스템의 로컬 FFmpeg 실행 파일을 지정합니다. 비워두면 번들된 버전을 사용합니다.",
+
+        "ffmpeg_hint_ready": "유효한 FFmpeg 실행 파일이 감지되었습니다.",
+        "ffmpeg_hint_missing": "유효한 FFmpeg 실행 파일을 찾을 수 없습니다. 미디어 가져오기가 실패할 수 있습니다.",
         "shortcuts": "단축키",
         "about": "정보",
         "about_desc": "Sona는 빠르고 정확하며 개인정보를 지키는 로컬 전사 편집기입니다.",
@@ -1392,11 +1408,7 @@
             "data_dir_hint": "SQLite 데이터베이스, 녹음 오디오 첨부 파일, 화자 음성 프로필 및 복구 스냅샷을 저장합니다. 변경 사항을 적용하려면 Sona를 다시 시작해야 합니다.",
             "models_dir_title": "모델 디렉터리",
             "models_dir_hint": "오프라인 ASR 음성 인식, VAD 및 구두점 모델을 저장합니다. 새로 다운로드한 모델은 여기에 저장됩니다.",
-            "badge_default": "기본값",
-            "badge_custom": "사용자 지정",
-            "browse": "디렉터리 변경...",
-            "open_folder": "폴더 열기",
-            "restore_default": "기본값으로 복원",
+
             "data_dir_change_confirm_title": "데이터 디렉터리를 변경하시겠습니까?",
             "data_dir_change_confirm_message": "데이터 디렉터리를 다음으로 전환합니다:\n{{path}}\n\n데이터베이스를 안전하게 다시 열기 위해 Sona가 다시 시작됩니다.",
             "data_dir_reset_confirm_title": "기본 데이터 디렉터리로 복원하시겠습니까?",

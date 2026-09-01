@@ -2,8 +2,8 @@ use hound::{SampleFormat, WavSpec, WavWriter};
 use sherpa_onnx::{SileroVadModelConfig, VadModelConfig, VoiceActivityDetector};
 use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 pub use sona_core::ports::asr::{
-    pcm_i16_to_f32, pcm_s16le_bytes_to_f32, resolve_ffmpeg_sidecar_path,
-    resolve_ffmpeg_sidecar_path_from_exe,
+    pcm_i16_to_f32, pcm_s16le_bytes_to_f32, resolve_ffmpeg_path, resolve_ffmpeg_path_from_exe,
+    resolve_ffmpeg_sidecar_path, resolve_ffmpeg_sidecar_path_from_exe,
 };
 use std::path::{Path, PathBuf};
 
@@ -129,7 +129,15 @@ pub async fn extract_and_resample_audio(
     filepath: &Path,
     target_sample_rate: u32,
 ) -> Result<Vec<f32>, AsrPortError> {
-    let ffmpeg_path = resolve_ffmpeg_sidecar_path()?;
+    extract_and_resample_audio_with_ffmpeg(filepath, target_sample_rate, None).await
+}
+
+pub async fn extract_and_resample_audio_with_ffmpeg(
+    filepath: &Path,
+    target_sample_rate: u32,
+    custom_ffmpeg_path: Option<&Path>,
+) -> Result<Vec<f32>, AsrPortError> {
+    let ffmpeg_path = resolve_ffmpeg_path(custom_ffmpeg_path)?;
     let mut command = tokio::process::Command::new(ffmpeg_path);
 
     #[cfg(target_os = "windows")]

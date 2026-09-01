@@ -176,3 +176,5 @@ export function SettingsAccordion({
         </div>
     );
 }
+
+export { SettingsLocationCard, type SettingsLocationCardProps } from './SettingsLocationCard';

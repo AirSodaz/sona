@@ -18,7 +18,7 @@ use sona_core::models::config::ModelFileConfig;
 use sona_core::ports::asr::{
     AsrPortError, AsrPortErrorKind, BatchSegmentationMode, BatchTranscriberPort,
     BatchTranscriptionObserver, LocalAsrEngine, NoopBatchTranscriptionObserver,
-    local_asr_engine_mismatch, pcm_s16le_bytes_to_f32, resolve_ffmpeg_sidecar_path,
+    local_asr_engine_mismatch, pcm_s16le_bytes_to_f32, resolve_ffmpeg_path,
 };
 use sona_core::ports::punctuation::{
     PunctuationEngineSet, apply_optional_punctuation, load_configured_punctuation,
@@ -117,6 +117,7 @@ struct LlamaBatchTranscriptionJob {
     punctuation_model: Option<PathBuf>,
     vad_engines: VadEngineSet,
     punct_engines: PunctuationEngineSet,
+    ffmpeg_path: Option<PathBuf>,
 }
 
 impl LlamaBatchTranscriptionJob {
@@ -180,6 +181,7 @@ impl LlamaBatchTranscriptionJob {
             punctuation_model: plan.punctuation_model.map(PathBuf::from),
             vad_engines: vad_engines.clone(),
             punct_engines: punct_engines.clone(),
+            ffmpeg_path: plan.ffmpeg_path.map(PathBuf::from),
         })
     }
 
@@ -224,7 +226,8 @@ impl LlamaBatchTranscriptionJob {
         }
 
         let sample_rate = mtmd.get_audio_sample_rate().unwrap_or(16_000).max(1);
-        let samples = decode_audio_input(&self.input_path, sample_rate)?;
+        let samples =
+            decode_audio_input(&self.input_path, sample_rate, self.ffmpeg_path.as_deref())?;
         observer.on_progress(10.0);
 
         let audio_segments = self.plan_audio_segments(&samples, sample_rate)?;
@@ -311,8 +314,11 @@ impl LlamaBatchTranscriptionJob {
             ));
         }
 
-        let detection_samples =
-            decode_audio_input(&self.input_path, BATCH_SEGMENTATION_SAMPLE_RATE)?;
+        let detection_samples = decode_audio_input(
+            &self.input_path,
+            BATCH_SEGMENTATION_SAMPLE_RATE,
+            self.ffmpeg_path.as_deref(),
+        )?;
         Ok(segment_batch_audio(
             &detection_samples,
             BATCH_SEGMENTATION_SAMPLE_RATE,
@@ -555,8 +561,12 @@ fn llama_generation_progress(
     (GENERATION_START + GENERATION_SPAN * (completed + completion_curve) / total).min(95.0)
 }
 
-fn decode_audio_input(path: &Path, sample_rate: u32) -> Result<Vec<f32>, AsrPortError> {
-    let ffmpeg_path = resolve_ffmpeg_sidecar_path()?;
+fn decode_audio_input(
+    path: &Path,
+    sample_rate: u32,
+    custom_ffmpeg_path: Option<&Path>,
+) -> Result<Vec<f32>, AsrPortError> {
+    let ffmpeg_path = resolve_ffmpeg_path(custom_ffmpeg_path)?;
     let mut command = Command::new(&ffmpeg_path);
 
     #[cfg(target_os = "windows")]
@@ -1100,6 +1110,7 @@ mod tests {
             gpu_acceleration: Some("auto".to_string()),
             export_format: ExportFormat::Json,
             output_target: OutputTarget::Stdout,
+            ffmpeg_path: None,
             quiet: true,
         }
     }

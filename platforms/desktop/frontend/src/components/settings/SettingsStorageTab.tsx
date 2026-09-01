@@ -4,14 +4,11 @@ import {
     Box,
     Clock,
     Database,
-    ExternalLink,
     Folder,
-    FolderOpen,
     Globe2,
     HardDrive,
     Music,
     RefreshCw,
-    RotateCcw,
     Trash2,
 } from 'lucide-react';
 import { Dropdown } from '../Dropdown';
@@ -31,7 +28,7 @@ import type {
     StorageUsageSnapshot,
     WebviewBrowsingDataClearResult,
 } from '../../types/storage';
-import { SettingsItem, SettingsPageHeader, SettingsSection, SettingsTabContainer } from './SettingsLayout';
+import { SettingsItem, SettingsLocationCard, SettingsPageHeader, SettingsSection, SettingsTabContainer } from './SettingsLayout';
 import './SettingsShared.css';
 
 const RETENTION_PRESETS = [
@@ -375,7 +372,7 @@ export function SettingsStorageTab(): React.JSX.Element {
                 }),
                 {
                     title: t('settings.storage.models_dir_reset_confirm_title', { defaultValue: 'Restore Default Models Directory?' }),
-                    confirmLabel: t('settings.storage.restore_default', { defaultValue: 'Restore Default' }),
+                    confirmLabel: t('common.restore_default', { defaultValue: 'Restore Default' }),
                     cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
                 },
             );
@@ -578,123 +575,38 @@ export function SettingsStorageTab(): React.JSX.Element {
                 icon={<Folder size={20} />}
             >
                 <div className="settings-storage-locations-grid">
-                    <div className="settings-storage-location-card" data-testid="settings-storage-data-dir-card">
-                        <div className="settings-storage-location-header">
-                            <div className="settings-storage-location-title-row">
-                                <span className="settings-storage-location-title">
-                                    {t('settings.storage.data_dir_title', { defaultValue: 'Data Directory' })}
-                                </span>
-                                <span className={`settings-storage-location-badge ${directoriesInfo?.isCustomDataDir ? 'custom' : 'default'}`}>
-                                    {directoriesInfo?.isCustomDataDir
-                                        ? t('settings.storage.badge_custom', { defaultValue: 'Custom' })
-                                        : t('settings.storage.badge_default', { defaultValue: 'Default' })}
-                                </span>
-                            </div>
-                            <p className="settings-storage-location-hint">
-                                {t('settings.storage.data_dir_hint', {
-                                    defaultValue: 'Stores SQLite databases, history recordings, speaker voice profiles, and recovery snapshots. Changing this requires restarting Sona.',
-                                })}
-                            </p>
-                        </div>
-                        <div
-                            className="settings-storage-path-box"
-                            data-tooltip={directoriesInfo?.dataDir || undefined}
-                            data-tooltip-pos="top"
-                            data-tooltip-multiline
-                        >
-                            <code>{directoriesInfo?.dataDir || t('common.loading', { defaultValue: 'Loading...' })}</code>
-                        </div>
-                        <div className="settings-storage-location-actions">
-                            <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => { void handleChangeDataDir(); }}
-                                disabled={isLocationBusy}
-                            >
-                                <FolderOpen size={14} aria-hidden="true" />
-                                {t('settings.storage.browse', { defaultValue: 'Change Directory...' })}
-                            </button>
-                            <button
-                                type="button"
-                                className="btn btn-ghost btn-sm"
-                                onClick={() => { void handleOpenDataDir(); }}
-                                disabled={!directoriesInfo?.dataDir}
-                            >
-                                <ExternalLink size={14} aria-hidden="true" />
-                                {t('settings.storage.open_folder', { defaultValue: 'Open Folder' })}
-                            </button>
-                            {directoriesInfo?.isCustomDataDir && (
-                                <button
-                                    type="button"
-                                    className="btn btn-ghost btn-sm"
-                                    onClick={() => { void handleResetDataDir(); }}
-                                    disabled={isLocationBusy}
-                                >
-                                    <RotateCcw size={14} aria-hidden="true" />
-                                    {t('settings.storage.restore_default', { defaultValue: 'Restore Default' })}
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="settings-storage-location-card" data-testid="settings-storage-models-dir-card">
-                        <div className="settings-storage-location-header">
-                            <div className="settings-storage-location-title-row">
-                                <span className="settings-storage-location-title">
-                                    {t('settings.storage.models_dir_title', { defaultValue: 'Models Directory' })}
-                                </span>
-                                <span className={`settings-storage-location-badge ${directoriesInfo?.isCustomModelsDir ? 'custom' : 'default'}`}>
-                                    {directoriesInfo?.isCustomModelsDir
-                                        ? t('settings.storage.badge_custom', { defaultValue: 'Custom' })
-                                        : t('settings.storage.badge_default', { defaultValue: 'Default' })}
-                                </span>
-                            </div>
-                            <p className="settings-storage-location-hint">
-                                {t('settings.storage.models_dir_hint', {
-                                    defaultValue: 'Stores offline ASR speech recognition, VAD, and punctuation models. Newly downloaded models will be saved here.',
-                                })}
-                            </p>
-                        </div>
-                        <div
-                            className="settings-storage-path-box"
-                            data-tooltip={directoriesInfo?.modelsDir || undefined}
-                            data-tooltip-pos="top"
-                            data-tooltip-multiline
-                        >
-                            <code>{directoriesInfo?.modelsDir || t('common.loading', { defaultValue: 'Loading...' })}</code>
-                        </div>
-                        <div className="settings-storage-location-actions">
-                            <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => { void handleChangeModelsDir(); }}
-                                disabled={isLocationBusy}
-                            >
-                                <FolderOpen size={14} aria-hidden="true" />
-                                {t('settings.storage.browse', { defaultValue: 'Change Directory...' })}
-                            </button>
-                            <button
-                                type="button"
-                                className="btn btn-ghost btn-sm"
-                                onClick={() => { void handleOpenModelsDir(); }}
-                                disabled={!directoriesInfo?.modelsDir}
-                            >
-                                <ExternalLink size={14} aria-hidden="true" />
-                                {t('settings.storage.open_folder', { defaultValue: 'Open Folder' })}
-                            </button>
-                            {directoriesInfo?.isCustomModelsDir && (
-                                <button
-                                    type="button"
-                                    className="btn btn-ghost btn-sm"
-                                    onClick={() => { void handleResetModelsDir(); }}
-                                    disabled={isLocationBusy}
-                                >
-                                    <RotateCcw size={14} aria-hidden="true" />
-                                    {t('settings.storage.restore_default', { defaultValue: 'Restore Default' })}
-                                </button>
-                            )}
-                        </div>
-                    </div>
+                    <SettingsLocationCard
+                        testId="settings-storage-data-dir-card"
+                        title={t('settings.storage.data_dir_title', { defaultValue: 'Data Directory' })}
+                        hint={t('settings.storage.data_dir_hint', {
+                            defaultValue: 'Stores SQLite databases, history recordings, speaker voice profiles, and recovery snapshots. Changing this requires restarting Sona.',
+                        })}
+                        path={directoriesInfo?.dataDir}
+                        isCustom={directoriesInfo?.isCustomDataDir}
+                        isBusy={isLocationBusy}
+                        changeLabel={t('common.change_directory', { defaultValue: 'Change Directory...' })}
+                        onChangePath={handleChangeDataDir}
+                        openFolderLabel={t('common.open_folder', { defaultValue: 'Open Folder' })}
+                        onOpenFolder={handleOpenDataDir}
+                        restoreDefaultLabel={t('common.restore_default', { defaultValue: 'Restore Default' })}
+                        onRestoreDefault={directoriesInfo?.isCustomDataDir ? handleResetDataDir : undefined}
+                    />
+                    <SettingsLocationCard
+                        testId="settings-storage-models-dir-card"
+                        title={t('settings.storage.models_dir_title', { defaultValue: 'Models Directory' })}
+                        hint={t('settings.storage.models_dir_hint', {
+                            defaultValue: 'Stores offline ASR speech recognition, VAD, and punctuation models. Newly downloaded models will be saved here.',
+                        })}
+                        path={directoriesInfo?.modelsDir}
+                        isCustom={directoriesInfo?.isCustomModelsDir}
+                        isBusy={isLocationBusy}
+                        changeLabel={t('common.change_directory', { defaultValue: 'Change Directory...' })}
+                        onChangePath={handleChangeModelsDir}
+                        openFolderLabel={t('common.open_folder', { defaultValue: 'Open Folder' })}
+                        onOpenFolder={handleOpenModelsDir}
+                        restoreDefaultLabel={t('common.restore_default', { defaultValue: 'Restore Default' })}
+                        onRestoreDefault={directoriesInfo?.isCustomModelsDir ? handleResetModelsDir : undefined}
+                    />
                 </div>
             </SettingsSection>
 

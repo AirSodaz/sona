@@ -771,6 +771,7 @@ describe('tauri boundary wrappers', () => {
         vadModelPath: '',
         punctuationModelPath: '',
         microphoneId: 'default',
+        ffmpegPath: '',
       },
       selectedModels: {
         live: { id: 'live', name: 'Live Model' },
@@ -819,6 +820,7 @@ describe('tauri boundary wrappers', () => {
         vadModelPath: '',
         punctuationModelPath: '',
         microphoneId: 'default',
+        ffmpegPath: '',
       },
       permissionState: 'prompt',
       microphoneProbe: {

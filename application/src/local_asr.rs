@@ -210,6 +210,7 @@ mod tests {
             export_format: ExportFormat::Json,
             output_target: OutputTarget::Stdout,
             quiet: true,
+            ffmpeg_path: None,
         }
     }
 

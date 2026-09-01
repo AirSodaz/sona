@@ -405,7 +405,7 @@ describe('SettingsStorageTab', () => {
   it('renders storage locations with data directory and models directory', async () => {
     render(<SettingsStorageTab />);
 
-    expect(await screen.findByText('Storage Locations')).toBeTruthy();
+    expect(await screen.findByText('/default/data')).toBeTruthy();
     const dataCard = screen.getByTestId('settings-storage-data-dir-card');
     const modelsCard = screen.getByTestId('settings-storage-models-dir-card');
 

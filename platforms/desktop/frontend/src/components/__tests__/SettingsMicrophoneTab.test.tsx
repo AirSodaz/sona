@@ -11,6 +11,7 @@ const mockRemove = vi.fn();
 const mockListMicrophoneDeviceOptions = vi.fn();
 const mockListSystemAudioDeviceOptions = vi.fn();
 const mockVisualizerPeakRefs = vi.hoisted(() => [] as Array<{ current: number }>);
+const mockOpen = vi.fn();
 
 function createDeferred<T>() {
     let resolve!: (value: T | PromiseLike<T>) => void;
@@ -39,6 +40,9 @@ vi.mock('@tauri-apps/api/event', () => ({
 vi.mock('@tauri-apps/plugin-fs', () => ({
     remove: (path: string) => mockRemove(path),
 }));
+vi.mock('@tauri-apps/plugin-dialog', () => ({
+    open: (...args: unknown[]) => mockOpen(...args),
+}));
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
@@ -49,6 +53,10 @@ vi.mock('react-i18next', () => ({
 vi.mock('lucide-react', () => ({
     Volume2: () => null,
     SlidersHorizontal: () => null,
+    FileAudio: () => null,
+    FolderOpen: () => null,
+    ExternalLink: () => null,
+    RotateCcw: () => null,
 }));
 
 vi.mock('../Icons', () => ({
@@ -81,17 +89,21 @@ vi.mock('../Switch', () => ({
     ),
 }));
 
-vi.mock('../settings/SettingsLayout', () => ({
-    SettingsTabContainer: ({ children }: any) => <div>{children}</div>,
-    SettingsSection: ({ children }: any) => <section>{children}</section>,
-    SettingsItem: ({ children }: any) => <div>{children}</div>,
-    SettingsPageHeader: ({ title, description }: any) => (
-        <header>
-            <div>{title}</div>
-            <div>{description}</div>
-        </header>
-    ),
-}));
+vi.mock('../settings/SettingsLayout', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../settings/SettingsLayout')>();
+    return {
+        ...actual,
+        SettingsTabContainer: ({ children }: any) => <div>{children}</div>,
+        SettingsSection: ({ children }: any) => <section>{children}</section>,
+        SettingsItem: ({ children }: any) => <div>{children}</div>,
+        SettingsPageHeader: ({ title, description }: any) => (
+            <header>
+                <div>{title}</div>
+                <div>{description}</div>
+            </header>
+        ),
+    };
+});
 
 vi.mock('../../hooks/useAudioVisualizer', () => ({
     useAudioVisualizer: ({ peakLevelRef }: { peakLevelRef: { current: number } }) => {
@@ -138,9 +150,24 @@ describe('SettingsMicrophoneTab', () => {
             value: globalThis.cancelAnimationFrame,
         });
 
-        mockInvoke.mockImplementation(async (command: string) => {
+        mockInvoke.mockImplementation(async (command: string, args?: any) => {
             if (command === 'stop_microphone_capture' || command === 'stop_system_audio_capture') {
                 return '';
+            }
+            if (command === 'get_runtime_environment_status') {
+                return {
+                    ffmpegPath: 'C:\\app\\ffmpeg.exe',
+                    ffmpegExists: true,
+                    logDirPath: 'C:\\app\\logs',
+                };
+            }
+            if (command === 'get_path_statuses') {
+                const paths: string[] = args?.paths || [];
+                return paths.map((p) => ({
+                    path: p,
+                    kind: p.includes('missing') ? 'missing' : 'file',
+                    error: null,
+                }));
             }
             return undefined;
         });
@@ -397,5 +424,73 @@ describe('SettingsMicrophoneTab', () => {
             ]);
         });
         expect(getListenCalls('system-audio')).toHaveLength(0);
+    });
+
+    it('renders the FFmpeg section with default sidecar path and allows browsing a custom path', async () => {
+        mockOpen.mockResolvedValue('D:\\tools\\ffmpeg.exe');
+
+        render(<SettingsMicrophoneTab isActiveTab isOpen />);
+
+        await waitFor(() => {
+            expect(screen.getByText('C:\\app\\ffmpeg.exe')).toBeDefined();
+            expect(screen.getByText('common.default')).toBeDefined();
+            expect(screen.getByText('common.ready')).toBeDefined();
+        });
+
+        const browseBtn = screen.getByText('common.change_path');
+        fireEvent.click(browseBtn);
+
+        await waitFor(() => {
+            expect(mockOpen).toHaveBeenCalledWith({
+                multiple: false,
+                directory: false,
+                filters: [
+                    {
+                        name: 'FFmpeg Executable',
+                        extensions: ['exe', '*'],
+                    },
+                ],
+            });
+            expect(useConfigStore.getState().config.ffmpegPath).toBe('D:\\tools\\ffmpeg.exe');
+        });
+    });
+
+    it('renders custom badge and allows restoring default when custom ffmpeg path is set', async () => {
+        useConfigStore.setState({
+            config: {
+                ...DEFAULT_CONFIG,
+                ffmpegPath: 'D:\\custom\\ffmpeg.exe',
+            },
+        });
+
+        render(<SettingsMicrophoneTab isActiveTab isOpen />);
+
+        await waitFor(() => {
+            expect(screen.getByText('D:\\custom\\ffmpeg.exe')).toBeDefined();
+            expect(screen.getByText('common.custom')).toBeDefined();
+            expect(screen.getByText('common.restore_default')).toBeDefined();
+        });
+
+        const restoreBtn = screen.getByText('common.restore_default');
+        fireEvent.click(restoreBtn);
+
+        expect(useConfigStore.getState().config.ffmpegPath).toBe('');
+    });
+
+    it('opens the FFmpeg folder when clicking open folder button', async () => {
+        render(<SettingsMicrophoneTab isActiveTab isOpen />);
+
+        await waitFor(() => {
+            expect(screen.getByText('common.open_folder')).toBeDefined();
+        });
+
+        const openFolderBtn = screen.getByText('common.open_folder');
+        fireEvent.click(openFolderBtn);
+
+        await waitFor(() => {
+            expect(mockInvoke).toHaveBeenCalledWith('storage_open_path', {
+                path: 'C:\\app\\ffmpeg.exe',
+            });
+        });
     });
 });

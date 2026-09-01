@@ -37,7 +37,16 @@
         "deselect_all": "取消全選",
         "clear_search": "清空搜尋",
         "parameter_settings": "參數設定",
-        "recommended": "推薦"
+        "recommended": "推薦",
+        "ready": "就緒",
+        "not_found": "未找到",
+        "default": "預設",
+        "custom": "自訂",
+        "browse": "瀏覽...",
+        "change_path": "更改路徑...",
+        "change_directory": "更改目錄...",
+        "open_folder": "開啟資料夾",
+        "restore_default": "恢復預設"
     },
     "errors": {
         "ai": {
@@ -1240,6 +1249,13 @@
         "mic_auto_hint": "選擇麥克風輸入裝置。",
         "mute_during_recording": "錄音時靜音",
         "mute_during_recording_hint": "錄音時自動靜音系統揚聲器，防止麥克風輸入系統聲音。",
+        "ffmpeg_title": "音訊解碼工具 (FFmpeg)",
+        "ffmpeg_description": "用於大量匯入影音檔案時進行格式解封裝與音訊重新取樣，以及擷取說話者音色樣本。預設使用內建 FFmpeg。",
+        "ffmpeg_path_title": "FFmpeg 可執行檔路徑",
+        "ffmpeg_path_hint": "指定本機已安裝的 FFmpeg 可執行檔。留空則使用應用隨附打包的內建版本。",
+
+        "ffmpeg_hint_ready": "已檢測到可用的 FFmpeg 可執行檔。",
+        "ffmpeg_hint_missing": "未檢測到有效的 FFmpeg 可執行檔，大量匯入和影音轉碼可能失敗。",
         "shortcuts": "快速鍵",
         "about": "關於",
         "about_desc": "Sona 是一款強大的本機轉錄編輯器，提供快速、準確且私密的語音轉文字功能。",
@@ -1392,11 +1408,7 @@
             "data_dir_hint": "儲存 SQLite 資料庫、歷史轉錄錄音附件、說話人聲紋庫及復原快照。變更後需要重啟 Sona 生效。",
             "models_dir_title": "模型目錄",
             "models_dir_hint": "儲存離線語音辨識 (ASR)、VAD 靜音偵測及標點復原等 AI 模型。後續下載的模型將儲存在此。",
-            "badge_default": "預設",
-            "badge_custom": "自訂",
-            "browse": "更改目錄...",
-            "open_folder": "開啟資料夾",
-            "restore_default": "恢復預設",
+
             "data_dir_change_confirm_title": "變更資料目錄？",
             "data_dir_change_confirm_message": "即將將資料目錄切換為：\n{{path}}\n\n切換資料目錄後需要重啟 Sona 客戶端以安全載入資料庫。",
             "data_dir_reset_confirm_title": "恢復預設資料目錄？",

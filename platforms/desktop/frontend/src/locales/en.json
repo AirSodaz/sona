@@ -37,7 +37,16 @@
         "deselect_all": "Deselect All",
         "clear_search": "Clear Search",
         "parameter_settings": "Parameter Settings",
-        "recommended": "Recommended"
+        "recommended": "Recommended",
+        "ready": "Ready",
+        "not_found": "Not Found",
+        "default": "Default",
+        "custom": "Custom",
+        "browse": "Browse...",
+        "change_path": "Change Path...",
+        "change_directory": "Change Directory...",
+        "open_folder": "Open Folder",
+        "restore_default": "Restore Default"
     },
     "errors": {
         "ai": {
@@ -1240,6 +1249,13 @@
         "mic_auto_hint": "Select the microphone input device.",
         "mute_during_recording": "Mute during recording",
         "mute_during_recording_hint": "Automatically mute the system speaker during recording. This stops the microphone from recording system sounds.",
+        "ffmpeg_title": "Audio Decoding Tool (FFmpeg)",
+        "ffmpeg_description": "Used for decoding/resampling media files during batch imports and extracting speaker samples. Uses bundled FFmpeg by default.",
+        "ffmpeg_path_title": "FFmpeg Executable Path",
+        "ffmpeg_path_hint": "Specify a local FFmpeg executable on your system. Leave empty to use the bundled version.",
+
+        "ffmpeg_hint_ready": "A valid FFmpeg executable is detected and ready.",
+        "ffmpeg_hint_missing": "No valid FFmpeg executable found. Media decoding and batch imports may fail.",
         "shortcuts": "Shortcuts",
         "about": "About",
         "about_desc": "Sona is a powerful, local transcript editor providing fast, accurate, and private speech-to-text capabilities.",
@@ -1372,11 +1388,7 @@
             "data_dir_hint": "Stores SQLite databases, history audio attachments, speaker voice profiles, and recovery snapshots. Sona will restart to apply changes.",
             "models_dir_title": "Models Directory",
             "models_dir_hint": "Stores offline ASR speech recognition, VAD, and punctuation models. Newly downloaded models will be saved here.",
-            "badge_default": "Default",
-            "badge_custom": "Custom",
-            "browse": "Change Directory...",
-            "open_folder": "Open Folder",
-            "restore_default": "Restore Default",
+
             "data_dir_change_confirm_title": "Change Data Directory?",
             "data_dir_change_confirm_message": "Switch data directory to:\n{{path}}\n\nSona will restart to safely reopen the database.",
             "data_dir_reset_confirm_title": "Restore Default Data Directory?",

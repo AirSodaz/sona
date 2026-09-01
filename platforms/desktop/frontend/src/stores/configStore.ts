@@ -45,6 +45,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   systemAudioDeviceId: 'default',
   muteDuringRecording: false,
   keepMicrophoneActive: false,
+  ffmpegPath: '',
 
   // Model
   asr: {
@@ -186,7 +187,7 @@ const SHORTCUT_KEYS: (keyof ShortcutConfig)[] = [
 ];
 
 const AUDIO_KEYS: (keyof AudioConfig)[] = [
-  'microphoneId', 'microphoneBoost', 'systemAudioDeviceId', 'muteDuringRecording', 'keepMicrophoneActive',
+  'microphoneId', 'microphoneBoost', 'systemAudioDeviceId', 'muteDuringRecording', 'keepMicrophoneActive', 'ffmpegPath',
 ];
 
 const MODEL_KEYS: (keyof ModelConfig)[] = [

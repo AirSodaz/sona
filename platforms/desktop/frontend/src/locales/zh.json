@@ -37,7 +37,16 @@
         "deselect_all": "取消全选",
         "clear_search": "清空搜索",
         "parameter_settings": "参数设置",
-        "recommended": "推荐"
+        "recommended": "推荐",
+        "ready": "就绪",
+        "not_found": "未找到",
+        "default": "默认",
+        "custom": "自定义",
+        "browse": "浏览...",
+        "change_path": "更改路径...",
+        "change_directory": "更改目录...",
+        "open_folder": "打开文件夹",
+        "restore_default": "恢复默认"
     },
     "errors": {
         "ai": {
@@ -1240,6 +1249,13 @@
         "mic_auto_hint": "选择麦克风输入设备。",
         "mute_during_recording": "录音时静音",
         "mute_during_recording_hint": "录音时自动静音系统扬声器，防止麦克风录入系统声音。",
+        "ffmpeg_title": "音频解码工具 (FFmpeg)",
+        "ffmpeg_description": "用于批量导入音视频文件时进行格式解封装与音频重采样，以及提取说话人音色样本。默认使用内置 FFmpeg。",
+        "ffmpeg_path_title": "FFmpeg 可执行文件路径",
+        "ffmpeg_path_hint": "指定本地已安装的 FFmpeg 可执行文件。留空则使用应用随附打包的内置版本。",
+
+        "ffmpeg_hint_ready": "已检测到可用的 FFmpeg 可执行文件。",
+        "ffmpeg_hint_missing": "未检测到有效的 FFmpeg 可执行文件，批量导入和音视频转码可能失败。",
         "shortcuts": "快捷键",
         "about": "关于",
         "about_desc": "Sona 是一款强大的本地转录编辑器，提供快速、准确且私密的语音转文字功能。",
@@ -1372,11 +1388,7 @@
             "data_dir_hint": "存储 SQLite 数据库、历史转录录音附件、说话人声纹库及恢复快照。变更后需要重启 Sona 生效。",
             "models_dir_title": "模型目录",
             "models_dir_hint": "存储离线语音识别 (ASR)、VAD 静音检测及标点恢复等 AI 模型。后续下载的模型将保存在此。",
-            "badge_default": "默认",
-            "badge_custom": "自定义",
-            "browse": "更改目录...",
-            "open_folder": "打开文件夹",
-            "restore_default": "恢复默认",
+
             "data_dir_change_confirm_title": "变更数据目录？",
             "data_dir_change_confirm_message": "即将将数据目录切换为：\n{{path}}\n\n切换数据目录后需要重启 Sona 客户端以安全加载数据库。",
             "data_dir_reset_confirm_title": "恢复默认数据目录？",

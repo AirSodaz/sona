@@ -37,7 +37,16 @@
         "deselect_all": "すべての選択を解除",
         "clear_search": "検索をクリア",
         "parameter_settings": "パラメータ設定",
-        "recommended": "おすすめ"
+        "recommended": "おすすめ",
+        "ready": "準備完了",
+        "not_found": "見つかりません",
+        "default": "デフォルト",
+        "custom": "カスタム",
+        "browse": "参照...",
+        "change_path": "パスを変更...",
+        "change_directory": "ディレクトリを変更...",
+        "open_folder": "フォルダーを開く",
+        "restore_default": "デフォルトに戻す"
     },
     "errors": {
         "ai": {
@@ -1240,6 +1249,13 @@
         "mic_auto_hint": "マイク入力デバイスを選択します。",
         "mute_during_recording": "録音中にミュートする",
         "mute_during_recording_hint": "録音中にシステムスピーカーを自動的にミュートします。これにより、マイクによるシステムサウンドの録音が停止されます。",
+        "ffmpeg_title": "音声デコードツール (FFmpeg)",
+        "ffmpeg_description": "バッチインポート時のメディアファイル変換および話者サンプル抽出に使用されます。デフォルトでは同梱の FFmpeg を使用します。",
+        "ffmpeg_path_title": "FFmpeg 実行ファイルパス",
+        "ffmpeg_path_hint": "ローカルにインストールされた FFmpeg 実行ファイルを指定します。空欄の場合は同梱版が使用されます。",
+
+        "ffmpeg_hint_ready": "有効な FFmpeg 実行ファイルが検出されました。",
+        "ffmpeg_hint_missing": "有効な FFmpeg 実行ファイルが見つかりません。バッチインポートが失敗する可能性があります。",
         "shortcuts": "ショートカット",
         "about": "について",
         "about_desc": "Sona は、高速、正確、プライベートな音声テキスト変換機能を提供する強力なローカル トランスクリプト エディタです。",
@@ -1392,11 +1408,7 @@
             "data_dir_hint": "SQLite データベース、録音添付ファイル、話者プロファイル、復元スナップショットを保存します。変更を適用するには Sona の再起動が必要です。",
             "models_dir_title": "モデルディレクトリ",
             "models_dir_hint": "オフライン音声認識 (ASR)、VAD、句読点モデルを保存します。新しくダウンロードしたモデルはここに保存されます。",
-            "badge_default": "デフォルト",
-            "badge_custom": "カスタム",
-            "browse": "ディレクトリを変更...",
-            "open_folder": "フォルダーを開く",
-            "restore_default": "デフォルトに戻す",
+
             "data_dir_change_confirm_title": "データディレクトリを変更しますか？",
             "data_dir_change_confirm_message": "データディレクトリを以下に変更します:\n{{path}}\n\nデータベースを安全に再読込するため、Sona を再起動します。",
             "data_dir_reset_confirm_title": "デフォルトのデータディレクトリに戻しますか？",

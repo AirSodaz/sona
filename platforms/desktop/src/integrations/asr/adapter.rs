@@ -112,6 +112,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
             export_format: ExportFormat::Json,
             output_target: OutputTarget::Stdout,
             quiet: true,
+            ffmpeg_path: request.ffmpeg_path,
         };
         let transcriber = sona_application::local_asr::LocalBatchTranscriberRouter::new(
             super::local_asr_registry_default(),
