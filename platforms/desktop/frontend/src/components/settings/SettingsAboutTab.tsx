@@ -4,6 +4,7 @@ import { openUrl } from '../../services/tauri/platform/opener';
 import packageJson from '../../../package.json';
 import { GithubIcon, HeartIcon, ExternalLinkIcon, ProcessingIcon, CheckIcon, DownloadIcon, BookIcon } from '../Icons';
 import { useAppUpdater } from '../../hooks/useAppUpdater';
+import { getAppReleaseChannel, formatChannelBadgeLabel } from '../../utils/channel';
 import { logger } from '../../utils/logger';
 import { openLogFolder } from '../../services/tauri/app';
 
@@ -14,7 +15,8 @@ import { openLogFolder } from '../../services/tauri/app';
 export function SettingsAboutTab(): React.JSX.Element {
     const { t } = useTranslation();
     const { status, updateInfo, checkUpdate, installUpdate, progress, relaunchToUpdate } = useAppUpdater();
-
+    const channel = getAppReleaseChannel();
+    const channelLabel = formatChannelBadgeLabel(channel);
     const handleOpenHomepage = async () => {
         try {
             await openUrl('https://github.com/AirSodaz/sona');
@@ -120,7 +122,11 @@ export function SettingsAboutTab(): React.JSX.Element {
                 </div>
                 <div className="about-title">
                     <h2>Sona</h2>
-                    <span className="about-version-badge">v{packageJson.version}</span>
+                    <span className={`about-version-badge channel-${channel}`}>
+                        <span className="about-version-text">v{packageJson.version}</span>
+                        <span className="about-version-divider">/</span>
+                        <span className="about-channel-text">{channelLabel}</span>
+                    </span>
                 </div>
                 <p className="about-description">
                     {t('settings.about_desc')}

@@ -70,12 +70,22 @@ function resetUpdaterStore() {
     hasAutoCheckedThisSession: false,
   });
 }
-
 describe('SettingsAboutTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     runGuardedQuitMock.mockReset();
     resetUpdaterStore();
+  });
+
+  it('renders app title and version badge containing version, divider, and channel', () => {
+    const { container } = render(<SettingsAboutTab />);
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Sona' })).toBeDefined();
+    const versionBadge = container.querySelector('.about-version-badge');
+    expect(versionBadge).not.toBeNull();
+    expect(versionBadge?.querySelector('.about-version-text')?.textContent).toMatch(/^v\d+\.\d+\.\d+/);
+    expect(versionBadge?.querySelector('.about-version-divider')?.textContent).toBe('/');
+    expect(versionBadge?.querySelector('.about-channel-text')?.textContent).toBe('Stable');
   });
 
   it('shows the available update after a manual trigger even if the toast was dismissed', async () => {
