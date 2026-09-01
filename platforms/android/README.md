@@ -102,7 +102,7 @@ verifies both outputs. The AAR must contain
 `jni/arm64-v8a/libonnxruntime.so`, compiled `uniffi.sona_uniffi_bind` classes,
 and the sample `SonaUniffiSmoke` class. The local Maven publication is
 written under `platforms/android/sample-consumer/sample-library/build/repo` as
-`com.sona:sona-uniffi-bindings:0.8.2`, with POM dependencies for JNA and
+`com.sona:sona-uniffi-bindings:0.8.3`, with POM dependencies for JNA and
 Kotlin coroutines. The verifier also checks the Gradle Module Metadata runtime
 variant so Gradle consumers resolve the same AAR and runtime dependencies.
 
@@ -123,7 +123,7 @@ The sample also includes `:consumer-library`, which does not apply the UniFFI
 generation script. It consumes the locally published AAR through:
 
 ```kotlin
-implementation("com.sona:sona-uniffi-bindings:0.8.2")
+implementation("com.sona:sona-uniffi-bindings:0.8.3")
 ```
 
 This guards the shape a normal Android app or library would use after the

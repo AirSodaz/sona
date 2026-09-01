@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.sona"
-version = "0.8.2"
+version = "0.8.3"
 
 android {
     namespace = "com.sona.uniffi.sample"

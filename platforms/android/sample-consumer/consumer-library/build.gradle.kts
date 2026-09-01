@@ -26,5 +26,5 @@ kotlin {
 }
 
 dependencies {
-    implementation("com.sona:sona-uniffi-bindings:0.8.2")
+    implementation("com.sona:sona-uniffi-bindings:0.8.3")
 }
