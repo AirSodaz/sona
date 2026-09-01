@@ -127,12 +127,12 @@ export function DashboardSparkline({
       role="img"
       aria-label={label}
     >
-      <ResponsiveContainer width="100%" height={36}>
-        <AreaChart data={chartPoints} margin={{ top: 6, right: 0, bottom: 2, left: 0 }}>
+      <ResponsiveContainer width="100%" height={32}>
+        <AreaChart data={chartPoints} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--dashboard-accent)" stopOpacity={0.32} />
-              <stop offset="100%" stopColor="var(--dashboard-accent)" stopOpacity={0.04} />
+              <stop offset="0%" stopColor="var(--dashboard-accent)" stopOpacity={0.24} />
+              <stop offset="100%" stopColor="var(--dashboard-accent)" stopOpacity={0.01} />
             </linearGradient>
           </defs>
           <XAxis dataKey="label" hide />
@@ -147,10 +147,10 @@ export function DashboardSparkline({
             dataKey="value"
             name={label}
             stroke="var(--dashboard-accent)"
-            strokeWidth={2}
+            strokeWidth={1.75}
             fill={`url(#${gradientId})`}
             dot={false}
-            activeDot={{ r: 3 }}
+            activeDot={{ r: 3, strokeWidth: 1.5, fill: 'var(--color-bg-elevated)', stroke: 'var(--dashboard-accent)' }}
             isAnimationActive={false}
           />
         </AreaChart>
@@ -183,19 +183,19 @@ export function DashboardTrendChart({
         role="img"
         aria-label={label}
       >
-        <ResponsiveContainer width="100%" height={108}>
-          <AreaChart data={chartPoints} margin={{ top: 12, right: 8, bottom: 8, left: 8 }}>
+        <ResponsiveContainer width="100%" height={104}>
+          <AreaChart data={chartPoints} margin={{ top: 8, right: 6, bottom: 4, left: 6 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="var(--dashboard-accent)" stopOpacity={0.28} />
-                <stop offset="100%" stopColor="var(--dashboard-accent)" stopOpacity={0.02} />
+                <stop offset="0%" stopColor="var(--dashboard-accent)" stopOpacity={0.22} />
+                <stop offset="100%" stopColor="var(--dashboard-accent)" stopOpacity={0.01} />
               </linearGradient>
             </defs>
-            <CartesianGrid vertical={false} stroke="var(--dashboard-chart-grid)" strokeDasharray="3 5" />
+            <CartesianGrid vertical={false} stroke="var(--dashboard-chart-grid)" strokeDasharray="3 4" strokeOpacity={0.6} />
             <XAxis dataKey="label" hide />
             <YAxis hide width={0} domain={['dataMin', 'dataMax']} />
             <Tooltip
-              cursor={{ stroke: 'var(--dashboard-accent)', strokeOpacity: 0.28, strokeWidth: 1 }}
+              cursor={{ stroke: 'var(--dashboard-accent)', strokeOpacity: 0.25, strokeWidth: 1, strokeDasharray: '2 2' }}
               wrapperStyle={{ outline: 'none' }}
               content={renderTooltip(valueFormatter)}
             />
@@ -204,10 +204,10 @@ export function DashboardTrendChart({
               dataKey="value"
               name={label}
               stroke="var(--dashboard-accent)"
-              strokeWidth={2.35}
+              strokeWidth={2}
               fill={`url(#${gradientId})`}
               dot={false}
-              activeDot={{ r: 4, strokeWidth: 2 }}
+              activeDot={{ r: 3.5, strokeWidth: 2, fill: 'var(--color-bg-elevated)', stroke: 'var(--dashboard-accent)' }}
               isAnimationActive={false}
             />
           </AreaChart>
@@ -244,8 +244,8 @@ export function CoverageBarChart({
       role="img"
       aria-label={label}
     >
-      <ResponsiveContainer width="100%" height={28}>
-        <BarChart layout="vertical" data={data} margin={{ top: 6, right: 0, bottom: 6, left: 0 }}>
+      <ResponsiveContainer width="100%" height={22}>
+        <BarChart layout="vertical" data={data} margin={{ top: 3, right: 0, bottom: 3, left: 0 }}>
           <XAxis type="number" hide domain={[0, 100]} />
           <YAxis type="category" dataKey="label" hide />
           <Tooltip
@@ -257,7 +257,7 @@ export function CoverageBarChart({
             dataKey="value"
             name={label}
             fill="var(--dashboard-accent)"
-            radius={[0, 999, 999, 0]}
+            radius={[999, 999, 999, 999]}
             background={{ fill: 'var(--dashboard-chart-track)', radius: 999 }}
             isAnimationActive={false}
           />
@@ -295,8 +295,8 @@ export function StackedDurationBarChart({
       role="img"
       aria-label={label}
     >
-      <ResponsiveContainer width="100%" height={34}>
-        <BarChart layout="vertical" data={data} margin={{ top: 7, right: 0, bottom: 7, left: 0 }}>
+      <ResponsiveContainer width="100%" height={28}>
+        <BarChart layout="vertical" data={data} margin={{ top: 4, right: 0, bottom: 4, left: 0 }}>
           <XAxis type="number" hide />
           <YAxis type="category" dataKey="label" hide />
           <Tooltip
@@ -308,7 +308,7 @@ export function StackedDurationBarChart({
             dataKey="identified"
             name={identifiedLabel}
             stackId="duration"
-            fill="#2d7ff9"
+            fill="#0284c7"
             radius={[999, 0, 0, 999]}
             isAnimationActive={false}
           />
@@ -316,7 +316,7 @@ export function StackedDurationBarChart({
             dataKey="anonymous"
             name={anonymousLabel}
             stackId="duration"
-            fill="#f59e0b"
+            fill="#d97706"
             radius={[0, 999, 999, 0]}
             isAnimationActive={false}
           />
@@ -349,8 +349,8 @@ export function MiniValueBarChart({
       role="img"
       aria-label={label}
     >
-      <ResponsiveContainer width="100%" height={26}>
-        <BarChart layout="vertical" data={data} margin={{ top: 5, right: 0, bottom: 5, left: 0 }}>
+      <ResponsiveContainer width="100%" height={20}>
+        <BarChart layout="vertical" data={data} margin={{ top: 2, right: 0, bottom: 2, left: 0 }}>
           <XAxis type="number" hide domain={[0, safeMaxValue]} />
           <YAxis type="category" dataKey="label" hide />
           <Tooltip
@@ -362,7 +362,7 @@ export function MiniValueBarChart({
             dataKey="value"
             name={label}
             fill="var(--dashboard-accent)"
-            radius={[0, 999, 999, 0]}
+            radius={[999, 999, 999, 999]}
             background={{ fill: 'var(--dashboard-chart-track)', radius: 999 }}
             isAnimationActive={false}
           />
