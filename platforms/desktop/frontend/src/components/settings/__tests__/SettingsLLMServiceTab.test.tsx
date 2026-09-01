@@ -1291,4 +1291,97 @@ describe('SettingsLLMServiceTab', () => {
 
     screen.getByRole('option', { name: 'Private Gateway' });
   });
+
+  it('closes add provider modal on Escape without closing settings', async () => {
+    await act(async () => {
+      render(<SettingsLLMServiceTab />);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.add_custom_provider' }));
+    });
+
+    expect(screen.getByRole('dialog', { name: 'settings.llm.add_custom_provider' })).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'Escape' });
+    });
+
+    expect(screen.queryByRole('dialog', { name: 'settings.llm.add_custom_provider' })).toBeNull();
+  });
+
+  it('closes add provider modal when clicking the backdrop and not when clicking inside', async () => {
+    let container!: HTMLElement;
+    await act(async () => {
+      ({ container } = render(<SettingsLLMServiceTab />));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.add_custom_provider' }));
+    });
+
+    const dialog = screen.getByRole('dialog', { name: 'settings.llm.add_custom_provider' });
+    const backdrop = container.querySelector('.provider-modal-backdrop') as HTMLElement;
+    expect(backdrop).toBeTruthy();
+
+    // Clicking inside the modal dialog should not close it
+    await act(async () => {
+      fireEvent.click(dialog);
+    });
+    expect(screen.getByRole('dialog', { name: 'settings.llm.add_custom_provider' })).toBeTruthy();
+
+    // Clicking the backdrop should close it
+    await act(async () => {
+      fireEvent.click(backdrop);
+    });
+    expect(screen.queryByRole('dialog', { name: 'settings.llm.add_custom_provider' })).toBeNull();
+  });
+
+  it('closes edit provider modal on Escape or backdrop click', async () => {
+    const conf = buildConfig();
+    conf.llmSettings!.customProviders = {
+      'custom-private-gateway': {
+        id: 'custom-private-gateway',
+        name: 'Private Gateway',
+        strategy: 'openai_compatible',
+        createdAt: '2026-05-18T00:00:00.000Z',
+      },
+    };
+    conf.llmSettings!.providers['custom-private-gateway'] = {
+      apiHost: 'https://gateway.example.com/v1',
+      apiKey: 'gateway-key',
+    };
+    currentConfig = conf;
+
+    let container!: HTMLElement;
+    await act(async () => {
+      ({ container } = render(<SettingsLLMServiceTab />));
+    });
+
+    // Click edit provider button
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.edit_provider' }));
+    });
+
+    expect(screen.getByRole('dialog', { name: 'settings.llm.edit_provider' })).toBeTruthy();
+
+    // Press Escape
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'Escape' });
+    });
+    expect(screen.queryByRole('dialog', { name: 'settings.llm.edit_provider' })).toBeNull();
+
+    // Open again and test backdrop click
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.edit_provider' }));
+    });
+
+    const backdrop = container.querySelector('.provider-modal-backdrop') as HTMLElement;
+    expect(backdrop).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(backdrop);
+    });
+    expect(screen.queryByRole('dialog', { name: 'settings.llm.edit_provider' })).toBeNull();
+  });
 });

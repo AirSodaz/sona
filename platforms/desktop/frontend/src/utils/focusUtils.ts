@@ -1,6 +1,5 @@
 export const MODAL_OVERLAY_SELECTOR =
-  '.shared-modal-overlay, .panel-modal-overlay, .settings-overlay, [data-focus-trap-overlay]';
-
+  '.shared-modal-overlay, .panel-modal-overlay, .settings-overlay, .provider-modal-backdrop, [data-focus-trap-overlay]';
 export const FOCUSABLE_SELECTOR = [
   'button:not([disabled])',
   '[href]',

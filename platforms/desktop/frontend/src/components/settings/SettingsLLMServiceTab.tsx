@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Settings2, Sparkles, Globe, AlignLeft, Plus, X } from 'lucide-react';
 import { RobotIcon } from '../Icons';
@@ -19,6 +19,7 @@ import { SettingsTabContainer, SettingsPageHeader, SettingsSection, SettingsItem
 import { FeatureCard } from './llm/FeatureCard';
 import { ProviderAccordionItem } from './llm/ProviderAccordionItem';
 import { getCurrentLlmSettings, getCurrentLlmState, isProviderConfiguredForConfig } from './llm/helpers';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import './SettingsLLMServiceTab.css';
 
 interface SettingsLLMServiceTabProps {
@@ -44,6 +45,21 @@ export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({
   const [setupApiKey, setSetupApiKey] = useState('');
   const [customProviderName, setCustomProviderName] = useState('');
   const [customProviderStrategy, setCustomProviderStrategy] = useState<CustomLlmProviderStrategy>('openai_compatible');
+  const addProviderModalRef = useRef<HTMLDivElement>(null);
+  const editProviderModalRef = useRef<HTMLDivElement>(null);
+
+  const handleCloseAddProvider = useCallback(() => {
+    setIsAddProviderOpen(false);
+    setProviderToAdd(null);
+    setCustomProviderName('');
+  }, []);
+
+  const handleCloseEditProvider = useCallback(() => {
+    setEditingProvider(null);
+  }, []);
+
+  useFocusTrap(isAddProviderOpen, handleCloseAddProvider, addProviderModalRef);
+  useFocusTrap(Boolean(editingProvider), handleCloseEditProvider, editProviderModalRef);
 
   const applyLlmSettings = useCallback((nextLlmSettings: LlmAssistantConfig['llmSettings']) => {
     if (!nextLlmSettings) return;
@@ -100,6 +116,7 @@ export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({
     setProviderToAdd(null);
     setSetupApiHost('');
     setSetupApiKey('');
+    setCustomProviderName('');
     setIsAddProviderOpen(true);
   };
 
@@ -274,12 +291,19 @@ export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({
       </SettingsSection>
 
       {isAddProviderOpen && (
-        <div className="provider-modal-backdrop">
+        <div
+          className="provider-modal-backdrop"
+          data-focus-trap-overlay="true"
+          onClick={handleCloseAddProvider}
+        >
           <div
+            ref={addProviderModalRef}
             className="provider-modal"
             role="dialog"
             aria-modal="true"
             aria-label={t('settings.llm.add_custom_provider')}
+            tabIndex={-1}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="provider-modal-header">
               <h3>{providerToAdd
@@ -289,7 +313,7 @@ export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({
                 type="button"
                 className="btn btn-icon btn-secondary-soft"
                 aria-label={t('settings.llm.close_add_custom_provider')}
-                onClick={() => setIsAddProviderOpen(false)}
+                onClick={handleCloseAddProvider}
               >
                 <X size={16} />
               </button>
@@ -354,7 +378,7 @@ export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => providerToAdd ? setProviderToAdd(null) : setIsAddProviderOpen(false)}
+                onClick={() => providerToAdd ? setProviderToAdd(null) : handleCloseAddProvider()}
               >
                 {providerToAdd ? t('common.back', { defaultValue: 'Back' }) : t('settings.llm.add_custom_provider_cancel')}
               </button>
@@ -375,11 +399,30 @@ export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({
       )}
 
       {editingProvider && (
-        <div className="provider-modal-backdrop">
-          <div className="provider-modal" role="dialog" aria-modal="true" aria-label={t('settings.llm.edit_provider', { defaultValue: 'Edit provider' })}>
+        <div
+          className="provider-modal-backdrop"
+          data-focus-trap-overlay="true"
+          onClick={handleCloseEditProvider}
+        >
+          <div
+            ref={editProviderModalRef}
+            className="provider-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('settings.llm.edit_provider', { defaultValue: 'Edit provider' })}
+            tabIndex={-1}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="provider-modal-header">
               <h3>{t('settings.llm.edit_provider', { defaultValue: 'Edit provider' })}</h3>
-              <button type="button" className="btn btn-icon btn-secondary-soft" aria-label={t('settings.llm.close_edit_provider', { defaultValue: 'Close edit provider' })} onClick={() => setEditingProvider(null)}><X size={16} /></button>
+              <button
+                type="button"
+                className="btn btn-icon btn-secondary-soft"
+                aria-label={t('settings.llm.close_edit_provider', { defaultValue: 'Close edit provider' })}
+                onClick={handleCloseEditProvider}
+              >
+                <X size={16} />
+              </button>
             </div>
             <div className="provider-modal-body">
               <div className="settings-item">
@@ -394,12 +437,14 @@ export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({
                     ['openai_responses', t('settings.llm.api_mode_openai_responses')],
                     ['anthropic', t('settings.llm.api_mode_claude')],
                     ['gemini', t('settings.llm.api_mode_gemini')],
-                  ].map(([strategy, label]) => <button key={strategy} type="button" className={`provider-mode-option ${editProviderStrategy === strategy ? 'selected' : ''}`} aria-pressed={editProviderStrategy === strategy} onClick={() => setEditProviderStrategy(strategy as CustomLlmProviderStrategy)}>{label}</button>)}
+                  ].map(([strategy, label]) => (
+                    <button key={strategy} type="button" className={`provider-mode-option ${editProviderStrategy === strategy ? 'selected' : ''}`} aria-pressed={editProviderStrategy === strategy} onClick={() => setEditProviderStrategy(strategy as CustomLlmProviderStrategy)}>{label}</button>
+                  ))}
                 </div>
               </div>
             </div>
             <div className="provider-modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={() => setEditingProvider(null)}>{t('common.cancel')}</button>
+              <button type="button" className="btn btn-secondary" onClick={handleCloseEditProvider}>{t('common.cancel')}</button>
               <button type="button" className="btn btn-primary" onClick={handleSaveProviderEdit} disabled={!editProviderName.trim()}>{t('common.save')}</button>
             </div>
           </div>
