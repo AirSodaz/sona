@@ -146,6 +146,20 @@ describe('SegmentEditor', () => {
     fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
     expect(onSplit).toHaveBeenCalledOnce();
   });
+  it('toggles strikethrough formatting on Ctrl+Shift+S or Cmd+Shift+S', async () => {
+    const { input } = renderEditor();
+    const editor = await waitFor(() => getActiveEditor()!);
+    const dispatchSpy = vi.spyOn(editor, 'dispatchCommand');
+
+    fireEvent.keyDown(input, { key: 's', ctrlKey: true, shiftKey: true });
+    expect(dispatchSpy).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'strikethrough');
+
+    dispatchSpy.mockClear();
+
+    fireEvent.keyDown(input, { key: 'S', metaKey: true, shiftKey: true });
+    expect(dispatchSpy).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'strikethrough');
+  });
+
 
   it('calls onSave with HTML on blur', () => {
     const { input } = renderEditor();
@@ -231,6 +245,7 @@ describe('SegmentEditor', () => {
     expect((screen.getByRole('menuitem', { name: 'editor.bold' }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole('menuitem', { name: 'editor.italic' }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole('menuitem', { name: 'editor.underline' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('menuitem', { name: 'editor.strikethrough' }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole('menuitem', { name: 'common.paste' }));
 
     await waitFor(() => expect(input.textContent).toBe('Hello world pasted'));
@@ -253,7 +268,7 @@ describe('SegmentEditor', () => {
       expect($getSelection()?.getTextContent()).toBe('Hello world');
     }));
 
-    for (const format of ['bold', 'italic', 'underline'] as const) {
+    for (const format of ['bold', 'italic', 'underline', 'strikethrough'] as const) {
       fireEvent.contextMenu(input, { clientX: 12, clientY: 12 });
       fireEvent.click(screen.getByRole('menuitem', { name: `editor.${format}` }));
       await waitFor(() => expect(dispatchSpy).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, format));

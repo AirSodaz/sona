@@ -9,6 +9,7 @@ import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import {
   $getRoot,
+  FORMAT_TEXT_COMMAND,
   type EditorState,
   type LexicalEditor,
 } from 'lexical';
@@ -116,6 +117,16 @@ export function SegmentEditor({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key.toLowerCase() === 's' || e.code === 'KeyS')) {
+        e.preventDefault();
+        e.stopPropagation();
+        const editor = editorRef.current;
+        if (editor) {
+          editor.dispatchCommand(FORMAT_TEXT_COMMAND, 'strikethrough');
+        }
+        return;
+      }
+
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         e.stopPropagation();

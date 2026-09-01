@@ -5,7 +5,8 @@ export type EditorShortcutKey =
   | 'selectAll'
   | 'bold'
   | 'italic'
-  | 'underline';
+  | 'underline'
+  | 'strikethrough';
 
 const SHORTCUT_KEYS: Record<EditorShortcutKey, string> = {
   cut: 'X',
@@ -15,6 +16,7 @@ const SHORTCUT_KEYS: Record<EditorShortcutKey, string> = {
   bold: 'B',
   italic: 'I',
   underline: 'U',
+  strikethrough: 'Shift+S',
 };
 
 export function getEditorShortcut(key: EditorShortcutKey): string {

@@ -1637,6 +1637,7 @@
         "editor_bold": "加粗",
         "editor_italic": "斜體",
         "editor_underline": "底線",
+        "editor_strikethrough": "刪除線",
         "editor_split_segment": "拆分段落",
         "section_live": "即時錄音",
         "record_start_stop": "開始 / 停止錄音",

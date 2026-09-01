@@ -156,7 +156,7 @@ After Sona creates transcript segments, the editor becomes the main place to rev
 1. Review the segment list in the editor.
 2. Click a timestamp to seek playback to that time.
 3. Double-click segment text, or use the edit action, to start editing.
-4. Right-click a read-only segment for `Copy` and `Select All`. While editing, right-click for `Cut`, `Copy`, `Paste`, `Select All`, `Bold`, `Italic`, and `Underline`; the keyboard context-menu key or `Shift + F10` opens the same menu.
+4. Right-click a read-only segment for `Copy` and `Select All`. While editing, right-click for `Cut`, `Copy`, `Paste`, `Select All`, `Bold`, `Italic`, `Underline`, and `Strikethrough`; the keyboard context-menu key or `Shift + F10` opens the same menu.
 5. Press `Enter` to save the current segment.
 6. Press `Shift + Enter` to split the current segment at the cursor.
 7. Use the merge action to combine a segment with the next one.
@@ -177,7 +177,7 @@ After Sona creates transcript segments, the editor becomes the main place to rev
 ### Notes
 
 - The editor toolbar only appears while a segment is actively being edited.
-- The toolbar supports `Undo`, `Redo`, `Bold`, `Italic`, `Underline`, and segment splitting.
+- The toolbar supports `Undo`, `Redo`, `Bold`, `Italic`, `Underline`, `Strikethrough`, and segment splitting.
 - Search can jump between matching segments without leaving the editor.
 - `Speaker Review` appears with the transcript tools when there are transcript segments. If the transcript has no speaker metadata yet, the review list can be empty.
 - `Speaker Profiles` are created in `Settings > Vocabulary`; project settings can choose which profiles are active for that project. Profiles help with candidates and automatic matching, but you can still confirm, reassign, or reset labels manually.

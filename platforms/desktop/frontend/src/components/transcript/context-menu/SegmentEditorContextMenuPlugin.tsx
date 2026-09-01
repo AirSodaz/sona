@@ -15,6 +15,7 @@ import {
   Copy,
   Italic as ItalicIcon,
   Scissors,
+  Strikethrough as StrikethroughIcon,
   TextSelect,
   Underline as UnderlineIcon,
 } from 'lucide-react';
@@ -57,23 +58,27 @@ export function SegmentEditorContextMenuPlugin({
     selection: BaseSelection | null,
     action?: () => void,
   ): boolean => {
-    const root = editor.getRootElement();
-    const selectionSnapshot = selection?.clone() ?? null;
-    if (!mountedRef.current || !root?.isConnected) {
-      return false;
+    if (!mountedRef.current) return false;
+    const rootElement = editor.getRootElement();
+    if (!rootElement) return false;
+
+    rootElement.focus();
+    if (selection) {
+      editor.update(() => {
+        $setSelection(selection.clone());
+      }, {
+        onUpdate: () => {
+          if (mountedRef.current && action) {
+            action();
+          }
+        },
+      });
+      return true;
     }
 
-    window.setTimeout(() => {
-      const currentRoot = editor.getRootElement();
-      if (!mountedRef.current || !currentRoot?.isConnected) return;
-      currentRoot.focus();
-      editor.update(() => {
-        if (selectionSnapshot) {
-          $setSelection(selectionSnapshot);
-        }
-        action?.();
-      }, { discrete: true });
-    }, 0);
+    if (action) {
+      action();
+    }
     return true;
   }, [editor]);
 
@@ -139,6 +144,7 @@ export function SegmentEditorContextMenuPlugin({
       { id: 'bold', label: t('editor.bold'), icon: <BoldIcon />, shortcut: getEditorShortcut('bold'), dividerBefore: true, onSelect: () => format('bold') },
       { id: 'italic', label: t('editor.italic'), icon: <ItalicIcon />, shortcut: getEditorShortcut('italic'), onSelect: () => format('italic') },
       { id: 'underline', label: t('editor.underline'), icon: <UnderlineIcon />, shortcut: getEditorShortcut('underline'), onSelect: () => format('underline') },
+      { id: 'strikethrough', label: t('editor.strikethrough'), icon: <StrikethroughIcon />, shortcut: getEditorShortcut('strikethrough'), onSelect: () => format('strikethrough') },
     ];
 
     openContextMenu({
@@ -161,32 +167,30 @@ export function SegmentEditorContextMenuPlugin({
   }, [contextId, editor, onCommit, onMenuOpenChange, openContextMenu, restoreEditor, t]);
 
   useEffect(() => {
-    let currentRoot: HTMLElement | null = null;
+    const rootElement = editor.getRootElement();
+    if (!rootElement) return;
+
     const handleContextMenu = (event: MouseEvent) => {
       event.preventDefault();
-      openMenu(event.currentTarget as HTMLElement, { x: event.clientX, y: event.clientY }, 'pointer');
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'ContextMenu' && !(event.key === 'F10' && event.shiftKey)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const root = event.currentTarget as HTMLElement;
-      const rect = root.getBoundingClientRect();
-      openMenu(root, { x: rect.left + 12, y: rect.top + 12 }, 'keyboard');
+      openMenu(rootElement, { x: event.clientX, y: event.clientY }, 'pointer');
     };
 
-    const unregisterRootListener = editor.registerRootListener((root, previousRoot) => {
-      previousRoot?.removeEventListener('contextmenu', handleContextMenu);
-      previousRoot?.removeEventListener('keydown', handleKeyDown);
-      root?.addEventListener('contextmenu', handleContextMenu);
-      root?.addEventListener('keydown', handleKeyDown);
-      currentRoot = root;
-    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isShiftF10 = event.key === 'F10' && event.shiftKey;
+      const isContextMenuKey = event.key === 'ContextMenu';
+      if (!isShiftF10 && !isContextMenuKey) return;
+
+      event.preventDefault();
+      const rect = rootElement.getBoundingClientRect();
+      openMenu(rootElement, { x: rect.left + 12, y: rect.top + 12 }, 'keyboard');
+    };
+
+    rootElement.addEventListener('contextmenu', handleContextMenu);
+    rootElement.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      currentRoot?.removeEventListener('contextmenu', handleContextMenu);
-      currentRoot?.removeEventListener('keydown', handleKeyDown);
-      unregisterRootListener();
+      rootElement.removeEventListener('contextmenu', handleContextMenu);
+      rootElement.removeEventListener('keydown', handleKeyDown);
     };
   }, [editor, openMenu]);
 

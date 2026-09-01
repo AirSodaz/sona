@@ -1637,6 +1637,7 @@
         "editor_bold": "Bold",
         "editor_italic": "Italic",
         "editor_underline": "Underline",
+        "editor_strikethrough": "취소선",
         "editor_split_segment": "Split 세그먼트",
         "section_live": "Live Record",
         "record_start_stop": "녹음 시작 / 중지",

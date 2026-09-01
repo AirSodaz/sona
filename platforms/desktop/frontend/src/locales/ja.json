@@ -1637,6 +1637,7 @@
         "editor_bold": "太字",
         "editor_italic": "イタリック体",
         "editor_underline": "下線",
+        "editor_strikethrough": "取り消し線",
         "editor_split_segment": "分割セグメント",
         "section_live": "ライブレコーディング",
         "record_start_stop": "録音の開始/停止",

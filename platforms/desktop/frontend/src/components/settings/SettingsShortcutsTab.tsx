@@ -60,6 +60,7 @@ export function SettingsShortcutsTab(): React.JSX.Element {
                 { key: 'Ctrl + B', description: t('shortcuts.editor_bold') },
                 { key: 'Ctrl + I', description: t('shortcuts.editor_italic') },
                 { key: 'Ctrl + U', description: t('shortcuts.editor_underline') },
+                { key: 'Ctrl + Shift + S', description: t('shortcuts.editor_strikethrough') },
                 { key: 'Shift + Enter', description: t('shortcuts.editor_split_segment') },
             ]
         }

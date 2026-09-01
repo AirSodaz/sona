@@ -1637,6 +1637,7 @@
         "editor_bold": "Bold",
         "editor_italic": "Italic",
         "editor_underline": "Underline",
+        "editor_strikethrough": "Strikethrough",
         "editor_split_segment": "Split Segment",
         "section_live": "Live Recording",
         "record_start_stop": "Start / Stop Recording",
