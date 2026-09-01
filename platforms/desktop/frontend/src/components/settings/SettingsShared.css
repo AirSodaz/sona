@@ -248,6 +248,18 @@
   background: var(--color-bg-primary);
 }
 
+.accordion-header-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  transition: background var(--transition-fast, 0.15s) ease;
+}
+
+.accordion-header-row .accordion-header-btn {
+  flex: 1;
+  min-width: 0;
+}
+
 .accordion-header-btn {
   display: flex;
   align-items: center;
@@ -292,6 +304,13 @@
   align-items: center;
 }
 
+.accordion-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: var(--spacing-lg, 24px);
+  flex-shrink: 0;
+}
 .settings-accordion-copy {
   display: flex;
   flex: 1;

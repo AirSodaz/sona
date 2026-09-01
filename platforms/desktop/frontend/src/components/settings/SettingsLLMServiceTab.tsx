@@ -238,38 +238,37 @@ export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({
         title={t('settings.llm.credentials_section')}
         description={t('settings.llm.credentials_hint')}
         icon={<Settings2 size={20} />}
+        contentClassName="accordion-container"
       >
-        <div className="accordion-container">
-          {configuredProviderDefinitions.map(def => (
-            <ProviderAccordionItem
-               key={def.id}
-               provider={def.id}
-               config={config}
-               isOpen={effectiveExpandedProvider === def.id}
-               onToggle={() => setExpandedProvider(effectiveExpandedProvider === def.id ? null : def.id)}
-               applyProviderUpdates={(updates) => applyProviderUpdates(def.id, updates)}
-               onOpenDetails={onOpenProviderDetails ? () => onOpenProviderDetails(def.id) : undefined}
-               onEdit={def.id.startsWith('custom-') ? () => openEditProvider(def.id) : undefined}
-               onDelete={def.id.startsWith('custom-') ? () => handleDeleteProvider(def.id) : undefined}
-               t={t}
-             />
-           ))
-          }
-          {configuredProviderDefinitions.length === 0 && (
-            <div className="settings-hint provider-empty-state">
-              {t('settings.llm.no_configured_providers', { defaultValue: 'No providers configured yet.' })}
-            </div>
-          )}
-          <div className="custom-provider-actions">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={openAddProvider}
-            >
-              <Plus size={16} />
-              <span>{t('settings.llm.add_custom_provider')}</span>
-            </button>
+        {configuredProviderDefinitions.map(def => (
+          <ProviderAccordionItem
+             key={def.id}
+             provider={def.id}
+             config={config}
+             isOpen={effectiveExpandedProvider === def.id}
+             onToggle={() => setExpandedProvider(effectiveExpandedProvider === def.id ? null : def.id)}
+             applyProviderUpdates={(updates) => applyProviderUpdates(def.id, updates)}
+             onOpenDetails={onOpenProviderDetails ? () => onOpenProviderDetails(def.id) : undefined}
+             onEdit={def.id.startsWith('custom-') ? () => openEditProvider(def.id) : undefined}
+             onDelete={def.id.startsWith('custom-') ? () => handleDeleteProvider(def.id) : undefined}
+             t={t}
+           />
+         ))
+        }
+        {configuredProviderDefinitions.length === 0 && (
+          <div className="settings-model-empty provider-empty-state">
+            {t('settings.llm.no_configured_providers', { defaultValue: 'No providers configured yet.' })}
           </div>
+        )}
+        <div className="custom-provider-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={openAddProvider}
+          >
+            <Plus size={16} />
+            <span>{t('settings.llm.add_custom_provider')}</span>
+          </button>
         </div>
       </SettingsSection>
 

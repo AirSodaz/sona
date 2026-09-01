@@ -12,6 +12,7 @@ import { markSettingsPerf } from '../utils/settingsPerf';
 import {
     SETTINGS_TABS,
     loadSettingsAboutTab,
+    loadSettingsApiServerTab,
     loadSettingsAutomationTab,
     loadSettingsDashboardTab,
     loadSettingsGeneralTab,
@@ -56,7 +57,7 @@ const SettingsModelsPane = lazy(loadSettingsModelsPane);
 const SettingsVocabularyTab = lazy(loadSettingsVocabularyTab);
 const SettingsAutomationTab = lazy(loadSettingsAutomationTab);
 const SettingsStorageTab = lazy(loadSettingsStorageTab);
-const SettingsApiServerTab = lazy(() => import('./settings/settingsLoaders').then(m => m.loadSettingsApiServerTab()));
+const SettingsApiServerTab = lazy(loadSettingsApiServerTab);
 const SettingsLLMServiceTab = lazy(loadSettingsLLMServiceTab);
 const SettingsShortcutsTab = lazy(loadSettingsShortcutsTab);
 const SettingsAboutTab = lazy(loadSettingsAboutTab);

@@ -48,12 +48,14 @@ interface SettingsSectionProps {
     title?: string;
     description?: string;
     icon?: ReactNode;
+    className?: string;
+    contentClassName?: string;
     children: ReactNode;
 }
 
-export function SettingsSection({ title, description, icon, children }: SettingsSectionProps) {
+export function SettingsSection({ title, description, icon, className = '', contentClassName = '', children }: SettingsSectionProps) {
     return (
-        <section className="settings-section">
+        <section className={`settings-section ${className}`.trim()}>
             {(title || description) && (
                 <div className="settings-section-header">
                     {title && (
@@ -67,7 +69,7 @@ export function SettingsSection({ title, description, icon, children }: Settings
                     )}
                 </div>
             )}
-            <div className="settings-section-content">
+            <div className={`settings-section-content ${contentClassName}`.trim()}>
                 {children}
             </div>
         </section>
@@ -119,13 +121,24 @@ export function SettingsItem({
 interface SettingsAccordionProps {
     title: string | ReactNode;
     status?: ReactNode;
+    actions?: ReactNode;
     defaultOpen?: boolean;
     isOpen?: boolean;
     onToggle?: () => void;
+    contentTestId?: string;
     children: ReactNode;
 }
 
-export function SettingsAccordion({ title, status, defaultOpen = false, isOpen, onToggle, children }: SettingsAccordionProps) {
+export function SettingsAccordion({
+    title,
+    status,
+    actions,
+    defaultOpen = false,
+    isOpen,
+    onToggle,
+    contentTestId,
+    children,
+}: SettingsAccordionProps) {
     const [localOpen, setLocalOpen] = useState(defaultOpen);
 
     const isExpanded = isOpen !== undefined ? isOpen : localOpen;
@@ -140,15 +153,23 @@ export function SettingsAccordion({ title, status, defaultOpen = false, isOpen, 
 
     return (
         <div className="accordion-wrapper">
-            <button type="button" className="accordion-header-btn" onClick={handleToggle} aria-expanded={isExpanded}>
-                <div className="accordion-header-left">
-                    <ChevronRight size={18} className={`accordion-chevron ${isExpanded ? 'open' : ''}`} />
-                    <span>{title}</span>
-                </div>
-                {status && <div className="accordion-header-status">{status}</div>}
-            </button>
+            <div className="accordion-header-row">
+                <button
+                    type="button"
+                    className="accordion-header-btn accordion-header"
+                    onClick={handleToggle}
+                    aria-expanded={isExpanded}
+                >
+                    <div className="accordion-header-left">
+                        <ChevronRight size={18} className={`accordion-chevron ${isExpanded ? 'open' : ''}`} />
+                        <span>{title}</span>
+                    </div>
+                    {status && <div className="accordion-header-status">{status}</div>}
+                </button>
+                {actions && <div className="accordion-header-actions">{actions}</div>}
+            </div>
             {isExpanded && (
-                <div className="accordion-content-panel">
+                <div className="accordion-content-panel accordion-content" data-testid={contentTestId}>
                     {children}
                 </div>
             )}

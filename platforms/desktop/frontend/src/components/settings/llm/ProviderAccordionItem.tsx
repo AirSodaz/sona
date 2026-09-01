@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Loader2, Pencil, Trash2, X } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Check, Loader2, Pencil, Trash2, X } from 'lucide-react';
 import { LlmProvider, LlmProviderSetting } from '../../../types/transcript';
 import { LlmAssistantConfig } from '../../../types/config';
 import type { LlmGenerateCommandRequest } from '../../../types/dashboard';
@@ -11,6 +11,7 @@ import {
 } from '../../../services/llm/providers';
 import { generateLlmText } from '../../../services/tauri/llm';
 import { getCurrentLlmSettings, getModelPlaceholder, isProviderConfiguredForConfig } from './helpers';
+import { SettingsAccordion, SettingsItem } from '../SettingsLayout';
 
 interface ProviderAccordionItemProps {
   provider: LlmProvider;
@@ -68,167 +69,200 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
       setTestMessage(normalizeError(error).message);
     }
   };
+  const status = useMemo(() => {
+    if (isConfigured) {
+      return { type: 'ready', text: t('settings.llm.status_ready', { defaultValue: '已就绪' }) };
+    }
+    if (def.requiresApiKey) {
+      return { type: 'missing', text: t('settings.llm.status_missing_api_key', { defaultValue: '缺少 API Key' }) };
+    }
+    return { type: 'off', text: t('settings.llm.status_off', { defaultValue: '未配置' }) };
+  }, [isConfigured, def.requiresApiKey, t]);
 
-  return (
-    <div className="accordion-item">
-      <div
-        className="accordion-header"
-        role="button"
-        tabIndex={0}
-        aria-expanded={isOpen}
-        onClick={onToggle}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            onToggle();
-          }
-        }}
-      >
-        <div className="accordion-title-container">
-          {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-          <span>{t(def.labelKey, { defaultValue: def.labelDefault })}</span>
-        </div>
-        <div className="accordion-header-status">
-          {isConfigured && (
-            <span className="status-badge ready"><Check size={12}/> {t('settings.llm.status_ready')}</span>
-          )}
-          {!isConfigured && def.requiresApiKey && (
-             <span className="status-badge missing"><X size={12}/> {t('settings.llm.status_missing_api_key')}</span>
-          )}
-        </div>
-        {(onEdit || onDelete) && (
-          <div className="provider-header-actions">
-            {onEdit && <button type="button" className="btn btn-icon btn-secondary-soft" aria-label={t('settings.llm.edit_provider', { defaultValue: 'Edit provider' })} onClick={(event) => { event.stopPropagation(); onEdit(); }}><Pencil size={14} /></button>}
-            {onDelete && <button type="button" className="btn btn-icon btn-secondary-soft" aria-label={t('settings.llm.delete_provider', { defaultValue: 'Delete provider' })} onClick={(event) => { event.stopPropagation(); onDelete(); }}><Trash2 size={14} /></button>}
-          </div>
-        )}
-      </div>
-      {isOpen && (
-        <div className="accordion-content" data-testid={`provider-accordion-content-${provider}`}>
-          {def.id === 'google_translate_free' ? (
-            <div className="settings-hint provider-free-hint">
-              {t('settings.llm.free_service_hint')}
-            </div>
-          ) : (
-            <>
-              <div className="settings-item">
-                <label className="settings-label" htmlFor={`llm-${def.id}-host`}>{def.apiHostLabelKey ? t(def.apiHostLabelKey, { defaultValue: def.apiHostLabelDefault }) : t('settings.llm.base_url')}</label>
-                {def.editableApiHost === false ? (
-                  <div className="settings-input provider-readonly-field" id={`llm-${def.id}-host`}>
-                    {setting?.apiHost || def.defaultApiHost}
-                  </div>
-                ) : (
-                  <input
-                    id={`llm-${def.id}-host`}
-                    type="text"
-                    className="settings-input"
-                    value={setting?.apiHost || ''}
-                    onChange={(e) => applyProviderUpdates({ apiHost: e.target.value })}
-                    placeholder={def.defaultApiHost}
-                  />
-                )}
-              </div>
-
-              <div className="settings-item">
-                <label className="settings-label" htmlFor={`llm-${def.id}-key`}>{t('settings.llm.api_key')}</label>
-                <input
-                  id={`llm-${def.id}-key`}
-                  type="password"
-                  className="settings-input"
-                  value={setting?.apiKey || ''}
-                  onChange={(e) => applyProviderUpdates({ apiKey: e.target.value })}
-                  placeholder={def.requiresApiKey ? 'sk-...' : t('settings.llm.optional_api_key')}
-                />
-              </div>
-
-              {setting?.apiVersion !== undefined && (
-                <div className="settings-item">
-                  <label className="settings-label" htmlFor={`llm-${def.id}-version`}>{t('settings.llm.api_version')}</label>
-                  <input
-                    id={`llm-${def.id}-version`}
-                    type="text"
-                    className="settings-input"
-                    value={setting.apiVersion}
-                    onChange={(e) => applyProviderUpdates({ apiVersion: e.target.value })}
-                    placeholder={def.defaultApiVersion || ''}
-                  />
-                </div>
-              )}
-
-              {setting?.apiPath !== undefined && (
-                <div className="settings-item">
-                  <label className="settings-label" htmlFor={`llm-${def.id}-path`}>{t('settings.llm.api_path')}</label>
-                  <input
-                    id={`llm-${def.id}-path`}
-                    type="text"
-                    className="settings-input"
-                    value={setting.apiPath}
-                    onChange={(e) => applyProviderUpdates({ apiPath: e.target.value })}
-                    readOnly={def.editableApiHost === false || provider === 'open_ai_responses' || provider === 'volcengine' || provider === 'perplexity'}
-                  />
-                </div>
-              )}
-            </>
-          )}
-
-          <div className="feature-field provider-test-actions">
-            <div className="provider-test-stack">
-              {def.id !== 'google_translate' && def.id !== 'google_translate_free' ? (
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-loading-wrapper"
-                  style={{ width: 'fit-content', minWidth: '120px' }}
-                  onClick={onOpenDetails}
-                  disabled={!onOpenDetails}
-                >
-                  <div className="btn-content-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                    <span>{t('settings.llm.details')}</span>
-                  </div>
-                </button>
-              ) : (() => {
-                let testBtnClass = 'btn-secondary';
-                let icon = null;
-                let label = t('settings.llm.test_connection');
-
-                if (testStatus === 'loading') {
-                  icon = <Loader2 className="animate-spin" size={16} />;
-                  label = t('settings.llm.testing');
-                } else if (testStatus === 'success') {
-                  testBtnClass = 'btn-success-flash';
-                  icon = <Check size={16} />;
-                  label = t('settings.llm.connection_success');
-                } else if (testStatus === 'error') {
-                  testBtnClass = 'btn-error-flash';
-                  icon = <X size={16} />;
-                  label = t('settings.llm.connection_failed');
-                }
-
-                return (
-                  <button
-                    type="button"
-                    className={`btn ${testBtnClass} btn-loading-wrapper`}
-                    style={{ width: 'fit-content', minWidth: '120px' }}
-                    onClick={handleTestConnection}
-                    disabled={testStatus === 'loading'}
-                  >
-                    <div className="btn-content-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                      {icon}
-                      <span>{label}</span>
-                    </div>
-                  </button>
-                );
-              })()}
-
-              {testStatus === 'error' && testMessage && (
-                <div className="connection-error-detail">
-                  <X size={12} />
-                  <span>{testMessage}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+  const actions = (onEdit || onDelete) ? (
+    <div className="provider-header-actions" onClick={(e) => e.stopPropagation()}>
+      {onEdit && (
+        <button
+          type="button"
+          className="btn btn-icon btn-secondary-soft"
+          aria-label={t('settings.llm.edit_provider', { defaultValue: 'Edit provider' })}
+          onClick={onEdit}
+        >
+          <Pencil size={14} />
+        </button>
+      )}
+      {onDelete && (
+        <button
+          type="button"
+          className="btn btn-icon btn-secondary-soft"
+          aria-label={t('settings.llm.delete_provider', { defaultValue: 'Delete provider' })}
+          onClick={onDelete}
+        >
+          <Trash2 size={14} />
+        </button>
       )}
     </div>
+  ) : undefined;
+
+  return (
+    <SettingsAccordion
+      title={t(def.labelKey, { defaultValue: def.labelDefault })}
+      status={<span className={`status-badge ${status.type}`}>{status.text}</span>}
+      actions={actions}
+      isOpen={isOpen}
+      onToggle={onToggle}
+      contentTestId={`provider-accordion-content-${provider}`}
+    >
+      {def.id === 'google_translate_free' ? (
+        <div className="settings-hint provider-free-hint">
+          {t('settings.llm.free_service_hint')}
+        </div>
+      ) : (
+        <>
+          <SettingsItem
+            title={def.apiHostLabelKey ? t(def.apiHostLabelKey, { defaultValue: def.apiHostLabelDefault }) : t('settings.llm.base_url')}
+          >
+            <div style={{ width: '320px' }}>
+              {def.editableApiHost === false ? (
+                <input
+                  id={`llm-${def.id}-host`}
+                  type="text"
+                  className="settings-input"
+                  value={setting?.apiHost || def.defaultApiHost}
+                  readOnly
+                  disabled
+                />
+              ) : (
+                <input
+                  id={`llm-${def.id}-host`}
+                  type="text"
+                  className="settings-input"
+                  value={setting?.apiHost || ''}
+                  onChange={(e) => applyProviderUpdates({ apiHost: e.target.value })}
+                  placeholder={def.defaultApiHost}
+                />
+              )}
+            </div>
+          </SettingsItem>
+
+          <SettingsItem
+            title={t('settings.llm.api_key')}
+          >
+            <div style={{ width: '320px' }}>
+              <input
+                id={`llm-${def.id}-key`}
+                type="password"
+                className="settings-input"
+                value={setting?.apiKey || ''}
+                onChange={(e) => applyProviderUpdates({ apiKey: e.target.value })}
+                placeholder={def.requiresApiKey ? 'sk-...' : t('settings.llm.optional_api_key')}
+              />
+            </div>
+          </SettingsItem>
+
+          {setting?.apiVersion !== undefined && (
+            <SettingsItem
+              title={t('settings.llm.api_version')}
+            >
+              <div style={{ width: '320px' }}>
+                <input
+                  id={`llm-${def.id}-version`}
+                  type="text"
+                  className="settings-input"
+                  value={setting.apiVersion}
+                  onChange={(e) => applyProviderUpdates({ apiVersion: e.target.value })}
+                  placeholder={def.defaultApiVersion || ''}
+                />
+              </div>
+            </SettingsItem>
+          )}
+
+          {setting?.apiPath !== undefined && (
+            <SettingsItem
+              title={t('settings.llm.api_path')}
+            >
+              <div style={{ width: '320px' }}>
+                <input
+                  id={`llm-${def.id}-path`}
+                  type="text"
+                  className="settings-input"
+                  value={setting.apiPath}
+                  onChange={(e) => applyProviderUpdates({ apiPath: e.target.value })}
+                  readOnly={def.editableApiHost === false || provider === 'open_ai_responses' || provider === 'volcengine' || provider === 'perplexity'}
+                />
+              </div>
+            </SettingsItem>
+          )}
+
+          {def.id !== 'google_translate' && (
+            <SettingsItem
+              title={t('settings.llm.models_management_title', { defaultValue: '模型管理' })}
+              hint={t('settings.llm.models_management_hint', { defaultValue: '管理和测试该供应商下的模型列表' })}
+            >
+              <button
+                type="button"
+                className="btn btn-secondary btn-loading-wrapper"
+                style={{ width: 'fit-content', minWidth: '120px' }}
+                onClick={onOpenDetails}
+                disabled={!onOpenDetails}
+              >
+                <div className="btn-content-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <span>{t('settings.llm.details')}</span>
+                </div>
+              </button>
+            </SettingsItem>
+          )}
+
+          {def.id === 'google_translate' && (
+            <SettingsItem
+              title={t('settings.llm.test_connection_title', { defaultValue: '连接测试' })}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                {(() => {
+                  let testBtnClass = 'btn-secondary';
+                  let icon = null;
+                  let label = t('settings.llm.test_connection');
+
+                  if (testStatus === 'loading') {
+                    icon = <Loader2 className="animate-spin" size={16} />;
+                    label = t('settings.llm.testing');
+                  } else if (testStatus === 'success') {
+                    testBtnClass = 'btn-success-flash';
+                    icon = <Check size={16} />;
+                    label = t('settings.llm.connection_success');
+                  } else if (testStatus === 'error') {
+                    testBtnClass = 'btn-error-flash';
+                    icon = <X size={16} />;
+                    label = t('settings.llm.connection_failed');
+                  }
+
+                  return (
+                    <button
+                      type="button"
+                      className={`btn ${testBtnClass} btn-loading-wrapper`}
+                      style={{ width: 'fit-content', minWidth: '120px' }}
+                      onClick={handleTestConnection}
+                      disabled={testStatus === 'loading'}
+                    >
+                      <div className="btn-content-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                        {icon}
+                        <span>{label}</span>
+                      </div>
+                    </button>
+                  );
+                })()}
+
+                {testStatus === 'error' && testMessage && (
+                  <div className="connection-error-detail">
+                    <X size={12} />
+                    <span>{testMessage}</span>
+                  </div>
+                )}
+              </div>
+            </SettingsItem>
+          )}
+        </>
+      )}
+    </SettingsAccordion>
   );
 });

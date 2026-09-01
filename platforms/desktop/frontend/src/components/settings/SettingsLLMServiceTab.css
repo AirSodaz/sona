@@ -221,87 +221,13 @@
   }
 }
 
-/* Accordion */
-.accordion-container {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  background: var(--color-border);
-  border-radius: inherit; /* Match parent SettingsSectionContent */
-  overflow: visible; /* Allow internal dropdowns to pop out */
-}
-
-.accordion-item {
-  --provider-accordion-inline-padding: var(--spacing-lg, 24px);
-  --provider-accordion-chevron-size: 18px;
-  --provider-accordion-title-gap: 10px;
-  --provider-accordion-title-indent: calc(
-    var(--provider-accordion-chevron-size) + var(--provider-accordion-title-gap)
-  );
-  background: var(--color-bg-elevated);
-  transition: background-color var(--transition-fast);
-}
-
-.accordion-item:first-child {
-  border-top-left-radius: inherit;
-  border-top-right-radius: inherit;
-}
-
-.accordion-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: var(--spacing-md) var(--provider-accordion-inline-padding);
-  cursor: pointer;
-  user-select: none;
-  font-weight: 500;
-  color: var(--color-text-primary);
-  transition: background-color var(--transition-fast);
-}
-
-.accordion-header:hover {
-  background: var(--color-bg-hover);
-}
-
-.accordion-title-container {
-  display: flex;
-  align-items: center;
-  gap: var(--provider-accordion-title-gap);
-  flex: 1;
-  min-width: 0;
-}
-
-.accordion-header-status {
-  flex-shrink: 0;
-}
-
-.provider-header-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.accordion-content {
-  padding:
-    var(--spacing-lg, 24px)
-    var(--provider-accordion-inline-padding)
-    var(--spacing-lg, 24px)
-    calc(var(--provider-accordion-inline-padding) + var(--provider-accordion-title-indent));
-  border-top: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md, 16px);
-  animation: llmProviderAccordionReveal 0.2s ease-out forwards;
-}
-
+/* Accordion & Provider credentials */
 .provider-readonly-field {
   align-items: center;
   display: flex;
-  min-height: 40px;
-  opacity: 0.75;
+  min-height: 38px;
+  color: var(--color-text-muted);
+  user-select: text;
 }
 
 .provider-free-hint {
@@ -310,10 +236,7 @@
 }
 
 .custom-provider-actions {
-  background: var(--color-bg-elevated);
-  border-top: 1px solid var(--color-border);
-  border-bottom-left-radius: inherit;
-  border-bottom-right-radius: inherit;
+  background: var(--color-bg-primary);
   padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
 }
 
@@ -325,7 +248,16 @@
 
 .provider-empty-state {
   padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
-  background: var(--color-bg-secondary);
+  background: var(--color-bg-primary);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.provider-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .provider-picker-group {
@@ -740,28 +672,6 @@
   gap: 8px;
 }
 
-@media (max-width: 640px) {
-  .accordion-item {
-    --provider-accordion-inline-padding: 16px;
-  }
-
-  .accordion-header {
-    padding: 14px var(--provider-accordion-inline-padding);
-  }
-
-  .accordion-content {
-    padding:
-      16px
-      var(--provider-accordion-inline-padding)
-      16px
-      calc(var(--provider-accordion-inline-padding) + var(--provider-accordion-title-indent));
-  }
-}
-
-@keyframes llmProviderAccordionReveal {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: none; }
-}
 
 /* Feature specific inputs */
 .feature-temperature-row {
