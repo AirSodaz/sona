@@ -32,6 +32,7 @@ import type {
     WebviewBrowsingDataClearResult,
 } from '../../types/storage';
 import { SettingsItem, SettingsPageHeader, SettingsSection, SettingsTabContainer } from './SettingsLayout';
+import './SettingsShared.css';
 
 const RETENTION_PRESETS = [
     { value: 'forever', days: null, labelKey: 'settings.storage.retention_forever', defaultLabel: 'Keep forever' },
@@ -595,7 +596,12 @@ export function SettingsStorageTab(): React.JSX.Element {
                                 })}
                             </p>
                         </div>
-                        <div className="settings-storage-path-box" title={directoriesInfo?.dataDir}>
+                        <div
+                            className="settings-storage-path-box"
+                            data-tooltip={directoriesInfo?.dataDir || undefined}
+                            data-tooltip-pos="top"
+                            data-tooltip-multiline
+                        >
                             <code>{directoriesInfo?.dataDir || t('common.loading', { defaultValue: 'Loading...' })}</code>
                         </div>
                         <div className="settings-storage-location-actions">
@@ -613,7 +619,6 @@ export function SettingsStorageTab(): React.JSX.Element {
                                 className="btn btn-ghost btn-sm"
                                 onClick={() => { void handleOpenDataDir(); }}
                                 disabled={!directoriesInfo?.dataDir}
-                                title={t('settings.storage.open_folder', { defaultValue: 'Open in Explorer' })}
                             >
                                 <ExternalLink size={14} aria-hidden="true" />
                                 {t('settings.storage.open_folder', { defaultValue: 'Open Folder' })}
@@ -650,7 +655,12 @@ export function SettingsStorageTab(): React.JSX.Element {
                                 })}
                             </p>
                         </div>
-                        <div className="settings-storage-path-box" title={directoriesInfo?.modelsDir}>
+                        <div
+                            className="settings-storage-path-box"
+                            data-tooltip={directoriesInfo?.modelsDir || undefined}
+                            data-tooltip-pos="top"
+                            data-tooltip-multiline
+                        >
                             <code>{directoriesInfo?.modelsDir || t('common.loading', { defaultValue: 'Loading...' })}</code>
                         </div>
                         <div className="settings-storage-location-actions">
@@ -668,7 +678,6 @@ export function SettingsStorageTab(): React.JSX.Element {
                                 className="btn btn-ghost btn-sm"
                                 onClick={() => { void handleOpenModelsDir(); }}
                                 disabled={!directoriesInfo?.modelsDir}
-                                title={t('settings.storage.open_folder', { defaultValue: 'Open in Explorer' })}
                             >
                                 <ExternalLink size={14} aria-hidden="true" />
                                 {t('settings.storage.open_folder', { defaultValue: 'Open Folder' })}

@@ -406,10 +406,33 @@ describe('SettingsStorageTab', () => {
     render(<SettingsStorageTab />);
 
     expect(await screen.findByText('Storage Locations')).toBeTruthy();
-    expect(screen.getByTestId('settings-storage-data-dir-card')).toBeTruthy();
-    expect(screen.getByTestId('settings-storage-models-dir-card')).toBeTruthy();
+    const dataCard = screen.getByTestId('settings-storage-data-dir-card');
+    const modelsCard = screen.getByTestId('settings-storage-models-dir-card');
+
+    expect(dataCard).toBeTruthy();
+    expect(modelsCard).toBeTruthy();
     expect(screen.getByText('/default/data')).toBeTruthy();
     expect(screen.getByText('/default/data/models')).toBeTruthy();
+
+    const dataPathBox = dataCard.querySelector('.settings-storage-path-box');
+    expect(dataPathBox?.getAttribute('title')).toBeNull();
+    expect(dataPathBox?.getAttribute('data-tooltip')).toBe('/default/data');
+    expect(dataPathBox?.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(dataPathBox?.hasAttribute('data-tooltip-multiline')).toBe(true);
+
+    const modelsPathBox = modelsCard.querySelector('.settings-storage-path-box');
+    expect(modelsPathBox?.getAttribute('title')).toBeNull();
+    expect(modelsPathBox?.getAttribute('data-tooltip')).toBe('/default/data/models');
+    expect(modelsPathBox?.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(modelsPathBox?.hasAttribute('data-tooltip-multiline')).toBe(true);
+
+    const dataOpenBtn = dataCard.querySelectorAll('button')[1];
+    expect(dataOpenBtn?.getAttribute('title')).toBeNull();
+    expect(dataOpenBtn?.getAttribute('data-tooltip')).toBeNull();
+
+    const modelsOpenBtn = modelsCard.querySelectorAll('button')[1];
+    expect(modelsOpenBtn?.getAttribute('title')).toBeNull();
+    expect(modelsOpenBtn?.getAttribute('data-tooltip')).toBeNull();
   });
 
   it('allows changing data directory and confirms before relaunch', async () => {

@@ -939,10 +939,34 @@
   border-radius: var(--radius-sm, 6px);
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border);
-  overflow: hidden;
+  min-width: 0;
+  cursor: default;
 }
 
+.settings-storage-path-box[data-tooltip]::after {
+  left: 0;
+  right: auto;
+  transform: none;
+  max-width: min(380px, 100%);
+  width: max-content;
+  white-space: normal;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.73rem;
+  line-height: 1.4;
+  padding: 6px 10px;
+  direction: ltr;
+  text-align: left;
+}
+
+.settings-storage-path-box[data-tooltip]:hover::after,
+.settings-storage-path-box[data-tooltip]:focus-visible::after {
+  transform: translateY(-4px);
+}
 .settings-storage-path-box code {
+  min-width: 0;
+  width: 100%;
   font-family: var(--font-mono, monospace);
   font-size: 0.76rem;
   color: var(--color-text-secondary);
