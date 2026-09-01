@@ -1,0 +1,409 @@
+/* =========================================================================
+   Settings Automation UI - Sona Warm Minimalism (Notion Style)
+   ========================================================================= */
+
+.automation-tab-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg, 24px);
+  animation: fadeIn var(--transition-fast, 150ms) ease;
+}
+
+/* --- Top Dashboard Stats Banner --- */
+.automation-stats-banner {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--spacing-sm, 8px);
+  padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 16px);
+}
+
+.automation-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.automation-stat-icon-box {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm, 10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  box-shadow: var(--apple-control-shadow-rest);
+}
+
+.automation-stat-icon-box.icon-active {
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 12%, var(--color-bg-elevated));
+  border-color: color-mix(in srgb, var(--color-success) 24%, var(--color-border));
+}
+
+.automation-stat-icon-box.icon-rules {
+  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--color-accent-primary) 8%, var(--color-bg-elevated));
+  border-color: color-mix(in srgb, var(--color-accent-primary) 20%, var(--color-border));
+}
+
+.automation-stat-icon-box.icon-history {
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-bg-elevated));
+  border-color: color-mix(in srgb, var(--color-warning) 24%, var(--color-border));
+}
+
+.automation-stat-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.automation-stat-value {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.automation-stat-label {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* --- Rule Row within Section (Seamless Flat Hierarchy) --- */
+.automation-rule-wrapper {
+  background: var(--color-bg-primary);
+  border-top: 1px solid var(--color-border);
+  transition: background-color var(--transition-fast, 150ms) ease;
+}
+
+.automation-rule-wrapper.is-disabled {
+  opacity: 0.75;
+  background: color-mix(in srgb, var(--color-bg-primary) 92%, var(--color-bg-secondary));
+}
+
+.settings-section-content > .automation-rule-wrapper:last-child {
+  border-bottom-left-radius: calc(var(--radius-lg, 16px) - 1px);
+  border-bottom-right-radius: calc(var(--radius-lg, 16px) - 1px);
+}
+
+.automation-rule-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px var(--spacing-lg, 24px);
+}
+
+.automation-rule-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.automation-card-title-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.automation-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full, 9999px);
+  flex-shrink: 0;
+  background: var(--color-text-disabled);
+}
+
+.automation-status-dot.dot-watching {
+  background: var(--color-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 24%, transparent);
+}
+
+.automation-status-dot.dot-error {
+  background: var(--color-error);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-error) 24%, transparent);
+}
+
+.automation-card-title-text {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automation-card-type-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm, 10px);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  letter-spacing: 0.02em;
+}
+
+.automation-rule-chevron {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-muted);
+  margin-left: auto;
+  padding-right: 4px;
+  transition: transform 0.2s ease;
+}
+
+.automation-card-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* --- Visual Pipeline Flowchart in Card --- */
+.automation-card-flow-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.automation-flow-node-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 10px);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automation-flow-node-box.node-source {
+  background: color-mix(in srgb, var(--color-info) 8%, var(--color-bg-elevated));
+  color: var(--color-info);
+  border-color: color-mix(in srgb, var(--color-info) 20%, var(--color-border));
+}
+
+.automation-flow-node-box.node-ai {
+  background: color-mix(in srgb, var(--color-accent-primary) 8%, var(--color-bg-elevated));
+  color: var(--color-text-primary);
+  border-color: color-mix(in srgb, var(--color-accent-primary) 20%, var(--color-border));
+}
+
+.automation-flow-node-box.node-export {
+  background: color-mix(in srgb, var(--color-success) 8%, var(--color-bg-elevated));
+  color: var(--color-success);
+  border-color: color-mix(in srgb, var(--color-success) 20%, var(--color-border));
+}
+
+.automation-flow-arrow-icon {
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+}
+
+.automation-card-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  flex-wrap: wrap;
+}
+
+/* --- Pipeline Editor (Visual 3-Step Builder inside Expanded Panel) --- */
+.automation-editor-container {
+  padding: 20px var(--spacing-lg, 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.settings-section-content > .automation-rule-wrapper:last-child .automation-editor-container {
+  border-bottom-left-radius: calc(var(--radius-lg, 16px) - 1px);
+  border-bottom-right-radius: calc(var(--radius-lg, 16px) - 1px);
+}
+
+.automation-editor-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.automation-editor-step-card {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 12px);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.automation-step-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.automation-step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-text-primary);
+  color: var(--color-bg-primary);
+}
+
+.automation-step-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.automation-step-subtitle {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-left: auto;
+}
+
+/* --- Summary Chips --- */
+.automation-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  border-radius: var(--radius-full, 9999px);
+  line-height: 1.4;
+  border: 1px solid transparent;
+}
+
+.automation-chip-neutral {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border);
+}
+
+.automation-chip-warning {
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-bg-elevated));
+  color: var(--color-warning);
+  border-color: color-mix(in srgb, var(--color-warning) 28%, var(--color-border));
+}
+
+.automation-chip-danger {
+  background: color-mix(in srgb, var(--color-error) 12%, var(--color-bg-elevated));
+  color: var(--color-error);
+  border-color: color-mix(in srgb, var(--color-error) 28%, var(--color-border));
+}
+
+.automation-chip-success {
+  background: color-mix(in srgb, var(--color-success) 12%, var(--color-bg-elevated));
+  color: var(--color-success);
+  border-color: color-mix(in srgb, var(--color-success) 28%, var(--color-border));
+}
+
+/* --- Profile Groups --- */
+.automation-profile-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.automation-profile-card {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 12px);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.automation-profile-card-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+/* --- Empty state callout --- */
+.automation-empty-callout {
+  padding: 32px 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--color-bg-primary);
+}
+
+.automation-empty-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+  box-shadow: var(--apple-control-shadow-rest);
+}
+
+.automation-empty-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.automation-empty-desc {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  max-width: 420px;
+}
+
+@media (max-width: 640px) {
+  .automation-editor-container {
+    padding: 16px;
+  }
+}

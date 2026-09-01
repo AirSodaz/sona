@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, ArrowRight, Sparkles, FolderSync, Tags, HardDriveDownload } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { PauseIcon, PlayIcon, TrashIcon } from '../../Icons';
 import { Switch } from '../../Switch';
@@ -11,39 +11,9 @@ function SummaryChip({
     label: string;
     tone?: 'neutral' | 'warning' | 'danger' | 'success';
 }): React.JSX.Element {
-    const chipColors = {
-        neutral: {
-            background: 'var(--color-bg-secondary)',
-            color: 'var(--color-text-muted)',
-        },
-        warning: {
-            background: 'var(--color-warning-bg, rgba(245, 158, 11, 0.12))',
-            color: 'var(--color-warning-text, #b7791f)',
-        },
-        danger: {
-            background: 'var(--color-danger-bg, rgba(239, 68, 68, 0.12))',
-            color: 'var(--color-danger-text, #b91c1c)',
-        },
-        success: {
-            background: 'var(--color-success-bg, rgba(16, 185, 129, 0.12))',
-            color: 'var(--color-success-text, #047857)',
-        },
-    } as const;
-
+    const toneClass = `automation-chip automation-chip-${tone}`;
     return (
-        <span
-            style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '2px 8px',
-                borderRadius: '999px',
-                fontSize: '0.75rem',
-                fontWeight: 500,
-                lineHeight: 1.4,
-                ...chipColors[tone],
-            }}
-        >
+        <span className={toneClass}>
             {label}
         </span>
     );
@@ -112,49 +82,70 @@ export function AutomationRuleCard({
             ? 'danger'
             : 'neutral';
 
+    const isFileRule = typeLabel === t('automation.file_rule', { defaultValue: 'File' }) || watchDirectory !== undefined;
+    const isWatching = enabled && (statusLabel === t('automation.status_watching', { defaultValue: 'Watching' }) || statusLabel === 'Watching');
+    const isError = (failureCount || 0) > 0 || statusLabel === 'Error' || statusLabel === t('automation.status_error', { defaultValue: 'Error' });
+
+    let statusDotClass = 'automation-status-dot';
+    if (isWatching) statusDotClass += ' dot-watching';
+    else if (isError) statusDotClass += ' dot-error';
+
     return (
-        <div
-            style={{
-                background: enabled ? 'var(--color-bg-primary)' : 'var(--color-bg-secondary-soft)',
-            }}
-        >
-            <div
-                style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '16px',
-                    padding: '16px 24px',
-                }}
-            >
+        <div className={`automation-rule-wrapper ${enabled ? 'is-enabled' : 'is-disabled'}`}>
+            {/* Main Header Bar */}
+            <div className="automation-rule-card-header">
                 <button
                     type="button"
                     onClick={onToggleExpand}
                     aria-expanded={isExpanded}
-                    style={{
-                        flex: 1,
-                        minWidth: 0,
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '12px',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: 0,
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        color: 'inherit',
-                    }}
+                    className="automation-rule-card-main"
                 >
-                    <div style={{ display: 'flex', alignItems: 'center', color: 'var(--color-text-muted)', paddingTop: '2px' }}>
-                        {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                    <div className="automation-card-title-line">
+                        <span className={statusDotClass} />
+                        <span className="automation-card-title-text settings-item-title">{title}</span>
+                        {typeLabel && (
+                            <span className="automation-card-type-tag">
+                                {isFileRule ? <FolderSync size={12} /> : <Tags size={12} />}
+                                <span>{typeLabel}</span>
+                            </span>
+                        )}
+                        <span className="automation-rule-chevron">
+                            {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                        </span>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0, flex: 1 }}>
-                        <div className="settings-item-title">{title}</div>
+                    {/* Flowchart Summary */}
+                    <div className="automation-card-flow-body">
+                        {isFileRule ? (
+                            <span className="automation-flow-node-box node-source" title={watchDirectory}>
+                                <FolderSync size={13} />
+                                <span>{watchDirectory ? (watchDirectory.split(/[/\\]/).pop() || watchDirectory) : t('automation.none', { defaultValue: 'None' })}</span>
+                            </span>
+                        ) : (
+                            <span className="automation-flow-node-box node-source" title={projectLabel}>
+                                <Tags size={13} />
+                                <span>{projectLabel}</span>
+                            </span>
+                        )}
 
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                            {typeLabel && <SummaryChip label={typeLabel} tone="neutral" />}
-                            <SummaryChip label={projectLabel} tone="neutral" />
-                            {profileLabel && <SummaryChip label={profileLabel} tone="neutral" />}
+                        <span className="automation-flow-arrow-icon"><ArrowRight size={13} /></span>
+
+                        <span className="automation-flow-node-box node-ai" title={profileLabel || t('automation.profile_global_fallback', { defaultValue: 'Global settings' })}>
+                            <Sparkles size={13} />
+                            <span>{profileLabel || t('automation.profile_global_fallback', { defaultValue: 'Global settings' })}</span>
+                        </span>
+
+                        {isFileRule && outputDirectory && (
+                            <>
+                                <span className="automation-flow-arrow-icon"><ArrowRight size={13} /></span>
+                                <span className="automation-flow-node-box node-export" title={outputDirectory}>
+                                    <HardDriveDownload size={13} />
+                                    <span>{outputDirectory.split(/[/\\]/).pop() || outputDirectory}</span>
+                                </span>
+                            </>
+                        )}
+
+                        <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px', alignItems: 'center' }}>
                             {priorityLabel && <SummaryChip label={priorityLabel} tone="neutral" />}
                             {statusLabel && <SummaryChip label={statusLabel} tone="neutral" />}
                             {resultLabel && <SummaryChip label={resultLabel} tone={resultChipTone} />}
@@ -186,30 +177,27 @@ export function AutomationRuleCard({
                                 />
                             )}
                         </div>
+                    </div>
 
+                    {/* Metadata & Hints */}
+                    <div className="automation-card-meta-row">
                         {watchDirectory !== undefined && (
-                            <div className="settings-item-hint" style={{ wordBreak: 'break-all' }}>
+                            <div className="settings-item-hint">
                                 {t('automation.watch_directory', { defaultValue: 'Watch Directory' })}: {watchDirectory || t('automation.none', { defaultValue: 'None' })}
                             </div>
                         )}
                         {outputDirectory !== undefined && (
-                            <div className="settings-item-hint" style={{ wordBreak: 'break-all' }}>
+                            <div className="settings-item-hint">
                                 {t('automation.output_directory', { defaultValue: 'Output Directory' })}: {outputDirectory || t('automation.none', { defaultValue: 'None' })}
                             </div>
                         )}
                         {resultMessage && (
-                            <div className="settings-item-hint" style={{ wordBreak: 'break-word' }}>
+                            <div className="settings-item-hint">
                                 {resultMessage}
                             </div>
                         )}
                         {blockedHint && (
-                            <div
-                                className="settings-item-hint"
-                                style={{
-                                    wordBreak: 'break-word',
-                                    color: 'var(--color-warning-text, #b7791f)',
-                                }}
-                            >
+                            <div className="settings-item-hint" style={{ color: 'var(--color-warning-text, #b7791f)' }}>
                                 {blockedHint}
                             </div>
                         )}
@@ -221,7 +209,7 @@ export function AutomationRuleCard({
                     </div>
                 </button>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <div className="automation-card-controls">
                     {canToggle && onToggleEnabled && (
                         <Switch
                             checked={enabled}
@@ -234,28 +222,28 @@ export function AutomationRuleCard({
                     )}
 
                     {onScanNow && (
-                        <button className="btn btn-secondary" onClick={onScanNow}>
+                        <button className="btn btn-secondary" onClick={onScanNow} title={t('automation.scan_now', { defaultValue: 'Scan Now' })}>
                             <PlayIcon />
                             <span>{t('automation.scan_now', { defaultValue: 'Scan Now' })}</span>
                         </button>
                     )}
 
                     {onRetryFailed && (
-                        <button className="btn btn-secondary" onClick={onRetryFailed} disabled={!failureCount}>
+                        <button className="btn btn-secondary" onClick={onRetryFailed} disabled={!failureCount} title={t('automation.retry_failed', { defaultValue: 'Retry Failed' })}>
                             <PauseIcon />
                             <span>{t('automation.retry_failed', { defaultValue: 'Retry Failed' })}</span>
                         </button>
                     )}
 
                     {onApplyExisting && (
-                        <button className="btn btn-secondary" onClick={onApplyExisting}>
+                        <button className="btn btn-secondary" onClick={onApplyExisting} title={t('automation.apply_existing', { defaultValue: 'Apply to existing' })}>
                             <PlayIcon />
                             <span>{t('automation.apply_existing', { defaultValue: 'Apply to existing' })}</span>
                         </button>
                     )}
 
                     {onDelete && (
-                        <button className="btn btn-secondary" onClick={onDelete}>
+                        <button className="btn btn-secondary" onClick={onDelete} title={t('common.delete')}>
                             <TrashIcon />
                             <span>{t('common.delete')}</span>
                         </button>
@@ -263,7 +251,10 @@ export function AutomationRuleCard({
                 </div>
             </div>
 
+            {/* Expandable Step Editor */}
             {isExpanded && editor}
         </div>
     );
 }
+
+export default AutomationRuleCard;
