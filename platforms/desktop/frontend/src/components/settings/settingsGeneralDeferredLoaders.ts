@@ -12,7 +12,13 @@ function memoizeLoader<T>(loader: () => Promise<T>): () => Promise<T> {
 
 export const loadBackupSettingsSection = memoizeLoader(async () => {
     const module = await import('./backup/BackupSettingsSection');
-    return { default: module.BackupSettingsSection };
+    if ('BackupSettingsSection' in module && module.BackupSettingsSection) {
+        return { default: module.BackupSettingsSection };
+    }
+    if ('default' in module && module.default) {
+        return { default: module.default };
+    }
+    return { default: module.BackupSettingsSection ?? module.default };
 });
 
 export function preloadSettingsGeneralDeferredSections(): Promise<void> {

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SlidersHorizontal, Tags, FolderSync } from 'lucide-react';
 import { AutomationIcon } from '../Icons';
 import { useAutomationStore } from '../../stores/automationStore';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
@@ -550,28 +551,58 @@ export function SettingsAutomationTab(): React.JSX.Element {
             <div
                 role="tablist"
                 aria-label={t('automation.sections', { defaultValue: 'Automation sections' })}
-                style={{ display: 'flex', gap: '8px', padding: '0 24px 16px', flexWrap: 'wrap' }}
+                className="settings-scenario-cards automation-feature-tabs"
             >
                 {([
-                    ['profiles', t('automation.profiles', { defaultValue: 'Profiles' })],
-                    ['tag', t('automation.tag_rules', { defaultValue: 'Tag Automation' })],
-                    ['file', t('automation.file_rules', { defaultValue: 'File Automation' })],
-                ] as const).map(([id, label]) => (
-                    <button
-                        key={id}
-                        type="button"
-                        role="tab"
-                        aria-selected={activeSection === id}
-                        className={`btn ${activeSection === id ? 'btn-primary' : 'btn-secondary'}`}
-                        onClick={() => {
-                            setSelectedSection(id);
-                            if (id !== 'tag') setFocusTagId(null);
-                            closeDraft(NEW_RULE_KEY);
-                        }}
-                    >
-                        {label}
-                    </button>
-                ))}
+                    {
+                        id: 'profiles' as const,
+                        label: t('automation.profiles', { defaultValue: 'Profiles' }),
+                        description: t('automation.profiles_tab_description', {
+                            defaultValue: 'Bundle language, templates, vocabularies, and speaker settings',
+                        }),
+                        icon: <SlidersHorizontal size={18} />,
+                    },
+                    {
+                        id: 'tag' as const,
+                        label: t('automation.tag_rules', { defaultValue: 'Tag Automation' }),
+                        description: t('automation.tag_rules_tab_description', {
+                            defaultValue: 'Run polish, translation, and summary by Tag priority',
+                        }),
+                        icon: <Tags size={18} />,
+                    },
+                    {
+                        id: 'file' as const,
+                        label: t('automation.file_rules', { defaultValue: 'File Automation' }),
+                        description: t('automation.file_rules_tab_description', {
+                            defaultValue: 'Watch folders, transcribe files, and export results',
+                        }),
+                        icon: <FolderSync size={18} />,
+                    },
+                ]).map(({ id, label, description, icon }) => {
+                    const isSelected = activeSection === id;
+                    return (
+                        <button
+                            id={`settings-automation-tab-${id}`}
+                            key={id}
+                            type="button"
+                            role="tab"
+                            aria-selected={isSelected}
+                            aria-label={label}
+                            className={`settings-scenario-card${isSelected ? ' active' : ''}`}
+                            onClick={() => {
+                                setSelectedSection(id);
+                                if (id !== 'tag') setFocusTagId(null);
+                                closeDraft(NEW_RULE_KEY);
+                            }}
+                        >
+                            <span className="settings-scenario-card-icon">{icon}</span>
+                            <span className="settings-scenario-card-text">
+                                <span className="settings-scenario-card-label">{label}</span>
+                                <span className="settings-scenario-card-description">{description}</span>
+                            </span>
+                        </button>
+                    );
+                })}
             </div>
 
             {activeSection === 'profiles' ? (
@@ -795,3 +826,5 @@ export function SettingsAutomationTab(): React.JSX.Element {
         </SettingsTabContainer>
     );
 }
+
+export default SettingsAutomationTab;

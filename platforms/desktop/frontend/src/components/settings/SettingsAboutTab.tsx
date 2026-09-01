@@ -192,3 +192,5 @@ export function SettingsAboutTab(): React.JSX.Element {
         </div>
     );
 }
+
+export default SettingsAboutTab;

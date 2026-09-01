@@ -243,3 +243,5 @@ export function SettingsGeneralTab({
         </SettingsTabContainer>
     );
 }
+
+export default SettingsGeneralTab;

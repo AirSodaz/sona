@@ -306,3 +306,5 @@ export function BackupSettingsSection({
     </SettingsSection>
   );
 }
+
+export default BackupSettingsSection;

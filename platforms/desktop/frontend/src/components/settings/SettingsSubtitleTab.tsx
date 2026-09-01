@@ -333,3 +333,5 @@ export function SettingsSubtitleTab(): React.JSX.Element {
         </SettingsTabContainer>
     );
 }
+
+export default SettingsSubtitleTab;

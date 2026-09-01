@@ -438,3 +438,5 @@ export function SettingsApiServerTab(): React.JSX.Element {
         </SettingsTabContainer>
     );
 }
+
+export default SettingsApiServerTab;

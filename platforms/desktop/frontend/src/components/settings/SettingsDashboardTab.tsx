@@ -191,3 +191,5 @@ export function SettingsDashboardTab({ isActive = true }: SettingsDashboardTabPr
     </SettingsTabContainer>
   );
 }
+
+export default SettingsDashboardTab;

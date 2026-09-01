@@ -505,3 +505,5 @@ export function SettingsMicrophoneTab({
         </SettingsTabContainer>
     );
 }
+
+export default SettingsMicrophoneTab;

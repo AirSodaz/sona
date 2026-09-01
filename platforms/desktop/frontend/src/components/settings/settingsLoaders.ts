@@ -28,66 +28,83 @@ function memoizeLoader<T>(loader: () => Promise<T>): () => Promise<T> {
     };
 }
 
+function resolveModuleComponent<
+    M extends object,
+    K extends keyof M,
+>(
+    module: M,
+    exportName: K,
+): { default: M[K] } {
+    if (exportName in module && module[exportName]) {
+        return { default: module[exportName] };
+    }
+    const candidate = module as { default?: M[K] };
+    if ('default' in candidate && candidate.default) {
+        return { default: candidate.default };
+    }
+    return { default: (module[exportName] ?? candidate.default) as M[K] };
+}
+
 const loadSettingsGeneralModule = memoizeLoader(async () => import('./SettingsGeneralTab'));
 
 export const loadSettingsGeneralTab = memoizeLoader(async () => {
     const module = await loadSettingsGeneralModule();
-    return { default: module.SettingsGeneralTab };
+    return resolveModuleComponent(module, 'SettingsGeneralTab');
 });
 
 export const loadSettingsDashboardTab = memoizeLoader(async () => {
     const module = await import('./SettingsDashboardTab');
-    return { default: module.SettingsDashboardTab };
+    return resolveModuleComponent(module, 'SettingsDashboardTab');
 });
 
 export const loadSettingsMicrophoneTab = memoizeLoader(async () => {
     const module = await import('./SettingsMicrophoneTab');
-    return { default: module.SettingsMicrophoneTab };
+    return resolveModuleComponent(module, 'SettingsMicrophoneTab');
 });
 
 export const loadSettingsSubtitleTab = memoizeLoader(async () => {
     const module = await import('./SettingsSubtitleTab');
-    return { default: module.SettingsSubtitleTab };
+    return resolveModuleComponent(module, 'SettingsSubtitleTab');
 });
 
 export const loadSettingsModelsPane = memoizeLoader(async () => {
     const module = await import('./SettingsModelsPane');
-    return { default: module.SettingsModelsPane };
+    return resolveModuleComponent(module, 'SettingsModelsPane');
 });
 
 export const loadSettingsVocabularyTab = memoizeLoader(async () => {
     const module = await import('./SettingsVocabularyTab');
-    return { default: module.SettingsVocabularyTab };
+    return resolveModuleComponent(module, 'SettingsVocabularyTab');
 });
 
 export const loadSettingsAutomationTab = memoizeLoader(async () => {
     const module = await import('./SettingsAutomationTab');
-    return { default: module.SettingsAutomationTab };
+    return resolveModuleComponent(module, 'SettingsAutomationTab');
 });
 
 export const loadSettingsStorageTab = memoizeLoader(async () => {
     const module = await import('./SettingsStorageTab');
-    return { default: module.SettingsStorageTab };
+    return resolveModuleComponent(module, 'SettingsStorageTab');
 });
 
 export const loadSettingsApiServerTab = memoizeLoader(async () => {
     const module = await import('./SettingsApiServerTab');
-    return { default: module.SettingsApiServerTab };
+    return resolveModuleComponent(module, 'SettingsApiServerTab');
 });
 
 export const loadSettingsLLMServiceTab = memoizeLoader(async () => {
     const module = await import('./SettingsLLMServiceTab');
-    return { default: module.SettingsLLMServiceTab };
+    return resolveModuleComponent(module, 'SettingsLLMServiceTab');
 });
 
 export const loadSettingsShortcutsTab = memoizeLoader(async () => {
     const module = await import('./SettingsShortcutsTab');
-    return { default: module.SettingsShortcutsTab };
+    return resolveModuleComponent(module, 'SettingsShortcutsTab');
 });
 
 export const loadSettingsAboutTab = memoizeLoader(async () => {
     const module = await import('./SettingsAboutTab');
-    return { default: module.SettingsAboutTab };
+    return resolveModuleComponent(module, 'SettingsAboutTab');
 });
 
 async function preloadSettingsGeneralTab(): Promise<void> {

@@ -17,3 +17,5 @@ export function SettingsModelsPane({ isOpen, isActive = isOpen }: SettingsModels
         </ModelManagerContext.Provider>
     );
 }
+
+export default SettingsModelsPane;

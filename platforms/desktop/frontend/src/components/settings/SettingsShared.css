@@ -150,6 +150,23 @@
   background: var(--color-bg-primary);
 }
 
+.settings-scenario-cards.three-columns,
+.automation-feature-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.automation-feature-tabs .settings-scenario-card,
+.settings-scenario-cards.three-columns .settings-scenario-card {
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .settings-scenario-cards.three-columns,
+  .automation-feature-tabs {
+    grid-template-columns: 1fr;
+  }
+}
+
 .settings-scenario-card {
   display: flex;
   align-items: center;

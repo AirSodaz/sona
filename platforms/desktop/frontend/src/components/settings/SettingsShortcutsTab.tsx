@@ -117,3 +117,5 @@ export function SettingsShortcutsTab(): React.JSX.Element {
         </SettingsTabContainer>
     );
 }
+
+export default SettingsShortcutsTab;

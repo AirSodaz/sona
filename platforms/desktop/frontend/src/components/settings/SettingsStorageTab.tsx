@@ -930,3 +930,5 @@ export function SettingsStorageTab(): React.JSX.Element {
         </SettingsTabContainer>
     );
 }
+
+export default SettingsStorageTab;

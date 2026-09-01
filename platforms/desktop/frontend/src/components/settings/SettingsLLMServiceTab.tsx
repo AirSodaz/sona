@@ -453,3 +453,5 @@ export const SettingsLLMServiceTab = React.memo(function SettingsLLMServiceTab({
     </SettingsTabContainer>
   );
 });
+
+export default SettingsLLMServiceTab;

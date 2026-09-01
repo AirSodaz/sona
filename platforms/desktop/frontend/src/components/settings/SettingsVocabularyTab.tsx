@@ -567,3 +567,5 @@ export function SettingsVocabularyTab(): React.JSX.Element {
     </SettingsTabContainer>
   );
 }
+
+export default SettingsVocabularyTab;
