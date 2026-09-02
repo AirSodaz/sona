@@ -4,6 +4,7 @@
 /* Global style entrypoint. Keep imports ordered to preserve the original cascade. */
 @import './base.css';
 @import './notification-center.css';
+@import './sync-header-pill.css';
 @import './app-shell.css';
 @import './projects-workbench.css';
 @import './controls.css';

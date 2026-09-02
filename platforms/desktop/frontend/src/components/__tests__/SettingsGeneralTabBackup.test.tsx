@@ -205,7 +205,7 @@ describe('Sync & Recovery settings', () => {
     }));
   });
 
-  it('renders sync status and keeps complete archives under advanced recovery', () => {
+  it('renders sync status and quick actions cleanly', () => {
     setStatus(status({
       pendingOperationCount: 4,
       conflictCount: 2,
@@ -217,42 +217,6 @@ describe('Sync & Recovery settings', () => {
     screen.getByRole('button', { name: 'Pause' });
     screen.getByText('Pending upload');
     screen.getByText('4');
-
-    fireEvent.click(screen.getByRole('button', { name: /Advanced recovery/ }));
-    screen.getByRole('button', { name: 'Export Backup' });
-    screen.getByRole('button', { name: 'Import Backup' });
-    screen.getByText('Legacy WebDAV archives');
-    expect(screen.queryByRole('button', { name: 'Upload Backup' })).toBeNull();
-  });
-
-  it('clears a legacy plaintext password only after secure credential migration succeeds', async () => {
-    const legacy = {
-      serverUrl: 'https://dav.example.com',
-      remoteDir: 'backups/sona',
-      username: 'sona',
-      password: 'legacy-secret',
-    };
-    testContext.getSetting.mockResolvedValue(legacy);
-    testContext.listLegacy.mockResolvedValue({
-      entries: [],
-      credentialsMigrated: true,
-    });
-    setStatus(status({}));
-    render(<BackupSettingsSection />);
-
-    fireEvent.click(screen.getByRole('button', { name: /Advanced recovery/ }));
-    await waitFor(() => expect(screen.getByDisplayValue('https://dav.example.com')).toBeDefined());
-    fireEvent.click(screen.getByRole('button', { name: 'List archives' }));
-
-    await waitFor(() => expect(testContext.listLegacy).toHaveBeenCalledWith({
-      serverUrl: legacy.serverUrl,
-      remoteRoot: legacy.remoteDir,
-      username: legacy.username,
-      password: legacy.password,
-    }));
-    expect(testContext.setSetting).toHaveBeenCalledWith('sona-backup-webdav', {
-      ...legacy,
-      password: '',
-    });
+    expect(screen.queryByText('Advanced recovery')).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   changeSyncMasterPassword,
@@ -33,16 +33,12 @@ import type {
   SyncUnlockRequest,
   WebDavObjectStoreConfig,
 } from '../../../types/sync';
-import { SettingsAccordion, SettingsSection } from '../SettingsLayout';
+import { SettingsSection } from '../SettingsLayout';
 import { SyncConflictCenter } from '../sync/SyncConflictCenter';
 import { SyncConnectedPanel } from '../sync/SyncConnectedPanel';
 import { isPresetShrink } from '../sync/syncPreset';
 import { SyncSetupPanel } from '../sync/SyncSetupPanel';
-import { LegacyRemoteBackupPanel } from '../sync/LegacyRemoteBackupPanel';
-import { BackupArchiveActions } from './BackupArchiveActions';
-import { useBackupSettingsController } from './useBackupSettingsController';
 import '../sync/SyncSettings.css';
-
 interface BackupSettingsSectionProps {
   isVisible?: boolean;
   isPrewarming?: boolean;
@@ -62,8 +58,6 @@ export function BackupSettingsSection({
   const setLastRunResult = useSyncStatusStore((state) => state.setLastRunResult);
   const [busyAction, setBusyAction] = React.useState<string | null>(null);
   const [recoveryKey, setRecoveryKey] = React.useState<string | null>(null);
-  const localBackup = useBackupSettingsController();
-
   React.useEffect(() => {
     if (isVisible || isPrewarming) {
       void syncRuntimeService.refreshStatus();
@@ -286,23 +280,6 @@ export function BackupSettingsSection({
           />
         </>
       )}
-
-      <SettingsAccordion
-        title={(
-          <div className="settings-accordion-copy">
-            <div className="settings-accordion-copy-title sync-advanced-title"><Database size={16} />{t('settings.backup.advanced_title', { defaultValue: 'Advanced recovery' })}</div>
-            <div className="settings-accordion-copy-hint">{localBackup.backupBlockerHint}</div>
-          </div>
-        )}
-      >
-        <BackupArchiveActions
-          busyAction={localBackup.busyAction}
-          isBackupBlocked={localBackup.isBackupBlocked}
-          onExport={localBackup.handleExportBackup}
-          onImport={localBackup.handleImportBackup}
-        />
-        <LegacyRemoteBackupPanel disabled={localBackup.isBackupBlocked} />
-      </SettingsAccordion>
     </SettingsSection>
   );
 }

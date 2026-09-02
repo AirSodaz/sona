@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BarChart3, HardDrive, Server } from 'lucide-react';
+import { BarChart3, Cloud, HardDrive, Server } from 'lucide-react';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useDialogStore } from '../stores/dialogStore';
@@ -22,6 +22,7 @@ import {
     loadSettingsShortcutsTab,
     loadSettingsStorageTab,
     loadSettingsSubtitleTab,
+    loadSettingsSyncTab,
     loadSettingsVocabularyTab,
 } from './settings/settingsLoaders';
 import './settings/Settings.css';
@@ -58,6 +59,7 @@ const SettingsVocabularyTab = lazy(loadSettingsVocabularyTab);
 const SettingsAutomationTab = lazy(loadSettingsAutomationTab);
 const SettingsStorageTab = lazy(loadSettingsStorageTab);
 const SettingsApiServerTab = lazy(loadSettingsApiServerTab);
+const SettingsSyncTab = lazy(loadSettingsSyncTab);
 const SettingsLLMServiceTab = lazy(loadSettingsLLMServiceTab);
 const SettingsShortcutsTab = lazy(loadSettingsShortcutsTab);
 const SettingsAboutTab = lazy(loadSettingsAboutTab);
@@ -98,6 +100,13 @@ function renderSettingsPane(
             return <SettingsAutomationTab />;
         case 'storage':
             return <SettingsStorageTab />;
+        case 'sync':
+            return (
+                <SettingsSyncTab
+                    isVisible={isOpen}
+                    isPrewarming={isPrewarming}
+                />
+            );
         case 'api_server':
             return <SettingsApiServerTab />;
         case 'llm_service':
@@ -467,6 +476,14 @@ export function Settings({
                             activeTab={renderedTab}
                             setActiveTab={navigateToTab}
                             tabIndex={renderedTab === 'storage' ? 0 : -1}
+                        />
+                        <SettingsTabButton
+                            id="sync"
+                            label={t('settings.sync.title', { defaultValue: 'Cloud Sync' })}
+                            Icon={() => <Cloud size={18} />}
+                            activeTab={renderedTab}
+                            setActiveTab={navigateToTab}
+                            tabIndex={renderedTab === 'sync' ? 0 : -1}
                         />
                         <SettingsTabButton
                             id="api_server"

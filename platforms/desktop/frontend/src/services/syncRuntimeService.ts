@@ -86,6 +86,7 @@ class SyncRuntimeService {
       return snapshot;
     } catch (error) {
       logger.warn('[Sync] Failed to load status:', error);
+      useSyncStatusStore.setState({ isLoaded: true });
       return null;
     }
   }

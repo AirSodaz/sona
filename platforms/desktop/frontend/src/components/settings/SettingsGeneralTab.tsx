@@ -9,7 +9,6 @@ import { useUIConfig, useSetConfig } from '../../stores/configStore';
 import type { AppLanguagePreference, AppLogLevel, UIConfig } from '../../types/config';
 import { markSettingsPerf } from '../../utils/settingsPerf';
 import { APP_LOG_LEVELS, normalizeLogLevel } from '../../utils/logLevel';
-import { loadBackupSettingsSection } from './settingsGeneralDeferredLoaders';
 import { SettingsTabContainer, SettingsSection, SettingsItem, SettingsPageHeader } from './SettingsLayout';
 
 interface SettingsGeneralTabProps {
@@ -19,8 +18,6 @@ interface SettingsGeneralTabProps {
 }
 
 type FontValue = NonNullable<UIConfig['font']>;
-
-const BackupSettingsSection = React.lazy(loadBackupSettingsSection);
 
 function getFontFamily(fontValue: string): string {
     switch (fontValue) {
@@ -209,13 +206,6 @@ export function SettingsGeneralTab({
                     />
                 </SettingsItem>
             </SettingsSection>
-
-            <React.Suspense fallback={null}>
-                <BackupSettingsSection
-                    isVisible={isVisible}
-                    isPrewarming={isPrewarming}
-                />
-            </React.Suspense>
 
             <SettingsSection
                 title={t('settings.diagnostics.title', { defaultValue: 'Model & Environment Diagnostics' })}

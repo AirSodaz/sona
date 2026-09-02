@@ -1,0 +1,253 @@
+/* ==========================================================================
+   Sync Header Pill & Popover (Desktop) - Sona Warm Minimalism
+   ========================================================================== */
+
+.sync-header-pill-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* --- Pill Trigger Button --- */
+.sync-header-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9999px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.15s) ease;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.sync-header-pill-btn:hover {
+  background: var(--color-bg-hover);
+  border-color: color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 40%, var(--color-border));
+  color: var(--color-text-primary);
+}
+
+.sync-header-pill-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 48%, transparent);
+  outline-offset: 2px;
+}
+
+.sync-header-pill-btn.is-syncing {
+  border-color: color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 50%, transparent);
+  background: color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 8%, var(--color-bg-secondary));
+  color: var(--color-accent-primary, var(--color-primary));
+}
+
+.sync-header-pill-btn.is-locked,
+.sync-header-pill-btn.is-paused {
+  border-color: color-mix(in srgb, var(--color-warning, #d97706) 40%, transparent);
+  color: var(--color-warning, #d97706);
+}
+
+.sync-header-pill-btn.is-error,
+.sync-header-pill-btn.has-conflicts {
+  border-color: color-mix(in srgb, var(--color-danger, #ef4444) 40%, transparent);
+  color: var(--color-danger, #ef4444);
+}
+
+.sync-pill-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sync-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-success, #228b4e);
+  flex-shrink: 0;
+}
+
+.sync-pill-inner.is-syncing .sync-pill-dot {
+  background: var(--color-accent-primary, var(--color-primary));
+}
+
+.sync-pill-inner.is-paused .sync-pill-dot,
+.sync-pill-inner.is-locked .sync-pill-dot {
+  background: var(--color-warning, #d97706);
+}
+
+.sync-pill-inner.is-error .sync-pill-dot,
+.sync-pill-inner.is-conflict .sync-pill-dot {
+  background: var(--color-danger, #ef4444);
+}
+
+.sync-pill-label {
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* --- Popover Panel --- */
+.sync-header-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 300px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: var(--shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.15));
+  z-index: 1000;
+  overflow: hidden;
+  animation: fadeIn var(--transition-fast, 0.15s) ease-in-out;
+}
+
+.sync-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary-soft, var(--color-bg-secondary));
+}
+
+.sync-popover-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+}
+
+.sync-popover-title-group strong {
+  font-weight: 600;
+}
+
+.sync-popover-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  text-transform: capitalize;
+}
+
+.sync-popover-badge.is-idle {
+  background: color-mix(in srgb, var(--color-success, #228b4e) 12%, transparent);
+  color: var(--color-success, #228b4e);
+}
+
+.sync-popover-badge.is-syncing {
+  background: color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 12%, transparent);
+  color: var(--color-accent-primary, var(--color-primary));
+}
+
+.sync-popover-badge.is-paused,
+.sync-popover-badge.is-locked {
+  background: color-mix(in srgb, var(--color-warning, #d97706) 12%, transparent);
+  color: var(--color-warning, #d97706);
+}
+
+.sync-popover-badge.is-error {
+  background: color-mix(in srgb, var(--color-danger, #ef4444) 12%, transparent);
+  color: var(--color-danger, #ef4444);
+}
+
+.sync-popover-badge.is-disabled {
+  background: color-mix(in srgb, var(--color-text-muted) 15%, transparent);
+  color: var(--color-text-muted);
+}
+
+.sync-popover-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sync-popover-disabled-state {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+
+.sync-popover-disabled-state p {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.sync-popover-cta {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sync-popover-conflict-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm, 8px);
+  background: color-mix(in srgb, var(--color-warning, #d97706) 12%, var(--color-bg-secondary));
+  border: 1px solid color-mix(in srgb, var(--color-warning, #d97706) 30%, var(--color-border));
+  color: var(--color-warning, #d97706);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast, 0.15s) ease;
+}
+
+.sync-popover-conflict-banner:hover {
+  background: color-mix(in srgb, var(--color-warning, #d97706) 18%, var(--color-bg-secondary));
+}
+
+.sync-popover-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm, 8px);
+  background: color-mix(in srgb, var(--color-danger, #ef4444) 10%, var(--color-bg-secondary));
+  border: 1px solid color-mix(in srgb, var(--color-danger, #ef4444) 25%, var(--color-border));
+  color: var(--color-danger, #ef4444);
+  font-size: 0.8rem;
+}
+
+.sync-popover-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm, 8px);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.sync-popover-metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+
+.sync-popover-metric-row span {
+  color: var(--color-text-muted);
+}
+
+.sync-popover-metric-row strong {
+  color: var(--color-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.sync-popover-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+}

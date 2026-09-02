@@ -34,6 +34,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   font: 'system',
   minimizeToTrayOnExit: true,
   autoCheckUpdates: true,
+  enableCloudSync: false,
   logLevel: 'info',
 
   // Shortcuts
@@ -179,7 +180,7 @@ export const useConfigStore = create<ConfigState>((set) => ({
 // equality so components re-render only when their domain changes.
 
 const UI_KEYS: (keyof UIConfig)[] = [
-  'appLanguage', 'theme', 'font', 'minimizeToTrayOnExit', 'autoCheckUpdates', 'logLevel', 'projectsViewMode'
+  'appLanguage', 'theme', 'font', 'minimizeToTrayOnExit', 'autoCheckUpdates', 'enableCloudSync', 'logLevel', 'projectsViewMode'
 ];
 
 const SHORTCUT_KEYS: (keyof ShortcutConfig)[] = [

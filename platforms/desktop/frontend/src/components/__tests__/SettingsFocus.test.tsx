@@ -85,6 +85,9 @@ vi.mock('../settings/SettingsAutomationTab', () => ({
 vi.mock('../settings/SettingsStorageTab', () => ({
     SettingsStorageTab: () => <div>Storage Tab</div>
 }));
+vi.mock('../settings/SettingsSyncTab', () => ({
+    SettingsSyncTab: () => <div>Sync Tab</div>
+}));
 vi.mock('../settings/SettingsLLMServiceTab', () => ({
     SettingsLLMServiceTab: () => <div>LLM Service Tab</div>
 }));
@@ -215,6 +218,7 @@ describe('Settings Focus Trap & Navigation', () => {
             'settings.vocabulary',
             'settings.automation',
             'settings.storage.title',
+            'settings.sync.title',
             'settings.api_server.title',
             'settings.llm.title',
             'shortcuts.title',

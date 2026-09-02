@@ -10,6 +10,7 @@ export type SettingsTab =
   | 'vocabulary'
   | 'automation'
   | 'storage'
+  | 'sync'
   | 'api_server';
 
 export type SettingsTabInput = SettingsTab | 'context' | 'voice_typing';

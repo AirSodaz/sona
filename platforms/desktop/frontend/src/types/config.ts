@@ -39,6 +39,8 @@ export interface UIConfig {
   minimizeToTrayOnExit?: boolean;
   /** Whether to automatically check for updates on startup. */
   autoCheckUpdates?: boolean;
+  /** Whether to enable multi-device cloud sync. Default: false. */
+  enableCloudSync?: boolean;
   /** Minimum log level for frontend and native application logs. Default: 'info'. */
   logLevel?: AppLogLevel;
   /** Workspace view mode. Default: 'list' */

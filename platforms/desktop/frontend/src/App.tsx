@@ -10,6 +10,7 @@ import { GlobalDialog } from './components/GlobalDialog';
 import { ErrorDialog } from './components/ErrorDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
 import { NotificationCenter } from './components/NotificationCenter';
+import { SyncHeaderPill } from './components/SyncHeaderPill';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useProjectStore } from './stores/projectStore';
 import { useTranscriptPlaybackStore } from './stores/transcriptPlaybackStore';
@@ -260,6 +261,7 @@ function App(): React.JSX.Element {
         <TabNavigation />
 
         <div className="header-actions">
+          <SyncHeaderPill onOpenSyncSettings={() => openSettingsTab('sync')} />
           <NotificationCenter
             onOpenRecoveryCenter={openRecoveryCenter}
             onOpenAutomationSettings={openAutomationSettings}
