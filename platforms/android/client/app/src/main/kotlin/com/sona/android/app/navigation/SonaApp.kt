@@ -65,6 +65,8 @@ import com.sona.android.application.recording.AsrModelSelection
 import com.sona.android.application.recording.AsrSelectionSlot
 import com.sona.android.application.sync.SyncConflictResolution
 import com.sona.android.application.sync.SyncPreset
+import com.sona.android.application.sync.DiscoveredVaultSummary
+import com.sona.android.application.sync.SyncPairingPayload
 import com.sona.android.application.sync.WebDavSyncProvider
 import com.sona.android.application.recovery.RecoveryResolution
 import com.sona.android.application.recovery.RecoverySource
@@ -168,6 +170,11 @@ internal fun SonaApp(
     onLoadSyncConflict: (String) -> Unit,
     onChangeSyncPreset: (SyncPreset) -> Unit,
     onChangeSyncPassword: (String, String) -> Unit,
+    onDiscoverSyncVaults: ((WebDavSyncProvider, ((List<DiscoveredVaultSummary>) -> Unit)?) -> Unit)? = null,
+    onCreateSyncWithVaultId: ((WebDavSyncProvider, SyncPreset, String, String?, Boolean) -> Unit)? = null,
+    onApplySyncPairingToken: ((String) -> SyncPairingPayload?)? = null,
+    onClearSyncPairingNotice: (() -> Unit)? = null,
+    onGetSyncPairingToken: ((Boolean, String) -> String?)? = null,
     onExportBackup: (String) -> Unit,
     onInspectBackup: (String) -> Unit,
     onConfirmBackupImport: () -> Unit,
@@ -504,6 +511,11 @@ internal fun SonaApp(
                             onLoadSyncConflict = onLoadSyncConflict,
                             onChangeSyncPreset = onChangeSyncPreset,
                             onChangeSyncPassword = onChangeSyncPassword,
+                            onDiscoverSyncVaults = onDiscoverSyncVaults,
+                            onCreateSyncWithVaultId = onCreateSyncWithVaultId,
+                            onApplySyncPairingToken = onApplySyncPairingToken,
+                            onClearSyncPairingNotice = onClearSyncPairingNotice,
+                            onGetSyncPairingToken = onGetSyncPairingToken,
                             onExportBackup = onExportBackup,
                             onInspectBackup = onInspectBackup,
                             onConfirmBackupImport = onConfirmBackupImport,

@@ -54,6 +54,8 @@ import com.sona.android.app.feature.bootstrap.SonaBootstrapUiState
 import com.sona.android.application.recording.OnlineAsrProvider
 import com.sona.android.application.recording.AsrModelSelection
 import com.sona.android.application.recording.AsrSelectionSlot
+import com.sona.android.application.sync.DiscoveredVaultSummary
+import com.sona.android.application.sync.SyncPairingPayload
 import com.sona.android.application.sync.SyncConflictResolution
 import com.sona.android.application.sync.SyncPreset
 import com.sona.android.application.sync.WebDavSyncProvider
@@ -105,6 +107,11 @@ internal fun SettingsScreen(
     onLoadSyncConflict: (String) -> Unit,
     onChangeSyncPreset: (SyncPreset) -> Unit,
     onChangeSyncPassword: (String, String) -> Unit,
+    onDiscoverSyncVaults: ((WebDavSyncProvider, ((List<DiscoveredVaultSummary>) -> Unit)?) -> Unit)? = null,
+    onCreateSyncWithVaultId: ((WebDavSyncProvider, SyncPreset, String, String?, Boolean) -> Unit)? = null,
+    onApplySyncPairingToken: ((String) -> SyncPairingPayload?)? = null,
+    onClearSyncPairingNotice: (() -> Unit)? = null,
+    onGetSyncPairingToken: ((Boolean, String) -> String?)? = null,
     onExportBackup: (String) -> Unit,
     onInspectBackup: (String) -> Unit,
     onConfirmBackupImport: () -> Unit,
@@ -241,6 +248,11 @@ internal fun SettingsScreen(
                     onLoadSyncConflict = onLoadSyncConflict,
                     onChangeSyncPreset = onChangeSyncPreset,
                     onChangeSyncPassword = onChangeSyncPassword,
+                    onDiscoverSyncVaults = onDiscoverSyncVaults,
+                    onCreateSyncWithVaultId = onCreateSyncWithVaultId,
+                    onApplySyncPairingToken = onApplySyncPairingToken,
+                    onClearSyncPairingNotice = onClearSyncPairingNotice,
+                    onGetSyncPairingToken = onGetSyncPairingToken,
                     onExportBackup = onExportBackup,
                     onInspectBackup = onInspectBackup,
                     onConfirmBackupImport = onConfirmBackupImport,
@@ -436,6 +448,11 @@ private fun SettingsDetailPane(
     onLoadSyncConflict: (String) -> Unit,
     onChangeSyncPreset: (SyncPreset) -> Unit,
     onChangeSyncPassword: (String, String) -> Unit,
+    onDiscoverSyncVaults: ((WebDavSyncProvider, ((List<DiscoveredVaultSummary>) -> Unit)?) -> Unit)? = null,
+    onCreateSyncWithVaultId: ((WebDavSyncProvider, SyncPreset, String, String?, Boolean) -> Unit)? = null,
+    onApplySyncPairingToken: ((String) -> SyncPairingPayload?)? = null,
+    onClearSyncPairingNotice: (() -> Unit)? = null,
+    onGetSyncPairingToken: ((Boolean, String) -> String?)? = null,
     onExportBackup: (String) -> Unit,
     onInspectBackup: (String) -> Unit,
     onConfirmBackupImport: () -> Unit,
@@ -513,6 +530,11 @@ private fun SettingsDetailPane(
                 onLoadConflict = onLoadSyncConflict,
                 onChangePreset = onChangeSyncPreset,
                 onChangePassword = onChangeSyncPassword,
+                onDiscoverVaults = onDiscoverSyncVaults,
+                onCreateWithVaultId = onCreateSyncWithVaultId,
+                onApplyPairingToken = onApplySyncPairingToken,
+                onClearPairingNotice = onClearSyncPairingNotice,
+                onGetPairingToken = onGetSyncPairingToken,
                 modifier = Modifier.weight(1f),
             )
             SettingsSection.DATA_RECOVERY -> DataRecoveryPane(

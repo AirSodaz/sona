@@ -19,11 +19,11 @@ use crate::json_bridge::{parse_core_json, serialize_core_json};
 use crate::mapper::{provider_configuration_from_ffi, sync_conflict_detail_to_ffi};
 use crate::sync_secret_store_bridge::FfiSecretStore;
 use crate::{
-    FfiSecret, FfiSyncChangePasswordRequestV1, FfiSyncConflictDetailV1,
-    FfiSyncConflictResolutionV1, FfiSyncConflictSummaryV1, FfiSyncCreateRequestV1,
-    FfiSyncCreateResultV1, FfiSyncJoinPreviewV1, FfiSyncJoinRequestV1, FfiSyncPresetV1,
-    FfiSyncProviderDescriptorV1, FfiSyncProviderInputV1, FfiSyncRunResultV1,
-    FfiSyncStatusSnapshotV1, FfiSyncUnlockRequestV1,
+    FfiDiscoveredVaultSummaryV1, FfiSecret, FfiSyncChangePasswordRequestV1,
+    FfiSyncConflictDetailV1, FfiSyncConflictResolutionV1, FfiSyncConflictSummaryV1,
+    FfiSyncCreateRequestV1, FfiSyncCreateResultV1, FfiSyncJoinPreviewV1, FfiSyncJoinRequestV1,
+    FfiSyncPairingInfoV1, FfiSyncPresetV1, FfiSyncProviderDescriptorV1, FfiSyncProviderInputV1,
+    FfiSyncRunResultV1, FfiSyncStatusSnapshotV1, FfiSyncUnlockRequestV1,
 };
 use crate::{SonaCoreBindingError, SonaCoreBindingResult};
 
@@ -90,6 +90,8 @@ struct CreateRequest {
     preset: SyncPresetV1,
     master_password: String,
     create_recovery_key: bool,
+    #[serde(default)]
+    vault_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -140,14 +142,36 @@ pub(crate) async fn get_status_json(
     serialize_core_json(&status, "sync status")
 }
 
+pub(crate) async fn discover_vaults_json(
+    context: impl Into<ContextSource>,
+    provider_json: String,
+) -> SonaCoreBindingResult<String> {
+    let provider = parse_provider_input_json(&provider_json, "sync discover vaults provider")?;
+    let vaults = application(context)?
+        .discover_vaults(provider)
+        .await
+        .map_err(sync_error)?;
+    serialize_core_json(&vaults, "sync discover vaults result")
+}
+
+pub(crate) fn get_pairing_info_json(
+    context: impl Into<ContextSource>,
+) -> SonaCoreBindingResult<String> {
+    let info = application(context)?
+        .get_pairing_info()
+        .map_err(sync_error)?;
+    serialize_core_json(&info, "sync pairing info result")
+}
+
 pub(crate) async fn create_vault_json(
     context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
     let request: CreateRequest = parse_core_json(&request_json, "sync create request")?;
     let result = application(context)?
-        .create(
+        .create_with_vault_id(
             request.provider.into_provider_input()?,
+            request.vault_id,
             request.preset,
             &request.master_password,
             request.create_recovery_key,
@@ -368,14 +392,36 @@ pub(crate) async fn get_status_v1(
         .map_err(sync_error)
 }
 
+pub(crate) async fn discover_vaults_v1(
+    context: impl Into<ContextSource>,
+    provider: FfiSyncProviderInputV1,
+) -> SonaCoreBindingResult<Vec<FfiDiscoveredVaultSummaryV1>> {
+    let provider = provider_input_from_ffi(&provider)?;
+    application(context)?
+        .discover_vaults(provider)
+        .await
+        .map(|vaults| vaults.into_iter().map(Into::into).collect())
+        .map_err(sync_error)
+}
+
+pub(crate) fn get_pairing_info_v1(
+    context: impl Into<ContextSource>,
+) -> SonaCoreBindingResult<Option<FfiSyncPairingInfoV1>> {
+    application(context)?
+        .get_pairing_info()
+        .map(|info| info.map(Into::into))
+        .map_err(sync_error)
+}
+
 pub(crate) async fn create_vault_v1(
     context: impl Into<ContextSource>,
     request: FfiSyncCreateRequestV1,
 ) -> SonaCoreBindingResult<FfiSyncCreateResultV1> {
     let provider = provider_input_from_ffi(&request.provider)?;
     let result = application(context)?
-        .create(
+        .create_with_vault_id(
             provider,
+            request.vault_id,
             request.preset.into(),
             request.master_password.expose(),
             request.create_recovery_key,

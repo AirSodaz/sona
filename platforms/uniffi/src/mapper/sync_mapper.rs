@@ -96,6 +96,20 @@ pub struct FfiSyncJoinPreviewV1 {
     pub remote_operation_count: u64,
     pub projected_conflict_count: u64,
 }
+#[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
+pub struct FfiDiscoveredVaultSummaryV1 {
+    pub vault_id: String,
+    pub preset: FfiSyncPresetV1,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
+pub struct FfiSyncPairingInfoV1 {
+    pub provider_id: String,
+    pub vault_id: String,
+    pub server_url: Option<String>,
+    pub remote_root: Option<String>,
+    pub username: Option<String>,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
 pub struct FfiSyncProviderDescriptorV1 {
@@ -176,6 +190,7 @@ pub struct FfiSyncCreateRequestV1 {
     pub preset: FfiSyncPresetV1,
     pub master_password: Arc<FfiSecret>,
     pub create_recovery_key: bool,
+    pub vault_id: Option<String>,
 }
 
 #[derive(Clone, Debug, uniffi::Record)]
@@ -339,6 +354,26 @@ impl From<SyncProviderDescriptor> for FfiSyncProviderDescriptorV1 {
         Self {
             id: value.id,
             display_name: value.display_name,
+        }
+    }
+}
+impl From<sona_sync::DiscoveredVaultSummary> for FfiDiscoveredVaultSummaryV1 {
+    fn from(value: sona_sync::DiscoveredVaultSummary) -> Self {
+        Self {
+            vault_id: value.vault_id,
+            preset: value.preset.into(),
+        }
+    }
+}
+
+impl From<sona_sync::SyncPairingInfo> for FfiSyncPairingInfoV1 {
+    fn from(value: sona_sync::SyncPairingInfo) -> Self {
+        Self {
+            provider_id: value.provider_id,
+            vault_id: value.vault_id,
+            server_url: value.server_url,
+            remote_root: value.remote_root,
+            username: value.username,
         }
     }
 }
@@ -549,6 +584,7 @@ mod tests {
             preset: FfiSyncPresetV1::Standard,
             master_password: FfiSecret::new("hunter2".to_string()),
             create_recovery_key: true,
+            vault_id: None,
         };
 
         let rendered = format!("{request:?}");

@@ -342,6 +342,16 @@ impl SonaContext {
     pub async fn sync_get_status_json(&self) -> SonaCoreBindingResult<String> {
         sync_bridge::get_status_json(self.source()).await
     }
+    pub async fn sync_discover_vaults_json(
+        &self,
+        provider_json: String,
+    ) -> SonaCoreBindingResult<String> {
+        sync_bridge::discover_vaults_json(self.source(), provider_json).await
+    }
+
+    pub fn sync_get_pairing_info_json(&self) -> SonaCoreBindingResult<String> {
+        sync_bridge::get_pairing_info_json(self.source())
+    }
 
     pub async fn sync_create_vault_json(
         &self,
@@ -428,6 +438,16 @@ impl SonaContext {
 
     pub async fn sync_get_status_v1(&self) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
         sync_bridge::get_status_v1(self.source()).await
+    }
+    pub async fn sync_discover_vaults_v1(
+        &self,
+        provider: FfiSyncProviderInputV1,
+    ) -> SonaCoreBindingResult<Vec<FfiDiscoveredVaultSummaryV1>> {
+        sync_bridge::discover_vaults_v1(self.source(), provider).await
+    }
+
+    pub fn sync_get_pairing_info_v1(&self) -> SonaCoreBindingResult<Option<FfiSyncPairingInfoV1>> {
+        sync_bridge::get_pairing_info_v1(self.source())
     }
 
     pub async fn sync_create_vault_v1(

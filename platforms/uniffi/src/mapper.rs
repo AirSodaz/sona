@@ -107,13 +107,14 @@ pub use storage_usage_mapper::{
     FfiStorageUsageSnapshotV1, FfiWebviewCacheUsageCategoryV1,
 };
 pub use sync_mapper::{
-    FfiHybridLogicalClockV1, FfiSyncCausalContextV1, FfiSyncChangePasswordRequestV1,
-    FfiSyncConflictDetailV1, FfiSyncConflictKindV1, FfiSyncConflictResolutionV1,
-    FfiSyncConflictSummaryV1, FfiSyncCreateRequestV1, FfiSyncCreateResultV1, FfiSyncEntityKeyV1,
-    FfiSyncEntityKindV1, FfiSyncErrorSnapshotV1, FfiSyncJoinPreviewV1, FfiSyncJoinRequestV1,
-    FfiSyncLifecycleStateV1, FfiSyncOperationKindV1, FfiSyncOperationV1, FfiSyncPresetV1,
-    FfiSyncProviderDescriptorV1, FfiSyncProviderInputV1, FfiSyncRunResultV1,
-    FfiSyncStatusSnapshotV1, FfiSyncUnlockRequestV1, FfiSyncVersionV1,
+    FfiDiscoveredVaultSummaryV1, FfiHybridLogicalClockV1, FfiSyncCausalContextV1,
+    FfiSyncChangePasswordRequestV1, FfiSyncConflictDetailV1, FfiSyncConflictKindV1,
+    FfiSyncConflictResolutionV1, FfiSyncConflictSummaryV1, FfiSyncCreateRequestV1,
+    FfiSyncCreateResultV1, FfiSyncEntityKeyV1, FfiSyncEntityKindV1, FfiSyncErrorSnapshotV1,
+    FfiSyncJoinPreviewV1, FfiSyncJoinRequestV1, FfiSyncLifecycleStateV1, FfiSyncOperationKindV1,
+    FfiSyncOperationV1, FfiSyncPairingInfoV1, FfiSyncPresetV1, FfiSyncProviderDescriptorV1,
+    FfiSyncProviderInputV1, FfiSyncRunResultV1, FfiSyncStatusSnapshotV1, FfiSyncUnlockRequestV1,
+    FfiSyncVersionV1,
 };
 pub(crate) use sync_mapper::{provider_configuration_from_ffi, sync_conflict_detail_to_ffi};
 pub use tag_mapper::*;

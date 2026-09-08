@@ -48,16 +48,17 @@ pub use mapper::{
     FfiDiagnosticsConfigV1, FfiDiagnosticsDeviceOptionV1, FfiDiagnosticsDeviceProbeV1,
     FfiDiagnosticsInputV1, FfiDiagnosticsModelRuleV1, FfiDiagnosticsModelRulesV1,
     FfiDiagnosticsModelSummaryV1, FfiDiagnosticsPathStatusesV1, FfiDiagnosticsSelectedModelsV1,
-    FfiDiagnosticsSnapshotV1, FfiExportFormatV1, FfiExportModeV1, FfiExportTranscriptFileRequestV1,
-    FfiExportTranscriptFileResultV1, FfiFileUsageCategoryV1, FfiHistoryAudioStatusV1,
-    FfiHistoryCommitTranscriptEditRequestV1, FfiHistoryCommitTranscriptEditResultV1,
-    FfiHistoryCompleteLiveDraftRequestV1, FfiHistoryCreateLiveDraftRequestV1,
-    FfiHistoryCreateTranscriptSnapshotRequestV1, FfiHistoryDeleteItemsRequestV1,
-    FfiHistoryDraftSourcePatchV1, FfiHistoryDraftSourceV1, FfiHistoryItemKindV1,
-    FfiHistoryItemMetaPatchV1, FfiHistoryItemRecordV1, FfiHistoryItemStatusV1,
-    FfiHistoryReplaceTagAssignmentsRequestV1, FfiHistorySaveImportedFileRequestV1,
-    FfiHistorySaveRecordingRequestV1, FfiHistorySearchMatchEntryV1, FfiHistorySummaryPayloadV1,
-    FfiHistoryTagCountEntryV1, FfiHistoryTrashItemsRequestV1, FfiHistoryUpdateItemMetaRequestV1,
+    FfiDiagnosticsSnapshotV1, FfiDiscoveredVaultSummaryV1, FfiExportFormatV1, FfiExportModeV1,
+    FfiExportTranscriptFileRequestV1, FfiExportTranscriptFileResultV1, FfiFileUsageCategoryV1,
+    FfiHistoryAudioStatusV1, FfiHistoryCommitTranscriptEditRequestV1,
+    FfiHistoryCommitTranscriptEditResultV1, FfiHistoryCompleteLiveDraftRequestV1,
+    FfiHistoryCreateLiveDraftRequestV1, FfiHistoryCreateTranscriptSnapshotRequestV1,
+    FfiHistoryDeleteItemsRequestV1, FfiHistoryDraftSourcePatchV1, FfiHistoryDraftSourceV1,
+    FfiHistoryItemKindV1, FfiHistoryItemMetaPatchV1, FfiHistoryItemRecordV1,
+    FfiHistoryItemStatusV1, FfiHistoryReplaceTagAssignmentsRequestV1,
+    FfiHistorySaveImportedFileRequestV1, FfiHistorySaveRecordingRequestV1,
+    FfiHistorySearchMatchEntryV1, FfiHistorySummaryPayloadV1, FfiHistoryTagCountEntryV1,
+    FfiHistoryTrashItemsRequestV1, FfiHistoryUpdateItemMetaRequestV1,
     FfiHistoryUpdateTagAssignmentsRequestV1, FfiHistoryUpdateTranscriptRequestV1,
     FfiHistoryWorkspaceDateFilterV1, FfiHistoryWorkspaceFilterTypeV1,
     FfiHistoryWorkspaceItemCountsV1, FfiHistoryWorkspaceItemSearchMatchV1,
@@ -94,8 +95,8 @@ pub use mapper::{
     FfiSyncConflictDetailV1, FfiSyncConflictKindV1, FfiSyncConflictResolutionV1,
     FfiSyncConflictSummaryV1, FfiSyncCreateRequestV1, FfiSyncCreateResultV1, FfiSyncEntityKeyV1,
     FfiSyncEntityKindV1, FfiSyncErrorSnapshotV1, FfiSyncJoinPreviewV1, FfiSyncJoinRequestV1,
-    FfiSyncLifecycleStateV1, FfiSyncOperationKindV1, FfiSyncOperationV1, FfiSyncPresetV1,
-    FfiSyncProviderDescriptorV1, FfiSyncProviderInputV1, FfiSyncRunResultV1,
+    FfiSyncLifecycleStateV1, FfiSyncOperationKindV1, FfiSyncOperationV1, FfiSyncPairingInfoV1,
+    FfiSyncPresetV1, FfiSyncProviderDescriptorV1, FfiSyncProviderInputV1, FfiSyncRunResultV1,
     FfiSyncStatusSnapshotV1, FfiSyncUnlockRequestV1, FfiSyncVersionV1, FfiTagCreateInputV1,
     FfiTagRecordV1, FfiTagRepositorySnapshotV1, FfiTagUpdateInputV1, FfiTaskLedgerKindV1,
     FfiTaskLedgerPatchV1, FfiTaskLedgerRecordV1, FfiTaskLedgerSnapshotV1, FfiTaskLedgerStatusV1,
@@ -583,6 +584,18 @@ pub fn release_application_context(app_data_dir: String) -> SonaCoreBindingResul
 pub async fn sync_get_status_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
     sync_bridge::get_status_json(app_data_dir).await
 }
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn sync_discover_vaults_json(
+    app_data_dir: String,
+    provider_json: String,
+) -> SonaCoreBindingResult<String> {
+    sync_bridge::discover_vaults_json(app_data_dir, provider_json).await
+}
+
+#[uniffi::export]
+pub fn sync_get_pairing_info_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
+    sync_bridge::get_pairing_info_json(app_data_dir)
+}
 
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn sync_create_vault_json(
@@ -703,6 +716,20 @@ pub async fn sync_get_status_v1(
     app_data_dir: String,
 ) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
     sync_bridge::get_status_v1(app_data_dir).await
+}
+#[uniffi::export]
+pub async fn sync_discover_vaults_v1(
+    app_data_dir: String,
+    provider: FfiSyncProviderInputV1,
+) -> SonaCoreBindingResult<Vec<FfiDiscoveredVaultSummaryV1>> {
+    sync_bridge::discover_vaults_v1(app_data_dir, provider).await
+}
+
+#[uniffi::export]
+pub fn sync_get_pairing_info_v1(
+    app_data_dir: String,
+) -> SonaCoreBindingResult<Option<FfiSyncPairingInfoV1>> {
+    sync_bridge::get_pairing_info_v1(app_data_dir)
 }
 
 #[uniffi::export]

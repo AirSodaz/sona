@@ -2,6 +2,8 @@ package com.sona.android.adapters.android.sync
 
 import androidx.work.NetworkType
 import com.sona.android.application.sync.SyncConflict
+import com.sona.android.application.sync.DiscoveredVaultSummary
+import com.sona.android.application.sync.SyncPairingInfo
 import com.sona.android.application.sync.SyncConflictResolution
 import com.sona.android.application.sync.SyncCreateResult
 import com.sona.android.application.sync.SyncError
@@ -75,7 +77,15 @@ class SyncWorkerPolicyTest {
             return SyncRunResult(0, 0, 0, 0, 0)
         }
         override suspend fun testProvider(provider: WebDavSyncProvider) = "WebDAV"
-        override suspend fun createVault(provider: WebDavSyncProvider, preset: SyncPreset, masterPassword: String): SyncCreateResult = error("unused")
+        override suspend fun discoverVaults(provider: WebDavSyncProvider): List<DiscoveredVaultSummary> = emptyList()
+        override suspend fun getPairingInfo(): SyncPairingInfo? = null
+        override suspend fun createVault(
+            provider: WebDavSyncProvider,
+            preset: SyncPreset,
+            masterPassword: String,
+            vaultId: String?,
+            createRecoveryKey: Boolean,
+        ): SyncCreateResult = error("unused")
         override suspend fun previewJoin(provider: WebDavSyncProvider, vaultId: String, masterPassword: String): SyncJoinPreview = error("unused")
         override suspend fun join(provider: WebDavSyncProvider, vaultId: String, masterPassword: String): SyncRunResult = error("unused")
         override suspend fun unlock(providerPassword: String, masterPassword: String) = current

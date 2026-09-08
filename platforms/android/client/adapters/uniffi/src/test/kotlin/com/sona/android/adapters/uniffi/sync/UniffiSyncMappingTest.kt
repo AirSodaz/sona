@@ -9,12 +9,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import uniffi.sona_uniffi_bind.FfiDiscoveredVaultSummaryV1
 import uniffi.sona_uniffi_bind.FfiSyncErrorSnapshotV1
 import uniffi.sona_uniffi_bind.FfiSyncLifecycleStateV1
+import uniffi.sona_uniffi_bind.FfiSyncPairingInfoV1
 import uniffi.sona_uniffi_bind.FfiSyncPresetV1
 import uniffi.sona_uniffi_bind.FfiSyncRunResultV1
 import uniffi.sona_uniffi_bind.FfiSyncStatusSnapshotV1
-
+import com.sona.android.application.sync.SyncPreset
 class UniffiSyncMappingTest {
     @Test
     fun `WebDAV provider requires HTTPS and uses structured JSON`() {
@@ -56,5 +58,29 @@ class UniffiSyncMappingTest {
         assertThrows(IllegalArgumentException::class.java) {
             FfiSyncRunResultV1(ULong.MAX_VALUE, 0uL, 0uL, 0uL, 0uL, 0uL, false).toApplication()
         }
+    }
+
+    @Test
+    fun `maps discovered vault summary`() {
+        val mapped = FfiDiscoveredVaultSummaryV1("vault-abc", FfiSyncPresetV1.FULL).toApplication()
+        assertEquals("vault-abc", mapped.vaultId)
+        assertEquals(SyncPreset.FULL, mapped.preset)
+    }
+
+    @Test
+    fun `maps sync pairing info`() {
+        val mapped = FfiSyncPairingInfoV1(
+            providerId = "webdav",
+            vaultId = "vault-xyz",
+            serverUrl = "https://dav.example.com",
+            remoteRoot = "Sona",
+            username = "alice",
+        ).toApplication()
+
+        assertEquals("webdav", mapped.providerId)
+        assertEquals("vault-xyz", mapped.vaultId)
+        assertEquals("https://dav.example.com", mapped.serverUrl)
+        assertEquals("Sona", mapped.remoteRoot)
+        assertEquals("alice", mapped.username)
     }
 }

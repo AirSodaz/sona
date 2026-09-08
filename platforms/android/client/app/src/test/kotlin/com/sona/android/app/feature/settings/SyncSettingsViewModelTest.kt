@@ -7,16 +7,21 @@ import com.sona.android.application.sync.SyncConflictResolution
 import com.sona.android.application.sync.SyncCreateResult
 import com.sona.android.application.sync.SyncJoinPreview
 import com.sona.android.application.sync.SyncLifecycleState
+import com.sona.android.application.sync.DiscoveredVaultSummary
+import com.sona.android.application.sync.SyncPairingInfo
+import com.sona.android.application.sync.SyncPairingPayload
 import com.sona.android.application.sync.SyncPort
 import com.sona.android.application.sync.SyncPreset
 import com.sona.android.application.sync.SyncRunResult
 import com.sona.android.application.sync.SyncSchedulerPort
 import com.sona.android.application.sync.SyncStatus
 import com.sona.android.application.sync.WebDavSyncProvider
+import com.sona.android.application.sync.encodeSyncPairingToken
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
@@ -79,6 +84,32 @@ class SyncSettingsViewModelTest {
         assertFalse(viewModel.state.value.toString().contains("bearer-secret"))
     }
 
+    @Test
+    fun `discoverVaults updates discoveredVaults in UI state`() = runTest {
+        val sync = FakeSyncPort().apply {
+            discovered = listOf(DiscoveredVaultSummary("vault-1", SyncPreset.STANDARD))
+        }
+        val viewModel = SyncSettingsViewModel(sync, FakeScheduler(), FakeFiles)
+
+        viewModel.discoverVaults(WebDavSyncProvider("https://dav.example", "Sona", "u", "p"))
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.state.value.discoveredVaults?.size)
+        assertEquals("vault-1", viewModel.state.value.discoveredVaults?.first()?.vaultId)
+    }
+
+    @Test
+    fun `applyPairingToken decodes and populates notice`() = runTest {
+        val viewModel = SyncSettingsViewModel(FakeSyncPort(), FakeScheduler(), FakeFiles)
+        val token = encodeSyncPairingToken("https://dav.example", "Sona", "alice", "vault-9")
+
+        val payload = viewModel.applyPairingToken(token)
+        assertNotNull(payload)
+        assertEquals("https://dav.example", payload?.serverUrl)
+        assertEquals("vault-9", payload?.vaultId)
+        assertNotNull(viewModel.state.value.pairingSuccessNotice)
+    }
+
     private class FakeScheduler : SyncSchedulerPort {
         var periodic = 0
         var immediate = 0
@@ -94,8 +125,17 @@ class SyncSettingsViewModelTest {
         var runCalls = 0
         var failure: Exception? = null
         override suspend fun status(): SyncStatus = failure?.let { throw it } ?: current
-        override suspend fun createVault(provider: WebDavSyncProvider, preset: SyncPreset, masterPassword: String) =
-            SyncCreateResult("vault", "device", "recovery-key", current)
+        var discovered = emptyList<DiscoveredVaultSummary>()
+        var pairingInfo: SyncPairingInfo? = SyncPairingInfo("webdav", "vault", "https://dav.example", "Sona", "alice")
+        override suspend fun discoverVaults(provider: WebDavSyncProvider) = discovered
+        override suspend fun getPairingInfo() = pairingInfo
+        override suspend fun createVault(
+            provider: WebDavSyncProvider,
+            preset: SyncPreset,
+            masterPassword: String,
+            vaultId: String?,
+            createRecoveryKey: Boolean,
+        ) = SyncCreateResult(vaultId ?: "vault", "device", if (createRecoveryKey) "recovery-key" else null, current)
         override suspend fun setPaused(paused: Boolean): SyncStatus = status(
             if (paused) SyncLifecycleState.PAUSED else SyncLifecycleState.IDLE,
         ).also { current = it }

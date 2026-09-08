@@ -285,6 +285,43 @@
     <string name="sync_keep_current" translatable="false">Keep current</string>
     <string name="sync_use_remote" translatable="false">Use remote</string>
     <string name="sync_keep_both" translatable="false">Keep both</string>
+    <string name="sync_import_pairing_token" translatable="false">Import pairing code</string>
+    <string name="sync_have_device_hint" translatable="false">Have another device already configured?</string>
+    <string name="sync_pairing_modal_title" translatable="false">Import Pairing Code</string>
+    <string name="sync_pairing_modal_desc" translatable="false">Paste the pairing code (sonasync://...) generated on your other device to quickly fill connection parameters.</string>
+    <string name="sync_pairing_token_label" translatable="false">Pairing code</string>
+    <string name="sync_pairing_security_note" translatable="false">The pairing code contains server metadata only. You will still need to enter your Master Password to unlock.</string>
+    <string name="sync_pair_device_modal_title" translatable="false">Pair New Device</string>
+    <string name="sync_copy_pairing_token" translatable="false">Copy pairing code</string>
+    <string name="sync_pair_step_1" translatable="false">1. Open Sona on your second device</string>
+    <string name="sync_pair_step_2" translatable="false">2. Go to Settings -> Sync -> tap \"Import pairing code\"</string>
+    <string name="sync_pair_step_3" translatable="false">3. Paste the code and enter your master password</string>
+    <string name="sync_preset_label" translatable="false">Provider Preset</string>
+    <string name="sync_auth_mode" translatable="false">Authentication Method</string>
+    <string name="sync_use_master_password" translatable="false">Master password</string>
+    <string name="sync_use_recovery_key" translatable="false">Emergency recovery key</string>
+    <string name="sync_advanced_title" translatable="false">Advanced Settings</string>
+    <string name="sync_advanced_desc" translatable="false">Remote root, custom Vault ID, sync scope, recovery key</string>
+    <string name="sync_create_recovery_key_label" translatable="false">Emergency Recovery Key</string>
+    <string name="sync_create_recovery_key_hint" translatable="false">Generate a recovery key to restore access if you forget your master password.</string>
+    <string name="sync_multi_vault_title" translatable="false">Multiple Sync Vaults Detected</string>
+    <string name="sync_multi_vault_desc" translatable="false">Found existing vaults on this server. Choose one to join or create a new vault:</string>
+    <string name="sync_create_new_vault_option" translatable="false">Create a new vault</string>
+    <string name="sync_join_selected_vault" translatable="false">Join Selected Vault</string>
+    <string name="sync_danger_zone" translatable="false">Danger Zone</string>
+    <string name="sync_disconnect_warning" translatable="false">Disconnecting this device will clear local sync state and credentials. Your local records will remain intact.</string>
+    <string name="sync_security_title" translatable="false">Vault Security &amp; Recovery</string>
+    <string name="sync_security_hint" translatable="false">Manage your encryption password and emergency recovery keys.</string>
+    <string name="sync_recovery_key_manage_title" translatable="false">Emergency Recovery Key</string>
+    <string name="sync_recovery_key_manage_hint" translatable="false">Used to recover your data if you forget the master password.</string>
+    <string name="sync_active_recovery_key" translatable="false">Active Recovery Key</string>
+    <string name="sync_recovery_key_save_warning" translatable="false">Save this key in a secure location (e.g. password manager). It is not stored in plain text.</string>
+    <string name="sync_change_password_mode_current" translatable="false">Use current password</string>
+    <string name="sync_change_password_mode_recovery" translatable="false">Reset with recovery key</string>
+    <string name="sync_confirm_new_password" translatable="false">Confirm new master password</string>
+    <string name="sync_password_mismatch" translatable="false">The new master password confirmation does not match.</string>
+    <string name="sync_pair_btn" translatable="false">Pair New Device</string>
+    <string name="sync_connect" translatable="false">Connect</string>
     <string name="action_copy" translatable="false">Copy</string>
     <string name="action_export" translatable="false">Export</string>
     <string name="action_refresh" translatable="false">Refresh</string>

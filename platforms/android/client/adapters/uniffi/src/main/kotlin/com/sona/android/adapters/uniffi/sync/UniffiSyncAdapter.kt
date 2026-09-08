@@ -1,5 +1,6 @@
 package com.sona.android.adapters.uniffi.sync
 
+import com.sona.android.application.sync.DiscoveredVaultSummary
 import com.sona.android.application.sync.SyncConflict
 import com.sona.android.application.sync.SyncConflictResolution
 import com.sona.android.application.sync.SyncConflictDetail
@@ -8,6 +9,7 @@ import com.sona.android.application.sync.SyncCreateResult
 import com.sona.android.application.sync.SyncError
 import com.sona.android.application.sync.SyncJoinPreview
 import com.sona.android.application.sync.SyncLifecycleState
+import com.sona.android.application.sync.SyncPairingInfo
 import com.sona.android.application.sync.SyncPort
 import com.sona.android.application.sync.SyncPreset
 import com.sona.android.application.sync.SyncRunResult
@@ -15,6 +17,7 @@ import com.sona.android.application.sync.SyncStatus
 import com.sona.android.application.sync.WebDavSyncProvider
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import uniffi.sona_uniffi_bind.FfiDiscoveredVaultSummaryV1
 import uniffi.sona_uniffi_bind.FfiSecret
 import uniffi.sona_uniffi_bind.FfiSyncChangePasswordRequestV1
 import uniffi.sona_uniffi_bind.FfiSyncConflictResolutionV1
@@ -22,6 +25,7 @@ import uniffi.sona_uniffi_bind.FfiSyncCreateRequestV1
 import uniffi.sona_uniffi_bind.FfiSyncJoinRequestV1
 import uniffi.sona_uniffi_bind.FfiSyncLifecycleStateV1
 import uniffi.sona_uniffi_bind.FfiSyncOperationKindV1
+import uniffi.sona_uniffi_bind.FfiSyncPairingInfoV1
 import uniffi.sona_uniffi_bind.FfiSyncPresetV1
 import uniffi.sona_uniffi_bind.FfiSyncProviderInputV1
 import uniffi.sona_uniffi_bind.FfiSyncRunResultV1
@@ -30,9 +34,11 @@ import uniffi.sona_uniffi_bind.FfiSyncUnlockRequestV1
 import uniffi.sona_uniffi_bind.syncChangeMasterPasswordV1
 import uniffi.sona_uniffi_bind.syncChangePresetV1
 import uniffi.sona_uniffi_bind.syncCreateVaultV1
+import uniffi.sona_uniffi_bind.syncDiscoverVaultsV1
 import uniffi.sona_uniffi_bind.syncDisconnectV1
 import uniffi.sona_uniffi_bind.syncGenerateRecoveryKey
 import uniffi.sona_uniffi_bind.syncGetConflictV1
+import uniffi.sona_uniffi_bind.syncGetPairingInfoV1
 import uniffi.sona_uniffi_bind.syncGetStatusV1
 import uniffi.sona_uniffi_bind.syncJoinVaultV1
 import uniffi.sona_uniffi_bind.syncListConflictsV1
@@ -52,20 +58,29 @@ class UniffiSyncAdapter(private val appDataDir: String) : SyncPort {
 
     override suspend fun status(): SyncStatus = syncGetStatusV1(appDataDir).toApplication()
 
+    override suspend fun discoverVaults(provider: WebDavSyncProvider): List<DiscoveredVaultSummary> =
+        syncDiscoverVaultsV1(appDataDir, provider.toFfi()).map { it.toApplication() }
+
+    override suspend fun getPairingInfo(): SyncPairingInfo? =
+        syncGetPairingInfoV1(appDataDir)?.toApplication()
+
     override suspend fun createVault(
         provider: WebDavSyncProvider,
         preset: SyncPreset,
         masterPassword: String,
+        vaultId: String?,
+        createRecoveryKey: Boolean,
     ): SyncCreateResult {
         val request = FfiSyncCreateRequestV1(
             provider = provider.toFfi(),
             preset = preset.toFfi(),
             masterPassword = FfiSecret(masterPassword),
-            createRecoveryKey = false,
+            createRecoveryKey = createRecoveryKey,
+            vaultId = vaultId?.takeIf { it.isNotBlank() },
         )
         return try {
             val created = syncCreateVaultV1(appDataDir, request)
-            val recoveryKey = syncGenerateRecoveryKey(appDataDir)
+            val recoveryKey = if (createRecoveryKey) syncGenerateRecoveryKey(appDataDir) else null
             SyncCreateResult(created.vaultId, created.deviceId, recoveryKey, created.status.toApplication())
         } finally {
             request.destroy()
@@ -231,6 +246,19 @@ internal fun FfiSyncRunResultV1.toApplication() = SyncRunResult(
     publishedOperationCount.toLongChecked("Published operation count"),
     conflictCount.toLongChecked("Conflict count"),
 )
+internal fun FfiDiscoveredVaultSummaryV1.toApplication() = DiscoveredVaultSummary(
+    vaultId = vaultId,
+    preset = SyncPreset.valueOf(preset.name),
+)
+
+internal fun FfiSyncPairingInfoV1.toApplication() = SyncPairingInfo(
+    providerId = providerId,
+    vaultId = vaultId,
+    serverUrl = serverUrl,
+    remoteRoot = remoteRoot,
+    username = username,
+)
+
 
 private fun uniffi.sona_uniffi_bind.FfiSyncConflictSummaryV1.toApplication() = SyncConflict(
     id = conflictId,
