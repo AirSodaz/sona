@@ -50,6 +50,10 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: default;
+}
+
 button:hover {
   border-color: #396cd8;
 }

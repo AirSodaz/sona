@@ -7,6 +7,7 @@ import {
   DatabaseZap,
   ExternalLink,
   KeyRound,
+  Layers,
   Link2,
   RefreshCw,
   Server,
@@ -142,21 +143,6 @@ export function SyncSetupPanel({
     value: p.id,
     label: t(p.nameKey, { defaultValue: p.defaultName }),
   }));
-
-  const scopeOptions: DropdownOption[] = [
-    {
-      value: 'standard',
-      label: `${t('settings.sync.preset_standard', { defaultValue: 'Standard' })} (${t('settings.sync.preset_standard_desc', { defaultValue: 'Transcripts & Projects' })})`,
-    },
-    {
-      value: 'content',
-      label: `${t('settings.sync.preset_content', { defaultValue: 'Content only' })} (${t('settings.sync.preset_content_desc', { defaultValue: 'Transcripts only' })})`,
-    },
-    {
-      value: 'full',
-      label: `${t('settings.sync.preset_full', { defaultValue: 'Full backup' })} (${t('settings.sync.preset_full_desc', { defaultValue: 'Everything' })})`,
-    },
-  ];
 
   // Test provider connection
   const handleTestConnection = async () => {
@@ -592,23 +578,61 @@ export function SyncSetupPanel({
 
           <SettingsItem
             title={t('settings.sync.scope_selector_label', { defaultValue: 'Sync scope preset' })}
+            hint={t('settings.sync.scope_selector_hint', { defaultValue: 'Choose which data types are synchronized to other devices' })}
+            layout="vertical"
           >
-            <Dropdown
-              id="sync-scope-preset"
-              value={preset}
-              onChange={(v) => setPreset(v as SyncPresetV1)}
-              options={scopeOptions}
-              disabled={isBusy}
-              style={{ width: '100%', maxWidth: '380px' }}
-            />
+            <div className="settings-scenario-cards three-columns" style={{ width: '100%', padding: 0, background: 'transparent' }}>
+              {[
+                {
+                  id: 'content' as const,
+                  label: t('settings.sync.preset_content', { defaultValue: 'Content only' }),
+                  description: t('settings.sync.scope_content_desc', { defaultValue: 'Transcripts & summaries' }),
+                },
+                {
+                  id: 'standard' as const,
+                  label: t('settings.sync.preset_standard', { defaultValue: 'Standard' }),
+                  description: t('settings.sync.scope_standard_desc', { defaultValue: 'Recommended for daily sync' }),
+                  badge: t('common.recommended', { defaultValue: 'Recommended' }),
+                },
+                {
+                  id: 'full' as const,
+                  label: t('settings.sync.preset_full', { defaultValue: 'Full workspace' }),
+                  description: t('settings.sync.scope_full_desc', { defaultValue: 'All settings & profiles' }),
+                },
+              ].map((s) => {
+                const isSelected = preset === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={`settings-scenario-card${isSelected ? ' active' : ''}`}
+                    onClick={() => setPreset(s.id)}
+                    disabled={isBusy}
+                  >
+                    <span className="settings-scenario-card-icon">
+                      <Layers size={18} />
+                    </span>
+                    <span className="settings-scenario-card-text">
+                      <span className="settings-scenario-card-label">
+                        {s.label}
+                        {s.badge && <span className="sync-scope-tag is-badge" style={{ marginLeft: '6px' }}>{s.badge}</span>}
+                      </span>
+                      <span className="settings-scenario-card-description">
+                        {s.description}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </SettingsItem>
-
           <SettingsItem
             title={t('settings.sync.create_recovery_key_label', { defaultValue: 'Emergency Recovery Key' })}
             hint={t('settings.sync.create_recovery_key_hint', { defaultValue: 'Generate a recovery key to restore access if you forget your master password.' })}
           >
             <Switch
               id="sync-create-recovery-key"
+              aria-label={t('settings.sync.create_recovery_key_label', { defaultValue: 'Emergency Recovery Key' })}
               checked={createRecoveryKey}
               onChange={(checked) => setCreateRecoveryKey(checked)}
               disabled={isBusy}

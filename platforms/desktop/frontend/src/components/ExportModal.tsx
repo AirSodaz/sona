@@ -247,7 +247,7 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '8px',
-                                cursor: hasTranslation ? 'pointer' : 'not-allowed',
+                                cursor: hasTranslation ? 'pointer' : 'default',
                                 fontSize: '0.875rem',
                                 opacity: hasTranslation ? 1 : 0.5
                             }}>
@@ -264,7 +264,7 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '8px',
-                                cursor: hasTranslation ? 'pointer' : 'not-allowed',
+                                cursor: hasTranslation ? 'pointer' : 'default',
                                 fontSize: '0.875rem',
                                 opacity: hasTranslation ? 1 : 0.5
                             }}>

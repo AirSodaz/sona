@@ -268,6 +268,7 @@ export function BackupSettingsSection({
             onDisconnect={handleDisconnect}
             onExportRecoveryKey={handleExportRecoveryKey}
             onGenerateRecoveryKey={handleGenerateRecoveryKey}
+            onDeleteRecoveryKey={() => setRecoveryKey(null)}
             onLock={handleLock}
             onRunNow={handleRunNow}
             onSetPaused={handleSetPaused}

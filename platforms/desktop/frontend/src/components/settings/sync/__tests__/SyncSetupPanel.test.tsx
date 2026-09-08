@@ -268,4 +268,43 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
     const cancelBtn = screen.getByRole('button', { name: /Cancel|取消/i });
     fireEvent.click(cancelBtn);
   });
+  it('allows changing sync preset via horizontal cards and toggling recovery key creation', async () => {
+    const onDiscoverVaults = vi.fn().mockResolvedValue([]);
+    render(
+      <SyncSetupPanel
+        busyAction={null}
+        onCreate={onCreate}
+        onJoin={onJoin}
+        onPreviewJoin={onPreviewJoin}
+        onTestProvider={onTestProvider}
+        onDiscoverVaults={onDiscoverVaults}
+      />,
+    );
+
+    fillFields();
+
+    // Open advanced options accordion
+    const advancedTitle = screen.getByText(/Advanced Settings|高级设置/i);
+    fireEvent.click(advancedTitle);
+
+    // Select 'Full workspace' preset
+    const fullCard = screen.getByRole('button', { name: /Full workspace/i });
+    fireEvent.click(fullCard);
+
+    // Toggle recovery key switch
+    const recoverySwitch = screen.getByLabelText(/Emergency Recovery Key/i);
+    fireEvent.click(recoverySwitch);
+
+    const saveBtn = screen.getByRole('button', { name: /Save & Enable Sync|保存并开启同步/i });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(onCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          preset: 'full',
+          createRecoveryKey: false,
+        }),
+      );
+    });
+  });
 });

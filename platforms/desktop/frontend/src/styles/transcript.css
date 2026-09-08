@@ -51,7 +51,7 @@
 
 .transcript-summary-modal .transcript-summary-template-tab:disabled {
   opacity: 0.65;
-  cursor: not-allowed;
+  cursor: default;
 }
 
 .transcript-summary-generate-button {
