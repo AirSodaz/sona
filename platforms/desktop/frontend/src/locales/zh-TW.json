@@ -974,7 +974,8 @@
             "password_changed_success": "主密碼更新成功。",
             "recovery_key_manage_title": "應急復原金鑰",
             "recovery_key_manage_hint": "若遺忘主密碼，可使用復原金鑰重設存取權限。",
-            "generate_recovery_key": "產生金鑰",
+            "generate_recovery_key": "產生復原金鑰",
+            "generate_key_action": "產生復原金鑰",
             "regenerate_key_action": "產生新金鑰",
             "new_recovery_key_title": "有效復原金鑰",
             "recovery_key_save_warning": "請將此金鑰儲存在安全的位置（如密碼管理器）。系統不會以明文儲存此金鑰。",
@@ -1035,7 +1036,12 @@
             "scope_templates": "提示詞與摘要範本",
             "just_now": "剛剛",
             "minutes_ago": "{{count}} 分鐘前",
-            "hours_ago": "{{count}} 小時前"
+            "hours_ago": "{{count}} 小時前",
+            "danger_zone_title": "危險操作",
+            "danger_zone_desc": "中斷裝置與同步庫的連線",
+            "recovery_key_status_title": "目前工作階段暫無明文復原金鑰",
+            "recovery_key_safety_hint": "復原金鑰不會以明文保存在本機或雲端。若此前未儲存，可隨時產生並備份。",
+            "password_matched": "密碼相符"
         },
         "diagnostics": {
             "title": "模型與環境診斷",

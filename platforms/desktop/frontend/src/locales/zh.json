@@ -974,7 +974,8 @@
             "password_changed_success": "主密码更新成功。",
             "recovery_key_manage_title": "应急恢复密钥",
             "recovery_key_manage_hint": "若遗忘主密码，可使用恢复密钥重置访问权限。",
-            "generate_recovery_key": "生成密钥",
+            "generate_recovery_key": "生成恢复密钥",
+            "generate_key_action": "生成恢复密钥",
             "regenerate_key_action": "生成新密钥",
             "new_recovery_key_title": "有效恢复密钥",
             "recovery_key_save_warning": "请将此密钥保存在安全的位置（如密码管理器）。系统不会以明文保存此密钥。",
@@ -1035,7 +1036,12 @@
             "scope_templates": "提示词与摘要模板",
             "just_now": "刚刚",
             "minutes_ago": "{{count}} 分钟前",
-            "hours_ago": "{{count}} 小时前"
+            "hours_ago": "{{count}} 小时前",
+            "danger_zone_title": "危险操作",
+            "danger_zone_desc": "断开设备与同步库的连接",
+            "recovery_key_status_title": "当前会话暂无明文恢复密钥",
+            "recovery_key_safety_hint": "恢复密钥不会以明文保存在本机或云端。若此前未保存，可随时生成并备份。",
+            "password_matched": "密码一致"
         },
         "diagnostics": {
             "title": "模型与环境诊断",

@@ -974,7 +974,8 @@
             "password_changed_success": "마스터 비밀번호가 성공적으로 업데이트되었습니다.",
             "recovery_key_manage_title": "비상 복구 키",
             "recovery_key_manage_hint": "마스터 비밀번호를 잊어버린 경우 데이터를 복구하는 데 사용됩니다.",
-            "generate_recovery_key": "키 생성",
+            "generate_recovery_key": "복구 키 생성",
+            "generate_key_action": "복구 키 생성",
             "regenerate_key_action": "새 키 생성",
             "new_recovery_key_title": "활성 복구 키",
             "recovery_key_save_warning": "이 키를 안전한 위치(예: 비밀번호 관리자)에 저장하세요. 일반 텍스트로 저장되지 않습니다.",
@@ -1035,7 +1036,12 @@
             "scope_templates": "프롬프트 및 요약 템플릿",
             "just_now": "방금 전",
             "minutes_ago": "{{count}}분 전",
-            "hours_ago": "{{count}}시간 전"
+            "hours_ago": "{{count}}시간 전",
+            "danger_zone_title": "위험 작업",
+            "danger_zone_desc": "이 기기와 동기화 보관함의 연결을 해제합니다.",
+            "recovery_key_status_title": "현재 세션에 활성화된 복구 키가 없습니다",
+            "recovery_key_safety_hint": "복구 키는 기기나 서버에 일반 텍스트로 저장되지 않습니다. 이전에 저장하지 않았다면 지금 새로 생성하세요.",
+            "password_matched": "비밀번호 일치"
         },
         "diagnostics": {
             "title": "모델 및 환경 Diagnostics",

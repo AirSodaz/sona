@@ -12,6 +12,12 @@ import {
   Copy,
   DatabaseZap,
   Download,
+  Eye,
+  EyeOff,
+  FileText,
+  FolderSync,
+  FolderTree,
+  HardDrive,
   HelpCircle,
   KeyRound,
   Layers,
@@ -19,7 +25,6 @@ import {
   Lock,
   Pause,
   Play,
-  QrCode,
   RefreshCw,
   Server,
   ShieldCheck,
@@ -66,9 +71,12 @@ import {
   type WellKnownSyncProviderId,
   detectProviderPresetId,
 } from './sync/SyncProviderPresets';
+import {
+  decodeSyncPairingToken,
+  encodeSyncPairingToken,
+} from './sync/syncPairing';
 import { SyncConflictCenter } from './sync/SyncConflictCenter';
 import './sync/SyncSettings.css';
-
 interface SettingsSyncTabProps {
   isVisible?: boolean;
   isPrewarming?: boolean;
@@ -81,47 +89,85 @@ const EMPTY_PROVIDER: WebDavObjectStoreConfig = {
   password: '',
 };
 
-function encodeSyncPairingToken(
-  provider: WebDavObjectStoreConfig,
-  vaultId: string,
-): string {
-  try {
-    const payload = {
-      v: 1,
-      serverUrl: provider.serverUrl,
-      remoteRoot: provider.remoteRoot,
-      username: provider.username,
-      vaultId,
-    };
-    const json = JSON.stringify(payload);
-    const b64 = btoa(encodeURIComponent(json));
-    return `sonasync://v1?data=${b64}`;
-  } catch {
-    return '';
+function getProviderPresetIcon(id: WellKnownSyncProviderId): React.JSX.Element {
+  switch (id) {
+    case 'nutstore':
+      return <Cloud size={18} />;
+    case 'nextcloud':
+      return <FolderSync size={18} />;
+    case 'infinicloud':
+      return <HardDrive size={18} />;
+    case 'synology':
+      return <Server size={18} />;
+    case 'alist':
+      return <FolderTree size={18} />;
+    case 'custom':
+    default:
+      return <Link2 size={18} />;
   }
 }
 
-function decodeSyncPairingToken(token: string): Partial<WebDavObjectStoreConfig & { vaultId: string }> | null {
-  try {
-    const trimmed = token.trim();
-    if (!trimmed.startsWith('sonasync://')) return null;
-    const url = new URL(trimmed);
-    const data = url.searchParams.get('data');
-    if (!data) return null;
-    const json = decodeURIComponent(atob(data));
-    const parsed = JSON.parse(json);
-    if (parsed && typeof parsed === 'object') {
-      return {
-        serverUrl: parsed.serverUrl || '',
-        remoteRoot: parsed.remoteRoot || 'Sona',
-        username: parsed.username || '',
-        vaultId: parsed.vaultId || '',
-      };
-    }
-    return null;
-  } catch {
-    return null;
+function getScopePresetIcon(id: SyncPresetV1): React.JSX.Element {
+  switch (id) {
+    case 'content':
+      return <FileText size={18} />;
+    case 'full':
+      return <Sparkles size={18} />;
+    case 'standard':
+    default:
+      return <Layers size={18} />;
   }
+}
+
+interface PasswordInputProps {
+  id?: string;
+  className?: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  autoComplete?: string;
+  ariaLabel?: string;
+  compact?: boolean;
+}
+
+function PasswordInput({
+  id,
+  className = 'settings-input',
+  value,
+  onChange,
+  disabled,
+  placeholder,
+  autoComplete,
+  ariaLabel,
+  compact = false,
+}: PasswordInputProps): React.JSX.Element {
+  const [show, setShow] = React.useState(false);
+  return (
+    <div className={`sync-password-wrapper${compact ? ' is-compact' : ''}`}>
+      <input
+        id={id}
+        className={className}
+        type={show ? 'text' : 'password'}
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        placeholder={placeholder}
+        autoComplete={autoComplete}
+        aria-label={ariaLabel}
+      />
+      <button
+        type="button"
+        className="sync-password-toggle"
+        onClick={() => setShow((v) => !v)}
+        tabIndex={-1}
+        title={show ? 'Hide password' : 'Show password'}
+        aria-label={show ? 'Hide password' : 'Show password'}
+      >
+        {show ? <EyeOff size={15} /> : <Eye size={15} />}
+      </button>
+    </div>
+  );
 }
 
 export function SettingsSyncTab({
@@ -180,7 +226,7 @@ export function SettingsSyncTab({
   const [showPairingModal, setShowPairingModal] = React.useState(false);
   const [copiedToken, setCopiedToken] = React.useState(false);
   const [copiedKey, setCopiedKey] = React.useState(false);
-
+  const [copiedVaultId, setCopiedVaultId] = React.useState(false);
   const isBusy = busyAction !== null;
 
   React.useEffect(() => {
@@ -259,6 +305,7 @@ export function SettingsSyncTab({
       if (decoded.serverUrl) updateProvider({ serverUrl: decoded.serverUrl });
       if (decoded.remoteRoot) updateProvider({ remoteRoot: decoded.remoteRoot });
       if (decoded.username) updateProvider({ username: decoded.username });
+      if (decoded.providerPassword) updateProvider({ password: decoded.providerPassword });
       if (decoded.vaultId) setVaultId(decoded.vaultId);
       setPreview(null);
     } else {
@@ -682,14 +729,13 @@ export function SettingsSyncTab({
                   >
                     <input
                       id="sync-server-url"
-                      className="settings-input"
+                      className="settings-input sync-input-field"
                       type="url"
                       aria-label={t('settings.sync.server_url', { defaultValue: 'Server URL' })}
                       placeholder="https://dav.example.com/remote.php/dav/files/you/"
                       value={provider.serverUrl}
                       onChange={(e) => updateProvider({ serverUrl: e.target.value })}
                       disabled={isBusy}
-                      style={{ width: '280px' }}
                     />
                   </SettingsItem>
 
@@ -699,13 +745,12 @@ export function SettingsSyncTab({
                   >
                     <input
                       id="sync-remote-root"
-                      className="settings-input"
+                      className="settings-input sync-input-field"
                       type="text"
                       aria-label={t('settings.sync.remote_root', { defaultValue: 'Remote root' })}
                       value={provider.remoteRoot}
                       onChange={(e) => updateProvider({ remoteRoot: e.target.value })}
                       disabled={isBusy}
-                      style={{ width: '280px' }}
                     />
                   </SettingsItem>
 
@@ -715,14 +760,13 @@ export function SettingsSyncTab({
                   >
                     <input
                       id="sync-username"
-                      className="settings-input"
+                      className="settings-input sync-input-field"
                       type="text"
                       aria-label={t('settings.sync.username', { defaultValue: 'Username' })}
                       placeholder={currentPresetMeta?.usernamePlaceholder || 'username'}
                       value={provider.username}
                       onChange={(e) => updateProvider({ username: e.target.value })}
                       disabled={isBusy}
-                      style={{ width: '280px' }}
                     />
                   </SettingsItem>
 
@@ -731,17 +775,15 @@ export function SettingsSyncTab({
                     hint={t('settings.sync.provider_password_hint', { defaultValue: 'Dedicated app password (recommended)' })}
                   >
                     <div className="sync-inline-input-group">
-                      <input
+                      <PasswordInput
                         id="sync-provider-password"
-                        className="settings-input"
-                        type="password"
                         autoComplete="current-password"
-                        aria-label={t('settings.sync.provider_password', { defaultValue: 'WebDAV password' })}
+                        ariaLabel={t('settings.sync.provider_password', { defaultValue: 'WebDAV password' })}
                         placeholder="••••••••••••"
                         value={provider.password}
                         onChange={(e) => updateProvider({ password: e.target.value })}
                         disabled={isBusy}
-                        style={{ width: '180px' }}
+                        compact={true}
                       />
                       <button
                         type="button"
@@ -809,16 +851,13 @@ export function SettingsSyncTab({
                     title={t('settings.sync.master_password', { defaultValue: 'Master password' })}
                     hint={t('settings.sync.master_password_hint', { defaultValue: 'Used to encrypt and unlock the sync vault across your devices' })}
                   >
-                    <input
+                    <PasswordInput
                       id="sync-master-password"
-                      className="settings-input"
-                      type="password"
                       autoComplete="new-password"
-                      aria-label={t('settings.sync.master_password', { defaultValue: 'Master password' })}
+                      ariaLabel={t('settings.sync.master_password', { defaultValue: 'Master password' })}
                       value={masterPassword}
                       onChange={(e) => setMasterPassword(e.target.value)}
                       disabled={isBusy}
-                      style={{ width: '280px' }}
                     />
                   </SettingsItem>
 
@@ -826,16 +865,13 @@ export function SettingsSyncTab({
                     title={t('settings.sync.confirm_password', { defaultValue: 'Confirm master password' })}
                     hint={t('settings.sync.confirm_password_hint', { defaultValue: 'Re-enter your master password to prevent typos' })}
                   >
-                    <input
+                    <PasswordInput
                       id="sync-confirm-password"
-                      className="settings-input"
-                      type="password"
                       autoComplete="new-password"
-                      aria-label={t('settings.sync.confirm_password', { defaultValue: 'Confirm master password' })}
+                      ariaLabel={t('settings.sync.confirm_password', { defaultValue: 'Confirm master password' })}
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       disabled={isBusy}
-                      style={{ width: '280px' }}
                     />
                   </SettingsItem>
 
@@ -844,7 +880,7 @@ export function SettingsSyncTab({
                     hint={t('settings.sync.scope_selector_hint', { defaultValue: 'Choose which data types are synchronized to other devices' })}
                     layout="vertical"
                   >
-                    <div className="settings-scenario-cards three-columns" style={{ width: '100%', padding: 0, background: 'transparent' }}>
+                    <div className="settings-scenario-cards three-columns sync-scenario-cards-embedded">
                       {[
                         {
                           id: 'content' as const,
@@ -873,7 +909,7 @@ export function SettingsSyncTab({
                             disabled={isBusy}
                           >
                             <span className="settings-scenario-card-icon">
-                              <Layers size={18} />
+                              {getScopePresetIcon(s.id)}
                             </span>
                             <span className="settings-scenario-card-text">
                               <span className="settings-scenario-card-label">
@@ -971,7 +1007,7 @@ export function SettingsSyncTab({
                 hint={t('settings.sync.choose_provider_hint', { defaultValue: 'Select a pre-configured service template or custom WebDAV' })}
                 layout="vertical"
               >
-                <div className="settings-scenario-cards three-columns" style={{ width: '100%', padding: 0, background: 'transparent' }}>
+                <div className="settings-scenario-cards three-columns sync-scenario-cards-embedded">
                   {SYNC_PROVIDER_PRESETS.map((p) => {
                     const isSelected = selectedPresetId === p.id;
                     return (
@@ -983,7 +1019,7 @@ export function SettingsSyncTab({
                         disabled={isBusy}
                       >
                         <span className="settings-scenario-card-icon">
-                          <Server size={18} />
+                          {getProviderPresetIcon(p.id)}
                         </span>
                         <span className="settings-scenario-card-text">
                           <span className="settings-scenario-card-label">
@@ -1005,14 +1041,13 @@ export function SettingsSyncTab({
               >
                 <input
                   id="sync-server-url"
-                  className="settings-input"
+                  className="settings-input sync-input-field"
                   type="url"
                   aria-label={t('settings.sync.server_url', { defaultValue: 'Server URL' })}
                   placeholder="https://dav.example.com/remote.php/dav/files/you/"
                   value={provider.serverUrl}
                   onChange={(e) => updateProvider({ serverUrl: e.target.value })}
                   disabled={isBusy}
-                  style={{ width: '280px' }}
                 />
               </SettingsItem>
 
@@ -1022,13 +1057,12 @@ export function SettingsSyncTab({
               >
                 <input
                   id="sync-remote-root"
-                  className="settings-input"
+                  className="settings-input sync-input-field"
                   type="text"
                   aria-label={t('settings.sync.remote_root', { defaultValue: 'Remote root' })}
                   value={provider.remoteRoot}
                   onChange={(e) => updateProvider({ remoteRoot: e.target.value })}
                   disabled={isBusy}
-                  style={{ width: '280px' }}
                 />
               </SettingsItem>
 
@@ -1038,14 +1072,13 @@ export function SettingsSyncTab({
               >
                 <input
                   id="sync-username"
-                  className="settings-input"
+                  className="settings-input sync-input-field"
                   type="text"
                   aria-label={t('settings.sync.username', { defaultValue: 'Username' })}
                   placeholder={currentPresetMeta?.usernamePlaceholder || 'username'}
                   value={provider.username}
                   onChange={(e) => updateProvider({ username: e.target.value })}
                   disabled={isBusy}
-                  style={{ width: '280px' }}
                 />
               </SettingsItem>
 
@@ -1053,17 +1086,14 @@ export function SettingsSyncTab({
                 title={t('settings.sync.provider_password', { defaultValue: 'WebDAV password' })}
                 hint={t('settings.sync.provider_password_hint', { defaultValue: 'Dedicated app password' })}
               >
-                <input
+                <PasswordInput
                   id="sync-provider-password"
-                  className="settings-input"
-                  type="password"
                   autoComplete="current-password"
-                  aria-label={t('settings.sync.provider_password', { defaultValue: 'WebDAV password' })}
+                  ariaLabel={t('settings.sync.provider_password', { defaultValue: 'WebDAV password' })}
                   placeholder="••••••••••••"
                   value={provider.password}
                   onChange={(e) => updateProvider({ password: e.target.value })}
                   disabled={isBusy}
-                  style={{ width: '280px' }}
                 />
               </SettingsItem>
 
@@ -1073,7 +1103,7 @@ export function SettingsSyncTab({
               >
                 <input
                   id="sync-vault-id"
-                  className="settings-input"
+                  className="settings-input sync-input-field"
                   type="text"
                   aria-label={t('settings.sync.vault_id', { defaultValue: 'Vault ID' })}
                   spellCheck={false}
@@ -1083,7 +1113,6 @@ export function SettingsSyncTab({
                     setPreview(null);
                   }}
                   disabled={isBusy}
-                  style={{ width: '280px' }}
                 />
               </SettingsItem>
 
@@ -1091,16 +1120,13 @@ export function SettingsSyncTab({
                 title={t('settings.sync.master_password', { defaultValue: 'Master password' })}
                 hint={t('settings.sync.master_password_hint', { defaultValue: 'The password used when creating this vault on the primary device' })}
               >
-                <input
+                <PasswordInput
                   id="sync-join-master-password"
-                  className="settings-input"
-                  type="password"
                   autoComplete="current-password"
-                  aria-label={t('settings.sync.master_password', { defaultValue: 'Master password' })}
+                  ariaLabel={t('settings.sync.master_password', { defaultValue: 'Master password' })}
                   value={masterPassword}
                   onChange={(e) => setMasterPassword(e.target.value)}
                   disabled={isBusy}
-                  style={{ width: '280px' }}
                 />
               </SettingsItem>
 
@@ -1175,51 +1201,50 @@ export function SettingsSyncTab({
           description={t('settings.sync.locked_hint', { defaultValue: 'Enter your credentials to unlock and resume synchronization.' })}
           icon={<Lock size={20} />}
         >
-          <div
-            className="settings-scenario-cards"
-            role="tablist"
-            aria-label={t('settings.sync.unlock_mode', { defaultValue: 'Unlock method' })}
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={unlockMode === 'password'}
-              className={`settings-scenario-card${unlockMode === 'password' ? ' active' : ''}`}
-              onClick={() => setUnlockMode('password')}
+          <div className="sync-scenario-cards-container">
+            <div
+              className="settings-scenario-cards"
+              role="tablist"
+              aria-label={t('settings.sync.unlock_mode', { defaultValue: 'Unlock method' })}
             >
-              <span className="settings-scenario-card-icon"><KeyRound size={18} /></span>
-              <span className="settings-scenario-card-text">
-                <span className="settings-scenario-card-label">{t('settings.sync.master_password', { defaultValue: 'Master password' })}</span>
-              </span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={unlockMode === 'recovery'}
-              className={`settings-scenario-card${unlockMode === 'recovery' ? ' active' : ''}`}
-              onClick={() => setUnlockMode('recovery')}
-            >
-              <span className="settings-scenario-card-icon"><ShieldCheck size={18} /></span>
-              <span className="settings-scenario-card-text">
-                <span className="settings-scenario-card-label">{t('settings.sync.recovery_key', { defaultValue: 'Recovery key' })}</span>
-              </span>
-            </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={unlockMode === 'password'}
+                className={`settings-scenario-card${unlockMode === 'password' ? ' active' : ''}`}
+                onClick={() => setUnlockMode('password')}
+              >
+                <span className="settings-scenario-card-icon"><KeyRound size={18} /></span>
+                <span className="settings-scenario-card-text">
+                  <span className="settings-scenario-card-label">{t('settings.sync.master_password', { defaultValue: 'Master password' })}</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={unlockMode === 'recovery'}
+                className={`settings-scenario-card${unlockMode === 'recovery' ? ' active' : ''}`}
+                onClick={() => setUnlockMode('recovery')}
+              >
+                <span className="settings-scenario-card-icon"><ShieldCheck size={18} /></span>
+                <span className="settings-scenario-card-text">
+                  <span className="settings-scenario-card-label">{t('settings.sync.recovery_key', { defaultValue: 'Recovery key' })}</span>
+                </span>
+              </button>
+            </div>
           </div>
 
           <SettingsItem
             title={t('settings.sync.provider_password', { defaultValue: 'WebDAV password' })}
             hint={t('settings.sync.provider_password_hint', { defaultValue: 'Enter your WebDAV application password' })}
           >
-            <input
+            <PasswordInput
               id="sync-unlock-provider-password"
-              className="settings-input"
-              type="password"
               autoComplete="current-password"
-              aria-label={t('settings.sync.provider_password', { defaultValue: 'WebDAV password' })}
+              ariaLabel={t('settings.sync.provider_password', { defaultValue: 'WebDAV password' })}
               value={unlockProviderPassword}
               onChange={(event) => setUnlockProviderPassword(event.target.value)}
               disabled={isBusy}
-              style={{ width: '280px' }}
             />
           </SettingsItem>
 
@@ -1228,16 +1253,13 @@ export function SettingsSyncTab({
               title={t('settings.sync.master_password', { defaultValue: 'Master password' })}
               hint={t('settings.sync.master_password_hint', { defaultValue: 'Enter your vault master password' })}
             >
-              <input
+              <PasswordInput
                 id="sync-unlock-master-password"
-                className="settings-input"
-                type="password"
                 autoComplete="current-password"
-                aria-label={t('settings.sync.master_password', { defaultValue: 'Master password' })}
+                ariaLabel={t('settings.sync.master_password', { defaultValue: 'Master password' })}
                 value={unlockMasterPassword}
                 onChange={(event) => setUnlockMasterPassword(event.target.value)}
                 disabled={isBusy}
-                style={{ width: '280px' }}
               />
             </SettingsItem>
           ) : (
@@ -1247,14 +1269,13 @@ export function SettingsSyncTab({
             >
               <input
                 id="sync-unlock-recovery-key"
-                className="settings-input"
+                className="settings-input sync-input-field"
                 type="text"
                 spellCheck={false}
                 aria-label={t('settings.sync.recovery_key', { defaultValue: 'Recovery key' })}
                 value={unlockRecoveryInput}
                 onChange={(event) => setUnlockRecoveryInput(event.target.value)}
                 disabled={isBusy}
-                style={{ width: '280px' }}
               />
             </SettingsItem>
           )}
@@ -1316,9 +1337,25 @@ export function SettingsSyncTab({
                       )}
                     </div>
                     {status.vaultId && (
-                      <span className="sync-vault-id-label">
-                        {t('settings.sync.vault_id', { defaultValue: 'Vault ID' })}: <code>{status.vaultId.slice(0, 16)}...</code>
-                      </span>
+                      <div className="sync-vault-id-row">
+                        <span>{t('settings.sync.vault_id', { defaultValue: 'Vault ID' })}:</span>
+                        <code title={status.vaultId}>{status.vaultId.slice(0, 16)}...</code>
+                        <button
+                          type="button"
+                          className="sync-copy-icon-btn"
+                          title={copiedVaultId ? t('common.copied', { defaultValue: 'Copied' }) : t('common.copy', { defaultValue: 'Copy' })}
+                          aria-label={t('common.copy', { defaultValue: 'Copy' })}
+                          onClick={async () => {
+                            if (navigator.clipboard?.writeText) {
+                              await navigator.clipboard.writeText(status.vaultId || '');
+                              setCopiedVaultId(true);
+                              setTimeout(() => setCopiedVaultId(false), 2000);
+                            }
+                          }}
+                        >
+                          {copiedVaultId ? <Check size={13} /> : <Copy size={13} />}
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1330,7 +1367,7 @@ export function SettingsSyncTab({
                     onClick={() => setShowPairingModal(true)}
                     disabled={isBusy}
                   >
-                    <QrCode size={15} />
+                    <Link2 size={15} />
                     <span>{t('settings.sync.pair_device_action', { defaultValue: 'Pair new device' })}</span>
                   </button>
                 </div>
@@ -1415,7 +1452,7 @@ export function SettingsSyncTab({
               layout="vertical"
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
-                <div className="settings-scenario-cards three-columns" style={{ width: '100%', padding: 0, background: 'transparent' }}>
+                <div className="settings-scenario-cards three-columns sync-scenario-cards-embedded">
                   {[
                     {
                       id: 'content' as const,
@@ -1444,7 +1481,7 @@ export function SettingsSyncTab({
                         disabled={isBusy}
                       >
                         <span className="settings-scenario-card-icon">
-                          <Layers size={18} />
+                          {getScopePresetIcon(p.id)}
                         </span>
                         <span className="settings-scenario-card-text">
                           <span className="settings-scenario-card-label">
@@ -1485,57 +1522,75 @@ export function SettingsSyncTab({
             <SettingsAccordion
               title={(
                 <div className="settings-accordion-copy">
-                  <div className="settings-accordion-copy-title"><KeyRound size={16} />{t('settings.sync.change_password', { defaultValue: 'Change master password' })}</div>
+                  <div className="settings-accordion-copy-title sync-conflict-title">
+                    <KeyRound size={16} />
+                    <span>{t('settings.sync.change_password', { defaultValue: 'Change master password' })}</span>
+                  </div>
                   <div className="settings-accordion-copy-hint">{t('settings.sync.change_password_hint', { defaultValue: 'Update the encryption master password for this vault.' })}</div>
                 </div>
               )}
             >
-              <SettingsItem indent={true} title={t('settings.sync.current_password', { defaultValue: 'Current password' })}>
-                <input
-                  className="settings-input"
-                  type="password"
-                  autoComplete="current-password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  disabled={isBusy}
-                  style={{ width: '260px' }}
-                />
-              </SettingsItem>
+              <div className="sync-password-form-card">
+                <div className="sync-password-form-row">
+                  <span className="sync-password-form-label">
+                    {t('settings.sync.current_password', { defaultValue: 'Current password' })}
+                  </span>
+                  <div className="sync-password-form-control">
+                    <PasswordInput
+                      value={currentPassword}
+                      autoComplete="current-password"
+                      ariaLabel={t('settings.sync.current_password', { defaultValue: 'Current password' })}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      disabled={isBusy}
+                    />
+                  </div>
+                </div>
 
-              <SettingsItem indent={true} title={t('settings.sync.next_password', { defaultValue: 'New master password' })}>
-                <input
-                  className="settings-input"
-                  type="password"
-                  autoComplete="new-password"
-                  value={nextPassword}
-                  onChange={(e) => setNextPassword(e.target.value)}
-                  disabled={isBusy}
-                  style={{ width: '260px' }}
-                />
-              </SettingsItem>
+                <div className="sync-password-form-row">
+                  <span className="sync-password-form-label">
+                    {t('settings.sync.next_password', { defaultValue: 'New master password' })}
+                  </span>
+                  <div className="sync-password-form-control">
+                    <PasswordInput
+                      value={nextPassword}
+                      autoComplete="new-password"
+                      ariaLabel={t('settings.sync.next_password', { defaultValue: 'New master password' })}
+                      onChange={(e) => setNextPassword(e.target.value)}
+                      disabled={isBusy}
+                    />
+                  </div>
+                </div>
 
-              <SettingsItem indent={true} title={t('settings.sync.confirm_next_password', { defaultValue: 'Confirm new master password' })}>
-                <input
-                  className="settings-input"
-                  type="password"
-                  autoComplete="new-password"
-                  value={confirmNextPassword}
-                  onChange={(e) => setConfirmNextPassword(e.target.value)}
-                  disabled={isBusy}
-                  style={{ width: '260px' }}
-                />
-              </SettingsItem>
+                <div className="sync-password-form-row">
+                  <span className="sync-password-form-label">
+                    {t('settings.sync.confirm_next_password', { defaultValue: 'Confirm new master password' })}
+                  </span>
+                  <div className="sync-password-form-control">
+                    {nextPassword && confirmNextPassword && nextPassword === confirmNextPassword && (
+                      <span className="sync-password-match-indicator">
+                        <Check size={14} />
+                        <span>{t('settings.sync.password_matched', { defaultValue: 'Passwords match' })}</span>
+                      </span>
+                    )}
+                    <PasswordInput
+                      value={confirmNextPassword}
+                      autoComplete="new-password"
+                      ariaLabel={t('settings.sync.confirm_next_password', { defaultValue: 'Confirm new master password' })}
+                      onChange={(e) => setConfirmNextPassword(e.target.value)}
+                      disabled={isBusy}
+                    />
+                  </div>
+                </div>
+              </div>
 
               {passwordError && (
-                <div className="sync-banner-row">
-                  <div className="sync-banner-box is-error">
-                    <AlertCircle size={16} />
-                    <span>{passwordError}</span>
-                  </div>
+                <div className="sync-banner-box is-error" style={{ margin: '8px 0' }}>
+                  <AlertCircle size={16} />
+                  <span>{passwordError}</span>
                 </div>
               )}
 
-              <div className="sync-wizard-actions">
+              <div className="sync-accordion-actions">
                 <button
                   type="button"
                   className="btn btn-primary btn-sm"
@@ -1553,17 +1608,19 @@ export function SettingsSyncTab({
             <SettingsAccordion
               title={(
                 <div className="settings-accordion-copy">
-                  <div className="settings-accordion-copy-title"><ShieldCheck size={16} />{t('settings.sync.recovery_key_manage_title', { defaultValue: 'Emergency Recovery Key' })}</div>
+                  <div className="settings-accordion-copy-title sync-conflict-title">
+                    <ShieldCheck size={16} />
+                    <span>{t('settings.sync.recovery_key_manage_title', { defaultValue: 'Emergency Recovery Key' })}</span>
+                  </div>
                   <div className="settings-accordion-copy-hint">{t('settings.sync.recovery_key_manage_hint', { defaultValue: 'Used to recover your data if you forget the master password.' })}</div>
                 </div>
               )}
             >
               <div className="sync-recovery-wrapper">
                 <div className="sync-recovery-top-row">
-                  <div>
-                    <strong>{t('settings.sync.recovery_key_manage_title', { defaultValue: 'Emergency Recovery Key' })}</strong>
-                    <span>{t('settings.sync.recovery_key_manage_hint', { defaultValue: 'Used to recover your data if you forget the master password.' })}</span>
-                  </div>
+                  <span className="sync-recovery-lead-text">
+                    {t('settings.sync.recovery_key_manage_hint', { defaultValue: 'Used to recover your data if you forget the master password.' })}
+                  </span>
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
@@ -1571,11 +1628,19 @@ export function SettingsSyncTab({
                     disabled={isBusy}
                   >
                     <Sparkles size={15} />
-                    <span>{t('settings.sync.regenerate_key_action', { defaultValue: 'Generate new key' })}</span>
+                    <span>{recoveryKey ? t('settings.sync.regenerate_key_action', { defaultValue: 'Generate new key' }) : t('settings.sync.generate_recovery_key', { defaultValue: 'Generate recovery key' })}</span>
                   </button>
                 </div>
 
-                {recoveryKey && (
+                {!recoveryKey ? (
+                  <div className="sync-recovery-empty-state">
+                    <ShieldCheck size={18} />
+                    <div>
+                      <strong>{t('settings.sync.recovery_key_status_title', { defaultValue: 'No active recovery key in this session' })}</strong>
+                      <p>{t('settings.sync.recovery_key_safety_hint', { defaultValue: 'Recovery keys are not stored in plaintext on device or server. If you have not saved your key, generate one now.' })}</p>
+                    </div>
+                  </div>
+                ) : (
                   <div className="sync-recovery-output-card">
                     <div className="sync-recovery-card-header">
                       <ShieldCheck size={16} />
@@ -1614,8 +1679,13 @@ export function SettingsSyncTab({
                 )}
               </div>
             </SettingsAccordion>
+          </SettingsSection>
 
-            {/* Disconnect action */}
+          {/* Section 4: Danger Zone */}
+          <SettingsSection
+            title={t('settings.sync.danger_zone_title', { defaultValue: 'Danger Zone' })}
+            description={t('settings.sync.danger_zone_desc', { defaultValue: 'Destructive sync operations for this device.' })}
+          >
             <SettingsItem
               title={t('settings.sync.disconnect_title', { defaultValue: 'Disconnect this device' })}
               hint={t('settings.sync.disconnect_hint', { defaultValue: 'Local data stays intact. The remote vault is not deleted.' })}
@@ -1632,11 +1702,19 @@ export function SettingsSyncTab({
             </SettingsItem>
           </SettingsSection>
 
-          {/* Section 4: Conflict Center */}
-          <SyncConflictCenter
-            conflictCount={status.conflictCount}
-            disabled={false}
-          />
+          {/* Section 5: Conflict Center */}
+          <SettingsSection
+            title={t('settings.sync.conflict_center', { defaultValue: 'Conflict Center' })}
+            description={t('settings.sync.conflict_center_hint', {
+              defaultValue: 'Review concurrent edits that need your decision.',
+            })}
+            icon={<AlertTriangle size={20} />}
+          >
+            <SyncConflictCenter
+              conflictCount={status.conflictCount}
+              disabled={false}
+            />
+          </SettingsSection>
         </>
       )}
 

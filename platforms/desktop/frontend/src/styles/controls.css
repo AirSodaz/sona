@@ -282,6 +282,12 @@ select,
   appearance: none;
 }
 
+/* Suppress Edge / WebView2 native password reveal button */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
 input[type="text"]:focus,
 input[type="password"]:focus,
 input[type="email"]:focus,

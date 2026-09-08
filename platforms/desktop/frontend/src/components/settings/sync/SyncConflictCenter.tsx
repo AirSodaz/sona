@@ -35,6 +35,7 @@ import type {
 import type { TranscriptSegment } from '../../../types/transcript';
 import type { TranscriptDiffRow } from '../../../types/transcriptSnapshot';
 import { SettingsAccordion } from '../SettingsLayout';
+import './SyncSettings.css';
 
 interface SyncConflictCenterProps {
   conflictCount: number;
@@ -261,6 +262,7 @@ export function SyncConflictCenter({
   const title = (
     <div className="settings-accordion-copy">
       <div className="settings-accordion-copy-title sync-conflict-title">
+        <FileDiff size={16} />
         <span>{t('settings.sync.conflict_center', { defaultValue: 'Conflict Center' })}</span>
         {conflictCount > 0 && <span className="sync-count-badge">{conflictCount}</span>}
       </div>
@@ -281,8 +283,8 @@ export function SyncConflictCenter({
       <div className="sync-conflict-center">
         {loading ? (
           <div className="sync-empty-state">
-            <Loader2 size={17} className="queue-icon-spin" />
-            {t('common.loading', { defaultValue: 'Loading...' })}
+            <Loader2 size={17} className="spin" />
+            <span>{t('common.loading', { defaultValue: 'Loading...' })}</span>
           </div>
         ) : summaries.length === 0 ? (
           <div className="sync-empty-state is-clean">
@@ -300,6 +302,8 @@ export function SyncConflictCenter({
                 <button
                   type="button"
                   key={summary.conflictId}
+                  role="tab"
+                  aria-selected={detail?.summary.conflictId === summary.conflictId}
                   className={`sync-conflict-item-btn ${detail?.summary.conflictId === summary.conflictId ? 'active' : ''}`}
                   onClick={() => void openDetail(summary)}
                 >
@@ -390,6 +394,7 @@ export function SyncConflictCenter({
                       disabled={resolving}
                       onClick={() => void resolve('use_conflicting')}
                     >
+                      <HardDrive size={16} />
                       <span>{t('settings.sync.use_conflicting', { defaultValue: 'Use remote version' })}</span>
                     </button>
                     {detail.summary.entity.kind === 'history_transcript' && (

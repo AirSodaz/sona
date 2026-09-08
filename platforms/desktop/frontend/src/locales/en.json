@@ -974,7 +974,8 @@
             "password_changed_success": "Master password updated successfully.",
             "recovery_key_manage_title": "Emergency Recovery Key",
             "recovery_key_manage_hint": "Used to recover your data if you forget the master password.",
-            "generate_recovery_key": "Generate key",
+            "generate_recovery_key": "Generate recovery key",
+            "generate_key_action": "Generate recovery key",
             "regenerate_key_action": "Generate new key",
             "new_recovery_key_title": "Active Recovery Key",
             "recovery_key_save_warning": "Save this key in a secure location (e.g. password manager). It is not stored in plain text.",
@@ -1035,7 +1036,12 @@
             "scope_templates": "Prompt & summary templates",
             "just_now": "Just now",
             "minutes_ago": "{{count}}m ago",
-            "hours_ago": "{{count}}h ago"
+            "hours_ago": "{{count}}h ago",
+            "danger_zone_title": "Danger Zone",
+            "danger_zone_desc": "Destructive sync operations for this device.",
+            "recovery_key_status_title": "No active recovery key in this session",
+            "recovery_key_safety_hint": "Recovery keys are not stored in plaintext on device or server. If you have not saved your key, generate one now.",
+            "password_matched": "Passwords match"
         },
         "diagnostics": {
             "title": "Model & Environment Diagnostics",

@@ -974,7 +974,8 @@
             "password_changed_success": "マスターパスワードが正常に更新されました。",
             "recovery_key_manage_title": "緊急復旧キー",
             "recovery_key_manage_hint": "マスターパスワードを忘れた場合にデータを復旧するために使用されます。",
-            "generate_recovery_key": "キーを生成",
+            "generate_recovery_key": "復元キーを生成",
+            "generate_key_action": "復元キーを生成",
             "regenerate_key_action": "新しいキーを生成",
             "new_recovery_key_title": "アクティブな復旧キー",
             "recovery_key_save_warning": "このキーを安全な場所（パスワードマネージャーなど）に保存してください。平文では保存されません。",
@@ -1035,7 +1036,12 @@
             "scope_templates": "プロンプトおよび要約テンプレート",
             "just_now": "たった今",
             "minutes_ago": "{{count}}分前",
-            "hours_ago": "{{count}}時間前"
+            "hours_ago": "{{count}}時間前",
+            "danger_zone_title": "危険ゾーン",
+            "danger_zone_desc": "このデバイスの同期保管庫との接続を切断します。",
+            "recovery_key_status_title": "現在のセッションにはアクティブな復元キーがありません",
+            "recovery_key_safety_hint": "復元キーはデバイスやサーバーに平文で保存されません。以前に保存していない場合は、今すぐ新しく生成してください。",
+            "password_matched": "パスワードが一致"
         },
         "diagnostics": {
             "title": "モデルと環境の診断",
