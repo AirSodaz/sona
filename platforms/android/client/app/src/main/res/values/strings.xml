@@ -256,9 +256,7 @@
     <string name="settings_sync_summary" translatable="false">WebDAV vault, status, and conflicts</string>
     <string name="settings_data_heading" translatable="false">Data and recovery</string>
     <string name="settings_data_summary" translatable="false">Backup, restore, and interrupted tasks</string>
-    <string name="sync_status" translatable="false">Status: %1$s</string>
     <string name="sync_create" translatable="false">Create vault</string>
-    <string name="sync_join" translatable="false">Join vault</string>
     <string name="sync_server_url" translatable="false">WebDAV server URL</string>
     <string name="sync_remote_root" translatable="false">Remote root</string>
     <string name="sync_username" translatable="false">Username</string>
@@ -266,9 +264,6 @@
     <string name="sync_master_password" translatable="false">Master password</string>
     <string name="sync_vault_id" translatable="false">Vault ID</string>
     <string name="sync_test" translatable="false">Test connection</string>
-    <string name="sync_preview" translatable="false">Preview</string>
-    <string name="sync_preview_counts" translatable="false">Local %1$d · Remote %2$d · Conflicts %3$d</string>
-    <string name="sync_confirm_join" translatable="false">Confirm join</string>
     <string name="sync_recovery_key" translatable="false">Recovery key</string>
     <string name="sync_unlock" translatable="false">Unlock</string>
     <string name="sync_counts" translatable="false">Pending %1$d · Conflicts %2$d</string>
