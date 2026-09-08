@@ -1,4 +1,5 @@
 import type {
+  DiscoveredVaultSummary,
   SyncChangePasswordRequest,
   LegacyRemoteBackupListResult,
   SyncConflictDetail,
@@ -18,6 +19,7 @@ import type {
   SyncStatusSnapshot,
   SyncUnlockRecoveryRequest,
   SyncUnlockRequest,
+  SyncPairingInfo,
   WebDavObjectStoreConfig,
 } from '../../types/sync';
 import type { PreparedBackupImport } from '../../types/backup';
@@ -54,6 +56,14 @@ export const testWebDavSyncProvider = (
   invokeTauri(TauriCommand.sync.testProvider, {
     provider: webDavProviderInput(config),
   });
+
+export const discoverWebDavSyncVaults = (
+  config: WebDavObjectStoreConfig,
+): Promise<DiscoveredVaultSummary[]> =>
+  invokeTauri(TauriCommand.sync.discoverWebDavVaults, { config });
+
+export const getSyncPairingInfo = (): Promise<SyncPairingInfo | null> =>
+  invokeTauri(TauriCommand.sync.getPairingInfo);
 
 export const listLegacyRemoteBackups = (
   config: WebDavObjectStoreConfig,

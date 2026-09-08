@@ -9,9 +9,10 @@ use sona_core::sync::{
 };
 use sona_runtime_fs::SystemClock;
 use sona_sync::{
-    JsonFileSyncConfigStore, LegacyRemoteBackupEntry, LegacyRemoteBackupService, SyncApplication,
-    SyncCreateResult as ApplicationCreateResult, SyncProviderFactory, SyncProviderInput,
-    SyncProviderRegistry, SystemSyncApplicationEnvironment, legacy_provider_credential_key,
+    DiscoveredVaultSummary, JsonFileSyncConfigStore, LegacyRemoteBackupEntry,
+    LegacyRemoteBackupService, SyncApplication, SyncCreateResult as ApplicationCreateResult,
+    SyncPairingInfo, SyncProviderFactory, SyncProviderInput, SyncProviderRegistry,
+    SystemSyncApplicationEnvironment, legacy_provider_credential_key,
 };
 use sona_sync_webdav::{WebDavObjectStore, WebDavObjectStoreConfig, WebDavSyncProviderFactory};
 use tauri::{AppHandle, Manager, Runtime};
@@ -25,6 +26,8 @@ const SYNC_CONFIG_FILE: &str = "sync.json";
 #[serde(rename_all = "camelCase")]
 pub struct SyncCreateRequest {
     pub provider: SyncProviderInput,
+    #[serde(default)]
+    pub vault_id: Option<String>,
     pub preset: SyncPresetV1,
     pub master_password: String,
     pub create_recovery_key: bool,
@@ -154,14 +157,37 @@ impl DesktopSyncManager {
     ) -> Result<SyncCreateResult, String> {
         self.application(app)
             .await?
-            .create(
+            .create_with_vault_id(
                 request.provider,
+                request.vault_id,
                 request.preset,
                 &request.master_password,
                 request.create_recovery_key,
             )
             .await
             .map(Into::into)
+            .map_err(sync_error)
+    }
+
+    pub async fn discover_vaults<R: Runtime>(
+        &self,
+        app: &AppHandle<R>,
+        provider: SyncProviderInput,
+    ) -> Result<Vec<DiscoveredVaultSummary>, String> {
+        self.application(app)
+            .await?
+            .discover_vaults(provider)
+            .await
+            .map_err(sync_error)
+    }
+
+    pub async fn get_pairing_info<R: Runtime>(
+        &self,
+        app: &AppHandle<R>,
+    ) -> Result<Option<SyncPairingInfo>, String> {
+        self.application(app)
+            .await?
+            .get_pairing_info()
             .map_err(sync_error)
     }
 

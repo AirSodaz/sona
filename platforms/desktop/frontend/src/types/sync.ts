@@ -44,8 +44,22 @@ export interface LegacyRemoteBackupListResult {
   credentialsMigrated: boolean;
 }
 
+export interface DiscoveredVaultSummary {
+  vaultId: string;
+  preset: SyncPresetV1;
+}
+
+export interface SyncPairingInfo {
+  providerId: string;
+  vaultId: string;
+  serverUrl?: string | null;
+  remoteRoot?: string | null;
+  username?: string | null;
+}
+
 export interface SyncCreateRequest {
   provider: WebDavObjectStoreConfig;
+  vaultId?: string;
   preset: SyncPresetV1;
   masterPassword: string;
   createRecoveryKey: boolean;

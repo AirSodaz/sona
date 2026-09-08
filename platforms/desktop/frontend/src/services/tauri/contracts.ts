@@ -52,6 +52,7 @@ import type {
 import type { TranscriptSegment } from "../../types/transcript";
 import type { ApiServerDashboardSnapshot } from "../../types/apiServer";
 import type {
+  DiscoveredVaultSummary,
   SyncChangePasswordRequest,
   SyncConflictDetail,
   SyncConflictResolution,
@@ -66,6 +67,7 @@ import type {
   SyncProviderTransportInput,
   SyncRunResult,
   SyncStatusSnapshot,
+  SyncPairingInfo,
   SyncUnlockRecoveryRequest,
   SyncUnlockRequest,
   WebDavObjectStoreConfig,
@@ -494,6 +496,18 @@ type ManualTauriCommandContractMap = {
   [TauriCommand.sync.testWebDavProvider]: {
     args: { config: WebDavObjectStoreConfig };
     result: SyncProviderDescriptor;
+  };
+  [TauriCommand.sync.discoverVaults]: {
+    args: { provider: SyncProviderTransportInput };
+    result: DiscoveredVaultSummary[];
+  };
+  [TauriCommand.sync.discoverWebDavVaults]: {
+    args: { config: WebDavObjectStoreConfig };
+    result: DiscoveredVaultSummary[];
+  };
+  [TauriCommand.sync.getPairingInfo]: {
+    args: undefined;
+    result: SyncPairingInfo | null;
   };
   [TauriCommand.sync.listLegacyBackups]: {
     args: { config: WebDavObjectStoreConfig };

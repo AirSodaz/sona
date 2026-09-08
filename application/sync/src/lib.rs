@@ -9,12 +9,12 @@ mod runtime;
 mod vault;
 
 pub use application::{
-    JsonFileSyncConfigStore, SyncApplication, SyncApplicationConfig, SyncApplicationEnvironment,
-    SyncApplicationError, SyncConfigStore, SyncCreateResult, SyncPresetChangeError, SyncProvider,
-    SyncProviderFactory, SyncProviderInput, SyncProviderRegistry, SyncRetryState,
-    SyncStatusContext, SystemSyncApplicationEnvironment, apply_sync_run_result, build_sync_status,
-    change_sync_preset, disabled_sync_status, is_retryable_sync_error, run_sync_cycle,
-    sync_error_code,
+    DiscoveredVaultSummary, JsonFileSyncConfigStore, SyncApplication, SyncApplicationConfig,
+    SyncApplicationEnvironment, SyncApplicationError, SyncConfigStore, SyncCreateResult,
+    SyncPairingInfo, SyncPresetChangeError, SyncProvider, SyncProviderFactory, SyncProviderInput,
+    SyncProviderRegistry, SyncRetryState, SyncStatusContext, SystemSyncApplicationEnvironment,
+    apply_sync_run_result, build_sync_status, change_sync_preset, disabled_sync_status,
+    is_retryable_sync_error, run_sync_cycle, sync_error_code,
 };
 pub use backoff::SyncBackoffPolicy;
 pub use crypto::{
@@ -32,7 +32,7 @@ pub use protocol::{
 pub use runtime::{SyncRuntime, load_remote_state_for_join};
 pub use vault::{
     CreatedRemoteVault, OpenedRemoteVault, change_remote_master_password, create_remote_vault,
-    open_remote_vault_with_password, open_remote_vault_with_recovery_key,
-    open_remote_vault_with_vault_key, regenerate_remote_recovery_key, update_remote_vault_preset,
-    vault_header_object_key,
+    open_remote_vault_with_password, open_remote_vault_with_password_or_recovery_key,
+    open_remote_vault_with_recovery_key, open_remote_vault_with_vault_key,
+    regenerate_remote_recovery_key, update_remote_vault_preset, vault_header_object_key,
 };

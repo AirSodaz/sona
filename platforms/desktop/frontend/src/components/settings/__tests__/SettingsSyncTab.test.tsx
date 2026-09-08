@@ -33,14 +33,15 @@ vi.mock('../../../services/tauri/sync', () => ({
   setSyncPaused: (...args: unknown[]) => testContext.setSyncPaused(...args),
   changeSyncPreset: vi.fn(),
   changeSyncMasterPassword: vi.fn(),
+  discoverWebDavSyncVaults: vi.fn().mockResolvedValue([]),
   generateSyncRecoveryKey: vi.fn(),
+  getSyncPairingInfo: vi.fn().mockResolvedValue(null),
   disconnectSyncVault: vi.fn(),
   lockSyncVault: vi.fn(),
   unlockSyncVault: vi.fn(),
   unlockSyncVaultWithRecovery: vi.fn(),
   listSyncConflicts: vi.fn().mockResolvedValue([]),
 }));
-
 vi.mock('../../../services/syncRuntimeService', () => ({
   syncRuntimeService: {
     refreshStatus: vi.fn().mockResolvedValue(null),
@@ -80,14 +81,14 @@ describe('SettingsSyncTab', () => {
     expect(screen.getAllByText(/Cloud Sync|云同步/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Cloud sync is currently turned off|云同步功能当前已关闭/i)).toBeDefined();
 
-    // Click "Turn On Cloud Sync" button
-    const turnOnBtn = screen.getByRole('button', { name: /Turn On Cloud Sync|开启云同步/i });
-    fireEvent.click(turnOnBtn);
+    // Toggle switch
+    const switchEl = screen.getByRole('switch');
+    fireEvent.click(switchEl);
 
     expect(useConfigStore.getState().config.enableCloudSync).toBe(true);
   });
 
-  it('renders setup scenario cards (Create vault / Join vault) when enabled but not configured', () => {
+  it('renders setup form when enabled but not configured', () => {
     useConfigStore.setState({
       config: {
         ...DEFAULT_CONFIG,
@@ -97,11 +98,11 @@ describe('SettingsSyncTab', () => {
 
     render(<SettingsSyncTab isVisible={true} />);
 
-    expect(screen.getByRole('tab', { name: /Create vault|创建同步库/i })).toBeDefined();
-    expect(screen.getByRole('tab', { name: /Join vault|加入同步库/i })).toBeDefined();
+    expect(screen.getByLabelText(/Server URL|服务器地址/i)).toBeDefined();
+    expect(screen.getByLabelText(/^Master password$|^主密码$/i)).toBeDefined();
+    expect(screen.getByRole('button', { name: /Save & Enable Sync|保存并开启同步/i })).toBeDefined();
     expect(screen.getAllByText(/Nutstore|坚果云/i).length).toBeGreaterThanOrEqual(1);
   });
-
   it('renders status overview and security sections when connected', () => {
     useConfigStore.setState({
       config: {

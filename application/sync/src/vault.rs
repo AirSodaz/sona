@@ -81,6 +81,23 @@ pub async fn open_remote_vault_with_recovery_key(
         etag,
     })
 }
+pub async fn open_remote_vault_with_password_or_recovery_key(
+    store: &dyn SyncObjectStore,
+    vault_id: &str,
+    password_or_recovery_key: &str,
+) -> Result<OpenedRemoteVault, SyncError> {
+    match open_remote_vault_with_password(store, vault_id, password_or_recovery_key).await {
+        Ok(opened) => Ok(opened),
+        Err(password_err) => {
+            match open_remote_vault_with_recovery_key(store, vault_id, password_or_recovery_key)
+                .await
+            {
+                Ok(opened) => Ok(opened),
+                Err(_) => Err(password_err),
+            }
+        }
+    }
+}
 
 pub async fn open_remote_vault_with_vault_key(
     store: &dyn SyncObjectStore,
@@ -151,7 +168,7 @@ pub fn vault_header_object_key(vault_id: &str) -> Result<SyncObjectKey, SyncErro
     SyncObjectKey::parse(format!("sona-sync/v1/{vault_id}/vault.json"))
 }
 
-async fn load_remote_header(
+pub(crate) async fn load_remote_header(
     store: &dyn SyncObjectStore,
     vault_id: &str,
 ) -> Result<(VaultHeaderV1, Option<String>), SyncError> {

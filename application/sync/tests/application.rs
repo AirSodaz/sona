@@ -72,11 +72,22 @@ impl SyncObjectStore for MemoryStore {
 
     async fn list(
         &self,
-        _prefix: &SyncObjectPrefix,
+        prefix: &SyncObjectPrefix,
         _continuation: Option<&str>,
     ) -> Result<SyncListPage, SyncError> {
+        let objects = self.objects.lock().unwrap();
+        let matched = objects
+            .iter()
+            .filter(|(k, _)| k.starts_with(prefix.as_str()))
+            .map(|(k, (bytes, etag))| SyncObjectMetadata {
+                key: SyncObjectKey::parse(k.clone()).unwrap(),
+                etag: Some(etag.clone()),
+                size: bytes.len() as u64,
+                modified_at: None,
+            })
+            .collect();
         Ok(SyncListPage {
-            objects: Vec::new(),
+            objects: matched,
             continuation: None,
         })
     }
@@ -471,7 +482,17 @@ impl SyncProviderFactory for TestProviderFactory {
                 display_name: "Test".to_string(),
             },
             store: self.store.clone(),
-            persisted_configuration: serde_json::json!({ "account": configuration["account"] }),
+            persisted_configuration: {
+                let mut persisted = serde_json::Map::new();
+                if let Some(obj) = configuration.as_object() {
+                    for (k, v) in obj {
+                        if k != "password" {
+                            persisted.insert(k.clone(), v.clone());
+                        }
+                    }
+                }
+                serde_json::Value::Object(persisted)
+            },
             credential: configuration["password"]
                 .as_str()
                 .unwrap()
@@ -1148,4 +1169,70 @@ async fn disconnect_waits_for_an_active_run_and_cannot_be_undone_by_retry_persis
         application.status().await.unwrap().state,
         SyncLifecycleState::Disabled
     );
+}
+
+#[tokio::test]
+async fn discover_vaults_and_pairing_info_support_smart_setup() {
+    let repository_factory = Arc::new(sqlite_sync_repository_factory(Arc::new(
+        Database::open_in_memory().unwrap(),
+    )));
+    let config = Arc::new(MemoryConfigStore::default());
+    let secrets = Arc::new(MemorySecretStore::default());
+    let store = Arc::new(MemoryStore::default());
+    let provider_factory = Arc::new(TestProviderFactory {
+        store: store.clone(),
+    });
+    let application = SyncApplication::new(
+        config.clone(),
+        repository_factory,
+        SyncProviderRegistry::new([provider_factory as Arc<dyn SyncProviderFactory>]),
+        secrets,
+        Arc::new(FixedEnvironment::new(["custom-device-1", "device-2"])),
+    );
+
+    let provider_input = SyncProviderInput {
+        provider_id: "test".to_string(),
+        configuration: serde_json::json!({
+            "serverUrl": "https://dav.example.com/",
+            "remoteRoot": "Sona",
+            "username": "alice",
+            "password": "secret-password",
+        }),
+    };
+
+    // 1. Initially no vaults exist
+    let discovered = application
+        .discover_vaults(provider_input.clone())
+        .await
+        .unwrap();
+    assert!(discovered.is_empty());
+
+    // 2. Create vault with custom/default vault ID
+    let created = application
+        .create_with_vault_id(
+            provider_input.clone(),
+            Some("default".to_string()),
+            SyncPresetV1::Standard,
+            TEST_MASTER_PASSWORD,
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.vault_id, "default");
+
+    // 3. Pairing info is retrievable
+    let pairing_info = application.get_pairing_info().unwrap().unwrap();
+    assert_eq!(pairing_info.vault_id, "default");
+    assert_eq!(
+        pairing_info.server_url.as_deref(),
+        Some("https://dav.example.com/")
+    );
+    assert_eq!(pairing_info.remote_root.as_deref(), Some("Sona"));
+    assert_eq!(pairing_info.username.as_deref(), Some("alice"));
+
+    // 4. Now discover_vaults finds "default"
+    let discovered = application.discover_vaults(provider_input).await.unwrap();
+    assert_eq!(discovered.len(), 1);
+    assert_eq!(discovered[0].vault_id, "default");
+    assert_eq!(discovered[0].preset, SyncPresetV1::Standard);
 }

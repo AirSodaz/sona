@@ -4,7 +4,7 @@ use sona_core::sync::{
     SyncConflictDetail, SyncConflictResolution, SyncConflictSummary, SyncJoinPreview, SyncPresetV1,
     SyncProviderDescriptor, SyncRunResult, SyncStatusSnapshot,
 };
-use sona_sync::SyncProviderInput;
+use sona_sync::{DiscoveredVaultSummary, SyncPairingInfo, SyncProviderInput};
 use sona_sync_webdav::WebDavObjectStoreConfig;
 
 use crate::platform::history_repository::{PreparedBackupImport, PreparedBackupImportState};
@@ -40,6 +40,34 @@ pub async fn sync_test_webdav_provider<R: Runtime>(
     manager
         .test_provider(&app, webdav_provider_input(config)?)
         .await
+}
+
+#[tauri::command]
+pub async fn sync_discover_vaults<R: Runtime>(
+    app: AppHandle<R>,
+    manager: State<'_, DesktopSyncManager>,
+    provider: SyncProviderInput,
+) -> Result<Vec<DiscoveredVaultSummary>, String> {
+    manager.discover_vaults(&app, provider).await
+}
+
+#[tauri::command]
+pub async fn sync_discover_webdav_vaults<R: Runtime>(
+    app: AppHandle<R>,
+    manager: State<'_, DesktopSyncManager>,
+    config: WebDavObjectStoreConfig,
+) -> Result<Vec<DiscoveredVaultSummary>, String> {
+    manager
+        .discover_vaults(&app, webdav_provider_input(config)?)
+        .await
+}
+
+#[tauri::command]
+pub async fn sync_get_pairing_info<R: Runtime>(
+    app: AppHandle<R>,
+    manager: State<'_, DesktopSyncManager>,
+) -> Result<Option<SyncPairingInfo>, String> {
+    manager.get_pairing_info(&app).await
 }
 
 #[tauri::command]

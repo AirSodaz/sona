@@ -156,7 +156,13 @@ pub fn change_master_password(
     next_master_password: &str,
 ) -> Result<VaultHeaderV1, SyncError> {
     require_master_password(next_master_password)?;
-    let vault_key = unlock_with_master_password(header, current_master_password)?;
+    let vault_key = match unlock_with_master_password(header, current_master_password) {
+        Ok(key) => key,
+        Err(err) => match unlock_with_recovery_key(header, current_master_password) {
+            Ok(key) => key,
+            Err(_) => return Err(err),
+        },
+    };
     let mut changed = header.clone();
     changed.password_slot =
         wrap_with_master_password(&header.vault_id, &vault_key, next_master_password)?;

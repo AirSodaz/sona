@@ -98,6 +98,8 @@ vi.mock('../../services/tauri/sync', () => ({
   changeSyncPreset: vi.fn(),
   createSyncVault: (...args: unknown[]) => testContext.createVault(...args),
   disconnectSyncVault: vi.fn(),
+  discoverWebDavSyncVaults: vi.fn().mockResolvedValue([]),
+  getSyncPairingInfo: vi.fn().mockResolvedValue(null),
   generateSyncRecoveryKey: vi.fn().mockResolvedValue('recovery-key'),
   getSyncConflict: vi.fn(),
   joinSyncVault: (...args: unknown[]) => testContext.joinVault(...args),
@@ -144,22 +146,20 @@ describe('Sync & Recovery settings', () => {
     setStatus(DISABLED_SYNC_STATUS);
   });
 
-  it('replaces the archive upload UI with create and join flows', () => {
+  it('replaces the archive upload UI with unified sync setup', () => {
     render(<BackupSettingsSection />);
 
     screen.getByText('Sync & Recovery');
-    screen.getByRole('tab', { name: 'Create vault' });
-    screen.getByRole('tab', { name: 'Join vault' });
+    screen.getByLabelText('Server URL');
+    screen.getByLabelText('Username');
+    screen.getByLabelText('Password');
+    screen.getByLabelText('Master password');
+    screen.getByRole('button', { name: 'Save & Enable Sync' });
     expect(screen.queryByRole('button', { name: 'Upload Backup' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Refresh Cloud Backups' })).toBeNull();
   });
 
-  it('shows a read-only join preview before applying the remote vault', async () => {
-    testContext.previewJoin.mockResolvedValue({
-      localOperationCount: 7,
-      remoteOperationCount: 12,
-      projectedConflictCount: 2,
-    });
+  it('allows joining an explicit remote vault via advanced options', async () => {
     testContext.joinVault.mockResolvedValue({
       pulledSegmentCount: 1,
       pulledCheckpointCount: 0,
@@ -171,21 +171,23 @@ describe('Sync & Recovery settings', () => {
     });
     render(<BackupSettingsSection />);
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Join vault' }));
     fireEvent.change(screen.getByLabelText('Server URL'), { target: { value: 'https://dav.example.com' } });
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'sona' } });
-    fireEvent.change(screen.getByLabelText('WebDAV password'), { target: { value: 'provider-secret' } });
-    fireEvent.change(screen.getByLabelText('Vault ID'), { target: { value: 'vault-remote' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'provider-secret' } });
     fireEvent.change(screen.getByLabelText('Master password'), { target: { value: 'x' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Preview join' }));
 
-    await waitFor(() => expect(testContext.previewJoin).toHaveBeenCalledTimes(1));
-    screen.getByText('12');
-    screen.getByText('2');
-    expect(testContext.joinVault).not.toHaveBeenCalled();
+    // Open advanced options and enter Vault ID
+    fireEvent.click(screen.getByRole('button', { name: /Advanced Settings|高级设置/i }));
+    fireEvent.change(screen.getByLabelText('Vault ID'), { target: { value: 'vault-remote' } });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm join' }));
-    await waitFor(() => expect(testContext.joinVault).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Enable Sync' }));
+
+    await waitFor(() => expect(testContext.joinVault).toHaveBeenCalledWith(
+      expect.objectContaining({
+        vaultId: 'vault-remote',
+        masterPassword: 'x',
+      }),
+    ));
   });
 
   it('shows only unlock controls while the vault is locked', async () => {

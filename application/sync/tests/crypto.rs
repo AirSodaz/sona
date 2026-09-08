@@ -43,6 +43,22 @@ fn changing_master_password_rewraps_without_changing_the_vault_key() {
         created.vault_key.as_slice()
     );
 }
+#[test]
+fn resetting_master_password_with_recovery_key_works_when_password_forgotten() {
+    let created = create_vault("vault-a", SyncPresetV1::Content, MASTER_PASSWORD, true).unwrap();
+    let recovery_key = created.recovery_key.expect("recovery key exists");
+
+    let changed = change_master_password(
+        &created.header,
+        &recovery_key,
+        "a brand new recovered password",
+    )
+    .unwrap();
+
+    assert!(unlock_with_master_password(&changed, MASTER_PASSWORD).is_err());
+    let unlocked = unlock_with_master_password(&changed, "a brand new recovered password").unwrap();
+    assert_eq!(unlocked.as_slice(), created.vault_key.as_slice());
+}
 
 #[test]
 fn master_passwords_only_need_to_be_non_empty() {

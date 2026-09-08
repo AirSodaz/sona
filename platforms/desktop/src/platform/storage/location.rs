@@ -474,7 +474,9 @@ pub fn resolve_storage_path_open_target(raw_path: &Path) -> StoragePathOpenTarge
         StoragePathOpenTarget::OpenDirectory(raw_path.to_path_buf())
     } else if raw_path.exists() {
         StoragePathOpenTarget::RevealItem(raw_path.to_path_buf())
-    } else if raw_path.extension().is_some() || raw_path.file_name().map_or(false, |n| n == "ffmpeg") {
+    } else if raw_path.extension().is_some()
+        || raw_path.file_name().map_or(false, |n| n == "ffmpeg")
+    {
         if let Some(parent) = raw_path.parent().filter(|p| !p.as_os_str().is_empty()) {
             let _ = std::fs::create_dir_all(parent);
             StoragePathOpenTarget::OpenDirectory(parent.to_path_buf())
@@ -513,11 +515,10 @@ pub fn open_storage_path<R: Runtime>(app: &AppHandle<R>, path_str: String) -> Re
                 .reveal_item_in_dir(&target_path)
                 .map_err(|e| e.to_string())
         }
-        StoragePathOpenTarget::OpenDirectory(target_path) => {
-            app.opener()
-                .open_path(target_path.to_string_lossy(), None::<&str>)
-                .map_err(|e| e.to_string())
-        }
+        StoragePathOpenTarget::OpenDirectory(target_path) => app
+            .opener()
+            .open_path(target_path.to_string_lossy(), None::<&str>)
+            .map_err(|e| e.to_string()),
     }
 }
 

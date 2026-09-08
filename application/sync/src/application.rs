@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -16,8 +16,9 @@ use tokio::sync::Mutex;
 use crate::runtime::load_remote_state_for_join;
 use crate::vault::{
     OpenedRemoteVault, change_remote_master_password, create_remote_vault,
-    open_remote_vault_with_password, open_remote_vault_with_recovery_key,
-    open_remote_vault_with_vault_key, regenerate_remote_recovery_key, update_remote_vault_preset,
+    open_remote_vault_with_password, open_remote_vault_with_password_or_recovery_key,
+    open_remote_vault_with_recovery_key, open_remote_vault_with_vault_key,
+    regenerate_remote_recovery_key, update_remote_vault_preset,
 };
 use crate::{SyncBackoffPolicy, SyncRuntime};
 
@@ -174,6 +175,23 @@ pub struct SyncCreateResult {
     pub status: SyncStatusSnapshot,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveredVaultSummary {
+    pub vault_id: String,
+    pub preset: SyncPresetV1,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncPairingInfo {
+    pub provider_id: String,
+    pub vault_id: String,
+    pub server_url: Option<String>,
+    pub remote_root: Option<String>,
+    pub username: Option<String>,
+}
+
 struct UnlockedSession {
     provider: SyncProvider,
     opened: OpenedRemoteVault,
@@ -256,9 +274,111 @@ impl SyncApplication {
         self.providers.test_provider(provider_input).await
     }
 
+    pub async fn discover_vaults(
+        &self,
+        provider_input: SyncProviderInput,
+    ) -> Result<Vec<DiscoveredVaultSummary>, SyncApplicationError> {
+        let provider = self.providers.prepare(provider_input).await?;
+        let capabilities = provider.store.probe().await?;
+        if !capabilities.conditional_create
+            || !capabilities.compare_and_swap
+            || !capabilities.delete
+        {
+            return Err(SyncApplicationError::InvalidState(
+                "Sync provider does not support required conditional object operations."
+                    .to_string(),
+            ));
+        }
+        let prefix = sona_core::sync::SyncObjectPrefix::parse("sona-sync/v1")?;
+        let mut continuation = None;
+        let mut vault_ids = BTreeSet::new();
+        loop {
+            let page = provider
+                .store
+                .list(&prefix, continuation.as_deref())
+                .await
+                .map_err(Into::<SyncApplicationError>::into)?;
+            for object in page.objects {
+                let key = object.key.as_str();
+                if let Some(vault_id) = key
+                    .strip_prefix("sona-sync/v1/")
+                    .and_then(|rest| rest.strip_suffix("/vault.json"))
+                    .filter(|id| !id.contains('/') && !id.is_empty())
+                {
+                    vault_ids.insert(vault_id.to_string());
+                }
+            }
+            continuation = page.continuation;
+            if continuation.is_none() {
+                break;
+            }
+        }
+
+        let mut discovered = Vec::new();
+        for vault_id in vault_ids {
+            if let Ok((header, _)) =
+                crate::vault::load_remote_header(provider.store.as_ref(), &vault_id).await
+            {
+                discovered.push(DiscoveredVaultSummary {
+                    vault_id: header.vault_id,
+                    preset: header.preset,
+                });
+            }
+        }
+        Ok(discovered)
+    }
+
+    pub fn get_pairing_info(&self) -> Result<Option<SyncPairingInfo>, SyncApplicationError> {
+        let Some(config) = self.config_store.load()? else {
+            return Ok(None);
+        };
+        let mut server_url = None;
+        let mut remote_root = None;
+        let mut username = None;
+        if let Some(obj) = config.provider_configuration.as_object() {
+            server_url = obj
+                .get("serverUrl")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            remote_root = obj
+                .get("remoteRoot")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            username = obj
+                .get("username")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+        }
+        Ok(Some(SyncPairingInfo {
+            provider_id: config.provider_id,
+            vault_id: config.vault_id,
+            server_url,
+            remote_root,
+            username,
+        }))
+    }
+
     pub async fn create(
         &self,
         provider_input: SyncProviderInput,
+        preset: SyncPresetV1,
+        master_password: &str,
+        create_recovery_key: bool,
+    ) -> Result<SyncCreateResult, SyncApplicationError> {
+        self.create_with_vault_id(
+            provider_input,
+            None,
+            preset,
+            master_password,
+            create_recovery_key,
+        )
+        .await
+    }
+
+    pub async fn create_with_vault_id(
+        &self,
+        provider_input: SyncProviderInput,
+        vault_id: Option<String>,
         preset: SyncPresetV1,
         master_password: &str,
         create_recovery_key: bool,
@@ -267,7 +387,10 @@ impl SyncApplication {
         self.ensure_unconfigured()?;
         let provider = self.providers.prepare(provider_input).await?;
         provider.store.probe().await?;
-        let vault_id = self.environment.next_id();
+        let vault_id = match vault_id {
+            Some(id) if !id.trim().is_empty() => id.trim().to_string(),
+            _ => self.environment.next_id(),
+        };
         let device_id = self.environment.next_id();
         let created = create_remote_vault(
             provider.store.as_ref(),
@@ -318,9 +441,12 @@ impl SyncApplication {
         let _lifecycle = self.lifecycle.lock().await;
         self.ensure_unconfigured()?;
         let provider = self.providers.prepare(provider_input).await?;
-        let opened =
-            open_remote_vault_with_password(provider.store.as_ref(), vault_id, master_password)
-                .await?;
+        let opened = open_remote_vault_with_password_or_recovery_key(
+            provider.store.as_ref(),
+            vault_id,
+            master_password,
+        )
+        .await?;
         let remote_segments = load_remote_state_for_join(
             provider.store.as_ref(),
             vault_id,
@@ -346,9 +472,12 @@ impl SyncApplication {
         let _lifecycle = self.lifecycle.lock().await;
         self.ensure_unconfigured()?;
         let provider = self.providers.prepare(provider_input).await?;
-        let opened =
-            open_remote_vault_with_password(provider.store.as_ref(), vault_id, master_password)
-                .await?;
+        let opened = open_remote_vault_with_password_or_recovery_key(
+            provider.store.as_ref(),
+            vault_id,
+            master_password,
+        )
+        .await?;
         let device_id = self.environment.next_id();
         self.repository_factory
             .initialize(vault_id, &device_id, opened.header.preset)?;

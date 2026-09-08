@@ -66,58 +66,209 @@
 }
 
 /* --------------------------------------------------------------------------
-   Step Wizard Indicator
+   Clean Minimal Setup Panel
    -------------------------------------------------------------------------- */
-.sync-step-indicator {
+.sync-setup-clean {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 14px 24px;
-  background: var(--color-bg-primary);
+  flex-direction: column;
+  gap: 20px;
 }
 
-.sync-step-node {
+.sync-pairing-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  gap: 12px;
+}
+
+.sync-pairing-banner-text {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 0.84rem;
+  color: var(--color-text-secondary);
+}
+
+.sync-pairing-banner-text svg {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.sync-setup-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-end;
+  padding-top: 8px;
+}
+
+.sync-auth-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--color-primary);
+  text-decoration: none;
+  margin-top: 2px;
+}
+
+.sync-auth-link:hover {
+  text-decoration: underline;
+}
+
+.sync-advanced-toggle-wrapper {
+  display: flex;
+  justify-content: flex-start;
+  padding: 4px 0;
+}
+
+.sync-advanced-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
   color: var(--color-text-muted);
-  font-size: 0.86rem;
-  font-weight: 500;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 6px 0;
   transition: color var(--transition-fast, 0.15s) ease;
 }
 
-.sync-step-node.is-active {
-  color: var(--color-text-primary);
-  font-weight: 600;
+.sync-advanced-toggle-btn:hover {
+  color: var(--color-text-main, var(--color-text-primary));
 }
 
-.sync-step-num {
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--color-bg-secondary);
+.sync-submit-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border-subtle, var(--color-border));
+}
+
+.sync-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+  justify-content: center;
+}
+
+.sync-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.sync-pairing-modal-body,
+.sync-multivault-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sync-pairing-modal-desc,
+.sync-multivault-modal-desc {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.sync-multivault-options-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.sync-multivault-option-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border);
-  font-size: 0.74rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  background: var(--color-bg-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.15s) ease;
 }
 
-.sync-step-node.is-active .sync-step-num {
-  background: var(--color-accent-primary, var(--color-primary));
-  color: var(--color-bg-elevated, #fff);
-  border-color: var(--color-accent-primary, var(--color-primary));
+.sync-multivault-option-card:hover {
+  border-color: var(--color-primary);
+  background: var(--color-bg-subtle, var(--color-bg-secondary));
 }
 
-.sync-step-line {
-  width: 40px;
-  height: 2px;
-  background: var(--color-border);
-  border-radius: 1px;
+.sync-multivault-option-card.is-selected {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-bg-elevated));
+  box-shadow: 0 0 0 1px var(--color-primary);
 }
 
+.sync-radio-input {
+  accent-color: var(--color-primary);
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.sync-multivault-icon-col {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+}
+
+.sync-multivault-icon-col .is-active-icon {
+  color: var(--color-primary);
+}
+
+.sync-multivault-option-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.sync-multivault-option-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.sync-multivault-id {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.88rem;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+
+.sync-multivault-tag {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-subtle, var(--color-border));
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.sync-multivault-hint {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
 /* --------------------------------------------------------------------------
    Standard Banner Row (Embedded in section content)
    -------------------------------------------------------------------------- */
@@ -182,6 +333,18 @@
 
 .sync-banner-box.is-error svg {
   color: var(--color-danger, #ef4444);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.sync-banner-box.is-warning {
+  background: color-mix(in srgb, var(--color-warning, #d97706) 10%, var(--color-bg-primary));
+  border: 1px solid color-mix(in srgb, var(--color-warning, #d97706) 25%, var(--color-border));
+  color: var(--color-text-secondary);
+}
+
+.sync-banner-box.is-warning svg {
+  color: var(--color-warning, #d97706);
   flex-shrink: 0;
   margin-top: 2px;
 }
@@ -510,16 +673,28 @@ input[type="password"]::-ms-clear {
 
 /* --------------------------------------------------------------------------
    Connected Status Overview Card
+/* --------------------------------------------------------------------------
+   Connected Status Hero Card (Modernized) & Main Panel Spacing
    -------------------------------------------------------------------------- */
+.sync-connected-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl, 32px);
+}
+
+.sync-status-hero-card,
 .sync-status-panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
   padding: var(--spacing-lg, 24px);
   background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: var(--shadow-sm);
 }
 
-.sync-status-header-row {
+.sync-hero-top-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -527,99 +702,173 @@ input[type="password"]::-ms-clear {
   flex-wrap: wrap;
 }
 
-.sync-status-heading {
+.sync-hero-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sync-hero-status-pill {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  font-size: 1.1rem;
 }
 
-.sync-status-icon {
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  border-radius: var(--radius-md, 10px);
-  background: color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 12%, var(--color-bg-secondary));
-  color: var(--color-accent-primary, var(--color-primary));
+.sync-hero-status-pill strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.sync-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
   flex-shrink: 0;
+  display: inline-block;
+  background: var(--color-text-muted);
 }
 
-.sync-status-icon.is-ready {
-  background: color-mix(in srgb, var(--color-success, #228b4e) 12%, var(--color-bg-secondary));
-  color: var(--color-success, #228b4e);
+.sync-status-dot.is-idle,
+.sync-status-dot.is-ready {
+  background: var(--color-success, #228b4e);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-success, #228b4e) 25%, transparent);
 }
 
-.sync-status-icon.is-syncing {
-  background: color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 15%, var(--color-bg-secondary));
-  color: var(--color-accent-primary, var(--color-primary));
+.sync-status-dot.is-syncing {
+  background: var(--color-primary, #2563eb);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #2563eb) 35%, transparent);
+  animation: syncDotPulse 1.6s infinite ease-in-out;
 }
 
-.sync-status-icon.is-paused {
-  background: color-mix(in srgb, var(--color-warning, #d97706) 12%, var(--color-bg-secondary));
-  color: var(--color-warning, #d97706);
+@keyframes syncDotPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.6;
+  }
 }
 
-.sync-status-icon.is-locked {
-  background: color-mix(in srgb, var(--color-warning, #d97706) 15%, var(--color-bg-secondary));
-  color: var(--color-warning, #d97706);
+.sync-status-dot.is-paused {
+  background: var(--color-warning, #d97706);
 }
 
-.sync-status-icon.is-error {
-  background: color-mix(in srgb, var(--color-danger, #ef4444) 12%, var(--color-bg-secondary));
-  color: var(--color-danger, #ef4444);
+.sync-status-dot.is-locked {
+  background: var(--color-warning, #d97706);
 }
 
-.sync-status-title-group {
+.sync-status-dot.is-error {
+  background: var(--color-danger, #ef4444);
+}
+
+.sync-hero-provider-tag {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: var(--radius-full, 9999px);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.sync-hero-meta {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sync-hero-meta code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.76rem;
+  color: var(--color-text-secondary);
+}
+
+.sync-meta-divider {
+  color: var(--color-border);
+}
+
+.sync-hero-server-url {
+  font-family: var(--font-mono, monospace);
+  color: var(--color-text-secondary);
+}
+
+.sync-hero-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.sync-status-title-group strong {
-  font-size: 0.98rem;
-  color: var(--color-text-primary);
-  font-weight: 600;
+.sync-pairing-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
 }
 
-.sync-provider-pill {
-  font-size: 0.72rem;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  background: color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 12%, transparent);
-  color: var(--color-accent-primary, var(--color-primary));
-  font-weight: 600;
-}
-
-.sync-conflict-badge {
-  display: inline-flex;
+.sync-pairing-summary-row {
+  display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.72rem;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  background: color-mix(in srgb, var(--color-warning, #d97706) 18%, transparent);
-  color: var(--color-warning, #d97706);
-  font-weight: 700;
+  justify-content: space-between;
+  font-size: 0.82rem;
 }
 
-.sync-vault-id-label {
-  display: block;
-  font-size: 0.74rem;
+.sync-pairing-summary-row span {
   color: var(--color-text-muted);
-  margin-top: 2px;
 }
 
-.sync-vault-id-label code {
+.sync-pairing-summary-row code {
   font-family: var(--font-mono, monospace);
-  font-size: 0.76rem;
+  font-size: 0.78rem;
+  color: var(--color-text-primary);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-pairing-steps-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle, var(--color-border));
+}
+
+.sync-pairing-step-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.82rem;
   color: var(--color-text-secondary);
 }
 
+.sync-step-badge {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
 .sync-metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 @media (max-width: 768px) {
@@ -631,28 +880,193 @@ input[type="password"]::-ms-clear {
 .sync-metric-card {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm, 8px);
-  background: var(--color-bg-secondary-soft, var(--color-bg-secondary));
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md, 10px);
+  background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
+  transition: border-color var(--transition-fast, 0.15s) ease;
 }
 
-.sync-metric-card span {
+.sync-metric-card:hover {
+  border-color: var(--color-border-hover, var(--color-border));
+}
+
+.sync-metric-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 500;
   color: var(--color-text-muted);
-  font-size: 0.74rem;
 }
 
-.sync-metric-card strong {
+.sync-metric-label svg {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.sync-metric-value {
+  font-size: 0.96rem;
+  font-weight: 600;
   color: var(--color-text-primary);
-  font-size: 0.88rem;
   font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.sync-metric-value.is-active {
+  color: var(--color-primary);
+}
+
+.sync-metric-card.is-error-card {
+  border-color: color-mix(in srgb, var(--color-danger, #ef4444) 30%, var(--color-border));
+  background: color-mix(in srgb, var(--color-danger, #ef4444) 4%, var(--color-bg-secondary));
 }
 
 .sync-text-warning {
   color: var(--color-warning, #d97706) !important;
 }
 
+.sync-error-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm, 8px);
+  background: color-mix(in srgb, var(--color-danger, #ef4444) 10%, var(--color-bg-primary));
+  border: 1px solid color-mix(in srgb, var(--color-danger, #ef4444) 25%, var(--color-border));
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.sync-error-banner-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-danger, #ef4444);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.sync-error-banner-title svg {
+  flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Locked Vault View & Segmented Controls
+   -------------------------------------------------------------------------- */
+.sync-unlock-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg, 24px);
+  padding: var(--spacing-lg, 24px);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: var(--shadow-sm);
+}
+
+.sync-status-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sync-status-heading strong {
+  display: block;
+  font-size: 1.05rem;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.sync-status-icon.is-locked {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--color-warning, #d97706) 12%, transparent);
+  color: var(--color-warning, #d97706);
+  flex-shrink: 0;
+}
+
+.sync-segmented-control {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  gap: 3px;
+  width: fit-content;
+}
+
+.sync-segmented-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm, 6px);
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.15s) ease;
+}
+
+.sync-segmented-btn:hover:not(.is-active) {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover, rgba(0, 0, 0, 0.04));
+}
+
+.sync-segmented-btn.is-active {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.08));
+}
+
+/* --------------------------------------------------------------------------
+   Security Panel & Password Form Inside Accordion
+   -------------------------------------------------------------------------- */
+.sync-security-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md, 16px);
+}
+
+.sync-security-form-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  padding: 12px 4px 4px 4px;
+}
+
+.sync-security-form-header svg {
+  color: var(--color-text-secondary);
+}
+
+.sync-change-password-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm, 8px);
+}
+
+.sync-change-password-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.sync-change-password-actions button:disabled,
+.sync-change-password-actions .btn:disabled {
+  cursor: default !important;
+}
 .sync-status-actions {
   display: flex;
   align-items: center;
@@ -766,72 +1180,84 @@ input[type="password"]::-ms-clear {
   flex-shrink: 0;
 }
 /* --------------------------------------------------------------------------
-   Pairing Modal
+   Pairing Token Boxes & Modal Controls
    -------------------------------------------------------------------------- */
-.sync-pairing-modal {
-  max-width: 500px;
-  width: 90%;
+.sync-import-token-box {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 6px;
 }
 
-.sync-pairing-header {
+.sync-import-token-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
 }
 
-.sync-pairing-header h3 {
-  margin: 0;
-  font-size: 1.1rem;
+.sync-import-token-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
   font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.sync-pairing-instructions {
-  margin: 0;
-  font-size: 0.86rem;
   color: var(--color-text-secondary);
-  line-height: 1.5;
 }
 
-.sync-pairing-token-box {
+.sync-pairing-token-container {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.sync-pairing-token-box textarea {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.sync-pairing-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  gap: 6px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
   padding: 10px 12px;
-  border-radius: var(--radius-sm, 8px);
-  background: color-mix(in srgb, var(--color-info, #2b7fff) 8%, var(--color-bg-secondary));
-  border: 1px solid color-mix(in srgb, var(--color-info, #2b7fff) 20%, var(--color-border));
+}
+
+.sync-pairing-token-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sync-pairing-token-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
   color: var(--color-text-secondary);
+}
+
+.sync-pairing-token-textarea {
+  width: 100%;
+  font-family: var(--font-mono, monospace);
   font-size: 0.78rem;
   line-height: 1.4;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--color-border-subtle, var(--color-border));
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  resize: none;
+  word-break: break-all;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.sync-pairing-note svg {
-  color: var(--color-info, #2b7fff);
-  flex-shrink: 0;
-  margin-top: 1px;
+.sync-pairing-token-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 15%, transparent);
 }
 
-.sync-pairing-footer {
+.sync-token-copy-inline-btn {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  padding: 3px 8px;
 }
-
 /* --------------------------------------------------------------------------
    Conflict Center (SyncConflictCenter)
    -------------------------------------------------------------------------- */
