@@ -150,4 +150,99 @@ describe('syncRuntimeService', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(testContext.runNow).toHaveBeenCalledTimes(1);
   });
+
+  it('triggers periodic sync every 5 minutes in foreground', async () => {
+    syncRuntimeService.init();
+    await flushStartup();
+    testContext.runNow.mockClear();
+    // Advance timer by 4 minutes 50 seconds (less than 5 minutes)
+    await vi.advanceTimersByTimeAsync(4 * 60 * 1_000 + 50_000);
+    expect(testContext.runNow).not.toHaveBeenCalled();
+
+    // Advance timer past 5 minutes (next heartbeat tick at 5m 10s)
+    await vi.advanceTimersByTimeAsync(20_000);
+    await flushStartup();
+    expect(testContext.runNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('throttles focus sync if last sync was recent, but syncs if interval exceeded', async () => {
+    syncRuntimeService.init();
+    await flushStartup();
+    testContext.runNow.mockClear();
+
+    // Focus immediately (0ms since last sync) -> throttled
+    window.dispatchEvent(new Event('focus'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(testContext.runNow).not.toHaveBeenCalled();
+
+    // Focus after 15 seconds (< 30s) -> still throttled
+    await vi.advanceTimersByTimeAsync(15_000);
+    window.dispatchEvent(new Event('focus'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(testContext.runNow).not.toHaveBeenCalled();
+
+    // Focus after 31 seconds (> 30s) -> triggers immediate sync
+    await vi.advanceTimersByTimeAsync(16_000);
+    window.dispatchEvent(new Event('focus'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(testContext.runNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not trigger periodic sync when vault is disabled or locked', async () => {
+    testContext.getStatus.mockResolvedValue({ ...IDLE_STATUS, state: 'locked' });
+    syncRuntimeService.init();
+    await flushStartup();
+    testContext.runNow.mockClear();
+
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1_000);
+    expect(testContext.runNow).not.toHaveBeenCalled();
+  });
+
+  it('retries scheduled sync when error backoff expires', async () => {
+    const errorStatus: SyncStatusSnapshot = {
+      ...IDLE_STATUS,
+      state: 'error',
+      lastError: { code: 'network', message: 'failed', retryable: true },
+      nextRetryAtMs: Date.now() + 30_000,
+    };
+    testContext.getStatus.mockResolvedValue(errorStatus);
+    syncRuntimeService.init();
+    await flushStartup();
+    testContext.runNow.mockClear();
+
+    // Advance 25 seconds (< 30s) -> not yet
+    await vi.advanceTimersByTimeAsync(25_000);
+    expect(testContext.runNow).not.toHaveBeenCalled();
+
+    // Advance past 30 seconds -> triggers retry run
+    testContext.getStatus.mockResolvedValue(IDLE_STATUS);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(testContext.runNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses relaxed 15-minute periodic sync when document is hidden', async () => {
+    Object.defineProperty(document, 'visibilityState', {
+      value: 'hidden',
+      configurable: true,
+    });
+    try {
+      syncRuntimeService.init();
+      await flushStartup();
+      testContext.runNow.mockClear();
+
+      // Advance timer by 10 minutes (> 5 minutes, but < 15 minutes)
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1_000);
+      expect(testContext.runNow).not.toHaveBeenCalled();
+
+      // Advance timer past 15 minutes
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1_000 + 20_000);
+      await flushStartup();
+      expect(testContext.runNow).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        configurable: true,
+      });
+    }
+  });
 });
