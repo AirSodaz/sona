@@ -461,15 +461,64 @@ pub fn reset_models_directory<R: Runtime>(
     get_storage_directories_info(app)
 }
 
-pub fn open_storage_path<R: Runtime>(app: &AppHandle<R>, path_str: String) -> Result<(), String> {
-    let path = PathBuf::from(path_str.trim());
-    if !path.exists() {
-        let _ = std::fs::create_dir_all(&path);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StoragePathOpenTarget {
+    RevealItem(PathBuf),
+    OpenDirectory(PathBuf),
+}
+
+pub fn resolve_storage_path_open_target(raw_path: &Path) -> StoragePathOpenTarget {
+    if raw_path.is_file() {
+        StoragePathOpenTarget::RevealItem(raw_path.to_path_buf())
+    } else if raw_path.is_dir() {
+        StoragePathOpenTarget::OpenDirectory(raw_path.to_path_buf())
+    } else if raw_path.exists() {
+        StoragePathOpenTarget::RevealItem(raw_path.to_path_buf())
+    } else if raw_path.extension().is_some() || raw_path.file_name().map_or(false, |n| n == "ffmpeg") {
+        if let Some(parent) = raw_path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            let _ = std::fs::create_dir_all(parent);
+            StoragePathOpenTarget::OpenDirectory(parent.to_path_buf())
+        } else {
+            let _ = std::fs::create_dir_all(raw_path);
+            StoragePathOpenTarget::OpenDirectory(raw_path.to_path_buf())
+        }
+    } else {
+        let _ = std::fs::create_dir_all(raw_path);
+        StoragePathOpenTarget::OpenDirectory(raw_path.to_path_buf())
     }
-    app.opener()
-        .open_path(path.to_string_lossy(), None::<&str>)
-        .map_err(|e| e.to_string())?;
-    Ok(())
+}
+
+pub fn open_storage_path<R: Runtime>(app: &AppHandle<R>, path_str: String) -> Result<(), String> {
+    let trimmed = path_str.trim().trim_matches('"').trim_matches('\'');
+    if trimmed.is_empty() {
+        return Err("Path cannot be empty".to_string());
+    }
+    let path = PathBuf::from(trimmed);
+    let target = resolve_storage_path_open_target(&path);
+
+    match target {
+        StoragePathOpenTarget::RevealItem(target_path) => {
+            if app.opener().reveal_item_in_dir(&target_path).is_ok() {
+                return Ok(());
+            }
+            if let Some(parent) = target_path.parent().filter(|p| !p.as_os_str().is_empty()) {
+                if parent.exists() {
+                    app.opener()
+                        .open_path(parent.to_string_lossy(), None::<&str>)
+                        .map_err(|e| e.to_string())?;
+                    return Ok(());
+                }
+            }
+            app.opener()
+                .reveal_item_in_dir(&target_path)
+                .map_err(|e| e.to_string())
+        }
+        StoragePathOpenTarget::OpenDirectory(target_path) => {
+            app.opener()
+                .open_path(target_path.to_string_lossy(), None::<&str>)
+                .map_err(|e| e.to_string())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -657,5 +706,65 @@ mod tests {
         // Config should have cleared pending_cleanup_dirs
         let loaded = load_bootstrap_config(&default_dir);
         assert!(loaded.pending_cleanup_dirs.is_empty());
+    }
+
+    #[test]
+    fn resolve_storage_path_target_for_existing_file() {
+        let temp = TempDir::new().unwrap();
+        let file_path = temp.path().join("ffmpeg.exe");
+        std::fs::write(&file_path, b"dummy").unwrap();
+
+        assert_eq!(
+            resolve_storage_path_open_target(&file_path),
+            StoragePathOpenTarget::RevealItem(file_path)
+        );
+    }
+
+    #[test]
+    fn resolve_storage_path_target_for_existing_directory() {
+        let temp = TempDir::new().unwrap();
+        let dir_path = temp.path().join("models");
+        std::fs::create_dir_all(&dir_path).unwrap();
+
+        assert_eq!(
+            resolve_storage_path_open_target(&dir_path),
+            StoragePathOpenTarget::OpenDirectory(dir_path)
+        );
+    }
+
+    #[test]
+    fn resolve_storage_path_target_for_missing_file_with_extension() {
+        let temp = TempDir::new().unwrap();
+        let missing_file = temp.path().join("missing_ffmpeg.exe");
+
+        assert_eq!(
+            resolve_storage_path_open_target(&missing_file),
+            StoragePathOpenTarget::OpenDirectory(temp.path().to_path_buf())
+        );
+        assert!(!missing_file.exists());
+    }
+
+    #[test]
+    fn resolve_storage_path_target_for_missing_extensionless_ffmpeg() {
+        let temp = TempDir::new().unwrap();
+        let missing_ffmpeg = temp.path().join("ffmpeg");
+
+        assert_eq!(
+            resolve_storage_path_open_target(&missing_ffmpeg),
+            StoragePathOpenTarget::OpenDirectory(temp.path().to_path_buf())
+        );
+        assert!(!missing_ffmpeg.exists());
+    }
+
+    #[test]
+    fn resolve_storage_path_target_for_missing_directory_without_extension() {
+        let temp = TempDir::new().unwrap();
+        let missing_dir = temp.path().join("uncreated_models");
+
+        assert_eq!(
+            resolve_storage_path_open_target(&missing_dir),
+            StoragePathOpenTarget::OpenDirectory(missing_dir.clone())
+        );
+        assert!(missing_dir.is_dir());
     }
 }
