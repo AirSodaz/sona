@@ -4,6 +4,7 @@ version.workspace = true
 description = "Standalone command line interface for Sona core"
 authors.workspace = true
 edition.workspace = true
+license.workspace = true
 build = "build.rs"
 
 [package.metadata.sona]

@@ -34,6 +34,9 @@
   },
   "bundle": {
     "active": true,
+    "copyright": "Copyright (c) 2026 AirSodaz",
+    "license": "MIT",
+    "licenseFile": "../../LICENSE",
     "createUpdaterArtifacts": true,
     "targets": [
       "app",

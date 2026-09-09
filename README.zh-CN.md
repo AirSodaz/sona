@@ -42,3 +42,7 @@
 | 架构指南 | 包角色、依赖方向、兼容性边界和验证 | [简体中文](docs/architecture.zh-CN.md) · [English](docs/architecture.md) |
 | Nightly 工作流 | Nightly 触发条件、构建任务、产物和发布 | [简体中文](docs/nightly-workflow.zh-CN.md) · [English](docs/nightly-workflow.md) |
 | 参与贡献 | 分支、验证、提交和 Pull Request 要求 | [English](CONTRIBUTING.md) |
+
+## 📄 开源协议
+
+本项目采用 [MIT 许可证](LICENSE) 开源。

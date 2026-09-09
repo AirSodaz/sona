@@ -42,3 +42,7 @@ Choose the guide that matches what you want to do:
 | Architecture Guide | Package roles, dependency direction, compatibility boundaries, and verification | [English](docs/architecture.md) · [简体中文](docs/architecture.zh-CN.md) |
 | Nightly Workflow | Nightly triggers, build jobs, artifacts, and publishing | [English](docs/nightly-workflow.md) · [简体中文](docs/nightly-workflow.zh-CN.md) |
 | Contributing | Branches, validation, commits, and pull request expectations | [English](CONTRIBUTING.md) |
+
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).

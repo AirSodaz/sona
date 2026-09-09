@@ -4,6 +4,7 @@ version.workspace = true
 description = "Reusable local offline ASR adapter for Sona"
 authors.workspace = true
 edition.workspace = true
+license.workspace = true
 build = "build.rs"
 
 [package.metadata.sona]

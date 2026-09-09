@@ -4,6 +4,7 @@ version.workspace = true
 description = "Use-case services for Sona, coordinating core domain logic through core-owned port traits"
 authors.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [package.metadata.sona]
 role = "application"

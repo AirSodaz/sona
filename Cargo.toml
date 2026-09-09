@@ -30,6 +30,7 @@ members = [
 version = "0.8.3"
 authors = ["AirSodaz"]
 edition = "2024"
+license = "MIT"
 
 # ---------------------------------------------------------------------------
 # Workspace dependencies

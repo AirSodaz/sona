@@ -4,6 +4,7 @@ version.workspace = true
 description = "Filesystem adapter for Sona recovery snapshots"
 authors.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [package.metadata.sona]
 role = "outbound-adapter"
