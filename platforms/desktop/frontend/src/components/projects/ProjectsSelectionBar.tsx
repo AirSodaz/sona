@@ -1,12 +1,12 @@
 import React from 'react';
-import { ListChecks, RotateCcw, Tags, Trash2, X } from 'lucide-react';
+import { ListChecks, RotateCcw, FolderKanban, Trash2, X } from 'lucide-react';
 import type { TranslationFn } from './types';
 
 interface ProjectsSelectionBarProps {
   isTrashScope: boolean;
   onCancel: () => void;
   onDeleteSelected: () => void;
-  onEditTags: () => void;
+  onAssignProject: () => void;
   onRestoreSelected: () => void;
   onToggleSelectAll: () => void;
   selectedIds: string[];
@@ -18,7 +18,7 @@ export function ProjectsSelectionBar({
   isTrashScope,
   onCancel,
   onDeleteSelected,
-  onEditTags,
+  onAssignProject,
   onRestoreSelected,
   onToggleSelectAll,
   selectedIds,
@@ -48,17 +48,17 @@ export function ProjectsSelectionBar({
         <button
           type="button"
           className="btn btn-icon projects-toolbar-icon"
-          onClick={isTrashScope ? onRestoreSelected : onEditTags}
+          onClick={isTrashScope ? onRestoreSelected : onAssignProject}
           disabled={selectedIds.length === 0}
           aria-label={isTrashScope
             ? t('history.restore', { defaultValue: 'Restore' })
-            : t('projects.edit_tags', { defaultValue: 'Edit Tags' })}
+            : t('projects.assign_project', { defaultValue: 'Assign Project' })}
           data-tooltip={isTrashScope
             ? t('history.restore', { defaultValue: 'Restore' })
-            : t('projects.edit_tags', { defaultValue: 'Edit Tags' })}
+            : t('projects.assign_project', { defaultValue: 'Assign Project' })}
           data-tooltip-pos="top"
         >
-          {isTrashScope ? <RotateCcw size={16} /> : <Tags size={16} />}
+          {isTrashScope ? <RotateCcw size={16} /> : <FolderKanban size={16} />}
         </button>
         <button
           type="button"

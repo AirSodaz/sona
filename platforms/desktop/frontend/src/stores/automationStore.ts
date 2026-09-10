@@ -55,8 +55,6 @@ import {
   isAutomationRecoveryBlocked,
 } from '../services/recoveryService';
 import { historyService } from '../services/historyService';
-import { applyAutomationProfile } from '../services/automation/automationConfigResolver';
-import { useHistoryStore } from './historyStore';
 import { useBatchQueueStore } from './batchQueueStore';
 import { useConfigStore } from './configStore';
 import { useProjectStore } from './projectStore';
@@ -300,11 +298,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       profileId: input.profileId ?? existing?.profileId,
       profileSource: input.profileSource ?? existing?.profileSource ?? 'tag_match',
       saveHistory: input.saveHistory ?? input.projectId !== 'none',
-      tagIds: input.tagIds ?? (
-        input.projectId && input.projectId !== 'inbox' && input.projectId !== 'none'
-          ? [input.projectId]
-          : []
-      ),
+      tagIds: [],
       presetId: input.presetId,
       watchDirectory: input.watchDirectory.trim(),
       recursive: input.recursive,
@@ -503,39 +497,10 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   },
 
   applyTagRuleToExisting: async (ruleId) => {
-    const state = get();
-    const rule = state.rules.find((item) => item.id === ruleId && item.kind === 'tag');
-    if (!rule) return 0;
-
-    const profile = rule.profileId
-      ? state.profiles.find((item) => item.id === rule.profileId)
-      : undefined;
-    const config = applyAutomationProfile(useConfigStore.getState().config, profile);
-    const matchedTagIds = new Set(rule.tagIds || []);
-    const historyItems = useHistoryStore.getState().items.filter((item) => (
-      item.deletedAt == null
-      && (item.tagIds || []).some((tagId) => matchedTagIds.has(tagId))
-    ));
-    let processed = 0;
-
-    for (const item of historyItems) {
-      const loaded = await historyService.loadTranscript(item.id);
-      if (!loaded?.length) continue;
-      const { processTagAutomationForHistory } = await import('../services/automation/tagAutomationProcessor');
-      await processTagAutomationForHistory({
-        actions: rule.actions ?? { autoPolish: false, autoTranslate: false, autoSummary: false },
-        config,
-        historyId: item.id,
-        segments: loaded,
-        ruleId: rule.id,
-        inputVersion: `existing:${rule.id}:${item.id}`,
-        force: true,
-      });
-      processed += 1;
-    }
-
-    await useHistoryStore.getState().refresh();
-    return processed;
+    // Project pipelines are immutable queue snapshots. Legacy tag rules are
+    // retained for backup import only and are never replayed at runtime.
+    void ruleId;
+    return 0;
   },
 
   beginTagAutomationRun: async (request) => serializeProcessedEntryMutation(async () => {

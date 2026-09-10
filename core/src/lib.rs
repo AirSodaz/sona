@@ -15,6 +15,7 @@ pub mod history_store {
 pub mod llm;
 pub mod models;
 pub mod ports;
+pub mod project;
 pub mod recovery;
 pub mod runtime;
 pub mod storage_usage;

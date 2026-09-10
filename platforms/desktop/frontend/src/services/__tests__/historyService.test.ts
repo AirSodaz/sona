@@ -36,7 +36,7 @@ describe("historyService", () => {
         icon: "system:mic",
         type: "recording",
         searchContent: "",
-        tagIds: [],
+        projectId: null,
         deletedAt: null,
         status: "draft",
         draftSource: "live_record",
@@ -55,7 +55,7 @@ describe("historyService", () => {
       {
         id: null,
         audioExtension: ".webm",
-        tagIds: ["project-1"],
+        projectId: "project-1",
         icon: "system:mic",
       },
     );
@@ -81,7 +81,7 @@ describe("historyService", () => {
       previewText: "Hello...",
       type: "recording",
       searchContent: "Hello",
-      tagIds: ["project-1"],
+      projectId: "project-1",
       deletedAt: null,
       status: "complete",
     });
@@ -94,13 +94,13 @@ describe("historyService", () => {
     );
 
     expect(testContext.invokeMock).toHaveBeenCalledWith(
-      "history_save_recording",
+      "history_save_recording_to_project",
       {
         segments: [
           expect.objectContaining({ id: "seg-1", text: "Hello", start: 0, end: 3, isFinal: true }),
         ],
         duration: 3,
-        tagIds: ["project-1"],
+        projectId: "project-1",
         audioBytes: [1, 2, 3],
         audioExtension: "webm",
       },
@@ -125,7 +125,7 @@ describe("historyService", () => {
       previewText: "Native...",
       type: "recording",
       searchContent: "Native",
-      tagIds: [],
+      projectId: null,
       deletedAt: null,
       status: "complete",
     });
@@ -137,13 +137,13 @@ describe("historyService", () => {
     );
 
     expect(testContext.invokeMock).toHaveBeenCalledWith(
-      "history_save_recording",
+      "history_save_recording_to_project",
       {
         segments: [
           expect.objectContaining({ id: "seg-1", text: "Native", start: 0, end: 4, isFinal: true }),
         ],
         duration: 4,
-        tagIds: [],
+        projectId: null,
         nativeAudioPath: "C:\\AppData\\history\\capture.wav",
         audioExtension: "wav",
       },
@@ -161,7 +161,7 @@ describe("historyService", () => {
       previewText: "Imported...",
       type: "batch",
       searchContent: "Imported",
-      tagIds: ["project-1"],
+      projectId: "project-1",
       deletedAt: null,
       status: "complete",
     });
@@ -175,14 +175,14 @@ describe("historyService", () => {
     );
 
     expect(testContext.invokeMock).toHaveBeenCalledWith(
-      "history_save_imported_file",
+      "history_save_imported_file_to_project",
       {
         sourcePath: "D:\\audio\\meeting.mp3",
         segments: [
           expect.objectContaining({ id: "seg-1", text: "Imported", start: 0, end: 5, isFinal: true }),
         ],
         duration: 5,
-        tagIds: ["project-1"],
+        projectId: "project-1",
         convertedSourcePath: "C:\\Temp\\meeting.wav",
         id: null,
       },

@@ -1,6 +1,6 @@
 use super::{Database, DatabaseError};
 
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 7;
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 8;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = CURRENT_SCHEMA_VERSION;
 
 /// Initializes a new database at the v0.8.0 schema baseline.
@@ -77,7 +77,8 @@ fn initialize_current_schema(tx: &rusqlite::Transaction) -> Result<(), rusqlite:
     migrate_v4(tx)?;
     migrate_v5(tx)?;
     migrate_v6(tx)?;
-    migrate_v7(tx)
+    migrate_v7(tx)?;
+    migrate_v8(tx)
 }
 
 fn bootstrap_schema_version(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
@@ -119,6 +120,12 @@ fn migrate_v1(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
             polish_scenario TEXT,
             polish_context TEXT,
             export_file_name_prefix TEXT NOT NULL DEFAULT ''
+        );
+
+        CREATE TABLE project_pipelines (
+            project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+            pipeline_json TEXT NOT NULL DEFAULT '{}',
+            updated_at INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE project_default_links (
@@ -611,6 +618,23 @@ fn migrate_v7(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     )
 }
 
+fn migrate_v8(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+    tx.execute_batch(
+        "ALTER TABLE history_items ADD COLUMN project_id TEXT REFERENCES tags(id) ON DELETE SET NULL;
+         CREATE INDEX IF NOT EXISTS idx_history_items_project_id ON history_items(project_id);
+         CREATE INDEX IF NOT EXISTS idx_history_items_project_timestamp ON history_items(project_id, timestamp DESC);
+         UPDATE history_items
+            SET project_id = (
+              SELECT hit.tag_id FROM history_item_tags hit
+              JOIN tags t ON t.id = hit.tag_id
+              WHERE hit.history_id = history_items.id
+              ORDER BY t.sort_order, t.id LIMIT 1
+            )
+          WHERE project_id IS NULL AND EXISTS (SELECT 1 FROM history_item_tags hit WHERE hit.history_id = history_items.id);
+         -- Legacy relationship table is retained for compatibility reads",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -686,7 +710,7 @@ mod tests {
         // Migrations already ran during open_in_memory. Running again should be a no-op.
         run_migrations(&db).unwrap();
 
-        assert_eq!(schema_versions(&db), vec![7]);
+        assert_eq!(schema_versions(&db), vec![8]);
     }
 
     #[test]
@@ -712,7 +736,7 @@ mod tests {
                 vec!["history_id", "tag_id"]
             );
             assert!(table_columns(conn, "history_items").contains(&"deleted_at".to_string()));
-            assert!(!table_columns(conn, "history_items").contains(&"project_id".to_string()));
+            assert!(table_columns(conn, "history_items").contains(&"project_id".to_string()));
 
             let projects_exist: i64 = conn.query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'projects'",
@@ -862,7 +886,7 @@ mod tests {
     fn test_future_schema_version_is_rejected() {
         let db = Database::open_in_memory().unwrap();
         db.with_connection(|conn| {
-            conn.execute("INSERT INTO schema_version (version) VALUES (8)", [])?;
+            conn.execute("INSERT INTO schema_version (version) VALUES (9)", [])?;
             Ok(())
         })
         .unwrap();
@@ -871,11 +895,11 @@ mod tests {
         assert!(matches!(
             err,
             DatabaseError::UnsupportedSchemaVersion {
-                found: 8,
-                current: 7
+                found: 9,
+                current: 8
             }
         ));
-        assert_eq!(schema_versions(&db), vec![7, 8]);
+        assert_eq!(schema_versions(&db), vec![8, 9]);
     }
 
     #[test]
@@ -893,7 +917,7 @@ mod tests {
             err,
             DatabaseError::UnsupportedLegacySchemaVersion {
                 found: 6,
-                minimum: 7
+                minimum: 8
             }
         ));
     }

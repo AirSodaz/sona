@@ -384,6 +384,7 @@ impl From<FfiHistoryCreateLiveDraftRequestV1> for HistoryCreateLiveDraftRequest 
             id: value.id,
             audio_extension: value.audio_extension,
             tag_ids: value.tag_ids,
+            project_id: None,
             icon: value.icon,
         }
     }
@@ -509,6 +510,7 @@ impl TryFrom<FfiHistorySaveRecordingRequestV1> for HistorySaveRecordingRequest {
             segments: history_transcript_segments_from_ffi(value.segments)?,
             duration: value.duration,
             tag_ids: value.tag_ids,
+            project_id: None,
             audio_bytes,
             native_audio_path,
             audio_extension,
@@ -526,6 +528,7 @@ impl TryFrom<FfiHistorySaveImportedFileRequestV1> for HistorySaveImportedFileReq
             segments: history_transcript_segments_from_ffi(value.segments)?,
             duration: value.duration,
             tag_ids: value.tag_ids,
+            project_id: None,
             converted_source_path: value.converted_source_path,
         })
     }
@@ -625,8 +628,8 @@ impl From<FfiHistoryWorkspaceScopeV1> for HistoryWorkspaceScope {
     fn from(value: FfiHistoryWorkspaceScopeV1) -> Self {
         match value {
             FfiHistoryWorkspaceScopeV1::All => Self::All,
-            FfiHistoryWorkspaceScopeV1::Untagged => Self::Untagged,
-            FfiHistoryWorkspaceScopeV1::Tag { tag_id } => Self::Tag { tag_id },
+            FfiHistoryWorkspaceScopeV1::Untagged => Self::Inbox,
+            FfiHistoryWorkspaceScopeV1::Tag { tag_id } => Self::Project { project_id: tag_id },
             FfiHistoryWorkspaceScopeV1::Trash => Self::Trash,
         }
     }

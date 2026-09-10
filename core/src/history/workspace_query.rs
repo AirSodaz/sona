@@ -138,10 +138,8 @@ fn query_workspace_items_impl(
 fn matches_scope(item: &HistoryItemRecord, scope: &HistoryWorkspaceScope) -> bool {
     match scope {
         HistoryWorkspaceScope::All => item.deleted_at.is_none(),
-        HistoryWorkspaceScope::Untagged => item.deleted_at.is_none() && item.tag_ids.is_empty(),
-        HistoryWorkspaceScope::Tag { tag_id } => {
-            item.deleted_at.is_none() && item.tag_ids.iter().any(|candidate| candidate == tag_id)
-        }
+        HistoryWorkspaceScope::Inbox => item.deleted_at.is_none() && item.project_id.is_none(),
+        HistoryWorkspaceScope::Project { project_id } => item.deleted_at.is_none() && item.project_id.as_deref() == Some(project_id.as_str()),
         HistoryWorkspaceScope::Trash => item.deleted_at.is_some(),
     }
 }
@@ -218,26 +216,30 @@ fn summarize_items(items: &[HistoryItemRecord]) -> HistoryWorkspaceSummary {
 
 fn count_items_by_tag(items: &[HistoryItemRecord]) -> HistoryWorkspaceItemCounts {
     let mut untagged = 0;
+    let mut inbox = 0;
     let mut trash = 0;
-    let mut by_tag_id = BTreeMap::new();
+    let mut by_project_id = BTreeMap::new();
 
     for item in items {
         if item.deleted_at.is_some() {
             trash += 1;
             continue;
         }
-        if item.tag_ids.is_empty() {
+        if item.project_id.is_none() {
             untagged += 1;
         }
-        for tag_id in &item.tag_ids {
-            *by_tag_id.entry(tag_id.clone()).or_insert(0) += 1;
+        if item.project_id.is_none() { inbox += 1; }
+        if let Some(project_id) = &item.project_id {
+            *by_project_id.entry(project_id.clone()).or_insert(0) += 1;
         }
     }
 
     HistoryWorkspaceItemCounts {
         untagged,
+        inbox,
         trash,
-        by_tag_id,
+        by_tag_id: BTreeMap::new(),
+        by_project_id,
     }
 }
 

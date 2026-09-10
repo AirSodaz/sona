@@ -12,6 +12,7 @@ interface ProjectSettingsModalProps {
   draftDescription: string;
   draftIcon: string;
   draftColor: string;
+  draftPipeline?: ProjectRecord['pipeline'];
   onClose: () => void;
   onSave: () => void;
   onDelete: () => void;
@@ -19,7 +20,7 @@ interface ProjectSettingsModalProps {
   onDescriptionChange: (value: string) => void;
   onIconChange: (value: string) => void;
   onColorChange: (value: string) => void;
-  onOpenAutomation?: (tagId: string) => void;
+  onPipelineChange?: (value: ProjectRecord['pipeline']) => void;
 }
 
 export function ProjectSettingsModal({
@@ -36,7 +37,8 @@ export function ProjectSettingsModal({
   onDescriptionChange,
   onIconChange,
   onColorChange,
-  onOpenAutomation,
+  draftPipeline,
+  onPipelineChange,
 }: ProjectSettingsModalProps): React.JSX.Element | null {
   const { t } = useTranslation();
 
@@ -51,11 +53,11 @@ export function ProjectSettingsModal({
       title={
         <div>
           <span style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
-            {t('projects.tag_settings_title', { defaultValue: 'Tag settings' })}
+            {t('projects.project_settings_title', { defaultValue: 'Project settings' })}
           </span>
           <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', margin: '4px 0 0 0', fontWeight: 400 }}>
-            {t('projects.tag_settings_metadata_hint', {
-              defaultValue: 'Tags describe records. Processing defaults now live in Automation profiles and rules.',
+            {t('projects.project_settings_hint', {
+              defaultValue: 'Configure project details and its processing pipeline.',
             })}
           </p>
         </div>
@@ -64,14 +66,9 @@ export function ProjectSettingsModal({
       footer={
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '12px' }}>
           <button type="button" className="btn btn-danger" onClick={() => void onDelete()}>
-            {t('projects.delete_tag', { defaultValue: 'Delete Tag' })}
+            {t('projects.delete_project', { defaultValue: 'Delete Project' })}
           </button>
           <div style={{ display: 'flex', gap: 'var(--spacing-sm)', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {onOpenAutomation && (
-              <button type="button" className="btn btn-secondary" onClick={() => onOpenAutomation(project.id)}>
-                {t('automation.open_for_tag', { defaultValue: 'Open Tag automation' })}
-              </button>
-            )}
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               {t('common.cancel', { defaultValue: 'Cancel' })}
             </button>
@@ -83,9 +80,20 @@ export function ProjectSettingsModal({
       }
     >
       <div className="settings-content-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+        {draftPipeline && onPipelineChange && (
+          <div className="projects-field">
+            <label>{t('projects.pipeline', { defaultValue: 'Pipeline' })}</label>
+            {(['autoPolish', 'autoTranslate', 'autoSummary', 'autoExport'] as const).map((key) => (
+              <label key={key} style={{ display: 'flex', gap: 8 }}>
+                <input type="checkbox" checked={Boolean(draftPipeline[key])} onChange={(e) => onPipelineChange({ ...draftPipeline, [key]: e.target.checked })} />
+                {key === 'autoPolish' ? 'Polish' : key === 'autoTranslate' ? 'Translate' : key === 'autoSummary' ? 'Summary' : 'Auto export'}
+              </label>
+            ))}
+          </div>
+        )}
         <div className="projects-field">
           <label htmlFor="project-settings-name">
-            {t('projects.tag_name', { defaultValue: 'Tag Name' })}
+            {t('projects.project_name', { defaultValue: 'Project name' })}
           </label>
           <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
             <IconPicker icon={draftIcon} onChange={onIconChange} defaultIcon={<FolderIcon />} />
@@ -96,7 +104,7 @@ export function ProjectSettingsModal({
               style={{ flex: 1 }}
               value={draftName}
               onChange={(event) => onNameChange(event.target.value)}
-              placeholder={t('projects.new_tag_name', { defaultValue: 'Tag name' })}
+              placeholder={t('projects.new_project_name', { defaultValue: 'Project name' })}
               autoFocus
             />
           </div>

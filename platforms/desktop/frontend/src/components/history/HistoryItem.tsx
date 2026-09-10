@@ -159,7 +159,7 @@ function HistoryItemComponent({
         <span className="history-item-tag-chips">
             {visibleTags.length === 0 && (
                 <span className="history-item-project-badge">
-                    {t('projects.untagged', { defaultValue: 'Untagged' })}
+                    {t('projects.inbox', { defaultValue: 'Inbox' })}
                 </span>
             )}
             {visibleTags.map((tag) => (

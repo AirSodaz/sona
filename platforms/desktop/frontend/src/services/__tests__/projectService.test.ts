@@ -8,20 +8,18 @@ const tauriProjectMocks = vi.hoisted(() => ({
   projectGetActiveId: vi.fn(),
   projectList: vi.fn(),
   projectReorder: vi.fn(),
-  projectSaveAll: vi.fn(),
   projectSetActiveId: vi.fn(),
   projectUpdate: vi.fn(),
 }));
 
-vi.mock('../tauri/tag', () => ({
-  tagCreate: tauriProjectMocks.projectCreate,
-  tagDelete: tauriProjectMocks.projectDelete,
-  tagGetActiveId: tauriProjectMocks.projectGetActiveId,
-  tagList: tauriProjectMocks.projectList,
-  tagReorder: tauriProjectMocks.projectReorder,
-  tagSaveAll: tauriProjectMocks.projectSaveAll,
-  tagSetActiveId: tauriProjectMocks.projectSetActiveId,
-  tagUpdate: tauriProjectMocks.projectUpdate,
+vi.mock('../tauri/project', () => ({
+  projectCreate: tauriProjectMocks.projectCreate,
+  projectDelete: tauriProjectMocks.projectDelete,
+  projectGetActiveId: tauriProjectMocks.projectGetActiveId,
+  projectList: tauriProjectMocks.projectList,
+  projectReorder: tauriProjectMocks.projectReorder,
+  projectSetActiveId: tauriProjectMocks.projectSetActiveId,
+  projectUpdate: tauriProjectMocks.projectUpdate,
 }));
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
@@ -54,7 +52,6 @@ describe('projectService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     tauriProjectMocks.projectList.mockResolvedValue([]);
-    tauriProjectMocks.projectSaveAll.mockResolvedValue(undefined);
     tauriProjectMocks.projectCreate.mockResolvedValue(project);
     tauriProjectMocks.projectUpdate.mockResolvedValue(project);
     tauriProjectMocks.projectDelete.mockResolvedValue(undefined);
@@ -89,14 +86,13 @@ describe('projectService', () => {
     expect(activeProjectId).toBe('project-1');
     expect(tauriProjectMocks.projectList.mock.calls[0]).toEqual([]);
     expect(tauriProjectMocks.projectList).toHaveBeenNthCalledWith(2);
-    expect(tauriProjectMocks.projectSaveAll).toHaveBeenCalledWith([project]);
     expect(tauriProjectMocks.projectCreate).toHaveBeenCalledWith({
       name: 'Research',
       description: 'Notes',
       icon: 'folder',
     });
     expect(tauriProjectMocks.projectUpdate).toHaveBeenCalledWith('project-1', { name: 'Updated' });
-    expect(tauriProjectMocks.projectDelete).toHaveBeenCalledWith('project-1');
+    expect(tauriProjectMocks.projectDelete).toHaveBeenCalledWith('project-1', 'moveToInbox');
     expect(tauriProjectMocks.projectReorder).toHaveBeenCalledWith(['project-1']);
     expect(tauriProjectMocks.projectGetActiveId).toHaveBeenCalledTimes(1);
     expect(tauriProjectMocks.projectSetActiveId).toHaveBeenCalledWith(null);

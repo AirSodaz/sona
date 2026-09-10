@@ -7,7 +7,6 @@ import type {
   AutomationRuntimeState,
   AutomationStageConfig,
 } from '../../types/automation';
-import type { AppConfig } from '../../types/config';
 import type {
   AutomationRuntimeCandidatePayload,
   AutomationRuntimePathCollectionResult,
@@ -19,7 +18,7 @@ import type {
   AutomationSessionNotification,
 } from './automationSessionState';
 import { resolveEffectiveConfig } from '../effectiveConfigService';
-import { resolveAutomationQueueSnapshot } from './automationConfigResolver';
+import { resolveItemPipeline } from '../projectPipeline';
 import { isPathInsideDirectory, normalizeAutomationPath } from '../automation/automationService';
 import {
   collectAutomationRuntimeRulePaths,
@@ -148,6 +147,7 @@ export class AutomationRuntimeCoordinator {
     payload: AutomationRuntimeCandidatePayload,
     options?: HandleAutomationRuntimeCandidateOptions,
   ): Promise<AutomationRuntimeCandidateHandleResult> => {
+    void options;
     const occurredAt = Date.now();
     const initialState = this.ports.getState();
     const rule = initialState.rules.find((item) => item.id === payload.ruleId);
@@ -204,94 +204,25 @@ export class AutomationRuntimeCoordinator {
       return { status: 'blocked', reason: 'already_pending' };
     }
 
-    const tagIds = latestRule.tagIds ?? (
-      latestRule.projectId && latestRule.projectId !== 'inbox' && latestRule.projectId !== 'none'
-        ? [latestRule.projectId]
-        : []
-    );
-    const projectStore = this.ports.useProjectStore.getState();
-    const tags = tagIds
-      .map((tagId) => projectStore.getProjectById(tagId))
-      .filter((tag): tag is NonNullable<typeof tag> => !!tag);
-    if (tags.length !== tagIds.length) {
-      this.ports.setState((current) => {
-        if (options?.suppressFailureNotification) {
-          const runtimeStatesWithError = {
-            ...current.runtimeStates,
-            [payload.ruleId]: this.ports.deriveRuntimeState(
-              payload.ruleId,
-              current.processedEntries,
-              current.runtimeStates[payload.ruleId],
-              {
-                status: 'error',
-                lastResult: 'error',
-                lastResultMessage: 'Tag not found.',
-                lastProcessedFilePath: payload.filePath,
-              },
-            ),
-          };
-
-          return {
-            runtimeStates: this.ports.applyRuntimeBlockState(
-              {
-                processedEntries: current.processedEntries,
-                runtimeStates: runtimeStatesWithError,
-              },
-              {
-                ruleId: payload.ruleId,
-                filePath: payload.filePath,
-                reason: 'project_missing',
-                occurredAt,
-              },
-            ).runtimeStates,
-          };
-        }
-
-        const nextFailureState = this.ports.applyRuntimeFailureState(current, {
-          ruleId: payload.ruleId,
-          ruleName: latestRule.name,
-          message: 'Tag not found.',
-          filePath: payload.filePath,
-        });
-
-        return {
-          ...nextFailureState,
-          ...this.ports.applyRuntimeBlockState(
-            {
-              processedEntries: current.processedEntries,
-              runtimeStates: nextFailureState.runtimeStates,
-            },
-            {
-              ruleId: payload.ruleId,
-              filePath: payload.filePath,
-              reason: 'project_missing',
-              occurredAt,
-            },
-          ),
-        };
-      });
-      return { status: 'blocked', reason: 'project_missing' };
-    }
-
     this.pendingFingerprints.add(pendingKey);
-    let effectiveConfig: AppConfig;
-    let resolvedStageConfig: AutomationStageConfig;
-    let automationResolutionSnapshot: AutomationResolutionSnapshot;
-    try {
-      const snapshot = resolveAutomationQueueSnapshot({
-        globalConfig: this.ports.useConfigStore.getState().config,
-        profiles: latestState.profiles,
-        rules: latestState.rules,
-        fileRule: latestRule,
-        tagIds,
-      });
-      effectiveConfig = snapshot.config;
-      resolvedStageConfig = snapshot.stageConfig;
-      automationResolutionSnapshot = snapshot.resolution;
-    } catch (error) {
-      this.pendingFingerprints.delete(pendingKey);
-      throw error;
-    }
+    const effectiveConfig = this.ports.useConfigStore.getState().config;
+    const projectId = latestRule.projectId && latestRule.projectId !== 'inbox' && latestRule.projectId !== 'none'
+      ? latestRule.projectId : null;
+    const pipeline = resolveItemPipeline(projectId, this.ports.useProjectStore.getState().projects, effectiveConfig);
+    const resolvedStageConfig: AutomationStageConfig = {
+      autoPolish: pipeline.autoPolish,
+      polishPresetId: pipeline.polishPresetId,
+      autoTranslate: pipeline.autoTranslate,
+      translationLanguage: pipeline.targetLanguage,
+      autoSummary: pipeline.autoSummary,
+      exportEnabled: pipeline.autoExport || latestRule.stageConfig.exportEnabled,
+    };
+    const automationResolutionSnapshot: AutomationResolutionSnapshot = {
+      fileRuleId: latestRule.id,
+      profileSource: 'global',
+      actions: { autoPolish: pipeline.autoPolish, autoTranslate: pipeline.autoTranslate, autoSummary: pipeline.autoSummary },
+      resolvedAt: Date.now(),
+    };
 
     try {
       this.ports.useBatchQueueStore.getState().addFiles([payload.filePath], {
@@ -303,7 +234,8 @@ export class AutomationRuntimeCoordinator {
         stageConfig: resolvedStageConfig,
         automationResolutionSnapshot,
         sourceFingerprint: payload.sourceFingerprint,
-        tagIds,
+        projectId,
+        pipelineSnapshot: pipeline,
         fileStat: {
           size: payload.size,
           mtimeMs: payload.mtimeMs,

@@ -197,8 +197,8 @@ export function ProjectsRail({
             type="button"
             className="btn btn-icon projects-rail-create"
             onClick={onOpenCreateModal}
-            aria-label={t('projects.new_tag_button', { defaultValue: 'New Tag' })}
-            data-tooltip={t('projects.new_tag_button', { defaultValue: 'New Tag' })}
+            aria-label={t('projects.new_project_button', { defaultValue: 'New Project' })}
+            data-tooltip={t('projects.new_project_button', { defaultValue: 'New Project' })}
             data-tooltip-pos="bottom"
           >
             <PlusCircleIcon width={18} height={18} />
@@ -228,7 +228,7 @@ export function ProjectsRail({
         >
           <RailItemContent
             icon={renderScopeIcon(UNTAGGED_SCOPE)}
-            title={t('projects.untagged', { defaultValue: 'Untagged' })}
+            title={t('projects.inbox', { defaultValue: 'Inbox' })}
           />
           <span className="projects-rail-count">{inboxCount}</span>
         </button>

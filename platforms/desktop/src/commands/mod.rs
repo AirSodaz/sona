@@ -6,6 +6,7 @@ pub mod downloads;
 pub mod export;
 pub mod history;
 pub mod llm;
+pub mod project;
 pub mod storage;
 pub mod sync;
 pub mod system;
@@ -25,6 +26,13 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::tag::tag_reorder,
         crate::commands::tag::tag_get_active_id,
         crate::commands::tag::tag_set_active_id,
+        crate::commands::project::project_list,
+        crate::commands::project::project_create,
+        crate::commands::project::project_update,
+        crate::commands::project::project_delete,
+        crate::commands::project::project_reorder,
+        crate::commands::project::project_get_active_id,
+        crate::commands::project::project_set_active_id,
         crate::commands::storage::storage_get_usage_snapshot,
         crate::commands::storage::storage_clear_webview_browsing_data,
         crate::commands::storage::storage_get_directories,
@@ -44,7 +52,9 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::history::history_create_live_draft,
         crate::commands::history::history_complete_live_draft,
         crate::commands::history::history_save_recording,
+        crate::commands::history::history_save_recording_to_project,
         crate::commands::history::history_save_imported_file,
+        crate::commands::history::history_save_imported_file_to_project,
         crate::commands::history::history_delete_items,
         crate::commands::history::history_trash_items,
         crate::commands::history::history_restore_items,

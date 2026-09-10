@@ -79,13 +79,14 @@ pub async fn history_create_live_draft<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     id: Option<String>,
     audio_extension: String,
-    tag_ids: Vec<String>,
+    project_id: Option<String>,
     icon: Option<String>,
 ) -> Result<LiveRecordingDraftResult, String> {
     let request = HistoryCreateLiveDraftRequest {
         id,
         audio_extension,
-        tag_ids,
+        tag_ids: Vec::new(),
+        project_id,
         icon,
     };
     validate_history_input(&request)?;
@@ -123,7 +124,7 @@ pub async fn history_save_recording<R: Runtime>(
     state: State<'_, HistoryRepositoryState>,
     segments: Vec<TranscriptSegment>,
     duration: f64,
-    tag_ids: Vec<String>,
+    project_id: Option<String>,
     audio_bytes: Option<Vec<u8>>,
     native_audio_path: Option<String>,
     audio_extension: Option<String>,
@@ -131,7 +132,8 @@ pub async fn history_save_recording<R: Runtime>(
     let request = HistorySaveRecordingRequest {
         segments,
         duration,
-        tag_ids,
+        tag_ids: Vec::new(),
+        project_id,
         audio_bytes,
         native_audio_path,
         audio_extension,
@@ -147,6 +149,17 @@ pub async fn history_save_recording<R: Runtime>(
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
+pub async fn history_save_recording_to_project<R: Runtime>(
+    app: AppHandle<R>, state: State<'_, HistoryRepositoryState>, segments: Vec<TranscriptSegment>, duration: f64,
+    project_id: Option<String>, audio_bytes: Option<Vec<u8>>, native_audio_path: Option<String>, audio_extension: Option<String>,
+) -> Result<HistoryItemRecord, String> {
+    let request = HistorySaveRecordingRequest { segments, duration, tag_ids: Vec::new(), project_id, audio_bytes, native_audio_path, audio_extension };
+    validate_history_input(&request)?;
+    crate::platform::history_repository::run_history_mutation_file_task(&app, state.inner(), move |service| service.save_recording(request)).await
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn history_save_imported_file<R: Runtime>(
     app: AppHandle<R>,
     state: State<'_, HistoryRepositoryState>,
@@ -154,7 +167,7 @@ pub async fn history_save_imported_file<R: Runtime>(
     source_path: String,
     segments: Vec<TranscriptSegment>,
     duration: f64,
-    tag_ids: Vec<String>,
+    project_id: Option<String>,
     converted_source_path: Option<String>,
 ) -> Result<HistoryItemRecord, String> {
     let request = HistorySaveImportedFileRequest {
@@ -162,7 +175,8 @@ pub async fn history_save_imported_file<R: Runtime>(
         source_path,
         segments,
         duration,
-        tag_ids,
+        tag_ids: Vec::new(),
+        project_id,
         converted_source_path,
     };
     validate_history_input(&request)?;
@@ -269,6 +283,17 @@ pub async fn history_update_transcript<R: Runtime>(
         service.update_transcript(request)
     })
     .await
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn history_save_imported_file_to_project<R: Runtime>(
+    app: AppHandle<R>, state: State<'_, HistoryRepositoryState>, id: Option<String>, source_path: String,
+    segments: Vec<TranscriptSegment>, duration: f64, project_id: Option<String>, converted_source_path: Option<String>,
+) -> Result<HistoryItemRecord, String> {
+    let request = HistorySaveImportedFileRequest { id, source_path, segments, duration, tag_ids: Vec::new(), project_id, converted_source_path };
+    validate_history_input(&request)?;
+    crate::platform::history_repository::run_history_mutation_file_task(&app, state.inner(), move |service| service.save_imported_file(request)).await
 }
 
 #[tauri::command]

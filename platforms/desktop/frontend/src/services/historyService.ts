@@ -35,12 +35,12 @@ import {
     historyRestoreTranscriptDiffRows,
     historyResolveAudioPath,
     historySaveImportedFile,
+    historySaveImportedFileToProject,
+    historySaveRecordingToProject,
     historySaveRecording,
     historySaveSummary,
     historyUpdateItemMeta,
     historyUpdateProjectAssignments,
-    historyReplaceTagAssignments,
-    historyUpdateTagAssignments,
     historyUpdateTranscript,
 } from './tauri/history';
 import { convertManagedAudioFileSrc } from './tauri/platform/assets';
@@ -71,13 +71,6 @@ function inferAudioExtensionFromBlob(blob: Blob): string {
     return 'webm';
 }
 
-function normalizeTagIds(value: string[] | string | null | undefined): string[] {
-    if (Array.isArray(value)) {
-        return Array.from(new Set(value.filter((tagId) => typeof tagId === 'string' && tagId.trim())));
-    }
-    return typeof value === 'string' && value.trim() ? [value] : [];
-}
-
 export interface HistoryServicePorts {
     historyListItems: typeof historyListItems;
     historyCreateLiveDraft: typeof historyCreateLiveDraft;
@@ -101,12 +94,12 @@ export interface HistoryServicePorts {
     historyRestoreTranscriptDiffRows: typeof historyRestoreTranscriptDiffRows;
     historyResolveAudioPath: typeof historyResolveAudioPath;
     historySaveImportedFile: typeof historySaveImportedFile;
+    historySaveRecordingToProject?: typeof historySaveRecordingToProject;
+    historySaveImportedFileToProject?: typeof historySaveImportedFileToProject;
     historySaveRecording: typeof historySaveRecording;
     historySaveSummary: typeof historySaveSummary;
     historyUpdateItemMeta: typeof historyUpdateItemMeta;
     historyUpdateProjectAssignments: typeof historyUpdateProjectAssignments;
-    historyReplaceTagAssignments: typeof historyReplaceTagAssignments;
-    historyUpdateTagAssignments: typeof historyUpdateTagAssignments;
     historyUpdateTranscript: typeof historyUpdateTranscript;
     convertManagedAudioFileSrc: typeof convertManagedAudioFileSrc;
 }
@@ -121,14 +114,14 @@ export class HistoryService {
 
     async createLiveRecordingDraft(
         audioExtension: string,
-        tagIds: string[] | string | null = [],
+        projectId: string | null = null,
         icon: string | null = 'system:mic',
         id?: string,
     ): Promise<LiveRecordingDraftHandle> {
         const result = await this.ports.historyCreateLiveDraft(
             id ?? null,
             audioExtension,
-            normalizeTagIds(tagIds),
+            projectId,
             icon,
         );
 
@@ -160,77 +153,57 @@ export class HistoryService {
         absoluteWavPath: string,
         segments: TranscriptSegment[],
         duration: number,
-        tagIds: string[] | string | null = [],
+        projectId: string | null = null,
     ): Promise<HistoryItem | null> {
         logger.info('[History] Saving native recording...', { absoluteWavPath, segments: segments.length, duration });
-
         if (!segments || segments.length === 0) {
             logger.info('[History] Empty transcript, skipping save.');
             return null;
         }
-
         const item = await this.ports.historySaveRecording({
-            segments,
-            duration,
-            tagIds: normalizeTagIds(tagIds),
-            nativeAudioPath: absoluteWavPath,
+            segments, duration, projectId, nativeAudioPath: absoluteWavPath,
             audioExtension: inferAudioExtensionFromPath(absoluteWavPath, 'wav'),
         });
-
         return normalizeHistoryItem(item);
     }
 
-    async saveRecording(
-        audioBlob: Blob,
-        segments: TranscriptSegment[],
-        duration: number,
-        tagIds: string[] | string | null = [],
-    ): Promise<HistoryItem | null> {
+    async saveNativeRecordingToProject(absoluteWavPath: string, segments: TranscriptSegment[], duration: number, projectId: string | null): Promise<HistoryItem | null> {
+        if (this.ports.historySaveRecordingToProject) {
+            return normalizeHistoryItem(await this.ports.historySaveRecordingToProject({ segments, duration, projectId, nativeAudioPath: absoluteWavPath, audioExtension: inferAudioExtensionFromPath(absoluteWavPath, 'wav') }));
+        }
+        return this.saveNativeRecording(absoluteWavPath, segments, duration, projectId);
+    }
+
+    async saveRecording(audioBlob: Blob, segments: TranscriptSegment[], duration: number, projectId: string | null = null): Promise<HistoryItem | null> {
         logger.info('[History] Saving recording...', { blobSize: audioBlob.size, segments: segments.length, duration });
-
         if (!segments || segments.length === 0) {
             logger.info('[History] Empty transcript, skipping save.');
             return null;
         }
-
         const audioBytes = Array.from(new Uint8Array(await audioBlob.arrayBuffer()));
-
-        const item = await this.ports.historySaveRecording({
-            segments,
-            duration,
-            tagIds: normalizeTagIds(tagIds),
-            audioBytes,
-            audioExtension: inferAudioExtensionFromBlob(audioBlob),
-        });
-
+        const item = await this.ports.historySaveRecording({ segments, duration, projectId, audioBytes, audioExtension: inferAudioExtensionFromBlob(audioBlob) });
         return normalizeHistoryItem(item);
     }
 
-    async saveImportedFile(
-        filePath: string,
-        segments: TranscriptSegment[],
-        duration: number = 0,
-        convertedFilePath?: string,
-        tagIds: string[] | string | null = [],
-        id?: string,
-    ): Promise<HistoryItem | null> {
-        logger.info('[History] Saving imported file...', { filePath, segments: segments.length });
+    async saveRecordingToProject(audioBlob: Blob, segments: TranscriptSegment[], duration: number, projectId: string | null): Promise<HistoryItem | null> {
+        return this.saveRecording(audioBlob, segments, duration, projectId);
+    }
 
+    async saveImportedFile(filePath: string, segments: TranscriptSegment[], duration: number = 0, convertedFilePath?: string, projectId: string | null = null, id?: string): Promise<HistoryItem | null> {
+        logger.info('[History] Saving imported file...', { filePath, segments: segments.length });
         if (!segments || segments.length === 0) {
             logger.info('[History] Empty transcript, skipping save.');
             return null;
         }
-
-        const item = await this.ports.historySaveImportedFile({
-            sourcePath: filePath,
-            segments,
-            duration,
-            tagIds: normalizeTagIds(tagIds),
-            convertedSourcePath: convertedFilePath,
-            id: id ?? null,
-        });
-
+        const item = await this.ports.historySaveImportedFile({ sourcePath: filePath, segments, duration, projectId, convertedSourcePath: convertedFilePath, id: id ?? null });
         return normalizeHistoryItem(item);
+    }
+
+    async saveImportedFileToProject(filePath: string, segments: TranscriptSegment[], duration: number, convertedFilePath: string | undefined, projectId: string | null, id?: string): Promise<HistoryItem | null> {
+        if (this.ports.historySaveImportedFileToProject) {
+            return normalizeHistoryItem(await this.ports.historySaveImportedFileToProject({ id, sourcePath: filePath, segments, duration, projectId, convertedSourcePath: convertedFilePath }));
+        }
+        return this.saveImportedFile(filePath, segments, duration, convertedFilePath, projectId, id);
     }
 
     async deleteRecording(id: string): Promise<void> {
@@ -340,22 +313,6 @@ export class HistoryService {
         await this.ports.historyUpdateProjectAssignments(ids, projectId);
     }
 
-    async updateTagAssignments(
-        ids: string[],
-        addTagIds: string[],
-        removeTagIds: string[],
-    ): Promise<void> {
-        if (ids.length > 0) {
-            await this.ports.historyUpdateTagAssignments(ids, addTagIds, removeTagIds);
-        }
-    }
-
-    async replaceTagAssignments(ids: string[], tagIds: string[]): Promise<void> {
-        if (ids.length > 0) {
-            await this.ports.historyReplaceTagAssignments(ids, tagIds);
-        }
-    }
-
     async updateProjectAssignmentsByCurrentProject(
         currentProjectId: string,
         nextProjectId: string | null,
@@ -435,12 +392,12 @@ export const historyService = createHistoryService({
     historyRestoreTranscriptDiffRows,
     historyResolveAudioPath,
     historySaveImportedFile,
+    historySaveImportedFileToProject,
+    historySaveRecordingToProject,
     historySaveRecording,
     historySaveSummary,
     historyUpdateItemMeta,
     historyUpdateProjectAssignments,
-    historyReplaceTagAssignments,
-    historyUpdateTagAssignments,
     historyUpdateTranscript,
     convertManagedAudioFileSrc,
 });

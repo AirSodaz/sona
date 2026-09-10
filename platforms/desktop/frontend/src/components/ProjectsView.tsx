@@ -9,7 +9,7 @@ import { ProjectsRail } from './projects/ProjectsRail';
 import { ProjectsResults } from './projects/ProjectsResults';
 import { ProjectsSelectionBar } from './projects/ProjectsSelectionBar';
 import { ProjectsToolbar } from './projects/ProjectsToolbar';
-import { TagAssignmentModal } from './projects/TagAssignmentModal';
+import { ProjectAssignmentModal } from './projects/ProjectAssignmentModal';
 import { useProjectSettingsDraft } from './projects/hooks/useProjectSettingsDraft';
 import { useWorkspaceBrowseState } from './projects/hooks/useWorkspaceBrowseState';
 import { useWorkspaceSelectionState } from './projects/hooks/useWorkspaceSelectionState';
@@ -98,7 +98,7 @@ function createWorkspaceMenuRevision(
   });
 }
 
-export function ProjectsView({ isActive = true, onOpenAutomationSettings }: ProjectsViewProps): React.JSX.Element {
+export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.Element {
   const { t } = useTranslation();
   const { activeContextId, closeContextMenu, openContextMenu } = useContextMenu();
   const projects = useProjectStore((state) => state.projects);
@@ -134,7 +134,7 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(sourceHistoryId);
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
-  const [tagAssignmentIds, setTagAssignmentIds] = useState<string[]>([]);
+  const [projectAssignmentIds, setProjectAssignmentIds] = useState<string[]>([]);
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const workspaceMenuSnapshotRef = useRef<WorkspaceMenuSnapshot | null>(null);
@@ -358,10 +358,10 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
     const candidates = new Map<string, HistoryItemType>();
     historyItems.forEach((item) => candidates.set(item.id, item));
     browseState.filteredAndSortedItems.forEach((item) => candidates.set(item.id, item));
-    return tagAssignmentIds
+    return projectAssignmentIds
       .map((id) => candidates.get(id))
       .filter((item): item is HistoryItemType => !!item && item.deletedAt == null);
-  }, [browseState.filteredAndSortedItems, historyItems, tagAssignmentIds]);
+  }, [browseState.filteredAndSortedItems, historyItems, projectAssignmentIds]);
 
   useEffect(() => {
     if (effectiveSelectedHistoryId === null && selectedHistoryId) {
@@ -626,11 +626,11 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
       ] : [
         {
           id: 'tags',
-          label: t('projects.edit_tags', { defaultValue: 'Edit Tags' }),
+          label: t('projects.assign_project', { defaultValue: 'Assign Project' }),
           icon: <Tags size={16} />,
           disabled: isLockedLiveDraft,
           onSelect: () => {
-            setTagAssignmentIds([id]);
+            setProjectAssignmentIds([id]);
           },
         },
         {
@@ -943,7 +943,7 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
               isTrashScope={browseState.isTrashScope}
               onCancel={handleToggleSelectionMode}
               onDeleteSelected={() => void handleDeleteSelected()}
-              onEditTags={() => setTagAssignmentIds(selectionState.selectedIds)}
+              onAssignProject={() => setProjectAssignmentIds(selectionState.selectedIds)}
               onRestoreSelected={() => void handleRestoreHistoryItems(selectionState.selectedIds)}
               onToggleSelectAll={selectionState.handleToggleSelectAll}
               selectedIds={selectionState.selectedIds}
@@ -1021,7 +1021,6 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
         onDescriptionChange={projectSettingsDraft.setDraftDescription}
         onIconChange={projectSettingsDraft.setDraftIcon}
         onColorChange={projectSettingsDraft.setDraftColor}
-        onOpenAutomation={onOpenAutomationSettings}
       />
 
       <RenameModal
@@ -1044,13 +1043,13 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
         }}
       />
 
-      <TagAssignmentModal
-        isOpen={tagAssignmentIds.length > 0}
+      <ProjectAssignmentModal
+        isOpen={projectAssignmentIds.length > 0}
         items={tagAssignmentItems}
-        tags={projects}
-        onClose={() => setTagAssignmentIds([])}
-        onApply={async (addTagIds, removeTagIds) => {
-          await historyService.updateTagAssignments(tagAssignmentIds, addTagIds, removeTagIds);
+        projects={projects}
+        onClose={() => setProjectAssignmentIds([])}
+        onApply={async (projectId) => {
+          await useProjectStore.getState().moveItemsToProject(projectAssignmentIds, projectId);
           await refreshHistory();
           selectionState.clearSelection();
         }}

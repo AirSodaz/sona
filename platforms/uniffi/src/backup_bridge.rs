@@ -412,6 +412,7 @@ mod tests {
                 .unwrap(),
                 duration: 1.0,
                 tag_ids: vec!["backup-project".to_string()],
+                project_id: Some("backup-project".to_string()),
                 audio_bytes: Some(vec![1, 2, 3]),
                 native_audio_path: None,
                 audio_extension: None,

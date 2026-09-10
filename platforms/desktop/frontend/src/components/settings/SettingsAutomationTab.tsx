@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SlidersHorizontal, Tags, FolderSync, Activity, Sparkles } from 'lucide-react';
+import { SlidersHorizontal, FolderSync, Activity, Sparkles } from 'lucide-react';
 import { AutomationIcon } from '../Icons';
 import { useAutomationStore } from '../../stores/automationStore';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
@@ -53,8 +53,6 @@ export function SettingsAutomationTab(): React.JSX.Element {
     const saveProfile = useAutomationStore((state) => state.saveProfile);
     const deleteProfile = useAutomationStore((state) => state.deleteProfile);
     const applyTagRuleToExisting = useAutomationStore((state) => state.applyTagRuleToExisting);
-    const focusTagId = useAutomationStore((state) => state.focusTagId);
-    const setFocusTagId = useAutomationStore((state) => state.setFocusTagId);
     const queueItems = useBatchQueueStore((state) => state.queueItems);
     const config = useConfigStore((state) => state.config);
     const projects = useProjectStore((state) => state.projects);
@@ -63,10 +61,10 @@ export function SettingsAutomationTab(): React.JSX.Element {
     const showError = useDialogStore((state) => state.showError);
     const [expandedRuleIds, setExpandedRuleIds] = useState<Set<string>>(new Set());
     const [drafts, setDrafts] = useState<Record<string, AutomationRuleDraft>>({});
-    const [selectedSection, setSelectedSection] = useState<'profiles' | 'tag' | 'file'>('file');
+    const [selectedSection, setSelectedSection] = useState<'profiles' | 'file'>('file');
     const [profileDrafts, setProfileDrafts] = useState<Record<string, AutomationProfileDraft>>({});
     const [expandedProfileIds, setExpandedProfileIds] = useState<Set<string>>(new Set());
-    const activeSection = focusTagId ? 'tag' : selectedSection;
+    const activeSection = selectedSection;
 
     const queueSummaryByRuleId = useMemo(() => {
         const summary = new Map<string, { pending: number; processing: number }>();
@@ -124,9 +122,8 @@ export function SettingsAutomationTab(): React.JSX.Element {
     const visibleRules = useMemo(
         () => rules.filter((rule) => (
             (rule.kind ?? 'file') === activeSection
-            && (activeSection !== 'tag' || !focusTagId || (rule.tagIds || []).includes(focusTagId))
         )),
-        [activeSection, focusTagId, rules],
+        [activeSection, rules],
     );
 
     const exportFormatOptions = useMemo<SelectOption[]>(() => ([
@@ -274,7 +271,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
         });
     };
 
-    const beginCreateRule = (kind: 'tag' | 'file' = activeSection === 'tag' ? 'tag' : 'file') => {
+    const beginCreateRule = (kind: 'file' = 'file') => {
         ensureDraft(NEW_RULE_KEY, createRuleDraft('inbox', kind));
         setExpandedRuleIds((current) => new Set(current).add(NEW_RULE_KEY));
     };
@@ -603,14 +600,6 @@ export function SettingsAutomationTab(): React.JSX.Element {
                         icon: <SlidersHorizontal size={18} />,
                     },
                     {
-                        id: 'tag' as const,
-                        label: t('automation.tag_rules', { defaultValue: 'Tag Automation' }),
-                        description: t('automation.tag_rules_tab_description', {
-                            defaultValue: 'Run polish, translation, and summary by Tag priority',
-                        }),
-                        icon: <Tags size={18} />,
-                    },
-                    {
                         id: 'file' as const,
                         label: t('automation.file_rules', { defaultValue: 'File Automation' }),
                         description: t('automation.file_rules_tab_description', {
@@ -631,7 +620,6 @@ export function SettingsAutomationTab(): React.JSX.Element {
                             className={`settings-scenario-card${isSelected ? ' active' : ''}`}
                             onClick={() => {
                                 setSelectedSection(id);
-                                if (id !== 'tag') setFocusTagId(null);
                                 closeDraft(NEW_RULE_KEY);
                             }}
                         >
@@ -718,50 +706,20 @@ export function SettingsAutomationTab(): React.JSX.Element {
                 </SettingsSection>
             ) : (
                 <SettingsSection
-                    title={activeSection === 'tag'
-                        ? t('automation.tag_rules', { defaultValue: 'Tag Automation' })
-                        : t('automation.file_rules', { defaultValue: 'File Automation' })}
-                    description={activeSection === 'tag'
-                        ? t('automation.tag_rules_description', {
-                            defaultValue: 'The highest-priority matching rule runs polish, translation, and summary after transcription. Tag automation never exports.',
-                        })
-                        : t('automation.file_rules_description', {
-                            defaultValue: 'Watch folders, transcribe files, resolve Tag post-processing, then export with this file rule.',
-                        })}
+                    title={t('automation.file_rules', { defaultValue: 'File Automation' })}
+                    description={t('automation.file_rules_description', {
+                        defaultValue: 'Watch folders, transcribe files, apply the project pipeline, then export with this file rule.',
+                    })}
                 >
-                    {activeSection === 'tag' && focusTagId && (
-                        <div className="settings-item-container layout-horizontal">
-                            <div className="settings-item-info">
-                                <div className="settings-item-title">
-                                    {t('automation.filtered_tag', {
-                                        defaultValue: 'Filtered by Tag: {{name}}',
-                                        name: projects.find((project) => project.id === focusTagId)?.name || focusTagId,
-                                    })}
-                                </div>
-                                <div className="settings-item-hint">
-                                    {t('automation.filtered_tag_hint', { defaultValue: 'Only rules that match this Tag are shown.' })}
-                                </div>
-                            </div>
-                            <div className="settings-item-action">
-                                <button className="btn btn-secondary" onClick={() => setFocusTagId(null)}>
-                                    {t('common.clear_filter', { defaultValue: 'Clear filter' })}
-                                </button>
-                            </div>
-                        </div>
-                    )}
                     <div className="settings-item-container layout-horizontal">
                         <div className="settings-item-info">
                             <div className="settings-item-title">
                                 {t('automation.rule_count', { defaultValue: '{{count}} rules configured.', count: visibleRules.length })}
                             </div>
                             <div className="settings-item-hint">
-                                {activeSection === 'tag'
-                                    ? t('automation.tag_list_hint', {
-                                        defaultValue: 'A record uses one complete matching rule. Equal priorities are ordered by stable rule ID.',
-                                    })
-                                    : t('automation.file_list_hint', {
-                                        defaultValue: 'File profile selection overrides Tag-matched profiles, then falls back to global settings.',
-                                    })}
+                                {t('automation.file_list_hint', {
+                                    defaultValue: 'File profile selection falls back to the active project pipeline and global settings.',
+                                })}
                             </div>
                         </div>
                         <div className="settings-item-action">
@@ -780,7 +738,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
                             projectLabel={visibleNewRuleDraft.saveHistory
                                 ? visibleNewRuleDraft.tagIds
                                     .map((tagId) => projectOptions.find((option) => option.value === tagId)?.label)
-                                    .filter(Boolean).join(', ') || t('projects.untagged', { defaultValue: 'Untagged' })
+                                    .filter(Boolean).join(', ') || t('projects.inbox', { defaultValue: 'Inbox' })
                                 : t('automation.history_disabled', { defaultValue: 'History off' })}
                             profileLabel={profileOptions.find((option) => option.value === (visibleNewRuleDraft.profileId || ''))?.label}
                             priorityLabel={visibleNewRuleDraft.kind === 'tag'
@@ -804,13 +762,9 @@ export function SettingsAutomationTab(): React.JSX.Element {
                                     {t('automation.empty_title', { defaultValue: 'No automation rules yet.' })}
                                 </div>
                                 <div className="settings-item-hint">
-                                    {activeSection === 'tag'
-                                        ? t('automation.tag_empty_hint', {
-                                            defaultValue: 'Add a rule to run post-processing when a transcription has any matching Tag.',
-                                        })
-                                        : t('automation.file_empty_hint', {
-                                            defaultValue: 'Add a rule to watch a folder, transcribe new files, and export the results.',
-                                        })}
+                                    {t('automation.file_empty_hint', {
+                                        defaultValue: 'Add a rule to watch a folder, transcribe new files, and export the results.',
+                                    })}
                                 </div>
                             </div>
                         </div>
@@ -830,7 +784,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
                                 projectLabel={displayRule.saveHistory
                                     ? displayRule.tagIds
                                         .map((tagId) => projectOptions.find((option) => option.value === tagId)?.label)
-                                        .filter(Boolean).join(', ') || t('projects.untagged', { defaultValue: 'Untagged' })
+                                        .filter(Boolean).join(', ') || t('projects.inbox', { defaultValue: 'Inbox' })
                                     : t('automation.history_disabled', { defaultValue: 'History off' })}
                                 profileLabel={profileOptions.find((option) => option.value === (displayRule.profileId || ''))?.label}
                                 priorityLabel={displayRule.kind === 'tag'

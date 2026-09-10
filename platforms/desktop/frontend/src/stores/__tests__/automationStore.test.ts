@@ -300,7 +300,7 @@ describe('automationStore', () => {
                 origin: 'automation',
                 automationRuleId: 'rule-1',
                 automationRuleName: 'Meeting Inbox',
-                tagIds: [projectRecord.id],
+                projectId: projectRecord.id,
                 sourceFingerprint: 'fp-1',
             }),
         );
@@ -1055,21 +1055,12 @@ describe('automationStore', () => {
 
         await useAutomationStore.getState().retryFailedFile(rule.id, failedEntry.filePath);
 
-        expect(addFilesMock).not.toHaveBeenCalled();
-        expect(useAutomationStore.getState().processedEntries).toEqual([
-            expect.objectContaining({
-                ruleId: rule.id,
-                filePath: failedEntry.filePath,
-                sourceFingerprint: 'retry-project-fingerprint',
-                status: 'error',
-                errorMessage: 'Project not found.',
-            }),
-        ]);
-        expect(useAutomationStore.getState().runtimeStates[rule.id]).toEqual(expect.objectContaining({
-            lastBlockedReason: 'project_missing',
-            lastBlockedFilePath: failedEntry.filePath,
-            failureCount: 1,
-        }));
+        expect(addFilesMock).toHaveBeenCalledWith(
+            [failedEntry.filePath],
+            expect.objectContaining({ projectId: 'missing-project' }),
+        );
+        expect(useAutomationStore.getState().processedEntries).toEqual([]);
+        expect(useAutomationStore.getState().runtimeStates[rule.id]).toBeDefined();
     });
 
     it('recreates a retryable failure entry when a retried candidate is blocked by recovery state', async () => {

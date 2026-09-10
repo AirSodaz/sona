@@ -942,6 +942,23 @@ export type DiagnosticsCoreSnapshot = {
 	punctuationRequired: boolean,
 };
 
+export type EffectivePipelineSnapshot = {
+	isProjectPipeline: boolean,
+	autoPolish: boolean,
+	polishPresetId: string | null,
+	polishPromptOverride: string | null,
+	autoTranslate: boolean,
+	targetLanguage: string | null,
+	autoSummary: boolean,
+	summaryTemplateId: string | null,
+	hotwordSetIds: string[],
+	replacementSetIds: string[],
+	autoExport: boolean,
+	exportFormat: string | null,
+	exportDirectory: string | null,
+	exportFileNamePrefix: string | null,
+};
+
 /**  Supported transcript export formats for every Sona frontend. */
 export type ExportFormat = "json" | "txt" | "srt" | "vtt" | "md";
 
@@ -1043,6 +1060,7 @@ export type HistoryCreateLiveDraftRequest = {
 	id: string | null,
 	audioExtension: string,
 	tagIds?: string[],
+	projectId: string | null,
 	icon: string | null,
 };
 
@@ -1112,6 +1130,11 @@ export type HistoryItemRecord = {
 	icon: string | null,
 	type: HistoryItemKind,
 	searchContent: string,
+	projectId: string | null,
+	/**
+	 *  Single project ownership. `tag_ids` is retained only for legacy backup
+	 *  decoding and is not used by new runtime code.
+	 */
 	tagIds?: string[],
 	deletedAt?: number | null,
 	status: HistoryItemStatus,
@@ -1133,6 +1156,7 @@ export type HistorySaveImportedFileRequest_Deserialize = {
 	segments: TranscriptSegment_Deserialize[],
 	duration: number,
 	tagIds?: string[],
+	projectId: string | null,
 	convertedSourcePath?: string | null,
 };
 
@@ -1142,6 +1166,7 @@ export type HistorySaveImportedFileRequest_Serialize = {
 	segments: TranscriptSegment_Serialize[],
 	duration: number,
 	tagIds?: string[],
+	projectId: string | null,
 	convertedSourcePath?: string | null,
 };
 
@@ -1151,6 +1176,7 @@ export type HistorySaveRecordingRequest_Deserialize = {
 	segments: TranscriptSegment_Deserialize[],
 	duration: number,
 	tagIds?: string[],
+	projectId: string | null,
 	audioBytes?: number[] | null,
 	nativeAudioPath?: string | null,
 	audioExtension?: string | null,
@@ -1160,6 +1186,7 @@ export type HistorySaveRecordingRequest_Serialize = {
 	segments: TranscriptSegment_Serialize[],
 	duration: number,
 	tagIds?: string[],
+	projectId: string | null,
 	audioBytes?: number[] | null,
 	nativeAudioPath?: string | null,
 	audioExtension?: string | null,
@@ -1218,8 +1245,10 @@ export type HistoryWorkspaceFilterType = "all" | "recording" | "batch";
 
 export type HistoryWorkspaceItemCounts = {
 	untagged: number,
+	inbox?: number,
 	trash: number,
 	byTagId: { [key in string]: number },
+	byProjectId?: { [key in string]: number },
 };
 
 export type HistoryWorkspaceItemSearchMatch = {
@@ -1247,7 +1276,7 @@ export type HistoryWorkspaceQueryResult = {
 	itemCounts: HistoryWorkspaceItemCounts,
 };
 
-export type HistoryWorkspaceScope = { kind: "all" } | { kind: "untagged" } | { kind: "tag"; tagId: string } | { kind: "trash" };
+export type HistoryWorkspaceScope = { kind: "all" } | { kind: "inbox" } | { kind: "project"; projectId: string } | { kind: "trash" };
 
 export type HistoryWorkspaceSearchRange = {
 	start: number,
@@ -1946,6 +1975,65 @@ export type PresetModelArtifact = {
 	sha256: string | null,
 	/**  Exact byte size when known; archives publish without one. */
 	sizeBytes: number | null,
+};
+
+export type ProjectCreateInput = {
+	name?: string,
+	description?: string | null,
+	icon?: string | null,
+	color?: string | null,
+	pipeline?: ProjectPipelineConfig | null,
+};
+
+export type ProjectPipelineConfig = {
+	enabled?: boolean,
+	autoPolish?: boolean,
+	polishPresetId?: string | null,
+	polishPromptOverride?: string | null,
+	autoTranslate?: boolean,
+	targetLanguage?: string | null,
+	autoSummary?: boolean,
+	summaryTemplateId?: string | null,
+	hotwordSetIds?: string[],
+	replacementSetIds?: string[],
+	autoExport?: boolean,
+	exportFormat?: string | null,
+	exportDirectory?: string | null,
+	exportFileNamePrefix?: string | null,
+};
+
+export type ProjectRecord = ProjectRecord_Serialize | ProjectRecord_Deserialize;
+
+export type ProjectRecord_Deserialize = {
+	id: string,
+	name: string,
+	description?: string,
+	icon?: string | null,
+	color?: string | null,
+	sortOrder: number,
+	createdAt: number,
+	updatedAt: number,
+	pipeline?: ProjectPipelineConfig | null,
+};
+
+export type ProjectRecord_Serialize = {
+	id: string,
+	name: string,
+	description: string,
+	icon: string | null,
+	color: string | null,
+	sortOrder: number,
+	createdAt: number,
+	updatedAt: number,
+	pipeline?: ProjectPipelineConfig | null,
+};
+
+export type ProjectUpdateInput = {
+	name?: string | null,
+	description?: string | null,
+	icon?: string | null,
+	color?: string | null,
+	pipeline?: ProjectPipelineConfig | null,
 };
 
 export type ProjectsViewMode = "list" | "grid" | "table";
@@ -2877,6 +2965,34 @@ export type WebviewCacheUsageCategory_Serialize = {
 };
 
 export type RustTauriCommandContractMap = {
+	"project_list": {
+		args: undefined;
+		result: ProjectRecord[];
+	};
+	"project_create": {
+		args: { input: ProjectCreateInput };
+		result: ProjectRecord;
+	};
+	"project_update": {
+		args: { projectId: string; updates: ProjectUpdateInput };
+		result: ProjectRecord | null;
+	};
+	"project_delete": {
+		args: { projectId: string; cascadeAction?: string };
+		result: void;
+	};
+	"project_reorder": {
+		args: { projectIds: string[] };
+		result: ProjectRecord[];
+	};
+	"project_get_active_id": {
+		args: undefined;
+		result: string | null;
+	};
+	"project_set_active_id": {
+		args: { projectId: string | null };
+		result: void;
+	};
 	"tag_list": {
 		args: { fallbackEnabledPolishKeywordSetIds?: string[] | null; fallbackEnabledSpeakerProfileIds?: string[] | null };
 		result: TagRecord[];
@@ -2997,8 +3113,16 @@ export type RustTauriCommandContractMap = {
 		args: HistorySaveRecordingRequest_Deserialize;
 		result: HistoryItemRecord;
 	};
+	"history_save_recording_to_project": {
+		args: { segments: TranscriptSegment_Deserialize[]; duration: number; projectId: string | null; audioBytes?: number[] | null; nativeAudioPath?: string | null; audioExtension?: string | null };
+		result: HistoryItemRecord;
+	};
 	"history_save_imported_file": {
 		args: HistorySaveImportedFileRequest_Deserialize;
+		result: HistoryItemRecord;
+	};
+	"history_save_imported_file_to_project": {
+		args: { id?: string | null; sourcePath: string; segments: TranscriptSegment_Deserialize[]; duration: number; projectId: string | null; convertedSourcePath?: string | null };
 		result: HistoryItemRecord;
 	};
 	"history_delete_items": {

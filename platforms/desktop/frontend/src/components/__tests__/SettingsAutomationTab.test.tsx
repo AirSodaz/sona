@@ -115,11 +115,11 @@ describe('SettingsAutomationTab', () => {
 
     const expandRule = () => fireEvent.click(screen.getByText('Meeting Inbox').closest('button')!);
 
-    it('separates profile, Tag, and file automation and keeps export only in file rules', () => {
+    it('separates profile and file automation and keeps export only in file rules', () => {
         render(<SettingsAutomationTab />);
 
         screen.getByRole('tab', { name: 'Profiles' });
-        screen.getByRole('tab', { name: 'Tag Automation' });
+        expect(screen.queryByRole('tab', { name: 'Tag Automation' })).toBeNull();
         expect(screen.getByRole('tab', { name: 'File Automation' }).getAttribute('aria-selected')).toBe('true');
         expandRule();
         screen.getByRole('switch', { name: 'Auto-Export' });
@@ -151,31 +151,10 @@ describe('SettingsAutomationTab', () => {
         })));
     });
 
-    it('creates a Tag rule with priority, profile, and ordered post-processing actions but no export controls', async () => {
-        useAutomationStore.setState({ ...useAutomationStore.getState(), rules: [] });
+    it('does not expose legacy Tag automation rules', async () => {
         render(<SettingsAutomationTab />);
-        fireEvent.click(screen.getByRole('tab', { name: 'Tag Automation' }));
-        fireEvent.click(screen.getByRole('button', { name: 'New Rule' }));
-
-        fireEvent.change(screen.getByPlaceholderText('e.g. Weekly Meeting Inbox'), { target: { value: 'Meeting post-processing' } });
-        fireEvent.change(screen.getByRole('spinbutton', { name: 'Priority' }), { target: { value: '30' } });
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Team Sync' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Configuration Profile' }));
-        fireEvent.click(screen.getByRole('option', { name: 'Meetings' }));
-        fireEvent.click(screen.getByRole('switch', { name: 'Polish' }));
-        fireEvent.click(screen.getByRole('switch', { name: 'Translate' }));
-        fireEvent.click(screen.getByRole('switch', { name: 'Summarize' }));
-        expect(screen.queryByRole('switch', { name: 'Auto-Export' })).toBeNull();
-        fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
-
-        await waitFor(() => expect(saveRule).toHaveBeenCalledWith(expect.objectContaining({
-            kind: 'tag',
-            priority: 30,
-            profileId: 'profile-1',
-            tagIds: ['project-1'],
-            actions: { autoPolish: true, autoTranslate: true, autoSummary: true },
-            stageConfig: expect.objectContaining({ exportEnabled: false }),
-        })));
+        expect(screen.queryByRole('tab', { name: 'Tag Automation' })).toBeNull();
+        expect(saveRule).not.toHaveBeenCalled();
     });
 
     it('creates and duplicates reusable configuration profiles', async () => {
@@ -198,7 +177,7 @@ describe('SettingsAutomationTab', () => {
         })));
     });
 
-    it('runs Tag automation on existing records only after explicit confirmation', async () => {
+    it('does not offer legacy Tag automation replay for existing records', async () => {
         useAutomationStore.setState({
             ...useAutomationStore.getState(),
             rules: [createRule({
@@ -211,10 +190,7 @@ describe('SettingsAutomationTab', () => {
             })],
         });
         render(<SettingsAutomationTab />);
-        fireEvent.click(screen.getByRole('tab', { name: 'Tag Automation' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Apply to existing' }));
-
-        await waitFor(() => expect(applyTagRuleToExisting).toHaveBeenCalledWith('tag-rule'));
-        expect(alert).toHaveBeenCalledWith('Processed 2 matching records.', { variant: 'success' });
+        expect(screen.queryByRole('button', { name: 'Apply to existing' })).toBeNull();
+        expect(applyTagRuleToExisting).not.toHaveBeenCalled();
     });
 });

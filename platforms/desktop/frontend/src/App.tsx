@@ -11,8 +11,8 @@ import { ErrorDialog } from './components/ErrorDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
 import { NotificationCenter } from './components/NotificationCenter';
 import { SyncHeaderPill } from './components/SyncHeaderPill';
+import { ProjectSelectorDropdown } from './components/ProjectSelectorDropdown';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
-import { useProjectStore } from './stores/projectStore';
 import { useTranscriptPlaybackStore } from './stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from './stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from './stores/transcriptSessionStore';
@@ -99,10 +99,6 @@ function App(): React.JSX.Element {
   const audioUrl = useTranscriptPlaybackStore((state) => state.audioUrl);
   const reopenOnboarding = useOnboardingStore((state) => state.reopen);
 
-  const activeProjectId = useProjectStore((state) => state.activeProjectId);
-  const activeProject = useProjectStore((state) => 
-    state.projects.find((p) => p.id === activeProjectId) || null
-  );
 
   const { t } = useTranslation();
   const llmConfig = useLlmAssistantConfig();
@@ -247,15 +243,7 @@ function App(): React.JSX.Element {
       <header className="app-header">
         <div className="app-logo">
           <h1>Sona</h1>
-          {activeProject && (
-            <span 
-              className="current-project-tag" 
-              onClick={() => setMode('projects')}
-              title={t('projects.open_projects', { defaultValue: 'Open Workspace' })}
-            >
-              {activeProject.name}
-            </span>
-          )}
+          <ProjectSelectorDropdown onOpenProjects={() => setMode('projects')} />
         </div>
 
         <TabNavigation />

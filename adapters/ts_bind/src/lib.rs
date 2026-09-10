@@ -122,6 +122,7 @@ pub use sona_core::sync::{
     SyncProviderDescriptor, SyncRunResult, SyncStatusSnapshot, SyncVersion,
 };
 pub use sona_core::tag::{TagCreateInput, TagRecord, TagRepositorySnapshot, TagUpdateInput};
+pub use sona_core::project::{EffectivePipelineSnapshot, ProjectCreateInput, ProjectPipelineConfig, ProjectRecord, ProjectUpdateInput};
 pub use sona_core::task_ledger::types::{
     TaskLedgerKind, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
 };
@@ -653,6 +654,11 @@ pub fn desktop_types() -> specta::Types {
         .register::<TagUpdateInput>()
         .register::<TagRecord>()
         .register::<TagRepositorySnapshot>()
+        .register::<ProjectPipelineConfig>()
+        .register::<ProjectCreateInput>()
+        .register::<ProjectUpdateInput>()
+        .register::<ProjectRecord>()
+        .register::<EffectivePipelineSnapshot>()
         .register::<AutomationProfileInput>()
         .register::<AutomationProfileRecord>()
         .register::<AutomationRuleInputActions>()
@@ -900,6 +906,11 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "TagUpdateInput",
     "TagRecord",
     "TagRepositorySnapshot",
+    "ProjectPipelineConfig",
+    "ProjectCreateInput",
+    "ProjectUpdateInput",
+    "ProjectRecord",
+    "EffectivePipelineSnapshot",
     "AutomationProfileInput",
     "AutomationProfileRecord",
     "AutomationRuleInputActions",
@@ -1445,6 +1456,7 @@ mod tests {
             kind: HistoryItemKind::Recording,
             search_content: "hello".to_string(),
             tag_ids: Vec::new(),
+            project_id: None,
             deleted_at: None,
             status: HistoryItemStatus::Complete,
             draft_source: None,
@@ -1703,6 +1715,11 @@ mod tests {
         assert_specta_type::<TagUpdateInput>();
         assert_specta_type::<TagRecord>();
         assert_specta_type::<TagRepositorySnapshot>();
+        assert_specta_type::<ProjectPipelineConfig>();
+        assert_specta_type::<ProjectCreateInput>();
+        assert_specta_type::<ProjectUpdateInput>();
+        assert_specta_type::<ProjectRecord>();
+        assert_specta_type::<EffectivePipelineSnapshot>();
         assert_specta_type::<AutomationProfileInput>();
         assert_specta_type::<AutomationProfileRecord>();
         assert_specta_type::<AutomationRuleInputActions>();

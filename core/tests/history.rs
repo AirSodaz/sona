@@ -23,6 +23,7 @@ fn history_item_transport_shape_lives_in_core() {
         kind: HistoryItemKind::Recording,
         search_content: "hello".to_string(),
         tag_ids: vec!["tag-1".to_string()],
+        project_id: Some("tag-1".to_string()),
         deleted_at: None,
         status: HistoryItemStatus::Complete,
         draft_source: None,
@@ -81,6 +82,7 @@ fn history_item_factory_uses_supplied_id_and_timestamp_for_recordings() {
         vec!["tag-1".to_string()],
         Some(".WEBM!"),
         None,
+        Some("tag-1".to_string()),
     );
 
     assert_eq!(item.id, "recording-1");
@@ -99,6 +101,7 @@ fn history_item_factory_prefers_request_ids_over_generated_fallback_ids() {
             id: Some("draft-request-id".to_string()),
             audio_extension: "wav".to_string(),
             tag_ids: Vec::new(),
+            project_id: None,
             icon: Some("Mic".to_string()),
         },
         HistoryItemGeneratedValues {
@@ -126,6 +129,7 @@ fn history_item_factory_prefers_request_ids_over_generated_fallback_ids() {
             timestamp: 43,
             recording_title: "Unused Imported Recording Title".to_string(),
         },
+        None,
     );
 
     assert_eq!(imported.item.id, "import-request-id");
