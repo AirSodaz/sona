@@ -19,12 +19,32 @@ impl TauriCommandContract {
 
 const RUST_OWNED_TAURI_COMMAND_CONTRACTS: &[TauriCommandContract] = &[
     TauriCommandContract::new("project_list", "undefined", "ProjectRecord[]"),
-    TauriCommandContract::new("project_create", "{ input: ProjectCreateInput }", "ProjectRecord"),
-    TauriCommandContract::new("project_update", "{ projectId: string; updates: ProjectUpdateInput }", "ProjectRecord | null"),
-    TauriCommandContract::new("project_delete", "{ projectId: string; cascadeAction?: string }", "void"),
-    TauriCommandContract::new("project_reorder", "{ projectIds: string[] }", "ProjectRecord[]"),
+    TauriCommandContract::new(
+        "project_create",
+        "{ input: ProjectCreateInput }",
+        "ProjectRecord",
+    ),
+    TauriCommandContract::new(
+        "project_update",
+        "{ projectId: string; updates: ProjectUpdateInput }",
+        "ProjectRecord | null",
+    ),
+    TauriCommandContract::new(
+        "project_delete",
+        "{ projectId: string; cascadeAction?: string }",
+        "void",
+    ),
+    TauriCommandContract::new(
+        "project_reorder",
+        "{ projectIds: string[] }",
+        "ProjectRecord[]",
+    ),
     TauriCommandContract::new("project_get_active_id", "undefined", "string | null"),
-    TauriCommandContract::new("project_set_active_id", "{ projectId: string | null }", "void"),
+    TauriCommandContract::new(
+        "project_set_active_id",
+        "{ projectId: string | null }",
+        "void",
+    ),
     TauriCommandContract::new(
         "tag_list",
         "{ fallbackEnabledPolishKeywordSetIds?: string[] | null; fallbackEnabledSpeakerProfileIds?: string[] | null }",

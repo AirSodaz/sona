@@ -121,12 +121,21 @@ pub fn resolve_item_pipeline(
     EffectivePipelineSnapshot {
         is_project_pipeline: true,
         auto_polish: pipeline.auto_polish,
-        polish_preset_id: pipeline.polish_preset_id.clone().or(fallback.polish_preset_id),
+        polish_preset_id: pipeline
+            .polish_preset_id
+            .clone()
+            .or(fallback.polish_preset_id),
         polish_prompt_override: pipeline.polish_prompt_override.clone(),
         auto_translate: pipeline.auto_translate,
-        target_language: pipeline.target_language.clone().or(fallback.target_language),
+        target_language: pipeline
+            .target_language
+            .clone()
+            .or(fallback.target_language),
         auto_summary: pipeline.auto_summary,
-        summary_template_id: pipeline.summary_template_id.clone().or(fallback.summary_template_id),
+        summary_template_id: pipeline
+            .summary_template_id
+            .clone()
+            .or(fallback.summary_template_id),
         hotword_set_ids: pipeline.hotword_set_ids.clone(),
         replacement_set_ids: pipeline.replacement_set_ids.clone(),
         auto_export: pipeline.auto_export,
@@ -136,7 +145,9 @@ pub fn resolve_item_pipeline(
     }
 }
 
-pub fn project_pipeline_from_json(value: &Value) -> Result<ProjectPipelineConfig, serde_json::Error> {
+pub fn project_pipeline_from_json(
+    value: &Value,
+) -> Result<ProjectPipelineConfig, serde_json::Error> {
     serde_json::from_value(value.clone())
 }
 
@@ -144,21 +155,55 @@ pub fn project_pipeline_from_json(value: &Value) -> Result<ProjectPipelineConfig
 mod tests {
     use super::*;
 
-    fn config() -> AppConfig { AppConfig { auto_polish: Some(true), polish_preset_id: Some("global".into()), translation_language: Some("zh".into()), summary_enabled: Some(true), summary_template_id: Some("default".into()), ..Default::default() } }
-    fn project(pipeline: Option<ProjectPipelineConfig>) -> ProjectRecord { ProjectRecord { id: "p1".into(), name: "Project".into(), description: String::new(), icon: None, color: None, sort_order: 0, created_at: 0, updated_at: 0, pipeline } }
+    fn config() -> AppConfig {
+        AppConfig {
+            auto_polish: Some(true),
+            polish_preset_id: Some("global".into()),
+            translation_language: Some("zh".into()),
+            summary_enabled: Some(true),
+            summary_template_id: Some("default".into()),
+            ..Default::default()
+        }
+    }
+    fn project(pipeline: Option<ProjectPipelineConfig>) -> ProjectRecord {
+        ProjectRecord {
+            id: "p1".into(),
+            name: "Project".into(),
+            description: String::new(),
+            icon: None,
+            color: None,
+            sort_order: 0,
+            created_at: 0,
+            updated_at: 0,
+            pipeline,
+        }
+    }
 
     #[test]
     fn inbox_and_missing_project_use_global_defaults() {
         let projects = vec![project(None)];
         assert!(!resolve_item_pipeline(None, &projects, &config()).is_project_pipeline);
-        assert_eq!(resolve_item_pipeline(Some("missing"), &projects, &config()).polish_preset_id.as_deref(), Some("global"));
+        assert_eq!(
+            resolve_item_pipeline(Some("missing"), &projects, &config())
+                .polish_preset_id
+                .as_deref(),
+            Some("global")
+        );
     }
 
     #[test]
     fn enabled_project_pipeline_overrides_and_inherits() {
         let mut pipeline = ProjectPipelineConfig::default();
-        pipeline.enabled = true; pipeline.auto_polish = false; pipeline.auto_translate = true; pipeline.target_language = Some("en".into()); pipeline.hotword_set_ids = vec!["hot".into()];
+        pipeline.enabled = true;
+        pipeline.auto_polish = false;
+        pipeline.auto_translate = true;
+        pipeline.target_language = Some("en".into());
+        pipeline.hotword_set_ids = vec!["hot".into()];
         let snapshot = resolve_item_pipeline(Some("p1"), &[project(Some(pipeline))], &config());
-        assert!(snapshot.is_project_pipeline); assert!(!snapshot.auto_polish); assert!(snapshot.auto_translate); assert_eq!(snapshot.target_language.as_deref(), Some("en")); assert_eq!(snapshot.summary_template_id.as_deref(), Some("default"));
+        assert!(snapshot.is_project_pipeline);
+        assert!(!snapshot.auto_polish);
+        assert!(snapshot.auto_translate);
+        assert_eq!(snapshot.target_language.as_deref(), Some("en"));
+        assert_eq!(snapshot.summary_template_id.as_deref(), Some("default"));
     }
 }

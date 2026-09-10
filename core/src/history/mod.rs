@@ -105,7 +105,10 @@ pub struct HistoryItemRecord {
 pub enum HistoryWorkspaceScope {
     All,
     Inbox,
-    Project { #[serde(rename = "projectId")] project_id: String },
+    Project {
+        #[serde(rename = "projectId")]
+        project_id: String,
+    },
     Trash,
 }
 

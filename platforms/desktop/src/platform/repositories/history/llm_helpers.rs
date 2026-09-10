@@ -151,7 +151,7 @@ mod tests {
                 segments: vec![segment("seg-1", "before")],
                 duration: 1.0,
                 tag_ids: Vec::new(),
-            project_id: None,
+                project_id: None,
                 audio_bytes: Some(vec![]),
                 native_audio_path: None,
                 audio_extension: None,
@@ -265,7 +265,7 @@ mod tests {
                 id: None,
                 audio_extension: "wav".to_string(),
                 tag_ids: Vec::new(),
-            project_id: None,
+                project_id: None,
                 icon: None,
             })
             .unwrap();
@@ -297,7 +297,7 @@ mod tests {
                 segments: vec![segment("seg-1", "test")],
                 duration: 1.0,
                 tag_ids: Vec::new(),
-            project_id: None,
+                project_id: None,
                 audio_bytes: Some(vec![]),
                 native_audio_path: None,
                 audio_extension: None,

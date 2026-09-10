@@ -139,7 +139,9 @@ fn matches_scope(item: &HistoryItemRecord, scope: &HistoryWorkspaceScope) -> boo
     match scope {
         HistoryWorkspaceScope::All => item.deleted_at.is_none(),
         HistoryWorkspaceScope::Inbox => item.deleted_at.is_none() && item.project_id.is_none(),
-        HistoryWorkspaceScope::Project { project_id } => item.deleted_at.is_none() && item.project_id.as_deref() == Some(project_id.as_str()),
+        HistoryWorkspaceScope::Project { project_id } => {
+            item.deleted_at.is_none() && item.project_id.as_deref() == Some(project_id.as_str())
+        }
         HistoryWorkspaceScope::Trash => item.deleted_at.is_some(),
     }
 }
@@ -228,7 +230,9 @@ fn count_items_by_tag(items: &[HistoryItemRecord]) -> HistoryWorkspaceItemCounts
         if item.project_id.is_none() {
             untagged += 1;
         }
-        if item.project_id.is_none() { inbox += 1; }
+        if item.project_id.is_none() {
+            inbox += 1;
+        }
         if let Some(project_id) = &item.project_id {
             *by_project_id.entry(project_id.clone()).or_insert(0) += 1;
         }

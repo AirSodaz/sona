@@ -1,4 +1,4 @@
-﻿use crate::DatabaseError;
+use crate::DatabaseError;
 use crate::ports::Database as DatabasePort;
 use rusqlite::OptionalExtension;
 use rusqlite::types::Type;
@@ -7,13 +7,13 @@ use sona_application::tag::TagRepositoryService;
 use sona_core::dashboard::error::DashboardError;
 use sona_core::dashboard::ports::TagRepository;
 use sona_core::ports::time::ClockPort;
+use sona_core::project::ProjectPipelineConfig;
 use sona_core::sync::SyncEntityKind;
 use sona_core::tag::{
     ACTIVE_TAG_SETTINGS_KEY, ActiveTagSelection, TagCreateInput, TagError, TagIdGenerator,
     TagListOptions, TagPatch, TagRecord, TagRepositorySnapshot, TagStore, TagStoredState,
     TagUpdateInput,
 };
-use sona_core::project::ProjectPipelineConfig;
 use std::sync::Arc;
 
 use crate::legacy_change_time;
@@ -92,7 +92,11 @@ where
         self.service().delete_tag(tag_id)
     }
 
-    pub fn delete_project_with_cascade(&self, project_id: &str, cascade_action: &str) -> Result<(), TagError> {
+    pub fn delete_project_with_cascade(
+        &self,
+        project_id: &str,
+        cascade_action: &str,
+    ) -> Result<(), TagError> {
         self.repository.get_db().and_then(|db| db.with_transaction(|tx| {
             if cascade_action == "deleteItems" {
                 tx.execute("UPDATE history_items SET project_id = NULL, deleted_at = COALESCE(deleted_at, ?1) WHERE project_id = ?2", rusqlite::params![legacy_change_time::now_ms() as i64, project_id])?;
@@ -120,22 +124,42 @@ where
 
     /// Loads the deterministic pipeline attached to a project. Pipelines are
     /// stored separately so legacy tag/project rows remain schema-compatible.
-    pub fn get_project_pipeline(&self, project_id: &str) -> Result<Option<ProjectPipelineConfig>, TagError> {
-        self.repository.get_db()
-            .and_then(|db| db.with_read_connection(|conn| {
-                let json: Option<String> = conn.query_row(
-                    "SELECT pipeline_json FROM project_pipelines WHERE project_id = ?1",
-                    [project_id], |row| row.get(0)
-                ).optional()?;
-                json.map(|value| serde_json::from_str(&value).map_err(|error| DatabaseError::QueryError(rusqlite::Error::ToSqlConversionFailure(Box::new(error)))))
+    pub fn get_project_pipeline(
+        &self,
+        project_id: &str,
+    ) -> Result<Option<ProjectPipelineConfig>, TagError> {
+        self.repository
+            .get_db()
+            .and_then(|db| {
+                db.with_read_connection(|conn| {
+                    let json: Option<String> = conn
+                        .query_row(
+                            "SELECT pipeline_json FROM project_pipelines WHERE project_id = ?1",
+                            [project_id],
+                            |row| row.get(0),
+                        )
+                        .optional()?;
+                    json.map(|value| {
+                        serde_json::from_str(&value).map_err(|error| {
+                            DatabaseError::QueryError(rusqlite::Error::ToSqlConversionFailure(
+                                Box::new(error),
+                            ))
+                        })
+                    })
                     .transpose()
-            }))
+                })
+            })
             .map_err(|error| TagError::Repository(error.to_string()))
     }
 
     /// Persists (or replaces) a project's pipeline snapshot.
-    pub fn set_project_pipeline(&self, project_id: &str, pipeline: &ProjectPipelineConfig) -> Result<(), TagError> {
-        let payload = serde_json::to_string(pipeline).map_err(|error| TagError::Repository(error.to_string()))?;
+    pub fn set_project_pipeline(
+        &self,
+        project_id: &str,
+        pipeline: &ProjectPipelineConfig,
+    ) -> Result<(), TagError> {
+        let payload = serde_json::to_string(pipeline)
+            .map_err(|error| TagError::Repository(error.to_string()))?;
         self.repository.get_db()
             .and_then(|db| db.with_transaction(|tx| {
                 tx.execute(

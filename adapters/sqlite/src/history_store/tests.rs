@@ -481,7 +481,7 @@ fn save_imported_file_rolls_back_db_and_cleans_staging_when_promote_fails() {
         segments: vec![segment_value("seg-promote", "Promote failure", 0.0, 1.0)],
         duration: 1.0,
         tag_ids: Vec::new(),
-            project_id: None,
+        project_id: None,
     });
 
     assert!(
@@ -514,7 +514,7 @@ fn mutation_readiness_filesystem_failures_preserve_operation_and_path() {
         id: Some("draft-1".to_string()),
         audio_extension: "wav".to_string(),
         tag_ids: Vec::new(),
-            project_id: None,
+        project_id: None,
         icon: None,
     });
 
@@ -916,7 +916,7 @@ fn save_imported_file_duplicate_id_does_not_overwrite_existing_audio() {
         segments: vec![segment_value("seg-2", "Duplicate import", 0.0, 1.0)],
         duration: 1.0,
         tag_ids: Vec::new(),
-            project_id: None,
+        project_id: None,
         converted_source_path: None,
     });
 

@@ -96,6 +96,10 @@ pub use sona_core::ports::asr::{
     OnlineAsrProviderRequest, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
     TranscriptTextReplacementRule, TranscriptTextReplacementRuleSet, VolcengineDoubaoAsrConfig,
 };
+pub use sona_core::project::{
+    EffectivePipelineSnapshot, ProjectCreateInput, ProjectPipelineConfig, ProjectRecord,
+    ProjectUpdateInput,
+};
 pub use sona_core::recovery::types::{
     RecoveredQueueItem, RecoveredTranscriptSegment, RecoveredTranscriptTiming,
     RecoveredTranscriptTimingUnit, RecoveryFileStat, RecoveryItemInput, RecoveryItemStage,
@@ -122,7 +126,6 @@ pub use sona_core::sync::{
     SyncProviderDescriptor, SyncRunResult, SyncStatusSnapshot, SyncVersion,
 };
 pub use sona_core::tag::{TagCreateInput, TagRecord, TagRepositorySnapshot, TagUpdateInput};
-pub use sona_core::project::{EffectivePipelineSnapshot, ProjectCreateInput, ProjectPipelineConfig, ProjectRecord, ProjectUpdateInput};
 pub use sona_core::task_ledger::types::{
     TaskLedgerKind, TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot, TaskLedgerStatus,
 };

@@ -91,8 +91,13 @@ pub(super) fn add_workspace_query_conditions(
 ) {
     match &request.scope {
         HistoryWorkspaceScope::All => clauses.push("h.deleted_at IS NULL".to_string()),
-        HistoryWorkspaceScope::Inbox => clauses.push("h.deleted_at IS NULL AND h.project_id IS NULL".to_string()),
-        HistoryWorkspaceScope::Project { project_id } => { clauses.push("h.deleted_at IS NULL AND h.project_id = ?".to_string()); params.push(Box::new(project_id.clone())); }
+        HistoryWorkspaceScope::Inbox => {
+            clauses.push("h.deleted_at IS NULL AND h.project_id IS NULL".to_string())
+        }
+        HistoryWorkspaceScope::Project { project_id } => {
+            clauses.push("h.deleted_at IS NULL AND h.project_id = ?".to_string());
+            params.push(Box::new(project_id.clone()));
+        }
         HistoryWorkspaceScope::Trash => clauses.push("h.deleted_at IS NOT NULL".to_string()),
     }
     match request.filter_type {
@@ -118,8 +123,13 @@ pub(super) fn add_workspace_scope_condition(
 ) {
     match scope {
         HistoryWorkspaceScope::All => clauses.push("h.deleted_at IS NULL".to_string()),
-        HistoryWorkspaceScope::Inbox => clauses.push("h.deleted_at IS NULL AND h.project_id IS NULL".to_string()),
-        HistoryWorkspaceScope::Project { project_id } => { clauses.push("h.deleted_at IS NULL AND h.project_id = ?".to_string()); params.push(Box::new(project_id.clone())); }
+        HistoryWorkspaceScope::Inbox => {
+            clauses.push("h.deleted_at IS NULL AND h.project_id IS NULL".to_string())
+        }
+        HistoryWorkspaceScope::Project { project_id } => {
+            clauses.push("h.deleted_at IS NULL AND h.project_id = ?".to_string());
+            params.push(Box::new(project_id.clone()));
+        }
         HistoryWorkspaceScope::Trash => clauses.push("h.deleted_at IS NOT NULL".to_string()),
     }
 }
