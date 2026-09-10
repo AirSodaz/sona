@@ -304,7 +304,6 @@ fn injection_step_mode(kind: &InjectionStepKind) -> &'static str {
     }
 }
 
-#[cfg(target_os = "windows")]
 fn injection_plan_mode(steps: &[InjectionStep]) -> &'static str {
     // This labels the overall plan for diagnostics only; execution still
     // happens one step at a time so mixed text can partially succeed.
