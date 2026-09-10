@@ -246,7 +246,7 @@ function requiredRuntimeLibraries(target) {
 function llamaCppRuntimeLibraries(target) {
   if (process.env.LLAMA_BUILD_SHARED_LIBS === '0') return [];
   if (target.includes('windows')) {
-    const libraries = ['ggml.dll', 'ggml-base.dll', 'ggml-cpu.dll', 'llama.dll'];
+    const libraries = ['ggml.dll', 'ggml-base.dll', 'ggml-cpu.dll', 'llama.dll', 'llama-common.dll'];
     if (process.env.LLAMA_ENABLE_VULKAN === '1') {
       libraries.push('ggml-vulkan.dll');
     }
@@ -258,6 +258,7 @@ function llamaCppRuntimeLibraries(target) {
       /^libggml-base(?:\.\d+)*\.dylib$/u,
       /^libggml-cpu(?:\.\d+)*\.dylib$/u,
       /^libllama(?:\.\d+)*\.dylib$/u,
+      /^libllama-common(?:\.\d+)*\.dylib$/u,
     ];
     if (process.env.LLAMA_ENABLE_METAL === '1') {
       libraries.push(/^libggml-metal(?:\.\d+)*\.dylib$/u);
@@ -269,6 +270,7 @@ function llamaCppRuntimeLibraries(target) {
     /^libggml-base\.so(?:\.\d+)*$/u,
     /^libggml-cpu\.so(?:\.\d+)*$/u,
     /^libllama\.so(?:\.\d+)*$/u,
+    /^libllama-common\.so(?:\.\d+)*$/u,
   ];
   if (process.env.LLAMA_ENABLE_VULKAN === '1') {
     libraries.push(/^libggml-vulkan\.so(?:\.\d+)*$/u);

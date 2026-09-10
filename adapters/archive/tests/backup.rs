@@ -311,7 +311,12 @@ fn write_entries(path: &Path, entries: &[TestEntry]) {
     let mut builder = tar::Builder::new(encoder);
     for entry in entries {
         let mut header = Header::new_gnu();
-        header.set_mode(0o600);
+        let mode = if entry.entry_type.is_dir() {
+            0o700
+        } else {
+            0o600
+        };
+        header.set_mode(mode);
         header.set_uid(0);
         header.set_gid(0);
         header.set_mtime(0);

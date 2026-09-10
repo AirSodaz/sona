@@ -46,6 +46,8 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
+    env:
+      LLAMA_BUILD_SHARED_LIBS: 0
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6

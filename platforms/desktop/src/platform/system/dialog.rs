@@ -56,14 +56,12 @@ pub fn show_error_dialog(message: &str) {
             ])
             .status();
 
-        if let Err(ref e) = res {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                // Unlike zenity, kdialog renders `--error` text as plain text
-                // (no Pango markup), so pass the raw message without escaping.
-                let _ = Command::new("kdialog")
-                    .args(["--error", message, "--title", "Sona Startup Error"])
-                    .status();
-            }
+        if matches!(&res, Err(e) if e.kind() == std::io::ErrorKind::NotFound) {
+            // Unlike zenity, kdialog renders `--error` text as plain text
+            // (no Pango markup), so pass the raw message without escaping.
+            let _ = Command::new("kdialog")
+                .args(["--error", message, "--title", "Sona Startup Error"])
+                .status();
         }
     }
 }
