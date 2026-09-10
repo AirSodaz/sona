@@ -312,7 +312,7 @@ export function ProjectSettingsModal({
                 {hotwordSets.length > 0 && (
                   <div className="project-pipeline-item">
                     <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-                      {t('settings.hotwords', { defaultValue: 'Hotwords' })}
+                      {t('projects.pipeline_hotwords', { defaultValue: 'Hotword Sets' })}
                     </span>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
                       {hotwordSets.map((set) => (
@@ -339,7 +339,7 @@ export function ProjectSettingsModal({
                 {replacementSets.length > 0 && (
                   <div className="project-pipeline-item">
                     <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-                      {t('settings.text_replacements', { defaultValue: 'Replacement Sets' })}
+                      {t('projects.pipeline_replacements', { defaultValue: 'Text Replacement Sets' })}
                     </span>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
                       {replacementSets.map((set) => (

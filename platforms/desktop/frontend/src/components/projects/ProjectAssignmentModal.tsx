@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { HistoryItem } from '../../types/history';
 import type { ProjectRecord } from '../../types/project';
 import { Modal } from '../Modal';
+import { Dropdown, type DropdownOption } from '../Dropdown';
 
 interface ProjectAssignmentModalProps {
   isOpen: boolean;
@@ -44,6 +45,11 @@ function OpenProjectAssignmentModal({
   const { t } = useTranslation();
   const [projectId, setProjectId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const projectOptions = useMemo<DropdownOption[]>(() => [
+    { value: '', label: t('projects.inbox', { defaultValue: 'Inbox' }) },
+    ...projects.map((project) => ({ value: project.id, label: project.name })),
+  ], [projects, t]);
   const handleApply = async () => {
     setIsSaving(true);
     try {
@@ -71,16 +77,22 @@ function OpenProjectAssignmentModal({
         </>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <span>{items.length} {t('projects.items_selected', { defaultValue: 'items selected' })}</span>
-        <select value={projectId ?? ''} onChange={(e) => setProjectId(e.target.value || null)}>
-          <option value="">{t('projects.inbox', { defaultValue: 'Inbox' })}</option>
-          {projects.map((project) => {
-          return (
-            <option key={project.id} value={project.id}>{project.name}</option>
-          );
-          })}
-        </select>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
+          {t('projects.selected_count', { count: items.length, defaultValue: '{{count}} selected' })}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontWeight: 500, color: 'var(--color-text-primary)', fontSize: '0.875rem' }}>
+            {t('projects.target_project', { defaultValue: 'Target Project' })}
+          </label>
+          <Dropdown
+            value={projectId ?? ''}
+            onChange={(val) => setProjectId(val || null)}
+            options={projectOptions}
+            style={{ width: '100%' }}
+            aria-label={t('projects.target_project', { defaultValue: 'Target Project' })}
+          />
+        </div>
       </div>
     </Modal>
   );

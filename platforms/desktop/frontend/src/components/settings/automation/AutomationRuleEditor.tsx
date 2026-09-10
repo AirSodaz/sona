@@ -43,7 +43,9 @@ export function AutomationRuleEditor({
                 {/* Step 1: WHEN - Trigger & Source */}
                 <div className="automation-editor-step-card">
                     <div className="automation-step-header">
-                        <span className="automation-step-badge">1. WHEN</span>
+                        <span className="automation-step-badge">
+                            {t('automation.step_badge_when', { defaultValue: '1. WHEN' })}
+                        </span>
                         <span className="automation-step-title">
                             {t('automation.step_file_trigger', { defaultValue: 'Watch Local Folder' })}
                         </span>
@@ -95,7 +97,9 @@ export function AutomationRuleEditor({
                 {/* Step 2: DESTINATION & PIPELINE */}
                 <div className="automation-editor-step-card">
                     <div className="automation-step-header">
-                        <span className="automation-step-badge">2. TARGET</span>
+                        <span className="automation-step-badge">
+                            {t('automation.step_badge_target', { defaultValue: '2. TARGET' })}
+                        </span>
                         <span className="automation-step-title">
                             {t('automation.step_target_project', { defaultValue: 'Target Project & Pipeline' })}
                         </span>

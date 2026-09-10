@@ -1418,7 +1418,8 @@ describe('ProjectsView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select hist-1' }));
     fireEvent.click(screen.getByRole('button', { name: 'Assign Project' }));
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'project-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Target Project' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Alpha' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
