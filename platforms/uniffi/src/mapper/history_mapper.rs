@@ -380,11 +380,12 @@ impl Display for HistoryMapperError {
 
 impl From<FfiHistoryCreateLiveDraftRequestV1> for HistoryCreateLiveDraftRequest {
     fn from(value: FfiHistoryCreateLiveDraftRequestV1) -> Self {
+        let project_id = value.tag_ids.first().cloned();
         Self {
             id: value.id,
             audio_extension: value.audio_extension,
             tag_ids: value.tag_ids,
-            project_id: None,
+            project_id,
             icon: value.icon,
         }
     }
@@ -506,11 +507,12 @@ impl TryFrom<FfiHistorySaveRecordingRequestV1> for HistorySaveRecordingRequest {
             Some(FfiAudioSourceV1::NativePath { path }) => (None, Some(path), None),
             None => (None, None, None),
         };
+        let project_id = value.tag_ids.first().cloned();
         Ok(Self {
             segments: history_transcript_segments_from_ffi(value.segments)?,
             duration: value.duration,
             tag_ids: value.tag_ids,
-            project_id: None,
+            project_id,
             audio_bytes,
             native_audio_path,
             audio_extension,
@@ -522,13 +524,14 @@ impl TryFrom<FfiHistorySaveImportedFileRequestV1> for HistorySaveImportedFileReq
     type Error = HistoryMapperError;
 
     fn try_from(value: FfiHistorySaveImportedFileRequestV1) -> Result<Self, Self::Error> {
+        let project_id = value.tag_ids.first().cloned();
         Ok(Self {
             id: value.id,
             source_path: value.source_path,
             segments: history_transcript_segments_from_ffi(value.segments)?,
             duration: value.duration,
             tag_ids: value.tag_ids,
-            project_id: None,
+            project_id,
             converted_source_path: value.converted_source_path,
         })
     }
@@ -670,6 +673,12 @@ impl From<FfiHistoryWorkspaceSortOrderV1> for HistoryWorkspaceSortOrder {
 
 impl From<HistoryItemRecord> for FfiHistoryItemRecordV1 {
     fn from(value: HistoryItemRecord) -> Self {
+        let mut tag_ids = value.tag_ids;
+        if tag_ids.is_empty() {
+            if let Some(pid) = value.project_id.as_ref() {
+                tag_ids.push(pid.clone());
+            }
+        }
         Self {
             id: value.id,
             timestamp: value.timestamp,
@@ -682,7 +691,7 @@ impl From<HistoryItemRecord> for FfiHistoryItemRecordV1 {
             icon: value.icon,
             kind: value.kind.into(),
             search_content: value.search_content,
-            tag_ids: value.tag_ids,
+            tag_ids,
             deleted_at: value.deleted_at,
             status: value.status.into(),
             draft_source: value.draft_source.map(Into::into),

@@ -17,7 +17,6 @@ import type { Event } from '../services/tauri/platform/events';
 import { getCurrentWindow } from '../services/tauri/platform/windows';
 import { invokeTauri } from '../services/tauri/invoke';
 import { resolveItemPipeline } from '../services/projectPipeline';
-import { ProjectSelectorDropdown } from './ProjectSelectorDropdown';
 
 /**
  * Displays the status of the currently processing or selected item in the queue.
@@ -358,10 +357,6 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
     // Initial drop zone view (no queue items)
     return (
         <div className={`batch-import-container ${className}`}>
-            <div className="batch-target-bar">
-                <span>所有导入文件将自动归档至:</span>
-                <ProjectSelectorDropdown onOpenProjects={() => undefined} />
-            </div>
             <div
                 className={`drop-zone drop-zone-wrapper ${isDragOver ? 'drag-over' : ''}`}
                 onDrop={handleDrop}

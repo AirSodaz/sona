@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { TFunction } from 'i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
+import { useProjectStore } from '../stores/projectStore';
+import type { ProjectRecord } from '../types/project';
 import { BatchQueueItem, BatchQueueItemStatus } from '../types/batchQueue';
 import { PendingIcon, ProcessingIcon, CompleteIcon, ErrorIcon, TrashIcon, XIcon } from './Icons';
 
@@ -32,8 +34,10 @@ const getStatusIcon = (status: BatchQueueItemStatus): React.JSX.Element => {
 interface QueueItemProps {
     item: BatchQueueItem;
     isActive: boolean;
+    projects: ProjectRecord[];
     onActivate: (id: string) => void;
     onRemove: (id: string) => void;
+    onSetItemProjectId: (id: string, projectId: string | null) => void;
     t: TFunction;
 }
 
@@ -41,7 +45,7 @@ interface QueueItemProps {
  * Individual queue item component.
  * Memoized to prevent re-renders of the entire list when only one item updates.
  */
-function QueueItemComponent({ item, isActive, onActivate, onRemove, t }: QueueItemProps): React.JSX.Element {
+function QueueItemComponent({ item, isActive, projects, onActivate, onRemove, onSetItemProjectId, t }: QueueItemProps): React.JSX.Element {
     const handleClick = () => {
         onActivate(item.id);
     };
@@ -75,6 +79,41 @@ function QueueItemComponent({ item, isActive, onActivate, onRemove, t }: QueueIt
             <div className="queue-item-content">
                 <div className="queue-item-filename" title={item.filename}>
                     {item.filename}
+                </div>
+                <div className="queue-item-meta" style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                    {item.status === 'pending' ? (
+                        <select
+                            className="queue-item-project-select"
+                            value={item.projectId ?? ''}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                                e.stopPropagation();
+                                onSetItemProjectId(item.id, e.target.value || null);
+                            }}
+                            style={{
+                                fontSize: '11px',
+                                padding: '1px 4px',
+                                borderRadius: '3px',
+                                border: '1px solid var(--color-border)',
+                                background: 'var(--color-bg-secondary)',
+                                color: 'var(--color-text-secondary)',
+                                cursor: 'pointer',
+                                maxWidth: '130px',
+                            }}
+                            title={t('projects.target_project', { defaultValue: 'Target Project' })}
+                        >
+                            <option value="">{t('projects.inbox', { defaultValue: 'Inbox' })}</option>
+                            {projects.map((project) => (
+                                <option key={project.id} value={project.id}>{project.name}</option>
+                            ))}
+                        </select>
+                    ) : (
+                        item.projectId ? (
+                            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                                {projects.find((p) => p.id === item.projectId)?.name}
+                            </span>
+                        ) : null
+                    )}
                 </div>
 
                 {item.origin === 'automation' && (
@@ -133,6 +172,8 @@ function QueueItemContainer({ id, t }: { id: string; t: TFunction }): React.JSX.
     const isActive = useBatchQueueStore((state) => state.activeItemId === id);
     const setActiveItem = useBatchQueueStore((state) => state.setActiveItem);
     const removeItem = useBatchQueueStore((state) => state.removeItem);
+    const setItemProjectId = useBatchQueueStore((state) => state.setItemProjectId);
+    const projects = useProjectStore((state) => state.projects);
 
     if (!item) return null;
 
@@ -142,6 +183,8 @@ function QueueItemContainer({ id, t }: { id: string; t: TFunction }): React.JSX.
             isActive={isActive}
             onActivate={setActiveItem}
             onRemove={removeItem}
+            onSetItemProjectId={setItemProjectId}
+            projects={projects}
             t={t}
         />
     );

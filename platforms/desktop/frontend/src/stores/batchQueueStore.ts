@@ -30,7 +30,7 @@ import {
 import { useTranscriptSessionStore } from './transcriptSessionStore';
 import { useTranscriptStore, DEFAULT_SESSION_DATA } from './transcriptStore';
 import type { RecoveredQueueItem } from '../types/recovery';
-import type { EffectivePipelineSnapshot } from '../services/projectPipeline';
+import { resolveItemPipeline, type EffectivePipelineSnapshot } from '../services/projectPipeline';
 import { historyService } from '../services/historyService';
 import {
     applySavedBatchHistoryToQueue,
@@ -110,6 +110,8 @@ interface BatchQueueState {
      * @param message Error message.
      */
     setItemError: (id: string, message: string) => void;
+    /** Sets an item's target project and refreshes its pipeline snapshot. */
+    setItemProjectId: (id: string, projectId: string | null) => void;
     /**
      * Removes an item from the queue.
      *
@@ -355,6 +357,22 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         } else if (id === null) {
             clearActiveTranscriptSession({ clearAudio: true, title: '' });
         }
+    },
+    setItemProjectId: (id, projectId) => {
+        set((state) => {
+            const item = state.queueItems.find((queueItem) => queueItem.id === id);
+            if (!item || item.status === 'processing' || item.status === 'complete') {
+                return state;
+            }
+            const projects = useProjectStore.getState().projects;
+            const config = item.resolvedConfigSnapshot ?? getEffectiveConfigSnapshot();
+            const pipelineSnapshot = resolveItemPipeline(projectId, projects, config);
+            return {
+                queueItems: state.queueItems.map((queueItem) => (
+                    queueItem.id === id ? { ...queueItem, projectId, pipelineSnapshot } : queueItem
+                )),
+            };
+        });
     },
 
     updateItemStatus: (id, status, progress, lastKnownStage) => {

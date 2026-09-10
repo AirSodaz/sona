@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, Pencil, RotateCcw, Settings as SettingsIcon, Tags, Trash2 } from 'lucide-react';
+import { Check, FolderOpen, Pencil, RotateCcw, Settings as SettingsIcon, Tags, Trash2 } from 'lucide-react';
 import { RenameModal } from './RenameModal';
 import { ProjectCreateModal } from './projects/ProjectCreateModal';
 import { ProjectSettingsModal } from './projects/ProjectSettingsModal';
+import { ProjectDeleteModal } from './projects/ProjectDeleteModal';
 import { ProjectsHeader } from './projects/ProjectsHeader';
 import { ProjectsRail } from './projects/ProjectsRail';
 import { ProjectsResults } from './projects/ProjectsResults';
@@ -134,6 +135,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(sourceHistoryId);
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState<ProjectRecord | null>(null);
   const [projectAssignmentIds, setProjectAssignmentIds] = useState<string[]>([]);
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -493,6 +495,15 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       }),
       actions: [
         {
+          id: 'set_active',
+          label: t('projects.set_as_active', { defaultValue: '设为当前活跃' }),
+          icon: <Check size={16} />,
+          disabled: activeProjectId === id,
+          onSelect: () => {
+            void setActiveProjectId(id);
+          },
+        },
+        {
           id: 'open',
           label: t('common.open', { defaultValue: 'Open' }),
           icon: <FolderOpen size={16} />,
@@ -508,6 +519,15 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           disabled: isOtherProjectLocked,
           onSelect: () => {
             void handleOpenProjectSettings(id);
+          },
+        },
+        {
+          id: 'delete',
+          label: t('projects.delete_project', { defaultValue: '删除项目' }),
+          icon: <Trash2 size={16} />,
+          disabled: lockState.isLocked,
+          onSelect: () => {
+            setProjectToDelete(project);
           },
         },
       ],
@@ -728,6 +748,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       description: projectSettingsDraft.draftDescription,
       icon: projectSettingsDraft.draftIcon,
       color: projectSettingsDraft.draftColor,
+      pipeline: projectSettingsDraft.draftPipeline,
     });
     projectSettingsDraft.setIsSettingsOpen(false);
   };
@@ -736,36 +757,16 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     if (!browseState.browseProject) {
       return;
     }
-
+    const project = browseState.browseProject;
     const shouldDiscard = await projectSettingsDraft.confirmDiscardProjectSettingsChanges();
     if (!shouldDiscard) {
       return;
     }
 
     if (projectSettingsDraft.isSettingsOpen) {
-      projectSettingsDraft.discardProjectSettingsDraft(browseState.browseProject);
+      projectSettingsDraft.discardProjectSettingsDraft(project);
     }
-
-    const confirmed = await confirm(
-      t('projects.delete_tag_confirm', {
-        tag: browseState.browseProject.name,
-        defaultValue: `Delete ${browseState.browseProject.name}? Items keep their other tags.`,
-      }),
-      {
-        title: t('projects.delete_tag_title', { defaultValue: 'Delete Tag' }),
-        confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
-        variant: 'error',
-      },
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    clearOpenedItem();
-    browseState.setBrowseScope('untagged');
-    await deleteProject(browseState.browseProject.id);
-    await refreshHistory();
+    setProjectToDelete(project);
   };
 
   const handleToggleSelectionMode = () => {
@@ -1014,6 +1015,8 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         draftDescription={projectSettingsDraft.draftDescription}
         draftIcon={projectSettingsDraft.draftIcon}
         draftColor={projectSettingsDraft.draftColor}
+        draftPipeline={projectSettingsDraft.draftPipeline}
+        onPipelineChange={projectSettingsDraft.setDraftPipeline}
         onClose={projectSettingsDraft.handleRequestCloseProjectSettings}
         onSave={handleSaveProject}
         onDelete={handleDeleteProject}
@@ -1052,6 +1055,22 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           await useProjectStore.getState().moveItemsToProject(projectAssignmentIds, projectId);
           await refreshHistory();
           selectionState.clearSelection();
+        }}
+      />
+
+      <ProjectDeleteModal
+        isOpen={!!projectToDelete}
+        project={projectToDelete}
+        itemCount={projectToDelete ? historyItems.filter((item) => !item.deletedAt && item.projectId === projectToDelete.id).length : 0}
+        onClose={() => setProjectToDelete(null)}
+        onConfirm={async (cascadeAction) => {
+          if (!projectToDelete) return;
+          const pid = projectToDelete.id;
+          clearOpenedItem();
+          browseState.setBrowseScope('untagged');
+          await deleteProject(pid, cascadeAction);
+          await refreshHistory();
+          setProjectToDelete(null);
         }}
       />
     </div>

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from '../Modal';
-
+import { PROJECT_COLOR_PRESETS } from '../../constants/projects';
 interface ProjectCreateModalProps {
   isOpen: boolean;
   name: string;
@@ -92,16 +92,29 @@ export function ProjectCreateModal({
         </div>
 
         <div className="projects-field">
-          <label htmlFor="project-create-color">
+          <label>
             {t('projects.tag_color', { defaultValue: 'Color' })}
           </label>
-          <input
-            id="project-create-color"
-            type="color"
-            value={color}
-            onChange={(event) => onColorChange(event.target.value)}
-            aria-label={t('projects.tag_color', { defaultValue: 'Color' })}
-          />
+          <div className="project-color-swatches">
+            {PROJECT_COLOR_PRESETS.map((presetColor) => (
+              <button
+                key={presetColor}
+                type="button"
+                className={`project-color-swatch ${color.toLowerCase() === presetColor.toLowerCase() ? 'active' : ''}`}
+                style={{ backgroundColor: presetColor }}
+                onClick={() => onColorChange(presetColor)}
+                title={presetColor}
+              />
+            ))}
+            <input
+              id="project-create-color"
+              type="color"
+              value={color}
+              onChange={(event) => onColorChange(event.target.value)}
+              aria-label={t('projects.tag_color', { defaultValue: 'Color' })}
+              style={{ width: 26, height: 26, padding: 0, border: 'none', cursor: 'pointer', borderRadius: 4, background: 'transparent' }}
+            />
+          </div>
         </div>
 
         <div className="projects-field">

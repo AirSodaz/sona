@@ -21,6 +21,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { restrictToVerticalAxis, restrictToWindowEdges } from '@dnd-kit/modifiers';
 import type { ProjectRecord } from '../../types/project';
+import { Zap, MoreHorizontal } from 'lucide-react';
 import { PlusCircleIcon } from '../Icons';
 import { ALL_ITEMS_SCOPE, TRASH_SCOPE, UNTAGGED_SCOPE } from './constants';
 import type { ProjectBrowseScope, TranslationFn } from './types';
@@ -123,7 +124,24 @@ function SortableProjectItem({
             defaultValue: `${projectCount} items`,
           })}
         />
+        {project.pipeline?.enabled && (
+          <span className="projects-rail-pipeline-badge" title={t('projects.pipeline_enabled', { defaultValue: '流水线已启用' })}>
+            <Zap size={13} />
+          </span>
+        )}
         <span className="projects-rail-count">{projectCount}</span>
+        <button
+          type="button"
+          className="projects-rail-menu-btn"
+          aria-label={t('common.more_options', { defaultValue: 'More options' })}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onOpenContextMenu(project.id, createPointerContextMenuRequest(event));
+          }}
+        >
+          <MoreHorizontal size={14} />
+        </button>
       </button>
     </div>
   );

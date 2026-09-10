@@ -23,8 +23,6 @@ import { useAudioRecorder, type RecordSegmentDeliveryMeta } from '../hooks/useAu
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { logger } from '../utils/logger';
 import { TranscriptUpdate } from '../types/transcript';
-import { useProjectStore } from '../stores/projectStore';
-import { resolveItemPipeline } from '../services/projectPipeline';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -78,10 +76,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const isCaptionMode = useTranscriptRuntimeStore((state) => state.isCaptionMode);
     const setIsCaptionMode = useTranscriptRuntimeStore((state) => state.setIsCaptionMode);
     const config = useConfigStore((state) => state.config);
-    const activeProjectId = useProjectStore((state) => state.activeProjectId);
-    const projects = useProjectStore((state) => state.projects);
-    const activeProject = projects.find((project) => project.id === activeProjectId) ?? null;
-    const pipeline = resolveItemPipeline(activeProjectId, projects, config);
 
     // Initialize dedicated caption session hook
     useCaptionSession(config, isCaptionMode);
@@ -245,14 +239,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
     return (
         <div className={`live-record-container ${className}`}>
-            <div className="project-target-bar" aria-live="polite">
-                <span>归属项目:</span>
-                <strong>{activeProject?.name ?? '收件箱'}</strong>
-                <span className="project-target-separator">|</span>
-                <span>语言: {config.language || '自动'}</span>
-                <span className="project-target-separator">|</span>
-                <span>流水线: {pipeline.isProjectPipeline ? '已启用' : '全局默认'}</span>
-            </div>
             <div className="live-record-main-content">
                 <div className="visualizer-wrapper">
                     <canvas
