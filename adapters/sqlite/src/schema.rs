@@ -1,12 +1,9 @@
 use super::{Database, DatabaseError};
 
 pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 8;
-const MIN_SUPPORTED_SCHEMA_VERSION: i64 = CURRENT_SCHEMA_VERSION;
+const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 7;
 
-/// Initializes a new database at the v0.8.0 schema baseline.
-///
-/// Databases created before v0.8.0 are intentionally no longer upgraded. Future
-/// schema changes must be appended after the current baseline.
+/// Initializes a new database at the current schema baseline or upgrades supported legacy databases.
 pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
     db.with_transaction(|tx| {
         bootstrap_schema_version(tx)?;
@@ -32,6 +29,11 @@ pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
                 "INSERT INTO schema_version (version) VALUES (?1)",
                 [CURRENT_SCHEMA_VERSION],
             )?;
+        } else if applied_version < CURRENT_SCHEMA_VERSION {
+            if applied_version < 8 {
+                migrate_v8(tx)?;
+                tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [8])?;
+            }
         }
         Ok(())
     })
@@ -618,10 +620,40 @@ fn migrate_v7(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     )
 }
 
+fn has_column(
+    tx: &rusqlite::Transaction,
+    table: &str,
+    column: &str,
+) -> Result<bool, rusqlite::Error> {
+    let mut stmt = tx.prepare(&format!("PRAGMA table_info({table})"))?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let name: String = row.get(1)?;
+        if name == column {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn migrate_v8(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     tx.execute_batch(
-        "ALTER TABLE history_items ADD COLUMN project_id TEXT REFERENCES tags(id) ON DELETE SET NULL;
-         CREATE INDEX IF NOT EXISTS idx_history_items_project_id ON history_items(project_id);
+        "CREATE TABLE IF NOT EXISTS project_pipelines (
+            project_id TEXT PRIMARY KEY REFERENCES tags(id) ON DELETE CASCADE,
+            pipeline_json TEXT NOT NULL DEFAULT '{}',
+            updated_at INTEGER NOT NULL DEFAULT 0
+        );",
+    )?;
+
+    if !has_column(tx, "history_items", "project_id")? {
+        tx.execute(
+            "ALTER TABLE history_items ADD COLUMN project_id TEXT REFERENCES tags(id) ON DELETE SET NULL;",
+            [],
+        )?;
+    }
+
+    tx.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_history_items_project_id ON history_items(project_id);
          CREATE INDEX IF NOT EXISTS idx_history_items_project_timestamp ON history_items(project_id, timestamp DESC);
          UPDATE history_items
             SET project_id = (
@@ -917,9 +949,92 @@ mod tests {
             err,
             DatabaseError::UnsupportedLegacySchemaVersion {
                 found: 6,
-                minimum: 8
+                minimum: 7
             }
         ));
+    }
+
+    #[test]
+    fn test_v7_schema_is_migrated_to_v8() {
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("ATTACH DATABASE ':memory:' AS analytics; PRAGMA foreign_keys = ON;")
+            .unwrap();
+        let tx = connection.transaction().unwrap();
+        migrate_v1(&tx).unwrap();
+        migrate_v2(&tx).unwrap();
+        migrate_v3(&tx).unwrap();
+        migrate_v4(&tx).unwrap();
+        migrate_v5(&tx).unwrap();
+        migrate_v6(&tx).unwrap();
+        migrate_v7(&tx).unwrap();
+
+        tx.execute(
+            "INSERT INTO tags (id, name, description, icon, color, sort_order, created_at, updated_at)
+             VALUES ('proj-1', 'Project One', '', 'folder', '#2563EB', 0, 100, 200)",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO history_items (id, timestamp, duration, title)
+             VALUES ('item-1', 1000, 5.0, 'Test Item')",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO history_item_tags (history_id, tag_id)
+             VALUES ('item-1', 'proj-1')",
+            [],
+        )
+        .unwrap();
+
+        tx.execute(
+            "CREATE TABLE schema_version (version INTEGER PRIMARY KEY)",
+            [],
+        )
+        .unwrap();
+        tx.execute("INSERT INTO schema_version (version) VALUES (7)", [])
+            .unwrap();
+        tx.commit().unwrap();
+
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("sona.db");
+        let mut disk_conn = rusqlite::Connection::open(&db_path).unwrap();
+        let backup = rusqlite::backup::Backup::new(&connection, &mut disk_conn).unwrap();
+        backup
+            .run_to_completion(5, std::time::Duration::from_millis(10), None)
+            .unwrap();
+        drop(backup);
+        drop(disk_conn);
+
+        let db = Database::open(temp.path()).unwrap();
+        assert_eq!(schema_versions(&db), vec![7, 8]);
+
+        db.with_connection(|conn| {
+            let pipelines_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'project_pipelines'",
+                [],
+                |row| row.get(0),
+            )?;
+            assert_eq!(pipelines_count, 1);
+
+            let project_id: String = conn.query_row(
+                "SELECT project_id FROM history_items WHERE id = 'item-1'",
+                [],
+                |row| row.get(0),
+            )?;
+            assert_eq!(project_id, "proj-1");
+
+            let index_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_history_items_project_id'",
+                [],
+                |row| row.get(0),
+            )?;
+            assert_eq!(index_count, 1);
+
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]

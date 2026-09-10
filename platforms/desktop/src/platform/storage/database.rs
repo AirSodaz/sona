@@ -152,12 +152,12 @@ mod tests {
     use super::*;
     use rusqlite::Connection;
 
-    fn create_legacy_v7_database(dir: &Path) {
+    fn create_legacy_v6_database(dir: &Path) {
         let db_path = dir.join("sona.db");
         let conn = Connection::open(db_path).unwrap();
         conn.execute_batch(
             "CREATE TABLE schema_version (version INTEGER PRIMARY KEY);
-             INSERT INTO schema_version (version) VALUES (7);
+             INSERT INTO schema_version (version) VALUES (6);
              CREATE TABLE legacy_test_table (id INTEGER PRIMARY KEY, content TEXT);
              INSERT INTO legacy_test_table (id, content) VALUES (1, 'legacy_data');",
         )
@@ -188,13 +188,13 @@ mod tests {
     #[test]
     fn test_legacy_schema_version_exit_action() {
         let temp = tempfile::tempdir().unwrap();
-        create_legacy_v7_database(temp.path());
+        create_legacy_v6_database(temp.path());
 
         let mut prompt_called = false;
         let err = open_and_migrate_sqlite_for_path_with_prompt(temp.path(), |found, minimum| {
             prompt_called = true;
-            assert_eq!(found, 7);
-            assert_eq!(minimum, 8);
+            assert_eq!(found, 6);
+            assert_eq!(minimum, 7);
             LegacyDatabaseAction::Exit
         })
         .unwrap_err();
@@ -204,8 +204,8 @@ mod tests {
         assert!(matches!(
             db_err,
             sona_sqlite::DatabaseError::UnsupportedLegacySchemaVersion {
-                found: 7,
-                minimum: 8,
+                found: 6,
+                minimum: 7,
             }
         ));
 
@@ -225,7 +225,7 @@ mod tests {
     #[test]
     fn test_legacy_schema_version_backup_and_reset_action() {
         let temp = tempfile::tempdir().unwrap();
-        create_legacy_v7_database(temp.path());
+        create_legacy_v6_database(temp.path());
 
         // Also create a dummy lock file and real analytics sqlite file
         std::fs::write(temp.path().join(".history.lock"), b"lock").unwrap();
@@ -233,8 +233,8 @@ mod tests {
         let mut prompt_called = false;
         let db = open_and_migrate_sqlite_for_path_with_prompt(temp.path(), |found, minimum| {
             prompt_called = true;
-            assert_eq!(found, 7);
-            assert_eq!(minimum, 8);
+            assert_eq!(found, 6);
+            assert_eq!(minimum, 7);
             LegacyDatabaseAction::BackupAndReset
         })
         .unwrap();
@@ -278,7 +278,7 @@ mod tests {
 
         let backup_dir = entries.pop().unwrap();
         let dir_name = backup_dir.file_name().unwrap().to_string_lossy();
-        assert!(dir_name.starts_with("db_v7_"));
+        assert!(dir_name.starts_with("db_v6_"));
 
         // Verify backed up files
         assert!(backup_dir.join("sona.db").exists());
@@ -287,7 +287,7 @@ mod tests {
 
         let info_str = std::fs::read_to_string(backup_dir.join("backup_info.json")).unwrap();
         let info: serde_json::Value = serde_json::from_str(&info_str).unwrap();
-        assert_eq!(info["schemaVersion"], 7);
+        assert_eq!(info["schemaVersion"], 6);
         assert_eq!(info["reason"], "unsupported_legacy_schema_version");
 
         // Verify backed up database still has original legacy data
@@ -300,6 +300,87 @@ mod tests {
             )
             .unwrap();
         assert_eq!(content, "legacy_data");
+    }
+
+    #[test]
+    fn test_v7_database_is_auto_migrated_to_v8() {
+        let temp = tempfile::tempdir().unwrap();
+        let db_path = temp.path().join("sona.db");
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE schema_version (version INTEGER PRIMARY KEY);
+             INSERT INTO schema_version (version) VALUES (7);
+             CREATE TABLE tags (
+                 id TEXT PRIMARY KEY,
+                 name TEXT NOT NULL,
+                 description TEXT NOT NULL DEFAULT '',
+                 icon TEXT,
+                 color TEXT,
+                 sort_order INTEGER NOT NULL DEFAULT 0,
+                 created_at INTEGER NOT NULL DEFAULT 0,
+                 updated_at INTEGER NOT NULL DEFAULT 0
+             );
+             INSERT INTO tags (id, name) VALUES ('proj-a', 'Project Alpha');
+             CREATE TABLE history_items (
+                 id TEXT PRIMARY KEY,
+                 timestamp INTEGER NOT NULL,
+                 duration REAL NOT NULL DEFAULT 0.0,
+                 title TEXT NOT NULL DEFAULT ''
+             );
+             INSERT INTO history_items (id, timestamp, title) VALUES ('item-1', 12345, 'Sample');
+             CREATE TABLE history_item_tags (
+                 history_id TEXT NOT NULL,
+                 tag_id TEXT NOT NULL,
+                 PRIMARY KEY (history_id, tag_id)
+             );
+             INSERT INTO history_item_tags (history_id, tag_id) VALUES ('item-1', 'proj-a');",
+        )
+        .unwrap();
+        drop(conn);
+
+        let db = open_and_migrate_sqlite_for_path_with_prompt(temp.path(), |_found, _min| {
+            panic!("Prompt must NOT be called for a v7 database since it can be migrated!");
+        })
+        .unwrap();
+
+        // The database should be automatically migrated to version 8
+        let version: i64 = db
+            .with_connection(|conn| {
+                conn.query_row(
+                    "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+                    [],
+                    |row| row.get(0),
+                )
+                .map_err(sona_sqlite::DatabaseError::QueryError)
+            })
+            .unwrap();
+        assert_eq!(version, 8);
+
+        // project_pipelines table should now exist
+        let pipeline_exists: bool = db
+            .with_connection(|conn| {
+                let count: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='project_pipelines'",
+                    [],
+                    |row| row.get(0),
+                ).map_err(sona_sqlite::DatabaseError::QueryError)?;
+                Ok(count > 0)
+            })
+            .unwrap();
+        assert!(pipeline_exists);
+
+        // history_items.project_id should be backfilled from history_item_tags
+        let project_id: String = db
+            .with_connection(|conn| {
+                conn.query_row(
+                    "SELECT project_id FROM history_items WHERE id = 'item-1'",
+                    [],
+                    |row| row.get(0),
+                )
+                .map_err(sona_sqlite::DatabaseError::QueryError)
+            })
+            .unwrap();
+        assert_eq!(project_id, "proj-a");
     }
 
     #[test]
