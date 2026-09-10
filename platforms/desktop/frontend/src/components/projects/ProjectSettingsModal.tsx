@@ -198,7 +198,7 @@ export function ProjectSettingsModal({
                       checked={Boolean(pipeline.autoPolish)}
                       onChange={(e) => updatePipeline({ autoPolish: e.target.checked })}
                     />
-                    <span>{t('automation.action_polish', { defaultValue: 'Auto Polish' })}</span>
+                    <span>{t('automation.auto_polish', { defaultValue: 'Auto Polish' })}</span>
                   </label>
                   {pipeline.autoPolish && (
                     <div className="project-pipeline-item-content">
@@ -222,7 +222,7 @@ export function ProjectSettingsModal({
                       checked={Boolean(pipeline.autoTranslate)}
                       onChange={(e) => updatePipeline({ autoTranslate: e.target.checked })}
                     />
-                    <span>{t('automation.action_translate', { defaultValue: 'Auto Translate' })}</span>
+                    <span>{t('automation.auto_translate', { defaultValue: 'Auto Translate' })}</span>
                   </label>
                   {pipeline.autoTranslate && (
                     <div className="project-pipeline-item-content">
@@ -246,7 +246,7 @@ export function ProjectSettingsModal({
                       checked={Boolean(pipeline.autoSummary)}
                       onChange={(e) => updatePipeline({ autoSummary: e.target.checked })}
                     />
-                    <span>{t('automation.action_summary', { defaultValue: 'Auto Summary' })}</span>
+                    <span>{t('automation.auto_summary', { defaultValue: 'Auto Summary' })}</span>
                   </label>
                   {pipeline.autoSummary && (
                     <div className="project-pipeline-item-content">

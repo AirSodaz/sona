@@ -1,7 +1,3 @@
-.app-logo:hover {
-  opacity: 1;
-}
-
 .app-logo h1 {
   font-size: 1rem;
   font-weight: 500;
@@ -9,15 +5,20 @@
   /* Removed gradient text for cleaner look */
   background: none;
   -webkit-text-fill-color: initial;
+  opacity: 0.9;
+  transition: opacity var(--transition-normal);
 }
 
-.project-selector { position: relative; margin-left: 8px; }
+.app-logo:hover h1 {
+  opacity: 1;
+}
+.project-selector { position: relative; margin-left: 8px; z-index: 1001; }
 .project-selector-trigger { display: inline-flex; align-items: center; gap: 7px; height: 30px; max-width: 190px; padding: 4px 10px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-bg-elevated); color: var(--color-text-primary); font: inherit; font-size: 13px; cursor: pointer; }
 .project-selector-trigger:hover { border-color: var(--color-border-hover); background: var(--color-bg-primary); }
 .project-selector-trigger:disabled { opacity: .55; cursor: not-allowed; }
 .project-selector-trigger > span:not(.project-color-dot) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-color-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--project-color, #6366F1); box-shadow: 0 0 0 2px color-mix(in srgb, var(--project-color, #6366F1) 20%, transparent); }
-.project-selector-popover { position: absolute; top: calc(100% + 6px); left: 0; z-index: 300; width: 280px; padding: 8px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg-elevated); box-shadow: var(--shadow-lg); }
+.project-selector-popover { position: absolute; top: calc(100% + 6px); left: 0; z-index: 1002; width: 280px; padding: 8px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg-elevated); box-shadow: var(--shadow-lg); }
 .project-selector-search { display: flex; align-items: center; gap: 7px; padding: 6px 8px; border-bottom: 1px solid var(--color-border); color: var(--color-text-muted); }
 .project-selector-search input { width: 100%; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; font-size: 13px; }
 .project-selector-option { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 6px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--color-text-primary); text-align: left; cursor: pointer; font: inherit; font-size: 13px; }
