@@ -10,17 +10,7 @@
     "frontendDist": "frontend/dist"
   },
   "app": {
-    "windows": [
-      {
-        "label": "main",
-        "title": "Sona - Transcript Editor",
-        "width": 1200,
-        "height": 800,
-        "minWidth": 900,
-        "minHeight": 600,
-        "dragDropEnabled": true
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": "default-src 'self'; script-src 'self' ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost; media-src 'self' asset: http://asset.localhost; connect-src 'self' ipc: http://ipc.localhost http://localhost:* ws://localhost:*; object-src 'none'; base-uri 'none'",
       "assetProtocol": {

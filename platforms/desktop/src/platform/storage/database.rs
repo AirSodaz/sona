@@ -122,17 +122,29 @@ pub fn open_and_migrate_sqlite_for_app<R: Runtime>(
     Ok((db, app_local_data_dir))
 }
 
-pub fn sqlite_database<R: Runtime>(app: &AppHandle<R>) -> Arc<sona_sqlite::Database> {
-    sqlite_application_context(app).database()
+pub fn try_sqlite_application_context<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<Arc<sona_sqlite::SqliteApplicationContext>, String> {
+    app.try_state::<Arc<sona_sqlite::SqliteApplicationContext>>()
+        .map(|s| Arc::clone(s.inner()))
+        .ok_or_else(|| "Database application context has not been initialized".to_string())
+}
+
+pub fn try_sqlite_database<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<Arc<sona_sqlite::Database>, String> {
+    try_sqlite_application_context(app).map(|ctx| ctx.database())
 }
 
 pub fn sqlite_application_context<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Arc<sona_sqlite::SqliteApplicationContext> {
-    Arc::clone(
-        app.state::<Arc<sona_sqlite::SqliteApplicationContext>>()
-            .inner(),
-    )
+    try_sqlite_application_context(app)
+        .expect("Database application context is requested before being managed")
+}
+
+pub fn sqlite_database<R: Runtime>(app: &AppHandle<R>) -> Arc<sona_sqlite::Database> {
+    sqlite_application_context(app).database()
 }
 
 #[cfg(test)]
