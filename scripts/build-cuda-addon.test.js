@@ -109,7 +109,7 @@ test('packageCudaAddonArchive creates package and sha256 checksum', () => {
     fs.writeFileSync(path.join(stagedDir, 'dummy.dll'), 'hello cuda');
 
     const archivePath = path.join(tempRoot, 'test-addon.tar.gz');
-    const info = packageCudaAddonArchive({ stagedDir, archivePath, platform: 'win32' });
+    const info = packageCudaAddonArchive({ stagedDir, archivePath });
 
     assert.ok(fs.existsSync(archivePath));
     assert.ok(fs.existsSync(`${archivePath}.sha256`));

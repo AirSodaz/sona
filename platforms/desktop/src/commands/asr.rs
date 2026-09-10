@@ -76,8 +76,10 @@ pub async fn feed_external_live_source(
         ));
     }
     let samples = samples
-        .chunks_exact(2)
-        .map(|sample| i16::from_le_bytes([sample[0], sample[1]]) as f32 / 32768.0)
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|sample| i16::from_le_bytes(*sample) as f32 / 32768.0)
         .collect::<Vec<_>>();
     let (source, frame) = state
         .next_external_frame(&source_token, samples)
