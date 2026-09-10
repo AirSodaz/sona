@@ -210,6 +210,7 @@ test('desktop bundle preparer rebases staged macOS dylibs before linking the CLI
     'libggml.dylib',
     'libggml-base.dylib',
     'libggml-cpu.dylib',
+    'libllama-common.dylib',
     'libllama.dylib',
   ];
   assert.deepEqual(
@@ -507,7 +508,7 @@ test('desktop bundle preparer collects llama.cpp libraries from Cargo build outp
 
   assert.deepEqual(
     fs.readdirSync(runtimeLibDir).sort(),
-    ['ggml-base.dll', 'ggml-cpu.dll', 'ggml.dll', 'llama.dll'],
+    ['ggml-base.dll', 'ggml-cpu.dll', 'ggml.dll', 'llama-common.dll', 'llama.dll'],
   );
 });
 
@@ -546,7 +547,7 @@ test('desktop bundle preparer skips broken release symlinks in favor of CMake ou
 
   assert.deepEqual(
     fs.readdirSync(runtimeLibDir).sort(),
-    ['libggml-base.so', 'libggml-cpu.so', 'libggml.so', 'libllama.so'],
+    ['libggml-base.so', 'libggml-cpu.so', 'libggml.so', 'libllama-common.so', 'libllama.so'],
   );
 });
 

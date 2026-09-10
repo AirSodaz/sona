@@ -321,8 +321,10 @@ impl AsrAudioFrame {
             ));
         }
         let samples = bytes
-            .chunks_exact(2)
-            .map(|sample| i16::from_le_bytes([sample[0], sample[1]]) as f32 / 32768.0)
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|sample| i16::from_le_bytes(*sample) as f32 / 32768.0)
             .collect::<Vec<_>>();
         Ok(Self::new(sequence, start_sample, samples))
     }
@@ -1038,8 +1040,10 @@ pub fn pcm_i16_to_f32(samples: &[i16]) -> Vec<f32> {
 
 pub fn pcm_s16le_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
     bytes
-        .chunks_exact(2)
-        .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / 32768.0)
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|chunk| i16::from_le_bytes(*chunk) as f32 / 32768.0)
         .collect()
 }
 
