@@ -364,7 +364,7 @@ function isLlamaCppDynamicLibrary(name, target) {
 }
 
 function requiredLlamaCppRuntimeLibraryAnchors(target) {
-  const names = ['ggml', 'ggml-base', 'ggml-cpu', 'llama'];
+  const names = ['ggml', 'ggml-base', 'ggml-cpu', 'llama', 'llama-common'];
   if (vulkanEnabled() && (target.includes('windows') || target.includes('linux'))) {
     names.push('ggml-vulkan');
   }
