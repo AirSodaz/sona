@@ -5,6 +5,7 @@ import type {
   AutomationRuntimeBlockReason,
   AutomationRuntimeState,
 } from '../../types/automation';
+import type { ProjectPipelineConfig } from '../../types/project';
 import type {
   AutomationRuntimeCandidatePayload,
   AutomationRuntimePathCollectionResult,
@@ -208,6 +209,15 @@ export class AutomationRuntimeCoordinator {
     const projectId = rawProjectId && rawProjectId !== 'inbox' && rawProjectId !== 'none'
       ? rawProjectId : null;
     const pipeline = resolveItemPipeline(projectId, this.ports.useProjectStore.getState().projects, effectiveConfig);
+    const hasExportDir = Boolean(latestRule.exportConfig?.directory);
+    const effectivePipeline = hasExportDir
+      ? {
+        ...pipeline,
+        autoExport: true,
+        exportDirectory: latestRule.exportConfig.directory,
+        exportFormat: (latestRule.exportConfig.format as ProjectPipelineConfig['exportFormat']) || pipeline.exportFormat || 'txt',
+      }
+      : pipeline;
 
     try {
       this.ports.useBatchQueueStore.getState().addFiles([payload.filePath], {
@@ -216,13 +226,14 @@ export class AutomationRuntimeCoordinator {
         automationRuleName: latestRule.name,
         resolvedConfigSnapshot: effectiveConfig,
         projectId,
-        pipelineSnapshot: pipeline,
+        pipelineSnapshot: effectivePipeline,
+        exportConfig: latestRule.exportConfig,
         sourceFingerprint: payload.sourceFingerprint,
         fileStat: {
           size: payload.size,
           mtimeMs: payload.mtimeMs,
         },
-        exportFileNamePrefix: pipeline.exportFileNamePrefix || latestRule.exportConfig?.prefix || '',
+        exportFileNamePrefix: effectivePipeline.exportFileNamePrefix || latestRule.exportConfig?.prefix || '',
       });
     } catch (error) {
       this.pendingFingerprints.delete(pendingKey);

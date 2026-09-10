@@ -18,10 +18,10 @@ import {
     createDraftFromRule,
     createRuleDraft,
     NEW_RULE_KEY,
+    setExportConfigField,
     type AutomationDraftUpdate,
     type AutomationRuleDraft,
 } from './automation';
-import { openDialog } from '../../services/tauri/platform/dialog';
 
 type BrowseField = 'watchDirectory' | 'directory';
 type SelectOption = {
@@ -70,7 +70,6 @@ export function SettingsAutomationTab(): React.JSX.Element {
     const projectOptions = useMemo<SelectOption[]>(() => [
         { value: 'inbox', label: t('projects.inbox', { defaultValue: 'Inbox' }) },
         ...projects.map((project) => ({ value: project.id, label: project.name })),
-        { value: 'none', label: t('automation.target_none', { defaultValue: 'None (Delete record after export)' }) },
     ], [projects, t]);
 
     const visibleRules = useMemo(
@@ -208,13 +207,14 @@ export function SettingsAutomationTab(): React.JSX.Element {
         if (!selected || typeof selected !== 'string') {
             return;
         }
-
         updateDraft(
             draftKey,
-            (draft) => ({
-                ...draft,
-                [field]: selected,
-            }),
+            field === 'directory'
+                ? setExportConfigField('directory', selected)
+                : (draft) => ({
+                    ...draft,
+                    [field]: selected,
+                }),
         );
     };
 
@@ -234,6 +234,15 @@ export function SettingsAutomationTab(): React.JSX.Element {
             return;
         }
 
+        if (!draft.saveHistory && !draft.exportConfig.directory.trim()) {
+            await alert(
+                t('automation.export_directory_required', {
+                    defaultValue: 'Please specify an output directory when Save to History is disabled.',
+                }),
+                { variant: 'warning' },
+            );
+            return;
+        }
         const liveRule = draft.id ? rules.find((rule: AutomationRule) => rule.id === draft.id) : null;
 
         try {
@@ -335,7 +344,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
         <SettingsTabContainer id="settings-panel-automation" ariaLabelledby="settings-tab-automation">
             <SettingsPageHeader
                 icon={<AutomationIcon width={28} height={28} />}
-                title={t('automation.title', { defaultValue: 'Folder Automation' })}
+                title={t('automation.title', { defaultValue: 'Automation' })}
                 description={t('automation.description', {
                     defaultValue: 'Watch local folders for new audio files, automatically ingest them into target projects, and run their deterministic pipelines.',
                 })}
@@ -443,9 +452,9 @@ export function SettingsAutomationTab(): React.JSX.Element {
                                 title={displayRule.name}
                                 typeLabel={t('automation.file_rule', { defaultValue: 'Folder' })}
                                 projectLabel={projectLabel}
+                                outputDirectory={displayRule.saveHistory ? undefined : displayRule.exportConfig?.directory}
                                 watchDirectory={displayRule.watchDirectory}
                                 enabled={displayRule.enabled}
-                                canToggle={true}
                                 onToggleEnabled={(value) => { void handleToggleEnabled(rule.id, value); }}
                                 statusLabel={getRuntimeStatusLabel(runtime?.status)}
                                 resultLabel={describeLastResult(rule.id)}

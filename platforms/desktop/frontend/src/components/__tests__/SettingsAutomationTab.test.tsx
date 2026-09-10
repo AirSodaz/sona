@@ -98,7 +98,7 @@ describe('SettingsAutomationTab', () => {
     it('renders folder automation watchers and project attribution label', () => {
         render(<SettingsAutomationTab />);
 
-        expect(screen.getByText('Folder Automation')).toBeDefined();
+        expect(screen.getByText('Automation')).toBeDefined();
         expect(screen.getByText('Meeting Inbox')).toBeDefined();
         expect(screen.getByText('Team Sync')).toBeDefined();
         expect(screen.getByTitle('C:\\watch')).toBeDefined();
@@ -119,6 +119,47 @@ describe('SettingsAutomationTab', () => {
             watchDirectory: 'C:\\watch\\interviews',
             recursive: true,
             projectId: 'inbox',
+        })));
+    });
+    it('hides target project when save to history is disabled', async () => {
+        useAutomationStore.setState({ ...useAutomationStore.getState(), rules: [] });
+        render(<SettingsAutomationTab />);
+
+        fireEvent.click(screen.getByRole('button', { name: 'New Rule' }));
+
+        const saveHistorySwitch = screen.getByRole('switch', { name: 'Save to History' });
+        expect(saveHistorySwitch).toBeDefined();
+        expect(screen.getByRole('button', { name: 'Target Project' })).toBeDefined();
+
+        // Toggle Save to History off
+        fireEvent.click(saveHistorySwitch);
+
+        expect(screen.queryByRole('button', { name: 'Target Project' })).toBeNull();
+
+        fireEvent.change(screen.getByPlaceholderText('e.g. Weekly Meeting Inbox'), { target: { value: 'Export Only Watcher' } });
+        fireEvent.change(screen.getByPlaceholderText('Choose a folder to monitor...'), { target: { value: 'C:\\watch\\export_only' } });
+
+        // First try to save without export directory -> should alert
+        fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
+        await waitFor(() => {
+            expect(alert).toHaveBeenCalledWith(
+                'Please specify an output directory when Save to History is disabled.',
+                expect.any(Object),
+            );
+            expect(saveRule).not.toHaveBeenCalled();
+        });
+
+        // Fill export directory and save
+        fireEvent.change(screen.getByPlaceholderText('Choose export directory...'), { target: { value: 'C:\\exports' } });
+        fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
+
+        await waitFor(() => expect(saveRule).toHaveBeenCalledWith(expect.objectContaining({
+            name: 'Export Only Watcher',
+            watchDirectory: 'C:\\watch\\export_only',
+            saveHistory: false,
+            exportConfig: expect.objectContaining({
+                directory: 'C:\\exports',
+            }),
         })));
     });
 
