@@ -106,6 +106,12 @@ where
             tx.execute("DELETE FROM project_pipelines WHERE project_id = ?1", [project_id])?;
             tx.execute("UPDATE app_settings SET value = NULL WHERE key = 'sona-active-project-id' AND (value = ?1 OR json_extract(value, '$') = ?1)", [project_id])?;
             tx.execute("DELETE FROM tags WHERE id = ?1", [project_id])?;
+            record_local_delete_in_transaction(
+                tx,
+                SyncEntityKind::Tag,
+                project_id,
+                legacy_change_time::now_ms() as i64 as u64,
+            )?;
             Ok(())
         })).map_err(|error| TagError::Repository(error.to_string()))
     }
@@ -160,11 +166,22 @@ where
     ) -> Result<(), TagError> {
         let payload = serde_json::to_string(pipeline)
             .map_err(|error| TagError::Repository(error.to_string()))?;
+        let now_ms = legacy_change_time::now_ms() as i64;
         self.repository.get_db()
             .and_then(|db| db.with_transaction(|tx| {
                 tx.execute(
                     "INSERT INTO project_pipelines (project_id, pipeline_json, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(project_id) DO UPDATE SET pipeline_json = excluded.pipeline_json, updated_at = excluded.updated_at",
-                    rusqlite::params![project_id, payload, legacy_change_time::now_ms() as i64],
+                    rusqlite::params![project_id, payload, now_ms],
+                )?;
+                let val = serde_json::to_value(pipeline)
+                    .map_err(|e| DatabaseError::QueryError(rusqlite::Error::ToSqlConversionFailure(Box::new(e))))?;
+                record_local_field_change_in_transaction(
+                    tx,
+                    SyncEntityKind::Tag,
+                    project_id,
+                    "pipeline",
+                    val,
+                    now_ms as u64,
                 )?;
                 Ok(())
             }))

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, ChevronRight, ArrowRight, Sparkles, FolderSync, Tags, HardDriveDownload } from 'lucide-react';
+import { ChevronDown, ChevronRight, ArrowRight, Sparkles, FolderSync, Tags } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { PauseIcon, PlayIcon, TrashIcon } from '../../Icons';
 import { Switch } from '../../Switch';
@@ -64,7 +64,6 @@ export function AutomationRuleCard({
     pendingCount,
     processingCount,
     projectLabel,
-    profileLabel,
     priorityLabel,
     migrationNotice,
     resultLabel,
@@ -116,34 +115,17 @@ export function AutomationRuleCard({
 
                     {/* Flowchart Summary */}
                     <div className="automation-card-flow-body">
-                        {isFileRule ? (
-                            <span className="automation-flow-node-box node-source" title={watchDirectory}>
-                                <FolderSync size={13} />
-                                <span>{watchDirectory ? (watchDirectory.split(/[/\\]/).pop() || watchDirectory) : t('automation.none', { defaultValue: 'None' })}</span>
-                            </span>
-                        ) : (
-                            <span className="automation-flow-node-box node-source" title={projectLabel}>
-                                <Tags size={13} />
-                                <span>{projectLabel}</span>
-                            </span>
-                        )}
+                        <span className="automation-flow-node-box node-source" title={watchDirectory}>
+                            <FolderSync size={13} />
+                            <span>{watchDirectory ? (watchDirectory.split(/[/\\]/).pop() || watchDirectory) : t('automation.none', { defaultValue: 'None' })}</span>
+                        </span>
 
                         <span className="automation-flow-arrow-icon"><ArrowRight size={13} /></span>
 
-                        <span className="automation-flow-node-box node-ai" title={profileLabel || t('automation.profile_global_fallback', { defaultValue: 'Global settings' })}>
+                        <span className="automation-flow-node-box node-ai" title={projectLabel}>
                             <Sparkles size={13} />
-                            <span>{profileLabel || t('automation.profile_global_fallback', { defaultValue: 'Global settings' })}</span>
+                            <span>{projectLabel}</span>
                         </span>
-
-                        {isFileRule && outputDirectory && (
-                            <>
-                                <span className="automation-flow-arrow-icon"><ArrowRight size={13} /></span>
-                                <span className="automation-flow-node-box node-export" title={outputDirectory}>
-                                    <HardDriveDownload size={13} />
-                                    <span>{outputDirectory.split(/[/\\]/).pop() || outputDirectory}</span>
-                                </span>
-                            </>
-                        )}
 
                         <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px', alignItems: 'center' }}>
                             {priorityLabel && <SummaryChip label={priorityLabel} tone="neutral" />}

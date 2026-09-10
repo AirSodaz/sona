@@ -12,6 +12,7 @@ import type {
 } from '../../types/config';
 import { useVocabularyConfig, useSetConfig } from '../../stores/configStore';
 import { useAutomationStore } from '../../stores/automationStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { SettingsTabContainer, SettingsPageHeader } from './SettingsLayout';
 import { Switch } from '../Switch';
 import { SettingsContextSection } from './SettingsContextSection';
@@ -197,7 +198,33 @@ export function SettingsVocabularyTab(): React.JSX.Element {
   const removeRuleSetReferenceFromProfiles = async (
     kind: AutomationRuleSetDependencyKind,
     setId: string,
-  ) => removeProfileDependency(kind, setId);
+  ) => {
+    await removeProfileDependency(kind, setId);
+    const { projects, updateProject } = useProjectStore.getState();
+    for (const project of projects) {
+      if (!project.pipeline) continue;
+      let changed = false;
+      let nextHotwords = project.pipeline.hotwordSetIds;
+      let nextReplacements = project.pipeline.replacementSetIds;
+      if (kind === 'hotwordSet' && nextHotwords?.includes(setId)) {
+        nextHotwords = nextHotwords.filter((id) => id !== setId);
+        changed = true;
+      }
+      if (kind === 'textReplacementSet' && nextReplacements?.includes(setId)) {
+        nextReplacements = nextReplacements.filter((id) => id !== setId);
+        changed = true;
+      }
+      if (changed) {
+        await updateProject(project.id, {
+          pipeline: {
+            ...project.pipeline,
+            hotwordSetIds: nextHotwords,
+            replacementSetIds: nextReplacements,
+          },
+        });
+      }
+    }
+  };
 
   const handleAddSet = () => {
     const setName = textReplacementUi.newSetName.trim();

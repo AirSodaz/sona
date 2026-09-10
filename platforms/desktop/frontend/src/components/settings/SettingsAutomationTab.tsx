@@ -1,16 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SlidersHorizontal, FolderSync, Activity, Sparkles } from 'lucide-react';
+import { FolderSync, Activity, Sparkles } from 'lucide-react';
 import { AutomationIcon } from '../Icons';
 import { useAutomationStore } from '../../stores/automationStore';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
-import { useConfigStore } from '../../stores/configStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useDialogStore } from '../../stores/dialogStore';
-import { getPolishPresetOptions } from '../../utils/polishPresets';
-import { getSummaryTemplateOptions } from '../../utils/summaryTemplates';
-import { getLocalizedLanguageName } from '../../utils/languageUtils';
-import { LANGUAGE_OPTIONS } from '../../constants/languages';
 import { SettingsPageHeader, SettingsSection, SettingsTabContainer } from './SettingsLayout';
 import './SettingsAutomation.css';
 import type {
@@ -20,15 +15,10 @@ import type {
 import {
     AutomationRuleCard,
     AutomationRuleEditor,
-    AutomationProfileEditor,
     createDraftFromRule,
     createRuleDraft,
     NEW_RULE_KEY,
-    normalizeAutomationRuleDraft,
-    setDraftField,
-    setExportConfigField,
     type AutomationDraftUpdate,
-    type AutomationProfileDraft,
     type AutomationRuleDraft,
 } from './automation';
 import { openDialog } from '../../services/tauri/platform/dialog';
@@ -40,9 +30,8 @@ type SelectOption = {
 };
 
 export function SettingsAutomationTab(): React.JSX.Element {
-    const { t, i18n } = useTranslation();
+    const { t } = useTranslation();
     const rules = useAutomationStore((state) => state.rules);
-    const profiles = useAutomationStore((state) => state.profiles);
     const runtimeStates = useAutomationStore((state) => state.runtimeStates);
     const processedEntries = useAutomationStore((state) => state.processedEntries);
     const saveRule = useAutomationStore((state) => state.saveRule);
@@ -50,21 +39,13 @@ export function SettingsAutomationTab(): React.JSX.Element {
     const toggleRuleEnabled = useAutomationStore((state) => state.toggleRuleEnabled);
     const scanRuleNow = useAutomationStore((state) => state.scanRuleNow);
     const retryFailed = useAutomationStore((state) => state.retryFailed);
-    const saveProfile = useAutomationStore((state) => state.saveProfile);
-    const deleteProfile = useAutomationStore((state) => state.deleteProfile);
-    const applyTagRuleToExisting = useAutomationStore((state) => state.applyTagRuleToExisting);
     const queueItems = useBatchQueueStore((state) => state.queueItems);
-    const config = useConfigStore((state) => state.config);
     const projects = useProjectStore((state) => state.projects);
     const alert = useDialogStore((state) => state.alert);
     const confirm = useDialogStore((state) => state.confirm);
     const showError = useDialogStore((state) => state.showError);
     const [expandedRuleIds, setExpandedRuleIds] = useState<Set<string>>(new Set());
     const [drafts, setDrafts] = useState<Record<string, AutomationRuleDraft>>({});
-    const [selectedSection, setSelectedSection] = useState<'profiles' | 'file'>('file');
-    const [profileDrafts, setProfileDrafts] = useState<Record<string, AutomationProfileDraft>>({});
-    const [expandedProfileIds, setExpandedProfileIds] = useState<Set<string>>(new Set());
-    const activeSection = selectedSection;
 
     const queueSummaryByRuleId = useMemo(() => {
         const summary = new Map<string, { pending: number; processing: number }>();
@@ -87,62 +68,14 @@ export function SettingsAutomationTab(): React.JSX.Element {
     }, [queueItems]);
 
     const projectOptions = useMemo<SelectOption[]>(() => [
-        ...projects.map((project) => ({ value: project.id, label: project.name })),
         { value: 'inbox', label: t('projects.inbox', { defaultValue: 'Inbox' }) },
+        ...projects.map((project) => ({ value: project.id, label: project.name })),
         { value: 'none', label: t('automation.target_none', { defaultValue: 'None (Delete record after export)' }) },
     ], [projects, t]);
 
-    const languageOptions = useMemo<SelectOption[]>(() => (
-        LANGUAGE_OPTIONS.map((language) => ({
-            value: language.code,
-            label: getLocalizedLanguageName(language.code, i18n?.language || 'zh'),
-        }))
-    ), [i18n?.language]);
-
-    const polishPresetOptions = useMemo<SelectOption[]>(() => (
-        getPolishPresetOptions(config.polishCustomPresets, t)
-    ), [config.polishCustomPresets, t]);
-
-    const summaryTemplateOptions = useMemo<SelectOption[]>(() => (
-        getSummaryTemplateOptions(config.summaryCustomTemplates, t)
-    ), [config.summaryCustomTemplates, t]);
-
-    const profileOptions = useMemo<SelectOption[]>(() => ([
-        { value: '', label: t('automation.profile_global_fallback', { defaultValue: 'Global settings' }) },
-        ...profiles.map((profile) => ({ value: profile.id, label: profile.name })),
-    ]), [profiles, t]);
-
-    const namedSets = useMemo(() => ({
-        textReplacementSets: (config.textReplacementSets || []).map((item) => ({ id: item.id, name: item.name })),
-        hotwordSets: (config.hotwordSets || []).map((item) => ({ id: item.id, name: item.name })),
-        polishKeywordSets: (config.polishKeywordSets || []).map((item) => ({ id: item.id, name: item.name })),
-        speakerProfiles: (config.speakerProfiles || []).map((item) => ({ id: item.id, name: item.name })),
-    }), [config.hotwordSets, config.polishKeywordSets, config.speakerProfiles, config.textReplacementSets]);
-
     const visibleRules = useMemo(
-        () => rules.filter((rule) => (
-            (rule.kind ?? 'file') === activeSection
-        )),
-        [activeSection, rules],
-    );
-
-    const exportFormatOptions = useMemo<SelectOption[]>(() => ([
-        { value: 'txt', label: 'TXT' },
-        { value: 'srt', label: 'SRT' },
-        { value: 'vtt', label: 'VTT' },
-        { value: 'json', label: 'JSON' },
-    ]), []);
-
-    const allExportModeOptions = useMemo<SelectOption[]>(() => ([
-        { value: 'original', label: t('export.mode_original', { defaultValue: 'Original' }) },
-        { value: 'translation', label: t('export.mode_translation', { defaultValue: 'Translation' }) },
-        { value: 'bilingual', label: t('export.mode_bilingual', { defaultValue: 'Bilingual' }) },
-    ]), [t]);
-
-    const getExportModeOptions = (autoTranslate: boolean) => (
-        autoTranslate
-            ? allExportModeOptions
-            : allExportModeOptions.filter((option) => option.value === 'original')
+        () => rules.filter((rule) => (rule.kind ?? 'file') === 'file'),
+        [rules],
     );
 
     const getRuntimeStatusLabel = (status: AutomationRuntimeStatus | undefined) => {
@@ -208,97 +141,80 @@ export function SettingsAutomationTab(): React.JSX.Element {
             return null;
         }
 
-        const fileName = runtime.lastBlockedFilePath?.split(/[/\\]/).pop()
-            || t('automation.blocked_unknown_file', { defaultValue: 'latest file' });
+        const fileName = runtime.lastBlockedFilePath
+            ? runtime.lastBlockedFilePath.split(/[\\/]/).filter(Boolean).pop()
+            : null;
+        if (fileName) {
+            return `${fileName}: ${reasonLabel}`;
+        }
 
-        return t('automation.latest_blocked_hint', {
-            defaultValue: 'Skipped {{fileName}}: {{reason}}',
-            fileName,
-            reason: reasonLabel,
+        return reasonLabel;
+    };
+
+    const toggleExpanded = (ruleId: string, defaultDraft?: AutomationRuleDraft) => {
+        setExpandedRuleIds((current) => {
+            const next = new Set(current);
+            if (next.has(ruleId)) {
+                next.delete(ruleId);
+            } else {
+                next.add(ruleId);
+                if (defaultDraft && !drafts[ruleId]) {
+                    setDrafts((prev) => ({ ...prev, [ruleId]: defaultDraft }));
+                }
+            }
+            return next;
+        });
+    };
+
+    const beginCreateRule = () => {
+        setDrafts((current) => ({
+            ...current,
+            [NEW_RULE_KEY]: createRuleDraft('inbox', 'file'),
+        }));
+        setExpandedRuleIds((current) => new Set(current).add(NEW_RULE_KEY));
+    };
+
+    const closeDraft = (draftKey: string) => {
+        setDrafts((current) => {
+            const next = { ...current };
+            delete next[draftKey];
+            return next;
+        });
+        setExpandedRuleIds((current) => {
+            const next = new Set(current);
+            next.delete(draftKey);
+            return next;
         });
     };
 
     const updateDraft = (draftKey: string, updater: AutomationDraftUpdate) => {
         setDrafts((current) => {
-            const existingDraft = current[draftKey];
-            if (!existingDraft) {
+            const target = current[draftKey];
+            if (!target) {
                 return current;
             }
-
             return {
                 ...current,
-                [draftKey]: normalizeAutomationRuleDraft(updater(existingDraft)),
+                [draftKey]: updater(target),
             };
         });
-    };
-
-    const ensureDraft = (draftKey: string, nextDraft: AutomationRuleDraft) => {
-        setDrafts((current) => {
-            if (current[draftKey]) {
-                return current;
-            }
-
-            return {
-                ...current,
-                [draftKey]: normalizeAutomationRuleDraft(nextDraft),
-            };
-        });
-    };
-
-    const toggleExpanded = (draftKey: string, nextDraft: AutomationRuleDraft) => {
-        ensureDraft(draftKey, nextDraft);
-        setExpandedRuleIds((current) => {
-            const nextExpanded = new Set(current);
-            if (nextExpanded.has(draftKey)) {
-                nextExpanded.delete(draftKey);
-            } else {
-                nextExpanded.add(draftKey);
-            }
-            return nextExpanded;
-        });
-    };
-
-    const closeDraft = (draftKey: string) => {
-        setExpandedRuleIds((current) => {
-            const nextExpanded = new Set(current);
-            nextExpanded.delete(draftKey);
-            return nextExpanded;
-        });
-        setDrafts((current) => {
-            const nextDrafts = { ...current };
-            delete nextDrafts[draftKey];
-            return nextDrafts;
-        });
-    };
-
-    const beginCreateRule = (kind: 'file' = 'file') => {
-        ensureDraft(NEW_RULE_KEY, createRuleDraft('inbox', kind));
-        setExpandedRuleIds((current) => new Set(current).add(NEW_RULE_KEY));
     };
 
     const handleBrowseDirectory = async (draftKey: string, field: BrowseField) => {
-        const draft = drafts[draftKey];
-        if (!draft) {
-            return;
-        }
-
         const selected = await openDialog({
             directory: true,
             multiple: false,
-            defaultPath: field === 'watchDirectory'
-                ? draft.watchDirectory || undefined
-                : draft.exportConfig.directory || undefined,
         });
-
         if (!selected || typeof selected !== 'string') {
             return;
         }
 
         updateDraft(
             draftKey,
-            field === 'watchDirectory'
-                ? setDraftField('watchDirectory', selected)
-                : setExportConfigField('directory', selected, false),
+            (draft) => ({
+                ...draft,
+                [field]: selected,
+            }),
         );
     };
 
@@ -308,18 +224,11 @@ export function SettingsAutomationTab(): React.JSX.Element {
             return;
         }
 
-        const missingTagFields = draft.kind === 'tag' && draft.tagIds.length === 0;
-        const missingFileFields = draft.kind === 'file'
-            && (!draft.watchDirectory.trim() || !draft.exportConfig.directory.trim());
-        if (!draft.name.trim() || missingTagFields || missingFileFields) {
+        if (!draft.name.trim() || !draft.watchDirectory.trim()) {
             await alert(
-                draft.kind === 'tag'
-                    ? t('automation.tag_required_fields', {
-                        defaultValue: 'Complete the name and select at least one Tag before saving.',
-                    })
-                    : t('automation.required_fields', {
-                        defaultValue: 'Complete the name, watch directory, and output directory before saving.',
-                    }),
+                t('automation.required_fields', {
+                    defaultValue: 'Complete the rule name and watch directory before saving.',
+                }),
                 { variant: 'warning' },
             );
             return;
@@ -343,24 +252,37 @@ export function SettingsAutomationTab(): React.JSX.Element {
     };
 
     const handleDelete = async (ruleId: string) => {
+        const targetRule = rules.find((rule) => rule.id === ruleId);
         const confirmed = await confirm(
-            t('automation.delete_confirm', { defaultValue: 'Delete this automation rule?' }),
+            t('automation.delete_confirm', {
+                defaultValue: 'Delete automation rule "{{name}}"?',
+                name: targetRule?.name || ruleId,
+            }),
             {
-                title: t('automation.delete_title', { defaultValue: 'Delete Automation Rule' }),
+                title: t('automation.delete_rule', { defaultValue: 'Delete Automation Rule' }),
+                variant: 'danger',
             },
         );
+
         if (!confirmed) {
             return;
         }
 
-        await deleteRule(ruleId);
-        closeDraft(ruleId);
+        try {
+            await deleteRule(ruleId);
+            closeDraft(ruleId);
+        } catch (error) {
+            await showError({
+                code: 'automation.delete_failed',
+                messageKey: 'errors.automation.delete_failed',
+                cause: error,
+            });
+        }
     };
 
-    const handleToggleRule = async (rule: AutomationRule, enabled: boolean) => {
+    const handleToggleEnabled = async (ruleId: string, enabled: boolean) => {
         try {
-            await toggleRuleEnabled(rule.id, enabled);
-            updateDraft(rule.id, setDraftField('enabled', enabled));
+            await toggleRuleEnabled(ruleId, enabled);
         } catch (error) {
             await showError({
                 code: 'automation.toggle_failed',
@@ -394,150 +316,18 @@ export function SettingsAutomationTab(): React.JSX.Element {
         }
     };
 
-    const createEditor = (draftKey: string, draft: AutomationRuleDraft) => (
+    const createEditor = (key: string, draft: AutomationRuleDraft) => (
         <AutomationRuleEditor
             draft={draft}
-            exportFormatOptions={exportFormatOptions}
-            exportModeOptions={getExportModeOptions(draft.stageConfig.autoTranslate)}
-            languageOptions={languageOptions}
-            onBrowseDirectory={(field) => { void handleBrowseDirectory(draftKey, field); }}
-            onCancel={() => closeDraft(draftKey)}
-            onSave={() => { void handleSave(draftKey); }}
-            onUpdateDraft={(updater) => updateDraft(draftKey, updater)}
-            polishPresetOptions={polishPresetOptions}
-            profileOptions={profileOptions}
+            onBrowseDirectory={(field) => { void handleBrowseDirectory(key, field); }}
+            onCancel={() => closeDraft(key)}
+            onSave={() => { void handleSave(key); }}
+            onUpdateDraft={(updater) => updateDraft(key, updater)}
             projectOptions={projectOptions}
         />
     );
 
-    const createProfileDraft = (source?: AutomationProfileDraft): AutomationProfileDraft => source ?? {
-        id: '',
-        name: '',
-        translationLanguage: config.translationLanguage || 'zh',
-        polishPresetId: config.polishPresetId || 'general',
-        summaryTemplateId: config.summaryTemplateId || 'general',
-        enabledTextReplacementSetIds: (config.textReplacementSets || []).filter((item) => item.enabled).map((item) => item.id),
-        enabledHotwordSetIds: (config.hotwordSets || []).filter((item) => item.enabled).map((item) => item.id),
-        enabledPolishKeywordSetIds: (config.polishKeywordSets || []).filter((item) => item.enabled).map((item) => item.id),
-        enabledSpeakerProfileIds: (config.speakerProfiles || []).filter((item) => item.enabled).map((item) => item.id),
-    };
-
-    const handleApplyExisting = async (ruleId: string) => {
-        const confirmed = await confirm(
-            t('automation.apply_existing_confirm', {
-                defaultValue: 'Apply this rule to all matching existing records? This can update transcript text, translations, and summaries.',
-            }),
-            { title: t('automation.apply_existing', { defaultValue: 'Apply to existing records' }) },
-        );
-        if (!confirmed) return;
-
-        try {
-            const count = await applyTagRuleToExisting(ruleId);
-            await alert(t('automation.apply_existing_complete', {
-                defaultValue: 'Processed {{count}} matching records.',
-                count,
-            }), { variant: 'success' });
-        } catch (error) {
-            await showError({
-                code: 'automation.apply_existing_failed',
-                messageKey: 'errors.automation.apply_existing_failed',
-                cause: error,
-            });
-        }
-    };
-
-    const beginCreateProfile = () => {
-        setProfileDrafts((current) => ({ ...current, __new_profile__: createProfileDraft() }));
-        setExpandedProfileIds((current) => new Set(current).add('__new_profile__'));
-    };
-
-    const beginEditProfile = (profileId: string) => {
-        const profile = profiles.find((item) => item.id === profileId);
-        if (!profile) return;
-        setProfileDrafts((current) => ({
-            ...current,
-            [profileId]: {
-                id: profile.id,
-                name: profile.name,
-                translationLanguage: profile.translationLanguage,
-                polishPresetId: profile.polishPresetId,
-                summaryTemplateId: profile.summaryTemplateId,
-                enabledTextReplacementSetIds: [...profile.enabledTextReplacementSetIds],
-                enabledHotwordSetIds: [...profile.enabledHotwordSetIds],
-                enabledPolishKeywordSetIds: [...profile.enabledPolishKeywordSetIds],
-                enabledSpeakerProfileIds: [...profile.enabledSpeakerProfileIds],
-            },
-        }));
-        setExpandedProfileIds((current) => new Set(current).add(profileId));
-    };
-
-    const closeProfileDraft = (key: string) => {
-        setProfileDrafts((current) => {
-            const next = { ...current };
-            delete next[key];
-            return next;
-        });
-        setExpandedProfileIds((current) => {
-            const next = new Set(current);
-            next.delete(key);
-            return next;
-        });
-    };
-
-    const handleSaveProfile = async (key: string) => {
-        const draft = profileDrafts[key];
-        if (!draft?.name.trim()) {
-            await alert(t('automation.profile_name_required', { defaultValue: 'Enter a profile name before saving.' }), { variant: 'warning' });
-            return;
-        }
-        await saveProfile({ ...draft, id: draft.id || undefined, name: draft.name.trim() });
-        closeProfileDraft(key);
-    };
-
-    const handleDuplicateProfile = async (profileId: string) => {
-        const profile = profiles.find((item) => item.id === profileId);
-        if (!profile) return;
-        await saveProfile({
-            ...profile,
-            id: undefined,
-            name: t('automation.profile_copy_name', { defaultValue: '{{name}} Copy', name: profile.name }),
-        });
-    };
-
-    const handleDeleteProfile = async (profileId: string) => {
-        const dependencies = rules.filter((rule) => rule.profileId === profileId);
-        if (dependencies.length > 0) {
-            await alert(t('automation.profile_in_use', {
-                defaultValue: 'This profile is used by {{count}} automation rules.',
-                count: dependencies.length,
-            }), { variant: 'warning' });
-            return;
-        }
-        const confirmed = await confirm(t('automation.profile_delete_confirm', { defaultValue: 'Delete this configuration profile?' }), {
-            title: t('automation.profile_delete_title', { defaultValue: 'Delete Profile' }),
-        });
-        if (confirmed) await deleteProfile(profileId);
-    };
-
     const newRuleDraft = drafts[NEW_RULE_KEY];
-    const visibleNewRuleDraft = newRuleDraft && newRuleDraft.kind === activeSection ? newRuleDraft : undefined;
-
-    const renderProfileEditor = (key: string, draft: AutomationProfileDraft) => (
-        <AutomationProfileEditor
-            draft={draft}
-            hotwordSets={namedSets.hotwordSets}
-            languageOptions={languageOptions}
-            onCancel={() => closeProfileDraft(key)}
-            onChange={(nextDraft) => setProfileDrafts((current) => ({ ...current, [key]: nextDraft }))}
-            onSave={() => { void handleSaveProfile(key); }}
-            polishKeywordSets={namedSets.polishKeywordSets}
-            polishPresetOptions={polishPresetOptions}
-            speakerProfiles={namedSets.speakerProfiles}
-            summaryTemplateOptions={summaryTemplateOptions}
-            textReplacementSets={namedSets.textReplacementSets}
-        />
-    );
-
     const activeWatchingCount = rules.filter((r) => r.enabled && (r.kind ?? 'file') === 'file').length;
     const totalActiveRulesCount = rules.filter((r) => r.enabled).length;
 
@@ -545,9 +335,9 @@ export function SettingsAutomationTab(): React.JSX.Element {
         <SettingsTabContainer id="settings-panel-automation" ariaLabelledby="settings-tab-automation">
             <SettingsPageHeader
                 icon={<AutomationIcon width={28} height={28} />}
-                title={t('automation.title', { defaultValue: 'Automation' })}
+                title={t('automation.title', { defaultValue: 'Folder Automation' })}
                 description={t('automation.description', {
-                    defaultValue: 'Profiles define reusable processing settings. Tag automation runs post-processing, and file automation owns folder watching and export.',
+                    defaultValue: 'Watch local folders for new audio files, automatically ingest them into target projects, and run their deterministic pipelines.',
                 })}
             />
 
@@ -569,7 +359,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
                     </div>
                     <div className="automation-stat-copy">
                         <span className="automation-stat-value">{totalActiveRulesCount} / {rules.length}</span>
-                        <span className="automation-stat-label">{t('automation.stat_rules', { defaultValue: 'Enabled Pipelines' })}</span>
+                        <span className="automation-stat-label">{t('automation.stat_rules', { defaultValue: 'Enabled Rules' })}</span>
                     </div>
                 </div>
 
@@ -584,239 +374,97 @@ export function SettingsAutomationTab(): React.JSX.Element {
                 </div>
             </div>
 
-            {/* Section Tabs */}
-            <div
-                role="tablist"
-                aria-label={t('automation.sections', { defaultValue: 'Automation sections' })}
-                className="settings-scenario-cards automation-feature-tabs"
-            >
-                {([
-                    {
-                        id: 'profiles' as const,
-                        label: t('automation.profiles', { defaultValue: 'Profiles' }),
-                        description: t('automation.profiles_tab_description', {
-                            defaultValue: 'Bundle language, templates, vocabularies, and speaker settings',
-                        }),
-                        icon: <SlidersHorizontal size={18} />,
-                    },
-                    {
-                        id: 'file' as const,
-                        label: t('automation.file_rules', { defaultValue: 'File Automation' }),
-                        description: t('automation.file_rules_tab_description', {
-                            defaultValue: 'Watch folders, transcribe files, and export results',
-                        }),
-                        icon: <FolderSync size={18} />,
-                    },
-                ]).map(({ id, label, description, icon }) => {
-                    const isSelected = activeSection === id;
-                    return (
-                        <button
-                            id={`settings-automation-tab-${id}`}
-                            key={id}
-                            type="button"
-                            role="tab"
-                            aria-selected={isSelected}
-                            aria-label={label}
-                            className={`settings-scenario-card${isSelected ? ' active' : ''}`}
-                            onClick={() => {
-                                setSelectedSection(id);
-                                closeDraft(NEW_RULE_KEY);
-                            }}
-                        >
-                            <span className="settings-scenario-card-icon">{icon}</span>
-                            <span className="settings-scenario-card-text">
-                                <span className="settings-scenario-card-label">{label}</span>
-                                <span className="settings-scenario-card-description">{description}</span>
-                            </span>
-                        </button>
-                    );
+            <SettingsSection
+                title={t('automation.file_rules', { defaultValue: 'Folder Watchers' })}
+                description={t('automation.file_rules_description', {
+                    defaultValue: 'Auto-ingest dropped audio from watched folders into assigned projects.',
                 })}
-            </div>
-
-            {activeSection === 'profiles' ? (
-                <SettingsSection
-                    title={t('automation.profiles', { defaultValue: 'Configuration Profiles' })}
-                    description={t('automation.profiles_description', {
-                        defaultValue: 'Bundle language, templates, vocabularies, hotwords, polish keywords, and speaker profiles for reuse.',
-                    })}
-                >
-                    <div className="settings-item-container layout-horizontal">
-                        <div className="settings-item-info">
-                            <div className="settings-item-title">
-                                {t('automation.profile_count', { defaultValue: '{{count}} profiles configured.', count: profiles.length })}
-                            </div>
-                            <div className="settings-item-hint">
-                                {t('automation.profile_fallback_hint', { defaultValue: 'Rules without a profile use global settings.' })}
-                            </div>
+            >
+                <div className="settings-item-container layout-horizontal">
+                    <div className="settings-item-info">
+                        <div className="settings-item-title">
+                            {t('automation.rule_count', { defaultValue: '{{count}} rules configured.', count: visibleRules.length })}
                         </div>
-                        <div className="settings-item-action">
-                            <button className="btn btn-primary" onClick={beginCreateProfile}>
-                                {t('automation.new_profile', { defaultValue: 'New Profile' })}
-                            </button>
+                        <div className="settings-item-hint">
+                            {t('automation.file_list_hint', {
+                                defaultValue: 'Each watched folder forwards new audio files directly to its target project pipeline.',
+                            })}
                         </div>
                     </div>
+                    <div className="settings-item-action">
+                        <button type="button" className="btn btn-primary" onClick={beginCreateRule}>
+                            {t('automation.new_rule', { defaultValue: 'New Rule' })}
+                        </button>
+                    </div>
+                </div>
 
-                    {profileDrafts.__new_profile__ && renderProfileEditor('__new_profile__', profileDrafts.__new_profile__)}
+                {newRuleDraft && (
+                    <AutomationRuleCard
+                        title={newRuleDraft.name.trim() || t('automation.create_rule', { defaultValue: 'Create Rule' })}
+                        typeLabel={t('automation.file_rule', { defaultValue: 'Folder' })}
+                        projectLabel={projectOptions.find((o) => o.value === (newRuleDraft.projectId || 'inbox'))?.label || t('projects.inbox', { defaultValue: 'Inbox' })}
+                        watchDirectory={newRuleDraft.watchDirectory}
+                        enabled={newRuleDraft.enabled}
+                        canToggle={false}
+                        statusLabel={t('automation.status_draft', { defaultValue: 'Draft' })}
+                        isExpanded={expandedRuleIds.has(NEW_RULE_KEY)}
+                        onToggleExpand={() => toggleExpanded(NEW_RULE_KEY, createRuleDraft('inbox', 'file'))}
+                        editor={createEditor(NEW_RULE_KEY, newRuleDraft)}
+                    />
+                )}
 
-                    {profiles.length === 0 && !profileDrafts.__new_profile__ ? (
-                        <div className="settings-item-container">
-                            <div className="settings-item-info">
-                                <div className="settings-item-title">
-                                    {t('automation.profile_empty', { defaultValue: 'No profiles yet.' })}
-                                </div>
-                                <div className="settings-item-hint">
-                                    {t('automation.profile_empty_hint', { defaultValue: 'Create a profile or keep using global settings as the fallback.' })}
-                                </div>
-                            </div>
-                        </div>
-                    ) : profiles.map((profile) => {
-                        const dependencies = rules.filter((rule) => rule.profileId === profile.id);
-                        return (
-                            <div key={profile.id} style={{ borderTop: '1px solid var(--color-border)' }}>
-                                <div className="settings-item-container layout-horizontal">
-                                    <div className="settings-item-info">
-                                        <div className="settings-item-title">{profile.name}</div>
-                                        <div className="settings-item-hint">
-                                            {dependencies.length > 0
-                                                ? t('automation.profile_dependencies', {
-                                                    defaultValue: 'Used by: {{names}}',
-                                                    names: dependencies.map((rule) => rule.name).join(', '),
-                                                })
-                                                : t('automation.profile_no_dependencies', { defaultValue: 'Not used by any rule.' })}
-                                        </div>
-                                    </div>
-                                    <div className="settings-item-action" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                        <button className="btn btn-secondary" onClick={() => beginEditProfile(profile.id)}>
-                                            {t('common.edit', { defaultValue: 'Edit' })}
-                                        </button>
-                                        <button className="btn btn-secondary" onClick={() => { void handleDuplicateProfile(profile.id); }}>
-                                            {t('common.duplicate', { defaultValue: 'Duplicate' })}
-                                        </button>
-                                        <button className="btn btn-secondary" onClick={() => { void handleDeleteProfile(profile.id); }}>
-                                            {t('common.delete')}
-                                        </button>
-                                    </div>
-                                </div>
-                                {expandedProfileIds.has(profile.id) && profileDrafts[profile.id]
-                                    ? renderProfileEditor(profile.id, profileDrafts[profile.id])
-                                    : null}
-                            </div>
-                        );
-                    })}
-                </SettingsSection>
-            ) : (
-                <SettingsSection
-                    title={t('automation.file_rules', { defaultValue: 'File Automation' })}
-                    description={t('automation.file_rules_description', {
-                        defaultValue: 'Watch folders, transcribe files, apply the project pipeline, then export with this file rule.',
-                    })}
-                >
-                    <div className="settings-item-container layout-horizontal">
+                {visibleRules.length === 0 && !newRuleDraft ? (
+                    <div className="settings-item-container">
                         <div className="settings-item-info">
                             <div className="settings-item-title">
-                                {t('automation.rule_count', { defaultValue: '{{count}} rules configured.', count: visibleRules.length })}
+                                {t('automation.empty_title', { defaultValue: 'No folder rules yet.' })}
                             </div>
                             <div className="settings-item-hint">
-                                {t('automation.file_list_hint', {
-                                    defaultValue: 'File profile selection falls back to the active project pipeline and global settings.',
+                                {t('automation.empty_hint', {
+                                    defaultValue: 'Set up a watched directory to automatically transcribe and process files.',
                                 })}
                             </div>
                         </div>
-                        <div className="settings-item-action">
-                            <button className="btn btn-primary" onClick={() => beginCreateRule(activeSection)}>
-                                {t('automation.new_rule', { defaultValue: 'New Rule' })}
-                            </button>
-                        </div>
                     </div>
-
-                    {visibleNewRuleDraft && (
-                        <AutomationRuleCard
-                            title={visibleNewRuleDraft.name.trim() || t('automation.create_rule', { defaultValue: 'Create Rule' })}
-                            typeLabel={visibleNewRuleDraft.kind === 'tag'
-                                ? t('automation.tag_rule', { defaultValue: 'Tag' })
-                                : t('automation.file_rule', { defaultValue: 'File' })}
-                            projectLabel={visibleNewRuleDraft.saveHistory
-                                ? visibleNewRuleDraft.tagIds
-                                    .map((tagId) => projectOptions.find((option) => option.value === tagId)?.label)
-                                    .filter(Boolean).join(', ') || t('projects.inbox', { defaultValue: 'Inbox' })
-                                : t('automation.history_disabled', { defaultValue: 'History off' })}
-                            profileLabel={profileOptions.find((option) => option.value === (visibleNewRuleDraft.profileId || ''))?.label}
-                            priorityLabel={visibleNewRuleDraft.kind === 'tag'
-                                ? t('automation.priority_value', { defaultValue: 'Priority {{priority}}', priority: visibleNewRuleDraft.priority })
-                                : undefined}
-                            watchDirectory={visibleNewRuleDraft.kind === 'file' ? visibleNewRuleDraft.watchDirectory : undefined}
-                            outputDirectory={visibleNewRuleDraft.kind === 'file' ? visibleNewRuleDraft.exportConfig.directory : undefined}
-                            resultLabel={t('automation.draft_badge', { defaultValue: 'Draft' })}
-                            enabled={true}
-                            canToggle={false}
-                            isExpanded={expandedRuleIds.has(NEW_RULE_KEY)}
-                            onToggleExpand={() => toggleExpanded(NEW_RULE_KEY, createRuleDraft('inbox', activeSection))}
-                            editor={createEditor(NEW_RULE_KEY, visibleNewRuleDraft)}
-                        />
-                    )}
-
-                    {visibleRules.length === 0 && !visibleNewRuleDraft ? (
-                        <div className="settings-item-container">
-                            <div className="settings-item-info">
-                                <div className="settings-item-title">
-                                    {t('automation.empty_title', { defaultValue: 'No automation rules yet.' })}
-                                </div>
-                                <div className="settings-item-hint">
-                                    {t('automation.file_empty_hint', {
-                                        defaultValue: 'Add a rule to watch a folder, transcribe new files, and export the results.',
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-                    ) : visibleRules.map((rule: AutomationRule) => {
+                ) : (
+                    visibleRules.map((rule) => {
                         const draft = drafts[rule.id];
-                        const displayRule = draft || createDraftFromRule(rule);
+                        const displayRule = draft ?? rule;
                         const runtime = runtimeStates[rule.id];
                         const queueSummary = queueSummaryByRuleId.get(rule.id);
+                        const targetProject = projects.find((p) => p.id === (displayRule.projectId || displayRule.tagIds?.[0]));
+                        const projectLabel = displayRule.saveHistory
+                            ? (targetProject ? targetProject.name : t('projects.inbox', { defaultValue: 'Inbox' }))
+                            : t('automation.history_disabled', { defaultValue: 'History off' });
 
                         return (
                             <AutomationRuleCard
                                 key={rule.id}
                                 title={displayRule.name}
-                                typeLabel={displayRule.kind === 'tag'
-                                    ? t('automation.tag_rule', { defaultValue: 'Tag' })
-                                    : t('automation.file_rule', { defaultValue: 'File' })}
-                                projectLabel={displayRule.saveHistory
-                                    ? displayRule.tagIds
-                                        .map((tagId) => projectOptions.find((option) => option.value === tagId)?.label)
-                                        .filter(Boolean).join(', ') || t('projects.inbox', { defaultValue: 'Inbox' })
-                                    : t('automation.history_disabled', { defaultValue: 'History off' })}
-                                profileLabel={profileOptions.find((option) => option.value === (displayRule.profileId || ''))?.label}
-                                priorityLabel={displayRule.kind === 'tag'
-                                    ? t('automation.priority_value', { defaultValue: 'Priority {{priority}}', priority: displayRule.priority })
-                                    : undefined}
-                                watchDirectory={displayRule.kind === 'file' ? displayRule.watchDirectory : undefined}
-                                outputDirectory={displayRule.kind === 'file' ? displayRule.exportConfig.directory : undefined}
-                                statusLabel={displayRule.kind === 'file' ? getRuntimeStatusLabel(runtime?.status) : undefined}
-                                resultLabel={displayRule.kind === 'file' ? describeLastResult(rule.id) : undefined}
-                                failureCount={displayRule.kind === 'file' ? runtime?.failureCount || 0 : undefined}
-                                pendingCount={displayRule.kind === 'file' ? queueSummary?.pending || 0 : undefined}
-                                processingCount={displayRule.kind === 'file' ? queueSummary?.processing || 0 : undefined}
-                                resultMessage={displayRule.kind === 'file' ? runtime?.lastResultMessage : undefined}
-                                blockedHint={displayRule.kind === 'file' ? describeLatestBlockedHint(rule.id) : undefined}
-                                migrationNotice={displayRule.migrationNotice}
-                                enabled={rule.enabled}
+                                typeLabel={t('automation.file_rule', { defaultValue: 'Folder' })}
+                                projectLabel={projectLabel}
+                                watchDirectory={displayRule.watchDirectory}
+                                enabled={displayRule.enabled}
                                 canToggle={true}
+                                onToggleEnabled={(value) => { void handleToggleEnabled(rule.id, value); }}
+                                statusLabel={getRuntimeStatusLabel(runtime?.status)}
+                                resultLabel={describeLastResult(rule.id)}
+                                resultMessage={runtime?.lastErrorMessage}
+                                blockedHint={describeLatestBlockedHint(rule.id)}
+                                pendingCount={queueSummary?.pending}
+                                processingCount={queueSummary?.processing}
+                                failureCount={runtime?.failureCount}
                                 isExpanded={expandedRuleIds.has(rule.id)}
                                 onToggleExpand={() => toggleExpanded(rule.id, createDraftFromRule(rule))}
-                                onToggleEnabled={(value) => { void handleToggleRule(rule, value); }}
-                                onScanNow={displayRule.kind === 'file' ? () => { void handleScanNow(rule.id); } : undefined}
-                                onRetryFailed={displayRule.kind === 'file' ? () => { void handleRetryFailed(rule.id); } : undefined}
-                                onApplyExisting={displayRule.kind === 'tag'
-                                    ? () => { void handleApplyExisting(rule.id); }
-                                    : undefined}
+                                onScanNow={() => { void handleScanNow(rule.id); }}
+                                onRetryFailed={() => { void handleRetryFailed(rule.id); }}
                                 onDelete={() => { void handleDelete(rule.id); }}
-                                editor={createEditor(rule.id, displayRule)}
+                                editor={draft ? createEditor(rule.id, draft) : null}
                             />
                         );
-                    })}
-                </SettingsSection>
-            )}
+                    })
+                )}
+            </SettingsSection>
         </SettingsTabContainer>
     );
 }

@@ -1,11 +1,9 @@
 import type {
   AutomationProcessedEntry,
   AutomationProfile,
-  AutomationResolutionSnapshot,
   AutomationRule,
   AutomationRuntimeBlockReason,
   AutomationRuntimeState,
-  AutomationStageConfig,
 } from '../../types/automation';
 import type {
   AutomationRuntimeCandidatePayload,
@@ -206,23 +204,10 @@ export class AutomationRuntimeCoordinator {
 
     this.pendingFingerprints.add(pendingKey);
     const effectiveConfig = this.ports.useConfigStore.getState().config;
-    const projectId = latestRule.projectId && latestRule.projectId !== 'inbox' && latestRule.projectId !== 'none'
-      ? latestRule.projectId : null;
+    const rawProjectId = latestRule.projectId ?? (latestRule.tagIds?.[0] || null);
+    const projectId = rawProjectId && rawProjectId !== 'inbox' && rawProjectId !== 'none'
+      ? rawProjectId : null;
     const pipeline = resolveItemPipeline(projectId, this.ports.useProjectStore.getState().projects, effectiveConfig);
-    const resolvedStageConfig: AutomationStageConfig = {
-      autoPolish: pipeline.autoPolish,
-      polishPresetId: pipeline.polishPresetId,
-      autoTranslate: pipeline.autoTranslate,
-      translationLanguage: pipeline.targetLanguage,
-      autoSummary: pipeline.autoSummary,
-      exportEnabled: pipeline.autoExport || latestRule.stageConfig.exportEnabled,
-    };
-    const automationResolutionSnapshot: AutomationResolutionSnapshot = {
-      fileRuleId: latestRule.id,
-      profileSource: 'global',
-      actions: { autoPolish: pipeline.autoPolish, autoTranslate: pipeline.autoTranslate, autoSummary: pipeline.autoSummary },
-      resolvedAt: Date.now(),
-    };
 
     try {
       this.ports.useBatchQueueStore.getState().addFiles([payload.filePath], {
@@ -230,17 +215,14 @@ export class AutomationRuntimeCoordinator {
         automationRuleId: latestRule.id,
         automationRuleName: latestRule.name,
         resolvedConfigSnapshot: effectiveConfig,
-        exportConfig: latestRule.stageConfig.exportEnabled ? latestRule.exportConfig : null,
-        stageConfig: resolvedStageConfig,
-        automationResolutionSnapshot,
-        sourceFingerprint: payload.sourceFingerprint,
         projectId,
         pipelineSnapshot: pipeline,
+        sourceFingerprint: payload.sourceFingerprint,
         fileStat: {
           size: payload.size,
           mtimeMs: payload.mtimeMs,
         },
-        exportFileNamePrefix: latestRule.exportConfig.prefix || '',
+        exportFileNamePrefix: pipeline.exportFileNamePrefix || latestRule.exportConfig?.prefix || '',
       });
     } catch (error) {
       this.pendingFingerprints.delete(pendingKey);

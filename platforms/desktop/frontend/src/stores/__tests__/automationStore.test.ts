@@ -233,44 +233,6 @@ describe('automationStore', () => {
         vi.useRealTimers();
     });
 
-    it('deduplicates successful Tag runs and increments explicit retry attempts', async () => {
-        const request = {
-            ruleId: 'tag-rule-1',
-            historyId: 'history-1',
-            inputVersion: 'input-v1',
-            actions: { autoPolish: true, autoTranslate: false, autoSummary: false },
-        };
-
-        await expect(useAutomationStore.getState().beginTagAutomationRun(request)).resolves.toBe(true);
-        expect(useAutomationStore.getState().processedEntries).toEqual([
-            expect.objectContaining({
-                kind: 'tag',
-                status: 'pending',
-                attempt: 1,
-                ruleId: request.ruleId,
-                historyId: request.historyId,
-                inputVersion: request.inputVersion,
-            }),
-        ]);
-
-        await useAutomationStore.getState().finishTagAutomationRun({
-            ruleId: request.ruleId,
-            historyId: request.historyId,
-            inputVersion: request.inputVersion,
-            status: 'complete',
-        });
-        await expect(useAutomationStore.getState().beginTagAutomationRun(request)).resolves.toBe(false);
-        await expect(useAutomationStore.getState().beginTagAutomationRun({
-            ...request,
-            force: true,
-        })).resolves.toBe(true);
-
-        expect(useAutomationStore.getState().processedEntries[0]).toEqual(expect.objectContaining({
-            kind: 'tag',
-            status: 'pending',
-            attempt: 2,
-        }));
-    });
 
     it('restores enabled rules and queues matching files on the initial scan', async () => {
         const rule = createRule();

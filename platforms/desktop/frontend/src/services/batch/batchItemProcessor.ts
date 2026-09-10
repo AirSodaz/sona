@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { AppConfig } from '../../types/config';
-import type { AutomationStageConfig } from '../../types/automation';
+import type { ExportFormat } from '../../utils/exportFormats';
 import type { BatchQueueItem, BatchQueueItemStatus } from '../../types/batchQueue';
 import type { HistoryItem } from '../../types/history';
 import type { RecoveryItemStage } from '../../types/recovery';
@@ -10,7 +10,6 @@ import { asrConfigService, isLlamaCppBatchRequest } from '../asrConfigService';
 import { historyService } from '../historyService';
 import { polishService } from '../polishService';
 import { translationService } from '../translationService';
-import { getFeatureLlmConfig, isLlmConfigComplete } from '../llm/configUtils';
 import { summaryService } from '../summaryService';
 import { exportService } from '../exportService';
 import { useHistoryStore } from '../../stores/historyStore';
@@ -18,6 +17,8 @@ import { useProjectStore } from '../../stores/projectStore';
 import { logger } from '../../utils/logger';
 import { remove } from '../tauri/platform/fs';
 import { join, tempDir } from '../tauri/platform/path';
+import { pipelineExecutionEngine } from '../pipeline/pipelineExecutionEngine';
+import { resolveItemPipeline } from '../projectPipeline';
 
 export interface BatchItemProcessorCallbacks {
   updateStatus: (
@@ -48,6 +49,7 @@ export interface BatchItemProcessorPorts {
   asrConfigService: typeof asrConfigService;
   useHistoryStore: typeof useHistoryStore;
   useProjectStore?: typeof useProjectStore;
+  pipelineExecutionEngine?: typeof pipelineExecutionEngine;
 }
 
 export class BatchItemProcessor {
@@ -65,7 +67,6 @@ export class BatchItemProcessor {
     const language = config.language;
     const batchAsr = this.ports.asrConfigService.resolveAsrTranscriptionRequest(config, 'batch');
     const isLlamaCpp = isLlamaCppBatchRequest(batchAsr);
-    const stageConfig = this.getAutomationStageConfig(item, config);
 
     if (!this.ports.asrConfigService.isAsrRequestConfigured(batchAsr)) {
       throw new Error('Batch ASR is not configured.');
@@ -157,72 +158,41 @@ export class BatchItemProcessor {
       await ensureHistorySaved();
       await persistHistorySnapshot();
 
-      const effectiveStageConfig = stageConfig;
+      const engine = this.ports.pipelineExecutionEngine ?? pipelineExecutionEngine;
+      const pipeline = item.pipelineSnapshot ?? resolveItemPipeline(
+        item.projectId,
+        this.ports.useProjectStore?.getState?.().projects ?? [],
+        config,
+      );
 
-      if (effectiveStageConfig.autoPolish && currentSegments.length > 0) {
-        this.throwIfCancelRequested(callbacks);
-        const llm = getFeatureLlmConfig(config, 'polish');
-        if (!isLlmConfigComplete(llm)) {
-          throw new Error('Polish model is not configured.');
-        }
+      const pipelineResult = await engine.execute({
+        historyId: savedHistoryId || '',
+        segments: currentSegments,
+        pipeline: {
+          ...pipeline,
+          autoExport: pipeline.autoExport || Boolean(item.exportConfig),
+          exportDirectory: item.exportConfig?.directory || pipeline.exportDirectory,
+          exportFormat: (item.exportConfig?.format as ExportFormat | undefined) || pipeline.exportFormat,
+          exportFileNamePrefix: item.exportFileNamePrefix || pipeline.exportFileNamePrefix,
+        },
+        globalConfig: config,
+        baseFileName: this.buildAutomationExportBaseName(item),
+        onProgress: (stage, progress) => {
+          callbacks.updateStatus('processing', progress, stage);
+        },
+        onSegmentsUpdated: async (updatedSegments) => {
+          setCurrentSegments(updatedSegments);
+          await persistHistorySnapshot();
+        },
+        onExportComplete: (exportPath) => {
+          callbacks.onExportComplete(exportPath);
+        },
+        isCancelRequested: () => callbacks.isCancelRequested(),
+      });
 
-        callbacks.updateStatus('processing', 96, 'polishing');
-        await this.ports.polishService.polishSegmentsWithConfig(
-          config,
-          currentSegments,
-          async (polishedChunk) => {
-            const nextSegments = this.ports.polishService.applyPolishedSegmentsInMemory(currentSegments, polishedChunk);
-            setCurrentSegments(nextSegments);
-          },
-        );
-        await persistHistorySnapshot();
+      if (pipelineResult.segments) {
+        currentSegments = pipelineResult.segments;
       }
-
-      if (effectiveStageConfig.autoTranslate && currentSegments.length > 0) {
-        this.throwIfCancelRequested(callbacks);
-        const llm = getFeatureLlmConfig(config, 'translation');
-        if (!isLlmConfigComplete(llm)) {
-          throw new Error('Translation model is not configured.');
-        }
-
-        callbacks.updateStatus('processing', 98, 'translating');
-        await this.ports.translationService.translateSegmentsWithConfig(
-          config,
-          currentSegments,
-          async (translatedChunk) => {
-            const nextSegments = this.ports.translationService.applyTranslationsInMemory(currentSegments, translatedChunk);
-            setCurrentSegments(nextSegments);
-          },
-        );
-        await persistHistorySnapshot();
-      }
-
-      if (effectiveStageConfig.autoSummary && currentSegments.length > 0 && savedHistoryId) {
-        this.throwIfCancelRequested(callbacks);
-        callbacks.updateStatus('processing', 99);
-        await this.ports.summaryService.retrySummaryTranscriptJob({
-          segments: currentSegments,
-          historyId: savedHistoryId,
-          templateId: config.summaryTemplateId,
-          config,
-        });
-        await this.ports.summaryService.persistSummary(savedHistoryId);
-      }
-
-
-      if (item.exportConfig) {
-        this.throwIfCancelRequested(callbacks);
-        callbacks.updateStatus('processing', 99, 'exporting');
-        const exportPath = await this.ports.exportTranscriptToDirectory({
-          segments: currentSegments,
-          directory: item.exportConfig.directory,
-          baseFileName: this.buildAutomationExportBaseName(item),
-          format: item.exportConfig.format,
-          mode: item.exportConfig.mode,
-        });
-        callbacks.onExportComplete(exportPath);
-      }
-
       if (savedHistoryId && callbacks.isActiveItem()) {
         await this.ports.summaryService.persistSummary(savedHistoryId);
       }
@@ -304,6 +274,8 @@ export const batchItemProcessor = createBatchItemProcessor({
   exportTranscriptToDirectory: exportService.exportTranscriptToDirectory,
   asrConfigService,
   useHistoryStore,
+  useProjectStore,
+  pipelineExecutionEngine,
 });
 
 export const { processBatchQueueItem } = batchItemProcessor;

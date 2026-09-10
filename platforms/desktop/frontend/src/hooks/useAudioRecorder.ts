@@ -37,7 +37,7 @@ import type { LiveRecordingDraftHandle } from '../services/historyService';
 import { convertManagedAudioFileSrc } from '../services/tauri/platform/assets';
 import { remove, writeFile } from '../services/tauri/platform/fs';
 import { resolveItemPipeline } from '../services/projectPipeline';
-
+import { pipelineExecutionEngine } from '../services/pipeline/pipelineExecutionEngine';
 export type {
     RecordSegmentDeliveryMeta,
     RecordSessionPhase,
@@ -174,8 +174,32 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         })),
         persistSummary: (historyId) => summaryService.persistSummary(historyId),
         postProcessSavedItem: async (historyId, segments) => {
-            void historyId;
-            return segments;
+            const activeProjectId = useProjectStore.getState().activeProjectId;
+            const effectiveConfig = useConfigStore.getState().config;
+            const pipeline = resolveItemPipeline(
+                activeProjectId,
+                useProjectStore.getState().projects,
+                effectiveConfig,
+            );
+            if (!pipeline.enabled) {
+                return segments;
+            }
+            try {
+                const result = await pipelineExecutionEngine.execute({
+                    historyId,
+                    segments,
+                    pipeline,
+                    globalConfig: effectiveConfig,
+                    baseFileName: `Recording-${historyId}`,
+                    onSegmentsUpdated: (updatedSegments) => {
+                        useTranscriptSessionStore.getState().setSegments(updatedSegments);
+                    },
+                });
+                return result.segments;
+            } catch (error) {
+                logger.error('[useAudioRecorder] Post-process pipeline failed:', error);
+                return segments;
+            }
         },
         annotateSegmentsForFile: (filePath, segments, transcriptConfig) => (
             speakerService.annotateSegmentsForFile(filePath, segments, transcriptConfig)

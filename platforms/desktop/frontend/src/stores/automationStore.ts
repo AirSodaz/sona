@@ -13,10 +13,6 @@ import type {
   AutomationRule,
   AutomationRuntimeState,
 } from '../types/automation';
-import {
-  registerTagAutomationRunPorts,
-  type TagAutomationRunRequest,
-} from '../services/automation/tagAutomationRun';
 import type { RecoveredQueueItem } from '../types/recovery';
 import { extractErrorMessage } from '../utils/errorUtils';
 import {
@@ -117,27 +113,12 @@ interface AutomationState {
   retryFailed: (ruleId: string) => Promise<void>;
   retryFailedFile: (ruleId: string, filePath: string) => Promise<void>;
   applyTagRuleToExisting: (ruleId: string) => Promise<number>;
-  beginTagAutomationRun: (request: TagAutomationRunRequest) => Promise<boolean>;
-  finishTagAutomationRun: (args: {
-    ruleId: string;
-    historyId: string;
-    inputVersion: string;
-    status: 'complete' | 'error';
-    errorMessage?: string;
-  }) => Promise<void>;
   dismissNotification: (notificationId: string) => void;
   retryNotification: (notificationId: string) => Promise<void>;
   markRecoveryItemDiscarded: (item: RecoveredQueueItem) => Promise<void>;
   stopAll: () => Promise<void>;
 }
 
-let processedEntryMutationQueue = Promise.resolve();
-
-function serializeProcessedEntryMutation<T>(operation: () => Promise<T>): Promise<T> {
-  const next = processedEntryMutationQueue.then(operation, operation);
-  processedEntryMutationQueue = next.then(() => undefined, () => undefined);
-  return next;
-}
 
 async function validateRuleBeforeActivation(rule: AutomationRule): Promise<void> {
   await validateAutomationRuleActivation(rule);
@@ -503,67 +484,6 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     return 0;
   },
 
-  beginTagAutomationRun: async (request) => serializeProcessedEntryMutation(async () => {
-    const currentEntries = get().processedEntries;
-    const existing = currentEntries.find((entry) => (
-      entry.kind === 'tag'
-      && entry.ruleId === request.ruleId
-      && entry.historyId === request.historyId
-      && entry.inputVersion === request.inputVersion
-    ));
-    if (existing?.status === 'complete' && !request.force) {
-      return false;
-    }
-
-    const nextEntry: AutomationProcessedEntry = {
-      id: existing?.id ?? uuidv4(),
-      ruleId: request.ruleId,
-      kind: 'tag',
-      inputVersion: request.inputVersion,
-      attempt: (existing?.attempt ?? 0) + 1,
-      filePath: existing?.filePath ?? '',
-      sourceFingerprint: existing?.sourceFingerprint ?? request.inputVersion,
-      size: existing?.size ?? 0,
-      mtimeMs: existing?.mtimeMs ?? 0,
-      status: 'pending',
-      processedAt: Date.now(),
-      historyId: request.historyId,
-      exportPath: existing?.exportPath,
-      errorMessage: undefined,
-    };
-    const nextEntries = [
-      ...currentEntries.filter((entry) => entry.id !== nextEntry.id),
-      nextEntry,
-    ].sort((left, right) => right.processedAt - left.processedAt);
-    await persistAutomationProcessedEntries(nextEntries);
-    set((current) => ({
-      processedEntries: nextEntries,
-      runtimeStates: rebuildRuntimeStates(current.rules, nextEntries, current.runtimeStates),
-    }));
-    return true;
-  }),
-
-  finishTagAutomationRun: async (args) => serializeProcessedEntryMutation(async () => {
-    const currentEntries = get().processedEntries;
-    const nextEntries = currentEntries.map((entry) => (
-      entry.kind === 'tag'
-      && entry.ruleId === args.ruleId
-      && entry.historyId === args.historyId
-      && entry.inputVersion === args.inputVersion
-        ? {
-          ...entry,
-          status: args.status,
-          processedAt: Date.now(),
-          errorMessage: args.errorMessage,
-        }
-        : entry
-    ));
-    await persistAutomationProcessedEntries(nextEntries);
-    set((current) => ({
-      processedEntries: nextEntries,
-      runtimeStates: rebuildRuntimeStates(current.rules, nextEntries, current.runtimeStates),
-    }));
-  }),
 
   dismissNotification: (notificationId) => {
     set((current) => ({
@@ -634,10 +554,6 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   },
 }));
 
-registerTagAutomationRunPorts({
-  begin: (request) => useAutomationStore.getState().beginTagAutomationRun(request),
-  finish: (request) => useAutomationStore.getState().finishTagAutomationRun(request),
-});
 
 function getAutomationRuntimeCoordinatorState(state: AutomationState): AutomationRuntimeCoordinatorState {
   return {

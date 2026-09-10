@@ -11,6 +11,7 @@ import { getSummaryTemplateOptions } from '../../utils/summaryTemplates';
 import { LANGUAGE_OPTIONS } from '../../constants/languages';
 import { getLocalizedLanguageName } from '../../utils/languageUtils';
 import { openDialog } from '../../services/tauri/platform/dialog';
+import { useConfigStore } from '../../stores/configStore';
 import { PROJECT_COLOR_PRESETS } from '../../constants/projects';
 export { PROJECT_COLOR_PRESETS };
 interface ProjectSettingsModalProps {
@@ -49,7 +50,9 @@ export function ProjectSettingsModal({
   onPipelineChange,
 }: ProjectSettingsModalProps): React.JSX.Element | null {
   const { t, i18n } = useTranslation();
-
+  const config = useConfigStore((state) => state.config);
+  const hotwordSets = config.hotwordSets || [];
+  const replacementSets = config.textReplacementSets || [];
   const polishPresetOptions = useMemo(() => getPolishPresetOptions(undefined, t), [t]);
   const summaryTemplateOptions = useMemo(() => getSummaryTemplateOptions(undefined, t), [t]);
   const languageOptions = useMemo(() => (
@@ -304,6 +307,60 @@ export function ProjectSettingsModal({
                     </div>
                   )}
                 </div>
+
+                {/* Hotword Sets */}
+                {hotwordSets.length > 0 && (
+                  <div className="project-pipeline-item">
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                      {t('settings.hotwords', { defaultValue: 'Hotwords' })}
+                    </span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
+                      {hotwordSets.map((set) => (
+                        <label key={set.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8125rem', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(pipeline.hotwordSetIds?.includes(set.id))}
+                            onChange={(e) => {
+                              const currentIds = pipeline.hotwordSetIds || [];
+                              const nextIds = e.target.checked
+                                ? [...currentIds, set.id]
+                                : currentIds.filter((id) => id !== set.id);
+                              updatePipeline({ hotwordSetIds: nextIds });
+                            }}
+                          />
+                          <span>{set.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Text Replacement Sets */}
+                {replacementSets.length > 0 && (
+                  <div className="project-pipeline-item">
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                      {t('settings.text_replacements', { defaultValue: 'Replacement Sets' })}
+                    </span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
+                      {replacementSets.map((set) => (
+                        <label key={set.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8125rem', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(pipeline.replacementSetIds?.includes(set.id))}
+                            onChange={(e) => {
+                              const currentIds = pipeline.replacementSetIds || [];
+                              const nextIds = e.target.checked
+                                ? [...currentIds, set.id]
+                                : currentIds.filter((id) => id !== set.id);
+                              updatePipeline({ replacementSetIds: nextIds });
+                            }}
+                          />
+                          <span>{set.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
