@@ -29,6 +29,82 @@ export const EMPTY_WORKSPACE_QUERY_RESULT: WorkspaceQueryResult = {
   },
 };
 
+export function deriveFallbackItemCounts(historyItems: HistoryItemType[]): HistoryWorkspaceItemCounts {
+  const byTagId: Record<string, number> = {};
+  let untagged = 0;
+  let trash = 0;
+  for (const item of historyItems) {
+    if (item.deletedAt != null) {
+      trash += 1;
+    } else if (!item.projectId) {
+      untagged += 1;
+    } else {
+      byTagId[item.projectId] = (byTagId[item.projectId] || 0) + 1;
+    }
+  }
+  return {
+    untagged,
+    inbox: untagged,
+    trash,
+    byTagId,
+    byProjectId: byTagId,
+  };
+}
+
+export function deriveFallbackSummary(
+  historyItems: HistoryItemType[],
+  scope: WorkspaceQueryRequest['scope'],
+): { summary: HistoryWorkspaceSummary; filteredItemCount: number } {
+  let totalItems = 0;
+  let totalDuration = 0;
+  let latestTimestamp: number | null = null;
+  let recordingCount = 0;
+  let batchCount = 0;
+
+  for (const item of historyItems) {
+    let matchesScope = false;
+    switch (scope.kind) {
+      case 'all':
+        matchesScope = item.deletedAt == null;
+        break;
+      case 'inbox':
+        matchesScope = item.deletedAt == null && !item.projectId;
+        break;
+      case 'trash':
+        matchesScope = item.deletedAt != null;
+        break;
+      case 'project':
+        matchesScope = item.deletedAt == null && item.projectId === scope.projectId;
+        break;
+    }
+
+    if (matchesScope) {
+      totalItems += 1;
+      totalDuration += Number(item.duration || 0);
+      const timestamp = Number(item.timestamp || 0);
+      if (latestTimestamp === null || timestamp > latestTimestamp) {
+        latestTimestamp = timestamp;
+      }
+      if (item.type === 'batch') {
+        batchCount += 1;
+      } else {
+        recordingCount += 1;
+      }
+    }
+  }
+
+  return {
+    filteredItemCount: totalItems,
+    summary: {
+      totalItems,
+      totalDuration,
+      latestTimestamp,
+      recordingCount,
+      batchCount,
+    },
+  };
+}
+
 const WORKSPACE_QUERY_PAGE_SIZE = 100;
 
 export interface WorkspaceQueryState extends WorkspaceQueryResult {
@@ -80,10 +156,53 @@ export function useWorkspaceQuery({
     dateFilter,
     sortOrder,
   }), [dateFilter, filterType, scope, searchQuery, sortOrder]);
+  const fallbackItemCounts = useMemo(
+    () => deriveFallbackItemCounts(historyItems),
+    [historyItems],
+  );
+
+  const activeItemCounts = snapshot?.result.itemCounts
+    ?? (historyItems.length > 0 ? fallbackItemCounts : EMPTY_WORKSPACE_QUERY_RESULT.itemCounts);
+
+  const fallbackSummary = useMemo(
+    () => deriveFallbackSummary(historyItems, scope),
+    [historyItems, scope],
+  );
+
   const hasCurrentSnapshot = snapshot?.request === request && snapshot.historyItems === historyItems;
   const initialLoadError = initialLoadFailure?.request === request
     && initialLoadFailure.historyItems === historyItems;
-  const queryResult = hasCurrentSnapshot ? snapshot.result : EMPTY_WORKSPACE_QUERY_RESULT;
+
+  const queryResult = useMemo<WorkspaceQueryResult>(() => {
+    if (hasCurrentSnapshot) {
+      return snapshot.result;
+    }
+    if (initialLoadError) {
+      return {
+        ...EMPTY_WORKSPACE_QUERY_RESULT,
+        itemCounts: activeItemCounts,
+      };
+    }
+    const isUnfilteredScope = !searchQuery.trim() && filterType === 'all' && dateFilter === 'all';
+    return {
+      filteredItems: [],
+      searchMatchByItemId: {},
+      filteredItemCount: isUnfilteredScope ? fallbackSummary.filteredItemCount : 0,
+      hasMore: false,
+      summary: historyItems.length > 0 ? fallbackSummary.summary : EMPTY_WORKSPACE_QUERY_RESULT.summary,
+      itemCounts: activeItemCounts,
+    };
+  }, [
+    activeItemCounts,
+    dateFilter,
+    fallbackSummary,
+    filterType,
+    hasCurrentSnapshot,
+    historyItems.length,
+    initialLoadError,
+    searchQuery,
+    snapshot,
+  ]);
   const isInitialLoading = !hasCurrentSnapshot && !initialLoadError;
 
   useEffect(() => {
