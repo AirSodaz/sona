@@ -132,6 +132,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [newProjectColor, setNewProjectColor] = useState('#64748b');
+  const [newProjectIcon, setNewProjectIcon] = useState('');
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(sourceHistoryId);
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
@@ -724,6 +725,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       name: newProjectName.trim(),
       description: newProjectDescription.trim(),
       color: newProjectColor,
+      icon: newProjectIcon,
     });
 
     if (!project) {
@@ -733,6 +735,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     setNewProjectName('');
     setNewProjectDescription('');
     setNewProjectColor('#64748b');
+    setNewProjectIcon('');
     setIsCreateModalOpen(false);
     browseState.setBrowseScope(project.id);
     await setActiveProjectId(project.id);
@@ -1001,9 +1004,11 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         name={newProjectName}
         description={newProjectDescription}
         color={newProjectColor}
+        icon={newProjectIcon}
         onNameChange={setNewProjectName}
         onDescriptionChange={setNewProjectDescription}
         onColorChange={setNewProjectColor}
+        onIconChange={setNewProjectIcon}
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={handleCreateProject}
       />

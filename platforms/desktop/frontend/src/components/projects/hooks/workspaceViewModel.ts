@@ -136,7 +136,7 @@ export function buildWorkspaceViewModel({
       defaultValue: 'Inbox collects recordings and imports without a project.',
     });
   const showWorkflowActions = !isAllItemsScope && browseScope !== TRASH_SCOPE;
-  const headerIcon = renderScopeIcon(browseScope, browseProject);
+  const headerIcon = renderScopeIcon(browseScope, browseProject, { size: 'lg', showBackground: true });
   const searchInputLabel = isAllItemsScope
     ? t('projects.search_placeholder_all_items', { defaultValue: 'Search All Items...' })
     : browseScope === TRASH_SCOPE

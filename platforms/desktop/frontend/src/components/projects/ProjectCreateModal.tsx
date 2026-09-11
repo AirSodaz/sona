@@ -1,15 +1,18 @@
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { FolderIcon } from '../Icons';
+import { IconPicker } from '../IconPicker';
 import { Modal } from '../Modal';
-import { PROJECT_COLOR_PRESETS } from '../../constants/projects';
 interface ProjectCreateModalProps {
   isOpen: boolean;
   name: string;
   description: string;
   color: string;
+  icon?: string;
   onNameChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
   onColorChange: (value: string) => void;
+  onIconChange?: (value: string) => void;
   onClose: () => void;
   onCreate: () => void;
 }
@@ -19,9 +22,11 @@ export function ProjectCreateModal({
   name,
   description,
   color,
+  icon,
   onNameChange,
   onDescriptionChange,
   onColorChange,
+  onIconChange,
   onClose,
   onCreate,
 }: ProjectCreateModalProps): React.JSX.Element | null {
@@ -80,39 +85,23 @@ export function ProjectCreateModal({
           <label htmlFor="project-create-name">
             {t('projects.project_name', { defaultValue: 'Project name' })}
           </label>
-          <input
-            id="project-create-name"
-            type="text"
-            className="settings-input"
-            value={name}
-            onChange={(event) => onNameChange(event.target.value)}
-            placeholder={t('projects.new_project_name', { defaultValue: 'Project name' })}
-            autoFocus
-          />
-        </div>
-
-        <div className="projects-field">
-          <label>
-            {t('projects.tag_color', { defaultValue: 'Color' })}
-          </label>
-          <div className="project-color-swatches">
-            {PROJECT_COLOR_PRESETS.map((presetColor) => (
-              <button
-                key={presetColor}
-                type="button"
-                className={`project-color-swatch ${color.toLowerCase() === presetColor.toLowerCase() ? 'active' : ''}`}
-                style={{ backgroundColor: presetColor }}
-                onClick={() => onColorChange(presetColor)}
-                title={presetColor}
-              />
-            ))}
+          <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+            <IconPicker
+              icon={icon || ''}
+              onChange={onIconChange || (() => {})}
+              defaultIcon={<FolderIcon />}
+              color={color}
+              onColorChange={onColorChange}
+            />
             <input
-              id="project-create-color"
-              type="color"
-              value={color}
-              onChange={(event) => onColorChange(event.target.value)}
-              aria-label={t('projects.tag_color', { defaultValue: 'Color' })}
-              style={{ width: 26, height: 26, padding: 0, border: 'none', cursor: 'pointer', borderRadius: 4, background: 'transparent' }}
+              id="project-create-name"
+              type="text"
+              className="settings-input"
+              style={{ flex: 1 }}
+              value={name}
+              onChange={(event) => onNameChange(event.target.value)}
+              placeholder={t('projects.new_project_name', { defaultValue: 'Project name' })}
+              autoFocus
             />
           </div>
         </div>

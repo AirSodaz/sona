@@ -14,8 +14,6 @@ import { LANGUAGE_OPTIONS } from '../../constants/languages';
 import { getLocalizedLanguageName } from '../../utils/languageUtils';
 import { openDialog } from '../../services/tauri/platform/dialog';
 import { useConfigStore } from '../../stores/configStore';
-import { PROJECT_COLOR_PRESETS } from '../../constants/projects';
-export { PROJECT_COLOR_PRESETS };
 
 const EXPORT_FORMAT_OPTIONS: DropdownOption[] = [
   { value: 'txt', label: 'TXT' },
@@ -133,7 +131,13 @@ export function ProjectSettingsModal({
             {t('projects.project_name', { defaultValue: 'Project name' })}
           </label>
           <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-            <IconPicker icon={draftIcon} onChange={onIconChange} defaultIcon={<FolderIcon />} />
+            <IconPicker
+              icon={draftIcon}
+              onChange={onIconChange}
+              defaultIcon={<FolderIcon />}
+              color={draftColor}
+              onColorChange={onColorChange}
+            />
             <input
               id="project-settings-name"
               type="text"
@@ -147,31 +151,6 @@ export function ProjectSettingsModal({
           </div>
         </div>
 
-        <div className="projects-field">
-          <label>
-            {t('projects.tag_color', { defaultValue: 'Color' })}
-          </label>
-          <div className="project-color-swatches">
-            {PROJECT_COLOR_PRESETS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                className={`project-color-swatch ${draftColor.toLowerCase() === color.toLowerCase() ? 'active' : ''}`}
-                style={{ backgroundColor: color }}
-                onClick={() => onColorChange(color)}
-                title={color}
-              />
-            ))}
-            <input
-              id="project-settings-color"
-              type="color"
-              value={draftColor}
-              onChange={(event) => onColorChange(event.target.value)}
-              title={t('common.custom_color', { defaultValue: 'Custom color' })}
-              style={{ width: 26, height: 26, padding: 0, border: 'none', cursor: 'pointer', borderRadius: 4, background: 'transparent' }}
-            />
-          </div>
-        </div>
 
         <div className="projects-field">
           <label htmlFor="project-settings-description">

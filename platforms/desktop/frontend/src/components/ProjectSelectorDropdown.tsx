@@ -55,7 +55,7 @@ import { useHistoryStore } from '../stores/historyStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { ProjectCreateModal } from './projects/ProjectCreateModal';
-
+import { ProjectVisual } from './projects/ProjectVisual';
 type Props = { onOpenProjects: () => void };
 
 export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.Element {
@@ -76,6 +76,7 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
   const [createName, setCreateName] = useState('');
   const [createDescription, setCreateDescription] = useState('');
   const [createColor, setCreateColor] = useState('#6366F1');
+  const [createIcon, setCreateIcon] = useState('');
   const ref = useRef<HTMLDivElement>(null);
 
   const countInbox = useMemo(() => historyItems.filter((i) => !i.deletedAt && !i.projectId).length, [historyItems]);
@@ -125,7 +126,7 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
           title={locked ? t('projects.locked_during_recording', { defaultValue: '录音中无法切换项目' }) : undefined}
         >
           {active ? (
-            <span className="project-color-dot" style={{ '--project-color': active.color || '#6366F1' } as React.CSSProperties} />
+            <ProjectVisual icon={active.icon} color={active.color} size="xs" showBackground />
           ) : (
             <InboxIcon width={14} height={14} />
           )}
@@ -184,7 +185,7 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
                 className={`project-selector-option ${activeProjectId === project.id ? 'active' : ''}`}
                 onClick={() => choose(project.id)}
               >
-                <span className="project-color-dot" style={{ '--project-color': project.color || '#6366F1' } as React.CSSProperties} />
+                <ProjectVisual icon={project.icon} color={project.color} size="xs" showBackground />
                 <span>{project.name}</span>
                 {project.pipeline?.enabled && <ZapIcon />}
                 {activeProjectId === project.id && <CheckIcon width={14} height={14} />}
@@ -217,17 +218,21 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
         name={createName}
         description={createDescription}
         color={createColor}
+        icon={createIcon}
         onNameChange={setCreateName}
         onDescriptionChange={setCreateDescription}
         onColorChange={setCreateColor}
+        onIconChange={setCreateIcon}
         onClose={() => setCreateOpen(false)}
         onCreate={async () => {
           const project = await createProject({
             name: createName,
             description: createDescription,
             color: createColor,
+            icon: createIcon,
           });
           if (project) await setActiveProjectId(project.id);
+          setCreateIcon('');
           setCreateOpen(false);
         }}
       />

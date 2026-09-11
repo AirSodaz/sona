@@ -7,7 +7,8 @@ import {
     isLiveRecordDraftHistoryItem,
 } from '../../types/history';
 import { useProjectStore } from '../../stores/projectStore';
-import { TrashIcon, MicIcon, FileTextIcon, EditIcon, FolderIcon, CodeIcon } from '../Icons';
+import { TrashIcon, MicIcon, FileTextIcon, EditIcon, FolderIcon, CodeIcon, InboxIcon } from '../Icons';
+import { ProjectBadge } from '../projects/ProjectVisual';
 import { Checkbox } from '../Checkbox';
 import type { WorkspaceSearchRange, WorkspaceSearchSnippet } from '../../utils/workspaceSearch';
 import {
@@ -158,18 +159,18 @@ function HistoryItemComponent({
     const tagChips = (
         <span className="history-item-tag-chips">
             {visibleTags.length === 0 && (
-                <span className="history-item-project-badge">
-                    {t('projects.inbox', { defaultValue: 'Inbox' })}
+                <span className="history-item-project-badge history-item-project-badge--inbox">
+                    <InboxIcon width={12} height={12} />
+                    <span className="history-item-project-badge-text">{t('projects.inbox', { defaultValue: 'Inbox' })}</span>
                 </span>
             )}
             {visibleTags.map((tag) => (
-                <span
+                <ProjectBadge
                     key={tag.id}
-                    className="history-item-project-badge"
-                    style={{ borderColor: tag.color, color: tag.color }}
-                >
-                    {tag.name}
-                </span>
+                    name={tag.name}
+                    icon={tag.icon}
+                    color={tag.color}
+                />
             ))}
             {hiddenTagCount > 0 && (
                 <span className="history-item-project-badge">+{hiddenTagCount}</span>

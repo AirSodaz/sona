@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { HistoryItem } from '../../types/history';
-import type { ProjectRecord } from '../../types/project';
 import { Modal } from '../Modal';
 import { Dropdown, type DropdownOption } from '../Dropdown';
+import { InboxIcon } from '../Icons';
+import { ProjectVisual } from './ProjectVisual';
 
 interface ProjectAssignmentModalProps {
   isOpen: boolean;
@@ -47,8 +47,26 @@ function OpenProjectAssignmentModal({
   const [isSaving, setIsSaving] = useState(false);
 
   const projectOptions = useMemo<DropdownOption[]>(() => [
-    { value: '', label: t('projects.inbox', { defaultValue: 'Inbox' }) },
-    ...projects.map((project) => ({ value: project.id, label: project.name })),
+    {
+      value: '',
+      label: (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <InboxIcon width={14} height={14} />
+          <span>{t('projects.inbox', { defaultValue: 'Inbox' })}</span>
+        </span>
+      ),
+      ariaLabel: t('projects.inbox', { defaultValue: 'Inbox' }),
+    },
+    ...projects.map((project) => ({
+      value: project.id,
+      label: (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <ProjectVisual icon={project.icon} color={project.color} size="xs" showBackground />
+          <span>{project.name}</span>
+        </span>
+      ),
+      ariaLabel: project.name,
+    })),
   ], [projects, t]);
   const handleApply = async () => {
     setIsSaving(true);

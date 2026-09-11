@@ -2,8 +2,8 @@
 
 import React from 'react';
 import type { ProjectRecord } from '../../types/project';
-import { renderIcon } from '../IconPicker';
-import { FolderIcon, InboxIcon, SummaryIcon, TrashIcon } from '../Icons';
+import { ProjectVisual } from './ProjectVisual';
+import { InboxIcon, SummaryIcon, TrashIcon } from '../Icons';
 import { ALL_ITEMS_SCOPE, TRASH_SCOPE, UNTAGGED_SCOPE } from './constants';
 import type {
   ProjectBrowseScope,
@@ -51,7 +51,11 @@ export function buildComparableProjectSettingsSnapshot(input: {
   };
 }
 
-export function renderScopeIcon(scope: ProjectBrowseScope, project?: ProjectRecord | null): React.ReactNode {
+export function renderScopeIcon(
+  scope: ProjectBrowseScope,
+  project?: ProjectRecord | null,
+  options?: { size?: 'xs' | 'sm' | 'md' | 'lg'; showBackground?: boolean },
+): React.ReactNode {
   if (scope === ALL_ITEMS_SCOPE) {
     return <SummaryIcon />;
   }
@@ -64,7 +68,14 @@ export function renderScopeIcon(scope: ProjectBrowseScope, project?: ProjectReco
     return <TrashIcon />;
   }
 
-  return renderIcon(project?.icon, <FolderIcon />);
+  return (
+    <ProjectVisual
+      icon={project?.icon}
+      color={project?.color}
+      size={options?.size ?? 'sm'}
+      showBackground={options?.showBackground ?? true}
+    />
+  );
 }
 
 interface RailItemContentProps {
