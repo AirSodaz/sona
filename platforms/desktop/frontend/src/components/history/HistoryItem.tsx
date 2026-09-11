@@ -205,12 +205,7 @@ function HistoryItemComponent({
         if (!onOpenContextMenu) {
             return;
         }
-
-        event.preventDefault();
         event.stopPropagation();
-        if (isSelectionMode) {
-            return;
-        }
 
         const request = createPointerContextMenuRequest(event);
         onOpenContextMenu(item.id, {
@@ -223,13 +218,7 @@ function HistoryItemComponent({
         if (!onOpenContextMenu || !isContextMenuKeyboardEvent(event)) {
             return;
         }
-
-        event.preventDefault();
         event.stopPropagation();
-        if (isSelectionMode) {
-            return;
-        }
-
         onOpenContextMenu(item.id, createKeyboardContextMenuRequest(event.currentTarget));
     };
 

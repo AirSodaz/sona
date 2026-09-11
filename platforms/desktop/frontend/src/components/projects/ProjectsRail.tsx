@@ -227,8 +227,13 @@ export function ProjectsRail({
       <div className="projects-rail-scopes">
         <button
           type="button"
-          className={`projects-rail-item ${isAllItemsScope ? 'active' : ''}`}
+          className={`projects-rail-item ${isAllItemsScope ? 'active' : ''} ${activeContextId === 'workspace:scope:all' ? 'context-menu-active' : ''}`}
           onClick={() => void onSwitchScope(ALL_ITEMS_SCOPE)}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onOpenProjectContextMenu(ALL_ITEMS_SCOPE, createPointerContextMenuRequest(event));
+          }}
           aria-pressed={isAllItemsScope}
         >
           <RailItemContent
@@ -242,8 +247,13 @@ export function ProjectsRail({
 
         <button
           type="button"
-          className={`projects-rail-item ${isTrashScope ? 'active' : ''}`}
+          className={`projects-rail-item ${isTrashScope ? 'active' : ''} ${activeContextId === 'workspace:scope:trash' ? 'context-menu-active' : ''}`}
           onClick={() => void onSwitchScope(TRASH_SCOPE)}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onOpenProjectContextMenu(TRASH_SCOPE, createPointerContextMenuRequest(event));
+          }}
           aria-pressed={isTrashScope}
         >
           <RailItemContent
@@ -257,11 +267,24 @@ export function ProjectsRail({
       </div>
 
       <div className="projects-rail-projects">
-        <div className="projects-rail-list">
+        <div
+          className="projects-rail-list"
+          onContextMenu={(event) => {
+            if (event.target === event.currentTarget) {
+              event.preventDefault();
+              onOpenProjectContextMenu('rail_empty', createPointerContextMenuRequest(event));
+            }
+          }}
+        >
           <button
             type="button"
-            className={`projects-rail-item ${isInboxScope ? 'active' : ''}`}
+            className={`projects-rail-item ${isInboxScope ? 'active' : ''} ${activeContextId === 'workspace:scope:untagged' ? 'context-menu-active' : ''}`}
             onClick={() => void onSwitchScope(UNTAGGED_SCOPE)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onOpenProjectContextMenu(UNTAGGED_SCOPE, createPointerContextMenuRequest(event));
+            }}
             aria-pressed={isInboxScope}
           >
             <RailItemContent
