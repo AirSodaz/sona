@@ -111,7 +111,7 @@ describe('SettingsAutomationTab', () => {
         fireEvent.click(screen.getByRole('button', { name: 'New Rule' }));
         fireEvent.change(screen.getByPlaceholderText('e.g. Weekly Meeting Inbox'), { target: { value: 'Customer Interviews' } });
         fireEvent.change(screen.getByPlaceholderText('Choose a folder to monitor...'), { target: { value: 'C:\\watch\\interviews' } });
-        fireEvent.click(screen.getByRole('switch', { name: 'Watch Subfolders' }));
+        fireEvent.click(screen.getByRole('switch', { name: 'Subdirectories' }));
         fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
 
         await waitFor(() => expect(saveRule).toHaveBeenCalledWith(expect.objectContaining({
@@ -149,6 +149,19 @@ describe('SettingsAutomationTab', () => {
             expect(saveRule).not.toHaveBeenCalled();
         });
 
+        // Verify Auto Polish and Auto Translate switches exist in export-only mode
+        const polishSwitch = screen.getByRole('switch', { name: 'Auto Polish' });
+        expect(polishSwitch).toBeDefined();
+        const translateSwitch = screen.getByRole('switch', { name: 'Auto Translate' });
+        expect(translateSwitch).toBeDefined();
+
+        // Toggling Auto Polish reveals the polish context dropdown
+        fireEvent.click(polishSwitch);
+        expect(screen.getByRole('button', { name: 'Auto Polish' })).toBeDefined();
+
+        // Toggling Auto Translate reveals the target language dropdown
+        fireEvent.click(translateSwitch);
+        expect(screen.getByRole('button', { name: 'Auto Translate' })).toBeDefined();
         // Fill export directory and save
         // Verify Export Format dropdown exists and can be selected
         const exportFormatDropdown = screen.getByRole('button', { name: 'Export Format' });
@@ -165,6 +178,10 @@ describe('SettingsAutomationTab', () => {
             name: 'Export Only Watcher',
             watchDirectory: 'C:\\watch\\export_only',
             saveHistory: false,
+            actions: expect.objectContaining({
+                autoPolish: true,
+                autoTranslate: true,
+            }),
             exportConfig: expect.objectContaining({
                 directory: 'C:\\exports',
                 format: 'srt',

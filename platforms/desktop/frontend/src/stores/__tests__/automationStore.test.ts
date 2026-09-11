@@ -268,6 +268,66 @@ describe('automationStore', () => {
         );
     });
 
+    it('applies direct polish and translate pipeline snapshot when saveHistory is disabled without a project', async () => {
+        const rule = createRule({
+            id: 'rule-export-only',
+            name: 'Export Only Watcher',
+            saveHistory: false,
+            projectId: 'none',
+            tagIds: [],
+            actions: {
+                autoPolish: true,
+                autoTranslate: true,
+                autoSummary: false,
+            },
+            stageConfig: {
+                autoPolish: true,
+                polishPresetId: 'interview',
+                autoTranslate: true,
+                translationLanguage: 'ja',
+                exportEnabled: true,
+            },
+            exportConfig: {
+                directory: 'C:\\exports',
+                format: 'srt',
+                mode: 'translation',
+            },
+        });
+        loadAutomationRulesMock.mockResolvedValue([rule]);
+
+        await useAutomationStore.getState().loadAndStart();
+        await emitRuntimeCandidate({
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\interview.wav',
+            sourceFingerprint: 'fp-interview',
+            size: 100,
+            mtimeMs: 2000,
+        });
+
+        expect(addFilesMock).toHaveBeenCalledWith(
+            ['C:\\watch\\interview.wav'],
+            expect.objectContaining({
+                origin: 'automation',
+                automationRuleId: 'rule-export-only',
+                automationRuleName: 'Export Only Watcher',
+                projectId: null,
+                pipelineSnapshot: expect.objectContaining({
+                    autoPolish: true,
+                    polishPresetId: 'interview',
+                    autoTranslate: true,
+                    targetLanguage: 'ja',
+                    autoExport: true,
+                    exportDirectory: 'C:\\exports',
+                    exportFormat: 'srt',
+                }),
+                exportConfig: expect.objectContaining({
+                    directory: 'C:\\exports',
+                    format: 'srt',
+                }),
+            }),
+        );
+    });
+
     it('skips queuing files that are currently blocked by recovery guard', async () => {
         const rule = createRule();
         loadAutomationRulesMock.mockResolvedValue([rule]);

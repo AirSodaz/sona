@@ -103,4 +103,43 @@ describe('ProjectSettingsModal', () => {
       })
     );
   });
+
+  it('renders pipeline features as switches and toggles them', () => {
+    const onPipelineChange = vi.fn();
+    render(
+      <ProjectSettingsModal
+        isOpen={true}
+        project={mockProject}
+        draftName="Test Project"
+        draftDescription="Test description"
+        draftIcon="folder"
+        draftColor="#6366f1"
+        draftPipeline={mockProject.pipeline}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onNameChange={vi.fn()}
+        onDescriptionChange={vi.fn()}
+        onIconChange={vi.fn()}
+        onColorChange={vi.fn()}
+        onPipelineChange={onPipelineChange}
+      />
+    );
+
+    // Verify pipeline enable and feature switches exist
+    expect(screen.getByRole('switch', { name: 'Enable Project Pipeline' })).toBeDefined();
+    const polishSwitch = screen.getByRole('switch', { name: 'Auto Polish' });
+    expect(polishSwitch).toBeDefined();
+    expect(screen.getByRole('switch', { name: 'Auto Translate' })).toBeDefined();
+    expect(screen.getByRole('switch', { name: 'Auto Summary' })).toBeDefined();
+    expect(screen.getByRole('switch', { name: 'Auto Export' })).toBeDefined();
+
+    // Toggle Auto Polish switch
+    fireEvent.click(polishSwitch);
+    expect(onPipelineChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        autoPolish: false,
+      })
+    );
+  });
 });

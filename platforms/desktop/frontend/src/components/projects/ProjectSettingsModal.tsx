@@ -7,6 +7,7 @@ import { FolderIcon } from '../Icons';
 import { IconPicker } from '../IconPicker';
 import { Modal } from '../Modal';
 import { Dropdown, type DropdownOption } from '../Dropdown';
+import { Switch } from '../Switch';
 import { getPolishPresetOptions } from '../../utils/polishPresets';
 import { getSummaryTemplateOptions } from '../../utils/summaryTemplates';
 import { LANGUAGE_OPTIONS } from '../../constants/languages';
@@ -188,30 +189,29 @@ export function ProjectSettingsModal({
         {/* Pipeline Configuration */}
         {onPipelineChange && (
           <div className="project-pipeline-section">
-            <label className="project-pipeline-toggle">
+            <div className="project-pipeline-toggle">
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <Zap size={15} style={{ color: 'var(--color-accent, #6366F1)' }} />
                 {t('projects.pipeline_enable', { defaultValue: 'Enable Project Pipeline' })}
               </span>
-              <input
-                type="checkbox"
+              <Switch
                 checked={Boolean(pipeline.enabled)}
-                onChange={(e) => updatePipeline({ enabled: e.target.checked })}
+                onChange={(checked) => updatePipeline({ enabled: checked })}
+                aria-label={t('projects.pipeline_enable', { defaultValue: 'Enable Project Pipeline' })}
               />
-            </label>
+            </div>
 
             {pipeline.enabled && (
               <div className="project-pipeline-options">
                 {/* Auto Polish */}
                 <div className="project-pipeline-item">
-                  <label className="project-pipeline-item-header">
-                    <input
-                      type="checkbox"
+                  <div className="project-pipeline-item-header">
+                    <Switch
                       checked={Boolean(pipeline.autoPolish)}
-                      onChange={(e) => updatePipeline({ autoPolish: e.target.checked })}
+                      onChange={(checked) => updatePipeline({ autoPolish: checked })}
+                      label={t('automation.auto_polish', { defaultValue: 'Auto Polish' })}
                     />
-                    <span>{t('automation.auto_polish', { defaultValue: 'Auto Polish' })}</span>
-                  </label>
+                  </div>
                   {pipeline.autoPolish && (
                     <div className="project-pipeline-item-content">
                       <Dropdown
@@ -227,14 +227,13 @@ export function ProjectSettingsModal({
 
                 {/* Auto Translate */}
                 <div className="project-pipeline-item">
-                  <label className="project-pipeline-item-header">
-                    <input
-                      type="checkbox"
+                  <div className="project-pipeline-item-header">
+                    <Switch
                       checked={Boolean(pipeline.autoTranslate)}
-                      onChange={(e) => updatePipeline({ autoTranslate: e.target.checked })}
+                      onChange={(checked) => updatePipeline({ autoTranslate: checked })}
+                      label={t('automation.auto_translate', { defaultValue: 'Auto Translate' })}
                     />
-                    <span>{t('automation.auto_translate', { defaultValue: 'Auto Translate' })}</span>
-                  </label>
+                  </div>
                   {pipeline.autoTranslate && (
                     <div className="project-pipeline-item-content">
                       <Dropdown
@@ -250,14 +249,13 @@ export function ProjectSettingsModal({
 
                 {/* Auto Summary */}
                 <div className="project-pipeline-item">
-                  <label className="project-pipeline-item-header">
-                    <input
-                      type="checkbox"
+                  <div className="project-pipeline-item-header">
+                    <Switch
                       checked={Boolean(pipeline.autoSummary)}
-                      onChange={(e) => updatePipeline({ autoSummary: e.target.checked })}
+                      onChange={(checked) => updatePipeline({ autoSummary: checked })}
+                      label={t('automation.auto_summary', { defaultValue: 'Auto Summary' })}
                     />
-                    <span>{t('automation.auto_summary', { defaultValue: 'Auto Summary' })}</span>
-                  </label>
+                  </div>
                   {pipeline.autoSummary && (
                     <div className="project-pipeline-item-content">
                       <Dropdown
@@ -273,14 +271,13 @@ export function ProjectSettingsModal({
 
                 {/* Auto Export */}
                 <div className="project-pipeline-item">
-                  <label className="project-pipeline-item-header">
-                    <input
-                      type="checkbox"
+                  <div className="project-pipeline-item-header">
+                    <Switch
                       checked={Boolean(pipeline.autoExport)}
-                      onChange={(e) => updatePipeline({ autoExport: e.target.checked })}
+                      onChange={(checked) => updatePipeline({ autoExport: checked })}
+                      label={t('automation.auto_export', { defaultValue: 'Auto Export' })}
                     />
-                    <span>{t('automation.auto_export', { defaultValue: 'Auto Export' })}</span>
-                  </label>
+                  </div>
                   {pipeline.autoExport && (
                     <div className="project-pipeline-item-content" style={{ flexDirection: 'column', gap: 6 }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

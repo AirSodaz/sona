@@ -210,14 +210,22 @@ export class AutomationRuntimeCoordinator {
       ? rawProjectId : null;
     const pipeline = resolveItemPipeline(projectId, this.ports.useProjectStore.getState().projects, effectiveConfig);
     const hasExportDir = Boolean(latestRule.exportConfig?.directory);
-    const effectivePipeline = hasExportDir
-      ? {
-        ...pipeline,
-        autoExport: true,
-        exportDirectory: latestRule.exportConfig.directory,
-        exportFormat: (latestRule.exportConfig.format as ProjectPipelineConfig['exportFormat']) || pipeline.exportFormat || 'txt',
-      }
-      : pipeline;
+    const ruleActionPolish = latestRule.actions?.autoPolish ?? latestRule.stageConfig?.autoPolish;
+    const ruleActionTranslate = latestRule.actions?.autoTranslate ?? latestRule.stageConfig?.autoTranslate;
+    const effectivePipeline = {
+      ...pipeline,
+      ...(ruleActionPolish !== undefined ? { autoPolish: ruleActionPolish } : {}),
+      ...(ruleActionTranslate !== undefined ? { autoTranslate: ruleActionTranslate } : {}),
+      ...(latestRule.stageConfig?.polishPresetId ? { polishPresetId: latestRule.stageConfig.polishPresetId } : {}),
+      ...(latestRule.stageConfig?.translationLanguage ? { targetLanguage: latestRule.stageConfig.translationLanguage } : {}),
+      ...(hasExportDir
+        ? {
+          autoExport: true,
+          exportDirectory: latestRule.exportConfig.directory,
+          exportFormat: (latestRule.exportConfig.format as ProjectPipelineConfig['exportFormat']) || pipeline.exportFormat || 'txt',
+        }
+        : {}),
+    };
 
     try {
       this.ports.useBatchQueueStore.getState().addFiles([payload.filePath], {
