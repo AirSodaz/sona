@@ -491,12 +491,24 @@ describe('ProjectsView', () => {
     });
   });
 
-  it('renders All Items and Inbox in the rail while keeping a single New Project CTA', async () => {
+  it('renders All Items and Trash in the scopes section, and Inbox pinned at the top of the projects list', async () => {
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
-    expect(getButtonByContent('All Items')).toBeDefined();
-    expect(getButtonByContent('Inbox')).toBeDefined();
+    const scopesContainer = document.querySelector('.projects-rail-scopes');
+    expect(scopesContainer).not.toBeNull();
+    const scopeButtons = scopesContainer!.querySelectorAll('.projects-rail-item');
+    expect(scopeButtons).toHaveLength(2);
+    expect(scopeButtons[0].textContent).toContain('All Items');
+    expect(scopeButtons[1].textContent).toContain('Trash');
+
+    const railList = document.querySelector('.projects-rail-list');
+    expect(railList).not.toBeNull();
+    const railItems = railList!.querySelectorAll('.projects-rail-item');
+    expect(railItems.length).toBeGreaterThanOrEqual(2);
+    expect(railItems[0].textContent).toContain('Inbox');
+    expect(railItems[1].textContent).toContain('Alpha');
+
     expect(screen.getAllByRole('button', { name: 'New Project' })).toHaveLength(1);
   });
 

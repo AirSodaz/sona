@@ -240,19 +240,6 @@ export function ProjectsRail({
 
         <button
           type="button"
-          className={`projects-rail-item ${isInboxScope ? 'active' : ''}`}
-          onClick={() => void onSwitchScope(UNTAGGED_SCOPE)}
-          aria-pressed={isInboxScope}
-        >
-          <RailItemContent
-            icon={renderScopeIcon(UNTAGGED_SCOPE)}
-            title={t('projects.inbox', { defaultValue: 'Inbox' })}
-          />
-          <span className="projects-rail-count">{inboxCount}</span>
-        </button>
-
-        <button
-          type="button"
           className={`projects-rail-item ${isTrashScope ? 'active' : ''}`}
           onClick={() => void onSwitchScope(TRASH_SCOPE)}
           aria-pressed={isTrashScope}
@@ -267,6 +254,19 @@ export function ProjectsRail({
 
       <div className="projects-rail-projects">
         <div className="projects-rail-list">
+          <button
+            type="button"
+            className={`projects-rail-item ${isInboxScope ? 'active' : ''}`}
+            onClick={() => void onSwitchScope(UNTAGGED_SCOPE)}
+            aria-pressed={isInboxScope}
+          >
+            <RailItemContent
+              icon={renderScopeIcon(UNTAGGED_SCOPE)}
+              title={t('projects.inbox', { defaultValue: 'Inbox' })}
+            />
+            <span className="projects-rail-count">{inboxCount}</span>
+          </button>
+
           {projects.length === 0 && (
             <div className="projects-rail-empty">
               {t('projects.no_tags', { defaultValue: 'No tags yet.' })}

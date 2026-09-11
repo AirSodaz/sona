@@ -63,7 +63,7 @@ export function ProjectDeleteModal({
         <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-primary)' }}>
           {t('projects.delete_project_confirm_msg', {
             name: project.name,
-            defaultValue: `Are you sure you want to delete "${project.name}"?`,
+            defaultValue: 'Are you sure you want to delete "{{name}}"?',
           })}
         </p>
 
@@ -72,7 +72,7 @@ export function ProjectDeleteModal({
             <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)' }}>
               {t('projects.delete_items_handling', {
                 count: itemCount,
-                defaultValue: `This project contains ${itemCount} items. Choose how to handle them:`,
+                defaultValue: 'This project contains {{count}} items. Choose how to handle them:',
               })}
             </span>
 
