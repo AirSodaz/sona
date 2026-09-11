@@ -187,7 +187,7 @@ function downloadOnnxRuntimeGpu({
   throw new Error(`Unsupported platform for ONNX Runtime GPU: ${platform}`);
 }
 function downloadLlamaCppCuda({
-  llamaRef = 'b4500',
+  llamaRef = 'b10405',
   cudaVersion = '12.4',
   cacheDir,
   platform = process.platform,
@@ -255,7 +255,7 @@ function collectFilesRecursively(dir, filterRegex) {
 }
 
 function buildLlamaCppGgmlCuda({
-  llamaRef = 'b4500',
+  llamaRef = 'b10405',
   buildRoot,
   cudaArchitectures = '75;80;86;89',
   platform = process.platform,
@@ -476,7 +476,7 @@ function runCli() {
   const addonVersion = options['addon-version'] || '0.1.0';
   const cudaVersion = options['cuda-version'] || env.cudaVersion || '12.4';
   const ortVersion = options['ort-version'] || '1.20.1';
-  const llamaRef = options['llama-ref'] || 'b4500';
+  const llamaRef = options['llama-ref'] || 'b10405';
   const outputDir = path.resolve(options['output-dir'] || path.join(repoRoot, 'dist', 'cuda-addon'));
   const cacheDir = path.join(repoRoot, 'target', 'cuda-addon-cache');
   const stageName = `sona-cuda-addon-v${addonVersion}-${process.platform === 'win32' ? 'windows-x64' : 'linux-x64'}`;

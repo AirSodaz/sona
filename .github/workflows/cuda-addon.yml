@@ -24,7 +24,7 @@ on:
       llama_cpp_ref:
         description: "llama.cpp git ref (branch/tag/commit)"
         required: false
-        default: "b4500"
+        default: "b10405"
         type: string
       publish_release:
         description: "Publish to GitHub Releases (only tag pushes publish automatically)"
@@ -81,7 +81,7 @@ jobs:
       ADDON_VERSION: ${{ needs.prepare-version.outputs.addon_version }}
       CUDA_VERSION: ${{ inputs.cuda_version || '12.4.1' }}
       ORT_VERSION: ${{ inputs.onnxruntime_version || '1.20.1' }}
-      LLAMA_REF: ${{ inputs.llama_cpp_ref || 'b4500' }}
+      LLAMA_REF: ${{ inputs.llama_cpp_ref || 'b10405' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -183,7 +183,7 @@ jobs:
       ADDON_VERSION: ${{ needs.prepare-version.outputs.addon_version }}
       CUDA_VERSION: ${{ inputs.cuda_version || '12.4.1' }}
       ORT_VERSION: ${{ inputs.onnxruntime_version || '1.20.1' }}
-      LLAMA_REF: ${{ inputs.llama_cpp_ref || 'b4500' }}
+      LLAMA_REF: ${{ inputs.llama_cpp_ref || 'b10405' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6

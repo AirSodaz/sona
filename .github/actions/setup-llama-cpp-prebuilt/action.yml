@@ -1,0 +1,75 @@
+name: 'Setup llama.cpp Prebuilt'
+description: 'Download and configure llama.cpp prebuilt libraries'
+
+inputs:
+  ref:
+    description: 'llama.cpp release tag (e.g. b10405)'
+  platform:
+    description: 'Platform identifier (macos-x64, macos-arm64, linux-x64, linux-vulkan-x64, windows-x64, windows-vulkan-x64, windows-cpu-arm64)'
+    required: true
+
+outputs:
+  lib-dir:
+    description: 'Directory containing the extracted libraries'
+    value: ${{ steps.extract.outputs.lib-dir }}
+
+runs:
+  using: composite
+  steps:
+    - name: Determine download URL
+      id: url
+      shell: bash
+      run: |
+        case "${{ inputs.platform }}" in
+          macos-x64)
+            ARTIFACT="llama-${{ inputs.ref }}-bin-macos-x64.tar.gz"
+            ;;
+          macos-arm64)
+            ARTIFACT="llama-${{ inputs.ref }}-bin-macos-arm64.tar.gz"
+            ;;
+          linux-x64)
+            ARTIFACT="llama-${{ inputs.ref }}-bin-ubuntu-x64.tar.gz"
+            ;;
+          linux-vulkan-x64)
+            ARTIFACT="llama-${{ inputs.ref }}-bin-ubuntu-vulkan-x64.tar.gz"
+            ;;
+          windows-x64)
+            ARTIFACT="llama-${{ inputs.ref }}-bin-win-cpu-x64.zip"
+            ;;
+          windows-vulkan-x64)
+            ARTIFACT="llama-${{ inputs.ref }}-bin-win-vulkan-x64.zip"
+            ;;
+          windows-cpu-arm64)
+            ARTIFACT="llama-${{ inputs.ref }}-bin-win-cpu-arm64.zip"
+            ;;
+          *)
+            echo "Unsupported platform: ${{ inputs.platform }}"
+            exit 1
+            ;;
+        esac
+        echo "artifact=$ARTIFACT" >> $GITHUB_OUTPUT
+        echo "url=https://github.com/ggerganov/llama.cpp/releases/download/${{ inputs.ref }}/$ARTIFACT" >> $GITHUB_OUTPUT
+
+    - name: Download prebuilt package
+      shell: bash
+      run: |
+        echo "Downloading ${{ steps.url.outputs.url }}"
+        curl -fsSL -o /tmp/llama-prebuilt.${{ runner.os == 'Windows' && 'zip' || 'tar.gz' }} \
+          "${{ steps.url.outputs.url }}"
+
+    - name: Extract libraries
+      id: extract
+      shell: bash
+      run: |
+        if [[ "$RUNNER_OS" == "Windows" ]]; then
+          LIB_DIR="${RUNNER_TEMP}/llama-libs"
+          mkdir -p "$LIB_DIR"
+          unzip -q /tmp/llama-prebuilt.zip -d "$LIB_DIR"
+          echo "lib-dir=$LIB_DIR/bin" >> $GITHUB_OUTPUT
+        else
+          LIB_DIR="${RUNNER_TEMP}/llama-libs"
+          mkdir -p "$LIB_DIR"
+          tar -xzf /tmp/llama-prebuilt.tar.gz -C "$LIB_DIR"
+          echo "lib-dir=$LIB_DIR/lib" >> $GITHUB_OUTPUT
+        fi
+        echo "Extracted to: $LIB_DIR"

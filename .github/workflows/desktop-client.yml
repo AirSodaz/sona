@@ -47,6 +47,7 @@ jobs:
           - platform: "windows-latest"
             args: "--target aarch64-pc-windows-msvc"
     env:
+      LLAMA_CPP_REF: b10405
       SHERPA_ONNX_VERSION: 1.13.8
       SHERPA_ONNX_TAG: v1.13.8
       LLAMA_BUILD_SHARED_LIBS: 1
@@ -92,6 +93,33 @@ jobs:
           target: ${{ matrix.args }}
           cache-key: sherpa-onnx-${{ env.SHERPA_ONNX_VERSION }}-${{ runner.os }}-${{ runner.arch }}-${{ strategy.job-index }}
 
+      - name: Setup llama.cpp prebuilt libraries
+        id: setup-llama
+        uses: ./.github/actions/setup-llama-cpp-prebuilt
+        with:
+          ref: ${{ env.LLAMA_CPP_REF }}
+          platform: ${{ matrix.platform == 'macos-latest' && (contains(matrix.args, 'aarch64-apple-darwin') && 'macos-arm64' || 'macos-x64') || (matrix.platform == 'ubuntu-22.04' && (contains(matrix.args, 'llama-vulkan') && 'linux-vulkan-x64' || 'linux-x64')) || (matrix.platform == 'windows-latest' && (contains(matrix.args, 'aarch64-pc-windows-msvc') && 'windows-cpu-arm64' || (contains(matrix.args, 'llama-vulkan') && 'windows-vulkan-x64' || 'windows-x64'))) }}
+
+      - name: Configure llama.cpp library paths
+        shell: bash
+        run: |
+          LIB_DIR="${{ steps.setup-llama.outputs.lib-dir }}"
+          echo "LLAMA_CPP_LIB_DIR=$LIB_DIR" >> $GITHUB_ENV
+
+          if [[ "${{ matrix.platform }}" == "macos-13" ]] || [[ "${{ matrix.platform }}" == "macos-14" ]]; then
+            echo "DYLD_LIBRARY_PATH=$LIB_DIR:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+          elif [[ "${{ matrix.platform }}" == "ubuntu-22.04" ]]; then
+            echo "LD_LIBRARY_PATH=$LIB_DIR:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          elif [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
+            # Windows uses PATH for DLL lookup
+            if command -v cygpath &> /dev/null; then
+              WIN_PATH=$(cygpath -w "$LIB_DIR")
+            else
+              WIN_PATH="$LIB_DIR"
+            fi
+            echo "$WIN_PATH" >> $GITHUB_PATH
+          fi
+
       - name: Configure Windows build environment
         if: startsWith(matrix.platform, 'windows')
         uses: ./.github/actions/setup-windows-build-env
@@ -100,7 +128,7 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          LD_LIBRARY_PATH: ${{ env.SHERPA_ONNX_LIB_DIR }}:${{ github.workspace }}/target/desktop-bundle/x86_64-unknown-linux-gnu/runtime-libs:${{ github.workspace }}/target/x86_64-unknown-linux-gnu/release:${{ github.workspace }}/target/release${{ env.VULKAN_SDK != '' && format(':{0}/lib', env.VULKAN_SDK) || '' }}
+          LD_LIBRARY_PATH: ${{ env.LLAMA_CPP_LIB_DIR }}:${{ env.SHERPA_ONNX_LIB_DIR }}:${{ github.workspace }}/target/desktop-bundle/x86_64-unknown-linux-gnu/runtime-libs:${{ github.workspace }}/target/x86_64-unknown-linux-gnu/release:${{ github.workspace }}/target/release${{ env.VULKAN_SDK != '' && format(':{0}/lib', env.VULKAN_SDK) || '' }}
           APPIMAGE_EXTRACT_AND_RUN: 1
           NO_STRIP: "true"
         run: node platforms/desktop/scripts/tauri.js build ${{ matrix.args }} --verbose
