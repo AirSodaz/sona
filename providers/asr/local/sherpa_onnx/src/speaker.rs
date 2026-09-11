@@ -139,6 +139,7 @@ pub fn run_speaker_diarization(
         segmentation: OfflineSpeakerSegmentationModelConfig {
             pyannote: OfflineSpeakerSegmentationPyannoteModelConfig {
                 model: Some(segmentation_model.to_string_lossy().into_owned()),
+                window_shift_ratio: 0.1,
             },
             num_threads: 1,
             debug: false,

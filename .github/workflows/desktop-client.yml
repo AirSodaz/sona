@@ -47,8 +47,8 @@ jobs:
           - platform: "windows-latest"
             args: "--target aarch64-pc-windows-msvc"
     env:
-      SHERPA_ONNX_VERSION: 1.13.5
-      SHERPA_ONNX_TAG: v1.13.5
+      SHERPA_ONNX_VERSION: 1.13.8
+      SHERPA_ONNX_TAG: v1.13.8
       LLAMA_BUILD_SHARED_LIBS: 1
       LLAMA_ENABLE_VULKAN: ${{ contains(matrix.args, 'llama-vulkan') && '1' || '0' }}
       LLAMA_ENABLE_METAL: ${{ contains(matrix.args, 'llama-metal') && '1' || '0' }}

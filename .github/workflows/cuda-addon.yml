@@ -89,7 +89,7 @@ jobs:
       - name: Download and Extract sherpa-onnx CUDA Prebuilt (Windows)
         shell: pwsh
         run: |
-          $sherpaVer = "1.13.5"
+          $sherpaVer = "1.13.8"
           $url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${sherpaVer}/sherpa-onnx-v${sherpaVer}-cuda-12.x-cudnn-9.x-onnxruntime1.27.1-win-x64-cuda.tar.bz2"
           Write-Host "Downloading sherpa-onnx CUDA prebuilt from $url"
           curl.exe -sSfL --retry 5 --retry-connrefused "$url" -o "sherpa-onnx-cuda.tar.bz2"
@@ -208,7 +208,7 @@ jobs:
 
       - name: Download and Extract sherpa-onnx CUDA Prebuilt (Linux)
         run: |
-          SHERPA_VER="1.13.5"
+          SHERPA_VER="1.13.8"
           URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_VER}/sherpa-onnx-v${SHERPA_VER}-cuda-12.x-cudnn-9.x-onnxruntime1.27.1-linux-x64-gpu.tar.bz2"
           echo "Downloading sherpa-onnx CUDA prebuilt from $URL"
           curl -sSfL --retry 5 "$URL" -o sherpa-onnx-cuda.tar.bz2

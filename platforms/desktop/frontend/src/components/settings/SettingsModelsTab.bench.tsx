@@ -1,4 +1,4 @@
-import { bench, describe } from 'vitest';
+import { test } from 'vitest';
 
 // Mock model type
 interface ModelInfo {
@@ -19,9 +19,8 @@ const getModelPath = async (id: string): Promise<string> => {
     return `/path/to/models/${id}`;
 };
 
-describe('SettingsModelsTab model resolution', () => {
-
-    bench('baseline sequential loop (streaming + batch)', async () => {
+test('SettingsModelsTab model resolution', async ({ bench }) => {
+    await bench('baseline sequential loop (streaming + batch)', async () => {
         const streamingModelPath = '/path/to/models/model-18';
         const batchModelPath = '/path/to/models/model-19';
 
@@ -58,9 +57,9 @@ describe('SettingsModelsTab model resolution', () => {
         if (!selectedStreamingModelId || !selectedBatchModelId) {
             return;
         }
-    });
+    }).run();
 
-    bench('optimized map with Promise.all', async () => {
+    await bench('optimized map with Promise.all', async () => {
         const streamingModelPath = '/path/to/models/model-18';
         const batchModelPath = '/path/to/models/model-19';
 
@@ -68,26 +67,26 @@ describe('SettingsModelsTab model resolution', () => {
         let selectedBatchModelId = '';
 
         // Optimization logic: map path -> id
-        const pathMap = new Map<string, string>();
+        const pathRecord: Record<string, string> = {};
 
         await Promise.all(
             mockModels.map(async (model) => {
                 const path = await getModelPath(model.id);
-                pathMap.set(path, model.id);
+                pathRecord[path] = model.id;
             })
         );
 
         if (streamingModelPath) {
-            selectedStreamingModelId = pathMap.get(streamingModelPath) || '';
+            selectedStreamingModelId = pathRecord[streamingModelPath] || '';
         }
 
         if (batchModelPath) {
-            selectedBatchModelId = pathMap.get(batchModelPath) || '';
+            selectedBatchModelId = pathRecord[batchModelPath] || '';
         }
 
         // Use variables to prevent strict compiler errors
         if (!selectedStreamingModelId || !selectedBatchModelId) {
             return;
         }
-    });
+    }).run();
 });
