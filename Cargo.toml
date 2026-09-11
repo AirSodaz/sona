@@ -67,7 +67,7 @@ async-trait = "0.1"
 axum = "0.8"
 base64 = "0.22"
 bitflags = "2.13"
-bzip2 = "0.4"
+bzip2 = "0.5"
 chrono = { version = "0.4.42", default-features = false, features = ["clock", "std"] }
 clap = { version = "4", features = ["derive", "wrap_help"] }
 cpal = "0.18"

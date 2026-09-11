@@ -5269,6 +5269,9 @@ checksum = "20dafead71c16a34e1ff357ddefc8afc11e7d51d6d2b9fbd07eaa48e3e540220"
 dependencies = [
  "block2",
  "dispatch2",
+ "glib-sys",
+ "gobject-sys",
+ "gtk-sys",
  "js-sys",
  "libc",
  "log",
@@ -6271,7 +6274,7 @@ dependencies = [
 name = "sona-archive"
 version = "0.9.0"
 dependencies = [
- "bzip2 0.4.4",
+ "bzip2 0.5.2",
  "serde",
  "serde_json",
  "sona-application",
@@ -6378,7 +6381,7 @@ name = "sona-model-downloads"
 version = "0.9.0"
 dependencies = [
  "axum",
- "bzip2 0.4.4",
+ "bzip2 0.5.2",
  "flate2",
  "fs3",
  "futures-util",
@@ -7431,7 +7434,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
