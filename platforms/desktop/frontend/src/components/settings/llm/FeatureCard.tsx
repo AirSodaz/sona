@@ -190,8 +190,8 @@ export const FeatureCard = React.memo(function FeatureCard({
       if (p.id === selectedProvider) return true;
 
       if (
-        featureId !== 'translation' &&
-        (p.id === 'google_translate' || p.id === 'google_translate_free')
+        (p.id === 'google_translate' || p.id === 'google_translate_free') &&
+        featureId !== 'translation'
       ) {
         return false;
       }
@@ -226,6 +226,16 @@ export const FeatureCard = React.memo(function FeatureCard({
 
   const fetchModelCandidates = useCallback(
     async (provider: LlmProvider) => {
+      // Google Translate providers only support translation feature
+      if (
+        (provider === 'google_translate' || provider === 'google_translate_free') &&
+        featureId !== 'translation'
+      ) {
+        setModelCandidates([]);
+        setIsLoadingCandidates(false);
+        return;
+      }
+
       const latestLlmState = latestLlmStateRef.current;
       const persistedModels = getProviderLlmModels(latestLlmState, provider);
       const isCacheExpired = isProviderModelDiscoveryExpired(latestLlmState, provider);
@@ -303,6 +313,13 @@ export const FeatureCard = React.memo(function FeatureCard({
   const commitModelChange = (providerToSave: LlmProvider, modelToSave: string) => {
     const trimmedModel = modelToSave.trim();
     if (!trimmedModel) {
+      return;
+    }
+    // Google Translate providers only support translation feature
+    if (
+      (providerToSave === 'google_translate' || providerToSave === 'google_translate_free') &&
+      featureId !== 'translation'
+    ) {
       return;
     }
 

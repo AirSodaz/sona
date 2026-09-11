@@ -14,7 +14,7 @@ function globalDefaults(config: AppConfig): ProjectPipelineConfig {
     polishPresetId: config.polishPresetId,
     autoTranslate: false,
     targetLanguage: config.translationLanguage,
-    autoSummary: config.summaryEnabled ?? false,
+    autoSummary: false,
     summaryTemplateId: config.summaryTemplateId,
     autoExport: false,
   };
