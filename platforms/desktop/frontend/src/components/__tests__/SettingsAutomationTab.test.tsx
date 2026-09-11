@@ -150,6 +150,14 @@ describe('SettingsAutomationTab', () => {
         });
 
         // Fill export directory and save
+        // Verify Export Format dropdown exists and can be selected
+        const exportFormatDropdown = screen.getByRole('button', { name: 'Export Format' });
+        expect(exportFormatDropdown).toBeDefined();
+        fireEvent.click(exportFormatDropdown);
+        fireEvent.click(screen.getByRole('option', { name: 'SRT' }));
+
+        const browseButtons = screen.getAllByRole('button', { name: 'Browse' });
+        expect(browseButtons).toHaveLength(2);
         fireEvent.change(screen.getByPlaceholderText('Choose export directory...'), { target: { value: 'C:\\exports' } });
         fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
 
@@ -159,6 +167,7 @@ describe('SettingsAutomationTab', () => {
             saveHistory: false,
             exportConfig: expect.objectContaining({
                 directory: 'C:\\exports',
+                format: 'srt',
             }),
         })));
     });

@@ -6,6 +6,7 @@ import { DEFAULT_PROJECT_PIPELINE } from '../../types/project';
 import { FolderIcon } from '../Icons';
 import { IconPicker } from '../IconPicker';
 import { Modal } from '../Modal';
+import { Dropdown, type DropdownOption } from '../Dropdown';
 import { getPolishPresetOptions } from '../../utils/polishPresets';
 import { getSummaryTemplateOptions } from '../../utils/summaryTemplates';
 import { LANGUAGE_OPTIONS } from '../../constants/languages';
@@ -14,6 +15,14 @@ import { openDialog } from '../../services/tauri/platform/dialog';
 import { useConfigStore } from '../../stores/configStore';
 import { PROJECT_COLOR_PRESETS } from '../../constants/projects';
 export { PROJECT_COLOR_PRESETS };
+
+const EXPORT_FORMAT_OPTIONS: DropdownOption[] = [
+  { value: 'txt', label: 'TXT' },
+  { value: 'srt', label: 'SRT' },
+  { value: 'vtt', label: 'VTT' },
+  { value: 'json', label: 'JSON' },
+  { value: 'docx', label: 'DOCX' },
+];
 interface ProjectSettingsModalProps {
   isOpen: boolean;
   project: ProjectRecord | null;
@@ -205,14 +214,13 @@ export function ProjectSettingsModal({
                   </label>
                   {pipeline.autoPolish && (
                     <div className="project-pipeline-item-content">
-                      <select
+                      <Dropdown
                         value={pipeline.polishPresetId || 'general'}
-                        onChange={(e) => updatePipeline({ polishPresetId: e.target.value })}
-                      >
-                        {polishPresetOptions.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
+                        onChange={(value) => updatePipeline({ polishPresetId: value })}
+                        options={polishPresetOptions}
+                        style={{ width: '100%' }}
+                        aria-label={t('automation.auto_polish', { defaultValue: 'Auto Polish' })}
+                      />
                     </div>
                   )}
                 </div>
@@ -229,14 +237,13 @@ export function ProjectSettingsModal({
                   </label>
                   {pipeline.autoTranslate && (
                     <div className="project-pipeline-item-content">
-                      <select
+                      <Dropdown
                         value={pipeline.targetLanguage || 'en'}
-                        onChange={(e) => updatePipeline({ targetLanguage: e.target.value })}
-                      >
-                        {languageOptions.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
+                        onChange={(value) => updatePipeline({ targetLanguage: value })}
+                        options={languageOptions}
+                        style={{ width: '100%' }}
+                        aria-label={t('automation.auto_translate', { defaultValue: 'Auto Translate' })}
+                      />
                     </div>
                   )}
                 </div>
@@ -253,14 +260,13 @@ export function ProjectSettingsModal({
                   </label>
                   {pipeline.autoSummary && (
                     <div className="project-pipeline-item-content">
-                      <select
+                      <Dropdown
                         value={pipeline.summaryTemplateId || 'general'}
-                        onChange={(e) => updatePipeline({ summaryTemplateId: e.target.value })}
-                      >
-                        {summaryTemplateOptions.map((opt) => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
+                        onChange={(value) => updatePipeline({ summaryTemplateId: value })}
+                        options={summaryTemplateOptions}
+                        style={{ width: '100%' }}
+                        aria-label={t('automation.auto_summary', { defaultValue: 'Auto Summary' })}
+                      />
                     </div>
                   )}
                 </div>
@@ -277,18 +283,19 @@ export function ProjectSettingsModal({
                   </label>
                   {pipeline.autoExport && (
                     <div className="project-pipeline-item-content" style={{ flexDirection: 'column', gap: 6 }}>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <select
-                          value={pipeline.exportFormat || 'txt'}
-                          onChange={(e) => updatePipeline({ exportFormat: e.target.value as ProjectPipelineConfig['exportFormat'] })}
-                          style={{ width: 100 }}
-                        >
-                          {(['txt', 'srt', 'vtt', 'json', 'docx'] as const).map((fmt) => (
-                            <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
-                          ))}
-                        </select>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <div style={{ width: 110, flexShrink: 0 }}>
+                          <Dropdown
+                            value={pipeline.exportFormat || 'txt'}
+                            onChange={(value) => updatePipeline({ exportFormat: value as ProjectPipelineConfig['exportFormat'] })}
+                            options={EXPORT_FORMAT_OPTIONS}
+                            style={{ width: '100%' }}
+                            aria-label={t('automation.export_format', { defaultValue: 'Export Format' })}
+                          />
+                        </div>
                         <input
                           type="text"
+                          className="settings-input"
                           value={pipeline.exportDirectory || ''}
                           onChange={(e) => updatePipeline({ exportDirectory: e.target.value })}
                           placeholder={t('automation.export_directory_placeholder', { defaultValue: 'Export directory' })}
@@ -298,8 +305,8 @@ export function ProjectSettingsModal({
                           type="button"
                           className="btn btn-secondary"
                           onClick={() => void handleBrowseExportDir()}
-                          title={t('common.browse', { defaultValue: 'Browse' })}
-                          style={{ height: 30, padding: '0 8px' }}
+                          title={t('settings.browse', { defaultValue: 'Browse' })}
+                          style={{ height: 32, padding: '0 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                         >
                           <FolderOpen size={14} />
                         </button>

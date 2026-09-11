@@ -6,6 +6,7 @@ import { useAutomationStore } from '../../stores/automationStore';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useDialogStore } from '../../stores/dialogStore';
+import { openDialog } from '../../services/tauri/platform/dialog';
 import { SettingsPageHeader, SettingsSection, SettingsTabContainer } from './SettingsLayout';
 import './SettingsAutomation.css';
 import type {
@@ -269,7 +270,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
             }),
             {
                 title: t('automation.delete_rule', { defaultValue: 'Delete Automation Rule' }),
-                variant: 'danger',
+                variant: 'error',
             },
         );
 
@@ -455,10 +456,11 @@ export function SettingsAutomationTab(): React.JSX.Element {
                                 outputDirectory={displayRule.saveHistory ? undefined : displayRule.exportConfig?.directory}
                                 watchDirectory={displayRule.watchDirectory}
                                 enabled={displayRule.enabled}
+                                canToggle={true}
                                 onToggleEnabled={(value) => { void handleToggleEnabled(rule.id, value); }}
                                 statusLabel={getRuntimeStatusLabel(runtime?.status)}
                                 resultLabel={describeLastResult(rule.id)}
-                                resultMessage={runtime?.lastErrorMessage}
+                                resultMessage={runtime?.lastResultMessage}
                                 blockedHint={describeLatestBlockedHint(rule.id)}
                                 pendingCount={queueSummary?.pending}
                                 processingCount={queueSummary?.processing}

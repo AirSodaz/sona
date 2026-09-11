@@ -12,6 +12,14 @@ import { setDraftField, setExportConfigField } from './automationRuleDraft';
 type SelectOption = { value: string; label: string };
 type BrowseField = 'watchDirectory' | 'directory';
 
+const DEFAULT_EXPORT_FORMAT_OPTIONS: SelectOption[] = [
+    { value: 'txt', label: 'TXT' },
+    { value: 'srt', label: 'SRT' },
+    { value: 'vtt', label: 'VTT' },
+    { value: 'json', label: 'JSON' },
+    { value: 'docx', label: 'DOCX' },
+];
+
 type Props = {
     draft: AutomationRuleDraft;
     exportFormatOptions?: SelectOption[];
@@ -28,6 +36,7 @@ type Props = {
 
 export function AutomationRuleEditor({
     draft,
+    exportFormatOptions,
     onBrowseDirectory,
     onCancel,
     onSave,
@@ -226,7 +235,7 @@ export function AutomationRuleEditor({
                                     <div style={{ display: 'flex', gap: '8px', width: '100%', maxWidth: '360px' }}>
                                         <input
                                             type="text"
-                                            className="input"
+                                            className="settings-input"
                                             value={draft.exportConfig.directory}
                                             onChange={(e) => onUpdateDraft(setExportConfigField('directory', e.target.value))}
                                             placeholder={t('automation.output_directory_placeholder', { defaultValue: 'Choose export directory...' })}
@@ -236,28 +245,24 @@ export function AutomationRuleEditor({
                                             type="button"
                                             className="btn btn-secondary"
                                             onClick={() => onBrowseDirectory('directory')}
-                                            title={t('common.browse', { defaultValue: 'Browse' })}
+                                            title={t('settings.browse', { defaultValue: 'Browse' })}
                                             style={{ padding: '0 10px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                                         >
                                             <FolderIcon width={15} height={15} />
-                                            <span>{t('common.browse', { defaultValue: 'Browse' })}</span>
+                                            <span>{t('settings.browse', { defaultValue: 'Browse' })}</span>
                                         </button>
                                     </div>
                                 </SettingsItem>
 
                                 <SettingsItem title={t('automation.export_format', { defaultValue: 'Export Format' })}>
-                                    <select
-                                        className="select"
+                                    <Dropdown
                                         value={draft.exportConfig.format || 'txt'}
-                                        onChange={(e) => onUpdateDraft(setExportConfigField('format', e.target.value as ExportFormat))}
+                                        onChange={(value) => onUpdateDraft(setExportConfigField('format', value as ExportFormat))}
+                                        options={exportFormatOptions ?? DEFAULT_EXPORT_FORMAT_OPTIONS}
                                         style={{ width: '140px' }}
-                                    >
-                                        {(['txt', 'srt', 'vtt', 'json', 'docx'] as const).map((fmt) => (
-                                            <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
-                                        ))}
-                                    </select>
+                                        aria-label={t('automation.export_format', { defaultValue: 'Export Format' })}
+                                    />
                                 </SettingsItem>
-
                                 <SettingsItem title={t('automation.pipeline_preset', { defaultValue: 'Processing Pipeline (Optional)' })}>
                                     <Dropdown
                                         value={draft.projectId && draft.projectId !== 'inbox' && draft.projectId !== 'none' ? draft.projectId : 'none'}

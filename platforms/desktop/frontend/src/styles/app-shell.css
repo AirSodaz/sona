@@ -41,8 +41,12 @@
 .project-pipeline-options { display: flex; flex-direction: column; gap: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); }
 .project-pipeline-item { display: flex; flex-direction: column; gap: 6px; }
 .project-pipeline-item-header { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-text-primary); cursor: pointer; }
-.project-pipeline-item-content { display: flex; gap: 8px; padding-left: 24px; }
-.project-pipeline-item-content select, .project-pipeline-item-content input { flex: 1; height: 30px; font-size: 12px; border-radius: 4px; border: 1px solid var(--color-border); background: var(--color-bg-elevated); color: var(--color-text-primary); padding: 0 8px; }
+.project-pipeline-item-content { display: flex; gap: 8px; padding-left: 24px; align-items: center; }
+.project-pipeline-item-content .dropdown-container { flex: 1; min-width: 0; }
+.project-pipeline-item-content .dropdown-trigger { min-height: 32px; height: 32px; font-size: 0.8125rem; padding: 0 10px; border-radius: var(--radius-sm, 6px); }
+.project-pipeline-item-content input { flex: 1; height: 32px; font-size: 0.8125rem; border-radius: var(--radius-sm, 6px); border: 1px solid var(--color-border); background: var(--color-bg-elevated); color: var(--color-text-primary); padding: 0 10px; }
+.project-pipeline-item-content select { flex: 1; height: 32px; font-size: 0.8125rem; border-radius: var(--radius-sm, 6px); border: 1px solid var(--color-border); background-color: var(--color-bg-elevated); color: var(--color-text-primary); padding: 0 10px; }
+.project-pipeline-item-content .btn { height: 32px; font-size: 0.8125rem; padding: 0 10px; border-radius: var(--radius-sm, 6px); }
 .project-selector-count { margin-left: auto; font-size: 11px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
 .projects-rail-menu-btn { opacity: 0; padding: 2px 4px; border: none; background: transparent; color: var(--color-text-muted); border-radius: 4px; cursor: pointer; transition: opacity 0.15s ease, color 0.15s ease; }
 .projects-rail-item-container:hover .projects-rail-menu-btn { opacity: 1; }
