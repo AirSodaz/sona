@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HistoryItem } from '../../../../types/history';
 import { useWorkspaceQuery } from '../workspaceQuery';
+import type { WorkspaceQueryResult } from '../../types';
 
 const historyQueryWorkspaceMock = vi.hoisted(() => vi.fn());
 
@@ -171,5 +172,72 @@ describe('useWorkspaceQuery', () => {
     }));
     expect(result.current.filteredItems.map((entry) => entry.id)).toEqual(['a', 'b']);
     expect(result.current.loadMoreError).toBe(false);
+  });
+
+  it('retains stable itemCounts and scope summary without jumping to zero while switching scopes', async () => {
+    const pendingQuery = deferred<WorkspaceQueryResult>();
+    const items: HistoryItem[] = [
+      { ...item('inbox-1'), projectId: null },
+      { ...item('proj-1'), projectId: 'project-a' },
+      { ...item('proj-2'), projectId: 'project-a' },
+    ];
+
+    historyQueryWorkspaceMock
+      .mockResolvedValueOnce({
+        ...page([items[0]], 1, false),
+        itemCounts: {
+          untagged: 1,
+          trash: 0,
+          byTagId: { 'project-a': 2 },
+        },
+      })
+      .mockReturnValueOnce(pendingQuery.promise);
+
+    const { result, rerender } = renderHook(
+      (params: Parameters<typeof useWorkspaceQuery>[0]) => useWorkspaceQuery(params),
+      {
+        initialProps: {
+          ...baseParams,
+          historyItems: items,
+          scope: { kind: 'inbox' as const },
+        } as Parameters<typeof useWorkspaceQuery>[0],
+      },
+    );
+
+    await waitFor(() => {
+      expect(result.current.itemCounts.untagged).toBe(1);
+      expect(result.current.itemCounts.byTagId?.['project-a']).toBe(2);
+    });
+
+    // Switch scope to project-a (query is now in-flight via pendingQuery)
+    rerender({
+      ...baseParams,
+      historyItems: items,
+      scope: { kind: 'project' as const, projectId: 'project-a' },
+    });
+
+    // During loading of the new scope, itemCounts and summary must remain stable (not 0)
+    expect(result.current.isInitialLoading).toBe(true);
+    expect(result.current.itemCounts.untagged).toBe(1);
+    expect(result.current.itemCounts.byTagId?.['project-a']).toBe(2);
+    expect(result.current.summary.totalItems).toBe(2);
+    expect(result.current.filteredItemCount).toBe(2);
+
+    // Resolve the query
+    await act(async () => {
+      pendingQuery.resolve({
+        ...page([items[1], items[2]], 2, false),
+        itemCounts: {
+          untagged: 1,
+          trash: 0,
+          byTagId: { 'project-a': 2 },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.isInitialLoading).toBe(false);
+      expect(result.current.filteredItems).toHaveLength(2);
+    });
   });
 });

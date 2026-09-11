@@ -1,15 +1,18 @@
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { FolderIcon } from '../Icons';
+import { IconPicker } from '../IconPicker';
 import { Modal } from '../Modal';
-
 interface ProjectCreateModalProps {
   isOpen: boolean;
   name: string;
   description: string;
   color: string;
+  icon?: string;
   onNameChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
   onColorChange: (value: string) => void;
+  onIconChange?: (value: string) => void;
   onClose: () => void;
   onCreate: () => void;
 }
@@ -19,9 +22,11 @@ export function ProjectCreateModal({
   name,
   description,
   color,
+  icon,
   onNameChange,
   onDescriptionChange,
   onColorChange,
+  onIconChange,
   onClose,
   onCreate,
 }: ProjectCreateModalProps): React.JSX.Element | null {
@@ -51,7 +56,7 @@ export function ProjectCreateModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={t('projects.new_tag_title', { defaultValue: 'New Tag' })}
+      title={t('projects.new_project_title', { defaultValue: 'New Project' })}
       size="md"
       footer={
         <>
@@ -78,30 +83,27 @@ export function ProjectCreateModal({
       >
         <div className="projects-field">
           <label htmlFor="project-create-name">
-            {t('projects.tag_name', { defaultValue: 'Tag Name' })}
+            {t('projects.project_name', { defaultValue: 'Project name' })}
           </label>
-          <input
-            id="project-create-name"
-            type="text"
-            className="settings-input"
-            value={name}
-            onChange={(event) => onNameChange(event.target.value)}
-            placeholder={t('projects.new_tag_name', { defaultValue: 'Tag name' })}
-            autoFocus
-          />
-        </div>
-
-        <div className="projects-field">
-          <label htmlFor="project-create-color">
-            {t('projects.tag_color', { defaultValue: 'Color' })}
-          </label>
-          <input
-            id="project-create-color"
-            type="color"
-            value={color}
-            onChange={(event) => onColorChange(event.target.value)}
-            aria-label={t('projects.tag_color', { defaultValue: 'Color' })}
-          />
+          <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+            <IconPicker
+              icon={icon || ''}
+              onChange={onIconChange || (() => {})}
+              defaultIcon={<FolderIcon />}
+              color={color}
+              onColorChange={onColorChange}
+            />
+            <input
+              id="project-create-name"
+              type="text"
+              className="settings-input"
+              style={{ flex: 1 }}
+              value={name}
+              onChange={(event) => onNameChange(event.target.value)}
+              placeholder={t('projects.new_project_name', { defaultValue: 'Project name' })}
+              autoFocus
+            />
+          </div>
         </div>
 
         <div className="projects-field">

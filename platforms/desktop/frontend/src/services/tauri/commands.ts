@@ -47,7 +47,9 @@ export const TauriCommand = {
     createLiveDraft: 'history_create_live_draft',
     completeLiveDraft: 'history_complete_live_draft',
     saveRecording: 'history_save_recording',
+    saveRecordingToProject: 'history_save_recording_to_project',
     saveImportedFile: 'history_save_imported_file',
+    saveImportedFileToProject: 'history_save_imported_file_to_project',
     deleteItems: 'history_delete_items',
     trashItems: 'history_trash_items',
     restoreItems: 'history_restore_items',
@@ -63,6 +65,7 @@ export const TauriCommand = {
     updateItemMeta: 'history_update_item_meta',
     updateProjectAssignments: 'history_update_project_assignments',
     reassignProject: 'history_reassign_project',
+    // Legacy migration-only commands retained for bindings compatibility.
     updateTagAssignments: 'history_update_tag_assignments',
     replaceTagAssignments: 'history_replace_tag_assignments',
     loadSummary: 'history_load_summary',
@@ -99,6 +102,15 @@ export const TauriCommand = {
     reorder: 'tag_reorder',
     getActiveId: 'tag_get_active_id',
     setActiveId: 'tag_set_active_id',
+  },
+  project: {
+    list: 'project_list',
+    create: 'project_create',
+    update: 'project_update',
+    delete: 'project_delete',
+    reorder: 'project_reorder',
+    getActiveId: 'project_get_active_id',
+    setActiveId: 'project_set_active_id',
   },
   automationRepository: {
     loadState: 'automation_load_repository_state',

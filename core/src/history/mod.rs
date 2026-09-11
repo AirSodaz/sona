@@ -84,6 +84,9 @@ pub struct HistoryItemRecord {
     #[serde(rename = "type")]
     pub kind: HistoryItemKind,
     pub search_content: String,
+    pub project_id: Option<String>,
+    /// Single project ownership. `tag_ids` is retained only for legacy backup
+    /// decoding and is not used by new runtime code.
     #[serde(default)]
     pub tag_ids: Vec<String>,
     #[cfg_attr(
@@ -101,10 +104,10 @@ pub struct HistoryItemRecord {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum HistoryWorkspaceScope {
     All,
-    Untagged,
-    Tag {
-        #[serde(rename = "tagId")]
-        tag_id: String,
+    Inbox,
+    Project {
+        #[serde(rename = "projectId")]
+        project_id: String,
     },
     Trash,
 }
@@ -218,12 +221,18 @@ pub struct HistoryWorkspaceItemCounts {
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub untagged: usize,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
+    #[serde(default)]
+    pub inbox: usize,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub trash: usize,
     #[cfg_attr(
         feature = "specta",
         specta(type = BTreeMap<String, specta_typescript::Number>)
     )]
     pub by_tag_id: BTreeMap<String, usize>,
+    #[cfg_attr(feature = "specta", specta(type = BTreeMap<String, specta_typescript::Number>))]
+    #[serde(default)]
+    pub by_project_id: BTreeMap<String, usize>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -255,6 +264,7 @@ pub struct HistoryCreateLiveDraftRequest {
     pub audio_extension: String,
     #[serde(default)]
     pub tag_ids: Vec<String>,
+    pub project_id: Option<String>,
     pub icon: Option<String>,
 }
 
@@ -267,6 +277,7 @@ pub struct HistorySaveRecordingRequest {
     pub duration: f64,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tag_ids: Vec<String>,
+    pub project_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audio_bytes: Option<Vec<u8>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -287,6 +298,7 @@ pub struct HistorySaveImportedFileRequest {
     pub duration: f64,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tag_ids: Vec<String>,
+    pub project_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub converted_source_path: Option<String>,
 }

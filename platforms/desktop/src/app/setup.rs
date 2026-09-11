@@ -21,6 +21,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     app.manage(dashboard_service);
     app.manage(sqlite_context);
+    crate::app::window::create_main_window(app.handle())?;
     crate::platform::model_downloads::try_auto_activate_cuda_addon(app.handle());
 
     let listener_app_handle = app_handle_for_listener.clone();

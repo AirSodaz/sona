@@ -6,11 +6,11 @@ import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useProjectStore } from '../../stores/projectStore';
-import type { AutomationProfile, AutomationRule } from '../../types/automation';
+import type { AutomationRule } from '../../types/automation';
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
-        t: (key: string, options?: Record<string, any>) => {
+        t: (key: string, options?: Record<string, unknown>) => {
             if (typeof options?.defaultValue === 'string') {
                 return options.defaultValue.replace(/\{\{(\w+)\}\}/g, (_match: string, variable: string) => String(options?.[variable] ?? ''));
             }
@@ -28,42 +28,34 @@ function createRule(overrides: Partial<AutomationRule> = {}): AutomationRule {
         id: 'rule-1',
         name: 'Meeting Inbox',
         kind: 'file',
-        priority: 0,
-        profileSource: 'tag_match',
-        saveHistory: true,
-        tagIds: ['project-1'],
         presetId: 'custom',
+        projectId: 'project-1',
         watchDirectory: 'C:\\watch',
         recursive: true,
         enabled: true,
-        actions: { autoPolish: false, autoTranslate: false, autoSummary: false },
-        stageConfig: { autoPolish: false, autoTranslate: false, exportEnabled: true },
-        exportConfig: { directory: 'C:\\exports', format: 'txt', mode: 'original' },
+        saveHistory: true,
+        stageConfig: {
+            autoPolish: false,
+            autoTranslate: false,
+            exportEnabled: false,
+        },
+        exportConfig: {
+            directory: 'C:\\export',
+            format: 'txt',
+            mode: 'original',
+        },
         createdAt: 1,
         updatedAt: 1,
         ...overrides,
     };
 }
 
-const profile: AutomationProfile = {
-    id: 'profile-1',
-    name: 'Meetings',
-    translationLanguage: 'ja',
-    polishPresetId: 'general',
-    summaryTemplateId: 'general',
-    enabledTextReplacementSetIds: [],
-    enabledHotwordSetIds: [],
-    enabledPolishKeywordSetIds: [],
-    enabledSpeakerProfileIds: [],
-    createdAt: 1,
-    updatedAt: 1,
-};
-
 describe('SettingsAutomationTab', () => {
     const saveRule = vi.fn();
-    const saveProfile = vi.fn();
-    const applyTagRuleToExisting = vi.fn();
+    const deleteRule = vi.fn();
+    const toggleRuleEnabled = vi.fn();
     const alert = vi.fn();
+    const confirm = vi.fn();
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -71,12 +63,6 @@ describe('SettingsAutomationTab', () => {
             config: {
                 ...useConfigStore.getState().config,
                 translationLanguage: 'ja',
-                polishCustomPresets: [],
-                summaryCustomTemplates: [],
-                textReplacementSets: [],
-                hotwordSets: [],
-                polishKeywordSets: [],
-                speakerProfiles: [],
             },
         });
         useProjectStore.setState({
@@ -85,136 +71,162 @@ describe('SettingsAutomationTab', () => {
                 name: 'Team Sync',
                 description: 'Meetings',
                 icon: '',
+                sortOrder: 0,
                 createdAt: 1,
                 updatedAt: 1,
+                pipeline: {
+                    enabled: true,
+                    autoPolish: true,
+                    polishPresetId: 'meeting',
+                    autoTranslate: false,
+                    autoSummary: true,
+                    summaryTemplateId: 'general',
+                    autoExport: false,
+                },
             }],
             activeProjectId: 'project-1',
         });
-        useBatchQueueStore.setState({ queueItems: [] } as any);
+        useBatchQueueStore.setState({ queueItems: [] });
         useDialogStore.setState({
             ...useDialogStore.getState(),
             alert: alert.mockResolvedValue(undefined),
-            confirm: vi.fn().mockResolvedValue(true),
+            confirm: confirm.mockResolvedValue(true),
             showError: vi.fn().mockResolvedValue(undefined),
         });
         useAutomationStore.setState({
             rules: [createRule()],
-            profiles: [profile],
+            profiles: [],
             runtimeStates: {},
             focusTagId: null,
             saveRule: saveRule.mockResolvedValue(undefined),
-            saveProfile: saveProfile.mockResolvedValue(undefined),
-            deleteProfile: vi.fn().mockResolvedValue(undefined),
-            deleteRule: vi.fn().mockResolvedValue(undefined),
-            toggleRuleEnabled: vi.fn().mockResolvedValue(undefined),
+            deleteRule: deleteRule.mockResolvedValue(undefined),
+            toggleRuleEnabled: toggleRuleEnabled.mockResolvedValue(undefined),
             scanRuleNow: vi.fn().mockResolvedValue(undefined),
             retryFailed: vi.fn().mockResolvedValue(undefined),
-            applyTagRuleToExisting: applyTagRuleToExisting.mockResolvedValue(2),
         });
     });
 
-    const expandRule = () => fireEvent.click(screen.getByText('Meeting Inbox').closest('button')!);
-
-    it('separates profile, Tag, and file automation and keeps export only in file rules', () => {
+    it('renders folder automation watchers and project attribution label', () => {
         render(<SettingsAutomationTab />);
 
-        screen.getByRole('tab', { name: 'Profiles' });
-        screen.getByRole('tab', { name: 'Tag Automation' });
-        expect(screen.getByRole('tab', { name: 'File Automation' }).getAttribute('aria-selected')).toBe('true');
-        expandRule();
-        screen.getByRole('switch', { name: 'Auto-Export' });
-        expect(screen.queryByRole('switch', { name: 'Auto-Polish' })).toBeNull();
-        expect(screen.queryByRole('switch', { name: 'Auto-Translate' })).toBeNull();
+        expect(screen.getByText('Automation')).toBeDefined();
+        expect(screen.getByText('Meeting Inbox')).toBeDefined();
+        expect(screen.getByText('Team Sync')).toBeDefined();
+        expect(screen.getByTitle('C:\\watch')).toBeDefined();
     });
 
-    it('creates a file rule with watcher, output Tag, profile source, and export settings', async () => {
+    it('creates a new folder monitoring rule targeting a project', async () => {
         useAutomationStore.setState({ ...useAutomationStore.getState(), rules: [] });
         render(<SettingsAutomationTab />);
 
         fireEvent.click(screen.getByRole('button', { name: 'New Rule' }));
-        fireEvent.change(screen.getByPlaceholderText('e.g. Weekly Meeting Inbox'), { target: { value: 'Subtitle Inbox' } });
-        fireEvent.change(screen.getByPlaceholderText('Choose a folder to monitor...'), { target: { value: 'C:\\watch\\subs' } });
-        fireEvent.change(screen.getByPlaceholderText('Choose where exports should be written...'), { target: { value: 'C:\\exports\\subs' } });
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Team Sync' }));
-        fireEvent.click(screen.getByRole('switch', { name: 'Watch Subfolders' }));
+        fireEvent.change(screen.getByPlaceholderText('e.g. Weekly Meeting Inbox'), { target: { value: 'Customer Interviews' } });
+        fireEvent.change(screen.getByPlaceholderText('Choose a folder to monitor...'), { target: { value: 'C:\\watch\\interviews' } });
+        fireEvent.click(screen.getByRole('switch', { name: 'Subdirectories' }));
         fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
 
         await waitFor(() => expect(saveRule).toHaveBeenCalledWith(expect.objectContaining({
-            kind: 'file',
-            name: 'Subtitle Inbox',
-            tagIds: ['project-1'],
-            watchDirectory: 'C:\\watch\\subs',
+            name: 'Customer Interviews',
+            watchDirectory: 'C:\\watch\\interviews',
             recursive: true,
-            profileSource: 'explicit',
-            stageConfig: expect.objectContaining({ exportEnabled: true }),
-            exportConfig: expect.objectContaining({ directory: 'C:\\exports\\subs' }),
+            projectId: 'inbox',
         })));
     });
-
-    it('creates a Tag rule with priority, profile, and ordered post-processing actions but no export controls', async () => {
+    it('hides target project when save to history is disabled', async () => {
         useAutomationStore.setState({ ...useAutomationStore.getState(), rules: [] });
         render(<SettingsAutomationTab />);
-        fireEvent.click(screen.getByRole('tab', { name: 'Tag Automation' }));
+
         fireEvent.click(screen.getByRole('button', { name: 'New Rule' }));
 
-        fireEvent.change(screen.getByPlaceholderText('e.g. Weekly Meeting Inbox'), { target: { value: 'Meeting post-processing' } });
-        fireEvent.change(screen.getByRole('spinbutton', { name: 'Priority' }), { target: { value: '30' } });
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Team Sync' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Configuration Profile' }));
-        fireEvent.click(screen.getByRole('option', { name: 'Meetings' }));
-        fireEvent.click(screen.getByRole('switch', { name: 'Polish' }));
-        fireEvent.click(screen.getByRole('switch', { name: 'Translate' }));
-        fireEvent.click(screen.getByRole('switch', { name: 'Summarize' }));
-        expect(screen.queryByRole('switch', { name: 'Auto-Export' })).toBeNull();
+        const saveHistorySwitch = screen.getByRole('switch', { name: 'Save to History' });
+        expect(saveHistorySwitch).toBeDefined();
+        expect(screen.getByRole('button', { name: 'Target Project' })).toBeDefined();
+
+        // Toggle Save to History off
+        fireEvent.click(saveHistorySwitch);
+
+        expect(screen.queryByRole('button', { name: 'Target Project' })).toBeNull();
+
+        fireEvent.change(screen.getByPlaceholderText('e.g. Weekly Meeting Inbox'), { target: { value: 'Export Only Watcher' } });
+        fireEvent.change(screen.getByPlaceholderText('Choose a folder to monitor...'), { target: { value: 'C:\\watch\\export_only' } });
+
+        // First try to save without export directory -> should alert
+        fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
+        await waitFor(() => {
+            expect(alert).toHaveBeenCalledWith(
+                'Please specify an output directory when Save to History is disabled.',
+                expect.any(Object),
+            );
+            expect(saveRule).not.toHaveBeenCalled();
+        });
+
+        // Verify Auto Polish and Auto Translate switches exist in export-only mode
+        const polishSwitch = screen.getByRole('switch', { name: 'Auto Polish' });
+        expect(polishSwitch).toBeDefined();
+        const translateSwitch = screen.getByRole('switch', { name: 'Auto Translate' });
+        expect(translateSwitch).toBeDefined();
+
+        // Toggling Auto Polish reveals the polish context dropdown
+        fireEvent.click(polishSwitch);
+        expect(screen.getByRole('button', { name: 'Auto Polish' })).toBeDefined();
+
+        // Toggling Auto Translate reveals the target language dropdown
+        fireEvent.click(translateSwitch);
+        expect(screen.getByRole('button', { name: 'Auto Translate' })).toBeDefined();
+        // Fill export directory and save
+        // Verify Export Format dropdown exists and can be selected
+        const exportFormatDropdown = screen.getByRole('button', { name: 'Export Format' });
+        expect(exportFormatDropdown).toBeDefined();
+        fireEvent.click(exportFormatDropdown);
+        fireEvent.click(screen.getByRole('option', { name: 'SRT' }));
+
+        const browseButtons = screen.getAllByRole('button', { name: 'Browse' });
+        expect(browseButtons).toHaveLength(2);
+        fireEvent.change(screen.getByPlaceholderText('Choose export directory...'), { target: { value: 'C:\\exports' } });
         fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
 
         await waitFor(() => expect(saveRule).toHaveBeenCalledWith(expect.objectContaining({
-            kind: 'tag',
-            priority: 30,
-            profileId: 'profile-1',
-            tagIds: ['project-1'],
-            actions: { autoPolish: true, autoTranslate: true, autoSummary: true },
-            stageConfig: expect.objectContaining({ exportEnabled: false }),
+            name: 'Export Only Watcher',
+            watchDirectory: 'C:\\watch\\export_only',
+            saveHistory: false,
+            actions: expect.objectContaining({
+                autoPolish: true,
+                autoTranslate: true,
+            }),
+            exportConfig: expect.objectContaining({
+                directory: 'C:\\exports',
+                format: 'srt',
+            }),
         })));
     });
 
-    it('creates and duplicates reusable configuration profiles', async () => {
+    it('validates rule name and directory before saving', async () => {
+        useAutomationStore.setState({ ...useAutomationStore.getState(), rules: [] });
         render(<SettingsAutomationTab />);
-        fireEvent.click(screen.getByRole('tab', { name: 'Profiles' }));
-        fireEvent.click(screen.getByRole('button', { name: 'New Profile' }));
-        fireEvent.change(screen.getByPlaceholderText('e.g. Customer interviews'), { target: { value: 'Interviews' } });
+
+        fireEvent.click(screen.getByRole('button', { name: 'New Rule' }));
         fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
 
-        await waitFor(() => expect(saveProfile).toHaveBeenCalledWith(expect.objectContaining({
-            id: undefined,
-            name: 'Interviews',
-            translationLanguage: 'ja',
-        })));
-
-        fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
-        await waitFor(() => expect(saveProfile).toHaveBeenCalledWith(expect.objectContaining({
-            id: undefined,
-            name: 'Meetings Copy',
-        })));
+        await waitFor(() => {
+            expect(alert).toHaveBeenCalledWith(
+                'Complete the rule name and watch directory before saving.',
+                expect.any(Object),
+            );
+            expect(saveRule).not.toHaveBeenCalled();
+        });
     });
 
-    it('runs Tag automation on existing records only after explicit confirmation', async () => {
-        useAutomationStore.setState({
-            ...useAutomationStore.getState(),
-            rules: [createRule({
-                id: 'tag-rule',
-                name: 'Existing meetings',
-                kind: 'tag',
-                tagIds: ['project-1'],
-                stageConfig: { autoPolish: true, autoTranslate: false, exportEnabled: false },
-                exportConfig: { directory: '', format: 'txt', mode: 'original' },
-            })],
-        });
+    it('confirms and deletes an existing rule', async () => {
         render(<SettingsAutomationTab />);
-        fireEvent.click(screen.getByRole('tab', { name: 'Tag Automation' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Apply to existing' }));
 
-        await waitFor(() => expect(applyTagRuleToExisting).toHaveBeenCalledWith('tag-rule'));
-        expect(alert).toHaveBeenCalledWith('Processed 2 matching records.', { variant: 'success' });
+        fireEvent.click(screen.getByRole('button', { name: 'common.delete' }));
+
+        await waitFor(() => {
+            expect(confirm).toHaveBeenCalledWith(
+                'Delete automation rule "Meeting Inbox"?',
+                expect.any(Object),
+            );
+            expect(deleteRule).toHaveBeenCalledWith('rule-1');
+        });
     });
 });

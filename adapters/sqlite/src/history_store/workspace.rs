@@ -91,12 +91,12 @@ pub(super) fn add_workspace_query_conditions(
 ) {
     match &request.scope {
         HistoryWorkspaceScope::All => clauses.push("h.deleted_at IS NULL".to_string()),
-        HistoryWorkspaceScope::Untagged => clauses.push(
-            "h.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM history_item_tags hit WHERE hit.history_id = h.id)".to_string(),
-        ),
-        HistoryWorkspaceScope::Tag { tag_id } => {
-            clauses.push("h.deleted_at IS NULL AND EXISTS (SELECT 1 FROM history_item_tags hit WHERE hit.history_id = h.id AND hit.tag_id = ?)".to_string());
-            params.push(Box::new(tag_id.clone()));
+        HistoryWorkspaceScope::Inbox => {
+            clauses.push("h.deleted_at IS NULL AND h.project_id IS NULL".to_string())
+        }
+        HistoryWorkspaceScope::Project { project_id } => {
+            clauses.push("h.deleted_at IS NULL AND h.project_id = ?".to_string());
+            params.push(Box::new(project_id.clone()));
         }
         HistoryWorkspaceScope::Trash => clauses.push("h.deleted_at IS NOT NULL".to_string()),
     }
@@ -123,12 +123,12 @@ pub(super) fn add_workspace_scope_condition(
 ) {
     match scope {
         HistoryWorkspaceScope::All => clauses.push("h.deleted_at IS NULL".to_string()),
-        HistoryWorkspaceScope::Untagged => clauses.push(
-            "h.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM history_item_tags hit WHERE hit.history_id = h.id)".to_string(),
-        ),
-        HistoryWorkspaceScope::Tag { tag_id } => {
-            clauses.push("h.deleted_at IS NULL AND EXISTS (SELECT 1 FROM history_item_tags hit WHERE hit.history_id = h.id AND hit.tag_id = ?)".to_string());
-            params.push(Box::new(tag_id.clone()));
+        HistoryWorkspaceScope::Inbox => {
+            clauses.push("h.deleted_at IS NULL AND h.project_id IS NULL".to_string())
+        }
+        HistoryWorkspaceScope::Project { project_id } => {
+            clauses.push("h.deleted_at IS NULL AND h.project_id = ?".to_string());
+            params.push(Box::new(project_id.clone()));
         }
         HistoryWorkspaceScope::Trash => clauses.push("h.deleted_at IS NOT NULL".to_string()),
     }

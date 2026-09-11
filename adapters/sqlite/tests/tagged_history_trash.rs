@@ -1,4 +1,4 @@
-﻿use std::sync::Arc;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use sona_core::history::mutation_repository::{
@@ -105,6 +105,7 @@ fn multi_tag_scopes_and_trash_lifecycle_preserve_then_purge_children_and_audio()
             segments: vec![segment("tagged")],
             duration: 1.0,
             tag_ids: vec!["tag-secondary".to_string(), "tag-priority".to_string()],
+            project_id: Some("tag-secondary".to_string()),
             audio_bytes: Some(vec![1, 2, 3, 4]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -126,6 +127,7 @@ fn multi_tag_scopes_and_trash_lifecycle_preserve_then_purge_children_and_audio()
             segments: vec![segment("untagged")],
             duration: 2.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![5, 6]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -137,29 +139,27 @@ fn multi_tag_scopes_and_trash_lifecycle_preserve_then_purge_children_and_audio()
     assert_eq!(all.filtered_item_count, 2);
     assert_eq!(all.item_counts.untagged, 1);
     assert_eq!(all.item_counts.trash, 0);
-    assert_eq!(all.item_counts.by_tag_id["tag-priority"], 1);
     assert_eq!(all.item_counts.by_tag_id["tag-secondary"], 1);
     let reloaded = all
         .filtered_items
         .iter()
         .find(|item| item.id == tagged.id)
         .unwrap();
-    assert_eq!(reloaded.tag_ids, ["tag-priority", "tag-secondary"]);
+    assert_eq!(reloaded.project_id.as_deref(), Some("tag-secondary"));
     assert_eq!(
-        query(&store, HistoryWorkspaceScope::Untagged).filtered_item_count,
+        query(&store, HistoryWorkspaceScope::Inbox).filtered_item_count,
         1
     );
     assert_eq!(
         query(
             &store,
-            HistoryWorkspaceScope::Tag {
-                tag_id: "tag-secondary".to_string(),
+            HistoryWorkspaceScope::Project {
+                project_id: "tag-secondary".to_string(),
             },
         )
         .filtered_item_count,
         1
     );
-
     let audio_path = root.path().join("history").join(&tagged.audio_path);
     assert!(audio_path.is_file());
     HistoryMutationRepository::trash_items(
@@ -178,10 +178,7 @@ fn multi_tag_scopes_and_trash_lifecycle_preserve_then_purge_children_and_audio()
     let trash = query(&store, HistoryWorkspaceScope::Trash);
     assert_eq!(trash.filtered_item_count, 1);
     assert_eq!(trash.filtered_items[0].deleted_at, Some(900));
-    assert_eq!(
-        trash.filtered_items[0].tag_ids,
-        ["tag-priority", "tag-secondary"]
-    );
+    assert_eq!(trash.filtered_items[0].tag_ids, ["tag-secondary"]);
     assert!(audio_path.is_file());
     assert_eq!(
         HistoryQueryRepository::load_transcript(&store, &tagged.id)
@@ -206,8 +203,8 @@ fn multi_tag_scopes_and_trash_lifecycle_preserve_then_purge_children_and_audio()
     .unwrap();
     let restored = query(
         &store,
-        HistoryWorkspaceScope::Tag {
-            tag_id: "tag-priority".to_string(),
+        HistoryWorkspaceScope::Project {
+            project_id: "tag-secondary".to_string(),
         },
     );
     assert_eq!(restored.filtered_item_count, 1);
@@ -264,6 +261,7 @@ fn purging_a_live_draft_removes_its_audio_without_purging_active_history() {
             id: Some("live-draft".to_string()),
             audio_extension: "wav".to_string(),
             tag_ids: Vec::new(),
+            project_id: None,
             icon: None,
         },
     )
@@ -275,6 +273,7 @@ fn purging_a_live_draft_removes_its_audio_without_purging_active_history() {
             segments: vec![segment("active")],
             duration: 1.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![4, 5, 6]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -315,6 +314,7 @@ fn trashing_unknown_or_already_trashed_items_does_not_enqueue_sync() {
             segments: vec![segment("sync")],
             duration: 1.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![1]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -377,6 +377,7 @@ fn restoring_unknown_or_active_items_does_not_enqueue_sync() {
             segments: vec![segment("active-sync")],
             duration: 1.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![1]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -415,6 +416,7 @@ fn deleting_tags_keeps_history_and_moves_items_without_tags_to_untagged() {
             segments: vec![segment("kept")],
             duration: 1.0,
             tag_ids: vec!["tag-a".to_string(), "tag-b".to_string()],
+            project_id: Some("tag-a".to_string()),
             audio_bytes: Some(vec![1]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -425,11 +427,9 @@ fn deleting_tags_keeps_history_and_moves_items_without_tags_to_untagged() {
     tags.delete_tag("tag-a").unwrap();
     let after_first_delete = query(&store, HistoryWorkspaceScope::All);
     assert_eq!(after_first_delete.filtered_item_count, 1);
-    assert_eq!(after_first_delete.filtered_items[0].id, item.id);
-    assert_eq!(after_first_delete.filtered_items[0].tag_ids, ["tag-b"]);
-
+    assert!(after_first_delete.filtered_items[0].tag_ids.is_empty());
     tags.delete_tag("tag-b").unwrap();
-    let untagged = query(&store, HistoryWorkspaceScope::Untagged);
+    let untagged = query(&store, HistoryWorkspaceScope::Inbox);
     assert_eq!(untagged.filtered_item_count, 1);
     assert_eq!(untagged.filtered_items[0].id, item.id);
     assert!(untagged.filtered_items[0].tag_ids.is_empty());

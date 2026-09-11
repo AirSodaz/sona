@@ -369,4 +369,83 @@ describe('useWorkspaceBrowseState', () => {
       searchInput.remove();
     }
   });
+
+  it('preserves item counts and scope items count without jumping to zero when switching scope', async () => {
+    const filterMenuRef = { current: document.createElement('div') } as React.RefObject<HTMLDivElement>;
+    const searchInputRef = { current: document.createElement('input') } as React.RefObject<HTMLInputElement>;
+    const onOpenItem = vi.fn();
+
+    const { promise: secondQueryPromise, resolve: resolveSecondQuery } = Promise.withResolvers<any>();
+
+    vi.mocked(historyQueryWorkspace)
+      .mockResolvedValueOnce({
+        filteredItems: historyItems,
+        searchMatchByItemId: {},
+        filteredItemCount: 1,
+        hasMore: false,
+        summary: {
+          totalItems: 1,
+          totalDuration: 120,
+          latestTimestamp: historyItems[0].timestamp,
+          recordingCount: 1,
+          batchCount: 0,
+        },
+        itemCounts: {
+          untagged: 0,
+          trash: 0,
+          byProjectId: { 'project-1': 1 },
+        },
+      })
+      .mockReturnValueOnce(secondQueryPromise as any);
+
+    const { result } = renderHook(() => useWorkspaceBrowseState({
+      activeProjectId: 'project-1',
+      historyItems,
+      projects: [projectAlpha],
+      filterMenuRef,
+      isSelectionMode: false,
+      searchInputRef,
+      t,
+      onOpenItem,
+    }));
+
+    await waitFor(() => {
+      expect(result.current.itemCounts.get('project-1')).toBe(1);
+      expect(result.current.scopeItemCount).toBe(1);
+    });
+
+    // Switch to inbox (scope becomes untagged, second query is in flight)
+    act(() => {
+      result.current.setBrowseScope('untagged');
+    });
+
+    // itemCounts must still contain project-1 count (not 0) and not drop
+    expect(result.current.itemCounts.get('project-1')).toBe(1);
+
+    act(() => {
+      resolveSecondQuery({
+        filteredItems: [],
+        searchMatchByItemId: {},
+        filteredItemCount: 0,
+        hasMore: false,
+        summary: {
+          totalItems: 0,
+          totalDuration: 0,
+          latestTimestamp: null,
+          recordingCount: 0,
+          batchCount: 0,
+        },
+        itemCounts: {
+          untagged: 0,
+          trash: 0,
+          byProjectId: { 'project-1': 1 },
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.browseScope).toBe('untagged');
+      expect(result.current.itemCounts.get('project-1')).toBe(1);
+    });
+  });
 });

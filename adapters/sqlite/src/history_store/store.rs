@@ -766,10 +766,8 @@ where
         Ok(self.get_db()?.with_connection(|conn| {
             let tx = conn.unchecked_transaction()?;
             let item_counts = {
-                let untagged = tx.query_row(
-                    "SELECT COUNT(*) FROM history_items h
-                     WHERE h.deleted_at IS NULL
-                       AND NOT EXISTS (SELECT 1 FROM history_item_tags hit WHERE hit.history_id = h.id)",
+                let inbox = tx.query_row(
+                    "SELECT COUNT(*) FROM history_items h WHERE h.deleted_at IS NULL AND h.project_id IS NULL",
                     [],
                     |row| row.get::<_, i64>(0),
                 )? as usize;
@@ -779,11 +777,7 @@ where
                     |row| row.get::<_, i64>(0),
                 )? as usize;
                 let mut stmt = tx.prepare_cached(
-                    "SELECT hit.tag_id, COUNT(*)
-                     FROM history_item_tags hit
-                     JOIN history_items h ON h.id = hit.history_id
-                     WHERE h.deleted_at IS NULL
-                     GROUP BY hit.tag_id",
+                    "SELECT project_id, COUNT(*) FROM history_items WHERE deleted_at IS NULL AND project_id IS NOT NULL GROUP BY project_id",
                 )?;
                 let mut by_tag_id = BTreeMap::new();
                 let rows = stmt.query_map([], |row| {
@@ -794,9 +788,11 @@ where
                     by_tag_id.insert(tag_id, count);
                 }
                 HistoryWorkspaceItemCounts {
-                    untagged,
+                    untagged: inbox,
+                    inbox,
                     trash,
                     by_tag_id,
+                    by_project_id: BTreeMap::new(),
                 }
             };
 
@@ -987,6 +983,7 @@ where
             segments,
             duration,
             tag_ids,
+            project_id,
             audio_bytes,
             native_audio_path,
             audio_extension,
@@ -1000,6 +997,7 @@ where
             tag_ids,
             audio_extension.as_deref(),
             native_audio_path.as_deref(),
+            project_id,
         );
         item.preview_text = normalized_transcript.preview_text;
         item.search_content = normalized_transcript.search_content;
@@ -1068,6 +1066,7 @@ where
             segments,
             duration,
             tag_ids,
+            project_id,
             converted_source_path,
         } = request;
 
@@ -1080,6 +1079,7 @@ where
             duration,
             tag_ids,
             generated,
+            project_id,
         );
         let mut item = imported.item;
         item.preview_text = normalized_transcript.preview_text;
@@ -1809,6 +1809,10 @@ where
             drop(remove);
             for id in ids {
                 let tag_ids = load_tag_ids(tx, id)?;
+                tx.execute(
+                    "UPDATE history_items SET project_id = ?1 WHERE id = ?2",
+                    rusqlite::params![tag_ids.first(), id],
+                )?;
                 record_local_field_change_in_transaction(
                     tx,
                     SyncEntityKind::HistoryItem,
@@ -1831,6 +1835,10 @@ where
         Ok(self.get_db()?.with_transaction(|tx| {
             for id in ids {
                 replace_history_item_tags(tx, id, tag_ids)?;
+                tx.execute(
+                    "UPDATE history_items SET project_id = ?1 WHERE id = ?2",
+                    rusqlite::params![tag_ids.first(), id],
+                )?;
                 record_local_field_change_in_transaction(
                     tx,
                     SyncEntityKind::HistoryItem,

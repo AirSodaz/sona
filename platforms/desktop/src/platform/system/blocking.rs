@@ -32,6 +32,13 @@ where
         .map_err(map_err_string)
 }
 
+/// Try to resolve the managed SQLite application context for a Desktop app handle.
+pub fn try_sqlite_context<R: Runtime>(
+    app: &AppHandle<R>,
+) -> Result<Arc<SqliteApplicationContext>, String> {
+    crate::platform::database::try_sqlite_application_context(app)
+}
+
 /// Resolve the managed SQLite application context for a Desktop app handle.
 pub fn sqlite_context<R: Runtime>(app: &AppHandle<R>) -> Arc<SqliteApplicationContext> {
     crate::platform::database::sqlite_application_context(app)
@@ -45,7 +52,7 @@ where
     E: ToString + Send + 'static,
     F: FnOnce(Arc<SqliteApplicationContext>) -> Result<T, E> + Send + 'static,
 {
-    let context = sqlite_context(app);
+    let context = try_sqlite_context(app)?;
     spawn_blocking_map(move || task(context)).await
 }
 
@@ -76,7 +83,7 @@ where
     E: ToString + Send + 'static,
     F: FnOnce(Arc<SqliteApplicationContext>) -> Result<T, E> + Send + 'static,
 {
-    let context = sqlite_context(app);
+    let context = try_sqlite_context(app)?;
     spawn_blocking_map(move || -> Result<T, String> {
         let _guard = lock.lock().map_err(map_err_string)?;
         task(context).map_err(map_err_string)

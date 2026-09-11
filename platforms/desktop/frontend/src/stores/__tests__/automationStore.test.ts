@@ -233,44 +233,6 @@ describe('automationStore', () => {
         vi.useRealTimers();
     });
 
-    it('deduplicates successful Tag runs and increments explicit retry attempts', async () => {
-        const request = {
-            ruleId: 'tag-rule-1',
-            historyId: 'history-1',
-            inputVersion: 'input-v1',
-            actions: { autoPolish: true, autoTranslate: false, autoSummary: false },
-        };
-
-        await expect(useAutomationStore.getState().beginTagAutomationRun(request)).resolves.toBe(true);
-        expect(useAutomationStore.getState().processedEntries).toEqual([
-            expect.objectContaining({
-                kind: 'tag',
-                status: 'pending',
-                attempt: 1,
-                ruleId: request.ruleId,
-                historyId: request.historyId,
-                inputVersion: request.inputVersion,
-            }),
-        ]);
-
-        await useAutomationStore.getState().finishTagAutomationRun({
-            ruleId: request.ruleId,
-            historyId: request.historyId,
-            inputVersion: request.inputVersion,
-            status: 'complete',
-        });
-        await expect(useAutomationStore.getState().beginTagAutomationRun(request)).resolves.toBe(false);
-        await expect(useAutomationStore.getState().beginTagAutomationRun({
-            ...request,
-            force: true,
-        })).resolves.toBe(true);
-
-        expect(useAutomationStore.getState().processedEntries[0]).toEqual(expect.objectContaining({
-            kind: 'tag',
-            status: 'pending',
-            attempt: 2,
-        }));
-    });
 
     it('restores enabled rules and queues matching files on the initial scan', async () => {
         const rule = createRule();
@@ -300,8 +262,68 @@ describe('automationStore', () => {
                 origin: 'automation',
                 automationRuleId: 'rule-1',
                 automationRuleName: 'Meeting Inbox',
-                tagIds: [projectRecord.id],
+                projectId: projectRecord.id,
                 sourceFingerprint: 'fp-1',
+            }),
+        );
+    });
+
+    it('applies direct polish and translate pipeline snapshot when saveHistory is disabled without a project', async () => {
+        const rule = createRule({
+            id: 'rule-export-only',
+            name: 'Export Only Watcher',
+            saveHistory: false,
+            projectId: 'none',
+            tagIds: [],
+            actions: {
+                autoPolish: true,
+                autoTranslate: true,
+                autoSummary: false,
+            },
+            stageConfig: {
+                autoPolish: true,
+                polishPresetId: 'interview',
+                autoTranslate: true,
+                translationLanguage: 'ja',
+                exportEnabled: true,
+            },
+            exportConfig: {
+                directory: 'C:\\exports',
+                format: 'srt',
+                mode: 'translation',
+            },
+        });
+        loadAutomationRulesMock.mockResolvedValue([rule]);
+
+        await useAutomationStore.getState().loadAndStart();
+        await emitRuntimeCandidate({
+            ruleId: rule.id,
+            filePath: 'C:\\watch\\interview.wav',
+            sourceFingerprint: 'fp-interview',
+            size: 100,
+            mtimeMs: 2000,
+        });
+
+        expect(addFilesMock).toHaveBeenCalledWith(
+            ['C:\\watch\\interview.wav'],
+            expect.objectContaining({
+                origin: 'automation',
+                automationRuleId: 'rule-export-only',
+                automationRuleName: 'Export Only Watcher',
+                projectId: null,
+                pipelineSnapshot: expect.objectContaining({
+                    autoPolish: true,
+                    polishPresetId: 'interview',
+                    autoTranslate: true,
+                    targetLanguage: 'ja',
+                    autoExport: true,
+                    exportDirectory: 'C:\\exports',
+                    exportFormat: 'srt',
+                }),
+                exportConfig: expect.objectContaining({
+                    directory: 'C:\\exports',
+                    format: 'srt',
+                }),
             }),
         );
     });
@@ -1055,21 +1077,12 @@ describe('automationStore', () => {
 
         await useAutomationStore.getState().retryFailedFile(rule.id, failedEntry.filePath);
 
-        expect(addFilesMock).not.toHaveBeenCalled();
-        expect(useAutomationStore.getState().processedEntries).toEqual([
-            expect.objectContaining({
-                ruleId: rule.id,
-                filePath: failedEntry.filePath,
-                sourceFingerprint: 'retry-project-fingerprint',
-                status: 'error',
-                errorMessage: 'Project not found.',
-            }),
-        ]);
-        expect(useAutomationStore.getState().runtimeStates[rule.id]).toEqual(expect.objectContaining({
-            lastBlockedReason: 'project_missing',
-            lastBlockedFilePath: failedEntry.filePath,
-            failureCount: 1,
-        }));
+        expect(addFilesMock).toHaveBeenCalledWith(
+            [failedEntry.filePath],
+            expect.objectContaining({ projectId: 'missing-project' }),
+        );
+        expect(useAutomationStore.getState().processedEntries).toEqual([]);
+        expect(useAutomationStore.getState().runtimeStates[rule.id]).toBeDefined();
     });
 
     it('recreates a retryable failure entry when a retried candidate is blocked by recovery state', async () => {

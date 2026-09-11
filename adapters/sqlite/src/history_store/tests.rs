@@ -148,6 +148,7 @@ fn history_row_mapper_reads_columns_by_name() {
                     '[\"project-name-map\"]' AS tag_ids,
                     search_content AS search_content,
                     kind AS kind,
+                    NULL AS project_id,
                     icon AS icon,
                     preview_text AS preview_text,
                     title AS title,
@@ -173,7 +174,7 @@ fn history_row_mapper_reads_columns_by_name() {
             assert_eq!(item.icon.as_deref(), Some("sparkles"));
             assert_eq!(item.kind, HistoryItemKind::Batch);
             assert_eq!(item.search_content, "Mapped search");
-            assert_eq!(item.tag_ids, vec!["project-name-map"]);
+                    assert_eq!(item.project_id, None);
             assert_eq!(item.status, HistoryItemStatus::Draft);
             assert_eq!(item.draft_source, Some(HistoryDraftSource::LiveRecord));
             Ok(())
@@ -198,6 +199,7 @@ fn audio_cleanup_removes_only_eligible_audio_and_preserves_text() {
             )],
             duration: 1.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![1, 2, 3, 4]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -208,6 +210,7 @@ fn audio_cleanup_removes_only_eligible_audio_and_preserves_text() {
             segments: vec![segment_value("seg-new", "Keep recent audio", 0.0, 1.0)],
             duration: 1.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![5, 6]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -262,6 +265,7 @@ fn audio_cleanup_skips_active_history_and_drafts() {
             segments: vec![segment_value("seg-active", "Active transcript", 0.0, 1.0)],
             duration: 1.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![1]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -272,6 +276,7 @@ fn audio_cleanup_skips_active_history_and_drafts() {
             id: None,
             audio_extension: "wav".to_string(),
             tag_ids: Vec::new(),
+            project_id: None,
             icon: None,
         })
         .unwrap()
@@ -329,6 +334,7 @@ fn audio_cleanup_marks_missing_audio_without_deleting_history() {
             )],
             duration: 1.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![1]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -381,6 +387,7 @@ fn audio_cleanup_keeps_available_when_file_deletion_fails() {
             )],
             duration: 1.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![1, 2, 3]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -432,6 +439,7 @@ fn audio_cleanup_disabled_when_retention_is_none() {
             segments: vec![segment_value("seg-keep", "Keep forever", 0.0, 1.0)],
             duration: 1.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![1, 2]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -473,6 +481,7 @@ fn save_imported_file_rolls_back_db_and_cleans_staging_when_promote_fails() {
         segments: vec![segment_value("seg-promote", "Promote failure", 0.0, 1.0)],
         duration: 1.0,
         tag_ids: Vec::new(),
+        project_id: None,
     });
 
     assert!(
@@ -505,6 +514,7 @@ fn mutation_readiness_filesystem_failures_preserve_operation_and_path() {
         id: Some("draft-1".to_string()),
         audio_extension: "wav".to_string(),
         tag_ids: Vec::new(),
+        project_id: None,
         icon: None,
     });
 
@@ -599,6 +609,7 @@ fn test_sqlite_store_crud() {
             segments: vec![segment_value("seg-1", "Hello world", 0.0, 2.0)],
             duration: 2.0,
             tag_ids: vec!["project-1".to_string()],
+            project_id: Some("project-1".to_string()),
             audio_bytes: Some(vec![1, 2, 3]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -703,6 +714,7 @@ fn commit_transcript_edit_is_atomic_and_detects_stale_baselines() {
             segments: base.clone(),
             duration: 1.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![1, 2, 3]),
             native_audio_path: None,
             audio_extension: None,
@@ -891,6 +903,7 @@ fn save_imported_file_duplicate_id_does_not_overwrite_existing_audio() {
             segments: vec![segment_value("seg-1", "Original import", 0.0, 1.0)],
             duration: 1.0,
             tag_ids: Vec::new(),
+            project_id: None,
             converted_source_path: None,
         })
         .unwrap();
@@ -903,6 +916,7 @@ fn save_imported_file_duplicate_id_does_not_overwrite_existing_audio() {
         segments: vec![segment_value("seg-2", "Duplicate import", 0.0, 1.0)],
         duration: 1.0,
         tag_ids: Vec::new(),
+        project_id: None,
         converted_source_path: None,
     });
 
@@ -923,6 +937,7 @@ fn resolve_audio_path_marks_available_item_missing_without_deleting_text() {
             segments: vec![segment_value("seg-1", "Keep text", 0.0, 1.0)],
             duration: 1.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![1]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -955,6 +970,7 @@ fn resolve_audio_path_preserves_removed_status_when_file_is_missing() {
             segments: vec![segment_value("seg-1", "Removed audio text", 0.0, 1.0)],
             duration: 1.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![1]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -1012,6 +1028,7 @@ fn test_sqlite_store_cascades() {
             segments: vec![segment_value("seg-1", "Hello", 0.0, 1.0)],
             duration: 1.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![1]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -1150,6 +1167,7 @@ fn test_sqlite_store_workspace_query() {
             )],
             duration: 10.0,
             tag_ids: vec!["project-1".to_string()],
+            project_id: Some("project-1".to_string()),
             audio_bytes: Some(vec![1]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -1166,6 +1184,7 @@ fn test_sqlite_store_workspace_query() {
             segments: vec![segment_value("seg-2", "Beta notes", 0.0, 20.0)],
             duration: 20.0,
             tag_ids: vec!["project-1".to_string()],
+            project_id: Some("project-1".to_string()),
             converted_source_path: None,
         })
         .unwrap();
@@ -1173,8 +1192,8 @@ fn test_sqlite_store_workspace_query() {
     // Query workspace
     let result = store
         .query_workspace(HistoryWorkspaceQueryRequest {
-            scope: HistoryWorkspaceScope::Tag {
-                tag_id: "project-1".to_string(),
+            scope: HistoryWorkspaceScope::Project {
+                project_id: "project-1".to_string(),
             },
             query: "roadmap".to_string(),
             filter_type: HistoryWorkspaceFilterType::Recording,
@@ -1453,6 +1472,7 @@ fn test_workspace_query_with_reconciliation() {
             id: None,
             audio_extension: "wav".to_string(),
             tag_ids: vec!["project-1".to_string()],
+            project_id: Some("project-1".to_string()),
             icon: None,
         })
         .unwrap();
@@ -1546,6 +1566,7 @@ fn test_sqlite_store_fts_workspace_query() {
             ],
             duration: 4.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![1, 2, 3]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),
@@ -1558,6 +1579,7 @@ fn test_sqlite_store_fts_workspace_query() {
             segments: vec![segment_value("seg-3", "你好，世界，这是一个测试", 0.0, 2.0)],
             duration: 2.0,
             tag_ids: Vec::new(),
+            project_id: None,
             audio_bytes: Some(vec![1, 2, 3]),
             native_audio_path: None,
             audio_extension: Some("wav".to_string()),

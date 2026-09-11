@@ -15,6 +15,7 @@ export interface AutomationRuleDraft {
     migrationNotice?: string;
     saveHistory: boolean;
     tagIds: string[];
+    projectId: string;
     presetId: AutomationRule['presetId'];
     watchDirectory: string;
     recursive: boolean;
@@ -34,6 +35,7 @@ type DirectDraftField =
     | 'profileSource'
     | 'saveHistory'
     | 'tagIds'
+    | 'projectId'
     | 'recursive'
     | 'watchDirectory';
 
@@ -89,6 +91,7 @@ export function createRuleDraft(projectId = 'inbox', kind: NonNullable<Automatio
         },
         saveHistory: projectId !== 'none',
         tagIds: projectId && projectId !== 'none' && projectId !== 'inbox' ? [projectId] : [],
+        projectId: projectId || 'inbox',
         presetId: 'custom',
         watchDirectory: '',
         recursive: false,
@@ -129,6 +132,7 @@ export function createDraftFromRule(rule: AutomationRule): AutomationRuleDraft {
                 ? [rule.projectId]
                 : []
         ),
+        projectId: rule.projectId ?? (rule.tagIds?.[0] || 'inbox'),
         presetId: rule.presetId,
         watchDirectory: rule.watchDirectory,
         recursive: rule.recursive,

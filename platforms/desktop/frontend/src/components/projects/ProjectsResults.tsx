@@ -282,7 +282,7 @@ export function ProjectsResults({
         onDelete={onDeleteHistoryItem}
         onRename={onRenameHistoryItem}
         onOpenContextMenu={onOpenHistoryContextMenu}
-        isContextMenuOpen={activeContextId === `workspace:history:${item.id}`}
+        isContextMenuOpen={activeContextId === `workspace:history:${item.id}` || Boolean(activeContextId?.startsWith('workspace:history:batch:') && selectedIdsSet.has(item.id))}
         isLoadDisabled={isTrashScope || (lockedHistoryId != null && !isLockedHistoryItem)}
         isRenameDisabled={isTrashScope || isLockedHistoryItem}
         isDeleteDisabled={isLockedHistoryItem}

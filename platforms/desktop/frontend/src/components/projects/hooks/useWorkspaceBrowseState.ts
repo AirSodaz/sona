@@ -89,10 +89,10 @@ export function useWorkspaceBrowseState({
     }
 
     if (controls.isInboxScope || !controls.browseProjectId) {
-      return { kind: 'untagged' };
+      return { kind: 'inbox' };
     }
 
-    return { kind: 'tag', tagId: controls.browseProjectId };
+    return { kind: 'project', projectId: controls.browseProjectId };
   }, [controls.browseProjectId, controls.isAllItemsScope, controls.isInboxScope, controls.isTrashScope]);
 
   const workspaceQueryResult = useWorkspaceQuery({

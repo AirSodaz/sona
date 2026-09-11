@@ -1,15 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, Pencil, RotateCcw, Settings as SettingsIcon, Tags, Trash2 } from 'lucide-react';
+import { useProjectRailContextMenu } from './projects/context-menu/useProjectRailContextMenu';
+import { useHistoryItemContextMenu } from './projects/context-menu/useHistoryItemContextMenu';
+import { storageOpenPath } from '../services/tauri/storage';
+import { logger } from '../utils/logger';
 import { RenameModal } from './RenameModal';
 import { ProjectCreateModal } from './projects/ProjectCreateModal';
 import { ProjectSettingsModal } from './projects/ProjectSettingsModal';
+import { ProjectDeleteModal } from './projects/ProjectDeleteModal';
 import { ProjectsHeader } from './projects/ProjectsHeader';
 import { ProjectsRail } from './projects/ProjectsRail';
 import { ProjectsResults } from './projects/ProjectsResults';
 import { ProjectsSelectionBar } from './projects/ProjectsSelectionBar';
 import { ProjectsToolbar } from './projects/ProjectsToolbar';
-import { TagAssignmentModal } from './projects/TagAssignmentModal';
+import { ProjectAssignmentModal } from './projects/ProjectAssignmentModal';
 import { useProjectSettingsDraft } from './projects/hooks/useProjectSettingsDraft';
 import { useWorkspaceBrowseState } from './projects/hooks/useWorkspaceBrowseState';
 import { useWorkspaceSelectionState } from './projects/hooks/useWorkspaceSelectionState';
@@ -29,8 +33,8 @@ import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type { HistoryItem as HistoryItemType } from '../types/history';
 import { isLiveRecordDraftHistoryItem } from '../types/history';
+import type { ProjectRecord } from '../types/project';
 import { useContextMenu } from './context-menu/useContextMenu';
-import type { ContextMenuOpenRequest } from './context-menu/trigger';
 
 interface ProjectsViewProps {
   isActive?: boolean;
@@ -98,7 +102,7 @@ function createWorkspaceMenuRevision(
   });
 }
 
-export function ProjectsView({ isActive = true, onOpenAutomationSettings }: ProjectsViewProps): React.JSX.Element {
+export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.Element {
   const { t } = useTranslation();
   const { activeContextId, closeContextMenu, openContextMenu } = useContextMenu();
   const projects = useProjectStore((state) => state.projects);
@@ -131,10 +135,12 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [newProjectColor, setNewProjectColor] = useState('#64748b');
+  const [newProjectIcon, setNewProjectIcon] = useState('');
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(sourceHistoryId);
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
-  const [tagAssignmentIds, setTagAssignmentIds] = useState<string[]>([]);
+  const [projectToDelete, setProjectToDelete] = useState<ProjectRecord | null>(null);
+  const [projectAssignmentIds, setProjectAssignmentIds] = useState<string[]>([]);
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const workspaceMenuSnapshotRef = useRef<WorkspaceMenuSnapshot | null>(null);
@@ -358,10 +364,10 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
     const candidates = new Map<string, HistoryItemType>();
     historyItems.forEach((item) => candidates.set(item.id, item));
     browseState.filteredAndSortedItems.forEach((item) => candidates.set(item.id, item));
-    return tagAssignmentIds
+    return projectAssignmentIds
       .map((id) => candidates.get(id))
       .filter((item): item is HistoryItemType => !!item && item.deletedAt == null);
-  }, [browseState.filteredAndSortedItems, historyItems, tagAssignmentIds]);
+  }, [browseState.filteredAndSortedItems, historyItems, projectAssignmentIds]);
 
   useEffect(() => {
     if (effectiveSelectedHistoryId === null && selectedHistoryId) {
@@ -460,60 +466,6 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
     projectSettingsDraft.setIsSettingsOpen(true);
   };
 
-  const handleOpenProjectContextMenu = (
-    id: string,
-    request: ContextMenuOpenRequest,
-  ) => {
-    const project = useProjectStore.getState().projects.find((item) => item.id === id);
-    if (!project) {
-      return;
-    }
-
-    const lockState = getLiveDraftLockState();
-    const isCurrentProject = browseScopeRef.current === id;
-    const isOtherProjectLocked = lockState.isLocked && !isCurrentProject;
-    const contextId = `workspace:project:${id}`;
-
-    workspaceMenuSnapshotRef.current = {
-      contextId,
-      revision: createWorkspaceMenuRevision(
-        contextId,
-        browseScopeRef.current,
-        viewMode,
-        selectionState.isSelectionMode,
-        isActive,
-      ),
-    };
-
-    openContextMenu({
-      contextId,
-      ariaLabel: t('common.actions_for', {
-        item: project.name,
-        defaultValue: 'Actions for {{item}}',
-      }),
-      actions: [
-        {
-          id: 'open',
-          label: t('common.open', { defaultValue: 'Open' }),
-          icon: <FolderOpen size={16} />,
-          disabled: isCurrentProject || lockState.isLocked,
-          onSelect: () => {
-            void handleSwitchBrowseScope(id);
-          },
-        },
-        {
-          id: 'settings',
-          label: t('projects.tag_settings', { defaultValue: 'Tag Settings' }),
-          icon: <SettingsIcon size={16} />,
-          disabled: isOtherProjectLocked,
-          onSelect: () => {
-            void handleOpenProjectSettings(id);
-          },
-        },
-      ],
-      ...request,
-    });
-  };
 
   const handleDeleteHistoryItem = async (id: string) => {
     const initialItem = useHistoryStore.getState().items.find((item) => item.id === id)
@@ -573,102 +525,6 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
     setRenameTarget({ id, title: item.title, icon: item.icon, type: item.type });
   };
 
-  const handleOpenHistoryContextMenu = (
-    id: string,
-    request: ContextMenuOpenRequest,
-  ) => {
-    const item = useHistoryStore.getState().items.find((historyItem) => historyItem.id === id);
-    if (!item || selectionState.isSelectionMode) {
-      return;
-    }
-
-    const lockState = getLiveDraftLockState();
-    const isLockedLiveDraft = lockState.isLocked && id === lockState.sourceHistoryId;
-    const isOpenDisabled = lockState.isLocked && id !== lockState.sourceHistoryId;
-    const contextId = `workspace:history:${id}`;
-
-    workspaceMenuSnapshotRef.current = {
-      contextId,
-      revision: createWorkspaceMenuRevision(
-        contextId,
-        browseScopeRef.current,
-        viewMode,
-        selectionState.isSelectionMode,
-        isActive,
-      ),
-    };
-
-    openContextMenu({
-      contextId,
-      ariaLabel: t('common.actions_for', {
-        item: item.title,
-        defaultValue: 'Actions for {{item}}',
-      }),
-      actions: item.deletedAt != null ? [
-        {
-          id: 'restore',
-          label: t('history.restore', { defaultValue: 'Restore' }),
-          icon: <RotateCcw size={16} />,
-          onSelect: () => {
-            void handleRestoreHistoryItems([id]);
-          },
-        },
-        {
-          id: 'purge',
-          label: t('history.delete_permanently', { defaultValue: 'Delete Permanently' }),
-          icon: <Trash2 size={16} />,
-          tone: 'danger',
-          dividerBefore: true,
-          onSelect: () => {
-            void handleDeleteHistoryItem(id);
-          },
-        },
-      ] : [
-        {
-          id: 'tags',
-          label: t('projects.edit_tags', { defaultValue: 'Edit Tags' }),
-          icon: <Tags size={16} />,
-          disabled: isLockedLiveDraft,
-          onSelect: () => {
-            setTagAssignmentIds([id]);
-          },
-        },
-        {
-          id: 'open',
-          label: t('common.open', { defaultValue: 'Open' }),
-          icon: <FolderOpen size={16} />,
-          disabled: isOpenDisabled,
-          onSelect: () => {
-            const latestItem = useHistoryStore.getState().items.find((historyItem) => historyItem.id === id);
-            if (latestItem) {
-              void handleOpenItem(latestItem);
-            }
-          },
-        },
-        {
-          id: 'rename',
-          label: t('common.rename', { defaultValue: 'Rename' }),
-          icon: <Pencil size={16} />,
-          disabled: isLockedLiveDraft,
-          onSelect: () => {
-            void handleRenameHistoryItem(id);
-          },
-        },
-        {
-          id: 'delete',
-          label: t('common.delete', { defaultValue: 'Delete' }),
-          icon: <Trash2 size={16} />,
-          disabled: isLockedLiveDraft,
-          tone: 'danger',
-          dividerBefore: true,
-          onSelect: () => {
-            void handleDeleteHistoryItem(id);
-          },
-        },
-      ],
-      ...request,
-    });
-  };
 
   const handlePerformRename = async (newTitle: string, newIcon?: string) => {
     if (!renameTarget) {
@@ -704,6 +560,7 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
       name: newProjectName.trim(),
       description: newProjectDescription.trim(),
       color: newProjectColor,
+      icon: newProjectIcon,
     });
 
     if (!project) {
@@ -713,6 +570,7 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
     setNewProjectName('');
     setNewProjectDescription('');
     setNewProjectColor('#64748b');
+    setNewProjectIcon('');
     setIsCreateModalOpen(false);
     browseState.setBrowseScope(project.id);
     await setActiveProjectId(project.id);
@@ -728,6 +586,7 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
       description: projectSettingsDraft.draftDescription,
       icon: projectSettingsDraft.draftIcon,
       color: projectSettingsDraft.draftColor,
+      pipeline: projectSettingsDraft.draftPipeline,
     });
     projectSettingsDraft.setIsSettingsOpen(false);
   };
@@ -736,36 +595,16 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
     if (!browseState.browseProject) {
       return;
     }
-
+    const project = browseState.browseProject;
     const shouldDiscard = await projectSettingsDraft.confirmDiscardProjectSettingsChanges();
     if (!shouldDiscard) {
       return;
     }
 
     if (projectSettingsDraft.isSettingsOpen) {
-      projectSettingsDraft.discardProjectSettingsDraft(browseState.browseProject);
+      projectSettingsDraft.discardProjectSettingsDraft(project);
     }
-
-    const confirmed = await confirm(
-      t('projects.delete_tag_confirm', {
-        tag: browseState.browseProject.name,
-        defaultValue: `Delete ${browseState.browseProject.name}? Items keep their other tags.`,
-      }),
-      {
-        title: t('projects.delete_tag_title', { defaultValue: 'Delete Tag' }),
-        confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
-        variant: 'error',
-      },
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    clearOpenedItem();
-    browseState.setBrowseScope('untagged');
-    await deleteProject(browseState.browseProject.id);
-    await refreshHistory();
+    setProjectToDelete(project);
   };
 
   const handleToggleSelectionMode = () => {
@@ -776,8 +615,8 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
     selectionState.toggleSelectionMode();
   };
 
-  const handleDeleteSelected = async () => {
-    if (selectionState.selectedIds.length === 0) {
+  const handleDeleteHistoryItems = async (ids: string[]) => {
+    if (ids.length === 0) {
       return;
     }
 
@@ -785,13 +624,13 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
     const confirmed = await confirm(
       isTrashScope
         ? t('history.purge_bulk_confirm', {
-          count: selectionState.selectedIds.length,
-          defaultValue: `Permanently delete ${selectionState.selectedIds.length} items? This cannot be undone.`,
+          count: ids.length,
+          defaultValue: `Permanently delete ${ids.length} items? This cannot be undone.`,
         })
         : t('history.trash_bulk_confirm', {
-        count: selectionState.selectedIds.length,
-        defaultValue: `Move ${selectionState.selectedIds.length} items to Trash?`,
-      }),
+          count: ids.length,
+          defaultValue: `Move ${ids.length} items to Trash?`,
+        }),
       {
         title: isTrashScope
           ? t('history.purge_title', { defaultValue: 'Delete Permanently' })
@@ -808,10 +647,72 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
     }
 
     if (isTrashScope) {
-      await historyService.purgeRecordings(selectionState.selectedIds);
+      await historyService.purgeRecordings(ids);
     } else {
-      await deleteHistoryItems(selectionState.selectedIds);
+      await deleteHistoryItems(ids);
     }
+    await refreshHistory();
+    selectionState.clearSelection();
+  };
+
+  const handleDeleteSelected = async () => {
+    await handleDeleteHistoryItems(selectionState.selectedIds);
+  };
+
+  const handleCopyTranscript = async (item: HistoryItemType) => {
+    try {
+      const segments = await historyService.loadTranscript(item.id);
+      const text = segments?.map((s) => s.text).join('\n').trim() || item.previewText || item.title;
+      if (text) {
+        await navigator.clipboard.writeText(text);
+      }
+    } catch (error) {
+      logger.error('Failed to copy transcript:', error);
+    }
+  };
+
+  const handleCopyTranscripts = async (items: HistoryItemType[]) => {
+    try {
+      const texts: string[] = [];
+      for (const item of items) {
+        const segments = await historyService.loadTranscript(item.id);
+        const text = segments?.map((s) => s.text).join('\n').trim() || item.previewText || item.title;
+        if (text) {
+          texts.push(`=== ${item.title} ===\n${text}`);
+        }
+      }
+      if (texts.length > 0) {
+        await navigator.clipboard.writeText(texts.join('\n\n'));
+      }
+    } catch (error) {
+      logger.error('Failed to copy transcripts:', error);
+    }
+  };
+
+  const handleCopyTitle = async (item: HistoryItemType) => {
+    try {
+      await navigator.clipboard.writeText(item.title);
+    } catch (error) {
+      logger.error('Failed to copy title:', error);
+    }
+  };
+
+  const handleShowInFolder = async (item: HistoryItemType) => {
+    try {
+      const fullPath = await historyService.getAudioAbsolutePath(item.id);
+      if (fullPath) {
+        await storageOpenPath(fullPath);
+      } else {
+        await historyService.openHistoryFolder();
+      }
+    } catch (error) {
+      logger.error('Failed to reveal file:', error);
+      await historyService.openHistoryFolder();
+    }
+  };
+
+  const handleMoveToInbox = async (ids: string[]) => {
+    await useProjectStore.getState().moveItemsToProject(ids, null);
     await refreshHistory();
     selectionState.clearSelection();
   };
@@ -852,6 +753,95 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
     await historyService.purgeRecordings(ids);
     await refreshHistory();
   };
+  const { openRailContextMenu } = useProjectRailContextMenu({
+    activeProjectId,
+    browseScope: browseState.browseScope,
+    isLockedLiveDraft: isLiveDraftSessionLocked,
+    onDeleteProject: (project) => {
+      setProjectToDelete(project);
+    },
+    onEmptyTrash: handleEmptyTrash,
+    onOpenCreateModal: () => setIsCreateModalOpen(true),
+    onOpenProjectSettings: (id) => void handleOpenProjectSettings(id),
+    onSetActiveProjectId: (id) => void setActiveProjectId(id),
+    onSwitchScope: handleSwitchBrowseScope,
+    openContextMenu,
+    projects,
+    t,
+    trashCount: browseState.itemCounts.get('trash') || 0,
+    onMenuOpened: (contextId) => {
+      workspaceMenuSnapshotRef.current = {
+        contextId,
+        revision: createWorkspaceMenuRevision(
+          contextId,
+          browseScopeRef.current,
+          viewMode,
+          selectionState.isSelectionMode,
+          isActive,
+        ),
+      };
+    },
+  });
+
+  const { openHistoryContextMenu } = useHistoryItemContextMenu({
+    getItemById: (id) => useHistoryStore.getState().items.find((historyItem) => historyItem.id === id)
+      ?? browseState.filteredAndSortedItems.find((historyItem) => historyItem.id === id),
+    isAllSelected: selectionState.isAllSelected,
+    isLockedLiveDraft: (id) => {
+      const lockState = getLiveDraftLockState();
+      return lockState.isLocked && id === lockState.sourceHistoryId;
+    },
+    isOpenDisabled: (id) => {
+      const lockState = getLiveDraftLockState();
+      return lockState.isLocked && id !== lockState.sourceHistoryId;
+    },
+    isTrashScope: browseState.isTrashScope,
+    onAssignProject: (ids) => {
+      setProjectAssignmentIds(ids);
+    },
+    onClearSelection: selectionState.clearSelection,
+    onCopyTitle: handleCopyTitle,
+    onCopyTranscript: handleCopyTranscript,
+    onCopyTranscripts: handleCopyTranscripts,
+    onDeleteHistoryItem: (id) => {
+      void handleDeleteHistoryItem(id);
+    },
+    onDeleteHistoryItems: (ids) => {
+      void handleDeleteHistoryItems(ids);
+    },
+    onMoveToInbox: (ids) => {
+      void handleMoveToInbox(ids);
+    },
+    onOpenItem: (item) => {
+      void handleOpenItem(item);
+    },
+    onRenameHistoryItem: (id) => {
+      void handleRenameHistoryItem(id);
+    },
+    onRestoreHistoryItems: (ids) => {
+      void handleRestoreHistoryItems(ids);
+    },
+    onSelectAllVisible: selectionState.handleToggleSelectAll,
+    onShowInFolder: (item) => {
+      void handleShowInFolder(item);
+    },
+    openContextMenu,
+    selectedIds: selectionState.selectedIds,
+    t,
+    onMenuOpened: (contextId) => {
+      workspaceMenuSnapshotRef.current = {
+        contextId,
+        revision: createWorkspaceMenuRevision(
+          contextId,
+          browseScopeRef.current,
+          viewMode,
+          selectionState.isSelectionMode,
+          isActive,
+        ),
+      };
+    },
+  });
+
 
   if (!isActive) {
     return (
@@ -879,7 +869,7 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
         onOpenCreateModal={() => setIsCreateModalOpen(true)}
         onReorderProjects={reorderProjects}
         onSwitchScope={handleSwitchBrowseScope}
-        onOpenProjectContextMenu={handleOpenProjectContextMenu}
+        onOpenProjectContextMenu={openRailContextMenu}
         projects={projects}
         t={t}
       />
@@ -943,7 +933,7 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
               isTrashScope={browseState.isTrashScope}
               onCancel={handleToggleSelectionMode}
               onDeleteSelected={() => void handleDeleteSelected()}
-              onEditTags={() => setTagAssignmentIds(selectionState.selectedIds)}
+              onAssignProject={() => setProjectAssignmentIds(selectionState.selectedIds)}
               onRestoreSelected={() => void handleRestoreHistoryItems(selectionState.selectedIds)}
               onToggleSelectAll={selectionState.handleToggleSelectAll}
               selectedIds={selectionState.selectedIds}
@@ -970,7 +960,7 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
             onDeleteHistoryItem={handleDeleteHistoryItem}
             onLoadMore={browseState.loadMore}
             onRenameHistoryItem={handleRenameHistoryItem}
-            onOpenHistoryContextMenu={handleOpenHistoryContextMenu}
+            onOpenHistoryContextMenu={openHistoryContextMenu}
             onRetryInitialLoad={browseState.retryInitialLoad}
             onScroll={browseState.handleScroll}
             onToggleSelection={selectionState.toggleSelection}
@@ -1000,9 +990,11 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
         name={newProjectName}
         description={newProjectDescription}
         color={newProjectColor}
+        icon={newProjectIcon}
         onNameChange={setNewProjectName}
         onDescriptionChange={setNewProjectDescription}
         onColorChange={setNewProjectColor}
+        onIconChange={setNewProjectIcon}
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={handleCreateProject}
       />
@@ -1014,6 +1006,8 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
         draftDescription={projectSettingsDraft.draftDescription}
         draftIcon={projectSettingsDraft.draftIcon}
         draftColor={projectSettingsDraft.draftColor}
+        draftPipeline={projectSettingsDraft.draftPipeline}
+        onPipelineChange={projectSettingsDraft.setDraftPipeline}
         onClose={projectSettingsDraft.handleRequestCloseProjectSettings}
         onSave={handleSaveProject}
         onDelete={handleDeleteProject}
@@ -1021,7 +1015,6 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
         onDescriptionChange={projectSettingsDraft.setDraftDescription}
         onIconChange={projectSettingsDraft.setDraftIcon}
         onColorChange={projectSettingsDraft.setDraftColor}
-        onOpenAutomation={onOpenAutomationSettings}
       />
 
       <RenameModal
@@ -1044,15 +1037,31 @@ export function ProjectsView({ isActive = true, onOpenAutomationSettings }: Proj
         }}
       />
 
-      <TagAssignmentModal
-        isOpen={tagAssignmentIds.length > 0}
+      <ProjectAssignmentModal
+        isOpen={projectAssignmentIds.length > 0}
         items={tagAssignmentItems}
-        tags={projects}
-        onClose={() => setTagAssignmentIds([])}
-        onApply={async (addTagIds, removeTagIds) => {
-          await historyService.updateTagAssignments(tagAssignmentIds, addTagIds, removeTagIds);
+        projects={projects}
+        onClose={() => setProjectAssignmentIds([])}
+        onApply={async (projectId) => {
+          await useProjectStore.getState().moveItemsToProject(projectAssignmentIds, projectId);
           await refreshHistory();
           selectionState.clearSelection();
+        }}
+      />
+
+      <ProjectDeleteModal
+        isOpen={!!projectToDelete}
+        project={projectToDelete}
+        itemCount={projectToDelete ? historyItems.filter((item) => !item.deletedAt && item.projectId === projectToDelete.id).length : 0}
+        onClose={() => setProjectToDelete(null)}
+        onConfirm={async (cascadeAction) => {
+          if (!projectToDelete) return;
+          const pid = projectToDelete.id;
+          clearOpenedItem();
+          browseState.setBrowseScope('untagged');
+          await deleteProject(pid, cascadeAction);
+          await refreshHistory();
+          setProjectToDelete(null);
         }}
       />
     </div>

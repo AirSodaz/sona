@@ -151,7 +151,8 @@ pub(crate) async fn save_history_recording_json(
     let request = HistorySaveRecordingRequest {
         segments: parse_legacy_segments(metadata.segments)?,
         duration: metadata.duration,
-        tag_ids: normalized_tag_ids(metadata.tag_ids, metadata.project_id),
+        tag_ids: normalized_tag_ids(metadata.tag_ids, metadata.project_id.clone()),
+        project_id: metadata.project_id,
         audio_bytes,
         native_audio_path,
         audio_extension: metadata.audio_extension,
@@ -179,7 +180,8 @@ pub(crate) async fn save_history_imported_file_json(
         source_path: request.source_path,
         segments: parse_legacy_segments(request.segments)?,
         duration: request.duration,
-        tag_ids: normalized_tag_ids(request.tag_ids, request.project_id),
+        tag_ids: normalized_tag_ids(request.tag_ids, request.project_id.clone()),
+        project_id: request.project_id,
         converted_source_path: request.converted_source_path,
     };
     run_mutation(context, move |service| service.save_imported_file(request)).await

@@ -1,68 +1,75 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Zap } from 'lucide-react';
 import { FolderIcon } from '../../Icons';
 import { Dropdown } from '../../Dropdown';
 import { Switch } from '../../Switch';
-import { Checkbox } from '../../Checkbox';
 import { SettingsItem } from '../SettingsLayout';
-import type { ExportFormat, ExportMode } from '../../../utils/exportFormats';
-import type { AutomationDraftUpdate, AutomationRuleDraft } from './automationRuleDraft';
+import { useProjectStore } from '../../../stores/projectStore';
+import type { ExportFormat } from '../../../utils/exportFormats';
 import {
-    setActionField,
+    type AutomationRuleDraft,
+    type AutomationDraftUpdate,
     setDraftField,
     setExportConfigField,
-    setStageConfigField,
+    setActionField,
 } from './automationRuleDraft';
+import { getPolishPresetOptions } from '../../../utils/polishPresets';
+import { LANGUAGE_OPTIONS } from '../../../constants/languages';
+import { getLocalizedLanguageName } from '../../../utils/languageUtils';
 
 type SelectOption = { value: string; label: string };
 type BrowseField = 'watchDirectory' | 'directory';
 
+const DEFAULT_EXPORT_FORMAT_OPTIONS: SelectOption[] = [
+    { value: 'txt', label: 'TXT' },
+    { value: 'srt', label: 'SRT' },
+    { value: 'vtt', label: 'VTT' },
+    { value: 'json', label: 'JSON' },
+    { value: 'docx', label: 'DOCX' },
+];
+
 type Props = {
     draft: AutomationRuleDraft;
-    exportFormatOptions: SelectOption[];
-    exportModeOptions: SelectOption[];
-    languageOptions: SelectOption[];
+    exportFormatOptions?: SelectOption[];
+    exportModeOptions?: SelectOption[];
+    languageOptions?: SelectOption[];
     onBrowseDirectory: (field: BrowseField) => void;
     onCancel: () => void;
     onSave: () => void;
     onUpdateDraft: (updater: AutomationDraftUpdate) => void;
-    polishPresetOptions: SelectOption[];
-    profileOptions: SelectOption[];
+    polishPresetOptions?: SelectOption[];
+    profileOptions?: SelectOption[];
     projectOptions: SelectOption[];
 };
-
-function ActionSwitch({
-    label,
-    checked,
-    onChange,
-}: {
-    label: string;
-    checked: boolean;
-    onChange: (value: boolean) => void;
-}): React.JSX.Element {
-    return (
-        <SettingsItem title={label}>
-            <Switch checked={checked} onChange={onChange} aria-label={label} />
-        </SettingsItem>
-    );
-}
 
 export function AutomationRuleEditor({
     draft,
     exportFormatOptions,
-    exportModeOptions,
-    languageOptions,
+    languageOptions: propsLanguageOptions,
     onBrowseDirectory,
     onCancel,
     onSave,
     onUpdateDraft,
-    polishPresetOptions,
-    profileOptions,
+    polishPresetOptions: propsPolishPresetOptions,
     projectOptions,
 }: Props): React.JSX.Element {
-    const { t } = useTranslation();
-    const isTagRule = draft.kind === 'tag';
-    const tags = projectOptions.filter((option) => option.value !== 'none' && option.value !== 'inbox');
+    const { t, i18n } = useTranslation();
+    const projects = useProjectStore((state) => state.projects);
+    const selectedProject = projects.find((p) => p.id === draft.projectId);
+    const resolvedPolishPresetOptions = useMemo(
+        () => propsPolishPresetOptions ?? getPolishPresetOptions(undefined, t),
+        [propsPolishPresetOptions, t],
+    );
+    const resolvedLanguageOptions = useMemo(
+        () => propsLanguageOptions ?? (
+            LANGUAGE_OPTIONS.map((language) => ({
+                value: language.code,
+                label: getLocalizedLanguageName(language.code, i18n?.language || 'zh'),
+            }))
+        ),
+        [propsLanguageOptions, i18n?.language],
+    );
 
     return (
         <div className="automation-editor-container">
@@ -70,16 +77,14 @@ export function AutomationRuleEditor({
                 {/* Step 1: WHEN - Trigger & Source */}
                 <div className="automation-editor-step-card">
                     <div className="automation-step-header">
-                        <span className="automation-step-badge">1. WHEN</span>
+                        <span className="automation-step-badge">
+                            {t('automation.step_badge_when', { defaultValue: '1. WHEN' })}
+                        </span>
                         <span className="automation-step-title">
-                            {isTagRule
-                                ? t('automation.step_tag_trigger', { defaultValue: 'Trigger by Project or Tag' })
-                                : t('automation.step_file_trigger', { defaultValue: 'Watch Local Folder' })}
+                            {t('automation.step_file_trigger', { defaultValue: 'Watch Local Folder' })}
                         </span>
                         <span className="automation-step-subtitle">
-                            {isTagRule
-                                ? t('automation.step_tag_hint', { defaultValue: 'Runs when audio is assigned to matching tags' })
-                                : t('automation.step_file_hint', { defaultValue: 'Auto-ingests new audio dropped in directory' })}
+                            {t('automation.step_file_hint', { defaultValue: 'Auto-ingests new audio dropped in directory' })}
                         </span>
                     </div>
 
@@ -93,247 +98,267 @@ export function AutomationRuleEditor({
                             />
                         </SettingsItem>
 
-                        {isTagRule ? (
+                        <SettingsItem title={t('automation.watch_directory', { defaultValue: 'Watch Directory' })} layout="vertical">
+                            <div style={{ display: 'flex', gap: '8px', width: '100%', alignItems: 'center' }}>
+                                <input
+                                    className="settings-input"
+                                    value={draft.watchDirectory}
+                                    onChange={(event) => onUpdateDraft(setDraftField('watchDirectory', event.target.value))}
+                                    placeholder={t('automation.watch_directory_placeholder', { defaultValue: 'Choose a folder to monitor...' })}
+                                    style={{ flex: 1, minWidth: 0, height: 36 }}
+                                />
+                                <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    onClick={() => onBrowseDirectory('watchDirectory')}
+                                    title={t('settings.browse', { defaultValue: 'Browse' })}
+                                    style={{ height: 36, padding: '0 12px', display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, whiteSpace: 'nowrap' }}
+                                >
+                                    <FolderIcon width={15} height={15} />
+                                    <span>{t('settings.browse', { defaultValue: 'Browse' })}</span>
+                                </button>
+                                <Switch
+                                    checked={draft.recursive}
+                                    onChange={(value) => onUpdateDraft(setDraftField('recursive', value))}
+                                    label={t('automation.recursive', { defaultValue: 'Subdirectories' })}
+                                    style={{ flexShrink: 0, marginLeft: 4, whiteSpace: 'nowrap' }}
+                                />
+                            </div>
+                        </SettingsItem>
+                    </div>
+                </div>
+
+                {/* Step 2: DESTINATION & PIPELINE */}
+                <div className="automation-editor-step-card">
+                    <div className="automation-step-header">
+                        <span className="automation-step-badge">
+                            {draft.saveHistory
+                                ? t('automation.step_badge_target', { defaultValue: '2. TARGET' })
+                                : t('automation.step_badge_export', { defaultValue: '2. EXPORT' })}
+                        </span>
+                        <span className="automation-step-title">
+                            {draft.saveHistory
+                                ? t('automation.step_target_project', { defaultValue: 'Target Project & Pipeline' })
+                                : t('automation.step_export_title', { defaultValue: 'Export Directory & Pipeline' })}
+                        </span>
+                        <span className="automation-step-subtitle">
+                            {draft.saveHistory
+                                ? t('automation.step_target_hint', { defaultValue: 'Assign ingested audio to a project and run its pipeline' })
+                                : t('automation.step_export_hint', { defaultValue: 'Specify output directory and optionally apply a processing pipeline' })}
+                        </span>
+                    </div>
+
+                    <div className="automation-step-content">
+                        <SettingsItem title={t('automation.save_history', { defaultValue: 'Save to History' })}>
+                            <Switch
+                                checked={draft.saveHistory}
+                                onChange={(value) => {
+                                    onUpdateDraft((current) => ({
+                                        ...current,
+                                        saveHistory: value,
+                                        ...(!value
+                                            ? { projectId: 'none', tagIds: [] }
+                                            : (current.projectId === 'none' ? { projectId: 'inbox', tagIds: [] } : {})
+                                        ),
+                                    }));
+                                }}
+                                aria-label={t('automation.save_history', { defaultValue: 'Save to History' })}
+                            />
+                        </SettingsItem>
+
+                        {draft.saveHistory ? (
                             <>
-                                <SettingsItem title={t('automation.priority', { defaultValue: 'Priority' })}>
-                                    <input
-                                        className="settings-input"
-                                        type="number"
-                                        min={0}
-                                        value={draft.priority}
-                                        onChange={(event) => onUpdateDraft(setDraftField('priority', Number(event.target.value) || 0))}
-                                        style={{ width: '120px' }}
-                                        aria-label={t('automation.priority', { defaultValue: 'Priority' })}
-                                    />
-                                </SettingsItem>
-
-                                <SettingsItem title={t('automation.match_tags', { defaultValue: 'Match any Tag' })} layout="vertical">
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px', width: '100%' }}>
-                                        {tags.length === 0 ? (
-                                            <span className="settings-item-hint">
-                                                {t('automation.no_tags', { defaultValue: 'Create a tag first.' })}
-                                            </span>
-                                        ) : tags.map((option) => (
-                                            <Checkbox
-                                                key={option.value}
-                                                checked={draft.tagIds.includes(option.value)}
-                                                label={option.label}
-                                                onChange={(checked) => onUpdateDraft(setDraftField(
-                                                    'tagIds',
-                                                    checked
-                                                        ? Array.from(new Set([...draft.tagIds, option.value]))
-                                                        : draft.tagIds.filter((tagId) => tagId !== option.value),
-                                                ))}
-                                            />
-                                        ))}
-                                    </div>
-                                </SettingsItem>
-
-                                <SettingsItem title={t('automation.profile', { defaultValue: 'Configuration Profile' })}>
+                                <SettingsItem title={t('automation.target_project', { defaultValue: 'Target Project' })}>
                                     <Dropdown
-                                        value={draft.profileId || ''}
-                                        onChange={(value) => onUpdateDraft(setDraftField('profileId', value || undefined))}
-                                        options={profileOptions}
-                                        style={{ width: '220px' }}
-                                        aria-label={t('automation.profile', { defaultValue: 'Configuration Profile' })}
+                                        value={draft.projectId && draft.projectId !== 'none' ? draft.projectId : 'inbox'}
+                                        onChange={(value) => {
+                                            onUpdateDraft((current) => ({
+                                                ...current,
+                                                projectId: value,
+                                                tagIds: value && value !== 'none' && value !== 'inbox' ? [value] : [],
+                                            }));
+                                        }}
+                                        options={projectOptions}
+                                        style={{ width: '240px' }}
+                                        aria-label={t('automation.target_project', { defaultValue: 'Target Project' })}
                                     />
                                 </SettingsItem>
+
+                                {/* Pipeline Overview Card */}
+                                <div style={{
+                                    padding: '12px 14px',
+                                    background: 'var(--color-bg-secondary)',
+                                    borderRadius: 'var(--radius-md)',
+                                    border: '1px solid var(--color-border)',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '8px',
+                                    fontSize: '0.8125rem',
+                                }}>
+                                    <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+                                        {t('projects.pipeline_overview', { defaultValue: 'Pipeline Execution' })}
+                                    </span>
+                                    {selectedProject?.pipeline?.enabled ? (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', color: 'var(--color-text-secondary)' }}>
+                                            <span>
+                                                ✓ {t('projects.pipeline_will_run', {
+                                                    defaultValue: 'Will execute deterministic pipeline for project "{{name}}":',
+                                                    name: selectedProject.name,
+                                                })}
+                                            </span>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                                                {selectedProject.pipeline.autoPolish && (
+                                                    <span className="automation-chip automation-chip-success">
+                                                        {t('automation.auto_polish', { defaultValue: 'Polish' })}: {selectedProject.pipeline.polishPresetId || 'general'}
+                                                    </span>
+                                                )}
+                                                {selectedProject.pipeline.autoTranslate && (
+                                                    <span className="automation-chip automation-chip-success">
+                                                        {t('automation.auto_translate', { defaultValue: 'Translate' })}: {selectedProject.pipeline.targetLanguage || 'en'}
+                                                    </span>
+                                                )}
+                                                {selectedProject.pipeline.autoSummary && (
+                                                    <span className="automation-chip automation-chip-success">
+                                                        {t('automation.auto_summary', { defaultValue: 'Summary' })}: {selectedProject.pipeline.summaryTemplateId || 'general'}
+                                                    </span>
+                                                )}
+                                                {selectedProject.pipeline.autoExport && (
+                                                    <span className="automation-chip automation-chip-success">
+                                                        {t('automation.auto_export', { defaultValue: 'Export' })}: {selectedProject.pipeline.exportDirectory}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <span style={{ color: 'var(--color-text-secondary)' }}>
+                                            {draft.projectId === 'inbox' || !selectedProject
+                                                ? t('automation.inbox_pipeline_hint', { defaultValue: 'Audio will be assigned to Inbox and follow global default settings.' })
+                                                : t('automation.disabled_pipeline_hint', { defaultValue: 'Project pipeline is disabled. Will follow global default settings.' })
+                                            }
+                                        </span>
+                                    )}
+                                </div>
                             </>
                         ) : (
                             <>
-                                <SettingsItem title={t('automation.watch_directory', { defaultValue: 'Watch Directory' })} layout="vertical">
-                                    <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                                <div style={{
+                                    padding: '10px 12px',
+                                    background: 'var(--color-bg-secondary)',
+                                    border: '1px solid var(--color-border)',
+                                    borderRadius: 'var(--radius-md)',
+                                    fontSize: '0.8125rem',
+                                    color: 'var(--color-text-secondary)',
+                                    lineHeight: 1.5,
+                                }}>
+                                    {t('automation.pure_export_notice', {
+                                        defaultValue: 'Export-only mode: audio will be transcribed and exported to the directory below without keeping records in local history.',
+                                    })}
+                                </div>
+                                <div className="project-pipeline-section">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 500, fontSize: 13, color: 'var(--color-text-primary)' }}>
+                                        <Zap size={15} style={{ color: 'var(--color-accent, #6366F1)' }} />
+                                        <span>{t('automation.pipeline_preset', { defaultValue: 'Processing Pipeline' })}</span>
+                                    </div>
+                                    <div className="project-pipeline-options">
+                                        {/* Auto Polish */}
+                                        <div className="project-pipeline-item">
+                                            <div className="project-pipeline-item-header">
+                                                <Switch
+                                                    checked={Boolean(draft.actions?.autoPolish)}
+                                                    onChange={(checked) => onUpdateDraft(setActionField('autoPolish', checked))}
+                                                    label={t('automation.auto_polish', { defaultValue: 'Auto Polish' })}
+                                                />
+                                            </div>
+                                            {draft.actions?.autoPolish && (
+                                                <div className="project-pipeline-item-content">
+                                                    <Dropdown
+                                                        value={draft.stageConfig?.polishPresetId || 'general'}
+                                                        onChange={(value) => onUpdateDraft((current) => ({
+                                                            ...current,
+                                                            stageConfig: {
+                                                                 ...current.stageConfig,
+                                                                polishPresetId: value,
+                                                            },
+                                                        }))}
+                                                        options={resolvedPolishPresetOptions}
+                                                        style={{ width: '100%' }}
+                                                        aria-label={t('automation.auto_polish', { defaultValue: 'Auto Polish' })}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Auto Translate */}
+                                        <div className="project-pipeline-item">
+                                            <div className="project-pipeline-item-header">
+                                                <Switch
+                                                    checked={Boolean(draft.actions?.autoTranslate)}
+                                                    onChange={(checked) => onUpdateDraft(setActionField('autoTranslate', checked))}
+                                                    label={t('automation.auto_translate', { defaultValue: 'Auto Translate' })}
+                                                />
+                                            </div>
+                                            {draft.actions?.autoTranslate && (
+                                                <div className="project-pipeline-item-content">
+                                                    <Dropdown
+                                                        value={draft.stageConfig?.translationLanguage || 'en'}
+                                                        onChange={(value) => onUpdateDraft((current) => ({
+                                                            ...current,
+                                                            stageConfig: {
+                                                                ...current.stageConfig,
+                                                                translationLanguage: value,
+                                                            },
+                                                        }))}
+                                                        options={resolvedLanguageOptions}
+                                                        style={{ width: '100%' }}
+                                                        aria-label={t('automation.auto_translate', { defaultValue: 'Auto Translate' })}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <SettingsItem title={t('automation.output_directory', { defaultValue: 'Output Directory' })}>
+                                    <div style={{ display: 'flex', gap: '8px', width: '100%', maxWidth: '360px', alignItems: 'center' }}>
                                         <input
+                                            type="text"
                                             className="settings-input"
-                                            value={draft.watchDirectory}
-                                            onChange={(event) => onUpdateDraft(setDraftField('watchDirectory', event.target.value))}
-                                            placeholder={t('automation.watch_directory_placeholder', { defaultValue: 'Choose a folder to monitor...' })}
-                                            style={{ flex: 1 }}
+                                            value={draft.exportConfig.directory}
+                                            onChange={(e) => onUpdateDraft(setExportConfigField('directory', e.target.value))}
+                                            placeholder={t('automation.output_directory_placeholder', { defaultValue: 'Choose export directory...' })}
+                                            style={{ flex: 1, minWidth: 0, height: 36 }}
                                         />
-                                        <button className="btn btn-secondary" onClick={() => onBrowseDirectory('watchDirectory')}>
-                                            <FolderIcon />
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary"
+                                            onClick={() => onBrowseDirectory('directory')}
+                                            title={t('settings.browse', { defaultValue: 'Browse' })}
+                                            style={{ height: 36, padding: '0 12px', display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, whiteSpace: 'nowrap' }}
+                                        >
+                                            <FolderIcon width={15} height={15} />
                                             <span>{t('settings.browse', { defaultValue: 'Browse' })}</span>
                                         </button>
                                     </div>
                                 </SettingsItem>
 
-                                <SettingsItem title={t('automation.recursive', { defaultValue: 'Watch Subfolders' })}>
-                                    <Switch
-                                        checked={draft.recursive}
-                                        onChange={(value) => onUpdateDraft(setDraftField('recursive', value))}
-                                        aria-label={t('automation.recursive', { defaultValue: 'Watch Subfolders' })}
-                                    />
-                                </SettingsItem>
-
-                                <SettingsItem title={t('automation.profile_source', { defaultValue: 'Profile Source' })}>
+                                <SettingsItem title={t('automation.export_format', { defaultValue: 'Export Format' })}>
                                     <Dropdown
-                                        value={draft.profileSource || 'explicit'}
-                                        onChange={(value) => onUpdateDraft(setDraftField('profileSource', value))}
-                                        options={[
-                                            { value: 'explicit', label: t('automation.profile_explicit', { defaultValue: 'Explicit profile' }) },
-                                            { value: 'tag_match', label: t('automation.profile_tag_match', { defaultValue: 'Resolve from Tag automation' }) },
-                                        ]}
-                                        style={{ width: '240px' }}
-                                        aria-label={t('automation.profile_source', { defaultValue: 'Profile Source' })}
+                                        value={draft.exportConfig.format || 'txt'}
+                                        onChange={(value) => onUpdateDraft(setExportConfigField('format', value as ExportFormat))}
+                                        options={exportFormatOptions ?? DEFAULT_EXPORT_FORMAT_OPTIONS}
+                                        style={{ width: '140px' }}
+                                        aria-label={t('automation.export_format', { defaultValue: 'Export Format' })}
                                     />
                                 </SettingsItem>
-
-                                {draft.profileSource !== 'tag_match' && (
-                                    <SettingsItem indent title={t('automation.profile', { defaultValue: 'Configuration Profile' })}>
-                                        <Dropdown
-                                            value={draft.profileId || ''}
-                                            onChange={(value) => onUpdateDraft(setDraftField('profileId', value || undefined))}
-                                            options={profileOptions}
-                                            style={{ width: '220px' }}
-                                            aria-label={t('automation.profile', { defaultValue: 'Configuration Profile' })}
-                                        />
-                                    </SettingsItem>
-                                )}
                             </>
                         )}
                     </div>
                 </div>
-
-                {/* Step 2: THEN - Processing Pipeline */}
-                {isTagRule ? (
-                    <div className="automation-editor-step-card">
-                        <div className="automation-step-header">
-                            <span className="automation-step-badge">2. THEN</span>
-                            <span className="automation-step-title">{t('automation.step_action_pipeline', { defaultValue: 'AI Processing Pipeline' })}</span>
-                            <span className="automation-step-subtitle">{t('automation.step_action_hint', { defaultValue: 'Sequential post-processing steps' })}</span>
-                        </div>
-
-                        <div className="automation-step-content">
-                            <ActionSwitch
-                                label={t('automation.auto_polish', { defaultValue: 'Polish' })}
-                                checked={draft.actions.autoPolish}
-                                onChange={(value) => onUpdateDraft(setActionField('autoPolish', value))}
-                            />
-                            {draft.actions.autoPolish && (
-                                <SettingsItem indent title={t('projects.polish_preset', { defaultValue: 'Polish Preset' })}>
-                                    <Dropdown
-                                        value={draft.stageConfig.polishPresetId || 'general'}
-                                        onChange={(value) => onUpdateDraft(setStageConfigField('polishPresetId', value))}
-                                        options={polishPresetOptions}
-                                        style={{ width: '180px' }}
-                                        aria-label={t('projects.polish_preset', { defaultValue: 'Polish Preset' })}
-                                    />
-                                </SettingsItem>
-                            )}
-
-                            <ActionSwitch
-                                label={t('automation.auto_translate', { defaultValue: 'Translate' })}
-                                checked={draft.actions.autoTranslate}
-                                onChange={(value) => onUpdateDraft(setActionField('autoTranslate', value))}
-                            />
-                            {draft.actions.autoTranslate && (
-                                <SettingsItem indent title={t('translation.target_language', { defaultValue: 'Target Language' })}>
-                                    <Dropdown
-                                        value={draft.stageConfig.translationLanguage || 'en'}
-                                        onChange={(value) => onUpdateDraft(setStageConfigField('translationLanguage', value))}
-                                        options={languageOptions}
-                                        style={{ width: '180px' }}
-                                        aria-label={t('translation.target_language', { defaultValue: 'Target Language' })}
-                                    />
-                                </SettingsItem>
-                            )}
-
-                            <ActionSwitch
-                                label={t('automation.auto_summary', { defaultValue: 'Summarize' })}
-                                checked={draft.actions.autoSummary}
-                                onChange={(value) => onUpdateDraft(setActionField('autoSummary', value))}
-                            />
-                        </div>
-                    </div>
-                ) : (
-                    /* Step 3 (for File Rule): DESTINATION & EXPORT */
-                    <div className="automation-editor-step-card">
-                        <div className="automation-step-header">
-                            <span className="automation-step-badge">2. OUTPUT</span>
-                            <span className="automation-step-title">{t('automation.step_output_export', { defaultValue: 'Destination & Auto-Export' })}</span>
-                            <span className="automation-step-subtitle">{t('automation.step_output_hint', { defaultValue: 'Assign to tags and export files' })}</span>
-                        </div>
-
-                        <div className="automation-step-content">
-                            <SettingsItem title={t('automation.target_tags', { defaultValue: 'Output Tags' })} layout="vertical">
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px', width: '100%' }}>
-                                    {tags.map((option) => (
-                                        <Checkbox
-                                            key={option.value}
-                                            checked={draft.tagIds.includes(option.value)}
-                                            label={option.label}
-                                            onChange={(checked) => onUpdateDraft(setDraftField(
-                                                'tagIds',
-                                                checked
-                                                    ? Array.from(new Set([...draft.tagIds, option.value]))
-                                                    : draft.tagIds.filter((tagId) => tagId !== option.value),
-                                            ))}
-                                        />
-                                    ))}
-                                </div>
-                            </SettingsItem>
-
-                            <SettingsItem title={t('automation.output_directory', { defaultValue: 'Output Directory' })} layout="vertical">
-                                <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
-                                    <input
-                                        className="settings-input"
-                                        value={draft.exportConfig.directory}
-                                        onChange={(event) => onUpdateDraft(setExportConfigField('directory', event.target.value, false))}
-                                        placeholder={t('automation.output_directory_placeholder', { defaultValue: 'Choose where exports should be written...' })}
-                                        style={{ flex: 1 }}
-                                    />
-                                    <button className="btn btn-secondary" onClick={() => onBrowseDirectory('directory')}>
-                                        <FolderIcon />
-                                        <span>{t('settings.browse', { defaultValue: 'Browse' })}</span>
-                                    </button>
-                                </div>
-                            </SettingsItem>
-
-                            <ActionSwitch
-                                label={t('automation.auto_export', { defaultValue: 'Auto-Export' })}
-                                checked={draft.stageConfig.exportEnabled}
-                                onChange={(value) => onUpdateDraft(setStageConfigField('exportEnabled', value))}
-                            />
-
-                            {draft.stageConfig.exportEnabled && (
-                                <>
-                                    <SettingsItem indent title={t('projects.export_prefix', { defaultValue: 'Filename Prefix' })}>
-                                        <input
-                                            className="settings-input"
-                                            value={draft.exportConfig.prefix || ''}
-                                            onChange={(event) => onUpdateDraft(setExportConfigField('prefix', event.target.value))}
-                                            placeholder={t('projects.export_prefix', { defaultValue: 'e.g. [Auto]' })}
-                                            style={{ width: '160px' }}
-                                        />
-                                    </SettingsItem>
-                                    <SettingsItem indent title={t('automation.export_format', { defaultValue: 'Export Format' })}>
-                                        <Dropdown
-                                            value={draft.exportConfig.format}
-                                            onChange={(value) => onUpdateDraft(setExportConfigField('format', value as ExportFormat))}
-                                            options={exportFormatOptions}
-                                            style={{ width: '160px' }}
-                                            aria-label={t('automation.export_format', { defaultValue: 'Export Format' })}
-                                        />
-                                    </SettingsItem>
-                                    <SettingsItem indent title={t('automation.export_mode', { defaultValue: 'Export Mode' })}>
-                                        <Dropdown
-                                            value={draft.exportConfig.mode}
-                                            onChange={(value) => onUpdateDraft(setExportConfigField('mode', value as ExportMode))}
-                                            options={exportModeOptions}
-                                            style={{ width: '160px' }}
-                                            aria-label={t('automation.export_mode', { defaultValue: 'Export Mode' })}
-                                        />
-                                    </SettingsItem>
-                                </>
-                            )}
-                        </div>
-                    </div>
-                )}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingTop: '8px' }}>
-                <button className="btn" onClick={onCancel}>{t('common.cancel')}</button>
-                <button className="btn btn-primary" onClick={onSave}>{t('common.save')}</button>
+                <button type="button" className="btn" onClick={onCancel}>{t('common.cancel')}</button>
+                <button type="button" className="btn btn-primary" onClick={onSave}>{t('common.save')}</button>
             </div>
         </div>
     );

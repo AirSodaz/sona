@@ -1,3 +1,6 @@
+use sona_core::project::{
+    ProjectCreateInput, ProjectPipelineConfig, ProjectRecord, ProjectUpdateInput,
+};
 use sona_core::tag::TagError;
 use sona_core::tag::{TagCreateInput, TagListOptions, TagRecord, TagUpdateInput};
 use sona_runtime_fs::{SystemClock, UuidGenerator};
@@ -16,6 +19,121 @@ where
     with_sqlite_context(app, move |context| {
         let adapter = context.tag_adapter(Arc::new(UuidGenerator), Arc::new(SystemClock));
         task(&adapter)
+    })
+    .await
+}
+
+fn project_from_tag(tag: TagRecord, pipeline: Option<ProjectPipelineConfig>) -> ProjectRecord {
+    ProjectRecord {
+        id: tag.id,
+        name: tag.name,
+        description: tag.description,
+        icon: (!tag.icon.is_empty()).then_some(tag.icon),
+        color: (!tag.color.is_empty()).then_some(tag.color),
+        sort_order: tag.sort_order,
+        created_at: tag.created_at,
+        updated_at: tag.updated_at,
+        pipeline,
+    }
+}
+
+pub async fn list_projects<R: Runtime>(app: &AppHandle<R>) -> Result<Vec<ProjectRecord>, String> {
+    run_tag_adapter(app, |adapter| {
+        adapter
+            .list_tags(TagListOptions::default())?
+            .into_iter()
+            .map(|tag| {
+                let pipeline = adapter.get_project_pipeline(&tag.id)?;
+                Ok(project_from_tag(tag, pipeline))
+            })
+            .collect()
+    })
+    .await
+}
+
+pub async fn create_project<R: Runtime>(
+    app: &AppHandle<R>,
+    input: ProjectCreateInput,
+) -> Result<ProjectRecord, String> {
+    run_tag_adapter(app, move |adapter| {
+        let pipeline = input.pipeline;
+        let tag = adapter.create_tag(TagCreateInput {
+            name: input.name,
+            description: input.description,
+            icon: input.icon,
+            color: input.color,
+        })?;
+        if let Some(value) = pipeline.as_ref() {
+            adapter.set_project_pipeline(&tag.id, value)?;
+        }
+        Ok(project_from_tag(tag, pipeline))
+    })
+    .await
+}
+
+pub async fn update_project<R: Runtime>(
+    app: &AppHandle<R>,
+    project_id: String,
+    updates: ProjectUpdateInput,
+) -> Result<Option<ProjectRecord>, String> {
+    run_tag_adapter(app, move |adapter| {
+        let pipeline_update = updates.pipeline;
+        let tag = adapter.update_tag(
+            &project_id,
+            TagUpdateInput {
+                name: updates.name,
+                description: updates.description,
+                icon: updates.icon,
+                color: updates.color,
+            },
+        )?;
+        let Some(tag) = tag else {
+            return Ok(None);
+        };
+        if let Some(value) = pipeline_update.as_ref() {
+            adapter.set_project_pipeline(&project_id, value)?;
+        }
+        let pipeline = if pipeline_update.is_some() {
+            pipeline_update
+        } else {
+            adapter.get_project_pipeline(&project_id)?
+        };
+        Ok(Some(project_from_tag(tag, pipeline)))
+    })
+    .await
+}
+
+pub async fn delete_project<R: Runtime>(
+    app: &AppHandle<R>,
+    project_id: String,
+) -> Result<(), String> {
+    run_tag_adapter(app, move |adapter| adapter.delete_tag(&project_id)).await
+}
+
+pub async fn delete_project_with_cascade<R: Runtime>(
+    app: &AppHandle<R>,
+    project_id: String,
+    cascade_action: String,
+) -> Result<(), String> {
+    run_tag_adapter(app, move |adapter| {
+        adapter.delete_project_with_cascade(&project_id, &cascade_action)
+    })
+    .await
+}
+
+pub async fn reorder_projects<R: Runtime>(
+    app: &AppHandle<R>,
+    project_ids: Vec<String>,
+) -> Result<Vec<ProjectRecord>, String> {
+    run_tag_adapter(app, move |adapter| {
+        adapter
+            .reorder_tags(project_ids)?
+            .into_iter()
+            .map(|tag| {
+                let pipeline = adapter.get_project_pipeline(&tag.id)?;
+                Ok(project_from_tag(tag, pipeline))
+            })
+            .collect()
     })
     .await
 }

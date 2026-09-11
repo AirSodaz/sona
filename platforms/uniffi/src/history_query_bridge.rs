@@ -355,6 +355,7 @@ mod tests {
                 segments: segments.clone(),
                 duration: 1.5,
                 tag_ids: Vec::new(),
+                project_id: None,
                 audio_bytes: Some(vec![1, 2, 3]),
                 native_audio_path: None,
                 audio_extension: Some("wav".to_string()),

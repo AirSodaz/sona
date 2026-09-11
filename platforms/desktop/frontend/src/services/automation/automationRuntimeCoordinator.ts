@@ -1,13 +1,11 @@
 import type {
   AutomationProcessedEntry,
   AutomationProfile,
-  AutomationResolutionSnapshot,
   AutomationRule,
   AutomationRuntimeBlockReason,
   AutomationRuntimeState,
-  AutomationStageConfig,
 } from '../../types/automation';
-import type { AppConfig } from '../../types/config';
+import type { ProjectPipelineConfig } from '../../types/project';
 import type {
   AutomationRuntimeCandidatePayload,
   AutomationRuntimePathCollectionResult,
@@ -19,7 +17,7 @@ import type {
   AutomationSessionNotification,
 } from './automationSessionState';
 import { resolveEffectiveConfig } from '../effectiveConfigService';
-import { resolveAutomationQueueSnapshot } from './automationConfigResolver';
+import { resolveItemPipeline } from '../projectPipeline';
 import { isPathInsideDirectory, normalizeAutomationPath } from '../automation/automationService';
 import {
   collectAutomationRuntimeRulePaths,
@@ -148,6 +146,7 @@ export class AutomationRuntimeCoordinator {
     payload: AutomationRuntimeCandidatePayload,
     options?: HandleAutomationRuntimeCandidateOptions,
   ): Promise<AutomationRuntimeCandidateHandleResult> => {
+    void options;
     const occurredAt = Date.now();
     const initialState = this.ports.getState();
     const rule = initialState.rules.find((item) => item.id === payload.ruleId);
@@ -204,94 +203,29 @@ export class AutomationRuntimeCoordinator {
       return { status: 'blocked', reason: 'already_pending' };
     }
 
-    const tagIds = latestRule.tagIds ?? (
-      latestRule.projectId && latestRule.projectId !== 'inbox' && latestRule.projectId !== 'none'
-        ? [latestRule.projectId]
-        : []
-    );
-    const projectStore = this.ports.useProjectStore.getState();
-    const tags = tagIds
-      .map((tagId) => projectStore.getProjectById(tagId))
-      .filter((tag): tag is NonNullable<typeof tag> => !!tag);
-    if (tags.length !== tagIds.length) {
-      this.ports.setState((current) => {
-        if (options?.suppressFailureNotification) {
-          const runtimeStatesWithError = {
-            ...current.runtimeStates,
-            [payload.ruleId]: this.ports.deriveRuntimeState(
-              payload.ruleId,
-              current.processedEntries,
-              current.runtimeStates[payload.ruleId],
-              {
-                status: 'error',
-                lastResult: 'error',
-                lastResultMessage: 'Tag not found.',
-                lastProcessedFilePath: payload.filePath,
-              },
-            ),
-          };
-
-          return {
-            runtimeStates: this.ports.applyRuntimeBlockState(
-              {
-                processedEntries: current.processedEntries,
-                runtimeStates: runtimeStatesWithError,
-              },
-              {
-                ruleId: payload.ruleId,
-                filePath: payload.filePath,
-                reason: 'project_missing',
-                occurredAt,
-              },
-            ).runtimeStates,
-          };
-        }
-
-        const nextFailureState = this.ports.applyRuntimeFailureState(current, {
-          ruleId: payload.ruleId,
-          ruleName: latestRule.name,
-          message: 'Tag not found.',
-          filePath: payload.filePath,
-        });
-
-        return {
-          ...nextFailureState,
-          ...this.ports.applyRuntimeBlockState(
-            {
-              processedEntries: current.processedEntries,
-              runtimeStates: nextFailureState.runtimeStates,
-            },
-            {
-              ruleId: payload.ruleId,
-              filePath: payload.filePath,
-              reason: 'project_missing',
-              occurredAt,
-            },
-          ),
-        };
-      });
-      return { status: 'blocked', reason: 'project_missing' };
-    }
-
     this.pendingFingerprints.add(pendingKey);
-    let effectiveConfig: AppConfig;
-    let resolvedStageConfig: AutomationStageConfig;
-    let automationResolutionSnapshot: AutomationResolutionSnapshot;
-    try {
-      const snapshot = resolveAutomationQueueSnapshot({
-        globalConfig: this.ports.useConfigStore.getState().config,
-        profiles: latestState.profiles,
-        rules: latestState.rules,
-        fileRule: latestRule,
-        tagIds,
-      });
-      effectiveConfig = snapshot.config;
-      resolvedStageConfig = snapshot.stageConfig;
-      automationResolutionSnapshot = snapshot.resolution;
-    } catch (error) {
-      this.pendingFingerprints.delete(pendingKey);
-      throw error;
-    }
+    const effectiveConfig = this.ports.useConfigStore.getState().config;
+    const rawProjectId = latestRule.projectId ?? (latestRule.tagIds?.[0] || null);
+    const projectId = rawProjectId && rawProjectId !== 'inbox' && rawProjectId !== 'none'
+      ? rawProjectId : null;
+    const pipeline = resolveItemPipeline(projectId, this.ports.useProjectStore.getState().projects, effectiveConfig);
+    const hasExportDir = Boolean(latestRule.exportConfig?.directory);
+    const ruleActionPolish = latestRule.actions?.autoPolish ?? latestRule.stageConfig?.autoPolish;
+    const ruleActionTranslate = latestRule.actions?.autoTranslate ?? latestRule.stageConfig?.autoTranslate;
+    const effectivePipeline = {
+      ...pipeline,
+      ...(ruleActionPolish !== undefined ? { autoPolish: ruleActionPolish } : {}),
+      ...(ruleActionTranslate !== undefined ? { autoTranslate: ruleActionTranslate } : {}),
+      ...(latestRule.stageConfig?.polishPresetId ? { polishPresetId: latestRule.stageConfig.polishPresetId } : {}),
+      ...(latestRule.stageConfig?.translationLanguage ? { targetLanguage: latestRule.stageConfig.translationLanguage } : {}),
+      ...(hasExportDir
+        ? {
+          autoExport: true,
+          exportDirectory: latestRule.exportConfig.directory,
+          exportFormat: (latestRule.exportConfig.format as ProjectPipelineConfig['exportFormat']) || pipeline.exportFormat || 'txt',
+        }
+        : {}),
+    };
 
     try {
       this.ports.useBatchQueueStore.getState().addFiles([payload.filePath], {
@@ -299,16 +233,15 @@ export class AutomationRuntimeCoordinator {
         automationRuleId: latestRule.id,
         automationRuleName: latestRule.name,
         resolvedConfigSnapshot: effectiveConfig,
-        exportConfig: latestRule.stageConfig.exportEnabled ? latestRule.exportConfig : null,
-        stageConfig: resolvedStageConfig,
-        automationResolutionSnapshot,
+        projectId,
+        pipelineSnapshot: effectivePipeline,
+        exportConfig: latestRule.exportConfig,
         sourceFingerprint: payload.sourceFingerprint,
-        tagIds,
         fileStat: {
           size: payload.size,
           mtimeMs: payload.mtimeMs,
         },
-        exportFileNamePrefix: latestRule.exportConfig.prefix || '',
+        exportFileNamePrefix: effectivePipeline.exportFileNamePrefix || latestRule.exportConfig?.prefix || '',
       });
     } catch (error) {
       this.pendingFingerprints.delete(pendingKey);

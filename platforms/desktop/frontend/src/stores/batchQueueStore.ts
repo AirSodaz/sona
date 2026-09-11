@@ -30,6 +30,7 @@ import {
 import { useTranscriptSessionStore } from './transcriptSessionStore';
 import { useTranscriptStore, DEFAULT_SESSION_DATA } from './transcriptStore';
 import type { RecoveredQueueItem } from '../types/recovery';
+import { resolveItemPipeline, type EffectivePipelineSnapshot } from '../services/projectPipeline';
 import { historyService } from '../services/historyService';
 import {
     applySavedBatchHistoryToQueue,
@@ -46,6 +47,7 @@ interface AddFilesOptions {
     automationResolutionSnapshot?: AutomationResolutionSnapshot;
     sourceFingerprint?: string;
     projectId?: string | null;
+    pipelineSnapshot?: EffectivePipelineSnapshot;
     tagIds?: string[];
     fileStat?: {
         size: number;
@@ -108,6 +110,8 @@ interface BatchQueueState {
      * @param message Error message.
      */
     setItemError: (id: string, message: string) => void;
+    /** Sets an item's target project and refreshes its pipeline snapshot. */
+    setItemProjectId: (id: string, projectId: string | null) => void;
     /**
      * Removes an item from the queue.
      *
@@ -151,9 +155,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
     addFiles: (filePaths, options) => {
         const projectStore = useProjectStore.getState();
-        const activeTagIds = options?.tagIds
-            ?? (options?.projectId ? [options.projectId] : projectStore.activeProjectId ? [projectStore.activeProjectId] : []);
-        const activeProjectId = activeTagIds[0] ?? null;
+        const activeProjectId = options?.projectId ?? projectStore.activeProjectId ?? null;
         const resolvedConfigSnapshot = options?.resolvedConfigSnapshot
             ?? getEffectiveConfigSnapshot();
         const exportFileNamePrefix = options?.exportFileNamePrefix ?? '';
@@ -169,7 +171,10 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 segments: [],
                 audioUrl: null,
                 projectId: activeProjectId,
-                tagIds: activeTagIds,
+                pipelineSnapshot: options?.pipelineSnapshot,
+                // New queue entries have a single canonical project assignment.
+                // Legacy tagIds are only read when restoring pre-migration entries.
+                tagIds: undefined,
                 origin: options?.origin || 'manual',
                 automationRuleId: options?.automationRuleId,
                 automationRuleName: options?.automationRuleName,
@@ -270,7 +275,6 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 patchQueueItemTask(item, {
                     historyId: historyItem.id,
                     projectId: historyItem.projectId ?? item.projectId,
-                    tagIds: historyItem.tagIds ?? item.tagIds ?? [],
                     title: historyItem.title,
                 });
 
@@ -291,7 +295,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 if (get().activeItemId === id) {
                     transcriptStore.rekeyCurrentSummaryState(savedMeta.historyId);
                     transcriptStore.setAudioUrl(savedMeta.audioUrl ?? null);
-                    void useProjectStore.getState().setActiveProjectId(savedMeta.tagIds?.[0] ?? savedMeta.projectId);
+                    void useProjectStore.getState().setActiveProjectId(savedMeta.projectId ?? null);
                 }
             },
             setItemExportPath: (id, exportPath) => {
@@ -349,10 +353,26 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
                 }
             });
             useTranscriptStore.getState().setAudioUrl(audioUrl);
-            void useProjectStore.getState().setActiveProjectId(item.tagIds?.[0] ?? item.projectId);
+            void useProjectStore.getState().setActiveProjectId(item.projectId);
         } else if (id === null) {
             clearActiveTranscriptSession({ clearAudio: true, title: '' });
         }
+    },
+    setItemProjectId: (id, projectId) => {
+        set((state) => {
+            const item = state.queueItems.find((queueItem) => queueItem.id === id);
+            if (!item || item.status === 'processing' || item.status === 'complete') {
+                return state;
+            }
+            const projects = useProjectStore.getState().projects;
+            const config = item.resolvedConfigSnapshot ?? getEffectiveConfigSnapshot();
+            const pipelineSnapshot = resolveItemPipeline(projectId, projects, config);
+            return {
+                queueItems: state.queueItems.map((queueItem) => (
+                    queueItem.id === id ? { ...queueItem, projectId, pipelineSnapshot } : queueItem
+                )),
+            };
+        });
     },
 
     updateItemStatus: (id, status, progress, lastKnownStage) => {

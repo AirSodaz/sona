@@ -17,6 +17,7 @@ fn sample_history_item(id: &str, status: HistoryItemStatus) -> HistoryItemRecord
         icon: None,
         kind: HistoryItemKind::Recording,
         search_content: String::new(),
+        project_id: Some(id.to_string()),
         tag_ids: vec![id.to_string()],
         deleted_at: None,
         status,

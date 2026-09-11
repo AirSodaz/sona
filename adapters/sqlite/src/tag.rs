@@ -1,4 +1,4 @@
-﻿use crate::DatabaseError;
+use crate::DatabaseError;
 use crate::ports::Database as DatabasePort;
 use rusqlite::OptionalExtension;
 use rusqlite::types::Type;
@@ -7,6 +7,7 @@ use sona_application::tag::TagRepositoryService;
 use sona_core::dashboard::error::DashboardError;
 use sona_core::dashboard::ports::TagRepository;
 use sona_core::ports::time::ClockPort;
+use sona_core::project::ProjectPipelineConfig;
 use sona_core::sync::SyncEntityKind;
 use sona_core::tag::{
     ACTIVE_TAG_SETTINGS_KEY, ActiveTagSelection, TagCreateInput, TagError, TagIdGenerator,
@@ -91,6 +92,30 @@ where
         self.service().delete_tag(tag_id)
     }
 
+    pub fn delete_project_with_cascade(
+        &self,
+        project_id: &str,
+        cascade_action: &str,
+    ) -> Result<(), TagError> {
+        self.repository.get_db().and_then(|db| db.with_transaction(|tx| {
+            if cascade_action == "deleteItems" {
+                tx.execute("UPDATE history_items SET project_id = NULL, deleted_at = COALESCE(deleted_at, ?1) WHERE project_id = ?2", rusqlite::params![legacy_change_time::now_ms() as i64, project_id])?;
+            } else {
+                tx.execute("UPDATE history_items SET project_id = NULL WHERE project_id = ?1", [project_id])?;
+            }
+            tx.execute("DELETE FROM project_pipelines WHERE project_id = ?1", [project_id])?;
+            tx.execute("UPDATE app_settings SET value = NULL WHERE key = 'sona-active-project-id' AND (value = ?1 OR json_extract(value, '$') = ?1)", [project_id])?;
+            tx.execute("DELETE FROM tags WHERE id = ?1", [project_id])?;
+            record_local_delete_in_transaction(
+                tx,
+                SyncEntityKind::Tag,
+                project_id,
+                legacy_change_time::now_ms() as i64 as u64,
+            )?;
+            Ok(())
+        })).map_err(|error| TagError::Repository(error.to_string()))
+    }
+
     pub fn reorder_tags(&self, tag_ids: Vec<String>) -> Result<Vec<TagRecord>, TagError> {
         self.service().reorder_tags(tag_ids)
     }
@@ -101,6 +126,66 @@ where
 
     pub fn set_active_tag_id(&self, tag_id: Option<String>) -> Result<(), TagError> {
         self.service().set_active_tag_id(tag_id)
+    }
+
+    /// Loads the deterministic pipeline attached to a project. Pipelines are
+    /// stored separately so legacy tag/project rows remain schema-compatible.
+    pub fn get_project_pipeline(
+        &self,
+        project_id: &str,
+    ) -> Result<Option<ProjectPipelineConfig>, TagError> {
+        self.repository
+            .get_db()
+            .and_then(|db| {
+                db.with_read_connection(|conn| {
+                    let json: Option<String> = conn
+                        .query_row(
+                            "SELECT pipeline_json FROM project_pipelines WHERE project_id = ?1",
+                            [project_id],
+                            |row| row.get(0),
+                        )
+                        .optional()?;
+                    json.map(|value| {
+                        serde_json::from_str(&value).map_err(|error| {
+                            DatabaseError::QueryError(rusqlite::Error::ToSqlConversionFailure(
+                                Box::new(error),
+                            ))
+                        })
+                    })
+                    .transpose()
+                })
+            })
+            .map_err(|error| TagError::Repository(error.to_string()))
+    }
+
+    /// Persists (or replaces) a project's pipeline snapshot.
+    pub fn set_project_pipeline(
+        &self,
+        project_id: &str,
+        pipeline: &ProjectPipelineConfig,
+    ) -> Result<(), TagError> {
+        let payload = serde_json::to_string(pipeline)
+            .map_err(|error| TagError::Repository(error.to_string()))?;
+        let now_ms = legacy_change_time::now_ms() as i64;
+        self.repository.get_db()
+            .and_then(|db| db.with_transaction(|tx| {
+                tx.execute(
+                    "INSERT INTO project_pipelines (project_id, pipeline_json, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(project_id) DO UPDATE SET pipeline_json = excluded.pipeline_json, updated_at = excluded.updated_at",
+                    rusqlite::params![project_id, payload, now_ms],
+                )?;
+                let val = serde_json::to_value(pipeline)
+                    .map_err(|e| DatabaseError::QueryError(rusqlite::Error::ToSqlConversionFailure(Box::new(e))))?;
+                record_local_field_change_in_transaction(
+                    tx,
+                    SyncEntityKind::Tag,
+                    project_id,
+                    "pipeline",
+                    val,
+                    now_ms as u64,
+                )?;
+                Ok(())
+            }))
+            .map_err(|error| TagError::Repository(error.to_string()))
     }
 
     fn service(&self) -> TagRepositoryService<'_> {

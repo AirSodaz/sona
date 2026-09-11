@@ -21,6 +21,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { restrictToVerticalAxis, restrictToWindowEdges } from '@dnd-kit/modifiers';
 import type { ProjectRecord } from '../../types/project';
+import { Zap, MoreHorizontal } from 'lucide-react';
 import { PlusCircleIcon } from '../Icons';
 import { ALL_ITEMS_SCOPE, TRASH_SCOPE, UNTAGGED_SCOPE } from './constants';
 import type { ProjectBrowseScope, TranslationFn } from './types';
@@ -104,6 +105,7 @@ function SortableProjectItem({
       <button
         type="button"
         className={`projects-rail-item ${isActive ? 'active' : ''} ${isContextMenuOpen ? 'context-menu-active' : ''}`}
+        style={project.color ? ({ '--item-accent-color': project.color } as React.CSSProperties) : undefined}
         onClick={() => void onSwitchScope(project.id)}
         {...attributes}
         {...listeners}
@@ -114,16 +116,32 @@ function SortableProjectItem({
           onOpenContextMenu(project.id, createPointerContextMenuRequest(event));
         }}
         aria-pressed={isActive}
+        title={project.description ? `${project.name}\n${project.description}` : project.name}
       >
         <RailItemContent
           icon={renderScopeIcon(project.id, project)}
           title={project.name}
-          description={project.description || t('projects.items_title', {
-            count: projectCount,
-            defaultValue: `${projectCount} items`,
-          })}
         />
-        <span className="projects-rail-count">{projectCount}</span>
+        <div className="projects-rail-actions">
+          {project.pipeline?.enabled && (
+            <span className="projects-rail-pipeline-badge" title={t('projects.pipeline_enabled', { defaultValue: '流水线已启用' })}>
+              <Zap size={13} />
+            </span>
+          )}
+          <span className="projects-rail-count">{projectCount}</span>
+          <button
+            type="button"
+            className="projects-rail-menu-btn"
+            aria-label={t('common.more_options', { defaultValue: 'More options' })}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onOpenContextMenu(project.id, createPointerContextMenuRequest(event));
+            }}
+          >
+            <MoreHorizontal size={14} />
+          </button>
+        </div>
       </button>
     </div>
   );
@@ -197,8 +215,8 @@ export function ProjectsRail({
             type="button"
             className="btn btn-icon projects-rail-create"
             onClick={onOpenCreateModal}
-            aria-label={t('projects.new_tag_button', { defaultValue: 'New Tag' })}
-            data-tooltip={t('projects.new_tag_button', { defaultValue: 'New Tag' })}
+            aria-label={t('projects.new_project_button', { defaultValue: 'New Project' })}
+            data-tooltip={t('projects.new_project_button', { defaultValue: 'New Project' })}
             data-tooltip-pos="bottom"
           >
             <PlusCircleIcon width={18} height={18} />
@@ -209,46 +227,75 @@ export function ProjectsRail({
       <div className="projects-rail-scopes">
         <button
           type="button"
-          className={`projects-rail-item ${isAllItemsScope ? 'active' : ''}`}
+          className={`projects-rail-item ${isAllItemsScope ? 'active' : ''} ${activeContextId === 'workspace:scope:all' ? 'context-menu-active' : ''}`}
           onClick={() => void onSwitchScope(ALL_ITEMS_SCOPE)}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onOpenProjectContextMenu(ALL_ITEMS_SCOPE, createPointerContextMenuRequest(event));
+          }}
           aria-pressed={isAllItemsScope}
         >
           <RailItemContent
             icon={renderScopeIcon(ALL_ITEMS_SCOPE)}
             title={t('projects.all_items', { defaultValue: 'All Items' })}
           />
-          <span className="projects-rail-count">{historyItemsCount}</span>
+          <div className="projects-rail-actions">
+            <span className="projects-rail-count">{historyItemsCount}</span>
+          </div>
         </button>
 
         <button
           type="button"
-          className={`projects-rail-item ${isInboxScope ? 'active' : ''}`}
-          onClick={() => void onSwitchScope(UNTAGGED_SCOPE)}
-          aria-pressed={isInboxScope}
-        >
-          <RailItemContent
-            icon={renderScopeIcon(UNTAGGED_SCOPE)}
-            title={t('projects.untagged', { defaultValue: 'Untagged' })}
-          />
-          <span className="projects-rail-count">{inboxCount}</span>
-        </button>
-
-        <button
-          type="button"
-          className={`projects-rail-item ${isTrashScope ? 'active' : ''}`}
+          className={`projects-rail-item ${isTrashScope ? 'active' : ''} ${activeContextId === 'workspace:scope:trash' ? 'context-menu-active' : ''}`}
           onClick={() => void onSwitchScope(TRASH_SCOPE)}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onOpenProjectContextMenu(TRASH_SCOPE, createPointerContextMenuRequest(event));
+          }}
           aria-pressed={isTrashScope}
         >
           <RailItemContent
             icon={renderScopeIcon(TRASH_SCOPE)}
             title={t('projects.trash', { defaultValue: 'Trash' })}
           />
-          <span className="projects-rail-count">{trashCount}</span>
+          <div className="projects-rail-actions">
+            <span className="projects-rail-count">{trashCount}</span>
+          </div>
         </button>
       </div>
 
       <div className="projects-rail-projects">
-        <div className="projects-rail-list">
+        <div
+          className="projects-rail-list"
+          onContextMenu={(event) => {
+            if (event.target === event.currentTarget) {
+              event.preventDefault();
+              onOpenProjectContextMenu('rail_empty', createPointerContextMenuRequest(event));
+            }
+          }}
+        >
+          <button
+            type="button"
+            className={`projects-rail-item ${isInboxScope ? 'active' : ''} ${activeContextId === 'workspace:scope:untagged' ? 'context-menu-active' : ''}`}
+            onClick={() => void onSwitchScope(UNTAGGED_SCOPE)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onOpenProjectContextMenu(UNTAGGED_SCOPE, createPointerContextMenuRequest(event));
+            }}
+            aria-pressed={isInboxScope}
+          >
+            <RailItemContent
+              icon={renderScopeIcon(UNTAGGED_SCOPE)}
+              title={t('projects.inbox', { defaultValue: 'Inbox' })}
+            />
+            <div className="projects-rail-actions">
+              <span className="projects-rail-count">{inboxCount}</span>
+            </div>
+          </button>
+
           {projects.length === 0 && (
             <div className="projects-rail-empty">
               {t('projects.no_tags', { defaultValue: 'No tags yet.' })}
@@ -295,16 +342,15 @@ export function ProjectsRail({
                   <button
                     type="button"
                     className={`projects-rail-item ${browseProjectId === activeId ? 'active' : ''}`}
+                    style={activeDragProject?.color ? ({ '--item-accent-color': activeDragProject.color } as React.CSSProperties) : undefined}
                   >
                     <RailItemContent
                       icon={renderScopeIcon(activeId, activeDragProject)}
                       title={activeDragProject?.name || ''}
-                      description={activeDragProject?.description || t('projects.items_title', {
-                        count: itemCounts.get(activeId) || 0,
-                        defaultValue: `${itemCounts.get(activeId) || 0} items`,
-                      })}
                     />
-                    <span className="projects-rail-count">{itemCounts.get(activeId) || 0}</span>
+                    <div className="projects-rail-actions">
+                      <span className="projects-rail-count">{itemCounts.get(activeId) || 0}</span>
+                    </div>
                   </button>
                 </div>
               ) : null}

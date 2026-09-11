@@ -114,7 +114,7 @@ impl DesktopSyncManager {
         let application = Arc::new(SyncApplication::new(
             Arc::new(JsonFileSyncConfigStore::new(config_path(app)?)),
             Arc::new(
-                crate::platform::database::sqlite_application_context(app)
+                crate::platform::database::try_sqlite_application_context(app)?
                     .sync_repository_factory(Arc::new(SystemClock)),
             ),
             SyncProviderRegistry::new([

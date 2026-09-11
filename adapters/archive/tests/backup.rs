@@ -62,6 +62,7 @@ fn history_item() -> HistoryItemRecord {
         kind: HistoryItemKind::Recording,
         search_content: "hello".to_string(),
         tag_ids: vec!["tag-1".to_string()],
+        project_id: Some("tag-1".to_string()),
         deleted_at: None,
         status: HistoryItemStatus::Complete,
         draft_source: None,

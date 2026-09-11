@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ProjectRecord } from '../../../types/project';
+import { DEFAULT_PROJECT_PIPELINE, type ProjectPipelineConfig, type ProjectRecord } from '../../../types/project';
 import type { TranslationFn } from '../types';
 import { useDialogStore } from '../../../stores/dialogStore';
 
@@ -21,13 +21,14 @@ export function useProjectSettingsDraft({
   const [draftDescription, setDraftDescription] = useState('');
   const [draftIcon, setDraftIcon] = useState('');
   const [draftColor, setDraftColor] = useState('#64748b');
-
+  const [draftPipeline, setDraftPipeline] = useState<ProjectPipelineConfig | undefined>(undefined);
   const resetProjectSettingsDraft = useCallback((project: ProjectRecord | null = browseProject) => {
     if (!project) {
       setDraftName('');
       setDraftDescription('');
       setDraftIcon('');
       setDraftColor('#64748b');
+      setDraftPipeline(undefined);
       return;
     }
 
@@ -35,6 +36,7 @@ export function useProjectSettingsDraft({
     setDraftDescription(project.description);
     setDraftIcon(project.icon || '');
     setDraftColor(project.color || '#64748b');
+    setDraftPipeline(project.pipeline ? { ...DEFAULT_PROJECT_PIPELINE, ...project.pipeline } : undefined);
   }, [browseProject]);
 
   useEffect(() => {
@@ -59,16 +61,18 @@ export function useProjectSettingsDraft({
       description: draftDescription,
       icon: draftIcon,
       color: draftColor || '#64748b',
+      pipeline: draftPipeline ?? undefined,
     };
     const savedProject = {
       name: browseProject.name,
       description: browseProject.description,
       icon: browseProject.icon || '',
       color: browseProject.color || '#64748b',
+      pipeline: browseProject.pipeline ? { ...DEFAULT_PROJECT_PIPELINE, ...browseProject.pipeline } : undefined,
     };
 
     return JSON.stringify(currentDraft) !== JSON.stringify(savedProject);
-  }, [browseProject, draftColor, draftDescription, draftIcon, draftName]);
+  }, [browseProject, draftColor, draftDescription, draftIcon, draftName, draftPipeline]);
 
   const confirmDiscardProjectSettingsChanges = useCallback(async () => {
     if (!isSettingsOpen || !isProjectSettingsDirty) {
@@ -119,6 +123,8 @@ export function useProjectSettingsDraft({
     setDraftIcon,
     draftColor,
     setDraftColor,
+    draftPipeline,
+    setDraftPipeline,
     isProjectSettingsDirty,
     resetProjectSettingsDraft,
     confirmDiscardProjectSettingsChanges,

@@ -69,7 +69,7 @@ export function buildWorkspaceViewModel({
   });
 
   const moveOptions = [
-    { value: UNTAGGED_SCOPE, label: t('projects.untagged', { defaultValue: 'Untagged' }) },
+    { value: UNTAGGED_SCOPE, label: t('projects.inbox', { defaultValue: 'Inbox' }) },
     ...projects.map((project) => ({ value: project.id, label: project.name })),
   ];
 
@@ -121,7 +121,7 @@ export function buildWorkspaceViewModel({
     ? t('projects.all_items', { defaultValue: 'All Items' })
     : browseScope === TRASH_SCOPE
     ? t('projects.trash', { defaultValue: 'Trash' })
-    : browseProject?.name || t('projects.untagged', { defaultValue: 'Untagged' });
+    : browseProject?.name || t('projects.inbox', { defaultValue: 'Inbox' });
   const headerDescription = isAllItemsScope
     ? t('projects.all_items_description', {
       defaultValue: 'Browse everything across Inbox and your projects.',
@@ -132,11 +132,11 @@ export function buildWorkspaceViewModel({
     })
     : browseProject
     ? browseProject.description
-    : t('projects.untagged_description', {
-      defaultValue: 'Untagged collects recordings and imports without a tag.',
+    : t('projects.inbox_description', {
+      defaultValue: 'Inbox collects recordings and imports without a project.',
     });
   const showWorkflowActions = !isAllItemsScope && browseScope !== TRASH_SCOPE;
-  const headerIcon = renderScopeIcon(browseScope, browseProject);
+  const headerIcon = renderScopeIcon(browseScope, browseProject, { size: 'lg', showBackground: true });
   const searchInputLabel = isAllItemsScope
     ? t('projects.search_placeholder_all_items', { defaultValue: 'Search All Items...' })
     : browseScope === TRASH_SCOPE
@@ -146,7 +146,7 @@ export function buildWorkspaceViewModel({
       project: browseProject.name,
       defaultValue: 'Search in {{project}}...',
     })
-    : t('projects.search_placeholder_untagged', { defaultValue: 'Search Untagged...' });
+    : t('projects.search_placeholder_inbox', { defaultValue: 'Search Inbox...' });
   const summaryChips: ProjectSummaryChip[] = [
     {
       key: 'items',

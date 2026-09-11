@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ProjectRecord, ProjectUpdateInput } from '../types/project';
+import type { ProjectPipelineConfig, ProjectRecord, ProjectUpdateInput } from '../types/project';
 import { historyService } from '../services/historyService';
 import { projectService } from '../services/projectService';
 import { extractErrorMessage } from '../utils/errorUtils';
@@ -20,7 +20,9 @@ interface ProjectState {
   loadProjects: () => Promise<void>;
   createProject: (input: CreateProjectInput) => Promise<ProjectRecord | null>;
   updateProject: (id: string, updates: ProjectUpdateInput) => Promise<void>;
-  deleteProject: (id: string) => Promise<void>;
+  updateProjectPipeline: (id: string, pipeline: ProjectPipelineConfig) => Promise<void>;
+  deleteProject: (id: string, cascadeAction?: 'moveToInbox' | 'deleteItems') => Promise<void>;
+  moveItemsToProject: (historyIds: string[], projectId: string | null) => Promise<void>;
   setActiveProjectId: (projectId: string | null) => Promise<void>;
   assignHistoryItems: (historyIds: string[], projectId: string | null) => Promise<void>;
   reorderProjects: (projectIds: string[]) => Promise<void>;
@@ -87,8 +89,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }));
   },
 
-  deleteProject: async (id) => {
-    await projectService.delete(id);
+  updateProjectPipeline: async (id, pipeline) => {
+    const updated = await projectService.updatePipeline(id, pipeline);
+    if (!updated) return;
+    set((state) => ({ projects: state.projects.map((item) => item.id === id ? updated : item) }));
+  },
+
+  deleteProject: async (id, cascadeAction = 'moveToInbox') => {
+    if (cascadeAction === 'moveToInbox') {
+      await projectService.delete(id);
+    } else {
+      await projectService.delete(id, cascadeAction);
+    }
 
     const activeProjectId = get().activeProjectId === id ? null : get().activeProjectId;
     if (get().activeProjectId === id) {
@@ -99,6 +111,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       projects: state.projects.filter((item) => item.id !== id),
       activeProjectId,
     }));
+  },
+
+  moveItemsToProject: async (historyIds, projectId) => {
+    if (historyIds.length === 0) return;
+    await historyService.updateProjectAssignments(historyIds, projectId);
   },
 
   setActiveProjectId: async (projectId) => {

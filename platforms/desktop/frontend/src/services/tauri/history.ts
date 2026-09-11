@@ -48,12 +48,10 @@ type CoreHistorySaveImportedFileRequest = TauriCommandArgs<
 >;
 type HistorySaveRecordingRequest = Omit<CoreHistorySaveRecordingRequest, "segments"> & {
   segments: TranscriptSegment[];
-  /** @deprecated */
   projectId?: string | null;
 };
 type HistorySaveImportedFileRequest = Omit<CoreHistorySaveImportedFileRequest, "segments"> & {
   segments: TranscriptSegment[];
-  /** @deprecated */
   projectId?: string | null;
 };
 type HistoryAudioCleanupRequest = TauriCommandArgs<
@@ -174,13 +172,13 @@ export async function historyListItems(opts?: {
 export async function historyCreateLiveDraft(
   id: string | null,
   audioExtension: string,
-  tagIds: string[] | string | null,
+  projectId: string | null,
   icon: string | null,
 ): Promise<HistoryDraftHandle> {
   return invokeTauri(TauriCommand.history.createLiveDraft, {
     id,
     audioExtension,
-    tagIds: Array.isArray(tagIds) ? tagIds : tagIds ? [tagIds] : [],
+    projectId,
     icon,
   });
 }
@@ -201,22 +199,16 @@ export async function historySaveRecording(
   request: HistorySaveRecordingRequest,
 ): Promise<HistoryItemRecord> {
   const { projectId, ...rest } = request;
-  return invokeTauri(TauriCommand.history.saveRecording, {
-    ...rest,
-    segments: rest.segments.map(toTranscriptSegmentTransport),
-    tagIds: rest.tagIds ?? (projectId ? [projectId] : []),
-  });
+  if (projectId !== undefined) return historySaveRecordingToProject({ ...rest, projectId: projectId ?? null });
+  return invokeTauri(TauriCommand.history.saveRecording, { ...rest, projectId: null, segments: rest.segments.map(toTranscriptSegmentTransport) });
 }
 
 export async function historySaveImportedFile(
   request: HistorySaveImportedFileRequest,
 ): Promise<HistoryItemRecord> {
   const { projectId, ...rest } = request;
-  return invokeTauri(TauriCommand.history.saveImportedFile, {
-    ...rest,
-    segments: rest.segments.map(toTranscriptSegmentTransport),
-    tagIds: rest.tagIds ?? (projectId ? [projectId] : []),
-  });
+  if (projectId !== undefined) return historySaveImportedFileToProject({ ...rest, projectId: projectId ?? null });
+  return invokeTauri(TauriCommand.history.saveImportedFile, { ...rest, projectId: null, segments: rest.segments.map(toTranscriptSegmentTransport) });
 }
 
 export async function historyDeleteItems(ids: string[]): Promise<void> {
@@ -249,6 +241,34 @@ export async function historyUpdateTranscript(
   return invokeTauri(TauriCommand.history.updateTranscript, {
     historyId,
     segments: segments.map(toTranscriptSegmentTransport),
+  });
+}
+
+export async function historySaveRecordingToProject(request: {
+  segments: TranscriptSegment[];
+  duration: number;
+  projectId: string | null;
+  audioBytes?: number[] | null;
+  nativeAudioPath?: string | null;
+  audioExtension?: string | null;
+}): Promise<HistoryItemRecord> {
+  return invokeTauri(TauriCommand.history.saveRecordingToProject, {
+    ...request,
+    segments: request.segments.map(toTranscriptSegmentTransport),
+  });
+}
+
+export async function historySaveImportedFileToProject(request: {
+  id?: string | null;
+  sourcePath: string;
+  segments: TranscriptSegment[];
+  duration: number;
+  projectId: string | null;
+  convertedSourcePath?: string | null;
+}): Promise<HistoryItemRecord> {
+  return invokeTauri(TauriCommand.history.saveImportedFileToProject, {
+    ...request,
+    segments: request.segments.map(toTranscriptSegmentTransport),
   });
 }
 
@@ -361,25 +381,6 @@ export async function historyUpdateProjectAssignments(
     ids,
     projectId,
   });
-}
-
-export async function historyUpdateTagAssignments(
-  ids: string[],
-  addTagIds: string[],
-  removeTagIds: string[],
-): Promise<void> {
-  await invokeTauri(TauriCommand.history.updateTagAssignments, {
-    ids,
-    addTagIds,
-    removeTagIds,
-  });
-}
-
-export async function historyReplaceTagAssignments(
-  ids: string[],
-  tagIds: string[],
-): Promise<void> {
-  await invokeTauri(TauriCommand.history.replaceTagAssignments, { ids, tagIds });
 }
 
 export async function historyReassignProject(

@@ -37,6 +37,7 @@ fn recording_request() -> HistorySaveRecordingRequest {
         segments: Vec::new(),
         duration: 1.25,
         tag_ids: Vec::new(),
+        project_id: None,
         audio_bytes: Some(vec![1, 2, 3]),
         native_audio_path: None,
         audio_extension: Some("wav".into()),

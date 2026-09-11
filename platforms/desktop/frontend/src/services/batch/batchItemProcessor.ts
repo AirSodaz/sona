@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { AppConfig } from '../../types/config';
-import type { AutomationStageConfig } from '../../types/automation';
+import type { ExportFormat } from '../../utils/exportFormats';
 import type { BatchQueueItem, BatchQueueItemStatus } from '../../types/batchQueue';
 import type { HistoryItem } from '../../types/history';
 import type { RecoveryItemStage } from '../../types/recovery';
@@ -10,14 +10,15 @@ import { asrConfigService, isLlamaCppBatchRequest } from '../asrConfigService';
 import { historyService } from '../historyService';
 import { polishService } from '../polishService';
 import { translationService } from '../translationService';
-import { getFeatureLlmConfig, isLlmConfigComplete } from '../llm/configUtils';
 import { summaryService } from '../summaryService';
 import { exportService } from '../exportService';
 import { useHistoryStore } from '../../stores/historyStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { logger } from '../../utils/logger';
 import { remove } from '../tauri/platform/fs';
 import { join, tempDir } from '../tauri/platform/path';
-import { beginTagAutomationRun, finishTagAutomationRun } from '../automation/tagAutomationRun';
+import { pipelineExecutionEngine } from '../pipeline/pipelineExecutionEngine';
+import { resolveItemPipeline } from '../projectPipeline';
 
 export interface BatchItemProcessorCallbacks {
   updateStatus: (
@@ -47,6 +48,8 @@ export interface BatchItemProcessorPorts {
   exportTranscriptToDirectory: typeof exportService.exportTranscriptToDirectory;
   asrConfigService: typeof asrConfigService;
   useHistoryStore: typeof useHistoryStore;
+  useProjectStore?: typeof useProjectStore;
+  pipelineExecutionEngine?: typeof pipelineExecutionEngine;
 }
 
 export class BatchItemProcessor {
@@ -57,10 +60,13 @@ export class BatchItemProcessor {
     config,
     callbacks,
   }: ProcessBatchItemOptions): Promise<void> => {
+    if (item.projectId && !this.ports.useProjectStore?.getState?.().getProjectById(item.projectId)) {
+      item.projectId = null;
+      item.pipelineSnapshot = undefined;
+    }
     const language = config.language;
     const batchAsr = this.ports.asrConfigService.resolveAsrTranscriptionRequest(config, 'batch');
     const isLlamaCpp = isLlamaCppBatchRequest(batchAsr);
-    const stageConfig = this.getAutomationStageConfig(item, config);
 
     if (!this.ports.asrConfigService.isAsrRequestConfigured(batchAsr)) {
       throw new Error('Batch ASR is not configured.');
@@ -73,9 +79,6 @@ export class BatchItemProcessor {
     let lastUpdateTime = 0;
     let tempWavPath: string | undefined;
     let savedHistoryId: string | null = item.historyId || null;
-    let tagRunKey: { ruleId: string; historyId: string; inputVersion: string } | null = null;
-    let tagRunStarted = false;
-    let tagRunFinished = false;
 
     const persistHistorySnapshot = async (): Promise<void> => {
       if (!savedHistoryId) {
@@ -90,14 +93,11 @@ export class BatchItemProcessor {
         return;
       }
 
-      const historyItem = await this.ports.historyService.saveImportedFile(
-        item.filePath,
-        currentSegments,
-        this.calculateDuration(currentSegments),
-        batchAsr.engine === 'local' && !isLlamaCpp ? tempWavPath : undefined,
-        item.tagIds ?? (item.projectId ? [item.projectId] : []),
-        item.id,
-      );
+      const duration = this.calculateDuration(currentSegments);
+      const convertedPath = batchAsr.engine === 'local' && !isLlamaCpp ? tempWavPath : undefined;
+      const historyItem = typeof this.ports.historyService.saveImportedFileToProject === 'function'
+        ? await this.ports.historyService.saveImportedFileToProject(item.filePath, currentSegments, duration, convertedPath, item.projectId, item.id)
+        : await this.ports.historyService.saveImportedFile(item.filePath, currentSegments, duration, convertedPath, item.projectId, item.id);
 
       if (!historyItem) {
         return;
@@ -158,109 +158,45 @@ export class BatchItemProcessor {
       await ensureHistorySaved();
       await persistHistorySnapshot();
 
-      const tagRuleId = item.automationResolutionSnapshot?.tagRuleId;
-      const tagActions = item.automationResolutionSnapshot?.actions ?? {
-        autoPolish: stageConfig.autoPolish,
-        autoTranslate: stageConfig.autoTranslate,
-        autoSummary: stageConfig.autoSummary === true,
-      };
-      if (tagRuleId && savedHistoryId && (
-        tagActions.autoPolish || tagActions.autoTranslate || tagActions.autoSummary
-      )) {
-        tagRunKey = {
-          ruleId: tagRuleId,
-          historyId: savedHistoryId,
-          inputVersion: item.sourceFingerprint || `queue:${item.id}`,
-        };
-        tagRunStarted = await beginTagAutomationRun({
-          ...tagRunKey,
-          actions: tagActions,
-        });
+      const engine = this.ports.pipelineExecutionEngine ?? pipelineExecutionEngine;
+      const pipeline = item.pipelineSnapshot ?? resolveItemPipeline(
+        item.projectId,
+        this.ports.useProjectStore?.getState?.().projects ?? [],
+        config,
+      );
+
+      const pipelineResult = await engine.execute({
+        historyId: savedHistoryId || '',
+        segments: currentSegments,
+        pipeline: {
+          ...pipeline,
+          autoExport: pipeline.autoExport || Boolean(item.exportConfig),
+          exportDirectory: item.exportConfig?.directory || pipeline.exportDirectory,
+          exportFormat: (item.exportConfig?.format as ExportFormat | undefined) || pipeline.exportFormat,
+          exportFileNamePrefix: item.exportFileNamePrefix || pipeline.exportFileNamePrefix,
+        },
+        globalConfig: config,
+        baseFileName: this.buildAutomationExportBaseName(item),
+        onProgress: (stage, progress) => {
+          callbacks.updateStatus('processing', progress, stage === 'summarizing' ? undefined : stage);
+        },
+        onSegmentsUpdated: async (updatedSegments) => {
+          setCurrentSegments(updatedSegments);
+          await persistHistorySnapshot();
+        },
+        onExportComplete: (exportPath) => {
+          callbacks.onExportComplete(exportPath);
+        },
+        isCancelRequested: () => callbacks.isCancelRequested(),
+      });
+
+      if (pipelineResult.segments) {
+        currentSegments = pipelineResult.segments;
       }
-
-      const effectiveStageConfig = tagRunKey && !tagRunStarted
-        ? { ...stageConfig, autoPolish: false, autoTranslate: false, autoSummary: false }
-        : stageConfig;
-
-      if (effectiveStageConfig.autoPolish && currentSegments.length > 0) {
-        this.throwIfCancelRequested(callbacks);
-        const llm = getFeatureLlmConfig(config, 'polish');
-        if (!isLlmConfigComplete(llm)) {
-          throw new Error('Polish model is not configured.');
-        }
-
-        callbacks.updateStatus('processing', 96, 'polishing');
-        await this.ports.polishService.polishSegmentsWithConfig(
-          config,
-          currentSegments,
-          async (polishedChunk) => {
-            const nextSegments = this.ports.polishService.applyPolishedSegmentsInMemory(currentSegments, polishedChunk);
-            setCurrentSegments(nextSegments);
-          },
-        );
-        await persistHistorySnapshot();
-      }
-
-      if (effectiveStageConfig.autoTranslate && currentSegments.length > 0) {
-        this.throwIfCancelRequested(callbacks);
-        const llm = getFeatureLlmConfig(config, 'translation');
-        if (!isLlmConfigComplete(llm)) {
-          throw new Error('Translation model is not configured.');
-        }
-
-        callbacks.updateStatus('processing', 98, 'translating');
-        await this.ports.translationService.translateSegmentsWithConfig(
-          config,
-          currentSegments,
-          async (translatedChunk) => {
-            const nextSegments = this.ports.translationService.applyTranslationsInMemory(currentSegments, translatedChunk);
-            setCurrentSegments(nextSegments);
-          },
-        );
-        await persistHistorySnapshot();
-      }
-
-      if (effectiveStageConfig.autoSummary && currentSegments.length > 0 && savedHistoryId) {
-        this.throwIfCancelRequested(callbacks);
-        callbacks.updateStatus('processing', 99);
-        await this.ports.summaryService.retrySummaryTranscriptJob({
-          segments: currentSegments,
-          historyId: savedHistoryId,
-          templateId: config.summaryTemplateId,
-          config,
-        });
-        await this.ports.summaryService.persistSummary(savedHistoryId);
-      }
-
-      if (tagRunStarted && tagRunKey) {
-        await finishTagAutomationRun({ ...tagRunKey, status: 'complete' });
-        tagRunFinished = true;
-      }
-
-      if (item.exportConfig) {
-        this.throwIfCancelRequested(callbacks);
-        callbacks.updateStatus('processing', 99, 'exporting');
-        const exportPath = await this.ports.exportTranscriptToDirectory({
-          segments: currentSegments,
-          directory: item.exportConfig.directory,
-          baseFileName: this.buildAutomationExportBaseName(item),
-          format: item.exportConfig.format,
-          mode: item.exportConfig.mode,
-        });
-        callbacks.onExportComplete(exportPath);
-      }
-
       if (savedHistoryId && callbacks.isActiveItem()) {
         await this.ports.summaryService.persistSummary(savedHistoryId);
       }
     } catch (error) {
-      if (tagRunStarted && !tagRunFinished && tagRunKey) {
-        await finishTagAutomationRun({
-          ...tagRunKey,
-          status: 'error',
-          errorMessage: error instanceof Error ? error.message : String(error),
-        });
-      }
       try {
         if (currentSegments.length > 0) {
           await ensureHistorySaved();
@@ -278,14 +214,6 @@ export class BatchItemProcessor {
 
   private calculateDuration(segments: TranscriptSegment[]): number {
     return segments.length > 0 ? segments[segments.length - 1].end : 0;
-  }
-
-  private getAutomationStageConfig(item: BatchQueueItem, config: AppConfig): AutomationStageConfig {
-    return item.stageConfig || {
-      autoPolish: config.autoPolish ?? false,
-      autoTranslate: false,
-      exportEnabled: false,
-    };
   }
 
   private buildAutomationExportBaseName(item: BatchQueueItem): string {
@@ -328,6 +256,8 @@ export const batchItemProcessor = createBatchItemProcessor({
   exportTranscriptToDirectory: exportService.exportTranscriptToDirectory,
   asrConfigService,
   useHistoryStore,
+  useProjectStore,
+  pipelineExecutionEngine,
 });
 
 export const { processBatchQueueItem } = batchItemProcessor;

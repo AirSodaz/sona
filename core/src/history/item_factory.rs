@@ -28,6 +28,7 @@ pub fn create_live_draft_item(
         recording_title,
         HistoryItemKind::Recording,
         request.tag_ids,
+        request.project_id,
         request.icon,
     );
     item.status = HistoryItemStatus::Draft;
@@ -41,6 +42,7 @@ pub fn create_recording_item(
     tag_ids: Vec<String>,
     audio_extension: Option<&str>,
     native_audio_path: Option<&str>,
+    project_id: Option<String>,
 ) -> HistoryItemRecord {
     let timestamp = generated.timestamp;
     let id = generated.fallback_id;
@@ -58,6 +60,7 @@ pub fn create_recording_item(
         recording_title,
         HistoryItemKind::Recording,
         tag_ids,
+        project_id,
         None,
     )
 }
@@ -74,6 +77,7 @@ pub fn create_imported_file_item(
     duration: f64,
     tag_ids: Vec<String>,
     generated: HistoryItemGeneratedValues,
+    project_id: Option<String>,
 ) -> ImportedFileItem {
     let timestamp = generated.timestamp;
     let id = id.unwrap_or(generated.fallback_id);
@@ -88,6 +92,7 @@ pub fn create_imported_file_item(
         format!("Batch {title_file_name}"),
         HistoryItemKind::Batch,
         tag_ids,
+        project_id,
         None,
     );
     ImportedFileItem {
@@ -136,6 +141,7 @@ fn build_history_item_record(
     title: String,
     kind: HistoryItemKind,
     tag_ids: Vec<String>,
+    project_id: Option<String>,
     icon: Option<String>,
 ) -> HistoryItemRecord {
     HistoryItemRecord {
@@ -150,6 +156,7 @@ fn build_history_item_record(
         icon,
         kind,
         search_content: String::new(),
+        project_id: project_id.or_else(|| tag_ids.first().cloned()),
         tag_ids,
         deleted_at: None,
         status: HistoryItemStatus::Complete,

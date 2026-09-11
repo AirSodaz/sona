@@ -38,6 +38,7 @@ pub(super) fn map_row_to_item(row: &rusqlite::Row) -> rusqlite::Result<HistoryIt
     let icon: Option<String> = row.get("icon")?;
     let kind_str: String = row.get("kind")?;
     let search_content: String = row.get("search_content")?;
+    let project_id: Option<String> = row.get("project_id")?;
     let tag_ids_json: String = row.get("tag_ids")?;
     let deleted_at_value: Option<i64> = row.get("deleted_at")?;
     let status_str: String = row.get("status")?;
@@ -89,8 +90,13 @@ pub(super) fn map_row_to_item(row: &rusqlite::Row) -> rusqlite::Result<HistoryIt
         })
         .transpose()?;
 
-    let tag_ids = serde_json::from_str::<Vec<String>>(&tag_ids_json)
+    let mut tag_ids = serde_json::from_str::<Vec<String>>(&tag_ids_json)
         .map_err(|error| invalid_history_column(row, "tag_ids", Type::Text, error.to_string()))?;
+    if tag_ids.is_empty()
+        && let Some(pid) = &project_id
+    {
+        tag_ids.push(pid.clone());
+    }
     let deleted_at = deleted_at_value
         .map(|value| checked_history_u64_column(row, "deleted_at", value))
         .transpose()?;
@@ -107,6 +113,7 @@ pub(super) fn map_row_to_item(row: &rusqlite::Row) -> rusqlite::Result<HistoryIt
         icon,
         kind,
         search_content,
+        project_id,
         tag_ids,
         deleted_at,
         status,

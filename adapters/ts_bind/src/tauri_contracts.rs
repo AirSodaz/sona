@@ -18,6 +18,33 @@ impl TauriCommandContract {
 }
 
 const RUST_OWNED_TAURI_COMMAND_CONTRACTS: &[TauriCommandContract] = &[
+    TauriCommandContract::new("project_list", "undefined", "ProjectRecord[]"),
+    TauriCommandContract::new(
+        "project_create",
+        "{ input: ProjectCreateInput }",
+        "ProjectRecord",
+    ),
+    TauriCommandContract::new(
+        "project_update",
+        "{ projectId: string; updates: ProjectUpdateInput }",
+        "ProjectRecord | null",
+    ),
+    TauriCommandContract::new(
+        "project_delete",
+        "{ projectId: string; cascadeAction?: string }",
+        "void",
+    ),
+    TauriCommandContract::new(
+        "project_reorder",
+        "{ projectIds: string[] }",
+        "ProjectRecord[]",
+    ),
+    TauriCommandContract::new("project_get_active_id", "undefined", "string | null"),
+    TauriCommandContract::new(
+        "project_set_active_id",
+        "{ projectId: string | null }",
+        "void",
+    ),
     TauriCommandContract::new(
         "tag_list",
         "{ fallbackEnabledPolishKeywordSetIds?: string[] | null; fallbackEnabledSpeakerProfileIds?: string[] | null }",
@@ -149,8 +176,18 @@ const RUST_OWNED_TAURI_COMMAND_CONTRACTS: &[TauriCommandContract] = &[
         "HistoryItemRecord",
     ),
     TauriCommandContract::new(
+        "history_save_recording_to_project",
+        "{ segments: TranscriptSegment_Deserialize[]; duration: number; projectId: string | null; audioBytes?: number[] | null; nativeAudioPath?: string | null; audioExtension?: string | null }",
+        "HistoryItemRecord",
+    ),
+    TauriCommandContract::new(
         "history_save_imported_file",
         "HistorySaveImportedFileRequest_Deserialize",
+        "HistoryItemRecord",
+    ),
+    TauriCommandContract::new(
+        "history_save_imported_file_to_project",
+        "{ id?: string | null; sourcePath: string; segments: TranscriptSegment_Deserialize[]; duration: number; projectId: string | null; convertedSourcePath?: string | null }",
         "HistoryItemRecord",
     ),
     TauriCommandContract::new("history_delete_items", "HistoryDeleteItemsRequest", "void"),
@@ -276,7 +313,7 @@ mod tests {
     #[test]
     fn tauri_command_contract_registry_is_unique_and_complete_for_the_slice() {
         let contracts = rust_owned_tauri_command_contracts();
-        assert_eq!(contracts.len(), 55);
+        assert_eq!(contracts.len(), 64);
         let names = contracts
             .iter()
             .map(|contract| contract.command)
@@ -285,6 +322,13 @@ mod tests {
 
         for expected in [
             "tag_list",
+            "project_list",
+            "project_create",
+            "project_update",
+            "project_delete",
+            "project_reorder",
+            "project_get_active_id",
+            "project_set_active_id",
             "task_ledger_load_snapshot",
             "recovery_load_snapshot",
             "automation_load_repository_state",

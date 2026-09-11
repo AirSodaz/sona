@@ -44,7 +44,7 @@ pub(super) fn build_recording_title(timestamp: u64) -> String {
     format!("Recording {}", local_time.format("%Y-%m-%d %H-%M-%S"))
 }
 
-pub(crate) const HISTORY_ITEM_COLUMNS: [&str; 15] = [
+pub(crate) const HISTORY_ITEM_COLUMNS: [&str; 16] = [
     "id",
     "timestamp",
     "duration",
@@ -56,13 +56,14 @@ pub(crate) const HISTORY_ITEM_COLUMNS: [&str; 15] = [
     "icon",
     "kind",
     "search_content",
+    "project_id",
     "tag_ids",
     "deleted_at",
     "status",
     "draft_source",
 ];
 
-pub(super) const HISTORY_ITEM_ROW_COLUMNS: [&str; 14] = [
+pub(super) const HISTORY_ITEM_ROW_COLUMNS: [&str; 15] = [
     "id",
     "timestamp",
     "duration",
@@ -74,6 +75,7 @@ pub(super) const HISTORY_ITEM_ROW_COLUMNS: [&str; 14] = [
     "icon",
     "kind",
     "search_content",
+    "project_id",
     "deleted_at",
     "status",
     "draft_source",
@@ -103,12 +105,7 @@ pub(super) fn history_select_columns(alias: Option<&str>, overrides: &[(&str, &s
             }
 
             if *column == "tag_ids" {
-                let history_id = alias.map_or("history_items.id".to_string(), |alias| {
-                    format!("{alias}.id")
-                });
-                return format!(
-                    "COALESCE((SELECT json_group_array(tag_id) FROM (SELECT hit.tag_id FROM history_item_tags hit JOIN tags t ON t.id = hit.tag_id WHERE hit.history_id = {history_id} ORDER BY t.sort_order, t.id)), '[]') AS tag_ids"
-                );
+                return "'[]' AS tag_ids".to_string();
             }
 
             match alias {
@@ -161,6 +158,7 @@ pub(crate) fn insert_history_item_row(
             ":icon": item.icon.as_deref(),
             ":kind": kind_str,
             ":search_content": &item.search_content,
+            ":project_id": item.project_id.as_deref().or_else(|| item.tag_ids.first().map(String::as_str)),
             ":deleted_at": deleted_at,
             ":status": status_str,
             ":draft_source": draft_source_str.as_deref(),

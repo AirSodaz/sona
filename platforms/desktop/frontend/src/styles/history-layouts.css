@@ -337,19 +337,38 @@
 .history-item-project-badge {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   justify-self: end;
   max-width: min(180px, 30vw);
   min-height: 24px;
   padding: 2px 8px;
   border-radius: var(--radius-full);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  color: var(--color-text-secondary);
-  font-size: 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--project-color, var(--color-border)) 28%, transparent);
+  background: color-mix(in srgb, var(--project-color, var(--color-text-muted)) 10%, var(--color-bg-secondary));
+  color: var(--color-text-primary);
+  font-size: 0.72rem;
+  font-weight: 500;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.history-item-project-badge:hover {
+  background: color-mix(in srgb, var(--project-color, var(--color-text-muted)) 16%, var(--color-bg-secondary));
+}
+.history-item-project-badge--inbox {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+
+.history-item-project-badge-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .history-item-tag-chips {

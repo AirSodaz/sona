@@ -2,6 +2,7 @@ import type { AppConfig } from './config';
 import { TranscriptSegment } from './transcript';
 import type { AutomationExportConfig, AutomationResolutionSnapshot, AutomationStageConfig } from './automation';
 import type { RecoveryItemStage } from './recovery';
+import type { EffectivePipelineSnapshot } from './project';
 
 /**
  * Status of a batch queue item.
@@ -38,6 +39,8 @@ export interface BatchQueueItem {
     tagIds?: string[];
     /** @deprecated Single-tag compatibility alias. */
     projectId: string | null;
+    /** Immutable project pipeline captured when queued. */
+    pipelineSnapshot?: EffectivePipelineSnapshot;
     /** How this queue item entered the pipeline. */
     origin?: BatchQueueItemOrigin;
     /** Automation rule ID when the item originated from folder monitoring. */

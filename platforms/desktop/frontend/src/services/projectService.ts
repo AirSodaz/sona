@@ -1,14 +1,5 @@
-import type { ProjectCreateInput, ProjectRecord, ProjectUpdateInput } from '../types/project';
-import {
-  tagCreate as projectCreate,
-  tagDelete as projectDelete,
-  tagGetActiveId as projectGetActiveId,
-  tagList as projectList,
-  tagReorder as projectReorder,
-  tagSaveAll as projectSaveAll,
-  tagSetActiveId as projectSetActiveId,
-  tagUpdate as projectUpdate,
-} from './tauri/tag';
+import type { ProjectCreateInput, ProjectPipelineConfig, ProjectRecord, ProjectUpdateInput } from '../types/project';
+import { projectCreate, projectDelete, projectGetActiveId, projectList, projectReorder, projectSetActiveId, projectUpdate } from './tauri/project';
 
 export interface ProjectServicePorts {
   projectCreate: typeof projectCreate;
@@ -16,7 +7,6 @@ export interface ProjectServicePorts {
   projectGetActiveId: typeof projectGetActiveId;
   projectList: typeof projectList;
   projectReorder: typeof projectReorder;
-  projectSaveAll: typeof projectSaveAll;
   projectSetActiveId: typeof projectSetActiveId;
   projectUpdate: typeof projectUpdate;
 }
@@ -33,7 +23,9 @@ export class ProjectService {
   }
 
   async saveAll(projects: ProjectRecord[]): Promise<void> {
-    await this.ports.projectSaveAll(projects);
+    await Promise.all(projects.map((project) => this.ports.projectUpdate(project.id, {
+      name: project.name, description: project.description, icon: project.icon, color: project.color, pipeline: project.pipeline,
+    })));
   }
 
   async reorder(projectIds: string[]): Promise<void> {
@@ -51,8 +43,12 @@ export class ProjectService {
     return this.ports.projectUpdate(id, updates);
   }
 
-  async delete(id: string): Promise<void> {
-    await this.ports.projectDelete(id);
+  async updatePipeline(id: string, pipeline: ProjectPipelineConfig): Promise<ProjectRecord | null> {
+    return this.update(id, { pipeline });
+  }
+
+  async delete(id: string, cascadeAction: 'moveToInbox' | 'deleteItems' = 'moveToInbox'): Promise<void> {
+    await this.ports.projectDelete(id, cascadeAction);
   }
 
   async getActiveProjectId(): Promise<string | null> {
@@ -74,7 +70,6 @@ export const projectService = createProjectService({
   projectGetActiveId,
   projectList,
   projectReorder,
-  projectSaveAll,
   projectSetActiveId,
   projectUpdate,
 });

@@ -215,6 +215,7 @@ fn history_item(id: &str) -> HistoryItemRecord {
         kind: HistoryItemKind::Recording,
         search_content: "hello".to_string(),
         tag_ids: Vec::new(),
+        project_id: None,
         deleted_at: None,
         status: HistoryItemStatus::Complete,
         draft_source: None,
@@ -243,6 +244,7 @@ fn recording_request() -> HistorySaveRecordingRequest {
         segments: segments(),
         duration: 1.0,
         tag_ids: vec!["project-1".to_string()],
+        project_id: Some("project-1".to_string()),
         audio_bytes: Some(vec![1, 2, 3]),
         native_audio_path: None,
         audio_extension: Some("wav".to_string()),
@@ -256,6 +258,7 @@ fn imported_file_request() -> HistorySaveImportedFileRequest {
         segments: segments(),
         duration: 1.0,
         tag_ids: vec!["project-1".to_string()],
+        project_id: Some("project-1".to_string()),
         converted_source_path: None,
     }
 }
@@ -270,6 +273,7 @@ fn service_routes_every_history_mutation_through_the_focused_port() {
             id: Some("draft-1".to_string()),
             audio_extension: "wav".to_string(),
             tag_ids: vec!["project-1".to_string()],
+            project_id: Some("project-1".to_string()),
             icon: Some("audio".to_string()),
         })
         .unwrap();
@@ -404,6 +408,7 @@ fn service_rejects_invalid_ids_tags_and_extensions_before_the_port() {
                 id: Some(" ".to_string()),
                 audio_extension: "wav".to_string(),
                 tag_ids: Vec::new(),
+                project_id: None,
                 icon: None,
             })
             .unwrap_err(),
@@ -412,6 +417,7 @@ fn service_rejects_invalid_ids_tags_and_extensions_before_the_port() {
                 id: Some("CON".to_string()),
                 audio_extension: "wav".to_string(),
                 tag_ids: Vec::new(),
+                project_id: None,
                 icon: None,
             })
             .unwrap_err(),
@@ -420,6 +426,7 @@ fn service_rejects_invalid_ids_tags_and_extensions_before_the_port() {
                 id: Some("history:1".to_string()),
                 audio_extension: "wav".to_string(),
                 tag_ids: Vec::new(),
+                project_id: None,
                 icon: None,
             })
             .unwrap_err(),
@@ -428,6 +435,7 @@ fn service_rejects_invalid_ids_tags_and_extensions_before_the_port() {
                 id: Some("history-1.".to_string()),
                 audio_extension: "wav".to_string(),
                 tag_ids: Vec::new(),
+                project_id: None,
                 icon: None,
             })
             .unwrap_err(),
@@ -436,6 +444,7 @@ fn service_rejects_invalid_ids_tags_and_extensions_before_the_port() {
                 id: None,
                 audio_extension: "../wav".to_string(),
                 tag_ids: Vec::new(),
+                project_id: None,
                 icon: None,
             })
             .unwrap_err(),
@@ -478,6 +487,7 @@ fn tag_ids_remain_opaque_while_history_ids_obey_file_name_limits() {
             id: Some("draft-1".to_string()),
             audio_extension: "wav".to_string(),
             tag_ids: vec!["team:alpha".to_string()],
+            project_id: Some("team:alpha".to_string()),
             icon: None,
         })
         .unwrap();
@@ -497,6 +507,7 @@ fn tag_ids_remain_opaque_while_history_ids_obey_file_name_limits() {
                 id: Some("a".repeat(239)),
                 audio_extension: "wav".to_string(),
                 tag_ids: Vec::new(),
+                project_id: None,
                 icon: None,
             })
             .unwrap_err(),

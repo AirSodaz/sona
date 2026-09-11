@@ -44,6 +44,7 @@ sona-sync = { workspace = true }
 sona-sync-webdav = { workspace = true }
 sona-ts-bind = { workspace = true }
 tauri = { version = "2", features = ["protocol-asset", "tray-icon", "image-png"] }
+rfd = { version = "0.16", default-features = false, features = ["common-controls-v6"] }
 tauri-plugin-opener = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -99,6 +100,7 @@ windows = { version = "0.61", features = [
 reqwest = { workspace = true }
 tempfile = { workspace = true }
 tower = { workspace = true }
+rusqlite = { workspace = true }
 
 [features]
 llama-vulkan = ["sona-llama-cpp/vulkan"]

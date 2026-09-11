@@ -13,10 +13,6 @@ import type {
   AutomationRule,
   AutomationRuntimeState,
 } from '../types/automation';
-import {
-  registerTagAutomationRunPorts,
-  type TagAutomationRunRequest,
-} from '../services/automation/tagAutomationRun';
 import type { RecoveredQueueItem } from '../types/recovery';
 import { extractErrorMessage } from '../utils/errorUtils';
 import {
@@ -55,8 +51,6 @@ import {
   isAutomationRecoveryBlocked,
 } from '../services/recoveryService';
 import { historyService } from '../services/historyService';
-import { applyAutomationProfile } from '../services/automation/automationConfigResolver';
-import { useHistoryStore } from './historyStore';
 import { useBatchQueueStore } from './batchQueueStore';
 import { useConfigStore } from './configStore';
 import { useProjectStore } from './projectStore';
@@ -119,27 +113,12 @@ interface AutomationState {
   retryFailed: (ruleId: string) => Promise<void>;
   retryFailedFile: (ruleId: string, filePath: string) => Promise<void>;
   applyTagRuleToExisting: (ruleId: string) => Promise<number>;
-  beginTagAutomationRun: (request: TagAutomationRunRequest) => Promise<boolean>;
-  finishTagAutomationRun: (args: {
-    ruleId: string;
-    historyId: string;
-    inputVersion: string;
-    status: 'complete' | 'error';
-    errorMessage?: string;
-  }) => Promise<void>;
   dismissNotification: (notificationId: string) => void;
   retryNotification: (notificationId: string) => Promise<void>;
   markRecoveryItemDiscarded: (item: RecoveredQueueItem) => Promise<void>;
   stopAll: () => Promise<void>;
 }
 
-let processedEntryMutationQueue = Promise.resolve();
-
-function serializeProcessedEntryMutation<T>(operation: () => Promise<T>): Promise<T> {
-  const next = processedEntryMutationQueue.then(operation, operation);
-  processedEntryMutationQueue = next.then(() => undefined, () => undefined);
-  return next;
-}
 
 async function validateRuleBeforeActivation(rule: AutomationRule): Promise<void> {
   await validateAutomationRuleActivation(rule);
@@ -300,11 +279,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       profileId: input.profileId ?? existing?.profileId,
       profileSource: input.profileSource ?? existing?.profileSource ?? 'tag_match',
       saveHistory: input.saveHistory ?? input.projectId !== 'none',
-      tagIds: input.tagIds ?? (
-        input.projectId && input.projectId !== 'inbox' && input.projectId !== 'none'
-          ? [input.projectId]
-          : []
-      ),
+      tagIds: [],
       presetId: input.presetId,
       watchDirectory: input.watchDirectory.trim(),
       recursive: input.recursive,
@@ -503,102 +478,12 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   },
 
   applyTagRuleToExisting: async (ruleId) => {
-    const state = get();
-    const rule = state.rules.find((item) => item.id === ruleId && item.kind === 'tag');
-    if (!rule) return 0;
-
-    const profile = rule.profileId
-      ? state.profiles.find((item) => item.id === rule.profileId)
-      : undefined;
-    const config = applyAutomationProfile(useConfigStore.getState().config, profile);
-    const matchedTagIds = new Set(rule.tagIds || []);
-    const historyItems = useHistoryStore.getState().items.filter((item) => (
-      item.deletedAt == null
-      && (item.tagIds || []).some((tagId) => matchedTagIds.has(tagId))
-    ));
-    let processed = 0;
-
-    for (const item of historyItems) {
-      const loaded = await historyService.loadTranscript(item.id);
-      if (!loaded?.length) continue;
-      const { processTagAutomationForHistory } = await import('../services/automation/tagAutomationProcessor');
-      await processTagAutomationForHistory({
-        actions: rule.actions ?? { autoPolish: false, autoTranslate: false, autoSummary: false },
-        config,
-        historyId: item.id,
-        segments: loaded,
-        ruleId: rule.id,
-        inputVersion: `existing:${rule.id}:${item.id}`,
-        force: true,
-      });
-      processed += 1;
-    }
-
-    await useHistoryStore.getState().refresh();
-    return processed;
+    // Project pipelines are immutable queue snapshots. Legacy tag rules are
+    // retained for backup import only and are never replayed at runtime.
+    void ruleId;
+    return 0;
   },
 
-  beginTagAutomationRun: async (request) => serializeProcessedEntryMutation(async () => {
-    const currentEntries = get().processedEntries;
-    const existing = currentEntries.find((entry) => (
-      entry.kind === 'tag'
-      && entry.ruleId === request.ruleId
-      && entry.historyId === request.historyId
-      && entry.inputVersion === request.inputVersion
-    ));
-    if (existing?.status === 'complete' && !request.force) {
-      return false;
-    }
-
-    const nextEntry: AutomationProcessedEntry = {
-      id: existing?.id ?? uuidv4(),
-      ruleId: request.ruleId,
-      kind: 'tag',
-      inputVersion: request.inputVersion,
-      attempt: (existing?.attempt ?? 0) + 1,
-      filePath: existing?.filePath ?? '',
-      sourceFingerprint: existing?.sourceFingerprint ?? request.inputVersion,
-      size: existing?.size ?? 0,
-      mtimeMs: existing?.mtimeMs ?? 0,
-      status: 'pending',
-      processedAt: Date.now(),
-      historyId: request.historyId,
-      exportPath: existing?.exportPath,
-      errorMessage: undefined,
-    };
-    const nextEntries = [
-      ...currentEntries.filter((entry) => entry.id !== nextEntry.id),
-      nextEntry,
-    ].sort((left, right) => right.processedAt - left.processedAt);
-    await persistAutomationProcessedEntries(nextEntries);
-    set((current) => ({
-      processedEntries: nextEntries,
-      runtimeStates: rebuildRuntimeStates(current.rules, nextEntries, current.runtimeStates),
-    }));
-    return true;
-  }),
-
-  finishTagAutomationRun: async (args) => serializeProcessedEntryMutation(async () => {
-    const currentEntries = get().processedEntries;
-    const nextEntries = currentEntries.map((entry) => (
-      entry.kind === 'tag'
-      && entry.ruleId === args.ruleId
-      && entry.historyId === args.historyId
-      && entry.inputVersion === args.inputVersion
-        ? {
-          ...entry,
-          status: args.status,
-          processedAt: Date.now(),
-          errorMessage: args.errorMessage,
-        }
-        : entry
-    ));
-    await persistAutomationProcessedEntries(nextEntries);
-    set((current) => ({
-      processedEntries: nextEntries,
-      runtimeStates: rebuildRuntimeStates(current.rules, nextEntries, current.runtimeStates),
-    }));
-  }),
 
   dismissNotification: (notificationId) => {
     set((current) => ({
@@ -669,10 +554,6 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   },
 }));
 
-registerTagAutomationRunPorts({
-  begin: (request) => useAutomationStore.getState().beginTagAutomationRun(request),
-  finish: (request) => useAutomationStore.getState().finishTagAutomationRun(request),
-});
 
 function getAutomationRuntimeCoordinatorState(state: AutomationState): AutomationRuntimeCoordinatorState {
   return {

@@ -185,7 +185,7 @@ describe('HistoryItem', () => {
     }));
   });
 
-  it('does not request an item context menu while selection mode is active', () => {
+  it('requests an item context menu while selection mode is active to support batch actions', () => {
     const onOpenContextMenu = vi.fn();
 
     render(
@@ -200,12 +200,18 @@ describe('HistoryItem', () => {
 
     const historyItem = screen.getByRole('listitem');
     fireEvent.contextMenu(historyItem, { clientX: 40, clientY: 50 });
+    expect(onOpenContextMenu).toHaveBeenCalledWith('hist-1', expect.objectContaining({
+      invocation: 'pointer',
+      point: { x: 40, y: 50 },
+    }));
+
     fireEvent.keyDown(screen.getByRole('button', { name: 'Load Client Call' }), {
       key: 'F10',
       shiftKey: true,
     });
-
-    expect(onOpenContextMenu).not.toHaveBeenCalled();
+    expect(onOpenContextMenu).toHaveBeenCalledWith('hist-1', expect.objectContaining({
+      invocation: 'keyboard',
+    }));
   });
 
   it('renders a search snippet with highlight for list layouts', () => {

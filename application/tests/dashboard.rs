@@ -99,6 +99,7 @@ fn history_item(id: &str, kind: HistoryItemKind, tag_id: Option<&str>) -> Histor
         kind,
         search_content: String::new(),
         tag_ids: tag_id.map(str::to_string).into_iter().collect(),
+        project_id: tag_id.map(str::to_string),
         deleted_at: None,
         status: HistoryItemStatus::Complete,
         draft_source: None,

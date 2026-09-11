@@ -1,4 +1,4 @@
-﻿use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use rusqlite::{OptionalExtension, Transaction, params};
@@ -13,7 +13,7 @@ use sona_core::sync::{
     SyncVersion, merge_operations,
 };
 
-use crate::{Database, DatabaseError};
+use crate::{Database, DatabaseError, legacy_change_time};
 
 const DELETE_FIELD: &str = "__entity__";
 
@@ -1566,7 +1566,14 @@ fn operation_allowed(preset: SyncPresetV1, operation: &SyncOperation) -> bool {
     match operation.entity.kind {
         SyncEntityKind::Tag | SyncEntityKind::Project => matches!(
             field,
-            "name" | "description" | "icon" | "color" | "sortOrder" | "createdAt" | "updatedAt"
+            "name"
+                | "description"
+                | "icon"
+                | "color"
+                | "sortOrder"
+                | "createdAt"
+                | "updatedAt"
+                | "pipeline"
         ),
         SyncEntityKind::HistoryItem => matches!(
             field,
@@ -1684,6 +1691,10 @@ fn apply_domain_delete(
 ) -> Result<(), DatabaseError> {
     match kind {
         SyncEntityKind::Tag | SyncEntityKind::Project => {
+            let _ = transaction.execute(
+                "DELETE FROM project_pipelines WHERE project_id = ?1",
+                [entity_id],
+            );
             execute_delete(transaction, "tags", "id", entity_id)
         }
         SyncEntityKind::HistoryItem => {
@@ -1848,6 +1859,15 @@ fn apply_tag_field(
         "INSERT OR IGNORE INTO tags (id, created_at, updated_at) VALUES (?1, 0, 0)",
         [entity_id],
     )?;
+    if field == "pipeline" {
+        let payload = serde_json::to_string(value)?;
+        transaction.execute(
+            "INSERT INTO project_pipelines (project_id, pipeline_json, updated_at) VALUES (?1, ?2, ?3)
+             ON CONFLICT(project_id) DO UPDATE SET pipeline_json = excluded.pipeline_json, updated_at = excluded.updated_at",
+            params![entity_id, payload, legacy_change_time::now_ms() as i64],
+        )?;
+        return Ok(());
+    }
     let column = match field {
         "name" => "name",
         "description" => "description",

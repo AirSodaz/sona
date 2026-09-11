@@ -238,7 +238,7 @@ describe('tauri boundary wrappers', () => {
       id: 'rule-1',
       name: 'Inbox',
       saveHistory: true,
-      tagIds: ['project-1'],
+      projectId: 'project-1',
       presetId: 'custom',
       watchDirectory: 'C:/watch',
       recursive: true,
@@ -258,6 +258,7 @@ describe('tauri boundary wrappers', () => {
     };
     const ruleInput = {
       ...rule,
+      tagIds: [],
       kind: 'file',
       priority: 0,
       profileSource: 'tag_match',
@@ -401,6 +402,7 @@ describe('tauri boundary wrappers', () => {
             profileId: undefined,
             profileSource: 'tag_match',
             actions: { autoPolish: false, autoTranslate: false, autoSummary: false },
+            tagIds: [],
             migrationNotice: undefined,
             stageConfig: {
               ...rule.stageConfig,
@@ -1069,7 +1071,7 @@ describe('tauri boundary wrappers', () => {
     await historySaveRecording({
       segments: [],
       duration: 3,
-      tagIds: ['project-1'],
+      projectId: 'project-1',
       audioBytes: [1, 2, 3],
       audioExtension: 'webm',
     });
@@ -1084,21 +1086,21 @@ describe('tauri boundary wrappers', () => {
     expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.history.createLiveDraft, {
       id: null,
       audioExtension: 'webm',
-      tagIds: ['project-1'],
+      projectId: 'project-1',
       icon: 'system:mic',
     });
-    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.history.saveRecording, {
+    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.history.saveRecordingToProject, {
       segments: [],
       duration: 3,
-      tagIds: ['project-1'],
+      projectId: 'project-1',
       audioBytes: [1, 2, 3],
       audioExtension: 'webm',
     });
-    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.history.saveImportedFile, {
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.history.saveImportedFileToProject, {
       sourcePath: 'D:/audio/meeting.mp3',
       segments: [],
       duration: 4,
-      tagIds: [],
+      projectId: null,
       convertedSourcePath: 'C:/Temp/meeting.wav',
     });
   });

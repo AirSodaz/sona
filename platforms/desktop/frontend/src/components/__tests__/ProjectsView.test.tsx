@@ -62,9 +62,9 @@ vi.mock('../../services/historyService', () => ({
     loadTranscript: vi.fn().mockResolvedValue([]),
     getAudioUrl: vi.fn().mockResolvedValue('asset:///audio.wav'),
     updateTranscript: vi.fn().mockResolvedValue(undefined),
+    commitTranscriptEdit: vi.fn().mockResolvedValue({ status: 'unchanged' }),
     updateItemMeta: vi.fn().mockResolvedValue(undefined),
     updateProjectAssignments: vi.fn().mockResolvedValue(undefined),
-    updateTagAssignments: vi.fn().mockResolvedValue(undefined),
     deleteRecording: vi.fn().mockResolvedValue(undefined),
     deleteRecordings: vi.fn().mockResolvedValue(undefined),
     restoreRecordings: vi.fn().mockResolvedValue(undefined),
@@ -102,34 +102,32 @@ vi.mock('../../services/tauri/history', () => {
       }
 
       const scopedItems = items.filter((item: any) => {
-        const tagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
+        const projectId = item.projectId ?? item.tagIds?.[0] ?? null;
         const isDeleted = item.deletedAt != null;
         if (scope.kind === 'all') {
           return !isDeleted;
         }
-        if (scope.kind === 'untagged') {
-          return !isDeleted && tagIds.length === 0;
+        if (scope.kind === 'inbox') {
+          return !isDeleted && !projectId;
         }
         if (scope.kind === 'trash') {
           return isDeleted;
         }
-        return !isDeleted && tagIds.includes(scope.tagId);
+        return !isDeleted && projectId === scope.projectId;
       });
-      const byTagId: Record<string, number> = {};
-      let untagged = 0;
+      const byProjectId: Record<string, number> = {};
+      let inbox = 0;
       let trash = 0;
       items.forEach((item: any) => {
         if (item.deletedAt != null) {
           trash += 1;
           return;
         }
-        const tagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
-        if (tagIds.length > 0) {
-          tagIds.forEach((tagId: string) => {
-            byTagId[tagId] = (byTagId[tagId] || 0) + 1;
-          });
+        const projectId = item.projectId ?? item.tagIds?.[0] ?? null;
+        if (projectId) {
+          byProjectId[projectId] = (byProjectId[projectId] || 0) + 1;
         } else {
-          untagged += 1;
+          inbox += 1;
         }
       });
 
@@ -140,9 +138,9 @@ vi.mock('../../services/tauri/history', () => {
         hasMore: false,
         summary: summarize(scopedItems),
         itemCounts: {
-          untagged,
+          inbox,
           trash,
-          byTagId,
+          byProjectId,
         },
       };
     }),
@@ -384,21 +382,19 @@ describe('ProjectsView', () => {
     searchMatchByItemId?: Record<string, any>;
     allItems?: any[];
   }) => {
-    const byTagId: Record<string, number> = {};
-    let untagged = 0;
+    const byProjectId: Record<string, number> = {};
+    let inbox = 0;
     let trash = 0;
     allItems.forEach((item) => {
       if (item.deletedAt != null) {
         trash += 1;
         return;
       }
-      const tagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
-      if (tagIds.length > 0) {
-        tagIds.forEach((tagId: string) => {
-          byTagId[tagId] = (byTagId[tagId] || 0) + 1;
-        });
+      const projectId = item.projectId ?? item.tagIds?.[0] ?? null;
+      if (projectId) {
+        byProjectId[projectId] = (byProjectId[projectId] || 0) + 1;
       } else {
-        untagged += 1;
+        inbox += 1;
       }
     });
 
@@ -411,9 +407,9 @@ describe('ProjectsView', () => {
       hasMore: false,
       summary: summarizeWorkspaceItems(scopedItems),
       itemCounts: {
-        untagged,
+        inbox,
         trash,
-        byTagId,
+        byProjectId,
       },
     };
   };
@@ -495,13 +491,25 @@ describe('ProjectsView', () => {
     });
   });
 
-  it('renders All Items and Inbox in the rail while keeping a single New Project CTA', async () => {
+  it('renders All Items and Trash in the scopes section, and Inbox pinned at the top of the projects list', async () => {
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
-    expect(getButtonByContent('All Items')).toBeDefined();
-    expect(getButtonByContent('Untagged')).toBeDefined();
-    expect(screen.getAllByRole('button', { name: 'New Tag' })).toHaveLength(1);
+    const scopesContainer = document.querySelector('.projects-rail-scopes');
+    expect(scopesContainer).not.toBeNull();
+    const scopeButtons = scopesContainer!.querySelectorAll('.projects-rail-item');
+    expect(scopeButtons).toHaveLength(2);
+    expect(scopeButtons[0].textContent).toContain('All Items');
+    expect(scopeButtons[1].textContent).toContain('Trash');
+
+    const railList = document.querySelector('.projects-rail-list');
+    expect(railList).not.toBeNull();
+    const railItems = railList!.querySelectorAll('.projects-rail-item');
+    expect(railItems.length).toBeGreaterThanOrEqual(2);
+    expect(railItems[0].textContent).toContain('Inbox');
+    expect(railItems[1].textContent).toContain('Alpha');
+
+    expect(screen.getAllByRole('button', { name: 'New Project' })).toHaveLength(1);
   });
 
   it('loads the AI rename service only when the AI rename action is used', async () => {
@@ -615,7 +623,7 @@ describe('ProjectsView', () => {
 
     await waitFor(() => {
       expect(projectService.setActiveProjectId).toHaveBeenCalledWith('project-1');
-      screen.getByText('Tag settings');
+      screen.getByText('Project settings');
     });
   });
 
@@ -1007,7 +1015,7 @@ describe('ProjectsView', () => {
     await waitForInitialHistoryLoad();
 
     const allItemsButton = getButtonByContent('All Items');
-    const inboxButton = getButtonByContent('Untagged');
+    const inboxButton = getButtonByContent('Inbox');
     const projectButton = getButtonByContent('Alpha');
 
     expect(getRailItemIcon(allItemsButton)).not.toBeNull();
@@ -1023,7 +1031,7 @@ describe('ProjectsView', () => {
 
     await clickAsync(inboxButton);
     await waitFor(() => {
-      screen.getByRole('heading', { name: 'Untagged' });
+      screen.getByRole('heading', { name: 'Inbox' });
       expect(getMainTitleIcon()).not.toBeNull();
     });
 
@@ -1041,7 +1049,7 @@ describe('ProjectsView', () => {
 
     screen.getByTestId('projects-toolbar-default');
     expect(screen.queryByTestId('projects-fab')).toBeNull();
-    screen.getByRole('textbox', { name: 'Search Untagged...' });
+    screen.getByRole('textbox', { name: 'Search Inbox...' });
     expect(screen.queryByTestId('projects-results-count')).toBeNull();
     screen.getByRole('button', { name: 'Filter' });
     screen.getByRole('button', { name: 'Open File Directory' });
@@ -1058,8 +1066,8 @@ describe('ProjectsView', () => {
 
     render(<ProjectsView />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'New Tag' }));
-    fireEvent.change(screen.getByPlaceholderText('Tag name'), {
+    fireEvent.click(screen.getByRole('button', { name: 'New Project' }));
+    fireEvent.change(screen.getByPlaceholderText('Project name'), {
       target: { value: 'New Workspace' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Create Tag' }));
@@ -1092,10 +1100,10 @@ describe('ProjectsView', () => {
       );
     });
 
-    expect(screen.queryByText('Tag settings')).toBeNull();
+    expect(screen.queryByText('Project settings')).toBeNull();
   });
 
-  it('keeps Tag settings metadata-only and does not write processing defaults', async () => {
+  it('keeps Project settings metadata-only and does not write processing defaults', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
     const updateProjectSpy = vi.spyOn(useProjectStore.getState(), 'updateProject');
 
@@ -1141,19 +1149,19 @@ describe('ProjectsView', () => {
     fireEvent.click(await screen.findByRole('button', { name: '🧪' }));
     fireEvent.click(await screen.findByRole('button', { name: '📄' }));
 
-    fireEvent.click(getButtonByContent('Untagged'));
+    fireEvent.click(getButtonByContent('Inbox'));
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalledTimes(1);
     });
     expect(useProjectStore.getState().activeProjectId).toBe('project-1');
-    screen.getByText('Tag settings');
+    screen.getByText('Project settings');
 
-    fireEvent.click(getButtonByContent('Untagged'));
+    fireEvent.click(getButtonByContent('Inbox'));
     await waitFor(() => {
       expect(useProjectStore.getState().activeProjectId).toBeNull();
     });
     expect(confirmSpy).toHaveBeenCalledTimes(2);
-    expect(screen.queryByText('Tag settings')).toBeNull();
+    expect(screen.queryByText('Project settings')).toBeNull();
   });
 
   it('guards closing project settings when icon-only edits are dirty', async () => {
@@ -1179,11 +1187,11 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       expect(confirmSpy).toHaveBeenCalledTimes(1);
     });
-    screen.getByText('Tag settings');
+    screen.getByText('Project settings');
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     await waitFor(() => {
-      expect(screen.queryByText('Tag settings')).toBeNull();
+      expect(screen.queryByText('Project settings')).toBeNull();
     });
     expect(confirmSpy).toHaveBeenCalledTimes(2);
   });
@@ -1346,7 +1354,7 @@ describe('ProjectsView', () => {
       expect(useTranscriptStore.getState().sourceHistoryId).toBe('hist-1');
     });
 
-    await clickAsync(getButtonByContent('Untagged'));
+    await clickAsync(getButtonByContent('Inbox'));
 
     await waitFor(() => {
       expect(getDetailPlaceholder()).toBeNull();
@@ -1397,7 +1405,7 @@ describe('ProjectsView', () => {
     });
   });
 
-  it('removes a tag from selected items without replacing other assignments', async () => {
+  it('moves selected items to a project without replacing other assignments', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
     useHistoryStore.setState({
       items: [
@@ -1421,16 +1429,13 @@ describe('ProjectsView', () => {
     await screen.findByText('Project Item');
     fireEvent.click(screen.getByRole('button', { name: 'Select' }));
     fireEvent.click(screen.getByRole('button', { name: 'Select hist-1' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit Tags' }));
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Alpha' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Assign Project' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Target Project' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Alpha' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
-      expect(historyService.updateTagAssignments).toHaveBeenCalledWith(
-        ['hist-1'],
-        [],
-        ['project-1'],
-      );
+      expect(historyService.updateProjectAssignments).toHaveBeenCalledWith(['hist-1'], 'project-1');
     });
   });
 
@@ -1445,7 +1450,7 @@ describe('ProjectsView', () => {
           audioPath: 'audio.wav',
           transcriptPath: 'hist-trash.json',
           previewText: 'Preview',
-          tagIds: ['project-1'],
+          projectId: 'project-1',
           deletedAt: Date.now(),
         },
       ],
@@ -1760,7 +1765,7 @@ describe('ProjectsView', () => {
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
 
-    const input = screen.getByRole('textbox', { name: 'Search Untagged...' });
+    const input = screen.getByRole('textbox', { name: 'Search Inbox...' });
     fireEvent.keyDown(window, { key: 'f', ctrlKey: true });
 
     expect(document.activeElement).toBe(input);
@@ -2042,7 +2047,7 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       screen.getByText('No matching items');
       expect(screen.queryByText('No items in this workspace yet.')).toBeNull();
-      expect(screen.getByRole('button', { name: 'Edit Tags' }).hasAttribute('disabled')).toBe(true);
+      expect(screen.getByRole('button', { name: 'Assign Project' }).hasAttribute('disabled')).toBe(true);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));

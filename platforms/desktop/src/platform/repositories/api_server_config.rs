@@ -89,7 +89,7 @@ pub fn load_online_asr_config_for_app<R: tauri::Runtime>(
     let provider = TauriPathProvider::from_app(app);
     load_app_config_for_server_with_database(
         &provider,
-        Some(crate::platform::database::sqlite_database(app)),
+        crate::platform::database::try_sqlite_database(app).ok(),
     )
     .map(|config| online_asr_config_from_app_config(&config))
     .unwrap_or_default()
@@ -108,7 +108,7 @@ pub fn load_api_server_startup_settings_for_app<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
 ) -> ServeStartupSettings {
     let provider = TauriPathProvider::from_app(app);
-    let database = Some(crate::platform::database::sqlite_database(app));
+    let database = crate::platform::database::try_sqlite_database(app).ok();
     if let Some(settings) = load_sqlite_serve_startup_settings(&provider, database.clone()) {
         return settings;
     }
