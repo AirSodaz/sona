@@ -1,14 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  SettingsDashboardTab,
-} from '../SettingsDashboardTab';
+import { dashboardService } from '../../../services/dashboardService';
 import type {
   DashboardLlmUsageStats,
   DashboardSnapshot,
   DashboardSpeakerStats,
 } from '../../../types/dashboard';
-import { dashboardService } from '../../../services/dashboardService';
+import { SettingsDashboardTab } from '../SettingsDashboardTab';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -104,7 +102,7 @@ function createUsageTrend(values: number[]) {
 }
 
 function createOverview(
-  overrides: Partial<DashboardSnapshot['content']['overview']> = {},
+  overrides: Partial<DashboardSnapshot['content']['overview']> = {}
 ): DashboardSnapshot['content']['overview'] {
   const itemCount = overrides.itemCount ?? 3;
   const tagCount = overrides.tagCount ?? 2;
@@ -123,8 +121,11 @@ function createOverview(
     totalDurationSeconds,
     totalDurationDisplay: overrides.totalDurationDisplay ?? displayDuration(totalDurationSeconds),
     transcriptCharacterCount,
-    transcriptCharacterCountDisplay: overrides.transcriptCharacterCountDisplay
-      ?? (typeof transcriptCharacterCount === 'number' ? displayNumber(transcriptCharacterCount) : undefined),
+    transcriptCharacterCountDisplay:
+      overrides.transcriptCharacterCountDisplay ??
+      (typeof transcriptCharacterCount === 'number'
+        ? displayNumber(transcriptCharacterCount)
+        : undefined),
     recordingCount,
     recordingCountDisplay: overrides.recordingCountDisplay ?? displayNumber(recordingCount),
     batchCount,
@@ -138,9 +139,7 @@ function createOverview(
   };
 }
 
-function createSpeakerStats(
-  overrides: Partial<DashboardSpeakerStats> = {},
-): DashboardSpeakerStats {
+function createSpeakerStats(overrides: Partial<DashboardSpeakerStats> = {}): DashboardSpeakerStats {
   const speakerTaggedSegmentCount = overrides.speakerTaggedSegmentCount ?? 5;
   const totalSegmentCount = overrides.totalSegmentCount ?? 6;
   const speakerAttributedDuration = overrides.speakerAttributedDuration ?? 180;
@@ -159,55 +158,65 @@ function createSpeakerStats(
       itemCountDisplay: '2',
     },
   ];
-  const topIdentifiedSpeakerRows = overrides.topIdentifiedSpeakerRows
-    ?? topIdentifiedSpeakers.slice(0, 5);
+  const topIdentifiedSpeakerRows =
+    overrides.topIdentifiedSpeakerRows ?? topIdentifiedSpeakers.slice(0, 5);
 
   return {
     annotatedItemCount: overrides.annotatedItemCount ?? 2,
-    annotatedItemCountDisplay: overrides.annotatedItemCountDisplay
-      ?? displayNumber(overrides.annotatedItemCount ?? 2),
+    annotatedItemCountDisplay:
+      overrides.annotatedItemCountDisplay ?? displayNumber(overrides.annotatedItemCount ?? 2),
     speakerAttributedDuration,
-    speakerAttributedDurationDisplay: overrides.speakerAttributedDurationDisplay
-      ?? displayDuration(speakerAttributedDuration),
+    speakerAttributedDurationDisplay:
+      overrides.speakerAttributedDurationDisplay ?? displayDuration(speakerAttributedDuration),
     identifiedSpeakerCount: overrides.identifiedSpeakerCount ?? 1,
-    identifiedSpeakerCountDisplay: overrides.identifiedSpeakerCountDisplay
-      ?? displayNumber(overrides.identifiedSpeakerCount ?? 1),
+    identifiedSpeakerCountDisplay:
+      overrides.identifiedSpeakerCountDisplay ??
+      displayNumber(overrides.identifiedSpeakerCount ?? 1),
     anonymousSpeakerSlotCount: overrides.anonymousSpeakerSlotCount ?? 2,
-    anonymousSpeakerSlotCountDisplay: overrides.anonymousSpeakerSlotCountDisplay
-      ?? displayNumber(overrides.anonymousSpeakerSlotCount ?? 2),
+    anonymousSpeakerSlotCountDisplay:
+      overrides.anonymousSpeakerSlotCountDisplay ??
+      displayNumber(overrides.anonymousSpeakerSlotCount ?? 2),
     speakerTaggedSegmentCount,
-    speakerTaggedSegmentCountDisplay: overrides.speakerTaggedSegmentCountDisplay
-      ?? displayNumber(speakerTaggedSegmentCount),
+    speakerTaggedSegmentCountDisplay:
+      overrides.speakerTaggedSegmentCountDisplay ?? displayNumber(speakerTaggedSegmentCount),
     totalSegmentCount,
-    totalSegmentCountDisplay: overrides.totalSegmentCountDisplay ?? displayNumber(totalSegmentCount),
+    totalSegmentCountDisplay:
+      overrides.totalSegmentCountDisplay ?? displayNumber(totalSegmentCount),
     totalSegmentDuration,
-    totalSegmentDurationDisplay: overrides.totalSegmentDurationDisplay
-      ?? displayDuration(totalSegmentDuration),
+    totalSegmentDurationDisplay:
+      overrides.totalSegmentDurationDisplay ?? displayDuration(totalSegmentDuration),
     identifiedDuration,
-    identifiedDurationDisplay: overrides.identifiedDurationDisplay
-      ?? displayDuration(identifiedDuration),
+    identifiedDurationDisplay:
+      overrides.identifiedDurationDisplay ?? displayDuration(identifiedDuration),
     anonymousDuration,
-    anonymousDurationDisplay: overrides.anonymousDurationDisplay
-      ?? displayDuration(anonymousDuration),
-    segmentCoverageRatio: overrides.segmentCoverageRatio
-      ?? (totalSegmentCount > 0 ? speakerTaggedSegmentCount / totalSegmentCount : 0),
-    segmentCoverageLabel: overrides.segmentCoverageLabel
-      ?? displayPercent(totalSegmentCount > 0 ? speakerTaggedSegmentCount / totalSegmentCount : 0),
-    durationCoverageRatio: overrides.durationCoverageRatio
-      ?? (totalSegmentDuration > 0 ? speakerAttributedDuration / totalSegmentDuration : 0),
-    durationCoverageLabel: overrides.durationCoverageLabel
-      ?? displayPercent(totalSegmentDuration > 0 ? speakerAttributedDuration / totalSegmentDuration : 0),
+    anonymousDurationDisplay:
+      overrides.anonymousDurationDisplay ?? displayDuration(anonymousDuration),
+    segmentCoverageRatio:
+      overrides.segmentCoverageRatio ??
+      (totalSegmentCount > 0 ? speakerTaggedSegmentCount / totalSegmentCount : 0),
+    segmentCoverageLabel:
+      overrides.segmentCoverageLabel ??
+      displayPercent(totalSegmentCount > 0 ? speakerTaggedSegmentCount / totalSegmentCount : 0),
+    durationCoverageRatio:
+      overrides.durationCoverageRatio ??
+      (totalSegmentDuration > 0 ? speakerAttributedDuration / totalSegmentDuration : 0),
+    durationCoverageLabel:
+      overrides.durationCoverageLabel ??
+      displayPercent(
+        totalSegmentDuration > 0 ? speakerAttributedDuration / totalSegmentDuration : 0
+      ),
     topIdentifiedSpeakers,
     topIdentifiedSpeakerRows,
-    topIdentifiedSpeakerMaxValue: overrides.topIdentifiedSpeakerMaxValue
-      ?? Math.max(0, ...topIdentifiedSpeakerRows.map((speaker) => speaker.durationSeconds)),
+    topIdentifiedSpeakerMaxValue:
+      overrides.topIdentifiedSpeakerMaxValue ??
+      Math.max(0, ...topIdentifiedSpeakerRows.map((speaker) => speaker.durationSeconds)),
     isDeepLoaded: overrides.isDeepLoaded ?? true,
   };
 }
 
 function createBreakdown<TValue extends string>(
   key: TValue,
-  bucket: Parameters<typeof createUsageBucket>[0],
+  bucket: Parameters<typeof createUsageBucket>[0]
 ) {
   const stats = createUsageBucket(bucket);
   const value = Math.max(stats.totalTokens, stats.callCount);
@@ -331,7 +340,10 @@ function createDeepSnapshotWithTrends(values: number[]): DashboardSnapshot {
         recentDailyItems: createContentTrend(values),
       },
     },
-    llmUsage: createUsage(snapshot.llmUsage.totals.callCount, values.map((value) => value * 100)),
+    llmUsage: createUsage(
+      snapshot.llmUsage.totals.callCount,
+      values.map((value) => value * 100)
+    ),
   };
 }
 
@@ -458,7 +470,9 @@ describe('SettingsDashboardTab', () => {
     ];
 
     vi.mocked(dashboardService.getFastSnapshot).mockResolvedValue(createFastSnapshot());
-    vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(createDeepSnapshotWithRechartsData(trendValues));
+    vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(
+      createDeepSnapshotWithRechartsData(trendValues)
+    );
 
     render(<SettingsDashboardTab />);
 
@@ -481,7 +495,9 @@ describe('SettingsDashboardTab', () => {
     ];
 
     vi.mocked(dashboardService.getFastSnapshot).mockResolvedValue(createFastSnapshot());
-    vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(createDeepSnapshotWithTrends(trendValues));
+    vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(
+      createDeepSnapshotWithTrends(trendValues)
+    );
 
     render(<SettingsDashboardTab />);
 
@@ -489,7 +505,8 @@ describe('SettingsDashboardTab', () => {
       screen.getByText('Alice');
     });
 
-    const tokenTrendTitle = screen.getAllByText('settings.dashboard.recent_token_trend')
+    const tokenTrendTitle = screen
+      .getAllByText('settings.dashboard.recent_token_trend')
       .find((element) => element.classList.contains('settings-dashboard-subtitle'));
 
     expect(tokenTrendTitle).toBeDefined();
@@ -499,15 +516,21 @@ describe('SettingsDashboardTab', () => {
 
     const tokenTrendCard = tokenTrendTitle.closest('.settings-dashboard-chart-card');
     expect(tokenTrendCard).not.toBeNull();
-    expect(tokenTrendCard?.querySelector('[data-testid="dashboard-recharts-trend"]')).not.toBeNull();
-    expect(tokenTrendCard?.querySelector('[aria-label="settings.dashboard.recent_token_trend"]')).not.toBeNull();
+    expect(
+      tokenTrendCard?.querySelector('[data-testid="dashboard-recharts-trend"]')
+    ).not.toBeNull();
+    expect(
+      tokenTrendCard?.querySelector('[aria-label="settings.dashboard.recent_token_trend"]')
+    ).not.toBeNull();
   });
 
   it('renders plain line charts for all-zero recent trend values', async () => {
     const trendValues = Array.from({ length: 30 }, () => 0);
 
     vi.mocked(dashboardService.getFastSnapshot).mockResolvedValue(createFastSnapshot());
-    vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(createDeepSnapshotWithTrends(trendValues));
+    vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(
+      createDeepSnapshotWithTrends(trendValues)
+    );
 
     render(<SettingsDashboardTab />);
 
@@ -544,7 +567,9 @@ describe('SettingsDashboardTab', () => {
     ];
 
     vi.mocked(dashboardService.getFastSnapshot).mockResolvedValue(createFastSnapshot());
-    vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(createDeepSnapshotWithRechartsData(trendValues));
+    vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(
+      createDeepSnapshotWithRechartsData(trendValues)
+    );
 
     render(<SettingsDashboardTab />);
 

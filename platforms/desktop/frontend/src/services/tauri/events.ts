@@ -43,6 +43,4 @@ export function buildRecognizerOutputEvent(instanceId: string): `recognizer-outp
   return `recognizer-output-${instanceId}`;
 }
 
-export type TauriEventName =
-  | DeepValueOf<typeof TauriEvent>
-  | `recognizer-output-${string}`;
+export type TauriEventName = DeepValueOf<typeof TauriEvent> | `recognizer-output-${string}`;

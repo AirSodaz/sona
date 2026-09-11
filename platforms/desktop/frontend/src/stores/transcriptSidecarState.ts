@@ -59,14 +59,14 @@ export function createDefaultSummaryState(): TranscriptSummaryState {
 
 export function resolveTranscriptHistoryKey(
   explicitHistoryId: string | undefined,
-  sourceHistoryId: string | null,
+  sourceHistoryId: string | null
 ): string {
   return explicitHistoryId || sourceHistoryId || 'current';
 }
 
 export function rekeyCurrentSummaryState(
   summaryStates: Record<string, TranscriptSummaryState>,
-  nextHistoryId: string | null,
+  nextHistoryId: string | null
 ): Record<string, TranscriptSummaryState> {
   if (!nextHistoryId || !summaryStates.current) {
     return summaryStates;
@@ -78,10 +78,10 @@ export function rekeyCurrentSummaryState(
 
   nextSummaryStates[nextHistoryId] = existingTargetState
     ? {
-      ...existingTargetState,
-      ...currentSummaryState,
-      record: currentSummaryState.record || existingTargetState.record,
-    }
+        ...existingTargetState,
+        ...currentSummaryState,
+        record: currentSummaryState.record || existingTargetState.record,
+      }
     : currentSummaryState;
 
   delete nextSummaryStates.current;

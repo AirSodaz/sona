@@ -1,11 +1,11 @@
 import type { AppConfig } from '../types/config';
-import { logger } from './logger';
-import {
+import type {
   OnboardingEntryContext,
   OnboardingState,
   OnboardingStatus,
   OnboardingStep,
 } from '../types/onboarding';
+import { logger } from './logger';
 
 export const ONBOARDING_STORAGE_KEY = 'sona-onboarding';
 export const LEGACY_FIRST_RUN_KEY = 'sona-first-run-completed';
@@ -34,7 +34,9 @@ function isValidStatus(value: unknown): value is OnboardingStatus {
 
 function createState(
   status: OnboardingStatus,
-  overrides: Partial<Pick<OnboardingState, 'deferredAt' | 'completedAt' | 'reminderDismissedAt'>> = {},
+  overrides: Partial<
+    Pick<OnboardingState, 'deferredAt' | 'completedAt' | 'reminderDismissedAt'>
+  > = {}
 ): OnboardingState {
   return {
     version: ONBOARDING_VERSION,
@@ -67,10 +69,7 @@ export function parseStoredConfig(rawValue: string | null): Partial<AppConfig> {
         config.modelPath ||
         '',
       batchModelPath:
-        config.batchModelPath ||
-        config.recognitionModelPath ||
-        config.modelPath ||
-        '',
+        config.batchModelPath || config.recognitionModelPath || config.modelPath || '',
       microphoneId: config.microphoneId || 'default',
     };
   } catch (error) {
@@ -106,7 +105,7 @@ export function hasRequiredOnboardingModels(config?: Partial<AppConfig> | null):
  */
 export function shouldShowOnboardingReminder(
   config?: Partial<AppConfig> | null,
-  state?: OnboardingState | null,
+  state?: OnboardingState | null
 ): boolean {
   return !hasRequiredOnboardingModels(config) && !state?.reminderDismissedAt;
 }
@@ -117,7 +116,7 @@ export function shouldShowOnboardingReminder(
 export function getResumeOnboardingStep(
   config?: Partial<AppConfig> | null,
   entryContext: OnboardingEntryContext = 'startup',
-  state?: OnboardingState | null,
+  state?: OnboardingState | null
 ): OnboardingStep {
   if (hasRequiredOnboardingModels(config)) {
     return 'microphone';
@@ -136,7 +135,7 @@ export function getResumeOnboardingStep(
 export function migrateOnboardingState(
   storedOnboardingValue: string | null,
   storedConfigValue: string | null,
-  legacyFirstRunCompleted: string | null,
+  legacyFirstRunCompleted: string | null
 ): OnboardingState {
   if (storedOnboardingValue) {
     try {
@@ -144,7 +143,8 @@ export function migrateOnboardingState(
       if (isRecord(parsed) && isValidStatus(parsed.status)) {
         const deferredAt = typeof parsed.deferredAt === 'string' ? parsed.deferredAt : undefined;
         const completedAt = typeof parsed.completedAt === 'string' ? parsed.completedAt : undefined;
-        const reminderDismissedAt = typeof parsed.reminderDismissedAt === 'string' ? parsed.reminderDismissedAt : undefined;
+        const reminderDismissedAt =
+          typeof parsed.reminderDismissedAt === 'string' ? parsed.reminderDismissedAt : undefined;
 
         return createState(parsed.status, {
           deferredAt,

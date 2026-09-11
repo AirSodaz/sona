@@ -1,8 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { useAutoSaveTranscript } from '../useAutoSaveTranscript';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import { useAutoSaveTranscript } from '../useAutoSaveTranscript';
 
 vi.mock('../../services/historyService', () => ({
   historyService: {
@@ -54,10 +54,12 @@ describe('useAutoSaveTranscript', () => {
     renderHook(() => useAutoSaveTranscript());
 
     act(() => {
-      useTranscriptStore.getState().loadTranscript(
-        [{ id: 'seg-1', text: 'Loaded text', start: 0, end: 1, isFinal: true }],
-        'hist-1',
-      );
+      useTranscriptStore
+        .getState()
+        .loadTranscript(
+          [{ id: 'seg-1', text: 'Loaded text', start: 0, end: 1, isFinal: true }],
+          'hist-1'
+        );
     });
 
     expect(useTranscriptStore.getState().autoSaveStates['hist-1']).toBeUndefined();
@@ -76,9 +78,9 @@ describe('useAutoSaveTranscript', () => {
     renderHook(() => useAutoSaveTranscript());
 
     act(() => {
-      useTranscriptStore.getState().setSegments([
-        { id: 'seg-1', text: 'Batch result', start: 0, end: 1, isFinal: true },
-      ]);
+      useTranscriptStore
+        .getState()
+        .setSegments([{ id: 'seg-1', text: 'Batch result', start: 0, end: 1, isFinal: true }]);
     });
 
     await act(async () => {
@@ -115,7 +117,7 @@ describe('useAutoSaveTranscript', () => {
       'hist-1',
       expect.any(String),
       expect.any(Array),
-      expect.any(Array),
+      expect.any(Array)
     );
     expect(useTranscriptStore.getState().autoSaveStates['hist-1']?.status).toBe('saved');
   });
@@ -158,10 +160,9 @@ describe('useAutoSaveTranscript', () => {
     expect(useTranscriptStore.getState().autoSaveStates['hist-1']?.status).toBe('saving');
 
     act(() => {
-      useTranscriptStore.getState().loadTranscript(
-        [{ id: 'seg-2', text: 'Two', start: 0, end: 1, isFinal: true }],
-        'hist-2',
-      );
+      useTranscriptStore
+        .getState()
+        .loadTranscript([{ id: 'seg-2', text: 'Two', start: 0, end: 1, isFinal: true }], 'hist-2');
     });
     await flushMicrotasks();
 
@@ -170,7 +171,7 @@ describe('useAutoSaveTranscript', () => {
       'hist-1',
       expect.any(String),
       expect.any(Array),
-      expect.any(Array),
+      expect.any(Array)
     );
     expect(useTranscriptStore.getState().autoSaveStates['hist-1']?.status).toBe('saved');
 

@@ -1,126 +1,128 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { exportTranscriptToDirectory } from '../services/exportService';
+import { openDialog } from '../services/tauri/platform/dialog';
+import { useDialogStore } from '../stores/dialogStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import { useDialogStore } from '../stores/dialogStore';
 import type { ExportFormat, ExportMode } from '../utils/exportFormats';
-import { exportTranscriptToDirectory } from '../services/exportService';
 import { logger } from '../utils/logger';
-import { openDialog } from '../services/tauri/platform/dialog';
 
 interface UseExportActionsProps {
-    isOpen: boolean;
-    onSuccess: () => void;
+  isOpen: boolean;
+  onSuccess: () => void;
 }
 
 export function useExportActions({ isOpen, onSuccess }: UseExportActionsProps) {
-    const { t } = useTranslation();
-    const alert = useDialogStore((state) => state.alert);
-    const showError = useDialogStore((state) => state.showError);
-    
-    const segments = useTranscriptSessionStore((state) => state.segments);
-    const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
-    const historyItems = useHistoryStore((state) => state.items);
-    
-    const [fileName, setFileName] = useState('');
-    const [directory, setDirectory] = useState(localStorage.getItem('sona_last_export_dir') || '');
-    const [exportFormat, setExportFormat] = useState<ExportFormat>('srt');
-    const [exportMode, setExportMode] = useState<ExportMode>('original');
-    const [isExporting, setIsExporting] = useState(false);
+  const { t } = useTranslation();
+  const alert = useDialogStore((state) => state.alert);
+  const showError = useDialogStore((state) => state.showError);
 
-    const hasTranslation = segments.some(seg => typeof seg.translation === 'string' && seg.translation.trim().length > 0);
-    
-    const defaultFileName = useMemo(() => {
-        const historyItem = historyItems.find(item => item.id === sourceHistoryId);
+  const segments = useTranscriptSessionStore((state) => state.segments);
+  const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+  const historyItems = useHistoryStore((state) => state.items);
 
-        if (historyItem) {
-            return historyItem.title.replace(/[\\/:*?"<>|]/g, '_');
-        }
+  const [fileName, setFileName] = useState('');
+  const [directory, setDirectory] = useState(localStorage.getItem('sona_last_export_dir') || '');
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('srt');
+  const [exportMode, setExportMode] = useState<ExportMode>('original');
+  const [isExporting, setIsExporting] = useState(false);
 
-        return '';
-    }, [historyItems, sourceHistoryId]);
+  const hasTranslation = segments.some(
+    (seg) => typeof seg.translation === 'string' && seg.translation.trim().length > 0
+  );
 
-    // Initial value for filename from history title
-    useEffect(() => {
-        if (!isOpen) {
-            return;
-        }
+  const defaultFileName = useMemo(() => {
+    const historyItem = historyItems.find((item) => item.id === sourceHistoryId);
 
-        queueMicrotask(() => {
-            setFileName(defaultFileName);
-        });
-    }, [defaultFileName, isOpen]);
+    if (historyItem) {
+      return historyItem.title.replace(/[\\/:*?"<>|]/g, '_');
+    }
 
-    useEffect(() => {
-        if (!isOpen || hasTranslation || exportMode === 'original') {
-            return;
-        }
+    return '';
+  }, [historyItems, sourceHistoryId]);
 
-        queueMicrotask(() => {
-            setExportMode('original');
-        });
-    }, [exportMode, hasTranslation, isOpen]);
+  // Initial value for filename from history title
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
 
-    const handleBrowse = async () => {
-        try {
-            const selected = await openDialog({
-                directory: true,
-                multiple: false,
-                defaultPath: directory || undefined,
-            });
-            if (selected && typeof selected === 'string') {
-                setDirectory(selected);
-                localStorage.setItem('sona_last_export_dir', selected);
-            }
-        } catch (error) {
-            logger.error('Failed to open directory picker:', error);
-        }
-    };
+    queueMicrotask(() => {
+      setFileName(defaultFileName);
+    });
+  }, [defaultFileName, isOpen]);
 
-    const handleExport = async () => {
-        if (!fileName.trim()) {
-            await alert(t('export.invalid_filename'), { variant: 'warning' });
-            return;
-        }
-        if (!directory) {
-            await alert(t('export.select_directory'), { variant: 'warning' });
-            return;
-        }
+  useEffect(() => {
+    if (!isOpen || hasTranslation || exportMode === 'original') {
+      return;
+    }
 
-        setIsExporting(true);
-        try {
-            await exportTranscriptToDirectory({
-                segments,
-                directory,
-                baseFileName: fileName,
-                format: exportFormat,
-                mode: exportMode,
-            });
-            
-            await alert(t('export.success'), { variant: 'success' });
-            onSuccess();
-        } catch (error) {
-            await showError({
-                code: 'export.failed',
-                messageKey: 'errors.export.failed',
-                cause: error,
-            });
-        } finally {
-            setIsExporting(false);
-        }
-    };
+    queueMicrotask(() => {
+      setExportMode('original');
+    });
+  }, [exportMode, hasTranslation, isOpen]);
 
-    return {
-        fileName,
-        setFileName,
+  const handleBrowse = async () => {
+    try {
+      const selected = await openDialog({
+        directory: true,
+        multiple: false,
+        defaultPath: directory || undefined,
+      });
+      if (selected && typeof selected === 'string') {
+        setDirectory(selected);
+        localStorage.setItem('sona_last_export_dir', selected);
+      }
+    } catch (error) {
+      logger.error('Failed to open directory picker:', error);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!fileName.trim()) {
+      await alert(t('export.invalid_filename'), { variant: 'warning' });
+      return;
+    }
+    if (!directory) {
+      await alert(t('export.select_directory'), { variant: 'warning' });
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      await exportTranscriptToDirectory({
+        segments,
         directory,
-        exportFormat,
-        setExportFormat,
-        exportMode,
-        setExportMode,
-        isExporting,
-        hasTranslation,
-        handleBrowse,
-        handleExport
-    };
+        baseFileName: fileName,
+        format: exportFormat,
+        mode: exportMode,
+      });
+
+      await alert(t('export.success'), { variant: 'success' });
+      onSuccess();
+    } catch (error) {
+      await showError({
+        code: 'export.failed',
+        messageKey: 'errors.export.failed',
+        cause: error,
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return {
+    fileName,
+    setFileName,
+    directory,
+    exportFormat,
+    setExportFormat,
+    exportMode,
+    setExportMode,
+    isExporting,
+    hasTranslation,
+    handleBrowse,
+    handleExport,
+  };
 }

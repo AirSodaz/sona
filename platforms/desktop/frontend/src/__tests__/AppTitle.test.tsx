@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
 
 vi.mock('react-i18next', async () => {
@@ -8,27 +8,32 @@ vi.mock('react-i18next', async () => {
 });
 
 vi.mock('../components/TabNavigation', () => ({ TabNavigation: () => <div>TabNavigation</div> }));
-vi.mock('../components/transcript/TranscriptWorkbench', () => ({ TranscriptWorkbench: () => <div>TranscriptWorkbench</div> }));
+vi.mock('../components/transcript/TranscriptWorkbench', () => ({
+  TranscriptWorkbench: () => <div>TranscriptWorkbench</div>,
+}));
 vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImport</div> }));
 vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
 vi.mock('../components/ProjectsView', () => ({ ProjectsView: () => <div>ProjectsView</div> }));
 vi.mock('../components/Settings', () => ({ Settings: () => <div>Settings</div> }));
-vi.mock('../components/DiagnosticsModal', () => ({ DiagnosticsModal: () => <div>DiagnosticsModal</div> }));
-vi.mock('../components/RecoveryCenterModal', () => ({ RecoveryCenterModal: () => <div>RecoveryCenterModal</div> }));
+vi.mock('../components/DiagnosticsModal', () => ({
+  DiagnosticsModal: () => <div>DiagnosticsModal</div>,
+}));
+vi.mock('../components/RecoveryCenterModal', () => ({
+  RecoveryCenterModal: () => <div>RecoveryCenterModal</div>,
+}));
 vi.mock('../components/GlobalDialog', () => ({ GlobalDialog: () => <div>GlobalDialog</div> }));
 vi.mock('../components/ErrorDialog', () => ({ ErrorDialog: () => <div>ErrorDialog</div> }));
 vi.mock('../components/FirstRunGuide', () => ({ FirstRunGuide: () => <div>FirstRunGuide</div> }));
 vi.mock('../components/NotificationCenter', () => ({ NotificationCenter: () => null }));
-vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBanner: () => <div>OnboardingReminderBanner</div> }));
+vi.mock('../components/OnboardingReminderBanner', () => ({
+  OnboardingReminderBanner: () => <div>OnboardingReminderBanner</div>,
+}));
 vi.mock('../components/Icons', async (importOriginal) => {
   const { buildPartialIconsMock, createNamedIconMock } = await import('./testUtils/icons');
-  return buildPartialIconsMock(
-    () => importOriginal<typeof import('../components/Icons')>(),
-    {
-      AutomationIcon: createNamedIconMock('AutomationIcon'),
-      SettingsIcon: createNamedIconMock('SettingsIcon'),
-    },
-  );
+  return buildPartialIconsMock(() => importOriginal<typeof import('../components/Icons')>(), {
+    AutomationIcon: createNamedIconMock('AutomationIcon'),
+    SettingsIcon: createNamedIconMock('SettingsIcon'),
+  });
 });
 
 vi.mock('../hooks/useAppInitialization', () => ({
@@ -44,7 +49,8 @@ const mockUseProjectStore = vi.fn();
 const mockUseOnboardingStore = vi.fn();
 
 vi.mock('../stores/transcriptRuntimeStore', () => ({
-  useTranscriptRuntimeStore: (selector: (state: unknown) => unknown) => mockUseTranscriptRuntimeStore(selector),
+  useTranscriptRuntimeStore: (selector: (state: unknown) => unknown) =>
+    mockUseTranscriptRuntimeStore(selector),
 }));
 
 vi.mock('../stores/projectStore', () => ({
@@ -73,15 +79,21 @@ describe('App Title Logic', () => {
   const setupStore = (
     transcriptOverrides = {},
     projectOverrides = {},
-    onboardingOverrides = {},
+    onboardingOverrides = {}
   ) => {
     const transcriptState = { ...defaultTranscriptState, ...transcriptOverrides };
     const projectState = { ...defaultProjectState, ...projectOverrides };
     const onboardingState = { ...defaultOnboardingState, ...onboardingOverrides };
 
-    mockUseTranscriptRuntimeStore.mockImplementation((selector: (state: typeof transcriptState) => unknown) => selector(transcriptState));
-    mockUseProjectStore.mockImplementation((selector: (state: typeof projectState) => unknown) => selector(projectState));
-    mockUseOnboardingStore.mockImplementation((selector: (state: typeof onboardingState) => unknown) => selector(onboardingState));
+    mockUseTranscriptRuntimeStore.mockImplementation(
+      (selector: (state: typeof transcriptState) => unknown) => selector(transcriptState)
+    );
+    mockUseProjectStore.mockImplementation((selector: (state: typeof projectState) => unknown) =>
+      selector(projectState)
+    );
+    mockUseOnboardingStore.mockImplementation(
+      (selector: (state: typeof onboardingState) => unknown) => selector(onboardingState)
+    );
   };
 
   beforeEach(() => {
@@ -106,7 +118,7 @@ describe('App Title Logic', () => {
       {
         activeProjectId: 'p1',
         projects: [{ id: 'p1', name: 'My Project' }],
-      },
+      }
     );
 
     render(<App />);
@@ -122,7 +134,9 @@ describe('App Title Logic', () => {
 
     expect(screen.getByText('ProjectsView')).not.toBeNull();
     expect(screen.getByText('TranscriptWorkbench')).not.toBeNull();
-    expect(container.querySelector('.persistent-transcript-host')?.classList.contains('is-hidden')).toBe(true);
+    expect(
+      container.querySelector('.persistent-transcript-host')?.classList.contains('is-hidden')
+    ).toBe(true);
 
     const workspaceShell = container.querySelector('.workspace-mode-shell');
     expect((workspaceShell as HTMLElement).style.display).toBe('none');

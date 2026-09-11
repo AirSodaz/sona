@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SettingsAboutTab } from '../settings/SettingsAboutTab';
 import { useAppUpdaterStore } from '../../stores/appUpdaterStore';
+import { SettingsAboutTab } from '../settings/SettingsAboutTab';
 
 const checkMock = vi.fn();
 const runGuardedQuitMock = vi.fn();
@@ -36,7 +36,8 @@ vi.mock('../../stores/errorDialogStore', () => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: Record<string, unknown>) => options?.version ? `${key}:${options.version}` : key,
+    t: (key: string, options?: Record<string, unknown>) =>
+      options?.version ? `${key}:${options.version}` : key,
   }),
   initReactI18next: {
     type: '3rdParty',
@@ -46,7 +47,8 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('../../i18n', () => ({
   default: {
-    t: (key: string, options?: Record<string, unknown>) => options?.version ? `${key}:${options.version}` : key,
+    t: (key: string, options?: Record<string, unknown>) =>
+      options?.version ? `${key}:${options.version}` : key,
   },
 }));
 
@@ -83,7 +85,9 @@ describe('SettingsAboutTab', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Sona' })).toBeDefined();
     const versionBadge = container.querySelector('.about-version-badge');
     expect(versionBadge).not.toBeNull();
-    expect(versionBadge?.querySelector('.about-version-text')?.textContent).toMatch(/^v\d+\.\d+\.\d+/);
+    expect(versionBadge?.querySelector('.about-version-text')?.textContent).toMatch(
+      /^v\d+\.\d+\.\d+/
+    );
     expect(versionBadge?.querySelector('.about-version-divider')?.textContent).toBe('/');
     expect(versionBadge?.querySelector('.about-channel-text')?.textContent).toBe('Stable');
   });

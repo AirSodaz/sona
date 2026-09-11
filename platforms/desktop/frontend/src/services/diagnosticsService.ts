@@ -1,3 +1,7 @@
+import { useConfigStore } from '../stores/configStore';
+import { useOnboardingStore } from '../stores/onboardingStore';
+import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
+import type { DiagnosticsSnapshot } from '../types/diagnostics';
 import { getResumeOnboardingStep } from '../utils/onboarding';
 import { getScenarioPunctuationModelPath, getScenarioVadModelPath } from '../utils/scenarioModels';
 import {
@@ -5,18 +9,9 @@ import {
   probeMicrophoneDeviceOptions,
   probeSystemAudioDeviceOptions,
 } from './audioDeviceService';
-import { useConfigStore } from '../stores/configStore';
-import { useOnboardingStore } from '../stores/onboardingStore';
-import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
-import { resolveVoiceTypingReadinessSnapshot } from './voiceTypingReadiness';
-import type {
-  DiagnosticsSnapshot,
-} from '../types/diagnostics';
+import { buildDiagnosticsSnapshot, type Translate } from './diagnosticsSnapshotBuilders';
 import { getDiagnosticsCoreSnapshot } from './tauri/app';
-import {
-  buildDiagnosticsSnapshot,
-  type Translate,
-} from './diagnosticsSnapshotBuilders';
+import { resolveVoiceTypingReadinessSnapshot } from './voiceTypingReadiness';
 
 export interface DiagnosticsServicePorts {
   useConfigStore: typeof useConfigStore;
@@ -51,7 +46,7 @@ export class DiagnosticsService {
         liveVadModelPath: getScenarioVadModelPath(config, 'live'),
         microphoneId: config.microphoneId ?? 'default',
       },
-      voiceTypingRuntime,
+      voiceTypingRuntime
     );
 
     const coreSnapshot = await this.ports.getDiagnosticsCoreSnapshot({
@@ -70,13 +65,13 @@ export class DiagnosticsService {
     });
 
     return this.ports.buildDiagnosticsSnapshot(t, coreSnapshot);
-  }
+  };
 
   getResumeOnboardingStep = () => {
     const config = this.ports.useConfigStore.getState().config;
     const state = this.ports.useOnboardingStore.getState().persistedState;
     return this.ports.getResumeOnboardingStep(config, 'startup', state);
-  }
+  };
 }
 
 export function createDiagnosticsService(ports: DiagnosticsServicePorts): DiagnosticsService {

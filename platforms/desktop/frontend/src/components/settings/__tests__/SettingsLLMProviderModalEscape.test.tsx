@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Settings } from '../../Settings';
 
 vi.mock('react-i18next', () => ({
@@ -70,14 +70,18 @@ describe('Settings LLM Service Tab - Add Provider Modal Escape and Backdrop', ()
 
     let container!: HTMLElement;
     await act(async () => {
-      ({ container } = render(<Settings isOpen={true} onClose={onSettingsClose} initialTab="llm_service" />));
+      ({ container } = render(
+        <Settings isOpen={true} onClose={onSettingsClose} initialTab="llm_service" />
+      ));
     });
     // Click "Add model provider" button
     const addBtn = await screen.findByRole('button', { name: 'settings.llm.add_custom_provider' });
     await act(async () => {
       fireEvent.click(addBtn);
     });
-    const addProviderModal = screen.getByRole('dialog', { name: 'settings.llm.add_custom_provider' });
+    const addProviderModal = screen.getByRole('dialog', {
+      name: 'settings.llm.add_custom_provider',
+    });
     const backdrop = container.querySelector('.provider-modal-backdrop') as HTMLElement;
     expect(backdrop).toBeTruthy();
 

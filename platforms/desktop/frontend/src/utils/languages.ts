@@ -13,28 +13,113 @@ export const VISIBLE_LANGUAGE_TAGS = 4;
 export const MAX_TOOLTIP_LANGUAGES = 24;
 
 const FALLBACK_NAMES: Record<string, string> = {
-  af: 'Afrikaans', am: 'Amharic', ar: 'Arabic', as: 'Assamese', az: 'Azerbaijani',
-  ba: 'Bashkir', be: 'Belarusian', bg: 'Bulgarian', bn: 'Bengali', bo: 'Tibetan',
-  br: 'Breton', bs: 'Bosnian', ca: 'Catalan', cs: 'Czech', cy: 'Welsh',
-  da: 'Danish', de: 'German', el: 'Greek', en: 'English', es: 'Spanish',
-  et: 'Estonian', eu: 'Basque', fa: 'Persian', fi: 'Finnish', fil: 'Filipino',
-  fo: 'Faroese', fr: 'French', gl: 'Galician', gu: 'Gujarati', ha: 'Hausa',
-  haw: 'Hawaiian', he: 'Hebrew', hi: 'Hindi', hr: 'Croatian', ht: 'Haitian Creole',
-  hu: 'Hungarian', hy: 'Armenian', id: 'Indonesian', is: 'Icelandic', it: 'Italian',
-  ja: 'Japanese', jv: 'Javanese', jw: 'Javanese', ka: 'Georgian', kab: 'Kabyle',
-  kk: 'Kazakh', km: 'Khmer', kn: 'Kannada', ko: 'Korean', ks: 'Kashmiri',
-  ky: 'Kyrgyz', la: 'Latin', lb: 'Luxembourgish', ln: 'Lingala', lo: 'Lao',
-  lt: 'Lithuanian', lv: 'Latvian', mg: 'Malagasy', mi: 'Maori', mk: 'Macedonian',
-  ml: 'Malayalam', mn: 'Mongolian', mr: 'Marathi', ms: 'Malay', mt: 'Maltese',
-  my: 'Myanmar', ne: 'Nepali', nl: 'Dutch', nn: 'Nynorsk', no: 'Norwegian',
-  oc: 'Occitan', or: 'Odia', pa: 'Punjabi', pl: 'Polish', ps: 'Pashto',
-  pt: 'Portuguese', ro: 'Romanian', ru: 'Russian', sa: 'Sanskrit', sd: 'Sindhi',
-  si: 'Sinhala', sk: 'Slovak', sl: 'Slovenian', sn: 'Shona', so: 'Somali',
-  sq: 'Albanian', sr: 'Serbian', su: 'Sundanese', sv: 'Swedish', sw: 'Swahili',
-  ta: 'Tamil', te: 'Telugu', tg: 'Tajik', th: 'Thai', tk: 'Turkmen',
-  tl: 'Tagalog', tr: 'Turkish', tt: 'Tatar', ug: 'Uyghur', uk: 'Ukrainian',
-  ur: 'Urdu', uz: 'Uzbek', vi: 'Vietnamese', yi: 'Yiddish', yo: 'Yoruba',
-  yue: 'Cantonese', zh: 'Chinese',
+  af: 'Afrikaans',
+  am: 'Amharic',
+  ar: 'Arabic',
+  as: 'Assamese',
+  az: 'Azerbaijani',
+  ba: 'Bashkir',
+  be: 'Belarusian',
+  bg: 'Bulgarian',
+  bn: 'Bengali',
+  bo: 'Tibetan',
+  br: 'Breton',
+  bs: 'Bosnian',
+  ca: 'Catalan',
+  cs: 'Czech',
+  cy: 'Welsh',
+  da: 'Danish',
+  de: 'German',
+  el: 'Greek',
+  en: 'English',
+  es: 'Spanish',
+  et: 'Estonian',
+  eu: 'Basque',
+  fa: 'Persian',
+  fi: 'Finnish',
+  fil: 'Filipino',
+  fo: 'Faroese',
+  fr: 'French',
+  gl: 'Galician',
+  gu: 'Gujarati',
+  ha: 'Hausa',
+  haw: 'Hawaiian',
+  he: 'Hebrew',
+  hi: 'Hindi',
+  hr: 'Croatian',
+  ht: 'Haitian Creole',
+  hu: 'Hungarian',
+  hy: 'Armenian',
+  id: 'Indonesian',
+  is: 'Icelandic',
+  it: 'Italian',
+  ja: 'Japanese',
+  jv: 'Javanese',
+  jw: 'Javanese',
+  ka: 'Georgian',
+  kab: 'Kabyle',
+  kk: 'Kazakh',
+  km: 'Khmer',
+  kn: 'Kannada',
+  ko: 'Korean',
+  ks: 'Kashmiri',
+  ky: 'Kyrgyz',
+  la: 'Latin',
+  lb: 'Luxembourgish',
+  ln: 'Lingala',
+  lo: 'Lao',
+  lt: 'Lithuanian',
+  lv: 'Latvian',
+  mg: 'Malagasy',
+  mi: 'Maori',
+  mk: 'Macedonian',
+  ml: 'Malayalam',
+  mn: 'Mongolian',
+  mr: 'Marathi',
+  ms: 'Malay',
+  mt: 'Maltese',
+  my: 'Myanmar',
+  ne: 'Nepali',
+  nl: 'Dutch',
+  nn: 'Nynorsk',
+  no: 'Norwegian',
+  oc: 'Occitan',
+  or: 'Odia',
+  pa: 'Punjabi',
+  pl: 'Polish',
+  ps: 'Pashto',
+  pt: 'Portuguese',
+  ro: 'Romanian',
+  ru: 'Russian',
+  sa: 'Sanskrit',
+  sd: 'Sindhi',
+  si: 'Sinhala',
+  sk: 'Slovak',
+  sl: 'Slovenian',
+  sn: 'Shona',
+  so: 'Somali',
+  sq: 'Albanian',
+  sr: 'Serbian',
+  su: 'Sundanese',
+  sv: 'Swedish',
+  sw: 'Swahili',
+  ta: 'Tamil',
+  te: 'Telugu',
+  tg: 'Tajik',
+  th: 'Thai',
+  tk: 'Turkmen',
+  tl: 'Tagalog',
+  tr: 'Turkish',
+  tt: 'Tatar',
+  ug: 'Uyghur',
+  uk: 'Ukrainian',
+  ur: 'Urdu',
+  uz: 'Uzbek',
+  vi: 'Vietnamese',
+  yi: 'Yiddish',
+  yo: 'Yoruba',
+  yue: 'Cantonese',
+  zh: 'Chinese',
 };
 
 let displayNamesCache: { locale: string; formatter: Intl.DisplayNames } | null = null;
@@ -70,7 +155,7 @@ export function languageDisplayName(code: string, locale: string): string {
 export function formatLanguagesTooltip(
   languages: string[] | undefined,
   locale: string = 'zh',
-  t?: (key: string, options?: Record<string, unknown>) => string,
+  t?: (key: string, options?: Record<string, unknown>) => string
 ): string {
   if (!languages || languages.length === 0) {
     return '';
@@ -105,10 +190,10 @@ export function formatLanguagesTooltip(
 
 export function isLanguageCapableModel(value: unknown): value is LanguageCapable {
   return Boolean(
-    value
-    && typeof value === 'object'
-    && Array.isArray((value as LanguageCapable).languages)
-    && typeof (value as LanguageCapable).languageMode === 'string',
+    value &&
+      typeof value === 'object' &&
+      Array.isArray((value as LanguageCapable).languages) &&
+      typeof (value as LanguageCapable).languageMode === 'string'
   );
 }
 
@@ -130,7 +215,7 @@ const COMMON_LANGUAGE_CODES = new Set(['zh', 'en', 'ja', 'ko', 'yue']);
  */
 export function buildLanguagePickerOptions(
   model: LanguageCapable | null | undefined,
-  locale: string,
+  locale: string
 ): LanguagePickerOption[] {
   if (!model) {
     return [{ value: 'auto', label: 'Auto' }];
@@ -172,7 +257,7 @@ export function buildLanguagePickerOptions(
  */
 export function coerceLanguage(
   model: LanguageCapable | null | undefined,
-  configured: string | null | undefined,
+  configured: string | null | undefined
 ): string {
   const language = configured?.trim() || 'auto';
   if (!model) {

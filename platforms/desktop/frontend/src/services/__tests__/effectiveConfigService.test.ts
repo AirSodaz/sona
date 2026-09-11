@@ -1,9 +1,9 @@
-import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { resolveEffectiveConfig } from '../effectiveConfigService';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildTestConfig } from '../../test-utils/configTestUtils';
 import type { AppConfig } from '../../types/config';
 import type { ProjectRecord } from '../../types/project';
+import { resolveEffectiveConfig } from '../effectiveConfigService';
 import { createLlmSettings } from '../llm/state';
-import { buildTestConfig } from '../../test-utils/configTestUtils';
 import { resolveEffectiveConfig as resolveEffectiveConfigInRust } from '../tauri/app';
 
 vi.mock('../tauri/app', () => ({
@@ -21,9 +21,7 @@ function createBaseConfig(): AppConfig {
     liveVadModelPath: '',
     llmSettings: createLlmSettings(),
     polishPresetId: 'general',
-    polishCustomPresets: [
-      { id: 'custom-team', name: 'Team', context: 'Team sync notes' },
-    ],
+    polishCustomPresets: [{ id: 'custom-team', name: 'Team', context: 'Team sync notes' }],
     polishKeywordSets: [
       { id: 'kw-1', name: 'Brand', enabled: true, keywords: 'Sona\nSherpa-onnx' },
       { id: 'kw-2', name: 'Style', enabled: false, keywords: 'Keep sentence case.' },

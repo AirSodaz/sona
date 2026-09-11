@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { processNextBatchQueueItems } from '../batchQueueCoordinator';
 import type { BatchQueueItem, BatchQueueItemStatus } from '../../../types/batchQueue';
+import { processNextBatchQueueItems } from '../batchQueueCoordinator';
 
 function makeQueueItem(id: string, status: BatchQueueItemStatus): BatchQueueItem {
   return {
@@ -60,10 +60,7 @@ describe('batchQueueCoordinator', () => {
     const processItem = vi.fn();
 
     await processNextBatchQueueItems({
-      getQueueItems: () => [
-        makeQueueItem('done', 'complete'),
-        makeQueueItem('failed', 'error'),
-      ],
+      getQueueItems: () => [makeQueueItem('done', 'complete'), makeQueueItem('failed', 'error')],
       getMaxConcurrent: () => 2,
       setQueueProcessing,
       processItem,

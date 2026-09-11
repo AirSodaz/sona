@@ -15,8 +15,8 @@ export function getLocalizedLanguageName(langCode: string, locale: string = 'en'
 
   // Static custom overrides for preferred i18n names in Sona
   const fallbacks: Record<string, Record<string, string>> = {
-    'zh': { 'zh': '中文 (简体)', 'en': 'Chinese (Simplified)' },
-    'zh-TW': { 'zh': '中文 (繁体)', 'en': 'Chinese (Traditional)' }
+    zh: { zh: '中文 (简体)', en: 'Chinese (Simplified)' },
+    'zh-TW': { zh: '中文 (繁体)', en: 'Chinese (Traditional)' },
   };
 
   if (fallbacks[langCode]?.[normLocale]) {
@@ -34,5 +34,5 @@ export function getLocalizedLanguageName(langCode: string, locale: string = 'en'
     }
   }
 
-  return fallbacks[langCode]?.['en'] || langCode;
+  return fallbacks[langCode]?.en || langCode;
 }

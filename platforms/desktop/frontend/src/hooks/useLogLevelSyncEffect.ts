@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useUIConfig } from '../stores/configStore';
 import { setLogLevel } from '../services/tauri/app';
+import { useUIConfig } from '../stores/configStore';
 import { logger, setLoggerLevel } from '../utils/logger';
 import { normalizeLogLevel } from '../utils/logLevel';
 
@@ -13,7 +13,6 @@ export function useLogLevelSyncEffect(isLoaded: boolean) {
 
     if (!isLoaded) return;
 
-    setLogLevel(normalizedLevel)
-      .catch((error) => logger.error('Failed to set log level:', error));
+    setLogLevel(normalizedLevel).catch((error) => logger.error('Failed to set log level:', error));
   }, [isLoaded, logLevel]);
 }

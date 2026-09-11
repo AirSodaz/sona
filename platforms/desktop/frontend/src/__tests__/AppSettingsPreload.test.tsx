@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
@@ -36,7 +36,9 @@ vi.mock('../components/transcript/TranscriptWorkbench', async () => {
       return (
         <div data-testid="transcript-workbench">
           TranscriptWorkbench
-          <button type="button" onClick={onClose}>Close Transcript</button>
+          <button type="button" onClick={onClose}>
+            Close Transcript
+          </button>
         </div>
       );
     },
@@ -84,16 +86,17 @@ vi.mock('../components/Settings', () => {
   settingsModuleLoaded();
 
   return {
-    Settings: ({ isOpen, prewarm, initialTab, onClose }: any) => (
+    Settings: ({ isOpen, prewarm, initialTab, onClose }: any) =>
       isOpen ? (
         <div>
           <div>Settings Tab: {initialTab}</div>
-          <button type="button" onClick={onClose}>Close Settings</button>
+          <button type="button" onClick={onClose}>
+            Close Settings
+          </button>
         </div>
       ) : prewarm ? (
         <div data-testid="settings-prewarm">Settings Prewarm: {initialTab}</div>
-      ) : null
-    ),
+      ) : null,
   };
 });
 
@@ -137,17 +140,23 @@ describe('App settings preload', () => {
     transcriptWorkbenchUnmountMock.mockClear();
     useTranscriptSessionStore.getState().clearSegments();
     useTranscriptPlaybackStore.getState().clearSession({ clearAudio: true });
-    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
-      mode: 'live',
-      setMode: vi.fn(),
-    }));
-    mockUseProjectStore.mockImplementation((selector: any) => selector({
-      activeProjectId: null,
-      projects: [],
-    }));
-    mockUseOnboardingStore.mockImplementation((selector: any) => selector({
-      reopen: vi.fn(),
-    }));
+    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) =>
+      selector({
+        mode: 'live',
+        setMode: vi.fn(),
+      })
+    );
+    mockUseProjectStore.mockImplementation((selector: any) =>
+      selector({
+        activeProjectId: null,
+        projects: [],
+      })
+    );
+    mockUseOnboardingStore.mockImplementation((selector: any) =>
+      selector({
+        reopen: vi.fn(),
+      })
+    );
   });
 
   afterEach(() => {
@@ -190,10 +199,10 @@ describe('App settings preload', () => {
 
     fireEvent.click(settingsButton);
 
-    expect(markSettingsPerfMock).toHaveBeenCalledWith(
-      'settings.open.default.click',
-      { tab: 'general', source: 'header' },
-    );
+    expect(markSettingsPerfMock).toHaveBeenCalledWith('settings.open.default.click', {
+      tab: 'general',
+      source: 'header',
+    });
     expect(await screen.findByText('Settings Tab: general')).toBeDefined();
     expect(screen.queryByTestId('settings-prewarm')).toBeNull();
     expect(screen.queryByRole('dialog', { name: 'common.loading' })).toBeNull();
@@ -202,10 +211,9 @@ describe('App settings preload', () => {
     await waitFor(() => {
       expect(preloadSettingsTabMock).toHaveBeenCalledWith('automation');
     });
-    expect(markSettingsPerfMock).toHaveBeenCalledWith(
-      'settings.open.tab.click',
-      { tab: 'automation' },
-    );
+    expect(markSettingsPerfMock).toHaveBeenCalledWith('settings.open.tab.click', {
+      tab: 'automation',
+    });
     expect(await screen.findByText('Settings Tab: automation')).toBeDefined();
 
     fireEvent.click(screen.getByText('Close Settings'));
@@ -228,19 +236,25 @@ describe('App settings preload', () => {
     const { rerender } = render(<App />);
 
     expect(screen.getByTestId('projects-view').textContent).toBe('ProjectsView: false');
-    expect(projectsViewRenderMock).toHaveBeenLastCalledWith(expect.objectContaining({ isActive: false }));
+    expect(projectsViewRenderMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ isActive: false })
+    );
 
     runtimeState.mode = 'projects';
     rerender(<App />);
 
     expect(screen.getByTestId('projects-view').textContent).toBe('ProjectsView: true');
-    expect(projectsViewRenderMock).toHaveBeenLastCalledWith(expect.objectContaining({ isActive: true }));
+    expect(projectsViewRenderMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ isActive: true })
+    );
 
     runtimeState.mode = 'batch';
     rerender(<App />);
 
     expect(screen.getByTestId('projects-view').textContent).toBe('ProjectsView: false');
-    expect(projectsViewRenderMock).toHaveBeenLastCalledWith(expect.objectContaining({ isActive: false }));
+    expect(projectsViewRenderMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ isActive: false })
+    );
   });
 
   it('keeps one transcript workbench instance while switching tabs around projects mode', () => {
@@ -271,23 +285,29 @@ describe('App settings preload', () => {
   });
 
   it('keeps the shared editor mounted but hidden when projects mode has no active transcript', () => {
-    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
-      mode: 'projects',
-      setMode: vi.fn(),
-    }));
+    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) =>
+      selector({
+        mode: 'projects',
+        setMode: vi.fn(),
+      })
+    );
 
     const { container } = render(<App />);
 
     expect(screen.getByTestId('transcript-workbench')).toBeDefined();
-    expect(container.querySelector('.persistent-transcript-host')?.classList.contains('is-hidden')).toBe(true);
+    expect(
+      container.querySelector('.persistent-transcript-host')?.classList.contains('is-hidden')
+    ).toBe(true);
     expect(screen.getByTestId('projects-view').textContent).toBe('ProjectsView: true');
   });
 
   it('closes the shared transcript session and hides the projects detail host', async () => {
-    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
-      mode: 'projects',
-      setMode: vi.fn(),
-    }));
+    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) =>
+      selector({
+        mode: 'projects',
+        setMode: vi.fn(),
+      })
+    );
     useTranscriptSessionStore.getState().openSession({
       segments: [{ id: 'seg-1', start: 0, end: 1, text: 'Hello', isFinal: true }],
       sourceHistoryId: 'hist-1',
@@ -298,12 +318,16 @@ describe('App settings preload', () => {
 
     const { container } = render(<App />);
 
-    expect(container.querySelector('.persistent-transcript-host')?.classList.contains('is-hidden')).toBe(false);
+    expect(
+      container.querySelector('.persistent-transcript-host')?.classList.contains('is-hidden')
+    ).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: 'Close Transcript' }));
 
     await waitFor(() => {
-      expect(container.querySelector('.persistent-transcript-host')?.classList.contains('is-hidden')).toBe(true);
+      expect(
+        container.querySelector('.persistent-transcript-host')?.classList.contains('is-hidden')
+      ).toBe(true);
     });
     expect(useTranscriptSessionStore.getState().sourceHistoryId).toBeNull();
     expect(useTranscriptSessionStore.getState().segments).toHaveLength(0);

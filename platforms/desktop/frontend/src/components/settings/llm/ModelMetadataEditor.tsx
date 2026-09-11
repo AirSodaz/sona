@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
 import { X } from 'lucide-react';
-import type { LlmModelEntry, LlmModelMetadata, LlmModality } from '../../../types/transcript';
+import React, { useState } from 'react';
+import type { LlmModality, LlmModelEntry, LlmModelMetadata } from '../../../types/transcript';
 
 type ModelMetadataDraft = {
   displayName: string;
@@ -81,20 +81,31 @@ export const ModelMetadataEditor = React.memo(function ModelMetadataEditor({
   const [error, setError] = useState('');
 
   const markDirty = (field: keyof ModelMetadataDraft) => {
-    setDirtyFields((current) => current.has(field) ? current : new Set(current).add(field));
+    setDirtyFields((current) => (current.has(field) ? current : new Set(current).add(field)));
   };
 
   const setText = (
-    field: keyof Pick<ModelMetadataDraft, 'displayName' | 'knowledgeCutoff' | 'releaseDate' | 'lastUpdated'>,
-    value: string,
+    field: keyof Pick<
+      ModelMetadataDraft,
+      'displayName' | 'knowledgeCutoff' | 'releaseDate' | 'lastUpdated'
+    >,
+    value: string
   ) => {
     setDraft((current) => ({ ...current, [field]: value }));
     markDirty(field);
   };
 
   const setNumber = (
-    field: keyof Pick<ModelMetadataDraft, 'contextWindow' | 'maxOutputTokens' | 'inputPrice' | 'outputPrice' | 'cacheReadPrice' | 'cacheWritePrice'>,
-    value: string,
+    field: keyof Pick<
+      ModelMetadataDraft,
+      | 'contextWindow'
+      | 'maxOutputTokens'
+      | 'inputPrice'
+      | 'outputPrice'
+      | 'cacheReadPrice'
+      | 'cacheWritePrice'
+    >,
+    value: string
   ) => {
     setDraft((current) => ({ ...current, [field]: value }));
     markDirty(field);
@@ -102,8 +113,15 @@ export const ModelMetadataEditor = React.memo(function ModelMetadataEditor({
   };
 
   const setCapability = (
-    field: keyof Pick<ModelMetadataDraft, 'supportsMultimodal' | 'supportsTools' | 'supportsReasoning' | 'supportsStructuredOutput' | 'supportsPromptCaching'>,
-    checked: boolean,
+    field: keyof Pick<
+      ModelMetadataDraft,
+      | 'supportsMultimodal'
+      | 'supportsTools'
+      | 'supportsReasoning'
+      | 'supportsStructuredOutput'
+      | 'supportsPromptCaching'
+    >,
+    checked: boolean
   ) => {
     setDraft((current) => ({ ...current, [field]: checked }));
     markDirty(field);
@@ -112,7 +130,7 @@ export const ModelMetadataEditor = React.memo(function ModelMetadataEditor({
   const setModality = (
     field: 'inputModalities' | 'outputModalities',
     modality: LlmModality,
-    checked: boolean,
+    checked: boolean
   ) => {
     markDirty(field);
     setDraft((current) => ({
@@ -130,14 +148,16 @@ export const ModelMetadataEditor = React.memo(function ModelMetadataEditor({
     const outputPrice = parseOptionalNonNegativeNumber(draft.outputPrice);
     const cacheReadPrice = parseOptionalNonNegativeNumber(draft.cacheReadPrice);
     const cacheWritePrice = parseOptionalNonNegativeNumber(draft.cacheWritePrice);
-    if ([
-      contextWindow,
-      maxOutputTokens,
-      inputPrice,
-      outputPrice,
-      cacheReadPrice,
-      cacheWritePrice,
-    ].includes(null)) {
+    if (
+      [
+        contextWindow,
+        maxOutputTokens,
+        inputPrice,
+        outputPrice,
+        cacheReadPrice,
+        cacheWritePrice,
+      ].includes(null)
+    ) {
       setError(t('settings.llm.model_metadata_invalid_number'));
       return;
     }
@@ -231,9 +251,11 @@ export const ModelMetadataEditor = React.memo(function ModelMetadataEditor({
         {(['inputModalities', 'outputModalities'] as const).map((field) => (
           <fieldset className="provider-model-modality-group" key={field}>
             <legend className="settings-label">
-              {t(field === 'inputModalities'
-                ? 'settings.llm.model_input_modalities'
-                : 'settings.llm.model_output_modalities')}
+              {t(
+                field === 'inputModalities'
+                  ? 'settings.llm.model_input_modalities'
+                  : 'settings.llm.model_output_modalities'
+              )}
             </legend>
             <div className="provider-model-modality-options">
               {MODEL_MODALITIES.map((modality) => (

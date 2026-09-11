@@ -1,11 +1,11 @@
-import React from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { historyQueryWorkspace } from '../../../services/tauri/history';
 import { useDialogStore } from '../../../stores/dialogStore';
 import { useErrorDialogStore } from '../../../stores/errorDialogStore';
 import type { HistoryItem } from '../../../types/history';
 import type { ProjectRecord } from '../../../types/project';
-import { historyQueryWorkspace } from '../../../services/tauri/history';
 import { useWorkspaceBrowseState } from '../hooks/useWorkspaceBrowseState';
 import { buildWorkspaceViewModel } from '../hooks/workspaceViewModel';
 
@@ -40,7 +40,9 @@ const historyItems: HistoryItem[] = [
 describe('useWorkspaceBrowseState', () => {
   const t = (key: string, options?: Record<string, unknown>) => {
     if (typeof options?.defaultValue === 'string') {
-      return options.defaultValue.replace(/\{\{(\w+)\}\}/g, (_match, variable: string) => String(options?.[variable] ?? ''));
+      return options.defaultValue.replace(/\{\{(\w+)\}\}/g, (_match, variable: string) =>
+        String(options?.[variable] ?? '')
+      );
     }
     return key;
   };
@@ -77,20 +79,26 @@ describe('useWorkspaceBrowseState', () => {
   });
 
   it('resets local browse state when the scope changes', async () => {
-    const filterMenuRef = { current: document.createElement('div') } as React.RefObject<HTMLDivElement>;
-    const searchInputRef = { current: document.createElement('input') } as React.RefObject<HTMLInputElement>;
+    const filterMenuRef = {
+      current: document.createElement('div'),
+    } as React.RefObject<HTMLDivElement>;
+    const searchInputRef = {
+      current: document.createElement('input'),
+    } as React.RefObject<HTMLInputElement>;
     const onOpenItem = vi.fn();
 
-    const { result } = renderHook(() => useWorkspaceBrowseState({
-      activeProjectId: 'project-1',
-      historyItems,
-      projects: [projectAlpha],
-      filterMenuRef,
-      isSelectionMode: false,
-      searchInputRef,
-      t,
-      onOpenItem,
-    }));
+    const { result } = renderHook(() =>
+      useWorkspaceBrowseState({
+        activeProjectId: 'project-1',
+        historyItems,
+        projects: [projectAlpha],
+        filterMenuRef,
+        isSelectionMode: false,
+        searchInputRef,
+        t,
+        onOpenItem,
+      })
+    );
 
     await act(async () => {
       result.current.setSearchQuery('roadmap');
@@ -109,24 +117,29 @@ describe('useWorkspaceBrowseState', () => {
   });
 
   it('clears the active search result when selection mode becomes active', async () => {
-    const filterMenuRef = { current: document.createElement('div') } as React.RefObject<HTMLDivElement>;
-    const searchInputRef = { current: document.createElement('input') } as React.RefObject<HTMLInputElement>;
+    const filterMenuRef = {
+      current: document.createElement('div'),
+    } as React.RefObject<HTMLDivElement>;
+    const searchInputRef = {
+      current: document.createElement('input'),
+    } as React.RefObject<HTMLInputElement>;
     const onOpenItem = vi.fn();
 
     const { result, rerender } = renderHook(
-      ({ isSelectionMode }) => useWorkspaceBrowseState({
-        activeProjectId: 'project-1',
-        historyItems,
-        projects: [projectAlpha],
-        filterMenuRef,
-        isSelectionMode,
-        searchInputRef,
-        t,
-        onOpenItem,
-      }),
+      ({ isSelectionMode }) =>
+        useWorkspaceBrowseState({
+          activeProjectId: 'project-1',
+          historyItems,
+          projects: [projectAlpha],
+          filterMenuRef,
+          isSelectionMode,
+          searchInputRef,
+          t,
+          onOpenItem,
+        }),
       {
         initialProps: { isSelectionMode: false },
-      },
+      }
     );
 
     await act(async () => {
@@ -142,10 +155,15 @@ describe('useWorkspaceBrowseState', () => {
   });
 
   it('ignores stale workspace query results from older async requests', async () => {
-    const filterMenuRef = { current: document.createElement('div') } as React.RefObject<HTMLDivElement>;
-    const searchInputRef = { current: document.createElement('input') } as React.RefObject<HTMLInputElement>;
+    const filterMenuRef = {
+      current: document.createElement('div'),
+    } as React.RefObject<HTMLDivElement>;
+    const searchInputRef = {
+      current: document.createElement('input'),
+    } as React.RefObject<HTMLInputElement>;
     const onOpenItem = vi.fn();
-    let resolveFirst: ((value: Awaited<ReturnType<typeof historyQueryWorkspace>>) => void) | null = null;
+    let resolveFirst: ((value: Awaited<ReturnType<typeof historyQueryWorkspace>>) => void) | null =
+      null;
 
     const firstItem: HistoryItem = {
       ...historyItems[0],
@@ -159,9 +177,12 @@ describe('useWorkspaceBrowseState', () => {
     };
 
     vi.mocked(historyQueryWorkspace)
-      .mockImplementationOnce(() => new Promise((resolve) => {
-        resolveFirst = resolve;
-      }))
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          })
+      )
       .mockResolvedValueOnce({
         filteredItems: [secondItem],
         searchMatchByItemId: {},
@@ -182,16 +203,18 @@ describe('useWorkspaceBrowseState', () => {
         },
       });
 
-    const { result } = renderHook(() => useWorkspaceBrowseState({
-      activeProjectId: 'project-1',
-      historyItems,
-      projects: [projectAlpha],
-      filterMenuRef,
-      isSelectionMode: false,
-      searchInputRef,
-      t,
-      onOpenItem,
-    }));
+    const { result } = renderHook(() =>
+      useWorkspaceBrowseState({
+        activeProjectId: 'project-1',
+        historyItems,
+        projects: [projectAlpha],
+        filterMenuRef,
+        isSelectionMode: false,
+        searchInputRef,
+        t,
+        onOpenItem,
+      })
+    );
 
     await act(async () => {
       result.current.setSearchQuery('second');
@@ -273,8 +296,12 @@ describe('useWorkspaceBrowseState', () => {
   });
 
   it('falls back to the empty workspace result when the query fails', async () => {
-    const filterMenuRef = { current: document.createElement('div') } as React.RefObject<HTMLDivElement>;
-    const searchInputRef = { current: document.createElement('input') } as React.RefObject<HTMLInputElement>;
+    const filterMenuRef = {
+      current: document.createElement('div'),
+    } as React.RefObject<HTMLDivElement>;
+    const searchInputRef = {
+      current: document.createElement('input'),
+    } as React.RefObject<HTMLInputElement>;
     const onOpenItem = vi.fn();
 
     vi.mocked(historyQueryWorkspace)
@@ -299,16 +326,18 @@ describe('useWorkspaceBrowseState', () => {
       })
       .mockRejectedValueOnce(new Error('query failed'));
 
-    const { result } = renderHook(() => useWorkspaceBrowseState({
-      activeProjectId: 'project-1',
-      historyItems,
-      projects: [projectAlpha],
-      filterMenuRef,
-      isSelectionMode: false,
-      searchInputRef,
-      t,
-      onOpenItem,
-    }));
+    const { result } = renderHook(() =>
+      useWorkspaceBrowseState({
+        activeProjectId: 'project-1',
+        historyItems,
+        projects: [projectAlpha],
+        filterMenuRef,
+        isSelectionMode: false,
+        searchInputRef,
+        t,
+        onOpenItem,
+      })
+    );
 
     await waitFor(() => {
       expect(result.current.filteredAndSortedItems).toHaveLength(1);
@@ -328,7 +357,9 @@ describe('useWorkspaceBrowseState', () => {
   });
 
   it('does not focus workspace search from Ctrl+F while focus belongs to detail or modal surfaces', async () => {
-    const filterMenuRef = { current: document.createElement('div') } as React.RefObject<HTMLDivElement>;
+    const filterMenuRef = {
+      current: document.createElement('div'),
+    } as React.RefObject<HTMLDivElement>;
     const searchInput = document.createElement('input');
     const searchInputRef = { current: searchInput } as React.RefObject<HTMLInputElement>;
     const detailPane = document.createElement('div');
@@ -345,16 +376,18 @@ describe('useWorkspaceBrowseState', () => {
     document.body.appendChild(searchInput);
 
     try {
-      renderHook(() => useWorkspaceBrowseState({
-        activeProjectId: 'project-1',
-        historyItems,
-        projects: [projectAlpha],
-        filterMenuRef,
-        isSelectionMode: false,
-        searchInputRef,
-        t,
-        onOpenItem,
-      }));
+      renderHook(() =>
+        useWorkspaceBrowseState({
+          activeProjectId: 'project-1',
+          historyItems,
+          projects: [projectAlpha],
+          filterMenuRef,
+          isSelectionMode: false,
+          searchInputRef,
+          t,
+          onOpenItem,
+        })
+      );
 
       detailInput.focus();
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true }));
@@ -371,11 +404,16 @@ describe('useWorkspaceBrowseState', () => {
   });
 
   it('preserves item counts and scope items count without jumping to zero when switching scope', async () => {
-    const filterMenuRef = { current: document.createElement('div') } as React.RefObject<HTMLDivElement>;
-    const searchInputRef = { current: document.createElement('input') } as React.RefObject<HTMLInputElement>;
+    const filterMenuRef = {
+      current: document.createElement('div'),
+    } as React.RefObject<HTMLDivElement>;
+    const searchInputRef = {
+      current: document.createElement('input'),
+    } as React.RefObject<HTMLInputElement>;
     const onOpenItem = vi.fn();
 
-    const { promise: secondQueryPromise, resolve: resolveSecondQuery } = Promise.withResolvers<any>();
+    const { promise: secondQueryPromise, resolve: resolveSecondQuery } =
+      Promise.withResolvers<any>();
 
     vi.mocked(historyQueryWorkspace)
       .mockResolvedValueOnce({
@@ -398,16 +436,18 @@ describe('useWorkspaceBrowseState', () => {
       })
       .mockReturnValueOnce(secondQueryPromise as any);
 
-    const { result } = renderHook(() => useWorkspaceBrowseState({
-      activeProjectId: 'project-1',
-      historyItems,
-      projects: [projectAlpha],
-      filterMenuRef,
-      isSelectionMode: false,
-      searchInputRef,
-      t,
-      onOpenItem,
-    }));
+    const { result } = renderHook(() =>
+      useWorkspaceBrowseState({
+        activeProjectId: 'project-1',
+        historyItems,
+        projects: [projectAlpha],
+        filterMenuRef,
+        isSelectionMode: false,
+        searchInputRef,
+        t,
+        onOpenItem,
+      })
+    );
 
     await waitFor(() => {
       expect(result.current.itemCounts.get('project-1')).toBe(1);

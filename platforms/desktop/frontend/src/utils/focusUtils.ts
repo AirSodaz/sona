@@ -11,15 +11,16 @@ export const FOCUSABLE_SELECTOR = [
 
 function isDisabledForFocus(element: HTMLElement): boolean {
   return (
-    element.getAttribute('aria-disabled') === 'true'
-    || element.hasAttribute('disabled')
-    || element.closest('[aria-hidden="true"], [hidden], [inert]') !== null
+    element.getAttribute('aria-disabled') === 'true' ||
+    element.hasAttribute('disabled') ||
+    element.closest('[aria-hidden="true"], [hidden], [inert]') !== null
   );
 }
 
 export function getFocusableElements(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
-    .filter((element) => !isDisabledForFocus(element));
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (element) => !isDisabledForFocus(element)
+  );
 }
 
 export function isGlobalDialogOpen(): boolean {

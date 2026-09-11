@@ -1,16 +1,7 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ContextMenuSurface } from './ContextMenuSurface';
-import type {
-  ContextMenuAction,
-  ContextMenuCloseReason,
-  OpenContextMenuOptions,
-} from './types';
+import type { ContextMenuAction, ContextMenuCloseReason, OpenContextMenuOptions } from './types';
 import { ContextMenuContext } from './useContextMenu';
 
 export type {
@@ -46,19 +37,25 @@ export function ContextMenuProvider({ children }: React.PropsWithChildren): Reac
     closeWithReason('programmatic');
   }, [closeWithReason]);
 
-  const handleAction = useCallback((action: ContextMenuAction) => {
-    closeWithReason('action');
-    action.onSelect();
-  }, [closeWithReason]);
+  const handleAction = useCallback(
+    (action: ContextMenuAction) => {
+      closeWithReason('action');
+      action.onSelect();
+    },
+    [closeWithReason]
+  );
 
-  const handleDismiss = useCallback((reason: ContextMenuCloseReason) => {
-    const anchor = menuRef.current?.anchor ?? null;
-    closeWithReason(reason);
+  const handleDismiss = useCallback(
+    (reason: ContextMenuCloseReason) => {
+      const anchor = menuRef.current?.anchor ?? null;
+      closeWithReason(reason);
 
-    if (reason === 'escape' && anchor?.isConnected) {
-      anchor.focus();
-    }
-  }, [closeWithReason]);
+      if (reason === 'escape' && anchor?.isConnected) {
+        anchor.focus();
+      }
+    },
+    [closeWithReason]
+  );
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -94,11 +91,14 @@ export function ContextMenuProvider({ children }: React.PropsWithChildren): Reac
 
   const activeContextId = menu?.contextId ?? null;
 
-  const value = useMemo(() => ({
-    activeContextId,
-    openContextMenu,
-    closeContextMenu,
-  }), [activeContextId, closeContextMenu, openContextMenu]);
+  const value = useMemo(
+    () => ({
+      activeContextId,
+      openContextMenu,
+      closeContextMenu,
+    }),
+    [activeContextId, closeContextMenu, openContextMenu]
+  );
 
   return (
     <ContextMenuContext.Provider value={value}>

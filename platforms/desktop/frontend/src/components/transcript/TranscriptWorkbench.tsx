@@ -1,25 +1,34 @@
-import React, { useState } from 'react';
+import { Users as SpeakerReviewIcon, History as VersionHistoryIcon } from 'lucide-react';
+import type React from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { History as VersionHistoryIcon, Users as SpeakerReviewIcon } from 'lucide-react';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { generateAiTitle } from '../../services/aiRenameService';
 import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
-import { ErrorBoundary } from '../ErrorBoundary';
-import { TranscriptEditor } from './TranscriptEditor';
-import { AudioPlayer } from '../AudioPlayer';
-import { TranscriptSummaryPanel } from './TranscriptSummaryPanel';
-import { TranscriptSpeakerReviewPanel } from './TranscriptSpeakerReviewPanel';
-import { RenameModal } from '../RenameModal';
-import { PolishButton } from '../PolishButton';
-import { TranslateButton } from '../TranslateButton';
-import { ExportButton } from '../ExportButton';
-import { TranscriptVersionPanel } from './TranscriptVersionPanel';
-import { CloseIcon, SummaryIcon, EditIcon, MicIcon, FileTextIcon, FolderIcon, CodeIcon } from '../Icons';
-import { generateAiTitle } from '../../services/aiRenameService';
 import { isHistoryItemDraft } from '../../types/history';
-import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { AudioPlayer } from '../AudioPlayer';
+import { ErrorBoundary } from '../ErrorBoundary';
+import { ExportButton } from '../ExportButton';
+import {
+  CloseIcon,
+  CodeIcon,
+  EditIcon,
+  FileTextIcon,
+  FolderIcon,
+  MicIcon,
+  SummaryIcon,
+} from '../Icons';
+import { PolishButton } from '../PolishButton';
+import { RenameModal } from '../RenameModal';
+import { TranslateButton } from '../TranslateButton';
+import { TranscriptEditor } from './TranscriptEditor';
+import { TranscriptSpeakerReviewPanel } from './TranscriptSpeakerReviewPanel';
+import { TranscriptSummaryPanel } from './TranscriptSummaryPanel';
+import { TranscriptVersionPanel } from './TranscriptVersionPanel';
 
 interface TranscriptWorkbenchProps {
   /** Callback when the user clicks the close button. */
@@ -38,11 +47,16 @@ function renderHeaderIcon(icon: string | null, defaultType: string): React.React
     if (icon.startsWith('system:')) {
       const iconName = icon.replace('system:', '');
       switch (iconName) {
-        case 'mic': return <MicIcon />;
-        case 'file': return <FileTextIcon />;
-        case 'folder': return <FolderIcon />;
-        case 'code': return <CodeIcon />;
-        default: break;
+        case 'mic':
+          return <MicIcon />;
+        case 'file':
+          return <FileTextIcon />;
+        case 'folder':
+          return <FolderIcon />;
+        case 'code':
+          return <CodeIcon />;
+        default:
+          break;
       }
     } else {
       return <span style={{ fontSize: '1.125rem', lineHeight: 1 }}>{icon}</span>;
@@ -56,7 +70,11 @@ function renderHeaderIcon(icon: string | null, defaultType: string): React.React
  * A unified workbench for transcript editing.
  * Combines the editor, audio player, AI summary access, and standard header.
  */
-export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconType }: TranscriptWorkbenchProps): React.JSX.Element | null {
+export function TranscriptWorkbench({
+  onClose,
+  title: propsTitle,
+  defaultIconType,
+}: TranscriptWorkbenchProps): React.JSX.Element | null {
   const { t } = useTranslation();
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [isSpeakerReviewOpen, setIsSpeakerReviewOpen] = useState(false);
@@ -74,41 +92,49 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
   const setTitle = useTranscriptSessionStore((state) => state.setTitle);
   const setIcon = useTranscriptSessionStore((state) => state.setIcon);
   const mode = useTranscriptRuntimeStore((state) => state.mode);
-  
-  const updateHistoryMeta = useHistoryStore((state) => state.updateItemMeta);
-  const currentHistoryItem = useHistoryStore((state) => (
-    sourceHistoryId ? state.items.find((item) => item.id === sourceHistoryId) || null : null
-  ));
 
-  useEscapeKey((event) => {
-    event.preventDefault();
-    onClose();
-  }, {
-    enabled: !isRecording,
-    checkTopMost: true,
-  });
+  const updateHistoryMeta = useHistoryStore((state) => state.updateItemMeta);
+  const currentHistoryItem = useHistoryStore((state) =>
+    sourceHistoryId ? state.items.find((item) => item.id === sourceHistoryId) || null : null
+  );
+
+  useEscapeKey(
+    (event) => {
+      event.preventDefault();
+      onClose();
+    },
+    {
+      enabled: !isRecording,
+      checkTopMost: true,
+    }
+  );
 
   const hasSegments = segments.length > 0;
-  
+
   // Summary button logic
   const summaryEnabled = config.summaryEnabled ?? true;
   const showSummaryButton = summaryEnabled && hasSegments;
   const showVersionButton = Boolean(
-    hasSegments
-    && sourceHistoryId
-    && sourceHistoryId !== 'current'
-    && (!currentHistoryItem || !isHistoryItemDraft(currentHistoryItem)),
+    hasSegments &&
+      sourceHistoryId &&
+      sourceHistoryId !== 'current' &&
+      (!currentHistoryItem || !isHistoryItemDraft(currentHistoryItem))
   );
 
-  const historyDefaultIconType = currentHistoryItem?.type === 'batch'
-    ? 'batch'
-    : currentHistoryItem?.type === 'recording'
-      ? 'recording'
-      : undefined;
-  const displayIconType = defaultIconType || historyDefaultIconType || (mode === 'batch' ? 'batch' : 'recording');
+  const historyDefaultIconType =
+    currentHistoryItem?.type === 'batch'
+      ? 'batch'
+      : currentHistoryItem?.type === 'recording'
+        ? 'recording'
+        : undefined;
+  const displayIconType =
+    defaultIconType || historyDefaultIconType || (mode === 'batch' ? 'batch' : 'recording');
 
   // Determine display title
-  const displayTitle = propsTitle || storeTitle || (mode === 'live' ? t('panel.live_record') : t('panel.batch_import'));
+  const displayTitle =
+    propsTitle ||
+    storeTitle ||
+    (mode === 'live' ? t('panel.live_record') : t('panel.batch_import'));
   const isManualHeaderActionsDisabled = isRecording;
   const isRenameModalVisible = isRenameModalOpen && !isManualHeaderActionsDisabled;
 
@@ -126,16 +152,22 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
       {hasSegments && (
         <div className="projects-detail-header">
           <div className="projects-detail-header-primary">
-            <div style={{ display: 'flex', alignItems: 'center', color: 'var(--color-text-secondary)' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                color: 'var(--color-text-secondary)',
+              }}
+            >
               {renderHeaderIcon(storeIcon, displayIconType)}
             </div>
-            <h4 
-              style={{ 
-                margin: 0, 
-                whiteSpace: 'nowrap', 
-                overflow: 'hidden', 
-                textOverflow: 'ellipsis' 
-              }} 
+            <h4
+              style={{
+                margin: 0,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
               title={displayTitle}
             >
               {displayTitle}
@@ -215,19 +247,16 @@ export function TranscriptWorkbench({ onClose, title: propsTitle, defaultIconTyp
           </div>
         </div>
       )}
-      
+
       <div className="panel-content">
         <ErrorBoundary>
           <TranscriptEditor />
         </ErrorBoundary>
       </div>
-      
+
       {audioUrl && <AudioPlayer />}
 
-      <TranscriptSummaryPanel 
-        isOpen={isSummaryOpen} 
-        onClose={() => setIsSummaryOpen(false)} 
-      />
+      <TranscriptSummaryPanel isOpen={isSummaryOpen} onClose={() => setIsSummaryOpen(false)} />
 
       <TranscriptSpeakerReviewPanel
         isOpen={isSpeakerReviewOpen}

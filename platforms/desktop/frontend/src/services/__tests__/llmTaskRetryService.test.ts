@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { retryLlmTaskFromLedger } from '../llmTaskRetryService';
-import { historyService } from '../historyService';
-import { polishService } from '../polishService';
-import { summaryService } from '../summaryService';
-import { translationService } from '../translationService';
-import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
-import { patchTaskLedgerRecord } from '../taskLedgerBuilders';
-import type { TaskLedgerRecord } from '../../types/taskLedger';
-import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
-import { buildTestConfig } from '../../test-utils/configTestUtils';
 import { useConfigStore } from '../../stores/configStore';
 import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
+import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
+import { buildTestConfig } from '../../test-utils/configTestUtils';
+import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
+import type { TaskLedgerRecord } from '../../types/taskLedger';
+import { historyService } from '../historyService';
+import { retryLlmTaskFromLedger } from '../llmTaskRetryService';
+import { polishService } from '../polishService';
+import { summaryService } from '../summaryService';
+import { patchTaskLedgerRecord } from '../taskLedgerBuilders';
+import { translationService } from '../translationService';
 
 vi.mock('../historyService', () => ({
   historyService: {
@@ -58,9 +58,7 @@ function makeTask(overrides: Partial<TaskLedgerRecord> = {}): TaskLedgerRecord {
   };
 }
 
-const segments = [
-  { id: '1', text: 'hello', start: 0, end: 1, isFinal: true },
-];
+const segments = [{ id: '1', text: 'hello', start: 0, end: 1, isFinal: true }];
 
 function createLlmReadyConfig() {
   return buildTestConfig({
@@ -149,11 +147,13 @@ describe('retryLlmTaskFromLedger', () => {
       sourceHistoryId: null,
     });
 
-    await retryLlmTaskFromLedger(makeTask({
-      kind: 'llmPolish',
-      historyId: undefined,
-      targetLanguage: undefined,
-    }));
+    await retryLlmTaskFromLedger(
+      makeTask({
+        kind: 'llmPolish',
+        historyId: undefined,
+        targetLanguage: undefined,
+      })
+    );
 
     expect(polishService.retryPolishTranscriptJob).toHaveBeenCalledWith({
       segments,
@@ -167,11 +167,13 @@ describe('retryLlmTaskFromLedger', () => {
       sourceHistoryId: 'history-a',
     });
 
-    await retryLlmTaskFromLedger(makeTask({
-      kind: 'llmSummary',
-      templateId: 'meeting',
-      targetLanguage: undefined,
-    }));
+    await retryLlmTaskFromLedger(
+      makeTask({
+        kind: 'llmSummary',
+        templateId: 'meeting',
+        targetLanguage: undefined,
+      })
+    );
 
     expect(summaryService.retrySummaryTranscriptJob).toHaveBeenCalledWith({
       segments,
@@ -181,10 +183,14 @@ describe('retryLlmTaskFromLedger', () => {
   });
 
   it('keeps the old ledger task and records a preflight error when retry cannot start', async () => {
-    await expect(retryLlmTaskFromLedger(makeTask({
-      historyId: undefined,
-      targetLanguage: undefined,
-    }))).rejects.toThrow('Transcript is no longer available for retry.');
+    await expect(
+      retryLlmTaskFromLedger(
+        makeTask({
+          historyId: undefined,
+          targetLanguage: undefined,
+        })
+      )
+    ).rejects.toThrow('Transcript is no longer available for retry.');
 
     expect(patchTaskLedgerRecord).toHaveBeenCalledTimes(1);
     expect(translationService.retryTranslateTranscriptJob).not.toHaveBeenCalled();
@@ -199,10 +205,15 @@ describe('retryLlmTaskFromLedger', () => {
       llmSettings: undefined,
     });
 
-    await expect(retryLlmTaskFromLedger(makeTask({
-      historyId: undefined,
-      targetLanguage: undefined,
-    }), { config })).rejects.toThrow('LLM Service not fully configured.');
+    await expect(
+      retryLlmTaskFromLedger(
+        makeTask({
+          historyId: undefined,
+          targetLanguage: undefined,
+        }),
+        { config }
+      )
+    ).rejects.toThrow('LLM Service not fully configured.');
 
     expect(patchTaskLedgerRecord).toHaveBeenCalledTimes(1);
   });

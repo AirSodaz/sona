@@ -1,11 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import type React from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal } from '../Modal';
-import { Dropdown, type DropdownOption } from '../Dropdown';
-import { InboxIcon } from '../Icons';
-import { ProjectVisual } from './ProjectVisual';
 import type { HistoryItem } from '../../types/history';
 import type { ProjectRecord } from '../../types/project';
+import { Dropdown, type DropdownOption } from '../Dropdown';
+import { InboxIcon } from '../Icons';
+import { Modal } from '../Modal';
+import { ProjectVisual } from './ProjectVisual';
 
 interface ProjectAssignmentModalProps {
   isOpen: boolean;
@@ -48,28 +49,31 @@ function OpenProjectAssignmentModal({
   const [projectId, setProjectId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const projectOptions = useMemo<DropdownOption[]>(() => [
-    {
-      value: '',
-      label: (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-          <InboxIcon width={14} height={14} />
-          <span>{t('projects.inbox', { defaultValue: 'Inbox' })}</span>
-        </span>
-      ),
-      ariaLabel: t('projects.inbox', { defaultValue: 'Inbox' }),
-    },
-    ...projects.map((project) => ({
-      value: project.id,
-      label: (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-          <ProjectVisual icon={project.icon} color={project.color} size="xs" showBackground />
-          <span>{project.name}</span>
-        </span>
-      ),
-      ariaLabel: project.name,
-    })),
-  ], [projects, t]);
+  const projectOptions = useMemo<DropdownOption[]>(
+    () => [
+      {
+        value: '',
+        label: (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+            <InboxIcon width={14} height={14} />
+            <span>{t('projects.inbox', { defaultValue: 'Inbox' })}</span>
+          </span>
+        ),
+        ariaLabel: t('projects.inbox', { defaultValue: 'Inbox' }),
+      },
+      ...projects.map((project) => ({
+        value: project.id,
+        label: (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+            <ProjectVisual icon={project.icon} color={project.color} size="xs" showBackground />
+            <span>{project.name}</span>
+          </span>
+        ),
+        ariaLabel: project.name,
+      })),
+    ],
+    [projects, t]
+  );
   const handleApply = async () => {
     setIsSaving(true);
     try {
@@ -91,7 +95,12 @@ function OpenProjectAssignmentModal({
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>
             {t('common.cancel', { defaultValue: 'Cancel' })}
           </button>
-          <button type="button" className="btn btn-primary" onClick={() => void handleApply()} disabled={isSaving}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => void handleApply()}
+            disabled={isSaving}
+          >
             {t('common.save', { defaultValue: 'Save' })}
           </button>
         </>
@@ -99,10 +108,15 @@ function OpenProjectAssignmentModal({
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <div style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-          {t('projects.selected_count', { count: items.length, defaultValue: '{{count}} selected' })}
+          {t('projects.selected_count', {
+            count: items.length,
+            defaultValue: '{{count}} selected',
+          })}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <label style={{ fontWeight: 500, color: 'var(--color-text-primary)', fontSize: '0.875rem' }}>
+          <label
+            style={{ fontWeight: 500, color: 'var(--color-text-primary)', fontSize: '0.875rem' }}
+          >
             {t('projects.target_project', { defaultValue: 'Target Project' })}
           </label>
           <Dropdown

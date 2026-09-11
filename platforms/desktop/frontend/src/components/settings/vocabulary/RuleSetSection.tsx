@@ -1,5 +1,5 @@
-import React from 'react';
 import { ChevronDown, ChevronRight, FileText, List, Plus, Trash2 } from 'lucide-react';
+import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Switch } from '../../Switch';
 import { SettingsSection } from '../SettingsLayout';
@@ -60,16 +60,25 @@ export function RuleSetSection<TSet extends RuleSetBase>({
 
   return (
     <SettingsSection title={title} icon={icon} description={description}>
-      <div style={{
-        display: 'flex',
-        gap: '12px',
-        padding: '24px',
-        background: 'var(--color-bg-primary)',
-        alignItems: 'flex-end',
-        borderBottom: '1px solid var(--color-border-subtle)'
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: '12px',
+          padding: '24px',
+          background: 'var(--color-bg-primary)',
+          alignItems: 'flex-end',
+          borderBottom: '1px solid var(--color-border-subtle)',
+        }}
+      >
         <div style={{ flex: 1 }}>
-          <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '4px', color: 'var(--color-text-muted)' }}>
+          <label
+            style={{
+              display: 'block',
+              fontSize: '0.85rem',
+              marginBottom: '4px',
+              color: 'var(--color-text-muted)',
+            }}
+          >
             {t('settings.rule_set_name', { defaultValue: 'Rule Set Name' })}
           </label>
           <input
@@ -85,20 +94,31 @@ export function RuleSetSection<TSet extends RuleSetBase>({
           className="btn btn-primary"
           onClick={onAddSet}
           disabled={!newSetName.trim()}
-          style={{ height: '38px', display: 'flex', alignItems: 'center', gap: '6px', padding: '0 20px' }}
+          style={{
+            height: '38px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '0 20px',
+          }}
         >
           <Plus size={18} />
           {t('settings.add_rule_set', { defaultValue: 'Add Set' })}
         </button>
       </div>
 
-      <div className="settings-list" style={{ background: 'var(--color-bg-primary)', overflow: 'hidden' }}>
+      <div
+        className="settings-list"
+        style={{ background: 'var(--color-bg-primary)', overflow: 'hidden' }}
+      >
         {sets.length === 0 ? (
-          <div style={{
-            padding: '48px 24px',
-            textAlign: 'center',
-            color: 'var(--color-text-muted)'
-          }}>
+          <div
+            style={{
+              padding: '48px 24px',
+              textAlign: 'center',
+              color: 'var(--color-text-muted)',
+            }}
+          >
             {emptyLabel}
           </div>
         ) : (
@@ -112,18 +132,31 @@ export function RuleSetSection<TSet extends RuleSetBase>({
               : undefined;
 
             return (
-              <div key={set.id} style={{
-                borderBottom: index === sets.length - 1 ? 'none' : '1px solid var(--color-border-subtle)',
-                background: set.enabled ? 'transparent' : 'var(--color-bg-secondary-soft)',
-              }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '16px 24px',
-                  cursor: 'pointer'
-                }} onClick={() => onToggleExpanded(set.id)}>
-                  <div style={{ display: 'flex', alignItems: 'center', color: 'var(--color-text-muted)' }}>
+              <div
+                key={set.id}
+                style={{
+                  borderBottom:
+                    index === sets.length - 1 ? 'none' : '1px solid var(--color-border-subtle)',
+                  background: set.enabled ? 'transparent' : 'var(--color-bg-secondary-soft)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '16px 24px',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => onToggleExpanded(set.id)}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      color: 'var(--color-text-muted)',
+                    }}
+                  >
                     {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
                   </div>
 
@@ -134,14 +167,30 @@ export function RuleSetSection<TSet extends RuleSetBase>({
                       value={set.name}
                       onClick={(event) => event.stopPropagation()}
                       onChange={(event) => onUpdateSetName(set.id, event.target.value)}
-                      style={{ fontWeight: 600, fontSize: '1rem', width: 'auto', minWidth: '150px' }}
+                      style={{
+                        fontWeight: 600,
+                        fontSize: '1rem',
+                        width: 'auto',
+                        minWidth: '150px',
+                      }}
                     />
-                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
+                    <span
+                      style={{
+                        fontSize: '0.75rem',
+                        color: 'var(--color-text-muted)',
+                        background: 'var(--color-bg-secondary)',
+                        padding: '2px 8px',
+                        borderRadius: 'var(--radius-sm)',
+                      }}
+                    >
                       {renderBadge(set)}
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }} onClick={(event) => event.stopPropagation()}>
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: '20px' }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
                     {batchToggle && (
                       <button
                         className="btn btn-icon btn-secondary-soft"
@@ -166,7 +215,9 @@ export function RuleSetSection<TSet extends RuleSetBase>({
                       className="btn btn-icon btn-danger-soft"
                       onClick={() => onDeleteSet(set.id)}
                       title={t('settings.delete_rule_set', { defaultValue: `Delete ${set.name}` })}
-                      aria-label={t('settings.delete_rule_set', { defaultValue: `Delete ${set.name}` })}
+                      aria-label={t('settings.delete_rule_set', {
+                        defaultValue: `Delete ${set.name}`,
+                      })}
                     >
                       <Trash2 size={18} />
                     </button>
@@ -174,12 +225,14 @@ export function RuleSetSection<TSet extends RuleSetBase>({
                 </div>
 
                 {isExpanded && (
-                  <div style={{
-                    padding: '0 24px 24px 56px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px'
-                  }}>
+                  <div
+                    style={{
+                      padding: '0 24px 24px 56px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                    }}
+                  >
                     {renderExpanded(set)}
                   </div>
                 )}

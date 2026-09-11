@@ -111,6 +111,9 @@ describe('projectStore', () => {
 
     await useProjectStore.getState().assignHistoryItems(['hist-1', 'hist-2'], 'project-2');
 
-    expect(historyService.updateProjectAssignments).toHaveBeenCalledWith(['hist-1', 'hist-2'], 'project-2');
+    expect(historyService.updateProjectAssignments).toHaveBeenCalledWith(
+      ['hist-1', 'hist-2'],
+      'project-2'
+    );
   });
 });

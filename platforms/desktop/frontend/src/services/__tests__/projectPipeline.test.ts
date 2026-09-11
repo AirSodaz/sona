@@ -34,15 +34,21 @@ describe('resolveItemPipeline', () => {
   });
 
   it('uses enabled project values and inherits omitted global values', () => {
-    const snapshot = resolveItemPipeline('project-1', [project({
-      enabled: true,
-      autoPolish: false,
-      autoTranslate: true,
-      targetLanguage: 'en',
-      autoSummary: false,
-      autoExport: true,
-      exportFormat: 'vtt',
-    })], config);
+    const snapshot = resolveItemPipeline(
+      'project-1',
+      [
+        project({
+          enabled: true,
+          autoPolish: false,
+          autoTranslate: true,
+          targetLanguage: 'en',
+          autoSummary: false,
+          autoExport: true,
+          exportFormat: 'vtt',
+        }),
+      ],
+      config
+    );
     expect(snapshot).toMatchObject({
       isProjectPipeline: true,
       autoPolish: false,
@@ -54,12 +60,20 @@ describe('resolveItemPipeline', () => {
   });
 
   it('treats disabled project pipelines as global defaults', () => {
-    expect(resolveItemPipeline('project-1', [project({
-      enabled: false,
-      autoPolish: false,
-      autoTranslate: true,
-      autoSummary: false,
-      autoExport: false,
-    })], config).isProjectPipeline).toBe(false);
+    expect(
+      resolveItemPipeline(
+        'project-1',
+        [
+          project({
+            enabled: false,
+            autoPolish: false,
+            autoTranslate: true,
+            autoSummary: false,
+            autoExport: false,
+          }),
+        ],
+        config
+      ).isProjectPipeline
+    ).toBe(false);
   });
 });

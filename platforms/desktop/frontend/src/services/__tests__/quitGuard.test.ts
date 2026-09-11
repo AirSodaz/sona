@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
@@ -45,7 +45,9 @@ describe('quitGuard', () => {
   });
 
   it('returns false when no quit-blocking tasks are active', () => {
-    expect(hasActiveFrontendQuitTasks(useTranscriptStore.getState(), useBatchQueueStore.getState())).toBe(false);
+    expect(
+      hasActiveFrontendQuitTasks(useTranscriptStore.getState(), useBatchQueueStore.getState())
+    ).toBe(false);
   });
 
   it.each([
@@ -57,12 +59,22 @@ describe('quitGuard', () => {
     ['retranscribe', { llmStates: { current: { isRetranscribing: true } } }, {}],
     ['summary generation', { summaryStates: { current: { isGenerating: true } } }, {}],
     ['processing batch queue item', {}, { queueItems: [{ status: 'processing' }] }],
-    ['running queue with pending item', {}, { isQueueProcessing: true, queueItems: [{ status: 'pending' }] }],
+    [
+      'running queue with pending item',
+      {},
+      { isQueueProcessing: true, queueItems: [{ status: 'pending' }] },
+    ],
   ])('detects %s as an active quit task', (_label, transcriptPatch, batchPatch) => {
-    useTranscriptStore.setState(transcriptPatch as Partial<ReturnType<typeof useTranscriptStore.getState>>);
-    useBatchQueueStore.setState(batchPatch as Partial<ReturnType<typeof useBatchQueueStore.getState>>);
+    useTranscriptStore.setState(
+      transcriptPatch as Partial<ReturnType<typeof useTranscriptStore.getState>>
+    );
+    useBatchQueueStore.setState(
+      batchPatch as Partial<ReturnType<typeof useBatchQueueStore.getState>>
+    );
 
-    expect(hasActiveFrontendQuitTasks(useTranscriptStore.getState(), useBatchQueueStore.getState())).toBe(true);
+    expect(
+      hasActiveFrontendQuitTasks(useTranscriptStore.getState(), useBatchQueueStore.getState())
+    ).toBe(true);
   });
 
   it('exits immediately without prompting when no active tasks are found', async () => {
@@ -95,11 +107,14 @@ describe('quitGuard', () => {
     const result = await runGuardedQuit(exitMock);
 
     expect(result).toBe(true);
-    expect(confirmMock).toHaveBeenCalledWith('tray.quit_warning_message', expect.objectContaining({
-      title: 'tray.quit_warning_title',
-      confirmLabel: 'tray.quit_confirm',
-      cancelLabel: 'common.cancel',
-    }));
+    expect(confirmMock).toHaveBeenCalledWith(
+      'tray.quit_warning_message',
+      expect.objectContaining({
+        title: 'tray.quit_warning_title',
+        confirmLabel: 'tray.quit_confirm',
+        cancelLabel: 'common.cancel',
+      })
+    );
     expect(exitMock).toHaveBeenCalledTimes(1);
   });
 

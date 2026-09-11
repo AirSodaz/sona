@@ -25,7 +25,11 @@
   border-radius: var(--radius-md, 12px);
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 12%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--color-accent-primary, var(--color-primary)) 12%,
+    transparent
+  );
   color: var(--color-accent-primary, var(--color-primary));
 }
 
@@ -300,8 +304,13 @@
 }
 
 .sync-banner-box.is-security {
-  background: color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 8%, var(--color-bg-primary));
-  border: 1px solid color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 20%, var(--color-border));
+  background: color-mix(
+    in srgb,
+    var(--color-accent-primary, var(--color-primary)) 8%,
+    var(--color-bg-primary)
+  );
+  border: 1px solid
+    color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 20%, var(--color-border));
   color: var(--color-text-secondary);
 }
 
@@ -395,7 +404,11 @@
 }
 
 .sync-scope-tag.is-badge {
-  background: color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 12%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--color-accent-primary, var(--color-primary)) 12%,
+    transparent
+  );
   color: var(--color-accent-primary, var(--color-primary));
 }
 
@@ -451,7 +464,9 @@
   color: var(--color-text-muted);
   cursor: pointer;
   border-radius: var(--radius-sm, 6px);
-  transition: color var(--transition-fast, 0.15s) ease, background var(--transition-fast, 0.15s) ease;
+  transition:
+    color var(--transition-fast, 0.15s) ease,
+    background var(--transition-fast, 0.15s) ease;
 }
 
 .sync-password-toggle:hover {
@@ -565,8 +580,8 @@ input[type="password"]::-ms-clear {
 }
 
 .sync-danger-zone {
-  border-top: 1px solid color-mix(in srgb, var(--color-danger, #ef4444) 20%, var(--color-border)) !important;
-  background: color-mix(in srgb, var(--color-danger, #ef4444) 3%, var(--color-bg-primary)) !important;
+  border-top: 1px solid color-mix(in srgb, var(--color-danger, #ef4444) 20%, var(--color-border));
+  background: color-mix(in srgb, var(--color-danger, #ef4444) 3%, var(--color-bg-primary));
 }
 
 .sync-vault-id-row {
@@ -597,7 +612,9 @@ input[type="password"]::-ms-clear {
   color: var(--color-text-muted);
   cursor: pointer;
   border-radius: 4px;
-  transition: color var(--transition-fast, 0.15s) ease, background var(--transition-fast, 0.15s) ease;
+  transition:
+    color var(--transition-fast, 0.15s) ease,
+    background var(--transition-fast, 0.15s) ease;
 }
 
 .sync-copy-icon-btn:hover {
@@ -743,7 +760,8 @@ input[type="password"]::-ms-clear {
 }
 
 @keyframes syncDotPulse {
-  0%, 100% {
+  0%,
+  100% {
     transform: scale(1);
     opacity: 1;
   }
@@ -924,7 +942,7 @@ input[type="password"]::-ms-clear {
 }
 
 .sync-text-warning {
-  color: var(--color-warning, #d97706) !important;
+  color: var(--color-warning, #d97706);
 }
 
 .sync-error-banner {
@@ -1065,7 +1083,7 @@ input[type="password"]::-ms-clear {
 
 .sync-change-password-actions button:disabled,
 .sync-change-password-actions .btn:disabled {
-  cursor: default !important;
+  cursor: default;
 }
 .sync-status-actions {
   display: flex;
@@ -1133,7 +1151,8 @@ input[type="password"]::-ms-clear {
   padding: 14px 16px;
   border-radius: var(--radius-md, 10px);
   background: var(--color-bg-elevated);
-  border: 1px solid color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 20%, var(--color-border));
+  border: 1px solid
+    color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 20%, var(--color-border));
   box-shadow: var(--shadow-sm);
 }
 
@@ -1242,7 +1261,9 @@ input[type="password"]::-ms-clear {
   word-break: break-all;
   box-sizing: border-box;
   cursor: pointer;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .sync-pairing-token-textarea:focus {
@@ -1338,7 +1359,9 @@ input[type="password"]::-ms-clear {
   color: var(--color-text-secondary);
   cursor: pointer;
   text-align: left;
-  transition: background var(--transition-fast, 0.15s) ease, color var(--transition-fast, 0.15s) ease;
+  transition:
+    background var(--transition-fast, 0.15s) ease,
+    color var(--transition-fast, 0.15s) ease;
 }
 
 .sync-conflict-item-btn:hover {

@@ -1,7 +1,7 @@
 import type { AppConfig } from '../../types/config';
+import { getScenarioVadModelPath } from '../../utils/scenarioModels';
 import type { AsrTranscriptionRequest } from '../asrConfigService';
 import { resolveAsrTranscriptionRequest } from '../asrConfigService';
-import { getScenarioVadModelPath } from '../../utils/scenarioModels';
 
 export type VoiceTypingShortcutModifier = 'control' | 'alt' | 'shift' | 'meta';
 
@@ -63,7 +63,7 @@ export function resolveVoiceTypingConfigSnapshot(config: AppConfig): VoiceTyping
 
 export function resolveVoiceTypingRuntimeChange(
   previous: VoiceTypingConfigSnapshot,
-  next: VoiceTypingConfigSnapshot,
+  next: VoiceTypingConfigSnapshot
 ): VoiceTypingRuntimeChange {
   const enabledChanged = next.enabled !== previous.enabled;
   const shortcutChanged = next.shortcut !== previous.shortcut;

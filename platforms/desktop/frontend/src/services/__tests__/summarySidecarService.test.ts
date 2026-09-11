@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_SUMMARY_TEMPLATE_ID } from '../../types/transcript';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import { DEFAULT_SUMMARY_TEMPLATE_ID } from '../../types/transcript';
 import { summarySidecarService } from '../summarySidecarService';
 
 const historyServiceMock = vi.hoisted(() => ({
@@ -35,15 +35,18 @@ describe('summarySidecarService', () => {
     historyServiceMock.loadSummary.mockReturnValue(load.promise);
 
     const pendingLoad = summarySidecarService.loadSummary('history-a');
-    useTranscriptStore.getState().setSummaryState({
-      activeTemplateId: 'meeting',
-      record: {
-        templateId: 'meeting',
-        content: 'Manual summary',
-        generatedAt: '2026-05-26T00:00:00.000Z',
-        sourceFingerprint: 'manual-fingerprint',
+    useTranscriptStore.getState().setSummaryState(
+      {
+        activeTemplateId: 'meeting',
+        record: {
+          templateId: 'meeting',
+          content: 'Manual summary',
+          generatedAt: '2026-05-26T00:00:00.000Z',
+          sourceFingerprint: 'manual-fingerprint',
+        },
       },
-    }, 'history-a');
+      'history-a'
+    );
 
     load.resolve({
       activeTemplateId: 'lecture',
@@ -57,16 +60,21 @@ describe('summarySidecarService', () => {
     await pendingLoad;
 
     expect(historyServiceMock.loadSummary).toHaveBeenCalledWith('history-a');
-    expect(useTranscriptStore.getState().getSummaryState('history-a').record?.content).toBe('Manual summary');
+    expect(useTranscriptStore.getState().getSummaryState('history-a').record?.content).toBe(
+      'Manual summary'
+    );
   });
 
   it('deletes persisted summary sidecars when the local state is default-only', async () => {
-    useTranscriptStore.getState().setSummaryState({
-      activeTemplateId: DEFAULT_SUMMARY_TEMPLATE_ID,
-      record: undefined,
-      isGenerating: false,
-      generationProgress: 0,
-    }, 'history-empty');
+    useTranscriptStore.getState().setSummaryState(
+      {
+        activeTemplateId: DEFAULT_SUMMARY_TEMPLATE_ID,
+        record: undefined,
+        isGenerating: false,
+        generationProgress: 0,
+      },
+      'history-empty'
+    );
 
     await summarySidecarService.persistSummary('history-empty');
 
@@ -75,16 +83,19 @@ describe('summarySidecarService', () => {
   });
 
   it('saves manual summary records using the durable sidecar payload shape', async () => {
-    useTranscriptStore.getState().setSummaryState({
-      activeTemplateId: 'meeting',
-      record: {
-        templateId: 'meeting',
-        content: 'Manual summary',
-        generatedAt: '2026-05-26T00:00:00.000Z',
-        sourceFingerprint: 'manual-fingerprint',
+    useTranscriptStore.getState().setSummaryState(
+      {
+        activeTemplateId: 'meeting',
+        record: {
+          templateId: 'meeting',
+          content: 'Manual summary',
+          generatedAt: '2026-05-26T00:00:00.000Z',
+          sourceFingerprint: 'manual-fingerprint',
+        },
+        streamingContent: 'transient text',
       },
-      streamingContent: 'transient text',
-    }, 'history-manual');
+      'history-manual'
+    );
 
     await summarySidecarService.persistSummary('history-manual');
 

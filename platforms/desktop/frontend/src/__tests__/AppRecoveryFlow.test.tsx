@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import App from '../App';
 
 vi.mock('react-i18next', () => ({
@@ -13,9 +13,13 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('../components/TabNavigation', () => ({ TabNavigation: () => <div>TabNavigation</div> }));
-vi.mock('../components/transcript/TranscriptWorkbench', () => ({ TranscriptWorkbench: () => <div>TranscriptWorkbench</div> }));
+vi.mock('../components/transcript/TranscriptWorkbench', () => ({
+  TranscriptWorkbench: () => <div>TranscriptWorkbench</div>,
+}));
 vi.mock('../components/ExportButton', () => ({ ExportButton: () => <div>ExportButton</div> }));
-vi.mock('../components/TranslateButton', () => ({ TranslateButton: () => <div>TranslateButton</div> }));
+vi.mock('../components/TranslateButton', () => ({
+  TranslateButton: () => <div>TranslateButton</div>,
+}));
 vi.mock('../components/PolishButton', () => ({ PolishButton: () => <div>PolishButton</div> }));
 vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImport</div> }));
 vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
@@ -36,14 +40,14 @@ vi.mock('../components/Icons', () => ({
 
 vi.mock('../components/NotificationCenter', () => ({
   NotificationCenter: ({ onOpenRecoveryCenter }: any) => (
-    <button type="button" onClick={onOpenRecoveryCenter}>Open Recovery Notification</button>
+    <button type="button" onClick={onOpenRecoveryCenter}>
+      Open Recovery Notification
+    </button>
   ),
 }));
 
 vi.mock('../components/RecoveryCenterModal', () => ({
-  RecoveryCenterModal: ({ isOpen }: any) => (
-    isOpen ? <div>Recovery Center Modal</div> : null
-  ),
+  RecoveryCenterModal: ({ isOpen }: any) => (isOpen ? <div>Recovery Center Modal</div> : null),
 }));
 
 vi.mock('../hooks/useAppInitialization', () => ({
@@ -77,17 +81,23 @@ vi.mock('../stores/onboardingStore', () => ({
 
 describe('App recovery flow', () => {
   it('opens the recovery center from the notification center entry', async () => {
-    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) => selector({
-      mode: 'live',
-      setMode: vi.fn(),
-    }));
-    mockUseProjectStore.mockImplementation((selector: any) => selector({
-      activeProjectId: null,
-      projects: [],
-    }));
-    mockUseOnboardingStore.mockImplementation((selector: any) => selector({
-      reopen: vi.fn(),
-    }));
+    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) =>
+      selector({
+        mode: 'live',
+        setMode: vi.fn(),
+      })
+    );
+    mockUseProjectStore.mockImplementation((selector: any) =>
+      selector({
+        activeProjectId: null,
+        projects: [],
+      })
+    );
+    mockUseOnboardingStore.mockImplementation((selector: any) =>
+      selector({
+        reopen: vi.fn(),
+      })
+    );
 
     render(<App />);
 

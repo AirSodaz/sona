@@ -1,9 +1,9 @@
+import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import {
   DEFAULT_SUMMARY_TEMPLATE_ID,
   type HistorySummaryPayload,
   type TranscriptSummaryState,
 } from '../types/transcript';
-import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { historyService } from './historyService';
 
 // Once we have local state, prefer it over re-hydrating from disk. This prevents a late
@@ -32,10 +32,7 @@ function buildSummaryPayload(summaryState: TranscriptSummaryState): HistorySumma
 // We intentionally persist only durable summary state. Empty/default state should delete
 // the sidecar so opening a transcript without summary data stays equivalent to "no file".
 function hasPersistableSummaryData(summaryState: TranscriptSummaryState): boolean {
-  return (
-    !!summaryState.record ||
-    summaryState.activeTemplateId !== DEFAULT_SUMMARY_TEMPLATE_ID
-  );
+  return !!summaryState.record || summaryState.activeTemplateId !== DEFAULT_SUMMARY_TEMPLATE_ID;
 }
 
 export interface SummarySidecarServicePorts {
@@ -91,7 +88,9 @@ export class SummarySidecarService {
   }
 }
 
-export function createSummarySidecarService(ports: SummarySidecarServicePorts): SummarySidecarService {
+export function createSummarySidecarService(
+  ports: SummarySidecarServicePorts
+): SummarySidecarService {
   return new SummarySidecarService(ports);
 }
 

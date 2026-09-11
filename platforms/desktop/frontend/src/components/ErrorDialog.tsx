@@ -1,8 +1,9 @@
-import React, { useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
 import { AlertCircle } from 'lucide-react';
-import { useErrorDialogStore } from '../stores/errorDialogStore';
+import type React from 'react';
+import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { useErrorDialogStore } from '../stores/errorDialogStore';
 
 /**
  * Dedicated modal dialog for user-visible errors.
@@ -62,14 +63,17 @@ export function ErrorDialog(): React.JSX.Element | null {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, close]);
 
-  useEscapeKey((e) => {
-    e.preventDefault();
-    close('dismiss');
-  }, {
-    enabled: isOpen,
-    checkTopMost: true,
-    containerRef: modalRef,
-  });
+  useEscapeKey(
+    (e) => {
+      e.preventDefault();
+      close('dismiss');
+    },
+    {
+      enabled: isOpen,
+      checkTopMost: true,
+      containerRef: modalRef,
+    }
+  );
 
   if (!isOpen || !options) {
     return null;

@@ -1,9 +1,9 @@
 import { create } from 'zustand';
+import i18n from '../i18n';
+import { runGuardedQuit } from '../services/quitGuard';
 import { openUrl } from '../services/tauri/platform/opener';
 import { relaunch } from '../services/tauri/platform/process';
 import { check, type Update } from '../services/tauri/platform/updater';
-import i18n from '../i18n';
-import { runGuardedQuit } from '../services/quitGuard';
 import { buildErrorDialogViewModel, extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { useErrorDialogStore } from './errorDialogStore';
@@ -42,12 +42,14 @@ async function openLatestReleasePage() {
 
 async function showUpdateError(error: unknown) {
   const showError = useErrorDialogStore.getState().showError;
-  const result = await showError(buildErrorDialogViewModel(i18n.t.bind(i18n), {
-    code: 'update.failed',
-    messageKey: 'errors.update.failed',
-    cause: error,
-    primaryActionLabelKey: 'settings.update_download_manually',
-  }));
+  const result = await showError(
+    buildErrorDialogViewModel(i18n.t.bind(i18n), {
+      code: 'update.failed',
+      messageKey: 'errors.update.failed',
+      cause: error,
+      primaryActionLabelKey: 'settings.update_download_manually',
+    })
+  );
 
   if (result === 'primary') {
     await openLatestReleasePage();
@@ -95,7 +97,9 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
           status: 'available',
           error: null,
           progress: 0,
-          notificationVisible: manual ? previousNotificationVisible : dismissedVersion !== update.version,
+          notificationVisible: manual
+            ? previousNotificationVisible
+            : dismissedVersion !== update.version,
         });
         return;
       }

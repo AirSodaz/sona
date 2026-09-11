@@ -1,7 +1,4 @@
-import type {
-  SyncPresetV1,
-  SyncStatusSnapshot,
-} from '../bindings';
+import type { SyncPresetV1, SyncStatusSnapshot } from '../bindings';
 
 export type {
   SyncConflictDetail,
@@ -84,10 +81,7 @@ export interface SyncPreviewJoinRequest {
 
 export type SyncJoinRequest = SyncPreviewJoinRequest;
 
-export type SyncPreviewJoinTransportRequest = Omit<
-  SyncPreviewJoinRequest,
-  'provider'
-> & {
+export type SyncPreviewJoinTransportRequest = Omit<SyncPreviewJoinRequest, 'provider'> & {
   provider: SyncProviderTransportInput;
 };
 

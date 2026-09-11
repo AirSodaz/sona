@@ -93,32 +93,37 @@ vi.mock('../../../stores/configStore', () => ({
 }));
 
 vi.mock('../../../stores/dialogStore', () => ({
-  useDialogStore: (selector: any) => selector({
-    confirm: (...args: unknown[]) => mocks.confirm(...args),
-    showError: (...args: unknown[]) => mocks.showError(...args),
-  }),
+  useDialogStore: (selector: any) =>
+    selector({
+      confirm: (...args: unknown[]) => mocks.confirm(...args),
+      showError: (...args: unknown[]) => mocks.showError(...args),
+    }),
 }));
 
 vi.mock('../../../stores/historyStore', () => ({
-  useHistoryStore: (selector: any) => selector({
-    refresh: (...args: unknown[]) => mocks.refreshHistory(...args),
-  }),
+  useHistoryStore: (selector: any) =>
+    selector({
+      refresh: (...args: unknown[]) => mocks.refreshHistory(...args),
+    }),
 }));
 
 vi.mock('../../../stores/transcriptSessionStore', () => ({
-  useTranscriptSessionStore: (selector: any) => selector({
-    sourceHistoryId: mocks.sourceHistoryId,
-  }),
+  useTranscriptSessionStore: (selector: any) =>
+    selector({
+      sourceHistoryId: mocks.sourceHistoryId,
+    }),
 }));
 
-function report(overrides: Partial<{
-  eligibleCount: number;
-  removedCount: number;
-  removedBytes: number;
-  missingMarkedCount: number;
-  failedCount: number;
-  skippedActiveCount: number;
-}> = {}) {
+function report(
+  overrides: Partial<{
+    eligibleCount: number;
+    removedCount: number;
+    removedBytes: number;
+    missingMarkedCount: number;
+    failedCount: number;
+    skippedActiveCount: number;
+  }> = {}
+) {
   return {
     eligibleCount: 0,
     removedCount: 0,
@@ -130,10 +135,12 @@ function report(overrides: Partial<{
   };
 }
 
-function usageSnapshot(overrides: Partial<{
-  totalBytes: number;
-  webviewBytes: number | null;
-}> = {}) {
+function usageSnapshot(
+  overrides: Partial<{
+    totalBytes: number;
+    webviewBytes: number | null;
+  }> = {}
+) {
   return {
     generatedAt: '2026-07-04T08:00:00.000Z',
     totalBytes: overrides.totalBytes ?? 10_240,
@@ -156,9 +163,7 @@ function usageSnapshot(overrides: Partial<{
           dataBytes: 1_280,
           indexBytes: 512,
           freePageBytes: 256,
-          indexEntries: [
-            { schema: 'main', name: 'idx_history_items_timestamp', bytes: 512 },
-          ],
+          indexEntries: [{ schema: 'main', name: 'idx_history_items_timestamp', bytes: 512 }],
           dbstatAvailable: true,
         },
       },
@@ -260,7 +265,9 @@ describe('SettingsStorageTab', () => {
   });
 
   it('shows a dbstat capability error when storage usage cannot be collected', async () => {
-    mocks.getUsageSnapshot.mockRejectedValue(new Error('SQLite dbstat capability is unavailable: no such table: dbstat'));
+    mocks.getUsageSnapshot.mockRejectedValue(
+      new Error('SQLite dbstat capability is unavailable: no such table: dbstat')
+    );
 
     render(<SettingsStorageTab />);
 
@@ -290,7 +297,7 @@ describe('SettingsStorageTab', () => {
         expect.stringContaining('This clears WebView cache'),
         expect.objectContaining({
           title: 'Clear WebView browsing data?',
-        }),
+        })
       );
     });
     await waitFor(() => {
@@ -299,7 +306,9 @@ describe('SettingsStorageTab', () => {
     await waitFor(() => {
       expect(mocks.getUsageSnapshot).toHaveBeenCalledTimes(2);
     });
-    expect(screen.getByTestId('settings-storage-webview-result').textContent).toContain('WebView cleanup requested');
+    expect(screen.getByTestId('settings-storage-webview-result').textContent).toContain(
+      'WebView cleanup requested'
+    );
   });
 
   it('shows a command error when WebView cleanup fails', async () => {
@@ -311,9 +320,11 @@ describe('SettingsStorageTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear WebView Data' }));
 
     await waitFor(() => {
-      expect(mocks.showError).toHaveBeenCalledWith(expect.objectContaining({
-        code: 'storage.webview_cleanup_failed',
-      }));
+      expect(mocks.showError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'storage.webview_cleanup_failed',
+        })
+      );
     });
   });
 
@@ -331,20 +342,24 @@ describe('SettingsStorageTab', () => {
 
   it('previews, confirms, applies, refreshes history, and shows the cleanup result', async () => {
     mocks.retentionDays = 30;
-    mocks.previewAudioCleanup.mockResolvedValue(report({
-      eligibleCount: 3,
-      removedCount: 2,
-      removedBytes: 2048,
-      missingMarkedCount: 1,
-      skippedActiveCount: 1,
-    }));
-    mocks.cleanupAudio.mockResolvedValue(report({
-      eligibleCount: 3,
-      removedCount: 2,
-      removedBytes: 2048,
-      missingMarkedCount: 1,
-      skippedActiveCount: 1,
-    }));
+    mocks.previewAudioCleanup.mockResolvedValue(
+      report({
+        eligibleCount: 3,
+        removedCount: 2,
+        removedBytes: 2048,
+        missingMarkedCount: 1,
+        skippedActiveCount: 1,
+      })
+    );
+    mocks.cleanupAudio.mockResolvedValue(
+      report({
+        eligibleCount: 3,
+        removedCount: 2,
+        removedBytes: 2048,
+        missingMarkedCount: 1,
+        skippedActiveCount: 1,
+      })
+    );
 
     render(<SettingsStorageTab />);
     await screen.findByRole('button', { name: 'Refresh' });
@@ -362,8 +377,12 @@ describe('SettingsStorageTab', () => {
       expect(mocks.cleanupAudio).toHaveBeenCalledWith(30, 'active-history');
     });
     expect(mocks.refreshHistory).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('settings-storage-cleanup-result').textContent).toContain('2 files removed');
-    expect(screen.getByTestId('settings-storage-cleanup-result').textContent).toContain('1 missing');
+    expect(screen.getByTestId('settings-storage-cleanup-result').textContent).toContain(
+      '2 files removed'
+    );
+    expect(screen.getByTestId('settings-storage-cleanup-result').textContent).toContain(
+      '1 missing'
+    );
   });
 
   it('handles a zero-file preview without asking for confirmation', async () => {
@@ -379,7 +398,9 @@ describe('SettingsStorageTab', () => {
       expect(mocks.previewAudioCleanup).toHaveBeenCalledWith(7, 'active-history');
     });
     await waitFor(() => {
-      expect(screen.getByTestId('settings-storage-cleanup-result').textContent).toContain('No audio files need cleanup');
+      expect(screen.getByTestId('settings-storage-cleanup-result').textContent).toContain(
+        'No audio files need cleanup'
+      );
     });
     expect(mocks.confirm).not.toHaveBeenCalled();
     expect(mocks.cleanupAudio).not.toHaveBeenCalled();
@@ -387,7 +408,9 @@ describe('SettingsStorageTab', () => {
 
   it('shows a command error when cleanup fails', async () => {
     mocks.retentionDays = 90;
-    mocks.previewAudioCleanup.mockResolvedValue(report({ eligibleCount: 1, removedCount: 1, removedBytes: 512 }));
+    mocks.previewAudioCleanup.mockResolvedValue(
+      report({ eligibleCount: 1, removedCount: 1, removedBytes: 512 })
+    );
     mocks.cleanupAudio.mockRejectedValue(new Error('delete failed'));
 
     render(<SettingsStorageTab />);
@@ -396,9 +419,11 @@ describe('SettingsStorageTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clean Now' }));
 
     await waitFor(() => {
-      expect(mocks.showError).toHaveBeenCalledWith(expect.objectContaining({
-        code: 'history.audio_cleanup_failed',
-      }));
+      expect(mocks.showError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'history.audio_cleanup_failed',
+        })
+      );
     });
   });
 
@@ -452,7 +477,7 @@ describe('SettingsStorageTab', () => {
         expect.stringContaining('/new/path'),
         expect.objectContaining({
           title: 'Change Data Directory?',
-        }),
+        })
       );
     });
 
@@ -482,7 +507,7 @@ describe('SettingsStorageTab', () => {
         expect.stringContaining('/new/path'),
         expect.objectContaining({
           title: 'Change Models Directory?',
-        }),
+        })
       );
     });
 
@@ -531,7 +556,7 @@ describe('SettingsStorageTab', () => {
         expect.stringContaining('/default/data'),
         expect.objectContaining({
           title: 'Restore Default Data Directory?',
-        }),
+        })
       );
     });
 
@@ -566,7 +591,7 @@ describe('SettingsStorageTab', () => {
         expect.stringContaining('/default/data/models'),
         expect.objectContaining({
           title: 'Restore Default Models Directory?',
-        }),
+        })
       );
     });
 

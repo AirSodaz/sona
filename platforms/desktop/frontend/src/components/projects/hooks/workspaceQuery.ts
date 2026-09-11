@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { HistoryItem as HistoryItemType } from '../../../types/history';
-import { historyQueryWorkspace } from '../../../services/tauri/history';
 import type { HistoryWorkspaceItemCounts, HistoryWorkspaceSummary } from '../../../bindings';
+import { historyQueryWorkspace } from '../../../services/tauri/history';
+import type { HistoryItem as HistoryItemType } from '../../../types/history';
+import { logger } from '../../../utils/logger';
 import type {
   ProjectDateFilter,
   ProjectFilterType,
@@ -9,7 +10,6 @@ import type {
   WorkspaceQueryRequest,
   WorkspaceQueryResult,
 } from '../types';
-import { logger } from '../../../utils/logger';
 
 export const EMPTY_WORKSPACE_QUERY_RESULT: WorkspaceQueryResult = {
   filteredItems: [],
@@ -30,7 +30,9 @@ export const EMPTY_WORKSPACE_QUERY_RESULT: WorkspaceQueryResult = {
   },
 };
 
-export function deriveFallbackItemCounts(historyItems: HistoryItemType[]): HistoryWorkspaceItemCounts {
+export function deriveFallbackItemCounts(
+  historyItems: HistoryItemType[]
+): HistoryWorkspaceItemCounts {
   const byTagId: Record<string, number> = {};
   let untagged = 0;
   let trash = 0;
@@ -54,7 +56,7 @@ export function deriveFallbackItemCounts(historyItems: HistoryItemType[]): Histo
 
 export function deriveFallbackSummary(
   historyItems: HistoryItemType[],
-  scope: WorkspaceQueryRequest['scope'],
+  scope: WorkspaceQueryRequest['scope']
 ): { summary: HistoryWorkspaceSummary; filteredItemCount: number } {
   let totalItems = 0;
   let totalDuration = 0;
@@ -150,29 +152,31 @@ export function useWorkspaceQuery({
   const [retryAttempt, setRetryAttempt] = useState(0);
   const requestIdRef = useRef(0);
   const loadingMoreRef = useRef(false);
-  const request = useMemo<Omit<WorkspaceQueryRequest, 'limit' | 'offset'>>(() => ({
-    scope,
-    query: searchQuery,
-    filterType,
-    dateFilter,
-    sortOrder,
-  }), [dateFilter, filterType, scope, searchQuery, sortOrder]);
-  const fallbackItemCounts = useMemo(
-    () => deriveFallbackItemCounts(historyItems),
-    [historyItems],
+  const request = useMemo<Omit<WorkspaceQueryRequest, 'limit' | 'offset'>>(
+    () => ({
+      scope,
+      query: searchQuery,
+      filterType,
+      dateFilter,
+      sortOrder,
+    }),
+    [dateFilter, filterType, scope, searchQuery, sortOrder]
   );
+  const fallbackItemCounts = useMemo(() => deriveFallbackItemCounts(historyItems), [historyItems]);
 
-  const activeItemCounts = snapshot?.result.itemCounts
-    ?? (historyItems.length > 0 ? fallbackItemCounts : EMPTY_WORKSPACE_QUERY_RESULT.itemCounts);
+  const activeItemCounts =
+    snapshot?.result.itemCounts ??
+    (historyItems.length > 0 ? fallbackItemCounts : EMPTY_WORKSPACE_QUERY_RESULT.itemCounts);
 
   const fallbackSummary = useMemo(
     () => deriveFallbackSummary(historyItems, scope),
-    [historyItems, scope],
+    [historyItems, scope]
   );
 
-  const hasCurrentSnapshot = snapshot?.request === request && snapshot.historyItems === historyItems;
-  const initialLoadError = initialLoadFailure?.request === request
-    && initialLoadFailure.historyItems === historyItems;
+  const hasCurrentSnapshot =
+    snapshot?.request === request && snapshot.historyItems === historyItems;
+  const initialLoadError =
+    initialLoadFailure?.request === request && initialLoadFailure.historyItems === historyItems;
 
   const queryResult = useMemo<WorkspaceQueryResult>(() => {
     if (hasCurrentSnapshot) {
@@ -190,7 +194,8 @@ export function useWorkspaceQuery({
       searchMatchByItemId: {},
       filteredItemCount: isUnfilteredScope ? fallbackSummary.filteredItemCount : 0,
       hasMore: false,
-      summary: historyItems.length > 0 ? fallbackSummary.summary : EMPTY_WORKSPACE_QUERY_RESULT.summary,
+      summary:
+        historyItems.length > 0 ? fallbackSummary.summary : EMPTY_WORKSPACE_QUERY_RESULT.summary,
       itemCounts: activeItemCounts,
     };
   }, [
@@ -289,7 +294,13 @@ export function useWorkspaceQuery({
         setIsLoadingMore(false);
       }
     }
-  }, [hasCurrentSnapshot, historyItems, queryResult.filteredItems.length, queryResult.hasMore, request]);
+  }, [
+    hasCurrentSnapshot,
+    historyItems,
+    queryResult.filteredItems.length,
+    queryResult.hasMore,
+    request,
+  ]);
 
   return {
     ...queryResult,

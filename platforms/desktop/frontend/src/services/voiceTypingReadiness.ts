@@ -1,4 +1,3 @@
-import { modelService } from './modelService';
 import type { AppConfig } from '../types/config';
 import type {
   VoiceTypingReadinessSnapshot,
@@ -7,13 +6,18 @@ import type {
 } from '../types/voiceTyping';
 import { findSelectedModelByMode } from '../utils/modelSelection';
 import { getScenarioVadModelPath } from '../utils/scenarioModels';
+import { modelService } from './modelService';
 
 export function resolveVoiceTypingReadinessSnapshot(
   config: Pick<
     AppConfig,
-    'voiceTypingEnabled' | 'voiceTypingShortcut' | 'streamingModelPath' | 'liveVadModelPath' | 'microphoneId'
+    | 'voiceTypingEnabled'
+    | 'voiceTypingShortcut'
+    | 'streamingModelPath'
+    | 'liveVadModelPath'
+    | 'microphoneId'
   >,
-  runtime: VoiceTypingRuntimeStatus,
+  runtime: VoiceTypingRuntimeStatus
 ): VoiceTypingReadinessSnapshot {
   const shortcutConfigured = (config.voiceTypingShortcut ?? '').trim().length > 0;
   const liveModelConfigured = (config.streamingModelPath ?? '').trim().length > 0;
@@ -25,9 +29,9 @@ export function resolveVoiceTypingReadinessSnapshot(
     : false;
   const vadConfigured = !requiresVad || getScenarioVadModelPath(config, 'live').length > 0;
   const hasRuntimeFailure =
-    runtime.shortcutRegistration === 'error'
-    || runtime.warmup === 'error'
-    || runtime.lastErrorSource !== null;
+    runtime.shortcutRegistration === 'error' ||
+    runtime.warmup === 'error' ||
+    runtime.lastErrorSource !== null;
 
   let state: VoiceTypingReadinessState;
   if (!config.voiceTypingEnabled) {
@@ -40,10 +44,7 @@ export function resolveVoiceTypingReadinessSnapshot(
     state = 'needs_vad';
   } else if (hasRuntimeFailure) {
     state = 'failed';
-  } else if (
-    runtime.shortcutRegistration !== 'ready'
-    || runtime.warmup !== 'ready'
-  ) {
+  } else if (runtime.shortcutRegistration !== 'ready' || runtime.warmup !== 'ready') {
     state = 'preparing';
   } else {
     state = 'ready';

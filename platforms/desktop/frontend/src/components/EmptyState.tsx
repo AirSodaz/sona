@@ -1,5 +1,5 @@
-import React from 'react';
 import { FolderOpen } from 'lucide-react';
+import type React from 'react';
 
 export interface EmptyStateProps {
   title: string;
@@ -23,26 +23,18 @@ export function EmptyState({
   return (
     <div className={`shared-empty-container ${className}`}>
       {/* Icon wraps */}
-      <div className="shared-empty-icon-wrap">
-        {resolvedIcon}
-      </div>
+      <div className="shared-empty-icon-wrap">{resolvedIcon}</div>
 
       {/* Info labels */}
       <div className="shared-empty-info">
         <h4 className="shared-empty-title">{title}</h4>
-        {description && (
-          <p className="shared-empty-desc">{description}</p>
-        )}
+        {description && <p className="shared-empty-desc">{description}</p>}
       </div>
 
       {/* Action button */}
       {actionLabel && onAction && (
         <div className="shared-empty-action">
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={onAction}
-          >
+          <button type="button" className="btn btn-primary btn-sm" onClick={onAction}>
             {actionLabel}
           </button>
         </div>

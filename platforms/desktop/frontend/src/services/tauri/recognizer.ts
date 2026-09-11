@@ -10,8 +10,9 @@ import { TauriCommand } from './commands';
 import type { TauriCommandArgs } from './contracts';
 import { invokeTauri } from './invoke';
 
-type CoreProcessBatchFileRequest =
-  TauriCommandArgs<typeof TauriCommand.recognizer.processBatchFile>;
+type CoreProcessBatchFileRequest = TauriCommandArgs<
+  typeof TauriCommand.recognizer.processBatchFile
+>;
 
 export type ProcessBatchFileRequest = Omit<
   CoreProcessBatchFileRequest,
@@ -29,7 +30,7 @@ function finiteNumber(value: number, path: string): number {
 }
 
 function normalizeModelFileConfig(
-  config: Extract<AsrTranscriptionRequest, { engine: 'local' }>['fileConfig'],
+  config: Extract<AsrTranscriptionRequest, { engine: 'local' }>['fileConfig']
 ): CoreModelFileConfig | undefined {
   if (!config) {
     return undefined;
@@ -54,9 +55,7 @@ function normalizeModelFileConfig(
   };
 }
 
-export function normalizeAsrRequest(
-  request: AsrTranscriptionRequest,
-): CoreAsrTranscriptionRequest {
+export function normalizeAsrRequest(request: AsrTranscriptionRequest): CoreAsrTranscriptionRequest {
   const common = {
     mode: request.mode,
     language: request.language,
@@ -96,7 +95,7 @@ export function normalizeAsrRequest(
 }
 
 function normalizeSpeakerProcessing(
-  config: SpeakerProcessingConfig | null,
+  config: SpeakerProcessingConfig | null
 ): CoreSpeakerProcessingConfig | null {
   if (!config) {
     return null;
@@ -105,22 +104,21 @@ function normalizeSpeakerProcessing(
   return {
     speakerSegmentationModelPath: config.speakerSegmentationModelPath ?? null,
     speakerEmbeddingModelPath: config.speakerEmbeddingModelPath ?? null,
-    speakerProfiles: config.speakerProfiles?.map((profile) => ({
-      ...profile,
-      samples: profile.samples.map((sample) => ({
-        ...sample,
-        durationSeconds: finiteNumber(
-          sample.durationSeconds,
-          `speakerProcessing.speakerProfiles.${profile.id}.samples.${sample.id}.durationSeconds`,
-        ),
-      })),
-    })) ?? null,
+    speakerProfiles:
+      config.speakerProfiles?.map((profile) => ({
+        ...profile,
+        samples: profile.samples.map((sample) => ({
+          ...sample,
+          durationSeconds: finiteNumber(
+            sample.durationSeconds,
+            `speakerProcessing.speakerProfiles.${profile.id}.samples.${sample.id}.durationSeconds`
+          ),
+        })),
+      })) ?? null,
   };
 }
 
-export async function prepareLiveTranscription(
-  asrRequest: AsrTranscriptionRequest,
-): Promise<void> {
+export async function prepareLiveTranscription(asrRequest: AsrTranscriptionRequest): Promise<void> {
   await invokeTauri(TauriCommand.recognizer.prepareLive, {
     asrRequest: normalizeAsrRequest(asrRequest),
   });
@@ -144,7 +142,7 @@ export async function startExternalLiveTranscription(request: {
 
 export async function feedExternalLiveSource(
   sourceToken: string,
-  samples: Uint8Array,
+  samples: Uint8Array
 ): Promise<void> {
   await invokeTauri(TauriCommand.recognizer.feedExternalSource, { sourceToken, samples });
 }
@@ -162,9 +160,7 @@ export interface StartNativeLiveTranscriptionRequest {
   asrRequest: AsrTranscriptionRequest;
 }
 
-export async function startNativeLiveTranscription(
-  request: StartNativeLiveTranscriptionRequest,
-) {
+export async function startNativeLiveTranscription(request: StartNativeLiveTranscriptionRequest) {
   return invokeTauri(TauriCommand.recognizer.startNativeLive, {
     ...request,
     asrRequest: normalizeAsrRequest(request.asrRequest),
@@ -173,7 +169,7 @@ export async function startNativeLiveTranscription(
 
 export async function pauseNativeLiveTranscription(
   consumerId: string,
-  sourceKind: 'system' | 'microphone',
+  sourceKind: 'system' | 'microphone'
 ): Promise<void> {
   await invokeTauri(TauriCommand.recognizer.pauseNativeLive, { consumerId, sourceKind });
 }
@@ -192,7 +188,7 @@ export async function resumeNativeLiveTranscription(request: {
 
 export async function stopNativeLiveTranscription(
   consumerId: string,
-  sourceKind: 'system' | 'microphone',
+  sourceKind: 'system' | 'microphone'
 ): Promise<string> {
   return invokeTauri(TauriCommand.recognizer.stopNativeLive, { consumerId, sourceKind });
 }
@@ -206,7 +202,7 @@ export async function getLiveTranscriptionMetrics() {
 }
 
 export async function processBatchFile(
-  request: ProcessBatchFileRequest,
+  request: ProcessBatchFileRequest
 ): Promise<TranscriptSegment[]> {
   return invokeTauri(TauriCommand.recognizer.processBatchFile, {
     ...request,

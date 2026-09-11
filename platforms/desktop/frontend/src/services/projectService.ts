@@ -1,5 +1,18 @@
-import type { ProjectCreateInput, ProjectPipelineConfig, ProjectRecord, ProjectUpdateInput } from '../types/project';
-import { projectCreate, projectDelete, projectGetActiveId, projectList, projectReorder, projectSetActiveId, projectUpdate } from './tauri/project';
+import type {
+  ProjectCreateInput,
+  ProjectPipelineConfig,
+  ProjectRecord,
+  ProjectUpdateInput,
+} from '../types/project';
+import {
+  projectCreate,
+  projectDelete,
+  projectGetActiveId,
+  projectList,
+  projectReorder,
+  projectSetActiveId,
+  projectUpdate,
+} from './tauri/project';
 
 export interface ProjectServicePorts {
   projectCreate: typeof projectCreate;
@@ -23,9 +36,17 @@ export class ProjectService {
   }
 
   async saveAll(projects: ProjectRecord[]): Promise<void> {
-    await Promise.all(projects.map((project) => this.ports.projectUpdate(project.id, {
-      name: project.name, description: project.description, icon: project.icon, color: project.color, pipeline: project.pipeline,
-    })));
+    await Promise.all(
+      projects.map((project) =>
+        this.ports.projectUpdate(project.id, {
+          name: project.name,
+          description: project.description,
+          icon: project.icon,
+          color: project.color,
+          pipeline: project.pipeline,
+        })
+      )
+    );
   }
 
   async reorder(projectIds: string[]): Promise<void> {
@@ -36,10 +57,7 @@ export class ProjectService {
     return this.ports.projectCreate(input);
   }
 
-  async update(
-    id: string,
-    updates: ProjectUpdateInput,
-  ): Promise<ProjectRecord | null> {
+  async update(id: string, updates: ProjectUpdateInput): Promise<ProjectRecord | null> {
     return this.ports.projectUpdate(id, updates);
   }
 
@@ -47,7 +65,10 @@ export class ProjectService {
     return this.update(id, { pipeline });
   }
 
-  async delete(id: string, cascadeAction: 'moveToInbox' | 'deleteItems' = 'moveToInbox'): Promise<void> {
+  async delete(
+    id: string,
+    cascadeAction: 'moveToInbox' | 'deleteItems' = 'moveToInbox'
+  ): Promise<void> {
     await this.ports.projectDelete(id, cascadeAction);
   }
 

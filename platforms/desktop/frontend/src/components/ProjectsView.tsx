@@ -1,25 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useProjectRailContextMenu } from './projects/context-menu/useProjectRailContextMenu';
-import { useHistoryItemContextMenu } from './projects/context-menu/useHistoryItemContextMenu';
-import { storageOpenPath } from '../services/tauri/storage';
-import { logger } from '../utils/logger';
-import { RenameModal } from './RenameModal';
-import { ProjectCreateModal } from './projects/ProjectCreateModal';
-import { ProjectSettingsModal } from './projects/ProjectSettingsModal';
-import { ProjectDeleteModal } from './projects/ProjectDeleteModal';
-import { ProjectsHeader } from './projects/ProjectsHeader';
-import { ProjectsRail } from './projects/ProjectsRail';
-import { ProjectsResults } from './projects/ProjectsResults';
-import { ProjectsSelectionBar } from './projects/ProjectsSelectionBar';
-import { ProjectsToolbar } from './projects/ProjectsToolbar';
-import { ProjectAssignmentModal } from './projects/ProjectAssignmentModal';
-import { useProjectSettingsDraft } from './projects/hooks/useProjectSettingsDraft';
-import { useWorkspaceBrowseState } from './projects/hooks/useWorkspaceBrowseState';
-import { useWorkspaceSelectionState } from './projects/hooks/useWorkspaceSelectionState';
-import type { RenameTarget } from './projects/types';
 import { historyService } from '../services/historyService';
 import { historyQueryWorkspace } from '../services/tauri/history';
+import { storageOpenPath } from '../services/tauri/storage';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useHistoryStore } from '../stores/historyStore';
@@ -34,7 +18,24 @@ import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type { HistoryItem as HistoryItemType } from '../types/history';
 import { isLiveRecordDraftHistoryItem } from '../types/history';
 import type { ProjectRecord } from '../types/project';
+import { logger } from '../utils/logger';
 import { useContextMenu } from './context-menu/useContextMenu';
+import { useHistoryItemContextMenu } from './projects/context-menu/useHistoryItemContextMenu';
+import { useProjectRailContextMenu } from './projects/context-menu/useProjectRailContextMenu';
+import { useProjectSettingsDraft } from './projects/hooks/useProjectSettingsDraft';
+import { useWorkspaceBrowseState } from './projects/hooks/useWorkspaceBrowseState';
+import { useWorkspaceSelectionState } from './projects/hooks/useWorkspaceSelectionState';
+import { ProjectAssignmentModal } from './projects/ProjectAssignmentModal';
+import { ProjectCreateModal } from './projects/ProjectCreateModal';
+import { ProjectDeleteModal } from './projects/ProjectDeleteModal';
+import { ProjectSettingsModal } from './projects/ProjectSettingsModal';
+import { ProjectsHeader } from './projects/ProjectsHeader';
+import { ProjectsRail } from './projects/ProjectsRail';
+import { ProjectsResults } from './projects/ProjectsResults';
+import { ProjectsSelectionBar } from './projects/ProjectsSelectionBar';
+import { ProjectsToolbar } from './projects/ProjectsToolbar';
+import type { RenameTarget } from './projects/types';
+import { RenameModal } from './RenameModal';
 
 interface ProjectsViewProps {
   isActive?: boolean;
@@ -75,7 +76,7 @@ function createWorkspaceMenuRevision(
   browseScope: string,
   viewMode: string,
   isSelectionMode: boolean,
-  isActive: boolean,
+  isActive: boolean
 ): string {
   const historyPrefix = 'workspace:history:';
   const projectPrefix = 'workspace:project:';
@@ -147,9 +148,10 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const browseScopeRef = useRef('inbox');
   const activeHistoryItem = useMemo(
     () => historyItems.find((item) => item.id === sourceHistoryId) || null,
-    [historyItems, sourceHistoryId],
+    [historyItems, sourceHistoryId]
   );
-  const isLiveDraftSessionLocked = isRecording && !!activeHistoryItem && isLiveRecordDraftHistoryItem(activeHistoryItem);
+  const isLiveDraftSessionLocked =
+    isRecording && !!activeHistoryItem && isLiveRecordDraftHistoryItem(activeHistoryItem);
 
   useEffect(() => {
     void loadHistoryItems();
@@ -160,65 +162,83 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     clearActiveTranscriptSession({ clearAudio: true });
   }, []);
 
-  const handleOpenItem = useCallback(async (item: HistoryItemType) => {
-    if (item.deletedAt != null) {
-      return;
-    }
-    const initialItem = useHistoryStore.getState().items.find((candidate) => candidate.id === item.id);
-    const initialLockState = getLiveDraftLockState();
-    if (!initialItem || (initialLockState.isLocked && item.id !== initialLockState.sourceHistoryId)) {
-      return;
-    }
-
-    try {
-      let segments = await historyService.loadTranscript(item.id);
-      const url = await historyService.getAudioUrl(item.id);
-
-      const latestItem = useHistoryStore.getState().items.find((candidate) => candidate.id === item.id);
-      const latestLockState = getLiveDraftLockState();
-      if (!latestItem || (latestLockState.isLocked && item.id !== latestLockState.sourceHistoryId)) {
+  const handleOpenItem = useCallback(
+    async (item: HistoryItemType) => {
+      if (item.deletedAt != null) {
+        return;
+      }
+      const initialItem = useHistoryStore
+        .getState()
+        .items.find((candidate) => candidate.id === item.id);
+      const initialLockState = getLiveDraftLockState();
+      if (
+        !initialItem ||
+        (initialLockState.isLocked && item.id !== initialLockState.sourceHistoryId)
+      ) {
         return;
       }
 
-      if (!segments && !url) {
-        await showError({
-          code: 'history.missing_files_deleted',
-          messageKey: 'errors.history.missing_files_deleted',
-          showCause: false,
-        });
+      try {
+        let segments = await historyService.loadTranscript(item.id);
+        const url = await historyService.getAudioUrl(item.id);
 
-        const deletableItem = useHistoryStore.getState().items.find((candidate) => candidate.id === item.id);
-        const deleteLockState = getLiveDraftLockState();
-        if (!deletableItem || (deleteLockState.isLocked && item.id === deleteLockState.sourceHistoryId)) {
+        const latestItem = useHistoryStore
+          .getState()
+          .items.find((candidate) => candidate.id === item.id);
+        const latestLockState = getLiveDraftLockState();
+        if (
+          !latestItem ||
+          (latestLockState.isLocked && item.id !== latestLockState.sourceHistoryId)
+        ) {
           return;
         }
 
-        await useHistoryStore.getState().deleteItem(item.id);
-        await useHistoryStore.getState().refresh();
-        return;
-      }
+        if (!segments && !url) {
+          await showError({
+            code: 'history.missing_files_deleted',
+            messageKey: 'errors.history.missing_files_deleted',
+            showCause: false,
+          });
 
-      if (!segments) {
-        segments = [];
-      }
+          const deletableItem = useHistoryStore
+            .getState()
+            .items.find((candidate) => candidate.id === item.id);
+          const deleteLockState = getLiveDraftLockState();
+          if (
+            !deletableItem ||
+            (deleteLockState.isLocked && item.id === deleteLockState.sourceHistoryId)
+          ) {
+            return;
+          }
 
-      openTranscriptSession({
-        segments,
-        sourceHistoryId: item.id,
-        title: latestItem.title,
-        icon: latestItem.icon,
-        audioUrl: url,
-      });
-      setSelectedHistoryId(item.id);
-      await useProjectStore.getState().setActiveProjectId(getPrimaryTagId(latestItem));
-    } catch (error) {
-      await showError({
-        code: 'history.load_failed',
-        messageKey: 'errors.history.load_failed',
-        cause: error,
-      });
-    }
-  }, [showError]);
+          await useHistoryStore.getState().deleteItem(item.id);
+          await useHistoryStore.getState().refresh();
+          return;
+        }
+
+        if (!segments) {
+          segments = [];
+        }
+
+        openTranscriptSession({
+          segments,
+          sourceHistoryId: item.id,
+          title: latestItem.title,
+          icon: latestItem.icon,
+          audioUrl: url,
+        });
+        setSelectedHistoryId(item.id);
+        await useProjectStore.getState().setActiveProjectId(getPrimaryTagId(latestItem));
+      } catch (error) {
+        await showError({
+          code: 'history.load_failed',
+          messageKey: 'errors.history.load_failed',
+          cause: error,
+        });
+      }
+    },
+    [showError]
+  );
 
   const browseState = useWorkspaceBrowseState({
     activeProjectId,
@@ -269,7 +289,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       browseState.browseScope,
       viewMode,
       selectionState.isSelectionMode,
-      isActive,
+      isActive
     );
     if (latestRevision !== snapshot.revision) {
       closeContextMenu();
@@ -295,27 +315,31 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     syncVisibleItems(browseState.filteredAndSortedItems);
   }, [browseState.filteredAndSortedItems, isActive, syncVisibleItems]);
 
-  const itemMatchesBrowseScope = useCallback((item: HistoryItemType) => {
-    if (browseState.isTrashScope) {
-      return item.deletedAt != null;
-    }
-    if (item.deletedAt != null) {
-      return false;
-    }
-    if (browseState.isAllItemsScope) {
-      return true;
-    }
-    if (browseState.isInboxScope) {
-      return (item.tagIds ?? (item.projectId ? [item.projectId] : [])).length === 0;
-    }
-    return (item.tagIds ?? (item.projectId ? [item.projectId] : []))
-      .includes(browseState.browseProjectId || '');
-  }, [
-    browseState.browseProjectId,
-    browseState.isAllItemsScope,
-    browseState.isInboxScope,
-    browseState.isTrashScope,
-  ]);
+  const itemMatchesBrowseScope = useCallback(
+    (item: HistoryItemType) => {
+      if (browseState.isTrashScope) {
+        return item.deletedAt != null;
+      }
+      if (item.deletedAt != null) {
+        return false;
+      }
+      if (browseState.isAllItemsScope) {
+        return true;
+      }
+      if (browseState.isInboxScope) {
+        return (item.tagIds ?? (item.projectId ? [item.projectId] : [])).length === 0;
+      }
+      return (item.tagIds ?? (item.projectId ? [item.projectId] : [])).includes(
+        browseState.browseProjectId || ''
+      );
+    },
+    [
+      browseState.browseProjectId,
+      browseState.isAllItemsScope,
+      browseState.isInboxScope,
+      browseState.isTrashScope,
+    ]
+  );
 
   const scopedSourceHistoryId = useMemo(() => {
     if (!sourceHistoryId) {
@@ -335,7 +359,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     }
 
     const selectedItemStillVisible = historyItems.some(
-      (item) => item.id === selectedHistoryId && itemMatchesBrowseScope(item),
+      (item) => item.id === selectedHistoryId && itemMatchesBrowseScope(item)
     );
     if (!selectedItemStillVisible) {
       return null;
@@ -358,7 +382,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
   const selectedItem = useMemo(
     () => historyItems.find((item) => item.id === effectiveSelectedHistoryId) || null,
-    [effectiveSelectedHistoryId, historyItems],
+    [effectiveSelectedHistoryId, historyItems]
   );
   const tagAssignmentItems = useMemo(() => {
     const candidates = new Map<string, HistoryItemType>();
@@ -381,7 +405,11 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     if (effectiveSelectedHistoryId === null) {
       const sessionState = useTranscriptSessionStore.getState();
       const playbackState = useTranscriptPlaybackStore.getState();
-      if (sessionState.sourceHistoryId || sessionState.segments.length > 0 || playbackState.audioUrl) {
+      if (
+        sessionState.sourceHistoryId ||
+        sessionState.segments.length > 0 ||
+        playbackState.audioUrl
+      ) {
         clearActiveTranscriptSession({ clearAudio: true });
       }
     }
@@ -401,8 +429,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     const isProjectScope = nextScope !== 'all' && nextScope !== 'untagged' && nextScope !== 'trash';
     const initialLockState = getLiveDraftLockState();
     if (
-      initialLockState.isLocked
-      || (isProjectScope && !useProjectStore.getState().projects.some((project) => project.id === nextScope))
+      initialLockState.isLocked ||
+      (isProjectScope &&
+        !useProjectStore.getState().projects.some((project) => project.id === nextScope))
     ) {
       return false;
     }
@@ -414,8 +443,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
     const latestLockState = getLiveDraftLockState();
     if (
-      latestLockState.isLocked
-      || (isProjectScope && !useProjectStore.getState().projects.some((project) => project.id === nextScope))
+      latestLockState.isLocked ||
+      (isProjectScope &&
+        !useProjectStore.getState().projects.some((project) => project.id === nextScope))
     ) {
       return false;
     }
@@ -436,7 +466,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     }
 
     if (nextScope !== 'trash') {
-      await useProjectStore.getState().setActiveProjectId(nextScope === 'untagged' ? null : nextScope);
+      await useProjectStore
+        .getState()
+        .setActiveProjectId(nextScope === 'untagged' ? null : nextScope);
     }
     return true;
   };
@@ -466,10 +498,10 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     projectSettingsDraft.setIsSettingsOpen(true);
   };
 
-
   const handleDeleteHistoryItem = async (id: string) => {
-    const initialItem = useHistoryStore.getState().items.find((item) => item.id === id)
-      ?? browseState.filteredAndSortedItems.find((item) => item.id === id);
+    const initialItem =
+      useHistoryStore.getState().items.find((item) => item.id === id) ??
+      browseState.filteredAndSortedItems.find((item) => item.id === id);
     const initialLockState = getLiveDraftLockState();
     if (!initialItem || (initialLockState.isLocked && id === initialLockState.sourceHistoryId)) {
       return;
@@ -478,23 +510,28 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     const isTrashItem = initialItem.deletedAt != null;
     const confirmed = await confirm(
       isTrashItem
-        ? t('history.purge_confirm', { defaultValue: 'Permanently delete this item? This cannot be undone.' })
-        : t('history.trash_confirm', { defaultValue: 'Move this item to Trash?' }), {
-      title: isTrashItem
-        ? t('history.purge_title', { defaultValue: 'Delete Permanently' })
-        : t('history.trash_title', { defaultValue: 'Move to Trash' }),
-      confirmLabel: isTrashItem
-        ? t('history.delete_permanently', { defaultValue: 'Delete Permanently' })
-        : t('history.move_to_trash', { defaultValue: 'Move to Trash' }),
-      variant: 'error',
-    });
+        ? t('history.purge_confirm', {
+            defaultValue: 'Permanently delete this item? This cannot be undone.',
+          })
+        : t('history.trash_confirm', { defaultValue: 'Move this item to Trash?' }),
+      {
+        title: isTrashItem
+          ? t('history.purge_title', { defaultValue: 'Delete Permanently' })
+          : t('history.trash_title', { defaultValue: 'Move to Trash' }),
+        confirmLabel: isTrashItem
+          ? t('history.delete_permanently', { defaultValue: 'Delete Permanently' })
+          : t('history.move_to_trash', { defaultValue: 'Move to Trash' }),
+        variant: 'error',
+      }
+    );
 
     if (!confirmed) {
       return;
     }
 
-    const latestItem = useHistoryStore.getState().items.find((item) => item.id === id)
-      ?? browseState.filteredAndSortedItems.find((item) => item.id === id);
+    const latestItem =
+      useHistoryStore.getState().items.find((item) => item.id === id) ??
+      browseState.filteredAndSortedItems.find((item) => item.id === id);
     const latestLockState = getLiveDraftLockState();
     if (!latestItem || (latestLockState.isLocked && id === latestLockState.sourceHistoryId)) {
       return;
@@ -515,8 +552,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   };
 
   const handleRenameHistoryItem = async (id: string) => {
-    const item = useHistoryStore.getState().items.find((historyItem) => historyItem.id === id)
-      ?? browseState.filteredAndSortedItems.find((historyItem) => historyItem.id === id);
+    const item =
+      useHistoryStore.getState().items.find((historyItem) => historyItem.id === id) ??
+      browseState.filteredAndSortedItems.find((historyItem) => historyItem.id === id);
     const lockState = getLiveDraftLockState();
     if (!item || (lockState.isLocked && id === lockState.sourceHistoryId)) {
       return;
@@ -524,7 +562,6 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
     setRenameTarget({ id, title: item.title, icon: item.icon, type: item.type });
   };
-
 
   const handlePerformRename = async (newTitle: string, newIcon?: string) => {
     if (!renameTarget) {
@@ -539,7 +576,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     }
 
     const trimmedTitle = newTitle.trim();
-    await useHistoryStore.getState().updateItemMeta(targetId, { title: trimmedTitle, icon: newIcon });
+    await useHistoryStore
+      .getState()
+      .updateItemMeta(targetId, { title: trimmedTitle, icon: newIcon });
     await useHistoryStore.getState().refresh();
 
     const sessionState = useTranscriptSessionStore.getState();
@@ -624,13 +663,13 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     const confirmed = await confirm(
       isTrashScope
         ? t('history.purge_bulk_confirm', {
-          count: ids.length,
-          defaultValue: `Permanently delete ${ids.length} items? This cannot be undone.`,
-        })
+            count: ids.length,
+            defaultValue: `Permanently delete ${ids.length} items? This cannot be undone.`,
+          })
         : t('history.trash_bulk_confirm', {
-          count: ids.length,
-          defaultValue: `Move ${ids.length} items to Trash?`,
-        }),
+            count: ids.length,
+            defaultValue: `Move ${ids.length} items to Trash?`,
+          }),
       {
         title: isTrashScope
           ? t('history.purge_title', { defaultValue: 'Delete Permanently' })
@@ -639,7 +678,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           ? t('history.delete_permanently', { defaultValue: 'Delete Permanently' })
           : t('history.move_to_trash', { defaultValue: 'Move to Trash' }),
         variant: 'error',
-      },
+      }
     );
 
     if (!confirmed) {
@@ -662,7 +701,13 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const handleCopyTranscript = async (item: HistoryItemType) => {
     try {
       const segments = await historyService.loadTranscript(item.id);
-      const text = segments?.map((s) => s.text).join('\n').trim() || item.previewText || item.title;
+      const text =
+        segments
+          ?.map((s) => s.text)
+          .join('\n')
+          .trim() ||
+        item.previewText ||
+        item.title;
       if (text) {
         await navigator.clipboard.writeText(text);
       }
@@ -676,7 +721,13 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       const texts: string[] = [];
       for (const item of items) {
         const segments = await historyService.loadTranscript(item.id);
-        const text = segments?.map((s) => s.text).join('\n').trim() || item.previewText || item.title;
+        const text =
+          segments
+            ?.map((s) => s.text)
+            .join('\n')
+            .trim() ||
+          item.previewText ||
+          item.title;
         if (text) {
           texts.push(`=== ${item.title} ===\n${text}`);
         }
@@ -729,7 +780,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         title: t('history.empty_trash', { defaultValue: 'Empty Trash' }),
         confirmLabel: t('history.delete_permanently', { defaultValue: 'Delete Permanently' }),
         variant: 'error',
-      },
+      }
     );
     if (!confirmed) return;
 
@@ -777,15 +828,16 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           browseScopeRef.current,
           viewMode,
           selectionState.isSelectionMode,
-          isActive,
+          isActive
         ),
       };
     },
   });
 
   const { openHistoryContextMenu } = useHistoryItemContextMenu({
-    getItemById: (id) => useHistoryStore.getState().items.find((historyItem) => historyItem.id === id)
-      ?? browseState.filteredAndSortedItems.find((historyItem) => historyItem.id === id),
+    getItemById: (id) =>
+      useHistoryStore.getState().items.find((historyItem) => historyItem.id === id) ??
+      browseState.filteredAndSortedItems.find((historyItem) => historyItem.id === id),
     isAllSelected: selectionState.isAllSelected,
     isLockedLiveDraft: (id) => {
       const lockState = getLiveDraftLockState();
@@ -836,21 +888,15 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           browseScopeRef.current,
           viewMode,
           selectionState.isSelectionMode,
-          isActive,
+          isActive
         ),
       };
     },
   });
 
-
   if (!isActive) {
     return (
-      <div
-        className="projects-workbench"
-        data-projects-inactive="true"
-        hidden
-        aria-hidden="true"
-      />
+      <div className="projects-workbench" data-projects-inactive="true" hidden aria-hidden="true" />
     );
   }
 
@@ -893,7 +939,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
             t={t}
           />
 
-              <ProjectsToolbar
+          <ProjectsToolbar
             activeFilterCount={browseState.activeFilterCount}
             currentSearchResultId={browseState.activeSearchResultId}
             dateFilter={browseState.dateFilter}
@@ -916,9 +962,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
             onSetFilterType={browseState.setFilterType}
             onSetSortOrder={browseState.setSortOrder}
             onSetViewMode={(nextViewMode) => setConfig({ projectsViewMode: nextViewMode })}
-                onToggleSelectionMode={handleToggleSelectionMode}
-                disableSelectionModeToggle={isLiveDraftSessionLocked}
-                scopedItemsCount={browseState.scopeItemCount}
+            onToggleSelectionMode={handleToggleSelectionMode}
+            disableSelectionModeToggle={isLiveDraftSessionLocked}
+            scopedItemsCount={browseState.scopeItemCount}
             searchInputLabel={browseState.searchInputLabel}
             searchInputRef={searchInputRef}
             searchQuery={browseState.searchQuery}
@@ -1052,7 +1098,13 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       <ProjectDeleteModal
         isOpen={!!projectToDelete}
         project={projectToDelete}
-        itemCount={projectToDelete ? historyItems.filter((item) => !item.deletedAt && item.projectId === projectToDelete.id).length : 0}
+        itemCount={
+          projectToDelete
+            ? historyItems.filter(
+                (item) => !item.deletedAt && item.projectId === projectToDelete.id
+              ).length
+            : 0
+        }
         onClose={() => setProjectToDelete(null)}
         onConfirm={async (cascadeAction) => {
           if (!projectToDelete) return;

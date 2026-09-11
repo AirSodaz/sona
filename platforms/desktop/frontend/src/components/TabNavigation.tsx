@@ -1,19 +1,19 @@
-import React, { useCallback, useEffect } from 'react';
+import type React from 'react';
+import { useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppMode } from '../types/transcript';
+import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useErrorDialogStore } from '../stores/errorDialogStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
-import { useBatchQueueStore } from '../stores/batchQueueStore';
+import type { AppMode } from '../types/transcript';
 
-import { MicIcon, FolderIcon, BookIcon } from './Icons';
-
+import { BookIcon, FolderIcon, MicIcon } from './Icons';
 
 /** Props for TabNavigation. */
 interface TabNavigationProps {
-    /** Optional CSS class name. */
-    className?: string;
+  /** Optional CSS class name. */
+  className?: string;
 }
 
 /**
@@ -23,96 +23,99 @@ interface TabNavigationProps {
  * @return The navigation tabs.
  */
 export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX.Element {
-    const { t } = useTranslation();
-    const mode = useTranscriptRuntimeStore((state) => state.mode);
-    const setMode = useTranscriptRuntimeStore((state) => state.setMode);
+  const { t } = useTranslation();
+  const mode = useTranscriptRuntimeStore((state) => state.mode);
+  const setMode = useTranscriptRuntimeStore((state) => state.setMode);
 
-    const handleTabChange = useCallback((newMode: AppMode) => {
-        if (mode === newMode) {
-            if (newMode === 'projects') {
-                document.querySelector('.projects-main-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
-                document.querySelector('.projects-rail-list')?.scrollTo({ top: 0, behavior: 'smooth' });
-            } else if (newMode === 'batch') {
-                document.querySelector('.queue-list')?.scrollTo({ top: 0, behavior: 'smooth' });
-            }
-            return;
+  const handleTabChange = useCallback(
+    (newMode: AppMode) => {
+      if (mode === newMode) {
+        if (newMode === 'projects') {
+          document.querySelector('.projects-main-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
+          document.querySelector('.projects-rail-list')?.scrollTo({ top: 0, behavior: 'smooth' });
+        } else if (newMode === 'batch') {
+          document.querySelector('.queue-list')?.scrollTo({ top: 0, behavior: 'smooth' });
         }
-        setMode(newMode);
+        return;
+      }
+      setMode(newMode);
 
-        if (newMode === 'live') {
-            const recordingSessionId = useTranscriptStore.getState().recordingSessionId;
-            useTranscriptStore.setState({ activeSessionId: recordingSessionId || 'default' });
+      if (newMode === 'live') {
+        const recordingSessionId = useTranscriptStore.getState().recordingSessionId;
+        useTranscriptStore.setState({ activeSessionId: recordingSessionId || 'default' });
+      }
+
+      if (newMode === 'batch') {
+        const activeItemId = useBatchQueueStore.getState().activeItemId;
+        if (activeItemId) {
+          const sessions = useTranscriptStore.getState().sessions;
+          if (sessions[activeItemId]) {
+            useTranscriptStore.setState({ activeSessionId: activeItemId });
+          }
         }
+      }
+    },
+    [mode, setMode]
+  );
 
-        if (newMode === 'batch') {
-            const activeItemId = useBatchQueueStore.getState().activeItemId;
-            if (activeItemId) {
-                const sessions = useTranscriptStore.getState().sessions;
-                if (sessions[activeItemId]) {
-                    useTranscriptStore.setState({ activeSessionId: activeItemId });
-                }
-            }
-        }
-    }, [mode, setMode]);
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === 'Tab') {
+        // Check if any modal/dialog is open
+        const isSettingsOpen = !!document.querySelector('.settings-overlay');
+        const isDialogOpen = useDialogStore.getState().isOpen;
+        const isErrorDialogOpen = useErrorDialogStore.getState().isOpen;
 
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.ctrlKey && e.key === 'Tab') {
-                // Check if any modal/dialog is open
-                const isSettingsOpen = !!document.querySelector('.settings-overlay');
-                const isDialogOpen = useDialogStore.getState().isOpen;
-                const isErrorDialogOpen = useErrorDialogStore.getState().isOpen;
+        if (isSettingsOpen || isDialogOpen || isErrorDialogOpen) return;
 
-                if (isSettingsOpen || isDialogOpen || isErrorDialogOpen) return;
+        e.preventDefault();
+        const modes: AppMode[] = ['live', 'batch', 'projects'];
+        const currentIndex = modes.indexOf(mode);
+        const nextIndex = e.shiftKey
+          ? (currentIndex - 1 + modes.length) % modes.length
+          : (currentIndex + 1) % modes.length;
 
-                e.preventDefault();
-                const modes: AppMode[] = ['live', 'batch', 'projects'];
-                const currentIndex = modes.indexOf(mode);
-                const nextIndex = e.shiftKey
-                    ? (currentIndex - 1 + modes.length) % modes.length
-                    : (currentIndex + 1) % modes.length;
+        handleTabChange(modes[nextIndex]);
+      }
+    };
 
-                handleTabChange(modes[nextIndex]);
-            }
-        };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleTabChange, mode]);
 
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleTabChange, mode]);
-
-    return (
-        <div
-            className={`tab-navigation ${className}`}
-            role="tablist"
-            aria-label={t('panel.mode_selection')}
-        >
-            <button
-                className={`tab-button ${mode === 'live' ? 'active' : ''}`}
-                onClick={() => handleTabChange('live')}
-                aria-selected={mode === 'live'}
-                role="tab"
-            >
-                <MicIcon />
-                <span>{t('panel.live_record')}</span>
-            </button>
-            <button
-                className={`tab-button ${mode === 'batch' ? 'active' : ''}`}
-                onClick={() => handleTabChange('batch')}
-                aria-selected={mode === 'batch'}
-                role="tab"
-            >
-                <FolderIcon />
-                <span>{t('panel.batch_import')}</span>
-            </button>
-            <button
-                className={`tab-button ${mode === 'projects' ? 'active' : ''}`}
-                onClick={() => handleTabChange('projects')}
-                aria-selected={mode === 'projects'}
-                role="tab"
-            >
-                <BookIcon />
-                <span>{t('panel.projects')}</span>
-            </button>
-        </div>
-    );
+  return (
+    <div
+      className={`tab-navigation ${className}`}
+      role="tablist"
+      aria-label={t('panel.mode_selection')}
+    >
+      <button
+        className={`tab-button ${mode === 'live' ? 'active' : ''}`}
+        onClick={() => handleTabChange('live')}
+        aria-selected={mode === 'live'}
+        role="tab"
+      >
+        <MicIcon />
+        <span>{t('panel.live_record')}</span>
+      </button>
+      <button
+        className={`tab-button ${mode === 'batch' ? 'active' : ''}`}
+        onClick={() => handleTabChange('batch')}
+        aria-selected={mode === 'batch'}
+        role="tab"
+      >
+        <FolderIcon />
+        <span>{t('panel.batch_import')}</span>
+      </button>
+      <button
+        className={`tab-button ${mode === 'projects' ? 'active' : ''}`}
+        onClick={() => handleTabChange('projects')}
+        aria-selected={mode === 'projects'}
+        role="tab"
+      >
+        <BookIcon />
+        <span>{t('panel.projects')}</span>
+      </button>
+    </div>
+  );
 }

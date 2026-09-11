@@ -1,22 +1,16 @@
-
-import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { fireEvent, screen, render as testingLibraryRender, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
-import {
-  render as testingLibraryRender,
-  screen,
-  fireEvent,
-  waitFor,
-} from '@testing-library/react';
-import { SegmentTokens } from '../SegmentTokens';
-import { TranscriptSegment } from '../../../types/transcript';
-import { Match } from '../../../stores/searchStore';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Match } from '../../../stores/searchStore';
+import type { TranscriptSegment } from '../../../types/transcript';
 import { ContextMenuProvider } from '../../context-menu/ContextMenuProvider';
+import { SegmentTokens } from '../SegmentTokens';
 
 const loggerErrorMock = vi.hoisted(() => vi.fn());
 
 // Mock dependencies
 vi.mock('../../../utils/exportFormats', () => ({
-  formatDisplayTime: (time: number) => `Time: ${time}`
+  formatDisplayTime: (time: number) => `Time: ${time}`,
 }));
 
 vi.mock('../../../utils/logger', () => ({
@@ -25,9 +19,8 @@ vi.mock('../../../utils/logger', () => ({
   },
 }));
 
-const render = (ui: ReactElement) => testingLibraryRender(
-  <ContextMenuProvider>{ui}</ContextMenuProvider>,
-);
+const render = (ui: ReactElement) =>
+  testingLibraryRender(<ContextMenuProvider>{ui}</ContextMenuProvider>);
 
 describe('SegmentTokens', () => {
   const mockSegment: TranscriptSegment = {
@@ -52,13 +45,8 @@ describe('SegmentTokens', () => {
 
   const writeTextMock = vi.fn().mockResolvedValue(undefined);
 
-  const renderWithContextMenu = (onSeek = vi.fn()) => render(
-    <SegmentTokens
-      segment={mockSegment}
-      isActive={false}
-      onSeek={onSeek}
-    />,
-  );
+  const renderWithContextMenu = (onSeek = vi.fn()) =>
+    render(<SegmentTokens segment={mockSegment} isActive={false} onSeek={onSeek} />);
 
   const getSegmentRoot = (container: HTMLElement) => {
     const root = container.querySelector<HTMLElement>('p.segment-text');
@@ -77,13 +65,7 @@ describe('SegmentTokens', () => {
   });
 
   it('renders segment text correctly', () => {
-    render(
-      <SegmentTokens
-        segment={mockSegment}
-        isActive={false}
-        onSeek={mockOnSeek}
-      />
-    );
+    render(<SegmentTokens segment={mockSegment} isActive={false} onSeek={mockOnSeek} />);
 
     screen.getByText('Hello');
     screen.getByText('world');
@@ -124,11 +106,7 @@ describe('SegmentTokens', () => {
   it('applies "partial" class when segment is not final', () => {
     const partialSegment = { ...mockSegment, isFinal: false };
     const { container } = render(
-      <SegmentTokens
-        segment={partialSegment}
-        isActive={false}
-        onSeek={mockOnSeek}
-      />
+      <SegmentTokens segment={partialSegment} isActive={false} onSeek={mockOnSeek} />
     );
 
     const paragraph = container.querySelector('p.segment-text');
@@ -137,13 +115,7 @@ describe('SegmentTokens', () => {
   });
 
   it('handles token click (seek)', () => {
-    render(
-      <SegmentTokens
-        segment={mockSegment}
-        isActive={false}
-        onSeek={mockOnSeek}
-      />
-    );
+    render(<SegmentTokens segment={mockSegment} isActive={false} onSeek={mockOnSeek} />);
 
     const token = screen.getByText('Hello');
     fireEvent.click(token);
@@ -152,13 +124,7 @@ describe('SegmentTokens', () => {
   });
 
   it('uses the standard custom tooltip for timed tokens', () => {
-    render(
-      <SegmentTokens
-        segment={mockSegment}
-        isActive={false}
-        onSeek={mockOnSeek}
-      />
-    );
+    render(<SegmentTokens segment={mockSegment} isActive={false} onSeek={mockOnSeek} />);
 
     const token = screen.getByText('Hello');
     expect(token.getAttribute('title')).toBeNull();
@@ -168,7 +134,7 @@ describe('SegmentTokens', () => {
 
   it('highlights search matches correctly', () => {
     const matches: Match[] = [
-      { startIndex: 0, length: 5, globalIndex: 0, segmentId: 'seg-1', text: 'Hello' } // Matches "Hello"
+      { startIndex: 0, length: 5, globalIndex: 0, segmentId: 'seg-1', text: 'Hello' }, // Matches "Hello"
     ];
 
     render(
@@ -188,7 +154,13 @@ describe('SegmentTokens', () => {
   });
 
   it('highlights active match correctly', () => {
-    const activeMatch: Match = { startIndex: 0, length: 5, globalIndex: 0, segmentId: 'seg-1', text: 'Hello' }; // Matches "Hello"
+    const activeMatch: Match = {
+      startIndex: 0,
+      length: 5,
+      globalIndex: 0,
+      segmentId: 'seg-1',
+      text: 'Hello',
+    }; // Matches "Hello"
     const matches: Match[] = [activeMatch];
 
     render(
@@ -208,7 +180,7 @@ describe('SegmentTokens', () => {
 
   it('handles match click', () => {
     const matches: Match[] = [
-      { startIndex: 0, length: 5, globalIndex: 1, segmentId: 'seg-1', text: 'Hello' } // Matches "Hello"
+      { startIndex: 0, length: 5, globalIndex: 1, segmentId: 'seg-1', text: 'Hello' }, // Matches "Hello"
     ];
 
     render(
@@ -332,7 +304,9 @@ describe('SegmentTokens', () => {
 
     fireEvent.contextMenu(getSegmentRoot(container), { clientX: 80, clientY: 120 });
 
-    expect((screen.getByRole('menuitem', { name: 'Copy' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('menuitem', { name: 'Copy' }) as HTMLButtonElement).disabled).toBe(
+      true
+    );
   });
 
   it('logs clipboard failures without surfacing them', async () => {
@@ -346,7 +320,7 @@ describe('SegmentTokens', () => {
     await waitFor(() => {
       expect(loggerErrorMock).toHaveBeenCalledWith(
         '[ReadonlySegmentContextMenu] Failed to copy text:',
-        copyError,
+        copyError
       );
     });
   });
@@ -360,7 +334,7 @@ describe('SegmentTokens', () => {
     result.rerender(
       <ContextMenuProvider>
         <div>Segment removed</div>
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     expect(screen.queryByRole('menu')).toBeNull();

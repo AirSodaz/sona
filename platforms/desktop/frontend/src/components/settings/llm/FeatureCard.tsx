@@ -1,30 +1,34 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { Dropdown } from '../../Dropdown';
-import { LlmFeature, LlmModelEntry, LlmProvider } from '../../../types/transcript';
-import { LlmAssistantConfig } from '../../../types/config';
-import {
-  addLlmModel,
-  enrichLlmModelMetadata,
-  findLlmModelId,
-  getProviderLlmModels,
-  getFeatureModelEntry,
-  isProviderModelDiscoveryExpired,
-  modelSummaryToMetadata,
-  setFeatureModelSelection,
-  setFeatureTemperature,
-  setFeatureReasoningEnabled,
-  setFeatureReasoningLevel,
-  syncProviderDiscoveredModels,
-} from '../../../services/llm/state';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildLlmConfig,
   DEFAULT_LLM_TEMPERATURE,
   getProviderDefinition,
   listProviderDefinitions,
 } from '../../../services/llm/providers';
+import {
+  addLlmModel,
+  enrichLlmModelMetadata,
+  findLlmModelId,
+  getFeatureModelEntry,
+  getProviderLlmModels,
+  isProviderModelDiscoveryExpired,
+  modelSummaryToMetadata,
+  setFeatureModelSelection,
+  setFeatureReasoningEnabled,
+  setFeatureReasoningLevel,
+  setFeatureTemperature,
+  syncProviderDiscoveredModels,
+} from '../../../services/llm/state';
 import { describeLlmModel, listLlmModels } from '../../../services/tauri/llm';
-import { getCurrentLlmSettings, getModelPlaceholder, isProviderConfiguredForConfig } from './helpers';
+import type { LlmAssistantConfig } from '../../../types/config';
+import type { LlmFeature, LlmModelEntry, LlmProvider } from '../../../types/transcript';
+import { Dropdown } from '../../Dropdown';
+import {
+  getCurrentLlmSettings,
+  getModelPlaceholder,
+  isProviderConfiguredForConfig,
+} from './helpers';
 
 interface FeatureCardProps {
   stepNumber: number;
@@ -53,12 +57,15 @@ export const FeatureCard = React.memo(function FeatureCard({
   const latestLlmStateRef = useRef(currentLlmState);
   const isMountedRef = useRef(true);
   latestLlmStateRef.current = currentLlmState;
-  const applyTrackedLlmSettings = useCallback((nextSettings: LlmAssistantConfig['llmSettings']) => {
-    if (nextSettings) {
-      latestLlmStateRef.current = nextSettings;
-    }
-    applyLlmSettings(nextSettings);
-  }, [applyLlmSettings]);
+  const applyTrackedLlmSettings = useCallback(
+    (nextSettings: LlmAssistantConfig['llmSettings']) => {
+      if (nextSettings) {
+        latestLlmStateRef.current = nextSettings;
+      }
+      applyLlmSettings(nextSettings);
+    },
+    [applyLlmSettings]
+  );
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -72,48 +79,61 @@ export const FeatureCard = React.memo(function FeatureCard({
     }
 
     const definitions = listProviderDefinitions(currentLlmState.customProviders);
-    return definitions.find((definition) => (
-      definition.id !== 'google_translate'
-      && definition.id !== 'google_translate_free'
-      && isProviderConfiguredForConfig(config, definition.id, currentLlmState.providers[definition.id])
-    ))?.id ?? 'open_ai';
+    return (
+      definitions.find(
+        (definition) =>
+          definition.id !== 'google_translate' &&
+          definition.id !== 'google_translate_free' &&
+          isProviderConfiguredForConfig(
+            config,
+            definition.id,
+            currentLlmState.providers[definition.id]
+          )
+      )?.id ?? 'open_ai'
+    );
   }, [config, currentLlmState.customProviders, currentLlmState.providers, featureId]);
   const selectedProvider = modelEntry?.provider || configuredProvider;
   const selectedModel = modelEntry?.model || '';
-  const temperature = featureId === 'polish'
-    ? (currentLlmState.selections.polishTemperature ?? DEFAULT_LLM_TEMPERATURE)
-    : featureId === 'translation'
-      ? (currentLlmState.selections.translationTemperature ?? DEFAULT_LLM_TEMPERATURE)
-      : (currentLlmState.selections.summaryTemperature ?? DEFAULT_LLM_TEMPERATURE);
+  const temperature =
+    featureId === 'polish'
+      ? (currentLlmState.selections.polishTemperature ?? DEFAULT_LLM_TEMPERATURE)
+      : featureId === 'translation'
+        ? (currentLlmState.selections.translationTemperature ?? DEFAULT_LLM_TEMPERATURE)
+        : (currentLlmState.selections.summaryTemperature ?? DEFAULT_LLM_TEMPERATURE);
 
-  const reasoningEnabled = featureId === 'polish'
-    ? !!currentLlmState.selections.polishReasoningEnabled
-    : featureId === 'translation'
-      ? !!currentLlmState.selections.translationReasoningEnabled
-      : !!currentLlmState.selections.summaryReasoningEnabled;
+  const reasoningEnabled =
+    featureId === 'polish'
+      ? !!currentLlmState.selections.polishReasoningEnabled
+      : featureId === 'translation'
+        ? !!currentLlmState.selections.translationReasoningEnabled
+        : !!currentLlmState.selections.summaryReasoningEnabled;
 
-  const reasoningLevel = featureId === 'polish'
-    ? (currentLlmState.selections.polishReasoningLevel ?? 'medium')
-    : featureId === 'translation'
-      ? (currentLlmState.selections.translationReasoningLevel ?? 'medium')
-      : (currentLlmState.selections.summaryReasoningLevel ?? 'medium');
+  const reasoningLevel =
+    featureId === 'polish'
+      ? (currentLlmState.selections.polishReasoningLevel ?? 'medium')
+      : featureId === 'translation'
+        ? (currentLlmState.selections.translationReasoningLevel ?? 'medium')
+        : (currentLlmState.selections.summaryReasoningLevel ?? 'medium');
 
   const supportsReasoning = useMemo(() => {
     return !!(
       modelEntry?.metadata?.supportsReasoning ||
-      (modelEntry?.model && (
-        modelEntry.model.toLowerCase().includes('o1-') ||
-        modelEntry.model.toLowerCase() === 'o1' ||
-        modelEntry.model.toLowerCase().includes('o3-') ||
-        modelEntry.model.toLowerCase().includes('deepseek-reasoner') ||
-        modelEntry.model.toLowerCase().includes('deepseek-r1') ||
-        modelEntry.model.toLowerCase().includes('claude-3-7') ||
-        modelEntry.model.toLowerCase().includes('gemini-2.5')
-      ))
+      (modelEntry?.model &&
+        (modelEntry.model.toLowerCase().includes('o1-') ||
+          modelEntry.model.toLowerCase() === 'o1' ||
+          modelEntry.model.toLowerCase().includes('o3-') ||
+          modelEntry.model.toLowerCase().includes('deepseek-reasoner') ||
+          modelEntry.model.toLowerCase().includes('deepseek-r1') ||
+          modelEntry.model.toLowerCase().includes('claude-3-7') ||
+          modelEntry.model.toLowerCase().includes('gemini-2.5')))
     );
   }, [modelEntry]);
 
-  const supportsTemperatureForModel = (provider: LlmProvider, model: string, metadata?: LlmModelEntry['metadata']) => {
+  const supportsTemperatureForModel = (
+    provider: LlmProvider,
+    model: string,
+    metadata?: LlmModelEntry['metadata']
+  ) => {
     const explicit = metadata?.supportsTemperature;
     if (typeof explicit === 'boolean') {
       return explicit;
@@ -123,23 +143,27 @@ export const FeatureCard = React.memo(function FeatureCard({
     }
     const normalizedModel = model.toLowerCase();
     return !(
-      /(^|[-:])o1(?:$|[-:])/.test(normalizedModel)
-      || /(^|[-:])o3(?:$|[-:])/.test(normalizedModel)
-      || normalizedModel.includes('deepseek-reasoner')
-      || normalizedModel.includes('deepseek-r1')
+      /(^|[-:])o1(?:$|[-:])/.test(normalizedModel) ||
+      /(^|[-:])o3(?:$|[-:])/.test(normalizedModel) ||
+      normalizedModel.includes('deepseek-reasoner') ||
+      normalizedModel.includes('deepseek-r1')
     );
   };
 
   const handleReasoningEnabledChange = (enabled: boolean) => {
-    applyTrackedLlmSettings(setFeatureReasoningEnabled(latestLlmStateRef.current, featureId, enabled));
+    applyTrackedLlmSettings(
+      setFeatureReasoningEnabled(latestLlmStateRef.current, featureId, enabled)
+    );
   };
 
   const handleReasoningLevelChange = (level: string) => {
-    applyTrackedLlmSettings(setFeatureReasoningLevel(
-      latestLlmStateRef.current,
-      featureId,
-      level as 'low' | 'medium' | 'high',
-    ));
+    applyTrackedLlmSettings(
+      setFeatureReasoningLevel(
+        latestLlmStateRef.current,
+        featureId,
+        level as 'low' | 'medium' | 'high'
+      )
+    );
   };
 
   const [localProvider, setLocalProvider] = useState<LlmProvider>(selectedProvider);
@@ -151,21 +175,24 @@ export const FeatureCard = React.memo(function FeatureCard({
   const candidateContainerRef = useRef<HTMLDivElement>(null);
   const localProviderDefinition = useMemo(
     () => getProviderDefinition(localProvider, currentLlmState.customProviders),
-    [currentLlmState.customProviders, localProvider],
+    [currentLlmState.customProviders, localProvider]
   );
   const supportsTemperature = supportsTemperatureForModel(
     localProvider,
     localProvider === selectedProvider ? localModelName || selectedModel : localModelName,
-    localProvider === selectedProvider ? modelEntry?.metadata : undefined,
+    localProvider === selectedProvider ? modelEntry?.metadata : undefined
   );
   const providerApiHost = currentLlmState.providers[localProvider]?.apiHost;
   const providerApiKey = currentLlmState.providers[localProvider]?.apiKey;
 
   const providerOptions = useMemo(() => {
-    const filtered = listProviderDefinitions(currentLlmState.customProviders).filter(p => {
+    const filtered = listProviderDefinitions(currentLlmState.customProviders).filter((p) => {
       if (p.id === selectedProvider) return true;
 
-      if (featureId !== 'translation' && (p.id === 'google_translate' || p.id === 'google_translate_free')) {
+      if (
+        featureId !== 'translation' &&
+        (p.id === 'google_translate' || p.id === 'google_translate_free')
+      ) {
         return false;
       }
 
@@ -177,11 +204,18 @@ export const FeatureCard = React.memo(function FeatureCard({
       value: p.id,
       label: t(p.labelKey, { defaultValue: p.labelDefault }),
     }));
-  }, [config, featureId, currentLlmState.customProviders, currentLlmState.providers, selectedProvider, t]);
+  }, [
+    config,
+    featureId,
+    currentLlmState.customProviders,
+    currentLlmState.providers,
+    selectedProvider,
+    t,
+  ]);
 
   const persistedProviderModels = useMemo(
     () => getProviderLlmModels(currentLlmState, localProvider),
-    [currentLlmState, localProvider],
+    [currentLlmState, localProvider]
   );
 
   const filteredCandidates = useMemo(() => {
@@ -190,47 +224,65 @@ export const FeatureCard = React.memo(function FeatureCard({
     return modelCandidates.filter((c) => c.toLowerCase().includes(query));
   }, [modelCandidates, localModelName]);
 
-  const fetchModelCandidates = useCallback(async (provider: LlmProvider) => {
-    const latestLlmState = latestLlmStateRef.current;
-    const persistedModels = getProviderLlmModels(latestLlmState, provider);
-    const isCacheExpired = isProviderModelDiscoveryExpired(latestLlmState, provider);
-    if (persistedModels.length > 0 && !isCacheExpired) {
-      setModelCandidates(persistedModels.map((entry) => entry.model));
-      setIsLoadingCandidates(false);
-      return;
-    }
+  const fetchModelCandidates = useCallback(
+    async (provider: LlmProvider) => {
+      const latestLlmState = latestLlmStateRef.current;
+      const persistedModels = getProviderLlmModels(latestLlmState, provider);
+      const isCacheExpired = isProviderModelDiscoveryExpired(latestLlmState, provider);
+      if (persistedModels.length > 0 && !isCacheExpired) {
+        setModelCandidates(persistedModels.map((entry) => entry.model));
+        setIsLoadingCandidates(false);
+        return;
+      }
 
-    const setting = latestLlmState.providers[provider];
-    if (!getProviderDefinition(provider, latestLlmState.customProviders).supportsModelListing || !setting) {
-      setModelCandidates([]);
-      setIsLoadingCandidates(false);
-      return;
-    }
-    setIsLoadingCandidates(true);
-    try {
-      const strategy = getProviderDefinition(provider, latestLlmState.customProviders).strategy;
-      const fetchedAt = new Date().toISOString();
-      const result = await listLlmModels({ provider, strategy, baseUrl: setting.apiHost, apiKey: setting.apiKey });
-      const models = Array.isArray(result)
-        ? result
-          .map((entry) => (typeof entry === 'string' ? entry : entry.model))
-          .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
-        : [];
-      setModelCandidates(models);
-      applyTrackedLlmSettings(syncProviderDiscoveredModels(latestLlmStateRef.current, provider, result, fetchedAt));
-    } catch {
-      setModelCandidates(persistedModels.map((entry) => entry.model));
-    } finally {
-      setIsLoadingCandidates(false);
-    }
-  }, [applyTrackedLlmSettings]);
+      const setting = latestLlmState.providers[provider];
+      if (
+        !getProviderDefinition(provider, latestLlmState.customProviders).supportsModelListing ||
+        !setting
+      ) {
+        setModelCandidates([]);
+        setIsLoadingCandidates(false);
+        return;
+      }
+      setIsLoadingCandidates(true);
+      try {
+        const strategy = getProviderDefinition(provider, latestLlmState.customProviders).strategy;
+        const fetchedAt = new Date().toISOString();
+        const result = await listLlmModels({
+          provider,
+          strategy,
+          baseUrl: setting.apiHost,
+          apiKey: setting.apiKey,
+        });
+        const models = Array.isArray(result)
+          ? result
+              .map((entry) => (typeof entry === 'string' ? entry : entry.model))
+              .filter(
+                (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0
+              )
+          : [];
+        setModelCandidates(models);
+        applyTrackedLlmSettings(
+          syncProviderDiscoveredModels(latestLlmStateRef.current, provider, result, fetchedAt)
+        );
+      } catch {
+        setModelCandidates(persistedModels.map((entry) => entry.model));
+      } finally {
+        setIsLoadingCandidates(false);
+      }
+    },
+    [applyTrackedLlmSettings]
+  );
 
   useEffect(() => {
     if (!isActive) {
       return;
     }
 
-    if (persistedProviderModels.length > 0 && !isProviderModelDiscoveryExpired(currentLlmState, localProvider)) {
+    if (
+      persistedProviderModels.length > 0 &&
+      !isProviderModelDiscoveryExpired(currentLlmState, localProvider)
+    ) {
       setModelCandidates(persistedProviderModels.map((entry) => entry.model));
       return;
     }
@@ -270,10 +322,10 @@ export const FeatureCard = React.memo(function FeatureCard({
 
     const providerSetting = nextState.providers[providerToSave];
     if (
-      !isManualAddition
-      || !providerSetting
-      || providerToSave === 'google_translate'
-      || providerToSave === 'google_translate_free'
+      !isManualAddition ||
+      !providerSetting ||
+      providerToSave === 'google_translate' ||
+      providerToSave === 'google_translate_free'
     ) {
       return;
     }
@@ -281,29 +333,34 @@ export const FeatureCard = React.memo(function FeatureCard({
     void describeLlmModel({
       ...buildLlmConfig(providerToSave, providerSetting, nextState.customProviders),
       model: trimmedModel,
-    }).then((summary) => {
-      if (!isMountedRef.current || !summary || summary.model !== trimmedModel) {
-        return;
-      }
-      const metadata = modelSummaryToMetadata(summary);
-      if (Object.keys(metadata).length === 0) {
-        return;
-      }
-      const latestState = latestLlmStateRef.current;
-      const enrichedState = enrichLlmModelMetadata(latestState, entryId, metadata);
-      if (enrichedState === latestState) {
-        return;
-      }
-      applyTrackedLlmSettings(enrichedState);
-    }).catch(() => {
-      // Catalog enrichment is best-effort and must not block a manual model.
-    });
+    })
+      .then((summary) => {
+        if (!isMountedRef.current || !summary || summary.model !== trimmedModel) {
+          return;
+        }
+        const metadata = modelSummaryToMetadata(summary);
+        if (Object.keys(metadata).length === 0) {
+          return;
+        }
+        const latestState = latestLlmStateRef.current;
+        const enrichedState = enrichLlmModelMetadata(latestState, entryId, metadata);
+        if (enrichedState === latestState) {
+          return;
+        }
+        applyTrackedLlmSettings(enrichedState);
+      })
+      .catch(() => {
+        // Catalog enrichment is best-effort and must not block a manual model.
+      });
   };
 
   const handleProviderChange = (newProvider: string) => {
     const p = newProvider as LlmProvider;
     setLocalProvider(p);
-    if (featureId === 'translation' && (p === 'google_translate' || p === 'google_translate_free')) {
+    if (
+      featureId === 'translation' &&
+      (p === 'google_translate' || p === 'google_translate_free')
+    ) {
       setLocalModelName('default');
       commitModelChange(p, 'default');
     } else {
@@ -329,22 +386,36 @@ export const FeatureCard = React.memo(function FeatureCard({
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') {
       if (!isCandidateMenuOpen && filteredCandidates.length > 0) {
-        event.preventDefault(); setIsCandidateMenuOpen(true); setHighlightedCandidateIndex(0); return;
+        event.preventDefault();
+        setIsCandidateMenuOpen(true);
+        setHighlightedCandidateIndex(0);
+        return;
       }
       if (filteredCandidates.length > 0) {
-        event.preventDefault(); setHighlightedCandidateIndex((prev) => (prev + 1) % filteredCandidates.length);
+        event.preventDefault();
+        setHighlightedCandidateIndex((prev) => (prev + 1) % filteredCandidates.length);
       }
       return;
     }
     if (event.key === 'ArrowUp' && isCandidateMenuOpen && filteredCandidates.length > 0) {
-      event.preventDefault(); setHighlightedCandidateIndex((prev) => (prev <= 0 ? filteredCandidates.length - 1 : prev - 1)); return;
+      event.preventDefault();
+      setHighlightedCandidateIndex((prev) =>
+        prev <= 0 ? filteredCandidates.length - 1 : prev - 1
+      );
+      return;
     }
     if (event.key === 'Escape' || event.key === 'Tab') {
-      setIsCandidateMenuOpen(false); setHighlightedCandidateIndex(-1); return;
+      setIsCandidateMenuOpen(false);
+      setHighlightedCandidateIndex(-1);
+      return;
     }
     if (event.key === 'Enter') {
       event.preventDefault();
-      if (isCandidateMenuOpen && highlightedCandidateIndex >= 0 && filteredCandidates[highlightedCandidateIndex]) {
+      if (
+        isCandidateMenuOpen &&
+        highlightedCandidateIndex >= 0 &&
+        filteredCandidates[highlightedCandidateIndex]
+      ) {
         handleModelSelect(filteredCandidates[highlightedCandidateIndex]);
         return;
       }
@@ -360,10 +431,7 @@ export const FeatureCard = React.memo(function FeatureCard({
   const temperatureLabelId = `feature-temperature-label-${featureId}`;
 
   return (
-    <div
-      className="feature-card"
-      data-feature-id={featureId}
-    >
+    <div className="feature-card" data-feature-id={featureId}>
       {showHeaderTitle && (
         <div className="feature-card-header">
           <div className="feature-card-title-group">
@@ -389,7 +457,9 @@ export const FeatureCard = React.memo(function FeatureCard({
 
           {localProviderDefinition.supportsModelListing ? (
             <div ref={candidateContainerRef} className="feature-field model-combobox-wrapper">
-              <label className="settings-label" htmlFor={`feature-model-${featureId}`}>{t('settings.llm.model_library')}</label>
+              <label className="settings-label" htmlFor={`feature-model-${featureId}`}>
+                {t('settings.llm.model_library')}
+              </label>
               <div className="dropdown-container" style={{ margin: 0 }}>
                 <input
                   id={`feature-model-${featureId}`}
@@ -404,11 +474,18 @@ export const FeatureCard = React.memo(function FeatureCard({
                 />
                 {isLoadingCandidates && (
                   <div className="settings-hint feature-card-loading-indicator">
-                    <Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
+                    <Loader2
+                      size={16}
+                      className="animate-spin"
+                      style={{ color: 'var(--color-primary)' }}
+                    />
                   </div>
                 )}
                 {isCandidateMenuOpen && filteredCandidates.length > 0 && (
-                  <div className="dropdown-menu" style={{ zIndex: 10, position: 'absolute', width: '100%' }}>
+                  <div
+                    className="dropdown-menu"
+                    style={{ zIndex: 10, position: 'absolute', width: '100%' }}
+                  >
                     {filteredCandidates.slice(0, 8).map((candidate, index) => (
                       <button
                         key={candidate}
@@ -427,12 +504,16 @@ export const FeatureCard = React.memo(function FeatureCard({
             </div>
           ) : (
             <div className="feature-field model-combobox-wrapper">
-              <label className="settings-label" htmlFor={`feature-model-${featureId}`}>{t('settings.llm.model_library')}</label>
+              <label className="settings-label" htmlFor={`feature-model-${featureId}`}>
+                {t('settings.llm.model_library')}
+              </label>
               <input
                 id={`feature-model-${featureId}`}
                 type="text"
                 className="settings-input feature-model-unsupported-input"
-                value={t('settings.llm.model_selection_unsupported', { defaultValue: 'Model selection unsupported' })}
+                value={t('settings.llm.model_selection_unsupported', {
+                  defaultValue: 'Model selection unsupported',
+                })}
                 disabled
                 readOnly
               />
@@ -493,7 +574,11 @@ export const FeatureCard = React.memo(function FeatureCard({
                     value={temperature}
                     onChange={(e) => handleTempChange(parseFloat(e.target.value))}
                     aria-label={`${title} ${t('settings.llm.temperature')}`}
-                    style={{ '--temperature-progress': `${(temperature / 2) * 100}%` } as React.CSSProperties}
+                    style={
+                      {
+                        '--temperature-progress': `${(temperature / 2) * 100}%`,
+                      } as React.CSSProperties
+                    }
                   />
                   <input
                     id={`feature-temp-${featureId}`}

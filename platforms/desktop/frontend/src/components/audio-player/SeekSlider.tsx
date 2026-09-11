@@ -1,15 +1,15 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { formatDisplayTime } from '../../utils/exportFormats';
 
 /** Props for the SeekSlider component. */
 export interface SeekSliderProps {
-    /** The total duration of the audio in seconds. */
-    duration: number;
-    /** Callback fired when the user seeks. */
-    onSeek: (time: number) => void;
-    /** Accessible label for the slider. */
-    seekLabel: string;
+  /** The total duration of the audio in seconds. */
+  duration: number;
+  /** Callback fired when the user seeks. */
+  onSeek: (time: number) => void;
+  /** Accessible label for the slider. */
+  seekLabel: string;
 }
 
 /**
@@ -17,67 +17,67 @@ export interface SeekSliderProps {
  * Subscribes directly to store to avoid React re-renders.
  */
 function SeekSliderComponent({ duration, onSeek, seekLabel }: SeekSliderProps): React.JSX.Element {
-    const inputRef = useRef<HTMLInputElement>(null);
-    const isDragging = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const isDragging = useRef(false);
 
-    useEffect(() => {
-        if (inputRef.current) {
-            const currentTime = useTranscriptPlaybackStore.getState().currentTime;
-            inputRef.current.value = String(currentTime);
-            inputRef.current.setAttribute('aria-valuenow', String(currentTime));
-            inputRef.current.setAttribute('aria-valuetext', formatDisplayTime(currentTime));
+  useEffect(() => {
+    if (inputRef.current) {
+      const currentTime = useTranscriptPlaybackStore.getState().currentTime;
+      inputRef.current.value = String(currentTime);
+      inputRef.current.setAttribute('aria-valuenow', String(currentTime));
+      inputRef.current.setAttribute('aria-valuetext', formatDisplayTime(currentTime));
+    }
+
+    const unsubscribe = useTranscriptPlaybackStore.subscribe((state, prevState) => {
+      if (state.currentTime === prevState.currentTime) return;
+
+      const time = state.currentTime;
+      // Only update if not currently being dragged
+      if (inputRef.current && !isDragging.current) {
+        const currentVal = parseFloat(inputRef.current.value);
+        // Update only if difference is significant to avoid fighting user input
+        if (Math.abs(currentVal - time) > 0.1) {
+          inputRef.current.value = String(time);
+          inputRef.current.setAttribute('aria-valuenow', String(time));
+          inputRef.current.setAttribute('aria-valuetext', formatDisplayTime(time));
         }
+      }
+    });
+    return unsubscribe;
+  }, []);
 
-        const unsubscribe = useTranscriptPlaybackStore.subscribe((state, prevState) => {
-            if (state.currentTime === prevState.currentTime) return;
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const time = parseFloat(e.target.value);
+    onSeek(time);
+  };
 
-            const time = state.currentTime;
-            // Only update if not currently being dragged
-            if (inputRef.current && !isDragging.current) {
-                const currentVal = parseFloat(inputRef.current.value);
-                // Update only if difference is significant to avoid fighting user input
-                if (Math.abs(currentVal - time) > 0.1) {
-                    inputRef.current.value = String(time);
-                    inputRef.current.setAttribute('aria-valuenow', String(time));
-                    inputRef.current.setAttribute('aria-valuetext', formatDisplayTime(time));
-                }
-            }
-        });
-        return unsubscribe;
-    }, []);
+  const handleInteractionStart = () => {
+    isDragging.current = true;
+  };
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const time = parseFloat(e.target.value);
-        onSeek(time);
-    };
+  const handleInteractionEnd = () => {
+    isDragging.current = false;
+  };
 
-    const handleInteractionStart = () => {
-        isDragging.current = true;
-    };
-
-    const handleInteractionEnd = () => {
-        isDragging.current = false;
-    };
-
-    return (
-        <input
-            ref={inputRef}
-            type="range"
-            className="audio-slider"
-            min={0}
-            max={duration || 0}
-            step={0.1}
-            defaultValue={useTranscriptPlaybackStore.getState().currentTime}
-            onChange={handleChange}
-            onMouseDown={handleInteractionStart}
-            onMouseUp={handleInteractionEnd}
-            onTouchStart={handleInteractionStart}
-            onTouchEnd={handleInteractionEnd}
-            aria-label={seekLabel}
-            aria-valuemin={0}
-            aria-valuemax={duration || 0}
-        />
-    );
+  return (
+    <input
+      ref={inputRef}
+      type="range"
+      className="audio-slider"
+      min={0}
+      max={duration || 0}
+      step={0.1}
+      defaultValue={useTranscriptPlaybackStore.getState().currentTime}
+      onChange={handleChange}
+      onMouseDown={handleInteractionStart}
+      onMouseUp={handleInteractionEnd}
+      onTouchStart={handleInteractionStart}
+      onTouchEnd={handleInteractionEnd}
+      aria-label={seekLabel}
+      aria-valuemin={0}
+      aria-valuemax={duration || 0}
+    />
+  );
 }
 
 export const SeekSlider = React.memo(SeekSliderComponent);

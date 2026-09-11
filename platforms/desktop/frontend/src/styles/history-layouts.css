@@ -344,7 +344,11 @@
   padding: 2px 8px;
   border-radius: var(--radius-full);
   border: 1px solid color-mix(in srgb, var(--project-color, var(--color-border)) 28%, transparent);
-  background: color-mix(in srgb, var(--project-color, var(--color-text-muted)) 10%, var(--color-bg-secondary));
+  background: color-mix(
+    in srgb,
+    var(--project-color, var(--color-text-muted)) 10%,
+    var(--color-bg-secondary)
+  );
   color: var(--color-text-primary);
   font-size: 0.72rem;
   font-weight: 500;
@@ -352,18 +356,23 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: background var(--transition-fast), border-color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .history-item-project-badge:hover {
-  background: color-mix(in srgb, var(--project-color, var(--color-text-muted)) 16%, var(--color-bg-secondary));
+  background: color-mix(
+    in srgb,
+    var(--project-color, var(--color-text-muted)) 16%,
+    var(--color-bg-secondary)
+  );
 }
 .history-item-project-badge--inbox {
   background: var(--color-bg-secondary);
   border-color: var(--color-border);
   color: var(--color-text-secondary);
 }
-
 
 .history-item-project-badge-text {
   overflow: hidden;
@@ -562,7 +571,11 @@
 /* Table Layout */
 .projects-layout-table {
   --projects-table-action-width: 80px;
-  --projects-table-row-divider: color-mix(in srgb, var(--color-border) 76%, var(--color-border-hover));
+  --projects-table-row-divider: color-mix(
+    in srgb,
+    var(--color-border) 76%,
+    var(--color-border-hover)
+  );
   --projects-table-selection-width: 40px;
   display: flex;
   flex-direction: column;

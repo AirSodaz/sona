@@ -1,513 +1,546 @@
-import { transcriptionService } from '../../services/transcriptionService';
 import { setSystemAudioMute as setSystemAudioMuteTauri } from '../../services/tauri/audio';
 import { TauriEvent } from '../../services/tauri/events';
+import { listen } from '../../services/tauri/platform/events';
+import { transcriptionService } from '../../services/transcriptionService';
 import type { TranscriptUpdate } from '../../types/transcript';
 import { shouldFeedWebAudioForPhase } from './timing';
-import type {
-    AudioRecorderCaptureRefs,
-    AudioRecorderLogger,
-    InputSource,
-} from './types';
-import { listen } from '../../services/tauri/platform/events';
+import type { AudioRecorderCaptureRefs, AudioRecorderLogger, InputSource } from './types';
 
 export class TranscriptionStartupError extends Error {
-    cause: unknown;
+  cause: unknown;
 
-    constructor(cause: unknown) {
-        super(cause instanceof Error ? cause.message : String(cause));
-        this.name = 'TranscriptionStartupError';
-        this.cause = cause;
-    }
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = 'TranscriptionStartupError';
+    this.cause = cause;
+  }
 }
 
 export function isTranscriptionStartupError(error: unknown): error is TranscriptionStartupError {
-    return error instanceof TranscriptionStartupError;
+  return error instanceof TranscriptionStartupError;
 }
 
 export function getSupportedMimeType(): string {
-    const types = [
-        'audio/webm;codecs=opus',
-        'audio/webm',
-        'audio/mp4',
-        'audio/aac',
-        'audio/ogg',
-        ''
-    ];
+  const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/aac', 'audio/ogg', ''];
 
-    for (const type of types) {
-        if (type === '' || MediaRecorder.isTypeSupported(type)) {
-            return type;
-        }
+  for (const type of types) {
+    if (type === '' || MediaRecorder.isTypeSupported(type)) {
+      return type;
     }
-    return '';
+  }
+  return '';
 }
 
 interface CreateAudioRecorderCaptureArgs {
-    refs: AudioRecorderCaptureRefs;
-    logger: AudioRecorderLogger;
-    onSegment: (update: TranscriptUpdate) => void;
-    activateRecordSession: (sessionId: string) => boolean;
-    canMutateActiveRecordResources: (sessionId: string) => boolean;
-    rollbackRecognizer: (sessionId: string, reason: string) => Promise<void>;
-    setPeakFromInt16: (samples: Int16Array) => void;
-    onWebRecordingStop: (blob: Blob, mimeType: string) => Promise<void>;
-    setIsRecording: (value: boolean) => void;
-    setIsPaused: (value: boolean) => void;
+  refs: AudioRecorderCaptureRefs;
+  logger: AudioRecorderLogger;
+  onSegment: (update: TranscriptUpdate) => void;
+  activateRecordSession: (sessionId: string) => boolean;
+  canMutateActiveRecordResources: (sessionId: string) => boolean;
+  rollbackRecognizer: (sessionId: string, reason: string) => Promise<void>;
+  setPeakFromInt16: (samples: Int16Array) => void;
+  onWebRecordingStop: (blob: Blob, mimeType: string) => Promise<void>;
+  setIsRecording: (value: boolean) => void;
+  setIsPaused: (value: boolean) => void;
 }
 
 export function createAudioRecorderCapture({
-    refs,
-    logger,
-    onSegment,
-    activateRecordSession,
-    canMutateActiveRecordResources,
-    rollbackRecognizer,
-    setPeakFromInt16,
-    onWebRecordingStop,
-    setIsRecording,
-    setIsPaused,
+  refs,
+  logger,
+  onSegment,
+  activateRecordSession,
+  canMutateActiveRecordResources,
+  rollbackRecognizer,
+  setPeakFromInt16,
+  onWebRecordingStop,
+  setIsRecording,
+  setIsPaused,
 }: CreateAudioRecorderCaptureArgs) {
-    type NativePeakEventName =
-        | typeof TauriEvent.audio.systemPeak
-        | typeof TauriEvent.audio.microphonePeak;
-    let pendingWebRecordingStop: Promise<void> | null = null;
-    let resolvePendingWebRecordingStop: (() => void) | null = null;
+  type NativePeakEventName =
+    | typeof TauriEvent.audio.systemPeak
+    | typeof TauriEvent.audio.microphonePeak;
+  let pendingWebRecordingStop: Promise<void> | null = null;
+  let resolvePendingWebRecordingStop: (() => void) | null = null;
 
-    function isDesktopCaptureActive(): boolean {
-        return refs.activeInputSourceRef.current === 'desktop';
+  function isDesktopCaptureActive(): boolean {
+    return refs.activeInputSourceRef.current === 'desktop';
+  }
+
+  async function setSystemAudioMute(mute: boolean, errorMessage: string): Promise<void> {
+    try {
+      await setSystemAudioMuteTauri(mute);
+    } catch (error) {
+      logger.error(errorMessage, error);
+    }
+  }
+
+  async function cleanupPartialStart(sessionId: string): Promise<void> {
+    if (!canMutateActiveRecordResources(sessionId)) {
+      logger.info(
+        `[useAudioRecorder] Skipping shared resource rollback for stale session. requested=${sessionId} active=stale`
+      );
+      return;
     }
 
-    async function setSystemAudioMute(mute: boolean, errorMessage: string): Promise<void> {
-        try {
-            await setSystemAudioMuteTauri(mute);
-        } catch (error) {
-            logger.error(errorMessage, error);
-        }
-    }
-
-    async function cleanupPartialStart(sessionId: string): Promise<void> {
-        if (!canMutateActiveRecordResources(sessionId)) {
-            logger.info(
-                `[useAudioRecorder] Skipping shared resource rollback for stale session. requested=${sessionId} active=stale`
-            );
-            return;
-        }
-
-        // Roll back whichever capture resources were acquired before the start
-        // path failed so fallback/retry attempts begin from a clean baseline.
-        if (refs.usingNativeCaptureRef.current) {
-            if (refs.nativeAudioUnlistenRef.current) {
-                refs.nativeAudioUnlistenRef.current();
-                refs.nativeAudioUnlistenRef.current = null;
-            }
-            try {
-                await transcriptionService.stopNativeCapture();
-                logger.info(
-                    `[useAudioRecorder] Rolled back native capture. session=${sessionId} source=${isDesktopCaptureActive() ? 'desktop' : 'microphone'}`
-                );
-            } catch (error) {
-                logger.warn(
-                    `[useAudioRecorder] Failed to roll back native capture. session=${sessionId} source=${isDesktopCaptureActive() ? 'desktop' : 'microphone'}`,
-                    error,
-                );
-            }
-            refs.usingNativeCaptureRef.current = false;
-        }
-
-        if (refs.activeStreamRef.current) {
-            refs.activeStreamRef.current.getTracks().forEach((track) => track.stop());
-            refs.activeStreamRef.current = null;
-        }
-
-        if (refs.audioContextRef.current) {
-            try {
-                if (refs.audioContextRef.current.state !== 'closed') {
-                    await refs.audioContextRef.current.close();
-                }
-            } catch (error) {
-                logger.warn(`[useAudioRecorder] Failed to close audio context during rollback. session=${sessionId}`, error);
-            }
-            refs.audioContextRef.current = null;
-        }
-
-        refs.mediaRecorderRef.current = null;
-    }
-
-    async function attachNativePeakListener(
-        eventName: NativePeakEventName,
-        sessionId: string,
-    ): Promise<boolean> {
-        try {
-            const unlisten = await listen<number>(eventName, (event) => {
-                const peak = Math.abs(event.payload);
-                const sample = Math.min(32767, Math.round(peak));
-
-                // This event only drives the live waveform meter. Native capture and
-                // backend transcription keep running even if the UI listener is unavailable.
-                if (!refs.isPausedRef.current) {
-                    refs.peakLevelRef.current = sample / 32767;
-                }
-            });
-
-            refs.nativeAudioUnlistenRef.current = unlisten;
-            return true;
-        } catch (error) {
-            refs.nativeAudioUnlistenRef.current = null;
-            logger.warn(
-                `[useAudioRecorder] Failed to attach native peak listener. session=${sessionId} event=${eventName}. Continuing without live meter.`,
-                error,
-            );
-            return false;
-        }
-    }
-
-    async function initializeAudioSession(
-        stream: MediaStream,
-        sessionId: string,
-        gain: number,
-    ): Promise<void> {
-        if (!refs.audioContextRef.current || refs.audioContextRef.current.state === 'closed') {
-            refs.audioContextRef.current = new AudioContext({ sampleRate: 16000 });
-        } else if (refs.audioContextRef.current.state === 'suspended') {
-            await refs.audioContextRef.current.resume();
-        }
-
-        // CRITICAL: Initialize transcription service BEFORE connecting the audio graph.
-        // This ensures isRunning=true before any audio samples arrive via onmessage,
-        // preventing initial audio data from being silently dropped.
-        logger.info(`[useAudioRecorder] Initializing transcription service (web audio). session=${sessionId}`);
-        await transcriptionService.startExternal(
-            onSegment,
-            (error) => { logger.error(`[useAudioRecorder] Transcription error. session=${sessionId}:`, error); },
-            {
-                callbackOwner: 'live-record',
-                callbackSessionId: sessionId,
-                gain,
-            }
+    // Roll back whichever capture resources were acquired before the start
+    // path failed so fallback/retry attempts begin from a clean baseline.
+    if (refs.usingNativeCaptureRef.current) {
+      if (refs.nativeAudioUnlistenRef.current) {
+        refs.nativeAudioUnlistenRef.current();
+        refs.nativeAudioUnlistenRef.current = null;
+      }
+      try {
+        await transcriptionService.stopNativeCapture();
+        logger.info(
+          `[useAudioRecorder] Rolled back native capture. session=${sessionId} source=${isDesktopCaptureActive() ? 'desktop' : 'microphone'}`
         );
-        logger.info(`[useAudioRecorder] Record session recognizer ready. session=${sessionId} transport=web-audio`);
-
-        const source = refs.audioContextRef.current.createMediaStreamSource(stream);
-
-        try {
-            await refs.audioContextRef.current.audioWorklet.addModule('/audio-processor.js');
-        } catch (error) {
-            logger.error('Failed to load audio worklet module:', error);
-            throw Object.assign(new Error('Audio worklet failed to load'), { cause: error });
-        }
-
-        const processor = new AudioWorkletNode(refs.audioContextRef.current, 'audio-processor');
-        processor.port.onmessage = (event) => {
-            const samples = event.data as Int16Array;
-            // Only forward samples while the session phase says the recognizer
-            // should still be accumulating audio for this run.
-            if (shouldFeedWebAudioForPhase(refs.recordSessionPhaseRef.current)) {
-                void transcriptionService.sendAudioInt16(samples);
-            }
-            if (!refs.isPausedRef.current) {
-                setPeakFromInt16(samples);
-            }
-        };
-
-        source.connect(processor);
-        processor.connect(refs.audioContextRef.current.destination);
+      } catch (error) {
+        logger.warn(
+          `[useAudioRecorder] Failed to roll back native capture. session=${sessionId} source=${isDesktopCaptureActive() ? 'desktop' : 'microphone'}`,
+          error
+        );
+      }
+      refs.usingNativeCaptureRef.current = false;
     }
 
-    async function tryStartNativeDesktopCapture(
-        sessionId: string,
-        deviceName: string | null,
-        outputPath: string,
-    ): Promise<boolean> {
-        try {
-            logger.info(`[useAudioRecorder] Attempting native system audio capture. session=${sessionId}`);
-
-            await transcriptionService.startNative(
-                onSegment,
-                (error) => {
-                    logger.error(`[useAudioRecorder] Transcription error callback. session=${sessionId}:`, error);
-                },
-                {
-                    sourceKind: 'system',
-                    deviceName,
-                    outputPath,
-                    callbackOwner: 'live-record',
-                    callbackSessionId: sessionId,
-                },
-            );
-            refs.usingNativeCaptureRef.current = true;
-
-            const peakListenerAttached = await attachNativePeakListener(TauriEvent.audio.systemPeak, sessionId);
-            logger.info(
-                `[useAudioRecorder] Record session capture attached. session=${sessionId} source=desktop transport=native peak_listener=${peakListenerAttached ? 'attached' : 'unavailable'}`
-            );
-            return true;
-        } catch (error) {
-            if (isTranscriptionStartupError(error)) {
-                logger.error(`[useAudioRecorder] Native desktop transcription startup failed. session=${sessionId}:`, error.cause);
-                await cleanupPartialStart(sessionId);
-                throw error;
-            }
-            logger.warn(`[useAudioRecorder] Native capture failed, fallback to Web API. session=${sessionId}`, error);
-            await cleanupPartialStart(sessionId);
-            await rollbackRecognizer(sessionId, 'desktop_native_fallback');
-            return false;
-        }
+    if (refs.activeStreamRef.current) {
+      refs.activeStreamRef.current.getTracks().forEach((track) => track.stop());
+      refs.activeStreamRef.current = null;
     }
 
-    async function tryStartNativeMicrophoneCapture(
-        sessionId: string,
-        options: {
-            deviceName: string | null;
-            boost: number;
-            muteDuringRecording: boolean;
-            outputPath: string;
-        },
-    ): Promise<boolean> {
-        try {
-            logger.info(`[useAudioRecorder] Attempting native microphone capture. session=${sessionId}`);
-
-            await transcriptionService.startNative(
-                onSegment,
-                (error) => {
-                    logger.error(`[useAudioRecorder] Transcription error callback. session=${sessionId}:`, error);
-                },
-                {
-                    sourceKind: 'microphone',
-                    deviceName: options.deviceName,
-                    outputPath: options.outputPath,
-                    gain: options.boost,
-                    callbackOwner: 'live-record',
-                    callbackSessionId: sessionId,
-                },
-            );
-            refs.usingNativeCaptureRef.current = true;
-
-            const peakListenerAttached = await attachNativePeakListener(TauriEvent.audio.microphonePeak, sessionId);
-            logger.info(
-                `[useAudioRecorder] Record session capture attached. session=${sessionId} source=microphone transport=native peak_listener=${peakListenerAttached ? 'attached' : 'unavailable'}`
-            );
-
-            if (options.muteDuringRecording) {
-                void setSystemAudioMute(true, 'Failed to mute system audio:');
-            }
-
-            return true;
-        } catch (error) {
-            if (isTranscriptionStartupError(error)) {
-                logger.error(`[useAudioRecorder] Native microphone transcription startup failed. session=${sessionId}:`, error.cause);
-                await cleanupPartialStart(sessionId);
-                throw error;
-            }
-            logger.warn(`[useAudioRecorder] Native microphone capture failed, fallback to Web API. session=${sessionId}`, error);
-            await cleanupPartialStart(sessionId);
-            await rollbackRecognizer(sessionId, 'microphone_native_fallback');
-            return false;
+    if (refs.audioContextRef.current) {
+      try {
+        if (refs.audioContextRef.current.state !== 'closed') {
+          await refs.audioContextRef.current.close();
         }
+      } catch (error) {
+        logger.warn(
+          `[useAudioRecorder] Failed to close audio context during rollback. session=${sessionId}`,
+          error
+        );
+      }
+      refs.audioContextRef.current = null;
     }
 
-    async function requestWebFallbackStream(inputSource: InputSource, microphoneId: string | undefined): Promise<MediaStream> {
-        if (inputSource === 'desktop') {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-                throw new Error('Display media not supported');
-            }
+    refs.mediaRecorderRef.current = null;
+  }
 
-            let stream = await navigator.mediaDevices.getDisplayMedia({
-                video: { width: 1, height: 1, frameRate: 1 },
-                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-            });
+  async function attachNativePeakListener(
+    eventName: NativePeakEventName,
+    sessionId: string
+  ): Promise<boolean> {
+    try {
+      const unlisten = await listen<number>(eventName, (event) => {
+        const peak = Math.abs(event.payload);
+        const sample = Math.min(32767, Math.round(peak));
 
-            const audioTracks = stream.getAudioTracks();
-            if (audioTracks.length === 0) {
-                throw new Error('No audio track found in display media');
-            }
-            stream.getVideoTracks().forEach((track) => track.stop());
-            stream = new MediaStream([audioTracks[0]]);
-            return stream;
+        // This event only drives the live waveform meter. Native capture and
+        // backend transcription keep running even if the UI listener is unavailable.
+        if (!refs.isPausedRef.current) {
+          refs.peakLevelRef.current = sample / 32767;
         }
+      });
 
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            throw new Error('Media devices API not supported');
-        }
+      refs.nativeAudioUnlistenRef.current = unlisten;
+      return true;
+    } catch (error) {
+      refs.nativeAudioUnlistenRef.current = null;
+      logger.warn(
+        `[useAudioRecorder] Failed to attach native peak listener. session=${sessionId} event=${eventName}. Continuing without live meter.`,
+        error
+      );
+      return false;
+    }
+  }
 
-        const constraints: MediaStreamConstraints = {
-            audio: microphoneId && microphoneId !== 'default'
-                ? {
-                    deviceId: { exact: microphoneId },
-                    autoGainControl: true,
-                    noiseSuppression: true,
-                    echoCancellation: true
-                }
-                : {
-                    autoGainControl: true,
-                    noiseSuppression: true,
-                    echoCancellation: true
-                }
-        };
-
-        return navigator.mediaDevices.getUserMedia(constraints);
+  async function initializeAudioSession(
+    stream: MediaStream,
+    sessionId: string,
+    gain: number
+  ): Promise<void> {
+    if (!refs.audioContextRef.current || refs.audioContextRef.current.state === 'closed') {
+      refs.audioContextRef.current = new AudioContext({ sampleRate: 16000 });
+    } else if (refs.audioContextRef.current.state === 'suspended') {
+      await refs.audioContextRef.current.resume();
     }
 
-    async function attachWebStream(
-        sessionId: string,
-        stream: MediaStream,
-        inputSource: InputSource,
-        muteDuringRecording: boolean,
-        gain: number,
-    ): Promise<void> {
-        refs.activeStreamRef.current = stream;
-        await initializeAudioSession(stream, sessionId, gain);
-        logger.info(`[useAudioRecorder] Record session capture attached. session=${sessionId} source=${inputSource} transport=web-audio`);
+    // CRITICAL: Initialize transcription service BEFORE connecting the audio graph.
+    // This ensures isRunning=true before any audio samples arrive via onmessage,
+    // preventing initial audio data from being silently dropped.
+    logger.info(
+      `[useAudioRecorder] Initializing transcription service (web audio). session=${sessionId}`
+    );
+    await transcriptionService.startExternal(
+      onSegment,
+      (error) => {
+        logger.error(`[useAudioRecorder] Transcription error. session=${sessionId}:`, error);
+      },
+      {
+        callbackOwner: 'live-record',
+        callbackSessionId: sessionId,
+        gain,
+      }
+    );
+    logger.info(
+      `[useAudioRecorder] Record session recognizer ready. session=${sessionId} transport=web-audio`
+    );
 
-        if (muteDuringRecording && inputSource === 'microphone') {
-            void setSystemAudioMute(true, 'Failed to mute system audio:');
-        }
+    const source = refs.audioContextRef.current.createMediaStreamSource(stream);
+
+    try {
+      await refs.audioContextRef.current.audioWorklet.addModule('/audio-processor.js');
+    } catch (error) {
+      logger.error('Failed to load audio worklet module:', error);
+      throw Object.assign(new Error('Audio worklet failed to load'), { cause: error });
     }
 
-    function startFileRecording(sessionId: string): boolean {
-        if (refs.usingNativeCaptureRef.current) {
-            // Native capture writes its own WAV via Rust, so the browser-side
-            // recorder only exists for the Web API fallback path.
-            return activateRecordSession(sessionId);
-        }
-
-        const stream = refs.activeStreamRef.current;
-        if (!stream) {
-            logger.error('No active stream to record');
-            return false;
-        }
-
-        const mimeType = getSupportedMimeType();
-        refs.mimeTypeRef.current = mimeType;
-        const options = mimeType ? { mimeType } : undefined;
-
-        const recorder = new MediaRecorder(stream, options);
-        refs.mediaRecorderRef.current = recorder;
-
-        const chunks: Blob[] = [];
-
-        recorder.ondataavailable = (event) => {
-            chunks.push(event.data);
-        };
-
-        recorder.onstop = () => {
-            const type = refs.mimeTypeRef.current || recorder.mimeType || 'audio/webm';
-            const blob = new Blob(chunks, { type });
-            void onWebRecordingStop(blob, type)
-                .catch((error) => {
-                    logger.error('[useAudioRecorder] Failed to persist MediaRecorder fallback audio:', error);
-                })
-                .finally(() => {
-                    resolvePendingWebRecordingStop?.();
-                    resolvePendingWebRecordingStop = null;
-                    pendingWebRecordingStop = null;
-                });
-        };
-
-        recorder.start();
-        return activateRecordSession(sessionId);
-    }
-
-    async function stopFileRecording(): Promise<void> {
-        const recorder = refs.mediaRecorderRef.current;
-        if (recorder && recorder.state !== 'inactive') {
-            pendingWebRecordingStop = new Promise((resolve) => {
-                resolvePendingWebRecordingStop = resolve;
-            });
-            recorder.stop();
-            await pendingWebRecordingStop;
-        } else if (pendingWebRecordingStop) {
-            await pendingWebRecordingStop;
-        }
-        setIsRecording(false);
-        setIsPaused(false);
-    }
-
-    async function stopCaptureForSession(sessionId: string): Promise<string | null> {
-        let savedWavPath: string | null = null;
-
-        if (refs.usingNativeCaptureRef.current) {
-            if (refs.nativeAudioUnlistenRef.current) {
-                refs.nativeAudioUnlistenRef.current();
-                refs.nativeAudioUnlistenRef.current = null;
-            }
-            try {
-                savedWavPath = await transcriptionService.stopNativeCapture();
-                logger.info('[useAudioRecorder] Saved raw audio to:', savedWavPath);
-            } catch (error) {
-                logger.error(`[useAudioRecorder] Failed to stop native capture. session=${sessionId}:`, error);
-            }
-            return savedWavPath;
-        }
-
-        if (refs.audioContextRef.current && refs.audioContextRef.current.state === 'running') {
-            try {
-                await refs.audioContextRef.current.suspend();
-            } catch (error) {
-                logger.error('Failed to suspend audio context:', error);
-            }
-        }
-
-        return null;
-    }
-
-    async function pauseCapture(sessionId: string): Promise<void> {
-        if (refs.usingNativeCaptureRef.current) {
-            logger.info(
-                `[useAudioRecorder] Native capture pause is coordinated with the transcription consumer. session=${sessionId}`
-            );
-            return;
-        }
-
-        if (refs.mediaRecorderRef.current && refs.mediaRecorderRef.current.state === 'recording') {
-            refs.mediaRecorderRef.current.pause();
-        }
-        if (refs.audioContextRef.current && refs.audioContextRef.current.state === 'running') {
-            await refs.audioContextRef.current.suspend();
-        }
-    }
-
-    async function resumeCapture(sessionId: string): Promise<void> {
-        if (refs.usingNativeCaptureRef.current) {
-            logger.info(
-                `[useAudioRecorder] Native capture resume is coordinated with the transcription consumer. session=${sessionId}`
-            );
-            return;
-        }
-
-        if (refs.audioContextRef.current && refs.audioContextRef.current.state === 'suspended') {
-            await refs.audioContextRef.current.resume();
-        }
-        if (refs.mediaRecorderRef.current && refs.mediaRecorderRef.current.state === 'paused') {
-            refs.mediaRecorderRef.current.resume();
-        }
-    }
-
-    async function teardownWebCaptureResources(): Promise<void> {
-        if (refs.activeStreamRef.current) {
-            refs.activeStreamRef.current.getTracks().forEach((track) => track.stop());
-            refs.activeStreamRef.current = null;
-        }
-
-        if (refs.audioContextRef.current) {
-            if (refs.audioContextRef.current.state !== 'closed') {
-                await refs.audioContextRef.current.close();
-            }
-            refs.audioContextRef.current = null;
-        }
-    }
-
-    return {
-        cleanupPartialStart,
-        tryStartNativeDesktopCapture,
-        tryStartNativeMicrophoneCapture,
-        requestWebFallbackStream,
-        attachWebStream,
-        startFileRecording,
-        stopFileRecording,
-        stopCaptureForSession,
-        pauseCapture,
-        resumeCapture,
-        teardownWebCaptureResources,
-        setSystemAudioMute,
+    const processor = new AudioWorkletNode(refs.audioContextRef.current, 'audio-processor');
+    processor.port.onmessage = (event) => {
+      const samples = event.data as Int16Array;
+      // Only forward samples while the session phase says the recognizer
+      // should still be accumulating audio for this run.
+      if (shouldFeedWebAudioForPhase(refs.recordSessionPhaseRef.current)) {
+        void transcriptionService.sendAudioInt16(samples);
+      }
+      if (!refs.isPausedRef.current) {
+        setPeakFromInt16(samples);
+      }
     };
+
+    source.connect(processor);
+    processor.connect(refs.audioContextRef.current.destination);
+  }
+
+  async function tryStartNativeDesktopCapture(
+    sessionId: string,
+    deviceName: string | null,
+    outputPath: string
+  ): Promise<boolean> {
+    try {
+      logger.info(
+        `[useAudioRecorder] Attempting native system audio capture. session=${sessionId}`
+      );
+
+      await transcriptionService.startNative(
+        onSegment,
+        (error) => {
+          logger.error(
+            `[useAudioRecorder] Transcription error callback. session=${sessionId}:`,
+            error
+          );
+        },
+        {
+          sourceKind: 'system',
+          deviceName,
+          outputPath,
+          callbackOwner: 'live-record',
+          callbackSessionId: sessionId,
+        }
+      );
+      refs.usingNativeCaptureRef.current = true;
+
+      const peakListenerAttached = await attachNativePeakListener(
+        TauriEvent.audio.systemPeak,
+        sessionId
+      );
+      logger.info(
+        `[useAudioRecorder] Record session capture attached. session=${sessionId} source=desktop transport=native peak_listener=${peakListenerAttached ? 'attached' : 'unavailable'}`
+      );
+      return true;
+    } catch (error) {
+      if (isTranscriptionStartupError(error)) {
+        logger.error(
+          `[useAudioRecorder] Native desktop transcription startup failed. session=${sessionId}:`,
+          error.cause
+        );
+        await cleanupPartialStart(sessionId);
+        throw error;
+      }
+      logger.warn(
+        `[useAudioRecorder] Native capture failed, fallback to Web API. session=${sessionId}`,
+        error
+      );
+      await cleanupPartialStart(sessionId);
+      await rollbackRecognizer(sessionId, 'desktop_native_fallback');
+      return false;
+    }
+  }
+
+  async function tryStartNativeMicrophoneCapture(
+    sessionId: string,
+    options: {
+      deviceName: string | null;
+      boost: number;
+      muteDuringRecording: boolean;
+      outputPath: string;
+    }
+  ): Promise<boolean> {
+    try {
+      logger.info(`[useAudioRecorder] Attempting native microphone capture. session=${sessionId}`);
+
+      await transcriptionService.startNative(
+        onSegment,
+        (error) => {
+          logger.error(
+            `[useAudioRecorder] Transcription error callback. session=${sessionId}:`,
+            error
+          );
+        },
+        {
+          sourceKind: 'microphone',
+          deviceName: options.deviceName,
+          outputPath: options.outputPath,
+          gain: options.boost,
+          callbackOwner: 'live-record',
+          callbackSessionId: sessionId,
+        }
+      );
+      refs.usingNativeCaptureRef.current = true;
+
+      const peakListenerAttached = await attachNativePeakListener(
+        TauriEvent.audio.microphonePeak,
+        sessionId
+      );
+      logger.info(
+        `[useAudioRecorder] Record session capture attached. session=${sessionId} source=microphone transport=native peak_listener=${peakListenerAttached ? 'attached' : 'unavailable'}`
+      );
+
+      if (options.muteDuringRecording) {
+        void setSystemAudioMute(true, 'Failed to mute system audio:');
+      }
+
+      return true;
+    } catch (error) {
+      if (isTranscriptionStartupError(error)) {
+        logger.error(
+          `[useAudioRecorder] Native microphone transcription startup failed. session=${sessionId}:`,
+          error.cause
+        );
+        await cleanupPartialStart(sessionId);
+        throw error;
+      }
+      logger.warn(
+        `[useAudioRecorder] Native microphone capture failed, fallback to Web API. session=${sessionId}`,
+        error
+      );
+      await cleanupPartialStart(sessionId);
+      await rollbackRecognizer(sessionId, 'microphone_native_fallback');
+      return false;
+    }
+  }
+
+  async function requestWebFallbackStream(
+    inputSource: InputSource,
+    microphoneId: string | undefined
+  ): Promise<MediaStream> {
+    if (inputSource === 'desktop') {
+      if (!navigator.mediaDevices?.getDisplayMedia) {
+        throw new Error('Display media not supported');
+      }
+
+      let stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { width: 1, height: 1, frameRate: 1 },
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      });
+
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length === 0) {
+        throw new Error('No audio track found in display media');
+      }
+      stream.getVideoTracks().forEach((track) => track.stop());
+      stream = new MediaStream([audioTracks[0]]);
+      return stream;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('Media devices API not supported');
+    }
+
+    const constraints: MediaStreamConstraints = {
+      audio:
+        microphoneId && microphoneId !== 'default'
+          ? {
+              deviceId: { exact: microphoneId },
+              autoGainControl: true,
+              noiseSuppression: true,
+              echoCancellation: true,
+            }
+          : {
+              autoGainControl: true,
+              noiseSuppression: true,
+              echoCancellation: true,
+            },
+    };
+
+    return navigator.mediaDevices.getUserMedia(constraints);
+  }
+
+  async function attachWebStream(
+    sessionId: string,
+    stream: MediaStream,
+    inputSource: InputSource,
+    muteDuringRecording: boolean,
+    gain: number
+  ): Promise<void> {
+    refs.activeStreamRef.current = stream;
+    await initializeAudioSession(stream, sessionId, gain);
+    logger.info(
+      `[useAudioRecorder] Record session capture attached. session=${sessionId} source=${inputSource} transport=web-audio`
+    );
+
+    if (muteDuringRecording && inputSource === 'microphone') {
+      void setSystemAudioMute(true, 'Failed to mute system audio:');
+    }
+  }
+
+  function startFileRecording(sessionId: string): boolean {
+    if (refs.usingNativeCaptureRef.current) {
+      // Native capture writes its own WAV via Rust, so the browser-side
+      // recorder only exists for the Web API fallback path.
+      return activateRecordSession(sessionId);
+    }
+
+    const stream = refs.activeStreamRef.current;
+    if (!stream) {
+      logger.error('No active stream to record');
+      return false;
+    }
+
+    const mimeType = getSupportedMimeType();
+    refs.mimeTypeRef.current = mimeType;
+    const options = mimeType ? { mimeType } : undefined;
+
+    const recorder = new MediaRecorder(stream, options);
+    refs.mediaRecorderRef.current = recorder;
+
+    const chunks: Blob[] = [];
+
+    recorder.ondataavailable = (event) => {
+      chunks.push(event.data);
+    };
+
+    recorder.onstop = () => {
+      const type = refs.mimeTypeRef.current || recorder.mimeType || 'audio/webm';
+      const blob = new Blob(chunks, { type });
+      void onWebRecordingStop(blob, type)
+        .catch((error) => {
+          logger.error('[useAudioRecorder] Failed to persist MediaRecorder fallback audio:', error);
+        })
+        .finally(() => {
+          resolvePendingWebRecordingStop?.();
+          resolvePendingWebRecordingStop = null;
+          pendingWebRecordingStop = null;
+        });
+    };
+
+    recorder.start();
+    return activateRecordSession(sessionId);
+  }
+
+  async function stopFileRecording(): Promise<void> {
+    const recorder = refs.mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      pendingWebRecordingStop = new Promise((resolve) => {
+        resolvePendingWebRecordingStop = resolve;
+      });
+      recorder.stop();
+      await pendingWebRecordingStop;
+    } else if (pendingWebRecordingStop) {
+      await pendingWebRecordingStop;
+    }
+    setIsRecording(false);
+    setIsPaused(false);
+  }
+
+  async function stopCaptureForSession(sessionId: string): Promise<string | null> {
+    let savedWavPath: string | null = null;
+
+    if (refs.usingNativeCaptureRef.current) {
+      if (refs.nativeAudioUnlistenRef.current) {
+        refs.nativeAudioUnlistenRef.current();
+        refs.nativeAudioUnlistenRef.current = null;
+      }
+      try {
+        savedWavPath = await transcriptionService.stopNativeCapture();
+        logger.info('[useAudioRecorder] Saved raw audio to:', savedWavPath);
+      } catch (error) {
+        logger.error(
+          `[useAudioRecorder] Failed to stop native capture. session=${sessionId}:`,
+          error
+        );
+      }
+      return savedWavPath;
+    }
+
+    if (refs.audioContextRef.current && refs.audioContextRef.current.state === 'running') {
+      try {
+        await refs.audioContextRef.current.suspend();
+      } catch (error) {
+        logger.error('Failed to suspend audio context:', error);
+      }
+    }
+
+    return null;
+  }
+
+  async function pauseCapture(sessionId: string): Promise<void> {
+    if (refs.usingNativeCaptureRef.current) {
+      logger.info(
+        `[useAudioRecorder] Native capture pause is coordinated with the transcription consumer. session=${sessionId}`
+      );
+      return;
+    }
+
+    if (refs.mediaRecorderRef.current && refs.mediaRecorderRef.current.state === 'recording') {
+      refs.mediaRecorderRef.current.pause();
+    }
+    if (refs.audioContextRef.current && refs.audioContextRef.current.state === 'running') {
+      await refs.audioContextRef.current.suspend();
+    }
+  }
+
+  async function resumeCapture(sessionId: string): Promise<void> {
+    if (refs.usingNativeCaptureRef.current) {
+      logger.info(
+        `[useAudioRecorder] Native capture resume is coordinated with the transcription consumer. session=${sessionId}`
+      );
+      return;
+    }
+
+    if (refs.audioContextRef.current && refs.audioContextRef.current.state === 'suspended') {
+      await refs.audioContextRef.current.resume();
+    }
+    if (refs.mediaRecorderRef.current && refs.mediaRecorderRef.current.state === 'paused') {
+      refs.mediaRecorderRef.current.resume();
+    }
+  }
+
+  async function teardownWebCaptureResources(): Promise<void> {
+    if (refs.activeStreamRef.current) {
+      refs.activeStreamRef.current.getTracks().forEach((track) => track.stop());
+      refs.activeStreamRef.current = null;
+    }
+
+    if (refs.audioContextRef.current) {
+      if (refs.audioContextRef.current.state !== 'closed') {
+        await refs.audioContextRef.current.close();
+      }
+      refs.audioContextRef.current = null;
+    }
+  }
+
+  return {
+    cleanupPartialStart,
+    tryStartNativeDesktopCapture,
+    tryStartNativeMicrophoneCapture,
+    requestWebFallbackStream,
+    attachWebStream,
+    startFileRecording,
+    stopFileRecording,
+    stopCaptureForSession,
+    pauseCapture,
+    resumeCapture,
+    teardownWebCaptureResources,
+    setSystemAudioMute,
+  };
 }

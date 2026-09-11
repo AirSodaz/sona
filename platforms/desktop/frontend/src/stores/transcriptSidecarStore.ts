@@ -1,4 +1,4 @@
-import { useTranscriptStore, type TranscriptStore } from './transcriptStore';
+import { type TranscriptStore, useTranscriptStore } from './transcriptStore';
 
 export const useTranscriptSidecarStore = Object.assign(
   <T>(selector: (state: TranscriptStore) => T) => {

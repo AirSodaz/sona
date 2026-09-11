@@ -123,7 +123,7 @@ describe('VoiceTypingShortcutController', () => {
         shortcutRegistration: 'error',
         lastErrorSource: 'shortcut_registration',
         lastErrorMessage: 'Shortcut already registered.',
-      }),
+      })
     );
   });
 });

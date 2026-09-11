@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -12,11 +11,12 @@ import {
   Settings,
   ShieldCheck,
 } from 'lucide-react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSyncStatusStore } from '../stores/syncStatusStore';
-import { runSyncNow, setSyncPaused } from '../services/tauri/sync';
 import { syncRuntimeService } from '../services/syncRuntimeService';
+import { runSyncNow, setSyncPaused } from '../services/tauri/sync';
 import { useUIConfig } from '../stores/configStore';
+import { useSyncStatusStore } from '../stores/syncStatusStore';
 import '../styles/sync-header-pill.css';
 
 interface SyncHeaderPillProps {
@@ -27,20 +27,26 @@ function formatRelativeTime(
   timestampMs: number | null,
   fallback: string,
   t: (key: string, options?: Record<string, unknown>) => string,
-  locale?: string,
+  locale?: string
 ): string {
   if (!timestampMs) return fallback;
   const diffMs = Date.now() - timestampMs;
   const diffSec = Math.floor(diffMs / 1000);
   if (diffSec < 60) return t('settings.sync.just_now', { defaultValue: 'Just now' });
   const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return t('settings.sync.minutes_ago', { defaultValue: '{{count}}m ago', count: diffMin });
+  if (diffMin < 60)
+    return t('settings.sync.minutes_ago', { defaultValue: '{{count}}m ago', count: diffMin });
   const diffHours = Math.floor(diffMin / 60);
-  if (diffHours < 24) return t('settings.sync.hours_ago', { defaultValue: '{{count}}h ago', count: diffHours });
-  return new Intl.DateTimeFormat(locale || undefined, { month: 'numeric', day: 'numeric' }).format(new Date(timestampMs));
+  if (diffHours < 24)
+    return t('settings.sync.hours_ago', { defaultValue: '{{count}}h ago', count: diffHours });
+  return new Intl.DateTimeFormat(locale || undefined, { month: 'numeric', day: 'numeric' }).format(
+    new Date(timestampMs)
+  );
 }
 
-export function SyncHeaderPill({ onOpenSyncSettings }: SyncHeaderPillProps): React.JSX.Element | null {
+export function SyncHeaderPill({
+  onOpenSyncSettings,
+}: SyncHeaderPillProps): React.JSX.Element | null {
   const { t, i18n } = useTranslation();
   const enableCloudSync = useUIConfig().enableCloudSync;
   const status = useSyncStatusStore((state) => state.snapshot);
@@ -112,7 +118,9 @@ export function SyncHeaderPill({ onOpenSyncSettings }: SyncHeaderPillProps): Rea
       return (
         <span className="sync-pill-inner is-disabled">
           <CloudOff size={14} />
-          <span className="sync-pill-label">{t('settings.sync.pill_disabled', { defaultValue: 'Cloud Sync' })}</span>
+          <span className="sync-pill-label">
+            {t('settings.sync.pill_disabled', { defaultValue: 'Cloud Sync' })}
+          </span>
         </span>
       );
     }
@@ -135,7 +143,9 @@ export function SyncHeaderPill({ onOpenSyncSettings }: SyncHeaderPillProps): Rea
       return (
         <span className="sync-pill-inner is-syncing">
           <RefreshCw size={14} className="queue-icon-spin" />
-          <span className="sync-pill-label">{t('settings.sync.syncing_short', { defaultValue: 'Syncing...' })}</span>
+          <span className="sync-pill-label">
+            {t('settings.sync.syncing_short', { defaultValue: 'Syncing...' })}
+          </span>
         </span>
       );
     }
@@ -144,7 +154,9 @@ export function SyncHeaderPill({ onOpenSyncSettings }: SyncHeaderPillProps): Rea
       return (
         <span className="sync-pill-inner is-locked">
           <Lock size={14} />
-          <span className="sync-pill-label">{t('settings.sync.locked_short', { defaultValue: 'Locked' })}</span>
+          <span className="sync-pill-label">
+            {t('settings.sync.locked_short', { defaultValue: 'Locked' })}
+          </span>
         </span>
       );
     }
@@ -153,7 +165,9 @@ export function SyncHeaderPill({ onOpenSyncSettings }: SyncHeaderPillProps): Rea
       return (
         <span className="sync-pill-inner is-paused">
           <Pause size={14} />
-          <span className="sync-pill-label">{t('settings.sync.paused_short', { defaultValue: 'Paused' })}</span>
+          <span className="sync-pill-label">
+            {t('settings.sync.paused_short', { defaultValue: 'Paused' })}
+          </span>
         </span>
       );
     }
@@ -162,7 +176,9 @@ export function SyncHeaderPill({ onOpenSyncSettings }: SyncHeaderPillProps): Rea
       return (
         <span className="sync-pill-inner is-error">
           <AlertCircle size={14} />
-          <span className="sync-pill-label">{t('settings.sync.error_short', { defaultValue: 'Sync error' })}</span>
+          <span className="sync-pill-label">
+            {t('settings.sync.error_short', { defaultValue: 'Sync error' })}
+          </span>
         </span>
       );
     }
@@ -172,7 +188,12 @@ export function SyncHeaderPill({ onOpenSyncSettings }: SyncHeaderPillProps): Rea
         <span className="sync-pill-dot" />
         <Cloud size={14} />
         <span className="sync-pill-label">
-          {formatRelativeTime(status.lastSuccessAtMs, t('settings.sync.idle_short', { defaultValue: 'Synced' }), t, i18n?.language)}
+          {formatRelativeTime(
+            status.lastSuccessAtMs,
+            t('settings.sync.idle_short', { defaultValue: 'Synced' }),
+            t,
+            i18n?.language
+          )}
         </span>
       </span>
     );
@@ -212,7 +233,8 @@ export function SyncHeaderPill({ onOpenSyncSettings }: SyncHeaderPillProps): Rea
               <div className="sync-popover-disabled-state">
                 <p>
                   {t('settings.sync.popover_disabled_hint', {
-                    defaultValue: 'Multi-device sync is not configured yet. Set up WebDAV cloud sync to keep your transcripts safe and in sync across devices.',
+                    defaultValue:
+                      'Multi-device sync is not configured yet. Set up WebDAV cloud sync to keep your transcripts safe and in sync across devices.',
                   })}
                 </p>
                 <button
@@ -257,12 +279,25 @@ export function SyncHeaderPill({ onOpenSyncSettings }: SyncHeaderPillProps): Rea
 
                 <div className="sync-popover-metrics">
                   <div className="sync-popover-metric-row">
-                    <span>{t('settings.sync.last_success', { defaultValue: 'Last success' })}:</span>
-                    <strong>{formatRelativeTime(status.lastSuccessAtMs, t('settings.sync.never', { defaultValue: 'Never' }), t, i18n?.language)}</strong>
+                    <span>
+                      {t('settings.sync.last_success', { defaultValue: 'Last success' })}:
+                    </span>
+                    <strong>
+                      {formatRelativeTime(
+                        status.lastSuccessAtMs,
+                        t('settings.sync.never', { defaultValue: 'Never' }),
+                        t,
+                        i18n?.language
+                      )}
+                    </strong>
                   </div>
                   <div className="sync-popover-metric-row">
                     <span>{t('settings.sync.preset', { defaultValue: 'Preset scope' })}:</span>
-                    <strong>{t(`settings.sync.preset_${status.preset}`, { defaultValue: status.preset ?? '-' })}</strong>
+                    <strong>
+                      {t(`settings.sync.preset_${status.preset}`, {
+                        defaultValue: status.preset ?? '-',
+                      })}
+                    </strong>
                   </div>
                 </div>
 
@@ -271,9 +306,14 @@ export function SyncHeaderPill({ onOpenSyncSettings }: SyncHeaderPillProps): Rea
                     type="button"
                     className="btn btn-primary btn-sm"
                     onClick={() => void handleRunNow()}
-                    disabled={isActionBusy || status.state === 'paused' || status.state === 'locked'}
+                    disabled={
+                      isActionBusy || status.state === 'paused' || status.state === 'locked'
+                    }
                   >
-                    <RefreshCw size={13} className={status.state === 'syncing' ? 'queue-icon-spin' : undefined} />
+                    <RefreshCw
+                      size={13}
+                      className={status.state === 'syncing' ? 'queue-icon-spin' : undefined}
+                    />
                     <span>
                       {status.state === 'syncing'
                         ? t('settings.sync.syncing', { defaultValue: 'Syncing...' })

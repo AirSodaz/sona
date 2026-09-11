@@ -1,19 +1,19 @@
-import type { AppConfig } from '../../types/config';
 import type {
   AutomationProcessedEntry,
   AutomationProfile,
   AutomationRule,
   AutomationRuleValidationResult,
 } from '../../types/automation';
+import type { AppConfig } from '../../types/config';
 import type { ProjectRecord } from '../../types/project';
 import {
+  type AutomationRepositoryState,
   automationLoadRepositoryState,
   automationPersistProcessedEntries,
   automationPersistProfiles,
   automationPersistRepositoryState,
   automationPersistRules,
   automationValidateRuleActivation,
-  type AutomationRepositoryState,
 } from '../tauri/automationRepository';
 
 export interface AutomationServicePorts {
@@ -30,74 +30,77 @@ export class AutomationService {
 
   ensureAutomationStorage = async (): Promise<void> => {
     await this.ports.automationLoadRepositoryState();
-  }
+  };
 
   loadAutomationRepositoryState = async (): Promise<AutomationRepositoryState> => {
     return this.ports.automationLoadRepositoryState();
-  }
+  };
 
   loadAutomationRules = async (): Promise<AutomationRule[]> => {
     return (await this.ports.automationLoadRepositoryState()).rules;
-  }
+  };
 
   loadAutomationProfiles = async (): Promise<AutomationProfile[]> => {
     return (await this.ports.automationLoadRepositoryState()).profiles;
-  }
+  };
 
   saveAutomationProfiles = async (profiles: AutomationProfile[]): Promise<void> => {
     await this.ports.automationPersistProfiles(profiles);
-  }
+  };
 
   saveAutomationRules = async (rules: AutomationRule[]): Promise<void> => {
     await this.ports.automationPersistRules(rules);
-  }
+  };
 
   loadAutomationProcessedEntries = async (): Promise<AutomationProcessedEntry[]> => {
     return (await this.ports.automationLoadRepositoryState()).processedEntries;
-  }
+  };
 
   saveAutomationProcessedEntries = async (entries: AutomationProcessedEntry[]): Promise<void> => {
     await this.ports.automationPersistProcessedEntries(entries);
-  }
+  };
 
   saveAutomationRepositoryState = async (
     profilesOrRules: AutomationProfile[] | AutomationRule[],
     rulesOrProcessed: AutomationRule[] | AutomationProcessedEntry[],
-    maybeProcessed?: AutomationProcessedEntry[],
+    maybeProcessed?: AutomationProcessedEntry[]
   ): Promise<void> => {
     await this.ports.automationPersistRepositoryState(
       profilesOrRules,
       rulesOrProcessed,
-      maybeProcessed,
+      maybeProcessed
     );
-  }
+  };
 
   normalizeAutomationPath = (path: string): string => {
     return path.trim().replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
-  }
+  };
 
   isSameAutomationPath = (a: string, b: string): boolean => {
     return this.normalizeAutomationPath(a) === this.normalizeAutomationPath(b);
-  }
+  };
 
   isPathInsideDirectory = (filePath: string, directoryPath: string): boolean => {
     const normalizedFile = this.normalizeAutomationPath(filePath);
     const normalizedDirectory = this.normalizeAutomationPath(directoryPath);
 
-    return normalizedFile === normalizedDirectory || normalizedFile.startsWith(`${normalizedDirectory}\\`);
-  }
+    return (
+      normalizedFile === normalizedDirectory ||
+      normalizedFile.startsWith(`${normalizedDirectory}\\`)
+    );
+  };
 
   createAutomationFingerprint = (filePath: string, size: number, mtimeMs: number): string => {
     return `${this.normalizeAutomationPath(filePath)}::${size}::${mtimeMs}`;
-  }
+  };
 
   validateAutomationRuleForActivation = async (
     rule: AutomationRule,
     globalConfig: AppConfig,
-    tags: ProjectRecord[],
+    tags: ProjectRecord[]
   ): Promise<AutomationRuleValidationResult> => {
     return this.ports.automationValidateRuleActivation(rule, globalConfig, tags);
-  }
+  };
 }
 
 export function createAutomationService(ports: AutomationServicePorts): AutomationService {

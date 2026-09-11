@@ -6,18 +6,18 @@ import {
   VOLCENGINE_DOUBAO_PROVIDER_ID,
 } from '../services/onlineAsrProviders';
 import type {
+  ApiServerConfig,
   AppConfig,
-  UIConfig,
-  ShortcutConfig,
   AudioConfig,
-  ModelConfig,
   CaptionConfig,
+  HistoryStorageConfig,
+  LlmAssistantConfig,
+  ModelConfig,
+  ShortcutConfig,
   TranscriptionConfig,
+  UIConfig,
   VocabularyConfig,
   VoiceTypingConfig,
-  ApiServerConfig,
-  LlmAssistantConfig,
-  HistoryStorageConfig,
 } from '../types/config';
 
 // ---------------------------------------------------------------------------
@@ -180,15 +180,25 @@ export const useConfigStore = create<ConfigState>((set) => ({
 // equality so components re-render only when their domain changes.
 
 const UI_KEYS: (keyof UIConfig)[] = [
-  'appLanguage', 'theme', 'font', 'minimizeToTrayOnExit', 'autoCheckUpdates', 'enableCloudSync', 'logLevel', 'projectsViewMode'
+  'appLanguage',
+  'theme',
+  'font',
+  'minimizeToTrayOnExit',
+  'autoCheckUpdates',
+  'enableCloudSync',
+  'logLevel',
+  'projectsViewMode',
 ];
 
-const SHORTCUT_KEYS: (keyof ShortcutConfig)[] = [
-  'liveRecordShortcut',
-];
+const SHORTCUT_KEYS: (keyof ShortcutConfig)[] = ['liveRecordShortcut'];
 
 const AUDIO_KEYS: (keyof AudioConfig)[] = [
-  'microphoneId', 'microphoneBoost', 'systemAudioDeviceId', 'muteDuringRecording', 'keepMicrophoneActive', 'ffmpegPath',
+  'microphoneId',
+  'microphoneBoost',
+  'systemAudioDeviceId',
+  'muteDuringRecording',
+  'keepMicrophoneActive',
+  'ffmpegPath',
 ];
 
 const MODEL_KEYS: (keyof ModelConfig)[] = [
@@ -206,20 +216,38 @@ const MODEL_KEYS: (keyof ModelConfig)[] = [
 ];
 
 const CAPTION_KEYS: (keyof CaptionConfig)[] = [
-  'lockWindow', 'alwaysOnTop', 'startOnLaunch',
-  'captionWindowWidth', 'captionFontSize', 'captionFontColor', 'captionBackgroundOpacity',
+  'lockWindow',
+  'alwaysOnTop',
+  'startOnLaunch',
+  'captionWindowWidth',
+  'captionFontSize',
+  'captionFontColor',
+  'captionBackgroundOpacity',
 ];
 
 const TRANSCRIPTION_KEYS: (keyof TranscriptionConfig)[] = [
-  'language', 'enableTimeline', 'enableITN',
-  'batchVadEnabled', 'liveVadBufferSize', 'batchVadBufferSize', 'maxConcurrent', 'gpuAcceleration',
+  'language',
+  'enableTimeline',
+  'enableITN',
+  'batchVadEnabled',
+  'liveVadBufferSize',
+  'batchVadBufferSize',
+  'maxConcurrent',
+  'gpuAcceleration',
 ];
 
 const LLM_KEYS: (keyof LlmAssistantConfig)[] = [
-  'llmSettings', 'summaryEnabled', 'translationLanguage',
-  'summaryTemplateId', 'summaryCustomTemplates',
-  'polishKeywords', 'polishPresetId', 'polishCustomPresets',
-  'autoPolish', 'autoPolishFrequency', 'llmRequestTimeoutSeconds',
+  'llmSettings',
+  'summaryEnabled',
+  'translationLanguage',
+  'summaryTemplateId',
+  'summaryCustomTemplates',
+  'polishKeywords',
+  'polishPresetId',
+  'polishCustomPresets',
+  'autoPolish',
+  'autoPolishFrequency',
+  'llmRequestTimeoutSeconds',
 ];
 
 const VOCABULARY_KEYS: (keyof VocabularyConfig)[] = [
@@ -231,7 +259,9 @@ const VOCABULARY_KEYS: (keyof VocabularyConfig)[] = [
 ];
 
 const VOICE_TYPING_KEYS: (keyof VoiceTypingConfig)[] = [
-  'voiceTypingEnabled', 'voiceTypingShortcut', 'voiceTypingMode'
+  'voiceTypingEnabled',
+  'voiceTypingShortcut',
+  'voiceTypingMode',
 ];
 const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [
   'httpServerEnabled',
@@ -245,9 +275,7 @@ const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [
   'httpServerIpWhitelist',
   'gpuAcceleration',
 ];
-const HISTORY_STORAGE_KEYS: (keyof HistoryStorageConfig)[] = [
-  'historyAudioRetentionDays',
-];
+const HISTORY_STORAGE_KEYS: (keyof HistoryStorageConfig)[] = ['historyAudioRetentionDays'];
 /** Pick a subset of keys from the config. */
 function pickConfig<K extends keyof AppConfig>(config: AppConfig, keys: K[]): Pick<AppConfig, K> {
   const result = {} as Pick<AppConfig, K>;

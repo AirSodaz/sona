@@ -1,20 +1,20 @@
-import {
-  createAutomationFingerprint,
-  normalizeAutomationPath,
-} from '../automation/automationService';
 import type {
   AutomationProcessedEntry,
   AutomationRule,
   AutomationRuntimeBlockReason,
   AutomationRuntimeState,
 } from '../../types/automation';
+import type { RecoveryItemStage } from '../../types/recovery';
+import {
+  createAutomationFingerprint,
+  normalizeAutomationPath,
+} from '../automation/automationService';
+import type { AutomationTaskSettledPayload } from '../automationEventBus';
 import type {
   AutomationRuntimeCandidatePayload,
   AutomationRuntimePathCollectionResult,
   AutomationRuntimeReplaceResult,
 } from '../automationRuntimeService';
-import type { AutomationTaskSettledPayload } from '../automationEventBus';
-import type { RecoveryItemStage } from '../../types/recovery';
 
 const RETRY_SOURCE_MISSING_SIZE = 0;
 const RETRY_SOURCE_MISSING_MTIME_MS = 0;
@@ -62,7 +62,7 @@ export function upsertFailureNotification(
     message?: string;
     retryable: boolean;
     occurredAt?: number;
-  },
+  }
 ): AutomationSessionNotification[] {
   const notificationId = getAutomationFailureNotificationId(ruleId);
   const existing = notifications.find((notification) => notification.id === notificationId);
@@ -104,13 +104,12 @@ export function appendOrMergeSuccessNotification(
     occurredAt?: number;
     waveActive: boolean;
     nextSuccessNotificationId: () => string;
-  },
+  }
 ): AutomationSessionNotification[] {
-  const existing = notifications.find((notification) => (
-    notification.kind === 'success'
-    && notification.ruleId === ruleId
-    && notification.waveActive
-  ));
+  const existing = notifications.find(
+    (notification) =>
+      notification.kind === 'success' && notification.ruleId === ruleId && notification.waveActive
+  );
 
   if (!existing) {
     return [
@@ -131,47 +130,44 @@ export function appendOrMergeSuccessNotification(
     ];
   }
 
-  return notifications.map((notification) => (
+  return notifications.map((notification) =>
     notification.id === existing.id
       ? {
-        ...notification,
-        ruleName,
-        count: notification.count + 1,
-        latestFilePath: filePath ?? notification.latestFilePath,
-        latestStage: stage ?? notification.latestStage,
-        updatedAt: occurredAt,
-        waveActive,
-      }
+          ...notification,
+          ruleName,
+          count: notification.count + 1,
+          latestFilePath: filePath ?? notification.latestFilePath,
+          latestStage: stage ?? notification.latestStage,
+          updatedAt: occurredAt,
+          waveActive,
+        }
       : notification
-  ));
+  );
 }
 
 export function removeRuleNotifications(
   notifications: AutomationSessionNotification[],
   ruleId: string,
-  kind?: AutomationNotificationKind,
+  kind?: AutomationNotificationKind
 ): AutomationSessionNotification[] {
-  return notifications.filter((notification) => (
-    notification.ruleId !== ruleId
-    || (kind && notification.kind !== kind)
-  ));
+  return notifications.filter(
+    (notification) => notification.ruleId !== ruleId || (kind && notification.kind !== kind)
+  );
 }
 
 function resolveRuntimeOverride<K extends keyof AutomationRuntimeState>(
   overrides: Partial<AutomationRuntimeState>,
   key: K,
-  fallback: AutomationRuntimeState[K],
+  fallback: AutomationRuntimeState[K]
 ): AutomationRuntimeState[K] {
-  return Object.prototype.hasOwnProperty.call(overrides, key)
-    ? overrides[key] as AutomationRuntimeState[K]
-    : fallback;
+  return Object.hasOwn(overrides, key) ? (overrides[key] as AutomationRuntimeState[K]) : fallback;
 }
 
 export function deriveRuntimeState(
   ruleId: string,
   entries: AutomationProcessedEntry[],
   existing: AutomationRuntimeState | undefined,
-  overrides: Partial<AutomationRuntimeState> = {},
+  overrides: Partial<AutomationRuntimeState> = {}
 ): AutomationRuntimeState {
   const ruleEntries = entries
     .filter((entry) => entry.status !== 'discarded')
@@ -184,26 +180,42 @@ export function deriveRuntimeState(
     ruleId,
     status: resolveRuntimeOverride(overrides, 'status', existing?.status ?? 'stopped'),
     lastScanAt: resolveRuntimeOverride(overrides, 'lastScanAt', existing?.lastScanAt),
-    lastCandidateAt: resolveRuntimeOverride(overrides, 'lastCandidateAt', existing?.lastCandidateAt),
+    lastCandidateAt: resolveRuntimeOverride(
+      overrides,
+      'lastCandidateAt',
+      existing?.lastCandidateAt
+    ),
     lastQueuedAt: resolveRuntimeOverride(overrides, 'lastQueuedAt', existing?.lastQueuedAt),
     lastBlockedAt: resolveRuntimeOverride(overrides, 'lastBlockedAt', existing?.lastBlockedAt),
-    lastBlockedReason: resolveRuntimeOverride(overrides, 'lastBlockedReason', existing?.lastBlockedReason),
-    lastBlockedFilePath: resolveRuntimeOverride(overrides, 'lastBlockedFilePath', existing?.lastBlockedFilePath),
-    lastProcessedAt: resolveRuntimeOverride(overrides, 'lastProcessedAt', latest?.processedAt ?? existing?.lastProcessedAt),
+    lastBlockedReason: resolveRuntimeOverride(
+      overrides,
+      'lastBlockedReason',
+      existing?.lastBlockedReason
+    ),
+    lastBlockedFilePath: resolveRuntimeOverride(
+      overrides,
+      'lastBlockedFilePath',
+      existing?.lastBlockedFilePath
+    ),
+    lastProcessedAt: resolveRuntimeOverride(
+      overrides,
+      'lastProcessedAt',
+      latest?.processedAt ?? existing?.lastProcessedAt
+    ),
     lastResult: resolveRuntimeOverride(
       overrides,
       'lastResult',
-      latest ? (latest.status === 'complete' ? 'success' : 'error') : existing?.lastResult,
+      latest ? (latest.status === 'complete' ? 'success' : 'error') : existing?.lastResult
     ),
     lastResultMessage: resolveRuntimeOverride(
       overrides,
       'lastResultMessage',
-      latest?.errorMessage ?? existing?.lastResultMessage,
+      latest?.errorMessage ?? existing?.lastResultMessage
     ),
     lastProcessedFilePath: resolveRuntimeOverride(
       overrides,
       'lastProcessedFilePath',
-      latest?.filePath ?? existing?.lastProcessedFilePath,
+      latest?.filePath ?? existing?.lastProcessedFilePath
     ),
     failureCount: resolveRuntimeOverride(overrides, 'failureCount', failureCount),
   };
@@ -212,7 +224,7 @@ export function deriveRuntimeState(
 export function rebuildRuntimeStates(
   rules: AutomationRule[],
   entries: AutomationProcessedEntry[],
-  current: Record<string, AutomationRuntimeState>,
+  current: Record<string, AutomationRuntimeState>
 ): Record<string, AutomationRuntimeState> {
   return rules.reduce<Record<string, AutomationRuntimeState>>((acc, rule) => {
     acc[rule.id] = deriveRuntimeState(rule.id, entries, current[rule.id], {
@@ -242,18 +254,23 @@ export function applyRuntimeFailureState(
     filePath?: string;
     stage?: RecoveryItemStage;
     lastScanAt?: number;
-  },
+  }
 ) {
   return {
     runtimeStates: {
       ...current.runtimeStates,
-      [ruleId]: deriveRuntimeState(ruleId, current.processedEntries, current.runtimeStates[ruleId], {
-        status: 'error',
-        lastScanAt,
-        lastResult: 'error',
-        lastResultMessage: message,
-        lastProcessedFilePath: filePath ?? current.runtimeStates[ruleId]?.lastProcessedFilePath,
-      }),
+      [ruleId]: deriveRuntimeState(
+        ruleId,
+        current.processedEntries,
+        current.runtimeStates[ruleId],
+        {
+          status: 'error',
+          lastScanAt,
+          lastResult: 'error',
+          lastResultMessage: message,
+          lastProcessedFilePath: filePath ?? current.runtimeStates[ruleId]?.lastProcessedFilePath,
+        }
+      ),
     },
     notifications: upsertFailureNotification(current.notifications, {
       ruleId,
@@ -282,17 +299,22 @@ export function applyRuntimeBlockState(
     filePath: string;
     reason: AutomationRuntimeBlockReason;
     occurredAt?: number;
-  },
+  }
 ) {
   return {
     runtimeStates: {
       ...current.runtimeStates,
-      [ruleId]: deriveRuntimeState(ruleId, current.processedEntries, current.runtimeStates[ruleId], {
-        lastCandidateAt: occurredAt,
-        lastBlockedAt: occurredAt,
-        lastBlockedReason: reason,
-        lastBlockedFilePath: filePath,
-      }),
+      [ruleId]: deriveRuntimeState(
+        ruleId,
+        current.processedEntries,
+        current.runtimeStates[ruleId],
+        {
+          lastCandidateAt: occurredAt,
+          lastBlockedAt: occurredAt,
+          lastBlockedReason: reason,
+          lastBlockedFilePath: filePath,
+        }
+      ),
     },
   };
 }
@@ -308,15 +330,20 @@ export function applyRuntimeQueuedState(
   }: {
     ruleId: string;
     occurredAt?: number;
-  },
+  }
 ) {
   return {
     runtimeStates: {
       ...current.runtimeStates,
-      [ruleId]: deriveRuntimeState(ruleId, current.processedEntries, current.runtimeStates[ruleId], {
-        lastCandidateAt: occurredAt,
-        lastQueuedAt: occurredAt,
-      }),
+      [ruleId]: deriveRuntimeState(
+        ruleId,
+        current.processedEntries,
+        current.runtimeStates[ruleId],
+        {
+          lastCandidateAt: occurredAt,
+          lastQueuedAt: occurredAt,
+        }
+      ),
     },
   };
 }
@@ -337,7 +364,7 @@ export function buildRetryFailureEntry(
   ruleId: string,
   filePath: string,
   message: string,
-  processedAt: number,
+  processedAt: number
 ): AutomationProcessedEntry {
   return {
     ruleId,
@@ -345,7 +372,7 @@ export function buildRetryFailureEntry(
     sourceFingerprint: createAutomationFingerprint(
       filePath,
       RETRY_SOURCE_MISSING_SIZE,
-      RETRY_SOURCE_MISSING_MTIME_MS,
+      RETRY_SOURCE_MISSING_MTIME_MS
     ),
     size: RETRY_SOURCE_MISSING_SIZE,
     mtimeMs: RETRY_SOURCE_MISSING_MTIME_MS,
@@ -359,7 +386,7 @@ export function buildRetryBlockedEntry(
   ruleId: string,
   candidate: AutomationRuntimeCandidatePayload,
   message: string,
-  processedAt: number,
+  processedAt: number
 ): AutomationProcessedEntry {
   return {
     ruleId,
@@ -419,26 +446,29 @@ interface AutomationSessionRuleStateSnapshot extends AutomationSessionStateSnaps
 export function applyRetryFailureResults(
   current: AutomationSessionRuleStateSnapshot,
   rule: AutomationRule,
-  results: AutomationRuntimePathCollectionResult[],
+  results: AutomationRuntimePathCollectionResult[]
 ): AutomationSessionStateSnapshot {
   const failureResults = results.filter((result) => result.outcome !== 'candidate');
   if (failureResults.length === 0) {
     return current;
   }
 
-  const entriesToAdd = failureResults.map((result, index) => (
+  const entriesToAdd = failureResults.map((result, index) =>
     buildRetryFailureEntry(
       rule.id,
       result.filePath,
       getRetryFailureMessage(result),
-      Date.now() + index,
+      Date.now() + index
     )
-  ));
+  );
   const nextEntries = [
-    ...current.processedEntries.filter((entry) => !(
-      entry.ruleId === rule.id
-      && entriesToAdd.some((candidate) => candidate.sourceFingerprint === entry.sourceFingerprint)
-    )),
+    ...current.processedEntries.filter(
+      (entry) =>
+        !(
+          entry.ruleId === rule.id &&
+          entriesToAdd.some((candidate) => candidate.sourceFingerprint === entry.sourceFingerprint)
+        )
+    ),
     ...entriesToAdd,
   ].sort((a, b) => b.processedAt - a.processedAt);
 
@@ -479,25 +509,23 @@ export function applyRetryBlockedResults(
   results: Array<{
     candidate: AutomationRuntimeCandidatePayload;
     reason: AutomationRuntimeBlockReason;
-  }>,
+  }>
 ): AutomationSessionStateSnapshot {
   if (results.length === 0) {
     return current;
   }
 
-  const entriesToAdd = results.map(({ candidate, reason }, index) => (
-    buildRetryBlockedEntry(
-      rule.id,
-      candidate,
-      getRetryBlockedMessage(reason),
-      Date.now() + index,
-    )
-  ));
+  const entriesToAdd = results.map(({ candidate, reason }, index) =>
+    buildRetryBlockedEntry(rule.id, candidate, getRetryBlockedMessage(reason), Date.now() + index)
+  );
   const nextEntries = [
-    ...current.processedEntries.filter((entry) => !(
-      entry.ruleId === rule.id
-      && entriesToAdd.some((candidate) => candidate.sourceFingerprint === entry.sourceFingerprint)
-    )),
+    ...current.processedEntries.filter(
+      (entry) =>
+        !(
+          entry.ruleId === rule.id &&
+          entriesToAdd.some((candidate) => candidate.sourceFingerprint === entry.sourceFingerprint)
+        )
+    ),
     ...entriesToAdd,
   ].sort((a, b) => b.processedAt - a.processedAt);
 
@@ -534,9 +562,13 @@ export function applyRetryBlockedResults(
 
 export function applyRuntimeReplaceResults(
   current: AutomationSessionRuleStateSnapshot,
-  results: AutomationRuntimeReplaceResult[],
+  results: AutomationRuntimeReplaceResult[]
 ): Pick<AutomationSessionStateSnapshot, 'runtimeStates' | 'notifications'> {
-  let runtimeStates = rebuildRuntimeStates(current.rules, current.processedEntries, current.runtimeStates);
+  let runtimeStates = rebuildRuntimeStates(
+    current.rules,
+    current.processedEntries,
+    current.runtimeStates
+  );
   let notifications = current.notifications;
 
   results.forEach((result) => {
@@ -566,7 +598,7 @@ export function applyRuntimeReplaceResults(
         ruleId: rule.id,
         ruleName: rule.name,
         message: result.error || 'Automation runtime failed to start.',
-      },
+      }
     );
     runtimeStates = nextFailureState.runtimeStates;
     notifications = nextFailureState.notifications;
@@ -585,14 +617,13 @@ export function applyTaskSettledState(
     fallbackRuleName?: string;
     waveActive: boolean;
     nextSuccessNotificationId: () => string;
-  },
+  }
 ): AutomationSessionStateSnapshot {
   const nextRule = current.rules.find((item) => item.id === payload.ruleId);
   const nextRuleName = nextRule?.name || options.fallbackRuleName || 'Automation';
-  const shouldClearBlockedHint = (
-    current.runtimeStates[payload.ruleId]?.lastBlockedFilePath === payload.filePath
-    && (current.runtimeStates[payload.ruleId]?.lastBlockedAt ?? 0) <= payload.processedAt
-  );
+  const shouldClearBlockedHint =
+    current.runtimeStates[payload.ruleId]?.lastBlockedFilePath === payload.filePath &&
+    (current.runtimeStates[payload.ruleId]?.lastBlockedAt ?? 0) <= payload.processedAt;
   let nextNotifications = current.notifications;
   if (payload.status === 'complete') {
     nextNotifications = appendOrMergeSuccessNotification(current.notifications, {
@@ -629,18 +660,21 @@ export function applyTaskSettledState(
           status: nextRule?.enabled ? 'watching' : 'stopped',
           lastProcessedAt: payload.processedAt,
           lastProcessedFilePath: payload.filePath,
-          lastResult: payload.status === 'discarded'
-            ? current.runtimeStates[payload.ruleId]?.lastResult
-            : payload.status === 'complete' ? 'success' : 'error',
+          lastResult:
+            payload.status === 'discarded'
+              ? current.runtimeStates[payload.ruleId]?.lastResult
+              : payload.status === 'complete'
+                ? 'success'
+                : 'error',
           lastResultMessage: payload.errorMessage,
           ...(shouldClearBlockedHint
             ? {
-              lastBlockedAt: undefined,
-              lastBlockedReason: undefined,
-              lastBlockedFilePath: undefined,
-            }
+                lastBlockedAt: undefined,
+                lastBlockedReason: undefined,
+                lastBlockedFilePath: undefined,
+              }
             : {}),
-        },
+        }
       ),
     },
   };

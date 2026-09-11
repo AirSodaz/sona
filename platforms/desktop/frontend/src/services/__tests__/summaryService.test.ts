@@ -1,9 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
-import { addLlmModel, createLlmSettings, setFeatureModelSelection, updateProviderSetting } from '../llm/state';
-import { summaryService } from '../summaryService';
-import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildTestConfig } from '../../test-utils/configTestUtils';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import {
+  addLlmModel,
+  createLlmSettings,
+  setFeatureModelSelection,
+  updateProviderSetting,
+} from '../llm/state';
+import { summaryService } from '../summaryService';
 
 const mockCreateLlmTaskId = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
@@ -55,11 +60,16 @@ vi.mock('../historyService', () => ({
 }));
 
 vi.mock('../taskLedgerBuilders', () => ({
-  buildLlmTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.buildLlmTaskLedgerRecord, undefined, args),
-  createLlmTaskLedgerId: (...args: unknown[]) => Reflect.apply(taskLedgerContext.createLlmTaskLedgerId, undefined, args),
-  isTaskLedgerCancelRequested: (...args: unknown[]) => Reflect.apply(taskLedgerContext.isTaskLedgerCancelRequested, undefined, args),
-  patchTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.patchTaskLedgerRecord, undefined, args),
-  upsertTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.upsertTaskLedgerRecord, undefined, args),
+  buildLlmTaskLedgerRecord: (...args: unknown[]) =>
+    Reflect.apply(taskLedgerContext.buildLlmTaskLedgerRecord, undefined, args),
+  createLlmTaskLedgerId: (...args: unknown[]) =>
+    Reflect.apply(taskLedgerContext.createLlmTaskLedgerId, undefined, args),
+  isTaskLedgerCancelRequested: (...args: unknown[]) =>
+    Reflect.apply(taskLedgerContext.isTaskLedgerCancelRequested, undefined, args),
+  patchTaskLedgerRecord: (...args: unknown[]) =>
+    Reflect.apply(taskLedgerContext.patchTaskLedgerRecord, undefined, args),
+  upsertTaskLedgerRecord: (...args: unknown[]) =>
+    Reflect.apply(taskLedgerContext.upsertTaskLedgerRecord, undefined, args),
 }));
 
 function createSummaryReadyConfig() {
@@ -105,11 +115,21 @@ describe('summaryService', () => {
     });
 
     mockListenToLlmTaskProgress.mockImplementation(async (_taskId, _taskType, onProgress) => {
-      onProgress({ taskId: 'summary-task-id', taskType: 'summary', completedChunks: 1, totalChunks: 2 });
+      onProgress({
+        taskId: 'summary-task-id',
+        taskType: 'summary',
+        completedChunks: 1,
+        totalChunks: 2,
+      });
       return vi.fn();
     });
     mockListenToLlmTaskText.mockImplementation(async (_taskId, _taskType, onText) => {
-      await onText({ taskId: 'summary-task-id', taskType: 'summary', text: 'Meeting stream', delta: 'Meeting stream' });
+      await onText({
+        taskId: 'summary-task-id',
+        taskType: 'summary',
+        text: 'Meeting stream',
+        delta: 'Meeting stream',
+      });
       return vi.fn();
     });
     vi.mocked(invoke).mockResolvedValue({
@@ -148,25 +168,38 @@ describe('summaryService', () => {
       }),
     });
     expect(historyService.saveSummary).not.toHaveBeenCalled();
-    expect(useTranscriptStore.getState().getSummaryState('history-a').record?.content).toBe('Meeting summary');
-    expect(useTranscriptStore.getState().getSummaryState('history-a').record?.generatedAt).toBe('2026-05-04T00:00:00.000Z');
-    expect(useTranscriptStore.getState().getSummaryState('history-a').record?.sourceFingerprint).toBe('rust-fingerprint');
-    expect(useTranscriptStore.getState().getSummaryState('history-a').streamingContent).toBeUndefined();
+    expect(useTranscriptStore.getState().getSummaryState('history-a').record?.content).toBe(
+      'Meeting summary'
+    );
+    expect(useTranscriptStore.getState().getSummaryState('history-a').record?.generatedAt).toBe(
+      '2026-05-04T00:00:00.000Z'
+    );
+    expect(
+      useTranscriptStore.getState().getSummaryState('history-a').record?.sourceFingerprint
+    ).toBe('rust-fingerprint');
+    expect(
+      useTranscriptStore.getState().getSummaryState('history-a').streamingContent
+    ).toBeUndefined();
     expect(useTranscriptStore.getState().getSummaryState('history-a').isGenerating).toBe(false);
   });
 
   it('updates temporary streaming content before the final summary record is written', async () => {
     useTranscriptStore.setState({
-      segments: [
-        { id: '1', text: 'Live summary text', start: 0, end: 2, isFinal: true },
-      ],
+      segments: [{ id: '1', text: 'Live summary text', start: 0, end: 2, isFinal: true }],
       sourceHistoryId: null,
     });
 
     let invokeResolved = false;
     mockListenToLlmTaskText.mockImplementation(async (_taskId, _taskType, onText) => {
-      await onText({ taskId: 'summary-task-id', taskType: 'summary', text: 'Partial summary', delta: 'Partial ' });
-      expect(useTranscriptStore.getState().getSummaryState('current').streamingContent).toBe('Partial summary');
+      await onText({
+        taskId: 'summary-task-id',
+        taskType: 'summary',
+        text: 'Partial summary',
+        delta: 'Partial ',
+      });
+      expect(useTranscriptStore.getState().getSummaryState('current').streamingContent).toBe(
+        'Partial summary'
+      );
       expect(useTranscriptStore.getState().getSummaryState('current').record).toBeUndefined();
       return vi.fn();
     });
@@ -191,20 +224,27 @@ describe('summaryService', () => {
     await summaryService.generateSummary('general');
 
     expect(invokeResolved).toBe(true);
-    expect(useTranscriptStore.getState().getSummaryState('current').record?.content).toBe('Final summary');
-    expect(useTranscriptStore.getState().getSummaryState('current').streamingContent).toBeUndefined();
+    expect(useTranscriptStore.getState().getSummaryState('current').record?.content).toBe(
+      'Final summary'
+    );
+    expect(
+      useTranscriptStore.getState().getSummaryState('current').streamingContent
+    ).toBeUndefined();
   });
 
   it('keeps streamed summary text in memory when generation fails', async () => {
     useTranscriptStore.setState({
-      segments: [
-        { id: '1', text: 'Live summary text', start: 0, end: 2, isFinal: true },
-      ],
+      segments: [{ id: '1', text: 'Live summary text', start: 0, end: 2, isFinal: true }],
       sourceHistoryId: null,
     });
 
     mockListenToLlmTaskText.mockImplementation(async (_taskId, _taskType, onText) => {
-      await onText({ taskId: 'summary-task-id', taskType: 'summary', text: 'Recoverable partial', delta: 'Recoverable partial' });
+      await onText({
+        taskId: 'summary-task-id',
+        taskType: 'summary',
+        text: 'Recoverable partial',
+        delta: 'Recoverable partial',
+      });
       return vi.fn();
     });
     vi.mocked(invoke).mockRejectedValue(new Error('network failed'));
@@ -212,7 +252,9 @@ describe('summaryService', () => {
     await expect(summaryService.generateSummary('general')).rejects.toThrow('network failed');
 
     expect(useTranscriptStore.getState().getSummaryState('current').record).toBeUndefined();
-    expect(useTranscriptStore.getState().getSummaryState('current').streamingContent).toBe('Recoverable partial');
+    expect(useTranscriptStore.getState().getSummaryState('current').streamingContent).toBe(
+      'Recoverable partial'
+    );
     expect(useTranscriptStore.getState().getSummaryState('current').isGenerating).toBe(false);
   });
 
@@ -220,9 +262,7 @@ describe('summaryService', () => {
     const { historyService } = await import('../historyService');
 
     useTranscriptStore.setState({
-      segments: [
-        { id: '1', text: 'Unsaved transcript', start: 0, end: 2, isFinal: true },
-      ],
+      segments: [{ id: '1', text: 'Unsaved transcript', start: 0, end: 2, isFinal: true }],
       sourceHistoryId: null,
     });
 
@@ -252,10 +292,12 @@ describe('summaryService', () => {
         record: expect.objectContaining({
           content: 'Current summary',
         }),
-      }),
+      })
     );
     expect(useTranscriptStore.getState().summaryStates.current).toBeUndefined();
-    expect(useTranscriptStore.getState().getSummaryState('history-new').record?.content).toBe('Current summary');
+    expect(useTranscriptStore.getState().getSummaryState('history-new').record?.content).toBe(
+      'Current summary'
+    );
   });
 
   it('hydrates summary sidecars into the store', async () => {
@@ -272,20 +314,20 @@ describe('summaryService', () => {
 
     await summaryService.loadSummary('history-lecture');
 
-    expect(useTranscriptStore.getState().getSummaryState('history-lecture')).toEqual(expect.objectContaining({
-      activeTemplateId: 'lecture',
-      record: expect.objectContaining({
-        content: 'Lecture summary',
-      }),
-    }));
+    expect(useTranscriptStore.getState().getSummaryState('history-lecture')).toEqual(
+      expect.objectContaining({
+        activeTemplateId: 'lecture',
+        record: expect.objectContaining({
+          content: 'Lecture summary',
+        }),
+      })
+    );
   });
 
   it('creates the first manual summary record when none exists yet', async () => {
     const { historyService } = await import('../historyService');
     useTranscriptStore.setState({
-      segments: [
-        { id: '1', text: 'Manual transcript', start: 0, end: 2, isFinal: true },
-      ],
+      segments: [{ id: '1', text: 'Manual transcript', start: 0, end: 2, isFinal: true }],
       sourceHistoryId: 'history-manual',
       summaryStates: {
         'history-manual': {
@@ -303,7 +345,7 @@ describe('summaryService', () => {
       expect.objectContaining({
         templateId: 'meeting',
         content: 'Manual summary',
-      }),
+      })
     );
     expect(historyService.saveSummary).toHaveBeenCalledWith(
       'history-manual',
@@ -313,15 +355,13 @@ describe('summaryService', () => {
           templateId: 'meeting',
           content: 'Manual summary',
         }),
-      }),
+      })
     );
   });
 
   it('rejects new summary generation when Summary is disabled', async () => {
     useTranscriptStore.setState({
-      segments: [
-        { id: '1', text: 'Transcript text', start: 0, end: 2, isFinal: true },
-      ],
+      segments: [{ id: '1', text: 'Transcript text', start: 0, end: 2, isFinal: true }],
       config: {
         ...createSummaryReadyConfig(),
         summaryEnabled: false,
@@ -337,9 +377,7 @@ describe('summaryService', () => {
     const readyConfig = createSummaryReadyConfig();
 
     useTranscriptStore.setState({
-      segments: [
-        { id: '1', text: 'Transcript text', start: 0, end: 2, isFinal: true },
-      ],
+      segments: [{ id: '1', text: 'Transcript text', start: 0, end: 2, isFinal: true }],
       config: {
         ...readyConfig,
         llmSettings: updateProviderSetting(readyConfig.llmSettings, 'open_ai', {
@@ -350,14 +388,14 @@ describe('summaryService', () => {
     });
     vi.mocked(invoke).mockClear();
 
-    await expect(summaryService.generateSummary('general')).rejects.toThrow('LLM Service not fully configured.');
+    await expect(summaryService.generateSummary('general')).rejects.toThrow(
+      'LLM Service not fully configured.'
+    );
     expect(invoke).not.toHaveBeenCalledWith('run_transcript_llm_job', expect.anything());
   });
 
   it('retries summary generation with the ledger template id and explicit history segments', async () => {
-    const segments = [
-      { id: '1', text: 'Retry summary text', start: 0, end: 2, isFinal: true },
-    ];
+    const segments = [{ id: '1', text: 'Retry summary text', start: 0, end: 2, isFinal: true }];
     useTranscriptStore.setState({
       segments: [],
       sourceHistoryId: null,
@@ -392,6 +430,8 @@ describe('summaryService', () => {
         segments,
       }),
     });
-    expect(useTranscriptStore.getState().getSummaryState('history-retry').record?.content).toBe('Retried summary');
+    expect(useTranscriptStore.getState().getSummaryState('history-retry').record?.content).toBe(
+      'Retried summary'
+    );
   });
 });

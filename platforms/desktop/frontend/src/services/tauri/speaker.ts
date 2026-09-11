@@ -1,6 +1,6 @@
 import type {
-  SpeakerProfileSample,
   SpeakerProcessingConfig,
+  SpeakerProfileSample,
   SpeakerReviewFilter,
   SpeakerReviewSnapshot,
 } from '../../types/speaker';
@@ -16,7 +16,7 @@ import { invokeTauri } from './invoke';
 export async function annotateSpeakerSegmentsFromFile(
   filePath: string,
   segments: TranscriptSegment[],
-  speakerProcessing: SpeakerProcessingConfig,
+  speakerProcessing: SpeakerProcessingConfig
 ): Promise<TranscriptSegment[]> {
   return invokeTauri(TauriCommand.speaker.annotateSegmentsFromFile, {
     filePath,
@@ -28,7 +28,7 @@ export async function annotateSpeakerSegmentsFromFile(
 export async function importSpeakerProfileSample(
   profileId: string,
   sourcePath: string,
-  sourceName?: string,
+  sourceName?: string
 ): Promise<SpeakerProfileSample> {
   return invokeTauri(TauriCommand.speaker.importProfileSample, {
     profileId,
@@ -39,7 +39,7 @@ export async function importSpeakerProfileSample(
 
 export async function buildSpeakerReviewSnapshot(
   segments: TranscriptSegment[],
-  activeFilter: SpeakerReviewFilter,
+  activeFilter: SpeakerReviewFilter
 ): Promise<SpeakerReviewSnapshot> {
   return invokeTauri(TauriCommand.speaker.buildReviewSnapshot, {
     segments,
@@ -48,19 +48,19 @@ export async function buildSpeakerReviewSnapshot(
 }
 
 export async function applySpeakerProfileToGroup(
-  request: ApplySpeakerProfileToGroupRequest,
+  request: ApplySpeakerProfileToGroupRequest
 ): Promise<SpeakerCorrectionResponse> {
   return invokeTauri(TauriCommand.speaker.applyProfileToGroup, { request });
 }
 
 export async function resetSpeakerGroupToAnonymous(
-  request: SpeakerGroupRequest,
+  request: SpeakerGroupRequest
 ): Promise<SpeakerCorrectionResponse> {
   return invokeTauri(TauriCommand.speaker.resetGroupToAnonymous, { request });
 }
 
 export async function confirmSpeakerGroupReview(
-  request: SpeakerGroupRequest,
+  request: SpeakerGroupRequest
 ): Promise<SpeakerCorrectionResponse> {
   return invokeTauri(TauriCommand.speaker.confirmGroupReview, { request });
 }

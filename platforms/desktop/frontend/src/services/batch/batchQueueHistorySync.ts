@@ -44,17 +44,17 @@ export async function resolveSavedBatchHistoryMeta({
 export function applySavedBatchHistoryToQueue(
   queueItems: BatchQueueItem[],
   itemId: string,
-  meta: SavedBatchHistoryMeta,
+  meta: SavedBatchHistoryMeta
 ): BatchQueueItem[] {
-  return queueItems.map((queueItem) => (
+  return queueItems.map((queueItem) =>
     queueItem.id === itemId
       ? {
-        ...queueItem,
-        historyId: meta.historyId,
-        historyTitle: meta.title,
-        audioUrl: meta.audioUrl ?? queueItem.audioUrl,
-        projectId: meta.projectId ?? queueItem.projectId,
-      }
+          ...queueItem,
+          historyId: meta.historyId,
+          historyTitle: meta.title,
+          audioUrl: meta.audioUrl ?? queueItem.audioUrl,
+          projectId: meta.projectId ?? queueItem.projectId,
+        }
       : queueItem
-  ));
+  );
 }

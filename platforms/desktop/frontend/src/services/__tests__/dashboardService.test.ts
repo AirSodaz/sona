@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DashboardSnapshot } from '../../types/dashboard';
 import { dashboardService } from '../dashboardService';
 import { getDashboardSnapshot } from '../tauri/dashboard';
-import type { DashboardSnapshot } from '../../types/dashboard';
 
 vi.mock('../tauri/dashboard', () => ({
   getDashboardSnapshot: vi.fn(),

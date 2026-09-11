@@ -1,17 +1,15 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { HistoryItem } from '../HistoryItem';
 import { useProjectStore } from '../../../stores/projectStore';
-
+import { HistoryItem } from '../HistoryItem';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (
-      key: string,
-      options?: { defaultValue?: string } & Record<string, unknown>,
-    ) => {
+    t: (key: string, options?: { defaultValue?: string } & Record<string, unknown>) => {
       if (typeof options?.defaultValue === 'string') {
-        return options.defaultValue.replace(/\{\{(\w+)\}\}/g, (_: string, variable: string) => String(options?.[variable] ?? ''));
+        return options.defaultValue.replace(/\{\{(\w+)\}\}/g, (_: string, variable: string) =>
+          String(options?.[variable] ?? '')
+        );
       }
       return key;
     },
@@ -53,13 +51,7 @@ describe('HistoryItem', () => {
     const onLoad = vi.fn();
     const onDelete = vi.fn();
 
-    render(
-      <HistoryItem
-        item={item}
-        onLoad={onLoad}
-        onDelete={onDelete}
-      />,
-    );
+    render(<HistoryItem item={item} onLoad={onLoad} onDelete={onDelete} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete Client Call' }));
 
@@ -80,7 +72,7 @@ describe('HistoryItem', () => {
         onDelete={onDelete}
         isSelectionMode
         onToggleSelection={onToggleSelection}
-      />,
+      />
     );
 
     expect(screen.queryByRole('button', { name: 'Delete Client Call' })).toBeNull();
@@ -103,7 +95,7 @@ describe('HistoryItem', () => {
         onDelete={vi.fn()}
         onOpenContextMenu={onOpenContextMenu}
         isContextMenuOpen
-      />,
+      />
     );
 
     const historyItem = screen.getByRole('listitem');
@@ -135,7 +127,7 @@ describe('HistoryItem', () => {
         onLoad={vi.fn()}
         onDelete={vi.fn()}
         onOpenContextMenu={onOpenContextMenu}
-      />,
+      />
     );
 
     const trigger = screen.getByRole('button', { name: 'Load Client Call' });
@@ -170,7 +162,7 @@ describe('HistoryItem', () => {
         onDelete={vi.fn()}
         onOpenContextMenu={onOpenContextMenu}
         isLoadDisabled
-      />,
+      />
     );
 
     const trigger = screen.getByRole('button', { name: 'Load Client Call' }) as HTMLButtonElement;
@@ -179,10 +171,13 @@ describe('HistoryItem', () => {
 
     fireEvent.keyDown(trigger, { key: 'F10', shiftKey: true });
 
-    expect(onOpenContextMenu).toHaveBeenCalledWith('hist-1', expect.objectContaining({
-      anchor: trigger,
-      invocation: 'keyboard',
-    }));
+    expect(onOpenContextMenu).toHaveBeenCalledWith(
+      'hist-1',
+      expect.objectContaining({
+        anchor: trigger,
+        invocation: 'keyboard',
+      })
+    );
   });
 
   it('requests an item context menu while selection mode is active to support batch actions', () => {
@@ -195,23 +190,29 @@ describe('HistoryItem', () => {
         onDelete={vi.fn()}
         onOpenContextMenu={onOpenContextMenu}
         isSelectionMode
-      />,
+      />
     );
 
     const historyItem = screen.getByRole('listitem');
     fireEvent.contextMenu(historyItem, { clientX: 40, clientY: 50 });
-    expect(onOpenContextMenu).toHaveBeenCalledWith('hist-1', expect.objectContaining({
-      invocation: 'pointer',
-      point: { x: 40, y: 50 },
-    }));
+    expect(onOpenContextMenu).toHaveBeenCalledWith(
+      'hist-1',
+      expect.objectContaining({
+        invocation: 'pointer',
+        point: { x: 40, y: 50 },
+      })
+    );
 
     fireEvent.keyDown(screen.getByRole('button', { name: 'Load Client Call' }), {
       key: 'F10',
       shiftKey: true,
     });
-    expect(onOpenContextMenu).toHaveBeenCalledWith('hist-1', expect.objectContaining({
-      invocation: 'keyboard',
-    }));
+    expect(onOpenContextMenu).toHaveBeenCalledWith(
+      'hist-1',
+      expect.objectContaining({
+        invocation: 'keyboard',
+      })
+    );
   });
 
   it('renders a search snippet with highlight for list layouts', () => {
@@ -226,31 +227,22 @@ describe('HistoryItem', () => {
           highlightStart: 10,
           highlightEnd: 17,
         }}
-      />,
+      />
     );
 
-    expect(container.querySelector('.history-item-preview')?.textContent).toContain('Quarterly roadmap follow-up');
+    expect(container.querySelector('.history-item-preview')?.textContent).toContain(
+      'Quarterly roadmap follow-up'
+    );
     expect(screen.getByText('roadmap').tagName).toBe('MARK');
   });
 
   it('keeps the project badge visible by default and hides it when requested', () => {
-    const { rerender } = render(
-      <HistoryItem
-        item={item}
-        onLoad={vi.fn()}
-        onDelete={vi.fn()}
-      />,
-    );
+    const { rerender } = render(<HistoryItem item={item} onLoad={vi.fn()} onDelete={vi.fn()} />);
 
     screen.getByText('Alpha');
 
     rerender(
-      <HistoryItem
-        item={item}
-        onLoad={vi.fn()}
-        onDelete={vi.fn()}
-        showProjectBadge={false}
-      />,
+      <HistoryItem item={item} onLoad={vi.fn()} onDelete={vi.fn()} showProjectBadge={false} />
     );
 
     expect(screen.queryByText('Alpha')).toBeNull();
@@ -270,15 +262,20 @@ describe('HistoryItem', () => {
         }}
         layout="table"
         isKeyboardActive
-      />,
+      />
     );
 
-    expect(container.querySelector('.history-item')?.classList.contains('keyboard-active')).toBe(true);
+    expect(container.querySelector('.history-item')?.classList.contains('keyboard-active')).toBe(
+      true
+    );
     expect(container.querySelector('.history-item-preview--table')).not.toBeNull();
-    expect(container.querySelector('.history-item--table .history-item-header .history-item-preview--table')).not.toBeNull();
+    expect(
+      container.querySelector(
+        '.history-item--table .history-item-header .history-item-preview--table'
+      )
+    ).not.toBeNull();
     expect(screen.getByText('planning').tagName).toBe('MARK');
   });
-
 
   it('removes the draft badge when the same live recording history item completes', () => {
     const { rerender } = render(
@@ -290,7 +287,7 @@ describe('HistoryItem', () => {
         }}
         onLoad={vi.fn()}
         onDelete={vi.fn()}
-      />,
+      />
     );
 
     screen.getByText('Draft');
@@ -305,7 +302,7 @@ describe('HistoryItem', () => {
         }}
         onLoad={vi.fn()}
         onDelete={vi.fn()}
-      />,
+      />
     );
 
     expect(screen.queryByText('Draft')).toBeNull();

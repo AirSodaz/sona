@@ -24,7 +24,14 @@ export type TranscriptSessionStateFields = Pick<
 
 export type TranscriptPlaybackStateFields = Pick<
   TranscriptActiveSessionState,
-  'activeSegmentId' | 'activeSegmentIndex' | 'audioFile' | 'audioUrl' | 'currentTime' | 'isPlaying' | 'lastSeekTimestamp' | 'seekRequest'
+  | 'activeSegmentId'
+  | 'activeSegmentIndex'
+  | 'audioFile'
+  | 'audioUrl'
+  | 'currentTime'
+  | 'isPlaying'
+  | 'lastSeekTimestamp'
+  | 'seekRequest'
 >;
 
 export const INITIAL_TRANSCRIPT_ACTIVE_SESSION_STATE: TranscriptActiveSessionState = {

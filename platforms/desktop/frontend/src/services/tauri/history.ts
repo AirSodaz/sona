@@ -1,14 +1,9 @@
-import {
-  normalizeHistoryItemRecord,
-  type HistoryAudioCleanupReport,
-  type HistoryItem,
-} from "../../types/history";
 import type {
+  HistoryWorkspaceQueryRequest as CoreHistoryWorkspaceQueryRequest,
+  HistoryWorkspaceQueryResult as CoreHistoryWorkspaceQueryResult,
   HistoryItemMetaPatch_Serialize,
   HistoryItemRecord,
   HistorySummaryPayload_Deserialize,
-  HistoryWorkspaceQueryRequest as CoreHistoryWorkspaceQueryRequest,
-  HistoryWorkspaceQueryResult as CoreHistoryWorkspaceQueryResult,
   HistoryWorkspaceScope,
   TranscriptDiffResult_Serialize,
   TranscriptDiffRow_Deserialize,
@@ -16,47 +11,40 @@ import type {
   TranscriptSegment_Deserialize,
   TranscriptSegment_Serialize,
   TranscriptSnapshotRecord_Serialize,
-} from "../../bindings";
-import type {
-  HistorySummaryPayload,
-  TranscriptSegment,
-} from "../../types/transcript";
+} from '../../bindings';
+import {
+  type HistoryAudioCleanupReport,
+  type HistoryItem,
+  normalizeHistoryItemRecord,
+} from '../../types/history';
+import { normalizeSpeakerAttribution, normalizeSpeakerTag } from '../../types/speakerNormalization';
+import type { HistorySummaryPayload, TranscriptSegment } from '../../types/transcript';
 import type {
   TranscriptDiffResult,
   TranscriptDiffRow,
   TranscriptSnapshotMetadata,
   TranscriptSnapshotReason,
   TranscriptSnapshotRecord,
-} from "../../types/transcriptSnapshot";
-import {
-  normalizeSpeakerAttribution,
-  normalizeSpeakerTag,
-} from "../../types/speakerNormalization";
-import type { WorkspaceItemSearchMatch } from "../../utils/workspaceSearch";
-import { TauriCommand } from "./commands";
-import type { TauriCommandArgs, TauriCommandResult } from "./contracts";
-import { invokeTauri } from "./invoke";
+} from '../../types/transcriptSnapshot';
+import type { WorkspaceItemSearchMatch } from '../../utils/workspaceSearch';
+import { TauriCommand } from './commands';
+import type { TauriCommandArgs, TauriCommandResult } from './contracts';
+import { invokeTauri } from './invoke';
 
-type HistoryDraftTransportHandle = TauriCommandResult<
-  typeof TauriCommand.history.createLiveDraft
->;
-type CoreHistorySaveRecordingRequest = TauriCommandArgs<
-  typeof TauriCommand.history.saveRecording
->;
+type HistoryDraftTransportHandle = TauriCommandResult<typeof TauriCommand.history.createLiveDraft>;
+type CoreHistorySaveRecordingRequest = TauriCommandArgs<typeof TauriCommand.history.saveRecording>;
 type CoreHistorySaveImportedFileRequest = TauriCommandArgs<
   typeof TauriCommand.history.saveImportedFile
 >;
-type HistorySaveRecordingRequest = Omit<CoreHistorySaveRecordingRequest, "segments"> & {
+type HistorySaveRecordingRequest = Omit<CoreHistorySaveRecordingRequest, 'segments'> & {
   segments: TranscriptSegment[];
   projectId?: string | null;
 };
-type HistorySaveImportedFileRequest = Omit<CoreHistorySaveImportedFileRequest, "segments"> & {
+type HistorySaveImportedFileRequest = Omit<CoreHistorySaveImportedFileRequest, 'segments'> & {
   segments: TranscriptSegment[];
   projectId?: string | null;
 };
-type HistoryAudioCleanupRequest = TauriCommandArgs<
-  typeof TauriCommand.history.cleanupAudio
->;
+type HistoryAudioCleanupRequest = TauriCommandArgs<typeof TauriCommand.history.cleanupAudio>;
 
 function normalizeTranscriptSegment(segment: TranscriptSegment_Serialize): TranscriptSegment {
   return {
@@ -71,14 +59,11 @@ function normalizeTranscriptSegment(segment: TranscriptSegment_Serialize): Trans
     durations: segment.durations ?? undefined,
     translation: segment.translation ?? undefined,
     speaker: normalizeSpeakerTag(segment.speaker) ?? undefined,
-    speakerAttribution:
-      normalizeSpeakerAttribution(segment.speakerAttribution) ?? undefined,
+    speakerAttribution: normalizeSpeakerAttribution(segment.speakerAttribution) ?? undefined,
   };
 }
 
-function toTranscriptSegmentTransport(
-  segment: TranscriptSegment,
-): TranscriptSegment_Deserialize {
+function toTranscriptSegmentTransport(segment: TranscriptSegment): TranscriptSegment_Deserialize {
   return {
     id: segment.id,
     text: segment.text,
@@ -95,25 +80,19 @@ function toTranscriptSegmentTransport(
   };
 }
 
-function toTranscriptDiffRowTransport(
-  row: TranscriptDiffRow,
-): TranscriptDiffRow_Deserialize {
+function toTranscriptDiffRowTransport(row: TranscriptDiffRow): TranscriptDiffRow_Deserialize {
   return {
     id: row.id,
     status: row.status,
-    snapshotSegment: row.snapshotSegment
-      ? toTranscriptSegmentTransport(row.snapshotSegment)
-      : null,
-    currentSegment: row.currentSegment
-      ? toTranscriptSegmentTransport(row.currentSegment)
-      : null,
+    snapshotSegment: row.snapshotSegment ? toTranscriptSegmentTransport(row.snapshotSegment) : null,
+    currentSegment: row.currentSegment ? toTranscriptSegmentTransport(row.currentSegment) : null,
     snapshotIndex: row.snapshotIndex,
     currentIndex: row.currentIndex,
   };
 }
 
 function toHistorySummaryPayloadTransport(
-  payload: HistorySummaryPayload,
+  payload: HistorySummaryPayload
 ): HistorySummaryPayload_Deserialize {
   return {
     activeTemplateId: payload.activeTemplateId,
@@ -127,20 +106,17 @@ function normalizeTranscriptDiffRow(row: TranscriptDiffRow_Serialize): Transcrip
     snapshotSegment: row.snapshotSegment
       ? normalizeTranscriptSegment(row.snapshotSegment)
       : undefined,
-    currentSegment: row.currentSegment
-      ? normalizeTranscriptSegment(row.currentSegment)
-      : undefined,
+    currentSegment: row.currentSegment ? normalizeTranscriptSegment(row.currentSegment) : undefined,
   };
 }
 
-export interface HistoryDraftHandle<TItem = HistoryItemRecord> extends Omit<
-  HistoryDraftTransportHandle,
-  "item"
-> {
+export interface HistoryDraftHandle<TItem = HistoryItemRecord>
+  extends Omit<HistoryDraftTransportHandle, 'item'> {
   item: TItem;
 }
 
-export type HistoryWorkspaceQueryScope = HistoryWorkspaceScope
+export type HistoryWorkspaceQueryScope =
+  | HistoryWorkspaceScope
   | { kind: 'inbox' }
   | { kind: 'project'; projectId: string };
 export type HistoryWorkspaceQueryRequest = Omit<CoreHistoryWorkspaceQueryRequest, 'scope'> & {
@@ -148,7 +124,7 @@ export type HistoryWorkspaceQueryRequest = Omit<CoreHistoryWorkspaceQueryRequest
 };
 export type HistoryWorkspaceQueryResult = Omit<
   CoreHistoryWorkspaceQueryResult,
-  "filteredItems" | "searchMatchByItemId" | "itemCounts"
+  'filteredItems' | 'searchMatchByItemId' | 'itemCounts'
 > & {
   filteredItems: HistoryItem[];
   searchMatchByItemId: Record<string, WorkspaceItemSearchMatch | null>;
@@ -173,7 +149,7 @@ export async function historyCreateLiveDraft(
   id: string | null,
   audioExtension: string,
   projectId: string | null,
-  icon: string | null,
+  icon: string | null
 ): Promise<HistoryDraftHandle> {
   return invokeTauri(TauriCommand.history.createLiveDraft, {
     id,
@@ -186,7 +162,7 @@ export async function historyCreateLiveDraft(
 export async function historyCompleteLiveDraft(
   historyId: string,
   segments: TranscriptSegment[],
-  duration: number,
+  duration: number
 ): Promise<HistoryItemRecord> {
   return invokeTauri(TauriCommand.history.completeLiveDraft, {
     historyId,
@@ -196,19 +172,29 @@ export async function historyCompleteLiveDraft(
 }
 
 export async function historySaveRecording(
-  request: HistorySaveRecordingRequest,
+  request: HistorySaveRecordingRequest
 ): Promise<HistoryItemRecord> {
   const { projectId, ...rest } = request;
-  if (projectId !== undefined) return historySaveRecordingToProject({ ...rest, projectId: projectId ?? null });
-  return invokeTauri(TauriCommand.history.saveRecording, { ...rest, projectId: null, segments: rest.segments.map(toTranscriptSegmentTransport) });
+  if (projectId !== undefined)
+    return historySaveRecordingToProject({ ...rest, projectId: projectId ?? null });
+  return invokeTauri(TauriCommand.history.saveRecording, {
+    ...rest,
+    projectId: null,
+    segments: rest.segments.map(toTranscriptSegmentTransport),
+  });
 }
 
 export async function historySaveImportedFile(
-  request: HistorySaveImportedFileRequest,
+  request: HistorySaveImportedFileRequest
 ): Promise<HistoryItemRecord> {
   const { projectId, ...rest } = request;
-  if (projectId !== undefined) return historySaveImportedFileToProject({ ...rest, projectId: projectId ?? null });
-  return invokeTauri(TauriCommand.history.saveImportedFile, { ...rest, projectId: null, segments: rest.segments.map(toTranscriptSegmentTransport) });
+  if (projectId !== undefined)
+    return historySaveImportedFileToProject({ ...rest, projectId: projectId ?? null });
+  return invokeTauri(TauriCommand.history.saveImportedFile, {
+    ...rest,
+    projectId: null,
+    segments: rest.segments.map(toTranscriptSegmentTransport),
+  });
 }
 
 export async function historyDeleteItems(ids: string[]): Promise<void> {
@@ -228,7 +214,7 @@ export async function historyPurgeItems(ids: string[]): Promise<void> {
 }
 
 export async function historyLoadTranscript(
-  historyId: string,
+  historyId: string
 ): Promise<TranscriptSegment[] | null> {
   const segments = await invokeTauri(TauriCommand.history.loadTranscript, { historyId });
   return segments?.map(normalizeTranscriptSegment) ?? null;
@@ -236,7 +222,7 @@ export async function historyLoadTranscript(
 
 export async function historyUpdateTranscript(
   historyId: string,
-  segments: TranscriptSegment[],
+  segments: TranscriptSegment[]
 ): Promise<HistoryItemRecord> {
   return invokeTauri(TauriCommand.history.updateTranscript, {
     historyId,
@@ -273,19 +259,19 @@ export async function historySaveImportedFileToProject(request: {
 }
 
 export type HistoryCommitTranscriptEditResult =
-  | { status: "unchanged" }
+  | { status: 'unchanged' }
   | {
-      status: "committed";
+      status: 'committed';
       item: HistoryItemRecord;
       snapshot: TranscriptSnapshotMetadata;
     }
-  | { status: "conflict"; currentSegments: TranscriptSegment[] };
+  | { status: 'conflict'; currentSegments: TranscriptSegment[] };
 
 export async function historyCommitTranscriptEdit(
   historyId: string,
   editSessionId: string,
   baseSegments: TranscriptSegment[],
-  editedSegments: TranscriptSegment[],
+  editedSegments: TranscriptSegment[]
 ): Promise<HistoryCommitTranscriptEditResult> {
   const result = await invokeTauri(TauriCommand.history.commitTranscriptEdit, {
     historyId,
@@ -293,9 +279,9 @@ export async function historyCommitTranscriptEdit(
     baseSegments: baseSegments.map(toTranscriptSegmentTransport),
     editedSegments: editedSegments.map(toTranscriptSegmentTransport),
   });
-  if (result.status === "conflict") {
+  if (result.status === 'conflict') {
     return {
-      status: "conflict",
+      status: 'conflict',
       currentSegments: result.current_segments.map(normalizeTranscriptSegment),
     };
   }
@@ -305,7 +291,7 @@ export async function historyCommitTranscriptEdit(
 export async function historyCreateTranscriptSnapshot(
   historyId: string,
   reason: TranscriptSnapshotReason,
-  segments: TranscriptSegment[],
+  segments: TranscriptSegment[]
 ): Promise<TranscriptSnapshotMetadata> {
   return invokeTauri(TauriCommand.history.createTranscriptSnapshot, {
     historyId,
@@ -315,7 +301,7 @@ export async function historyCreateTranscriptSnapshot(
 }
 
 export async function historyListTranscriptSnapshots(
-  historyId: string,
+  historyId: string
 ): Promise<TranscriptSnapshotMetadata[]> {
   return invokeTauri(TauriCommand.history.listTranscriptSnapshots, {
     historyId,
@@ -324,27 +310,25 @@ export async function historyListTranscriptSnapshots(
 
 export async function historyLoadTranscriptSnapshot(
   historyId: string,
-  snapshotId: string,
+  snapshotId: string
 ): Promise<TranscriptSnapshotRecord | null> {
   const record: TranscriptSnapshotRecord_Serialize | null = await invokeTauri(
     TauriCommand.history.loadTranscriptSnapshot,
-    { historyId, snapshotId },
+    { historyId, snapshotId }
   );
-  return record
-    ? { ...record, segments: record.segments.map(normalizeTranscriptSegment) }
-    : null;
+  return record ? { ...record, segments: record.segments.map(normalizeTranscriptSegment) } : null;
 }
 
 export async function historyBuildTranscriptDiff(
   snapshotSegments: TranscriptSegment[],
-  currentSegments: TranscriptSegment[],
+  currentSegments: TranscriptSegment[]
 ): Promise<{ rows: TranscriptDiffRow[]; changedCount: number }> {
   const result: TranscriptDiffResult_Serialize = await invokeTauri(
     TauriCommand.history.buildTranscriptDiff,
     {
       snapshotSegments: snapshotSegments.map(toTranscriptSegmentTransport),
       currentSegments: currentSegments.map(toTranscriptSegmentTransport),
-    },
+    }
   );
   return {
     ...result,
@@ -354,7 +338,7 @@ export async function historyBuildTranscriptDiff(
 
 export async function historyRestoreTranscriptDiffRows(
   rows: TranscriptDiffRow[],
-  selectedRowIds: Iterable<string>,
+  selectedRowIds: Iterable<string>
 ): Promise<TranscriptSegment[]> {
   const segments = await invokeTauri(TauriCommand.history.restoreTranscriptDiffRows, {
     rows: rows.map(toTranscriptDiffRowTransport),
@@ -365,7 +349,7 @@ export async function historyRestoreTranscriptDiffRows(
 
 export async function historyUpdateItemMeta(
   historyId: string,
-  updates: HistoryItemMetaPatch_Serialize,
+  updates: HistoryItemMetaPatch_Serialize
 ): Promise<void> {
   await invokeTauri(TauriCommand.history.updateItemMeta, {
     historyId,
@@ -375,7 +359,7 @@ export async function historyUpdateItemMeta(
 
 export async function historyUpdateProjectAssignments(
   ids: string[],
-  projectId: string | null,
+  projectId: string | null
 ): Promise<void> {
   await invokeTauri(TauriCommand.history.updateProjectAssignments, {
     ids,
@@ -385,7 +369,7 @@ export async function historyUpdateProjectAssignments(
 
 export async function historyReassignProject(
   currentProjectId: string,
-  nextProjectId: string | null,
+  nextProjectId: string | null
 ): Promise<void> {
   await invokeTauri(TauriCommand.history.reassignProject, {
     currentProjectId,
@@ -393,15 +377,13 @@ export async function historyReassignProject(
   });
 }
 
-export async function historyLoadSummary(
-  historyId: string,
-): Promise<HistorySummaryPayload | null> {
+export async function historyLoadSummary(historyId: string): Promise<HistorySummaryPayload | null> {
   return invokeTauri(TauriCommand.history.loadSummary, { historyId });
 }
 
 export async function historySaveSummary(
   historyId: string,
-  summaryPayload: HistorySummaryPayload,
+  summaryPayload: HistorySummaryPayload
 ): Promise<void> {
   await invokeTauri(TauriCommand.history.saveSummary, {
     historyId,
@@ -413,40 +395,38 @@ export async function historyDeleteSummary(historyId: string): Promise<void> {
   await invokeTauri(TauriCommand.history.deleteSummary, { historyId });
 }
 
-export async function historyResolveAudioPath(
-  historyId: string,
-): Promise<string | null> {
+export async function historyResolveAudioPath(historyId: string): Promise<string | null> {
   return invokeTauri(TauriCommand.history.resolveAudioPath, { historyId });
 }
 
 export async function historyPreviewAudioCleanup(
-  request: HistoryAudioCleanupRequest,
+  request: HistoryAudioCleanupRequest
 ): Promise<HistoryAudioCleanupReport> {
   return invokeTauri(TauriCommand.history.previewAudioCleanup, request);
 }
 
 export async function historyCleanupAudio(
-  request: HistoryAudioCleanupRequest,
+  request: HistoryAudioCleanupRequest
 ): Promise<HistoryAudioCleanupReport> {
   return invokeTauri(TauriCommand.history.cleanupAudio, request);
 }
 
 export async function historyQueryWorkspace(
-  request: HistoryWorkspaceQueryRequest,
+  request: HistoryWorkspaceQueryRequest
 ): Promise<HistoryWorkspaceQueryResult> {
   const result = await invokeTauri(
     TauriCommand.history.queryWorkspace,
-    request as CoreHistoryWorkspaceQueryRequest,
+    request as CoreHistoryWorkspaceQueryRequest
   );
   const searchMatchByItemId = Object.fromEntries(
     Object.entries(result.searchMatchByItemId).map(([itemId, match]) => {
       if (!match) return [itemId, null];
       const matchedField =
-        match.matchedField === "title" || match.matchedField === "previewText"
+        match.matchedField === 'title' || match.matchedField === 'previewText'
           ? match.matchedField
-          : "searchContent";
+          : 'searchContent';
       return [itemId, { ...match, matchedField } satisfies WorkspaceItemSearchMatch];
-    }),
+    })
   );
   return {
     ...result,

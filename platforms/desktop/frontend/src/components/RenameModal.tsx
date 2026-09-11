@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
-import { SparklesIcon, MicIcon, FileTextIcon } from './Icons';
-import { IconPicker } from './IconPicker';
-import { Modal } from './Modal';
+import type React from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FormField } from './FormField';
+import { IconPicker } from './IconPicker';
+import { FileTextIcon, MicIcon, SparklesIcon } from './Icons';
+import { Modal } from './Modal';
 
 interface RenameModalProps {
   isOpen: boolean;

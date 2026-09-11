@@ -1,21 +1,19 @@
-import React from 'react';
-import {
-  type DashboardTranslation,
-} from './formatters';
-import { joinClassNames } from './classNames';
-import {
-  CoverageBarChart,
-  DashboardSparkline,
-  MiniValueBarChart,
-  StackedDurationBarChart,
-  type DashboardChartPoint,
-  type DashboardChartTone,
-} from './charts';
+import type React from 'react';
 import type {
   DashboardLlmUsageBreakdown,
   DashboardSpeakerLeader,
   DashboardSpeakerStats,
 } from '../../../types/dashboard';
+import {
+  CoverageBarChart,
+  type DashboardChartPoint,
+  type DashboardChartTone,
+  DashboardSparkline,
+  MiniValueBarChart,
+  StackedDurationBarChart,
+} from './charts';
+import { joinClassNames } from './classNames';
+import type { DashboardTranslation } from './formatters';
 
 export function StatPill({ children }: { children: React.ReactNode }): React.JSX.Element {
   return <span className="settings-dashboard-stat-pill">{children}</span>;
@@ -36,7 +34,7 @@ export function StatusBadge({
     <div
       className={joinClassNames(
         'settings-dashboard-status-badge',
-        tone === 'warning' ? 'warning' : '',
+        tone === 'warning' ? 'warning' : ''
       )}
       data-testid={testId}
     >
@@ -78,7 +76,7 @@ export function KpiCard({
         variant,
         tone,
         compact ? 'compact' : '',
-        muted ? 'muted' : '',
+        muted ? 'muted' : ''
       )}
     >
       <div className="settings-dashboard-kpi-topline">
@@ -87,11 +85,7 @@ export function KpiCard({
       </div>
       <div className="settings-dashboard-kpi-value">{value}</div>
       {sparkline && sparkline.length > 0 && (
-        <DashboardSparkline
-          label={sparklineLabel || label}
-          points={sparkline}
-          tone={chartTone}
-        />
+        <DashboardSparkline label={sparklineLabel || label} points={sparkline} tone={chartTone} />
       )}
       {detail && <div className="settings-dashboard-kpi-detail">{detail}</div>}
     </div>
@@ -120,11 +114,7 @@ function CoverageMeter({
       <div className="settings-dashboard-note">
         {unitFormatter(numerator)} / {unitFormatter(denominator)}
       </div>
-      <CoverageBarChart
-        label={label}
-        value={coverage}
-        valueFormatter={() => coverageLabel}
-      />
+      <CoverageBarChart label={label} value={coverage} valueFormatter={() => coverageLabel} />
     </div>
   );
 }
@@ -142,15 +132,16 @@ function IdentifiedAnonymousDistribution({
   anonymousDurationDisplay: string;
   t: DashboardTranslation;
 }): React.JSX.Element {
-  const formatSplitDuration = (value: number): string => (
-    value === identifiedDuration ? identifiedDurationDisplay : anonymousDurationDisplay
-  );
+  const formatSplitDuration = (value: number): string =>
+    value === identifiedDuration ? identifiedDurationDisplay : anonymousDurationDisplay;
 
   return (
     <div className="settings-dashboard-distribution-panel">
       <div className="settings-dashboard-chart-header">
         <div className="settings-dashboard-subtitle">
-          {t('settings.dashboard.identified_vs_anonymous', { defaultValue: 'Identified vs Anonymous' })}
+          {t('settings.dashboard.identified_vs_anonymous', {
+            defaultValue: 'Identified vs Anonymous',
+          })}
         </div>
         <div className="settings-dashboard-note">
           {t('settings.dashboard.identified_vs_anonymous_hint', {
@@ -160,9 +151,15 @@ function IdentifiedAnonymousDistribution({
       </div>
       <div className="settings-dashboard-split-chart">
         <StackedDurationBarChart
-          label={t('settings.dashboard.identified_vs_anonymous', { defaultValue: 'Identified vs Anonymous' })}
-          identifiedLabel={t('settings.dashboard.identified_duration', { defaultValue: 'Identified duration' })}
-          anonymousLabel={t('settings.dashboard.anonymous_duration', { defaultValue: 'Anonymous duration' })}
+          label={t('settings.dashboard.identified_vs_anonymous', {
+            defaultValue: 'Identified vs Anonymous',
+          })}
+          identifiedLabel={t('settings.dashboard.identified_duration', {
+            defaultValue: 'Identified duration',
+          })}
+          anonymousLabel={t('settings.dashboard.anonymous_duration', {
+            defaultValue: 'Anonymous duration',
+          })}
           identifiedDuration={identifiedDuration}
           anonymousDuration={anonymousDuration}
           valueFormatter={formatSplitDuration}
@@ -171,13 +168,17 @@ function IdentifiedAnonymousDistribution({
       <div className="settings-dashboard-bar-list compact">
         <div className="settings-dashboard-bar-item">
           <div className="settings-dashboard-bar-label-row">
-            <span>{t('settings.dashboard.identified_duration', { defaultValue: 'Identified duration' })}</span>
+            <span>
+              {t('settings.dashboard.identified_duration', { defaultValue: 'Identified duration' })}
+            </span>
             <span>{identifiedDurationDisplay}</span>
           </div>
         </div>
         <div className="settings-dashboard-bar-item">
           <div className="settings-dashboard-bar-label-row">
-            <span>{t('settings.dashboard.anonymous_duration', { defaultValue: 'Anonymous duration' })}</span>
+            <span>
+              {t('settings.dashboard.anonymous_duration', { defaultValue: 'Anonymous duration' })}
+            </span>
             <span>{anonymousDurationDisplay}</span>
           </div>
         </div>
@@ -198,12 +199,18 @@ export function SpeakerOverviewCard({
   if (!speakers) {
     return (
       <div
-        className={joinClassNames('settings-dashboard-chart-card', 'settings-dashboard-overview-card', 'muted')}
+        className={joinClassNames(
+          'settings-dashboard-chart-card',
+          'settings-dashboard-overview-card',
+          'muted'
+        )}
         data-testid="dashboard-speaker-overview-card"
       >
         <div className="settings-dashboard-chart-header">
           <div className="settings-dashboard-subtitle">
-            {t('settings.dashboard.coverage_and_attribution', { defaultValue: 'Coverage & Attribution' })}
+            {t('settings.dashboard.coverage_and_attribution', {
+              defaultValue: 'Coverage & Attribution',
+            })}
           </div>
           {statusMessage && <div className="settings-dashboard-note">{statusMessage}</div>}
         </div>
@@ -217,14 +224,20 @@ export function SpeakerOverviewCard({
   }
 
   return (
-    <div className="settings-dashboard-chart-card settings-dashboard-overview-card" data-testid="dashboard-speaker-overview-card">
+    <div
+      className="settings-dashboard-chart-card settings-dashboard-overview-card"
+      data-testid="dashboard-speaker-overview-card"
+    >
       <div className="settings-dashboard-chart-header">
         <div className="settings-dashboard-subtitle">
-          {t('settings.dashboard.coverage_and_attribution', { defaultValue: 'Coverage & Attribution' })}
+          {t('settings.dashboard.coverage_and_attribution', {
+            defaultValue: 'Coverage & Attribution',
+          })}
         </div>
         <div className="settings-dashboard-note">
           {t('settings.dashboard.coverage_summary', {
-            defaultValue: '{{segmentCoverage}} segment coverage · {{durationCoverage}} duration coverage',
+            defaultValue:
+              '{{segmentCoverage}} segment coverage · {{durationCoverage}} duration coverage',
             segmentCoverage: speakers.segmentCoverageLabel,
             durationCoverage: speakers.durationCoverageLabel,
           })}
@@ -232,24 +245,32 @@ export function SpeakerOverviewCard({
       </div>
       <div className="settings-dashboard-coverage-grid">
         <CoverageMeter
-          label={t('settings.dashboard.segment_coverage', { defaultValue: 'Speaker-Tagged Segments' })}
+          label={t('settings.dashboard.segment_coverage', {
+            defaultValue: 'Speaker-Tagged Segments',
+          })}
           numerator={speakers.speakerTaggedSegmentCount}
           denominator={speakers.totalSegmentCount}
           coverage={speakers.segmentCoverageRatio}
           coverageLabel={speakers.segmentCoverageLabel}
-          unitFormatter={(value) => value === speakers.speakerTaggedSegmentCount
-            ? speakers.speakerTaggedSegmentCountDisplay
-            : speakers.totalSegmentCountDisplay}
+          unitFormatter={(value) =>
+            value === speakers.speakerTaggedSegmentCount
+              ? speakers.speakerTaggedSegmentCountDisplay
+              : speakers.totalSegmentCountDisplay
+          }
         />
         <CoverageMeter
-          label={t('settings.dashboard.duration_coverage', { defaultValue: 'Speaker-Tagged Duration' })}
+          label={t('settings.dashboard.duration_coverage', {
+            defaultValue: 'Speaker-Tagged Duration',
+          })}
           numerator={speakers.speakerAttributedDuration}
           denominator={speakers.totalSegmentDuration}
           coverage={speakers.durationCoverageRatio}
           coverageLabel={speakers.durationCoverageLabel}
-          unitFormatter={(value) => value === speakers.speakerAttributedDuration
-            ? speakers.speakerAttributedDurationDisplay
-            : speakers.totalSegmentDurationDisplay}
+          unitFormatter={(value) =>
+            value === speakers.speakerAttributedDuration
+              ? speakers.speakerAttributedDurationDisplay
+              : speakers.totalSegmentDurationDisplay
+          }
         />
       </div>
       <IdentifiedAnonymousDistribution
@@ -276,7 +297,8 @@ function RankedSpeakers({
     return (
       <div className="settings-dashboard-empty-inline" data-testid="dashboard-top-speakers-empty">
         {t('settings.dashboard.top_speakers_empty', {
-          defaultValue: 'No identified speakers yet. Anonymous coverage still appears above when available.',
+          defaultValue:
+            'No identified speakers yet. Anonymous coverage still appears above when available.',
         })}
       </div>
     );
@@ -323,16 +345,25 @@ export function SpeakerRankingCard({
   statusMessage?: string | null;
 }): React.JSX.Element {
   return (
-    <div className={joinClassNames('settings-dashboard-chart-card', 'settings-dashboard-ranking-card', !speakers ? 'muted' : '')}>
+    <div
+      className={joinClassNames(
+        'settings-dashboard-chart-card',
+        'settings-dashboard-ranking-card',
+        !speakers ? 'muted' : ''
+      )}
+    >
       <div className="settings-dashboard-chart-header">
         <div className="settings-dashboard-subtitle">
-          {t('settings.dashboard.top_identified_speakers', { defaultValue: 'Top Identified Speakers' })}
+          {t('settings.dashboard.top_identified_speakers', {
+            defaultValue: 'Top Identified Speakers',
+          })}
         </div>
         <div className="settings-dashboard-note">
           {speakers
             ? t('settings.dashboard.top_identified_speakers_hint', {
-              defaultValue: 'Ranked by speaker-attributed duration, with segment and item counts alongside.',
-            })
+                defaultValue:
+                  'Ranked by speaker-attributed duration, with segment and item counts alongside.',
+              })
             : statusMessage}
         </div>
       </div>

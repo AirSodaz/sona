@@ -1,11 +1,7 @@
-import {
-  isRegistered,
-  register,
-  unregister,
-} from '../tauri/platform/globalShortcut';
 import { useVoiceTypingRuntimeStore } from '../../stores/voiceTypingRuntimeStore';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { logger } from '../../utils/logger';
+import { isRegistered, register, unregister } from '../tauri/platform/globalShortcut';
 
 export type VoiceTypingMode = 'hold' | 'toggle';
 
@@ -83,10 +79,9 @@ export class VoiceTypingShortcutController {
       });
     } catch (error) {
       logger.error('[VoiceTypingService] Failed to update voice typing shortcut:', error);
-      useVoiceTypingRuntimeStore.getState().setShortcutRegistrationStatus(
-        'error',
-        extractErrorMessage(error)
-      );
+      useVoiceTypingRuntimeStore
+        .getState()
+        .setShortcutRegistrationStatus('error', extractErrorMessage(error));
     }
   }
 

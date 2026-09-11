@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { SettingsSyncTab } from '../SettingsSyncTab';
-import { useSyncStatusStore } from '../../../stores/syncStatusStore';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, useConfigStore } from '../../../stores/configStore';
+import { useSyncStatusStore } from '../../../stores/syncStatusStore';
 import { DISABLED_SYNC_STATUS, type SyncStatusSnapshot } from '../../../types/sync';
+import { SettingsSyncTab } from '../SettingsSyncTab';
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string } & Record<string, unknown>) =>
@@ -79,7 +80,9 @@ describe('SettingsSyncTab', () => {
   it('renders switch off by default and shows disabled notice card', () => {
     render(<SettingsSyncTab isVisible={true} />);
     expect(screen.getAllByText(/Cloud Sync|云同步/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/Cloud sync is currently turned off|云同步功能当前已关闭/i)).toBeDefined();
+    expect(
+      screen.getByText(/Cloud sync is currently turned off|云同步功能当前已关闭/i)
+    ).toBeDefined();
 
     // Toggle switch
     const switchEl = screen.getByRole('switch');
@@ -100,7 +103,9 @@ describe('SettingsSyncTab', () => {
 
     expect(screen.getByLabelText(/Server URL|服务器地址/i)).toBeDefined();
     expect(screen.getByLabelText(/^Master password$|^主密码$/i)).toBeDefined();
-    expect(screen.getByRole('button', { name: /Save & Enable Sync|保存并开启同步/i })).toBeDefined();
+    expect(
+      screen.getByRole('button', { name: /Save & Enable Sync|保存并开启同步/i })
+    ).toBeDefined();
     expect(screen.getAllByText(/Nutstore|坚果云/i).length).toBeGreaterThanOrEqual(1);
   });
   it('renders status overview and security sections when connected', () => {

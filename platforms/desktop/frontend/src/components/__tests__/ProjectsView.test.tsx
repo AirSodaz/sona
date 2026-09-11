@@ -1,26 +1,25 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ReactElement } from 'react';
 import {
   act,
   fireEvent,
-  render as testingLibraryRender,
   screen,
+  render as testingLibraryRender,
   waitFor,
 } from '@testing-library/react';
-import { ProjectsView } from '../ProjectsView';
-import { ContextMenuProvider } from '../context-menu/ContextMenuProvider';
-import { ProjectsResults } from '../projects/ProjectsResults';
+import type { ReactElement } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import { ContextMenuProvider } from '../context-menu/ContextMenuProvider';
+import { ProjectsView } from '../ProjectsView';
+import { ProjectsResults } from '../projects/ProjectsResults';
 
 window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
-const render = (ui: ReactElement) => testingLibraryRender(
-  <ContextMenuProvider>{ui}</ContextMenuProvider>,
-);
+const render = (ui: ReactElement) =>
+  testingLibraryRender(<ContextMenuProvider>{ui}</ContextMenuProvider>);
 const virtuosoScrollToIndexMock = vi.hoisted(() => vi.fn());
 const virtuosoGridScrollToIndexMock = vi.hoisted(() => vi.fn());
 const workspaceQueryBackendMock = vi.hoisted(() => ({
@@ -215,9 +214,7 @@ vi.mock('../history/HistoryItem', () => ({
       {searchSnippet?.text && <span>{`Snippet ${searchSnippet.text}`}</span>}
       {isSelected && <span>{`Active ${item.id}`}</span>}
       {onRename && !isSelectionMode && (
-        <button onClick={() => onRename(item.id)}>
-          {`Rename ${item.title}`}
-        </button>
+        <button onClick={() => onRename(item.id)}>{`Rename ${item.title}`}</button>
       )}
       {isSelectionMode && (
         <button onClick={() => onToggleSelection?.(item.id)}>
@@ -231,59 +228,51 @@ vi.mock('../history/HistoryItem', () => ({
 vi.mock('react-virtuoso', async () => {
   const React = await import('react');
   const renderLimit = 20;
-  const Virtuoso = React.forwardRef(({
-    className,
-    components,
-    context,
-    data = [],
-    itemContent,
-    onScroll,
-  }: any, ref) => {
-    React.useImperativeHandle(ref, () => ({
-      scrollToIndex: virtuosoScrollToIndexMock,
-      scrollTo: vi.fn(),
-      scrollBy: vi.fn(),
-      getState: vi.fn(),
-    }));
+  const Virtuoso = React.forwardRef(
+    ({ className, components, context, data = [], itemContent, onScroll }: any, ref) => {
+      React.useImperativeHandle(ref, () => ({
+        scrollToIndex: virtuosoScrollToIndexMock,
+        scrollTo: vi.fn(),
+        scrollBy: vi.fn(),
+        getState: vi.fn(),
+      }));
 
-    const Header = components?.Header;
-    const Footer = components?.Footer;
-    const List = components?.List;
-    const items = data.slice(0, renderLimit).map((item: any, index: number) => itemContent(index, item, context));
-    return (
-      <div className={className} onScroll={onScroll} data-testid="projects-virtuoso-list">
-        {Header && <Header context={context} />}
-        {List ? <List context={context}>{items}</List> : items}
-        {Footer && <Footer context={context} />}
-      </div>
-    );
-  });
-  const VirtuosoGrid = React.forwardRef(({
-    className,
-    components,
-    data = [],
-    itemContent,
-    listClassName,
-    onScroll,
-  }: any, ref) => {
-    React.useImperativeHandle(ref, () => ({
-      scrollToIndex: virtuosoGridScrollToIndexMock,
-      scrollTo: vi.fn(),
-      scrollBy: vi.fn(),
-    }));
-
-    const Header = components?.Header;
-    const Footer = components?.Footer;
-    return (
-      <div className={className} onScroll={onScroll} data-testid="projects-virtuoso-grid">
-        {Header && <Header />}
-        <div className={listClassName}>
-          {data.slice(0, renderLimit).map((item: any, index: number) => itemContent(index, item))}
+      const Header = components?.Header;
+      const Footer = components?.Footer;
+      const List = components?.List;
+      const items = data
+        .slice(0, renderLimit)
+        .map((item: any, index: number) => itemContent(index, item, context));
+      return (
+        <div className={className} onScroll={onScroll} data-testid="projects-virtuoso-list">
+          {Header && <Header context={context} />}
+          {List ? <List context={context}>{items}</List> : items}
+          {Footer && <Footer context={context} />}
         </div>
-        {Footer && <Footer />}
-      </div>
-    );
-  });
+      );
+    }
+  );
+  const VirtuosoGrid = React.forwardRef(
+    ({ className, components, data = [], itemContent, listClassName, onScroll }: any, ref) => {
+      React.useImperativeHandle(ref, () => ({
+        scrollToIndex: virtuosoGridScrollToIndexMock,
+        scrollTo: vi.fn(),
+        scrollBy: vi.fn(),
+      }));
+
+      const Header = components?.Header;
+      const Footer = components?.Footer;
+      return (
+        <div className={className} onScroll={onScroll} data-testid="projects-virtuoso-grid">
+          {Header && <Header />}
+          <div className={listClassName}>
+            {data.slice(0, renderLimit).map((item: any, index: number) => itemContent(index, item))}
+          </div>
+          {Footer && <Footer />}
+        </div>
+      );
+    }
+  );
 
   return { Virtuoso, VirtuosoGrid };
 });
@@ -292,7 +281,9 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: any) => {
       if (typeof options?.defaultValue === 'string') {
-        return options.defaultValue.replace(/\{\{(\w+)\}\}/g, (_: string, variable: string) => String(options?.[variable] ?? ''));
+        return options.defaultValue.replace(/\{\{(\w+)\}\}/g, (_: string, variable: string) =>
+          String(options?.[variable] ?? '')
+        );
       }
       return key;
     },
@@ -307,7 +298,9 @@ describe('ProjectsView', () => {
   const getButtonByContent = (label: string) => {
     const button = screen
       .getAllByRole('button')
-      .find((candidate) => candidate.tagName === 'BUTTON' && candidate.textContent?.includes(label));
+      .find(
+        (candidate) => candidate.tagName === 'BUTTON' && candidate.textContent?.includes(label)
+      );
     expect(button).not.toBeNull();
     return button as HTMLButtonElement;
   };
@@ -316,7 +309,8 @@ describe('ProjectsView', () => {
 
   const getMainTitleIcon = () => document.querySelector('.projects-main-title-icon');
 
-  const getDetailPlaceholder = () => document.querySelector('.projects-detail-pane[data-projects-detail-placeholder="true"]');
+  const getDetailPlaceholder = () =>
+    document.querySelector('.projects-detail-pane[data-projects-detail-placeholder="true"]');
 
   const selectDropdownOption = (ariaLabel: string, optionLabel: string) => {
     fireEvent.click(screen.getByRole('button', { name: ariaLabel }));
@@ -346,7 +340,7 @@ describe('ProjectsView', () => {
     });
   };
 
-  const createHistoryItems = (count: number, projectId: string | null = null) => (
+  const createHistoryItems = (count: number, projectId: string | null = null) =>
     Array.from({ length: count }, (_, index) => ({
       id: `hist-${index}`,
       title: `History ${index}`,
@@ -357,8 +351,7 @@ describe('ProjectsView', () => {
       previewText: `Preview ${index}`,
       type: 'recording',
       projectId,
-    }))
-  );
+    }));
 
   const summarizeWorkspaceItems = (items: any[]) => ({
     totalItems: items.length,
@@ -401,7 +394,7 @@ describe('ProjectsView', () => {
     return {
       filteredItems,
       searchMatchByItemId: Object.fromEntries(
-        filteredItems.map((item) => [item.id, searchMatchByItemId[item.id] ?? null]),
+        filteredItems.map((item) => [item.id, searchMatchByItemId[item.id] ?? null])
       ),
       filteredItemCount: filteredItems.length,
       hasMore: false,
@@ -590,11 +583,13 @@ describe('ProjectsView', () => {
     act(() => {
       const currentItem = useHistoryStore.getState().items[0];
       useHistoryStore.setState({
-        items: [{
-          ...currentItem,
-          status: 'draft',
-          draftSource: 'live_record',
-        }],
+        items: [
+          {
+            ...currentItem,
+            status: 'draft',
+            draftSource: 'live_record',
+          },
+        ],
       } as any);
       useTranscriptStore.setState({
         sourceHistoryId: 'hist-inbox',
@@ -702,11 +697,13 @@ describe('ProjectsView', () => {
     act(() => {
       const currentItem = useHistoryStore.getState().items[0];
       useHistoryStore.setState({
-        items: [{
-          ...currentItem,
-          status: 'draft',
-          draftSource: 'live_record',
-        }],
+        items: [
+          {
+            ...currentItem,
+            status: 'draft',
+            draftSource: 'live_record',
+          },
+        ],
       } as any);
       useTranscriptStore.setState({
         sourceHistoryId: 'hist-inbox',
@@ -729,19 +726,21 @@ describe('ProjectsView', () => {
 
     act(() => {
       useHistoryStore.setState({
-        items: [{
-          id: 'hist-live',
-          title: 'Live Draft',
-          timestamp: Date.now(),
-          duration: 12,
-          audioPath: 'live.wav',
-          transcriptPath: 'hist-live.json',
-          previewText: 'Live preview',
-          type: 'recording',
-          projectId: 'project-1',
-          status: 'draft',
-          draftSource: 'live_record',
-        }],
+        items: [
+          {
+            id: 'hist-live',
+            title: 'Live Draft',
+            timestamp: Date.now(),
+            duration: 12,
+            audioPath: 'live.wav',
+            transcriptPath: 'hist-live.json',
+            previewText: 'Live preview',
+            type: 'recording',
+            projectId: 'project-1',
+            status: 'draft',
+            draftSource: 'live_record',
+          },
+        ],
       } as any);
       useTranscriptStore.setState({
         sourceHistoryId: 'hist-live',
@@ -807,8 +806,12 @@ describe('ProjectsView', () => {
     });
     fireEvent.keyDown(projectButton, { key: 'F10', shiftKey: true });
 
-    expect((screen.getByRole('menuitem', { name: 'Open' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('menuitem', { name: 'Tag Settings' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('menuitem', { name: 'Open' }) as HTMLButtonElement).disabled).toBe(
+      true
+    );
+    expect(
+      (screen.getByRole('menuitem', { name: 'Tag Settings' }) as HTMLButtonElement).disabled
+    ).toBe(false);
   });
 
   it('disables other project actions during an active live draft', async () => {
@@ -840,39 +843,43 @@ describe('ProjectsView', () => {
     await waitForInitialHistoryLoad();
 
     fireEvent.contextMenu(getButtonByContent('Alpha'), { clientX: 80, clientY: 120 });
-    expect((screen.getByRole('menuitem', { name: 'Open' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('menuitem', { name: 'Tag Settings' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('menuitem', { name: 'Open' }) as HTMLButtonElement).disabled).toBe(
+      true
+    );
+    expect(
+      (screen.getByRole('menuitem', { name: 'Tag Settings' }) as HTMLButtonElement).disabled
+    ).toBe(true);
   });
 
   it('locks only the current live draft actions when older live drafts remain', async () => {
     const liveDrafts = [
-        {
-          id: 'hist-old-draft',
-          title: 'Old Live Draft',
-          timestamp: Date.now() - 1000,
-          duration: 8,
-          audioPath: 'old-live.wav',
-          transcriptPath: 'hist-old-draft.json',
-          previewText: 'Old draft',
-          type: 'recording',
-          projectId: null,
-          status: 'draft',
-          draftSource: 'live_record',
-        },
-        {
-          id: 'hist-current-draft',
-          title: 'Current Live Draft',
-          timestamp: Date.now(),
-          duration: 4,
-          audioPath: 'current-live.wav',
-          transcriptPath: 'hist-current-draft.json',
-          previewText: 'Current draft',
-          type: 'recording',
-          projectId: null,
-          status: 'draft',
-          draftSource: 'live_record',
-        },
-      ] as any;
+      {
+        id: 'hist-old-draft',
+        title: 'Old Live Draft',
+        timestamp: Date.now() - 1000,
+        duration: 8,
+        audioPath: 'old-live.wav',
+        transcriptPath: 'hist-old-draft.json',
+        previewText: 'Old draft',
+        type: 'recording',
+        projectId: null,
+        status: 'draft',
+        draftSource: 'live_record',
+      },
+      {
+        id: 'hist-current-draft',
+        title: 'Current Live Draft',
+        timestamp: Date.now(),
+        duration: 4,
+        audioPath: 'current-live.wav',
+        transcriptPath: 'hist-current-draft.json',
+        previewText: 'Current draft',
+        type: 'recording',
+        projectId: null,
+        status: 'draft',
+        draftSource: 'live_record',
+      },
+    ] as any;
 
     render(
       <ProjectsResults
@@ -904,7 +911,7 @@ describe('ProjectsView', () => {
         selectedIds={[]}
         t={(_key, options) => String(options?.defaultValue ?? '')}
         viewMode="list"
-      />,
+      />
     );
 
     const oldDraft = screen.getByTestId('history-item-hist-old-draft');
@@ -946,11 +953,12 @@ describe('ProjectsView', () => {
     render(<ProjectsView isActive={false} />);
     await waitForInitialHistoryLoad();
 
-    expect(document.querySelector('.projects-workbench[data-projects-inactive="true"]')).not.toBeNull();
+    expect(
+      document.querySelector('.projects-workbench[data-projects-inactive="true"]')
+    ).not.toBeNull();
     expect(screen.queryByText('TranscriptEditor')).toBeNull();
     expect(screen.queryByTestId('history-item-hist-0')).toBeNull();
   });
-
 
   it('hides repeated project badges outside the All Items scope', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
@@ -1004,10 +1012,12 @@ describe('ProjectsView', () => {
       fireEvent.keyDown(input, { key: 'ArrowDown' });
     }
 
-    expect(virtuosoScrollToIndexMock).toHaveBeenLastCalledWith(expect.objectContaining({
-      align: 'center',
-      index: 24,
-    }));
+    expect(virtuosoScrollToIndexMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        align: 'center',
+        index: 24,
+      })
+    );
   });
 
   it('renders scope icons in the rail and main header consistently', async () => {
@@ -1096,7 +1106,7 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       expect(updateProjectSpy).toHaveBeenCalledWith(
         'project-1',
-        expect.objectContaining({ name: 'Alpha Updated', icon: '🧪' }),
+        expect.objectContaining({ name: 'Alpha Updated', icon: '🧪' })
       );
     });
 
@@ -1124,7 +1134,7 @@ describe('ProjectsView', () => {
         'project-1',
         expect.objectContaining({
           description: 'Metadata only',
-        }),
+        })
       );
     });
     expect(updateProjectSpy.mock.calls[0]?.[1]).not.toHaveProperty('defaults');
@@ -1132,9 +1142,7 @@ describe('ProjectsView', () => {
 
   it('guards switching to Inbox when project settings drafts are dirty', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
-    const confirmSpy = vi.fn()
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
+    const confirmSpy = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     useDialogStore.setState({
       ...useDialogStore.getState(),
       confirm: confirmSpy,
@@ -1166,9 +1174,7 @@ describe('ProjectsView', () => {
 
   it('guards closing project settings when icon-only edits are dirty', async () => {
     useProjectStore.setState({ activeProjectId: 'project-1' });
-    const confirmSpy = vi.fn()
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
+    const confirmSpy = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     useDialogStore.setState({
       ...useDialogStore.getState(),
       confirm: confirmSpy,
@@ -1285,7 +1291,9 @@ describe('ProjectsView', () => {
     screen.getByText('Project inbox');
     screen.getByRole('textbox', { name: 'Search All Items...' });
     expect(screen.getByTestId('projects-summary-total-items').textContent).toBe('2');
-    expect(screen.getByTestId('projects-summary-type-split').textContent).toBe('1 recordings / 1 imports');
+    expect(screen.getByTestId('projects-summary-type-split').textContent).toBe(
+      '1 recordings / 1 imports'
+    );
     expect(screen.queryByTestId('projects-results-count')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Tag Settings' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Start Live Record' })).toBeNull();
@@ -1383,11 +1391,13 @@ describe('ProjectsView', () => {
     await waitForInitialHistoryLoad();
 
     await act(async () => {
-      useTranscriptStore.getState().loadTranscript(
-        [{ id: 'seg-1', start: 0, end: 1, text: 'Hello', isFinal: true }],
-        'hist-1',
-        'Project Item',
-      );
+      useTranscriptStore
+        .getState()
+        .loadTranscript(
+          [{ id: 'seg-1', start: 0, end: 1, text: 'Hello', isFinal: true }],
+          'hist-1',
+          'Project Item'
+        );
       useTranscriptStore.getState().setAudioUrl('asset:///audio.wav');
     });
 
@@ -1478,7 +1488,10 @@ describe('ProjectsView', () => {
       expect(screen.queryByRole('menu')).toBeNull();
     });
 
-    fireEvent.contextMenu(screen.getByTestId('history-item-hist-trash'), { clientX: 160, clientY: 220 });
+    fireEvent.contextMenu(screen.getByTestId('history-item-hist-trash'), {
+      clientX: 160,
+      clientY: 220,
+    });
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete Permanently' }));
     await waitFor(() => {
       expect(historyService.purgeRecordings).toHaveBeenCalledWith(['hist-trash']);
@@ -1580,7 +1593,7 @@ describe('ProjectsView', () => {
       {
         id: 'hist-recording',
         title: 'Client Call',
-        timestamp: now - (2 * 24 * 60 * 60 * 1000),
+        timestamp: now - 2 * 24 * 60 * 60 * 1000,
         duration: 180,
         audioPath: 'audio-1.wav',
         transcriptPath: 'hist-recording.json',
@@ -1592,7 +1605,7 @@ describe('ProjectsView', () => {
       {
         id: 'hist-batch-old',
         title: 'Imported Deck',
-        timestamp: now - (10 * 24 * 60 * 60 * 1000),
+        timestamp: now - 10 * 24 * 60 * 60 * 1000,
         duration: 320,
         audioPath: 'audio-2.wav',
         transcriptPath: 'hist-batch-old.json',
@@ -1604,7 +1617,7 @@ describe('ProjectsView', () => {
       {
         id: 'hist-batch-recent',
         title: 'Workshop Import',
-        timestamp: now - (24 * 60 * 60 * 1000),
+        timestamp: now - 24 * 60 * 60 * 1000,
         duration: 240,
         audioPath: 'audio-3.wav',
         transcriptPath: 'hist-batch-recent.json',
@@ -1699,7 +1712,9 @@ describe('ProjectsView', () => {
 
     selectDropdownOption('Sort items', 'Title A-Z');
     await waitFor(() => {
-      const orderedItems = screen.getAllByTestId(/history-item-/).map((item) => item.textContent || '');
+      const orderedItems = screen
+        .getAllByTestId(/history-item-/)
+        .map((item) => item.textContent || '');
       expect(orderedItems[0]).toContain('Workshop Import');
     });
   });
@@ -1710,7 +1725,7 @@ describe('ProjectsView', () => {
       {
         id: 'hist-recording',
         title: 'Client Call',
-        timestamp: Date.now() - (2 * 24 * 60 * 60 * 1000),
+        timestamp: Date.now() - 2 * 24 * 60 * 60 * 1000,
         duration: 180,
         audioPath: 'audio-1.wav',
         transcriptPath: 'hist-recording.json',
@@ -1722,7 +1737,7 @@ describe('ProjectsView', () => {
       {
         id: 'hist-batch',
         title: 'Workshop Import',
-        timestamp: Date.now() - (24 * 60 * 60 * 1000),
+        timestamp: Date.now() - 24 * 60 * 60 * 1000,
         duration: 240,
         audioPath: 'audio-2.wav',
         transcriptPath: 'hist-batch.json',
@@ -1733,11 +1748,12 @@ describe('ProjectsView', () => {
       },
     ];
     useHistoryStore.setState({ items } as any);
-    workspaceQueryBackendMock.impl = ({ filterType }) => buildWorkspaceQueryResult({
-      filteredItems: filterType === 'batch' ? [items[1]] : items,
-      scopedItems: items,
-      allItems: items,
-    });
+    workspaceQueryBackendMock.impl = ({ filterType }) =>
+      buildWorkspaceQueryResult({
+        filteredItems: filterType === 'batch' ? [items[1]] : items,
+        scopedItems: items,
+        allItems: items,
+      });
 
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
@@ -1852,10 +1868,14 @@ describe('ProjectsView', () => {
     });
     fireEvent.keyDown(input, { key: 'ArrowDown' });
 
-    expect(screen.getByTestId('history-item-hist-1').getAttribute('data-keyboard-active')).toBe('true');
+    expect(screen.getByTestId('history-item-hist-1').getAttribute('data-keyboard-active')).toBe(
+      'true'
+    );
 
     fireEvent.keyDown(input, { key: 'ArrowDown' });
-    expect(screen.getByTestId('history-item-hist-2').getAttribute('data-keyboard-active')).toBe('true');
+    expect(screen.getByTestId('history-item-hist-2').getAttribute('data-keyboard-active')).toBe(
+      'true'
+    );
 
     fireEvent.keyDown(input, { key: 'Enter' });
 
@@ -1920,9 +1940,11 @@ describe('ProjectsView', () => {
     });
 
     await act(async () => {
-      await useHistoryStore.getState().updateTranscript('hist-1', [
-        { id: 'seg-1', start: 0, end: 1, text: 'Fresh roadmap notes', isFinal: true },
-      ]);
+      await useHistoryStore
+        .getState()
+        .updateTranscript('hist-1', [
+          { id: 'seg-1', start: 0, end: 1, text: 'Fresh roadmap notes', isFinal: true },
+        ]);
     });
 
     await waitFor(() => {
@@ -1962,7 +1984,9 @@ describe('ProjectsView', () => {
     });
     fireEvent.keyDown(input, { key: 'ArrowDown' });
 
-    expect(screen.getByTestId('history-item-hist-1').getAttribute('data-keyboard-active')).toBe('false');
+    expect(screen.getByTestId('history-item-hist-1').getAttribute('data-keyboard-active')).toBe(
+      'false'
+    );
   });
 
   it('clears the query on first Escape and blurs the search box on second Escape', async () => {
@@ -2028,11 +2052,12 @@ describe('ProjectsView', () => {
       },
     ];
     useHistoryStore.setState({ items } as any);
-    workspaceQueryBackendMock.impl = ({ query }) => buildWorkspaceQueryResult({
-      filteredItems: query === 'missing item' ? [] : items,
-      scopedItems: items,
-      allItems: items,
-    });
+    workspaceQueryBackendMock.impl = ({ query }) =>
+      buildWorkspaceQueryResult({
+        filteredItems: query === 'missing item' ? [] : items,
+        scopedItems: items,
+        allItems: items,
+      });
 
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
@@ -2047,7 +2072,9 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       screen.getByText('No matching items');
       expect(screen.queryByText('No items in this workspace yet.')).toBeNull();
-      expect(screen.getByRole('button', { name: 'Assign Project' }).hasAttribute('disabled')).toBe(true);
+      expect(screen.getByRole('button', { name: 'Assign Project' }).hasAttribute('disabled')).toBe(
+        true
+      );
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));

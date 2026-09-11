@@ -21,8 +21,8 @@ describe('onboarding utils', () => {
           streamingModelPath: '/models/live',
           batchModelPath: '/models/batch',
         }),
-        null,
-      ),
+        null
+      )
     ).toEqual({
       version: 1,
       status: 'completed',
@@ -44,8 +44,8 @@ describe('onboarding utils', () => {
           streamingModelPath: '/models/live',
           batchModelPath: '/models/batch',
         }),
-        null,
-      ),
+        null
+      )
     ).toEqual({
       version: 1,
       status: 'completed',
@@ -58,7 +58,7 @@ describe('onboarding utils', () => {
       shouldShowOnboardingReminder({
         streamingModelPath: '/models/live',
         batchModelPath: '/models/batch',
-      }),
+      })
     ).toBe(false);
   });
 
@@ -70,8 +70,8 @@ describe('onboarding utils', () => {
           version: 1,
           status: 'deferred',
           reminderDismissedAt: '2026-03-27T00:00:00.000Z',
-        },
-      ),
+        }
+      )
     ).toBe(false);
   });
 
@@ -84,8 +84,8 @@ describe('onboarding utils', () => {
           reminderDismissedAt: '2026-03-27T00:00:00.000Z',
         }),
         null,
-        null,
-      ),
+        null
+      )
     ).toEqual({
       version: 1,
       status: 'deferred',
@@ -98,28 +98,26 @@ describe('onboarding utils', () => {
       getResumeOnboardingStep(
         { streamingModelPath: '/models/live', batchModelPath: '/models/batch' },
         'startup',
-        { version: 1, status: 'deferred' },
-      ),
+        { version: 1, status: 'deferred' }
+      )
     ).toBe('microphone');
   });
 
   it('starts at microphone for brand new users', () => {
     expect(
-      getResumeOnboardingStep(
-        { streamingModelPath: '', batchModelPath: '' },
-        'startup',
-        { version: 1, status: 'pending' },
-      ),
+      getResumeOnboardingStep({ streamingModelPath: '', batchModelPath: '' }, 'startup', {
+        version: 1,
+        status: 'pending',
+      })
     ).toBe('microphone');
   });
 
   it('returns models if microphone is likely done but models are missing', () => {
     expect(
-      getResumeOnboardingStep(
-        { streamingModelPath: '', batchModelPath: '' },
-        'startup',
-        { version: 1, status: 'deferred' },
-      ),
+      getResumeOnboardingStep({ streamingModelPath: '', batchModelPath: '' }, 'startup', {
+        version: 1,
+        status: 'deferred',
+      })
     ).toBe('models');
   });
 });

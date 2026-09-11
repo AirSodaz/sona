@@ -1,38 +1,39 @@
-import React, { lazy, Suspense, useCallback, useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Type } from 'lucide-react';
-import { TabNavigation } from './components/TabNavigation';
-import { TranscriptWorkbench } from './components/transcript/TranscriptWorkbench';
+import type React from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BatchImport } from './components/BatchImport';
-import { LiveRecord } from './components/LiveRecord';
-import { ProjectsView } from './components/ProjectsView';
-import { GlobalDialog } from './components/GlobalDialog';
 import { ErrorDialog } from './components/ErrorDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
+import { GlobalDialog } from './components/GlobalDialog';
+import { AutomationIcon, SettingsIcon } from './components/Icons';
+import { LiveRecord } from './components/LiveRecord';
 import { NotificationCenter } from './components/NotificationCenter';
-import { SyncHeaderPill } from './components/SyncHeaderPill';
 import { ProjectSelectorDropdown } from './components/ProjectSelectorDropdown';
+import { ProjectsView } from './components/ProjectsView';
+import { SyncHeaderPill } from './components/SyncHeaderPill';
+import { preloadAllSettingsTabs, preloadSettingsTab } from './components/settings/settingsLoaders';
+import { TabNavigation } from './components/TabNavigation';
+import { TranscriptWorkbench } from './components/transcript/TranscriptWorkbench';
+import { useAppInitialization } from './hooks/useAppInitialization';
+import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
+import { useAutoUpdateCheck } from './hooks/useAutoUpdateCheck';
+import { useTranscriptionServiceSync } from './hooks/useTranscriptionServiceSync';
+import { useTrayHandling } from './hooks/useTrayHandling';
+import { diagnosticsService } from './services/diagnosticsService';
+import { buildLlmConfigPatch, createLlmSettings } from './services/llm/state';
+import { useAutomationStore } from './stores/automationStore';
+import { useBatchQueueStore } from './stores/batchQueueStore';
+import { useLlmAssistantConfig, useSetConfig } from './stores/configStore';
+import { useOnboardingStore } from './stores/onboardingStore';
+import { clearActiveTranscriptSession } from './stores/transcriptCoordinator';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptPlaybackStore } from './stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from './stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from './stores/transcriptSessionStore';
-import { useOnboardingStore } from './stores/onboardingStore';
-import { useBatchQueueStore } from './stores/batchQueueStore';
-import { useAutomationStore } from './stores/automationStore';
-import { AutomationIcon, SettingsIcon } from './components/Icons';
-import { useAppInitialization } from './hooks/useAppInitialization';
-import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
-import { useAutoUpdateCheck } from './hooks/useAutoUpdateCheck';
-import { useTrayHandling } from './hooks/useTrayHandling';
-import { useTranscriptionServiceSync } from './hooks/useTranscriptionServiceSync';
 import type { SettingsTab } from './types/settings';
-import { preloadAllSettingsTabs, preloadSettingsTab } from './components/settings/settingsLoaders';
-import { diagnosticsService } from './services/diagnosticsService';
-import { clearActiveTranscriptSession } from './stores/transcriptCoordinator';
-import { getSettingsPerfErrorDetail, markSettingsPerf } from './utils/settingsPerf';
-import { useLlmAssistantConfig, useSetConfig } from './stores/configStore';
-import { buildLlmConfigPatch, createLlmSettings } from './services/llm/state';
 import type { LlmProvider } from './types/transcript';
+import { getSettingsPerfErrorDetail, markSettingsPerf } from './utils/settingsPerf';
 
 let settingsModulePromise: Promise<typeof import('./components/Settings')> | null = null;
 
@@ -99,7 +100,6 @@ function App(): React.JSX.Element {
   const audioUrl = useTranscriptPlaybackStore((state) => state.audioUrl);
   const reopenOnboarding = useOnboardingStore((state) => state.reopen);
 
-
   const { t } = useTranslation();
   const llmConfig = useLlmAssistantConfig();
   const updateConfig = useSetConfig();
@@ -134,10 +134,13 @@ function App(): React.JSX.Element {
       });
   }, []);
 
-  const setPreloadedSettingsInitialTab = useCallback((tab: SettingsTab) => {
-    preloadSettings(tab);
-    setSettingsInitialTab(tab);
-  }, [preloadSettings]);
+  const setPreloadedSettingsInitialTab = useCallback(
+    (tab: SettingsTab) => {
+      preloadSettings(tab);
+      setSettingsInitialTab(tab);
+    },
+    [preloadSettings]
+  );
 
   // Handle tray events
   useTrayHandling(setIsSettingsOpen, setPreloadedSettingsInitialTab);
@@ -155,13 +158,16 @@ function App(): React.JSX.Element {
     setIsSettingsOpen(true);
   }, [preloadSettings]);
 
-  const openSettingsTab = useCallback((tab: SettingsTab) => {
-    markSettingsPerf('settings.open.tab.click', { tab });
-    preloadSettings(tab);
-    setActivePanelModal((current) => (current?.origin === 'settings' ? null : current));
-    setSettingsInitialTab(tab);
-    setIsSettingsOpen(true);
-  }, [preloadSettings]);
+  const openSettingsTab = useCallback(
+    (tab: SettingsTab) => {
+      markSettingsPerf('settings.open.tab.click', { tab });
+      preloadSettings(tab);
+      setActivePanelModal((current) => (current?.origin === 'settings' ? null : current));
+      setSettingsInitialTab(tab);
+      setIsSettingsOpen(true);
+    },
+    [preloadSettings]
+  );
 
   const openDiagnostics = useCallback(() => {
     const origin = isSettingsOpen ? 'settings' : 'standalone';
@@ -179,14 +185,17 @@ function App(): React.JSX.Element {
     setActivePanelModal((current) => (current?.kind === 'diagnostics' ? null : current));
   }, []);
 
-  const openProviderDetailsFromSettings = useCallback((provider?: LlmProvider) => {
-    const nextProvider = provider ?? llmConfig.llmSettings?.activeProvider ?? 'open_ai';
-    setActivePanelModal({
-      kind: 'provider_details',
-      origin: 'settings',
-      provider: nextProvider,
-    });
-  }, [llmConfig.llmSettings?.activeProvider]);
+  const openProviderDetailsFromSettings = useCallback(
+    (provider?: LlmProvider) => {
+      const nextProvider = provider ?? llmConfig.llmSettings?.activeProvider ?? 'open_ai';
+      setActivePanelModal({
+        kind: 'provider_details',
+        origin: 'settings',
+        provider: nextProvider,
+      });
+    },
+    [llmConfig.llmSettings?.activeProvider]
+  );
 
   const handlePanelBack = useCallback(() => {
     setActivePanelModal(null);
@@ -201,10 +210,13 @@ function App(): React.JSX.Element {
     openSettingsTab('automation');
   }, [openSettingsTab]);
 
-  const openAutomationSettingsForTag = useCallback((tagId: string) => {
-    useAutomationStore.getState().setFocusTagId(tagId);
-    openSettingsTab('automation');
-  }, [openSettingsTab]);
+  const openAutomationSettingsForTag = useCallback(
+    (tagId: string) => {
+      useAutomationStore.getState().setFocusTagId(tagId);
+      openSettingsTab('automation');
+    },
+    [openSettingsTab]
+  );
 
   const openVoiceTypingSettings = useCallback(() => {
     openSettingsTab('subtitle');
@@ -238,7 +250,9 @@ function App(): React.JSX.Element {
 
   return (
     <div className="app">
-      <a href="#main-content" className="skip-link">{t('common.skip_to_content')}</a>
+      <a href="#main-content" className="skip-link">
+        {t('common.skip_to_content')}
+      </a>
       {/* Header */}
       <header className="app-header">
         <div className="app-logo">
@@ -270,10 +284,19 @@ function App(): React.JSX.Element {
 
       {/* Main Content */}
       <main id="main-content" className={appMainClassName}>
-        <div className="projects-mode-shell" style={{ display: isProjectsMode ? undefined : 'none' }}>
-          <ProjectsView isActive={isProjectsMode} onOpenAutomationSettings={openAutomationSettingsForTag} />
+        <div
+          className="projects-mode-shell"
+          style={{ display: isProjectsMode ? undefined : 'none' }}
+        >
+          <ProjectsView
+            isActive={isProjectsMode}
+            onOpenAutomationSettings={openAutomationSettingsForTag}
+          />
         </div>
-        <div className="workspace-mode-shell" style={{ display: !isProjectsMode ? undefined : 'none' }}>
+        <div
+          className="workspace-mode-shell"
+          style={{ display: !isProjectsMode ? undefined : 'none' }}
+        >
           <div className="panel-container">
             {/* Left Panel - Input */}
             <div className="panel panel-left">
@@ -285,7 +308,9 @@ function App(): React.JSX.Element {
                     className="btn btn-icon projects-rail-create"
                     onClick={openAutomationSettings}
                     aria-label={t('automation.open_settings', { defaultValue: 'Open Automation' })}
-                    data-tooltip={t('automation.open_settings', { defaultValue: 'Open Automation' })}
+                    data-tooltip={t('automation.open_settings', {
+                      defaultValue: 'Open Automation',
+                    })}
                     data-tooltip-pos="bottom"
                   >
                     <AutomationIcon width={18} height={18} />
@@ -296,8 +321,12 @@ function App(): React.JSX.Element {
                     type="button"
                     className="btn btn-icon projects-rail-create"
                     onClick={openVoiceTypingSettings}
-                    aria-label={t('voice_typing.open_settings', { defaultValue: 'Open Voice Typing' })}
-                    data-tooltip={t('voice_typing.open_settings', { defaultValue: 'Open Voice Typing' })}
+                    aria-label={t('voice_typing.open_settings', {
+                      defaultValue: 'Open Voice Typing',
+                    })}
+                    data-tooltip={t('voice_typing.open_settings', {
+                      defaultValue: 'Open Voice Typing',
+                    })}
                     data-tooltip-pos="bottom"
                   >
                     <Type size={18} aria-hidden="true" />
@@ -344,8 +373,14 @@ function App(): React.JSX.Element {
         <Suspense fallback={null}>
           <DiagnosticsPanel
             isOpen={isDiagnosticsOpen || activePanelModal?.kind === 'diagnostics'}
-            origin={activePanelModal?.kind === 'diagnostics' ? activePanelModal.origin : 'standalone'}
-            onBack={activePanelModal?.kind === 'diagnostics' && activePanelModal.origin === 'settings' ? handlePanelBack : undefined}
+            origin={
+              activePanelModal?.kind === 'diagnostics' ? activePanelModal.origin : 'standalone'
+            }
+            onBack={
+              activePanelModal?.kind === 'diagnostics' && activePanelModal.origin === 'settings'
+                ? handlePanelBack
+                : undefined
+            }
             onClose={closeDiagnostics}
             onOpenSettingsTab={openSettingsTab}
             onRunFirstRunSetup={runFirstRunSetupFromDiagnostics}

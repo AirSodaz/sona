@@ -1,12 +1,13 @@
 import packageJson from '../../package.json';
-import { historyService } from './historyService';
-import { settingsStore, STORE_KEY_CONFIG } from './storageService';
 import { useAutomationStore } from '../stores/automationStore';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useConfigStore } from '../stores/configStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
-import { clearActiveTranscriptSession, openTranscriptSession } from '../stores/transcriptCoordinator';
+import {
+  clearActiveTranscriptSession,
+  openTranscriptSession,
+} from '../stores/transcriptCoordinator';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
@@ -22,6 +23,8 @@ import type { AppConfig } from '../types/config';
 import type { HistoryItem } from '../types/history';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
+import { historyService } from './historyService';
+import { STORE_KEY_CONFIG, settingsStore } from './storageService';
 import {
   applyPreparedHistoryImport,
   disposePreparedBackupImport,
@@ -31,7 +34,10 @@ import {
 import { openDialog, saveDialog } from './tauri/platform/dialog';
 
 class BackupOperationBlockedError extends Error {
-  constructor(public readonly blocker: BackupOperationBlocker, message: string) {
+  constructor(
+    public readonly blocker: BackupOperationBlocker,
+    message: string
+  ) {
     super(message);
     this.name = 'BackupOperationBlockedError';
   }
@@ -42,15 +48,13 @@ function padNumber(value: number): string {
 }
 
 function formatBackupTimestamp(date = new Date()): string {
-  return [
-    date.getFullYear(),
-    padNumber(date.getMonth() + 1),
-    padNumber(date.getDate()),
-  ].join('-') + '_' + [
-    padNumber(date.getHours()),
-    padNumber(date.getMinutes()),
-    padNumber(date.getSeconds()),
-  ].join('-');
+  return (
+    [date.getFullYear(), padNumber(date.getMonth() + 1), padNumber(date.getDate())].join('-') +
+    '_' +
+    [padNumber(date.getHours()), padNumber(date.getMinutes()), padNumber(date.getSeconds())].join(
+      '-'
+    )
+  );
 }
 
 function ensureRecord(value: unknown, label: string): Record<string, unknown> {
@@ -98,9 +102,13 @@ function validateManifest(raw: unknown): BackupManifestV1 {
       historyItems: typeof counts.historyItems === 'number' ? counts.historyItems : 0,
       transcriptFiles: typeof counts.transcriptFiles === 'number' ? counts.transcriptFiles : 0,
       summaryFiles: typeof counts.summaryFiles === 'number' ? counts.summaryFiles : 0,
-      automationProfiles: typeof counts.automationProfiles === 'number' ? counts.automationProfiles : 0,
+      automationProfiles:
+        typeof counts.automationProfiles === 'number' ? counts.automationProfiles : 0,
       automationRules: typeof counts.automationRules === 'number' ? counts.automationRules : 0,
-      automationProcessedEntries: typeof counts.automationProcessedEntries === 'number' ? counts.automationProcessedEntries : 0,
+      automationProcessedEntries:
+        typeof counts.automationProcessedEntries === 'number'
+          ? counts.automationProcessedEntries
+          : 0,
       analyticsFiles: typeof counts.analyticsFiles === 'number' ? counts.analyticsFiles : 0,
     },
   };
@@ -160,13 +168,13 @@ export class BackupService {
     if (blocker === 'recording') {
       throw new BackupOperationBlockedError(
         blocker,
-        'Stop Live Record before exporting or importing backups.',
+        'Stop Live Record before exporting or importing backups.'
       );
     }
 
     throw new BackupOperationBlockedError(
       blocker,
-      'Wait for Batch Import to finish or clear pending items before exporting or importing backups.',
+      'Wait for Batch Import to finish or clear pending items before exporting or importing backups.'
     );
   }
 
@@ -194,7 +202,7 @@ export class BackupService {
     }
 
     const historyItems = this.ports.getHistoryItems();
-    const matchingItem = historyItems.find(item => item.id === currentHistoryId);
+    const matchingItem = historyItems.find((item) => item.id === currentHistoryId);
 
     if (!matchingItem) {
       this.ports.clearActiveTranscriptSession({ clearAudio: true });
@@ -217,12 +225,10 @@ export class BackupService {
     this.ports.setAudioFile(null);
   }
 
-  async exportBackup(options?: {
-    archivePath?: string;
-  }): Promise<ExportBackupResult | null> {
+  async exportBackup(options?: { archivePath?: string }): Promise<ExportBackupResult | null> {
     this.ensureBackupOperationsIdle();
 
-    const archivePath = options?.archivePath || await this.pickExportArchivePath();
+    const archivePath = options?.archivePath || (await this.pickExportArchivePath());
     if (!archivePath) {
       return null;
     }
@@ -243,7 +249,7 @@ export class BackupService {
   }): Promise<PreparedBackupImport | null> {
     this.ensureBackupOperationsIdle();
 
-    const archivePath = options?.archivePath || await this.pickImportArchivePath();
+    const archivePath = options?.archivePath || (await this.pickImportArchivePath());
     if (!archivePath) {
       return null;
     }
@@ -306,13 +312,16 @@ export class BackupService {
         } catch (error) {
           logger.error(
             '[Backup] Failed to clear transcript after import error:',
-            extractErrorMessage(error),
+            extractErrorMessage(error)
           );
         }
       }
 
       await this.disposePreparedImport(prepared).catch((error) => {
-        logger.error('[Backup] Failed to dispose prepared backup import:', extractErrorMessage(error));
+        logger.error(
+          '[Backup] Failed to dispose prepared backup import:',
+          extractErrorMessage(error)
+        );
       });
     }
   }
@@ -324,9 +333,10 @@ export function createBackupService(ports: BackupServicePorts): BackupService {
 
 export const backupService = createBackupService({
   getIsRecording: () => useTranscriptRuntimeStore.getState().isRecording,
-  getHasBlockingQueueItems: () => useBatchQueueStore.getState().queueItems.some((item) => (
-    item.status === 'pending' || item.status === 'processing'
-  )),
+  getHasBlockingQueueItems: () =>
+    useBatchQueueStore
+      .getState()
+      .queueItems.some((item) => item.status === 'pending' || item.status === 'processing'),
   stopAllAutomation: () => useAutomationStore.getState().stopAll(),
   loadAndStartAutomation: () => useAutomationStore.getState().loadAndStart(),
   reloadConfig: async () => {
@@ -356,8 +366,10 @@ export const backupService = createBackupService({
 });
 
 // Re-export methods used by standalone imports to minimize consumer breakage
-export const buildDefaultBackupFileName = backupService.buildDefaultBackupFileName.bind(backupService);
-export const getBackupOperationBlocker = backupService.getBackupOperationBlocker.bind(backupService);
+export const buildDefaultBackupFileName =
+  backupService.buildDefaultBackupFileName.bind(backupService);
+export const getBackupOperationBlocker =
+  backupService.getBackupOperationBlocker.bind(backupService);
 export const exportBackup = backupService.exportBackup.bind(backupService);
 export const prepareImportBackup = backupService.prepareImportBackup.bind(backupService);
 export const disposePreparedImport = backupService.disposePreparedImport.bind(backupService);

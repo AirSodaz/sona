@@ -1,9 +1,9 @@
-import { expect, vi, beforeEach, describe, it } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
-import { SettingsApiServerTab } from '../SettingsApiServerTab';
-import { buildTestConfig } from '../../../test-utils/configTestUtils';
-import { invokeTauri } from '../../../services/tauri/invoke';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TauriCommand } from '../../../services/tauri/commands';
+import { invokeTauri } from '../../../services/tauri/invoke';
+import { buildTestConfig } from '../../../test-utils/configTestUtils';
+import { SettingsApiServerTab } from '../SettingsApiServerTab';
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-i18next')>();
@@ -30,7 +30,9 @@ let currentConfig = buildTestConfig({
 });
 
 vi.mock('../../../stores/configStore', async () => {
-  const actual = await vi.importActual<typeof import('../../../stores/configStore')>('../../../stores/configStore');
+  const actual = await vi.importActual<typeof import('../../../stores/configStore')>(
+    '../../../stores/configStore'
+  );
   return {
     ...actual,
     useApiServerConfig: () => currentConfig,
@@ -167,7 +169,13 @@ describe('SettingsApiServerTab', () => {
     global.fetch = browserFetch as typeof fetch;
     vi.mocked(invokeTauri).mockResolvedValueOnce({
       health: { status: 'ok', uptime: 3600, activeJobs: 1, pendingJobs: 0, cacheSpaceBytes: 0 },
-      info: { platform: 'win32', gpuAvailable: true, models: [], vadInstalled: true, punctuationInstalled: true },
+      info: {
+        platform: 'win32',
+        gpuAvailable: true,
+        models: [],
+        vadInstalled: true,
+        punctuationInstalled: true,
+      },
       jobs: { 'test-job': 'Processing' },
     } as never);
 
@@ -179,9 +187,9 @@ describe('SettingsApiServerTab', () => {
     screen.getByText('Job Queue');
 
     await waitFor(() => {
-        screen.getByText('Running');
-        screen.getByText('1h 0m 0s');
-        screen.getByText('Processing');
+      screen.getByText('Running');
+      screen.getByText('1h 0m 0s');
+      screen.getByText('Processing');
     });
     expect(invokeTauri).toHaveBeenCalledWith('get_api_server_dashboard_snapshot');
     expect(browserFetch).not.toHaveBeenCalled();
@@ -213,10 +221,13 @@ describe('SettingsApiServerTab', () => {
       await Promise.resolve();
     });
 
-    expect(invokeTauri).toHaveBeenCalledWith(TauriCommand.apiServer.start, expect.objectContaining({
-      gpuAcceleration: 'cuda',
-      maxUploadSizeMb: 50,
-    }));
+    expect(invokeTauri).toHaveBeenCalledWith(
+      TauriCommand.apiServer.start,
+      expect.objectContaining({
+        gpuAcceleration: 'cuda',
+        maxUploadSizeMb: 50,
+      })
+    );
     expect(mockUpdateConfig).toHaveBeenCalledWith({ httpServerIpWhitelist: '127.0.0.0/8,::1/128' });
     vi.useRealTimers();
   });

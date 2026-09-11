@@ -3,10 +3,10 @@ import type {
   CustomLlmProvider,
   CustomLlmProviderId,
   CustomLlmProviderStrategy,
+  LlmModality,
   LlmModelDiscoveryStatus,
   LlmModelEntry,
   LlmModelMetadata,
-  LlmModality,
   LlmProvider,
   LlmProviderSetting,
   LlmSettings,
@@ -60,7 +60,11 @@ function sanitizeModalities(value: unknown): LlmModality[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
   }
-  return [...new Set(value.filter((item): item is LlmModality => LLM_MODALITIES.has(item as LlmModality)))];
+  return [
+    ...new Set(
+      value.filter((item): item is LlmModality => LLM_MODALITIES.has(item as LlmModality))
+    ),
+  ];
 }
 
 function sanitizeModelMetadata(metadata: unknown): LlmModelMetadata | undefined {
@@ -69,9 +73,14 @@ function sanitizeModelMetadata(metadata: unknown): LlmModelMetadata | undefined 
   }
   const candidate = metadata as Record<string, unknown>;
   const metadataSources = Array.isArray(candidate.metadataSources)
-    ? [...new Set(candidate.metadataSources.filter((source): source is 'provider' | 'models_dev' => (
-      source === 'provider' || source === 'models_dev'
-    )))]
+    ? [
+        ...new Set(
+          candidate.metadataSources.filter(
+            (source): source is 'provider' | 'models_dev' =>
+              source === 'provider' || source === 'models_dev'
+          )
+        ),
+      ]
     : undefined;
 
   return {
@@ -97,7 +106,9 @@ function sanitizeModelMetadata(metadata: unknown): LlmModelMetadata | undefined 
   };
 }
 
-function sanitizeModelEntry(entry: Partial<LlmModelEntry> | null | undefined): LlmModelEntry | null {
+function sanitizeModelEntry(
+  entry: Partial<LlmModelEntry> | null | undefined
+): LlmModelEntry | null {
   if (!entry) {
     return null;
   }
@@ -120,7 +131,7 @@ function sanitizeModelEntry(entry: Partial<LlmModelEntry> | null | undefined): L
 }
 
 function sanitizeMetadataOverrides(
-  overrides: LlmModelEntry['metadataOverrides'] | null | undefined,
+  overrides: LlmModelEntry['metadataOverrides'] | null | undefined
 ): LlmModelEntry['metadataOverrides'] | undefined {
   if (!overrides || typeof overrides !== 'object') {
     return undefined;
@@ -140,9 +151,7 @@ function isValidIsoTimestamp(value: unknown): value is string {
   return typeof value === 'string' && Number.isFinite(Date.parse(value));
 }
 
-function normalizeStoredModelDiscovery(
-  rawDiscovery: unknown,
-): LlmSettings['modelDiscovery'] {
+function normalizeStoredModelDiscovery(rawDiscovery: unknown): LlmSettings['modelDiscovery'] {
   if (!rawDiscovery || typeof rawDiscovery !== 'object') {
     return {};
   }
@@ -187,7 +196,10 @@ function normalizeStoredModels(rawModels: unknown): Record<string, LlmModelEntry
 
 // Keep persisted order when possible, then append any surviving models that were missing
 // from the order array so migrations never orphan a valid model entry.
-function normalizeStoredModelOrder(rawOrder: unknown, models: Record<string, LlmModelEntry>): string[] {
+function normalizeStoredModelOrder(
+  rawOrder: unknown,
+  models: Record<string, LlmModelEntry>
+): string[] {
   const seen = new Set<string>();
   const modelIds = Object.keys(models);
   const ordered: string[] = [];
@@ -236,13 +248,19 @@ function normalizeStoredSelections(rawSelections: unknown, models: Record<string
     translationTemperature: normalizeTemperature(selections.translationTemperature),
     summaryTemperature: normalizeTemperature(selections.summaryTemperature),
     polishReasoningEnabled:
-      typeof selections.polishReasoningEnabled === 'boolean' ? selections.polishReasoningEnabled : undefined,
+      typeof selections.polishReasoningEnabled === 'boolean'
+        ? selections.polishReasoningEnabled
+        : undefined,
     polishReasoningLevel: normalizeReasoningLevel(selections.polishReasoningLevel),
     translationReasoningEnabled:
-      typeof selections.translationReasoningEnabled === 'boolean' ? selections.translationReasoningEnabled : undefined,
+      typeof selections.translationReasoningEnabled === 'boolean'
+        ? selections.translationReasoningEnabled
+        : undefined,
     translationReasoningLevel: normalizeReasoningLevel(selections.translationReasoningLevel),
     summaryReasoningEnabled:
-      typeof selections.summaryReasoningEnabled === 'boolean' ? selections.summaryReasoningEnabled : undefined,
+      typeof selections.summaryReasoningEnabled === 'boolean'
+        ? selections.summaryReasoningEnabled
+        : undefined,
     summaryReasoningLevel: normalizeReasoningLevel(selections.summaryReasoningLevel),
   };
 }
@@ -251,10 +269,7 @@ function normalizeReasoningLevel(value: unknown): 'low' | 'medium' | 'high' | un
   return value === 'low' || value === 'medium' || value === 'high' ? value : undefined;
 }
 
-function applyLegacyTemperature(
-  llmSettings: LlmSettings,
-  legacyTemperature: unknown,
-): LlmSettings {
+function applyLegacyTemperature(llmSettings: LlmSettings, legacyTemperature: unknown): LlmSettings {
   const normalizedTemperature = normalizeTemperature(legacyTemperature);
   if (normalizedTemperature === undefined) {
     return llmSettings;
@@ -265,7 +280,8 @@ function applyLegacyTemperature(
     selections: {
       ...llmSettings.selections,
       polishTemperature: llmSettings.selections.polishTemperature ?? normalizedTemperature,
-      translationTemperature: llmSettings.selections.translationTemperature ?? normalizedTemperature,
+      translationTemperature:
+        llmSettings.selections.translationTemperature ?? normalizedTemperature,
     },
   };
 }
@@ -277,7 +293,9 @@ function supportsSummaryModel(modelEntry: LlmModelEntry | undefined): boolean {
     return false;
   }
 
-  return modelEntry.provider !== 'google_translate' && modelEntry.provider !== 'google_translate_free';
+  return (
+    modelEntry.provider !== 'google_translate' && modelEntry.provider !== 'google_translate_free'
+  );
 }
 
 type LegacyBootstrapModel = {
@@ -331,13 +349,17 @@ function getTrimmedString(value: unknown): string | undefined {
 }
 
 function isCustomProviderStrategy(value: unknown): value is CustomLlmProviderStrategy {
-  return value === 'openai_compatible'
-    || value === 'openai_responses'
-    || value === 'anthropic'
-    || value === 'gemini';
+  return (
+    value === 'openai_compatible' ||
+    value === 'openai_responses' ||
+    value === 'anthropic' ||
+    value === 'gemini'
+  );
 }
 
-function normalizeStoredCustomProviders(rawProviders: unknown): Record<CustomLlmProviderId, CustomLlmProvider> {
+function normalizeStoredCustomProviders(
+  rawProviders: unknown
+): Record<CustomLlmProviderId, CustomLlmProvider> {
   if (!rawProviders || typeof rawProviders !== 'object') {
     return {};
   }
@@ -351,7 +373,8 @@ function normalizeStoredCustomProviders(rawProviders: unknown): Record<CustomLlm
     }
 
     const name = getTrimmedString(provider.name) ?? normalizedId;
-    const createdAt = getTrimmedString(provider.createdAt) ?? LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.createdAt;
+    const createdAt =
+      getTrimmedString(provider.createdAt) ?? LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.createdAt;
     customProviders[normalizedId] = {
       id: normalizedId,
       name,
@@ -364,15 +387,25 @@ function normalizeStoredCustomProviders(rawProviders: unknown): Record<CustomLlm
 }
 
 function needsLegacyOpenAiCompatibleProvider(source: LlmMigrationSource): boolean {
-  if (normalizeProvider(source.llmSettings?.activeProvider) === LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.id) {
+  if (
+    normalizeProvider(source.llmSettings?.activeProvider) ===
+    LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.id
+  ) {
     return true;
   }
-  if (normalizeProvider(source.llm?.provider ?? source.llmServiceType) === LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.id) {
+  if (
+    normalizeProvider(source.llm?.provider ?? source.llmServiceType) ===
+    LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.id
+  ) {
     return true;
   }
 
   const providerKeys = Object.keys(source.llmSettings?.providers ?? {});
-  if (providerKeys.some((provider) => normalizeProvider(provider) === LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.id)) {
+  if (
+    providerKeys.some(
+      (provider) => normalizeProvider(provider) === LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.id
+    )
+  ) {
     return true;
   }
 
@@ -384,36 +417,54 @@ function needsLegacyOpenAiCompatibleProvider(source: LlmMigrationSource): boolea
 
 function extractLegacyProviderSetting(source: LlmMigrationSource): Partial<LlmProviderSetting> {
   return {
-    apiHost: getTrimmedString(source.llmBaseUrl) ?? getTrimmedString(source.aiBaseUrl) ?? getTrimmedString(source.baseUrl),
-    apiKey: getTrimmedString(source.llmApiKey) ?? getTrimmedString(source.aiApiKey) ?? getTrimmedString(source.apiKey),
-    apiPath: getTrimmedString(source.llmApiPath) ?? getTrimmedString(source.aiApiPath) ?? getTrimmedString(source.apiPath),
-    apiVersion: getTrimmedString(source.llmApiVersion) ?? getTrimmedString(source.aiApiVersion) ?? getTrimmedString(source.apiVersion),
+    apiHost:
+      getTrimmedString(source.llmBaseUrl) ??
+      getTrimmedString(source.aiBaseUrl) ??
+      getTrimmedString(source.baseUrl),
+    apiKey:
+      getTrimmedString(source.llmApiKey) ??
+      getTrimmedString(source.aiApiKey) ??
+      getTrimmedString(source.apiKey),
+    apiPath:
+      getTrimmedString(source.llmApiPath) ??
+      getTrimmedString(source.aiApiPath) ??
+      getTrimmedString(source.apiPath),
+    apiVersion:
+      getTrimmedString(source.llmApiVersion) ??
+      getTrimmedString(source.aiApiVersion) ??
+      getTrimmedString(source.apiVersion),
   };
 }
 
-function extractLegacyModel(source: LlmMigrationSource): { provider: LlmProvider; model: string } | null {
+function extractLegacyModel(
+  source: LlmMigrationSource
+): { provider: LlmProvider; model: string } | null {
   const provider = normalizeProvider(
-    source.llmSettings?.activeProvider ?? source.llm?.provider ?? source.llmServiceType,
+    source.llmSettings?.activeProvider ?? source.llm?.provider ?? source.llmServiceType
   );
-  const model = getTrimmedString(source.llm?.model)
-    ?? getTrimmedString(source.llmModel)
-    ?? getTrimmedString(source.aiModel)
-    ?? getTrimmedString(source.model)
-    ?? '';
+  const model =
+    getTrimmedString(source.llm?.model) ??
+    getTrimmedString(source.llmModel) ??
+    getTrimmedString(source.aiModel) ??
+    getTrimmedString(source.model) ??
+    '';
 
   return model ? { provider, model } : null;
 }
 
 function resolveLegacyBootstrapModel(source: LlmMigrationSource): LegacyBootstrapModel | null {
-  const legacyStoredProviderModel = Object.entries(source.llmSettings?.providers ?? {}).find(([, rawSetting]) => {
-    const model = (rawSetting as LegacyStoredProviderSetting | undefined)?.model;
-    return typeof model === 'string' && model.trim();
-  });
+  const legacyStoredProviderModel = Object.entries(source.llmSettings?.providers ?? {}).find(
+    ([, rawSetting]) => {
+      const model = (rawSetting as LegacyStoredProviderSetting | undefined)?.model;
+      return typeof model === 'string' && model.trim();
+    }
+  );
 
   if (legacyStoredProviderModel) {
     return {
       provider: normalizeProvider(legacyStoredProviderModel[0]),
-      model: getTrimmedString((legacyStoredProviderModel[1] as LegacyStoredProviderSetting).model) || '',
+      model:
+        getTrimmedString((legacyStoredProviderModel[1] as LegacyStoredProviderSetting).model) || '',
     };
   }
 
@@ -422,7 +473,7 @@ function resolveLegacyBootstrapModel(source: LlmMigrationSource): LegacyBootstra
 
 function normalizeStoredProviders(
   rawProviders: unknown,
-  customProviders: LlmSettings['customProviders'],
+  customProviders: LlmSettings['customProviders']
 ): Partial<Record<LlmProvider, LlmProviderSetting>> {
   if (!rawProviders || typeof rawProviders !== 'object') {
     return {};
@@ -433,12 +484,16 @@ function normalizeStoredProviders(
   for (const [rawProvider, rawSetting] of Object.entries(rawProviders as Record<string, unknown>)) {
     const provider = normalizeProvider(rawProvider);
     const setting = rawSetting as Partial<LlmProviderSetting> & { model?: string };
-    providers[provider] = sanitizeProviderSetting(provider, {
-      apiHost: setting.apiHost,
-      apiKey: setting.apiKey,
-      apiPath: setting.apiPath,
-      apiVersion: setting.apiVersion,
-    }, customProviders);
+    providers[provider] = sanitizeProviderSetting(
+      provider,
+      {
+        apiHost: setting.apiHost,
+        apiKey: setting.apiKey,
+        apiPath: setting.apiPath,
+        apiVersion: setting.apiVersion,
+      },
+      customProviders
+    );
   }
 
   return providers;
@@ -446,7 +501,7 @@ function normalizeStoredProviders(
 
 function bootstrapMissingModelSelections(
   llmSettings: LlmSettings,
-  legacyModel: LegacyBootstrapModel | null,
+  legacyModel: LegacyBootstrapModel | null
 ): LlmSettings {
   if (llmSettings.modelOrder.length > 0) {
     return llmSettings;
@@ -461,13 +516,16 @@ function bootstrapMissingModelSelections(
     return setFeatureModelSelection(
       setFeatureModelSelection(nextSettings, 'polish', migratedModelId),
       'translation',
-      migratedModelId,
+      migratedModelId
     );
   }
 
   // Fresh installs still need one usable translation path even before the user picks an
   // LLM provider, so we bootstrap the free Google model as a translation-only fallback.
-  const nextSettings = addLlmModel(llmSettings, { provider: 'google_translate_free', model: 'default' });
+  const nextSettings = addLlmModel(llmSettings, {
+    provider: 'google_translate_free',
+    model: 'default',
+  });
   const defaultModelId = nextSettings.modelOrder[0];
   return setFeatureModelSelection(nextSettings, 'translation', defaultModelId);
 }
@@ -486,30 +544,31 @@ function ensureSummaryModelSelection(llmSettings: LlmSettings): LlmSettings {
   return setFeatureModelSelection(llmSettings, 'summary', polishModelId);
 }
 
-export function ensureLlmState(
-  source?: LlmMigrationSource,
-): { llmSettings: LlmSettings } {
+export function ensureLlmState(source?: LlmMigrationSource): { llmSettings: LlmSettings } {
   const candidate = source ?? {};
   const currentProvider = normalizeProvider(
-    candidate.llmSettings?.activeProvider ??
-      candidate.llmServiceType ??
-      candidate.llm?.provider,
+    candidate.llmSettings?.activeProvider ?? candidate.llmServiceType ?? candidate.llm?.provider
   );
 
   const customProviders = normalizeStoredCustomProviders(candidate.llmSettings?.customProviders);
   if (needsLegacyOpenAiCompatibleProvider(candidate)) {
-    customProviders[LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.id] = LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER;
+    customProviders[LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER.id] =
+      LEGACY_OPENAI_COMPATIBLE_CUSTOM_PROVIDER;
   }
   const providers = normalizeStoredProviders(candidate.llmSettings?.providers, customProviders);
 
   if (candidate.llm) {
     const provider = normalizeProvider(candidate.llm.provider);
-    providers[provider] = sanitizeProviderSetting(provider, {
-      apiHost: getTrimmedString(candidate.llm.baseUrl),
-      apiKey: getTrimmedString(candidate.llm.apiKey),
-      apiPath: getTrimmedString(candidate.llm.apiPath),
-      apiVersion: getTrimmedString(candidate.llm.apiVersion),
-    }, customProviders);
+    providers[provider] = sanitizeProviderSetting(
+      provider,
+      {
+        apiHost: getTrimmedString(candidate.llm.baseUrl),
+        apiKey: getTrimmedString(candidate.llm.apiKey),
+        apiPath: getTrimmedString(candidate.llm.apiPath),
+        apiVersion: getTrimmedString(candidate.llm.apiVersion),
+      },
+      customProviders
+    );
   } else {
     const legacySetting = extractLegacyProviderSetting(candidate);
     if (
@@ -518,17 +577,27 @@ export function ensureLlmState(
       legacySetting.apiPath ||
       legacySetting.apiVersion
     ) {
-      providers[currentProvider] = sanitizeProviderSetting(currentProvider, {
-        ...legacySetting,
-        ...(providers[currentProvider] ?? {}),
-      }, customProviders);
+      providers[currentProvider] = sanitizeProviderSetting(
+        currentProvider,
+        {
+          ...legacySetting,
+          ...(providers[currentProvider] ?? {}),
+        },
+        customProviders
+      );
     }
   }
 
   const storedModels = normalizeStoredModels(candidate.llmSettings?.models);
-  const storedModelOrder = normalizeStoredModelOrder(candidate.llmSettings?.modelOrder, storedModels);
+  const storedModelOrder = normalizeStoredModelOrder(
+    candidate.llmSettings?.modelOrder,
+    storedModels
+  );
   const storedModelDiscovery = normalizeStoredModelDiscovery(candidate.llmSettings?.modelDiscovery);
-  const storedSelections = normalizeStoredSelections(candidate.llmSettings?.selections, storedModels);
+  const storedSelections = normalizeStoredSelections(
+    candidate.llmSettings?.selections,
+    storedModels
+  );
 
   // Migration order matters here:
   // 1. normalize providers and legacy runtime credentials,
@@ -540,7 +609,11 @@ export function ensureLlmState(
     customProviders,
     providers: {
       ...providers,
-      [currentProvider]: sanitizeProviderSetting(currentProvider, providers[currentProvider], customProviders),
+      [currentProvider]: sanitizeProviderSetting(
+        currentProvider,
+        providers[currentProvider],
+        customProviders
+      ),
     },
     models: storedModels,
     modelOrder: storedModelOrder,
@@ -548,7 +621,10 @@ export function ensureLlmState(
     selections: storedSelections,
   };
 
-  llmSettings = bootstrapMissingModelSelections(llmSettings, resolveLegacyBootstrapModel(candidate));
+  llmSettings = bootstrapMissingModelSelections(
+    llmSettings,
+    resolveLegacyBootstrapModel(candidate)
+  );
   llmSettings = applyLegacyTemperature(llmSettings, candidate.llm?.temperature);
   llmSettings = ensureSummaryModelSelection(llmSettings);
 

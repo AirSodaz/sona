@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import presetModelsData from '../../../../../../../core/src/models/preset-models.json';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { invoke } from '@tauri-apps/api/core';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import presetModelsData from '../../../../../../../core/src/models/preset-models.json';
 import type {
   RecoveredQueueItem_Serialize,
   RecoveryItemInput_Serialize,
@@ -10,28 +10,40 @@ import type {
 } from '../../../bindings';
 import type { AutomationProcessedEntry, AutomationRule } from '../../../types/automation';
 import type { AppConfig } from '../../../types/config';
-import { TauriCommand } from '../commands';
-import { invokeTauri } from '../invoke';
+import type { TaskLedgerRecord, TaskLedgerSnapshot } from '../../../types/taskLedger';
 import {
+  getAppSetting,
   getAsrRuntimeMetrics,
   getDiagnosticsCoreSnapshot,
   getModelCatalogSnapshot,
-  migrateAppConfig,
   loadAppConfig,
-  saveAppConfig,
-  getAppSetting,
-  setAppSetting,
+  migrateAppConfig,
   openLogFolder,
   resolveEffectiveConfig,
   resolveModelCatalogSelectedIds,
+  saveAppConfig,
+  setAppSetting,
   setLogLevel,
   setMinimizeToTray,
 } from '../app';
 import { startMicrophoneCapture, stopSystemAudioCapture } from '../audio';
+import { replaceAutomationRuntimeRules } from '../automation';
 import {
+  type AutomationRepositoryState,
+  automationLoadRepositoryState,
+  automationPersistProcessedEntries,
+  automationPersistRepositoryState,
+  automationPersistRules,
+  automationValidateRuleActivation,
+} from '../automationRepository';
+import { applyPreparedHistoryImport } from '../backup';
+import { TauriCommand } from '../commands';
+import { getDashboardSnapshot } from '../dashboard';
+import { exportTranscriptFile } from '../export';
+import {
+  historyBuildTranscriptDiff,
   historyCleanupAudio,
   historyCommitTranscriptEdit,
-  historyBuildTranscriptDiff,
   historyCreateLiveDraft,
   historyCreateTranscriptSnapshot,
   historyListTranscriptSnapshots,
@@ -45,6 +57,7 @@ import {
   historySaveSummary,
   historyUpdateTranscript,
 } from '../history';
+import { invokeTauri } from '../invoke';
 import {
   completeLlm,
   describeLlmModel,
@@ -55,29 +68,20 @@ import {
   summarizeTranscript,
   translateTranscriptSegments,
 } from '../llm';
+import { llmUsageEnsureStorage, llmUsageReadRaw, llmUsageReplaceRaw } from '../llmUsage';
 import { processBatchFile } from '../recognizer';
-import { replaceAutomationRuntimeRules } from '../automation';
-import {
-  automationLoadRepositoryState,
-  automationPersistProcessedEntries,
-  automationPersistRepositoryState,
-  automationPersistRules,
-  automationValidateRuleActivation,
-  type AutomationRepositoryState,
-} from '../automationRepository';
-import { applyPreparedHistoryImport } from '../backup';
-import { getDashboardSnapshot } from '../dashboard';
-import { exportTranscriptFile } from '../export';
-import {
-  llmUsageEnsureStorage,
-  llmUsageReadRaw,
-  llmUsageReplaceRaw,
-} from '../llmUsage';
 import {
   recoveryLoadSnapshot,
   recoveryPersistQueueSnapshot,
   recoverySaveSnapshot,
 } from '../recovery';
+import {
+  annotateSpeakerSegmentsFromFile,
+  applySpeakerProfileToGroup,
+  buildSpeakerReviewSnapshot,
+  confirmSpeakerGroupReview,
+  resetSpeakerGroupToAnonymous,
+} from '../speaker';
 import {
   storageClearWebviewBrowsingData,
   storageGetDirectories,
@@ -88,20 +92,9 @@ import {
   storageResetModelsDirectory,
   storageSetModelsDirectory,
 } from '../storage';
-import {
-  annotateSpeakerSegmentsFromFile,
-  applySpeakerProfileToGroup,
-  buildSpeakerReviewSnapshot,
-  confirmSpeakerGroupReview,
-  resetSpeakerGroupToAnonymous,
-} from '../speaker';
+import { createSyncVault, joinSyncVault, previewSyncJoin, testWebDavSyncProvider } from '../sync';
 import { getAuxWindowState, getMousePosition, injectText, setAuxWindowState } from '../system';
-import {
-  createSyncVault,
-  joinSyncVault,
-  previewSyncJoin,
-  testWebDavSyncProvider,
-} from '../sync';
+import { tagList, tagSaveAll } from '../tag';
 import {
   taskLedgerClearResolved,
   taskLedgerLoadSnapshot,
@@ -109,13 +102,10 @@ import {
   taskLedgerRemoveTask,
   taskLedgerUpsertTask,
 } from '../taskLedger';
-import { tagList, tagSaveAll } from '../tag';
-import type { TaskLedgerRecord, TaskLedgerSnapshot } from '../../../types/taskLedger';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
-
 
 const uiLlmConfig = {
   provider: 'open_ai',
@@ -154,13 +144,15 @@ describe('tauri boundary wrappers', () => {
       invokeBoundaryFile,
       resolve(platformBoundaryRoot, 'assets.ts'),
     ]);
-    const allowedInvokeFiles = new Set([
-      resolve(srcRoot, 'services/tauri/invoke.ts'),
-    ]);
+    const allowedInvokeFiles = new Set([resolve(srcRoot, 'services/tauri/invoke.ts')]);
     const violations: string[] = [];
 
     function isInsidePlatformBoundary(path: string): boolean {
-      return path === platformBoundaryRoot || path.startsWith(`${platformBoundaryRoot}\\`) || path.startsWith(`${platformBoundaryRoot}/`);
+      return (
+        path === platformBoundaryRoot ||
+        path.startsWith(`${platformBoundaryRoot}\\`) ||
+        path.startsWith(`${platformBoundaryRoot}/`)
+      );
     }
 
     function visit(path: string) {
@@ -183,13 +175,17 @@ describe('tauri boundary wrappers', () => {
         const moduleName = match[1];
         if (moduleName === '@tauri-apps/api/core') {
           if (!allowedCoreImportFiles.has(path)) {
-            violations.push(`${relative(srcRoot, path)} imports ${moduleName} outside the tauri boundary`);
+            violations.push(
+              `${relative(srcRoot, path)} imports ${moduleName} outside the tauri boundary`
+            );
           }
           continue;
         }
 
         if (!isInsidePlatformBoundary(path)) {
-          violations.push(`${relative(srcRoot, path)} imports ${moduleName} outside services/tauri/platform`);
+          violations.push(
+            `${relative(srcRoot, path)} imports ${moduleName} outside services/tauri/platform`
+          );
         }
       }
 
@@ -362,65 +358,93 @@ describe('tauri boundary wrappers', () => {
         arrange: () => {
           vi.mocked(invoke).mockResolvedValueOnce({
             profiles: [],
-            rules: [{
-              ...rule,
-              stageConfig: {
-                ...rule.stageConfig,
-                polishPresetId: '',
-                translationLanguage: '',
+            rules: [
+              {
+                ...rule,
+                stageConfig: {
+                  ...rule.stageConfig,
+                  polishPresetId: '',
+                  translationLanguage: '',
+                },
+                exportConfig: { ...rule.exportConfig, prefix: '' },
               },
-              exportConfig: { ...rule.exportConfig, prefix: '' },
-            }],
-            processedEntries: [{
-              ...processedEntry,
-              historyId: null,
-              exportPath: null,
-              errorMessage: null,
-            }],
+            ],
+            processedEntries: [
+              {
+                ...processedEntry,
+                historyId: null,
+                exportPath: null,
+                errorMessage: null,
+              },
+            ],
           });
         },
         act: async () => {
           repoState = await automationLoadRepositoryState();
           await automationPersistRules([rule as unknown as AutomationRule]);
-          await automationPersistProcessedEntries([processedEntry as unknown as AutomationProcessedEntry]);
-          await automationPersistRepositoryState([], [rule as unknown as AutomationRule], [processedEntry as unknown as AutomationProcessedEntry]);
-          await automationValidateRuleActivation(rule as unknown as AutomationRule, {} as unknown as AppConfig, []);
+          await automationPersistProcessedEntries([
+            processedEntry as unknown as AutomationProcessedEntry,
+          ]);
+          await automationPersistRepositoryState(
+            [],
+            [rule as unknown as AutomationRule],
+            [processedEntry as unknown as AutomationProcessedEntry]
+          );
+          await automationValidateRuleActivation(
+            rule as unknown as AutomationRule,
+            {} as unknown as AppConfig,
+            []
+          );
         },
         expected: [
           [TauriCommand.automationRepository.loadState],
           [TauriCommand.automationRepository.persistRules, { rules: [ruleInput] }],
-          [TauriCommand.automationRepository.persistProcessedEntries, { processedEntries: [processedEntry] }],
-          [TauriCommand.automationRepository.persistState, { profiles: [], rules: [ruleInput], processedEntries: [processedEntry] }],
-          [TauriCommand.automationRepository.validateActivation, { rule: ruleInput, globalConfig: {}, tags: [] }],
+          [
+            TauriCommand.automationRepository.persistProcessedEntries,
+            { processedEntries: [processedEntry] },
+          ],
+          [
+            TauriCommand.automationRepository.persistState,
+            { profiles: [], rules: [ruleInput], processedEntries: [processedEntry] },
+          ],
+          [
+            TauriCommand.automationRepository.validateActivation,
+            { rule: ruleInput, globalConfig: {}, tags: [] },
+          ],
         ],
-        verify: () => expect(repoState).toEqual({
-          profiles: [],
-          rules: [{
-            ...rule,
-            kind: 'file',
-            priority: 0,
-            profileId: undefined,
-            profileSource: 'tag_match',
-            actions: { autoPolish: false, autoTranslate: false, autoSummary: false },
-            tagIds: [],
-            migrationNotice: undefined,
-            stageConfig: {
-              ...rule.stageConfig,
-              polishPresetId: undefined,
-              translationLanguage: undefined,
-            },
-            exportConfig: { ...rule.exportConfig, prefix: undefined },
-          }],
-          processedEntries: [{
-            ...processedEntry,
-            kind: 'file',
-            inputVersion: 'fingerprint',
-            attempt: 1,
-            historyId: undefined,
-            exportPath: undefined,
-            errorMessage: undefined,
-          }],
-        }),
+        verify: () =>
+          expect(repoState).toEqual({
+            profiles: [],
+            rules: [
+              {
+                ...rule,
+                kind: 'file',
+                priority: 0,
+                profileId: undefined,
+                profileSource: 'tag_match',
+                actions: { autoPolish: false, autoTranslate: false, autoSummary: false },
+                tagIds: [],
+                migrationNotice: undefined,
+                stageConfig: {
+                  ...rule.stageConfig,
+                  polishPresetId: undefined,
+                  translationLanguage: undefined,
+                },
+                exportConfig: { ...rule.exportConfig, prefix: undefined },
+              },
+            ],
+            processedEntries: [
+              {
+                ...processedEntry,
+                kind: 'file',
+                inputVersion: 'fingerprint',
+                attempt: 1,
+                historyId: undefined,
+                exportPath: undefined,
+                errorMessage: undefined,
+              },
+            ],
+          }),
       },
       {
         name: 'recovery wrappers forward repository commands',
@@ -434,41 +458,60 @@ describe('tauri boundary wrappers', () => {
         },
         expected: [
           [TauriCommand.recovery.loadSnapshot],
-          [TauriCommand.recovery.saveSnapshot, {
-            items: [{
-              ...item,
-              segments: [{
-                ...segment,
-                tokens: null,
-                timestamps: null,
-                durations: null,
-                translation: null,
-                speaker: null,
-                speakerAttribution: null,
-              }],
-            }],
-          }],
-          [TauriCommand.recovery.persistQueueSnapshot, {
-            queueItems: [{
-              ...queueItem,
-              segments: [{
-                ...segment,
-                tokens: null,
-                timestamps: null,
-                durations: null,
-                translation: null,
-                speaker: null,
-                speakerAttribution: null,
-              }],
-            }],
-          }],
+          [
+            TauriCommand.recovery.saveSnapshot,
+            {
+              items: [
+                {
+                  ...item,
+                  segments: [
+                    {
+                      ...segment,
+                      tokens: null,
+                      timestamps: null,
+                      durations: null,
+                      translation: null,
+                      speaker: null,
+                      speakerAttribution: null,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          [
+            TauriCommand.recovery.persistQueueSnapshot,
+            {
+              queueItems: [
+                {
+                  ...queueItem,
+                  segments: [
+                    {
+                      ...segment,
+                      tokens: null,
+                      timestamps: null,
+                      durations: null,
+                      translation: null,
+                      speaker: null,
+                      speakerAttribution: null,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
         ],
-        verify: () => expect(recoverySnapshot).toEqual({ version: 1, updatedAt: 100, items: [item] }),
+        verify: () =>
+          expect(recoverySnapshot).toEqual({ version: 1, updatedAt: 100, items: [item] }),
       },
       {
         name: 'task ledger wrappers forward repository commands',
         arrange: () => {
-          vi.mocked(invoke).mockResolvedValue({ version: 1, updatedAt: 101, tasks: [wireRecord] } as unknown as never);
+          vi.mocked(invoke).mockResolvedValue({
+            version: 1,
+            updatedAt: 101,
+            tasks: [wireRecord],
+          } as unknown as never);
         },
         act: async () => {
           ledgerSnapshot = await taskLedgerLoadSnapshot();
@@ -483,22 +526,28 @@ describe('tauri boundary wrappers', () => {
         expected: [
           [TauriCommand.taskLedger.loadSnapshot],
           [TauriCommand.taskLedger.upsertTask, { record: wireRecord }],
-          [TauriCommand.taskLedger.patchTask, {
-            id: 'task-1',
-            patch: { status: 'cancelRequested', tagIds: ['tag-2'] },
-          }],
+          [
+            TauriCommand.taskLedger.patchTask,
+            {
+              id: 'task-1',
+              patch: { status: 'cancelRequested', tagIds: ['tag-2'] },
+            },
+          ],
           [TauriCommand.taskLedger.removeTask, { id: 'task-1' }],
           [TauriCommand.taskLedger.clearResolved],
         ],
-        verify: () => expect(ledgerSnapshot).toEqual({
-          version: 1,
-          updatedAt: 101,
-          tasks: [{
-            ...record,
-            projectId: undefined,
-            tagIds: ['tag-1'],
-          }],
-        }),
+        verify: () =>
+          expect(ledgerSnapshot).toEqual({
+            version: 1,
+            updatedAt: 101,
+            tasks: [
+              {
+                ...record,
+                projectId: undefined,
+                tagIds: ['tag-1'],
+              },
+            ],
+          }),
       },
       {
         name: 'llm usage wrappers forward analytics repository commands',
@@ -516,16 +565,12 @@ describe('tauri boundary wrappers', () => {
       {
         name: 'dashboard snapshot forwards request payload',
         act: () => getDashboardSnapshot({ deep: true }),
-        expected: [
-          [TauriCommand.dashboard.getSnapshot, { request: { deep: true } }],
-        ],
+        expected: [[TauriCommand.dashboard.getSnapshot, { request: { deep: true } }]],
       },
       {
         name: 'backup wrappers centralize import commands',
         act: () => applyPreparedHistoryImport('import-1'),
-        expected: [
-          [TauriCommand.backup.applyPreparedImport, { importId: 'import-1' }],
-        ],
+        expected: [[TauriCommand.backup.applyPreparedImport, { importId: 'import-1' }]],
       },
     ];
 
@@ -534,8 +579,9 @@ describe('tauri boundary wrappers', () => {
       arrange?.();
       await act();
 
-      const recorded = vi.mocked(invoke).mock.calls
-        .slice(callOffset)
+      const recorded = vi
+        .mocked(invoke)
+        .mock.calls.slice(callOffset)
         .map(([command, args]) => (args === undefined ? [command] : [command, args]));
       expect(recorded, name).toEqual(expected);
       verify?.();
@@ -631,7 +677,7 @@ describe('tauri boundary wrappers', () => {
   it('normalizes a snapshot built from every preset-models.json type', async () => {
     const presetTypeFlags: Record<string, true> = {};
     for (const preset of presetModelsData) {
-        presetTypeFlags[preset.type] = true;
+      presetTypeFlags[preset.type] = true;
     }
     const presetTypes = Object.keys(presetTypeFlags);
     expect(presetTypes.length).toBeGreaterThan(0);
@@ -691,25 +737,25 @@ describe('tauri boundary wrappers', () => {
 
     const result = await getModelCatalogSnapshot();
 
-    expect(result.models.map((model) => model.type)).toEqual(
-      expect.arrayContaining(presetTypes),
-    );
+    expect(result.models.map((model) => model.type)).toEqual(expect.arrayContaining(presetTypes));
     expect(invoke).toHaveBeenCalledWith(TauriCommand.app.getModelCatalogSnapshot);
   });
 
   it('rejects model catalog values outside the UI contract', async () => {
     vi.mocked(invoke).mockResolvedValueOnce({
       modelsDir: 'C:/models',
-      models: [{
-        type: 'future-asr-engine',
-        modes: null,
-        engine: 'sherpa-onnx',
-      }],
+      models: [
+        {
+          type: 'future-asr-engine',
+          modes: null,
+          engine: 'sherpa-onnx',
+        },
+      ],
       sections: [],
     });
 
     await expect(getModelCatalogSnapshot()).rejects.toThrow(
-      'Unexpected model catalog type: future-asr-engine',
+      'Unexpected model catalog type: future-asr-engine'
     );
   });
 
@@ -737,7 +783,7 @@ describe('tauri boundary wrappers', () => {
     });
 
     await expect(getModelCatalogSnapshot()).rejects.toThrow(
-      'Expected a finite number for model catalog vadBufferSize',
+      'Expected a finite number for model catalog vadBufferSize'
     );
   });
 
@@ -882,7 +928,7 @@ describe('tauri boundary wrappers', () => {
       permissionState: 'unexpected',
     });
     await expect(getDiagnosticsCoreSnapshot(input)).rejects.toThrow(
-      'Unexpected diagnostics permission state: unexpected',
+      'Unexpected diagnostics permission state: unexpected'
     );
   });
 
@@ -910,9 +956,7 @@ describe('tauri boundary wrappers', () => {
       ...globalConfig,
       translationLanguage: 'ja',
     };
-    vi.mocked(invoke)
-      .mockResolvedValueOnce(migrationResult)
-      .mockResolvedValueOnce(effectiveConfig);
+    vi.mocked(invoke).mockResolvedValueOnce(migrationResult).mockResolvedValueOnce(effectiveConfig);
 
     await expect(migrateAppConfig(globalConfig, 'Default Rules')).resolves.toEqual(migrationResult);
     await expect(resolveEffectiveConfig(globalConfig, project)).resolves.toEqual(effectiveConfig);
@@ -962,9 +1006,7 @@ describe('tauri boundary wrappers', () => {
   });
 
   it('audio wrappers adapt capture arguments and return values', async () => {
-    vi.mocked(invoke)
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce('record.wav');
+    vi.mocked(invoke).mockResolvedValueOnce(undefined).mockResolvedValueOnce('record.wav');
 
     await startMicrophoneCapture({
       deviceName: 'Mic 1',
@@ -999,16 +1041,18 @@ describe('tauri boundary wrappers', () => {
     expect(result).toEqual({ id: 'history-1' });
     expect(invoke).toHaveBeenCalledWith(TauriCommand.history.updateTranscript, {
       historyId: 'history-1',
-      segments: [{
-        ...segment,
-        timing: null,
-        tokens: null,
-        timestamps: null,
-        durations: null,
-        translation: null,
-        speaker: null,
-        speakerAttribution: null,
-      }],
+      segments: [
+        {
+          ...segment,
+          timing: null,
+          tokens: null,
+          timestamps: null,
+          durations: null,
+          translation: null,
+          speaker: null,
+          speakerAttribution: null,
+        },
+      ],
     });
   });
 
@@ -1026,13 +1070,18 @@ describe('tauri boundary wrappers', () => {
       .mockResolvedValueOnce(undefined);
 
     await historyBuildTranscriptDiff([segment], []);
-    await historyRestoreTranscriptDiffRows([{
-      id: 'row-1',
-      status: 'removed',
-      snapshotSegment: segment,
-      snapshotIndex: 0,
-      currentIndex: null,
-    }], ['row-1']);
+    await historyRestoreTranscriptDiffRows(
+      [
+        {
+          id: 'row-1',
+          status: 'removed',
+          snapshotSegment: segment,
+          snapshotIndex: 0,
+          currentIndex: null,
+        },
+      ],
+      ['row-1']
+    );
     await historySaveSummary('history-1', { activeTemplateId: 'general' });
 
     const wireSegment = {
@@ -1050,14 +1099,16 @@ describe('tauri boundary wrappers', () => {
       currentSegments: [],
     });
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.history.restoreTranscriptDiffRows, {
-      rows: [{
-        id: 'row-1',
-        status: 'removed',
-        snapshotSegment: wireSegment,
-        currentSegment: null,
-        snapshotIndex: 0,
-        currentIndex: null,
-      }],
+      rows: [
+        {
+          id: 'row-1',
+          status: 'removed',
+          snapshotSegment: wireSegment,
+          currentSegment: null,
+          snapshotIndex: 0,
+          currentIndex: null,
+        },
+      ],
       selectedRowIds: ['row-1'],
     });
     expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.history.saveSummary, {
@@ -1130,37 +1181,41 @@ describe('tauri boundary wrappers', () => {
   });
 
   it('history transcript reads normalize nullable wire fields for the editor model', async () => {
-    vi.mocked(invoke).mockResolvedValueOnce([{
-      id: 'segment-1',
-      text: 'hello',
-      start: 0,
-      end: 1,
-      isFinal: true,
-      timing: null,
-      tokens: null,
-      timestamps: null,
-      durations: null,
-      translation: null,
-      speaker: { id: 'speaker-1', label: 'Speaker 1', kind: 'anonymous', score: null },
-      speakerAttribution: null,
-    }]);
+    vi.mocked(invoke).mockResolvedValueOnce([
+      {
+        id: 'segment-1',
+        text: 'hello',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        timing: null,
+        tokens: null,
+        timestamps: null,
+        durations: null,
+        translation: null,
+        speaker: { id: 'speaker-1', label: 'Speaker 1', kind: 'anonymous', score: null },
+        speakerAttribution: null,
+      },
+    ]);
 
     const result = await historyLoadTranscript('history-1');
 
-    expect(result).toEqual([{
-      id: 'segment-1',
-      text: 'hello',
-      start: 0,
-      end: 1,
-      isFinal: true,
-      timing: undefined,
-      tokens: undefined,
-      timestamps: undefined,
-      durations: undefined,
-      translation: undefined,
-      speaker: { id: 'speaker-1', label: 'Speaker 1', kind: 'anonymous', score: undefined },
-      speakerAttribution: undefined,
-    }]);
+    expect(result).toEqual([
+      {
+        id: 'segment-1',
+        text: 'hello',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        timing: undefined,
+        tokens: undefined,
+        timestamps: undefined,
+        durations: undefined,
+        translation: undefined,
+        speaker: { id: 'speaker-1', label: 'Speaker 1', kind: 'anonymous', score: undefined },
+        speakerAttribution: undefined,
+      },
+    ]);
   });
 
   it('history workspace query wrapper forwards flat query args', async () => {
@@ -1276,9 +1331,7 @@ describe('tauri boundary wrappers', () => {
       afterBytes: 1,
       clearRequested: true,
     };
-    vi.mocked(invoke)
-      .mockResolvedValueOnce(snapshot)
-      .mockResolvedValueOnce(clearResult);
+    vi.mocked(invoke).mockResolvedValueOnce(snapshot).mockResolvedValueOnce(clearResult);
 
     await expect(storageGetUsageSnapshot()).resolves.toEqual(snapshot);
     await expect(storageClearWebviewBrowsingData()).resolves.toEqual(clearResult);
@@ -1306,7 +1359,9 @@ describe('tauri boundary wrappers', () => {
       .mockResolvedValueOnce(undefined);
 
     await expect(storageGetDirectories()).resolves.toEqual(directoriesInfo);
-    await expect(storageMigrateDataDirectory('C:/SonaData', true)).resolves.toEqual(directoriesInfo);
+    await expect(storageMigrateDataDirectory('C:/SonaData', true)).resolves.toEqual(
+      directoriesInfo
+    );
     await expect(storageResetDataDirectory()).resolves.toEqual(directoriesInfo);
     await expect(storageSetModelsDirectory('D:/Models', false)).resolves.toEqual(directoriesInfo);
     await expect(storageResetModelsDirectory()).resolves.toEqual(directoriesInfo);
@@ -1389,7 +1444,7 @@ describe('tauri boundary wrappers', () => {
     };
     await expect(completeLlm(request)).resolves.toEqual(response);
     await expect(describeLlmModel(uiLlmConfig)).resolves.toEqual(
-      expect.objectContaining({ displayName: 'GPT-4.1' }),
+      expect.objectContaining({ displayName: 'GPT-4.1' })
     );
 
     expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.llm.complete, {
@@ -1418,12 +1473,14 @@ describe('tauri boundary wrappers', () => {
     const models = [{ model: 'gpt-4.1', inputPrice: 0.01, contextWindow: 1_000_000 }];
     vi.mocked(invoke).mockResolvedValueOnce(models);
 
-    await expect(listLlmModels({
-      provider: 'open_ai',
-      strategy: 'openai_compatible',
-      baseUrl: 'https://api.openai.com',
-      apiKey: 'test-key',
-    })).resolves.toEqual(models);
+    await expect(
+      listLlmModels({
+        provider: 'open_ai',
+        strategy: 'openai_compatible',
+        baseUrl: 'https://api.openai.com',
+        apiKey: 'test-key',
+      })
+    ).resolves.toEqual(models);
 
     expect(invoke).toHaveBeenCalledWith(TauriCommand.llm.listModels, {
       request: {
@@ -1436,28 +1493,34 @@ describe('tauri boundary wrappers', () => {
   });
 
   it('rejects non-finite and unsafe LLM request numbers before invoking Tauri', async () => {
-    await expect(completeLlm({
-      config: { ...uiLlmConfig, temperature: Number.POSITIVE_INFINITY },
-      input: 'answer',
-    })).rejects.toThrow('request.config.temperature must be a finite number');
+    await expect(
+      completeLlm({
+        config: { ...uiLlmConfig, temperature: Number.POSITIVE_INFINITY },
+        input: 'answer',
+      })
+    ).rejects.toThrow('request.config.temperature must be a finite number');
 
-    await expect(completeLlm({
-      config: uiLlmConfig,
-      input: 'answer',
-      options: { maxOutputTokens: Number.MAX_SAFE_INTEGER + 1 },
-    })).rejects.toThrow('request.options.maxOutputTokens must be a non-negative safe integer');
+    await expect(
+      completeLlm({
+        config: uiLlmConfig,
+        input: 'answer',
+        options: { maxOutputTokens: Number.MAX_SAFE_INTEGER + 1 },
+      })
+    ).rejects.toThrow('request.options.maxOutputTokens must be a non-negative safe integer');
 
-    await expect(completeLlm({
-      config: uiLlmConfig,
-      input: 'answer',
-      options: {
-        responseFormat: {
-          type: 'json_schema',
-          name: 'answer',
-          schema: { maximum: Number.POSITIVE_INFINITY },
+    await expect(
+      completeLlm({
+        config: uiLlmConfig,
+        input: 'answer',
+        options: {
+          responseFormat: {
+            type: 'json_schema',
+            name: 'answer',
+            schema: { maximum: Number.POSITIVE_INFINITY },
+          },
         },
-      },
-    })).rejects.toThrow('request.options.responseFormat.schema.maximum must be a finite number');
+      })
+    ).rejects.toThrow('request.options.responseFormat.schema.maximum must be a finite number');
 
     expect(invoke).not.toHaveBeenCalled();
   });
@@ -1467,21 +1530,25 @@ describe('tauri boundary wrappers', () => {
       { model: 'broken-price', inputPrice: Number.POSITIVE_INFINITY },
     ]);
 
-    await expect(listLlmModels({
-      provider: 'open_ai',
-      baseUrl: 'https://api.openai.com',
-      apiKey: 'test-key',
-    })).rejects.toThrow('result[0].inputPrice must be a finite number');
+    await expect(
+      listLlmModels({
+        provider: 'open_ai',
+        baseUrl: 'https://api.openai.com',
+        apiKey: 'test-key',
+      })
+    ).rejects.toThrow('result[0].inputPrice must be a finite number');
 
     vi.mocked(invoke).mockResolvedValueOnce([
       { model: 'unsafe-window', contextWindow: Number.MAX_SAFE_INTEGER + 1 },
     ]);
 
-    await expect(listLlmModels({
-      provider: 'open_ai',
-      baseUrl: 'https://api.openai.com',
-      apiKey: 'test-key',
-    })).rejects.toThrow('result[0].contextWindow must be a non-negative safe integer');
+    await expect(
+      listLlmModels({
+        provider: 'open_ai',
+        baseUrl: 'https://api.openai.com',
+        apiKey: 'test-key',
+      })
+    ).rejects.toThrow('result[0].contextWindow must be a non-negative safe integer');
   });
 
   it('rejects unsafe dynamic JSON numbers in LLM completion responses', async () => {
@@ -1497,20 +1564,19 @@ describe('tauri boundary wrappers', () => {
       },
     });
 
-    await expect(completeLlm({
-      config: uiLlmConfig,
-      input: 'answer',
-    })).rejects.toThrow('result.json.nested[0] must be a safe integer');
+    await expect(
+      completeLlm({
+        config: uiLlmConfig,
+        input: 'answer',
+      })
+    ).rejects.toThrow('result.json.nested[0] must be a safe integer');
   });
 
   it('normalizes all transcript task requests to generated Core contracts', async () => {
-    vi.mocked(invoke)
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce({
-        templateId: 'default',
-        content: 'summary',
-      });
+    vi.mocked(invoke).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce({
+      templateId: 'default',
+      content: 'summary',
+    });
 
     await polishTranscriptSegments({
       taskId: 'polish-task',
@@ -1567,12 +1633,14 @@ describe('tauri boundary wrappers', () => {
   });
 
   it('rejects unsafe transcript task chunk sizes before invoking Tauri', async () => {
-    await expect(polishTranscriptSegments({
-      taskId: 'polish-task',
-      config: uiLlmConfig,
-      segments: [{ id: '1', text: 'hello' }],
-      chunkSize: -1,
-    })).rejects.toThrow('request.chunkSize must be a non-negative safe integer');
+    await expect(
+      polishTranscriptSegments({
+        taskId: 'polish-task',
+        config: uiLlmConfig,
+        segments: [{ id: '1', text: 'hello' }],
+        chunkSize: -1,
+      })
+    ).rejects.toThrow('request.chunkSize must be a non-negative safe integer');
 
     expect(invoke).not.toHaveBeenCalled();
   });
@@ -1808,17 +1876,21 @@ describe('tauri boundary wrappers', () => {
       speakerProcessing: {
         speakerSegmentationModelPath: 'C:/models/seg.onnx',
         speakerEmbeddingModelPath: 'C:/models/embed.onnx',
-        speakerProfiles: [{
-          id: 'profile-1',
-          name: 'Alice',
-          enabled: true,
-          samples: [{
-            id: 'sample-1',
-            filePath: 'C:/samples/alice.wav',
-            sourceName: 'alice.wav',
-            durationSeconds: 1.5,
-          }],
-        }],
+        speakerProfiles: [
+          {
+            id: 'profile-1',
+            name: 'Alice',
+            enabled: true,
+            samples: [
+              {
+                id: 'sample-1',
+                filePath: 'C:/samples/alice.wav',
+                sourceName: 'alice.wav',
+                durationSeconds: 1.5,
+              },
+            ],
+          },
+        ],
       },
       asrRequest: {
         engine: 'local',
@@ -1847,17 +1919,21 @@ describe('tauri boundary wrappers', () => {
       speakerProcessing: {
         speakerSegmentationModelPath: 'C:/models/seg.onnx',
         speakerEmbeddingModelPath: 'C:/models/embed.onnx',
-        speakerProfiles: [{
-          id: 'profile-1',
-          name: 'Alice',
-          enabled: true,
-          samples: [{
-            id: 'sample-1',
-            filePath: 'C:/samples/alice.wav',
-            sourceName: 'alice.wav',
-            durationSeconds: 1.5,
-          }],
-        }],
+        speakerProfiles: [
+          {
+            id: 'profile-1',
+            name: 'Alice',
+            enabled: true,
+            samples: [
+              {
+                id: 'sample-1',
+                filePath: 'C:/samples/alice.wav',
+                sourceName: 'alice.wav',
+                durationSeconds: 1.5,
+              },
+            ],
+          },
+        ],
       },
       asrRequest: expect.objectContaining({
         engine: 'local',
@@ -1890,23 +1966,25 @@ describe('tauri boundary wrappers', () => {
     const segment = { id: 'segment-1', text: 'hello', start: 0, end: 1, isFinal: true };
     vi.mocked(invoke).mockResolvedValueOnce({
       status: 'conflict',
-      current_segments: [{
-        ...segment,
-        timing: null,
-        tokens: null,
-        timestamps: null,
-        durations: null,
-        translation: null,
-        speaker: null,
-        speakerAttribution: null,
-      }],
+      current_segments: [
+        {
+          ...segment,
+          timing: null,
+          tokens: null,
+          timestamps: null,
+          durations: null,
+          translation: null,
+          speaker: null,
+          speakerAttribution: null,
+        },
+      ],
     });
 
     const result = await historyCommitTranscriptEdit(
       'history-1',
       'session-1',
       [segment],
-      [{ ...segment, text: 'edited' }],
+      [{ ...segment, text: 'edited' }]
     );
 
     expect(result).toEqual({ status: 'conflict', currentSegments: [segment] });
@@ -1930,9 +2008,7 @@ describe('tauri boundary wrappers', () => {
       updatedAt: 101,
     };
     const tag = { ...wireTag };
-    vi.mocked(invoke)
-      .mockResolvedValueOnce([wireTag])
-      .mockResolvedValueOnce(undefined);
+    vi.mocked(invoke).mockResolvedValueOnce([wireTag]).mockResolvedValueOnce(undefined);
 
     const listed = await tagList();
     await tagSaveAll([tag]);
@@ -2053,9 +2129,7 @@ describe('tauri boundary wrappers', () => {
   });
 
   it('system wrappers centralize native text and cursor helpers', async () => {
-    vi.mocked(invoke)
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce([640, 360]);
+    vi.mocked(invoke).mockResolvedValueOnce(undefined).mockResolvedValueOnce([640, 360]);
 
     await injectText('hello', ['alt']);
     const mousePosition = await getMousePosition();
@@ -2069,9 +2143,7 @@ describe('tauri boundary wrappers', () => {
   });
 
   it('system aux-window wrappers preserve generic call sites', async () => {
-    vi.mocked(invoke)
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce({ theme: 'dark' });
+    vi.mocked(invoke).mockResolvedValueOnce(undefined).mockResolvedValueOnce({ theme: 'dark' });
 
     await setAuxWindowState('voice-typing', { theme: 'dark' });
     const state = await getAuxWindowState<{ theme: string }>('voice-typing');
@@ -2085,5 +2157,4 @@ describe('tauri boundary wrappers', () => {
       label: 'voice-typing',
     });
   });
-
 });

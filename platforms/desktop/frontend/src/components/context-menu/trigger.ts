@@ -7,7 +7,7 @@ export interface ContextMenuOpenRequest {
 }
 
 export function createPointerContextMenuRequest(
-  event: React.MouseEvent<HTMLElement>,
+  event: React.MouseEvent<HTMLElement>
 ): ContextMenuOpenRequest {
   return {
     anchor: event.currentTarget,
@@ -16,9 +16,7 @@ export function createPointerContextMenuRequest(
   };
 }
 
-export function createKeyboardContextMenuRequest(
-  anchor: HTMLElement,
-): ContextMenuOpenRequest {
+export function createKeyboardContextMenuRequest(anchor: HTMLElement): ContextMenuOpenRequest {
   const rect = anchor.getBoundingClientRect();
   return {
     anchor,
@@ -27,8 +25,6 @@ export function createKeyboardContextMenuRequest(
   };
 }
 
-export function isContextMenuKeyboardEvent(
-  event: React.KeyboardEvent<HTMLElement>,
-): boolean {
+export function isContextMenuKeyboardEvent(event: React.KeyboardEvent<HTMLElement>): boolean {
   return event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey);
 }

@@ -1,6 +1,6 @@
 import type { AppConfig } from '../types/config';
+import { type ModelInfo, PRESET_MODELS } from '../types/modelCatalog';
 import { modelService } from './modelService';
-import { PRESET_MODELS, type ModelInfo } from '../types/modelCatalog';
 
 export const RECOMMENDED_RECOGNITION_MODEL_ID =
   'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
@@ -23,9 +23,10 @@ export interface RecommendedOnboardingPaths {
  * Returns the recommended model set used by the first-run wizard.
  */
 export function getRecommendedOnboardingModels(): ModelInfo[] {
-  return PRESET_MODELS.filter((model) => (
-    model.id === RECOMMENDED_RECOGNITION_MODEL_ID || model.id === RECOMMENDED_VAD_MODEL_ID
-  )).sort((left, right) => {
+  return PRESET_MODELS.filter(
+    (model) =>
+      model.id === RECOMMENDED_RECOGNITION_MODEL_ID || model.id === RECOMMENDED_VAD_MODEL_ID
+  ).sort((left, right) => {
     const order = [RECOMMENDED_RECOGNITION_MODEL_ID, RECOMMENDED_VAD_MODEL_ID];
     return order.indexOf(left.id) - order.indexOf(right.id);
   });
@@ -49,7 +50,7 @@ export async function resolveRecommendedOnboardingPaths(): Promise<RecommendedOn
  * Builds the config fragment applied after onboarding downloads complete.
  */
 export function getRecommendedOnboardingConfig(
-  paths: RecommendedOnboardingPaths,
+  paths: RecommendedOnboardingPaths
 ): Partial<AppConfig> {
   return {
     streamingModelPath: paths.streamingModelPath,
@@ -65,7 +66,7 @@ export function getRecommendedOnboardingConfig(
  */
 export async function downloadRecommendedOnboardingModels(
   onUpdate?: (update: OnboardingDownloadUpdate) => void,
-  signal?: AbortSignal,
+  signal?: AbortSignal
 ): Promise<RecommendedOnboardingPaths> {
   const downloads = await Promise.all(
     getRecommendedOnboardingModels().map(async (model) => {
@@ -79,17 +80,19 @@ export async function downloadRecommendedOnboardingModels(
             isFinished,
           });
         },
-        signal,
+        signal
       );
 
       return {
         modelId: model.id,
         path,
       };
-    }),
+    })
   );
 
-  const recognitionPath = downloads.find((item) => item.modelId === RECOMMENDED_RECOGNITION_MODEL_ID)?.path;
+  const recognitionPath = downloads.find(
+    (item) => item.modelId === RECOMMENDED_RECOGNITION_MODEL_ID
+  )?.path;
   const vadPath = downloads.find((item) => item.modelId === RECOMMENDED_VAD_MODEL_ID)?.path;
 
   if (!recognitionPath || !vadPath) {

@@ -17,12 +17,13 @@ vi.mock('../audioDeviceService', () => ({
   probeSystemAudioDeviceOptions: mocks.probeSystemAudio,
 }));
 
-import { diagnosticsService } from '../diagnosticsService';
 import { DEFAULT_CONFIG, useConfigStore } from '../../stores/configStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useVoiceTypingRuntimeStore } from '../../stores/voiceTypingRuntimeStore';
+import { diagnosticsService } from '../diagnosticsService';
 
-const STREAMING_SENSEVOICE_PATH = 'C:\\models\\sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
+const STREAMING_SENSEVOICE_PATH =
+  'C:\\models\\sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
 const BATCH_QWEN_PATH = 'C:\\models\\qwen3-asr-0.6b-q8-gguf';
 const VAD_PATH = 'C:\\models\\silero_vad.onnx';
 
@@ -183,11 +184,9 @@ describe('diagnosticsService', () => {
             lastErrorMessage: null,
           }),
         }),
-      }),
+      })
     );
-    expect(JSON.stringify(mocks.invoke.mock.calls[0]?.[1])).not.toContain(
-      'liveModelConfigured',
-    );
+    expect(JSON.stringify(mocks.invoke.mock.calls[0]?.[1])).not.toContain('liveModelConfigured');
   });
 
   it('builds diagnostics UI spec in TS from Rust-owned fact fields', async () => {
@@ -196,10 +195,14 @@ describe('diagnosticsService', () => {
     const snapshot = await diagnosticsService.collectSnapshot(t);
     const liveOverview = snapshot.overview.find((card) => card.id === 'live-record');
     const inputSection = snapshot.sections.find((section) => section.id === 'input-capture');
-    const runtimeSection = snapshot.sections.find((section) => section.id === 'runtime-environment');
+    const runtimeSection = snapshot.sections.find(
+      (section) => section.id === 'runtime-environment'
+    );
     const microphoneCheck = inputSection?.checks.find((check) => check.id === 'microphone-device');
     const logDirCheck = runtimeSection?.checks.find((check) => check.id === 'log-dir');
-    const permissionCheck = inputSection?.checks.find((check) => check.id === 'microphone-permission');
+    const permissionCheck = inputSection?.checks.find(
+      (check) => check.id === 'microphone-permission'
+    );
 
     expect(snapshot.scannedAt).toBe('2026-05-03T00:00:00.000Z');
     expect(liveOverview).toEqual(
@@ -209,25 +212,25 @@ describe('diagnosticsService', () => {
           kind: 'request_microphone_permission',
           label: '请求权限',
         }),
-      }),
+      })
     );
     expect(microphoneCheck).toEqual(
       expect.objectContaining({
         title: 'Input Device',
         meta: '自动',
-      }),
+      })
     );
     expect(logDirCheck).toEqual(
       expect.objectContaining({
         title: 'Log Directory',
         meta: 'C:\\app\\logs',
-      }),
+      })
     );
     expect(permissionCheck?.action).toEqual(
       expect.objectContaining({
         kind: 'request_microphone_permission',
         label: '请求权限',
-      }),
+      })
     );
   });
 });

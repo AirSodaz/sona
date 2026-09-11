@@ -35,9 +35,7 @@ export function notifySyncLocalChangeForCommand(command: string): void {
   listeners.forEach((listener) => listener());
 }
 
-export function subscribeToSyncLocalChanges(
-  listener: SyncLocalChangeListener,
-): () => void {
+export function subscribeToSyncLocalChanges(listener: SyncLocalChangeListener): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }

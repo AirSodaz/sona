@@ -63,7 +63,10 @@ export function getErrorDetails(error: unknown): string | undefined {
   return normalized.message;
 }
 
-export function buildErrorDialogOptions(t: TranslateFn, input: AppErrorInput): BuiltErrorDialogOptions {
+export function buildErrorDialogOptions(
+  t: TranslateFn,
+  input: AppErrorInput
+): BuiltErrorDialogOptions {
   const fallbackMessage = t('errors.common.operation_failed', {
     defaultValue: 'The operation could not be completed.',
   });
@@ -81,7 +84,10 @@ export function buildErrorDialogOptions(t: TranslateFn, input: AppErrorInput): B
   };
 }
 
-export function buildErrorDialogViewModel(t: TranslateFn, input: AppErrorInput): ErrorDialogViewModel {
+export function buildErrorDialogViewModel(
+  t: TranslateFn,
+  input: AppErrorInput
+): ErrorDialogViewModel {
   const { title, message, details } = buildErrorDialogOptions(t, input);
   const hasPrimaryAction = Boolean(input.primaryActionLabelKey);
 
@@ -103,7 +109,10 @@ export function buildErrorDialogViewModel(t: TranslateFn, input: AppErrorInput):
   };
 }
 
-function extractMessageCandidate(error: unknown, visited = new WeakSet<object>()): string | undefined {
+function extractMessageCandidate(
+  error: unknown,
+  visited = new WeakSet<object>()
+): string | undefined {
   if (typeof error === 'string') {
     return error.trim() || undefined;
   }

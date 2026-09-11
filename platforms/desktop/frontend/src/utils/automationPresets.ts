@@ -76,23 +76,24 @@ const CUSTOM_AUTOMATION_PRESET: AutomationPresetDefinition = {
 };
 
 export function isBuiltInAutomationPresetId(
-  presetId: AutomationPresetId | string | null | undefined,
+  presetId: AutomationPresetId | string | null | undefined
 ): presetId is BuiltInAutomationPresetId {
   return AUTOMATION_PRESETS.some((preset) => preset.id === presetId);
 }
 
-export function getAutomationPresetDefinition(presetId: AutomationPresetId | string | null | undefined): AutomationPresetDefinition {
+export function getAutomationPresetDefinition(
+  presetId: AutomationPresetId | string | null | undefined
+): AutomationPresetDefinition {
   if (presetId === 'custom') {
     return CUSTOM_AUTOMATION_PRESET;
   }
 
-  return AUTOMATION_PRESETS.find((preset) => preset.id === presetId)
-    ?? AUTOMATION_PRESETS[0];
+  return AUTOMATION_PRESETS.find((preset) => preset.id === presetId) ?? AUTOMATION_PRESETS[0];
 }
 
 export function applyAutomationPreset(
   presetId: BuiltInAutomationPresetId,
-  rule: Pick<AutomationRule, 'stageConfig' | 'exportConfig'>,
+  rule: Pick<AutomationRule, 'stageConfig' | 'exportConfig'>
 ): Pick<AutomationRule, 'stageConfig' | 'exportConfig'> {
   const preset = getAutomationPresetDefinition(presetId);
   return {
@@ -109,21 +110,21 @@ export function applyAutomationPreset(
 
 export function matchesAutomationPreset(
   presetId: BuiltInAutomationPresetId,
-  rule: Pick<AutomationRule, 'stageConfig' | 'exportConfig'>,
+  rule: Pick<AutomationRule, 'stageConfig' | 'exportConfig'>
 ): boolean {
   const preset = getAutomationPresetDefinition(presetId);
 
   return (
-    rule.stageConfig.autoPolish === preset.stageConfig.autoPolish
-    && rule.stageConfig.autoTranslate === preset.stageConfig.autoTranslate
-    && rule.stageConfig.exportEnabled === preset.stageConfig.exportEnabled
-    && rule.exportConfig.format === preset.exportConfig.format
-    && rule.exportConfig.mode === preset.exportConfig.mode
+    rule.stageConfig.autoPolish === preset.stageConfig.autoPolish &&
+    rule.stageConfig.autoTranslate === preset.stageConfig.autoTranslate &&
+    rule.stageConfig.exportEnabled === preset.stageConfig.exportEnabled &&
+    rule.exportConfig.format === preset.exportConfig.format &&
+    rule.exportConfig.mode === preset.exportConfig.mode
   );
 }
 
 export function findMatchingAutomationPreset(
-  rule: Pick<AutomationRule, 'stageConfig' | 'exportConfig'>,
+  rule: Pick<AutomationRule, 'stageConfig' | 'exportConfig'>
 ): BuiltInAutomationPresetId | null {
   return AUTOMATION_PRESETS.find((preset) => matchesAutomationPreset(preset.id, rule))?.id ?? null;
 }

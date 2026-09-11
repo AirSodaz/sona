@@ -1,81 +1,81 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { useDialogStore } from '../dialogStore';
 
 describe('dialogStore', () => {
-    beforeEach(() => {
-        useDialogStore.setState({
-            isOpen: false,
-            options: null,
-            resolveRef: null
-        });
+  beforeEach(() => {
+    useDialogStore.setState({
+      isOpen: false,
+      options: null,
+      resolveRef: null,
+    });
+  });
+
+  it('should open alert dialog and resolve when closed', async () => {
+    const { alert, close } = useDialogStore.getState();
+
+    let resolved = false;
+    const promise = alert('Hello').then(() => {
+      resolved = true;
     });
 
-    it('should open alert dialog and resolve when closed', async () => {
-        const { alert, close } = useDialogStore.getState();
+    expect(useDialogStore.getState().isOpen).toBe(true);
+    expect(useDialogStore.getState().options?.message).toBe('Hello');
+    expect(useDialogStore.getState().options?.type).toBe('alert');
 
-        let resolved = false;
-        const promise = alert('Hello').then(() => {
-            resolved = true;
-        });
+    expect(resolved).toBe(false);
 
-        expect(useDialogStore.getState().isOpen).toBe(true);
-        expect(useDialogStore.getState().options?.message).toBe('Hello');
-        expect(useDialogStore.getState().options?.type).toBe('alert');
+    // Close it
+    close(true);
 
-        expect(resolved).toBe(false);
+    await promise;
+    expect(resolved).toBe(true);
+    expect(useDialogStore.getState().isOpen).toBe(false);
+  });
 
-        // Close it
-        close(true);
+  it('should open confirm dialog and resolve with true when confirmed', async () => {
+    const { confirm, close } = useDialogStore.getState();
 
-        await promise;
-        expect(resolved).toBe(true);
-        expect(useDialogStore.getState().isOpen).toBe(false);
+    const promise = confirm('Are you sure?');
+
+    expect(useDialogStore.getState().isOpen).toBe(true);
+    expect(useDialogStore.getState().options?.type).toBe('confirm');
+
+    close(true);
+
+    const result = await promise;
+    expect(result).toBe(true);
+  });
+
+  it('should open confirm dialog and resolve with false when cancelled', async () => {
+    const { confirm, close } = useDialogStore.getState();
+
+    const promise = confirm('Are you sure?');
+
+    expect(useDialogStore.getState().isOpen).toBe(true);
+
+    close(false);
+
+    const result = await promise;
+    expect(result).toBe(false);
+  });
+
+  it('should open a standardized error dialog with details', async () => {
+    const { showError, close } = useDialogStore.getState();
+
+    const promise = showError({
+      code: 'translation.failed',
+      messageKey: 'errors.translation.failed',
+      cause: new Error('timeout'),
     });
 
-    it('should open confirm dialog and resolve with true when confirmed', async () => {
-        const { confirm, close } = useDialogStore.getState();
+    expect(useDialogStore.getState().isOpen).toBe(true);
+    expect(useDialogStore.getState().options?.title).toBeTruthy();
+    expect(useDialogStore.getState().options?.variant).toBe('error');
+    expect(useDialogStore.getState().options?.details).toBe('timeout');
 
-        const promise = confirm('Are you sure?');
+    close(true);
 
-        expect(useDialogStore.getState().isOpen).toBe(true);
-        expect(useDialogStore.getState().options?.type).toBe('confirm');
-
-        close(true);
-
-        const result = await promise;
-        expect(result).toBe(true);
-    });
-
-    it('should open confirm dialog and resolve with false when cancelled', async () => {
-        const { confirm, close } = useDialogStore.getState();
-
-        const promise = confirm('Are you sure?');
-
-        expect(useDialogStore.getState().isOpen).toBe(true);
-
-        close(false);
-
-        const result = await promise;
-        expect(result).toBe(false);
-    });
-
-    it('should open a standardized error dialog with details', async () => {
-        const { showError, close } = useDialogStore.getState();
-
-        const promise = showError({
-            code: 'translation.failed',
-            messageKey: 'errors.translation.failed',
-            cause: new Error('timeout'),
-        });
-
-        expect(useDialogStore.getState().isOpen).toBe(true);
-        expect(useDialogStore.getState().options?.title).toBeTruthy();
-        expect(useDialogStore.getState().options?.variant).toBe('error');
-        expect(useDialogStore.getState().options?.details).toBe('timeout');
-
-        close(true);
-
-        await promise;
-        expect(useDialogStore.getState().isOpen).toBe(false);
-    });
+    await promise;
+    expect(useDialogStore.getState().isOpen).toBe(false);
+  });
 });

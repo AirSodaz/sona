@@ -19,48 +19,48 @@ export const BUILTIN_SUMMARY_TEMPLATES = [
     labelKey: 'summary.templates.general',
     defaultLabel: 'General',
     instructions:
-      '1. A short overview paragraph.\n'
-      + '2. A concise list of key points.\n'
-      + '3. Follow-up items or next steps only if they are supported by the transcript.',
+      '1. A short overview paragraph.\n' +
+      '2. A concise list of key points.\n' +
+      '3. Follow-up items or next steps only if they are supported by the transcript.',
   },
   {
     id: 'meeting',
     labelKey: 'summary.templates.meeting',
     defaultLabel: 'Meeting',
     instructions:
-      '1. Meeting overview.\n'
-      + '2. Decisions made.\n'
-      + '3. Action items with owners when the transcript names them.\n'
-      + '4. Open questions, blockers, or risks.',
+      '1. Meeting overview.\n' +
+      '2. Decisions made.\n' +
+      '3. Action items with owners when the transcript names them.\n' +
+      '4. Open questions, blockers, or risks.',
   },
   {
     id: 'lecture',
     labelKey: 'summary.templates.lecture',
     defaultLabel: 'Lecture',
     instructions:
-      '1. Lecture overview.\n'
-      + '2. Core concepts or arguments.\n'
-      + '3. Important examples, evidence, or explanations.\n'
-      + '4. Review points or next steps for study.',
+      '1. Lecture overview.\n' +
+      '2. Core concepts or arguments.\n' +
+      '3. Important examples, evidence, or explanations.\n' +
+      '4. Review points or next steps for study.',
   },
 ] as const satisfies readonly BuiltInSummaryTemplate[];
 
-export type BuiltInSummaryTemplateId = typeof BUILTIN_SUMMARY_TEMPLATES[number]['id'];
+export type BuiltInSummaryTemplateId = (typeof BUILTIN_SUMMARY_TEMPLATES)[number]['id'];
 
 export function isBuiltInSummaryTemplateId(
-  value: string | null | undefined,
+  value: string | null | undefined
 ): value is BuiltInSummaryTemplateId {
   return BUILTIN_SUMMARY_TEMPLATES.some((template) => template.id === value);
 }
 
 export function getBuiltInSummaryTemplate(
-  id: string | null | undefined,
+  id: string | null | undefined
 ): BuiltInSummaryTemplate | undefined {
   return BUILTIN_SUMMARY_TEMPLATES.find((template) => template.id === id);
 }
 
 export function normalizeSummaryCustomTemplates(
-  templates: SummaryCustomTemplate[] | null | undefined,
+  templates: SummaryCustomTemplate[] | null | undefined
 ): SummaryCustomTemplate[] {
   if (!Array.isArray(templates) || templates.length === 0) {
     return [];
@@ -75,15 +75,19 @@ export function normalizeSummaryCustomTemplates(
       continue;
     }
 
-    const id = typeof template.id === 'string' && template.id.trim()
-      ? template.id.trim()
-      : createImportedSummaryTemplateId(`${template.name ?? ''}-${template.instructions ?? ''}-${index}`);
+    const id =
+      typeof template.id === 'string' && template.id.trim()
+        ? template.id.trim()
+        : createImportedSummaryTemplateId(
+            `${template.name ?? ''}-${template.instructions ?? ''}-${index}`
+          );
     if (seenIds.has(id)) {
       continue;
     }
 
     const name = typeof template.name === 'string' ? template.name.trim() : '';
-    const instructions = typeof template.instructions === 'string' ? template.instructions.trim() : '';
+    const instructions =
+      typeof template.instructions === 'string' ? template.instructions.trim() : '';
     if (!name || !instructions) {
       continue;
     }
@@ -102,21 +106,23 @@ export function normalizeSummaryCustomTemplates(
 export function getSummaryTemplateLabel(
   templateId: string | null | undefined,
   customTemplates: SummaryCustomTemplate[] | null | undefined,
-  t: TFunction,
+  t: TFunction
 ): string {
   const builtIn = getBuiltInSummaryTemplate(templateId);
   if (builtIn) {
     return t(builtIn.labelKey, { defaultValue: builtIn.defaultLabel });
   }
 
-  return normalizeSummaryCustomTemplates(customTemplates).find((template) => template.id === templateId)?.name
-    || t('summary.templates.general', { defaultValue: 'General' });
+  return (
+    normalizeSummaryCustomTemplates(customTemplates).find((template) => template.id === templateId)
+      ?.name || t('summary.templates.general', { defaultValue: 'General' })
+  );
 }
 
 export function resolveSummaryTemplate(
   templateId: string | null | undefined,
   customTemplates: SummaryCustomTemplate[] | null | undefined,
-  t?: TFunction,
+  t?: TFunction
 ): ResolvedSummaryTemplate {
   const builtIn = getBuiltInSummaryTemplate(templateId);
   if (builtIn) {
@@ -128,7 +134,9 @@ export function resolveSummaryTemplate(
     };
   }
 
-  const custom = normalizeSummaryCustomTemplates(customTemplates).find((template) => template.id === templateId);
+  const custom = normalizeSummaryCustomTemplates(customTemplates).find(
+    (template) => template.id === templateId
+  );
   if (custom) {
     return {
       id: custom.id,
@@ -149,7 +157,7 @@ export function resolveSummaryTemplate(
 
 export function getSummaryTemplateOptions(
   customTemplates: SummaryCustomTemplate[] | null | undefined,
-  t: TFunction,
+  t: TFunction
 ): Array<{ value: string; label: string }> {
   const builtInOptions = BUILTIN_SUMMARY_TEMPLATES.map((template) => ({
     value: template.id,
@@ -165,13 +173,15 @@ export function getSummaryTemplateOptions(
 
 export function coerceSummaryTemplateId(
   templateId: string | null | undefined,
-  customTemplates: SummaryCustomTemplate[] | null | undefined,
+  customTemplates: SummaryCustomTemplate[] | null | undefined
 ): SummaryTemplateId {
   if (isBuiltInSummaryTemplateId(templateId)) {
     return templateId;
   }
 
-  return normalizeSummaryCustomTemplates(customTemplates).some((template) => template.id === templateId)
+  return normalizeSummaryCustomTemplates(customTemplates).some(
+    (template) => template.id === templateId
+  )
     ? (templateId as SummaryTemplateId)
     : DEFAULT_SUMMARY_TEMPLATE_ID;
 }
@@ -186,5 +196,7 @@ function hashString(value: string): string {
     hash = ((hash << 5) + hash) ^ value.charCodeAt(index);
   }
 
-  return Math.abs(hash >>> 0).toString(16).padStart(8, '0');
+  return Math.abs(hash >>> 0)
+    .toString(16)
+    .padStart(8, '0');
 }

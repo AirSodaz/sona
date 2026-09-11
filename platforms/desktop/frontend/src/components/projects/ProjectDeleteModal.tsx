@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { AlertTriangle } from 'lucide-react';
+import type React from 'react';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { ProjectRecord } from '../../types/project';
 import { Modal } from '../Modal';
 
@@ -49,12 +50,31 @@ export function ProjectDeleteModal({
       }
       size="md"
       footer={
-        <div style={{ display: 'flex', gap: 'var(--spacing-sm)', justifyContent: 'flex-end', width: '100%' }}>
-          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isDeleting}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 'var(--spacing-sm)',
+            justifyContent: 'flex-end',
+            width: '100%',
+          }}
+        >
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={onClose}
+            disabled={isDeleting}
+          >
             {t('common.cancel', { defaultValue: 'Cancel' })}
           </button>
-          <button type="button" className="btn btn-danger" onClick={() => void handleDelete()} disabled={isDeleting}>
-            {isDeleting ? t('common.deleting', { defaultValue: 'Deleting...' }) : t('common.delete', { defaultValue: 'Delete' })}
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={() => void handleDelete()}
+            disabled={isDeleting}
+          >
+            {isDeleting
+              ? t('common.deleting', { defaultValue: 'Deleting...' })
+              : t('common.delete', { defaultValue: 'Delete' })}
           </button>
         </div>
       }
@@ -68,7 +88,17 @@ export function ProjectDeleteModal({
         </p>
 
         {itemCount > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 12, background: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 10,
+              padding: 12,
+              background: 'var(--color-bg-secondary)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--color-border)',
+            }}
+          >
             <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-text-secondary)' }}>
               {t('projects.delete_items_handling', {
                 count: itemCount,
@@ -76,7 +106,15 @@ export function ProjectDeleteModal({
               })}
             </span>
 
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+                cursor: 'pointer',
+                fontSize: 13,
+              }}
+            >
               <input
                 type="radio"
                 name="cascadeAction"
@@ -86,14 +124,29 @@ export function ProjectDeleteModal({
                 style={{ marginTop: 3 }}
               />
               <div>
-                <strong>{t('projects.move_to_inbox_option', { defaultValue: 'Move to Inbox (Recommended)' })}</strong>
+                <strong>
+                  {t('projects.move_to_inbox_option', {
+                    defaultValue: 'Move to Inbox (Recommended)',
+                  })}
+                </strong>
                 <p style={{ margin: '2px 0 0 0', fontSize: 12, color: 'var(--color-text-muted)' }}>
-                  {t('projects.move_to_inbox_desc', { defaultValue: 'Keep all recordings and transcriptions; reset their project to Inbox.' })}
+                  {t('projects.move_to_inbox_desc', {
+                    defaultValue:
+                      'Keep all recordings and transcriptions; reset their project to Inbox.',
+                  })}
                 </p>
               </div>
             </label>
 
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 8,
+                cursor: 'pointer',
+                fontSize: 13,
+              }}
+            >
               <input
                 type="radio"
                 name="cascadeAction"
@@ -103,16 +156,22 @@ export function ProjectDeleteModal({
                 style={{ marginTop: 3 }}
               />
               <div>
-                <strong style={{ color: 'var(--color-error)' }}>{t('projects.move_to_trash_option', { defaultValue: 'Move all items to Trash' })}</strong>
+                <strong style={{ color: 'var(--color-error)' }}>
+                  {t('projects.move_to_trash_option', { defaultValue: 'Move all items to Trash' })}
+                </strong>
                 <p style={{ margin: '2px 0 0 0', fontSize: 12, color: 'var(--color-text-muted)' }}>
-                  {t('projects.move_to_trash_desc', { defaultValue: 'Soft-delete all associated items and send them to Trash.' })}
+                  {t('projects.move_to_trash_desc', {
+                    defaultValue: 'Soft-delete all associated items and send them to Trash.',
+                  })}
                 </p>
               </div>
             </label>
           </div>
         ) : (
           <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-muted)' }}>
-            {t('projects.delete_empty_project_note', { defaultValue: 'This project has no records and will be removed immediately.' })}
+            {t('projects.delete_empty_project_note', {
+              defaultValue: 'This project has no records and will be removed immediately.',
+            })}
           </p>
         )}
       </div>

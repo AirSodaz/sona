@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
 import type React from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { HistoryItem as HistoryItemType } from '../../../types/history';
 import type { ProjectRecord } from '../../../types/project';
 import { INBOX_SCOPE } from '../constants';
@@ -36,9 +36,9 @@ export function useWorkspaceSelectionState({
   }, []);
 
   const toggleSelection = useCallback((id: string) => {
-    setSelectedIds((current) => (
+    setSelectedIds((current) =>
       current.includes(id) ? current.filter((itemId) => itemId !== id) : [...current, id]
-    ));
+    );
   }, []);
 
   const clearSelection = useCallback(() => {

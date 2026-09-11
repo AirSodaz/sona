@@ -1,28 +1,25 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { AlertCircle, BarChart3, Bot, FileText, LoaderCircle } from 'lucide-react';
+import type React from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  AlertCircle,
-  BarChart3,
-  Bot,
-  FileText,
-  LoaderCircle,
-} from 'lucide-react';
-import type { DashboardSnapshot } from '../../types/dashboard';
 import { dashboardService } from '../../services/dashboardService';
+import type { DashboardSnapshot } from '../../types/dashboard';
 import { normalizeError } from '../../utils/errorUtils';
-import { SettingsPageHeader, SettingsSection, SettingsTabContainer } from './SettingsLayout';
 import {
   ContentOverviewSection,
   LlmUsagePanel,
   SpeakerInsightsSection,
 } from './dashboard/sections';
+import { SettingsPageHeader, SettingsSection, SettingsTabContainer } from './SettingsLayout';
 import './SettingsDashboardTab.css';
 
 interface SettingsDashboardTabProps {
   isActive?: boolean;
 }
 
-export function SettingsDashboardTab({ isActive = true }: SettingsDashboardTabProps): React.JSX.Element {
+export function SettingsDashboardTab({
+  isActive = true,
+}: SettingsDashboardTabProps): React.JSX.Element {
   const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [isFastLoading, setIsFastLoading] = useState(true);
@@ -109,8 +106,15 @@ export function SettingsDashboardTab({ isActive = true }: SettingsDashboardTabPr
         <div className="settings-dashboard-state error" data-testid="dashboard-error">
           <AlertCircle size={18} />
           <div>
-            <div className="settings-dashboard-state-title">{t('settings.dashboard.error_title', { defaultValue: 'Dashboard unavailable' })}</div>
-            <div className="settings-dashboard-note">{error || t('settings.dashboard.error_body', { defaultValue: 'Try reloading dashboard data.' })}</div>
+            <div className="settings-dashboard-state-title">
+              {t('settings.dashboard.error_title', { defaultValue: 'Dashboard unavailable' })}
+            </div>
+            <div className="settings-dashboard-note">
+              {error ||
+                t('settings.dashboard.error_body', {
+                  defaultValue: 'Try reloading dashboard data.',
+                })}
+            </div>
           </div>
           <button className="btn" onClick={() => setReloadToken((value) => value + 1)}>
             {t('settings.dashboard.retry', { defaultValue: 'Retry' })}
@@ -135,10 +139,13 @@ export function SettingsDashboardTab({ isActive = true }: SettingsDashboardTabPr
           })}
         />
         <div className="settings-dashboard-empty-page" data-testid="dashboard-empty">
-          <div className="settings-dashboard-state-title">{t('settings.dashboard.empty_title', { defaultValue: 'No dashboard data yet' })}</div>
+          <div className="settings-dashboard-state-title">
+            {t('settings.dashboard.empty_title', { defaultValue: 'No dashboard data yet' })}
+          </div>
           <div className="settings-dashboard-note">
             {t('settings.dashboard.empty_body', {
-              defaultValue: 'Saved transcripts and successful LLM calls will start appearing here automatically.',
+              defaultValue:
+                'Saved transcripts and successful LLM calls will start appearing here automatically.',
             })}
           </div>
         </div>
@@ -159,7 +166,8 @@ export function SettingsDashboardTab({ isActive = true }: SettingsDashboardTabPr
       <SettingsSection
         title={t('settings.dashboard.global_content', { defaultValue: 'Global Content' })}
         description={t('settings.dashboard.global_content_description', {
-          defaultValue: 'Saved content volume, where it lives, and how much transcript data already has speaker attribution.',
+          defaultValue:
+            'Saved content volume, where it lives, and how much transcript data already has speaker attribution.',
         })}
         icon={<FileText size={20} />}
       >
@@ -182,7 +190,8 @@ export function SettingsDashboardTab({ isActive = true }: SettingsDashboardTabPr
       <SettingsSection
         title={t('settings.dashboard.llm_usage', { defaultValue: 'LLM Usage' })}
         description={t('settings.dashboard.llm_usage_description', {
-          defaultValue: 'All-time successful LLM calls tracked since this analytics file started, including connection tests.',
+          defaultValue:
+            'All-time successful LLM calls tracked since this analytics file started, including connection tests.',
         })}
         icon={<Bot size={20} />}
       >

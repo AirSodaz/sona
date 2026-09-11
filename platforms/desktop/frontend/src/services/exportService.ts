@@ -22,15 +22,15 @@ export class ExportService {
 
   sanitizeExportFileName = (fileName: string): string => {
     return fileName.replace(/[\\/:*?"<>|]/g, '_').trim();
-  }
+  };
 
   exportTranscriptToDirectory = async (
-    options: ExportTranscriptToDirectoryOptions,
+    options: ExportTranscriptToDirectoryOptions
   ): Promise<string> => {
     const extension = getFileExtension(options.format);
     const fullPath = await this.ports.join(
       options.directory,
-      `${this.sanitizeExportFileName(options.baseFileName)}${extension}`,
+      `${this.sanitizeExportFileName(options.baseFileName)}${extension}`
     );
     const result = await this.ports.exportTranscriptFile({
       segments: options.segments,
@@ -39,7 +39,7 @@ export class ExportService {
       outputPath: fullPath,
     });
     return result.outputPath;
-  }
+  };
 }
 
 export function createExportService(ports: ExportServicePorts): ExportService {
@@ -51,7 +51,4 @@ export const exportService = createExportService({
   join,
 });
 
-export const {
-  sanitizeExportFileName,
-  exportTranscriptToDirectory,
-} = exportService;
+export const { sanitizeExportFileName, exportTranscriptToDirectory } = exportService;

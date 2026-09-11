@@ -1,5 +1,5 @@
-import { logger } from '../utils/logger';
 import type { StorageDirectoriesInfo } from '../types/storage';
+import { logger } from '../utils/logger';
 
 export interface ModelFileServicePorts {
   appLocalDataDir: () => Promise<string>;
@@ -32,7 +32,10 @@ export class ModelFileService {
         await this.ports.mkdir(modelsDir, { recursive: true });
       }
     } catch (error) {
-      logger.debug('[ModelFileService] Could not check or create models directory via frontend fs plugin:', error);
+      logger.debug(
+        '[ModelFileService] Could not check or create models directory via frontend fs plugin:',
+        error
+      );
     }
     logger.info('[ModelService] Models directory:', modelsDir);
     return modelsDir;

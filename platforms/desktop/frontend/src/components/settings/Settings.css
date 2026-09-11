@@ -1,4 +1,4 @@
-@import './SettingsShared.css';
+@import "./SettingsShared.css";
 
 /* ===========================
    Settings Panel
@@ -402,4 +402,3 @@
   color: var(--color-text-muted);
   font-size: 0.875rem;
 }
-

@@ -30,9 +30,8 @@ export function normalizeSpeakerTag(input: unknown): SpeakerTag | undefined {
   }
 
   const kind: SpeakerKind = source.kind === 'identified' ? 'identified' : 'anonymous';
-  const score = typeof source.score === 'number' && Number.isFinite(source.score)
-    ? source.score
-    : undefined;
+  const score =
+    typeof source.score === 'number' && Number.isFinite(source.score) ? source.score : undefined;
 
   return {
     id: source.id.trim(),
@@ -126,9 +125,10 @@ export function normalizeSpeakerProfileSample(input: unknown): SpeakerProfileSam
     id: source.id.trim(),
     filePath: source.filePath.trim(),
     sourceName: isNonEmptyString(source.sourceName) ? source.sourceName.trim() : 'Sample',
-    durationSeconds: typeof source.durationSeconds === 'number' && Number.isFinite(source.durationSeconds)
-      ? Math.max(0, source.durationSeconds)
-      : 0,
+    durationSeconds:
+      typeof source.durationSeconds === 'number' && Number.isFinite(source.durationSeconds)
+        ? Math.max(0, source.durationSeconds)
+        : 0,
   };
 }
 
@@ -168,8 +168,10 @@ export function normalizeSpeakerProfiles(input: unknown): SpeakerProfile[] {
 
 export function deriveSpeakerProfileReadiness(profile: SpeakerProfile): SpeakerProfileReadiness {
   const usableSamples = profile.samples.filter((sample) => sample.durationSeconds >= 4);
-  const usableDurationSeconds = usableSamples
-    .reduce((sum, sample) => sum + sample.durationSeconds, 0);
+  const usableDurationSeconds = usableSamples.reduce(
+    (sum, sample) => sum + sample.durationSeconds,
+    0
+  );
 
   if (usableSamples.length >= 2 && usableDurationSeconds >= 20) {
     return {
@@ -199,7 +201,7 @@ export function deriveSpeakerProfileReadiness(profile: SpeakerProfile): SpeakerP
 
 export function areSpeakerTagsEqual(
   first: SpeakerTag | null | undefined,
-  second: SpeakerTag | null | undefined,
+  second: SpeakerTag | null | undefined
 ): boolean {
   if (!first && !second) {
     return true;
@@ -209,7 +211,5 @@ export function areSpeakerTagsEqual(
     return false;
   }
 
-  return first.id === second.id
-    && first.label === second.label
-    && first.kind === second.kind;
+  return first.id === second.id && first.label === second.label && first.kind === second.kind;
 }

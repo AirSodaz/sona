@@ -65,20 +65,24 @@ export const BUILTIN_POLISH_PRESETS = [
   },
 ] as const satisfies readonly BuiltInPolishPreset[];
 
-export type BuiltInPolishPresetId = typeof BUILTIN_POLISH_PRESETS[number]['id'];
+export type BuiltInPolishPresetId = (typeof BUILTIN_POLISH_PRESETS)[number]['id'];
 
 export const DEFAULT_POLISH_PRESET_ID: BuiltInPolishPresetId = 'general';
 
-export function isBuiltInPolishPresetId(value: string | null | undefined): value is BuiltInPolishPresetId {
+export function isBuiltInPolishPresetId(
+  value: string | null | undefined
+): value is BuiltInPolishPresetId {
   return BUILTIN_POLISH_PRESETS.some((preset) => preset.id === value);
 }
 
-export function getBuiltInPolishPreset(id: string | null | undefined): BuiltInPolishPreset | undefined {
+export function getBuiltInPolishPreset(
+  id: string | null | undefined
+): BuiltInPolishPreset | undefined {
   return BUILTIN_POLISH_PRESETS.find((preset) => preset.id === id);
 }
 
 export function normalizePolishCustomPresets(
-  presets: PolishCustomPreset[] | null | undefined,
+  presets: PolishCustomPreset[] | null | undefined
 ): PolishCustomPreset[] {
   if (!Array.isArray(presets) || presets.length === 0) {
     return [];
@@ -93,9 +97,10 @@ export function normalizePolishCustomPresets(
       continue;
     }
 
-    const id = typeof preset.id === 'string' && preset.id.trim()
-      ? preset.id.trim()
-      : createImportedPolishPresetId(`${preset.name ?? ''}-${preset.context ?? ''}-${index}`);
+    const id =
+      typeof preset.id === 'string' && preset.id.trim()
+        ? preset.id.trim()
+        : createImportedPolishPresetId(`${preset.name ?? ''}-${preset.context ?? ''}-${index}`);
     if (seenIds.has(id)) {
       continue;
     }
@@ -105,9 +110,10 @@ export function normalizePolishCustomPresets(
       continue;
     }
 
-    const name = typeof preset.name === 'string' && preset.name.trim()
-      ? preset.name.trim()
-      : buildImportedPresetName(undefined, context);
+    const name =
+      typeof preset.name === 'string' && preset.name.trim()
+        ? preset.name.trim()
+        : buildImportedPresetName(undefined, context);
 
     normalized.push({
       id,
@@ -123,21 +129,23 @@ export function normalizePolishCustomPresets(
 export function getPolishPresetLabel(
   presetId: string | null | undefined,
   customPresets: PolishCustomPreset[] | null | undefined,
-  t: TFunction,
+  t: TFunction
 ): string {
   const builtIn = getBuiltInPolishPreset(presetId);
   if (builtIn) {
     return t(builtIn.labelKey, { defaultValue: builtIn.defaultLabel });
   }
 
-  return normalizePolishCustomPresets(customPresets).find((preset) => preset.id === presetId)?.name
-    || t('polish.scenarios.general', { defaultValue: 'General' });
+  return (
+    normalizePolishCustomPresets(customPresets).find((preset) => preset.id === presetId)?.name ||
+    t('polish.scenarios.general', { defaultValue: 'General' })
+  );
 }
 
 export function resolvePolishPreset(
   presetId: string | null | undefined,
   customPresets: PolishCustomPreset[] | null | undefined,
-  t?: TFunction,
+  t?: TFunction
 ): ResolvedPolishPreset {
   const builtIn = getBuiltInPolishPreset(presetId);
   if (builtIn) {
@@ -149,7 +157,9 @@ export function resolvePolishPreset(
     };
   }
 
-  const custom = normalizePolishCustomPresets(customPresets).find((preset) => preset.id === presetId);
+  const custom = normalizePolishCustomPresets(customPresets).find(
+    (preset) => preset.id === presetId
+  );
   if (custom) {
     return {
       id: custom.id,
@@ -169,7 +179,7 @@ export function resolvePolishPreset(
 
 export function getPolishPresetOptions(
   customPresets: PolishCustomPreset[] | null | undefined,
-  t: TFunction,
+  t: TFunction
 ): Array<{ value: string; label: string }> {
   const builtInOptions = BUILTIN_POLISH_PRESETS.map((preset) => ({
     value: preset.id,
@@ -185,7 +195,7 @@ export function getPolishPresetOptions(
 
 export function coercePolishPresetId(
   presetId: string | null | undefined,
-  customPresets: PolishCustomPreset[] | null | undefined,
+  customPresets: PolishCustomPreset[] | null | undefined
 ): string {
   if (isBuiltInPolishPresetId(presetId)) {
     return presetId;
@@ -199,7 +209,7 @@ export function coercePolishPresetId(
 export function migrateLegacyPolishSelection(
   input: LegacyPolishSelectionInput,
   existingCustomPresets: PolishCustomPreset[] | null | undefined,
-  preferredName?: string,
+  preferredName?: string
 ): LegacyPolishSelectionResult {
   const customPresets = normalizePolishCustomPresets(existingCustomPresets);
   const presetId = coercePolishPresetId(input.presetId, customPresets);
@@ -233,13 +243,13 @@ export function migrateLegacyPolishSelection(
 export function ensurePolishCustomPreset(
   existingCustomPresets: PolishCustomPreset[] | null | undefined,
   context: string,
-  preferredName?: string,
+  preferredName?: string
 ): LegacyPolishSelectionResult {
   const normalizedContext = context.trim();
   const customPresets = normalizePolishCustomPresets(existingCustomPresets);
 
   const existingPreset = customPresets.find(
-    (preset) => preset.context.trim().toLowerCase() === normalizedContext.toLowerCase(),
+    (preset) => preset.context.trim().toLowerCase() === normalizedContext.toLowerCase()
   );
   if (existingPreset) {
     return {
@@ -279,5 +289,7 @@ function hashString(value: string): string {
     hash = ((hash << 5) + hash) ^ value.charCodeAt(index);
   }
 
-  return Math.abs(hash >>> 0).toString(16).padStart(8, '0');
+  return Math.abs(hash >>> 0)
+    .toString(16)
+    .padStart(8, '0');
 }

@@ -1,344 +1,368 @@
+import { Calendar, Clock } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Calendar, Clock } from 'lucide-react';
-import {
-    HistoryItem as HistoryItemType,
-    isHistoryItemDraft,
-    isLiveRecordDraftHistoryItem,
-} from '../../types/history';
 import { useProjectStore } from '../../stores/projectStore';
-import { TrashIcon, MicIcon, FileTextIcon, EditIcon, FolderIcon, CodeIcon, InboxIcon } from '../Icons';
-import { ProjectBadge } from '../projects/ProjectVisual';
-import { Checkbox } from '../Checkbox';
-import type { WorkspaceSearchRange, WorkspaceSearchSnippet } from '../../utils/workspaceSearch';
 import {
-    createKeyboardContextMenuRequest,
-    createPointerContextMenuRequest,
-    isContextMenuKeyboardEvent,
-    type ContextMenuOpenRequest,
+  type HistoryItem as HistoryItemType,
+  isHistoryItemDraft,
+  isLiveRecordDraftHistoryItem,
+} from '../../types/history';
+import type { WorkspaceSearchRange, WorkspaceSearchSnippet } from '../../utils/workspaceSearch';
+import { Checkbox } from '../Checkbox';
+import {
+  type ContextMenuOpenRequest,
+  createKeyboardContextMenuRequest,
+  createPointerContextMenuRequest,
+  isContextMenuKeyboardEvent,
 } from '../context-menu/trigger';
+import {
+  CodeIcon,
+  EditIcon,
+  FileTextIcon,
+  FolderIcon,
+  InboxIcon,
+  MicIcon,
+  TrashIcon,
+} from '../Icons';
+import { ProjectBadge } from '../projects/ProjectVisual';
 
 interface HistoryItemProps {
-    item: HistoryItemType;
-    onLoad: (item: HistoryItemType) => void;
-    onDelete: (id: string) => void;
-    onRename?: (id: string) => void;
-    searchQuery?: string;
-    searchTitleMatch?: WorkspaceSearchRange | null;
-    searchSnippet?: WorkspaceSearchSnippet | null;
-    isSelectionMode?: boolean;
-    isSelected?: boolean;
-    isKeyboardActive?: boolean;
-    onToggleSelection?: (id: string) => void;
-    layout?: 'list' | 'grid' | 'table';
-    isLoadDisabled?: boolean;
-    isRenameDisabled?: boolean;
-    isDeleteDisabled?: boolean;
-    showProjectBadge?: boolean;
-    isContextMenuOpen?: boolean;
-    onOpenContextMenu?: (id: string, request: ContextMenuOpenRequest) => void;
+  item: HistoryItemType;
+  onLoad: (item: HistoryItemType) => void;
+  onDelete: (id: string) => void;
+  onRename?: (id: string) => void;
+  searchQuery?: string;
+  searchTitleMatch?: WorkspaceSearchRange | null;
+  searchSnippet?: WorkspaceSearchSnippet | null;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  isKeyboardActive?: boolean;
+  onToggleSelection?: (id: string) => void;
+  layout?: 'list' | 'grid' | 'table';
+  isLoadDisabled?: boolean;
+  isRenameDisabled?: boolean;
+  isDeleteDisabled?: boolean;
+  showProjectBadge?: boolean;
+  isContextMenuOpen?: boolean;
+  onOpenContextMenu?: (id: string, request: ContextMenuOpenRequest) => void;
 }
 
 /**
  * Renders an icon based on the icon string or fallback to type default
  */
 function renderIcon(icon: string | undefined, type: string | undefined): React.ReactNode {
-    if (icon) {
-        if (icon.startsWith('system:')) {
-            const iconName = icon.replace('system:', '');
-            switch (iconName) {
-                case 'mic': return <MicIcon />;
-                case 'file': return <FileTextIcon />;
-                case 'folder': return <FolderIcon />;
-                case 'code': return <CodeIcon />;
-                default: break;
-            }
-        } else {
-            // Assume it's an emoji
-            return <span className="emoji-icon">{icon}</span>;
-        }
+  if (icon) {
+    if (icon.startsWith('system:')) {
+      const iconName = icon.replace('system:', '');
+      switch (iconName) {
+        case 'mic':
+          return <MicIcon />;
+        case 'file':
+          return <FileTextIcon />;
+        case 'folder':
+          return <FolderIcon />;
+        case 'code':
+          return <CodeIcon />;
+        default:
+          break;
+      }
+    } else {
+      // Assume it's an emoji
+      return <span className="emoji-icon">{icon}</span>;
     }
+  }
 
-    // Fallback
-    return type === 'batch' ? <FileTextIcon /> : <MicIcon />;
+  // Fallback
+  return type === 'batch' ? <FileTextIcon /> : <MicIcon />;
 }
 
 function highlightRange(text: string, range?: WorkspaceSearchRange | null): React.ReactNode {
-    if (!range) {
-        return text;
-    }
+  if (!range) {
+    return text;
+  }
 
-    const safeStart = Math.max(0, Math.min(range.start, text.length));
-    const safeEnd = Math.max(safeStart, Math.min(range.end, text.length));
+  const safeStart = Math.max(0, Math.min(range.start, text.length));
+  const safeEnd = Math.max(safeStart, Math.min(range.end, text.length));
 
-    if (safeStart === safeEnd) {
-        return text;
-    }
+  if (safeStart === safeEnd) {
+    return text;
+  }
 
-    return (
-        <>
-            {text.slice(0, safeStart)}
-            <mark className="search-highlight">{text.slice(safeStart, safeEnd)}</mark>
-            {text.slice(safeEnd)}
-        </>
-    );
+  return (
+    <>
+      {text.slice(0, safeStart)}
+      <mark className="search-highlight">{text.slice(safeStart, safeEnd)}</mark>
+      {text.slice(safeEnd)}
+    </>
+  );
 }
 
 function renderSnippet(snippet?: WorkspaceSearchSnippet | null): React.ReactNode {
-    if (!snippet) {
-        return null;
-    }
+  if (!snippet) {
+    return null;
+  }
 
-    return highlightRange(snippet.text, {
-        start: snippet.highlightStart,
-        end: snippet.highlightEnd,
-    });
+  return highlightRange(snippet.text, {
+    start: snippet.highlightStart,
+    end: snippet.highlightEnd,
+  });
 }
 
 function formatDuration(seconds: number): string {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 function formatRelativeDate(timestamp: number, locale: string): string {
-    const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
-    const now = Date.now();
-    const diffInSeconds = Math.round((timestamp - now) / 1000);
-    const absDiff = Math.abs(diffInSeconds);
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  const now = Date.now();
+  const diffInSeconds = Math.round((timestamp - now) / 1000);
+  const absDiff = Math.abs(diffInSeconds);
 
-    if (absDiff < 60) {
-        return rtf.format(diffInSeconds, 'second');
-    } else if (absDiff < 3600) {
-        return rtf.format(Math.round(diffInSeconds / 60), 'minute');
-    } else if (absDiff < 86400) {
-        return rtf.format(Math.round(diffInSeconds / 3600), 'hour');
-    } else if (absDiff < 604800) {
-        return rtf.format(Math.round(diffInSeconds / 86400), 'day');
-    } else {
-        const date = new Date(timestamp);
-        return new Intl.DateTimeFormat(locale, {
-            month: 'short',
-            day: 'numeric',
-            year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
-        }).format(date);
-    }
+  if (absDiff < 60) {
+    return rtf.format(diffInSeconds, 'second');
+  } else if (absDiff < 3600) {
+    return rtf.format(Math.round(diffInSeconds / 60), 'minute');
+  } else if (absDiff < 86400) {
+    return rtf.format(Math.round(diffInSeconds / 3600), 'hour');
+  } else if (absDiff < 604800) {
+    return rtf.format(Math.round(diffInSeconds / 86400), 'day');
+  } else {
+    const date = new Date(timestamp);
+    return new Intl.DateTimeFormat(locale, {
+      month: 'short',
+      day: 'numeric',
+      year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined,
+    }).format(date);
+  }
 }
 
 function HistoryItemComponent({
-    item,
-    onLoad,
-    onDelete,
-    onRename,
-    searchQuery = '',
-    searchTitleMatch = null,
-    searchSnippet = null,
-    isSelectionMode = false,
-    isSelected = false,
-    isKeyboardActive = false,
-    onToggleSelection,
-    layout = 'list',
-    isLoadDisabled = false,
-    isRenameDisabled = false,
-    isDeleteDisabled = false,
-    showProjectBadge = true,
-    isContextMenuOpen = false,
-    onOpenContextMenu,
+  item,
+  onLoad,
+  onDelete,
+  onRename,
+  searchQuery = '',
+  searchTitleMatch = null,
+  searchSnippet = null,
+  isSelectionMode = false,
+  isSelected = false,
+  isKeyboardActive = false,
+  onToggleSelection,
+  layout = 'list',
+  isLoadDisabled = false,
+  isRenameDisabled = false,
+  isDeleteDisabled = false,
+  showProjectBadge = true,
+  isContextMenuOpen = false,
+  onOpenContextMenu,
 }: HistoryItemProps): React.JSX.Element {
-    const { t, i18n } = useTranslation();
-    const contentButtonRef = React.useRef<HTMLButtonElement>(null);
-    const projects = useProjectStore((state) => state.projects);
-    const itemTags = React.useMemo(() => {
-        const itemTagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
-        return itemTagIds
-            .map((tagId) => projects.find((tag) => tag.id === tagId))
-            .filter((tag): tag is NonNullable<typeof tag> => !!tag);
-    }, [item.projectId, item.tagIds, projects]);
-    const visibleTags = itemTags.slice(0, 2);
-    const hiddenTagCount = Math.max(0, itemTags.length - visibleTags.length);
-    const tagChips = (
-        <span className="history-item-tag-chips">
-            {visibleTags.length === 0 && (
-                <span className="history-item-project-badge history-item-project-badge--inbox">
-                    <InboxIcon width={12} height={12} />
-                    <span className="history-item-project-badge-text">{t('projects.inbox', { defaultValue: 'Inbox' })}</span>
-                </span>
-            )}
-            {visibleTags.map((tag) => (
-                <ProjectBadge
-                    key={tag.id}
-                    name={tag.name}
-                    icon={tag.icon}
-                    color={tag.color}
-                />
-            ))}
-            {hiddenTagCount > 0 && (
-                <span className="history-item-project-badge">+{hiddenTagCount}</span>
-            )}
+  const { t, i18n } = useTranslation();
+  const contentButtonRef = React.useRef<HTMLButtonElement>(null);
+  const projects = useProjectStore((state) => state.projects);
+  const itemTags = React.useMemo(() => {
+    const itemTagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
+    return itemTagIds
+      .map((tagId) => projects.find((tag) => tag.id === tagId))
+      .filter((tag): tag is NonNullable<typeof tag> => !!tag);
+  }, [item.projectId, item.tagIds, projects]);
+  const visibleTags = itemTags.slice(0, 2);
+  const hiddenTagCount = Math.max(0, itemTags.length - visibleTags.length);
+  const tagChips = (
+    <span className="history-item-tag-chips">
+      {visibleTags.length === 0 && (
+        <span className="history-item-project-badge history-item-project-badge--inbox">
+          <InboxIcon width={12} height={12} />
+          <span className="history-item-project-badge-text">
+            {t('projects.inbox', { defaultValue: 'Inbox' })}
+          </span>
         </span>
-    );
-    const itemTypeLabel = item.type === 'batch'
-        ? t('projects.filter_batch', { defaultValue: 'Batch imports' })
-        : t('projects.filter_recordings', { defaultValue: 'Recordings' });
-    const isDraft = isHistoryItemDraft(item);
-    const isLiveDraft = isLiveRecordDraftHistoryItem(item);
-    const previewText = item.previewText
-        ? item.previewText
-        : isLiveDraft
-            ? t('history.live_record_draft_description', { defaultValue: 'Interrupted live recording draft' })
-            : null;
+      )}
+      {visibleTags.map((tag) => (
+        <ProjectBadge key={tag.id} name={tag.name} icon={tag.icon} color={tag.color} />
+      ))}
+      {hiddenTagCount > 0 && <span className="history-item-project-badge">+{hiddenTagCount}</span>}
+    </span>
+  );
+  const itemTypeLabel =
+    item.type === 'batch'
+      ? t('projects.filter_batch', { defaultValue: 'Batch imports' })
+      : t('projects.filter_recordings', { defaultValue: 'Recordings' });
+  const isDraft = isHistoryItemDraft(item);
+  const isLiveDraft = isLiveRecordDraftHistoryItem(item);
+  const previewText = item.previewText
+    ? item.previewText
+    : isLiveDraft
+      ? t('history.live_record_draft_description', {
+          defaultValue: 'Interrupted live recording draft',
+        })
+      : null;
 
-    const handleClick = (e: React.MouseEvent) => {
-        if (isSelectionMode && onToggleSelection) {
-            e.preventDefault();
-            e.stopPropagation();
-            onToggleSelection(item.id);
-        } else if (isLoadDisabled) {
-            e.preventDefault();
-            e.stopPropagation();
-        } else {
-            onLoad(item);
-        }
-    };
+  const handleClick = (e: React.MouseEvent) => {
+    if (isSelectionMode && onToggleSelection) {
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleSelection(item.id);
+    } else if (isLoadDisabled) {
+      e.preventDefault();
+      e.stopPropagation();
+    } else {
+      onLoad(item);
+    }
+  };
 
-    const handleContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
-        if (!onOpenContextMenu) {
-            return;
-        }
-        event.stopPropagation();
+  const handleContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!onOpenContextMenu) {
+      return;
+    }
+    event.stopPropagation();
 
-        const request = createPointerContextMenuRequest(event);
-        onOpenContextMenu(item.id, {
-            ...request,
-            anchor: contentButtonRef.current ?? request.anchor,
-        });
-    };
+    const request = createPointerContextMenuRequest(event);
+    onOpenContextMenu(item.id, {
+      ...request,
+      anchor: contentButtonRef.current ?? request.anchor,
+    });
+  };
 
-    const handleContextMenuKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-        if (!onOpenContextMenu || !isContextMenuKeyboardEvent(event)) {
-            return;
-        }
-        event.stopPropagation();
-        onOpenContextMenu(item.id, createKeyboardContextMenuRequest(event.currentTarget));
-    };
+  const handleContextMenuKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (!onOpenContextMenu || !isContextMenuKeyboardEvent(event)) {
+      return;
+    }
+    event.stopPropagation();
+    onOpenContextMenu(item.id, createKeyboardContextMenuRequest(event.currentTarget));
+  };
 
-    return (
-        <div
-            id={`workspace-search-result-${item.id}`}
-            data-history-item-id={item.id}
-            className={`history-item history-item--${layout} ${showProjectBadge ? '' : 'history-item--without-project-badge'} ${isSelected ? 'selected' : ''} ${isSelectionMode ? 'is-selection-mode' : ''} ${isKeyboardActive ? 'keyboard-active' : ''} ${isContextMenuOpen ? 'context-menu-active' : ''}`}
-            onClick={isSelectionMode ? () => onToggleSelection?.(item.id) : undefined}
-            onContextMenu={handleContextMenu}
-            role={layout === 'table' ? 'row' : 'listitem'}
-        >
-            {isSelectionMode && (
-                <div className="history-item-checkbox" role={layout === 'table' ? 'cell' : undefined}>
-                    <Checkbox
-                        checked={isSelected}
-                        onChange={() => onToggleSelection?.(item.id)}
-                        aria-label={t('history.select_item', { item: item.title, defaultValue: `Select ${item.title}` })}
-                    />
-                </div>
-            )}
-
-            <button
-                ref={contentButtonRef}
-                type="button"
-                className="history-item-content"
-                onClick={handleClick}
-                onKeyDown={handleContextMenuKeyDown}
-                aria-label={`${t('common.load', { defaultValue: 'Load' })} ${item.title}`}
-                role={layout === 'table' ? 'cell' : undefined}
-                aria-disabled={!isSelectionMode && isLoadDisabled}
-            >
-                <div className="history-item-header">
-                    <div className="history-item-title-row">
-                        <span className="history-item-type-icon" title={itemTypeLabel}>
-                            {renderIcon(item.icon, item.type)}
-                        </span>
-                        <span className="history-item-title">{highlightRange(item.title, searchTitleMatch)}</span>
-                        {isDraft && (
-                            <span className="history-item-status-badge">
-                                {t('history.draft_badge', { defaultValue: 'Draft' })}
-                            </span>
-                        )}
-                    </div>
-
-                    {layout === 'table' && searchQuery.trim() && searchSnippet && (
-                        <p className="history-item-preview history-item-preview--table">
-                            {renderSnippet(searchSnippet)}
-                        </p>
-                    )}
-
-                    {layout !== 'table' && showProjectBadge && (
-                        tagChips
-                    )}
-                </div>
-
-                {layout === 'table' && showProjectBadge && (
-                    <div className="history-item-table-cell history-item-table-project" role="cell">
-                        {tagChips}
-                    </div>
-                )}
-
-                {layout !== 'table' && (
-                    <p className="history-item-preview">
-                        {searchQuery.trim() && searchSnippet
-                            ? renderSnippet(searchSnippet)
-                            : previewText
-                            ? previewText
-                            : <em>{t('history.no_transcript')}</em>}
-                    </p>
-                )}
-
-                <div className={`history-item-meta ${layout === 'table' ? 'history-item-table-cells' : ''}`}>
-                    <span className="history-item-meta-chip" role={layout === 'table' ? 'cell' : undefined}>
-                        <Calendar size={12} />
-                        {formatRelativeDate(item.timestamp, i18n.language)}
-                    </span>
-                    <span className="history-item-meta-chip" role={layout === 'table' ? 'cell' : undefined}>
-                        <Clock size={12} />
-                        {formatDuration(item.duration)}
-                    </span>
-                </div>
-            </button>
-
-            {!isSelectionMode && (
-                <div className="history-item-actions" role={layout === 'table' ? 'cell' : undefined}>
-                    {onRename && (
-                        <button
-                            type="button"
-                            className="btn btn-icon history-item-rename"
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                onRename(item.id);
-                            }}
-                            aria-label={t('common.rename_item', { item: item.title, defaultValue: `Rename ${item.title}` })}
-                            data-tooltip={t('common.rename', { defaultValue: 'Rename' })}
-                            data-tooltip-pos="left"
-                            disabled={isRenameDisabled}
-                        >
-                            <EditIcon />
-                        </button>
-                    )}
-                    <button
-                        type="button"
-                        className="btn btn-icon delete-btn history-item-delete"
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            onDelete(item.id);
-                        }}
-                        aria-label={t('common.delete_item', { item: item.title, defaultValue: `Delete ${item.title}` })}
-                        data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
-                        data-tooltip-pos="left"
-                        disabled={isDeleteDisabled}
-                    >
-                        <TrashIcon />
-                    </button>
-                </div>
-            )}
+  return (
+    <div
+      id={`workspace-search-result-${item.id}`}
+      data-history-item-id={item.id}
+      className={`history-item history-item--${layout} ${showProjectBadge ? '' : 'history-item--without-project-badge'} ${isSelected ? 'selected' : ''} ${isSelectionMode ? 'is-selection-mode' : ''} ${isKeyboardActive ? 'keyboard-active' : ''} ${isContextMenuOpen ? 'context-menu-active' : ''}`}
+      onClick={isSelectionMode ? () => onToggleSelection?.(item.id) : undefined}
+      onContextMenu={handleContextMenu}
+      role={layout === 'table' ? 'row' : 'listitem'}
+    >
+      {isSelectionMode && (
+        <div className="history-item-checkbox" role={layout === 'table' ? 'cell' : undefined}>
+          <Checkbox
+            checked={isSelected}
+            onChange={() => onToggleSelection?.(item.id)}
+            aria-label={t('history.select_item', {
+              item: item.title,
+              defaultValue: `Select ${item.title}`,
+            })}
+          />
         </div>
-    );
+      )}
+
+      <button
+        ref={contentButtonRef}
+        type="button"
+        className="history-item-content"
+        onClick={handleClick}
+        onKeyDown={handleContextMenuKeyDown}
+        aria-label={`${t('common.load', { defaultValue: 'Load' })} ${item.title}`}
+        role={layout === 'table' ? 'cell' : undefined}
+        aria-disabled={!isSelectionMode && isLoadDisabled}
+      >
+        <div className="history-item-header">
+          <div className="history-item-title-row">
+            <span className="history-item-type-icon" title={itemTypeLabel}>
+              {renderIcon(item.icon, item.type)}
+            </span>
+            <span className="history-item-title">
+              {highlightRange(item.title, searchTitleMatch)}
+            </span>
+            {isDraft && (
+              <span className="history-item-status-badge">
+                {t('history.draft_badge', { defaultValue: 'Draft' })}
+              </span>
+            )}
+          </div>
+
+          {layout === 'table' && searchQuery.trim() && searchSnippet && (
+            <p className="history-item-preview history-item-preview--table">
+              {renderSnippet(searchSnippet)}
+            </p>
+          )}
+
+          {layout !== 'table' && showProjectBadge && tagChips}
+        </div>
+
+        {layout === 'table' && showProjectBadge && (
+          <div className="history-item-table-cell history-item-table-project" role="cell">
+            {tagChips}
+          </div>
+        )}
+
+        {layout !== 'table' && (
+          <p className="history-item-preview">
+            {searchQuery.trim() && searchSnippet ? (
+              renderSnippet(searchSnippet)
+            ) : previewText ? (
+              previewText
+            ) : (
+              <em>{t('history.no_transcript')}</em>
+            )}
+          </p>
+        )}
+
+        <div
+          className={`history-item-meta ${layout === 'table' ? 'history-item-table-cells' : ''}`}
+        >
+          <span className="history-item-meta-chip" role={layout === 'table' ? 'cell' : undefined}>
+            <Calendar size={12} />
+            {formatRelativeDate(item.timestamp, i18n.language)}
+          </span>
+          <span className="history-item-meta-chip" role={layout === 'table' ? 'cell' : undefined}>
+            <Clock size={12} />
+            {formatDuration(item.duration)}
+          </span>
+        </div>
+      </button>
+
+      {!isSelectionMode && (
+        <div className="history-item-actions" role={layout === 'table' ? 'cell' : undefined}>
+          {onRename && (
+            <button
+              type="button"
+              className="btn btn-icon history-item-rename"
+              onClick={(event) => {
+                event.stopPropagation();
+                onRename(item.id);
+              }}
+              aria-label={t('common.rename_item', {
+                item: item.title,
+                defaultValue: `Rename ${item.title}`,
+              })}
+              data-tooltip={t('common.rename', { defaultValue: 'Rename' })}
+              data-tooltip-pos="left"
+              disabled={isRenameDisabled}
+            >
+              <EditIcon />
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn-icon delete-btn history-item-delete"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete(item.id);
+            }}
+            aria-label={t('common.delete_item', {
+              item: item.title,
+              defaultValue: `Delete ${item.title}`,
+            })}
+            data-tooltip={t('history.delete_tooltip', { defaultValue: 'Delete' })}
+            data-tooltip-pos="left"
+            disabled={isDeleteDisabled}
+          >
+            <TrashIcon />
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export const HistoryItem = React.memo(HistoryItemComponent);

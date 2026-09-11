@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BatchItemProcessor, type BatchItemProcessorPorts } from '../batchItemProcessor';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BatchQueueItem } from '../../../types/batchQueue';
 import type { AppConfig } from '../../../types/config';
+import { BatchItemProcessor, type BatchItemProcessorPorts } from '../batchItemProcessor';
 
 vi.mock('@tauri-apps/api/path', () => ({
   tempDir: vi.fn(() => Promise.resolve('/tmp')),
@@ -23,9 +23,9 @@ describe('BatchItemProcessor', () => {
   beforeEach(() => {
     mockPorts = {
       transcriptionService: {
-        transcribeFile: vi.fn().mockResolvedValue([
-          { id: 'seg-1', start: 0, end: 10, text: 'Raw transcription' },
-        ]),
+        transcribeFile: vi
+          .fn()
+          .mockResolvedValue([{ id: 'seg-1', start: 0, end: 10, text: 'Raw transcription' }]),
         setModelPath: vi.fn(),
         setEnableITN: vi.fn(),
       } as unknown as BatchItemProcessorPorts['transcriptionService'],
@@ -134,7 +134,7 @@ describe('BatchItemProcessor', () => {
           polishPresetId: 'proj-preset',
           autoPolish: true,
         }),
-      }),
+      })
     );
   });
 });

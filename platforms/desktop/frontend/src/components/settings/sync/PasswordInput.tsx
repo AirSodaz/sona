@@ -1,5 +1,5 @@
-import React from 'react';
 import { Eye, EyeOff } from 'lucide-react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 export interface PasswordInputProps {
   id?: string;
@@ -44,7 +44,11 @@ export function PasswordInput({
         className="sync-password-toggle"
         onClick={() => setShow(!show)}
         disabled={disabled}
-        aria-label={show ? t('settings.sync.hide_password', { defaultValue: 'Hide password' }) : t('settings.sync.show_password', { defaultValue: 'Show password' })}
+        aria-label={
+          show
+            ? t('settings.sync.hide_password', { defaultValue: 'Hide password' })
+            : t('settings.sync.show_password', { defaultValue: 'Show password' })
+        }
         tabIndex={-1}
       >
         {show ? <EyeOff size={15} /> : <Eye size={15} />}

@@ -1,13 +1,13 @@
-import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
 
 describe('Tauri security config', () => {
   it('keeps CSP enabled and restricts asset protocol scope to managed app data', () => {
     const configPath = resolve(
       dirname(fileURLToPath(import.meta.url)),
-      '../../../../../tauri.conf.json',
+      '../../../../../tauri.conf.json'
     );
     const config = JSON.parse(readFileSync(configPath, 'utf8'));
     const security = config.app.security;

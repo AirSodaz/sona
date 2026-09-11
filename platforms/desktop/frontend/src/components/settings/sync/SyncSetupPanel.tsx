@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   AlertCircle,
   Check,
@@ -14,6 +13,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type {
   DiscoveredVaultSummary,
@@ -27,17 +27,17 @@ import type {
   SyncRunResult,
   WebDavObjectStoreConfig,
 } from '../../../types/sync';
+import { Dropdown, type DropdownOption } from '../../Dropdown';
+import { Modal } from '../../Modal';
+import { Switch } from '../../Switch';
+import { SettingsAccordion, SettingsItem, SettingsSection } from '../SettingsLayout';
+import { PasswordInput } from './PasswordInput';
 import {
+  detectProviderPresetId,
   SYNC_PROVIDER_PRESETS,
   type WellKnownSyncProviderId,
-  detectProviderPresetId,
 } from './SyncProviderPresets';
 import { decodeSyncPairingToken } from './syncPairing';
-import { SettingsAccordion, SettingsItem, SettingsSection } from '../SettingsLayout';
-import { Dropdown, type DropdownOption } from '../../Dropdown';
-import { Switch } from '../../Switch';
-import { Modal } from '../../Modal';
-import { PasswordInput } from './PasswordInput';
 export interface SyncSetupPanelProps {
   busyAction: string | null;
   onCreate: (request: SyncCreateRequest) => Promise<SyncCreateResult>;
@@ -72,7 +72,8 @@ export function SyncSetupPanel({
   const { t } = useTranslation();
 
   // Form states
-  const [selectedPresetId, setSelectedPresetId] = React.useState<WellKnownSyncProviderId>('nutstore');
+  const [selectedPresetId, setSelectedPresetId] =
+    React.useState<WellKnownSyncProviderId>('nutstore');
   const [provider, setProvider] = React.useState<WebDavObjectStoreConfig>({
     serverUrl: SYNC_PROVIDER_PRESETS[0].defaultServerUrl,
     remoteRoot: 'Sona',
@@ -92,7 +93,9 @@ export function SyncSetupPanel({
   const [pairingTokenError, setPairingTokenError] = React.useState<string | null>(null);
 
   // Multi-vault resolution modal state
-  const [discoveredVaults, setDiscoveredVaults] = React.useState<DiscoveredVaultSummary[] | null>(null);
+  const [discoveredVaults, setDiscoveredVaults] = React.useState<DiscoveredVaultSummary[] | null>(
+    null
+  );
   const [selectedVaultToJoin, setSelectedVaultToJoin] = React.useState<string>('default');
   const [isCreatingNewVault, setIsCreatingNewVault] = React.useState(false);
 
@@ -148,11 +151,19 @@ export function SyncSetupPanel({
   const handleTestConnection = async () => {
     const err = checkProviderFields(provider);
     if (err === 'https') {
-      setValidationError(t('settings.sync.error_https_required', { defaultValue: 'WebDAV server URL must use HTTPS.' }));
+      setValidationError(
+        t('settings.sync.error_https_required', {
+          defaultValue: 'WebDAV server URL must use HTTPS.',
+        })
+      );
       return;
     }
     if (err) {
-      setValidationError(t('settings.sync.validation_fill_all', { defaultValue: 'Fill in all provider credentials.' }));
+      setValidationError(
+        t('settings.sync.validation_fill_all', {
+          defaultValue: 'Fill in all provider credentials.',
+        })
+      );
       return;
     }
 
@@ -165,7 +176,12 @@ export function SyncSetupPanel({
     } catch (error) {
       setTestSuccess(null);
       const msg = error instanceof Error ? error.message : String(error);
-      setTestError(msg || t('settings.sync.detect_failed', { defaultValue: 'Connection failed. Check credentials and server URL.' }));
+      setTestError(
+        msg ||
+          t('settings.sync.detect_failed', {
+            defaultValue: 'Connection failed. Check credentials and server URL.',
+          })
+      );
     } finally {
       setIsTesting(false);
     }
@@ -176,7 +192,9 @@ export function SyncSetupPanel({
     if (!pairingTokenInput.trim()) return;
     const decoded = decodeSyncPairingToken(pairingTokenInput);
     if (!decoded) {
-      setPairingTokenError(t('settings.sync.invalid_token', { defaultValue: 'Invalid pairing token format.' }));
+      setPairingTokenError(
+        t('settings.sync.invalid_token', { defaultValue: 'Invalid pairing token format.' })
+      );
       return;
     }
     setPairingTokenError(null);
@@ -195,7 +213,7 @@ export function SyncSetupPanel({
       t('settings.sync.pairing_applied_notice', {
         defaultValue: 'Imported connection parameters from device (Vault: {{vaultId}})',
         vaultId: decoded.vaultId,
-      }),
+      })
     );
   };
 
@@ -203,24 +221,45 @@ export function SyncSetupPanel({
   const handleSaveAndSync = async () => {
     const providerErr = checkProviderFields(provider);
     if (providerErr === 'https') {
-      setValidationError(t('settings.sync.error_https_required', { defaultValue: 'WebDAV server URL must use HTTPS.' }));
+      setValidationError(
+        t('settings.sync.error_https_required', {
+          defaultValue: 'WebDAV server URL must use HTTPS.',
+        })
+      );
       return;
     }
     if (providerErr) {
-      setValidationError(t('settings.sync.validation_fill_all', { defaultValue: 'Fill in all provider credentials.' }));
+      setValidationError(
+        t('settings.sync.validation_fill_all', {
+          defaultValue: 'Fill in all provider credentials.',
+        })
+      );
       return;
     }
     if (!masterPassword) {
       setValidationError(
         unlockMethod === 'recovery'
-          ? t('settings.sync.validation_recovery_key', { defaultValue: 'Enter your emergency recovery key.' })
-          : t('settings.sync.validation_master_password', { defaultValue: 'Enter a master password.' }),
+          ? t('settings.sync.validation_recovery_key', {
+              defaultValue: 'Enter your emergency recovery key.',
+            })
+          : t('settings.sync.validation_master_password', {
+              defaultValue: 'Enter a master password.',
+            })
       );
       return;
     }
     // Only check password confirmation if using master password and not directly joining an explicitly given vault
-    if (unlockMethod === 'password' && !vaultId.trim() && confirmPassword && masterPassword !== confirmPassword) {
-      setValidationError(t('settings.sync.validation_password_match', { defaultValue: 'The master password confirmation does not match.' }));
+    if (
+      unlockMethod === 'password' &&
+      !vaultId.trim() &&
+      confirmPassword &&
+      masterPassword !== confirmPassword
+    ) {
+      setValidationError(
+        t('settings.sync.validation_password_match', {
+          defaultValue: 'The master password confirmation does not match.',
+        })
+      );
       return;
     }
 
@@ -331,12 +370,19 @@ export function SyncSetupPanel({
       {/* Section 1: Storage Provider */}
       <SettingsSection
         title={t('settings.sync.section_storage', { defaultValue: 'WebDAV Storage Configuration' })}
-        description={t('settings.sync.section_storage_desc', { defaultValue: 'Configure your WebDAV server endpoint and credentials for encrypted data synchronization.' })}
+        description={t('settings.sync.section_storage_desc', {
+          defaultValue:
+            'Configure your WebDAV server endpoint and credentials for encrypted data synchronization.',
+        })}
       >
         <div className="sync-pairing-banner">
           <div className="sync-pairing-banner-text">
             <Link2 size={15} />
-            <span>{t('settings.sync.have_device_hint', { defaultValue: 'Have another device already configured?' })}</span>
+            <span>
+              {t('settings.sync.have_device_hint', {
+                defaultValue: 'Have another device already configured?',
+              })}
+            </span>
           </div>
           <button
             type="button"
@@ -358,7 +404,9 @@ export function SyncSetupPanel({
                 rel="noopener noreferrer"
                 className="sync-auth-link"
               >
-                <span>{t('settings.sync.view_auth_guide', { defaultValue: 'View setup guide' })}</span>
+                <span>
+                  {t('settings.sync.view_auth_guide', { defaultValue: 'View setup guide' })}
+                </span>
                 <ExternalLink size={12} />
               </a>
             ) : undefined
@@ -391,9 +439,7 @@ export function SyncSetupPanel({
           />
         </SettingsItem>
 
-        <SettingsItem
-          title={t('settings.sync.username', { defaultValue: 'Username' })}
-        >
+        <SettingsItem title={t('settings.sync.username', { defaultValue: 'Username' })}>
           <input
             id="sync-username"
             className="settings-input"
@@ -409,9 +455,21 @@ export function SyncSetupPanel({
 
         <SettingsItem
           title={t('settings.sync.password', { defaultValue: 'Password' })}
-          hint={currentPresetMeta ? t(currentPresetMeta.helpKey, { defaultValue: currentPresetMeta.helpDefault }) : undefined}
+          hint={
+            currentPresetMeta
+              ? t(currentPresetMeta.helpKey, { defaultValue: currentPresetMeta.helpDefault })
+              : undefined
+          }
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%', maxWidth: '380px' }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              width: '100%',
+              maxWidth: '380px',
+            }}
+          >
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <PasswordInput
                 id="sync-password"
@@ -443,7 +501,11 @@ export function SyncSetupPanel({
               </button>
             </div>
             {testError && (
-              <div className="sync-banner-box is-error" role="alert" style={{ padding: '6px 10px', marginTop: '2px' }}>
+              <div
+                className="sync-banner-box is-error"
+                role="alert"
+                style={{ padding: '6px 10px', marginTop: '2px' }}
+              >
                 <AlertCircle size={14} />
                 <span style={{ fontSize: '0.8rem' }}>{testError}</span>
               </div>
@@ -455,11 +517,16 @@ export function SyncSetupPanel({
       {/* Section 2: End-to-End Encryption */}
       <SettingsSection
         title={t('settings.sync.section_encryption', { defaultValue: 'End-to-End Encryption' })}
-        description={t('settings.sync.section_encryption_desc', { defaultValue: 'Your transcripts and data are encrypted locally before uploading. The storage provider cannot read them.' })}
+        description={t('settings.sync.section_encryption_desc', {
+          defaultValue:
+            'Your transcripts and data are encrypted locally before uploading. The storage provider cannot read them.',
+        })}
       >
         <SettingsItem
           title={t('settings.sync.unlock_mode', { defaultValue: 'Authentication method' })}
-          hint={t('settings.sync.unlock_mode_hint', { defaultValue: 'Use master password for encryption, or existing recovery key to decrypt' })}
+          hint={t('settings.sync.unlock_mode_hint', {
+            defaultValue: 'Use master password for encryption, or existing recovery key to decrypt',
+          })}
         >
           <div className="sync-segmented-control">
             <button
@@ -468,7 +535,9 @@ export function SyncSetupPanel({
               onClick={() => setUnlockMethod('password')}
             >
               <KeyRound size={13} />
-              <span>{t('settings.sync.use_master_password', { defaultValue: 'Master password' })}</span>
+              <span>
+                {t('settings.sync.use_master_password', { defaultValue: 'Master password' })}
+              </span>
             </button>
             <button
               type="button"
@@ -476,7 +545,9 @@ export function SyncSetupPanel({
               onClick={() => setUnlockMethod('recovery')}
             >
               <ShieldCheck size={13} />
-              <span>{t('settings.sync.use_recovery_key', { defaultValue: 'Emergency recovery key' })}</span>
+              <span>
+                {t('settings.sync.use_recovery_key', { defaultValue: 'Emergency recovery key' })}
+              </span>
             </button>
           </div>
         </SettingsItem>
@@ -485,7 +556,10 @@ export function SyncSetupPanel({
           <>
             <SettingsItem
               title={t('settings.sync.master_password', { defaultValue: 'Master password' })}
-              hint={t('settings.sync.master_password_hint', { defaultValue: 'Encrypts your sync data. All devices must use this password to unlock and sync.' })}
+              hint={t('settings.sync.master_password_hint', {
+                defaultValue:
+                  'Encrypts your sync data. All devices must use this password to unlock and sync.',
+              })}
             >
               <PasswordInput
                 id="sync-master-password"
@@ -500,11 +574,15 @@ export function SyncSetupPanel({
             {!vaultId.trim() && (
               <SettingsItem
                 title={t('settings.sync.confirm_password', { defaultValue: 'Confirm password' })}
-                hint={t('settings.sync.confirm_password_hint', { defaultValue: 'Re-enter your master password' })}
+                hint={t('settings.sync.confirm_password_hint', {
+                  defaultValue: 'Re-enter your master password',
+                })}
               >
                 <PasswordInput
                   id="sync-confirm-password"
-                  ariaLabel={t('settings.sync.confirm_password', { defaultValue: 'Confirm password' })}
+                  ariaLabel={t('settings.sync.confirm_password', {
+                    defaultValue: 'Confirm password',
+                  })}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   disabled={isBusy}
@@ -516,14 +594,21 @@ export function SyncSetupPanel({
         ) : (
           <SettingsItem
             title={t('settings.sync.use_recovery_key', { defaultValue: 'Emergency recovery key' })}
-            hint={t('settings.sync.recovery_key_join_hint', { defaultValue: 'If you forgot the master password, you can enter the emergency recovery key saved when this vault was created to decrypt and join.' })}
+            hint={t('settings.sync.recovery_key_join_hint', {
+              defaultValue:
+                'If you forgot the master password, you can enter the emergency recovery key saved when this vault was created to decrypt and join.',
+            })}
           >
             <input
               id="sync-recovery-key-input"
               className="settings-input sync-monospace-input"
               type="text"
-              aria-label={t('settings.sync.use_recovery_key', { defaultValue: 'Emergency recovery key' })}
-              placeholder={t('settings.sync.recovery_key_placeholder', { defaultValue: 'Paste the recovery key saved during vault creation' })}
+              aria-label={t('settings.sync.use_recovery_key', {
+                defaultValue: 'Emergency recovery key',
+              })}
+              placeholder={t('settings.sync.recovery_key_placeholder', {
+                defaultValue: 'Paste the recovery key saved during vault creation',
+              })}
               value={masterPassword}
               onChange={(e) => setMasterPassword(e.target.value)}
               disabled={isBusy}
@@ -536,16 +621,24 @@ export function SyncSetupPanel({
       {/* Section 3: Advanced Settings (Native Sona Accordion) */}
       <SettingsSection>
         <SettingsAccordion
-          title={(
+          title={
             <div className="settings-accordion-copy">
-              <div className="settings-accordion-copy-title">{t('settings.sync.advanced_settings_title', { defaultValue: 'Advanced Settings' })}</div>
-              <div className="settings-accordion-copy-hint">{t('settings.sync.advanced_options', { defaultValue: 'Remote directory, Vault ID, Sync scope, Recovery key' })}</div>
+              <div className="settings-accordion-copy-title">
+                {t('settings.sync.advanced_settings_title', { defaultValue: 'Advanced Settings' })}
+              </div>
+              <div className="settings-accordion-copy-hint">
+                {t('settings.sync.advanced_options', {
+                  defaultValue: 'Remote directory, Vault ID, Sync scope, Recovery key',
+                })}
+              </div>
             </div>
-          )}
+          }
         >
           <SettingsItem
             title={t('settings.sync.remote_root', { defaultValue: 'Remote root' })}
-            hint={t('settings.sync.remote_root_hint', { defaultValue: 'Folder name on the remote storage, default is Sona' })}
+            hint={t('settings.sync.remote_root_hint', {
+              defaultValue: 'Folder name on the remote storage, default is Sona',
+            })}
           >
             <input
               id="sync-remote-root"
@@ -561,7 +654,9 @@ export function SyncSetupPanel({
 
           <SettingsItem
             title={t('settings.sync.vault_id_custom', { defaultValue: 'Target Vault ID' })}
-            hint={t('settings.sync.vault_id_custom_hint', { defaultValue: 'Leave empty for auto-discovery or default vault ("default")' })}
+            hint={t('settings.sync.vault_id_custom_hint', {
+              defaultValue: 'Leave empty for auto-discovery or default vault ("default")',
+            })}
           >
             <input
               id="sync-vault-id"
@@ -578,26 +673,37 @@ export function SyncSetupPanel({
 
           <SettingsItem
             title={t('settings.sync.scope_selector_label', { defaultValue: 'Sync scope preset' })}
-            hint={t('settings.sync.scope_selector_hint', { defaultValue: 'Choose which data types are synchronized to other devices' })}
+            hint={t('settings.sync.scope_selector_hint', {
+              defaultValue: 'Choose which data types are synchronized to other devices',
+            })}
             layout="vertical"
           >
-            <div className="settings-scenario-cards three-columns" style={{ width: '100%', padding: 0, background: 'transparent' }}>
+            <div
+              className="settings-scenario-cards three-columns"
+              style={{ width: '100%', padding: 0, background: 'transparent' }}
+            >
               {[
                 {
                   id: 'content' as const,
                   label: t('settings.sync.preset_content', { defaultValue: 'Content only' }),
-                  description: t('settings.sync.scope_content_desc', { defaultValue: 'Transcripts & summaries' }),
+                  description: t('settings.sync.scope_content_desc', {
+                    defaultValue: 'Transcripts & summaries',
+                  }),
                 },
                 {
                   id: 'standard' as const,
                   label: t('settings.sync.preset_standard', { defaultValue: 'Standard' }),
-                  description: t('settings.sync.scope_standard_desc', { defaultValue: 'Recommended for daily sync' }),
+                  description: t('settings.sync.scope_standard_desc', {
+                    defaultValue: 'Recommended for daily sync',
+                  }),
                   badge: t('common.recommended', { defaultValue: 'Recommended' }),
                 },
                 {
                   id: 'full' as const,
                   label: t('settings.sync.preset_full', { defaultValue: 'Full workspace' }),
-                  description: t('settings.sync.scope_full_desc', { defaultValue: 'All settings & profiles' }),
+                  description: t('settings.sync.scope_full_desc', {
+                    defaultValue: 'All settings & profiles',
+                  }),
                 },
               ].map((s) => {
                 const isSelected = preset === s.id;
@@ -615,11 +721,13 @@ export function SyncSetupPanel({
                     <span className="settings-scenario-card-text">
                       <span className="settings-scenario-card-label">
                         {s.label}
-                        {s.badge && <span className="sync-scope-tag is-badge" style={{ marginLeft: '6px' }}>{s.badge}</span>}
+                        {s.badge && (
+                          <span className="sync-scope-tag is-badge" style={{ marginLeft: '6px' }}>
+                            {s.badge}
+                          </span>
+                        )}
                       </span>
-                      <span className="settings-scenario-card-description">
-                        {s.description}
-                      </span>
+                      <span className="settings-scenario-card-description">{s.description}</span>
                     </span>
                   </button>
                 );
@@ -627,12 +735,19 @@ export function SyncSetupPanel({
             </div>
           </SettingsItem>
           <SettingsItem
-            title={t('settings.sync.create_recovery_key_label', { defaultValue: 'Emergency Recovery Key' })}
-            hint={t('settings.sync.create_recovery_key_hint', { defaultValue: 'Generate a recovery key to restore access if you forget your master password.' })}
+            title={t('settings.sync.create_recovery_key_label', {
+              defaultValue: 'Emergency Recovery Key',
+            })}
+            hint={t('settings.sync.create_recovery_key_hint', {
+              defaultValue:
+                'Generate a recovery key to restore access if you forget your master password.',
+            })}
           >
             <Switch
               id="sync-create-recovery-key"
-              aria-label={t('settings.sync.create_recovery_key_label', { defaultValue: 'Emergency Recovery Key' })}
+              aria-label={t('settings.sync.create_recovery_key_label', {
+                defaultValue: 'Emergency Recovery Key',
+              })}
               checked={createRecoveryKey}
               onChange={(checked) => setCreateRecoveryKey(checked)}
               disabled={isBusy}
@@ -644,7 +759,11 @@ export function SyncSetupPanel({
       {/* Submit Action Footer */}
       <div className="sync-setup-footer">
         {validationError && (
-          <div className="sync-banner-box is-warning" role="alert" style={{ width: '100%', maxWidth: '420px' }}>
+          <div
+            className="sync-banner-box is-warning"
+            role="alert"
+            style={{ width: '100%', maxWidth: '420px' }}
+          >
             <AlertCircle size={16} />
             <span>{validationError}</span>
           </div>
@@ -659,12 +778,18 @@ export function SyncSetupPanel({
           {isConnecting ? (
             <>
               <RefreshCw size={16} className="queue-icon-spin" />
-              <span>{t('settings.sync.connecting_and_detecting', { defaultValue: 'Connecting and detecting storage...' })}</span>
+              <span>
+                {t('settings.sync.connecting_and_detecting', {
+                  defaultValue: 'Connecting and detecting storage...',
+                })}
+              </span>
             </>
           ) : (
             <>
               <CheckCircle2 size={16} />
-              <span>{t('settings.sync.save_and_enable', { defaultValue: 'Save & Enable Sync' })}</span>
+              <span>
+                {t('settings.sync.save_and_enable', { defaultValue: 'Save & Enable Sync' })}
+              </span>
             </>
           )}
         </button>
@@ -706,7 +831,8 @@ export function SyncSetupPanel({
         <div className="sync-pairing-modal-body">
           <p className="sync-pairing-modal-desc">
             {t('settings.sync.pairing_modal_desc', {
-              defaultValue: 'Paste the pairing code (sonasync://...) generated on your other device to quickly fill connection parameters.',
+              defaultValue:
+                'Paste the pairing code (sonasync://...) generated on your other device to quickly fill connection parameters.',
             })}
           </p>
 
@@ -759,7 +885,8 @@ export function SyncSetupPanel({
             <ShieldCheck size={15} />
             <span>
               {t('settings.sync.pairing_security_note', {
-                defaultValue: 'The pairing code contains server metadata only. You will still need to enter your Master Password on the second device to unlock.',
+                defaultValue:
+                  'The pairing code contains server metadata only. You will still need to enter your Master Password on the second device to unlock.',
               })}
             </span>
           </div>
@@ -770,7 +897,9 @@ export function SyncSetupPanel({
       <Modal
         isOpen={discoveredVaults !== null && discoveredVaults.length > 1}
         onClose={() => setDiscoveredVaults(null)}
-        title={t('settings.sync.multi_vault_detected_title', { defaultValue: 'Multiple Sync Vaults Detected' })}
+        title={t('settings.sync.multi_vault_detected_title', {
+          defaultValue: 'Multiple Sync Vaults Detected',
+        })}
         size="md"
         footer={
           <>
@@ -805,7 +934,8 @@ export function SyncSetupPanel({
         <div className="sync-multivault-modal-body">
           <p className="sync-multivault-modal-desc">
             {t('settings.sync.multi_vault_detected_desc', {
-              defaultValue: 'This WebDAV server already contains multiple sync vaults. Choose which vault to connect to, or initialize a new one:',
+              defaultValue:
+                'This WebDAV server already contains multiple sync vaults. Choose which vault to connect to, or initialize a new one:',
             })}
           </p>
 
@@ -840,14 +970,18 @@ export function SyncSetupPanel({
                     <span className="sync-multivault-hint">
                       {v.vaultId === 'default'
                         ? t('settings.sync.vault_default_hint', { defaultValue: 'Default vault' })
-                        : t('settings.sync.existing_vault_hint', { defaultValue: 'Existing remote vault' })}
+                        : t('settings.sync.existing_vault_hint', {
+                            defaultValue: 'Existing remote vault',
+                          })}
                     </span>
                   </div>
                 </label>
               );
             })}
 
-            <label className={`sync-multivault-option-card ${isCreatingNewVault ? 'is-selected' : ''}`}>
+            <label
+              className={`sync-multivault-option-card ${isCreatingNewVault ? 'is-selected' : ''}`}
+            >
               <input
                 type="radio"
                 name="vault-selection"
@@ -860,9 +994,17 @@ export function SyncSetupPanel({
               </div>
               <div className="sync-multivault-option-info">
                 <div className="sync-multivault-option-title-row">
-                  <strong>{t('settings.sync.create_new_vault_option', { defaultValue: 'Create a new independent vault' })}</strong>
+                  <strong>
+                    {t('settings.sync.create_new_vault_option', {
+                      defaultValue: 'Create a new independent vault',
+                    })}
+                  </strong>
                 </div>
-                <span className="sync-multivault-hint">{t('settings.sync.create_new_vault_option_desc', { defaultValue: 'Initialize a separate workspace on this storage' })}</span>
+                <span className="sync-multivault-hint">
+                  {t('settings.sync.create_new_vault_option_desc', {
+                    defaultValue: 'Initialize a separate workspace on this storage',
+                  })}
+                </span>
               </div>
             </label>
           </div>

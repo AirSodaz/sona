@@ -1,186 +1,190 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import type { TranscriptSegment } from '../../types/transcript';
 import { computeSegmentsFingerprint, computeSummarySourceFingerprint } from '../segmentUtils';
-import { TranscriptSegment } from '../../types/transcript';
 
 describe('computeSegmentsFingerprint', () => {
-    it('returns a fingerprint for a list of segments', () => {
-        const segments: TranscriptSegment[] = [
-            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true },
-            { id: '2', text: 'World', start: 1, end: 2, isFinal: true }
-        ];
-        const fingerprint = computeSegmentsFingerprint(segments);
-        expect(fingerprint).toBeTruthy();
-        expect(fingerprint).toBe(computeSegmentsFingerprint(segments));
-        expect(fingerprint).not.toBe(computeSegmentsFingerprint([segments[0]]));
-    });
+  it('returns a fingerprint for a list of segments', () => {
+    const segments: TranscriptSegment[] = [
+      { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true },
+      { id: '2', text: 'World', start: 1, end: 2, isFinal: true },
+    ];
+    const fingerprint = computeSegmentsFingerprint(segments);
+    expect(fingerprint).toBeTruthy();
+    expect(fingerprint).toBe(computeSegmentsFingerprint(segments));
+    expect(fingerprint).not.toBe(computeSegmentsFingerprint([segments[0]]));
+  });
 
-    it('returns a different fingerprint when translation changes', () => {
-        const segments1: TranscriptSegment[] = [
-            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }
-        ];
-        const segments2: TranscriptSegment[] = [
-            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true, translation: 'Bonjour' }
-        ];
-        const fingerprint1 = computeSegmentsFingerprint(segments1);
-        const fingerprint2 = computeSegmentsFingerprint(segments2);
+  it('returns a different fingerprint when translation changes', () => {
+    const segments1: TranscriptSegment[] = [
+      { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true },
+    ];
+    const segments2: TranscriptSegment[] = [
+      { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true, translation: 'Bonjour' },
+    ];
+    const fingerprint1 = computeSegmentsFingerprint(segments1);
+    const fingerprint2 = computeSegmentsFingerprint(segments2);
 
-        expect(fingerprint1).not.toBe(fingerprint2);
-        expect(fingerprint2).toContain('Bonjour');
-    });
+    expect(fingerprint1).not.toBe(fingerprint2);
+    expect(fingerprint2).toContain('Bonjour');
+  });
 
-    it('returns a different fingerprint when isFinal changes', () => {
-        const segments1: TranscriptSegment[] = [
-            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: false }
-        ];
-        const segments2: TranscriptSegment[] = [
-            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }
-        ];
-        const fingerprint1 = computeSegmentsFingerprint(segments1);
-        const fingerprint2 = computeSegmentsFingerprint(segments2);
+  it('returns a different fingerprint when isFinal changes', () => {
+    const segments1: TranscriptSegment[] = [
+      { id: '1', text: 'Hello', start: 0, end: 1, isFinal: false },
+    ];
+    const segments2: TranscriptSegment[] = [
+      { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true },
+    ];
+    const fingerprint1 = computeSegmentsFingerprint(segments1);
+    const fingerprint2 = computeSegmentsFingerprint(segments2);
 
-        expect(fingerprint1).not.toBe(fingerprint2);
-    });
+    expect(fingerprint1).not.toBe(fingerprint2);
+  });
 
-    it('returns a different fingerprint when timing changes', () => {
-        const segments1: TranscriptSegment[] = [
-            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }
-        ];
-        const segments2: TranscriptSegment[] = [
-            { id: '1', text: 'Hello', start: 0, end: 1.5, isFinal: true }
-        ];
-        const fingerprint1 = computeSegmentsFingerprint(segments1);
-        const fingerprint2 = computeSegmentsFingerprint(segments2);
+  it('returns a different fingerprint when timing changes', () => {
+    const segments1: TranscriptSegment[] = [
+      { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true },
+    ];
+    const segments2: TranscriptSegment[] = [
+      { id: '1', text: 'Hello', start: 0, end: 1.5, isFinal: true },
+    ];
+    const fingerprint1 = computeSegmentsFingerprint(segments1);
+    const fingerprint2 = computeSegmentsFingerprint(segments2);
 
-        expect(fingerprint1).not.toBe(fingerprint2);
-    });
+    expect(fingerprint1).not.toBe(fingerprint2);
+  });
 
-    it('returns a different fingerprint when speaker metadata changes', () => {
-        const segments1: TranscriptSegment[] = [
-            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }
-        ];
-        const segments2: TranscriptSegment[] = [
-            {
-                id: '1',
-                text: 'Hello',
-                start: 0,
-                end: 1,
-                isFinal: true,
-                speaker: { id: 'speaker-1', label: 'Alice', kind: 'identified', score: 0.88 },
-            }
-        ];
+  it('returns a different fingerprint when speaker metadata changes', () => {
+    const segments1: TranscriptSegment[] = [
+      { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true },
+    ];
+    const segments2: TranscriptSegment[] = [
+      {
+        id: '1',
+        text: 'Hello',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        speaker: { id: 'speaker-1', label: 'Alice', kind: 'identified', score: 0.88 },
+      },
+    ];
 
-        expect(computeSegmentsFingerprint(segments1)).not.toBe(computeSegmentsFingerprint(segments2));
-    });
+    expect(computeSegmentsFingerprint(segments1)).not.toBe(computeSegmentsFingerprint(segments2));
+  });
 
-    it('returns a different fingerprint when speaker attribution changes', () => {
-        const segments1: TranscriptSegment[] = [
-            {
-                id: '1',
-                text: 'Hello',
-                start: 0,
-                end: 1,
-                isFinal: true,
-                speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
-            }
-        ];
-        const segments2: TranscriptSegment[] = [
-            {
-                id: '1',
-                text: 'Hello',
-                start: 0,
-                end: 1,
-                isFinal: true,
-                speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
-                speakerAttribution: {
-                    groupId: 'anonymous-1',
-                    anonymousLabel: 'Speaker 1',
-                    state: 'suggested',
-                    source: 'auto',
-                    confidence: 'medium',
-                    candidates: [
-                        { profileId: 'speaker-1', profileName: 'Alice', score: 0.78, rank: 1 },
-                    ],
-                },
-            }
-        ];
+  it('returns a different fingerprint when speaker attribution changes', () => {
+    const segments1: TranscriptSegment[] = [
+      {
+        id: '1',
+        text: 'Hello',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+      },
+    ];
+    const segments2: TranscriptSegment[] = [
+      {
+        id: '1',
+        text: 'Hello',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+        speakerAttribution: {
+          groupId: 'anonymous-1',
+          anonymousLabel: 'Speaker 1',
+          state: 'suggested',
+          source: 'auto',
+          confidence: 'medium',
+          candidates: [{ profileId: 'speaker-1', profileName: 'Alice', score: 0.78, rank: 1 }],
+        },
+      },
+    ];
 
-        expect(computeSegmentsFingerprint(segments1)).not.toBe(computeSegmentsFingerprint(segments2));
-    });
+    expect(computeSegmentsFingerprint(segments1)).not.toBe(computeSegmentsFingerprint(segments2));
+  });
 });
 
 describe('computeSummarySourceFingerprint', () => {
-    it('ignores translation changes when building the summary fingerprint', () => {
-        const segments1: TranscriptSegment[] = [
-            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }
-        ];
-        const segments2: TranscriptSegment[] = [
-            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true, translation: 'Bonjour' }
-        ];
+  it('ignores translation changes when building the summary fingerprint', () => {
+    const segments1: TranscriptSegment[] = [
+      { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true },
+    ];
+    const segments2: TranscriptSegment[] = [
+      { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true, translation: 'Bonjour' },
+    ];
 
-        expect(computeSummarySourceFingerprint(segments1)).toBe(computeSummarySourceFingerprint(segments2));
-    });
+    expect(computeSummarySourceFingerprint(segments1)).toBe(
+      computeSummarySourceFingerprint(segments2)
+    );
+  });
 
-    it('changes when transcript source text changes', () => {
-        const segments1: TranscriptSegment[] = [
-            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }
-        ];
-        const segments2: TranscriptSegment[] = [
-            { id: '1', text: 'Hello there', start: 0, end: 1, isFinal: true }
-        ];
+  it('changes when transcript source text changes', () => {
+    const segments1: TranscriptSegment[] = [
+      { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true },
+    ];
+    const segments2: TranscriptSegment[] = [
+      { id: '1', text: 'Hello there', start: 0, end: 1, isFinal: true },
+    ];
 
-        expect(computeSummarySourceFingerprint(segments1)).not.toBe(computeSummarySourceFingerprint(segments2));
-    });
+    expect(computeSummarySourceFingerprint(segments1)).not.toBe(
+      computeSummarySourceFingerprint(segments2)
+    );
+  });
 
-    it('changes when speaker metadata changes', () => {
-        const segments1: TranscriptSegment[] = [
-            { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }
-        ];
-        const segments2: TranscriptSegment[] = [
-            {
-                id: '1',
-                text: 'Hello',
-                start: 0,
-                end: 1,
-                isFinal: true,
-                speaker: { id: 'speaker-1', label: 'Alice', kind: 'identified' },
-            }
-        ];
+  it('changes when speaker metadata changes', () => {
+    const segments1: TranscriptSegment[] = [
+      { id: '1', text: 'Hello', start: 0, end: 1, isFinal: true },
+    ];
+    const segments2: TranscriptSegment[] = [
+      {
+        id: '1',
+        text: 'Hello',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        speaker: { id: 'speaker-1', label: 'Alice', kind: 'identified' },
+      },
+    ];
 
-        expect(computeSummarySourceFingerprint(segments1)).not.toBe(computeSummarySourceFingerprint(segments2));
-    });
+    expect(computeSummarySourceFingerprint(segments1)).not.toBe(
+      computeSummarySourceFingerprint(segments2)
+    );
+  });
 
-    it('ignores speaker attribution-only changes when visible speaker labels stay the same', () => {
-        const segments1: TranscriptSegment[] = [
-            {
-                id: '1',
-                text: 'Hello',
-                start: 0,
-                end: 1,
-                isFinal: true,
-                speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
-            }
-        ];
-        const segments2: TranscriptSegment[] = [
-            {
-                id: '1',
-                text: 'Hello',
-                start: 0,
-                end: 1,
-                isFinal: true,
-                speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
-                speakerAttribution: {
-                    groupId: 'anonymous-1',
-                    anonymousLabel: 'Speaker 1',
-                    state: 'suggested',
-                    source: 'auto',
-                    confidence: 'medium',
-                    candidates: [
-                        { profileId: 'speaker-1', profileName: 'Alice', score: 0.78, rank: 1 },
-                    ],
-                },
-            }
-        ];
+  it('ignores speaker attribution-only changes when visible speaker labels stay the same', () => {
+    const segments1: TranscriptSegment[] = [
+      {
+        id: '1',
+        text: 'Hello',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+      },
+    ];
+    const segments2: TranscriptSegment[] = [
+      {
+        id: '1',
+        text: 'Hello',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' },
+        speakerAttribution: {
+          groupId: 'anonymous-1',
+          anonymousLabel: 'Speaker 1',
+          state: 'suggested',
+          source: 'auto',
+          confidence: 'medium',
+          candidates: [{ profileId: 'speaker-1', profileName: 'Alice', score: 0.78, rank: 1 }],
+        },
+      },
+    ];
 
-        expect(computeSummarySourceFingerprint(segments1)).toBe(computeSummarySourceFingerprint(segments2));
-    });
+    expect(computeSummarySourceFingerprint(segments1)).toBe(
+      computeSummarySourceFingerprint(segments2)
+    );
+  });
 });

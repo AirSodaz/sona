@@ -37,7 +37,7 @@ class SyncRuntimeService {
         if (this.isQueueBusy(previous) && !this.isQueueBusy(state)) {
           this.flushQueuedSync();
         }
-      }),
+      })
     );
 
     if (typeof window !== 'undefined') {
@@ -110,7 +110,11 @@ class SyncRuntimeService {
       return;
     }
     const snapshot = useSyncStatusStore.getState().snapshot;
-    if (snapshot.state === 'disabled' || snapshot.state === 'locked' || snapshot.state === 'paused') {
+    if (
+      snapshot.state === 'disabled' ||
+      snapshot.state === 'locked' ||
+      snapshot.state === 'paused'
+    ) {
       return;
     }
     const retryDelay = snapshot.nextRetryAtMs
@@ -199,11 +203,7 @@ class SyncRuntimeService {
   }
 
   private scheduleRetry(snapshot: SyncStatusSnapshot): void {
-    if (
-      snapshot.state === 'error'
-      && snapshot.lastError?.retryable
-      && snapshot.nextRetryAtMs
-    ) {
+    if (snapshot.state === 'error' && snapshot.lastError?.retryable && snapshot.nextRetryAtMs) {
       const delay = Math.max(0, snapshot.nextRetryAtMs - Date.now());
       if (!this.syncTimer) {
         this.armSyncTimer(delay);
@@ -218,19 +218,23 @@ class SyncRuntimeService {
   }
 
   private canRun(snapshot: SyncStatusSnapshot): boolean {
-    return snapshot.state === 'idle' || (
-      snapshot.state === 'error' && Boolean(snapshot.lastError?.retryable)
+    return (
+      snapshot.state === 'idle' ||
+      (snapshot.state === 'error' && Boolean(snapshot.lastError?.retryable))
     );
   }
 
   private isBusinessBusy(): boolean {
-    return useTranscriptRuntimeStore.getState().isRecording
-      || this.isQueueBusy(useBatchQueueStore.getState());
+    return (
+      useTranscriptRuntimeStore.getState().isRecording ||
+      this.isQueueBusy(useBatchQueueStore.getState())
+    );
   }
 
   private isQueueBusy(state: ReturnType<typeof useBatchQueueStore.getState>): boolean {
-    return state.isQueueProcessing || state.queueItems.some(
-      (item) => item.status === 'pending' || item.status === 'processing',
+    return (
+      state.isQueueProcessing ||
+      state.queueItems.some((item) => item.status === 'pending' || item.status === 'processing')
     );
   }
 

@@ -1,18 +1,19 @@
-import React, { useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Plus, Trash2 } from 'lucide-react';
+import type React from 'react';
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
-import { SummaryIcon } from '../Icons';
-import { useLlmAssistantConfig, useSetConfig } from '../../stores/configStore';
 import { useAutomationStore } from '../../stores/automationStore';
-import { DEFAULT_SUMMARY_TEMPLATE_ID, SummaryCustomTemplate } from '../../types/transcript';
-import { SettingsItem, SettingsSection } from './SettingsLayout';
+import { useLlmAssistantConfig, useSetConfig } from '../../stores/configStore';
+import { DEFAULT_SUMMARY_TEMPLATE_ID, type SummaryCustomTemplate } from '../../types/transcript';
 import {
   BUILTIN_SUMMARY_TEMPLATES,
   getSummaryTemplateOptions,
   normalizeSummaryCustomTemplates,
 } from '../../utils/summaryTemplates';
 import { Dropdown } from '../Dropdown';
+import { SummaryIcon } from '../Icons';
+import { SettingsItem, SettingsSection } from './SettingsLayout';
 
 export function SettingsSummaryTemplateSection(): React.JSX.Element {
   const { t } = useTranslation();
@@ -25,11 +26,11 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
 
   const customTemplates = useMemo(
     () => normalizeSummaryCustomTemplates(config.summaryCustomTemplates),
-    [config.summaryCustomTemplates],
+    [config.summaryCustomTemplates]
   );
   const templateOptions = useMemo(
     () => getSummaryTemplateOptions(customTemplates, t),
-    [customTemplates, t],
+    [customTemplates, t]
   );
 
   const handleAddTemplate = () => {
@@ -55,7 +56,7 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
 
   const handleUpdateTemplate = (
     templateId: string,
-    updates: Partial<Pick<SummaryCustomTemplate, 'name' | 'instructions'>>,
+    updates: Partial<Pick<SummaryCustomTemplate, 'name' | 'instructions'>>
   ) => {
     if (typeof updates.name === 'string' && !updates.name.trim()) {
       return;
@@ -66,22 +67,23 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
     }
 
     updateConfig({
-      summaryCustomTemplates: customTemplates.map((template) => (
+      summaryCustomTemplates: customTemplates.map((template) =>
         template.id === templateId
           ? {
-            ...template,
-            ...updates,
-          }
+              ...template,
+              ...updates,
+            }
           : template
-      )),
+      ),
     });
   };
 
   const handleDeleteTemplate = async (templateId: string) => {
     const nextTemplates = customTemplates.filter((template) => template.id !== templateId);
-    const nextTemplateId = config.summaryTemplateId === templateId
-      ? DEFAULT_SUMMARY_TEMPLATE_ID
-      : (config.summaryTemplateId || DEFAULT_SUMMARY_TEMPLATE_ID);
+    const nextTemplateId =
+      config.summaryTemplateId === templateId
+        ? DEFAULT_SUMMARY_TEMPLATE_ID
+        : config.summaryTemplateId || DEFAULT_SUMMARY_TEMPLATE_ID;
 
     updateConfig({
       summaryCustomTemplates: nextTemplates,
@@ -94,9 +96,12 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
   return (
     <>
       <SettingsSection
-        title={t('settings.summary_templates_default_title', { defaultValue: 'Default Summary Template' })}
+        title={t('settings.summary_templates_default_title', {
+          defaultValue: 'Default Summary Template',
+        })}
         description={t('settings.summary_templates_default_description', {
-          defaultValue: 'Choose which summary template is used when no automation profile overrides it.',
+          defaultValue:
+            'Choose which summary template is used when no automation profile overrides it.',
         })}
         icon={<SummaryIcon width={20} height={20} />}
       >
@@ -117,9 +122,12 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
       </SettingsSection>
 
       <SettingsSection
-        title={t('settings.summary_templates_builtin_title', { defaultValue: 'Built-in Summary Templates' })}
+        title={t('settings.summary_templates_builtin_title', {
+          defaultValue: 'Built-in Summary Templates',
+        })}
         description={t('settings.summary_templates_builtin_description', {
-          defaultValue: 'These templates are provided by Sona and can be viewed here, but not edited.',
+          defaultValue:
+            'These templates are provided by Sona and can be viewed here, but not edited.',
         })}
         icon={<SummaryIcon width={20} height={20} />}
       >
@@ -134,7 +142,9 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
               gap: '10px',
             }}
           >
-            <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+            <div
+              style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-text-primary)' }}
+            >
               {t(template.labelKey, { defaultValue: template.defaultLabel })}
             </div>
             <div
@@ -156,9 +166,12 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
       </SettingsSection>
 
       <SettingsSection
-        title={t('settings.summary_templates_custom_title', { defaultValue: 'Custom Summary Templates' })}
+        title={t('settings.summary_templates_custom_title', {
+          defaultValue: 'Custom Summary Templates',
+        })}
         description={t('settings.summary_templates_custom_description', {
-          defaultValue: 'Create reusable summary template names and instructions for different workflows.',
+          defaultValue:
+            'Create reusable summary template names and instructions for different workflows.',
         })}
         icon={<SummaryIcon width={20} height={20} />}
       >
@@ -176,7 +189,9 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
             className="settings-input"
             value={newTemplateName}
             onChange={(event) => setNewTemplateName(event.target.value)}
-            placeholder={t('settings.summary_template_name_placeholder', { defaultValue: 'Template name' })}
+            placeholder={t('settings.summary_template_name_placeholder', {
+              defaultValue: 'Template name',
+            })}
           />
           <textarea
             className="settings-input"
@@ -210,49 +225,59 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
               fontSize: '0.875rem',
             }}
           >
-            {t('settings.summary_templates_no_custom', { defaultValue: 'No custom summary templates yet.' })}
+            {t('settings.summary_templates_no_custom', {
+              defaultValue: 'No custom summary templates yet.',
+            })}
           </div>
-        ) : customTemplates.map((template) => (
-          <div
-            key={template.id}
-            style={{
-              padding: '20px 24px',
-              background: 'var(--color-bg-primary)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-              <input
-                type="text"
+        ) : (
+          customTemplates.map((template) => (
+            <div
+              key={template.id}
+              style={{
+                padding: '20px 24px',
+                background: 'var(--color-bg-primary)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                <input
+                  type="text"
+                  className="settings-input"
+                  value={template.name}
+                  onChange={(event) =>
+                    handleUpdateTemplate(template.id, { name: event.target.value })
+                  }
+                  aria-label={t('settings.summary_template_name_placeholder', {
+                    defaultValue: 'Template name',
+                  })}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-icon btn-danger-soft"
+                  onClick={() => void handleDeleteTemplate(template.id)}
+                  aria-label={t('common.delete_item', {
+                    item: template.name,
+                    defaultValue: `Delete ${template.name}`,
+                  })}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+              <textarea
                 className="settings-input"
-                value={template.name}
-                onChange={(event) => handleUpdateTemplate(template.id, { name: event.target.value })}
-                aria-label={t('settings.summary_template_name_placeholder', { defaultValue: 'Template name' })}
-                style={{ flex: 1 }}
+                value={template.instructions}
+                onChange={(event) =>
+                  handleUpdateTemplate(template.id, { instructions: event.target.value })
+                }
+                aria-label={template.name}
+                style={{ minHeight: '120px', resize: 'vertical' }}
               />
-              <button
-                type="button"
-                className="btn btn-icon btn-danger-soft"
-                onClick={() => void handleDeleteTemplate(template.id)}
-                aria-label={t('common.delete_item', {
-                  item: template.name,
-                  defaultValue: `Delete ${template.name}`,
-                })}
-              >
-                <Trash2 size={16} />
-              </button>
             </div>
-            <textarea
-              className="settings-input"
-              value={template.instructions}
-              onChange={(event) => handleUpdateTemplate(template.id, { instructions: event.target.value })}
-              aria-label={template.name}
-              style={{ minHeight: '120px', resize: 'vertical' }}
-            />
-          </div>
-        ))}
+          ))
+        )}
       </SettingsSection>
     </>
   );

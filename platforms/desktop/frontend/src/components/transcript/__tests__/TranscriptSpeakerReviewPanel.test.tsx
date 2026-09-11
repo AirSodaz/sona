@@ -1,14 +1,14 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { TranscriptSpeakerReviewPanel } from '../TranscriptSpeakerReviewPanel';
-import { resetTranscriptStores } from '../../../test-utils/transcriptStoreTestUtils';
+import { speakerCorrectionService } from '../../../services/speakerCorrectionService';
 import { useConfigStore } from '../../../stores/configStore';
 import { useProjectStore } from '../../../stores/projectStore';
 import { useTranscriptPlaybackStore } from '../../../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../../../stores/transcriptSessionStore';
-import { speakerCorrectionService } from '../../../services/speakerCorrectionService';
+import { resetTranscriptStores } from '../../../test-utils/transcriptStoreTestUtils';
 import type { SpeakerProfile } from '../../../types/speaker';
 import type { TranscriptSegment } from '../../../types/transcript';
+import { TranscriptSpeakerReviewPanel } from '../TranscriptSpeakerReviewPanel';
 
 const translations: Record<string, string | ((options: Record<string, unknown>) => string)> = {
   'common.close': 'Close',
@@ -54,11 +54,10 @@ const tauriMocks = vi.hoisted(() => ({
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, options?: { defaultValue?: string; [key: string]: unknown }) => (
+    t: (key: string, options?: { defaultValue?: string; [key: string]: unknown }) =>
       typeof translations[key] === 'function'
         ? translations[key](options || {})
-        : translations[key] || options?.defaultValue || key
-    ),
+        : translations[key] || options?.defaultValue || key,
   }),
   initReactI18next: {
     type: '3rdParty',
@@ -85,7 +84,13 @@ const GROUP_SUGGESTED = {
   riskReason: 'suggested' as const,
   priority: 0,
   candidates: [
-    { profileId: 'alice', profileName: 'Alice', score: 0.79, rank: 1, displayScore: 'rust-score-alice' },
+    {
+      profileId: 'alice',
+      profileName: 'Alice',
+      score: 0.79,
+      rank: 1,
+      displayScore: 'rust-score-alice',
+    },
     { profileId: 'bob', profileName: 'Bob', score: 0.72, rank: 2, displayScore: 'rust-score-bob' },
   ],
   speaker: { id: 'anonymous-1', label: 'Speaker 1', kind: 'anonymous' as const },
@@ -96,8 +101,22 @@ const GROUP_SUGGESTED = {
   firstStart: 12,
   displayStart: 'rust-group-start-seg-1',
   previewSegments: [
-    { id: 'seg-1', start: 12, end: 18, displayStart: 'rust-start-seg-1', displayDuration: 'rust-duration-seg-1', text: 'Hello there' },
-    { id: 'seg-1b', start: 20, end: 22, displayStart: 'rust-start-seg-1b', displayDuration: 'rust-duration-seg-1b', text: 'Follow up' },
+    {
+      id: 'seg-1',
+      start: 12,
+      end: 18,
+      displayStart: 'rust-start-seg-1',
+      displayDuration: 'rust-duration-seg-1',
+      text: 'Hello there',
+    },
+    {
+      id: 'seg-1b',
+      start: 20,
+      end: 22,
+      displayStart: 'rust-start-seg-1b',
+      displayDuration: 'rust-duration-seg-1b',
+      text: 'Follow up',
+    },
   ],
 };
 
@@ -120,7 +139,14 @@ const GROUP_ANONYMOUS = {
   firstStart: 30,
   displayStart: 'rust-group-start-seg-2',
   previewSegments: [
-    { id: 'seg-2', start: 30, end: 34, displayStart: 'rust-start-seg-2', displayDuration: 'rust-duration-seg-2', text: 'Unknown voice' },
+    {
+      id: 'seg-2',
+      start: 30,
+      end: 34,
+      displayStart: 'rust-start-seg-2',
+      displayDuration: 'rust-duration-seg-2',
+      text: 'Unknown voice',
+    },
   ],
 };
 
@@ -143,7 +169,14 @@ const GROUP_IDENTIFIED = {
   firstStart: 40,
   displayStart: 'rust-group-start-seg-3',
   previewSegments: [
-    { id: 'seg-3', start: 40, end: 44, displayStart: 'rust-start-seg-3', displayDuration: 'rust-duration-seg-3', text: 'Known Alice' },
+    {
+      id: 'seg-3',
+      start: 40,
+      end: 44,
+      displayStart: 'rust-start-seg-3',
+      displayDuration: 'rust-duration-seg-3',
+      text: 'Known Alice',
+    },
   ],
 };
 
@@ -166,7 +199,14 @@ const GROUP_REVIEWED = {
   firstStart: 50,
   displayStart: 'rust-group-start-seg-4',
   previewSegments: [
-    { id: 'seg-4', start: 50, end: 54, displayStart: 'rust-start-seg-4', displayDuration: 'rust-duration-seg-4', text: 'Confirmed Bob' },
+    {
+      id: 'seg-4',
+      start: 50,
+      end: 54,
+      displayStart: 'rust-start-seg-4',
+      displayDuration: 'rust-duration-seg-4',
+      text: 'Confirmed Bob',
+    },
   ],
 };
 
@@ -181,7 +221,9 @@ const FILTER_OPTIONS = [
 
 function buildReviewSnapshot(segments: TranscriptSegment[], activeFilter: string) {
   const isAnonymous1Reviewed = segments.some(
-    (s) => (s.speakerAttribution?.groupId === 'anonymous-1' || s.id === 'seg-1') && s.speakerAttribution?.source === 'manual',
+    (s) =>
+      (s.speakerAttribution?.groupId === 'anonymous-1' || s.id === 'seg-1') &&
+      s.speakerAttribution?.source === 'manual'
   );
 
   const groups = [
@@ -218,25 +260,43 @@ function buildReviewSnapshot(segments: TranscriptSegment[], activeFilter: string
   };
 }
 
-function assignProfileToGroup(segments: TranscriptSegment[], groupId: string, targetProfileId: string, profiles: SpeakerProfile[]): TranscriptSegment[] {
+function assignProfileToGroup(
+  segments: TranscriptSegment[],
+  groupId: string,
+  targetProfileId: string,
+  profiles: SpeakerProfile[]
+): TranscriptSegment[] {
   const target = profiles.find((p) => p.id === targetProfileId);
   return segments.map((s) => {
     if (s.speakerAttribution?.groupId !== groupId && s.speaker?.id !== groupId) return s;
     return {
       ...s,
-      speaker: target ? { id: target.id, label: target.name, kind: 'identified' as const } : s.speaker,
-      speakerAttribution: s.speakerAttribution ? { ...s.speakerAttribution, state: 'identified' as const, source: 'manual' as const } : undefined,
+      speaker: target
+        ? { id: target.id, label: target.name, kind: 'identified' as const }
+        : s.speaker,
+      speakerAttribution: s.speakerAttribution
+        ? { ...s.speakerAttribution, state: 'identified' as const, source: 'manual' as const }
+        : undefined,
     };
   });
 }
 
-function resetGroupToAnonymous(segments: TranscriptSegment[], groupId: string): TranscriptSegment[] {
+function resetGroupToAnonymous(
+  segments: TranscriptSegment[],
+  groupId: string
+): TranscriptSegment[] {
   return segments.map((s) => {
     if (s.speakerAttribution?.groupId !== groupId && s.speaker?.id !== groupId) return s;
     return {
       ...s,
-      speaker: { id: groupId, label: s.speakerAttribution?.anonymousLabel || 'Speaker 1', kind: 'anonymous' as const },
-      speakerAttribution: s.speakerAttribution ? { ...s.speakerAttribution, state: 'anonymous' as const, source: 'manual' as const } : undefined,
+      speaker: {
+        id: groupId,
+        label: s.speakerAttribution?.anonymousLabel || 'Speaker 1',
+        kind: 'anonymous' as const,
+      },
+      speakerAttribution: s.speakerAttribution
+        ? { ...s.speakerAttribution, state: 'anonymous' as const, source: 'manual' as const }
+        : undefined,
     };
   });
 }
@@ -246,7 +306,9 @@ function confirmGroupReview(segments: TranscriptSegment[], groupId: string): Tra
     if (s.speakerAttribution?.groupId !== groupId && s.speaker?.id !== groupId) return s;
     return {
       ...s,
-      speakerAttribution: s.speakerAttribution ? { ...s.speakerAttribution, state: 'anonymous' as const, source: 'manual' as const } : undefined,
+      speakerAttribution: s.speakerAttribution
+        ? { ...s.speakerAttribution, state: 'anonymous' as const, source: 'manual' as const }
+        : undefined,
     };
   });
 }
@@ -313,9 +375,7 @@ describe('TranscriptSpeakerReviewPanel', () => {
           state: 'suggested',
           source: 'auto',
           confidence: 'medium',
-          candidates: [
-            { profileId: 'alice', profileName: 'Alice', score: 0.79, rank: 1 },
-          ],
+          candidates: [{ profileId: 'alice', profileName: 'Alice', score: 0.79, rank: 1 }],
         },
       },
       {
@@ -379,7 +439,7 @@ describe('TranscriptSpeakerReviewPanel', () => {
             args.request.segments,
             args.request.groupId,
             args.request.targetProfileId,
-            args.request.speakerProfiles,
+            args.request.speakerProfiles
           ),
           enabledSpeakerProfileIds: args.request.enabledSpeakerProfileIds,
         };
@@ -438,10 +498,14 @@ describe('TranscriptSpeakerReviewPanel', () => {
     expect(within(suggestedGroup).getByText('Alice rust-score-alice')).toBeDefined();
     expect(within(suggestedGroup).getByText('Bob rust-score-bob')).toBeDefined();
     expect(within(suggestedGroup).getByRole('button', { name: 'Apply Alice' })).toBeDefined();
-    expect(within(suggestedGroup).getByRole('button', { name: 'Confirm current label' })).toBeDefined();
+    expect(
+      within(suggestedGroup).getByRole('button', { name: 'Confirm current label' })
+    ).toBeDefined();
     expect(within(suggestedGroup).getByRole('button', { name: 'Alice' })).toBeDefined();
     expect(within(suggestedGroup).getByRole('button', { name: 'Bob' })).toBeDefined();
-    expect(within(suggestedGroup).getByRole('button', { name: 'Show all speaker profiles' })).toBeDefined();
+    expect(
+      within(suggestedGroup).getByRole('button', { name: 'Show all speaker profiles' })
+    ).toBeDefined();
   });
 
   it('switches between queue filters', async () => {
@@ -473,19 +537,24 @@ describe('TranscriptSpeakerReviewPanel', () => {
 
     await act(async () => {
       fireEvent.click(
-        within(screen.getByTestId('speaker-review-group-anonymous-1'))
-          .getByRole('button', { name: 'Confirm current label' }),
+        within(screen.getByTestId('speaker-review-group-anonymous-1')).getByRole('button', {
+          name: 'Confirm current label',
+        })
       );
     });
 
     await waitFor(() => {
       expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
       expect(screen.getByTestId('speaker-review-group-anonymous-2')).toBeDefined();
-      expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')?.speakerAttribution)
-        .toEqual(expect.objectContaining({
+      expect(
+        useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')
+          ?.speakerAttribution
+      ).toEqual(
+        expect.objectContaining({
           state: 'anonymous',
           source: 'manual',
-        }));
+        })
+      );
     });
   });
 
@@ -530,11 +599,15 @@ describe('TranscriptSpeakerReviewPanel', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
       expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-2'));
-      expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')?.speakerAttribution)
-        .toEqual(expect.objectContaining({
+      expect(
+        useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')
+          ?.speakerAttribution
+      ).toEqual(
+        expect.objectContaining({
           state: 'anonymous',
           source: 'manual',
-        }));
+        })
+      );
     });
   });
 
@@ -551,18 +624,26 @@ describe('TranscriptSpeakerReviewPanel', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
       expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-2'));
-      expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')?.speaker)
-        .toEqual(expect.objectContaining({
+      expect(
+        useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')
+          ?.speaker
+      ).toEqual(
+        expect.objectContaining({
           id: 'alice',
           label: 'Alice',
           kind: 'identified',
-        }));
-      expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1b')?.speaker)
-        .toEqual(expect.objectContaining({
+        })
+      );
+      expect(
+        useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1b')
+          ?.speaker
+      ).toEqual(
+        expect.objectContaining({
           id: 'alice',
           label: 'Alice',
           kind: 'identified',
-        }));
+        })
+      );
     });
   });
 
@@ -579,12 +660,16 @@ describe('TranscriptSpeakerReviewPanel', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('speaker-review-group-anonymous-1')).toBeNull();
       expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-2'));
-      expect(useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')?.speaker)
-        .toEqual(expect.objectContaining({
+      expect(
+        useTranscriptSessionStore.getState().segments.find((segment) => segment.id === 'seg-1')
+          ?.speaker
+      ).toEqual(
+        expect.objectContaining({
           id: 'anonymous-1',
           label: 'Speaker 1',
           kind: 'anonymous',
-        }));
+        })
+      );
     });
   });
 
@@ -612,7 +697,8 @@ describe('TranscriptSpeakerReviewPanel', () => {
   });
 
   it('does not submit duplicate shortcut actions while a group is busy', async () => {
-    const { promise: actionPromise, resolve: resolveAction } = Promise.withResolvers<TranscriptSegment[]>();
+    const { promise: actionPromise, resolve: resolveAction } =
+      Promise.withResolvers<TranscriptSegment[]>();
     const confirmSpy = vi
       .spyOn(speakerCorrectionService, 'confirmSpeakerGroupReview')
       .mockImplementation(() => actionPromise);
@@ -640,8 +726,9 @@ describe('TranscriptSpeakerReviewPanel', () => {
 
     await act(async () => {
       fireEvent.click(
-        within(screen.getByTestId('speaker-review-group-anonymous-1'))
-          .getByRole('button', { name: 'Jump to first segment' }),
+        within(screen.getByTestId('speaker-review-group-anonymous-1')).getByRole('button', {
+          name: 'Jump to first segment',
+        })
       );
     });
 

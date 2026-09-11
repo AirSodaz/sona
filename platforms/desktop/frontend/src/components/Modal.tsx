@@ -1,8 +1,9 @@
-import React, { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
+import type React from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getFocusableElements, isTopMostModal } from '../utils/focusUtils';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { getFocusableElements, isTopMostModal } from '../utils/focusUtils';
 import { ModalPortal } from './ModalPortal';
 
 function joinClassNames(...parts: Array<string | undefined | false | null>): string {
@@ -161,15 +162,18 @@ export function Modal({
   }, [isOpen, autoFocus, initialFocusRef]);
 
   // Keyboard events (Esc key and Focus Trap Tab key)
-  useEscapeKey((event) => {
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    onClose();
-  }, {
-    enabled: isOpen && closeOnEsc,
-    checkTopMost: true,
-    containerRef: modalRef
-  });
+  useEscapeKey(
+    (event) => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      onClose();
+    },
+    {
+      enabled: isOpen && closeOnEsc,
+      checkTopMost: true,
+      containerRef: modalRef,
+    }
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -240,13 +244,16 @@ export function Modal({
         >
           {/* Header */}
           <div className="shared-modal-header" ref={headerRef}>
-            {title && (
-              typeof title === 'string' ? (
-                <h3 className="shared-modal-title" id={titleId}>{title}</h3>
+            {title &&
+              (typeof title === 'string' ? (
+                <h3 className="shared-modal-title" id={titleId}>
+                  {title}
+                </h3>
               ) : (
-                <div className="shared-modal-title" id={titleId}>{title}</div>
-              )
-            )}
+                <div className="shared-modal-title" id={titleId}>
+                  {title}
+                </div>
+              ))}
             {!hideCloseButton && (
               <button
                 type="button"
@@ -263,9 +270,7 @@ export function Modal({
 
           {/* Body */}
           <div className="shared-modal-body" style={bodyStyle}>
-            <div ref={bodyContentRef}>
-              {children}
-            </div>
+            <div ref={bodyContentRef}>{children}</div>
           </div>
 
           {/* Footer */}

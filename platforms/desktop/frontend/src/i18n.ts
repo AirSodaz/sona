@@ -1,6 +1,6 @@
 import i18n from 'i18next';
-import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
+import { initReactI18next } from 'react-i18next';
 import { resolveDetectedAppLanguage, SUPPORTED_APP_LANGUAGES } from './constants/appLanguages';
 
 /**
@@ -16,38 +16,38 @@ import zh from './locales/zh.json';
 import zhTW from './locales/zh-TW.json';
 
 const resources = {
-    en: {
-        translation: en
-    },
-    ja: {
-        translation: ja
-    },
-    ko: {
-        translation: ko
-    },
-    zh: {
-        translation: zh
-    },
-    'zh-TW': {
-        translation: zhTW
-    }
+  en: {
+    translation: en,
+  },
+  ja: {
+    translation: ja,
+  },
+  ko: {
+    translation: ko,
+  },
+  zh: {
+    translation: zh,
+  },
+  'zh-TW': {
+    translation: zhTW,
+  },
 };
 
 i18n
-    .use(LanguageDetector)
-    .use(initReactI18next)
-    .init({
-        resources,
-        supportedLngs: [...SUPPORTED_APP_LANGUAGES],
-        fallbackLng: 'en',
-        interpolation: {
-            escapeValue: false // react already safes from xss
-        },
-        detection: {
-            order: ['navigator', 'htmlTag', 'path', 'subdomain'],
-            caches: [],
-            convertDetectedLanguage: resolveDetectedAppLanguage
-        }
-    });
+  .use(LanguageDetector)
+  .use(initReactI18next)
+  .init({
+    resources,
+    supportedLngs: [...SUPPORTED_APP_LANGUAGES],
+    fallbackLng: 'en',
+    interpolation: {
+      escapeValue: false, // react already safes from xss
+    },
+    detection: {
+      order: ['navigator', 'htmlTag', 'path', 'subdomain'],
+      caches: [],
+      convertDetectedLanguage: resolveDetectedAppLanguage,
+    },
+  });
 
 export default i18n;

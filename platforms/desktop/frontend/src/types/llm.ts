@@ -1,8 +1,8 @@
 import type {
-  LlmProvider as GeneratedLlmProvider,
   BuiltinLlmProvider as GeneratedBuiltinLlmProvider,
+  LlmProvider as GeneratedLlmProvider,
+  PolishPresetId as GeneratedPolishPresetId,
   SummaryTemplateId as GeneratedSummaryTemplateId,
-  PolishPresetId as GeneratedPolishPresetId
 } from '../bindings';
 
 export type BuiltInLlmProvider = GeneratedBuiltinLlmProvider;
@@ -28,14 +28,17 @@ export function unflattenLlmProvider(provider: LlmProvider): LlmProviderPayload 
   return { Builtin: provider as BuiltInLlmProvider };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: recursive config flattening needs dynamic type
 export function flattenAppConfig(config: any): any {
   if (!config) return config;
   const result = { ...config };
 
   if (result.llmSettings && typeof result.llmSettings === 'object') {
     result.llmSettings = { ...result.llmSettings };
-    if (result.llmSettings.activeProvider && typeof result.llmSettings.activeProvider === 'object') {
+    if (
+      result.llmSettings.activeProvider &&
+      typeof result.llmSettings.activeProvider === 'object'
+    ) {
       result.llmSettings.activeProvider = flattenLlmProvider(result.llmSettings.activeProvider);
     }
   }
@@ -49,7 +52,6 @@ export function flattenAppConfig(config: any): any {
 
   return result;
 }
-
 
 export type LlmProviderStrategy =
   | 'openai_compatible'

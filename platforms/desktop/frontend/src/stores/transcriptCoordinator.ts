@@ -1,4 +1,4 @@
-import { useTranscriptStore, type TranscriptStore } from './transcriptStore';
+import { type TranscriptStore, useTranscriptStore } from './transcriptStore';
 
 export { useTranscriptStore } from './transcriptStore';
 
@@ -6,19 +6,27 @@ export const openTranscriptSession = (...args: Parameters<TranscriptStore['openS
   return useTranscriptStore.getState().openSession(...args);
 };
 
-export const loadTranscriptSession = (...args: Parameters<TranscriptStore['loadTranscriptSession']>) => {
+export const loadTranscriptSession = (
+  ...args: Parameters<TranscriptStore['loadTranscriptSession']>
+) => {
   return useTranscriptStore.getState().loadTranscriptSession(...args);
 };
 
-export const clearActiveTranscriptSession = (...args: Parameters<TranscriptStore['clearActiveTranscriptSession']>) => {
+export const clearActiveTranscriptSession = (
+  ...args: Parameters<TranscriptStore['clearActiveTranscriptSession']>
+) => {
   return useTranscriptStore.getState().clearActiveTranscriptSession(...args);
 };
 
-export const clearTranscriptSegments = (...args: Parameters<TranscriptStore['clearTranscriptSegments']>) => {
+export const clearTranscriptSegments = (
+  ...args: Parameters<TranscriptStore['clearTranscriptSegments']>
+) => {
   return useTranscriptStore.getState().clearTranscriptSegments(...args);
 };
 
-export const syncSavedRecordingMeta = (...args: Parameters<TranscriptStore['syncSavedRecordingMeta']>) => {
+export const syncSavedRecordingMeta = (
+  ...args: Parameters<TranscriptStore['syncSavedRecordingMeta']>
+) => {
   return useTranscriptStore.getState().syncSavedRecordingMeta(...args);
 };
 
@@ -38,19 +46,27 @@ export const mergeTranscriptSegments = (...args: Parameters<TranscriptStore['mer
   return useTranscriptStore.getState().mergeSegments(...args);
 };
 
-export const splitTranscriptSegment = (...args: Parameters<TranscriptStore['splitTranscriptSegment']>) => {
+export const splitTranscriptSegment = (
+  ...args: Parameters<TranscriptStore['splitTranscriptSegment']>
+) => {
   return useTranscriptStore.getState().splitTranscriptSegment(...args);
 };
 
-export const finalizeLastTranscriptSegment = (...args: Parameters<TranscriptStore['finalizeLastSegment']>) => {
+export const finalizeLastTranscriptSegment = (
+  ...args: Parameters<TranscriptStore['finalizeLastSegment']>
+) => {
   return useTranscriptStore.getState().finalizeLastSegment(...args);
 };
 
-export const applyTranscriptUpdate = (...args: Parameters<TranscriptStore['applyTranscriptUpdate']>) => {
+export const applyTranscriptUpdate = (
+  ...args: Parameters<TranscriptStore['applyTranscriptUpdate']>
+) => {
   return useTranscriptStore.getState().applyTranscriptUpdate(...args);
 };
 
-export const upsertTranscriptSegmentAndSetActive = (...args: Parameters<TranscriptStore['upsertTranscriptSegmentAndSetActive']>) => {
+export const upsertTranscriptSegmentAndSetActive = (
+  ...args: Parameters<TranscriptStore['upsertTranscriptSegmentAndSetActive']>
+) => {
   return useTranscriptStore.getState().upsertTranscriptSegmentAndSetActive(...args);
 };
 

@@ -1,5 +1,5 @@
 import llmProvidersManifest from '../../../../../../core/src/llm/llm-providers.json';
-import {
+import type {
   BuiltInLlmProvider,
   CustomLlmProvider,
   CustomLlmProviderId,
@@ -76,10 +76,13 @@ export const BUILT_IN_LLM_PROVIDER_DEFINITIONS: LlmProviderDefinition[] = [
 export const LLM_PROVIDER_DEFINITIONS = BUILT_IN_LLM_PROVIDER_DEFINITIONS;
 
 export const LLM_PROVIDER_MAP: Record<BuiltInLlmProvider, LlmProviderDefinition> =
-  BUILT_IN_LLM_PROVIDER_DEFINITIONS.reduce((acc, provider) => {
-    acc[provider.id as BuiltInLlmProvider] = provider;
-    return acc;
-  }, {} as Record<BuiltInLlmProvider, LlmProviderDefinition>);
+  BUILT_IN_LLM_PROVIDER_DEFINITIONS.reduce(
+    (acc, provider) => {
+      acc[provider.id as BuiltInLlmProvider] = provider;
+      return acc;
+    },
+    {} as Record<BuiltInLlmProvider, LlmProviderDefinition>
+  );
 
 // Older config snapshots used several provider spellings. Normalize them before any
 // migration logic so the rest of the file only reasons about canonical ids.
@@ -102,8 +105,7 @@ const LEGACY_PROVIDER_MAP: Record<string, LlmProvider> = {
 };
 
 function isBuiltInProvider(value: unknown): value is BuiltInLlmProvider {
-  return typeof value === 'string'
-    && Object.prototype.hasOwnProperty.call(LLM_PROVIDER_MAP, value);
+  return typeof value === 'string' && Object.hasOwn(LLM_PROVIDER_MAP, value);
 }
 
 export function isCustomProviderId(value: unknown): value is CustomLlmProviderId {
@@ -122,7 +124,7 @@ export function normalizeProvider(value: unknown): LlmProvider {
 
 export function createCustomProviderId(
   name: string,
-  existingProviders: Partial<Record<LlmProvider, unknown>> | undefined,
+  existingProviders: Partial<Record<LlmProvider, unknown>> | undefined
 ): CustomLlmProviderId {
   const normalized = name
     .trim()
@@ -141,7 +143,12 @@ export function createCustomProviderId(
   return `${baseId}-${suffix}` as CustomLlmProviderId;
 }
 
-function customProviderDefaults(strategy: CustomLlmProviderStrategy): Pick<LlmProviderDefinition, 'defaultApiHost' | 'defaultApiPath' | 'supportsModelListing' | 'requiresApiKey'> {
+function customProviderDefaults(
+  strategy: CustomLlmProviderStrategy
+): Pick<
+  LlmProviderDefinition,
+  'defaultApiHost' | 'defaultApiPath' | 'supportsModelListing' | 'requiresApiKey'
+> {
   switch (strategy) {
     case 'openai_responses':
       return {
@@ -185,19 +192,21 @@ export function createCustomProviderDefinition(provider: CustomLlmProvider): Llm
 }
 
 export function listProviderDefinitions(
-  customProviders?: Partial<Record<LlmProvider, CustomLlmProvider>>,
+  customProviders?: Partial<Record<LlmProvider, CustomLlmProvider>>
 ): LlmProviderDefinition[] {
   return [
     ...BUILT_IN_LLM_PROVIDER_DEFINITIONS,
     ...Object.values(customProviders ?? {})
-      .filter((provider): provider is CustomLlmProvider => Boolean(provider?.id && provider.name && provider.strategy))
+      .filter((provider): provider is CustomLlmProvider =>
+        Boolean(provider?.id && provider.name && provider.strategy)
+      )
       .map(createCustomProviderDefinition),
   ];
 }
 
 export function getProviderDefinition(
   provider: LlmProvider,
-  customProviders?: Partial<Record<LlmProvider, CustomLlmProvider>>,
+  customProviders?: Partial<Record<LlmProvider, CustomLlmProvider>>
 ): LlmProviderDefinition {
   if (isBuiltInProvider(provider)) {
     const definition = LLM_PROVIDER_MAP[provider];
@@ -221,7 +230,7 @@ export function getProviderDefinition(
 
 export function createProviderSetting(
   provider: LlmProvider,
-  customProviders?: Partial<Record<LlmProvider, CustomLlmProvider>>,
+  customProviders?: Partial<Record<LlmProvider, CustomLlmProvider>>
 ): LlmProviderSetting {
   const definition = getProviderDefinition(provider, customProviders);
   return {
@@ -235,7 +244,7 @@ export function createProviderSetting(
 export function buildLlmConfig(
   provider: LlmProvider,
   setting: LlmProviderSetting,
-  customProviders?: Partial<Record<LlmProvider, CustomLlmProvider>>,
+  customProviders?: Partial<Record<LlmProvider, CustomLlmProvider>>
 ): LlmConfig {
   const definition = getProviderDefinition(provider, customProviders);
 

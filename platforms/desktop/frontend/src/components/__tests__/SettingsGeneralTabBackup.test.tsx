@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { BackupSettingsSection } from '../settings/backup/BackupSettingsSection';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSyncStatusStore } from '../../stores/syncStatusStore';
 import { DISABLED_SYNC_STATUS, type SyncStatusSnapshot } from '../../types/sync';
+import { BackupSettingsSection } from '../settings/backup/BackupSettingsSection';
 
 const testContext = vi.hoisted(() => ({
   alert: vi.fn().mockResolvedValue(undefined),
@@ -32,18 +32,28 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('../Dropdown', () => ({
   Dropdown: ({ id, value, onChange, options, disabled }: any) => (
-    <select id={id} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled}>
-      {options.map((option: any) => <option key={option.value} value={option.value}>{option.label}</option>)}
+    <select
+      id={id}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      disabled={disabled}
+    >
+      {options.map((option: any) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
     </select>
   ),
 }));
 
 vi.mock('../../stores/dialogStore', () => ({
-  useDialogStore: (selector: any) => selector({
-    alert: testContext.alert,
-    confirm: testContext.confirm,
-    showError: testContext.showError,
-  }),
+  useDialogStore: (selector: any) =>
+    selector({
+      alert: testContext.alert,
+      confirm: testContext.confirm,
+      showError: testContext.showError,
+    }),
 }));
 
 vi.mock('../../stores/transcriptRuntimeStore', () => ({
@@ -171,7 +181,9 @@ describe('Sync & Recovery settings', () => {
     });
     render(<BackupSettingsSection />);
 
-    fireEvent.change(screen.getByLabelText('Server URL'), { target: { value: 'https://dav.example.com' } });
+    fireEvent.change(screen.getByLabelText('Server URL'), {
+      target: { value: 'https://dav.example.com' },
+    });
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'sona' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'provider-secret' } });
     fireEvent.change(screen.getByLabelText('Master password'), { target: { value: 'x' } });
@@ -182,12 +194,14 @@ describe('Sync & Recovery settings', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save & Enable Sync' }));
 
-    await waitFor(() => expect(testContext.joinVault).toHaveBeenCalledWith(
-      expect.objectContaining({
-        vaultId: 'vault-remote',
-        masterPassword: 'x',
-      }),
-    ));
+    await waitFor(() =>
+      expect(testContext.joinVault).toHaveBeenCalledWith(
+        expect.objectContaining({
+          vaultId: 'vault-remote',
+          masterPassword: 'x',
+        })
+      )
+    );
   });
 
   it('shows only unlock controls while the vault is locked', async () => {
@@ -197,22 +211,28 @@ describe('Sync & Recovery settings', () => {
 
     screen.getByText('Sync vault locked');
     expect(screen.queryByRole('button', { name: 'Sync now' })).toBeNull();
-    fireEvent.change(screen.getByLabelText('WebDAV password'), { target: { value: 'provider-secret' } });
+    fireEvent.change(screen.getByLabelText('WebDAV password'), {
+      target: { value: 'provider-secret' },
+    });
     fireEvent.change(screen.getByLabelText('Master password'), { target: { value: 'x' } });
     fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
 
-    await waitFor(() => expect(testContext.unlock).toHaveBeenCalledWith({
-      providerPassword: 'provider-secret',
-      masterPassword: 'x',
-    }));
+    await waitFor(() =>
+      expect(testContext.unlock).toHaveBeenCalledWith({
+        providerPassword: 'provider-secret',
+        masterPassword: 'x',
+      })
+    );
   });
 
   it('renders sync status and quick actions cleanly', () => {
-    setStatus(status({
-      pendingOperationCount: 4,
-      conflictCount: 2,
-      lastSuccessAtMs: 1_750_000_000_000,
-    }));
+    setStatus(
+      status({
+        pendingOperationCount: 4,
+        conflictCount: 2,
+        lastSuccessAtMs: 1_750_000_000_000,
+      })
+    );
     render(<BackupSettingsSection />);
 
     screen.getByRole('button', { name: 'Sync now' });

@@ -1,39 +1,41 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_LLM_PROVIDER } from '../providers';
 import {
+  addCustomProvider,
   addLlmModel,
   buildLlmConfigPatch,
   createLlmSettings,
-  addCustomProvider,
-  updateCustomProvider,
-  removeCustomProvider,
-  ensureProviderSetting,
   enrichLlmModelMetadata,
+  ensureProviderSetting,
   findLlmModelId,
-  getModelDiscoveryStatus,
   getFeatureModelEntry,
+  getModelDiscoveryStatus,
   getOrderedLlmModels,
   getProviderLlmModels,
   isProviderModelDiscoveryExpired,
+  removeCustomProvider,
   removeLlmModel,
   sanitizeProviderSetting,
   setFeatureModelSelection,
-  setFeatureTemperature,
   setFeatureReasoningEnabled,
   setFeatureReasoningLevel,
+  setFeatureTemperature,
   syncProviderDiscoveredModels,
+  updateCustomProvider,
   updateLlmModelMetadata,
   updateProviderSetting,
 } from '../state';
-import { DEFAULT_LLM_PROVIDER } from '../providers';
 
 describe('llm state', () => {
   it('creates initial settings for the default provider', () => {
     const llmSettings = createLlmSettings();
 
     expect(llmSettings.activeProvider).toBe(DEFAULT_LLM_PROVIDER);
-    expect(llmSettings.providers[DEFAULT_LLM_PROVIDER]).toEqual(expect.objectContaining({
-      apiHost: 'https://translate.googleapis.com/translate_a/single',
-    }));
+    expect(llmSettings.providers[DEFAULT_LLM_PROVIDER]).toEqual(
+      expect.objectContaining({
+        apiHost: 'https://translate.googleapis.com/translate_a/single',
+      })
+    );
     expect(llmSettings.modelOrder).toEqual([]);
   });
 
@@ -41,12 +43,19 @@ describe('llm state', () => {
     let llmSettings = createLlmSettings('open_ai');
     llmSettings = addLlmModel(llmSettings, { provider: 'open_ai', model: 'gpt-4o-mini' });
     llmSettings = addLlmModel(llmSettings, { provider: 'open_ai', model: 'gpt-4o-mini' });
-    llmSettings = addLlmModel(llmSettings, { provider: 'anthropic', model: 'claude-sonnet-4-20250514' });
+    llmSettings = addLlmModel(llmSettings, {
+      provider: 'anthropic',
+      model: 'claude-sonnet-4-20250514',
+    });
 
     expect(llmSettings.modelOrder).toHaveLength(2);
     expect(getOrderedLlmModels(llmSettings)).toEqual([
       expect.objectContaining({ provider: 'open_ai', model: 'gpt-4o-mini', source: 'manual' }),
-      expect.objectContaining({ provider: 'anthropic', model: 'claude-sonnet-4-20250514', source: 'manual' }),
+      expect.objectContaining({
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-20250514',
+        source: 'manual',
+      }),
     ]);
   });
 
@@ -61,11 +70,13 @@ describe('llm state', () => {
 
     const config = buildLlmConfigPatch(llmSettings);
 
-    expect(getFeatureModelEntry(config, 'summary')).toEqual(expect.objectContaining({
-      provider: 'open_ai',
-      model: 'gpt-4o-mini',
-      source: 'manual',
-    }));
+    expect(getFeatureModelEntry(config, 'summary')).toEqual(
+      expect.objectContaining({
+        provider: 'open_ai',
+        model: 'gpt-4o-mini',
+        source: 'manual',
+      })
+    );
   });
 
   it('stores feature temperatures independently on selections', () => {
@@ -74,15 +85,20 @@ describe('llm state', () => {
     llmSettings = setFeatureTemperature(llmSettings, 'translation', 1.1);
     llmSettings = setFeatureTemperature(llmSettings, 'summary', 0.4);
 
-    expect(llmSettings.selections).toEqual(expect.objectContaining({
-      polishTemperature: 0.2,
-      translationTemperature: 1.1,
-      summaryTemperature: 0.4,
-    }));
+    expect(llmSettings.selections).toEqual(
+      expect.objectContaining({
+        polishTemperature: 0.2,
+        translationTemperature: 1.1,
+        summaryTemperature: 0.4,
+      })
+    );
   });
 
   it('clears feature selections when removing the selected model', () => {
-    let llmSettings = addLlmModel(createLlmSettings(), { provider: 'open_ai', model: 'gpt-4o-mini' });
+    let llmSettings = addLlmModel(createLlmSettings(), {
+      provider: 'open_ai',
+      model: 'gpt-4o-mini',
+    });
     const modelId = llmSettings.modelOrder[0];
     llmSettings = setFeatureModelSelection(llmSettings, 'polish', modelId);
     llmSettings = setFeatureModelSelection(llmSettings, 'translation', modelId);
@@ -113,11 +129,13 @@ describe('llm state', () => {
         createdAt,
       },
     });
-    expect(nextSettings.providers['custom-private-gateway']).toEqual(expect.objectContaining({
-      apiHost: '',
-      apiKey: '',
-      apiPath: '/v1/responses',
-    }));
+    expect(nextSettings.providers['custom-private-gateway']).toEqual(
+      expect.objectContaining({
+        apiHost: '',
+        apiKey: '',
+        apiPath: '/v1/responses',
+      })
+    );
   });
 
   it('updates custom provider metadata without changing its id', () => {
@@ -131,11 +149,13 @@ describe('llm state', () => {
       strategy: 'anthropic',
     });
 
-    expect(llmSettings.customProviders?.['custom-private-gateway']).toEqual(expect.objectContaining({
-      id: 'custom-private-gateway',
-      name: 'Team Gateway',
-      strategy: 'anthropic',
-    }));
+    expect(llmSettings.customProviders?.['custom-private-gateway']).toEqual(
+      expect.objectContaining({
+        id: 'custom-private-gateway',
+        name: 'Team Gateway',
+        strategy: 'anthropic',
+      })
+    );
     expect(llmSettings.providers['custom-private-gateway']?.apiPath).toBeUndefined();
   });
 
@@ -237,23 +257,35 @@ describe('llm state', () => {
 
   it('stores provider model discovery expiration when syncing discovered models', () => {
     const fetchedAt = '2026-05-24T10:00:00.000Z';
-    const llmSettings = syncProviderDiscoveredModels(createLlmSettings('open_ai'), 'open_ai', [
-      { model: 'gpt-4.1' },
-    ], fetchedAt);
+    const llmSettings = syncProviderDiscoveredModels(
+      createLlmSettings('open_ai'),
+      'open_ai',
+      [{ model: 'gpt-4.1' }],
+      fetchedAt
+    );
 
     expect(getModelDiscoveryStatus(llmSettings, 'open_ai')).toEqual({
       fetchedAt,
       expiresAt: '2026-05-25T10:00:00.000Z',
     });
-    expect(isProviderModelDiscoveryExpired(llmSettings, 'open_ai', '2026-05-24T12:00:00.000Z')).toBe(false);
-    expect(isProviderModelDiscoveryExpired(llmSettings, 'open_ai', '2026-05-25T10:00:00.000Z')).toBe(true);
-    expect(isProviderModelDiscoveryExpired(createLlmSettings('open_ai'), 'open_ai', fetchedAt)).toBe(true);
+    expect(
+      isProviderModelDiscoveryExpired(llmSettings, 'open_ai', '2026-05-24T12:00:00.000Z')
+    ).toBe(false);
+    expect(
+      isProviderModelDiscoveryExpired(llmSettings, 'open_ai', '2026-05-25T10:00:00.000Z')
+    ).toBe(true);
+    expect(
+      isProviderModelDiscoveryExpired(createLlmSettings('open_ai'), 'open_ai', fetchedAt)
+    ).toBe(true);
   });
 
   it('marks a provider model discovery cache expired when provider settings change', () => {
-    const synced = syncProviderDiscoveredModels(createLlmSettings('open_ai'), 'open_ai', [
-      { model: 'gpt-4.1' },
-    ], '2026-05-24T10:00:00.000Z');
+    const synced = syncProviderDiscoveredModels(
+      createLlmSettings('open_ai'),
+      'open_ai',
+      [{ model: 'gpt-4.1' }],
+      '2026-05-24T10:00:00.000Z'
+    );
 
     const updated = updateProviderSetting(synced, 'open_ai', {
       apiHost: 'https://gateway.example.com',
@@ -262,7 +294,9 @@ describe('llm state', () => {
     expect(getProviderLlmModels(updated, 'open_ai')).toEqual([
       expect.objectContaining({ model: 'gpt-4.1', source: 'discovered' }),
     ]);
-    expect(isProviderModelDiscoveryExpired(updated, 'open_ai', '2026-05-24T10:05:00.000Z')).toBe(true);
+    expect(isProviderModelDiscoveryExpired(updated, 'open_ai', '2026-05-24T10:05:00.000Z')).toBe(
+      true
+    );
   });
 
   it('removes stale discovered models while preserving manual models and clearing stale selections', () => {
@@ -312,21 +346,23 @@ describe('llm state', () => {
 
     expect(nextSettings.modelOrder).toEqual([modelId]);
     expect(nextSettings.selections.summaryModelId).toBe(modelId);
-    expect(nextSettings.models[modelId]).toEqual(expect.objectContaining({
-      model: 'gpt-4.1',
-      metadata: expect.objectContaining({
-        contextWindow: 200000,
-        inputPrice: 2.5,
-        supportsTools: false,
-        supportsReasoning: true,
-      }),
-      metadataOverrides: {
-        contextWindow: true,
-        inputPrice: true,
-        supportsTools: true,
-        supportsReasoning: true,
-      },
-    }));
+    expect(nextSettings.models[modelId]).toEqual(
+      expect.objectContaining({
+        model: 'gpt-4.1',
+        metadata: expect.objectContaining({
+          contextWindow: 200000,
+          inputPrice: 2.5,
+          supportsTools: false,
+          supportsReasoning: true,
+        }),
+        metadataOverrides: {
+          contextWindow: true,
+          inputPrice: true,
+          supportsTools: true,
+          supportsReasoning: true,
+        },
+      })
+    );
   });
 
   it('keeps edited discovered metadata fields while refreshing provider values for untouched fields', () => {
@@ -357,13 +393,15 @@ describe('llm state', () => {
       },
     ]);
 
-    expect(nextSettings.models[modelId!].metadata).toEqual(expect.objectContaining({
-      contextWindow: 200000,
-      inputPrice: 1.5,
-      outputPrice: 6,
-      supportsTools: false,
-      supportsReasoning: true,
-    }));
+    expect(nextSettings.models[modelId!].metadata).toEqual(
+      expect.objectContaining({
+        contextWindow: 200000,
+        inputPrice: 1.5,
+        outputPrice: 6,
+        supportsTools: false,
+        supportsReasoning: true,
+      })
+    );
     expect(nextSettings.models[modelId!].metadataOverrides).toEqual({
       contextWindow: true,
       supportsTools: true,
@@ -371,14 +409,16 @@ describe('llm state', () => {
   });
 
   it('merges enriched model metadata without replacing user overrides', () => {
-    let llmSettings = syncProviderDiscoveredModels(createLlmSettings('open_ai'), 'open_ai', [{
-      model: 'gpt-4.1',
-      displayName: 'GPT-4.1',
-      cacheReadPrice: 0.5,
-      inputModalities: ['text', 'image'],
-      supportsStructuredOutput: true,
-      metadataSources: ['provider', 'models_dev'],
-    }]);
+    let llmSettings = syncProviderDiscoveredModels(createLlmSettings('open_ai'), 'open_ai', [
+      {
+        model: 'gpt-4.1',
+        displayName: 'GPT-4.1',
+        cacheReadPrice: 0.5,
+        inputModalities: ['text', 'image'],
+        supportsStructuredOutput: true,
+        metadataSources: ['provider', 'models_dev'],
+      },
+    ]);
     const modelId = findLlmModelId(llmSettings, 'open_ai', 'gpt-4.1')!;
     llmSettings = updateLlmModelMetadata(llmSettings, modelId, { cacheReadPrice: 0.25 });
 
@@ -389,15 +429,17 @@ describe('llm state', () => {
       metadataSources: ['models_dev'],
     });
 
-    expect(refreshed.models[modelId]).toEqual(expect.objectContaining({
-      metadata: expect.objectContaining({
-        displayName: 'GPT 4.1',
-        cacheReadPrice: 0.25,
-        supportsPromptCaching: true,
-        metadataSources: ['models_dev'],
-      }),
-      metadataOverrides: expect.objectContaining({ cacheReadPrice: true }),
-    }));
+    expect(refreshed.models[modelId]).toEqual(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          displayName: 'GPT 4.1',
+          cacheReadPrice: 0.25,
+          supportsPromptCaching: true,
+          metadataSources: ['models_dev'],
+        }),
+        metadataOverrides: expect.objectContaining({ cacheReadPrice: true }),
+      })
+    );
     expect(enrichLlmModelMetadata(refreshed, 'missing', { displayName: 'stale' })).toBe(refreshed);
   });
 
@@ -422,18 +464,20 @@ describe('llm state', () => {
       },
     ]);
 
-    expect(nextSettings.models[manualModelId]).toEqual(expect.objectContaining({
-      model: 'manual-model',
-      source: 'manual',
-      metadata: expect.objectContaining({
-        contextWindow: 64000,
-        outputPrice: 3,
-      }),
-      metadataOverrides: {
-        contextWindow: true,
-        outputPrice: true,
-      },
-    }));
+    expect(nextSettings.models[manualModelId]).toEqual(
+      expect.objectContaining({
+        model: 'manual-model',
+        source: 'manual',
+        metadata: expect.objectContaining({
+          contextWindow: 64000,
+          outputPrice: 3,
+        }),
+        metadataOverrides: {
+          contextWindow: true,
+          outputPrice: true,
+        },
+      })
+    );
     expect(findLlmModelId(nextSettings, 'open_ai', 'gpt-4.1')).toBeDefined();
   });
 

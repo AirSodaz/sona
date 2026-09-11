@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Plus, Trash2 } from 'lucide-react';
+import type React from 'react';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
-import { BookIcon } from '../Icons';
+import { useAutomationStore } from '../../stores/automationStore';
+import { useSetConfig, useVocabularyConfig } from '../../stores/configStore';
+import { useProjectStore } from '../../stores/projectStore';
 import type {
   HotwordRule,
   HotwordRuleSet,
@@ -10,21 +13,16 @@ import type {
   TextReplacementRule,
   TextReplacementRuleSet,
 } from '../../types/config';
-import { useVocabularyConfig, useSetConfig } from '../../stores/configStore';
-import { useAutomationStore } from '../../stores/automationStore';
-import { useProjectStore } from '../../stores/projectStore';
-import { SettingsTabContainer, SettingsPageHeader } from './SettingsLayout';
+import { normalizePolishKeywordSets } from '../../utils/polishKeywords';
+import { BookIcon } from '../Icons';
 import { Switch } from '../Switch';
 import { SettingsContextSection } from './SettingsContextSection';
-import { SettingsSummaryTemplateSection } from './SettingsSummaryTemplateSection';
+import { SettingsPageHeader, SettingsTabContainer } from './SettingsLayout';
 import { SettingsSpeakerProfilesSection } from './SettingsSpeakerProfilesSection';
-import { normalizePolishKeywordSets } from '../../utils/polishKeywords';
+import { SettingsSummaryTemplateSection } from './SettingsSummaryTemplateSection';
 import { RuleSetSection } from './vocabulary/RuleSetSection';
 
-type AutomationRuleSetDependencyKind =
-  | 'textReplacementSet'
-  | 'hotwordSet'
-  | 'polishKeywordSet';
+type AutomationRuleSetDependencyKind = 'textReplacementSet' | 'hotwordSet' | 'polishKeywordSet';
 
 interface RuleSetUiState {
   newSetName: string;
@@ -124,7 +122,7 @@ function useRuleSetUiState(): RuleSetUiState {
 function updateSetById<TSet extends { id: string }>(
   sets: TSet[],
   id: string,
-  updates: Partial<TSet>,
+  updates: Partial<TSet>
 ): TSet[] {
   return sets.map((set) => (set.id === id ? { ...set, ...updates } : set));
 }
@@ -136,17 +134,17 @@ function removeSetById<TSet extends { id: string }>(sets: TSet[], id: string): T
 function updateRulesForSet<TSet extends { id: string; rules: unknown[] }>(
   sets: TSet[],
   setId: string,
-  getNextRules: (rules: TSet['rules']) => TSet['rules'],
+  getNextRules: (rules: TSet['rules']) => TSet['rules']
 ): TSet[] {
-  return sets.map((set) => (
-    set.id === setId ? { ...set, rules: getNextRules(set.rules) } as TSet : set
-  ));
+  return sets.map((set) =>
+    set.id === setId ? ({ ...set, rules: getNextRules(set.rules) } as TSet) : set
+  );
 }
 
 function updateRuleById<TRule extends { id: string }>(
   rules: TRule[],
   ruleId: string,
-  updates: Partial<TRule>,
+  updates: Partial<TRule>
 ): TRule[] {
   return rules.map((rule) => (rule.id === ruleId ? { ...rule, ...updates } : rule));
 }
@@ -156,7 +154,8 @@ function rulesToString(rules: TextReplacementRule[]): string {
 }
 
 function stringToRules(value: string): TextReplacementRule[] {
-  return value.split('\n')
+  return value
+    .split('\n')
     .filter((line) => line.trim() !== '')
     .map((line) => {
       const separators = ['=>', '->', '=', ':'] as const;
@@ -176,7 +175,8 @@ function hotwordsToString(rules: HotwordRule[]): string {
 }
 
 function stringToHotwords(value: string): HotwordRule[] {
-  return value.split('\n')
+  return value
+    .split('\n')
     .filter((line) => line.trim() !== '')
     .map((line) => ({ id: uuidv4(), text: line.trim() }));
 }
@@ -197,7 +197,7 @@ export function SettingsVocabularyTab(): React.JSX.Element {
 
   const removeRuleSetReferenceFromProfiles = async (
     kind: AutomationRuleSetDependencyKind,
-    setId: string,
+    setId: string
   ) => {
     await removeProfileDependency(kind, setId);
     const { projects, updateProject } = useProjectStore.getState();
@@ -264,19 +264,19 @@ export function SettingsVocabularyTab(): React.JSX.Element {
   const handleUpdateRuleInSet = (
     setId: string,
     ruleId: string,
-    updates: Partial<TextReplacementRule>,
+    updates: Partial<TextReplacementRule>
   ) => {
     updateConfig({
-      textReplacementSets: updateRulesForSet(sets, setId, (rules) => updateRuleById(rules, ruleId, updates)),
+      textReplacementSets: updateRulesForSet(sets, setId, (rules) =>
+        updateRuleById(rules, ruleId, updates)
+      ),
     });
   };
 
   const handleDeleteRuleFromSet = (setId: string, ruleId: string) => {
     updateConfig({
-      textReplacementSets: updateRulesForSet(
-        sets,
-        setId,
-        (rules) => rules.filter((rule) => rule.id !== ruleId),
+      textReplacementSets: updateRulesForSet(sets, setId, (rules) =>
+        rules.filter((rule) => rule.id !== ruleId)
       ),
     });
   };
@@ -318,19 +318,19 @@ export function SettingsVocabularyTab(): React.JSX.Element {
   const handleUpdateHotwordInSet = (
     setId: string,
     ruleId: string,
-    updates: Partial<HotwordRule>,
+    updates: Partial<HotwordRule>
   ) => {
     updateConfig({
-      hotwordSets: updateRulesForSet(hotwordSets, setId, (rules) => updateRuleById(rules, ruleId, updates)),
+      hotwordSets: updateRulesForSet(hotwordSets, setId, (rules) =>
+        updateRuleById(rules, ruleId, updates)
+      ),
     });
   };
 
   const handleDeleteHotwordFromSet = (setId: string, ruleId: string) => {
     updateConfig({
-      hotwordSets: updateRulesForSet(
-        hotwordSets,
-        setId,
-        (rules) => rules.filter((rule) => rule.id !== ruleId),
+      hotwordSets: updateRulesForSet(hotwordSets, setId, (rules) =>
+        rules.filter((rule) => rule.id !== ruleId)
       ),
     });
   };
@@ -365,16 +365,23 @@ export function SettingsVocabularyTab(): React.JSX.Element {
       <SettingsPageHeader
         icon={<BookIcon width={28} height={28} />}
         title={t('settings.vocabulary')}
-        description={t('settings.vocabulary_description', { defaultValue: 'Manage custom vocabulary, hotwords, polish keyword sets, text polish context presets, and summary templates.' })}
+        description={t('settings.vocabulary_description', {
+          defaultValue:
+            'Manage custom vocabulary, hotwords, polish keyword sets, text polish context presets, and summary templates.',
+        })}
       />
 
       <RuleSetSection
         title={t('settings.text_replacement_title', { defaultValue: 'Text Replacement' })}
         icon={<BookIcon width={20} height={20} />}
-        description={t('settings.text_replacement_description', { defaultValue: 'Group rules into sets to easily enable or disable them.' })}
+        description={t('settings.text_replacement_description', {
+          defaultValue: 'Group rules into sets to easily enable or disable them.',
+        })}
         sets={sets}
         newSetName={textReplacementUi.newSetName}
-        newSetPlaceholder={t('settings.rule_set_name_placeholder', { defaultValue: 'e.g. Technical Terms' })}
+        newSetPlaceholder={t('settings.rule_set_name_placeholder', {
+          defaultValue: 'e.g. Technical Terms',
+        })}
         emptyLabel={t('settings.no_rule_sets', { defaultValue: 'No rule sets defined.' })}
         expandedSetIds={textReplacementUi.expandedSetIds}
         onAddSet={handleAddSet}
@@ -385,7 +392,8 @@ export function SettingsVocabularyTab(): React.JSX.Element {
         onUpdateSetName={(id, name) => handleUpdateSet(id, { name })}
         renderBadge={(set) => (
           <>
-            {set.rules.length} {t('settings.rules_count', { count: set.rules.length, defaultValue: 'rules' })}
+            {set.rules.length}{' '}
+            {t('settings.rules_count', { count: set.rules.length, defaultValue: 'rules' })}
           </>
         )}
         getBatchToggle={(set) => ({
@@ -399,24 +407,32 @@ export function SettingsVocabularyTab(): React.JSX.Element {
               onChange={(checked) => handleUpdateSet(set.id, { ignoreCase: checked })}
               style={{ transform: 'scale(0.8)' }}
             />
-            <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>
+            <span
+              style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', fontWeight: 500 }}
+            >
               {t('settings.ignore_case')}
             </span>
           </div>
         )}
-        renderExpanded={(set) => (
+        renderExpanded={(set) =>
           textReplacementUi.batchEditingSetIds.has(set.id) ? (
             <>
               <textarea
                 className="settings-input"
                 value={rulesToString(set.rules)}
-                onChange={(event) => handleUpdateSet(set.id, { rules: stringToRules(event.target.value) })}
-                placeholder={t('settings.rules_placeholder', { defaultValue: 'e.g. Find => Replace With' })}
+                onChange={(event) =>
+                  handleUpdateSet(set.id, { rules: stringToRules(event.target.value) })
+                }
+                placeholder={t('settings.rules_placeholder', {
+                  defaultValue: 'e.g. Find => Replace With',
+                })}
                 rows={5}
                 style={TEXTAREA_STYLE}
               />
               <p style={HINT_STYLE}>
-                {t('settings.rules_hint', { defaultValue: 'Use " => " to separate find and replace text. One rule per line.' })}
+                {t('settings.rules_hint', {
+                  defaultValue: 'Use " => " to separate find and replace text. One rule per line.',
+                })}
               </p>
             </>
           ) : (
@@ -428,16 +444,24 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                       type="text"
                       className="settings-input-minimal"
                       value={rule.from}
-                      onChange={(event) => handleUpdateRuleInSet(set.id, rule.id, { from: event.target.value })}
+                      onChange={(event) =>
+                        handleUpdateRuleInSet(set.id, rule.id, { from: event.target.value })
+                      }
                       placeholder={t('settings.find')}
                       style={{ fontWeight: 500 }}
                     />
-                    <div style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem', opacity: 0.6 }}>{'=>'}</div>
+                    <div
+                      style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem', opacity: 0.6 }}
+                    >
+                      {'=>'}
+                    </div>
                     <input
                       type="text"
                       className="settings-input-minimal"
                       value={rule.to}
-                      onChange={(event) => handleUpdateRuleInSet(set.id, rule.id, { to: event.target.value })}
+                      onChange={(event) =>
+                        handleUpdateRuleInSet(set.id, rule.id, { to: event.target.value })
+                      }
                       placeholder={t('settings.replace_with')}
                     />
                   </div>
@@ -462,16 +486,20 @@ export function SettingsVocabularyTab(): React.JSX.Element {
               </button>
             </>
           )
-        )}
+        }
       />
 
       <RuleSetSection
         title={t('settings.hotwords_title', { defaultValue: 'Hotwords' })}
         icon={<BookIcon width={20} height={20} />}
-        description={t('settings.hotwords_description', { defaultValue: 'Enhance recognition for specific terms. One per line.' })}
+        description={t('settings.hotwords_description', {
+          defaultValue: 'Enhance recognition for specific terms. One per line.',
+        })}
         sets={hotwordSets}
         newSetName={hotwordUi.newSetName}
-        newSetPlaceholder={t('settings.rule_set_name_placeholder', { defaultValue: 'e.g. Technical Terms' })}
+        newSetPlaceholder={t('settings.rule_set_name_placeholder', {
+          defaultValue: 'e.g. Technical Terms',
+        })}
         emptyLabel={t('settings.no_rule_sets', { defaultValue: 'No rule sets defined.' })}
         expandedSetIds={hotwordUi.expandedSetIds}
         onAddSet={handleAddHotwordSet}
@@ -482,26 +510,34 @@ export function SettingsVocabularyTab(): React.JSX.Element {
         onUpdateSetName={(id, name) => handleUpdateHotwordSet(id, { name })}
         renderBadge={(set) => (
           <>
-            {set.rules.length} {t('settings.rules_count', { count: set.rules.length, defaultValue: 'rules' })}
+            {set.rules.length}{' '}
+            {t('settings.rules_count', { count: set.rules.length, defaultValue: 'rules' })}
           </>
         )}
         getBatchToggle={(set) => ({
           isEditing: hotwordUi.batchEditingSetIds.has(set.id),
           onToggle: () => hotwordUi.toggleBatchEditing(set.id),
         })}
-        renderExpanded={(set) => (
+        renderExpanded={(set) =>
           hotwordUi.batchEditingSetIds.has(set.id) ? (
             <>
               <textarea
                 className="settings-input"
                 value={hotwordsToString(set.rules)}
-                onChange={(event) => handleUpdateHotwordSet(set.id, { rules: stringToHotwords(event.target.value) })}
-                placeholder={t('settings.hotwords_placeholder', { defaultValue: 'e.g. ChatGPT\nSherpa-onnx :2.0' })}
+                onChange={(event) =>
+                  handleUpdateHotwordSet(set.id, { rules: stringToHotwords(event.target.value) })
+                }
+                placeholder={t('settings.hotwords_placeholder', {
+                  defaultValue: 'e.g. ChatGPT\nSherpa-onnx :2.0',
+                })}
                 rows={5}
                 style={TEXTAREA_STYLE}
               />
               <p style={HINT_STYLE}>
-                {t('settings.hotwords_hint', { defaultValue: 'Tip: Optional weight suffix " :2.0" applies to sherpa-onnx Transducer models only; other engines ignore it.' })}
+                {t('settings.hotwords_hint', {
+                  defaultValue:
+                    'Tip: Optional weight suffix " :2.0" applies to sherpa-onnx Transducer models only; other engines ignore it.',
+                })}
               </p>
             </>
           ) : (
@@ -513,8 +549,12 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                       type="text"
                       className="settings-input-minimal"
                       value={rule.text}
-                      onChange={(event) => handleUpdateHotwordInSet(set.id, rule.id, { text: event.target.value })}
-                      placeholder={t('settings.hotwords_placeholder', { defaultValue: 'e.g. ChatGPT' })}
+                      onChange={(event) =>
+                        handleUpdateHotwordInSet(set.id, rule.id, { text: event.target.value })
+                      }
+                      placeholder={t('settings.hotwords_placeholder', {
+                        defaultValue: 'e.g. ChatGPT',
+                      })}
                       style={{ fontWeight: 500 }}
                     />
                   </div>
@@ -538,23 +578,31 @@ export function SettingsVocabularyTab(): React.JSX.Element {
                 {t('common.add')}
               </button>
               <p style={HINT_STYLE}>
-                {t('settings.hotwords_hint', { defaultValue: 'Tip: Optional weight suffix " :2.0" applies to sherpa-onnx Transducer models only; other engines ignore it.' })}
+                {t('settings.hotwords_hint', {
+                  defaultValue:
+                    'Tip: Optional weight suffix " :2.0" applies to sherpa-onnx Transducer models only; other engines ignore it.',
+                })}
               </p>
             </>
           )
-        )}
+        }
       />
 
       <RuleSetSection
         title={t('settings.polish_keywords_title', { defaultValue: 'Polish Keywords' })}
         icon={<BookIcon width={20} height={20} />}
         description={t('settings.polish_keywords_description', {
-          defaultValue: 'Group reusable keyword guidance into global sets. Enabled sets are combined when text polish runs.',
+          defaultValue:
+            'Group reusable keyword guidance into global sets. Enabled sets are combined when text polish runs.',
         })}
         sets={polishKeywordSets}
         newSetName={polishKeywordUi.newSetName}
-        newSetPlaceholder={t('settings.polish_keyword_set_name_placeholder', { defaultValue: 'e.g. Brand Terms' })}
-        emptyLabel={t('settings.no_polish_keyword_sets', { defaultValue: 'No polish keyword sets yet.' })}
+        newSetPlaceholder={t('settings.polish_keyword_set_name_placeholder', {
+          defaultValue: 'e.g. Brand Terms',
+        })}
+        emptyLabel={t('settings.no_polish_keyword_sets', {
+          defaultValue: 'No polish keyword sets yet.',
+        })}
         expandedSetIds={polishKeywordUi.expandedSetIds}
         onAddSet={handleAddPolishKeywordSet}
         onDeleteSet={handleDeletePolishKeywordSet}
@@ -562,17 +610,19 @@ export function SettingsVocabularyTab(): React.JSX.Element {
         onToggleEnabled={(id, enabled) => handleUpdatePolishKeywordSet(id, { enabled })}
         onToggleExpanded={polishKeywordUi.toggleExpanded}
         onUpdateSetName={(id, name) => handleUpdatePolishKeywordSet(id, { name })}
-        renderBadge={(set) => (
+        renderBadge={(set) =>
           set.keywords.trim()
             ? t('settings.polish_keywords_ready', { defaultValue: 'Ready' })
             : t('settings.polish_keywords_empty', { defaultValue: 'Empty' })
-        )}
+        }
         renderExpanded={(set) => (
           <>
             <textarea
               className="settings-input"
               value={set.keywords}
-              onChange={(event) => handleUpdatePolishKeywordSet(set.id, { keywords: event.target.value })}
+              onChange={(event) =>
+                handleUpdatePolishKeywordSet(set.id, { keywords: event.target.value })
+              }
               placeholder={t('settings.polish_keywords_placeholder', {
                 defaultValue: 'e.g. Product names, terminology, preferred spellings',
               })}
@@ -581,7 +631,8 @@ export function SettingsVocabularyTab(): React.JSX.Element {
             />
             <p style={HINT_STYLE}>
               {t('settings.polish_keywords_hint', {
-                defaultValue: 'Use this block for preferred terms or style guidance. Enabled sets are combined in order during polishing.',
+                defaultValue:
+                  'Use this block for preferred terms or style guidance. Enabled sets are combined in order during polishing.',
               })}
             </p>
           </>

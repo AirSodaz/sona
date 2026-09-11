@@ -1,25 +1,19 @@
+import { LANGUAGE_OPTIONS } from '../constants/languages';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
-import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/configUtils';
-import { LANGUAGE_OPTIONS } from '../constants/languages';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment } from '../types/transcript';
+import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/configUtils';
+import { runConfiguredSegmentTask, runTranscriptSegmentTaskJob } from './llm/segmentTask';
+import { listenToTranscriptLlmJobUpdates } from './llmTaskEvents';
 import type {
   TranscriptLlmJobResult,
   TranslatedSegment,
   TranslateSegmentsRequest,
 } from './llmTaskTypes';
-import { listenToTranscriptLlmJobUpdates } from './llmTaskEvents';
-import {
-  runConfiguredSegmentTask,
-  runTranscriptSegmentTaskJob,
-} from './llm/segmentTask';
+import { createLlmTaskLedgerId, isTaskLedgerCancelRequested } from './taskLedgerBuilders';
 import { runTranscriptLlmJob } from './tauri/llm';
-import {
-  createLlmTaskLedgerId,
-  isTaskLedgerCancelRequested,
-} from './taskLedgerBuilders';
 
 interface RetryTranslateTranscriptJobOptions {
   segments: TranscriptSegment[];
@@ -37,7 +31,7 @@ function buildTranslationMap(translations: TranslatedSegment[]): Map<string, Tra
 
 function applyTranslatedChunkToSegments(
   segments: TranscriptSegment[],
-  translationMap: ReadonlyMap<string, TranslatedSegment>,
+  translationMap: ReadonlyMap<string, TranslatedSegment>
 ): TranscriptSegment[] {
   // Merge by id so translated text reuses the existing timeline, speaker metadata, and
   // other segment fields instead of replacing transcript rows wholesale.
@@ -64,7 +58,7 @@ export class TranslationService {
     config: Pick<AppConfig, 'llmSettings' | 'translationLanguage'>,
     segments: TranscriptSegment[],
     onChunkTranslated?: (translatedChunk: TranslatedSegment[]) => void | Promise<void>,
-    taskIdOverride?: string,
+    taskIdOverride?: string
   ): Promise<TranslatedSegment[]> {
     return this.ports.runConfiguredSegmentTask({
       feature: 'translation',
@@ -73,12 +67,8 @@ export class TranslationService {
       segments,
       onChunk: onChunkTranslated,
       taskIdOverride,
-      buildRequest: ({ taskId, llmConfig, segments: inputSegments }) => this.buildRequest(
-        taskId,
-        llmConfig,
-        config,
-        inputSegments,
-      ),
+      buildRequest: ({ taskId, llmConfig, segments: inputSegments }) =>
+        this.buildRequest(taskId, llmConfig, config, inputSegments),
     });
   }
 
@@ -115,7 +105,9 @@ export class TranslationService {
       onProgress: (translationProgress, jobHistoryId) => {
         // Progress belongs to the job's original record even if the user navigates away
         // before the backend finishes, so keep writing against the captured history id.
-        this.ports.getTranscriptSidecarStore().updateLlmState({ translationProgress }, jobHistoryId);
+        this.ports
+          .getTranscriptSidecarStore()
+          .updateLlmState({ translationProgress }, jobHistoryId);
       },
       runTask: async (taskId, jobHistoryId) => {
         const unlistenJobUpdates = await this.ports.listenToTranscriptLlmJobUpdates(
@@ -126,10 +118,10 @@ export class TranslationService {
               return;
             }
             this.applyTranscriptJobUpdate(payload);
-          },
+          }
         );
         try {
-          const langOpt = LANGUAGE_OPTIONS.find(l => l.code === resolvedTargetLanguage);
+          const langOpt = LANGUAGE_OPTIONS.find((l) => l.code === resolvedTargetLanguage);
           const result = await this.ports.runTranscriptLlmJob({
             taskId,
             taskType: 'translate',
@@ -148,10 +140,14 @@ export class TranslationService {
         }
       },
       onSuccess: (jobHistoryId) => {
-        this.ports.getTranscriptSidecarStore().updateLlmState({ translationProgress: 100 }, jobHistoryId);
+        this.ports
+          .getTranscriptSidecarStore()
+          .updateLlmState({ translationProgress: 100 }, jobHistoryId);
       },
       onError: (jobHistoryId) => {
-        this.ports.getTranscriptSidecarStore().updateLlmState({ translationProgress: 0 }, jobHistoryId);
+        this.ports
+          .getTranscriptSidecarStore()
+          .updateLlmState({ translationProgress: 0 }, jobHistoryId);
       },
       onFinally: (jobHistoryId) => {
         const currentSidecarStore = this.ports.getTranscriptSidecarStore();
@@ -166,7 +162,7 @@ export class TranslationService {
 
   applyTranslationsInMemory(
     segments: TranscriptSegment[],
-    translations: TranslatedSegment[],
+    translations: TranslatedSegment[]
   ): TranscriptSegment[] {
     return applyTranslatedChunkToSegments(segments, buildTranslationMap(translations));
   }
@@ -175,16 +171,16 @@ export class TranslationService {
     taskId: string,
     llmConfig: NonNullable<ReturnType<typeof getFeatureLlmConfig>>,
     config: Pick<AppConfig, 'llmSettings' | 'translationLanguage'>,
-    segments: TranscriptSegment[],
+    segments: TranscriptSegment[]
   ): TranslateSegmentsRequest {
     const targetCode = config.translationLanguage || 'zh';
-    const langOpt = LANGUAGE_OPTIONS.find(l => l.code === targetCode);
+    const langOpt = LANGUAGE_OPTIONS.find((l) => l.code === targetCode);
     return {
       taskId,
       config: llmConfig,
       segments: segments.map(({ id, text }) => ({ id, text })),
       targetLanguage: targetCode,
-      targetLanguageName: langOpt ? langOpt.englishName : undefined
+      targetLanguageName: langOpt ? langOpt.englishName : undefined,
     };
   }
 

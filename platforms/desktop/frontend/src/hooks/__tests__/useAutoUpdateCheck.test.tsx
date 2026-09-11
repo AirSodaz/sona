@@ -1,8 +1,8 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useAutoUpdateCheck } from '../useAutoUpdateCheck';
-import { useConfigStore } from '../../stores/configStore';
 import { useAppUpdaterStore } from '../../stores/appUpdaterStore';
+import { useConfigStore } from '../../stores/configStore';
+import { useAutoUpdateCheck } from '../useAutoUpdateCheck';
 
 const checkMock = vi.fn();
 const runGuardedQuitMock = vi.fn();

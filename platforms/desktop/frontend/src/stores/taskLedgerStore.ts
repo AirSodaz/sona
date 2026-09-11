@@ -1,10 +1,6 @@
 import { create } from 'zustand';
-import type {
-  TaskLedgerPatch,
-  TaskLedgerRecord,
-  TaskLedgerSnapshot,
-} from '../types/taskLedger';
-import type { LoadableState } from '../types/asyncState';
+import { TauriEvent } from '../services/tauri/events';
+import { listen, type UnlistenFn } from '../services/tauri/platform/events';
 import {
   taskLedgerClearResolved,
   taskLedgerLoadSnapshot,
@@ -12,10 +8,10 @@ import {
   taskLedgerRemoveTask,
   taskLedgerUpsertTask,
 } from '../services/tauri/taskLedger';
-import { TauriEvent } from '../services/tauri/events';
+import type { LoadableState } from '../types/asyncState';
+import type { TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot } from '../types/taskLedger';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
-import { listen, type UnlistenFn } from '../services/tauri/platform/events';
 import {
   getCancelRequestedIds,
   isCancelRequestedTask,
@@ -56,23 +52,16 @@ async function ensureTaskLedgerListener() {
     TauriEvent.taskLedger.updated,
     ({ payload }) => {
       useTaskLedgerStore.getState().applySnapshot(payload);
-    },
+    }
   );
 }
 
-async function enqueueDurableWrite<T>(
-  taskId: string,
-  write: () => Promise<T>,
-): Promise<T> {
+async function enqueueDurableWrite<T>(taskId: string, write: () => Promise<T>): Promise<T> {
   const previousWrite = durableWriteChains.get(taskId);
-  const nextWrite = previousWrite
-    ? previousWrite
-      .catch(() => undefined)
-      .then(write)
-    : write();
+  const nextWrite = previousWrite ? previousWrite.catch(() => undefined).then(write) : write();
   const trackedWrite = nextWrite.then(
     () => undefined,
-    () => undefined,
+    () => undefined
   );
 
   durableWriteChains.set(taskId, trackedWrite);
@@ -169,7 +158,7 @@ export const useTaskLedgerStore = create<TaskLedgerState>((set, get) => ({
 
   requestCancel: async (id) => {
     const task = get().tasks.find((item) => item.id === id);
-    if (!task || !task.cancelable || task.status === 'cancelRequested') {
+    if (!task?.cancelable || task.status === 'cancelRequested') {
       return;
     }
 

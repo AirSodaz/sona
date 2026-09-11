@@ -1,14 +1,15 @@
-import React, { useCallback, useEffect, useRef } from 'react';
 import { Copy, TextSelect } from 'lucide-react';
+import type React from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useContextMenu } from '../../context-menu/useContextMenu';
+import { logger } from '../../../utils/logger';
 import {
+  type ContextMenuOpenRequest,
   createKeyboardContextMenuRequest,
   createPointerContextMenuRequest,
   isContextMenuKeyboardEvent,
-  type ContextMenuOpenRequest,
 } from '../../context-menu/trigger';
-import { logger } from '../../../utils/logger';
+import { useContextMenu } from '../../context-menu/useContextMenu';
 import { getEditorShortcut } from './shortcutLabels';
 
 interface UseReadonlySegmentContextMenuOptions {
@@ -45,87 +46,98 @@ export function useReadonlySegmentContextMenu({
   const contextId = `editor:readonly:${segmentId}`;
   const ownsMenuRef = useRef(false);
 
-  useEffect(() => () => {
-    if (ownsMenuRef.current) {
-      closeContextMenu();
-    }
-  }, [closeContextMenu, contextId]);
+  useEffect(
+    () => () => {
+      if (ownsMenuRef.current) {
+        closeContextMenu();
+      }
+    },
+    [closeContextMenu, contextId]
+  );
 
-  const openMenu = useCallback((request: ContextMenuOpenRequest) => {
-    const root = rootRef.current;
-    if (!root) {
-      return;
-    }
+  const openMenu = useCallback(
+    (request: ContextMenuOpenRequest) => {
+      const root = rootRef.current;
+      if (!root) {
+        return;
+      }
 
-    const copyText = getContainedSelectionText(root) ?? root.textContent ?? '';
-    const clipboard = navigator.clipboard;
-    const writeText = typeof clipboard?.writeText === 'function'
-      ? clipboard.writeText.bind(clipboard)
-      : null;
+      const copyText = getContainedSelectionText(root) ?? root.textContent ?? '';
+      const clipboard = navigator.clipboard;
+      const writeText =
+        typeof clipboard?.writeText === 'function' ? clipboard.writeText.bind(clipboard) : null;
 
-    openContextMenu({
-      contextId,
-      ariaLabel: t('editor.context_menu_label', { defaultValue: 'Text editing actions' }),
-      actions: [
-        {
-          id: 'copy',
-          label: t('common.copy', { defaultValue: 'Copy' }),
-          icon: <Copy size={16} />,
-          shortcut: getEditorShortcut('copy'),
-          disabled: writeText === null,
-          onSelect: () => {
-            if (!writeText) {
-              return;
-            }
+      openContextMenu({
+        contextId,
+        ariaLabel: t('editor.context_menu_label', { defaultValue: 'Text editing actions' }),
+        actions: [
+          {
+            id: 'copy',
+            label: t('common.copy', { defaultValue: 'Copy' }),
+            icon: <Copy size={16} />,
+            shortcut: getEditorShortcut('copy'),
+            disabled: writeText === null,
+            onSelect: () => {
+              if (!writeText) {
+                return;
+              }
 
-            void writeText(copyText).catch((error) => {
-              void logger.error('[ReadonlySegmentContextMenu] Failed to copy text:', error);
-            });
+              void writeText(copyText).catch((error) => {
+                void logger.error('[ReadonlySegmentContextMenu] Failed to copy text:', error);
+              });
+            },
           },
-        },
-        {
-          id: 'select-all',
-          label: t('common.select_all', { defaultValue: 'Select All' }),
-          icon: <TextSelect size={16} />,
-          shortcut: getEditorShortcut('selectAll'),
-          onSelect: () => {
-            const currentRoot = rootRef.current;
-            const selection = window.getSelection();
-            if (!currentRoot || !selection) {
-              return;
-            }
+          {
+            id: 'select-all',
+            label: t('common.select_all', { defaultValue: 'Select All' }),
+            icon: <TextSelect size={16} />,
+            shortcut: getEditorShortcut('selectAll'),
+            onSelect: () => {
+              const currentRoot = rootRef.current;
+              const selection = window.getSelection();
+              if (!currentRoot || !selection) {
+                return;
+              }
 
-            const range = document.createRange();
-            range.selectNodeContents(currentRoot);
-            selection.removeAllRanges();
-            selection.addRange(range);
+              const range = document.createRange();
+              range.selectNodeContents(currentRoot);
+              selection.removeAllRanges();
+              selection.addRange(range);
+            },
           },
+        ],
+        ...request,
+        onClose: () => {
+          ownsMenuRef.current = false;
         },
-      ],
-      ...request,
-      onClose: () => {
-        ownsMenuRef.current = false;
-      },
-    });
-    ownsMenuRef.current = true;
-  }, [contextId, openContextMenu, rootRef, t]);
+      });
+      ownsMenuRef.current = true;
+    },
+    [contextId, openContextMenu, rootRef, t]
+  );
 
-  const onContextMenu = useCallback<React.MouseEventHandler<HTMLElement>>((event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    openMenu(createPointerContextMenuRequest(event));
-  }, [openMenu]);
+  const onContextMenu = useCallback<React.MouseEventHandler<HTMLElement>>(
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openMenu(createPointerContextMenuRequest(event));
+    },
+    [openMenu]
+  );
 
-  const onKeyDown = useCallback<React.KeyboardEventHandler<HTMLElement>>((event) => {
-    if (!isContextMenuKeyboardEvent(event)) {
-      return;
-    }
+  const onKeyDown = useCallback<React.KeyboardEventHandler<HTMLElement>>(
+    (event) => {
+      if (!isContextMenuKeyboardEvent(event)) {
+        return;
+      }
 
-    event.preventDefault();
-    event.stopPropagation();
-    const anchor = event.target instanceof HTMLElement ? event.target : event.currentTarget;
-    openMenu(createKeyboardContextMenuRequest(anchor));
-  }, [openMenu]);
+      event.preventDefault();
+      event.stopPropagation();
+      const anchor = event.target instanceof HTMLElement ? event.target : event.currentTarget;
+      openMenu(createKeyboardContextMenuRequest(anchor));
+    },
+    [openMenu]
+  );
 
   return { onContextMenu, onKeyDown };
 }

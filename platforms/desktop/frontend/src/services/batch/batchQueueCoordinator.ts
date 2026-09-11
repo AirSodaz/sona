@@ -1,22 +1,19 @@
+import type { BatchQueueItem, BatchQueueItemStatus } from '../../types/batchQueue';
 import type { AppConfig } from '../../types/config';
-import type {
-  BatchQueueItem,
-  BatchQueueItemStatus,
-} from '../../types/batchQueue';
 import type { HistoryItem } from '../../types/history';
 import type { RecoveryItemStage } from '../../types/recovery';
 import type { TaskLedgerStatus } from '../../types/taskLedger';
 import type { TranscriptSegment } from '../../types/transcript';
-import { emitAutomationTaskSettled } from '../automationEventBus';
+import { extractErrorMessage } from '../../utils/errorUtils';
+import { logger } from '../../utils/logger';
 import { asrConfigService } from '../asrConfigService';
-import { batchItemProcessor } from './batchItemProcessor';
+import { emitAutomationTaskSettled } from '../automationEventBus';
 import {
   createBatchTaskLedgerId,
   isTaskLedgerCancelRequested,
   patchTaskLedgerRecord,
 } from '../taskLedgerBuilders';
-import { logger } from '../../utils/logger';
-import { extractErrorMessage } from '../../utils/errorUtils';
+import { batchItemProcessor } from './batchItemProcessor';
 
 export interface BatchQueueSchedulerPorts {
   getQueueItems: () => BatchQueueItem[];
@@ -33,11 +30,15 @@ export interface BatchQueueLifecyclePorts {
     id: string,
     status: BatchQueueItemStatus,
     progress?: number,
-    lastKnownStage?: RecoveryItemStage,
+    lastKnownStage?: RecoveryItemStage
   ) => void;
   updateItemSegments: (id: string, segments: TranscriptSegment[]) => void;
   setItemError: (id: string, message: string) => void;
-  applySavedHistory: (itemId: string, item: BatchQueueItem, historyItem: HistoryItem) => void | Promise<void>;
+  applySavedHistory: (
+    itemId: string,
+    item: BatchQueueItem,
+    historyItem: HistoryItem
+  ) => void | Promise<void>;
   setItemExportPath: (itemId: string, exportPath: string) => void;
   isActiveItem: (itemId: string) => boolean;
   scheduleNext: () => void;
@@ -82,7 +83,7 @@ export class BatchQueueCoordinator {
     itemsToStart.forEach((item) => {
       void processItem(item.id);
     });
-  }
+  };
 
   toTaskLedgerStatus = (status: BatchQueueItemStatus): TaskLedgerStatus => {
     switch (status) {
@@ -97,34 +98,37 @@ export class BatchQueueCoordinator {
       case 'error':
         return 'failed';
     }
-  }
+  };
 
-  private patchQueueItemTask = (item: BatchQueueItem, patch: Parameters<typeof patchTaskLedgerRecord>[1]): void => {
+  private patchQueueItemTask = (
+    item: BatchQueueItem,
+    patch: Parameters<typeof patchTaskLedgerRecord>[1]
+  ): void => {
     this.ports.patchTaskLedgerRecord(this.ports.createBatchTaskLedgerId(item.id), patch);
-  }
+  };
 
   private resolveQueueItemConfig = (
     item: BatchQueueItem,
-    getFallbackConfigSnapshot: () => AppConfig,
+    getFallbackConfigSnapshot: () => AppConfig
   ): AppConfig => {
     if (item.resolvedConfigSnapshot) {
       return item.resolvedConfigSnapshot;
     }
 
     return getFallbackConfigSnapshot();
-  }
+  };
 
   private notifyAutomationResult = async (
     item: BatchQueueItem,
     status: 'complete' | 'error' | 'discarded',
     getQueueItems: () => BatchQueueItem[],
-    errorMessage?: string,
+    errorMessage?: string
   ): Promise<void> => {
     if (
-      item.origin !== 'automation'
-      || !item.automationRuleId
-      || !item.sourceFingerprint
-      || !item.fileStat
+      item.origin !== 'automation' ||
+      !item.automationRuleId ||
+      !item.sourceFingerprint ||
+      !item.fileStat
     ) {
       return;
     }
@@ -143,11 +147,11 @@ export class BatchQueueCoordinator {
       errorMessage,
       stage: latestItem.lastKnownStage,
     });
-  }
+  };
 
   private settleCancelledItem = async (
     item: BatchQueueItem,
-    lifecyclePorts: BatchQueueLifecyclePorts,
+    lifecyclePorts: BatchQueueLifecyclePorts
   ): Promise<void> => {
     lifecyclePorts.updateItemStatus(item.id, 'cancelled', 0);
     this.patchQueueItemTask(item, {
@@ -158,14 +162,14 @@ export class BatchQueueCoordinator {
       errorMessage: undefined,
     });
     await this.notifyAutomationResult(item, 'discarded', lifecyclePorts.getQueueItems);
-  }
+  };
 
   processBatchQueueItemLifecycle = async (
     itemId: string,
-    lifecyclePorts: BatchQueueLifecyclePorts,
+    lifecyclePorts: BatchQueueLifecyclePorts
   ): Promise<void> => {
     const item = lifecyclePorts.getQueueItem(itemId);
-    if (!item || item.status !== 'pending') {
+    if (item?.status !== 'pending') {
       return;
     }
 
@@ -176,9 +180,11 @@ export class BatchQueueCoordinator {
       return;
     }
 
-    if (!this.ports.asrConfigService.isAsrRequestConfigured(
-      this.ports.asrConfigService.resolveAsrTranscriptionRequest(config, 'batch')
-    )) {
+    if (
+      !this.ports.asrConfigService.isAsrRequestConfigured(
+        this.ports.asrConfigService.resolveAsrTranscriptionRequest(config, 'batch')
+      )
+    ) {
       const message = 'Batch ASR is not configured.';
       lifecyclePorts.setItemError(itemId, message);
       await this.notifyAutomationResult(item, 'error', lifecyclePorts.getQueueItems, message);
@@ -203,7 +209,8 @@ export class BatchQueueCoordinator {
             lifecyclePorts.setItemExportPath(itemId, exportPath);
           },
           isActiveItem: () => lifecyclePorts.isActiveItem(itemId),
-          isCancelRequested: () => this.ports.isTaskLedgerCancelRequested(this.ports.createBatchTaskLedgerId(itemId)),
+          isCancelRequested: () =>
+            this.ports.isTaskLedgerCancelRequested(this.ports.createBatchTaskLedgerId(itemId)),
         },
       });
 
@@ -233,10 +240,12 @@ export class BatchQueueCoordinator {
     } finally {
       lifecyclePorts.scheduleNext();
     }
-  }
+  };
 }
 
-export function createBatchQueueCoordinator(ports: BatchQueueCoordinatorPorts): BatchQueueCoordinator {
+export function createBatchQueueCoordinator(
+  ports: BatchQueueCoordinatorPorts
+): BatchQueueCoordinator {
   return new BatchQueueCoordinator(ports);
 }
 
@@ -249,8 +258,5 @@ export const batchQueueCoordinator = createBatchQueueCoordinator({
   patchTaskLedgerRecord,
 });
 
-export const {
-  processNextBatchQueueItems,
-  processBatchQueueItemLifecycle,
-  toTaskLedgerStatus,
-} = batchQueueCoordinator;
+export const { processNextBatchQueueItems, processBatchQueueItemLifecycle, toTaskLedgerStatus } =
+  batchQueueCoordinator;

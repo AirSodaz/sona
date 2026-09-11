@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { SyncSetupPanel } from '../SyncSetupPanel';
+import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import type { DiscoveredVaultSummary } from '../../../../types/sync';
+import { SyncSetupPanel } from '../SyncSetupPanel';
 import { encodeSyncPairingToken } from '../syncPairing';
 
 vi.mock('react-i18next', () => ({
@@ -65,7 +65,7 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
         onJoin={onJoin}
         onPreviewJoin={onPreviewJoin}
         onTestProvider={onTestProvider}
-      />,
+      />
     );
 
     fillFields();
@@ -79,7 +79,7 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
           serverUrl: 'https://dav.example.com/',
           username: 'alice',
           password: 'secret',
-        }),
+        })
       );
     });
   });
@@ -95,7 +95,7 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
         onPreviewJoin={onPreviewJoin}
         onTestProvider={onTestProvider}
         onDiscoverVaults={onDiscoverVaults}
-      />,
+      />
     );
 
     fillFields();
@@ -112,7 +112,7 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
         expect.objectContaining({
           vaultId: 'default',
           masterPassword: 'master-password-123',
-        }),
+        })
       );
     });
   });
@@ -131,7 +131,7 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
         onPreviewJoin={onPreviewJoin}
         onTestProvider={onTestProvider}
         onDiscoverVaults={onDiscoverVaults}
-      />,
+      />
     );
 
     fillFields();
@@ -148,7 +148,7 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
         expect.objectContaining({
           vaultId: 'existing-vault-abc',
           masterPassword: 'master-password-123',
-        }),
+        })
       );
     });
   });
@@ -168,7 +168,7 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
         onPreviewJoin={onPreviewJoin}
         onTestProvider={onTestProvider}
         onDiscoverVaults={onDiscoverVaults}
-      />,
+      />
     );
 
     fillFields();
@@ -195,7 +195,7 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
         expect.objectContaining({
           vaultId: 'work-vault',
           masterPassword: 'master-password-123',
-        }),
+        })
       );
     });
   });
@@ -208,13 +208,15 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
         onJoin={onJoin}
         onPreviewJoin={onPreviewJoin}
         onTestProvider={onTestProvider}
-      />,
+      />
     );
 
     // Click quick import button
     const importBtn = screen.getByRole('button', { name: /Import pairing code|从配对口令导入/i });
     fireEvent.click(importBtn);
-    expect(screen.getByRole('heading', { name: /Import Pairing Code|导入设备配对口令/i })).toBeDefined();
+    expect(
+      screen.getByRole('heading', { name: /Import Pairing Code|导入设备配对口令/i })
+    ).toBeDefined();
     const token = encodeSyncPairingToken(
       {
         serverUrl: 'https://dav.paired.com/remote/',
@@ -223,7 +225,7 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
         password: 'paired-password',
       },
       'paired-vault-123',
-      true,
+      true
     );
 
     const textarea = screen.getByPlaceholderText(/sonasync:\/\/v1\?data=/i);
@@ -248,7 +250,7 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
         onJoin={onJoin}
         onPreviewJoin={onPreviewJoin}
         onTestProvider={onTestProvider}
-      />,
+      />
     );
 
     const importBtn = screen.getByRole('button', { name: /Import pairing code|从配对口令导入/i });
@@ -278,7 +280,7 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
         onPreviewJoin={onPreviewJoin}
         onTestProvider={onTestProvider}
         onDiscoverVaults={onDiscoverVaults}
-      />,
+      />
     );
 
     fillFields();
@@ -303,7 +305,7 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
         expect.objectContaining({
           preset: 'full',
           createRecoveryKey: false,
-        }),
+        })
       );
     });
   });

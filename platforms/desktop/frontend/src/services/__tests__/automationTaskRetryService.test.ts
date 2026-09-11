@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { retryAutomationTaskFromLedger } from '../automationTaskRetryService';
 import { useAutomationStore } from '../../stores/automationStore';
-import { patchTaskLedgerRecord } from '../taskLedgerBuilders';
 import type { TaskLedgerRecord } from '../../types/taskLedger';
+import { retryAutomationTaskFromLedger } from '../automationTaskRetryService';
+import { patchTaskLedgerRecord } from '../taskLedgerBuilders';
 
 vi.mock('../../stores/automationStore', () => ({
   useAutomationStore: {
@@ -51,9 +51,13 @@ describe('retryAutomationTaskFromLedger', () => {
   });
 
   it('records a preflight failure when retry metadata is missing', async () => {
-    await expect(retryAutomationTaskFromLedger(makeTask({
-      filePath: undefined,
-    }))).rejects.toThrow('Automation task is missing retry metadata.');
+    await expect(
+      retryAutomationTaskFromLedger(
+        makeTask({
+          filePath: undefined,
+        })
+      )
+    ).rejects.toThrow('Automation task is missing retry metadata.');
 
     expect(retryFailedFile).not.toHaveBeenCalled();
     expect(patchTaskLedgerRecord).toHaveBeenCalledTimes(1);
@@ -62,7 +66,9 @@ describe('retryAutomationTaskFromLedger', () => {
   it('keeps the old ledger task when runtime preflight rejects the retry', async () => {
     retryFailedFile.mockRejectedValue(new Error('Automation rule not found.'));
 
-    await expect(retryAutomationTaskFromLedger(makeTask())).rejects.toThrow('Automation rule not found.');
+    await expect(retryAutomationTaskFromLedger(makeTask())).rejects.toThrow(
+      'Automation rule not found.'
+    );
 
     expect(patchTaskLedgerRecord).toHaveBeenCalledTimes(1);
   });

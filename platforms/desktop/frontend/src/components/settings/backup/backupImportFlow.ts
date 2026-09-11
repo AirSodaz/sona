@@ -1,7 +1,4 @@
-import type {
-  BackupManifestV1,
-  PreparedBackupImport,
-} from '../../../types/backup';
+import type { BackupManifestV1, PreparedBackupImport } from '../../../types/backup';
 
 type TranslateFn = (key: string, options?: Record<string, unknown>) => string;
 
@@ -18,10 +15,7 @@ interface RunPreparedBackupImportFlowOptions {
  * Builds the destructive import summary copy shared by local and remote backup
  * restore flows.
  */
-export function buildBackupImportDetails(
-  t: TranslateFn,
-  manifest: BackupManifestV1,
-): string {
+export function buildBackupImportDetails(t: TranslateFn, manifest: BackupManifestV1): string {
   return [
     t('settings.backup.import_details_scope', {
       defaultValue:
@@ -71,7 +65,7 @@ export function buildBackupImportDetails(
  * remote WebDAV restore without changing their surrounding UI copy.
  */
 export async function runPreparedBackupImportFlow(
-  options: RunPreparedBackupImportFlowOptions,
+  options: RunPreparedBackupImportFlowOptions
 ): Promise<void> {
   let prepared: PreparedBackupImport | null = null;
 

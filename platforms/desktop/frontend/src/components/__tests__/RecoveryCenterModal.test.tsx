@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RecoveryCenterModal } from '../RecoveryCenterModal';
 
 const mockResumeAll = vi.fn();
@@ -70,8 +70,10 @@ vi.mock('react-i18next', () => ({
       if (key === 'recovery.overview.draft_count') return `${options?.count} draft`;
       if (key === 'recovery.section.batch_description') return 'Batch section';
       if (key === 'recovery.section.automation_description') return 'Automation section';
-      if (key === 'recovery.item.batch_description') return `Target project: ${options?.projectName}`;
-      if (key === 'recovery.item.automation_description') return `Automation rule: ${options?.ruleName} · Target project: ${options?.projectName}`;
+      if (key === 'recovery.item.batch_description')
+        return `Target project: ${options?.projectName}`;
+      if (key === 'recovery.item.automation_description')
+        return `Automation rule: ${options?.ruleName} · Target project: ${options?.projectName}`;
       if (key === 'recovery.labels.no_project') return 'No project';
       if (key === 'recovery.labels.partial_draft') return 'Partial draft available';
       if (key === 'recovery.labels.last_recovered') return 'Recovered From';
@@ -91,11 +93,10 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('../../stores/projectStore', () => ({
-  useProjectStore: (selector: any) => selector({
-    projects: [
-      { id: 'project-1', name: 'Team Sync' },
-    ],
-  }),
+  useProjectStore: (selector: any) =>
+    selector({
+      projects: [{ id: 'project-1', name: 'Team Sync' }],
+    }),
 }));
 
 vi.mock('../../stores/recoveryStore', () => ({
@@ -182,8 +183,12 @@ describe('RecoveryCenterModal', () => {
     render(<RecoveryCenterModal isOpen={true} onClose={vi.fn()} />);
 
     const meetingRow = screen.getByText('meeting.wav').closest('.recovery-item-row') as HTMLElement;
-    const resumeButton = within(meetingRow).getByRole('button', { name: 'Resume' }) as HTMLButtonElement;
-    const discardButton = within(meetingRow).getByRole('button', { name: 'Discard' }) as HTMLButtonElement;
+    const resumeButton = within(meetingRow).getByRole('button', {
+      name: 'Resume',
+    }) as HTMLButtonElement;
+    const discardButton = within(meetingRow).getByRole('button', {
+      name: 'Discard',
+    }) as HTMLButtonElement;
 
     expect(resumeButton.disabled).toBe(true);
     expect(discardButton.disabled).toBe(false);

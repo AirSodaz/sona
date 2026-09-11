@@ -2,8 +2,9 @@
  * A helper to safely serialize arguments, particularly JavaScript Error objects
  * which become {} when simply passed to JSON.stringify.
  */
-import type { AppLogLevel } from '../types/config';
+
 import { getPluginLogModule } from '../services/tauri/platform/log';
+import type { AppLogLevel } from '../types/config';
 import { normalizeLogLevel, shouldWriteLogLevel } from './logLevel';
 
 const browserConsole = globalThis.console;
@@ -103,5 +104,5 @@ export const logger = {
     if (!shouldWriteLogLevel('error', currentLogLevel)) return;
     browserConsole.error(message, ...args);
     await writeLog('error', message, ...args);
-  }
+  },
 };

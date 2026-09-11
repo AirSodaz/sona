@@ -1,6 +1,6 @@
-import React from 'react';
-import { FolderIcon } from '../Icons';
+import type React from 'react';
 import { SYSTEM_ICONS } from '../IconPicker';
+import { FolderIcon } from '../Icons';
 
 export const DEFAULT_PROJECT_COLOR = '#64748B';
 

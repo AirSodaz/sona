@@ -1,37 +1,38 @@
-import React, { useMemo, useState } from 'react';
 import {
+  closestCorners,
   DndContext,
-  DragEndEvent,
+  type DragEndEvent,
   DragOverlay,
-  DragStartEvent,
+  type DragStartEvent,
+  defaultDropAnimationSideEffects,
   KeyboardSensor,
   PointerSensor,
-  closestCorners,
-  defaultDropAnimationSideEffects,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
+import { restrictToVerticalAxis, restrictToWindowEdges } from '@dnd-kit/modifiers';
 import {
-  SortableContext,
   arrayMove,
+  SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { restrictToVerticalAxis, restrictToWindowEdges } from '@dnd-kit/modifiers';
+import { MoreHorizontal, Zap } from 'lucide-react';
+import type React from 'react';
+import { useMemo, useState } from 'react';
 import type { ProjectRecord } from '../../types/project';
-import { Zap, MoreHorizontal } from 'lucide-react';
+import {
+  type ContextMenuOpenRequest,
+  createKeyboardContextMenuRequest,
+  createPointerContextMenuRequest,
+  isContextMenuKeyboardEvent,
+} from '../context-menu/trigger';
 import { PlusCircleIcon } from '../Icons';
 import { ALL_ITEMS_SCOPE, TRASH_SCOPE, UNTAGGED_SCOPE } from './constants';
 import type { ProjectBrowseScope, TranslationFn } from './types';
 import { RailItemContent, renderScopeIcon } from './utils';
-import {
-  createKeyboardContextMenuRequest,
-  createPointerContextMenuRequest,
-  isContextMenuKeyboardEvent,
-  type ContextMenuOpenRequest,
-} from '../context-menu/trigger';
 
 interface ProjectsRailProps {
   browseProjectId: string | null;
@@ -70,14 +71,9 @@ function SortableProjectItem({
   isContextMenuOpen,
   t,
 }: SortableProjectItemProps): React.JSX.Element {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: project.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: project.id,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -105,7 +101,11 @@ function SortableProjectItem({
       <button
         type="button"
         className={`projects-rail-item ${isActive ? 'active' : ''} ${isContextMenuOpen ? 'context-menu-active' : ''}`}
-        style={project.color ? ({ '--item-accent-color': project.color } as React.CSSProperties) : undefined}
+        style={
+          project.color
+            ? ({ '--item-accent-color': project.color } as React.CSSProperties)
+            : undefined
+        }
         onClick={() => void onSwitchScope(project.id)}
         {...attributes}
         {...listeners}
@@ -118,13 +118,13 @@ function SortableProjectItem({
         aria-pressed={isActive}
         title={project.description ? `${project.name}\n${project.description}` : project.name}
       >
-        <RailItemContent
-          icon={renderScopeIcon(project.id, project)}
-          title={project.name}
-        />
+        <RailItemContent icon={renderScopeIcon(project.id, project)} title={project.name} />
         <div className="projects-rail-actions">
           {project.pipeline?.enabled && (
-            <span className="projects-rail-pipeline-badge" title={t('projects.pipeline_enabled', { defaultValue: '流水线已启用' })}>
+            <span
+              className="projects-rail-pipeline-badge"
+              title={t('projects.pipeline_enabled', { defaultValue: '流水线已启用' })}
+            >
               <Zap size={13} />
             </span>
           )}
@@ -174,12 +174,12 @@ export function ProjectsRail({
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    }),
+    })
   );
 
   const activeDragProject = useMemo(
     () => (activeId ? projects.find((project) => project.id === activeId) || null : null),
-    [activeId, projects],
+    [activeId, projects]
   );
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -342,7 +342,13 @@ export function ProjectsRail({
                   <button
                     type="button"
                     className={`projects-rail-item ${browseProjectId === activeId ? 'active' : ''}`}
-                    style={activeDragProject?.color ? ({ '--item-accent-color': activeDragProject.color } as React.CSSProperties) : undefined}
+                    style={
+                      activeDragProject?.color
+                        ? ({
+                            '--item-accent-color': activeDragProject.color,
+                          } as React.CSSProperties)
+                        : undefined
+                    }
                   >
                     <RailItemContent
                       icon={renderScopeIcon(activeId, activeDragProject)}

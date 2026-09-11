@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ensureLlmState } from '../migration';
 import { getFeatureLlmConfig } from '../configUtils';
+import { ensureLlmState } from '../migration';
 
 describe('llm migration', () => {
   it('migrates legacy llm config into llmSettings without losing values', () => {
@@ -15,26 +15,32 @@ describe('llm migration', () => {
     } as any);
 
     expect(llmSettings.activeProvider).toBe('open_ai');
-    expect(llmSettings.providers.open_ai).toEqual(expect.objectContaining({
-      apiHost: 'https://api.openai.com',
-      apiKey: 'legacy-key',
-    }));
+    expect(llmSettings.providers.open_ai).toEqual(
+      expect.objectContaining({
+        apiHost: 'https://api.openai.com',
+        apiKey: 'legacy-key',
+      })
+    );
     expect(llmSettings.modelOrder).toHaveLength(1);
-    expect(llmSettings.models[llmSettings.modelOrder[0]]).toEqual(expect.objectContaining({
-      provider: 'open_ai',
-      model: 'gpt-4o',
-      source: 'manual',
-    }));
+    expect(llmSettings.models[llmSettings.modelOrder[0]]).toEqual(
+      expect.objectContaining({
+        provider: 'open_ai',
+        model: 'gpt-4o',
+        source: 'manual',
+      })
+    );
     expect(llmSettings.selections.polishModelId).toBe(llmSettings.modelOrder[0]);
     expect(llmSettings.selections.translationModelId).toBe(llmSettings.modelOrder[0]);
     expect(llmSettings.selections.summaryModelId).toBe(llmSettings.modelOrder[0]);
-    expect(getFeatureLlmConfig({ llmSettings }, 'polish')).toEqual(expect.objectContaining({
-      provider: 'open_ai',
-      baseUrl: 'https://api.openai.com',
-      apiKey: 'legacy-key',
-      model: 'gpt-4o',
-      temperature: 0.2,
-    }));
+    expect(getFeatureLlmConfig({ llmSettings }, 'polish')).toEqual(
+      expect.objectContaining({
+        provider: 'open_ai',
+        baseUrl: 'https://api.openai.com',
+        apiKey: 'legacy-key',
+        model: 'gpt-4o',
+        temperature: 0.2,
+      })
+    );
   });
 
   it('restores the Chatbox default host when migrating an empty Gemini host', () => {
@@ -48,9 +54,11 @@ describe('llm migration', () => {
       },
     } as any);
 
-    expect(llmSettings.providers.gemini).toEqual(expect.objectContaining({
-      apiHost: 'https://generativelanguage.googleapis.com',
-    }));
+    expect(llmSettings.providers.gemini).toEqual(
+      expect.objectContaining({
+        apiHost: 'https://generativelanguage.googleapis.com',
+      })
+    );
   });
 
   it('migrates a legacy provider-scoped stored model when no normalized models survive', () => {
@@ -71,11 +79,13 @@ describe('llm migration', () => {
     } as any);
 
     expect(llmSettings.modelOrder).toHaveLength(1);
-    expect(llmSettings.models[llmSettings.modelOrder[0]]).toEqual(expect.objectContaining({
-      provider: 'anthropic',
-      model: 'claude-sonnet-4-20250514',
-      source: 'manual',
-    }));
+    expect(llmSettings.models[llmSettings.modelOrder[0]]).toEqual(
+      expect.objectContaining({
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-20250514',
+        source: 'manual',
+      })
+    );
     expect(llmSettings.selections.polishModelId).toBe(llmSettings.modelOrder[0]);
     expect(llmSettings.selections.translationModelId).toBe(llmSettings.modelOrder[0]);
     expect(llmSettings.selections.summaryModelId).toBe(llmSettings.modelOrder[0]);
@@ -117,10 +127,12 @@ describe('llm migration', () => {
     expect(llmSettings.selections.summaryModelId).toBeUndefined();
     expect(llmSettings.selections.polishTemperature).toBeUndefined();
     expect(llmSettings.selections.translationTemperature).toBe(1.2);
-    expect(llmSettings.selections).toEqual(expect.objectContaining({
-      polishReasoningEnabled: true,
-      polishReasoningLevel: 'high',
-    }));
+    expect(llmSettings.selections).toEqual(
+      expect.objectContaining({
+        polishReasoningEnabled: true,
+        polishReasoningLevel: 'high',
+      })
+    );
     expect(llmSettings.selections.translationReasoningLevel).toBeUndefined();
   });
 
@@ -137,11 +149,13 @@ describe('llm migration', () => {
 
     expect(llmSettings.modelOrder).toHaveLength(1);
     const fallbackModelId = llmSettings.modelOrder[0];
-    expect(llmSettings.models[fallbackModelId]).toEqual(expect.objectContaining({
-      provider: 'google_translate_free',
-      model: 'default',
-      source: 'manual',
-    }));
+    expect(llmSettings.models[fallbackModelId]).toEqual(
+      expect.objectContaining({
+        provider: 'google_translate_free',
+        model: 'default',
+        source: 'manual',
+      })
+    );
     expect(llmSettings.selections.translationModelId).toBe(fallbackModelId);
     expect(llmSettings.selections.polishModelId).toBeUndefined();
     expect(llmSettings.selections.summaryModelId).toBeUndefined();
@@ -207,15 +221,19 @@ describe('llm migration', () => {
         createdAt: expect.any(String),
       },
     });
-    expect(llmSettings.providers['custom-openai-compatible']).toEqual(expect.objectContaining({
-      apiHost: 'https://gateway.example.com/v1',
-      apiKey: 'gateway-key',
-      apiPath: '/v1/chat/completions',
-    }));
-    expect(llmSettings.models['open_ai_compatible-gpt-4o']).toEqual(expect.objectContaining({
-      provider: 'custom-openai-compatible',
-      source: 'manual',
-    }));
+    expect(llmSettings.providers['custom-openai-compatible']).toEqual(
+      expect.objectContaining({
+        apiHost: 'https://gateway.example.com/v1',
+        apiKey: 'gateway-key',
+        apiPath: '/v1/chat/completions',
+      })
+    );
+    expect(llmSettings.models['open_ai_compatible-gpt-4o']).toEqual(
+      expect.objectContaining({
+        provider: 'custom-openai-compatible',
+        source: 'manual',
+      })
+    );
     expect(llmSettings.selections.polishModelId).toBe('open_ai_compatible-gpt-4o');
   });
 
@@ -256,19 +274,21 @@ describe('llm migration', () => {
       },
     } as any);
 
-    expect(llmSettings.models['open-ai-test']).toEqual(expect.objectContaining({
-      provider: 'open_ai',
-      model: 'gpt-4.1',
-      source: 'manual',
-      metadata: expect.objectContaining({
-        displayName: 'GPT-4.1',
-        contextWindow: 128000,
-        inputModalities: ['text', 'image'],
-        supportsTools: true,
-        metadataSources: ['provider', 'models_dev'],
-      }),
-      metadataOverrides: { cacheReadPrice: true },
-    }));
+    expect(llmSettings.models['open-ai-test']).toEqual(
+      expect.objectContaining({
+        provider: 'open_ai',
+        model: 'gpt-4.1',
+        source: 'manual',
+        metadata: expect.objectContaining({
+          displayName: 'GPT-4.1',
+          contextWindow: 128000,
+          inputModalities: ['text', 'image'],
+          supportsTools: true,
+          metadataSources: ['provider', 'models_dev'],
+        }),
+        metadataOverrides: { cacheReadPrice: true },
+      })
+    );
     expect(llmSettings.selections.polishModelId).toBe('open-ai-test');
   });
 

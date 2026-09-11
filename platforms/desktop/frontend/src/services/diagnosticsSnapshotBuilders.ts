@@ -7,24 +7,24 @@ import type {
   DiagnosticsCoreFactsSnapshot,
   DiagnosticsSnapshot,
 } from '../types/diagnostics';
-import type { SettingsTab } from '../types/settings';
 import type {
   AsrInferenceMetric,
   AsrModelLoadMetric,
   AsrRuntimeMetricsSnapshot,
   RuntimePathStatus,
 } from '../types/runtime';
+import type { SettingsTab } from '../types/settings';
 
 export type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 export type {
+  DeviceProbeFacts,
   DiagnosticsConfigFacts,
   DiagnosticsCoreFactsSnapshot,
   DiagnosticsCoreInput,
   DiagnosticsModelRulesFacts,
   DiagnosticsPathStatusesFacts,
   DiagnosticsSelectedModelsFacts,
-  DeviceProbeFacts,
   ModelRuleFacts,
   ModelSummaryFacts,
   VoiceTypingReadinessFacts,
@@ -76,7 +76,7 @@ function tr(
   t: Translate,
   key: string,
   defaultValue: string,
-  params?: Record<string, unknown>,
+  params?: Record<string, unknown>
 ): string {
   return t(key, {
     defaultValue,
@@ -92,7 +92,7 @@ function openSettingsAction(
   t: Translate,
   settingsTab: SettingsTab,
   labelKey: string,
-  defaultValue: string,
+  defaultValue: string
 ): DiagnosticAction {
   return {
     kind: 'open_settings',
@@ -106,7 +106,7 @@ function openModelSettingsAction(t: Translate): DiagnosticAction {
     t,
     'models',
     'settings.diagnostics.open_model_settings',
-    'Open Model Settings',
+    'Open Model Settings'
   );
 }
 
@@ -115,7 +115,7 @@ function openInputDeviceAction(t: Translate): DiagnosticAction {
     t,
     'microphone',
     'settings.diagnostics.open_input_device',
-    'Open Input Device',
+    'Open Input Device'
   );
 }
 
@@ -124,7 +124,7 @@ function openVoiceTypingAction(t: Translate): DiagnosticAction {
     t,
     'subtitle',
     'settings.diagnostics.open_voice_typing',
-    'Open Voice Typing',
+    'Open Voice Typing'
   );
 }
 
@@ -162,7 +162,7 @@ function check(
   status: DiagnosticStatus,
   description: string,
   action?: DiagnosticAction,
-  meta?: string,
+  meta?: string
 ): DiagnosticCheck {
   return {
     id,
@@ -181,7 +181,7 @@ function buildModelPathPolicyCheck(args: PathPolicyCheckArgs): DiagnosticCheck {
       args.title,
       args.missingSelectionStatus,
       args.missingSelectionDescription,
-      args.action,
+      args.action
     );
   }
 
@@ -192,7 +192,7 @@ function buildModelPathPolicyCheck(args: PathPolicyCheckArgs): DiagnosticCheck {
       args.missingPathStatus,
       args.missingPathDescription,
       args.action,
-      args.missingPathMeta,
+      args.missingPathMeta
     );
   }
 
@@ -203,23 +203,16 @@ function buildModelPathPolicyCheck(args: PathPolicyCheckArgs): DiagnosticCheck {
       args.unknownPathStatus,
       args.unknownPathDescription,
       args.action,
-      args.unknownPathMeta,
+      args.unknownPathMeta
     );
   }
 
-  return check(
-    args.id,
-    args.title,
-    'ready',
-    args.readyDescription,
-    undefined,
-    args.readyMeta,
-  );
+  return check(args.id, args.title, 'ready', args.readyDescription, undefined, args.readyMeta);
 }
 
 function buildModelChecks(
   t: Translate,
-  snapshot: DiagnosticsCoreFactsSnapshot,
+  snapshot: DiagnosticsCoreFactsSnapshot
 ): BuiltChecks['model'] {
   const { config } = snapshot;
   const streamingPath = config.streamingModelPath.trim();
@@ -237,24 +230,24 @@ function buildModelChecks(
     missingSelectionDescription: tr(
       t,
       'settings.diagnostics.live_model_missing',
-      'No Live Record Model is selected yet.',
+      'No Live Record Model is selected yet.'
     ),
     missingPathStatus: 'failed',
     missingPathDescription: tr(
       t,
       'settings.diagnostics.model_path_missing',
-      'The selected model path no longer exists on disk.',
+      'The selected model path no longer exists on disk.'
     ),
     unknownPathStatus: 'info',
     unknownPathDescription: tr(
       t,
       'settings.diagnostics.model_path_unverified',
-      'Sona could not verify the selected path from the current runtime. The current configuration is being kept as-is.',
+      'Sona could not verify the selected path from the current runtime. The current configuration is being kept as-is.'
     ),
     readyDescription: tr(
       t,
       'settings.diagnostics.model_ready',
-      'The selected model is configured and reachable.',
+      'The selected model is configured and reachable.'
     ),
     action: openModelSettings,
     missingPathMeta: config.streamingModelPath,
@@ -271,24 +264,24 @@ function buildModelChecks(
     missingSelectionDescription: tr(
       t,
       'settings.diagnostics.batch_model_missing',
-      'No Batch Import Model is selected yet.',
+      'No Batch Import Model is selected yet.'
     ),
     missingPathStatus: 'failed',
     missingPathDescription: tr(
       t,
       'settings.diagnostics.model_path_missing',
-      'The selected model path no longer exists on disk.',
+      'The selected model path no longer exists on disk.'
     ),
     unknownPathStatus: 'info',
     unknownPathDescription: tr(
       t,
       'settings.diagnostics.model_path_unverified',
-      'Sona could not verify the selected path from the current runtime. The current configuration is being kept as-is.',
+      'Sona could not verify the selected path from the current runtime. The current configuration is being kept as-is.'
     ),
     readyDescription: tr(
       t,
       'settings.diagnostics.model_ready',
-      'The selected model is configured and reachable.',
+      'The selected model is configured and reachable.'
     ),
     action: openModelSettings,
     missingPathMeta: config.batchModelPath,
@@ -304,9 +297,9 @@ function buildModelChecks(
         tr(
           t,
           'settings.diagnostics.vad_unknown',
-          'Pick a Live Record Model first to evaluate whether a VAD model is required.',
+          'Pick a Live Record Model first to evaluate whether a VAD model is required.'
         ),
-        openModelSettings,
+        openModelSettings
       )
     : !snapshot.modelRules.live?.requiresVad
       ? check(
@@ -316,8 +309,8 @@ function buildModelChecks(
           tr(
             t,
             'settings.diagnostics.vad_not_required',
-            'The selected Live Record Model does not require a separate VAD model.',
-          ),
+            'The selected Live Record Model does not require a separate VAD model.'
+          )
         )
       : buildModelPathPolicyCheck({
           id: 'vad',
@@ -328,24 +321,24 @@ function buildModelChecks(
           missingSelectionDescription: tr(
             t,
             'settings.diagnostics.vad_missing',
-            'The selected Live Record Model still needs a VAD model.',
+            'The selected Live Record Model still needs a VAD model.'
           ),
           missingPathStatus: 'failed',
           missingPathDescription: tr(
             t,
             'settings.diagnostics.model_path_missing',
-            'The selected model path no longer exists on disk.',
+            'The selected model path no longer exists on disk.'
           ),
           unknownPathStatus: 'info',
           unknownPathDescription: tr(
             t,
             'settings.diagnostics.model_path_unverified',
-            'Sona could not verify the selected path from the current runtime. The current configuration is being kept as-is.',
+            'Sona could not verify the selected path from the current runtime. The current configuration is being kept as-is.'
           ),
           readyDescription: tr(
             t,
             'settings.diagnostics.vad_ready',
-            'The required VAD model is configured and reachable.',
+            'The required VAD model is configured and reachable.'
           ),
           action: openModelSettings,
           missingPathMeta: config.vadModelPath,
@@ -360,8 +353,8 @@ function buildModelChecks(
         tr(
           t,
           'settings.diagnostics.punctuation_not_required',
-          'The current recognition models do not require a separate punctuation model.',
-        ),
+          'The current recognition models do not require a separate punctuation model.'
+        )
       )
     : buildModelPathPolicyCheck({
         id: 'punctuation',
@@ -372,24 +365,24 @@ function buildModelChecks(
         missingSelectionDescription: tr(
           t,
           'settings.diagnostics.punctuation_warning',
-          'A selected recognition model expects a punctuation model, but none is available yet.',
+          'A selected recognition model expects a punctuation model, but none is available yet.'
         ),
         missingPathStatus: 'warning',
         missingPathDescription: tr(
           t,
           'settings.diagnostics.model_path_missing',
-          'The selected model path no longer exists on disk.',
+          'The selected model path no longer exists on disk.'
         ),
         unknownPathStatus: 'warning',
         unknownPathDescription: tr(
           t,
           'settings.diagnostics.model_path_unverified',
-          'Sona could not verify the selected path from the current runtime. The current configuration is being kept as-is.',
+          'Sona could not verify the selected path from the current runtime. The current configuration is being kept as-is.'
         ),
         readyDescription: tr(
           t,
           'settings.diagnostics.punctuation_ready',
-          'The required punctuation model is configured and reachable.',
+          'The required punctuation model is configured and reachable.'
         ),
         action: openModelSettings,
         missingPathMeta: punctuationPath,
@@ -406,7 +399,7 @@ function buildModelChecks(
 
 function buildInputChecks(
   t: Translate,
-  snapshot: DiagnosticsCoreFactsSnapshot,
+  snapshot: DiagnosticsCoreFactsSnapshot
 ): BuiltChecks['input'] {
   const permissionCheck = (() => {
     switch (snapshot.permissionState) {
@@ -415,11 +408,7 @@ function buildInputChecks(
           'microphone-permission',
           tr(t, 'settings.diagnostics.permission_title', 'Microphone Permission'),
           'ready',
-          tr(
-            t,
-            'settings.diagnostics.permission_granted',
-            'Microphone access is already granted.',
-          ),
+          tr(t, 'settings.diagnostics.permission_granted', 'Microphone access is already granted.')
         );
       case 'denied':
         return check(
@@ -429,9 +418,9 @@ function buildInputChecks(
           tr(
             t,
             'settings.diagnostics.permission_denied',
-            'Microphone access is denied, so the first live recording path cannot start.',
+            'Microphone access is denied, so the first live recording path cannot start.'
           ),
-          requestMicrophonePermissionAction(t),
+          requestMicrophonePermissionAction(t)
         );
       case 'unsupported':
         return check(
@@ -441,8 +430,8 @@ function buildInputChecks(
           tr(
             t,
             'settings.diagnostics.permission_unsupported',
-            'This environment does not expose browser microphone permission controls.',
-          ),
+            'This environment does not expose browser microphone permission controls.'
+          )
         );
       default:
         return check(
@@ -452,9 +441,9 @@ function buildInputChecks(
           tr(
             t,
             'settings.diagnostics.permission_prompt',
-            'Microphone access has not been granted yet.',
+            'Microphone access has not been granted yet.'
           ),
-          requestMicrophonePermissionAction(t),
+          requestMicrophonePermissionAction(t)
         );
     }
   })();
@@ -470,12 +459,12 @@ function buildInputChecks(
           : tr(
               t,
               'settings.diagnostics.microphone_unavailable',
-              'No microphone devices are currently available.',
+              'No microphone devices are currently available.'
             ),
-        openInputDeviceAction(t),
+        openInputDeviceAction(t)
       )
-    : microphoneId === 'default'
-      || snapshot.microphoneProbe.options.some((option) => option.value === microphoneId)
+    : microphoneId === 'default' ||
+        snapshot.microphoneProbe.options.some((option) => option.value === microphoneId)
       ? check(
           'microphone-device',
           tr(t, 'settings.diagnostics.microphone_title', 'Input Device'),
@@ -483,10 +472,10 @@ function buildInputChecks(
           tr(
             t,
             'settings.diagnostics.microphone_ready',
-            'The current input-device selection is still available.',
+            'The current input-device selection is still available.'
           ),
           undefined,
-          microphoneId === 'default' ? tr(t, 'settings.mic_auto', 'Auto') : microphoneId,
+          microphoneId === 'default' ? tr(t, 'settings.mic_auto', 'Auto') : microphoneId
         )
       : check(
           'microphone-device',
@@ -495,10 +484,10 @@ function buildInputChecks(
           tr(
             t,
             'settings.diagnostics.microphone_missing_selection',
-            'The saved microphone selection is no longer available.',
+            'The saved microphone selection is no longer available.'
           ),
           openInputDeviceAction(t),
-          microphoneId,
+          microphoneId
         );
 
   const systemAudioCheck = snapshot.systemAudioProbe.available
@@ -509,8 +498,8 @@ function buildInputChecks(
         tr(
           t,
           'settings.diagnostics.system_audio_ready',
-          'System audio capture devices are available.',
-        ),
+          'System audio capture devices are available.'
+        )
       )
     : check(
         'system-audio-capture',
@@ -521,9 +510,9 @@ function buildInputChecks(
           : tr(
               t,
               'settings.diagnostics.system_audio_warning',
-              'Sona could not enumerate system audio capture devices right now.',
+              'Sona could not enumerate system audio capture devices right now.'
             ),
-        openInputDeviceAction(t),
+        openInputDeviceAction(t)
       );
 
   return {
@@ -535,7 +524,7 @@ function buildInputChecks(
 
 function buildVoiceTypingCheck(
   t: Translate,
-  snapshot: DiagnosticsCoreFactsSnapshot,
+  snapshot: DiagnosticsCoreFactsSnapshot
 ): DiagnosticCheck {
   const title = tr(t, 'settings.diagnostics.voice_typing_title', 'Voice Typing Runtime');
   const readiness = snapshot.voiceTypingReadiness;
@@ -546,16 +535,17 @@ function buildVoiceTypingCheck(
         title,
         'info',
         tr(t, 'settings.diagnostics.voice_typing_off', 'Voice Typing is currently turned off.'),
-        openVoiceTypingAction(t),
+        openVoiceTypingAction(t)
       );
     case 'needs_shortcut':
     case 'needs_live_model':
     case 'needs_vad': {
-      const key = readiness.state === 'needs_shortcut'
-        ? 'settings.voice_typing_status_summary_missing_shortcut'
-        : readiness.state === 'needs_vad'
-          ? 'settings.voice_typing_status_summary_missing_vad'
-          : 'settings.voice_typing_status_summary_missing_model';
+      const key =
+        readiness.state === 'needs_shortcut'
+          ? 'settings.voice_typing_status_summary_missing_shortcut'
+          : readiness.state === 'needs_vad'
+            ? 'settings.voice_typing_status_summary_missing_vad'
+            : 'settings.voice_typing_status_summary_missing_model';
       return check(
         'voice-typing',
         title,
@@ -563,7 +553,7 @@ function buildVoiceTypingCheck(
         readiness.lastErrorMessage
           ? runtimeMessage(t, readiness.lastErrorMessage)
           : tr(t, key, 'Voice Typing still needs setup before it can run.'),
-        openVoiceTypingAction(t),
+        openVoiceTypingAction(t)
       );
     }
     case 'failed':
@@ -576,9 +566,9 @@ function buildVoiceTypingCheck(
           : tr(
               t,
               'settings.voice_typing_status_summary_failed',
-              'Voice Typing hit a runtime problem.',
+              'Voice Typing hit a runtime problem.'
             ),
-        retryVoiceTypingWarmupAction(t),
+        retryVoiceTypingWarmupAction(t)
       );
     case 'preparing':
       return check(
@@ -588,8 +578,8 @@ function buildVoiceTypingCheck(
         tr(
           t,
           'settings.voice_typing_status_summary_preparing',
-          'Voice Typing is getting ready in the background.',
-        ),
+          'Voice Typing is getting ready in the background.'
+        )
       );
     case 'ready':
     default:
@@ -600,15 +590,15 @@ function buildVoiceTypingCheck(
         tr(
           t,
           'settings.voice_typing_status_summary_ready',
-          'Voice Typing is ready to dictate into other apps.',
-        ),
+          'Voice Typing is ready to dictate into other apps.'
+        )
       );
   }
 }
 
 function buildRuntimeChecks(
   t: Translate,
-  snapshot: DiagnosticsCoreFactsSnapshot,
+  snapshot: DiagnosticsCoreFactsSnapshot
 ): BuiltChecks['runtime'] {
   const voiceTypingCheck = buildVoiceTypingCheck(t, snapshot);
   const ffmpegCheck = snapshot.runtimeEnvironment.ffmpegExists
@@ -618,7 +608,7 @@ function buildRuntimeChecks(
         'ready',
         tr(t, 'settings.diagnostics.ffmpeg_ready', 'The bundled FFmpeg sidecar is present.'),
         undefined,
-        snapshot.runtimeEnvironment.ffmpegPath,
+        snapshot.runtimeEnvironment.ffmpegPath
       )
     : check(
         'ffmpeg',
@@ -627,34 +617,35 @@ function buildRuntimeChecks(
         tr(
           t,
           'settings.diagnostics.ffmpeg_missing',
-          'The bundled FFmpeg sidecar could not be found. Batch imports and media decoding may fail until the app is reinstalled.',
+          'The bundled FFmpeg sidecar could not be found. Batch imports and media decoding may fail until the app is reinstalled.'
         ),
         openLogFolderAction(t),
-        snapshot.runtimeEnvironment.ffmpegPath,
+        snapshot.runtimeEnvironment.ffmpegPath
       );
-  const logDirCheck = snapshot.runtimeEnvironment.logDirPath.trim().length === 0
-    ? check(
-        'log-dir',
-        tr(t, 'settings.diagnostics.log_dir_title', 'Log Directory'),
-        'failed',
-        tr(
-          t,
-          'settings.diagnostics.log_dir_missing',
-          'Sona could not resolve the runtime log directory.',
-        ),
-      )
-    : check(
-        'log-dir',
-        tr(t, 'settings.diagnostics.log_dir_title', 'Log Directory'),
-        'ready',
-        tr(
-          t,
-          'settings.diagnostics.log_dir_ready',
-          'Runtime logs can be resolved for troubleshooting.',
-        ),
-        openLogFolderAction(t),
-        snapshot.runtimeEnvironment.logDirPath,
-      );
+  const logDirCheck =
+    snapshot.runtimeEnvironment.logDirPath.trim().length === 0
+      ? check(
+          'log-dir',
+          tr(t, 'settings.diagnostics.log_dir_title', 'Log Directory'),
+          'failed',
+          tr(
+            t,
+            'settings.diagnostics.log_dir_missing',
+            'Sona could not resolve the runtime log directory.'
+          )
+        )
+      : check(
+          'log-dir',
+          tr(t, 'settings.diagnostics.log_dir_title', 'Log Directory'),
+          'ready',
+          tr(
+            t,
+            'settings.diagnostics.log_dir_ready',
+            'Runtime logs can be resolved for troubleshooting.'
+          ),
+          openLogFolderAction(t),
+          snapshot.runtimeEnvironment.logDirPath
+        );
 
   return {
     voiceTypingCheck,
@@ -694,10 +685,7 @@ function describeModelLoadMetric(metric: AsrModelLoadMetric): string {
 }
 
 function describeInferenceMetric(metric: AsrInferenceMetric): string {
-  const parts = [
-    `stage ${metric.stage}`,
-    `decode ${formatMetricMs(metric.decodeMs)}`,
-  ];
+  const parts = [`stage ${metric.stage}`, `decode ${formatMetricMs(metric.decodeMs)}`];
 
   if (metric.audioExtractMs !== null && metric.audioExtractMs !== undefined) {
     parts.push(`extract ${formatMetricMs(metric.audioExtractMs)}`);
@@ -719,7 +707,7 @@ function describeInferenceMetric(metric: AsrInferenceMetric): string {
 
 function buildAsrPerformanceChecks(
   t: Translate,
-  metrics: AsrRuntimeMetricsSnapshot,
+  metrics: AsrRuntimeMetricsSnapshot
 ): BuiltChecks['asr'] {
   const modelMemoryCheck = metrics.modelLoad
     ? check(
@@ -733,10 +721,10 @@ function buildAsrPerformanceChecks(
           {
             modelType: metrics.modelLoad.modelType,
             recognizerKind: metrics.modelLoad.recognizerKind,
-          },
+          }
         ),
         undefined,
-        describeModelLoadMetric(metrics.modelLoad),
+        describeModelLoadMetric(metrics.modelLoad)
       )
     : check(
         'asr-model-memory',
@@ -745,8 +733,8 @@ function buildAsrPerformanceChecks(
         tr(
           t,
           'settings.diagnostics.asr_model_memory_empty',
-          'No ASR runtime metrics have been captured yet.',
-        ),
+          'No ASR runtime metrics have been captured yet.'
+        )
       );
 
   const liveLatencyCheck = metrics.liveInference
@@ -758,10 +746,10 @@ function buildAsrPerformanceChecks(
           t,
           'settings.diagnostics.asr_live_latency_ready',
           `Last live inference from ${metrics.liveInference.instanceId ?? 'unknown instance'}.`,
-          { instanceId: metrics.liveInference.instanceId ?? 'unknown instance' },
+          { instanceId: metrics.liveInference.instanceId ?? 'unknown instance' }
         ),
         undefined,
-        describeInferenceMetric(metrics.liveInference),
+        describeInferenceMetric(metrics.liveInference)
       )
     : check(
         'asr-live-latency',
@@ -770,8 +758,8 @@ function buildAsrPerformanceChecks(
         tr(
           t,
           'settings.diagnostics.asr_live_latency_empty',
-          'No live transcription latency has been captured yet.',
-        ),
+          'No live transcription latency has been captured yet.'
+        )
       );
 
   const batchLatencyCheck = metrics.batchInference
@@ -782,10 +770,10 @@ function buildAsrPerformanceChecks(
         tr(
           t,
           'settings.diagnostics.asr_batch_latency_ready',
-          'Last batch transcription run completed.',
+          'Last batch transcription run completed.'
         ),
         undefined,
-        describeInferenceMetric(metrics.batchInference),
+        describeInferenceMetric(metrics.batchInference)
       )
     : check(
         'asr-batch-latency',
@@ -794,8 +782,8 @@ function buildAsrPerformanceChecks(
         tr(
           t,
           'settings.diagnostics.asr_batch_latency_empty',
-          'No batch transcription latency has been captured yet.',
-        ),
+          'No batch transcription latency has been captured yet.'
+        )
       );
 
   return {
@@ -824,7 +812,7 @@ function statusPriority(status: DiagnosticStatus): number {
 function pickWorseStatus(statuses: DiagnosticStatus[]): DiagnosticStatus {
   return statuses.reduce<DiagnosticStatus>(
     (worst, status) => (statusPriority(status) > statusPriority(worst) ? status : worst),
-    'ready',
+    'ready'
   );
 }
 
@@ -833,7 +821,7 @@ function overviewCard(
   title: string,
   description: string,
   statuses: DiagnosticStatus[],
-  action?: DiagnosticAction,
+  action?: DiagnosticAction
 ): DiagnosticOverviewCard {
   return {
     id,
@@ -860,11 +848,11 @@ function liveRecordOverviewAction(t: Translate, checks: BuiltChecks): Diagnostic
 function batchImportOverviewAction(
   t: Translate,
   snapshot: DiagnosticsCoreFactsSnapshot,
-  checks: BuiltChecks,
+  checks: BuiltChecks
 ): DiagnosticAction | undefined {
   if (
-    checks.model.batchModelCheck.status !== 'ready'
-    || checks.model.punctuationCheck.status === 'warning'
+    checks.model.batchModelCheck.status !== 'ready' ||
+    checks.model.punctuationCheck.status === 'warning'
   ) {
     return openModelSettingsAction(t);
   }
@@ -877,7 +865,7 @@ function batchImportOverviewAction(
 function buildOverviewCards(
   t: Translate,
   snapshot: DiagnosticsCoreFactsSnapshot,
-  checks: BuiltChecks,
+  checks: BuiltChecks
 ): DiagnosticOverviewCard[] {
   return [
     overviewCard(
@@ -888,7 +876,7 @@ function buildOverviewCards(
         : tr(
             t,
             'settings.diagnostics.first_run_missing',
-            'The recommended batch setup is still incomplete.',
+            'The recommended batch setup is still incomplete.'
           ),
       [
         snapshot.onboardingReady ? 'ready' : 'missing',
@@ -896,7 +884,7 @@ function buildOverviewCards(
           ? 'warning'
           : checks.input.permissionCheck.status,
       ],
-      snapshot.onboardingReady ? undefined : runFirstSetupAction(t),
+      snapshot.onboardingReady ? undefined : runFirstSetupAction(t)
     ),
     overviewCard(
       'live-record',
@@ -904,7 +892,7 @@ function buildOverviewCards(
       tr(
         t,
         'settings.diagnostics.live_record_card_description',
-        'Model, VAD, permission, and microphone selection for real-time capture.',
+        'Model, VAD, permission, and microphone selection for real-time capture.'
       ),
       [
         checks.model.liveModelCheck.status,
@@ -912,7 +900,7 @@ function buildOverviewCards(
         checks.input.permissionCheck.status,
         checks.input.microphoneCheck.status,
       ],
-      liveRecordOverviewAction(t, checks),
+      liveRecordOverviewAction(t, checks)
     ),
     overviewCard(
       'batch-import',
@@ -920,14 +908,14 @@ function buildOverviewCards(
       tr(
         t,
         'settings.diagnostics.batch_import_card_description',
-        'batch model and bundled media decoding support for file processing.',
+        'batch model and bundled media decoding support for file processing.'
       ),
       [
         checks.model.batchModelCheck.status,
         checks.model.punctuationCheck.status,
         checks.runtime.ffmpegCheck.status,
       ],
-      batchImportOverviewAction(t, snapshot, checks),
+      batchImportOverviewAction(t, snapshot, checks)
     ),
     overviewCard(
       'voice-typing',
@@ -935,10 +923,10 @@ function buildOverviewCards(
       tr(
         t,
         'settings.diagnostics.voice_typing_card_description',
-        'Shortcut, live model reuse, and runtime warm-up for dictation.',
+        'Shortcut, live model reuse, and runtime warm-up for dictation.'
       ),
       [checks.runtime.voiceTypingCheck.status],
-      checks.runtime.voiceTypingCheck.action,
+      checks.runtime.voiceTypingCheck.action
     ),
   ];
 }
@@ -951,7 +939,7 @@ function buildSections(t: Translate, checks: BuiltChecks): DiagnosticSection[] {
       description: tr(
         t,
         'settings.diagnostics.models_section_description',
-        'Check that local transcription models and required dependencies are present.',
+        'Check that local transcription models and required dependencies are present.'
       ),
       checks: [
         checks.model.liveModelCheck,
@@ -966,7 +954,7 @@ function buildSections(t: Translate, checks: BuiltChecks): DiagnosticSection[] {
       description: tr(
         t,
         'settings.diagnostics.input_section_description',
-        'Check permissions and the availability of input or capture devices.',
+        'Check permissions and the availability of input or capture devices.'
       ),
       checks: [
         checks.input.permissionCheck,
@@ -980,7 +968,7 @@ function buildSections(t: Translate, checks: BuiltChecks): DiagnosticSection[] {
       description: tr(
         t,
         'settings.diagnostics.runtime_section_description',
-        'Check background runtime readiness and packaged environment dependencies.',
+        'Check background runtime readiness and packaged environment dependencies.'
       ),
       checks: [
         checks.runtime.voiceTypingCheck,
@@ -994,7 +982,7 @@ function buildSections(t: Translate, checks: BuiltChecks): DiagnosticSection[] {
       description: tr(
         t,
         'settings.diagnostics.asr_performance_section_description',
-        'Review recent local ASR model memory and transcription latency samples.',
+        'Review recent local ASR model memory and transcription latency samples.'
       ),
       checks: [
         checks.asr.modelMemoryCheck,
@@ -1007,7 +995,7 @@ function buildSections(t: Translate, checks: BuiltChecks): DiagnosticSection[] {
 
 export function buildDiagnosticsSnapshot(
   t: Translate,
-  snapshot: DiagnosticsCoreFactsSnapshot,
+  snapshot: DiagnosticsCoreFactsSnapshot
 ): DiagnosticsSnapshot {
   const checks: BuiltChecks = {
     model: buildModelChecks(t, snapshot),

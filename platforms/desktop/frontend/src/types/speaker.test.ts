@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import type { SpeakerProfile } from './speaker';
 import {
   areSpeakerTagsEqual,
   deriveSpeakerProfileReadiness,
   normalizeSpeakerAttribution,
   normalizeSpeakerProfiles,
 } from './speakerNormalization';
-import type { SpeakerProfile } from './speaker';
 
 function createProfile(samples: number[]): SpeakerProfile {
   return {
@@ -52,19 +52,21 @@ describe('speaker profile readiness', () => {
 
 describe('normalizeSpeakerAttribution', () => {
   it('keeps group identity, anonymous label, and the top three candidates', () => {
-    expect(normalizeSpeakerAttribution({
-      groupId: 'anonymous-1',
-      anonymousLabel: 'Speaker 1',
-      state: 'suggested',
-      source: 'auto',
-      confidence: 'medium',
-      candidates: [
-        { profileId: 'speaker-a', profileName: 'Alice', score: 0.79, rank: 1 },
-        { profileId: 'speaker-b', profileName: 'Bob', score: 0.73, rank: 2 },
-        { profileId: 'speaker-c', profileName: 'Carol', score: 0.68, rank: 3 },
-        { profileId: 'speaker-d', profileName: 'Dan', score: 0.61, rank: 4 },
-      ],
-    })).toEqual({
+    expect(
+      normalizeSpeakerAttribution({
+        groupId: 'anonymous-1',
+        anonymousLabel: 'Speaker 1',
+        state: 'suggested',
+        source: 'auto',
+        confidence: 'medium',
+        candidates: [
+          { profileId: 'speaker-a', profileName: 'Alice', score: 0.79, rank: 1 },
+          { profileId: 'speaker-b', profileName: 'Bob', score: 0.73, rank: 2 },
+          { profileId: 'speaker-c', profileName: 'Carol', score: 0.68, rank: 3 },
+          { profileId: 'speaker-d', profileName: 'Dan', score: 0.61, rank: 4 },
+        ],
+      })
+    ).toEqual({
       groupId: 'anonymous-1',
       anonymousLabel: 'Speaker 1',
       state: 'suggested',
@@ -81,15 +83,17 @@ describe('normalizeSpeakerAttribution', () => {
 
 describe('speaker runtime facade', () => {
   it('normalizes speaker profiles through the facade', () => {
-    expect(normalizeSpeakerProfiles([
-      {
-        id: ' speaker-a ',
-        samples: [
-          { id: ' sample-a ', filePath: ' C:/sample.wav ', durationSeconds: 12 },
-          { id: '', filePath: 'C:/missing-id.wav', durationSeconds: 8 },
-        ],
-      },
-    ])).toEqual([
+    expect(
+      normalizeSpeakerProfiles([
+        {
+          id: ' speaker-a ',
+          samples: [
+            { id: ' sample-a ', filePath: ' C:/sample.wav ', durationSeconds: 12 },
+            { id: '', filePath: 'C:/missing-id.wav', durationSeconds: 8 },
+          ],
+        },
+      ])
+    ).toEqual([
       {
         id: 'speaker-a',
         name: 'Speaker Profile',
@@ -107,9 +111,11 @@ describe('speaker runtime facade', () => {
   });
 
   it('compares speaker tags by stable identity fields through the facade', () => {
-    expect(areSpeakerTagsEqual(
-      { id: 'speaker-a', label: 'Alice', kind: 'identified', score: 0.9 },
-      { id: 'speaker-a', label: 'Alice', kind: 'identified', score: 0.1 },
-    )).toBe(true);
+    expect(
+      areSpeakerTagsEqual(
+        { id: 'speaker-a', label: 'Alice', kind: 'identified', score: 0.9 },
+        { id: 'speaker-a', label: 'Alice', kind: 'identified', score: 0.1 }
+      )
+    ).toBe(true);
   });
 });

@@ -16,6 +16,7 @@ import type {
   TranscriptSegment_Serialize as CoreTranscriptSegment,
   TranslateSegmentsRequest_Serialize as CoreTranslateSegmentsRequest,
 } from '../../bindings';
+import type { LlmGenerateCommandRequest } from '../../types/dashboard';
 import type {
   PolishedSegment,
   PolishSegmentsRequest,
@@ -26,7 +27,6 @@ import type {
   TranslatedSegment,
   TranslateSegmentsRequest,
 } from '../../types/llmTask';
-import type { LlmGenerateCommandRequest } from '../../types/dashboard';
 import type {
   LlmCompletionRequest,
   LlmCompletionResponse,
@@ -68,10 +68,7 @@ function nullableFiniteNumber(value: number | undefined, path: string): number |
   return value === undefined ? null : finiteNumber(value, path);
 }
 
-function nullableNonNegativeSafeInteger(
-  value: number | undefined,
-  path: string,
-): number | null {
+function nullableNonNegativeSafeInteger(value: number | undefined, path: string): number | null {
   return value === undefined ? null : nonNegativeSafeInteger(value, path);
 }
 
@@ -91,10 +88,7 @@ function normalizeJsonValue(value: unknown, path: string): LlmJsonValue {
   }
   if (typeof value === 'object') {
     return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [
-        key,
-        normalizeJsonValue(item, `${path}.${key}`),
-      ]),
+      Object.entries(value).map(([key, item]) => [key, normalizeJsonValue(item, `${path}.${key}`)])
     );
   }
   throw new TypeError(`${path} must be a JSON value`);
@@ -105,7 +99,7 @@ function normalizeProvider(provider: string): CoreLlmProvider {
     return { Custom: provider };
   }
   return {
-    Builtin: PROVIDER_ALIASES[provider] ?? provider as CoreBuiltinLlmProvider,
+    Builtin: PROVIDER_ALIASES[provider] ?? (provider as CoreBuiltinLlmProvider),
   };
 }
 
@@ -140,16 +134,14 @@ function defaultStrategy(provider: CoreLlmProvider): CoreLlmProviderStrategy {
 }
 
 function normalizeStrategy(strategy: string): CoreLlmProviderStrategy {
-  return STRATEGY_ALIASES[strategy] ?? strategy as CoreLlmProviderStrategy;
+  return STRATEGY_ALIASES[strategy] ?? (strategy as CoreLlmProviderStrategy);
 }
 
 function normalizeConfig(config: LlmConfig, path: string): CoreLlmConfig {
   const provider = normalizeProvider(config.provider);
   return {
     provider,
-    strategy: config.strategy
-      ? normalizeStrategy(config.strategy)
-      : defaultStrategy(provider),
+    strategy: config.strategy ? normalizeStrategy(config.strategy) : defaultStrategy(provider),
     baseUrl: config.baseUrl,
     apiKey: config.apiKey,
     model: config.model,
@@ -158,16 +150,13 @@ function normalizeConfig(config: LlmConfig, path: string): CoreLlmConfig {
     temperature: nullableFiniteNumber(config.temperature, `${path}.temperature`),
     reasoningEnabled: config.reasoningEnabled ?? null,
     reasoningLevel: config.reasoningLevel ?? null,
-    timeoutSeconds: nullableNonNegativeSafeInteger(
-      config.timeoutSeconds,
-      `${path}.timeoutSeconds`,
-    ),
+    timeoutSeconds: nullableNonNegativeSafeInteger(config.timeoutSeconds, `${path}.timeoutSeconds`),
   };
 }
 
 function normalizeResponseFormat(
   format: LlmResponseFormat | undefined,
-  path: string,
+  path: string
 ): CoreLlmResponseFormat {
   if (!format) {
     return { type: 'text' };
@@ -184,13 +173,13 @@ function normalizeResponseFormat(
 
 function normalizeCompletionOptions(
   options: LlmCompletionRequest['options'],
-  path: string,
+  path: string
 ): CoreLlmCompletionOptions {
   return {
     temperature: nullableFiniteNumber(options?.temperature, `${path}.temperature`),
     maxOutputTokens: nullableNonNegativeSafeInteger(
       options?.maxOutputTokens,
-      `${path}.maxOutputTokens`,
+      `${path}.maxOutputTokens`
     ),
     reasoningEnabled: options?.reasoningEnabled ?? null,
     reasoningLevel: options?.reasoningLevel ?? null,
@@ -234,7 +223,7 @@ function normalizeModelsRequest(request: {
 
 function normalizeModelSummary(
   summary: CoreLlmModelSummary,
-  path: string,
+  path: string
 ): LlmDiscoveredModelSummary {
   for (const key of ['inputPrice', 'outputPrice', 'cacheReadPrice', 'cacheWritePrice'] as const) {
     const value = summary[key];
@@ -251,34 +240,37 @@ function normalizeModelSummary(
   return summary;
 }
 
-function normalizeCompletionResponse(
-  response: CoreLlmCompletionResponse,
-): LlmCompletionResponse {
-  const json = response.json == null
-    ? undefined
-    : normalizeJsonValue(response.json, 'result.json');
-  const usage = response.usage == null
-    ? null
-    : {
-        promptTokens: nonNegativeSafeInteger(response.usage.promptTokens, 'result.usage.promptTokens'),
-        completionTokens: nonNegativeSafeInteger(
-          response.usage.completionTokens,
-          'result.usage.completionTokens',
-        ),
-        totalTokens: nonNegativeSafeInteger(response.usage.totalTokens, 'result.usage.totalTokens'),
-        cachedInputTokens: nonNegativeSafeInteger(
-          response.usage.cachedInputTokens ?? 0,
-          'result.usage.cachedInputTokens',
-        ),
-        cacheCreationInputTokens: nonNegativeSafeInteger(
-          response.usage.cacheCreationInputTokens ?? 0,
-          'result.usage.cacheCreationInputTokens',
-        ),
-        reasoningTokens: nonNegativeSafeInteger(
-          response.usage.reasoningTokens ?? 0,
-          'result.usage.reasoningTokens',
-        ),
-      };
+function normalizeCompletionResponse(response: CoreLlmCompletionResponse): LlmCompletionResponse {
+  const json = response.json == null ? undefined : normalizeJsonValue(response.json, 'result.json');
+  const usage =
+    response.usage == null
+      ? null
+      : {
+          promptTokens: nonNegativeSafeInteger(
+            response.usage.promptTokens,
+            'result.usage.promptTokens'
+          ),
+          completionTokens: nonNegativeSafeInteger(
+            response.usage.completionTokens,
+            'result.usage.completionTokens'
+          ),
+          totalTokens: nonNegativeSafeInteger(
+            response.usage.totalTokens,
+            'result.usage.totalTokens'
+          ),
+          cachedInputTokens: nonNegativeSafeInteger(
+            response.usage.cachedInputTokens ?? 0,
+            'result.usage.cachedInputTokens'
+          ),
+          cacheCreationInputTokens: nonNegativeSafeInteger(
+            response.usage.cacheCreationInputTokens ?? 0,
+            'result.usage.cacheCreationInputTokens'
+          ),
+          reasoningTokens: nonNegativeSafeInteger(
+            response.usage.reasoningTokens ?? 0,
+            'result.usage.reasoningTokens'
+          ),
+        };
 
   nonNegativeSafeInteger(response.execution.attempts, 'result.execution.attempts');
   return {
@@ -300,7 +292,9 @@ function normalizePolishRequest(request: PolishSegmentsRequest): CorePolishSegme
   };
 }
 
-function normalizeTranslateRequest(request: TranslateSegmentsRequest): CoreTranslateSegmentsRequest {
+function normalizeTranslateRequest(
+  request: TranslateSegmentsRequest
+): CoreTranslateSegmentsRequest {
   return {
     taskId: request.taskId,
     config: normalizeConfig(request.config, 'request.config'),
@@ -324,7 +318,7 @@ function normalizeSummaryTemplate(template: {
 }
 
 function normalizeSummarizeRequest(
-  request: SummarizeTranscriptRequest,
+  request: SummarizeTranscriptRequest
 ): CoreSummarizeTranscriptRequest {
   return {
     taskId: request.taskId,
@@ -337,14 +331,14 @@ function normalizeSummarizeRequest(
     })),
     chunkCharBudget: nullableNonNegativeSafeInteger(
       request.chunkCharBudget,
-      'request.chunkCharBudget',
+      'request.chunkCharBudget'
     ),
   };
 }
 
 function normalizeTranscriptSegment(
   segment: TranscriptLlmJobRequest['segments'][number],
-  path: string,
+  path: string
 ): CoreTranscriptSegment {
   return {
     ...segment,
@@ -364,16 +358,16 @@ function normalizeTranscriptSegment(
       : {}),
     ...(segment.timestamps
       ? {
-          timestamps: segment.timestamps.map((value, index) => (
+          timestamps: segment.timestamps.map((value, index) =>
             finiteNumber(value, `${path}.timestamps[${index}]`)
-          )),
+          ),
         }
       : {}),
     ...(segment.durations
       ? {
-          durations: segment.durations.map((value, index) => (
+          durations: segment.durations.map((value, index) =>
             finiteNumber(value, `${path}.durations[${index}]`)
-          )),
+          ),
         }
       : {}),
     ...(segment.speaker?.score === undefined
@@ -392,11 +386,11 @@ function normalizeTranscriptSegment(
               ...candidate,
               score: finiteNumber(
                 candidate.score,
-                `${path}.speakerAttribution.candidates[${index}].score`,
+                `${path}.speakerAttribution.candidates[${index}].score`
               ),
               rank: nonNegativeSafeInteger(
                 candidate.rank,
-                `${path}.speakerAttribution.candidates[${index}].rank`,
+                `${path}.speakerAttribution.candidates[${index}].rank`
               ),
             })),
           },
@@ -416,9 +410,7 @@ type CoreTranscriptJobFields = Pick<
   | 'chunkCharBudget'
 >;
 
-function normalizeTranscriptJobFields(
-  request: TranscriptLlmJobRequest,
-): CoreTranscriptJobFields {
+function normalizeTranscriptJobFields(request: TranscriptLlmJobRequest): CoreTranscriptJobFields {
   const emptyFields: CoreTranscriptJobFields = {
     targetLanguage: null,
     targetLanguageName: null,
@@ -451,16 +443,16 @@ function normalizeTranscriptJobFields(
 }
 
 function normalizeTranscriptJobRequest(
-  request: TranscriptLlmJobRequest,
+  request: TranscriptLlmJobRequest
 ): CoreTranscriptLlmJobRequest {
   return {
     taskId: request.taskId,
     taskType: request.taskType,
     jobHistoryId: request.jobHistoryId ?? null,
     config: normalizeConfig(request.config, 'request.config'),
-    segments: request.segments.map((segment, index) => (
+    segments: request.segments.map((segment, index) =>
       normalizeTranscriptSegment(segment, `request.segments[${index}]`)
-    )),
+    ),
     ...normalizeTranscriptJobFields(request),
   };
 }
@@ -478,7 +470,9 @@ export async function completeLlm(request: LlmCompletionRequest): Promise<LlmCom
   return normalizeCompletionResponse(response);
 }
 
-export async function describeLlmModel(config: LlmConfig): Promise<LlmDiscoveredModelSummary | null> {
+export async function describeLlmModel(
+  config: LlmConfig
+): Promise<LlmDiscoveredModelSummary | null> {
   const result = await invokeTauri(TauriCommand.llm.describeModel, {
     config: normalizeConfig(config, 'config'),
   });
@@ -498,7 +492,7 @@ export async function listLlmModels(request: {
 }
 
 export async function polishTranscriptSegments(
-  request: PolishSegmentsRequest,
+  request: PolishSegmentsRequest
 ): Promise<PolishedSegment[]> {
   return invokeTauri(TauriCommand.llm.polishTranscriptSegments, {
     request: normalizePolishRequest(request),
@@ -506,7 +500,7 @@ export async function polishTranscriptSegments(
 }
 
 export async function runTranscriptLlmJob(
-  request: TranscriptLlmJobRequest,
+  request: TranscriptLlmJobRequest
 ): Promise<TranscriptLlmJobResult> {
   return invokeTauri(TauriCommand.llm.runTranscriptJob, {
     request: normalizeTranscriptJobRequest(request),
@@ -514,7 +508,7 @@ export async function runTranscriptLlmJob(
 }
 
 export async function summarizeTranscript(
-  request: SummarizeTranscriptRequest,
+  request: SummarizeTranscriptRequest
 ): Promise<TranscriptSummaryResult> {
   return invokeTauri(TauriCommand.llm.summarizeTranscript, {
     request: normalizeSummarizeRequest(request),
@@ -522,7 +516,7 @@ export async function summarizeTranscript(
 }
 
 export async function translateTranscriptSegments(
-  request: TranslateSegmentsRequest,
+  request: TranslateSegmentsRequest
 ): Promise<TranslatedSegment[]> {
   return invokeTauri(TauriCommand.llm.translateTranscriptSegments, {
     request: normalizeTranslateRequest(request),

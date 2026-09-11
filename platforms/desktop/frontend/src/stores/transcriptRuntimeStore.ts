@@ -1,5 +1,5 @@
-import { useTranscriptStore, type TranscriptStore } from './transcriptStore';
 import type { LexicalEditor } from 'lexical';
+import { type TranscriptStore, useTranscriptStore } from './transcriptStore';
 
 let activeEditor: LexicalEditor | null = null;
 

@@ -1,14 +1,14 @@
 import type { AppConfig } from '../../types/config';
 import type { TranscriptSegment } from '../../types/transcript';
-import type { EffectivePipelineSnapshot } from '../projectPipeline';
 import type { ExportFormat, ExportMode } from '../../utils/exportFormats';
-import { polishService } from '../polishService';
-import { translationService } from '../translationService';
-import { summaryService } from '../summaryService';
+import { logger } from '../../utils/logger';
 import { exportService } from '../exportService';
 import { historyService } from '../historyService';
 import { isFeatureLlmConfigComplete } from '../llm/configUtils';
-import { logger } from '../../utils/logger';
+import { polishService } from '../polishService';
+import type { EffectivePipelineSnapshot } from '../projectPipeline';
+import { summaryService } from '../summaryService';
+import { translationService } from '../translationService';
 
 export type PipelineStage = 'polishing' | 'translating' | 'summarizing' | 'exporting';
 
@@ -70,7 +70,9 @@ export class PipelineExecutionEngine {
     if (pipeline.autoPolish) {
       this.throwIfCancelled(isCancelRequested);
       if (!this.ports.isFeatureLlmConfigComplete(globalConfig, 'polish')) {
-        logger.warn('[PipelineExecutionEngine] Polish model is not configured, skipping auto-polish.');
+        logger.warn(
+          '[PipelineExecutionEngine] Polish model is not configured, skipping auto-polish.'
+        );
       } else {
         onProgress?.('polishing', 96);
         const polishConfig: AppConfig = {
@@ -83,10 +85,10 @@ export class PipelineExecutionEngine {
           async (polishedChunk) => {
             currentSegments = this.ports.polishService.applyPolishedSegmentsInMemory(
               currentSegments,
-              polishedChunk,
+              polishedChunk
             );
             await onSegmentsUpdated?.(currentSegments);
-          },
+          }
         );
         if (historyId) {
           await this.ports.historyService.updateTranscript(historyId, currentSegments);
@@ -98,7 +100,9 @@ export class PipelineExecutionEngine {
     if (pipeline.autoTranslate) {
       this.throwIfCancelled(isCancelRequested);
       if (!this.ports.isFeatureLlmConfigComplete(globalConfig, 'translation')) {
-        logger.warn('[PipelineExecutionEngine] Translation model is not configured, skipping auto-translate.');
+        logger.warn(
+          '[PipelineExecutionEngine] Translation model is not configured, skipping auto-translate.'
+        );
       } else {
         onProgress?.('translating', 98);
         const translateConfig: AppConfig = {
@@ -111,10 +115,10 @@ export class PipelineExecutionEngine {
           async (translatedChunk) => {
             currentSegments = this.ports.translationService.applyTranslationsInMemory(
               currentSegments,
-              translatedChunk,
+              translatedChunk
             );
             await onSegmentsUpdated?.(currentSegments);
-          },
+          }
         );
         if (historyId) {
           await this.ports.historyService.updateTranscript(historyId, currentSegments);
@@ -126,7 +130,9 @@ export class PipelineExecutionEngine {
     if (pipeline.autoSummary && historyId) {
       this.throwIfCancelled(isCancelRequested);
       if (!this.ports.isFeatureLlmConfigComplete(globalConfig, 'summary')) {
-        logger.warn('[PipelineExecutionEngine] Summary model is not configured, skipping auto-summary.');
+        logger.warn(
+          '[PipelineExecutionEngine] Summary model is not configured, skipping auto-summary.'
+        );
       } else {
         onProgress?.('summarizing', 99);
         const templateId = pipeline.summaryTemplateId || globalConfig.summaryTemplateId;
@@ -175,7 +181,7 @@ export function createPipelineExecutionEngine(
     exportService,
     historyService,
     isFeatureLlmConfigComplete,
-  },
+  }
 ): PipelineExecutionEngine {
   return new PipelineExecutionEngine(ports);
 }

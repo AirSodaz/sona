@@ -1,524 +1,539 @@
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useModelManager } from '../useModelManager';
 import { modelService } from '../../services/modelService';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { setTestConfig } from '../../test-utils/configTestUtils';
+import { useModelManager } from '../useModelManager';
 
 const SENSEVOICE_INT8_ID = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17';
 const SENSEVOICE_FP32_ID = 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17';
-const SILERO_VAD_ID = 'silero-vad';const catalogModel = {
-    id: 'preset-a',
-    name: 'Preset A',
-    description: 'settings.descriptions.preset_a',
-    url: 'https://example.com/preset-a.tar.bz2',
-    type: 'sensevoice',
-    modes: ['streaming', 'batch'],
-    languages: ['en', 'zh'],
-    languageMode: 'selectable',
-    size: '1 MB',
-    engine: 'sherpa-onnx',
-    rules: { requiresVad: false, requiresPunctuation: false },
-    installPath: '/models/preset-a',
-    downloadPath: '/models/preset-a.tar.bz2',
-    isInstalled: true,
+const SILERO_VAD_ID = 'silero-vad';
+const catalogModel = {
+  id: 'preset-a',
+  name: 'Preset A',
+  description: 'settings.descriptions.preset_a',
+  url: 'https://example.com/preset-a.tar.bz2',
+  type: 'sensevoice',
+  modes: ['streaming', 'batch'],
+  languages: ['en', 'zh'],
+  languageMode: 'selectable',
+  size: '1 MB',
+  engine: 'sherpa-onnx',
+  rules: { requiresVad: false, requiresPunctuation: false },
+  installPath: '/models/preset-a',
+  downloadPath: '/models/preset-a.tar.bz2',
+  isInstalled: true,
 } as any;
 const modelCatalogSnapshot = {
-    modelsDir: '/models',
-    models: [catalogModel],
-    sections: [
+  modelsDir: '/models',
+  models: [catalogModel],
+  sections: [
+    {
+      type: 'asr',
+      groups: [
         {
-            type: 'asr',
-            groups: [
-                {
-                    key: 'preset-a',
-                    models: [catalogModel],
-                },
-            ],
+          key: 'preset-a',
+          models: [catalogModel],
         },
+      ],
+    },
+  ],
+  selectionOptions: {
+    streaming: [
+      {
+        id: 'preset-a',
+        label: 'Preset A',
+        installPath: '/models/preset-a',
+        isInstalled: true,
+      },
     ],
-    selectionOptions: {
-        streaming: [
-            {
-                id: 'preset-a',
-                label: 'Preset A',
-                installPath: '/models/preset-a',
-                isInstalled: true,
-            },
-        ],
-        batch: [
-            {
-                id: 'preset-a',
-                label: 'Preset A',
-                installPath: '/models/preset-a',
-                isInstalled: true,
-            },
-        ],
-        speakerSegmentation: [],
-        speakerEmbedding: [],
-    },
-    modelPathById: {
-        'preset-a': '/models/preset-a',
-    },
-    modelIdByNormalizedPath: {
-        '/models/preset-a': 'preset-a',
-    },
-    pathMatchTokens: [
-        { id: 'preset-a', token: 'preset-a' },
+    batch: [
+      {
+        id: 'preset-a',
+        label: 'Preset A',
+        installPath: '/models/preset-a',
+        isInstalled: true,
+      },
     ],
-    dependencyRequestsByModelId: {},
-    restoreDefaults: {
-        punctuationModelPath: '',
-        speakerSegmentationModelPath: '',
-        speakerEmbeddingModelPath: '',
-        enableITN: true,
-        vadBufferSize: 5,
-        maxConcurrent: 2,
-    },
+    speakerSegmentation: [],
+    speakerEmbedding: [],
+  },
+  modelPathById: {
+    'preset-a': '/models/preset-a',
+  },
+  modelIdByNormalizedPath: {
+    '/models/preset-a': 'preset-a',
+  },
+  pathMatchTokens: [{ id: 'preset-a', token: 'preset-a' }],
+  dependencyRequestsByModelId: {},
+  restoreDefaults: {
+    punctuationModelPath: '',
+    speakerSegmentationModelPath: '',
+    speakerEmbeddingModelPath: '',
+    enableITN: true,
+    vadBufferSize: 5,
+    maxConcurrent: 2,
+  },
 } as any;
 
 function buildInstalledCatalogSnapshot(installedIds: string[]): any {
-    const models = [
-        SENSEVOICE_INT8_ID,
-        SENSEVOICE_FP32_ID,
-        SILERO_VAD_ID,
-    ].map((id) => ({
-        ...catalogModel,
-        id,
-        installPath: `/models/${id}`,
-        downloadPath: `/models/${id}.tar.bz2`,
-        isInstalled: installedIds.includes(id),
-    }));
+  const models = [SENSEVOICE_INT8_ID, SENSEVOICE_FP32_ID, SILERO_VAD_ID].map((id) => ({
+    ...catalogModel,
+    id,
+    installPath: `/models/${id}`,
+    downloadPath: `/models/${id}.tar.bz2`,
+    isInstalled: installedIds.includes(id),
+  }));
 
-    return {
-        modelsDir: '/models',
-        models,
-        sections: [
-            {
-                type: 'asr',
-                groups: models.map((model) => ({ key: model.id, models: [model] })),
-            },
-        ],
-        selectionOptions: {
-            streaming: models.map((model) => ({
-                id: model.id,
-                label: model.name,
-                installPath: model.installPath,
-                isInstalled: model.isInstalled,
-            })),
-            batch: models.map((model) => ({
-                id: model.id,
-                label: model.name,
-                installPath: model.installPath,
-                isInstalled: model.isInstalled,
-            })),
-            speakerSegmentation: [],
-            speakerEmbedding: [],
-        },
-        modelPathById: Object.fromEntries(models.map((model) => [model.id, model.installPath])),
-        modelIdByNormalizedPath: Object.fromEntries(models.map((model) => [model.installPath.toLowerCase(), model.id])),
-        pathMatchTokens: models.map((model) => ({ id: model.id, token: model.id.toLowerCase() })),
-        dependencyRequestsByModelId: {},
-        restoreDefaults: {
-            streamingModelPath: installedIds.includes(SENSEVOICE_INT8_ID)
-                ? `/models/${SENSEVOICE_INT8_ID}`
-                : installedIds.includes(SENSEVOICE_FP32_ID)
-                    ? `/models/${SENSEVOICE_FP32_ID}`
-                    : undefined,
-            batchModelPath: installedIds.includes(SENSEVOICE_INT8_ID)
-                ? `/models/${SENSEVOICE_INT8_ID}`
-                : installedIds.includes(SENSEVOICE_FP32_ID)
-                    ? `/models/${SENSEVOICE_FP32_ID}`
-                    : undefined,
-            vadModelPath: installedIds.includes(SILERO_VAD_ID) ? `/models/${SILERO_VAD_ID}` : undefined,
-            punctuationModelPath: '',
-            speakerSegmentationModelPath: '',
-            speakerEmbeddingModelPath: '',
-            enableITN: true,
-            vadBufferSize: 5,
-            maxConcurrent: 2,
-        },
-    };
+  return {
+    modelsDir: '/models',
+    models,
+    sections: [
+      {
+        type: 'asr',
+        groups: models.map((model) => ({ key: model.id, models: [model] })),
+      },
+    ],
+    selectionOptions: {
+      streaming: models.map((model) => ({
+        id: model.id,
+        label: model.name,
+        installPath: model.installPath,
+        isInstalled: model.isInstalled,
+      })),
+      batch: models.map((model) => ({
+        id: model.id,
+        label: model.name,
+        installPath: model.installPath,
+        isInstalled: model.isInstalled,
+      })),
+      speakerSegmentation: [],
+      speakerEmbedding: [],
+    },
+    modelPathById: Object.fromEntries(models.map((model) => [model.id, model.installPath])),
+    modelIdByNormalizedPath: Object.fromEntries(
+      models.map((model) => [model.installPath.toLowerCase(), model.id])
+    ),
+    pathMatchTokens: models.map((model) => ({ id: model.id, token: model.id.toLowerCase() })),
+    dependencyRequestsByModelId: {},
+    restoreDefaults: {
+      streamingModelPath: installedIds.includes(SENSEVOICE_INT8_ID)
+        ? `/models/${SENSEVOICE_INT8_ID}`
+        : installedIds.includes(SENSEVOICE_FP32_ID)
+          ? `/models/${SENSEVOICE_FP32_ID}`
+          : undefined,
+      batchModelPath: installedIds.includes(SENSEVOICE_INT8_ID)
+        ? `/models/${SENSEVOICE_INT8_ID}`
+        : installedIds.includes(SENSEVOICE_FP32_ID)
+          ? `/models/${SENSEVOICE_FP32_ID}`
+          : undefined,
+      vadModelPath: installedIds.includes(SILERO_VAD_ID) ? `/models/${SILERO_VAD_ID}` : undefined,
+      punctuationModelPath: '',
+      speakerSegmentationModelPath: '',
+      speakerEmbeddingModelPath: '',
+      enableITN: true,
+      vadBufferSize: 5,
+      maxConcurrent: 2,
+    },
+  };
 }
 
 vi.mock('react-i18next', () => ({
-    useTranslation: () => ({
-        t: (key: string) => key,
-    }),
-    initReactI18next: {
-        type: '3rdParty',
-        init: () => undefined,
-    },
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+  initReactI18next: {
+    type: '3rdParty',
+    init: () => undefined,
+  },
 }));
 
 vi.mock('../../services/modelService', () => ({
-    PRESET_MODELS: [
-        { id: 'preset-a', name: 'Preset A', type: 'sensevoice' },
-    ],
-    PRESET_MODELS_MAP: {},
-    modelService: {
-        isModelInstalled: vi.fn(),
-        getModelPath: vi.fn(),
-        downloadModel: vi.fn(),
-        checkHardware: vi.fn(),
-        deleteModel: vi.fn(),
-        getModelRules: vi.fn(),
-        getModelCatalogSnapshot: vi.fn(),
-        resolveModelCatalogSelectedIds: vi.fn(),
-        resolveAsrSelectedModelIdsFromSnapshot: vi.fn(),
-        resolveScenarioSelectedModelIdsFromSnapshot: vi.fn(),
-    }
+  PRESET_MODELS: [{ id: 'preset-a', name: 'Preset A', type: 'sensevoice' }],
+  PRESET_MODELS_MAP: {},
+  modelService: {
+    isModelInstalled: vi.fn(),
+    getModelPath: vi.fn(),
+    downloadModel: vi.fn(),
+    checkHardware: vi.fn(),
+    deleteModel: vi.fn(),
+    getModelRules: vi.fn(),
+    getModelCatalogSnapshot: vi.fn(),
+    resolveModelCatalogSelectedIds: vi.fn(),
+    resolveAsrSelectedModelIdsFromSnapshot: vi.fn(),
+    resolveScenarioSelectedModelIdsFromSnapshot: vi.fn(),
+  },
 }));
 
 function createScenarioIdResolver() {
-    return (snapshot: any, config: Record<string, string | undefined>) => {
-        const sectionOptionsByType: Record<string, Array<{ id: string }>> = {};
-        for (const section of snapshot.sections) {
-            sectionOptionsByType[section.type] = section.groups.flatMap((group: any) => group.models);
-        }
+  return (snapshot: any, config: Record<string, string | undefined>) => {
+    const sectionOptionsByType: Record<string, Array<{ id: string }>> = {};
+    for (const section of snapshot.sections) {
+      sectionOptionsByType[section.type] = section.groups.flatMap((group: any) => group.models);
+    }
 
-        const resolve = (path: string | undefined, options: Array<{ id: string }>) => {
-            if (!path?.trim()) return null;
-            const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
-            const exact = snapshot.modelIdByNormalizedPath[normalizedPath];
-            if (exact && options.some((option) => option.id === exact)) return exact;
-            const tokenMatch = options.find((option) => {
-                const token = snapshot.pathMatchTokens.find((item: any) => item.id === option.id);
-                return token?.token && normalizedPath.includes(token.token);
-            });
-            return tokenMatch?.id ?? null;
-        };
-
-        return {
-            liveSpeakerSegmentation: resolve(config.liveSpeakerSegmentationModelPath, snapshot.selectionOptions.speakerSegmentation),
-            batchSpeakerSegmentation: resolve(config.batchSpeakerSegmentationModelPath, snapshot.selectionOptions.speakerSegmentation),
-            liveSpeakerEmbedding: resolve(config.liveSpeakerEmbeddingModelPath, snapshot.selectionOptions.speakerEmbedding),
-            batchSpeakerEmbedding: resolve(config.batchSpeakerEmbeddingModelPath, snapshot.selectionOptions.speakerEmbedding),
-            livePunctuation: resolve(config.livePunctuationModelPath, sectionOptionsByType.punctuation ?? []),
-            batchPunctuation: resolve(config.batchPunctuationModelPath, sectionOptionsByType.punctuation ?? []),
-            liveVad: resolve(config.liveVadModelPath, sectionOptionsByType.vad ?? []),
-            batchVad: resolve(config.batchVadModelPath, sectionOptionsByType.vad ?? []),
-        };
+    const resolve = (path: string | undefined, options: Array<{ id: string }>) => {
+      if (!path?.trim()) return null;
+      const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
+      const exact = snapshot.modelIdByNormalizedPath[normalizedPath];
+      if (exact && options.some((option) => option.id === exact)) return exact;
+      const tokenMatch = options.find((option) => {
+        const token = snapshot.pathMatchTokens.find((item: any) => item.id === option.id);
+        return token?.token && normalizedPath.includes(token.token);
+      });
+      return tokenMatch?.id ?? null;
     };
+
+    return {
+      liveSpeakerSegmentation: resolve(
+        config.liveSpeakerSegmentationModelPath,
+        snapshot.selectionOptions.speakerSegmentation
+      ),
+      batchSpeakerSegmentation: resolve(
+        config.batchSpeakerSegmentationModelPath,
+        snapshot.selectionOptions.speakerSegmentation
+      ),
+      liveSpeakerEmbedding: resolve(
+        config.liveSpeakerEmbeddingModelPath,
+        snapshot.selectionOptions.speakerEmbedding
+      ),
+      batchSpeakerEmbedding: resolve(
+        config.batchSpeakerEmbeddingModelPath,
+        snapshot.selectionOptions.speakerEmbedding
+      ),
+      livePunctuation: resolve(
+        config.livePunctuationModelPath,
+        sectionOptionsByType.punctuation ?? []
+      ),
+      batchPunctuation: resolve(
+        config.batchPunctuationModelPath,
+        sectionOptionsByType.punctuation ?? []
+      ),
+      liveVad: resolve(config.liveVadModelPath, sectionOptionsByType.vad ?? []),
+      batchVad: resolve(config.batchVadModelPath, sectionOptionsByType.vad ?? []),
+    };
+  };
 }
 
 describe('useModelManager restoreDefaultModelSettings', () => {
-    beforeEach(() => {
-        vi.mocked(modelService.isModelInstalled).mockReset();
-        vi.mocked(modelService.getModelPath).mockReset();
-        vi.mocked(modelService.downloadModel).mockReset();
-        vi.mocked(modelService.checkHardware).mockReset();
-        vi.mocked(modelService.deleteModel).mockReset();
-        vi.mocked(modelService.getModelRules).mockReset();
-        vi.mocked(modelService.getModelCatalogSnapshot).mockReset();
-        vi.mocked(modelService.resolveModelCatalogSelectedIds).mockReset();
-        vi.mocked(modelService.resolveAsrSelectedModelIdsFromSnapshot).mockReset();
-        vi.mocked(modelService.resolveScenarioSelectedModelIdsFromSnapshot).mockReset();
+  beforeEach(() => {
+    vi.mocked(modelService.isModelInstalled).mockReset();
+    vi.mocked(modelService.getModelPath).mockReset();
+    vi.mocked(modelService.downloadModel).mockReset();
+    vi.mocked(modelService.checkHardware).mockReset();
+    vi.mocked(modelService.deleteModel).mockReset();
+    vi.mocked(modelService.getModelRules).mockReset();
+    vi.mocked(modelService.getModelCatalogSnapshot).mockReset();
+    vi.mocked(modelService.resolveModelCatalogSelectedIds).mockReset();
+    vi.mocked(modelService.resolveAsrSelectedModelIdsFromSnapshot).mockReset();
+    vi.mocked(modelService.resolveScenarioSelectedModelIdsFromSnapshot).mockReset();
 
-        setTestConfig({
-            streamingModelPath: '/current/live',
-            batchModelPath: '/current/batch',
-            liveVadModelPath: '/current/vad',
-            livePunctuationModelPath: '/current/punctuation',
-            liveSpeakerSegmentationModelPath: '/current/speaker-segmentation',
-            liveSpeakerEmbeddingModelPath: '/current/speaker-embedding',
-            enableITN: false,
-            batchVadEnabled: false,
-            liveVadBufferSize: 9,
-            maxConcurrent: 4,
-            asr: {
-                providers: {
-                    online: {
-                        'volcengine-doubao': {
-                            apiKey: 'volc-test-key',
-                            streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
-                            streamingResourceId: 'volc.seedasr.sauc.duration',
-                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit',
-                            batchResourceId: 'volc.seedasr.auc',
-                        },
-                    },
-                },
+    setTestConfig({
+      streamingModelPath: '/current/live',
+      batchModelPath: '/current/batch',
+      liveVadModelPath: '/current/vad',
+      livePunctuationModelPath: '/current/punctuation',
+      liveSpeakerSegmentationModelPath: '/current/speaker-segmentation',
+      liveSpeakerEmbeddingModelPath: '/current/speaker-embedding',
+      enableITN: false,
+      batchVadEnabled: false,
+      liveVadBufferSize: 9,
+      maxConcurrent: 4,
+      asr: {
+        providers: {
+          online: {
+            'volcengine-doubao': {
+              apiKey: 'volc-test-key',
+              streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+              streamingResourceId: 'volc.seedasr.sauc.duration',
+              batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit',
+              batchResourceId: 'volc.seedasr.auc',
             },
-        });
-
-        useDialogStore.setState({
-            isOpen: false,
-            options: null,
-            resolveRef: null,
-            confirm: vi.fn().mockResolvedValue(true),
-            showError: vi.fn().mockResolvedValue(undefined),
-        });
-
-        vi.mocked(modelService.getModelPath).mockImplementation(async (id: string) => `/models/${id}`);
-        vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(modelCatalogSnapshot);
-        vi.mocked(modelService.resolveModelCatalogSelectedIds).mockResolvedValue({
-            streaming: null,
-            batch: null,
-            speakerSegmentation: null,
-            speakerEmbedding: null,
-        });
-        vi.mocked(modelService.resolveAsrSelectedModelIdsFromSnapshot).mockImplementation((snapshot, paths) => {
-            const resolve = (path: string, options: Array<{ id: string }>) => {
-                if (!path.trim()) return null;
-                const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
-                const exact = snapshot.modelIdByNormalizedPath[normalizedPath];
-                if (exact && options.some((option) => option.id === exact)) return exact;
-                const tokenMatch = options.find((option) => {
-                    const token = snapshot.pathMatchTokens.find((item: any) => item.id === option.id);
-                    return token?.token && normalizedPath.includes(token.token);
-                });
-                return tokenMatch?.id ?? null;
-            };
-
-            return {
-                streaming: resolve(paths.streamingModelPath, snapshot.selectionOptions.streaming),
-                batch: resolve(paths.batchModelPath, snapshot.selectionOptions.batch),
-            };
-        });
-        vi.mocked(modelService.resolveScenarioSelectedModelIdsFromSnapshot).mockImplementation(
-            createScenarioIdResolver() as any,
-        );
+          },
+        },
+      },
     });
 
-    it('does not load the model catalog while inactive for settings tab prewarm', async () => {
-        vi.mocked(modelService.isModelInstalled).mockResolvedValue(false);
-
-        renderHook(() => useModelManager(false));
-
-        await act(async () => {
-            await Promise.resolve();
-        });
-
-        expect(modelService.getModelCatalogSnapshot).not.toHaveBeenCalled();
-        expect(modelService.resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
-        expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+    useDialogStore.setState({
+      isOpen: false,
+      options: null,
+      resolveRef: null,
+      confirm: vi.fn().mockResolvedValue(true),
+      showError: vi.fn().mockResolvedValue(undefined),
     });
 
-    it('loads the model catalog snapshot when the model pane becomes active', async () => {
-        vi.mocked(modelService.isModelInstalled).mockResolvedValue(false);
+    vi.mocked(modelService.getModelPath).mockImplementation(async (id: string) => `/models/${id}`);
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(modelCatalogSnapshot);
+    vi.mocked(modelService.resolveModelCatalogSelectedIds).mockResolvedValue({
+      streaming: null,
+      batch: null,
+      speakerSegmentation: null,
+      speakerEmbedding: null,
+    });
+    vi.mocked(modelService.resolveAsrSelectedModelIdsFromSnapshot).mockImplementation(
+      (snapshot, paths) => {
+        const resolve = (path: string, options: Array<{ id: string }>) => {
+          if (!path.trim()) return null;
+          const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
+          const exact = snapshot.modelIdByNormalizedPath[normalizedPath];
+          if (exact && options.some((option) => option.id === exact)) return exact;
+          const tokenMatch = options.find((option) => {
+            const token = snapshot.pathMatchTokens.find((item: any) => item.id === option.id);
+            return token?.token && normalizedPath.includes(token.token);
+          });
+          return tokenMatch?.id ?? null;
+        };
 
-        const { result, rerender } = renderHook(({ isOpen }) => useModelManager(isOpen), {
-            initialProps: { isOpen: false },
-        });
+        return {
+          streaming: resolve(paths.streamingModelPath, snapshot.selectionOptions.streaming),
+          batch: resolve(paths.batchModelPath, snapshot.selectionOptions.batch),
+        };
+      }
+    );
+    vi.mocked(modelService.resolveScenarioSelectedModelIdsFromSnapshot).mockImplementation(
+      createScenarioIdResolver() as any
+    );
+  });
 
-        rerender({ isOpen: true });
+  it('does not load the model catalog while inactive for settings tab prewarm', async () => {
+    vi.mocked(modelService.isModelInstalled).mockResolvedValue(false);
 
-        await waitFor(() => {
-            expect(modelService.getModelCatalogSnapshot).toHaveBeenCalledTimes(1);
-            expect(result.current.installedModels.has('preset-a')).toBe(true);
-        });
-        await waitFor(() => {
-            expect(result.current.catalogLoadState).toBe('ready');
-        });
-        expect(modelService.resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
-        expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+    renderHook(() => useModelManager(false));
+
+    await act(async () => {
+      await Promise.resolve();
     });
 
-    it('defers model catalog loading until after the active frame', async () => {
-        vi.mocked(modelService.isModelInstalled).mockResolvedValue(false);
+    expect(modelService.getModelCatalogSnapshot).not.toHaveBeenCalled();
+    expect(modelService.resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
+    expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+  });
 
-        const { rerender } = renderHook(({ isOpen }) => useModelManager(isOpen), {
-            initialProps: { isOpen: false },
-        });
+  it('loads the model catalog snapshot when the model pane becomes active', async () => {
+    vi.mocked(modelService.isModelInstalled).mockResolvedValue(false);
 
-        rerender({ isOpen: true });
-
-        expect(modelService.getModelCatalogSnapshot).not.toHaveBeenCalled();
-        expect(modelService.resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
-        expect(modelService.isModelInstalled).not.toHaveBeenCalled();
-
-        await waitFor(() => {
-            expect(modelService.getModelCatalogSnapshot).toHaveBeenCalledTimes(1);
-            expect(modelService.resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
-        });
-        expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+    const { result, rerender } = renderHook(({ isOpen }) => useModelManager(isOpen), {
+      initialProps: { isOpen: false },
     });
 
-    it('does not apply a stale catalog snapshot after the model pane is deactivated', async () => {
-        let resolveSnapshot: (snapshot: typeof modelCatalogSnapshot) => void = () => undefined;
-        vi.mocked(modelService.getModelCatalogSnapshot).mockReturnValue(
-            new Promise((resolve) => {
-                resolveSnapshot = resolve;
-            })
-        );
+    rerender({ isOpen: true });
 
-        const { result, rerender } = renderHook(({ isOpen }) => useModelManager(isOpen), {
-            initialProps: { isOpen: false },
-        });
+    await waitFor(() => {
+      expect(modelService.getModelCatalogSnapshot).toHaveBeenCalledTimes(1);
+      expect(result.current.installedModels.has('preset-a')).toBe(true);
+    });
+    await waitFor(() => {
+      expect(result.current.catalogLoadState).toBe('ready');
+    });
+    expect(modelService.resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
+    expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+  });
 
-        rerender({ isOpen: true });
+  it('defers model catalog loading until after the active frame', async () => {
+    vi.mocked(modelService.isModelInstalled).mockResolvedValue(false);
 
-        await waitFor(() => {
-            expect(result.current.catalogLoadState).toBe('loading');
-        });
-
-        rerender({ isOpen: false });
-
-        await act(async () => {
-            resolveSnapshot(modelCatalogSnapshot);
-            await Promise.resolve();
-        });
-
-        expect(result.current.catalogLoadState).toBe('idle');
-        expect(result.current.installedModels.has('preset-a')).toBe(false);
+    const { rerender } = renderHook(({ isOpen }) => useModelManager(isOpen), {
+      initialProps: { isOpen: false },
     });
 
-    it('resolves selected model ids from the loaded snapshot without backend fallback', async () => {
-        setTestConfig({
-            streamingModelPath: '/models/preset-a',
-            batchModelPath: 'D:\\portable\\preset-a',
-            liveSpeakerSegmentationModelPath: '',
-            liveSpeakerEmbeddingModelPath: '',
-        });
+    rerender({ isOpen: true });
 
-        const { result, rerender } = renderHook(({ isOpen }) => useModelManager(isOpen), {
-            initialProps: { isOpen: false },
-        });
+    expect(modelService.getModelCatalogSnapshot).not.toHaveBeenCalled();
+    expect(modelService.resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
+    expect(modelService.isModelInstalled).not.toHaveBeenCalled();
 
-        expect(result.current.catalogLoadState).toBe('idle');
+    await waitFor(() => {
+      expect(modelService.getModelCatalogSnapshot).toHaveBeenCalledTimes(1);
+      expect(modelService.resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
+    });
+    expect(modelService.isModelInstalled).not.toHaveBeenCalled();
+  });
 
-        rerender({ isOpen: true });
+  it('does not apply a stale catalog snapshot after the model pane is deactivated', async () => {
+    let resolveSnapshot: (snapshot: typeof modelCatalogSnapshot) => void = () => undefined;
+    vi.mocked(modelService.getModelCatalogSnapshot).mockReturnValue(
+      new Promise((resolve) => {
+        resolveSnapshot = resolve;
+      })
+    );
 
-        await waitFor(() => {
-            expect(result.current.catalogLoadState).toBe('ready');
-            expect(result.current.selectedModelIds).toMatchObject({
-                streaming: 'preset-a',
-                batch: 'preset-a',
-            });
-        });
-
-        expect(modelService.getModelCatalogSnapshot).toHaveBeenCalledTimes(1);
-        expect(modelService.resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
+    const { result, rerender } = renderHook(({ isOpen }) => useModelManager(isOpen), {
+      initialProps: { isOpen: false },
     });
 
-    it('restores SenseVoice Int8 and Silero VAD when both are installed', async () => {
-        vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
-            buildInstalledCatalogSnapshot([SENSEVOICE_INT8_ID, SILERO_VAD_ID])
-        );
+    rerender({ isOpen: true });
 
-        const { result } = renderHook(() => useModelManager(false));
+    await waitFor(() => {
+      expect(result.current.catalogLoadState).toBe('loading');
+    });
 
-        await act(async () => {
-            await result.current.restoreDefaultModelSettings();
-        });
+    rerender({ isOpen: false });
 
-        expect(useConfigStore.getState().config).toMatchObject({
-            streamingModelPath: `/models/${SENSEVOICE_INT8_ID}`,
-            batchModelPath: `/models/${SENSEVOICE_INT8_ID}`,
-            liveVadModelPath: `/models/${SILERO_VAD_ID}`,
-            batchVadModelPath: `/models/${SILERO_VAD_ID}`,
-            livePunctuationModelPath: '',
-            batchPunctuationModelPath: '',
-            liveSpeakerSegmentationModelPath: '',
-            batchSpeakerSegmentationModelPath: '',
-            liveSpeakerEmbeddingModelPath: '',
-            batchSpeakerEmbeddingModelPath: '',
-            enableITN: true,
-            batchVadEnabled: true,
-            liveVadBufferSize: 5,
-            batchVadBufferSize: 5,
-            maxConcurrent: 2,
-            asr: {
-                providers: {
-                    online: {
-                        'volcengine-doubao': {
-                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
-                            batchResourceId: 'volc.bigasr.auc_turbo',
-                        },
-                    },
-                },
+    await act(async () => {
+      resolveSnapshot(modelCatalogSnapshot);
+      await Promise.resolve();
+    });
+
+    expect(result.current.catalogLoadState).toBe('idle');
+    expect(result.current.installedModels.has('preset-a')).toBe(false);
+  });
+
+  it('resolves selected model ids from the loaded snapshot without backend fallback', async () => {
+    setTestConfig({
+      streamingModelPath: '/models/preset-a',
+      batchModelPath: 'D:\\portable\\preset-a',
+      liveSpeakerSegmentationModelPath: '',
+      liveSpeakerEmbeddingModelPath: '',
+    });
+
+    const { result, rerender } = renderHook(({ isOpen }) => useModelManager(isOpen), {
+      initialProps: { isOpen: false },
+    });
+
+    expect(result.current.catalogLoadState).toBe('idle');
+
+    rerender({ isOpen: true });
+
+    await waitFor(() => {
+      expect(result.current.catalogLoadState).toBe('ready');
+      expect(result.current.selectedModelIds).toMatchObject({
+        streaming: 'preset-a',
+        batch: 'preset-a',
+      });
+    });
+
+    expect(modelService.getModelCatalogSnapshot).toHaveBeenCalledTimes(1);
+    expect(modelService.resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
+  });
+
+  it('restores SenseVoice Int8 and Silero VAD when both are installed', async () => {
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([SENSEVOICE_INT8_ID, SILERO_VAD_ID])
+    );
+
+    const { result } = renderHook(() => useModelManager(false));
+
+    await act(async () => {
+      await result.current.restoreDefaultModelSettings();
+    });
+
+    expect(useConfigStore.getState().config).toMatchObject({
+      streamingModelPath: `/models/${SENSEVOICE_INT8_ID}`,
+      batchModelPath: `/models/${SENSEVOICE_INT8_ID}`,
+      liveVadModelPath: `/models/${SILERO_VAD_ID}`,
+      batchVadModelPath: `/models/${SILERO_VAD_ID}`,
+      livePunctuationModelPath: '',
+      batchPunctuationModelPath: '',
+      liveSpeakerSegmentationModelPath: '',
+      batchSpeakerSegmentationModelPath: '',
+      liveSpeakerEmbeddingModelPath: '',
+      batchSpeakerEmbeddingModelPath: '',
+      enableITN: true,
+      batchVadEnabled: true,
+      liveVadBufferSize: 5,
+      batchVadBufferSize: 5,
+      maxConcurrent: 2,
+      asr: {
+        providers: {
+          online: {
+            'volcengine-doubao': {
+              batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+              batchResourceId: 'volc.bigasr.auc_turbo',
             },
-        });
+          },
+        },
+      },
+    });
+  });
+
+  it('falls back to SenseVoice Fp32 when Int8 is unavailable', async () => {
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([SENSEVOICE_FP32_ID])
+    );
+
+    const { result } = renderHook(() => useModelManager(false));
+
+    await act(async () => {
+      await result.current.restoreDefaultModelSettings();
     });
 
-    it('falls back to SenseVoice Fp32 when Int8 is unavailable', async () => {
-        vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
-            buildInstalledCatalogSnapshot([SENSEVOICE_FP32_ID])
-        );
+    expect(useConfigStore.getState().config).toMatchObject({
+      streamingModelPath: `/models/${SENSEVOICE_FP32_ID}`,
+      batchModelPath: `/models/${SENSEVOICE_FP32_ID}`,
+      liveVadModelPath: '',
+      batchVadModelPath: '',
+      livePunctuationModelPath: '',
+      batchPunctuationModelPath: '',
+      liveSpeakerSegmentationModelPath: '',
+      batchSpeakerSegmentationModelPath: '',
+      liveSpeakerEmbeddingModelPath: '',
+      batchSpeakerEmbeddingModelPath: '',
+      enableITN: true,
+      batchVadEnabled: true,
+      liveVadBufferSize: 5,
+      batchVadBufferSize: 5,
+      maxConcurrent: 2,
+    });
+  });
 
-        const { result } = renderHook(() => useModelManager(false));
+  it('keeps the current ASR models and clears scenario VAD paths when no defaults resolve', async () => {
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([])
+    );
 
-        await act(async () => {
-            await result.current.restoreDefaultModelSettings();
-        });
+    const { result } = renderHook(() => useModelManager(false));
 
-        expect(useConfigStore.getState().config).toMatchObject({
-            streamingModelPath: `/models/${SENSEVOICE_FP32_ID}`,
-            batchModelPath: `/models/${SENSEVOICE_FP32_ID}`,
-            liveVadModelPath: '',
-            batchVadModelPath: '',
-            livePunctuationModelPath: '',
-            batchPunctuationModelPath: '',
-            liveSpeakerSegmentationModelPath: '',
-            batchSpeakerSegmentationModelPath: '',
-            liveSpeakerEmbeddingModelPath: '',
-            batchSpeakerEmbeddingModelPath: '',
-            enableITN: true,
-            batchVadEnabled: true,
-            liveVadBufferSize: 5,
-            batchVadBufferSize: 5,
-            maxConcurrent: 2,
-        });
+    await act(async () => {
+      await result.current.restoreDefaultModelSettings();
     });
 
-    it('keeps the current ASR models and clears scenario VAD paths when no defaults resolve', async () => {
-        vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
-            buildInstalledCatalogSnapshot([])
-        );
+    expect(useConfigStore.getState().config).toMatchObject({
+      streamingModelPath: '/current/live',
+      batchModelPath: '/current/batch',
+      liveVadModelPath: '',
+      batchVadModelPath: '',
+      livePunctuationModelPath: '',
+      batchPunctuationModelPath: '',
+      liveSpeakerSegmentationModelPath: '',
+      batchSpeakerSegmentationModelPath: '',
+      liveSpeakerEmbeddingModelPath: '',
+      batchSpeakerEmbeddingModelPath: '',
+      enableITN: true,
+      batchVadEnabled: true,
+      liveVadBufferSize: 5,
+      batchVadBufferSize: 5,
+      maxConcurrent: 2,
+    });
+  });
 
-        const { result } = renderHook(() => useModelManager(false));
+  it('clears scenario VAD paths to the catalog default when Silero VAD is not installed', async () => {
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([SENSEVOICE_INT8_ID])
+    );
 
-        await act(async () => {
-            await result.current.restoreDefaultModelSettings();
-        });
+    const { result } = renderHook(() => useModelManager(false));
 
-        expect(useConfigStore.getState().config).toMatchObject({
-            streamingModelPath: '/current/live',
-            batchModelPath: '/current/batch',
-            liveVadModelPath: '',
-            batchVadModelPath: '',
-            livePunctuationModelPath: '',
-            batchPunctuationModelPath: '',
-            liveSpeakerSegmentationModelPath: '',
-            batchSpeakerSegmentationModelPath: '',
-            liveSpeakerEmbeddingModelPath: '',
-            batchSpeakerEmbeddingModelPath: '',
-            enableITN: true,
-            batchVadEnabled: true,
-            liveVadBufferSize: 5,
-            batchVadBufferSize: 5,
-            maxConcurrent: 2,
-        });
+    await act(async () => {
+      await result.current.restoreDefaultModelSettings();
     });
 
-    it('clears scenario VAD paths to the catalog default when Silero VAD is not installed', async () => {
-        vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
-            buildInstalledCatalogSnapshot([SENSEVOICE_INT8_ID])
-        );
-
-        const { result } = renderHook(() => useModelManager(false));
-
-        await act(async () => {
-            await result.current.restoreDefaultModelSettings();
-        });
-
-        expect(useConfigStore.getState().config).toMatchObject({
-            streamingModelPath: `/models/${SENSEVOICE_INT8_ID}`,
-            batchModelPath: `/models/${SENSEVOICE_INT8_ID}`,
-            liveVadModelPath: '',
-            batchVadModelPath: '',
-            livePunctuationModelPath: '',
-            batchPunctuationModelPath: '',
-            liveSpeakerSegmentationModelPath: '',
-            batchSpeakerSegmentationModelPath: '',
-            liveSpeakerEmbeddingModelPath: '',
-            batchSpeakerEmbeddingModelPath: '',
-            enableITN: true,
-            batchVadEnabled: true,
-            liveVadBufferSize: 5,
-            batchVadBufferSize: 5,
-            maxConcurrent: 2,
-        });
+    expect(useConfigStore.getState().config).toMatchObject({
+      streamingModelPath: `/models/${SENSEVOICE_INT8_ID}`,
+      batchModelPath: `/models/${SENSEVOICE_INT8_ID}`,
+      liveVadModelPath: '',
+      batchVadModelPath: '',
+      livePunctuationModelPath: '',
+      batchPunctuationModelPath: '',
+      liveSpeakerSegmentationModelPath: '',
+      batchSpeakerSegmentationModelPath: '',
+      liveSpeakerEmbeddingModelPath: '',
+      batchSpeakerEmbeddingModelPath: '',
+      enableITN: true,
+      batchVadEnabled: true,
+      liveVadBufferSize: 5,
+      batchVadBufferSize: 5,
+      maxConcurrent: 2,
     });
+  });
 });

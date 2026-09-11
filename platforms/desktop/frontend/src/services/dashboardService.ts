@@ -1,5 +1,5 @@
-import { getDashboardSnapshot } from './tauri/dashboard';
 import type { DashboardSnapshot } from '../types/dashboard';
+import { getDashboardSnapshot } from './tauri/dashboard';
 
 export interface DashboardServicePorts {
   getDashboardSnapshot: typeof getDashboardSnapshot;

@@ -1,5 +1,5 @@
 import type { AppConfig } from '../../types/config';
-import {
+import type {
   CustomLlmProvider,
   CustomLlmProviderStrategy,
   LlmDiscoveredModelSummary,
@@ -11,11 +11,7 @@ import {
   LlmProviderSetting,
   LlmSettings,
 } from '../../types/transcript';
-import {
-  createCustomProviderId,
-  createProviderSetting,
-  DEFAULT_LLM_PROVIDER,
-} from './providers';
+import { createCustomProviderId, createProviderSetting, DEFAULT_LLM_PROVIDER } from './providers';
 
 // Persisted settings store feature selections as keyed ids so we can keep one shared
 // model library while still letting polish / translation / summary pick independently.
@@ -66,7 +62,8 @@ const MODEL_METADATA_KEYS = [
 ] as const satisfies (keyof LlmModelMetadata)[];
 
 const EDITABLE_MODEL_METADATA_KEYS = MODEL_METADATA_KEYS.filter(
-  (key): key is Exclude<(typeof MODEL_METADATA_KEYS)[number], 'metadataSources'> => key !== 'metadataSources',
+  (key): key is Exclude<(typeof MODEL_METADATA_KEYS)[number], 'metadataSources'> =>
+    key !== 'metadataSources'
 );
 
 const MODEL_DISCOVERY_TTL_MS = 24 * 60 * 60 * 1000;
@@ -80,7 +77,9 @@ function parseTimestampMs(value: string | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function createDiscoveryStatus(fetchedAt: string = new Date().toISOString()): LlmModelDiscoveryStatus {
+function createDiscoveryStatus(
+  fetchedAt: string = new Date().toISOString()
+): LlmModelDiscoveryStatus {
   const fetchedAtMs = parseTimestampMs(fetchedAt) ?? Date.now();
   return {
     fetchedAt,
@@ -91,7 +90,7 @@ function createDiscoveryStatus(fetchedAt: string = new Date().toISOString()): Ll
 export function sanitizeProviderSetting(
   provider: LlmProvider,
   setting?: Partial<LlmProviderSetting> | null,
-  customProviders?: LlmSettings['customProviders'],
+  customProviders?: LlmSettings['customProviders']
 ): LlmProviderSetting {
   const defaults = createProviderSetting(provider, customProviders);
 
@@ -122,7 +121,11 @@ function createEmptyModelState() {
 }
 
 function createModelId(provider: LlmProvider, model: string): string {
-  const normalizedModel = model.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const normalizedModel = model
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
   return normalizedModel ? `${provider}-${normalizedModel}` : `${provider}-model`;
 }
 
@@ -155,14 +158,18 @@ export function createLlmSettings(activeProvider: LlmProvider = DEFAULT_LLM_PROV
 
 export function ensureProviderSetting(
   llmSettings: LlmSettings | undefined,
-  provider: LlmProvider,
+  provider: LlmProvider
 ): LlmProviderSetting {
-  return sanitizeProviderSetting(provider, llmSettings?.providers?.[provider], llmSettings?.customProviders);
+  return sanitizeProviderSetting(
+    provider,
+    llmSettings?.providers?.[provider],
+    llmSettings?.customProviders
+  );
 }
 
 export function setActiveProvider(
   llmSettings: LlmSettings | undefined,
-  provider: LlmProvider,
+  provider: LlmProvider
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings();
   return {
@@ -179,14 +186,18 @@ export function setActiveProvider(
 export function updateProviderSetting(
   llmSettings: LlmSettings | undefined,
   provider: LlmProvider,
-  updates: Partial<LlmProviderSetting>,
+  updates: Partial<LlmProviderSetting>
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings(provider);
   const existingSetting = ensureProviderSetting(current, provider);
-  const nextSetting = sanitizeProviderSetting(provider, {
-    ...existingSetting,
-    ...updates,
-  }, current.customProviders);
+  const nextSetting = sanitizeProviderSetting(
+    provider,
+    {
+      ...existingSetting,
+      ...updates,
+    },
+    current.customProviders
+  );
   const settingChanged =
     existingSetting.apiHost !== nextSetting.apiHost ||
     existingSetting.apiKey !== nextSetting.apiKey ||
@@ -199,9 +210,9 @@ export function updateProviderSetting(
     activeProvider: current.activeProvider,
     modelDiscovery: settingChanged
       ? {
-        ...currentDiscovery,
-        [provider]: undefined,
-      }
+          ...currentDiscovery,
+          [provider]: undefined,
+        }
       : current.modelDiscovery,
     providers: {
       ...current.providers,
@@ -216,7 +227,7 @@ export function addCustomProvider(
     name: string;
     strategy: CustomLlmProviderStrategy;
     createdAt?: string;
-  },
+  }
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings();
   const existingCustomProviders = current.customProviders ?? {};
@@ -250,10 +261,11 @@ export function addCustomProvider(
 export function updateCustomProvider(
   llmSettings: LlmSettings | undefined,
   providerId: LlmProvider,
-  updates: Partial<Pick<CustomLlmProvider, 'name' | 'strategy'>>,
+  updates: Partial<Pick<CustomLlmProvider, 'name' | 'strategy'>>
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings();
-  const existing = current.customProviders?.[providerId as keyof NonNullable<LlmSettings['customProviders']>];
+  const existing =
+    current.customProviders?.[providerId as keyof NonNullable<LlmSettings['customProviders']>];
   if (!existing) return current;
   const nextProvider = { ...existing, ...updates, name: (updates.name ?? existing.name).trim() };
   const customProviders = { ...current.customProviders, [providerId]: nextProvider };
@@ -276,15 +288,18 @@ export function updateCustomProvider(
 
 export function removeCustomProvider(
   llmSettings: LlmSettings | undefined,
-  providerId: LlmProvider,
+  providerId: LlmProvider
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings();
-  if (!current.customProviders?.[providerId as keyof NonNullable<LlmSettings['customProviders']>]) return current;
+  if (!current.customProviders?.[providerId as keyof NonNullable<LlmSettings['customProviders']>])
+    return current;
   const customProviders = { ...current.customProviders };
   delete customProviders[providerId as keyof typeof customProviders];
   const providers = { ...current.providers };
   delete providers[providerId];
-  const removedModelIds = new Set(current.modelOrder.filter((id) => current.models[id]?.provider === providerId));
+  const removedModelIds = new Set(
+    current.modelOrder.filter((id) => current.models[id]?.provider === providerId)
+  );
   const models = { ...current.models };
   removedModelIds.forEach((id) => delete models[id]);
   const selections = { ...current.selections };
@@ -294,7 +309,8 @@ export function removeCustomProvider(
   });
   return {
     ...current,
-    activeProvider: current.activeProvider === providerId ? DEFAULT_LLM_PROVIDER : current.activeProvider,
+    activeProvider:
+      current.activeProvider === providerId ? DEFAULT_LLM_PROVIDER : current.activeProvider,
     customProviders,
     providers,
     models,
@@ -305,7 +321,8 @@ export function removeCustomProvider(
 
 export function addLlmModel(
   llmSettings: LlmSettings | undefined,
-  entry: Pick<LlmModelEntry, 'provider' | 'model'> & Partial<Pick<LlmModelEntry, 'source' | 'metadata' | 'metadataOverrides'>>,
+  entry: Pick<LlmModelEntry, 'provider' | 'model'> &
+    Partial<Pick<LlmModelEntry, 'source' | 'metadata' | 'metadataOverrides'>>
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings(entry.provider);
   const model = entry.model.trim();
@@ -323,16 +340,17 @@ export function addLlmModel(
     const metadata = mergeModelMetadata(existing.metadata, entry.metadata, metadataOverrides);
     const nextEntry: LlmModelEntry = {
       ...existing,
-      source: entry.source === 'manual' || existing.source === 'manual'
-        ? 'manual'
-        : entry.source ?? existing.source ?? 'manual',
+      source:
+        entry.source === 'manual' || existing.source === 'manual'
+          ? 'manual'
+          : (entry.source ?? existing.source ?? 'manual'),
       metadata,
       metadataOverrides,
     };
     if (
-      nextEntry.source === existing.source
-      && nextEntry.metadata === existing.metadata
-      && nextEntry.metadataOverrides === existing.metadataOverrides
+      nextEntry.source === existing.source &&
+      nextEntry.metadata === existing.metadata &&
+      nextEntry.metadataOverrides === existing.metadataOverrides
     ) {
       return current;
     }
@@ -369,7 +387,7 @@ export function addLlmModel(
 function mergeModelMetadata(
   existing: LlmModelMetadata | undefined,
   incoming: LlmModelMetadata | undefined,
-  overrides: LlmModelEntry['metadataOverrides'] | undefined,
+  overrides: LlmModelEntry['metadataOverrides'] | undefined
 ): LlmModelMetadata | undefined {
   if (!incoming) {
     return existing;
@@ -380,7 +398,7 @@ function mergeModelMetadata(
   };
 
   for (const key of MODEL_METADATA_KEYS) {
-    if (!Object.prototype.hasOwnProperty.call(incoming, key)) {
+    if (!Object.hasOwn(incoming, key)) {
       continue;
     }
     if (overrides?.[key]) {
@@ -396,7 +414,7 @@ function mergeModelMetadata(
 export function updateLlmModelMetadata(
   llmSettings: LlmSettings | undefined,
   modelId: string,
-  metadata: Partial<LlmModelMetadata>,
+  metadata: Partial<LlmModelMetadata>
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings();
   const existing = current.models[modelId];
@@ -412,7 +430,7 @@ export function updateLlmModelMetadata(
   };
 
   for (const key of EDITABLE_MODEL_METADATA_KEYS) {
-    if (!Object.prototype.hasOwnProperty.call(metadata, key)) {
+    if (!Object.hasOwn(metadata, key)) {
       continue;
     }
     nextMetadata[key] = metadata[key] as never;
@@ -436,7 +454,7 @@ export function updateLlmModelMetadata(
 export function enrichLlmModelMetadata(
   llmSettings: LlmSettings | undefined,
   modelId: string,
-  metadata: Partial<LlmModelMetadata>,
+  metadata: Partial<LlmModelMetadata>
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings();
   const existing = current.models[modelId];
@@ -457,10 +475,7 @@ export function enrichLlmModelMetadata(
   };
 }
 
-export function removeLlmModel(
-  llmSettings: LlmSettings | undefined,
-  modelId: string,
-): LlmSettings {
+export function removeLlmModel(llmSettings: LlmSettings | undefined, modelId: string): LlmSettings {
   const current = llmSettings ?? createLlmSettings();
   if (!current.models[modelId]) {
     return current;
@@ -476,10 +491,16 @@ export function removeLlmModel(
     modelOrder: current.modelOrder.filter((id) => id !== modelId),
     selections: {
       ...current.selections,
-      polishModelId: current.selections.polishModelId === modelId ? undefined : current.selections.polishModelId,
+      polishModelId:
+        current.selections.polishModelId === modelId ? undefined : current.selections.polishModelId,
       translationModelId:
-        current.selections.translationModelId === modelId ? undefined : current.selections.translationModelId,
-      summaryModelId: current.selections.summaryModelId === modelId ? undefined : current.selections.summaryModelId,
+        current.selections.translationModelId === modelId
+          ? undefined
+          : current.selections.translationModelId,
+      summaryModelId:
+        current.selections.summaryModelId === modelId
+          ? undefined
+          : current.selections.summaryModelId,
     },
   };
 }
@@ -487,7 +508,7 @@ export function removeLlmModel(
 export function setFeatureModelSelection(
   llmSettings: LlmSettings | undefined,
   feature: LlmFeature,
-  modelId: string | undefined,
+  modelId: string | undefined
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings();
   const key = FEATURE_MODEL_SELECTION_KEYS[feature];
@@ -504,7 +525,7 @@ export function setFeatureModelSelection(
 export function setFeatureTemperature(
   llmSettings: LlmSettings | undefined,
   feature: LlmFeature,
-  temperature: number | undefined,
+  temperature: number | undefined
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings();
   const key = FEATURE_TEMPERATURE_SELECTION_KEYS[feature];
@@ -521,7 +542,7 @@ export function setFeatureTemperature(
 export function setFeatureReasoningEnabled(
   llmSettings: LlmSettings | undefined,
   feature: LlmFeature,
-  enabled: boolean | undefined,
+  enabled: boolean | undefined
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings();
   const key = FEATURE_REASONING_ENABLED_KEYS[feature];
@@ -538,7 +559,7 @@ export function setFeatureReasoningEnabled(
 export function setFeatureReasoningLevel(
   llmSettings: LlmSettings | undefined,
   feature: LlmFeature,
-  level: 'low' | 'medium' | 'high' | undefined,
+  level: 'low' | 'medium' | 'high' | undefined
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings();
   const key = FEATURE_REASONING_LEVEL_KEYS[feature];
@@ -562,7 +583,7 @@ export function getOrderedLlmModels(llmSettings: LlmSettings | undefined): LlmMo
 
 export function getProviderLlmModels(
   llmSettings: LlmSettings | undefined,
-  provider: LlmProvider,
+  provider: LlmProvider
 ): LlmModelEntry[] {
   return getOrderedLlmModels(llmSettings).filter((entry) => entry.provider === provider);
 }
@@ -570,7 +591,7 @@ export function getProviderLlmModels(
 export function findLlmModelId(
   llmSettings: LlmSettings | undefined,
   provider: LlmProvider,
-  model: string,
+  model: string
 ): string | undefined {
   const normalizedModel = model.trim();
   if (!normalizedModel) {
@@ -586,7 +607,7 @@ export function findLlmModelId(
 
 export function getModelDiscoveryStatus(
   llmSettings: LlmSettings | undefined,
-  provider: LlmProvider,
+  provider: LlmProvider
 ): LlmModelDiscoveryStatus | undefined {
   return llmSettings?.modelDiscovery?.[provider];
 }
@@ -594,7 +615,7 @@ export function getModelDiscoveryStatus(
 export function isProviderModelDiscoveryExpired(
   llmSettings: LlmSettings | undefined,
   provider: LlmProvider,
-  now: string = new Date().toISOString(),
+  now: string = new Date().toISOString()
 ): boolean {
   const status = getModelDiscoveryStatus(llmSettings, provider);
   const expiresAtMs = parseTimestampMs(status?.expiresAt);
@@ -610,13 +631,11 @@ export function syncProviderDiscoveredModels(
   llmSettings: LlmSettings | undefined,
   provider: LlmProvider,
   discoveredModels: LlmDiscoveredModelSummary[],
-  fetchedAt?: string,
+  fetchedAt?: string
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings(provider);
   const nextDiscoveredModelNames = new Set(
-    discoveredModels
-      .map((entry) => entry.model.trim())
-      .filter(Boolean),
+    discoveredModels.map((entry) => entry.model.trim()).filter(Boolean)
   );
 
   let nextSettings = current;
@@ -649,9 +668,7 @@ export function syncProviderDiscoveredModels(
   };
 }
 
-export function modelSummaryToMetadata(
-  summary: LlmDiscoveredModelSummary,
-): LlmModelMetadata {
+export function modelSummaryToMetadata(summary: LlmDiscoveredModelSummary): LlmModelMetadata {
   const metadata: LlmModelMetadata = {};
   for (const key of MODEL_METADATA_KEYS) {
     const value = summary[key];
@@ -665,7 +682,7 @@ export function modelSummaryToMetadata(
 
 export function getFeatureModelId(
   config: Pick<AppConfig, 'llmSettings'>,
-  feature: LlmFeature,
+  feature: LlmFeature
 ): string | undefined {
   if (!config.llmSettings) {
     return undefined;
@@ -676,19 +693,17 @@ export function getFeatureModelId(
 
 export function getFeatureModelEntry(
   config: Pick<AppConfig, 'llmSettings'>,
-  feature: LlmFeature,
+  feature: LlmFeature
 ): LlmModelEntry | null {
   if (!config.llmSettings) {
     return null;
   }
 
   const modelId = getFeatureModelId(config, feature);
-  return modelId ? config.llmSettings.models[modelId] ?? null : null;
+  return modelId ? (config.llmSettings.models[modelId] ?? null) : null;
 }
 
-export function buildLlmConfigPatch(
-  nextLlmSettings: LlmSettings,
-): Pick<AppConfig, 'llmSettings'> {
+export function buildLlmConfigPatch(nextLlmSettings: LlmSettings): Pick<AppConfig, 'llmSettings'> {
   return {
     llmSettings: nextLlmSettings,
   };

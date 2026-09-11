@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { handleTaskRetryPreflightFailure } from '../taskRetryFailure';
-import { patchTaskLedgerRecord } from '../taskLedgerBuilders';
 import type { TaskLedgerRecord } from '../../types/taskLedger';
+import { patchTaskLedgerRecord } from '../taskLedgerBuilders';
+import { handleTaskRetryPreflightFailure } from '../taskRetryFailure';
 
 vi.mock('../taskLedgerBuilders', () => ({
   patchTaskLedgerRecord: vi.fn(),
@@ -44,7 +44,9 @@ describe('handleTaskRetryPreflightFailure', () => {
   it('rethrows a normalized error with the original cause', () => {
     const cause = { error: 'Tauri command failed.' };
 
-    expect(() => handleTaskRetryPreflightFailure(makeTask(), cause)).toThrow('Tauri command failed.');
+    expect(() => handleTaskRetryPreflightFailure(makeTask(), cause)).toThrow(
+      'Tauri command failed.'
+    );
 
     try {
       handleTaskRetryPreflightFailure(makeTask(), cause);

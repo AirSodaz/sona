@@ -1,9 +1,9 @@
 import i18n from '../i18n';
-import { logger } from '../utils/logger';
-import { extractErrorMessage } from '../utils/errorUtils';
-import { TauriEvent } from './tauri/events';
 import type { ModelCatalogModel, ModelInfo, ProgressCallback } from '../types/modelCatalog';
+import { extractErrorMessage } from '../utils/errorUtils';
+import { logger } from '../utils/logger';
 import { downloadCandidates, modelscopeMirrorUrl } from '../utils/mirrorCandidates';
+import { TauriEvent } from './tauri/events';
 
 interface DownloadProgressPayloadObject {
   0?: number;
@@ -14,8 +14,17 @@ interface DownloadProgressPayloadObject {
   id?: string;
 }
 
-type DownloadFile = (input: { url: string; outputPath: string; id: string; expectedSha256?: string }) => Promise<void>;
-type DownloadPresetModel = (input: { modelId: string; downloadId: string; mirror?: string }) => Promise<string>;
+type DownloadFile = (input: {
+  url: string;
+  outputPath: string;
+  id: string;
+  expectedSha256?: string;
+}) => Promise<void>;
+type DownloadPresetModel = (input: {
+  modelId: string;
+  downloadId: string;
+  mirror?: string;
+}) => Promise<string>;
 type ExtractTarBz2 = (input: { archivePath: string; targetDir: string }) => Promise<void>;
 type Listen = <T>(event: string, handler: (event: { payload: T }) => void) => Promise<() => void>;
 
@@ -39,7 +48,11 @@ interface DownloadModelInput {
   mirror?: string;
 }
 
-export function parseDownloadProgressPayload(payload: unknown): { downloaded: number; total: number; id: string } {
+export function parseDownloadProgressPayload(payload: unknown): {
+  downloaded: number;
+  total: number;
+  id: string;
+} {
   if (Array.isArray(payload)) {
     const [downloaded, total, id] = payload;
     return {
@@ -51,21 +64,16 @@ export function parseDownloadProgressPayload(payload: unknown): { downloaded: nu
 
   if (typeof payload === 'object' && payload !== null) {
     const value = payload as DownloadProgressPayloadObject;
-    const downloaded = typeof value[0] === 'number'
-      ? value[0]
-      : typeof value.downloaded === 'number'
-        ? value.downloaded
-        : 0;
-    const total = typeof value[1] === 'number'
-      ? value[1]
-      : typeof value.total === 'number'
-        ? value.total
-        : 0;
-    const id = typeof value[2] === 'string'
-      ? value[2]
-      : typeof value.id === 'string'
-        ? value.id
-        : '';
+    const downloaded =
+      typeof value[0] === 'number'
+        ? value[0]
+        : typeof value.downloaded === 'number'
+          ? value.downloaded
+          : 0;
+    const total =
+      typeof value[1] === 'number' ? value[1] : typeof value.total === 'number' ? value.total : 0;
+    const id =
+      typeof value[2] === 'string' ? value[2] : typeof value.id === 'string' ? value.id : '';
 
     return { downloaded, total, id };
   }
@@ -91,7 +99,7 @@ class ModelDownloadService {
     if (this.ports.downloadPresetModel) {
       return await this.downloadPresetModel(modelId, onProgress, signal, mirror);
     }
-    const targetModelsDir = modelsDir ?? await this.ports.getModelsDir();
+    const targetModelsDir = modelsDir ?? (await this.ports.getModelsDir());
     const artifacts = model.artifacts ?? [];
     if (artifacts.length > 1) {
       return await this.downloadPresetModel(modelId, onProgress, signal, mirror);
@@ -118,7 +126,15 @@ class ModelDownloadService {
         await this.ports.remove(`${tempFilePath}.download`).catch(() => undefined);
       }
       try {
-        await this.downloadFile(candidateUrl, tempFilePath, onProgress, signal, 'Downloading', expectedSha256, candidateIndex > 0);
+        await this.downloadFile(
+          candidateUrl,
+          tempFilePath,
+          onProgress,
+          signal,
+          'Downloading',
+          expectedSha256,
+          candidateIndex > 0
+        );
         lastError = null;
         break;
       } catch (error) {
@@ -147,10 +163,14 @@ class ModelDownloadService {
     if (onProgress) {
       extractUnlisten = await this.ports.listen<string>(TauriEvent.app.extractProgress, (event) => {
         const filename = event.payload;
-        const displayFilename = filename.length > 30 ? '...' + filename.slice(-27) : filename;
-        onProgress(100, i18n.t('settings.model_download_status.extracting_file', {
-          filename: displayFilename,
-        }), false);
+        const displayFilename = filename.length > 30 ? `...${filename.slice(-27)}` : filename;
+        onProgress(
+          100,
+          i18n.t('settings.model_download_status.extracting_file', {
+            filename: displayFilename,
+          }),
+          false
+        );
       });
     }
 
@@ -158,7 +178,9 @@ class ModelDownloadService {
       logger.info('Starting extraction...');
       await this.extractArchive(tempFilePath, targetModelsDir, signal);
     } catch (error) {
-      throw Object.assign(new Error(`Extraction failed: ${extractErrorMessage(error)}`), { cause: error });
+      throw Object.assign(new Error(`Extraction failed: ${extractErrorMessage(error)}`), {
+        cause: error,
+      });
     } finally {
       if (extractUnlisten) {
         extractUnlisten();
@@ -188,7 +210,7 @@ class ModelDownloadService {
     modelId: string,
     onProgress?: ProgressCallback,
     signal?: AbortSignal,
-    mirror?: string,
+    mirror?: string
   ): Promise<string> {
     if (!this.ports.downloadPresetModel) {
       throw new Error('Preset model downloads are unavailable in this host');
@@ -221,25 +243,32 @@ class ModelDownloadService {
       if (onProgress && timeDiff > 500) {
         const bytesDiff = Math.max(0, downloaded - uiLastDownloaded);
         const speedBytesPerSec = bytesDiff / (timeDiff / 1000);
-        const speedStr = speedBytesPerSec > 1024 * 1024
-          ? `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`
-          : `${Math.round(speedBytesPerSec / 1024)} KB/s`;
+        const speedStr =
+          speedBytesPerSec > 1024 * 1024
+            ? `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`
+            : `${Math.round(speedBytesPerSec / 1024)} KB/s`;
 
         uiLastDownloaded = downloaded;
         lastTime = now;
-        onProgress(Math.round((downloaded / total) * 100), i18n.t('settings.model_download_status.downloading', {
-          label: 'Downloading',
-          downloadedMB: Math.round(downloaded / 1024 / 1024),
-          totalMB: Math.round(total / 1024 / 1024),
-          speed: speedStr,
-        }));
+        onProgress(
+          Math.round((downloaded / total) * 100),
+          i18n.t('settings.model_download_status.downloading', {
+            label: 'Downloading',
+            downloadedMB: Math.round(downloaded / 1024 / 1024),
+            totalMB: Math.round(total / 1024 / 1024),
+            speed: speedStr,
+          })
+        );
       }
     });
 
     try {
-      onProgress?.(0, i18n.t('settings.model_download_status.downloading_only', {
-        label: 'Downloading',
-      }));
+      onProgress?.(
+        0,
+        i18n.t('settings.model_download_status.downloading_only', {
+          label: 'Downloading',
+        })
+      );
       const path = await this.ports.downloadPresetModel({ modelId, downloadId, mirror });
       onProgress?.(100, i18n.t('settings.model_download_status.done'), true);
       return path;
@@ -261,7 +290,7 @@ class ModelDownloadService {
     signal?: AbortSignal,
     label: string = i18n.t('settings.model_download_status.download_label'),
     expectedSha256?: string,
-    fromMirror: boolean = false,
+    fromMirror: boolean = false
   ): Promise<void> {
     let lastError: unknown = null;
     let lastDownloaded = 0;
@@ -295,9 +324,10 @@ class ModelDownloadService {
       if (onProgress && (timeDiff > 500 || total === downloaded)) {
         const bytesDiff = Math.max(0, downloaded - uiLastDownloaded);
         const speedBytesPerSec = bytesDiff / (timeDiff / 1000);
-        const speedStr = speedBytesPerSec > 1024 * 1024
-          ? `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`
-          : `${Math.round(speedBytesPerSec / 1024)} KB/s`;
+        const speedStr =
+          speedBytesPerSec > 1024 * 1024
+            ? `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`
+            : `${Math.round(speedBytesPerSec / 1024)} KB/s`;
 
         uiLastDownloaded = downloaded;
         lastTime = now;
@@ -306,12 +336,15 @@ class ModelDownloadService {
           const percentage = Math.round((downloaded / total) * 100);
           const downloadedMB = Math.round(downloaded / 1024 / 1024);
           const totalMB = Math.round(total / 1024 / 1024);
-          onProgress(percentage, i18n.t('settings.model_download_status.downloading', {
-            label,
-            downloadedMB,
-            totalMB,
-            speed: speedStr,
-          }));
+          onProgress(
+            percentage,
+            i18n.t('settings.model_download_status.downloading', {
+              label,
+              downloadedMB,
+              totalMB,
+              speed: speedStr,
+            })
+          );
         }
       }
     });
@@ -327,12 +360,15 @@ class ModelDownloadService {
 
         try {
           if (onProgress) {
-            onProgress(0, i18n.t(
-              fromMirror
-                ? 'settings.model_download_status.downloading_from_mirror'
-                : 'settings.model_download_status.downloading_only',
-              { label },
-            ));
+            onProgress(
+              0,
+              i18n.t(
+                fromMirror
+                  ? 'settings.model_download_status.downloading_from_mirror'
+                  : 'settings.model_download_status.downloading_only',
+                { label }
+              )
+            );
           }
 
           logger.info(`Attempting download from: ${url} with ID: ${downloadId}`);
@@ -353,10 +389,16 @@ class ModelDownloadService {
           if (lastDownloaded > downloadedAtStartOfAttempt) {
             // We made progress! Reset consecutive failures to 1 (this was a failed attempt but fruitful)
             consecutiveFailures = 1;
-            logger.warn(`Download attempt ${attempt} failed via ${fromMirror ? 'mirror' : 'direct'}, but progress was made. Resetting consecutive failures.`, error);
+            logger.warn(
+              `Download attempt ${attempt} failed via ${fromMirror ? 'mirror' : 'direct'}, but progress was made. Resetting consecutive failures.`,
+              error
+            );
           } else {
             consecutiveFailures++;
-            logger.warn(`Download attempt ${attempt} failed via ${fromMirror ? 'mirror' : 'direct'}. Consecutive failures: ${consecutiveFailures}`, error);
+            logger.warn(
+              `Download attempt ${attempt} failed via ${fromMirror ? 'mirror' : 'direct'}. Consecutive failures: ${consecutiveFailures}`,
+              error
+            );
           }
 
           lastError = error;
@@ -377,7 +419,7 @@ class ModelDownloadService {
       const lastErrorMessage = extractErrorMessage(cause);
       throw Object.assign(
         new Error(`Download failed after all attempts. Last error: ${lastErrorMessage}`),
-        { cause },
+        { cause }
       );
     } finally {
       if (unlisten) {
@@ -389,7 +431,7 @@ class ModelDownloadService {
   private async extractArchive(
     archivePath: string,
     targetDir: string,
-    signal?: AbortSignal,
+    signal?: AbortSignal
   ): Promise<void> {
     logger.info('[ModelService] Attempting extraction via Rust backend (extract_tar_bz2)...');
 
@@ -405,7 +447,9 @@ class ModelDownloadService {
         targetDir,
       });
     } catch (error) {
-      throw Object.assign(new Error(`Extraction failed: ${extractErrorMessage(error)}`), { cause: error });
+      throw Object.assign(new Error(`Extraction failed: ${extractErrorMessage(error)}`), {
+        cause: error,
+      });
     }
   }
 }

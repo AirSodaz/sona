@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  SETTINGS_PERF_STORAGE_KEY,
   clearSettingsPerf,
   disableSettingsPerf,
   enableSettingsPerf,
   getSettingsPerfErrorDetail,
   isSettingsPerfEnabled,
   markSettingsPerf,
+  SETTINGS_PERF_STORAGE_KEY,
   snapshotSettingsPerf,
 } from './settingsPerf';
 
@@ -70,12 +70,12 @@ describe('settingsPerf', () => {
     expect(loggerInfoMock).toHaveBeenNthCalledWith(
       1,
       '[SettingsPerf] settings.open.default.click',
-      expect.objectContaining({ name: 'settings.open.default.click' }),
+      expect.objectContaining({ name: 'settings.open.default.click' })
     );
     expect(loggerInfoMock).toHaveBeenNthCalledWith(
       2,
       '[SettingsPerf] settings.shell.commit',
-      expect.objectContaining({ name: 'settings.shell.commit' }),
+      expect.objectContaining({ name: 'settings.shell.commit' })
     );
   });
 

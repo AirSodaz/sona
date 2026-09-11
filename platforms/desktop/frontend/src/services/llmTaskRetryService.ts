@@ -1,15 +1,19 @@
+import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type { AppConfig } from '../types/config';
 import type { TaskLedgerKind, TaskLedgerRecord } from '../types/taskLedger';
 import type { TranscriptSegment } from '../types/transcript';
-import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { logger } from '../utils/logger';
-import { getFeatureLlmConfig, isLlmConfigComplete, isSummaryLlmConfigComplete } from './llm/configUtils';
 import { historyService } from './historyService';
+import {
+  getFeatureLlmConfig,
+  isLlmConfigComplete,
+  isSummaryLlmConfigComplete,
+} from './llm/configUtils';
 import { polishService } from './polishService';
 import { summaryService } from './summaryService';
-import { translationService } from './translationService';
 import { handleTaskRetryPreflightFailure } from './taskRetryFailure';
+import { translationService } from './translationService';
 
 interface RetryLlmTaskOptions {
   config?: AppConfig;
@@ -26,7 +30,9 @@ function isLlmLedgerKind(kind: TaskLedgerKind): kind is LlmLedgerKind {
   return kind === 'llmPolish' || kind === 'llmTranslate' || kind === 'llmSummary';
 }
 
-function hasSegments(segments: TranscriptSegment[] | null | undefined): segments is TranscriptSegment[] {
+function hasSegments(
+  segments: TranscriptSegment[] | null | undefined
+): segments is TranscriptSegment[] {
   return Array.isArray(segments) && segments.length > 0;
 }
 
@@ -117,7 +123,7 @@ function runRetryTask(task: TaskLedgerRecord, context: RetryTranscriptContext): 
 
 export async function retryLlmTaskFromLedger(
   task: TaskLedgerRecord,
-  options?: RetryLlmTaskOptions,
+  options?: RetryLlmTaskOptions
 ): Promise<void> {
   try {
     if (!isLlmLedgerKind(task.kind)) {

@@ -1,8 +1,8 @@
-import type { HistoryAudioCleanupReport } from '../types/history';
-import { logger } from '../utils/logger';
 import { useConfigStore } from '../stores/configStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import type { HistoryAudioCleanupReport } from '../types/history';
+import { logger } from '../utils/logger';
 import { historyService } from './historyService';
 
 let cleanupInFlight: Promise<HistoryAudioCleanupReport | null> | null = null;
@@ -20,7 +20,7 @@ function hasStatusChanges(report: HistoryAudioCleanupReport): boolean {
 }
 
 export async function runHistoryAudioCleanupForCurrentConfig(
-  now = new Date(),
+  now = new Date()
 ): Promise<HistoryAudioCleanupReport | null> {
   const retentionDays = useConfigStore.getState().config.historyAudioRetentionDays ?? null;
   if (retentionDays === null) {

@@ -6,13 +6,13 @@
  * unnecessary re-renders.
  */
 
-import type { LlmSettings, SummaryCustomTemplate, SummaryTemplateId } from './llm';
-import type { SpeakerProfile } from './speaker';
 import type {
   AppConfig as GeneratedAppConfig,
   AppLanguagePreference as GeneratedAppLanguagePreference,
   AppLogLevel as GeneratedAppLogLevel,
 } from '../bindings';
+import type { LlmSettings, SummaryCustomTemplate, SummaryTemplateId } from './llm';
+import type { SpeakerProfile } from './speaker';
 
 // ---------------------------------------------------------------------------
 // UI preferences
@@ -377,8 +377,7 @@ export interface HistoryStorageConfig {
  * This is the intersection of all domain-specific config slices.
  * Existing code that references `AppConfig` continues to work unchanged.
  */
-export type AppConfig =
-  GeneratedAppConfig &
+export type AppConfig = GeneratedAppConfig &
   BaseConfig &
   UIConfig &
   ShortcutConfig &

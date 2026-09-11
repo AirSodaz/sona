@@ -1,163 +1,174 @@
+import type { TFunction } from 'i18next';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { TFunction } from 'i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useProjectStore } from '../stores/projectStore';
+import type { BatchQueueItem, BatchQueueItemStatus } from '../types/batchQueue';
 import type { ProjectRecord } from '../types/project';
-import { BatchQueueItem, BatchQueueItemStatus } from '../types/batchQueue';
-import { PendingIcon, ProcessingIcon, CompleteIcon, ErrorIcon, TrashIcon, XIcon } from './Icons';
-
-
+import { CompleteIcon, ErrorIcon, PendingIcon, ProcessingIcon, TrashIcon, XIcon } from './Icons';
 
 /**
  * Returns the appropriate icon for a queue item status.
  */
 const getStatusIcon = (status: BatchQueueItemStatus): React.JSX.Element => {
-    switch (status) {
-        case 'pending':
-            return <PendingIcon />;
-        case 'processing':
-            return <ProcessingIcon />;
-        case 'complete':
-            return <CompleteIcon />;
-        case 'error':
-            return <ErrorIcon />;
-        case 'cancelled':
-            return <ErrorIcon />;
-        default:
-            return <PendingIcon />;
-    }
+  switch (status) {
+    case 'pending':
+      return <PendingIcon />;
+    case 'processing':
+      return <ProcessingIcon />;
+    case 'complete':
+      return <CompleteIcon />;
+    case 'error':
+      return <ErrorIcon />;
+    case 'cancelled':
+      return <ErrorIcon />;
+    default:
+      return <PendingIcon />;
+  }
 };
 
 /** Props for QueueItem component. */
 interface QueueItemProps {
-    item: BatchQueueItem;
-    isActive: boolean;
-    projects: ProjectRecord[];
-    onActivate: (id: string) => void;
-    onRemove: (id: string) => void;
-    onSetItemProjectId: (id: string, projectId: string | null) => void;
-    t: TFunction;
+  item: BatchQueueItem;
+  isActive: boolean;
+  projects: ProjectRecord[];
+  onActivate: (id: string) => void;
+  onRemove: (id: string) => void;
+  onSetItemProjectId: (id: string, projectId: string | null) => void;
+  t: TFunction;
 }
 
 /**
  * Individual queue item component.
  * Memoized to prevent re-renders of the entire list when only one item updates.
  */
-function QueueItemComponent({ item, isActive, projects, onActivate, onRemove, onSetItemProjectId, t }: QueueItemProps): React.JSX.Element {
-    const handleClick = () => {
-        onActivate(item.id);
-    };
+function QueueItemComponent({
+  item,
+  isActive,
+  projects,
+  onActivate,
+  onRemove,
+  onSetItemProjectId,
+  t,
+}: QueueItemProps): React.JSX.Element {
+  const handleClick = () => {
+    onActivate(item.id);
+  };
 
-    const handleRemove = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        onRemove(item.id);
-    };
+  const handleRemove = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onRemove(item.id);
+  };
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onActivate(item.id);
-        }
-    };
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onActivate(item.id);
+    }
+  };
 
-    return (
-        <div
-            className={`queue-item queue-item-${item.status} ${isActive ? 'queue-item-active' : ''}`}
-            onClick={handleClick}
-            onKeyDown={handleKeyDown}
-            role="listitem"
-            tabIndex={0}
-            aria-current={isActive ? 'true' : undefined}
-            aria-label={`${item.filename} - ${t(`batch.status_${item.status}`)}`}
-        >
-            <div className="queue-item-icon" aria-hidden="true">
-                {getStatusIcon(item.status)}
-            </div>
+  return (
+    <div
+      className={`queue-item queue-item-${item.status} ${isActive ? 'queue-item-active' : ''}`}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      role="listitem"
+      tabIndex={0}
+      aria-current={isActive ? 'true' : undefined}
+      aria-label={`${item.filename} - ${t(`batch.status_${item.status}`)}`}
+    >
+      <div className="queue-item-icon" aria-hidden="true">
+        {getStatusIcon(item.status)}
+      </div>
 
-            <div className="queue-item-content">
-                <div className="queue-item-filename" title={item.filename}>
-                    {item.filename}
-                </div>
-                <div className="queue-item-meta" style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                    {item.status === 'pending' ? (
-                        <select
-                            className="queue-item-project-select"
-                            value={item.projectId ?? ''}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => {
-                                e.stopPropagation();
-                                onSetItemProjectId(item.id, e.target.value || null);
-                            }}
-                            style={{
-                                fontSize: '11px',
-                                padding: '1px 4px',
-                                borderRadius: '3px',
-                                border: '1px solid var(--color-border)',
-                                background: 'var(--color-bg-secondary)',
-                                color: 'var(--color-text-secondary)',
-                                cursor: 'pointer',
-                                maxWidth: '130px',
-                            }}
-                            title={t('projects.target_project', { defaultValue: 'Target Project' })}
-                        >
-                            <option value="">{t('projects.inbox', { defaultValue: 'Inbox' })}</option>
-                            {projects.map((project) => (
-                                <option key={project.id} value={project.id}>{project.name}</option>
-                            ))}
-                        </select>
-                    ) : (
-                        item.projectId ? (
-                            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                                {projects.find((p) => p.id === item.projectId)?.name}
-                            </span>
-                        ) : null
-                    )}
-                </div>
-
-                {item.origin === 'automation' && (
-                    <div
-                        className="queue-item-error"
-                        title={item.automationRuleName || t('automation.automated', { defaultValue: 'Automated' })}
-                        style={{ color: 'var(--color-text-muted)' }}
-                    >
-                        {t('automation.automated', { defaultValue: 'Automated' })}
-                        {item.automationRuleName ? ` · ${item.automationRuleName}` : ''}
-                    </div>
-                )}
-
-                {item.status === 'processing' && (
-                    <div className="queue-item-progress">
-                        <div
-                            className="queue-item-progress-fill"
-                            style={{ width: `${item.progress}%` }}
-                            role="progressbar"
-                            aria-valuenow={Math.round(item.progress)}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                        />
-                    </div>
-                )}
-
-                {item.status === 'error' && item.errorMessage && (
-                    <div className="queue-item-error" title={item.errorMessage}>
-                        {t('batch.file_failed')}
-                    </div>
-                )}
-            </div>
-
-            <button
-                className="btn btn-icon queue-item-remove"
-                onClick={handleRemove}
-                aria-label={t('common.delete_item', { item: item.filename })}
-                data-tooltip={t('common.delete')}
-                data-tooltip-pos="left"
-            >
-                <XIcon width={12} height={12} />
-            </button>
+      <div className="queue-item-content">
+        <div className="queue-item-filename" title={item.filename}>
+          {item.filename}
         </div>
-    );
+        <div
+          className="queue-item-meta"
+          style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}
+        >
+          {item.status === 'pending' ? (
+            <select
+              className="queue-item-project-select"
+              value={item.projectId ?? ''}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => {
+                e.stopPropagation();
+                onSetItemProjectId(item.id, e.target.value || null);
+              }}
+              style={{
+                fontSize: '11px',
+                padding: '1px 4px',
+                borderRadius: '3px',
+                border: '1px solid var(--color-border)',
+                background: 'var(--color-bg-secondary)',
+                color: 'var(--color-text-secondary)',
+                cursor: 'pointer',
+                maxWidth: '130px',
+              }}
+              title={t('projects.target_project', { defaultValue: 'Target Project' })}
+            >
+              <option value="">{t('projects.inbox', { defaultValue: 'Inbox' })}</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          ) : item.projectId ? (
+            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+              {projects.find((p) => p.id === item.projectId)?.name}
+            </span>
+          ) : null}
+        </div>
+
+        {item.origin === 'automation' && (
+          <div
+            className="queue-item-error"
+            title={
+              item.automationRuleName || t('automation.automated', { defaultValue: 'Automated' })
+            }
+            style={{ color: 'var(--color-text-muted)' }}
+          >
+            {t('automation.automated', { defaultValue: 'Automated' })}
+            {item.automationRuleName ? ` · ${item.automationRuleName}` : ''}
+          </div>
+        )}
+
+        {item.status === 'processing' && (
+          <div className="queue-item-progress">
+            <div
+              className="queue-item-progress-fill"
+              style={{ width: `${item.progress}%` }}
+              role="progressbar"
+              aria-valuenow={Math.round(item.progress)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            />
+          </div>
+        )}
+
+        {item.status === 'error' && item.errorMessage && (
+          <div className="queue-item-error" title={item.errorMessage}>
+            {t('batch.file_failed')}
+          </div>
+        )}
+      </div>
+
+      <button
+        className="btn btn-icon queue-item-remove"
+        onClick={handleRemove}
+        aria-label={t('common.delete_item', { item: item.filename })}
+        data-tooltip={t('common.delete')}
+        data-tooltip-pos="left"
+      >
+        <XIcon width={12} height={12} />
+      </button>
+    </div>
+  );
 }
 
 const QueueItem = React.memo(QueueItemComponent);
@@ -167,33 +178,33 @@ const QueueItem = React.memo(QueueItemComponent);
  * This prevents the parent list from re-rendering when a single item updates.
  */
 function QueueItemContainer({ id, t }: { id: string; t: TFunction }): React.JSX.Element | null {
-    const item = useBatchQueueStore((state) => state.queueItems.find((i) => i.id === id));
-    // Subscribe to active state for this item
-    const isActive = useBatchQueueStore((state) => state.activeItemId === id);
-    const setActiveItem = useBatchQueueStore((state) => state.setActiveItem);
-    const removeItem = useBatchQueueStore((state) => state.removeItem);
-    const setItemProjectId = useBatchQueueStore((state) => state.setItemProjectId);
-    const projects = useProjectStore((state) => state.projects);
+  const item = useBatchQueueStore((state) => state.queueItems.find((i) => i.id === id));
+  // Subscribe to active state for this item
+  const isActive = useBatchQueueStore((state) => state.activeItemId === id);
+  const setActiveItem = useBatchQueueStore((state) => state.setActiveItem);
+  const removeItem = useBatchQueueStore((state) => state.removeItem);
+  const setItemProjectId = useBatchQueueStore((state) => state.setItemProjectId);
+  const projects = useProjectStore((state) => state.projects);
 
-    if (!item) return null;
+  if (!item) return null;
 
-    return (
-        <QueueItem
-            item={item}
-            isActive={isActive}
-            onActivate={setActiveItem}
-            onRemove={removeItem}
-            onSetItemProjectId={setItemProjectId}
-            projects={projects}
-            t={t}
-        />
-    );
+  return (
+    <QueueItem
+      item={item}
+      isActive={isActive}
+      onActivate={setActiveItem}
+      onRemove={removeItem}
+      onSetItemProjectId={setItemProjectId}
+      projects={projects}
+      t={t}
+    />
+  );
 }
 
 /** Props for FileQueueSidebar. */
 interface FileQueueSidebarProps {
-    /** Optional CSS class name. */
-    className?: string;
+  /** Optional CSS class name. */
+  className?: string;
 }
 
 /**
@@ -203,46 +214,46 @@ interface FileQueueSidebarProps {
  * @param props - Component props.
  * @return The file queue sidebar element.
  */
-export function FileQueueSidebar({ className = '' }: FileQueueSidebarProps): React.JSX.Element | null {
-    const { t } = useTranslation();
+export function FileQueueSidebar({
+  className = '',
+}: FileQueueSidebarProps): React.JSX.Element | null {
+  const { t } = useTranslation();
 
-    // OPTIMIZATION: Subscribe only to the list of IDs using useShallow.
-    // This ensures the sidebar component ONLY re-renders when items are added, removed, or reordered,
-    // but NOT when an item's progress/status updates (which happens frequently).
-    const itemIds = useBatchQueueStore(
-        useShallow((state) => state.queueItems.map((i) => i.id))
-    );
+  // OPTIMIZATION: Subscribe only to the list of IDs using useShallow.
+  // This ensures the sidebar component ONLY re-renders when items are added, removed, or reordered,
+  // but NOT when an item's progress/status updates (which happens frequently).
+  const itemIds = useBatchQueueStore(useShallow((state) => state.queueItems.map((i) => i.id)));
 
-    const clearQueue = useBatchQueueStore((state) => state.clearQueue);
+  const clearQueue = useBatchQueueStore((state) => state.clearQueue);
 
-    if (itemIds.length === 0) {
-        return null;
-    }
+  if (itemIds.length === 0) {
+    return null;
+  }
 
-    return (
-        <div className={`file-queue-sidebar ${className}`}>
-            <div className="queue-header">
-                <span className="queue-title">{t('batch.queue_title', { count: itemIds.length })}</span>
-                <button
-                    className="btn btn-icon queue-clear-btn"
-                    onClick={clearQueue}
-                    aria-label={t('batch.clear_queue')}
-                    data-tooltip={t('batch.clear_queue')}
-                    data-tooltip-pos="left"
-                >
-                    <TrashIcon />
-                </button>
-            </div>
+  return (
+    <div className={`file-queue-sidebar ${className}`}>
+      <div className="queue-header">
+        <span className="queue-title">{t('batch.queue_title', { count: itemIds.length })}</span>
+        <button
+          className="btn btn-icon queue-clear-btn"
+          onClick={clearQueue}
+          aria-label={t('batch.clear_queue')}
+          data-tooltip={t('batch.clear_queue')}
+          data-tooltip-pos="left"
+        >
+          <TrashIcon />
+        </button>
+      </div>
 
-            <div className="queue-list" role="list" aria-label={t('batch.queue_title', { count: itemIds.length })}>
-                {itemIds.map((id) => (
-                    <QueueItemContainer
-                        key={id}
-                        id={id}
-                        t={t}
-                    />
-                ))}
-            </div>
-        </div>
-    );
+      <div
+        className="queue-list"
+        role="list"
+        aria-label={t('batch.queue_title', { count: itemIds.length })}
+      >
+        {itemIds.map((id) => (
+          <QueueItemContainer key={id} id={id} t={t} />
+        ))}
+      </div>
+    </div>
+  );
 }

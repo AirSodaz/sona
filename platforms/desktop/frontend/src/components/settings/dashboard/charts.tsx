@@ -1,4 +1,6 @@
-import React, { useId } from 'react';
+import type React from 'react';
+import { useId } from 'react';
+import type { TooltipContentProps, TooltipPayloadEntry } from 'recharts';
 import {
   Area,
   AreaChart,
@@ -10,7 +12,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { TooltipContentProps, TooltipPayloadEntry } from 'recharts';
 
 export type DashboardChartTone = 'accent' | 'info' | 'warm';
 
@@ -20,7 +21,9 @@ export type DashboardChartPoint = {
 };
 
 type DashboardTooltipValue = number | string | ReadonlyArray<number | string>;
-type DashboardTooltipPayload = ReadonlyArray<TooltipPayloadEntry<DashboardTooltipValue, string | number>>;
+type DashboardTooltipPayload = ReadonlyArray<
+  TooltipPayloadEntry<DashboardTooltipValue, string | number>
+>;
 
 interface DashboardTooltipProps {
   active?: boolean;
@@ -35,7 +38,10 @@ function safeChartValue(value: number): number {
   return Number.isFinite(value) ? Math.max(0, value) : 0;
 }
 
-function normalizeChartPoints(points: DashboardChartPoint[], minimumPoints = 30): DashboardChartPoint[] {
+function normalizeChartPoints(
+  points: DashboardChartPoint[],
+  minimumPoints = 30
+): DashboardChartPoint[] {
   const safePoints = points.map((point) => ({
     label: typeof point.label === 'string' ? point.label : '',
     value: safeChartValue(point.value),
@@ -76,7 +82,10 @@ function DashboardTooltip({
           : String(rawValue ?? '');
 
         return (
-          <div key={`${entry.name ?? 'value'}-${index}`} className="settings-dashboard-chart-tooltip-row">
+          <div
+            key={`${entry.name ?? 'value'}-${index}`}
+            className="settings-dashboard-chart-tooltip-row"
+          >
             <span
               className="settings-dashboard-chart-tooltip-swatch"
               style={{ background: entry.color || 'var(--dashboard-accent)' }}
@@ -92,7 +101,7 @@ function DashboardTooltip({
 
 function renderTooltip(valueFormatter: (value: number) => string) {
   return (
-    props: TooltipContentProps<DashboardTooltipValue, string | number>,
+    props: TooltipContentProps<DashboardTooltipValue, string | number>
   ): React.JSX.Element | null => (
     <DashboardTooltip
       active={props.active}
@@ -150,7 +159,12 @@ export function DashboardSparkline({
             strokeWidth={1.75}
             fill={`url(#${gradientId})`}
             dot={false}
-            activeDot={{ r: 3, strokeWidth: 1.5, fill: 'var(--color-bg-elevated)', stroke: 'var(--dashboard-accent)' }}
+            activeDot={{
+              r: 3,
+              strokeWidth: 1.5,
+              fill: 'var(--color-bg-elevated)',
+              stroke: 'var(--dashboard-accent)',
+            }}
             isAnimationActive={false}
           />
         </AreaChart>
@@ -191,11 +205,21 @@ export function DashboardTrendChart({
                 <stop offset="100%" stopColor="var(--dashboard-accent)" stopOpacity={0.01} />
               </linearGradient>
             </defs>
-            <CartesianGrid vertical={false} stroke="var(--dashboard-chart-grid)" strokeDasharray="3 4" strokeOpacity={0.6} />
+            <CartesianGrid
+              vertical={false}
+              stroke="var(--dashboard-chart-grid)"
+              strokeDasharray="3 4"
+              strokeOpacity={0.6}
+            />
             <XAxis dataKey="label" hide />
             <YAxis hide width={0} domain={['dataMin', 'dataMax']} />
             <Tooltip
-              cursor={{ stroke: 'var(--dashboard-accent)', strokeOpacity: 0.25, strokeWidth: 1, strokeDasharray: '2 2' }}
+              cursor={{
+                stroke: 'var(--dashboard-accent)',
+                strokeOpacity: 0.25,
+                strokeWidth: 1,
+                strokeDasharray: '2 2',
+              }}
               wrapperStyle={{ outline: 'none' }}
               content={renderTooltip(valueFormatter)}
             />
@@ -207,7 +231,12 @@ export function DashboardTrendChart({
               strokeWidth={2}
               fill={`url(#${gradientId})`}
               dot={false}
-              activeDot={{ r: 3.5, strokeWidth: 2, fill: 'var(--color-bg-elevated)', stroke: 'var(--dashboard-accent)' }}
+              activeDot={{
+                r: 3.5,
+                strokeWidth: 2,
+                fill: 'var(--color-bg-elevated)',
+                stroke: 'var(--dashboard-accent)',
+              }}
               isAnimationActive={false}
             />
           </AreaChart>
@@ -215,9 +244,14 @@ export function DashboardTrendChart({
       </div>
       <div className="settings-dashboard-trend-anchors">
         <div className="settings-dashboard-trend-anchor" data-testid="dashboard-trend-anchor-start">
-          <div className="settings-dashboard-trend-anchor-label">{startPoint?.label || '\u00A0'}</div>
+          <div className="settings-dashboard-trend-anchor-label">
+            {startPoint?.label || '\u00A0'}
+          </div>
         </div>
-        <div className="settings-dashboard-trend-anchor end" data-testid="dashboard-trend-anchor-end">
+        <div
+          className="settings-dashboard-trend-anchor end"
+          data-testid="dashboard-trend-anchor-end"
+        >
           <div className="settings-dashboard-trend-anchor-label">{endPoint?.label || '\u00A0'}</div>
         </div>
       </div>
@@ -282,11 +316,13 @@ export function StackedDurationBarChart({
   anonymousDuration: number;
   valueFormatter: (value: number) => string;
 }): React.JSX.Element {
-  const data = [{
-    label,
-    identified: safeChartValue(identifiedDuration),
-    anonymous: safeChartValue(anonymousDuration),
-  }];
+  const data = [
+    {
+      label,
+      identified: safeChartValue(identifiedDuration),
+      anonymous: safeChartValue(anonymousDuration),
+    },
+  ];
 
   return (
     <div

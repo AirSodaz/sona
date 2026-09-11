@@ -1,12 +1,5 @@
-import type { BackupManifestV1, PreparedBackupImport } from "../../types/backup";
-import type { DashboardSnapshot } from "../../types/dashboard";
 import type {
   AsrTranscriptionRequest_Serialize as CoreAsrTranscriptionRequest,
-  CudaAddonInspection,
-  DiagnosticsCoreInput,
-  DiagnosticsCoreSnapshot,
-  ExportTranscriptFileRequest_Serialize,
-  ExportTranscriptFileResult,
   LlmCompletionRequest_Serialize as CoreLlmCompletionRequest,
   LlmCompletionResponse_Serialize as CoreLlmCompletionResponse,
   LlmConfig_Serialize as CoreLlmConfig,
@@ -17,42 +10,50 @@ import type {
   ModelCatalogSnapshot as CoreModelCatalogSnapshot,
   ModelSelectionPaths as CoreModelSelectionPaths,
   PolishSegmentsRequest_Serialize as CorePolishSegmentsRequest,
-  RustTauriCommandContractMap,
   SpeakerProcessingConfig as CoreSpeakerProcessingConfig,
-  StorageUsageSnapshot_Serialize,
   SummarizeTranscriptRequest_Serialize as CoreSummarizeTranscriptRequest,
   TranscriptLlmJobRequest_Serialize as CoreTranscriptLlmJobRequest,
   TranslateSegmentsRequest_Serialize as CoreTranslateSegmentsRequest,
+  CudaAddonInspection,
+  DiagnosticsCoreInput,
+  DiagnosticsCoreSnapshot,
+  ExportTranscriptFileRequest_Serialize,
+  ExportTranscriptFileResult,
+  RustTauriCommandContractMap,
+  StorageUsageSnapshot_Serialize,
   WebviewBrowsingDataClearResult,
-} from "../../bindings";
+} from '../../bindings';
+import type { ApiServerDashboardSnapshot } from '../../types/apiServer';
+import type { BackupManifestV1, PreparedBackupImport } from '../../types/backup';
+import type { AppConfig, AppLogLevel } from '../../types/config';
+import type { DashboardSnapshot } from '../../types/dashboard';
+import type {
+  PolishedSegment,
+  TranscriptLlmJobResult,
+  TranscriptSummaryResult,
+  TranslatedSegment,
+} from '../../types/llmTask';
+import type { ProjectRecord } from '../../types/project';
 import type {
   AsrRuntimeMetricsSnapshot,
   RuntimeEnvironmentStatus,
   RuntimePathStatus,
-} from "../../types/runtime";
+} from '../../types/runtime';
 import type {
-  AppConfig,
-  AppLogLevel,
-} from "../../types/config";
-import type {
-  ProjectRecord,
-} from "../../types/project";
-import type {
+  SpeakerProcessingConfig,
+  SpeakerProfileSample,
   SpeakerReviewFilter,
   SpeakerReviewSnapshot,
-  SpeakerProfileSample,
-  SpeakerProcessingConfig,
-} from "../../types/speaker";
-import type { StorageDirectoriesInfo } from "../../types/storage";
+} from '../../types/speaker';
 import type {
   ApplySpeakerProfileToGroupRequest,
   SpeakerCorrectionResponse,
   SpeakerGroupRequest,
-} from "../../types/speakerCommands";
-import type { TranscriptSegment } from "../../types/transcript";
-import type { ApiServerDashboardSnapshot } from "../../types/apiServer";
+} from '../../types/speakerCommands';
+import type { StorageDirectoriesInfo } from '../../types/storage';
 import type {
   DiscoveredVaultSummary,
+  LegacyRemoteBackupListResult,
   SyncChangePasswordRequest,
   SyncConflictDetail,
   SyncConflictResolution,
@@ -61,25 +62,19 @@ import type {
   SyncCreateTransportRequest,
   SyncJoinPreview,
   SyncJoinTransportRequest,
+  SyncPairingInfo,
   SyncPresetV1,
   SyncPreviewJoinTransportRequest,
   SyncProviderDescriptor,
   SyncProviderTransportInput,
   SyncRunResult,
   SyncStatusSnapshot,
-  SyncPairingInfo,
   SyncUnlockRecoveryRequest,
   SyncUnlockRequest,
   WebDavObjectStoreConfig,
-  LegacyRemoteBackupListResult,
-} from "../../types/sync";
-import type {
-  PolishedSegment,
-  TranscriptLlmJobResult,
-  TranscriptSummaryResult,
-  TranslatedSegment,
-} from "../../types/llmTask";
-import { TauriCommand, type TauriCommandName } from "./commands";
+} from '../../types/sync';
+import type { TranscriptSegment } from '../../types/transcript';
+import { TauriCommand, type TauriCommandName } from './commands';
 
 export interface LiveTranscriptionSubscription {
   consumerId: string;
@@ -162,11 +157,11 @@ export type ModelCatalogSelectedIds = CoreModelCatalogSelectedIds;
 type ManualTauriCommandContractMap = {
   [TauriCommand.app.extractTarBz2]: {
     args: ExtractTarBz2Args;
-    result: void;
+    result: undefined;
   };
   [TauriCommand.app.downloadFile]: {
     args: DownloadFileArgs;
-    result: void;
+    result: undefined;
   };
   [TauriCommand.app.downloadPresetModel]: {
     args: DownloadPresetModelArgs;
@@ -174,15 +169,15 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.app.deletePresetModel]: {
     args: { modelId: string };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.app.cancelDownload]: {
     args: { id: string };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.app.openLogFolder]: {
     args: undefined;
-    result: void;
+    result: undefined;
   };
   [TauriCommand.app.getModelCatalogSnapshot]: {
     args: undefined;
@@ -202,7 +197,7 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.app.saveAppConfig]: {
     args: { config: AppConfig };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.app.getAppSetting]: {
     args: { key: string };
@@ -210,7 +205,7 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.app.setAppSetting]: {
     args: { key: string; value: unknown };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.app.migrateAppConfig]: {
     args: {
@@ -247,19 +242,19 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.app.forceExit]: {
     args: undefined;
-    result: void;
+    result: undefined;
   };
   [TauriCommand.app.updateTrayMenu]: {
     args: UpdateTrayMenuArgs;
-    result: void;
+    result: undefined;
   };
   [TauriCommand.app.setMinimizeToTray]: {
     args: { enabled: boolean };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.app.setLogLevel]: {
     args: { level: AppLogLevel };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.app.checkMediaFormats]: {
     args: { paths: string[] };
@@ -267,7 +262,7 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.audio.setSystemAudioMute]: {
     args: { mute: boolean };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.audio.getSystemAudioDevices]: {
     args: undefined;
@@ -275,7 +270,7 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.audio.startSystemAudioCapture]: {
     args: StartAudioCaptureArgs;
-    result: void;
+    result: undefined;
   };
   [TauriCommand.audio.stopSystemAudioCapture]: {
     args: { instanceId: string };
@@ -283,7 +278,7 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.audio.setSystemAudioCapturePaused]: {
     args: SetCapturePausedArgs;
-    result: void;
+    result: undefined;
   };
   [TauriCommand.audio.getMicrophoneDevices]: {
     args: undefined;
@@ -291,7 +286,7 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.audio.startMicrophoneCapture]: {
     args: StartAudioCaptureArgs;
-    result: void;
+    result: undefined;
   };
   [TauriCommand.audio.stopMicrophoneCapture]: {
     args: { instanceId: string };
@@ -299,7 +294,7 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.audio.setMicrophoneCapturePaused]: {
     args: SetCapturePausedArgs;
-    result: void;
+    result: undefined;
   };
   [TauriCommand.storage.getUsageSnapshot]: {
     args: undefined;
@@ -339,7 +334,7 @@ type ManualTauriCommandContractMap = {
     args: {
       path: string;
     };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.dashboard.getSnapshot]: {
     args: { request: { deep: boolean } };
@@ -351,7 +346,7 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.llmUsage.ensureStorage]: {
     args: undefined;
-    result: void;
+    result: undefined;
   };
   [TauriCommand.llmUsage.readRaw]: {
     args: undefined;
@@ -359,7 +354,7 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.llmUsage.replaceRaw]: {
     args: { content: string };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.llm.generateText]: {
     args: { request: CoreLlmGenerateRequest };
@@ -395,7 +390,7 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.recognizer.prepareLive]: {
     args: { asrRequest: CoreAsrTranscriptionRequest };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.recognizer.createExternalSource]: {
     args: undefined;
@@ -417,11 +412,11 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.recognizer.feedExternalSource]: {
     args: { sourceToken: string; samples: Uint8Array };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.recognizer.retireExternalSource]: {
     args: { sourceToken: string };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.recognizer.startNativeLive]: {
     args: {
@@ -436,7 +431,7 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.recognizer.pauseNativeLive]: {
     args: { consumerId: string; sourceKind: 'system' | 'microphone' };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.recognizer.resumeNativeLive]: {
     args: {
@@ -453,7 +448,7 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.recognizer.stopLive]: {
     args: { consumerId: string };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.recognizer.getLiveMetrics]: {
     args: undefined;
@@ -479,11 +474,11 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.backup.applyPreparedImport]: {
     args: { importId: string };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.backup.disposePreparedImport]: {
     args: { importId: string };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.sync.getStatus]: {
     args: undefined;
@@ -559,7 +554,7 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.sync.changeMasterPassword]: {
     args: { request: SyncChangePasswordRequest };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.sync.generateRecoveryKey]: {
     args: undefined;
@@ -575,7 +570,7 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.sync.resolveConflict]: {
     args: { conflictId: string; resolution: SyncConflictResolution };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.speaker.annotateSegmentsFromFile]: {
     args: {
@@ -617,7 +612,7 @@ type ManualTauriCommandContractMap = {
       label: string;
       payload: unknown;
     };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.system.getAuxWindowState]: {
     args: { label: string };
@@ -625,14 +620,14 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.system.clearAuxWindowState]: {
     args: { label: string };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.system.injectText]: {
     args: {
       text: string;
       shortcutModifiers?: string[];
     };
-    result: void;
+    result: undefined;
   };
   [TauriCommand.system.getMousePosition]: {
     args: undefined;
@@ -653,13 +648,13 @@ type ManualTauriCommandContractMap = {
       jobTtlMinutes: number;
       maxStreaming: number;
       ipWhitelist: string;
-      gpuAcceleration: "auto" | "cpu" | "vulkan" | "metal" | "cuda";
+      gpuAcceleration: 'auto' | 'cpu' | 'vulkan' | 'metal' | 'cuda';
     };
     result: string;
   };
   [TauriCommand.apiServer.stop]: {
     args: undefined;
-    result: void;
+    result: undefined;
   };
   [TauriCommand.apiServer.dashboardSnapshot]: {
     args: undefined;
@@ -685,32 +680,24 @@ type ManualTauriCommandContractMap = {
   };
 };
 
-export type TauriCommandContractMap = RustTauriCommandContractMap &
-  ManualTauriCommandContractMap;
+export type TauriCommandContractMap = RustTauriCommandContractMap & ManualTauriCommandContractMap;
 
 type Assert<T extends true> = T;
 export type TauriAllCommandsCovered = Assert<
-  Exclude<TauriCommandName, keyof TauriCommandContractMap> extends never
-    ? true
-    : false
+  Exclude<TauriCommandName, keyof TauriCommandContractMap> extends never ? true : false
 >;
 export type TauriNoExtraContracts = Assert<
-  Exclude<keyof TauriCommandContractMap, TauriCommandName> extends never
-    ? true
-    : false
+  Exclude<keyof TauriCommandContractMap, TauriCommandName> extends never ? true : false
 >;
 
 export type KnownTauriCommandName = keyof TauriCommandContractMap;
 export type TauriCommandArgs<TCommand extends KnownTauriCommandName> =
-  TauriCommandContractMap[TCommand]["args"];
+  TauriCommandContractMap[TCommand]['args'];
 export type TauriCommandResult<TCommand extends KnownTauriCommandName> =
-  TauriCommandContractMap[TCommand]["result"];
+  TauriCommandContractMap[TCommand]['result'];
 export type TauriCommandsWithArgs = {
-  [
-    TCommand in KnownTauriCommandName
-  ]: TauriCommandArgs<TCommand> extends undefined ? never : TCommand;
+  [TCommand in KnownTauriCommandName]: TauriCommandArgs<TCommand> extends undefined
+    ? never
+    : TCommand;
 }[KnownTauriCommandName];
-export type TauriCommandsWithoutArgs = Exclude<
-  KnownTauriCommandName,
-  TauriCommandsWithArgs
->;
+export type TauriCommandsWithoutArgs = Exclude<KnownTauriCommandName, TauriCommandsWithArgs>;

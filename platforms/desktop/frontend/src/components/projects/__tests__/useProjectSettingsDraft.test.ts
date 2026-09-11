@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useProjectSettingsDraft } from '../hooks/useProjectSettingsDraft';
 import type { ProjectRecord } from '../../../types/project';
+import { useProjectSettingsDraft } from '../hooks/useProjectSettingsDraft';
 
 const projectAlpha: ProjectRecord = {
   id: 'project-1',
@@ -20,9 +20,8 @@ const projectBeta: ProjectRecord = {
 };
 
 describe('useProjectSettingsDraft', () => {
-  const t = (key: string, options?: Record<string, unknown>) => (
-    typeof options?.defaultValue === 'string' ? options.defaultValue : key
-  );
+  const t = (key: string, options?: Record<string, unknown>) =>
+    typeof options?.defaultValue === 'string' ? options.defaultValue : key;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -34,7 +33,7 @@ describe('useProjectSettingsDraft', () => {
       ({ browseProject }) => useProjectSettingsDraft({ browseProject, confirm, t }),
       {
         initialProps: { browseProject: projectAlpha as ProjectRecord | null },
-      },
+      }
     );
 
     await waitFor(() => {
@@ -57,11 +56,13 @@ describe('useProjectSettingsDraft', () => {
 
   it('confirms discard only when settings are open and the draft is dirty', async () => {
     const confirm = vi.fn().mockResolvedValue(true);
-    const { result } = renderHook(() => useProjectSettingsDraft({
-      browseProject: projectAlpha,
-      confirm,
-      t,
-    }));
+    const { result } = renderHook(() =>
+      useProjectSettingsDraft({
+        browseProject: projectAlpha,
+        confirm,
+        t,
+      })
+    );
 
     await waitFor(() => {
       expect(result.current.draftIcon).toBe('🧪');

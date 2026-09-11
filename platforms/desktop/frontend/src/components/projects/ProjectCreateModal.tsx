@@ -1,8 +1,10 @@
-import React, { useEffect } from 'react';
+import type React from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderIcon } from '../Icons';
 import { IconPicker } from '../IconPicker';
+import { FolderIcon } from '../Icons';
 import { Modal } from '../Modal';
+
 interface ProjectCreateModalProps {
   isOpen: boolean;
   name: string;
@@ -115,7 +117,9 @@ export function ProjectCreateModal({
             className="settings-input"
             value={description}
             onChange={(event) => onDescriptionChange(event.target.value)}
-            placeholder={t('projects.new_project_description', { defaultValue: 'Short description' })}
+            placeholder={t('projects.new_project_description', {
+              defaultValue: 'Short description',
+            })}
             style={{ minHeight: '100px' }}
           />
         </div>

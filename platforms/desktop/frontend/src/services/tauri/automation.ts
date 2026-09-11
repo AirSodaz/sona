@@ -7,7 +7,7 @@ import { TauriCommand } from './commands';
 import { invokeTauri } from './invoke';
 
 export async function replaceAutomationRuntimeRules(
-  rules: AutomationRuntimeRuleConfig[],
+  rules: AutomationRuntimeRuleConfig[]
 ): Promise<AutomationRuntimeReplaceResult[]> {
   return invokeTauri(TauriCommand.automation.replaceRuntimeRules, { rules });
 }
@@ -18,7 +18,7 @@ export async function scanAutomationRuntimeRule(rule: AutomationRuntimeRuleConfi
 
 export async function collectAutomationRuntimeRulePaths(
   rule: AutomationRuntimeRuleConfig,
-  filePaths: string[],
+  filePaths: string[]
 ): Promise<AutomationRuntimePathCollectionResult[]> {
   return invokeTauri(TauriCommand.automation.collectRuntimeRulePaths, {
     rule,

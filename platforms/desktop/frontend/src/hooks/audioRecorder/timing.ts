@@ -3,142 +3,142 @@ import { normalizeTranscriptUpdate, shiftTranscriptSegment } from '../../utils/t
 import type { AudioRecorderLogger, RecordSessionPhase, RecordTimingRefs } from './types';
 
 export function shouldFeedWebAudioForPhase(phase: RecordSessionPhase): boolean {
-    // Web-audio fallback should stop feeding new samples while paused/stopping,
-    // because those transitions are controlled entirely on the client side.
-    return phase === 'starting' || phase === 'recording' || phase === 'resuming';
+  // Web-audio fallback should stop feeding new samples while paused/stopping,
+  // because those transitions are controlled entirely on the client side.
+  return phase === 'starting' || phase === 'recording' || phase === 'resuming';
 }
 
 interface CreateRecordTimingControllerArgs {
-    refs: RecordTimingRefs;
-    logger: AudioRecorderLogger;
-    setRecordingElapsedMs: (value: number) => void;
-    getSessionId: () => string | null;
-    now?: () => number;
+  refs: RecordTimingRefs;
+  logger: AudioRecorderLogger;
+  setRecordingElapsedMs: (value: number) => void;
+  getSessionId: () => string | null;
+  now?: () => number;
 }
 
 export function createRecordTimingController({
-    refs,
-    logger,
-    setRecordingElapsedMs,
-    getSessionId,
-    now = () => Date.now(),
+  refs,
+  logger,
+  setRecordingElapsedMs,
+  getSessionId,
+  now = () => Date.now(),
 }: CreateRecordTimingControllerArgs) {
-    // Duration tracking is maintained separately from transcript timing because
-    // recognizer segment boundaries can drift around pause/resume transitions.
-    function resetRecordedDuration(): void {
-        refs.recordedDurationMsRef.current = 0;
-        refs.activeDurationStartedAtRef.current = null;
+  // Duration tracking is maintained separately from transcript timing because
+  // recognizer segment boundaries can drift around pause/resume transitions.
+  function resetRecordedDuration(): void {
+    refs.recordedDurationMsRef.current = 0;
+    refs.activeDurationStartedAtRef.current = null;
+  }
+
+  function beginRecordedDurationWindow(): void {
+    refs.activeDurationStartedAtRef.current = now();
+  }
+
+  function pauseRecordedDurationWindow(): void {
+    if (refs.activeDurationStartedAtRef.current !== null) {
+      refs.recordedDurationMsRef.current += now() - refs.activeDurationStartedAtRef.current;
+      refs.activeDurationStartedAtRef.current = null;
     }
+  }
 
-    function beginRecordedDurationWindow(): void {
-        refs.activeDurationStartedAtRef.current = now();
+  function getRecordedDurationMs(): number {
+    let durationMs = refs.recordedDurationMsRef.current;
+    if (refs.activeDurationStartedAtRef.current !== null) {
+      durationMs += now() - refs.activeDurationStartedAtRef.current;
     }
+    return durationMs;
+  }
 
-    function pauseRecordedDurationWindow(): void {
-        if (refs.activeDurationStartedAtRef.current !== null) {
-            refs.recordedDurationMsRef.current += now() - refs.activeDurationStartedAtRef.current;
-            refs.activeDurationStartedAtRef.current = null;
-        }
-    }
+  function syncRecordingElapsedMs(): void {
+    setRecordingElapsedMs(getRecordedDurationMs());
+  }
 
-    function getRecordedDurationMs(): number {
-        let durationMs = refs.recordedDurationMsRef.current;
-        if (refs.activeDurationStartedAtRef.current !== null) {
-            durationMs += now() - refs.activeDurationStartedAtRef.current;
-        }
-        return durationMs;
-    }
+  function getRecordedDurationSeconds(): number {
+    return getRecordedDurationMs() / 1000;
+  }
 
-    function syncRecordingElapsedMs(): void {
-        setRecordingElapsedMs(getRecordedDurationMs());
-    }
+  function finalizeRecordedDurationSeconds(): number {
+    pauseRecordedDurationWindow();
+    syncRecordingElapsedMs();
+    const durationSeconds = getRecordedDurationSeconds();
+    refs.finalizedDurationSecondsRef.current = durationSeconds;
+    return durationSeconds;
+  }
 
-    function getRecordedDurationSeconds(): number {
-        return getRecordedDurationMs() / 1000;
-    }
+  // Timeline offsets keep emitted segment timestamps monotonic across
+  // pause/resume, even if the recognizer restarts its internal clock at 0.
+  function resetRecordTimeline(): void {
+    refs.segmentTimeOffsetSecondsRef.current = 0;
+    refs.recordTimelineCursorSecondsRef.current = 0;
+  }
 
-    function finalizeRecordedDurationSeconds(): number {
-        pauseRecordedDurationWindow();
-        syncRecordingElapsedMs();
-        const durationSeconds = getRecordedDurationSeconds();
-        refs.finalizedDurationSecondsRef.current = durationSeconds;
-        return durationSeconds;
-    }
+  function resetLiveTimingState(): void {
+    resetRecordedDuration();
+    resetRecordTimeline();
+    setRecordingElapsedMs(0);
+  }
 
-    // Timeline offsets keep emitted segment timestamps monotonic across
-    // pause/resume, even if the recognizer restarts its internal clock at 0.
-    function resetRecordTimeline(): void {
-        refs.segmentTimeOffsetSecondsRef.current = 0;
-        refs.recordTimelineCursorSecondsRef.current = 0;
-    }
+  function clearFinalizedDurationSeconds(): void {
+    refs.finalizedDurationSecondsRef.current = null;
+  }
 
-    function resetLiveTimingState(): void {
-        resetRecordedDuration();
-        resetRecordTimeline();
-        setRecordingElapsedMs(0);
-    }
+  function getFinalizedDurationSeconds(): number | null {
+    return refs.finalizedDurationSecondsRef.current;
+  }
 
-    function clearFinalizedDurationSeconds(): void {
-        refs.finalizedDurationSecondsRef.current = null;
-    }
+  function getNextSegmentTimeOffsetSeconds(): number {
+    return Math.max(refs.recordTimelineCursorSecondsRef.current, getRecordedDurationSeconds());
+  }
 
-    function getFinalizedDurationSeconds(): number | null {
-        return refs.finalizedDurationSecondsRef.current;
-    }
+  function setSegmentTimeOffsetSeconds(offsetSeconds: number, reason: string): void {
+    refs.segmentTimeOffsetSecondsRef.current = offsetSeconds;
+    logger.info(
+      `[useAudioRecorder] Updated record segment timeline offset. session=${getSessionId() ?? 'none'} offset=${offsetSeconds.toFixed(3)} reason=${reason}`
+    );
+  }
 
-    function getNextSegmentTimeOffsetSeconds(): number {
-        return Math.max(refs.recordTimelineCursorSecondsRef.current, getRecordedDurationSeconds());
-    }
+  function normalizeRecordSegmentTiming(segment: TranscriptSegment): TranscriptSegment {
+    return shiftTranscriptSegment(segment, refs.segmentTimeOffsetSecondsRef.current);
+  }
 
-    function setSegmentTimeOffsetSeconds(offsetSeconds: number, reason: string): void {
-        refs.segmentTimeOffsetSecondsRef.current = offsetSeconds;
-        logger.info(
-            `[useAudioRecorder] Updated record segment timeline offset. session=${getSessionId() ?? 'none'} offset=${offsetSeconds.toFixed(3)} reason=${reason}`
-        );
-    }
-
-    function normalizeRecordSegmentTiming(segment: TranscriptSegment): TranscriptSegment {
-        return shiftTranscriptSegment(segment, refs.segmentTimeOffsetSecondsRef.current);
-    }
-
-    function normalizeRecordTranscriptUpdate(update: TranscriptUpdate): TranscriptUpdate {
-        const normalized = normalizeTranscriptUpdate(update);
-        if (refs.segmentTimeOffsetSecondsRef.current === 0) {
-            return normalized;
-        }
-
-        return {
-            ...normalized,
-            upsertSegments: normalized.upsertSegments.map(normalizeRecordSegmentTiming),
-        };
-    }
-
-    function trackAcceptedSegment(segment: TranscriptSegment): void {
-        refs.recordTimelineCursorSecondsRef.current = Math.max(
-            refs.recordTimelineCursorSecondsRef.current,
-            segment.end,
-        );
-    }
-
-    function trackAcceptedTranscriptUpdate(update: TranscriptUpdate): void {
-        update.upsertSegments.forEach(trackAcceptedSegment);
+  function normalizeRecordTranscriptUpdate(update: TranscriptUpdate): TranscriptUpdate {
+    const normalized = normalizeTranscriptUpdate(update);
+    if (refs.segmentTimeOffsetSecondsRef.current === 0) {
+      return normalized;
     }
 
     return {
-        beginRecordedDurationWindow,
-        pauseRecordedDurationWindow,
-        getRecordedDurationMs,
-        syncRecordingElapsedMs,
-        getRecordedDurationSeconds,
-        finalizeRecordedDurationSeconds,
-        resetLiveTimingState,
-        clearFinalizedDurationSeconds,
-        getFinalizedDurationSeconds,
-        getNextSegmentTimeOffsetSeconds,
-        setSegmentTimeOffsetSeconds,
-        normalizeRecordSegmentTiming,
-        normalizeRecordTranscriptUpdate,
-        trackAcceptedSegment,
-        trackAcceptedTranscriptUpdate,
+      ...normalized,
+      upsertSegments: normalized.upsertSegments.map(normalizeRecordSegmentTiming),
     };
+  }
+
+  function trackAcceptedSegment(segment: TranscriptSegment): void {
+    refs.recordTimelineCursorSecondsRef.current = Math.max(
+      refs.recordTimelineCursorSecondsRef.current,
+      segment.end
+    );
+  }
+
+  function trackAcceptedTranscriptUpdate(update: TranscriptUpdate): void {
+    update.upsertSegments.forEach(trackAcceptedSegment);
+  }
+
+  return {
+    beginRecordedDurationWindow,
+    pauseRecordedDurationWindow,
+    getRecordedDurationMs,
+    syncRecordingElapsedMs,
+    getRecordedDurationSeconds,
+    finalizeRecordedDurationSeconds,
+    resetLiveTimingState,
+    clearFinalizedDurationSeconds,
+    getFinalizedDurationSeconds,
+    getNextSegmentTimeOffsetSeconds,
+    setSegmentTimeOffsetSeconds,
+    normalizeRecordSegmentTiming,
+    normalizeRecordTranscriptUpdate,
+    trackAcceptedSegment,
+    trackAcceptedTranscriptUpdate,
+  };
 }

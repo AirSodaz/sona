@@ -1,8 +1,13 @@
-import React from 'react';
 import { CheckSquare, LayoutGrid, LayoutList, List, Search, SlidersHorizontal } from 'lucide-react';
+import type React from 'react';
 import { Dropdown } from '../Dropdown';
 import { FolderIcon, XIcon } from '../Icons';
-import type { ProjectDateFilter, ProjectFilterType, ProjectSortOrder, TranslationFn } from './types';
+import type {
+  ProjectDateFilter,
+  ProjectFilterType,
+  ProjectSortOrder,
+  TranslationFn,
+} from './types';
 
 interface ProjectsToolbarProps {
   activeFilterCount: number;
@@ -83,7 +88,9 @@ export function ProjectsToolbar({
             type="text"
             placeholder={searchInputLabel}
             aria-label={searchInputLabel}
-            aria-activedescendant={currentSearchResultId ? `workspace-search-result-${currentSearchResultId}` : undefined}
+            aria-activedescendant={
+              currentSearchResultId ? `workspace-search-result-${currentSearchResultId}` : undefined
+            }
             value={searchQuery}
             onChange={(event) => onSearchQueryChange(event.target.value)}
             onKeyDown={onSearchInputKeyDown}
@@ -130,8 +137,13 @@ export function ProjectsToolbar({
               <div className="projects-filter-popover-header">
                 <div className="projects-filter-popover-copy">
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                    <strong>{t('projects.filter_button', { defaultValue: 'Filter & Sort' })}</strong>
-                    <span className="projects-results-count" data-testid="projects-results-count-popover">
+                    <strong>
+                      {t('projects.filter_button', { defaultValue: 'Filter & Sort' })}
+                    </strong>
+                    <span
+                      className="projects-results-count"
+                      data-testid="projects-results-count-popover"
+                    >
                       {t('projects.results_count', {
                         visible: filteredResultsCount,
                         total: scopedItemsCount,
@@ -196,7 +208,11 @@ export function ProjectsToolbar({
 
       <div className="projects-toolbar-right">
         <div className="projects-segmented-control">
-          <div className="projects-view-toggles" role="group" aria-label={t('projects.view_mode', { defaultValue: 'View Mode' })}>
+          <div
+            className="projects-view-toggles"
+            role="group"
+            aria-label={t('projects.view_mode', { defaultValue: 'View Mode' })}
+          >
             <button
               type="button"
               className={`btn btn-icon projects-toolbar-icon ${viewMode === 'list' ? 'active' : ''}`}

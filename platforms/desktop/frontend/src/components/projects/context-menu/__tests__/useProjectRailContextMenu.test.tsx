@@ -1,8 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ProjectRecord } from '../../../../types/project';
-import type { OpenContextMenuOptions } from '../../../context-menu/types';
 import type { ContextMenuOpenRequest } from '../../../context-menu/trigger';
+import type { OpenContextMenuOptions } from '../../../context-menu/types';
 import { ALL_ITEMS_SCOPE, TRASH_SCOPE, UNTAGGED_SCOPE } from '../../constants';
 import { useProjectRailContextMenu } from '../useProjectRailContextMenu';
 
@@ -23,7 +23,8 @@ function createDummyRequest(): ContextMenuOpenRequest {
   };
 }
 
-const t = ((key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key) as any;
+const t = ((key: string, options?: { defaultValue?: string }) =>
+  options?.defaultValue ?? key) as any;
 
 describe('useProjectRailContextMenu', () => {
   it('opens custom project menu with open, set active, settings, and delete actions', () => {
@@ -36,18 +37,20 @@ describe('useProjectRailContextMenu', () => {
     const onOpenProjectSettings = vi.fn();
     const onDeleteProject = vi.fn();
 
-    const { result } = renderHook(() => useProjectRailContextMenu({
-      activeProjectId: null,
-      browseScope: 'all',
-      isLockedLiveDraft: false,
-      onDeleteProject,
-      onOpenProjectSettings,
-      onSetActiveProjectId,
-      onSwitchScope,
-      openContextMenu,
-      projects: [dummyProject],
-      t,
-    }));
+    const { result } = renderHook(() =>
+      useProjectRailContextMenu({
+        activeProjectId: null,
+        browseScope: 'all',
+        isLockedLiveDraft: false,
+        onDeleteProject,
+        onOpenProjectSettings,
+        onSetActiveProjectId,
+        onSwitchScope,
+        openContextMenu,
+        projects: [dummyProject],
+        t,
+      })
+    );
 
     act(() => {
       result.current.openRailContextMenu('proj-1', createDummyRequest());
@@ -85,18 +88,20 @@ describe('useProjectRailContextMenu', () => {
     const onSwitchScope = vi.fn().mockResolvedValue(true);
     const onSetActiveProjectId = vi.fn();
 
-    const { result } = renderHook(() => useProjectRailContextMenu({
-      activeProjectId: 'proj-1',
-      browseScope: 'all',
-      isLockedLiveDraft: false,
-      onDeleteProject: vi.fn(),
-      onOpenProjectSettings: vi.fn(),
-      onSetActiveProjectId,
-      onSwitchScope,
-      openContextMenu,
-      projects: [dummyProject],
-      t,
-    }));
+    const { result } = renderHook(() =>
+      useProjectRailContextMenu({
+        activeProjectId: 'proj-1',
+        browseScope: 'all',
+        isLockedLiveDraft: false,
+        onDeleteProject: vi.fn(),
+        onOpenProjectSettings: vi.fn(),
+        onSetActiveProjectId,
+        onSwitchScope,
+        openContextMenu,
+        projects: [dummyProject],
+        t,
+      })
+    );
 
     act(() => {
       result.current.openRailContextMenu(UNTAGGED_SCOPE, createDummyRequest());
@@ -106,7 +111,9 @@ describe('useProjectRailContextMenu', () => {
     const actionIds = capturedOptions!.actions.map((action) => action.id);
     expect(actionIds).toEqual(['open_inbox', 'set_active_inbox']);
 
-    const setActiveInbox = capturedOptions!.actions.find((action) => action.id === 'set_active_inbox');
+    const setActiveInbox = capturedOptions!.actions.find(
+      (action) => action.id === 'set_active_inbox'
+    );
     setActiveInbox?.onSelect();
     expect(onSetActiveProjectId).toHaveBeenCalledWith(null);
   });
@@ -119,20 +126,22 @@ describe('useProjectRailContextMenu', () => {
     const onSwitchScope = vi.fn().mockResolvedValue(true);
     const onEmptyTrash = vi.fn();
 
-    const { result } = renderHook(() => useProjectRailContextMenu({
-      activeProjectId: null,
-      browseScope: 'all',
-      isLockedLiveDraft: false,
-      onDeleteProject: vi.fn(),
-      onEmptyTrash,
-      onOpenProjectSettings: vi.fn(),
-      onSetActiveProjectId: vi.fn(),
-      onSwitchScope,
-      openContextMenu,
-      projects: [dummyProject],
-      t,
-      trashCount: 5,
-    }));
+    const { result } = renderHook(() =>
+      useProjectRailContextMenu({
+        activeProjectId: null,
+        browseScope: 'all',
+        isLockedLiveDraft: false,
+        onDeleteProject: vi.fn(),
+        onEmptyTrash,
+        onOpenProjectSettings: vi.fn(),
+        onSetActiveProjectId: vi.fn(),
+        onSwitchScope,
+        openContextMenu,
+        projects: [dummyProject],
+        t,
+        trashCount: 5,
+      })
+    );
 
     act(() => {
       result.current.openRailContextMenu(TRASH_SCOPE, createDummyRequest());
@@ -156,18 +165,20 @@ describe('useProjectRailContextMenu', () => {
     });
     const onSwitchScope = vi.fn().mockResolvedValue(true);
 
-    const { result } = renderHook(() => useProjectRailContextMenu({
-      activeProjectId: null,
-      browseScope: 'proj-1',
-      isLockedLiveDraft: false,
-      onDeleteProject: vi.fn(),
-      onOpenProjectSettings: vi.fn(),
-      onSetActiveProjectId: vi.fn(),
-      onSwitchScope,
-      openContextMenu,
-      projects: [dummyProject],
-      t,
-    }));
+    const { result } = renderHook(() =>
+      useProjectRailContextMenu({
+        activeProjectId: null,
+        browseScope: 'proj-1',
+        isLockedLiveDraft: false,
+        onDeleteProject: vi.fn(),
+        onOpenProjectSettings: vi.fn(),
+        onSetActiveProjectId: vi.fn(),
+        onSwitchScope,
+        openContextMenu,
+        projects: [dummyProject],
+        t,
+      })
+    );
 
     act(() => {
       result.current.openRailContextMenu(ALL_ITEMS_SCOPE, createDummyRequest());
@@ -185,19 +196,21 @@ describe('useProjectRailContextMenu', () => {
     });
     const onOpenCreateModal = vi.fn();
 
-    const { result } = renderHook(() => useProjectRailContextMenu({
-      activeProjectId: null,
-      browseScope: 'all',
-      isLockedLiveDraft: false,
-      onDeleteProject: vi.fn(),
-      onOpenCreateModal,
-      onOpenProjectSettings: vi.fn(),
-      onSetActiveProjectId: vi.fn(),
-      onSwitchScope: vi.fn().mockResolvedValue(true),
-      openContextMenu,
-      projects: [dummyProject],
-      t,
-    }));
+    const { result } = renderHook(() =>
+      useProjectRailContextMenu({
+        activeProjectId: null,
+        browseScope: 'all',
+        isLockedLiveDraft: false,
+        onDeleteProject: vi.fn(),
+        onOpenCreateModal,
+        onOpenProjectSettings: vi.fn(),
+        onSetActiveProjectId: vi.fn(),
+        onSwitchScope: vi.fn().mockResolvedValue(true),
+        openContextMenu,
+        projects: [dummyProject],
+        t,
+      })
+    );
 
     act(() => {
       result.current.openRailContextMenu('rail_empty', createDummyRequest());

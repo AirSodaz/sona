@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeTranscriptSegment } from '../transcriptTiming';
 import type { TranscriptSegment } from '../../types/transcript';
+import { normalizeTranscriptSegment } from '../transcriptTiming';
 
 describe('normalizeTranscriptSegment', () => {
   it('does not preserve token timing text that no longer matches edited segment text', () => {

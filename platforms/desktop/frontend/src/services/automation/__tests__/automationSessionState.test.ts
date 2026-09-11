@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { AutomationTaskSettledPayload } from '../../../services/automationEventBus';
 import type {
   AutomationProcessedEntry,
   AutomationRule,
   AutomationRuntimeState,
 } from '../../../types/automation';
-import type { AutomationTaskSettledPayload } from '../../../services/automationEventBus';
 import {
+  type AutomationSessionNotification,
   applyRetryBlockedResults,
   applyRetryFailureResults,
   applyRuntimeReplaceResults,
   applyTaskSettledState,
-  type AutomationSessionNotification,
 } from '../automationSessionState';
 
 function createRule(overrides: Partial<AutomationRule> = {}): AutomationRule {
@@ -39,7 +39,9 @@ function createRule(overrides: Partial<AutomationRule> = {}): AutomationRule {
   };
 }
 
-function createRuntimeState(overrides: Partial<AutomationRuntimeState> = {}): AutomationRuntimeState {
+function createRuntimeState(
+  overrides: Partial<AutomationRuntimeState> = {}
+): AutomationRuntimeState {
   return {
     ruleId: 'rule-1',
     status: 'stopped',
@@ -49,7 +51,7 @@ function createRuntimeState(overrides: Partial<AutomationRuntimeState> = {}): Au
 }
 
 function createNotification(
-  overrides: Partial<AutomationSessionNotification> = {},
+  overrides: Partial<AutomationSessionNotification> = {}
 ): AutomationSessionNotification {
   return {
     id: 'notification-1',
@@ -90,7 +92,7 @@ describe('automationSessionState', () => {
           candidate: null,
           error: null,
         },
-      ],
+      ]
     );
 
     expect(nextState.processedEntries).toEqual([
@@ -112,11 +114,13 @@ describe('automationSessionState', () => {
         retryable: true,
       }),
     ]);
-    expect(nextState.runtimeStates[rule.id]).toEqual(expect.objectContaining({
-      lastBlockedReason: 'retry_source_missing',
-      lastBlockedFilePath: 'C:\\watch\\missing.wav',
-      failureCount: 1,
-    }));
+    expect(nextState.runtimeStates[rule.id]).toEqual(
+      expect.objectContaining({
+        lastBlockedReason: 'retry_source_missing',
+        lastBlockedFilePath: 'C:\\watch\\missing.wav',
+        failureCount: 1,
+      })
+    );
   });
 
   it('recreates a blocked retry candidate as an error entry and preserves the block reason', () => {
@@ -144,7 +148,7 @@ describe('automationSessionState', () => {
           },
           reason: 'recovery_blocked',
         },
-      ],
+      ]
     );
 
     expect(nextState.processedEntries).toEqual([
@@ -167,11 +171,13 @@ describe('automationSessionState', () => {
         retryable: true,
       }),
     ]);
-    expect(nextState.runtimeStates[rule.id]).toEqual(expect.objectContaining({
-      lastBlockedReason: 'recovery_blocked',
-      lastBlockedFilePath: 'C:\\watch\\blocked.wav',
-      failureCount: 1,
-    }));
+    expect(nextState.runtimeStates[rule.id]).toEqual(
+      expect.objectContaining({
+        lastBlockedReason: 'recovery_blocked',
+        lastBlockedFilePath: 'C:\\watch\\blocked.wav',
+        failureCount: 1,
+      })
+    );
   });
 
   it('marks started runtime rules as watching and converts failed starts into failure notifications', () => {
@@ -190,18 +196,22 @@ describe('automationSessionState', () => {
       [
         { ruleId: firstRule.id, started: true, error: null },
         { ruleId: secondRule.id, started: false, error: 'Watcher failed to start.' },
-      ],
+      ]
     );
 
-    expect(nextState.runtimeStates[firstRule.id]).toEqual(expect.objectContaining({
-      status: 'watching',
-      lastResultMessage: undefined,
-    }));
-    expect(nextState.runtimeStates[secondRule.id]).toEqual(expect.objectContaining({
-      status: 'error',
-      lastResult: 'error',
-      lastResultMessage: 'Watcher failed to start.',
-    }));
+    expect(nextState.runtimeStates[firstRule.id]).toEqual(
+      expect.objectContaining({
+        status: 'watching',
+        lastResultMessage: undefined,
+      })
+    );
+    expect(nextState.runtimeStates[secondRule.id]).toEqual(
+      expect.objectContaining({
+        status: 'error',
+        lastResult: 'error',
+        lastResultMessage: 'Watcher failed to start.',
+      })
+    );
     expect(nextState.notifications).toEqual([
       expect.objectContaining({
         kind: 'failure',
@@ -259,7 +269,7 @@ describe('automationSessionState', () => {
       {
         waveActive: true,
         nextSuccessNotificationId: () => 'automation-success-rule-1-2',
-      },
+      }
     );
 
     expect(nextState.notifications).toEqual([
@@ -273,13 +283,15 @@ describe('automationSessionState', () => {
         waveActive: true,
       }),
     ]);
-    expect(nextState.runtimeStates[rule.id]).toEqual(expect.objectContaining({
-      status: 'watching',
-      lastResult: 'success',
-      lastProcessedFilePath: 'C:\\watch\\meeting.wav',
-      lastBlockedReason: undefined,
-      lastBlockedFilePath: undefined,
-    }));
+    expect(nextState.runtimeStates[rule.id]).toEqual(
+      expect.objectContaining({
+        status: 'watching',
+        lastResult: 'success',
+        lastProcessedFilePath: 'C:\\watch\\meeting.wav',
+        lastBlockedReason: undefined,
+        lastBlockedFilePath: undefined,
+      })
+    );
   });
 
   it('records discarded settled automation items without creating failure notifications', () => {
@@ -321,14 +333,16 @@ describe('automationSessionState', () => {
       {
         waveActive: false,
         nextSuccessNotificationId: () => 'automation-success-rule-1-1',
-      },
+      }
     );
 
     expect(nextState.notifications).toEqual([]);
-    expect(nextState.runtimeStates[rule.id]).toEqual(expect.objectContaining({
-      status: 'watching',
-      lastResult: 'success',
-      lastProcessedFilePath: 'C:\\watch\\cancelled.wav',
-    }));
+    expect(nextState.runtimeStates[rule.id]).toEqual(
+      expect.objectContaining({
+        status: 'watching',
+        lastResult: 'success',
+        lastProcessedFilePath: 'C:\\watch\\cancelled.wav',
+      })
+    );
   });
 });

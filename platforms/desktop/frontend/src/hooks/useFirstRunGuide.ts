@@ -41,7 +41,7 @@ function getActiveStepIndex(currentStep: OnboardingStep): number {
 function getPreferredMicrophoneId(
   currentValue: string,
   configMicrophoneId: string | undefined,
-  options: DeviceOption[],
+  options: DeviceOption[]
 ): string {
   const preferredValue = currentValue || configMicrophoneId || 'default';
   const matchingOption = options.find((option) => option.value === preferredValue);
@@ -162,9 +162,7 @@ export function useFirstRunGuide() {
     } catch (error) {
       logger.error('[Onboarding] Failed to download recommended models:', error);
       setModelStepStatus('error');
-      setModelError(
-        error instanceof Error ? error.message : t('first_run.models.error_detail')
-      );
+      setModelError(error instanceof Error ? error.message : t('first_run.models.error_detail'));
     }
   }
 

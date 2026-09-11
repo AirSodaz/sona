@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
 import { DEFAULT_CONFIG, useConfigStore } from '../configStore';
 import { getEffectiveConfigSnapshot, useEffectiveConfigStore } from '../effectiveConfigStore';
 import { useProjectStore } from '../projectStore';
-import { useTranscriptPlaybackStore } from '../transcriptPlaybackStore';
-import { useTranscriptRuntimeStore } from '../transcriptRuntimeStore';
-import { useTranscriptSessionStore } from '../transcriptSessionStore';
-import { useTranscriptSidecarStore } from '../transcriptSidecarStore';
 import {
   applyTranscriptUpdate,
   clearActiveTranscriptSession,
   openTranscriptSession,
   syncSavedRecordingMeta,
 } from '../transcriptCoordinator';
-import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
+import { useTranscriptPlaybackStore } from '../transcriptPlaybackStore';
+import { useTranscriptRuntimeStore } from '../transcriptRuntimeStore';
+import { useTranscriptSessionStore } from '../transcriptSessionStore';
+import { useTranscriptSidecarStore } from '../transcriptSidecarStore';
 
 vi.mock('../../services/tauri/app', () => ({
   resolveEffectiveConfig: vi.fn(async (globalConfig: any) => globalConfig),
@@ -57,15 +57,18 @@ describe('Transcript Stores', () => {
   });
 
   it('opens and clears a transcript session, then syncs saved metadata back into session and sidecar state', () => {
-    useTranscriptSidecarStore.getState().setSummaryState({
-      activeTemplateId: 'meeting',
-      record: {
-        templateId: 'meeting',
-        content: 'Unsaved summary',
-        generatedAt: '2026-04-30T00:00:00.000Z',
-        sourceFingerprint: 'fp-1',
+    useTranscriptSidecarStore.getState().setSummaryState(
+      {
+        activeTemplateId: 'meeting',
+        record: {
+          templateId: 'meeting',
+          content: 'Unsaved summary',
+          generatedAt: '2026-04-30T00:00:00.000Z',
+          sourceFingerprint: 'fp-1',
+        },
       },
-    }, 'current');
+      'current'
+    );
 
     openTranscriptSession({
       segments: [{ id: 'seg-1', text: 'Hello', start: 0, end: 1, isFinal: true }],
@@ -75,37 +78,47 @@ describe('Transcript Stores', () => {
       audioUrl: 'asset:///draft.wav',
     });
 
-    expect(useTranscriptSessionStore.getState()).toEqual(expect.objectContaining({
-      sourceHistoryId: 'history-1',
-      title: 'Draft',
-      icon: 'system:mic',
-    }));
+    expect(useTranscriptSessionStore.getState()).toEqual(
+      expect.objectContaining({
+        sourceHistoryId: 'history-1',
+        title: 'Draft',
+        icon: 'system:mic',
+      })
+    );
     expect(useTranscriptPlaybackStore.getState().audioUrl).toBe('asset:///draft.wav');
 
     syncSavedRecordingMeta('Saved title', 'history-1', 'system:file');
 
-    expect(useTranscriptSessionStore.getState()).toEqual(expect.objectContaining({
-      sourceHistoryId: 'history-1',
-      title: 'Saved title',
-      icon: 'system:file',
-    }));
+    expect(useTranscriptSessionStore.getState()).toEqual(
+      expect.objectContaining({
+        sourceHistoryId: 'history-1',
+        title: 'Saved title',
+        icon: 'system:file',
+      })
+    );
     expect(useTranscriptSidecarStore.getState().summaryStates.current).toBeUndefined();
-    expect(useTranscriptSidecarStore.getState().getSummaryState('history-1').record?.content).toBe('Unsaved summary');
+    expect(useTranscriptSidecarStore.getState().getSummaryState('history-1').record?.content).toBe(
+      'Unsaved summary'
+    );
 
     clearActiveTranscriptSession({ clearAudio: true, title: 'Empty' });
 
-    expect(useTranscriptSessionStore.getState()).toEqual(expect.objectContaining({
-      segments: [],
-      sourceHistoryId: null,
-      title: 'Empty',
-      icon: null,
-    }));
-    expect(useTranscriptPlaybackStore.getState()).toEqual(expect.objectContaining({
-      audioFile: null,
-      audioUrl: null,
-      activeSegmentId: null,
-      activeSegmentIndex: -1,
-    }));
+    expect(useTranscriptSessionStore.getState()).toEqual(
+      expect.objectContaining({
+        segments: [],
+        sourceHistoryId: null,
+        title: 'Empty',
+        icon: null,
+      })
+    );
+    expect(useTranscriptPlaybackStore.getState()).toEqual(
+      expect.objectContaining({
+        audioFile: null,
+        audioUrl: null,
+        activeSegmentId: null,
+        activeSegmentIndex: -1,
+      })
+    );
   });
 
   it('clears stale auto-save status when opening a persisted transcript session', () => {
@@ -139,24 +152,28 @@ describe('Transcript Stores', () => {
     const playbackStore = useTranscriptPlaybackStore.getState();
     playbackStore.requestSeek(7.5);
 
-    expect(useTranscriptPlaybackStore.getState()).toEqual(expect.objectContaining({
-      currentTime: 7.5,
-      activeSegmentId: 'seg-2',
-      activeSegmentIndex: 1,
-      seekRequest: {
-        time: 7.5,
-        timestamp: expect.any(Number),
-      },
-    }));
+    expect(useTranscriptPlaybackStore.getState()).toEqual(
+      expect.objectContaining({
+        currentTime: 7.5,
+        activeSegmentId: 'seg-2',
+        activeSegmentIndex: 1,
+        seekRequest: {
+          time: 7.5,
+          timestamp: expect.any(Number),
+        },
+      })
+    );
 
     playbackStore.clearSession();
 
-    expect(useTranscriptPlaybackStore.getState()).toEqual(expect.objectContaining({
-      audioUrl: null,
-      currentTime: 0,
-      activeSegmentId: null,
-      activeSegmentIndex: -1,
-    }));
+    expect(useTranscriptPlaybackStore.getState()).toEqual(
+      expect.objectContaining({
+        audioUrl: null,
+        currentTime: 0,
+        activeSegmentId: null,
+        activeSegmentIndex: -1,
+      })
+    );
   });
 
   it('runtime store updates workbench and recording flags independently of transcript content', () => {
@@ -169,14 +186,16 @@ describe('Transcript Stores', () => {
     runtimeStore.setIsPaused(true);
     runtimeStore.setIsCaptionMode(true);
 
-    expect(useTranscriptRuntimeStore.getState()).toEqual(expect.objectContaining({
-      mode: 'batch',
-      processingStatus: 'processing',
-      processingProgress: 45,
-      isRecording: true,
-      isPaused: true,
-      isCaptionMode: true,
-    }));
+    expect(useTranscriptRuntimeStore.getState()).toEqual(
+      expect.objectContaining({
+        mode: 'batch',
+        processingStatus: 'processing',
+        processingProgress: 45,
+        isRecording: true,
+        isPaused: true,
+        isCaptionMode: true,
+      })
+    );
   });
 
   it('sidecar store updates llm and auto-save state and rekeys current summary records', () => {
@@ -184,53 +203,63 @@ describe('Transcript Stores', () => {
 
     sidecarStore.updateLlmState({ isPolishing: true, polishProgress: 50 }, 'current');
     sidecarStore.setAutoSaveState('hist-1', 'saving');
-    sidecarStore.setSummaryState({
-      activeTemplateId: 'general',
-      record: {
-        templateId: 'general',
-        content: 'Current summary',
-        generatedAt: '2026-04-30T01:00:00.000Z',
-        sourceFingerprint: 'fp-current',
+    sidecarStore.setSummaryState(
+      {
+        activeTemplateId: 'general',
+        record: {
+          templateId: 'general',
+          content: 'Current summary',
+          generatedAt: '2026-04-30T01:00:00.000Z',
+          sourceFingerprint: 'fp-current',
+        },
       },
-    }, 'current');
+      'current'
+    );
     sidecarStore.rekeyCurrentSummaryState('hist-2');
 
-    expect(useTranscriptSidecarStore.getState().getLlmState('current')).toEqual(expect.objectContaining({
-      isPolishing: true,
-      polishProgress: 50,
-    }));
+    expect(useTranscriptSidecarStore.getState().getLlmState('current')).toEqual(
+      expect.objectContaining({
+        isPolishing: true,
+        polishProgress: 50,
+      })
+    );
     expect(useTranscriptSidecarStore.getState().autoSaveStates['hist-1']).toEqual({
       status: 'saving',
       updatedAt: expect.any(Number),
     });
     expect(useTranscriptSidecarStore.getState().summaryStates.current).toBeUndefined();
-    expect(useTranscriptSidecarStore.getState().getSummaryState('hist-2').record?.content).toBe('Current summary');
+    expect(useTranscriptSidecarStore.getState().getSummaryState('hist-2').record?.content).toBe(
+      'Current summary'
+    );
   });
 
   it('applies transcript updates atomically and keeps active selection aligned', () => {
     openTranscriptSession({
-      segments: [
-        { id: 'seg-partial', text: 'Hello world.', start: 0, end: 2, isFinal: false },
-      ],
+      segments: [{ id: 'seg-partial', text: 'Hello world.', start: 0, end: 2, isFinal: false }],
       sourceHistoryId: null,
     });
 
-    applyTranscriptUpdate({
-      removeIds: ['seg-partial'],
-      upsertSegments: [
-        { id: 'seg-final-1', text: 'Hello.', start: 0, end: 1, isFinal: true },
-        { id: 'seg-final-2', text: 'World.', start: 1, end: 2, isFinal: true },
-      ],
-    }, 'seg-final-2');
+    applyTranscriptUpdate(
+      {
+        removeIds: ['seg-partial'],
+        upsertSegments: [
+          { id: 'seg-final-1', text: 'Hello.', start: 0, end: 1, isFinal: true },
+          { id: 'seg-final-2', text: 'World.', start: 1, end: 2, isFinal: true },
+        ],
+      },
+      'seg-final-2'
+    );
 
     expect(useTranscriptSessionStore.getState().segments.map((segment) => segment.id)).toEqual([
       'seg-final-1',
       'seg-final-2',
     ]);
-    expect(useTranscriptPlaybackStore.getState()).toEqual(expect.objectContaining({
-      activeSegmentId: 'seg-final-2',
-      activeSegmentIndex: 1,
-    }));
+    expect(useTranscriptPlaybackStore.getState()).toEqual(
+      expect.objectContaining({
+        activeSegmentId: 'seg-final-2',
+        activeSegmentIndex: 1,
+      })
+    );
   });
 
   it('effective config store falls back to global settings for metadata-only Tags', async () => {
@@ -259,13 +288,17 @@ describe('Transcript Stores', () => {
 
     await useEffectiveConfigStore.getState().syncConfig();
 
-    expect(useEffectiveConfigStore.getState().config).toEqual(expect.objectContaining({
-      summaryTemplateId: 'general',
-      translationLanguage: 'zh',
-    }));
-    expect(getEffectiveConfigSnapshot()).toEqual(expect.objectContaining({
-      summaryTemplateId: 'general',
-      translationLanguage: 'zh',
-    }));
+    expect(useEffectiveConfigStore.getState().config).toEqual(
+      expect.objectContaining({
+        summaryTemplateId: 'general',
+        translationLanguage: 'zh',
+      })
+    );
+    expect(getEffectiveConfigSnapshot()).toEqual(
+      expect.objectContaining({
+        summaryTemplateId: 'general',
+        translationLanguage: 'zh',
+      })
+    );
   });
 });

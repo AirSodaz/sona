@@ -1,9 +1,7 @@
 type TranslationOptions = Record<string, unknown> | undefined;
 type TranslationOverride = string | ((options?: TranslationOptions) => string);
 
-export function createReactI18nextMock(
-  overrides: Record<string, TranslationOverride> = {},
-) {
+export function createReactI18nextMock(overrides: Record<string, TranslationOverride> = {}) {
   const t = (key: string, options?: TranslationOptions): string => {
     const override = overrides[key];
 

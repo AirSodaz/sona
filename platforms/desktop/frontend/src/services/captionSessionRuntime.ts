@@ -1,14 +1,11 @@
-import { captionWindowService } from './captionWindowService';
-import {
-  captionTranscriptionService,
-  type TranscriptionService,
-} from './transcriptionService';
-import { TauriEvent } from './tauri/events';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { normalizeTranscriptUpdate } from '../utils/transcriptTiming';
+import { captionWindowService } from './captionWindowService';
+import { TauriEvent } from './tauri/events';
 import { listen, type UnlistenFn } from './tauri/platform/events';
+import { captionTranscriptionService, type TranscriptionService } from './transcriptionService';
 
 type CaptionWindowOpenOptions = Parameters<typeof captionWindowService.open>[0];
 type CaptionWindowStyleOptions = Parameters<typeof captionWindowService.updateStyle>[0];
@@ -105,18 +102,16 @@ async function closeAudioContext(audioContext: AudioContext | null): Promise<voi
   }
 }
 
-async function tryStartNativeCaptionCapture(config: AppConfig): Promise<CaptionNativeCaptureResult> {
+async function tryStartNativeCaptionCapture(
+  config: AppConfig
+): Promise<CaptionNativeCaptureResult> {
   try {
     logger.info('[CaptionSession] Attempting native system audio capture...');
-    await captionTranscriptionService.startNative(
-      sendCaptionSegments,
-      logCaptionServiceError,
-      {
-        sourceKind: 'system',
-        deviceName: getCaptionDeviceName(config),
-        callbackOwner: 'caption',
-      },
-    );
+    await captionTranscriptionService.startNative(sendCaptionSegments, logCaptionServiceError, {
+      sourceKind: 'system',
+      deviceName: getCaptionDeviceName(config),
+      callbackOwner: 'caption',
+    });
     const unlisten = await listen<number>(TauriEvent.audio.systemPeak, () => {
       // The Rust backend feeds the recognizer directly for native caption capture.
     });
@@ -137,7 +132,7 @@ async function tryStartNativeCaptionCapture(config: AppConfig): Promise<CaptionN
 
 async function requestDisplayMediaFallback(
   isActive: () => boolean,
-  onStreamEnded: () => void,
+  onStreamEnded: () => void
 ): Promise<MediaStream | null> {
   try {
     const stream = await navigator.mediaDevices.getDisplayMedia(buildDisplayMediaOptions());
@@ -169,7 +164,7 @@ async function requestDisplayMediaFallback(
 
 async function resolveCaptionAudioContext(
   existingAudioContext: AudioContext | null,
-  isActive: () => boolean,
+  isActive: () => boolean
 ): Promise<AudioContext | null> {
   let audioContext = existingAudioContext;
 
@@ -210,7 +205,7 @@ function logCaptionServiceError(error: string): void {
 function connectWebAudioPipeline(
   audioContext: AudioContext,
   stream: MediaStream,
-  captionService: TranscriptionService,
+  captionService: TranscriptionService
 ): WebAudioPipeline {
   const source = audioContext.createMediaStreamSource(stream);
   const processor = new AudioWorkletNode(audioContext, 'audio-processor');
@@ -237,15 +232,14 @@ class CaptionSessionRuntime {
 
   isRunning(): boolean {
     return Boolean(
-      (this.stream && this.audioContext?.state === 'running')
-      || this.usingNativeCapture,
+      (this.stream && this.audioContext?.state === 'running') || this.usingNativeCapture
     );
   }
 
   async start(
     config: AppConfig,
     isActive: () => boolean,
-    onStreamEnded: () => void,
+    onStreamEnded: () => void
   ): Promise<void> {
     if (this.isRunning()) {
       return;
@@ -275,10 +269,7 @@ class CaptionSessionRuntime {
     }
 
     if (!this.usingNativeCapture) {
-      this.audioContext = await resolveCaptionAudioContext(
-        this.audioContext,
-        isActive,
-      );
+      this.audioContext = await resolveCaptionAudioContext(this.audioContext, isActive);
 
       if (!isActive()) {
         return;
@@ -303,17 +294,8 @@ class CaptionSessionRuntime {
       return;
     }
 
-    if (
-      !this.usingNativeCapture
-      && !this.processor
-      && this.audioContext
-      && this.stream
-    ) {
-      const pipeline = connectWebAudioPipeline(
-        this.audioContext,
-        this.stream,
-        captionService,
-      );
+    if (!this.usingNativeCapture && !this.processor && this.audioContext && this.stream) {
+      const pipeline = connectWebAudioPipeline(this.audioContext, this.stream, captionService);
       this.processor = pipeline.processor;
     }
   }
@@ -349,12 +331,14 @@ class CaptionSessionRuntime {
   }
 
   async updateStyle(config: AppConfig): Promise<void> {
-    await captionWindowService.updateStyle(buildCaptionWindowStyle({
-      width: config.captionWindowWidth,
-      fontSize: config.captionFontSize,
-      color: config.captionFontColor,
-      backgroundOpacity: config.captionBackgroundOpacity,
-    }));
+    await captionWindowService.updateStyle(
+      buildCaptionWindowStyle({
+        width: config.captionWindowWidth,
+        fontSize: config.captionFontSize,
+        color: config.captionFontColor,
+        backgroundOpacity: config.captionBackgroundOpacity,
+      })
+    );
   }
 
   resetForTesting(): void {

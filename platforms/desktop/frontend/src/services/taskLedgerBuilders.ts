@@ -1,9 +1,9 @@
-import type { BatchQueueItem } from '../types/batchQueue';
-import type { RecoveryItemStage, RecoveredQueueItem } from '../types/recovery';
-import type { TaskLedgerKind, TaskLedgerPatch, TaskLedgerRecord } from '../types/taskLedger';
-import type { LlmTaskType } from './llmTaskTypes';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
+import type { BatchQueueItem } from '../types/batchQueue';
+import type { RecoveredQueueItem, RecoveryItemStage } from '../types/recovery';
+import type { TaskLedgerKind, TaskLedgerPatch, TaskLedgerRecord } from '../types/taskLedger';
 import { logger } from '../utils/logger';
+import type { LlmTaskType } from './llmTaskTypes';
 
 export interface TaskLedgerBuildersPorts {
   useTaskLedgerStore: typeof useTaskLedgerStore;
@@ -14,23 +14,23 @@ export class TaskLedgerBuilders {
 
   createBatchTaskLedgerId = (queueItemId: string): string => {
     return `batch-${queueItemId}`;
-  }
+  };
 
   createLlmTaskLedgerId = (taskId: string): string => {
     return `llm-${taskId}`;
-  }
+  };
 
   createRecoveryTaskLedgerId = (recoveryId: string): string => {
     return `recovery-${recoveryId}`;
-  }
+  };
 
   nowTaskLedgerTimestamp = (): number => {
     return Date.now();
-  }
+  };
 
   buildBatchTaskLedgerRecord = (
     item: BatchQueueItem,
-    status: TaskLedgerRecord['status'] = 'pending',
+    status: TaskLedgerRecord['status'] = 'pending'
   ): TaskLedgerRecord => {
     const now = this.nowTaskLedgerTimestamp();
     const taskKind: TaskLedgerKind = item.origin === 'automation' ? 'automation' : 'batchImport';
@@ -56,7 +56,7 @@ export class TaskLedgerBuilders {
       sourceFingerprint: item.sourceFingerprint,
       errorMessage: item.errorMessage,
     };
-  }
+  };
 
   buildRecoveryTaskLedgerRecord = (item: RecoveredQueueItem): TaskLedgerRecord => {
     return {
@@ -81,7 +81,7 @@ export class TaskLedgerBuilders {
       sourceFingerprint: item.sourceFingerprint,
       errorMessage: item.canResume ? undefined : 'Source file is missing.',
     };
-  }
+  };
 
   buildLlmTaskLedgerRecord = ({
     taskId,
@@ -125,42 +125,62 @@ export class TaskLedgerBuilders {
       templateId,
       targetLanguage,
     };
-  }
+  };
 
   upsertTaskLedgerRecord = (record: TaskLedgerRecord, options?: { transient?: boolean }): void => {
-    void this.ports.useTaskLedgerStore.getState().upsertTask(record, options).catch((error) => {
-      logger.error('[TaskLedger] Failed to upsert task:', error);
-    });
-  }
+    void this.ports.useTaskLedgerStore
+      .getState()
+      .upsertTask(record, options)
+      .catch((error) => {
+        logger.error('[TaskLedger] Failed to upsert task:', error);
+      });
+  };
 
-  patchTaskLedgerRecord = (id: string, patch: TaskLedgerPatch, options?: { transient?: boolean }): void => {
-    void this.ports.useTaskLedgerStore.getState().patchTask(id, {
-      ...patch,
-      updatedAt: patch.updatedAt ?? this.nowTaskLedgerTimestamp(),
-    }, options).catch((error) => {
-      logger.error('[TaskLedger] Failed to patch task:', error);
-    });
-  }
+  patchTaskLedgerRecord = (
+    id: string,
+    patch: TaskLedgerPatch,
+    options?: { transient?: boolean }
+  ): void => {
+    void this.ports.useTaskLedgerStore
+      .getState()
+      .patchTask(
+        id,
+        {
+          ...patch,
+          updatedAt: patch.updatedAt ?? this.nowTaskLedgerTimestamp(),
+        },
+        options
+      )
+      .catch((error) => {
+        logger.error('[TaskLedger] Failed to patch task:', error);
+      });
+  };
 
   removeTaskLedgerRecord = (id: string): void => {
-    void this.ports.useTaskLedgerStore.getState().removeTask(id).catch((error) => {
-      logger.error('[TaskLedger] Failed to remove task:', error);
-    });
-  }
+    void this.ports.useTaskLedgerStore
+      .getState()
+      .removeTask(id)
+      .catch((error) => {
+        logger.error('[TaskLedger] Failed to remove task:', error);
+      });
+  };
 
   requestTaskLedgerCancel = (id: string): void => {
-    void this.ports.useTaskLedgerStore.getState().requestCancel(id).catch((error) => {
-      logger.error('[TaskLedger] Failed to request task cancellation:', error);
-    });
-  }
+    void this.ports.useTaskLedgerStore
+      .getState()
+      .requestCancel(id)
+      .catch((error) => {
+        logger.error('[TaskLedger] Failed to request task cancellation:', error);
+      });
+  };
 
   isTaskLedgerCancelRequested = (id: string): boolean => {
     return this.ports.useTaskLedgerStore.getState().isCancelRequested(id);
-  }
+  };
 
   recoveryStageToTaskStage = (stage?: RecoveryItemStage): string | undefined => {
     return stage;
-  }
+  };
 }
 
 export function createTaskLedgerBuilders(ports: TaskLedgerBuildersPorts): TaskLedgerBuilders {

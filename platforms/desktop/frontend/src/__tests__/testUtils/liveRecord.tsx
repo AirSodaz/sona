@@ -29,7 +29,7 @@ type LiveRecordHistoryMockFns = {
 export function createLiveRecordingDraftHandle(
   id: string,
   extension = 'wav',
-  overrides: Partial<HistoryItem> = {},
+  overrides: Partial<HistoryItem> = {}
 ): LiveRecordingDraftHandle {
   return {
     item: {
@@ -55,7 +55,7 @@ export function createLiveRecordingDraftHandle(
 export function createCompletedHistoryItem(
   id: string,
   extension = 'wav',
-  overrides: Partial<HistoryItem> = {},
+  overrides: Partial<HistoryItem> = {}
 ): HistoryItem {
   return {
     id,
@@ -87,11 +87,7 @@ export function createLiveDraftRegistry() {
     handles.clear();
   };
 
-  const createNext = (
-    audioExtension: string,
-    projectId?: string | null,
-    icon?: string | null,
-  ) => {
+  const createNext = (audioExtension: string, projectId?: string | null, icon?: string | null) => {
     counter += 1;
     const draft = createLiveRecordingDraftHandle(`draft-${counter}`, audioExtension, {
       projectId: projectId ?? null,
@@ -105,11 +101,7 @@ export function createLiveDraftRegistry() {
     handles.delete(historyId);
   };
 
-  const complete = (
-    historyId: string,
-    segments: SegmentLike[],
-    duration: number,
-  ) => {
+  const complete = (historyId: string, segments: SegmentLike[], duration: number) => {
     const draft = handles.get(historyId) ?? createLiveRecordingDraftHandle(historyId);
     return createCompletedHistoryItem(historyId, getAudioExtension(draft), {
       title: draft.item.title,
@@ -117,7 +109,10 @@ export function createLiveDraftRegistry() {
       projectId: draft.item.projectId,
       duration,
       previewText: segments[0]?.text || '',
-      searchContent: segments.map((segment) => segment.text || '').join(' ').trim(),
+      searchContent: segments
+        .map((segment) => segment.text || '')
+        .join(' ')
+        .trim(),
     });
   };
 
@@ -130,7 +125,10 @@ export function createLiveDraftRegistry() {
   };
 }
 
-const liveDraftRegistries = new WeakMap<LiveRecordHistoryMockFns, ReturnType<typeof createLiveDraftRegistry>>();
+const liveDraftRegistries = new WeakMap<
+  LiveRecordHistoryMockFns,
+  ReturnType<typeof createLiveDraftRegistry>
+>();
 
 export function getLiveDraftRegistry(mocks: LiveRecordHistoryMockFns) {
   let registry = liveDraftRegistries.get(mocks);
@@ -145,7 +143,7 @@ export function getLiveDraftRegistry(mocks: LiveRecordHistoryMockFns) {
 
 export function resetLiveRecordHistoryMocks(
   mocks: LiveRecordHistoryMockFns,
-  options: LiveRecordHistoryMockOptions = {},
+  options: LiveRecordHistoryMockOptions = {}
 ) {
   const drafts = getLiveDraftRegistry(mocks);
   const saveRecordingResult = options.saveRecordingResult ?? {
@@ -172,25 +170,28 @@ export function resetLiveRecordHistoryMocks(
       audioExtension: string,
       projectId?: string | null,
       icon?: string | null,
-      id?: string,
+      id?: string
     ) => {
       if (id) {
-        const draft = createLiveRecordingDraftHandle(id, audioExtension, { projectId, icon: icon ?? 'system:mic' });
+        const draft = createLiveRecordingDraftHandle(id, audioExtension, {
+          projectId,
+          icon: icon ?? 'system:mic',
+        });
         drafts.handles.set(id, draft);
         return draft;
       }
       return drafts.createNext(audioExtension, projectId, icon);
-    },
+    }
   );
   mocks.mockCompleteLiveRecordingDraft.mockImplementation(
     async (historyId: string, segments: SegmentLike[], duration: number) =>
-      drafts.complete(historyId, segments, duration),
+      drafts.complete(historyId, segments, duration)
   );
 }
 
 export function createLiveRecordHistoryServiceMockModule(
   mocks: LiveRecordHistoryMockFns,
-  options: Pick<LiveRecordHistoryMockOptions, 'saveImportedFileResult'> = {},
+  options: Pick<LiveRecordHistoryMockOptions, 'saveImportedFileResult'> = {}
 ) {
   const saveImportedFileResult = options.saveImportedFileResult ?? { id: 'test-id' };
 
@@ -200,13 +201,10 @@ export function createLiveRecordHistoryServiceMockModule(
         audioExtension: string,
         projectId?: string | null,
         icon?: string | null,
-        id?: string,
+        id?: string
       ) => mocks.mockCreateLiveRecordingDraft(audioExtension, projectId, icon, id),
-      completeLiveRecordingDraft: (
-        historyId: string,
-        segments: SegmentLike[],
-        duration: number,
-      ) => mocks.mockCompleteLiveRecordingDraft(historyId, segments, duration),
+      completeLiveRecordingDraft: (historyId: string, segments: SegmentLike[], duration: number) =>
+        mocks.mockCompleteLiveRecordingDraft(historyId, segments, duration),
       discardLiveRecordingDraft: (historyId: string) => mocks.mockDeleteRecording(historyId),
       deleteRecording: (historyId: string) => mocks.mockDeleteRecording(historyId),
       updateTranscript: vi.fn().mockResolvedValue(undefined),
@@ -226,9 +224,7 @@ export function createLiveRecordHistoryServiceMockModule(
   };
 }
 
-export function createLiveRecordHistoryMockController(
-  options: LiveRecordHistoryMockOptions = {},
-) {
+export function createLiveRecordHistoryMockController(options: LiveRecordHistoryMockOptions = {}) {
   const mocks: LiveRecordHistoryMockFns = {
     mockSaveRecording: vi.fn(),
     mockSaveNativeRecording: vi.fn(),
@@ -293,7 +289,9 @@ export function createLiveRecordTranscriptionMocks(): LiveRecordTranscriptionMoc
   };
 }
 
-export function createLiveRecordTranscriptionServiceMockModule(mocks: LiveRecordTranscriptionMocks) {
+export function createLiveRecordTranscriptionServiceMockModule(
+  mocks: LiveRecordTranscriptionMocks
+) {
   const service = {
     start: mocks.mockStart,
     startNative: mocks.mockStartNative,

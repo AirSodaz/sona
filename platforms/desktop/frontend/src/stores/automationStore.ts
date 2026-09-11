@@ -1,20 +1,5 @@
-import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import {
-  replaceAutomationRuntimeRules,
-  scanAutomationRuntimeRule,
-  toAutomationRuntimeRuleConfig,
-  type AutomationRuntimeReplaceResult,
-} from '../services/automationRuntimeService';
-
-import type {
-  AutomationProcessedEntry,
-  AutomationProfile,
-  AutomationRule,
-  AutomationRuntimeState,
-} from '../types/automation';
-import type { RecoveredQueueItem } from '../types/recovery';
-import { extractErrorMessage } from '../utils/errorUtils';
+import { create } from 'zustand';
 import {
   loadAutomationRepositoryState,
   persistAutomationProcessedEntries,
@@ -24,40 +9,53 @@ import {
   validateAutomationRuleActivation,
 } from '../services/automation/automationRepository';
 import {
-  applyRuntimeFailureState,
-  applyRuntimeReplaceResults,
+  type AutomationRuntimeCoordinatorState,
+  createAutomationRuntimeCoordinator,
+} from '../services/automation/automationRuntimeCoordinator';
+import {
+  isPathInsideDirectory,
+  normalizeAutomationPath,
+} from '../services/automation/automationService';
+import {
   type AutomationSessionNotification,
-  deriveRuntimeState,
-  rebuildRuntimeStates,
-  removeRuleNotifications,
   applyRetryBlockedResults,
   applyRetryFailureResults,
   applyRuntimeBlockState,
+  applyRuntimeFailureState,
   applyRuntimeQueuedState,
+  applyRuntimeReplaceResults,
   applyTaskSettledState,
+  deriveRuntimeState,
   getUniqueFilePaths,
+  rebuildRuntimeStates,
+  removeRuleNotifications,
 } from '../services/automation/automationSessionState';
-import { resolveEffectiveConfig } from '../services/effectiveConfigService';
-import { isPathInsideDirectory, normalizeAutomationPath } from '../services/automation/automationService';
+import { subscribeAutomationTaskSettled } from '../services/automationEventBus';
 import {
+  type AutomationRuntimeReplaceResult,
   collectAutomationRuntimeRulePaths,
   listenToAutomationRuntimeCandidates,
+  replaceAutomationRuntimeRules,
+  scanAutomationRuntimeRule,
+  toAutomationRuntimeRuleConfig,
 } from '../services/automationRuntimeService';
-import {
-  subscribeAutomationTaskSettled,
-} from '../services/automationEventBus';
+import { resolveEffectiveConfig } from '../services/effectiveConfigService';
+import { historyService } from '../services/historyService';
 import {
   clearAutomationRecoveryGuardEntry,
   isAutomationRecoveryBlocked,
 } from '../services/recoveryService';
-import { historyService } from '../services/historyService';
+import type {
+  AutomationProcessedEntry,
+  AutomationProfile,
+  AutomationRule,
+  AutomationRuntimeState,
+} from '../types/automation';
+import type { RecoveredQueueItem } from '../types/recovery';
+import { extractErrorMessage } from '../utils/errorUtils';
 import { useBatchQueueStore } from './batchQueueStore';
 import { useConfigStore } from './configStore';
 import { useProjectStore } from './projectStore';
-import {
-  createAutomationRuntimeCoordinator,
-  type AutomationRuntimeCoordinatorState,
-} from '../services/automation/automationRuntimeCoordinator';
 
 interface SaveRuleInput {
   id?: string;
@@ -106,7 +104,10 @@ interface AutomationState {
   saveRule: (input: SaveRuleInput) => Promise<AutomationRule>;
   saveProfile: (input: SaveProfileInput) => Promise<AutomationProfile>;
   deleteProfile: (profileId: string) => Promise<void>;
-  removeProfileDependency: (kind: AutomationProfileDependencyKind, dependencyId: string) => Promise<void>;
+  removeProfileDependency: (
+    kind: AutomationProfileDependencyKind,
+    dependencyId: string
+  ) => Promise<void>;
   deleteRule: (ruleId: string) => Promise<void>;
   toggleRuleEnabled: (ruleId: string, enabled: boolean) => Promise<void>;
   scanRuleNow: (ruleId: string) => Promise<void>;
@@ -119,42 +120,51 @@ interface AutomationState {
   stopAll: () => Promise<void>;
 }
 
-
 async function validateRuleBeforeActivation(rule: AutomationRule): Promise<void> {
   await validateAutomationRuleActivation(rule);
 }
 
 async function syncAutomationRuntimeRules(options?: { throwForRuleId?: string }) {
   const state = useAutomationStore.getState();
-  const enabledRules = state.rules.filter((rule) => rule.enabled && (rule.kind ?? 'file') === 'file');
+  const enabledRules = state.rules.filter(
+    (rule) => rule.enabled && (rule.kind ?? 'file') === 'file'
+  );
 
   await automationRuntimeCoordinator.ensureRuntimeCandidateListener();
 
   let results: AutomationRuntimeReplaceResult[];
   try {
-    results = await replaceAutomationRuntimeRules(enabledRules.map((rule) => toAutomationRuntimeRuleConfig(rule)));
+    results = await replaceAutomationRuntimeRules(
+      enabledRules.map((rule) => toAutomationRuntimeRuleConfig(rule))
+    );
   } catch (error) {
     const message = extractErrorMessage(error);
     useAutomationStore.setState((current) => {
-      let runtimeStates = rebuildRuntimeStates(current.rules, current.processedEntries, current.runtimeStates);
+      let runtimeStates = rebuildRuntimeStates(
+        current.rules,
+        current.processedEntries,
+        current.runtimeStates
+      );
       let notifications = current.notifications;
 
-      current.rules.filter((rule) => rule.enabled).forEach((rule) => {
-        const nextFailureState = applyRuntimeFailureState(
-          {
-            processedEntries: current.processedEntries,
-            runtimeStates,
-            notifications,
-          },
-          {
-            ruleId: rule.id,
-            ruleName: rule.name,
-            message,
-          },
-        );
-        runtimeStates = nextFailureState.runtimeStates;
-        notifications = nextFailureState.notifications;
-      });
+      current.rules
+        .filter((rule) => rule.enabled)
+        .forEach((rule) => {
+          const nextFailureState = applyRuntimeFailureState(
+            {
+              processedEntries: current.processedEntries,
+              runtimeStates,
+              notifications,
+            },
+            {
+              ruleId: rule.id,
+              ruleName: rule.name,
+              message,
+            }
+          );
+          runtimeStates = nextFailureState.runtimeStates;
+          notifications = nextFailureState.notifications;
+        });
 
       return {
         runtimeStates,
@@ -203,10 +213,15 @@ async function scanRule(ruleId: string) {
   useAutomationStore.setState((current) => ({
     runtimeStates: {
       ...current.runtimeStates,
-      [ruleId]: deriveRuntimeState(ruleId, current.processedEntries, current.runtimeStates[ruleId], {
-        status: 'scanning',
-        lastScanAt: Date.now(),
-      }),
+      [ruleId]: deriveRuntimeState(
+        ruleId,
+        current.processedEntries,
+        current.runtimeStates[ruleId],
+        {
+          status: 'scanning',
+          lastScanAt: Date.now(),
+        }
+      ),
     },
   }));
 
@@ -216,10 +231,15 @@ async function scanRule(ruleId: string) {
     useAutomationStore.setState((current) => ({
       runtimeStates: {
         ...current.runtimeStates,
-        [ruleId]: deriveRuntimeState(ruleId, current.processedEntries, current.runtimeStates[ruleId], {
-          status: rule.enabled ? 'watching' : 'stopped',
-          lastScanAt: Date.now(),
-        }),
+        [ruleId]: deriveRuntimeState(
+          ruleId,
+          current.processedEntries,
+          current.runtimeStates[ruleId],
+          {
+            status: rule.enabled ? 'watching' : 'stopped',
+            lastScanAt: Date.now(),
+          }
+        ),
       },
     }));
   } catch (error) {
@@ -284,11 +304,12 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       watchDirectory: input.watchDirectory.trim(),
       recursive: input.recursive,
       enabled: input.enabled ?? existing?.enabled ?? false,
-      actions: input.actions ?? existing?.actions ?? {
-        autoPolish: input.stageConfig.autoPolish,
-        autoTranslate: input.stageConfig.autoTranslate,
-        autoSummary: false,
-      },
+      actions: input.actions ??
+        existing?.actions ?? {
+          autoPolish: input.stageConfig.autoPolish,
+          autoTranslate: input.stageConfig.autoTranslate,
+          autoSummary: false,
+        },
       stageConfig: {
         ...input.stageConfig,
       },
@@ -312,7 +333,11 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     await persistAutomationRules(nextRules);
     set((current) => ({
       rules: nextRules,
-      runtimeStates: rebuildRuntimeStates(nextRules, current.processedEntries, current.runtimeStates),
+      runtimeStates: rebuildRuntimeStates(
+        nextRules,
+        current.processedEntries,
+        current.runtimeStates
+      ),
     }));
 
     if (nextRule.enabled && (nextRule.kind ?? 'file') === 'file') {
@@ -348,7 +373,9 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
 
   saveProfile: async (input) => {
     const now = Date.now();
-    const existing = input.id ? get().profiles.find((profile) => profile.id === input.id) : undefined;
+    const existing = input.id
+      ? get().profiles.find((profile) => profile.id === input.id)
+      : undefined;
     const profile: AutomationProfile = {
       ...input,
       id: existing?.id ?? input.id ?? uuidv4(),
@@ -356,7 +383,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       updatedAt: now,
     };
     const profiles = existing
-      ? get().profiles.map((item) => item.id === existing.id ? profile : item)
+      ? get().profiles.map((item) => (item.id === existing.id ? profile : item))
       : [profile, ...get().profiles];
     await persistAutomationProfiles(profiles);
     set({ profiles });
@@ -392,7 +419,9 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
           if (profile.enabledTextReplacementSetIds.includes(dependencyId)) {
             next = {
               ...profile,
-              enabledTextReplacementSetIds: profile.enabledTextReplacementSetIds.filter((id) => id !== dependencyId),
+              enabledTextReplacementSetIds: profile.enabledTextReplacementSetIds.filter(
+                (id) => id !== dependencyId
+              ),
             };
           }
           break;
@@ -400,7 +429,9 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
           if (profile.enabledHotwordSetIds.includes(dependencyId)) {
             next = {
               ...profile,
-              enabledHotwordSetIds: profile.enabledHotwordSetIds.filter((id) => id !== dependencyId),
+              enabledHotwordSetIds: profile.enabledHotwordSetIds.filter(
+                (id) => id !== dependencyId
+              ),
             };
           }
           break;
@@ -408,7 +439,9 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
           if (profile.enabledPolishKeywordSetIds.includes(dependencyId)) {
             next = {
               ...profile,
-              enabledPolishKeywordSetIds: profile.enabledPolishKeywordSetIds.filter((id) => id !== dependencyId),
+              enabledPolishKeywordSetIds: profile.enabledPolishKeywordSetIds.filter(
+                (id) => id !== dependencyId
+              ),
             };
           }
           break;
@@ -416,7 +449,9 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
           if (profile.enabledSpeakerProfileIds.includes(dependencyId)) {
             next = {
               ...profile,
-              enabledSpeakerProfileIds: profile.enabledSpeakerProfileIds.filter((id) => id !== dependencyId),
+              enabledSpeakerProfileIds: profile.enabledSpeakerProfileIds.filter(
+                (id) => id !== dependencyId
+              ),
             };
           }
           break;
@@ -453,7 +488,11 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     await persistAutomationRules(nextRules);
     set((current) => ({
       rules: nextRules,
-      runtimeStates: rebuildRuntimeStates(nextRules, current.processedEntries, current.runtimeStates),
+      runtimeStates: rebuildRuntimeStates(
+        nextRules,
+        current.processedEntries,
+        current.runtimeStates
+      ),
     }));
 
     if (enabled) {
@@ -484,16 +523,17 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     return 0;
   },
 
-
   dismissNotification: (notificationId) => {
     set((current) => ({
-      notifications: current.notifications.filter((notification) => notification.id !== notificationId),
+      notifications: current.notifications.filter(
+        (notification) => notification.id !== notificationId
+      ),
     }));
   },
 
   retryNotification: async (notificationId) => {
     const notification = get().notifications.find((item) => item.id === notificationId);
-    if (!notification || notification.kind !== 'failure' || !notification.retryable) {
+    if (notification?.kind !== 'failure' || !notification.retryable) {
       return;
     }
 
@@ -509,11 +549,13 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       ruleId: item.automationRuleId,
       kind: 'file',
       inputVersion: item.sourceFingerprint,
-      attempt: (get().processedEntries.find((entry) => (
-        entry.kind !== 'tag'
-        && entry.ruleId === item.automationRuleId
-        && entry.sourceFingerprint === item.sourceFingerprint
-      ))?.attempt ?? 0) + 1,
+      attempt:
+        (get().processedEntries.find(
+          (entry) =>
+            entry.kind !== 'tag' &&
+            entry.ruleId === item.automationRuleId &&
+            entry.sourceFingerprint === item.sourceFingerprint
+        )?.attempt ?? 0) + 1,
       filePath: item.filePath,
       sourceFingerprint: item.sourceFingerprint,
       size: item.fileStat?.size || 0,
@@ -525,10 +567,13 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     };
 
     const nextProcessedEntries = [
-      ...get().processedEntries.filter((entry) => !(
-        entry.ruleId === nextEntry.ruleId
-        && entry.sourceFingerprint === nextEntry.sourceFingerprint
-      )),
+      ...get().processedEntries.filter(
+        (entry) =>
+          !(
+            entry.ruleId === nextEntry.ruleId &&
+            entry.sourceFingerprint === nextEntry.sourceFingerprint
+          )
+      ),
       nextEntry,
     ].sort((a, b) => b.processedAt - a.processedAt);
 
@@ -536,7 +581,11 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     clearAutomationRecoveryGuardEntry(item.automationRuleId, item.sourceFingerprint);
     set((current) => ({
       processedEntries: nextProcessedEntries,
-      runtimeStates: rebuildRuntimeStates(current.rules, nextProcessedEntries, current.runtimeStates),
+      runtimeStates: rebuildRuntimeStates(
+        current.rules,
+        nextProcessedEntries,
+        current.runtimeStates
+      ),
     }));
   },
 
@@ -545,17 +594,23 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     await replaceAutomationRuntimeRules([]);
     set((current) => ({
       runtimeStates: current.rules.reduce<Record<string, AutomationRuntimeState>>((acc, rule) => {
-        acc[rule.id] = deriveRuntimeState(rule.id, current.processedEntries, current.runtimeStates[rule.id], {
-          status: 'stopped',
-        });
+        acc[rule.id] = deriveRuntimeState(
+          rule.id,
+          current.processedEntries,
+          current.runtimeStates[rule.id],
+          {
+            status: 'stopped',
+          }
+        );
         return acc;
       }, {}),
     }));
   },
 }));
 
-
-function getAutomationRuntimeCoordinatorState(state: AutomationState): AutomationRuntimeCoordinatorState {
+function getAutomationRuntimeCoordinatorState(
+  state: AutomationState
+): AutomationRuntimeCoordinatorState {
   return {
     profiles: state.profiles,
     rules: state.rules,
@@ -600,7 +655,7 @@ const automationRuntimeCoordinator = createAutomationRuntimeCoordinator({
 });
 
 export async function __emitAutomationTaskSettledForTests(
-  payload: Parameters<typeof automationRuntimeCoordinator.handleTaskSettled>[0],
+  payload: Parameters<typeof automationRuntimeCoordinator.handleTaskSettled>[0]
 ) {
   await automationRuntimeCoordinator.handleTaskSettled(payload);
 }

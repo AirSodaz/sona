@@ -24,7 +24,9 @@ export function useWorkspaceBrowseControls({
   activeProjectId,
   projects,
 }: UseWorkspaceBrowseControlsParams) {
-  const [browseScopeState, setBrowseScopeState] = useState<ProjectBrowseScope>(() => activeProjectId || UNTAGGED_SCOPE);
+  const [browseScopeState, setBrowseScopeState] = useState<ProjectBrowseScope>(
+    () => activeProjectId || UNTAGGED_SCOPE
+  );
   const [isFilterMenuOpen, setIsFilterMenuOpenState] = useState(false);
   const [searchQuery, setSearchQueryState] = useState('');
   const [activeSearchResultIdState, setActiveSearchResultIdState] = useState<string | null>(null);
@@ -34,9 +36,9 @@ export function useWorkspaceBrowseControls({
 
   const browseScope = useMemo<ProjectBrowseScope>(() => {
     if (
-      browseScopeState === ALL_ITEMS_SCOPE
-      || browseScopeState === UNTAGGED_SCOPE
-      || browseScopeState === TRASH_SCOPE
+      browseScopeState === ALL_ITEMS_SCOPE ||
+      browseScopeState === UNTAGGED_SCOPE ||
+      browseScopeState === TRASH_SCOPE
     ) {
       return browseScopeState;
     }
@@ -54,15 +56,13 @@ export function useWorkspaceBrowseControls({
   const browseProjectId = !isAllItemsScope && !isInboxScope && !isTrashScope ? browseScope : null;
   const browseProject = useMemo(
     () => projects.find((item) => item.id === browseProjectId) || null,
-    [browseProjectId, projects],
+    [browseProjectId, projects]
   );
 
   const setActiveSearchResultId = useCallback((nextValue: React.SetStateAction<string | null>) => {
-    setActiveSearchResultIdState((current) => (
-      typeof nextValue === 'function'
-        ? nextValue(current)
-        : nextValue
-    ));
+    setActiveSearchResultIdState((current) =>
+      typeof nextValue === 'function' ? nextValue(current) : nextValue
+    );
   }, []);
 
   const setSearchQuery = useCallback((value: string) => {

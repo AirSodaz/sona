@@ -1,9 +1,5 @@
 import { create } from 'zustand';
-import {
-  DISABLED_SYNC_STATUS,
-  type SyncRunResult,
-  type SyncStatusSnapshot,
-} from '../types/sync';
+import { DISABLED_SYNC_STATUS, type SyncRunResult, type SyncStatusSnapshot } from '../types/sync';
 
 interface SyncStatusState {
   snapshot: SyncStatusSnapshot;

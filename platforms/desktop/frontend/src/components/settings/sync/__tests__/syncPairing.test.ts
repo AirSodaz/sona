@@ -35,6 +35,6 @@ describe('syncPairing', () => {
     expect(decodeSyncPairingToken('')).toBeNull();
     expect(decodeSyncPairingToken('invalid-token')).toBeNull();
     expect(decodeSyncPairingToken('sonasync://v1?data=invalid_base64_???')).toBeNull();
-    expect(decodeSyncPairingToken('sonasync://v1?data=' + btoa('{"invalid": true}'))).toBeNull();
+    expect(decodeSyncPairingToken(`sonasync://v1?data=${btoa('{"invalid": true}')}`)).toBeNull();
   });
 });

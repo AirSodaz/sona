@@ -28,18 +28,31 @@
 
 .sync-header-pill-btn:hover {
   background: var(--color-bg-hover);
-  border-color: color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 40%, var(--color-border));
+  border-color: color-mix(
+    in srgb,
+    var(--color-accent-primary, var(--color-primary)) 40%,
+    var(--color-border)
+  );
   color: var(--color-text-primary);
 }
 
 .sync-header-pill-btn:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 48%, transparent);
+  outline: 2px solid
+    color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 48%, transparent);
   outline-offset: 2px;
 }
 
 .sync-header-pill-btn.is-syncing {
-  border-color: color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 50%, transparent);
-  background: color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 8%, var(--color-bg-secondary));
+  border-color: color-mix(
+    in srgb,
+    var(--color-accent-primary, var(--color-primary)) 50%,
+    transparent
+  );
+  background: color-mix(
+    in srgb,
+    var(--color-accent-primary, var(--color-primary)) 8%,
+    var(--color-bg-secondary)
+  );
   color: var(--color-accent-primary, var(--color-primary));
 }
 
@@ -138,7 +151,11 @@
 }
 
 .sync-popover-badge.is-syncing {
-  background: color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 12%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--color-accent-primary, var(--color-primary)) 12%,
+    transparent
+  );
   color: var(--color-accent-primary, var(--color-primary));
 }
 

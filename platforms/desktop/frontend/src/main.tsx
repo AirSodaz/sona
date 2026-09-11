@@ -1,23 +1,23 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App";
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
 import './i18n';
 import './styles/index.css';
-import { useBatchQueueStore } from "./stores/batchQueueStore";
-import { useDialogStore } from "./stores/dialogStore";
-import { useOnboardingStore } from "./stores/onboardingStore";
-import { useTranscriptPlaybackStore } from "./stores/transcriptPlaybackStore";
-import { useTranscriptRuntimeStore } from "./stores/transcriptRuntimeStore";
-import { useTranscriptSessionStore } from "./stores/transcriptSessionStore";
-import { useTranscriptSidecarStore } from "./stores/transcriptSidecarStore";
-import { transcriptionService } from "./services/transcriptionService";
-import { modelService } from "./services/modelService";
-import { voiceTypingService } from "./services/voiceTypingService";
-import { CaptionWindow } from "./components/CaptionWindow";
-import { VoiceTypingOverlay } from "./components/VoiceTypingOverlay";
-import { ErrorBoundary } from "./components/ErrorBoundary";
-import { ContextMenuProvider } from "./components/context-menu/ContextMenuProvider";
-import { logger } from "./utils/logger";
+import { CaptionWindow } from './components/CaptionWindow';
+import { ContextMenuProvider } from './components/context-menu/ContextMenuProvider';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { VoiceTypingOverlay } from './components/VoiceTypingOverlay';
+import { modelService } from './services/modelService';
+import { transcriptionService } from './services/transcriptionService';
+import { voiceTypingService } from './services/voiceTypingService';
+import { useBatchQueueStore } from './stores/batchQueueStore';
+import { useDialogStore } from './stores/dialogStore';
+import { useOnboardingStore } from './stores/onboardingStore';
+import { useTranscriptPlaybackStore } from './stores/transcriptPlaybackStore';
+import { useTranscriptRuntimeStore } from './stores/transcriptRuntimeStore';
+import { useTranscriptSessionStore } from './stores/transcriptSessionStore';
+import { useTranscriptSidecarStore } from './stores/transcriptSidecarStore';
+import { logger } from './utils/logger';
 
 declare global {
   interface Window {
@@ -66,12 +66,10 @@ if (isVoiceTypingWindow) {
   rootComponent = <CaptionWindow />;
 }
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <ContextMenuProvider>
-        {rootComponent}
-      </ContextMenuProvider>
+      <ContextMenuProvider>{rootComponent}</ContextMenuProvider>
     </ErrorBoundary>
-  </React.StrictMode>,
+  </React.StrictMode>
 );

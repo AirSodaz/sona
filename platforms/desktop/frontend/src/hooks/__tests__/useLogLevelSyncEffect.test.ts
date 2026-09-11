@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../services/tauri/app', async () => {
-  const actual = await vi.importActual<typeof import('../../services/tauri/app')>('../../services/tauri/app');
+  const actual = await vi.importActual<typeof import('../../services/tauri/app')>(
+    '../../services/tauri/app'
+  );
   return {
     ...actual,
     setLogLevel: (...args: unknown[]) => mocks.setLogLevel(...args),

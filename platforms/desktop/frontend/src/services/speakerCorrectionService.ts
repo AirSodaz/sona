@@ -1,10 +1,7 @@
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import type {
-  SpeakerCorrectionProfileSections,
-  SpeakerProfile,
-} from '../types/speaker';
+import type { SpeakerCorrectionProfileSections, SpeakerProfile } from '../types/speaker';
 import { normalizeSpeakerProfiles } from '../types/speakerNormalization';
 import type { TranscriptSegment } from '../types/transcript';
 import {
@@ -13,15 +10,15 @@ import {
   resetSpeakerGroupToAnonymous as resetSpeakerGroupToAnonymousInRust,
 } from './tauri/speaker';
 
+export type { SpeakerCorrectionProfileSections } from '../types/speaker';
 export type {
   ApplySpeakerProfileToGroupRequest,
   SpeakerCorrectionResponse,
   SpeakerGroupRequest,
 } from '../types/speakerCommands';
-export type { SpeakerCorrectionProfileSections } from '../types/speaker';
 
 export function buildSpeakerCorrectionProfileSections(
-  inputProfiles: SpeakerProfile[] | undefined,
+  inputProfiles: SpeakerProfile[] | undefined
 ): SpeakerCorrectionProfileSections {
   const profiles = normalizeSpeakerProfiles(inputProfiles);
   return {
@@ -44,7 +41,7 @@ export class SpeakerCorrectionService {
 
   async assignProfileToSpeakerGroup(
     sourceGroupId: string,
-    targetProfileId: string,
+    targetProfileId: string
   ): Promise<TranscriptSegment[]> {
     const configStore = this.ports.getConfigStore();
     const profiles = normalizeSpeakerProfiles(configStore.config.speakerProfiles);
@@ -55,7 +52,9 @@ export class SpeakerCorrectionService {
       groupId: sourceGroupId,
       targetProfileId,
       speakerProfiles: profiles,
-      enabledSpeakerProfileIds: profiles.filter((profile) => profile.enabled).map((profile) => profile.id),
+      enabledSpeakerProfileIds: profiles
+        .filter((profile) => profile.enabled)
+        .map((profile) => profile.id),
     });
 
     sessionStore.setSegments(response.segments);
@@ -95,7 +94,9 @@ export class SpeakerCorrectionService {
   }
 }
 
-export function createSpeakerCorrectionService(ports: SpeakerCorrectionServicePorts): SpeakerCorrectionService {
+export function createSpeakerCorrectionService(
+  ports: SpeakerCorrectionServicePorts
+): SpeakerCorrectionService {
   return new SpeakerCorrectionService(ports);
 }
 

@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect } from 'react';
-import type { HistoryItem as HistoryItemType } from '../../../types/history';
+import type React from 'react';
+import { useCallback, useEffect } from 'react';
 import { useDialogStore } from '../../../stores/dialogStore';
 import { useErrorDialogStore } from '../../../stores/errorDialogStore';
+import type { HistoryItem as HistoryItemType } from '../../../types/history';
 import { getWorkspaceSearchResultDomId } from '../../../utils/workspaceSearch';
 
 interface UseWorkspaceSearchNavigationParams {
@@ -30,7 +31,9 @@ export function useWorkspaceSearchNavigation({
       return;
     }
 
-    const activeElement = document.getElementById(getWorkspaceSearchResultDomId(activeSearchResultId));
+    const activeElement = document.getElementById(
+      getWorkspaceSearchResultDomId(activeSearchResultId)
+    );
     activeElement?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [activeSearchResultId]);
 
@@ -73,74 +76,80 @@ export function useWorkspaceSearchNavigation({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [focusWorkspaceSearchInput]);
 
-  const moveActiveSearchResult = useCallback((direction: 'next' | 'prev') => {
-    if (filteredItems.length === 0) {
-      return;
-    }
+  const moveActiveSearchResult = useCallback(
+    (direction: 'next' | 'prev') => {
+      if (filteredItems.length === 0) {
+        return;
+      }
 
-    setActiveSearchResultId((current) => {
-      const currentIndex = current
-        ? filteredItems.findIndex((item) => item.id === current)
-        : -1;
-      const fallbackIndex = direction === 'next' ? 0 : filteredItems.length - 1;
-      const nextIndex = currentIndex === -1
-        ? fallbackIndex
-        : (currentIndex + (direction === 'next' ? 1 : -1) + filteredItems.length) % filteredItems.length;
+      setActiveSearchResultId((current) => {
+        const currentIndex = current ? filteredItems.findIndex((item) => item.id === current) : -1;
+        const fallbackIndex = direction === 'next' ? 0 : filteredItems.length - 1;
+        const nextIndex =
+          currentIndex === -1
+            ? fallbackIndex
+            : (currentIndex + (direction === 'next' ? 1 : -1) + filteredItems.length) %
+              filteredItems.length;
 
-      return filteredItems[nextIndex]?.id ?? null;
-    });
-  }, [filteredItems, setActiveSearchResultId]);
+        return filteredItems[nextIndex]?.id ?? null;
+      });
+    },
+    [filteredItems, setActiveSearchResultId]
+  );
 
-  return useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
+  return useCallback(
+    (event: React.KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
 
-      if (searchQuery.trim()) {
-        setSearchQuery('');
+        if (searchQuery.trim()) {
+          setSearchQuery('');
+          setActiveSearchResultId(null);
+          return;
+        }
+
         setActiveSearchResultId(null);
+        searchInputRef.current?.blur();
         return;
       }
 
-      setActiveSearchResultId(null);
-      searchInputRef.current?.blur();
-      return;
-    }
-
-    if (isSelectionMode) {
-      return;
-    }
-
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      moveActiveSearchResult('next');
-      return;
-    }
-
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      moveActiveSearchResult('prev');
-      return;
-    }
-
-    if (event.key === 'Enter' && activeSearchResultId) {
-      const activeItem = filteredItems.find((item) => item.id === activeSearchResultId);
-      if (!activeItem) {
+      if (isSelectionMode) {
         return;
       }
 
-      event.preventDefault();
-      setActiveSearchResultId(null);
-      void onOpenItem(activeItem);
-    }
-  }, [
-    activeSearchResultId,
-    filteredItems,
-    isSelectionMode,
-    moveActiveSearchResult,
-    onOpenItem,
-    searchInputRef,
-    searchQuery,
-    setActiveSearchResultId,
-    setSearchQuery,
-  ]);
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        moveActiveSearchResult('next');
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        moveActiveSearchResult('prev');
+        return;
+      }
+
+      if (event.key === 'Enter' && activeSearchResultId) {
+        const activeItem = filteredItems.find((item) => item.id === activeSearchResultId);
+        if (!activeItem) {
+          return;
+        }
+
+        event.preventDefault();
+        setActiveSearchResultId(null);
+        void onOpenItem(activeItem);
+      }
+    },
+    [
+      activeSearchResultId,
+      filteredItems,
+      isSelectionMode,
+      moveActiveSearchResult,
+      onOpenItem,
+      searchInputRef,
+      searchQuery,
+      setActiveSearchResultId,
+      setSearchQuery,
+    ]
+  );
 }

@@ -4,10 +4,7 @@ import {
   probeMicrophoneDeviceOptions,
   probeSystemAudioDeviceOptions,
 } from '../audioDeviceService';
-import {
-  getMicrophoneDevices,
-  getSystemAudioDevices,
-} from '../tauri/audio';
+import { getMicrophoneDevices, getSystemAudioDevices } from '../tauri/audio';
 
 const tauriAudioMocks = vi.hoisted(() => ({
   getMicrophoneDevices: vi.fn(),
@@ -29,7 +26,7 @@ function setMediaDevices(mediaDevices: Partial<MediaDevices>): void {
 function createMediaDevice(
   kind: MediaDeviceKind,
   deviceId: string,
-  label: string,
+  label: string
 ): MediaDeviceInfo {
   return {
     deviceId,
@@ -47,10 +44,7 @@ describe('audioDeviceService', () => {
   });
 
   it('returns deduped native microphone options when native devices are available', async () => {
-    vi.mocked(getMicrophoneDevices).mockResolvedValue([
-      { name: 'Desk Mic' },
-      { name: 'Desk Mic' },
-    ]);
+    vi.mocked(getMicrophoneDevices).mockResolvedValue([{ name: 'Desk Mic' }, { name: 'Desk Mic' }]);
 
     const probe = await probeMicrophoneDeviceOptions('Auto');
 
@@ -66,10 +60,12 @@ describe('audioDeviceService', () => {
 
   it('falls back to browser microphone enumeration when native lookup fails', async () => {
     vi.mocked(getMicrophoneDevices).mockRejectedValue(new Error('native unavailable'));
-    const enumerateDevices = vi.fn().mockResolvedValue([
-      createMediaDevice('audioinput', 'browser-mic', 'Browser Mic'),
-      createMediaDevice('audiooutput', 'speaker', 'Speaker'),
-    ]);
+    const enumerateDevices = vi
+      .fn()
+      .mockResolvedValue([
+        createMediaDevice('audioinput', 'browser-mic', 'Browser Mic'),
+        createMediaDevice('audiooutput', 'speaker', 'Speaker'),
+      ]);
     setMediaDevices({ enumerateDevices });
 
     const probe = await probeMicrophoneDeviceOptions('Auto');
@@ -103,15 +99,9 @@ describe('audioDeviceService', () => {
     const stop = vi.fn();
     const enumerateDevices = vi
       .fn()
-      .mockResolvedValueOnce([
-        createMediaDevice('audioinput', 'desk-mic', ''),
-      ])
-      .mockResolvedValueOnce([
-        createMediaDevice('audioinput', 'desk-mic', ''),
-      ])
-      .mockResolvedValueOnce([
-        createMediaDevice('audioinput', 'desk-mic', 'Desk Mic'),
-      ]);
+      .mockResolvedValueOnce([createMediaDevice('audioinput', 'desk-mic', '')])
+      .mockResolvedValueOnce([createMediaDevice('audioinput', 'desk-mic', '')])
+      .mockResolvedValueOnce([createMediaDevice('audioinput', 'desk-mic', 'Desk Mic')]);
     const getUserMedia = vi.fn().mockResolvedValue({
       getTracks: () => [{ stop }],
     });

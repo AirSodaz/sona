@@ -1,7 +1,7 @@
 import type { PolishKeywordRuleSet } from '../types/config';
 
 export function normalizePolishKeywordSets(
-  sets: PolishKeywordRuleSet[] | null | undefined,
+  sets: PolishKeywordRuleSet[] | null | undefined
 ): PolishKeywordRuleSet[] {
   if (!Array.isArray(sets) || sets.length === 0) {
     return [];
@@ -17,12 +17,14 @@ export function normalizePolishKeywordSets(
     }
 
     const keywords = typeof set.keywords === 'string' ? set.keywords : '';
-    const name = typeof set.name === 'string' && set.name.trim()
-      ? set.name.trim()
-      : buildFallbackPolishKeywordSetName(keywords, index);
-    const id = typeof set.id === 'string' && set.id.trim()
-      ? set.id.trim()
-      : createPolishKeywordSetId(`${name}-${keywords}-${index}`);
+    const name =
+      typeof set.name === 'string' && set.name.trim()
+        ? set.name.trim()
+        : buildFallbackPolishKeywordSetName(keywords, index);
+    const id =
+      typeof set.id === 'string' && set.id.trim()
+        ? set.id.trim()
+        : createPolishKeywordSetId(`${name}-${keywords}-${index}`);
 
     if (seenIds.has(id)) {
       continue;
@@ -42,7 +44,7 @@ export function normalizePolishKeywordSets(
 
 export function migrateLegacyPolishKeywords(
   legacyKeywords: string | null | undefined,
-  existingSets: PolishKeywordRuleSet[] | null | undefined,
+  existingSets: PolishKeywordRuleSet[] | null | undefined
 ): PolishKeywordRuleSet[] {
   const normalizedSets = normalizePolishKeywordSets(existingSets);
   const normalizedKeywords = typeof legacyKeywords === 'string' ? legacyKeywords.trim() : '';
@@ -51,17 +53,17 @@ export function migrateLegacyPolishKeywords(
     return normalizedSets;
   }
 
-  const existingIndex = normalizedSets.findIndex((set) => set.keywords.trim() === normalizedKeywords);
+  const existingIndex = normalizedSets.findIndex(
+    (set) => set.keywords.trim() === normalizedKeywords
+  );
   if (existingIndex >= 0) {
     if (normalizedSets[existingIndex].enabled) {
       return normalizedSets;
     }
 
-    return normalizedSets.map((set, index) => (
-      index === existingIndex
-        ? { ...set, enabled: true }
-        : set
-    ));
+    return normalizedSets.map((set, index) =>
+      index === existingIndex ? { ...set, enabled: true } : set
+    );
   }
 
   return [
@@ -75,9 +77,7 @@ export function migrateLegacyPolishKeywords(
   ];
 }
 
-export function resolvePolishKeywords(
-  sets: PolishKeywordRuleSet[] | null | undefined,
-): string {
+export function resolvePolishKeywords(sets: PolishKeywordRuleSet[] | null | undefined): string {
   return normalizePolishKeywordSets(sets)
     .filter((set) => set.enabled && set.keywords.trim())
     .map((set) => set.keywords.trim())
@@ -103,5 +103,7 @@ function hashString(value: string): string {
     hash = ((hash << 5) + hash) ^ value.charCodeAt(index);
   }
 
-  return Math.abs(hash >>> 0).toString(16).padStart(8, '0');
+  return Math.abs(hash >>> 0)
+    .toString(16)
+    .padStart(8, '0');
 }

@@ -1,180 +1,185 @@
-import { ReactNode, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { type ReactNode, useState } from 'react';
 import './SettingsShared.css';
 
 /**
  * Main container for a settings tab.
  */
-export function SettingsTabContainer({ children, id, ariaLabelledby }: { children: ReactNode; id?: string; ariaLabelledby?: string }) {
-    return (
-        <div
-            className="settings-tab-container"
-            role="tabpanel"
-            id={id}
-            aria-labelledby={ariaLabelledby}
-        >
-            {children}
-        </div>
-    );
+export function SettingsTabContainer({
+  children,
+  id,
+  ariaLabelledby,
+}: {
+  children: ReactNode;
+  id?: string;
+  ariaLabelledby?: string;
+}) {
+  return (
+    <div
+      className="settings-tab-container"
+      role="tabpanel"
+      id={id}
+      aria-labelledby={ariaLabelledby}
+    >
+      {children}
+    </div>
+  );
 }
 
 export interface SettingsPageHeaderProps {
-    title: string | ReactNode;
-    description?: string | ReactNode;
-    icon?: ReactNode;
+  title: string | ReactNode;
+  description?: string | ReactNode;
+  icon?: ReactNode;
 }
 
 export function SettingsPageHeader({ title, description, icon }: SettingsPageHeaderProps) {
-    return (
-        <div className="settings-page-header">
-            <h2 className="settings-page-title">
-                {icon && <span className="settings-page-icon">{icon}</span>}
-                {title}
-            </h2>
-            {description && (
-                <p className="settings-page-description">
-                    {description}
-                </p>
-            )}
-            <div className="settings-divider" />
-        </div>
-    );
+  return (
+    <div className="settings-page-header">
+      <h2 className="settings-page-title">
+        {icon && <span className="settings-page-icon">{icon}</span>}
+        {title}
+      </h2>
+      {description && <p className="settings-page-description">{description}</p>}
+      <div className="settings-divider" />
+    </div>
+  );
 }
 
 /**
  * A grouped section of settings with an optional title, icon, and description.
  */
 interface SettingsSectionProps {
-    title?: string;
-    description?: string;
-    icon?: ReactNode;
-    className?: string;
-    contentClassName?: string;
-    children: ReactNode;
+  title?: string;
+  description?: string;
+  icon?: ReactNode;
+  className?: string;
+  contentClassName?: string;
+  children: ReactNode;
 }
 
-export function SettingsSection({ title, description, icon, className = '', contentClassName = '', children }: SettingsSectionProps) {
-    return (
-        <section className={`settings-section ${className}`.trim()}>
-            {(title || description) && (
-                <div className="settings-section-header">
-                    {title && (
-                        <div className="settings-section-title-wrapper">
-                            {icon && <span className="settings-section-icon">{icon}</span>}
-                            <span>{title}</span>
-                        </div>
-                    )}
-                    {description && (
-                        <div className="settings-section-description">{description}</div>
-                    )}
-                </div>
-            )}
-            <div className={`settings-section-content ${contentClassName}`.trim()}>
-                {children}
+export function SettingsSection({
+  title,
+  description,
+  icon,
+  className = '',
+  contentClassName = '',
+  children,
+}: SettingsSectionProps) {
+  return (
+    <section className={`settings-section ${className}`.trim()}>
+      {(title || description) && (
+        <div className="settings-section-header">
+          {title && (
+            <div className="settings-section-title-wrapper">
+              {icon && <span className="settings-section-icon">{icon}</span>}
+              <span>{title}</span>
             </div>
-        </section>
-    );
+          )}
+          {description && <div className="settings-section-description">{description}</div>}
+        </div>
+      )}
+      <div className={`settings-section-content ${contentClassName}`.trim()}>{children}</div>
+    </section>
+  );
 }
 
 /**
  * A single setting row or block.
  */
 interface SettingsItemProps {
-    title: string | ReactNode;
-    hint?: string | ReactNode;
-    layout?: 'horizontal' | 'vertical';
-    children: ReactNode;
-    indent?: boolean;
-    style?: React.CSSProperties;
+  title: string | ReactNode;
+  hint?: string | ReactNode;
+  layout?: 'horizontal' | 'vertical';
+  children: ReactNode;
+  indent?: boolean;
+  style?: React.CSSProperties;
 }
 
 export function SettingsItem({
-    title,
-    hint,
-    layout = 'horizontal',
-    children,
-    indent,
-    style,
+  title,
+  hint,
+  layout = 'horizontal',
+  children,
+  indent,
+  style,
 }: SettingsItemProps) {
-    return (
-        <div
-            className={`settings-item-container layout-${layout} ${indent ? 'indented' : ''}`}
-            style={{
-                ...style,
-                ...(indent ? { paddingLeft: '56px' } : {}),
-            }}
-        >
-            <div className="settings-item-info">
-                <div className="settings-item-title">{title}</div>
-                {hint && <div className="settings-item-hint">{hint}</div>}
-            </div>
-            <div className="settings-item-action">
-                {children}
-            </div>
-        </div>
-    );
+  return (
+    <div
+      className={`settings-item-container layout-${layout} ${indent ? 'indented' : ''}`}
+      style={{
+        ...style,
+        ...(indent ? { paddingLeft: '56px' } : {}),
+      }}
+    >
+      <div className="settings-item-info">
+        <div className="settings-item-title">{title}</div>
+        {hint && <div className="settings-item-hint">{hint}</div>}
+      </div>
+      <div className="settings-item-action">{children}</div>
+    </div>
+  );
 }
 
 /**
  * A collapsible accordion item for advanced settings.
  */
 interface SettingsAccordionProps {
-    title: string | ReactNode;
-    status?: ReactNode;
-    actions?: ReactNode;
-    defaultOpen?: boolean;
-    isOpen?: boolean;
-    onToggle?: () => void;
-    contentTestId?: string;
-    children: ReactNode;
+  title: string | ReactNode;
+  status?: ReactNode;
+  actions?: ReactNode;
+  defaultOpen?: boolean;
+  isOpen?: boolean;
+  onToggle?: () => void;
+  contentTestId?: string;
+  children: ReactNode;
 }
 
 export function SettingsAccordion({
-    title,
-    status,
-    actions,
-    defaultOpen = false,
-    isOpen,
-    onToggle,
-    contentTestId,
-    children,
+  title,
+  status,
+  actions,
+  defaultOpen = false,
+  isOpen,
+  onToggle,
+  contentTestId,
+  children,
 }: SettingsAccordionProps) {
-    const [localOpen, setLocalOpen] = useState(defaultOpen);
+  const [localOpen, setLocalOpen] = useState(defaultOpen);
 
-    const isExpanded = isOpen !== undefined ? isOpen : localOpen;
+  const isExpanded = isOpen !== undefined ? isOpen : localOpen;
 
-    const handleToggle = () => {
-        if (onToggle) {
-            onToggle();
-        } else {
-            setLocalOpen(!isExpanded);
-        }
-    };
+  const handleToggle = () => {
+    if (onToggle) {
+      onToggle();
+    } else {
+      setLocalOpen(!isExpanded);
+    }
+  };
 
-    return (
-        <div className="accordion-wrapper">
-            <div className="accordion-header-row">
-                <button
-                    type="button"
-                    className="accordion-header-btn accordion-header"
-                    onClick={handleToggle}
-                    aria-expanded={isExpanded}
-                >
-                    <div className="accordion-header-left">
-                        <ChevronRight size={18} className={`accordion-chevron ${isExpanded ? 'open' : ''}`} />
-                        <span>{title}</span>
-                    </div>
-                    {status && <div className="accordion-header-status">{status}</div>}
-                </button>
-                {actions && <div className="accordion-header-actions">{actions}</div>}
-            </div>
-            {isExpanded && (
-                <div className="accordion-content-panel accordion-content" data-testid={contentTestId}>
-                    {children}
-                </div>
-            )}
+  return (
+    <div className="accordion-wrapper">
+      <div className="accordion-header-row">
+        <button
+          type="button"
+          className="accordion-header-btn accordion-header"
+          onClick={handleToggle}
+          aria-expanded={isExpanded}
+        >
+          <div className="accordion-header-left">
+            <ChevronRight size={18} className={`accordion-chevron ${isExpanded ? 'open' : ''}`} />
+            <span>{title}</span>
+          </div>
+          {status && <div className="accordion-header-status">{status}</div>}
+        </button>
+        {actions && <div className="accordion-header-actions">{actions}</div>}
+      </div>
+      {isExpanded && (
+        <div className="accordion-content-panel accordion-content" data-testid={contentTestId}>
+          {children}
         </div>
-    );
+      )}
+    </div>
+  );
 }
 
 export { SettingsLocationCard, type SettingsLocationCardProps } from './SettingsLocationCard';

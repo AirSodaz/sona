@@ -12,20 +12,23 @@ export interface TaskLedgerSnapshotState {
   cancelRequestedIds: Set<string>;
 }
 
-export function patchTaskRecord(record: TaskLedgerRecord, patch: TaskLedgerPatch): TaskLedgerRecord {
+export function patchTaskRecord(
+  record: TaskLedgerRecord,
+  patch: TaskLedgerPatch
+): TaskLedgerRecord {
   return {
     ...record,
     ...patch,
-    errorMessage: patch.errorMessage === null ? undefined : patch.errorMessage ?? record.errorMessage,
-    tagIds: patch.tagIds === null ? [] : patch.tagIds ?? record.tagIds,
+    errorMessage:
+      patch.errorMessage === null ? undefined : (patch.errorMessage ?? record.errorMessage),
+    tagIds: patch.tagIds === null ? [] : (patch.tagIds ?? record.tagIds),
   };
 }
 
 export function mergeTask(tasks: TaskLedgerRecord[], record: TaskLedgerRecord): TaskLedgerRecord[] {
-  return [
-    record,
-    ...tasks.filter((task) => task.id !== record.id),
-  ].sort((a, b) => b.updatedAt - a.updatedAt);
+  return [record, ...tasks.filter((task) => task.id !== record.id)].sort(
+    (a, b) => b.updatedAt - a.updatedAt
+  );
 }
 
 export function shouldRetainTaskStatus(status: TaskLedgerStatus): boolean {
@@ -42,16 +45,14 @@ export function isCancelRequestedTask(task: TaskLedgerRecord): boolean {
 
 export function getCancelRequestedIds(
   tasks: TaskLedgerRecord[],
-  existingIds: Set<string> = new Set(),
+  existingIds: Set<string> = new Set()
 ): Set<string> {
   const taskIds = new Set(tasks.map((task) => task.id));
   const resolvedTaskIds = new Set(
-    tasks
-      .filter((task) => isResolvedTaskStatus(task.status))
-      .map((task) => task.id),
+    tasks.filter((task) => isResolvedTaskStatus(task.status)).map((task) => task.id)
   );
   const cancelRequestedIds = new Set(
-    Array.from(existingIds).filter((id) => taskIds.has(id) && !resolvedTaskIds.has(id)),
+    Array.from(existingIds).filter((id) => taskIds.has(id) && !resolvedTaskIds.has(id))
   );
   tasks.filter(isCancelRequestedTask).forEach((task) => {
     cancelRequestedIds.add(task.id);
@@ -69,13 +70,15 @@ export function snapshotToTaskLedgerState(snapshot: TaskLedgerSnapshot): TaskLed
 }
 
 function shouldKeepLocalTask(existing: TaskLedgerRecord, incoming: TaskLedgerRecord): boolean {
-  return existing.updatedAt > incoming.updatedAt
-    || (isResolvedTaskStatus(existing.status) && existing.updatedAt >= incoming.updatedAt);
+  return (
+    existing.updatedAt > incoming.updatedAt ||
+    (isResolvedTaskStatus(existing.status) && existing.updatedAt >= incoming.updatedAt)
+  );
 }
 
 export function mergeSnapshotWithLocalTasks(
   snapshotTasks: TaskLedgerRecord[],
-  localTasks: TaskLedgerRecord[],
+  localTasks: TaskLedgerRecord[]
 ): TaskLedgerRecord[] {
   const localTasksById = new Map(localTasks.map((task) => [task.id, task]));
   const snapshotTaskIds = new Set(snapshotTasks.map((task) => task.id));
@@ -83,10 +86,11 @@ export function mergeSnapshotWithLocalTasks(
     const existing = localTasksById.get(task.id);
     return existing && shouldKeepLocalTask(existing, task) ? existing : task;
   });
-  const transientResolvedTasks = localTasks.filter((task) => (
-    !snapshotTaskIds.has(task.id) && isResolvedTaskStatus(task.status)
-  ));
+  const transientResolvedTasks = localTasks.filter(
+    (task) => !snapshotTaskIds.has(task.id) && isResolvedTaskStatus(task.status)
+  );
 
-  return [...mergedSnapshotTasks, ...transientResolvedTasks]
-    .sort((a, b) => b.updatedAt - a.updatedAt);
+  return [...mergedSnapshotTasks, ...transientResolvedTasks].sort(
+    (a, b) => b.updatedAt - a.updatedAt
+  );
 }

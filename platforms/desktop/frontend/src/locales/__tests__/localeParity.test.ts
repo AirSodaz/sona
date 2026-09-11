@@ -10,9 +10,9 @@ function flattenLocaleKeys(value: unknown, prefix = ''): string[] {
     return prefix ? [prefix] : [];
   }
 
-  return Object.entries(value).flatMap(([key, child]) => (
+  return Object.entries(value).flatMap(([key, child]) =>
     flattenLocaleKeys(child, prefix ? `${prefix}.${key}` : key)
-  ));
+  );
 }
 
 function flattenLocaleStrings(value: unknown, prefix = ''): Record<string, string> {
@@ -21,9 +21,9 @@ function flattenLocaleStrings(value: unknown, prefix = ''): Record<string, strin
   }
 
   return Object.fromEntries(
-    Object.entries(value).flatMap(([key, child]) => (
+    Object.entries(value).flatMap(([key, child]) =>
       Object.entries(flattenLocaleStrings(child, prefix ? `${prefix}.${key}` : key))
-    )),
+    )
   );
 }
 
@@ -54,7 +54,7 @@ describe('locale resources', () => {
 
     expect(
       getInterpolationNames(flattenLocaleStrings(en)['common.actions_for'] ?? ''),
-      'common.actions_for',
+      'common.actions_for'
     ).toEqual(['item']);
   });
 
@@ -86,10 +86,9 @@ describe('locale resources', () => {
       const localized = flattenLocaleStrings(resource);
 
       for (const [key, value] of Object.entries(baseline)) {
-        expect(
-          getInterpolationNames(localized[key] ?? ''),
-          `${locale}:${key}`,
-        ).toEqual(getInterpolationNames(value));
+        expect(getInterpolationNames(localized[key] ?? ''), `${locale}:${key}`).toEqual(
+          getInterpolationNames(value)
+        );
       }
     }
   });
@@ -140,9 +139,7 @@ describe('locale resources', () => {
     const strings = flattenLocaleStrings(ko);
 
     const offenders = Object.entries(strings)
-      .filter(([, value]) => (
-        forbiddenFragments.some((fragment) => value.includes(fragment))
-      ))
+      .filter(([, value]) => forbiddenFragments.some((fragment) => value.includes(fragment)))
       .map(([key, value]) => `${key}: ${value}`);
 
     expect(offenders).toEqual([]);

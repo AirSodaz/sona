@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { AppConfig } from '../types/config';
-import { useConfigStore, DEFAULT_CONFIG } from './configStore';
+import { DEFAULT_CONFIG, useConfigStore } from './configStore';
 
 interface EffectiveConfigState {
   config: AppConfig;
@@ -14,16 +14,22 @@ function isAppConfigLike(value: unknown): value is AppConfig {
     return false;
   }
   const candidate = value as Partial<AppConfig>;
-  return typeof candidate.streamingModelPath === 'string'
-    && typeof candidate.batchModelPath === 'string';
+  return (
+    typeof candidate.streamingModelPath === 'string' && typeof candidate.batchModelPath === 'string'
+  );
 }
 
-function shouldUseGlobalSnapshot(snapshot: AppConfig | undefined, globalConfig: AppConfig): boolean {
-  return !snapshot
-    || (snapshot === DEFAULT_CONFIG && globalConfig !== DEFAULT_CONFIG)
-    || snapshot.streamingModelPath !== globalConfig.streamingModelPath
-    || snapshot.batchModelPath !== globalConfig.batchModelPath
-    || snapshot.asr !== globalConfig.asr;
+function shouldUseGlobalSnapshot(
+  snapshot: AppConfig | undefined,
+  globalConfig: AppConfig
+): boolean {
+  return (
+    !snapshot ||
+    (snapshot === DEFAULT_CONFIG && globalConfig !== DEFAULT_CONFIG) ||
+    snapshot.streamingModelPath !== globalConfig.streamingModelPath ||
+    snapshot.batchModelPath !== globalConfig.batchModelPath ||
+    snapshot.asr !== globalConfig.asr
+  );
 }
 
 async function computeEffectiveConfig(): Promise<AppConfig> {

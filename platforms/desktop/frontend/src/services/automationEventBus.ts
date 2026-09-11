@@ -14,11 +14,15 @@ export interface AutomationTaskSettledPayload {
   stage?: RecoveryItemStage;
 }
 
-type AutomationTaskSettledListener = (payload: AutomationTaskSettledPayload) => void | Promise<void>;
+type AutomationTaskSettledListener = (
+  payload: AutomationTaskSettledPayload
+) => void | Promise<void>;
 
 const automationTaskSettledListeners = new Set<AutomationTaskSettledListener>();
 
-export function subscribeAutomationTaskSettled(listener: AutomationTaskSettledListener): () => void {
+export function subscribeAutomationTaskSettled(
+  listener: AutomationTaskSettledListener
+): () => void {
   automationTaskSettledListeners.add(listener);
 
   return () => {
@@ -26,12 +30,12 @@ export function subscribeAutomationTaskSettled(listener: AutomationTaskSettledLi
   };
 }
 
-export async function emitAutomationTaskSettled(payload: AutomationTaskSettledPayload): Promise<void> {
+export async function emitAutomationTaskSettled(
+  payload: AutomationTaskSettledPayload
+): Promise<void> {
   if (automationTaskSettledListeners.size === 0) {
     return;
   }
 
-  await Promise.all(
-    [...automationTaskSettledListeners].map((listener) => listener(payload)),
-  );
+  await Promise.all([...automationTaskSettledListeners].map((listener) => listener(payload)));
 }

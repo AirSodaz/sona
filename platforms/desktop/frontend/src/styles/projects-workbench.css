@@ -113,7 +113,11 @@
   cursor: pointer;
   text-align: left;
   user-select: none;
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
 }
 
 .projects-rail-item:hover {
@@ -130,7 +134,9 @@
   background: var(--color-bg-elevated);
   color: var(--color-text-primary);
   border-color: color-mix(in srgb, var(--color-border) 65%, transparent);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 1px rgba(0, 0, 0, 0.02);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.05),
+    0 1px 1px rgba(0, 0, 0, 0.02);
 }
 
 .projects-rail-item.context-menu-active {
@@ -139,7 +145,9 @@
 }
 
 .projects-rail-item.active:focus-visible {
-  box-shadow: var(--apple-control-focus-ring), 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    var(--apple-control-focus-ring),
+    0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .projects-rail-item-main {
@@ -167,7 +175,7 @@
 }
 
 .projects-rail-item-icon > span {
-  font-size: 1rem !important;
+  font-size: 1rem;
   line-height: 1;
 }
 
@@ -229,7 +237,9 @@
   pointer-events: none;
 }
 .projects-rail-item-container.is-dragging-overlay .projects-rail-item {
-  box-shadow: var(--shadow-lg), 0 0 0 1px var(--color-border);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 0 1px var(--color-border);
   background: var(--color-bg-elevated);
   transform: scale(1.02);
   border-color: var(--color-accent-primary, #64748b);
@@ -287,7 +297,10 @@
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+  transition:
+    opacity 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
 }
 
 .projects-rail-item-container:hover .projects-rail-menu-btn,
@@ -328,7 +341,7 @@
   height: 32px;
   min-width: 32px;
   min-height: 32px;
-  padding: 0 !important;
+  padding: 0;
   border: 1px solid transparent;
   border-radius: var(--radius-sm, 7px);
   background: transparent;
@@ -372,14 +385,17 @@
   gap: var(--spacing-sm);
   padding: var(--spacing-md) var(--spacing-lg);
   border-bottom: 1px solid var(--color-border);
-  background: linear-gradient(180deg,
-      color-mix(in srgb, var(--color-bg-primary) 96%, var(--color-bg-secondary)),
-      var(--color-bg-primary));
-  transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-              padding 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-              opacity 0.3s ease,
-              gap 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-              border-width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-bg-primary) 96%, var(--color-bg-secondary)),
+    var(--color-bg-primary)
+  );
+  transition:
+    max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    padding 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.3s ease,
+    gap 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    border-width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   flex-shrink: 0;
   max-height: 250px;
   opacity: 1;
@@ -404,9 +420,11 @@
   gap: var(--spacing-md);
   padding: var(--spacing-sm) var(--spacing-lg);
   border-bottom: 1px solid var(--color-border);
-  background: linear-gradient(180deg,
-      color-mix(in srgb, var(--color-bg-primary) 96%, var(--color-bg-secondary)),
-      var(--color-bg-primary));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-bg-primary) 96%, var(--color-bg-secondary)),
+    var(--color-bg-primary)
+  );
   overflow: visible;
 }
 
@@ -507,13 +525,13 @@
 }
 
 .projects-search input {
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  height: 100% !important;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  height: 100%;
   width: 100%;
   font-size: 0.85rem;
-  padding: 0 32px 0 34px !important;
+  padding: 0 32px 0 34px;
   flex: 1;
 }
 
@@ -573,16 +591,16 @@
 .projects-segmented-control .projects-toolbar-icon {
   position: relative;
   isolation: isolate;
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
+  border: none;
+  background: transparent;
+  box-shadow: none;
   border-radius: var(--projects-segmented-inner-radius);
   overflow: visible;
   color: color-mix(in srgb, var(--color-text-secondary) 92%, var(--color-text-primary));
 }
 
 .projects-segmented-control .projects-toolbar-icon::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
@@ -617,8 +635,8 @@
 
 .projects-segmented-control .projects-toolbar-icon:hover,
 .projects-segmented-control .projects-toolbar-icon.active {
-  background: transparent !important;
-  box-shadow: none !important;
+  background: transparent;
+  box-shadow: none;
   color: var(--color-text-primary);
 }
 
@@ -661,7 +679,7 @@
 }
 
 .projects-main-title-icon > span {
-  font-size: 1.25rem !important;
+  font-size: 1.25rem;
   line-height: 1;
 }
 
@@ -793,7 +811,7 @@
   justify-content: center;
   gap: 8px;
   min-height: 36px;
-  width: auto !important;
+  width: auto;
   min-width: 36px;
   padding: 0 12px;
   border: 1px solid var(--color-border);
@@ -927,8 +945,8 @@
   font-size: 0.875rem;
   color: var(--color-text-secondary);
   font-weight: 600;
-  white-space: nowrap !important;
-  flex-shrink: 0 !important;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .projects-main-scroll {
@@ -1044,9 +1062,11 @@
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--color-border);
-  background: linear-gradient(180deg,
-      color-mix(in srgb, var(--color-bg-primary) 96%, var(--color-bg-secondary)),
-      var(--color-bg-primary));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-bg-primary) 96%, var(--color-bg-secondary)),
+    var(--color-bg-primary)
+  );
   box-shadow: inset 1px 0 0 color-mix(in srgb, var(--color-border) 70%, transparent);
 }
 
@@ -1241,7 +1261,7 @@
   .projects-toolbar-primary .dropdown-container,
   .projects-toolbar-contextual-actions .dropdown-container,
   .projects-toolbar-contextual-actions .btn {
-    width: 100% !important;
+    width: 100%;
   }
 
   .projects-filter-popover {

@@ -15,11 +15,7 @@ import type {
   TranslationFn,
   WorkspaceQueryResult,
 } from '../types';
-import {
-  formatSummaryDuration,
-  formatTimestamp,
-  renderScopeIcon,
-} from '../utils';
+import { formatSummaryDuration, formatTimestamp, renderScopeIcon } from '../utils';
 
 interface WorkspaceViewModelParams {
   browseProject: ProjectRecord | null;
@@ -64,7 +60,9 @@ export function buildWorkspaceViewModel({
   const itemCounts = new Map<string | null, number>();
   itemCounts.set(null, queryResult.itemCounts.untagged ?? queryResult.itemCounts.inbox ?? 0);
   itemCounts.set(TRASH_SCOPE, queryResult.itemCounts.trash ?? 0);
-  Object.entries(queryResult.itemCounts.byTagId ?? queryResult.itemCounts.byProjectId ?? {}).forEach(([tagId, count]) => {
+  Object.entries(
+    queryResult.itemCounts.byTagId ?? queryResult.itemCounts.byProjectId ?? {}
+  ).forEach(([tagId, count]) => {
     itemCounts.set(tagId, count);
   });
 
@@ -87,11 +85,26 @@ export function buildWorkspaceViewModel({
   ];
 
   const sortOptions = [
-    { value: 'newest' as const, label: t('projects.sort_newest', { defaultValue: 'Newest first' }) },
-    { value: 'oldest' as const, label: t('projects.sort_oldest', { defaultValue: 'Oldest first' }) },
-    { value: 'duration_desc' as const, label: t('projects.sort_duration_desc', { defaultValue: 'Longest first' }) },
-    { value: 'duration_asc' as const, label: t('projects.sort_duration_asc', { defaultValue: 'Shortest first' }) },
-    { value: 'title_asc' as const, label: t('projects.sort_title_asc', { defaultValue: 'Title A-Z' }) },
+    {
+      value: 'newest' as const,
+      label: t('projects.sort_newest', { defaultValue: 'Newest first' }),
+    },
+    {
+      value: 'oldest' as const,
+      label: t('projects.sort_oldest', { defaultValue: 'Oldest first' }),
+    },
+    {
+      value: 'duration_desc' as const,
+      label: t('projects.sort_duration_desc', { defaultValue: 'Longest first' }),
+    },
+    {
+      value: 'duration_asc' as const,
+      label: t('projects.sort_duration_asc', { defaultValue: 'Shortest first' }),
+    },
+    {
+      value: 'title_asc' as const,
+      label: t('projects.sort_title_asc', { defaultValue: 'Title A-Z' }),
+    },
   ];
 
   const activeFilterLabels: string[] = [];
@@ -114,39 +127,42 @@ export function buildWorkspaceViewModel({
   const filterPopoverHint = hasActiveFilters
     ? activeFilterLabels.join(' · ')
     : t('projects.filter_menu_hint', {
-      defaultValue: 'Refine the current workspace view by type or time.',
-    });
+        defaultValue: 'Refine the current workspace view by type or time.',
+      });
 
   const headerTitle = isAllItemsScope
     ? t('projects.all_items', { defaultValue: 'All Items' })
     : browseScope === TRASH_SCOPE
-    ? t('projects.trash', { defaultValue: 'Trash' })
-    : browseProject?.name || t('projects.inbox', { defaultValue: 'Inbox' });
+      ? t('projects.trash', { defaultValue: 'Trash' })
+      : browseProject?.name || t('projects.inbox', { defaultValue: 'Inbox' });
   const headerDescription = isAllItemsScope
     ? t('projects.all_items_description', {
-      defaultValue: 'Browse everything across Inbox and your projects.',
-    })
+        defaultValue: 'Browse everything across Inbox and your projects.',
+      })
     : browseScope === TRASH_SCOPE
-    ? t('projects.trash_description', {
-      defaultValue: 'Restore items or delete them permanently.',
-    })
-    : browseProject
-    ? browseProject.description
-    : t('projects.inbox_description', {
-      defaultValue: 'Inbox collects recordings and imports without a project.',
-    });
+      ? t('projects.trash_description', {
+          defaultValue: 'Restore items or delete them permanently.',
+        })
+      : browseProject
+        ? browseProject.description
+        : t('projects.inbox_description', {
+            defaultValue: 'Inbox collects recordings and imports without a project.',
+          });
   const showWorkflowActions = !isAllItemsScope && browseScope !== TRASH_SCOPE;
-  const headerIcon = renderScopeIcon(browseScope, browseProject, { size: 'lg', showBackground: true });
+  const headerIcon = renderScopeIcon(browseScope, browseProject, {
+    size: 'lg',
+    showBackground: true,
+  });
   const searchInputLabel = isAllItemsScope
     ? t('projects.search_placeholder_all_items', { defaultValue: 'Search All Items...' })
     : browseScope === TRASH_SCOPE
-    ? t('projects.search_placeholder_trash', { defaultValue: 'Search Trash...' })
-    : browseProject
-    ? t('projects.search_placeholder_project', {
-      project: browseProject.name,
-      defaultValue: 'Search in {{project}}...',
-    })
-    : t('projects.search_placeholder_inbox', { defaultValue: 'Search Inbox...' });
+      ? t('projects.search_placeholder_trash', { defaultValue: 'Search Trash...' })
+      : browseProject
+        ? t('projects.search_placeholder_project', {
+            project: browseProject.name,
+            defaultValue: 'Search in {{project}}...',
+          })
+        : t('projects.search_placeholder_inbox', { defaultValue: 'Search Inbox...' });
   const summaryChips: ProjectSummaryChip[] = [
     {
       key: 'items',

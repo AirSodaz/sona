@@ -7,7 +7,7 @@ class AudioProcessor extends AudioWorkletProcessor {
     this.bufferIndex = 0;
   }
 
-  process(inputs, outputs, parameters) {
+  process(inputs, _outputs, _parameters) {
     const input = inputs[0];
     // input is array of channels (Float32Array)
     if (input && input.length > 0) {
@@ -17,7 +17,7 @@ class AudioProcessor extends AudioWorkletProcessor {
         // Convert Float32 (-1.0 to 1.0) to Int16
         const s = Math.max(-1, Math.min(1, channelData[i]));
         // Convert to PCM Int16
-        this.buffer[this.bufferIndex++] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        this.buffer[this.bufferIndex++] = s < 0 ? s * 0x8000 : s * 0x7fff;
 
         // When buffer is full, send it to the main thread
         if (this.bufferIndex >= this.bufferSize) {

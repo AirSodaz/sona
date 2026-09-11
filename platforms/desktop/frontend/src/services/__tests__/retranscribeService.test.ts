@@ -1,8 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { retranscribeService } from '../retranscribeService';
-import { historyService } from '../historyService';
-import { transcriptionService } from '../transcriptionService';
-import { transcriptSnapshotService } from '../transcriptSnapshotService';
 import { useHistoryStore } from '../../stores/historyStore';
 import {
   resetTranscriptStores,
@@ -10,6 +6,10 @@ import {
 } from '../../test-utils/transcriptStoreTestUtils';
 import type { TranscriptSegment } from '../../types/transcript';
 import { normalizeTranscriptSegments } from '../../utils/transcriptTiming';
+import { historyService } from '../historyService';
+import { retranscribeService } from '../retranscribeService';
+import { transcriptionService } from '../transcriptionService';
+import { transcriptSnapshotService } from '../transcriptSnapshotService';
 
 vi.mock('../../stores/effectiveConfigStore', () => ({
   getEffectiveConfigSnapshot: () => ({
@@ -88,7 +88,9 @@ describe('RetranscribeService', () => {
       sourceHistoryId: 'history-a',
       segments: originalSegments,
     });
-    useHistoryStore.setState({ updateTranscript } as Partial<ReturnType<typeof useHistoryStore.getState>>);
+    useHistoryStore.setState({ updateTranscript } as Partial<
+      ReturnType<typeof useHistoryStore.getState>
+    >);
     vi.mocked(transcriptionService.transcribeFile).mockResolvedValue(nextSegments);
 
     await retranscribeService.retranscribeCurrentRecord();
@@ -96,14 +98,14 @@ describe('RetranscribeService', () => {
     expect(transcriptSnapshotService.createSnapshot).toHaveBeenCalledWith(
       'history-a',
       'retranscribe',
-      originalSegments,
+      originalSegments
     );
     expect(
-      vi.mocked(transcriptSnapshotService.createSnapshot).mock.invocationCallOrder[0],
-    ).toBeLessThan(
-      vi.mocked(transcriptionService.transcribeFile).mock.invocationCallOrder[0],
-    );
+      vi.mocked(transcriptSnapshotService.createSnapshot).mock.invocationCallOrder[0]
+    ).toBeLessThan(vi.mocked(transcriptionService.transcribeFile).mock.invocationCallOrder[0]);
     expect(updateTranscript).toHaveBeenCalledWith('history-a', nextSegments);
-    expect(useTranscriptStore.getState().segments).toEqual(normalizeTranscriptSegments(nextSegments));
+    expect(useTranscriptStore.getState().segments).toEqual(
+      normalizeTranscriptSegments(nextSegments)
+    );
   });
 });

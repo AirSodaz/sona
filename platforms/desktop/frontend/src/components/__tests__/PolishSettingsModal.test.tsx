@@ -1,15 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { PolishSettingsModal } from '../PolishSettingsModal';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useConfigStore } from '../../stores/configStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import { PolishSettingsModal } from '../PolishSettingsModal';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string } & Record<string, unknown>) => {
       if (typeof options?.defaultValue === 'string') {
-        return options.defaultValue.replace(/\{\{(\w+)\}\}/g, (_: string, variable: string) => String(options?.[variable] ?? ''));
+        return options.defaultValue.replace(/\{\{(\w+)\}\}/g, (_: string, variable: string) =>
+          String(options?.[variable] ?? '')
+        );
       }
       return key;
     },

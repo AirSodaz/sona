@@ -4,13 +4,18 @@ import { ProjectsResults } from '../ProjectsResults';
 
 vi.mock('react-virtuoso', async () => {
   const React = await import('react');
-  const VirtualList = ({ components, context, data, endReached, itemContent }: any, ref: unknown) => {
+  const VirtualList = (
+    { components, context, data, endReached, itemContent }: any,
+    ref: unknown
+  ) => {
     void ref;
     const Footer = components?.Footer;
     return (
       <div>
         {data.map((item: any, index: number) => itemContent(index, item))}
-        <button type="button" onClick={() => endReached?.(data.length - 1)}>Reach end</button>
+        <button type="button" onClick={() => endReached?.(data.length - 1)}>
+          Reach end
+        </button>
         {Footer ? <Footer context={context} /> : null}
       </div>
     );
@@ -70,7 +75,7 @@ function renderResults(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 
-  render(<ProjectsResults {...props as any} />);
+  render(<ProjectsResults {...(props as any)} />);
   return props;
 }
 

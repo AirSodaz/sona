@@ -30,7 +30,9 @@ const vadModel: ModelInfo = {
   engine: 'sherpa-onnx',
 };
 
-function makeRestoreDefaults(overrides: Partial<ModelCatalogRestoreDefaults> = {}): ModelCatalogRestoreDefaults {
+function makeRestoreDefaults(
+  overrides: Partial<ModelCatalogRestoreDefaults> = {}
+): ModelCatalogRestoreDefaults {
   return {
     punctuationModelPath: '',
     speakerSegmentationModelPath: '',
@@ -46,30 +48,32 @@ describe('modelConfigPatches', () => {
   it('builds ASR selection patches for streaming/Batch Model loads', () => {
     const config = buildTestConfig();
 
-    expect(buildModelPathConfigPatch(config, streamingModel, '/models/streaming')).toEqual(expect.objectContaining({
-      streamingModelPath: '/models/streaming',
-      batchModelPath: '/models/streaming',
-      asr: expect.objectContaining({
-        selections: expect.objectContaining({
-          live: expect.objectContaining({
-            modelId: 'streaming-model',
-            modelPath: '/models/streaming',
-          }),
-          caption: expect.objectContaining({
-            modelId: 'streaming-model',
-            modelPath: '/models/streaming',
-          }),
-          voiceTyping: expect.objectContaining({
-            modelId: 'streaming-model',
-            modelPath: '/models/streaming',
-          }),
-          batch: expect.objectContaining({
-            modelId: 'streaming-model',
-            modelPath: '/models/streaming',
+    expect(buildModelPathConfigPatch(config, streamingModel, '/models/streaming')).toEqual(
+      expect.objectContaining({
+        streamingModelPath: '/models/streaming',
+        batchModelPath: '/models/streaming',
+        asr: expect.objectContaining({
+          selections: expect.objectContaining({
+            live: expect.objectContaining({
+              modelId: 'streaming-model',
+              modelPath: '/models/streaming',
+            }),
+            caption: expect.objectContaining({
+              modelId: 'streaming-model',
+              modelPath: '/models/streaming',
+            }),
+            voiceTyping: expect.objectContaining({
+              modelId: 'streaming-model',
+              modelPath: '/models/streaming',
+            }),
+            batch: expect.objectContaining({
+              modelId: 'streaming-model',
+              modelPath: '/models/streaming',
+            }),
           }),
         }),
-      }),
-    }));
+      })
+    );
   });
 
   it('builds per-scenario patches for auxiliary models', () => {
@@ -95,26 +99,28 @@ describe('modelConfigPatches', () => {
       batchSpeakerEmbeddingModelPath: '/models/deleted',
     });
 
-    expect(buildModelRemovalConfigPatch(config, '/models/deleted')).toEqual(expect.objectContaining({
-      streamingModelPath: '',
-      batchModelPath: '',
-      livePunctuationModelPath: '',
-      batchPunctuationModelPath: '',
-      liveVadModelPath: '',
-      batchVadModelPath: '',
-      liveSpeakerSegmentationModelPath: '',
-      batchSpeakerSegmentationModelPath: '',
-      liveSpeakerEmbeddingModelPath: '',
-      batchSpeakerEmbeddingModelPath: '',
-      asr: expect.objectContaining({
-        selections: expect.objectContaining({
-          live: expect.objectContaining({ modelPath: '' }),
-          caption: expect.objectContaining({ modelPath: '' }),
-          voiceTyping: expect.objectContaining({ modelPath: '' }),
-          batch: expect.objectContaining({ modelPath: '' }),
+    expect(buildModelRemovalConfigPatch(config, '/models/deleted')).toEqual(
+      expect.objectContaining({
+        streamingModelPath: '',
+        batchModelPath: '',
+        livePunctuationModelPath: '',
+        batchPunctuationModelPath: '',
+        liveVadModelPath: '',
+        batchVadModelPath: '',
+        liveSpeakerSegmentationModelPath: '',
+        batchSpeakerSegmentationModelPath: '',
+        liveSpeakerEmbeddingModelPath: '',
+        batchSpeakerEmbeddingModelPath: '',
+        asr: expect.objectContaining({
+          selections: expect.objectContaining({
+            live: expect.objectContaining({ modelPath: '' }),
+            caption: expect.objectContaining({ modelPath: '' }),
+            voiceTyping: expect.objectContaining({ modelPath: '' }),
+            batch: expect.objectContaining({ modelPath: '' }),
+          }),
         }),
-      }),
-    }));
+      })
+    );
   });
 
   it('restores catalog defaults and keeps current paths when optional defaults are absent', () => {
@@ -128,32 +134,38 @@ describe('modelConfigPatches', () => {
       enableITN: false,
     });
 
-    const patch = buildRestoreDefaultModelConfigPatch(config, makeRestoreDefaults({
-      streamingModelPath: '/models/default-live',
-      batchModelPath: '/models/default-batch',
-    }));
+    const patch = buildRestoreDefaultModelConfigPatch(
+      config,
+      makeRestoreDefaults({
+        streamingModelPath: '/models/default-live',
+        batchModelPath: '/models/default-batch',
+      })
+    );
     const nextConfig = { ...config, ...patch };
 
-    expect(nextConfig).toEqual(expect.objectContaining({
-      streamingModelPath: '/models/default-live',
-      batchModelPath: '/models/default-batch',
-      // Restore defaults apply the catalog default VAD path to both scenarios.
-      liveVadModelPath: '',
-      batchVadModelPath: '',
-      liveVadBufferSize: 5,
-      batchVadBufferSize: 5,
-      maxConcurrent: 2,
-      enableITN: true,
-      asr: expect.objectContaining({
-        providers: expect.objectContaining({
-          online: expect.objectContaining({
-            'volcengine-doubao': expect.objectContaining({
-              batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
-              batchResourceId: 'volc.bigasr.auc_turbo',
+    expect(nextConfig).toEqual(
+      expect.objectContaining({
+        streamingModelPath: '/models/default-live',
+        batchModelPath: '/models/default-batch',
+        // Restore defaults apply the catalog default VAD path to both scenarios.
+        liveVadModelPath: '',
+        batchVadModelPath: '',
+        liveVadBufferSize: 5,
+        batchVadBufferSize: 5,
+        maxConcurrent: 2,
+        enableITN: true,
+        asr: expect.objectContaining({
+          providers: expect.objectContaining({
+            online: expect.objectContaining({
+              'volcengine-doubao': expect.objectContaining({
+                batchEndpoint:
+                  'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+                batchResourceId: 'volc.bigasr.auc_turbo',
+              }),
             }),
           }),
         }),
-      }),
-    }));
+      })
+    );
   });
 });

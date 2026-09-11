@@ -1,18 +1,10 @@
-import React from 'react';
-import {
-  AlertCircle,
-  BarChart3,
-  Bot,
-  Clock3,
-  FileText,
-  LoaderCircle,
-} from 'lucide-react';
+import { AlertCircle, BarChart3, Bot, Clock3, FileText, LoaderCircle } from 'lucide-react';
+import type React from 'react';
 import type {
-  DashboardOverviewStats,
   DashboardLlmUsageStats,
+  DashboardOverviewStats,
   DashboardSpeakerStats,
 } from '../../../types/dashboard';
-import { type DashboardTranslation } from './formatters';
 import {
   KpiCard,
   SpeakerOverviewCard,
@@ -21,6 +13,7 @@ import {
   StatusBadge,
   UsageBreakdown,
 } from './cards';
+import type { DashboardTranslation } from './formatters';
 import { ContentTrends, TokenTrend } from './trend';
 
 export function ContentOverviewSection({
@@ -47,14 +40,18 @@ export function ContentOverviewSection({
     <div className="settings-dashboard-subsection">
       <div className="settings-dashboard-subsection-header">
         <div className="settings-dashboard-subtitle-stack">
-          <div className="settings-dashboard-subtitle">{t('settings.dashboard.content_overview', { defaultValue: 'Content Overview' })}</div>
+          <div className="settings-dashboard-subtitle">
+            {t('settings.dashboard.content_overview', { defaultValue: 'Content Overview' })}
+          </div>
         </div>
         {(isDeepLoading || error) && (
           <div className="settings-dashboard-status-rail">
             {isDeepLoading && (
               <StatusBadge
                 icon={<LoaderCircle className="spin" size={14} />}
-                label={t('settings.dashboard.partial_loading', { defaultValue: 'Loading transcript and speaker details...' })}
+                label={t('settings.dashboard.partial_loading', {
+                  defaultValue: 'Loading transcript and speaker details...',
+                })}
                 testId="dashboard-partial"
               />
             )}
@@ -80,8 +77,10 @@ export function ContentOverviewSection({
           variant="feature"
           tone="accent"
           sparkline={itemSparkline}
-          sparklineLabel={t('settings.dashboard.recent_item_trend', { defaultValue: 'Recent 30 Day Item Trend' })}
-          detail={(
+          sparklineLabel={t('settings.dashboard.recent_item_trend', {
+            defaultValue: 'Recent 30 Day Item Trend',
+          })}
+          detail={
             <div className="settings-dashboard-pill-row">
               <StatPill>
                 {t('settings.dashboard.recording_pill', {
@@ -96,7 +95,7 @@ export function ContentOverviewSection({
                 })}
               </StatPill>
             </div>
-          )}
+          }
         />
         <KpiCard
           label={t('settings.dashboard.total_duration', { defaultValue: 'Total Duration' })}
@@ -105,25 +104,35 @@ export function ContentOverviewSection({
           variant="feature"
           tone="warm"
           sparkline={durationSparkline}
-          sparklineLabel={t('settings.dashboard.recent_duration_trend', { defaultValue: 'Recent 30 Day Duration Trend' })}
+          sparklineLabel={t('settings.dashboard.recent_duration_trend', {
+            defaultValue: 'Recent 30 Day Duration Trend',
+          })}
         />
       </div>
 
       <div className="settings-dashboard-support-grid">
         <KpiCard
-          label={t('settings.dashboard.transcript_characters', { defaultValue: 'Transcript Characters' })}
-          value={typeof overview.transcriptCharacterCount === 'number'
-            ? overview.transcriptCharacterCountDisplay || ''
-            : t('settings.dashboard.scanning', { defaultValue: 'Scanning...' })}
+          label={t('settings.dashboard.transcript_characters', {
+            defaultValue: 'Transcript Characters',
+          })}
+          value={
+            typeof overview.transcriptCharacterCount === 'number'
+              ? overview.transcriptCharacterCountDisplay || ''
+              : t('settings.dashboard.scanning', { defaultValue: 'Scanning...' })
+          }
           muted={typeof overview.transcriptCharacterCount !== 'number'}
-          detail={typeof overview.transcriptCharacterCount !== 'number'
-            ? t('settings.dashboard.partial_loading', { defaultValue: 'Loading transcript and speaker details...' })
-            : undefined}
+          detail={
+            typeof overview.transcriptCharacterCount !== 'number'
+              ? t('settings.dashboard.partial_loading', {
+                  defaultValue: 'Loading transcript and speaker details...',
+                })
+              : undefined
+          }
         />
         <KpiCard
           label={t('settings.dashboard.tags', { defaultValue: 'Tags' })}
           value={overview.tagCountDisplay}
-          detail={(
+          detail={
             <div className="settings-dashboard-pill-row">
               <StatPill>
                 {t('settings.dashboard.untagged_pill', {
@@ -138,7 +147,7 @@ export function ContentOverviewSection({
                 })}
               </StatPill>
             </div>
-          )}
+          }
         />
       </div>
 
@@ -159,14 +168,18 @@ export function SpeakerInsightsSection({
   t: DashboardTranslation;
 }): React.JSX.Element {
   const statusMessage = isDeepLoading
-    ? t('settings.dashboard.deep_scan_loading', { defaultValue: 'Speaker stats are still scanning saved transcripts.' })
+    ? t('settings.dashboard.deep_scan_loading', {
+        defaultValue: 'Speaker stats are still scanning saved transcripts.',
+      })
     : error;
 
   return (
     <div className="settings-dashboard-subsection">
       <div className="settings-dashboard-subsection-header">
         <div className="settings-dashboard-subtitle-stack">
-          <div className="settings-dashboard-subtitle">{t('settings.dashboard.speaker_insights', { defaultValue: 'Speaker Insights' })}</div>
+          <div className="settings-dashboard-subtitle">
+            {t('settings.dashboard.speaker_insights', { defaultValue: 'Speaker Insights' })}
+          </div>
         </div>
         {isDeepLoading && (
           <div className="settings-dashboard-status-rail">
@@ -181,25 +194,33 @@ export function SpeakerInsightsSection({
 
       <div className="settings-dashboard-speaker-kpi-grid">
         <KpiCard
-          label={t('settings.dashboard.annotated_items', { defaultValue: 'Speaker-Annotated Items' })}
+          label={t('settings.dashboard.annotated_items', {
+            defaultValue: 'Speaker-Annotated Items',
+          })}
           value={speakers ? speakers.annotatedItemCountDisplay : '...'}
           muted={!speakers}
           compact
         />
         <KpiCard
-          label={t('settings.dashboard.speaker_attributed_duration', { defaultValue: 'Speaker-Attributed Duration' })}
+          label={t('settings.dashboard.speaker_attributed_duration', {
+            defaultValue: 'Speaker-Attributed Duration',
+          })}
           value={speakers ? speakers.speakerAttributedDurationDisplay : '...'}
           muted={!speakers}
           compact
         />
         <KpiCard
-          label={t('settings.dashboard.identified_speakers', { defaultValue: 'Identified Speakers' })}
+          label={t('settings.dashboard.identified_speakers', {
+            defaultValue: 'Identified Speakers',
+          })}
           value={speakers ? speakers.identifiedSpeakerCountDisplay : '...'}
           muted={!speakers}
           compact
         />
         <KpiCard
-          label={t('settings.dashboard.anonymous_slots', { defaultValue: 'Anonymous Speaker Slots' })}
+          label={t('settings.dashboard.anonymous_slots', {
+            defaultValue: 'Anonymous Speaker Slots',
+          })}
           value={speakers ? speakers.anonymousSpeakerSlotCountDisplay : '...'}
           muted={!speakers}
           compact
@@ -207,16 +228,8 @@ export function SpeakerInsightsSection({
       </div>
 
       <div className="settings-dashboard-speaker-detail-grid">
-        <SpeakerOverviewCard
-          speakers={speakers}
-          t={t}
-          statusMessage={statusMessage}
-        />
-        <SpeakerRankingCard
-          speakers={speakers}
-          t={t}
-          statusMessage={statusMessage}
-        />
+        <SpeakerOverviewCard speakers={speakers} t={t} statusMessage={statusMessage} />
+        <SpeakerRankingCard speakers={speakers} t={t} statusMessage={statusMessage} />
       </div>
     </div>
   );
@@ -248,7 +261,9 @@ export function LlmUsagePanel({
           variant="feature"
           tone="info"
           sparkline={callSparkline}
-          sparklineLabel={t('settings.dashboard.llm_call_count', { defaultValue: 'Successful Calls' })}
+          sparklineLabel={t('settings.dashboard.llm_call_count', {
+            defaultValue: 'Successful Calls',
+          })}
         />
         <KpiCard
           label={t('settings.dashboard.total_tokens', { defaultValue: 'Total Tokens' })}
@@ -257,7 +272,9 @@ export function LlmUsagePanel({
           variant="feature"
           tone="accent"
           sparkline={tokenSparkline}
-          sparklineLabel={t('settings.dashboard.recent_token_trend', { defaultValue: 'Recent 30 Day Token Trend' })}
+          sparklineLabel={t('settings.dashboard.recent_token_trend', {
+            defaultValue: 'Recent 30 Day Token Trend',
+          })}
         />
       </div>
 
@@ -267,7 +284,9 @@ export function LlmUsagePanel({
           value={llmUsage.totals.callsWithUsageDisplay}
         />
         <KpiCard
-          label={t('settings.dashboard.calls_without_usage', { defaultValue: 'Calls Missing Usage' })}
+          label={t('settings.dashboard.calls_without_usage', {
+            defaultValue: 'Calls Missing Usage',
+          })}
           value={llmUsage.totals.callsWithoutUsageDisplay}
           tone={llmUsage.totals.callsWithoutUsage > 0 ? 'warm' : 'default'}
         />
@@ -289,9 +308,9 @@ export function LlmUsagePanel({
           <span>
             {llmUsage.startedAt
               ? t('settings.dashboard.tracking_since', {
-                defaultValue: 'Tracking since {{date}}',
-                date: llmUsage.trackingSinceDisplay || llmUsage.startedAt,
-              })
+                  defaultValue: 'Tracking since {{date}}',
+                  date: llmUsage.trackingSinceDisplay || llmUsage.startedAt,
+                })
               : t('settings.dashboard.no_tracked_calls', { defaultValue: 'No tracked calls yet.' })}
           </span>
         </div>
@@ -300,7 +319,8 @@ export function LlmUsagePanel({
             <AlertCircle size={14} />
             <span>
               {t('settings.dashboard.missing_usage_hint', {
-                defaultValue: '{{count}} successful calls did not include token usage from the provider.',
+                defaultValue:
+                  '{{count}} successful calls did not include token usage from the provider.',
                 count: llmUsage.totals.callsWithoutUsageDisplay,
               })}
             </span>

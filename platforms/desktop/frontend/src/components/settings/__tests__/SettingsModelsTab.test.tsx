@@ -1,644 +1,703 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { SettingsModelsTab } from '../SettingsModelsTab';
-import { useConfigStore } from '../../../stores/configStore';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelManagerContext } from '../../../hooks/useModelManager';
-import { setTestConfig } from '../../../test-utils/configTestUtils';
+import { useConfigStore } from '../../../stores/configStore';
 import { useDialogStore } from '../../../stores/dialogStore';
+import { setTestConfig } from '../../../test-utils/configTestUtils';
+import { SettingsModelsTab } from '../SettingsModelsTab';
 
 vi.mock('react-i18next', () => ({
-    useTranslation: () => ({
-        t: (key: string, options?: { defaultValue?: string } & Record<string, unknown>) => {
-            if (typeof options?.defaultValue === 'string') {
-                return options.defaultValue.replace(/\{\{(\w+)\}\}/g, (_: string, variable: string) => String(options?.[variable] ?? ''));
-            }
-            return key;
-        },
-    }),
-    initReactI18next: {
-        type: '3rdParty',
-        init: () => undefined,
+  useTranslation: () => ({
+    t: (key: string, options?: { defaultValue?: string } & Record<string, unknown>) => {
+      if (typeof options?.defaultValue === 'string') {
+        return options.defaultValue.replace(/\{\{(\w+)\}\}/g, (_: string, variable: string) =>
+          String(options?.[variable] ?? '')
+        );
+      }
+      return key;
     },
+  }),
+  initReactI18next: {
+    type: '3rdParty',
+    init: () => undefined,
+  },
 }));
 
 vi.mock('../ModelCard', () => ({
-    ModelCard: ({
-        models,
-        actionsDisabled,
-    }: {
-        models: Array<{ id: string; name: string }>;
-        actionsDisabled?: boolean;
-    }) => (
-        <div data-testid={`model-card-${models[0].id}`}>
-            {models[0].name}
-            <button type="button" disabled={actionsDisabled}>model-action</button>
-        </div>
-    ),
+  ModelCard: ({
+    models,
+    actionsDisabled,
+  }: {
+    models: Array<{ id: string; name: string }>;
+    actionsDisabled?: boolean;
+  }) => (
+    <div data-testid={`model-card-${models[0].id}`}>
+      {models[0].name}
+      <button type="button" disabled={actionsDisabled}>
+        model-action
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock('../../../services/modelService', () => ({
-    PRESET_MODELS: [],
-    PRESET_MODELS_MAP: {},
-    modelService: {
-        getModelPath: vi.fn(async (id: string) => `/models/${id}`),
-        getModelRules: vi.fn(() => ({ requiresVad: false, requiresPunctuation: false })),
-    },
+  PRESET_MODELS: [],
+  PRESET_MODELS_MAP: {},
+  modelService: {
+    getModelPath: vi.fn(async (id: string) => `/models/${id}`),
+    getModelRules: vi.fn(() => ({ requiresVad: false, requiresPunctuation: false })),
+  },
 }));
 
 vi.mock('../../../services/cudaAddonService', () => ({
-    cudaAddonService: {
-        getStatus: vi.fn(async () => ({
-            isInstalled: false,
-            isActive: false,
-            path: '/runtimes/cuda',
-            missingFiles: ['cudart64_12.dll'],
-            version: null,
-            cudaVersion: null,
-        })),
-        activate: vi.fn(async () => ({
-            isInstalled: true,
-            isActive: true,
-            path: '/runtimes/cuda',
-            missingFiles: [],
-            version: '0.1.0',
-            cudaVersion: '12.4',
-        })),
-        downloadAndInstall: vi.fn(async () => ({
-            isInstalled: true,
-            isActive: true,
-            path: '/runtimes/cuda',
-            missingFiles: [],
-            version: '0.1.0',
-            cudaVersion: '12.4',
-        })),
-        cancelDownload: vi.fn(async () => {}),
-    },
+  cudaAddonService: {
+    getStatus: vi.fn(async () => ({
+      isInstalled: false,
+      isActive: false,
+      path: '/runtimes/cuda',
+      missingFiles: ['cudart64_12.dll'],
+      version: null,
+      cudaVersion: null,
+    })),
+    activate: vi.fn(async () => ({
+      isInstalled: true,
+      isActive: true,
+      path: '/runtimes/cuda',
+      missingFiles: [],
+      version: '0.1.0',
+      cudaVersion: '12.4',
+    })),
+    downloadAndInstall: vi.fn(async () => ({
+      isInstalled: true,
+      isActive: true,
+      path: '/runtimes/cuda',
+      missingFiles: [],
+      version: '0.1.0',
+      cudaVersion: '12.4',
+    })),
+    cancelDownload: vi.fn(async () => {}),
+  },
 }));
 
 const speakerSegmentationModelBase = {
-    id: 'sherpa-onnx-pyannote-segmentation-3-0',
-    name: 'Pyannote 3.0',
-    description: 'settings.descriptions.speaker_segmentation',
-    url: 'https://example.com/seg.tar.bz2',
-    type: 'speaker-segmentation',
-    language: 'multi',
-    size: '6.64 MB',
-    engine: 'sherpa-onnx',
-    rules: { requiresVad: false, requiresPunctuation: false },
-    installPath: '/models/sherpa-onnx-pyannote-segmentation-3-0',
-    downloadPath: '/models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2',
+  id: 'sherpa-onnx-pyannote-segmentation-3-0',
+  name: 'Pyannote 3.0',
+  description: 'settings.descriptions.speaker_segmentation',
+  url: 'https://example.com/seg.tar.bz2',
+  type: 'speaker-segmentation',
+  language: 'multi',
+  size: '6.64 MB',
+  engine: 'sherpa-onnx',
+  rules: { requiresVad: false, requiresPunctuation: false },
+  installPath: '/models/sherpa-onnx-pyannote-segmentation-3-0',
+  downloadPath: '/models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2',
 };
 const speakerEmbeddingModelBase = {
-    id: '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
-    name: '3DSpeaker CAMPPlus',
-    description: 'settings.descriptions.speaker_embedding',
-    url: 'https://example.com/embed.onnx',
-    type: 'speaker-embedding',
-    language: 'zh,en',
-    size: '27 MB',
-    isArchive: false,
-    filename: '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
-    engine: 'sherpa-onnx',
-    rules: { requiresVad: false, requiresPunctuation: false },
-    installPath: '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
-    downloadPath: '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+  id: '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+  name: '3DSpeaker CAMPPlus',
+  description: 'settings.descriptions.speaker_embedding',
+  url: 'https://example.com/embed.onnx',
+  type: 'speaker-embedding',
+  language: 'zh,en',
+  size: '27 MB',
+  isArchive: false,
+  filename: '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+  engine: 'sherpa-onnx',
+  rules: { requiresVad: false, requiresPunctuation: false },
+  installPath: '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+  downloadPath: '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
 };
 
 function buildModelCatalog(installedModels: Set<string>) {
-    const speakerSegmentationModel = {
-        ...speakerSegmentationModelBase,
-        isInstalled: installedModels.has(speakerSegmentationModelBase.id),
-    };
-    const speakerEmbeddingModel = {
-        ...speakerEmbeddingModelBase,
-        isInstalled: installedModels.has(speakerEmbeddingModelBase.id),
-    };
+  const speakerSegmentationModel = {
+    ...speakerSegmentationModelBase,
+    isInstalled: installedModels.has(speakerSegmentationModelBase.id),
+  };
+  const speakerEmbeddingModel = {
+    ...speakerEmbeddingModelBase,
+    isInstalled: installedModels.has(speakerEmbeddingModelBase.id),
+  };
 
-    return {
-        modelsDir: '/models',
-        models: [speakerSegmentationModel, speakerEmbeddingModel],
-        sections: [
-        {
-            type: 'speaker-segmentation',
-            groups: [
-                {
-                    key: 'sherpa-onnx-pyannote-segmentation-3-0',
-                    models: [speakerSegmentationModel],
-                },
-            ],
-        },
-        {
-            type: 'speaker-embedding',
-            groups: [
-                {
-                    key: '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
-                    models: [speakerEmbeddingModel],
-                },
-            ],
-        },
+  return {
+    modelsDir: '/models',
+    models: [speakerSegmentationModel, speakerEmbeddingModel],
+    sections: [
+      {
+        type: 'speaker-segmentation',
+        groups: [
+          {
+            key: 'sherpa-onnx-pyannote-segmentation-3-0',
+            models: [speakerSegmentationModel],
+          },
         ],
-        selectionOptions: {
-            streaming: [],
-            batch: [],
-            speakerSegmentation: [
-                {
-                    id: speakerSegmentationModel.id,
-                    label: speakerSegmentationModel.name,
-                    installPath: speakerSegmentationModel.installPath,
-                    isInstalled: speakerSegmentationModel.isInstalled,
-                },
-            ],
-            speakerEmbedding: [
-                {
-                    id: speakerEmbeddingModel.id,
-                    label: speakerEmbeddingModel.name,
-                    installPath: speakerEmbeddingModel.installPath,
-                    isInstalled: speakerEmbeddingModel.isInstalled,
-                },
-            ],
-        },
-        modelPathById: {
-            [speakerSegmentationModel.id]: speakerSegmentationModel.installPath,
-            [speakerEmbeddingModel.id]: speakerEmbeddingModel.installPath,
-        },
-        modelIdByNormalizedPath: {
-            [speakerSegmentationModel.installPath.toLowerCase()]: speakerSegmentationModel.id,
-            [speakerEmbeddingModel.installPath.toLowerCase()]: speakerEmbeddingModel.id,
-        },
-        pathMatchTokens: [
-            {
-                id: speakerSegmentationModel.id,
-                token: speakerSegmentationModel.id.toLowerCase(),
-            },
-            {
-                id: speakerEmbeddingModel.id,
-                token: speakerEmbeddingModel.id.toLowerCase(),
-            },
+      },
+      {
+        type: 'speaker-embedding',
+        groups: [
+          {
+            key: '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+            models: [speakerEmbeddingModel],
+          },
         ],
-        dependencyRequestsByModelId: {},
-        restoreDefaults: {
-            punctuationModelPath: '',
-            speakerSegmentationModelPath: '',
-            speakerEmbeddingModelPath: '',
-            enableITN: true,
-            vadBufferSize: 5,
-            maxConcurrent: 2,
+      },
+    ],
+    selectionOptions: {
+      streaming: [],
+      batch: [],
+      speakerSegmentation: [
+        {
+          id: speakerSegmentationModel.id,
+          label: speakerSegmentationModel.name,
+          installPath: speakerSegmentationModel.installPath,
+          isInstalled: speakerSegmentationModel.isInstalled,
         },
-    };
+      ],
+      speakerEmbedding: [
+        {
+          id: speakerEmbeddingModel.id,
+          label: speakerEmbeddingModel.name,
+          installPath: speakerEmbeddingModel.installPath,
+          isInstalled: speakerEmbeddingModel.isInstalled,
+        },
+      ],
+    },
+    modelPathById: {
+      [speakerSegmentationModel.id]: speakerSegmentationModel.installPath,
+      [speakerEmbeddingModel.id]: speakerEmbeddingModel.installPath,
+    },
+    modelIdByNormalizedPath: {
+      [speakerSegmentationModel.installPath.toLowerCase()]: speakerSegmentationModel.id,
+      [speakerEmbeddingModel.installPath.toLowerCase()]: speakerEmbeddingModel.id,
+    },
+    pathMatchTokens: [
+      {
+        id: speakerSegmentationModel.id,
+        token: speakerSegmentationModel.id.toLowerCase(),
+      },
+      {
+        id: speakerEmbeddingModel.id,
+        token: speakerEmbeddingModel.id.toLowerCase(),
+      },
+    ],
+    dependencyRequestsByModelId: {},
+    restoreDefaults: {
+      punctuationModelPath: '',
+      speakerSegmentationModelPath: '',
+      speakerEmbeddingModelPath: '',
+      enableITN: true,
+      vadBufferSize: 5,
+      maxConcurrent: 2,
+    },
+  };
 }
 
 function renderTab(installedModels: Set<string>, managerOverrides: Record<string, unknown> = {}) {
-    function Harness() {
-        const config = useConfigStore((state) => state.config);
-        const managerValue = {
-            deletingId: null,
-            downloads: {},
-            installedModels,
-            modelCatalog: buildModelCatalog(installedModels),
-            selectedModelIds: {
-                streaming: null,
-                batch: null,
-                liveSpeakerSegmentation: config.liveSpeakerSegmentationModelPath ? speakerSegmentationModelBase.id : null,
-                batchSpeakerSegmentation: config.batchSpeakerSegmentationModelPath ? speakerSegmentationModelBase.id : null,
-                liveSpeakerEmbedding: config.liveSpeakerEmbeddingModelPath ? speakerEmbeddingModelBase.id : null,
-                batchSpeakerEmbedding: config.batchSpeakerEmbeddingModelPath ? speakerEmbeddingModelBase.id : null,
-                livePunctuation: null,
-                batchPunctuation: null,
-                liveVad: null,
-                batchVad: null,
-            },
-            catalogLoadState: 'ready',
-            catalogLoadError: null,
-            handleDelete: vi.fn(),
-            handleDownload: vi.fn(),
-            handleCancelDownload: vi.fn(),
-            handleLoad: vi.fn(),
-            restoreDefaultModelSettings: () => {
-                useConfigStore.getState().setConfig({
-                    batchVadEnabled: true,
-                    livePunctuationModelPath: '',
-                    batchPunctuationModelPath: '',
-                    liveSpeakerSegmentationModelPath: '',
-                    batchSpeakerSegmentationModelPath: '',
-                    liveSpeakerEmbeddingModelPath: '',
-                    batchSpeakerEmbeddingModelPath: '',
-                    enableITN: true,
-                    liveVadBufferSize: 5,
-                    batchVadBufferSize: 5,
-                    maxConcurrent: 2,
-                });
-            },
-            ...managerOverrides,
-        } as any;
+  function Harness() {
+    const config = useConfigStore((state) => state.config);
+    const managerValue = {
+      deletingId: null,
+      downloads: {},
+      installedModels,
+      modelCatalog: buildModelCatalog(installedModels),
+      selectedModelIds: {
+        streaming: null,
+        batch: null,
+        liveSpeakerSegmentation: config.liveSpeakerSegmentationModelPath
+          ? speakerSegmentationModelBase.id
+          : null,
+        batchSpeakerSegmentation: config.batchSpeakerSegmentationModelPath
+          ? speakerSegmentationModelBase.id
+          : null,
+        liveSpeakerEmbedding: config.liveSpeakerEmbeddingModelPath
+          ? speakerEmbeddingModelBase.id
+          : null,
+        batchSpeakerEmbedding: config.batchSpeakerEmbeddingModelPath
+          ? speakerEmbeddingModelBase.id
+          : null,
+        livePunctuation: null,
+        batchPunctuation: null,
+        liveVad: null,
+        batchVad: null,
+      },
+      catalogLoadState: 'ready',
+      catalogLoadError: null,
+      handleDelete: vi.fn(),
+      handleDownload: vi.fn(),
+      handleCancelDownload: vi.fn(),
+      handleLoad: vi.fn(),
+      restoreDefaultModelSettings: () => {
+        useConfigStore.getState().setConfig({
+          batchVadEnabled: true,
+          livePunctuationModelPath: '',
+          batchPunctuationModelPath: '',
+          liveSpeakerSegmentationModelPath: '',
+          batchSpeakerSegmentationModelPath: '',
+          liveSpeakerEmbeddingModelPath: '',
+          batchSpeakerEmbeddingModelPath: '',
+          enableITN: true,
+          liveVadBufferSize: 5,
+          batchVadBufferSize: 5,
+          maxConcurrent: 2,
+        });
+      },
+      ...managerOverrides,
+    } as any;
 
-        return (
-            <ModelManagerContext.Provider value={managerValue}>
-                <SettingsModelsTab />
-            </ModelManagerContext.Provider>
-        );
-    }
+    return (
+      <ModelManagerContext.Provider value={managerValue}>
+        <SettingsModelsTab />
+      </ModelManagerContext.Provider>
+    );
+  }
 
-    return render(<Harness />);
+  return render(<Harness />);
 }
 
 async function activateBatchScenarioAndExpandAdvanced() {
-    fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
+  fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
 
-    const advancedHeader = await screen.findByRole('button', { name: /高级设置/ });
-    const expanded = advancedHeader.getAttribute('aria-expanded') === 'true';
-    if (!expanded) {
-        fireEvent.click(advancedHeader);
-    }
+  const advancedHeader = await screen.findByRole('button', { name: /高级设置/ });
+  const expanded = advancedHeader.getAttribute('aria-expanded') === 'true';
+  if (!expanded) {
+    fireEvent.click(advancedHeader);
+  }
 }
 
 describe('SettingsModelsTab speaker model selections', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-        setTestConfig({
-            liveSpeakerSegmentationModelPath: '',
-            liveSpeakerEmbeddingModelPath: '',
-            batchSpeakerSegmentationModelPath: '',
-            batchSpeakerEmbeddingModelPath: '',
-            batchVadEnabled: true,
-        });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setTestConfig({
+      liveSpeakerSegmentationModelPath: '',
+      liveSpeakerEmbeddingModelPath: '',
+      batchSpeakerSegmentationModelPath: '',
+      batchSpeakerEmbeddingModelPath: '',
+      batchVadEnabled: true,
+    });
+  });
+
+  it('toggles the batch VAD setting from the advanced section of the batch scenario', async () => {
+    renderTab(new Set());
+
+    await activateBatchScenarioAndExpandAdvanced();
+
+    screen.getByText('settings.batch_vad_enabled');
+    screen.getByText('settings.batch_vad_enabled_hint');
+
+    const row = screen.getByText('settings.batch_vad_enabled').closest('.settings-item-container');
+    expect(row).not.toBeNull();
+    const batchVadSwitch = within(row as HTMLElement).getByRole('switch');
+    expect(batchVadSwitch.getAttribute('aria-checked')).toBe('true');
+
+    fireEvent.click(batchVadSwitch);
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.batchVadEnabled).toBe(false);
+      expect(batchVadSwitch.getAttribute('aria-checked')).toBe('false');
+    });
+  });
+
+  it('hides the batch VAD toggle on the live scenario', async () => {
+    renderTab(new Set());
+
+    await screen.findByRole('button', { name: /高级设置/ });
+    const advancedHeader = screen.getByRole('button', { name: /高级设置/ });
+    if (advancedHeader.getAttribute('aria-expanded') !== 'true') {
+      fireEvent.click(advancedHeader);
+    }
+
+    expect(screen.queryByText('settings.batch_vad_enabled')).toBeNull();
+  });
+
+  it('restores batch VAD setting to true when restoring default settings', async () => {
+    setTestConfig({
+      batchVadEnabled: false,
     });
 
-    it('toggles the batch VAD setting from the advanced section of the batch scenario', async () => {
-        renderTab(new Set());
+    renderTab(new Set());
 
-        await activateBatchScenarioAndExpandAdvanced();
+    await activateBatchScenarioAndExpandAdvanced();
 
-        screen.getByText('settings.batch_vad_enabled');
-        screen.getByText('settings.batch_vad_enabled_hint');
+    const row = screen.getByText('settings.batch_vad_enabled').closest('.settings-item-container');
+    const batchVadSwitch = within(row as HTMLElement).getByRole('switch');
+    expect(batchVadSwitch.getAttribute('aria-checked')).toBe('false');
 
-        const row = screen.getByText('settings.batch_vad_enabled').closest('.settings-item-container');
-        expect(row).not.toBeNull();
-        const batchVadSwitch = within(row as HTMLElement).getByRole('switch');
-        expect(batchVadSwitch.getAttribute('aria-checked')).toBe('true');
+    const restoreButton = screen.getByText('settings.restore_defaults');
+    fireEvent.click(restoreButton);
 
-        fireEvent.click(batchVadSwitch);
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.batchVadEnabled).toBe(true);
+      expect(batchVadSwitch.getAttribute('aria-checked')).toBe('true');
+    });
+  });
 
-        await waitFor(() => {
-            expect(useConfigStore.getState().config.batchVadEnabled).toBe(false);
-            expect(batchVadSwitch.getAttribute('aria-checked')).toBe('false');
-        });
+  it('shows Off for both speaker dropdowns even when no speaker models are installed', async () => {
+    renderTab(new Set());
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Speaker Segmentation Model' }).textContent
+      ).toContain('Off');
+      expect(screen.getByRole('button', { name: 'Speaker Embedding Model' }).textContent).toContain(
+        'Off'
+      );
     });
 
-    it('hides the batch VAD toggle on the live scenario', async () => {
-        renderTab(new Set());
+    // Expand accordions to mount ModelCards
+    const segAccordion = await screen.findByRole('button', { name: /Speaker Segmentation Models/ });
+    fireEvent.click(segAccordion);
 
-        await screen.findByRole('button', { name: /高级设置/ });
-        const advancedHeader = screen.getByRole('button', { name: /高级设置/ });
-        if (advancedHeader.getAttribute('aria-expanded') !== 'true') {
-            fireEvent.click(advancedHeader);
-        }
+    const embedAccordion = await screen.findByRole('button', { name: /Speaker Embedding Models/ });
+    fireEvent.click(embedAccordion);
 
-        expect(screen.queryByText('settings.batch_vad_enabled')).toBeNull();
-    });
+    expect(
+      screen.getByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0').textContent
+    ).toContain('Pyannote 3.0');
+    expect(
+      screen.getByTestId('model-card-3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx')
+        .textContent
+    ).toContain('3DSpeaker CAMPPlus');
 
-    it('restores batch VAD setting to true when restoring default settings', async () => {
-        setTestConfig({
-            batchVadEnabled: false,
-        });
+    fireEvent.click(screen.getByRole('button', { name: 'Speaker Segmentation Model' }));
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Off']);
+  });
 
-        renderTab(new Set());
-
-        await activateBatchScenarioAndExpandAdvanced();
-
-        const row = screen.getByText('settings.batch_vad_enabled').closest('.settings-item-container');
-        const batchVadSwitch = within(row as HTMLElement).getByRole('switch');
-        expect(batchVadSwitch.getAttribute('aria-checked')).toBe('false');
-
-        const restoreButton = screen.getByText('settings.restore_defaults');
-        fireEvent.click(restoreButton);
-
-        await waitFor(() => {
-            expect(useConfigStore.getState().config.batchVadEnabled).toBe(true);
-            expect(batchVadSwitch.getAttribute('aria-checked')).toBe('true');
-        });
-    });
-
-    it('shows Off for both speaker dropdowns even when no speaker models are installed', async () => {
-        renderTab(new Set());
-
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: 'Speaker Segmentation Model' }).textContent).toContain('Off');
-            expect(screen.getByRole('button', { name: 'Speaker Embedding Model' }).textContent).toContain('Off');
-        });
-
-        // Expand accordions to mount ModelCards
-        const segAccordion = await screen.findByRole('button', { name: /Speaker Segmentation Models/ });
-        fireEvent.click(segAccordion);
-
-        const embedAccordion = await screen.findByRole('button', { name: /Speaker Embedding Models/ });
-        fireEvent.click(embedAccordion);
-
-        expect(screen.getByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0').textContent).toContain('Pyannote 3.0');
-        expect(screen.getByTestId('model-card-3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx').textContent).toContain('3DSpeaker CAMPPlus');
-
-        fireEvent.click(screen.getByRole('button', { name: 'Speaker Segmentation Model' }));
-        expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Off']);
-    });
-
-    it('keeps the page usable while local model catalog status is loading', async () => {
-        setTestConfig({
-            asr: {
-                providers: {
-                    online: {
-                        'volcengine-doubao': {
-                            apiKey: 'test-api-key',
-                            streamingEndpoint: 'test-endpoint',
-                            streamingResourceId: 'test-resource-id',
-                            batchEndpoint: 'test-batch-endpoint',
-                            batchResourceId: 'test-batch-resource',
-                        },
-                    },
-                },
+  it('keeps the page usable while local model catalog status is loading', async () => {
+    setTestConfig({
+      asr: {
+        providers: {
+          online: {
+            'volcengine-doubao': {
+              apiKey: 'test-api-key',
+              streamingEndpoint: 'test-endpoint',
+              streamingResourceId: 'test-resource-id',
+              batchEndpoint: 'test-batch-endpoint',
+              batchResourceId: 'test-batch-resource',
             },
-            batchVadEnabled: true,
-        } as any);
+          },
+        },
+      },
+      batchVadEnabled: true,
+    } as any);
 
-        renderTab(new Set(), {
-            catalogLoadState: 'loading',
-        });
-
-        screen.getByText('Checking local models...');
-        expect((screen.getByRole('button', { name: 'settings.select_streaming_model' }) as HTMLButtonElement).disabled).toBe(true);
-        expect((screen.getByLabelText('settings.restore_defaults') as HTMLButtonElement).disabled).toBe(true);
-        expect(screen.queryByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).toBeNull();
-        expect(screen.queryByRole('button', { name: /Speaker Segmentation Models/ })).toBeNull();
-        expect(screen.queryByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).toBeNull();
-
-        const apiKeyInput = screen.getByPlaceholderText('X-Api-Key') as HTMLInputElement;
-        expect(apiKeyInput.disabled).toBe(false);
-
-        await activateBatchScenarioAndExpandAdvanced();
-
-        const row = screen.getByText('settings.batch_vad_enabled').closest('.settings-item-container');
-        const batchVadSwitch = within(row as HTMLElement).getByRole('switch');
-        fireEvent.click(batchVadSwitch);
-
-        await waitFor(() => {
-            expect(useConfigStore.getState().config.batchVadEnabled).toBe(false);
-        });
+    renderTab(new Set(), {
+      catalogLoadState: 'loading',
     });
 
-    it('mounts local model cards and enables local actions after the catalog is ready', async () => {
-        renderTab(new Set([
-            'sherpa-onnx-pyannote-segmentation-3-0',
-            '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
-        ]));
+    screen.getByText('Checking local models...');
+    expect(
+      (screen.getByRole('button', { name: 'settings.select_streaming_model' }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+    expect((screen.getByLabelText('settings.restore_defaults') as HTMLButtonElement).disabled).toBe(
+      true
+    );
+    expect(screen.queryByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Speaker Segmentation Models/ })).toBeNull();
+    expect(screen.queryByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).toBeNull();
 
-        expect((screen.getByRole('button', { name: 'settings.select_streaming_model' }) as HTMLButtonElement).disabled).toBe(false);
-        expect((screen.getByLabelText('settings.restore_defaults') as HTMLButtonElement).disabled).toBe(false);
-        expect(screen.queryByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).toBeNull();
-        expect(screen.queryByRole('button', { name: /Speaker Segmentation Models/ })).toBeNull();
+    const apiKeyInput = screen.getByPlaceholderText('X-Api-Key') as HTMLInputElement;
+    expect(apiKeyInput.disabled).toBe(false);
 
-        await waitFor(() => {
-            screen.getByRole('button', { name: /Speaker Segmentation Models/ });
-        });
-        fireEvent.click(screen.getByRole('button', { name: /Speaker Segmentation Models/ }));
-        expect(screen.getByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0').textContent).toContain('Pyannote 3.0');
-        expect((within(screen.getByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).getByRole('button', { name: 'model-action' }) as HTMLButtonElement).disabled).toBe(false);
+    await activateBatchScenarioAndExpandAdvanced();
+
+    const row = screen.getByText('settings.batch_vad_enabled').closest('.settings-item-container');
+    const batchVadSwitch = within(row as HTMLElement).getByRole('switch');
+    fireEvent.click(batchVadSwitch);
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.batchVadEnabled).toBe(false);
+    });
+  });
+
+  it('mounts local model cards and enables local actions after the catalog is ready', async () => {
+    renderTab(
+      new Set([
+        'sherpa-onnx-pyannote-segmentation-3-0',
+        '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+      ])
+    );
+
+    expect(
+      (screen.getByRole('button', { name: 'settings.select_streaming_model' }) as HTMLButtonElement)
+        .disabled
+    ).toBe(false);
+    expect((screen.getByLabelText('settings.restore_defaults') as HTMLButtonElement).disabled).toBe(
+      false
+    );
+    expect(screen.queryByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Speaker Segmentation Models/ })).toBeNull();
+
+    await waitFor(() => {
+      screen.getByRole('button', { name: /Speaker Segmentation Models/ });
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Speaker Segmentation Models/ }));
+    expect(
+      screen.getByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0').textContent
+    ).toContain('Pyannote 3.0');
+    expect(
+      (
+        within(screen.getByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).getByRole(
+          'button',
+          { name: 'model-action' }
+        ) as HTMLButtonElement
+      ).disabled
+    ).toBe(false);
+  });
+
+  it('clears selected speaker model paths when Off is chosen', async () => {
+    setTestConfig({
+      liveSpeakerSegmentationModelPath: '/models/sherpa-onnx-pyannote-segmentation-3-0',
+      liveSpeakerEmbeddingModelPath:
+        '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
     });
 
-    it('clears selected speaker model paths when Off is chosen', async () => {
-        setTestConfig({
-            liveSpeakerSegmentationModelPath: '/models/sherpa-onnx-pyannote-segmentation-3-0',
-            liveSpeakerEmbeddingModelPath: '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
-        });
+    renderTab(
+      new Set([
+        'sherpa-onnx-pyannote-segmentation-3-0',
+        '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+      ])
+    );
 
-        renderTab(new Set([
-            'sherpa-onnx-pyannote-segmentation-3-0',
-            '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
-        ]));
-
-        await waitFor(() => {
-            expect(screen.getByRole('button', { name: 'Speaker Segmentation Model' }).textContent).toContain('Pyannote 3.0');
-            expect(screen.getByRole('button', { name: 'Speaker Embedding Model' }).textContent).toContain('3DSpeaker CAMPPlus');
-        });
-
-        fireEvent.click(screen.getByRole('button', { name: 'Speaker Segmentation Model' }));
-        fireEvent.click(screen.getByRole('option', { name: 'Off' }));
-
-        fireEvent.click(screen.getByRole('button', { name: 'Speaker Embedding Model' }));
-        fireEvent.click(screen.getByRole('option', { name: 'Off' }));
-
-        await waitFor(() => {
-            expect(useConfigStore.getState().config.liveSpeakerSegmentationModelPath).toBe('');
-            expect(useConfigStore.getState().config.liveSpeakerEmbeddingModelPath).toBe('');
-            expect(screen.getByRole('button', { name: 'Speaker Segmentation Model' }).textContent).toContain('Off');
-            expect(screen.getByRole('button', { name: 'Speaker Embedding Model' }).textContent).toContain('Off');
-        });
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Speaker Segmentation Model' }).textContent
+      ).toContain('Pyannote 3.0');
+      expect(screen.getByRole('button', { name: 'Speaker Embedding Model' }).textContent).toContain(
+        '3DSpeaker CAMPPlus'
+      );
     });
 
-    it('allows selecting Volcengine Doubao online ASR even when no local ASR model is installed', async () => {
-        setTestConfig({
-            asr: {
-                providers: {
-                    online: {
-                        'volcengine-doubao': {
-                            apiKey: 'test-api-key',
-                            streamingEndpoint: 'test-endpoint',
-                            streamingResourceId: 'test-resource-id',
-                            batchEndpoint: 'test-batch-endpoint',
-                            batchResourceId: 'test-batch-resource',
-                        }
-                    }
-                }
-            }
-        } as any);
+    fireEvent.click(screen.getByRole('button', { name: 'Speaker Segmentation Model' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Off' }));
 
-        renderTab(new Set());
+    fireEvent.click(screen.getByRole('button', { name: 'Speaker Embedding Model' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Off' }));
 
-        fireEvent.click(screen.getByRole('button', { name: 'settings.select_streaming_model' }));
-        fireEvent.click(screen.getByRole('option', { name: '豆包语音 (火山)' }));
-
-        await waitFor(() => {
-            const config = useConfigStore.getState().config;
-            expect(config.streamingModelPath).toBe('');
-            expect(config.asr?.selections.live).toMatchObject({
-                engine: 'online',
-                mode: 'streaming',
-                modelPath: '',
-                providerId: 'volcengine-doubao',
-                profileId: 'volcengine-doubao-default',
-            });
-            expect(config.asr?.selections.caption.engine).toBe('online');
-            expect(config.asr?.selections.voiceTyping.engine).toBe('online');
-        });
-
-        screen.getByText('音频会发送到火山引擎进行识别。');
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.liveSpeakerSegmentationModelPath).toBe('');
+      expect(useConfigStore.getState().config.liveSpeakerEmbeddingModelPath).toBe('');
+      expect(
+        screen.getByRole('button', { name: 'Speaker Segmentation Model' }).textContent
+      ).toContain('Off');
+      expect(screen.getByRole('button', { name: 'Speaker Embedding Model' }).textContent).toContain(
+        'Off'
+      );
     });
+  });
 
-    it('keeps a selected Volcengine batch slot when local ASR models are not installed', async () => {
-        setTestConfig({
-            asr: {
-                providers: {
-                    online: {
-                        'volcengine-doubao': {
-                            apiKey: 'test',
-                            streamingEndpoint: 'test',
-                            streamingResourceId: 'test',
-                            batchEndpoint: 'test',
-                            batchResourceId: 'test',
-                        }
-                    }
-                },
-                selections: {
-                    live: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
-                    caption: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
-                    voiceTyping: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
-                    batch: {
-                        engine: 'online',
-                        mode: 'batch',
-                        modelId: null,
-                        modelPath: '',
-                        providerId: 'volcengine-doubao',
-                        profileId: 'volcengine-doubao-default',
-                    },
-                },
+  it('allows selecting Volcengine Doubao online ASR even when no local ASR model is installed', async () => {
+    setTestConfig({
+      asr: {
+        providers: {
+          online: {
+            'volcengine-doubao': {
+              apiKey: 'test-api-key',
+              streamingEndpoint: 'test-endpoint',
+              streamingResourceId: 'test-resource-id',
+              batchEndpoint: 'test-batch-endpoint',
+              batchResourceId: 'test-batch-resource',
             },
-            batchModelPath: '',
-        } as any);
+          },
+        },
+      },
+    } as any);
 
-        renderTab(new Set());
+    renderTab(new Set());
 
-        fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
+    fireEvent.click(screen.getByRole('button', { name: 'settings.select_streaming_model' }));
+    fireEvent.click(screen.getByRole('option', { name: '豆包语音 (火山)' }));
 
-        await waitFor(() => {
-            screen.getByRole('button', { name: '豆包语音 (火山)' });
-            expect(useConfigStore.getState().config.asr?.selections.batch.engine).toBe('online');
-        });
+    await waitFor(() => {
+      const config = useConfigStore.getState().config;
+      expect(config.streamingModelPath).toBe('');
+      expect(config.asr?.selections.live).toMatchObject({
+        engine: 'online',
+        mode: 'streaming',
+        modelPath: '',
+        providerId: 'volcengine-doubao',
+        profileId: 'volcengine-doubao-default',
+      });
+      expect(config.asr?.selections.caption.engine).toBe('online');
+      expect(config.asr?.selections.voiceTyping.engine).toBe('online');
     });
 
-    it('keeps Volcengine local batch import on flash mode and disables async URL-only modes', async () => {
-        setTestConfig({
-            asr: {
-                selections: {
-                    live: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
-                    caption: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
-                    voiceTyping: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
-                    batch: {
-                        engine: 'online',
-                        mode: 'batch',
-                        modelId: null,
-                        modelPath: '',
-                        providerId: 'volcengine-doubao',
-                        profileId: 'volcengine-doubao-default',
-                    },
-                },
-                providers: {
-                    online: {
-                        'volcengine-doubao': {
-                            apiKey: 'volc-test-key',
-                            streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
-                            streamingResourceId: 'volc.seedasr.sauc.duration',
-                            batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
-                            batchResourceId: 'volc.bigasr.auc_turbo',
-                        },
-                    },
-                },
+    screen.getByText('音频会发送到火山引擎进行识别。');
+  });
+
+  it('keeps a selected Volcengine batch slot when local ASR models are not installed', async () => {
+    setTestConfig({
+      asr: {
+        providers: {
+          online: {
+            'volcengine-doubao': {
+              apiKey: 'test',
+              streamingEndpoint: 'test',
+              streamingResourceId: 'test',
+              batchEndpoint: 'test',
+              batchResourceId: 'test',
             },
-        } as any);
+          },
+        },
+        selections: {
+          live: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+          caption: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+          voiceTyping: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+          batch: {
+            engine: 'online',
+            mode: 'batch',
+            modelId: null,
+            modelPath: '',
+            providerId: 'volcengine-doubao',
+            profileId: 'volcengine-doubao-default',
+          },
+        },
+      },
+      batchModelPath: '',
+    } as any);
 
-        renderTab(new Set());
+    renderTab(new Set());
 
-        fireEvent.click(screen.getByRole('button', { name: '急速 (同步直回)' }));
+    fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
 
-        const standardOption = screen.getByRole('option', { name: /普通 \(异步轮询\)/ });
-        const offpeakOption = screen.getByRole('option', { name: /闲时 \(特惠异步\)/ });
+    await waitFor(() => {
+      screen.getByRole('button', { name: '豆包语音 (火山)' });
+      expect(useConfigStore.getState().config.asr?.selections.batch.engine).toBe('online');
+    });
+  });
 
-        expect((standardOption as HTMLButtonElement).disabled).toBe(true);
-        expect((offpeakOption as HTMLButtonElement).disabled).toBe(true);
-        expect(screen.getAllByText('需要公网音频 URL，当前本地批量导入暂不支持。').length).toBeGreaterThan(0);
+  it('keeps Volcengine local batch import on flash mode and disables async URL-only modes', async () => {
+    setTestConfig({
+      asr: {
+        selections: {
+          live: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+          caption: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+          voiceTyping: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+          batch: {
+            engine: 'online',
+            mode: 'batch',
+            modelId: null,
+            modelPath: '',
+            providerId: 'volcengine-doubao',
+            profileId: 'volcengine-doubao-default',
+          },
+        },
+        providers: {
+          online: {
+            'volcengine-doubao': {
+              apiKey: 'volc-test-key',
+              streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+              streamingResourceId: 'volc.seedasr.sauc.duration',
+              batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+              batchResourceId: 'volc.bigasr.auc_turbo',
+            },
+          },
+        },
+      },
+    } as any);
 
-        fireEvent.click(standardOption);
+    renderTab(new Set());
 
-        await waitFor(() => {
-            expect(useConfigStore.getState().config.asr?.providers?.online?.['volcengine-doubao']).toMatchObject({
-                batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
-                batchResourceId: 'volc.bigasr.auc_turbo',
-            });
-        });
+    fireEvent.click(screen.getByRole('button', { name: '急速 (同步直回)' }));
+
+    const standardOption = screen.getByRole('option', { name: /普通 \(异步轮询\)/ });
+    const offpeakOption = screen.getByRole('option', { name: /闲时 \(特惠异步\)/ });
+
+    expect((standardOption as HTMLButtonElement).disabled).toBe(true);
+    expect((offpeakOption as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      screen.getAllByText('需要公网音频 URL，当前本地批量导入暂不支持。').length
+    ).toBeGreaterThan(0);
+
+    fireEvent.click(standardOption);
+
+    await waitFor(() => {
+      expect(
+        useConfigStore.getState().config.asr?.providers?.online?.['volcengine-doubao']
+      ).toMatchObject({
+        batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+        batchResourceId: 'volc.bigasr.auc_turbo',
+      });
+    });
+  });
+
+  it('renders GPU acceleration dropdown options and disables platform-unsupported options', async () => {
+    setTestConfig({
+      gpuAcceleration: 'auto',
     });
 
-    it('renders GPU acceleration dropdown options and disables platform-unsupported options', async () => {
-        setTestConfig({
-            gpuAcceleration: 'auto',
-        });
+    renderTab(new Set());
 
-        renderTab(new Set());
+    await activateBatchScenarioAndExpandAdvanced();
 
-        await activateBatchScenarioAndExpandAdvanced();
+    const gpuDropdownButton = screen.getByRole('button', { name: 'Auto' });
+    fireEvent.click(gpuDropdownButton);
 
-        const gpuDropdownButton = screen.getByRole('button', { name: 'Auto' });
-        fireEvent.click(gpuDropdownButton);
+    const autoOption = screen.getByRole('option', { name: 'Auto' });
+    const cpuOption = screen.getByRole('option', { name: 'Off' });
+    const vulkanOption = screen.getByRole('option', { name: /^Vulkan/ });
+    const metalOption = screen.getByRole('option', { name: /^Metal/ });
+    const cudaOption = screen.getByRole('option', { name: /^CUDA/ });
 
-        const autoOption = screen.getByRole('option', { name: 'Auto' });
-        const cpuOption = screen.getByRole('option', { name: 'Off' });
-        const vulkanOption = screen.getByRole('option', { name: /^Vulkan/ });
-        const metalOption = screen.getByRole('option', { name: /^Metal/ });
-        const cudaOption = screen.getByRole('option', { name: /^CUDA/ });
+    expect((autoOption as HTMLButtonElement).disabled).toBe(false);
+    expect((cpuOption as HTMLButtonElement).disabled).toBe(false);
+    expect((vulkanOption as HTMLButtonElement).disabled).toBe(false);
+    expect((metalOption as HTMLButtonElement).disabled).toBe(true);
+    expect((cudaOption as HTMLButtonElement).disabled).toBe(false);
 
-        expect((autoOption as HTMLButtonElement).disabled).toBe(false);
-        expect((cpuOption as HTMLButtonElement).disabled).toBe(false);
-        expect((vulkanOption as HTMLButtonElement).disabled).toBe(false);
-        expect((metalOption as HTMLButtonElement).disabled).toBe(true);
-        expect((cudaOption as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(vulkanOption);
 
-        fireEvent.click(vulkanOption);
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.gpuAcceleration).toBe('vulkan');
+    });
+  });
 
-        await waitFor(() => {
-            expect(useConfigStore.getState().config.gpuAcceleration).toBe('vulkan');
-        });
+  it('prompts user to download and install CUDA addon when selecting uninstalled CUDA', async () => {
+    const confirmSpy = vi.spyOn(useDialogStore.getState(), 'confirm').mockResolvedValueOnce(true);
+    const alertSpy = vi.spyOn(useDialogStore.getState(), 'alert').mockResolvedValueOnce(undefined);
+
+    setTestConfig({
+      gpuAcceleration: 'auto',
     });
 
-    it('prompts user to download and install CUDA addon when selecting uninstalled CUDA', async () => {
-        const confirmSpy = vi.spyOn(useDialogStore.getState(), 'confirm').mockResolvedValueOnce(true);
-        const alertSpy = vi.spyOn(useDialogStore.getState(), 'alert').mockResolvedValueOnce(undefined);
+    renderTab(new Set());
 
-        setTestConfig({
-            gpuAcceleration: 'auto',
-        });
+    await activateBatchScenarioAndExpandAdvanced();
 
-        renderTab(new Set());
+    const gpuDropdownButton = screen.getByRole('button', { name: 'Auto' });
+    fireEvent.click(gpuDropdownButton);
 
-        await activateBatchScenarioAndExpandAdvanced();
+    const cudaOption = screen.getByRole('option', { name: /^CUDA/ });
+    fireEvent.click(cudaOption);
 
-        const gpuDropdownButton = screen.getByRole('button', { name: 'Auto' });
-        fireEvent.click(gpuDropdownButton);
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(useConfigStore.getState().config.gpuAcceleration).toBe('cuda');
+      expect(alertSpy).toHaveBeenCalledTimes(1);
+    });
+  });
 
-        const cudaOption = screen.getByRole('option', { name: /^CUDA/ });
-        fireEvent.click(cudaOption);
-
-        await waitFor(() => {
-            expect(confirmSpy).toHaveBeenCalledTimes(1);
-            expect(useConfigStore.getState().config.gpuAcceleration).toBe('cuda');
-            expect(alertSpy).toHaveBeenCalledTimes(1);
-        });
+  it('renders download mirror options with GitHub and Hugging Face groups and updates config on change', async () => {
+    setTestConfig({
+      modelDownloadMirror: 'auto',
     });
 
-    it('renders download mirror options with GitHub and Hugging Face groups and updates config on change', async () => {
-        setTestConfig({
-            modelDownloadMirror: 'auto',
-        });
-
-        renderTab(new Set());
-        const mirrorDropdownTrigger = await screen.findByRole('button', { name: 'settings.model_download_mirror' });
-        expect(mirrorDropdownTrigger.textContent).toContain('自动');
-
-        fireEvent.click(mirrorDropdownTrigger);
-
-        expect(screen.getByText('GitHub').classList.contains('dropdown-group-header')).toBe(true);
-        expect(screen.getByText('Hugging Face').classList.contains('dropdown-group-header')).toBe(true);
-        const directOption = screen.getByRole('option', { name: '官方直连' });
-        expect(directOption).not.toBeNull();
-        const hfOption = screen.getByRole('option', { name: '镜像站 (hf-mirror.com)' });
-        fireEvent.click(hfOption);
-
-        await waitFor(() => {
-            expect(useConfigStore.getState().config.modelDownloadMirror).toBe('hf-mirror');
-        });
+    renderTab(new Set());
+    const mirrorDropdownTrigger = await screen.findByRole('button', {
+      name: 'settings.model_download_mirror',
     });
+    expect(mirrorDropdownTrigger.textContent).toContain('自动');
+
+    fireEvent.click(mirrorDropdownTrigger);
+
+    expect(screen.getByText('GitHub').classList.contains('dropdown-group-header')).toBe(true);
+    expect(screen.getByText('Hugging Face').classList.contains('dropdown-group-header')).toBe(true);
+    const directOption = screen.getByRole('option', { name: '官方直连' });
+    expect(directOption).not.toBeNull();
+    const hfOption = screen.getByRole('option', { name: '镜像站 (hf-mirror.com)' });
+    fireEvent.click(hfOption);
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.modelDownloadMirror).toBe('hf-mirror');
+    });
+  });
 });

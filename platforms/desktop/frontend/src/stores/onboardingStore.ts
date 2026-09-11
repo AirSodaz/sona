@@ -1,13 +1,7 @@
 import { create } from 'zustand';
-import {
-  OnboardingEntryContext,
-  OnboardingState,
-  OnboardingStep,
-} from '../types/onboarding';
-import {
-  getResumeOnboardingStep,
-} from '../utils/onboarding';
-import { settingsStore, STORE_KEY_ONBOARDING } from '../services/storageService';
+import { STORE_KEY_ONBOARDING, settingsStore } from '../services/storageService';
+import type { OnboardingEntryContext, OnboardingState, OnboardingStep } from '../types/onboarding';
+import { getResumeOnboardingStep } from '../utils/onboarding';
 
 interface OnboardingStoreState {
   persistedState: OnboardingState;
@@ -37,7 +31,9 @@ export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
 
   setPersistedState: (state: OnboardingState, configHasModels: boolean) => {
     // We mock a partial config just for `getResumeOnboardingStep` to know if models exist.
-    const mockConfig = configHasModels ? { streamingModelPath: 'mock', batchModelPath: 'mock' } : undefined;
+    const mockConfig = configHasModels
+      ? { streamingModelPath: 'mock', batchModelPath: 'mock' }
+      : undefined;
     set({
       persistedState: state,
       currentStep: getResumeOnboardingStep(mockConfig, 'startup', state),
@@ -75,7 +71,7 @@ export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
       persistedState: nextState,
       isOpen: false,
     });
-    
+
     await settingsStore.set(STORE_KEY_ONBOARDING, nextState);
     await settingsStore.save();
   },
@@ -95,7 +91,7 @@ export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
       entryContext: 'startup',
       focusStartRecordingToken: state.focusStartRecordingToken + 1,
     }));
-    
+
     await settingsStore.set(STORE_KEY_ONBOARDING, nextState);
     await settingsStore.save();
   },
@@ -110,7 +106,7 @@ export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
     set({
       persistedState: nextState,
     });
-    
+
     await settingsStore.set(STORE_KEY_ONBOARDING, nextState);
     await settingsStore.save();
   },

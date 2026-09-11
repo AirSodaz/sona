@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { SettingsVocabularyTab } from '../SettingsVocabularyTab';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useAutomationStore } from '../../../stores/automationStore';
 import { useConfigStore } from '../../../stores/configStore';
 import { useProjectStore } from '../../../stores/projectStore';
-import { useAutomationStore } from '../../../stores/automationStore';
+import { SettingsVocabularyTab } from '../SettingsVocabularyTab';
 
 vi.mock('../../../services/automation/automationRepository', () => ({
   loadAutomationRepositoryState: vi.fn(),
@@ -18,7 +18,9 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: { defaultValue?: string } & Record<string, unknown>) => {
       if (typeof options?.defaultValue === 'string') {
-        return options.defaultValue.replace(/\{\{(\w+)\}\}/g, (_: string, variable: string) => String(options?.[variable] ?? ''));
+        return options.defaultValue.replace(/\{\{(\w+)\}\}/g, (_: string, variable: string) =>
+          String(options?.[variable] ?? '')
+        );
       }
       return key;
     },
@@ -40,7 +42,7 @@ vi.mock('../../../services/projectService', () => ({
       description: updates.description || '',
       createdAt: 1,
       updatedAt: 2,
-      })),
+    })),
     delete: vi.fn(),
     setActiveProjectId: vi.fn(),
     saveAll: vi.fn(),
@@ -85,19 +87,21 @@ describe('SettingsVocabularyTab', () => {
       activeProjectId: null,
     });
     useAutomationStore.setState({
-      profiles: [{
-        id: 'profile-1',
-        name: 'Team profile',
-        translationLanguage: 'en',
-        polishPresetId: 'custom-team',
-        summaryTemplateId: 'summary-team',
-        enabledTextReplacementSetIds: ['text-1'],
-        enabledHotwordSetIds: ['hot-1'],
-        enabledPolishKeywordSetIds: ['kw-1'],
-        enabledSpeakerProfileIds: ['speaker-1'],
-        createdAt: 1,
-        updatedAt: 1,
-      }],
+      profiles: [
+        {
+          id: 'profile-1',
+          name: 'Team profile',
+          translationLanguage: 'en',
+          polishPresetId: 'custom-team',
+          summaryTemplateId: 'summary-team',
+          enabledTextReplacementSetIds: ['text-1'],
+          enabledHotwordSetIds: ['hot-1'],
+          enabledPolishKeywordSetIds: ['kw-1'],
+          enabledSpeakerProfileIds: ['speaker-1'],
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
     });
   });
 
@@ -180,9 +184,12 @@ describe('SettingsVocabularyTab', () => {
       }),
     ]);
 
-    fireEvent.change(screen.getByPlaceholderText('e.g. Product names, terminology, preferred spellings'), {
-      target: { value: 'Sona\nSherpa-onnx' },
-    });
+    fireEvent.change(
+      screen.getByPlaceholderText('e.g. Product names, terminology, preferred spellings'),
+      {
+        target: { value: 'Sona\nSherpa-onnx' },
+      }
+    );
 
     expect(useConfigStore.getState().config.polishKeywordSets).toEqual([
       expect.objectContaining({
@@ -199,12 +206,8 @@ describe('SettingsVocabularyTab', () => {
         textReplacementSets: [
           { id: 'text-1', name: 'Text Set', enabled: true, ignoreCase: false, rules: [] },
         ],
-        hotwordSets: [
-          { id: 'hot-1', name: 'Hot Set', enabled: true, rules: [] },
-        ],
-        polishKeywordSets: [
-          { id: 'kw-1', name: 'Brand Terms', enabled: true, keywords: 'Sona' },
-        ],
+        hotwordSets: [{ id: 'hot-1', name: 'Hot Set', enabled: true, rules: [] }],
+        polishKeywordSets: [{ id: 'kw-1', name: 'Brand Terms', enabled: true, keywords: 'Sona' }],
       },
     });
     render(<SettingsVocabularyTab />);
@@ -233,9 +236,7 @@ describe('SettingsVocabularyTab', () => {
       config: {
         ...useConfigStore.getState().config,
         polishPresetId: 'custom-team',
-        polishCustomPresets: [
-          { id: 'custom-team', name: 'Team', context: 'Initial context' },
-        ],
+        polishCustomPresets: [{ id: 'custom-team', name: 'Team', context: 'Initial context' }],
       },
     });
 
@@ -269,9 +270,7 @@ describe('SettingsVocabularyTab', () => {
     useConfigStore.setState({
       config: {
         ...useConfigStore.getState().config,
-        speakerProfiles: [
-          { id: 'speaker-1', name: 'Alice', enabled: true, samples: [] },
-        ],
+        speakerProfiles: [{ id: 'speaker-1', name: 'Alice', enabled: true, samples: [] }],
       },
     });
     render(<SettingsVocabularyTab />);
@@ -294,8 +293,18 @@ describe('SettingsVocabularyTab', () => {
             name: 'Alice',
             enabled: true,
             samples: [
-              { id: 'sample-1', filePath: '/alice-1.wav', sourceName: 'Alice 1', durationSeconds: 10 },
-              { id: 'sample-2', filePath: '/alice-2.wav', sourceName: 'Alice 2', durationSeconds: 11 },
+              {
+                id: 'sample-1',
+                filePath: '/alice-1.wav',
+                sourceName: 'Alice 1',
+                durationSeconds: 10,
+              },
+              {
+                id: 'sample-2',
+                filePath: '/alice-2.wav',
+                sourceName: 'Alice 2',
+                durationSeconds: 11,
+              },
             ],
           },
           {
@@ -311,7 +320,12 @@ describe('SettingsVocabularyTab', () => {
             name: 'Carol',
             enabled: true,
             samples: [
-              { id: 'sample-4', filePath: '/carol-1.wav', sourceName: 'Carol 1', durationSeconds: 3.5 },
+              {
+                id: 'sample-4',
+                filePath: '/carol-1.wav',
+                sourceName: 'Carol 1',
+                durationSeconds: 3.5,
+              },
             ],
           },
         ],
@@ -321,7 +335,9 @@ describe('SettingsVocabularyTab', () => {
     render(<SettingsVocabularyTab />);
 
     screen.getByText('Ready for automatic matching');
-    screen.getByText('Can appear as a suggestion, but needs more usable samples before automatic matching.');
+    screen.getByText(
+      'Can appear as a suggestion, but needs more usable samples before automatic matching.'
+    );
     screen.getByText('Needs more usable samples before it can participate in speaker recognition.');
   });
 });

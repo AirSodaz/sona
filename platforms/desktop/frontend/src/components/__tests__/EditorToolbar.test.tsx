@@ -1,211 +1,209 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
-import { EditorToolbar } from '../EditorToolbar';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { FORMAT_TEXT_COMMAND, REDO_COMMAND, UNDO_COMMAND } from 'lexical';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-    resetTranscriptStores,
-    useTranscriptStore,
+  resetTranscriptStores,
+  useTranscriptStore,
 } from '../../test-utils/transcriptStoreTestUtils';
-import { vi, describe, beforeEach, afterEach, it, expect } from 'vitest';
-import {
-    FORMAT_TEXT_COMMAND,
-    UNDO_COMMAND,
-    REDO_COMMAND,
-} from 'lexical';
+import { EditorToolbar } from '../EditorToolbar';
 
 vi.mock('react-i18next', () => ({
-    useTranslation: () => ({
-        t: (_key: string, fallbackOrOptions?: string | { defaultValue?: string }) => {
-            if (typeof fallbackOrOptions === 'string') {
-                return fallbackOrOptions;
-            }
+  useTranslation: () => ({
+    t: (_key: string, fallbackOrOptions?: string | { defaultValue?: string }) => {
+      if (typeof fallbackOrOptions === 'string') {
+        return fallbackOrOptions;
+      }
 
-            return fallbackOrOptions?.defaultValue || _key;
-        },
-    }),
+      return fallbackOrOptions?.defaultValue || _key;
+    },
+  }),
 }));
 
 vi.mock('../../stores/transcriptRuntimeStore', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('../../stores/transcriptRuntimeStore')>();
-    return {
-        ...actual,
-        getActiveEditor: vi.fn(),
-    };
+  const actual = await importOriginal<typeof import('../../stores/transcriptRuntimeStore')>();
+  return {
+    ...actual,
+    getActiveEditor: vi.fn(),
+  };
 });
 
 import { getActiveEditor } from '../../stores/transcriptRuntimeStore';
 
 describe('EditorToolbar', () => {
-    let dispatchMock: ReturnType<typeof vi.fn>;
-    let updateMock: ReturnType<typeof vi.fn>;
-    const flushMicrotasks = async () => {
-        await act(async () => {
-            await Promise.resolve();
-        });
-    };
+  let dispatchMock: ReturnType<typeof vi.fn>;
+  let updateMock: ReturnType<typeof vi.fn>;
+  const flushMicrotasks = async () => {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  };
 
-    beforeEach(() => {
-        vi.clearAllMocks();
-        resetTranscriptStores();
-        dispatchMock = vi.fn();
-        updateMock = vi.fn();
-        vi.mocked(getActiveEditor).mockReturnValue({
-            dispatchCommand: dispatchMock,
-            update: updateMock,
-        } as any);
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetTranscriptStores();
+    dispatchMock = vi.fn();
+    updateMock = vi.fn();
+    vi.mocked(getActiveEditor).mockReturnValue({
+      dispatchCommand: dispatchMock,
+      update: updateMock,
+    } as any);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('does not render when there is no saved item and no active edit session', () => {
+    const { container } = render(<EditorToolbar />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('does not synthesize a saved status for an opened history item without an auto-save record', () => {
+    useTranscriptStore.setState({ sourceHistoryId: 'hist-1' });
+
+    const { container } = render(<EditorToolbar />);
+
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  });
+
+  it('does not render stale auto-save status when opening a persisted transcript', () => {
+    useTranscriptStore.setState({
+      autoSaveStates: {
+        'hist-1': {
+          status: 'saving',
+          updatedAt: Date.now(),
+        },
+      },
     });
 
-    afterEach(() => {
-        vi.useRealTimers();
+    useTranscriptStore
+      .getState()
+      .loadTranscript(
+        [{ id: 'seg-1', text: 'Loaded text', start: 0, end: 1, isFinal: true }],
+        'hist-1'
+      );
+
+    const { container } = render(<EditorToolbar />);
+
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('does not show a save pill for unsaved content while still exposing edit controls', () => {
+    useTranscriptStore.setState({ editingSegmentId: 'seg-1' });
+
+    render(<EditorToolbar />);
+
+    expect(screen.queryByRole('status')).toBeNull();
+    screen.getByRole('button', { name: 'Undo' });
+  });
+
+  it('shows a lightweight saving status while auto-save is running', () => {
+    useTranscriptStore.setState({
+      sourceHistoryId: 'hist-1',
+      autoSaveStates: {
+        'hist-1': {
+          status: 'saving',
+          updatedAt: Date.now(),
+        },
+      },
     });
 
-    it('does not render when there is no saved item and no active edit session', () => {
-        const { container } = render(<EditorToolbar />);
-        expect(container.firstChild).toBeNull();
+    render(<EditorToolbar />);
+
+    expect(screen.getByRole('status').textContent).toContain('Saving...');
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  });
+
+  it('hides the saved status after 1.5 seconds', async () => {
+    vi.useFakeTimers();
+    useTranscriptStore.setState({
+      sourceHistoryId: 'hist-1',
+      autoSaveStates: {
+        'hist-1': {
+          status: 'saved',
+          updatedAt: Date.now(),
+        },
+      },
     });
 
-    it('does not synthesize a saved status for an opened history item without an auto-save record', () => {
-        useTranscriptStore.setState({ sourceHistoryId: 'hist-1' });
+    render(<EditorToolbar />);
+    await flushMicrotasks();
 
-        const { container } = render(<EditorToolbar />);
+    expect(screen.getByRole('status').textContent).toContain('Saved');
 
-        expect(container.firstChild).toBeNull();
-        expect(screen.queryByRole('status')).toBeNull();
-        expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
     });
 
-    it('does not render stale auto-save status when opening a persisted transcript', () => {
-        useTranscriptStore.setState({
-            autoSaveStates: {
-                'hist-1': {
-                    status: 'saving',
-                    updatedAt: Date.now(),
-                },
-            },
-        });
+    expect(screen.queryByRole('status')).toBeNull();
+  });
 
-        useTranscriptStore.getState().loadTranscript(
-            [{ id: 'seg-1', text: 'Loaded text', start: 0, end: 1, isFinal: true }],
-            'hist-1',
-        );
-
-        const { container } = render(<EditorToolbar />);
-
-        expect(container.firstChild).toBeNull();
-        expect(screen.queryByRole('status')).toBeNull();
+  it('renders editor controls while editing and reflects auto-save errors', () => {
+    useTranscriptStore.setState({
+      editingSegmentId: 'seg-1',
+      sourceHistoryId: 'hist-1',
+      autoSaveStates: {
+        'hist-1': {
+          status: 'error',
+          updatedAt: Date.now(),
+        },
+      },
     });
 
-    it('does not show a save pill for unsaved content while still exposing edit controls', () => {
-        useTranscriptStore.setState({ editingSegmentId: 'seg-1' });
+    render(<EditorToolbar />);
 
-        render(<EditorToolbar />);
+    expect(screen.getByRole('status').textContent).toContain('Save failed');
+    screen.getByRole('button', { name: 'Undo' });
+    screen.getByRole('button', { name: 'Bold' });
+  });
 
-        expect(screen.queryByRole('status')).toBeNull();
-        screen.getByRole('button', { name: 'Undo' });
+  it('dispatches lexical commands on button click', () => {
+    useTranscriptStore.setState({ editingSegmentId: 'seg-1' });
+
+    render(<EditorToolbar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
+    expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'bold');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Italic' }));
+    expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'italic');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Underline' }));
+    expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'underline');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Strikethrough' }));
+    expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'strikethrough');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Code' }));
+    expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'code');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(dispatchMock).toHaveBeenCalledWith(UNDO_COMMAND, undefined);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Redo' }));
+    expect(dispatchMock).toHaveBeenCalledWith(REDO_COMMAND, undefined);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Split segment' }));
+    expect(updateMock).toHaveBeenCalled();
+  });
+
+  it('prevents default on mouse down to preserve focus', () => {
+    useTranscriptStore.setState({ editingSegmentId: 'seg-1' });
+
+    render(<EditorToolbar />);
+
+    const boldButton = screen.getByRole('button', { name: 'Bold' });
+    const event = new MouseEvent('mousedown', {
+      bubbles: true,
+      cancelable: true,
     });
+    const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
 
-    it('shows a lightweight saving status while auto-save is running', () => {
-        useTranscriptStore.setState({
-            sourceHistoryId: 'hist-1',
-            autoSaveStates: {
-                'hist-1': {
-                    status: 'saving',
-                    updatedAt: Date.now(),
-                },
-            },
-        });
+    fireEvent(boldButton, event);
 
-        render(<EditorToolbar />);
-
-        expect(screen.getByRole('status').textContent).toContain('Saving...');
-        expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
-    });
-
-    it('hides the saved status after 1.5 seconds', async () => {
-        vi.useFakeTimers();
-        useTranscriptStore.setState({
-            sourceHistoryId: 'hist-1',
-            autoSaveStates: {
-                'hist-1': {
-                    status: 'saved',
-                    updatedAt: Date.now(),
-                },
-            },
-        });
-
-        render(<EditorToolbar />);
-        await flushMicrotasks();
-
-        expect(screen.getByRole('status').textContent).toContain('Saved');
-
-        await act(async () => {
-            await vi.advanceTimersByTimeAsync(1500);
-        });
-
-        expect(screen.queryByRole('status')).toBeNull();
-    });
-
-    it('renders editor controls while editing and reflects auto-save errors', () => {
-        useTranscriptStore.setState({
-            editingSegmentId: 'seg-1',
-            sourceHistoryId: 'hist-1',
-            autoSaveStates: {
-                'hist-1': {
-                    status: 'error',
-                    updatedAt: Date.now(),
-                },
-            },
-        });
-
-        render(<EditorToolbar />);
-
-        expect(screen.getByRole('status').textContent).toContain('Save failed');
-        screen.getByRole('button', { name: 'Undo' });
-        screen.getByRole('button', { name: 'Bold' });
-    });
-
-    it('dispatches lexical commands on button click', () => {
-        useTranscriptStore.setState({ editingSegmentId: 'seg-1' });
-
-        render(<EditorToolbar />);
-
-        fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
-        expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'bold');
-
-        fireEvent.click(screen.getByRole('button', { name: 'Italic' }));
-        expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'italic');
-
-        fireEvent.click(screen.getByRole('button', { name: 'Underline' }));
-        expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'underline');
-
-        fireEvent.click(screen.getByRole('button', { name: 'Strikethrough' }));
-        expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'strikethrough');
-
-        fireEvent.click(screen.getByRole('button', { name: 'Code' }));
-        expect(dispatchMock).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'code');
-
-        fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
-        expect(dispatchMock).toHaveBeenCalledWith(UNDO_COMMAND, undefined);
-
-        fireEvent.click(screen.getByRole('button', { name: 'Redo' }));
-        expect(dispatchMock).toHaveBeenCalledWith(REDO_COMMAND, undefined);
-
-        fireEvent.click(screen.getByRole('button', { name: 'Split segment' }));
-        expect(updateMock).toHaveBeenCalled();
-    });
-
-    it('prevents default on mouse down to preserve focus', () => {
-        useTranscriptStore.setState({ editingSegmentId: 'seg-1' });
-
-        render(<EditorToolbar />);
-
-        const boldButton = screen.getByRole('button', { name: 'Bold' });
-        const event = new MouseEvent('mousedown', {
-            bubbles: true,
-            cancelable: true,
-        });
-        const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
-
-        fireEvent(boldButton, event);
-
-        expect(preventDefaultSpy).toHaveBeenCalled();
-    });
+    expect(preventDefaultSpy).toHaveBeenCalled();
+  });
 });

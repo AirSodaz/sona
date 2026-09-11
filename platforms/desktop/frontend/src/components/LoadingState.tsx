@@ -1,5 +1,5 @@
-import React from 'react';
 import { Loader2 } from 'lucide-react';
+import type React from 'react';
 import { useTranslation } from 'react-i18next';
 
 export interface LoadingStateProps {
@@ -7,10 +7,7 @@ export interface LoadingStateProps {
   className?: string;
 }
 
-export function LoadingState({
-  message,
-  className = '',
-}: LoadingStateProps): React.JSX.Element {
+export function LoadingState({ message, className = '' }: LoadingStateProps): React.JSX.Element {
   const { t } = useTranslation();
   const resolvedMessage = message ?? t('common.loading', { defaultValue: 'Loading...' });
 

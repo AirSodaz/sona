@@ -19,7 +19,7 @@ import {
  * where a split would produce an empty left half.
  */
 export function serializeSplitBlocks(
-  editor: LexicalEditor,
+  editor: LexicalEditor
 ): { leftHtml: string; rightHtml: string } | null {
   let leftHtml = '';
   let rightHtml = '';
@@ -38,9 +38,7 @@ export function serializeSplitBlocks(
 
     const blockChildren = parentBlock.getChildren();
     const rightSibling = anchorNode.getNextSibling();
-    const splitIndex = rightSibling
-      ? blockChildren.indexOf(rightSibling)
-      : blockChildren.length;
+    const splitIndex = rightSibling ? blockChildren.indexOf(rightSibling) : blockChildren.length;
 
     if (splitIndex <= 0) return;
 

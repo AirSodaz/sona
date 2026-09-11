@@ -1,6 +1,5 @@
-
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SearchUI } from '../SearchUI';
 
 // Mock stores
@@ -8,25 +7,25 @@ const mockUseSearchStore = vi.fn();
 const mockUseTranscriptSessionStore = vi.fn();
 
 vi.mock('../../stores/searchStore', () => ({
-  useSearchStore: () => mockUseSearchStore()
+  useSearchStore: () => mockUseSearchStore(),
 }));
 
 vi.mock('../../stores/transcriptSessionStore', () => ({
-  useTranscriptSessionStore: (selector: any) => mockUseTranscriptSessionStore(selector)
+  useTranscriptSessionStore: (selector: any) => mockUseTranscriptSessionStore(selector),
 }));
 
 // Mock icons
 vi.mock('../Icons', () => ({
   ChevronUpIcon: () => <span data-testid="chevron-up">Up</span>,
   ChevronDownIcon: () => <span data-testid="chevron-down">Down</span>,
-  CloseIcon: () => <span data-testid="close">Close</span>
+  CloseIcon: () => <span data-testid="close">Close</span>,
 }));
 
 // Mock translation
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string, defaultValue?: string) => defaultValue || key
-  })
+    t: (key: string, defaultValue?: string) => defaultValue || key,
+  }),
 }));
 
 describe('SearchUI', () => {
@@ -39,7 +38,7 @@ describe('SearchUI', () => {
     setQuery: vi.fn(),
     nextMatch: vi.fn(),
     prevMatch: vi.fn(),
-    performSearch: vi.fn()
+    performSearch: vi.fn(),
   };
 
   beforeEach(() => {
@@ -78,7 +77,7 @@ describe('SearchUI', () => {
       ...defaultSearchState,
       query: 'foo',
       matches: [],
-      currentMatchIndex: 0
+      currentMatchIndex: 0,
     });
     render(<SearchUI />);
     // "0/0" is rendered when query exists but matches is empty
@@ -90,27 +89,27 @@ describe('SearchUI', () => {
       ...defaultSearchState,
       query: 'foo',
       matches: [1, 2, 3, 4, 5], // Mock matches array
-      currentMatchIndex: 0
+      currentMatchIndex: 0,
     });
     render(<SearchUI />);
     screen.getByText('1/5');
   });
 
   it('displays empty string when no query', () => {
-      mockUseSearchStore.mockReturnValue({
-        ...defaultSearchState,
-        query: '',
-        matches: [],
-        currentMatchIndex: 0
-      });
-      render(<SearchUI />);
-      // Should not show 0/0. Text should be empty.
-      // Getting empty text is tricky with getByText.
-      // We can query by class name.
-      const { container } = render(<SearchUI />);
-      const count = container.querySelector('.search-count');
-      expect(count).not.toBeNull();
-      expect(count?.textContent).toBe('');
+    mockUseSearchStore.mockReturnValue({
+      ...defaultSearchState,
+      query: '',
+      matches: [],
+      currentMatchIndex: 0,
+    });
+    render(<SearchUI />);
+    // Should not show 0/0. Text should be empty.
+    // Getting empty text is tricky with getByText.
+    // We can query by class name.
+    const { container } = render(<SearchUI />);
+    const count = container.querySelector('.search-count');
+    expect(count).not.toBeNull();
+    expect(count?.textContent).toBe('');
   });
 
   it('calls nextMatch on Enter', () => {

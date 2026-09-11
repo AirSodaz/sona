@@ -1,47 +1,47 @@
-import React, { useRef, useCallback, useMemo, useEffect } from 'react';
-import { useAutoScroll } from '../../hooks/useAutoScroll';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+import { useAutoScroll } from '../../hooks/useAutoScroll';
+import { useTranscriptUIState } from '../../hooks/useTranscriptUIState';
 import { useDialogStore } from '../../stores/dialogStore';
+import { useSearchStore } from '../../stores/searchStore';
 import {
-    deleteTranscriptSegment,
-    mergeTranscriptSegments,
-    updateTranscriptSegment,
-    splitTranscriptSegment,
+  deleteTranscriptSegment,
+  mergeTranscriptSegments,
+  splitTranscriptSegment,
+  updateTranscriptSegment,
 } from '../../stores/transcriptCoordinator';
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
-import { TranscriptSegment } from '../../types/transcript';
+import { areSpeakerTagsEqual } from '../../types/speakerNormalization';
+import type { TranscriptSegment } from '../../types/transcript';
+import { EditorToolbar } from '../EditorToolbar';
 import { PlusCircleIcon } from '../Icons';
+import { SearchUI } from '../SearchUI';
 import { SegmentItem } from './SegmentItem';
 import { TranscriptUIContext } from './TranscriptUIContext';
-import { SearchUI } from '../SearchUI';
-import { EditorToolbar } from '../EditorToolbar';
-import { useSearchStore } from '../../stores/searchStore';
-import { useTranscriptUIState } from '../../hooks/useTranscriptUIState';
-import { areSpeakerTagsEqual } from '../../types/speakerNormalization';
 
 const TranscriptListHeader = React.memo(function TranscriptListHeader(): React.JSX.Element {
-    return (
-        <div className="transcript-list-header">
-            <div className="transcript-list-opening-spacer" aria-hidden="true" />
-        </div>
-    );
+  return (
+    <div className="transcript-list-header">
+      <div className="transcript-list-opening-spacer" aria-hidden="true" />
+    </div>
+  );
 });
 
 const TranscriptListFooter = React.memo(function TranscriptListFooter(): React.JSX.Element {
-    return <div className="transcript-list-footer-spacer" aria-hidden="true" />;
+  return <div className="transcript-list-footer-spacer" aria-hidden="true" />;
 });
 
 /** Context passed to virtualized list items via Virtuoso. */
 interface TranscriptContext {
-    onSeek: (time: number) => void;
-    onEdit: (id: string) => void;
-    onSave: (id: string, text: string) => void;
-    onDelete: (id: string) => void;
-    onMergeWithNext: (id: string) => void;
-    onSplit: (id: string, leftText: string, rightText: string) => void;
-    onAnimationEnd: (id: string) => void;
+  onSeek: (time: number) => void;
+  onEdit: (id: string) => void;
+  onSave: (id: string, text: string) => void;
+  onDelete: (id: string) => void;
+  onMergeWithNext: (id: string) => void;
+  onSplit: (id: string, leftText: string, rightText: string) => void;
+  onAnimationEnd: (id: string) => void;
 }
 
 /**
@@ -53,202 +53,257 @@ interface TranscriptContext {
  * @return The transcript editor interface.
  */
 export function TranscriptEditor(): React.JSX.Element {
-    const { t } = useTranslation();
-    const { confirm } = useDialogStore();
-    const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const { t } = useTranslation();
+  const { confirm } = useDialogStore();
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
 
-    const segments = useTranscriptSessionStore((state) => state.segments);
-    const setEditingSegmentId = useTranscriptSessionStore((state) => state.setEditingSegmentId);
-    const requestSeek = useTranscriptPlaybackStore((state) => state.requestSeek);
+  const segments = useTranscriptSessionStore((state) => state.segments);
+  const setEditingSegmentId = useTranscriptSessionStore((state) => state.setEditingSegmentId);
+  const requestSeek = useTranscriptPlaybackStore((state) => state.requestSeek);
 
-    // Hooks for UI state and alignment
-    const { uiStore, handleAnimationEnd } = useTranscriptUIState(segments);
+  // Hooks for UI state and alignment
+  const { uiStore, handleAnimationEnd } = useTranscriptUIState(segments);
 
-    // Keep a ref to segments to make callbacks stable where needed
-    const segmentsRef = useRef(segments);
+  // Keep a ref to segments to make callbacks stable where needed
+  const segmentsRef = useRef(segments);
 
-    useEffect(() => {
-        segmentsRef.current = segments;
-    }, [segments]);
+  useEffect(() => {
+    segmentsRef.current = segments;
+  }, [segments]);
 
-    // Auto-scroll to active segment during playback
-    useAutoScroll(virtuosoRef);
+  // Auto-scroll to active segment during playback
+  useAutoScroll(virtuosoRef);
 
-    const handleSeek = useCallback((time: number) => {
-        requestSeek(time);
-    }, [requestSeek]);
+  const handleSeek = useCallback(
+    (time: number) => {
+      requestSeek(time);
+    },
+    [requestSeek]
+  );
 
-    const handleEdit = useCallback((id: string) => {
-        setEditingSegmentId(id);
-    }, [setEditingSegmentId]);
+  const handleEdit = useCallback(
+    (id: string) => {
+      setEditingSegmentId(id);
+    },
+    [setEditingSegmentId]
+  );
 
-    const handleSave = useCallback((id: string, text: string) => {
-        updateTranscriptSegment(id, { text });
-        setEditingSegmentId(null);
+  const handleSave = useCallback(
+    (id: string, text: string) => {
+      updateTranscriptSegment(id, { text });
+      setEditingSegmentId(null);
+    },
+    [setEditingSegmentId]
+  );
 
-    }, [setEditingSegmentId]);
-
-    const handleDelete = useCallback(async (id: string) => {
-        const confirmed = await confirm(t('editor.delete_confirm_message', { defaultValue: 'Are you sure you want to delete this segment?' }), {
-            title: t('editor.delete_confirm_title', { defaultValue: 'Confirm Delete' }),
-            variant: 'warning'
-        });
-
-        if (confirmed) {
-            deleteTranscriptSegment(id);
+  const handleDelete = useCallback(
+    async (id: string) => {
+      const confirmed = await confirm(
+        t('editor.delete_confirm_message', {
+          defaultValue: 'Are you sure you want to delete this segment?',
+        }),
+        {
+          title: t('editor.delete_confirm_title', { defaultValue: 'Confirm Delete' }),
+          variant: 'warning',
         }
-    }, [t, confirm]);
+      );
 
-    const handleMergeWithNext = useCallback(async (id: string) => {
-        const confirmed = await confirm(t('editor.merge_confirm_message', { defaultValue: 'Merge this segment with the next one?' }), {
-            title: t('editor.merge_confirm_title', { defaultValue: 'Confirm Merge' }),
-            variant: 'info'
-        });
+      if (confirmed) {
+        deleteTranscriptSegment(id);
+      }
+    },
+    [t, confirm]
+  );
 
-        if (confirmed) {
-            const currentSegments = segmentsRef.current;
-            const index = currentSegments.findIndex((s) => s.id === id);
-            if (index !== -1 && index < currentSegments.length - 1) {
-                mergeTranscriptSegments(id, currentSegments[index + 1].id);
-            }
+  const handleMergeWithNext = useCallback(
+    async (id: string) => {
+      const confirmed = await confirm(
+        t('editor.merge_confirm_message', {
+          defaultValue: 'Merge this segment with the next one?',
+        }),
+        {
+          title: t('editor.merge_confirm_title', { defaultValue: 'Confirm Merge' }),
+          variant: 'info',
         }
-    }, [confirm, t]);
+      );
 
-    const handleSplit = useCallback((id: string, leftText: string, rightText: string) => {
-        splitTranscriptSegment(id, leftText, rightText);
-    }, []);
-
-    // Stable context for Virtuoso items (callbacks only)
-    const contextValue = useMemo<TranscriptContext>(() => ({
-        onSeek: handleSeek,
-        onEdit: handleEdit,
-        onSave: handleSave,
-        onDelete: handleDelete,
-        onMergeWithNext: handleMergeWithNext,
-        onSplit: handleSplit,
-        onAnimationEnd: handleAnimationEnd,
-    }), [handleSeek, handleEdit, handleSave, handleDelete, handleMergeWithNext, handleSplit, handleAnimationEnd]);
-
-    const itemContent = useCallback((index: number, segment: TranscriptSegment, context: TranscriptContext) => {
-        const previousSegment = index > 0 ? segmentsRef.current[index - 1] : null;
-        const nextSegment = index < segmentsRef.current.length - 1 ? segmentsRef.current[index + 1] : null;
-        return (
-            <SegmentItem
-                key={segment.id}
-                segment={segment}
-                index={index}
-                showSpeakerLabel={Boolean(segment.speaker) && !areSpeakerTagsEqual(previousSegment?.speaker, segment.speaker)}
-                canMergeWithNext={segment.isFinal && (!nextSegment || (nextSegment.isFinal && areSpeakerTagsEqual(segment.speaker, nextSegment.speaker)))}
-                onSeek={context.onSeek}
-                onEdit={context.onEdit}
-                onSave={context.onSave}
-                onDelete={context.onDelete}
-                onMergeWithNext={context.onMergeWithNext}
-                onSplit={context.onSplit}
-                onAnimationEnd={context.onAnimationEnd}
-            />
-        );
-    }, []);
-
-    // Search integration
-    const {
-        isOpen: isSearchOpen,
-        open: openSearch,
-        matches: searchMatches,
-        currentMatchIndex: searchMatchIndex
-    } = useSearchStore();
-
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-                const activeElement = document.activeElement;
-                const isBodyFocus = activeElement === document.body;
-                if (!isBodyFocus && (!(activeElement instanceof HTMLElement) || !activeElement.closest('.projects-detail-pane'))) {
-                    return;
-                }
-
-                e.preventDefault();
-                openSearch();
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [openSearch]);
-
-    // Calculate total words/characters
-    const wordCount = useMemo(() => {
-        if (!segments || segments.length === 0) return 0;
-
-        // Count CJK characters + words using Unicode properties
-        let count = 0;
-        for (const segment of segments) {
-            if (!segment.text) continue;
-            // \p{sc=Han} matches Chinese characters
-            // \p{sc=Hiragana} matches Hiragana
-            // \p{sc=Katakana} matches Katakana
-            // \p{sc=Hangul} matches Korean Hangul
-            // \p{L}+ matches a sequence of letters (words)
-            // \d+ matches a sequence of numbers
-            const matches = segment.text.match(/[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}]|[\p{L}\d]+/gu);
-            if (matches) {
-                count += matches.length;
-            }
+      if (confirmed) {
+        const currentSegments = segmentsRef.current;
+        const index = currentSegments.findIndex((s) => s.id === id);
+        if (index !== -1 && index < currentSegments.length - 1) {
+          mergeTranscriptSegments(id, currentSegments[index + 1].id);
         }
-        return count;
-    }, [segments]);
+      }
+    },
+    [confirm, t]
+  );
 
-    const virtuosoComponents = useMemo(() => ({
-        Header: TranscriptListHeader,
-        Footer: TranscriptListFooter,
-    }), []);
+  const handleSplit = useCallback((id: string, leftText: string, rightText: string) => {
+    splitTranscriptSegment(id, leftText, rightText);
+  }, []);
 
-    // Scroll to active match
-    useEffect(() => {
-        if (isSearchOpen && searchMatches.length > 0 && searchMatchIndex >= 0) {
-            const match = searchMatches[searchMatchIndex];
-            const segmentIndex = segmentsRef.current.findIndex(s => s.id === match.segmentId);
+  // Stable context for Virtuoso items (callbacks only)
+  const contextValue = useMemo<TranscriptContext>(
+    () => ({
+      onSeek: handleSeek,
+      onEdit: handleEdit,
+      onSave: handleSave,
+      onDelete: handleDelete,
+      onMergeWithNext: handleMergeWithNext,
+      onSplit: handleSplit,
+      onAnimationEnd: handleAnimationEnd,
+    }),
+    [
+      handleSeek,
+      handleEdit,
+      handleSave,
+      handleDelete,
+      handleMergeWithNext,
+      handleSplit,
+      handleAnimationEnd,
+    ]
+  );
 
-            if (segmentIndex !== -1 && virtuosoRef.current) {
-                virtuosoRef.current.scrollToIndex({
-                    index: segmentIndex,
-                    align: 'center',
-                    behavior: 'smooth'
-                });
-            }
+  const itemContent = useCallback(
+    (index: number, segment: TranscriptSegment, context: TranscriptContext) => {
+      const previousSegment = index > 0 ? segmentsRef.current[index - 1] : null;
+      const nextSegment =
+        index < segmentsRef.current.length - 1 ? segmentsRef.current[index + 1] : null;
+      return (
+        <SegmentItem
+          key={segment.id}
+          segment={segment}
+          index={index}
+          showSpeakerLabel={
+            Boolean(segment.speaker) &&
+            !areSpeakerTagsEqual(previousSegment?.speaker, segment.speaker)
+          }
+          canMergeWithNext={
+            segment.isFinal &&
+            (!nextSegment ||
+              (nextSegment.isFinal && areSpeakerTagsEqual(segment.speaker, nextSegment.speaker)))
+          }
+          onSeek={context.onSeek}
+          onEdit={context.onEdit}
+          onSave={context.onSave}
+          onDelete={context.onDelete}
+          onMergeWithNext={context.onMergeWithNext}
+          onSplit={context.onSplit}
+          onAnimationEnd={context.onAnimationEnd}
+        />
+      );
+    },
+    []
+  );
+
+  // Search integration
+  const {
+    isOpen: isSearchOpen,
+    open: openSearch,
+    matches: searchMatches,
+    currentMatchIndex: searchMatchIndex,
+  } = useSearchStore();
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        const activeElement = document.activeElement;
+        const isBodyFocus = activeElement === document.body;
+        if (
+          !isBodyFocus &&
+          (!(activeElement instanceof HTMLElement) ||
+            !activeElement.closest('.projects-detail-pane'))
+        ) {
+          return;
         }
-    }, [isSearchOpen, searchMatchIndex, searchMatches]);
 
-    if (segments.length === 0) {
-        return (
-            <div className="empty-state">
-                <PlusCircleIcon />
-                <p style={{ whiteSpace: 'pre-line' }}>{t('editor.empty_state')}</p>
-            </div>
-        );
+        e.preventDefault();
+        openSearch();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [openSearch]);
+
+  // Calculate total words/characters
+  const wordCount = useMemo(() => {
+    if (!segments || segments.length === 0) return 0;
+
+    // Count CJK characters + words using Unicode properties
+    let count = 0;
+    for (const segment of segments) {
+      if (!segment.text) continue;
+      // \p{sc=Han} matches Chinese characters
+      // \p{sc=Hiragana} matches Hiragana
+      // \p{sc=Katakana} matches Katakana
+      // \p{sc=Hangul} matches Korean Hangul
+      // \p{L}+ matches a sequence of letters (words)
+      // \d+ matches a sequence of numbers
+      const matches = segment.text.match(
+        /[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}]|[\p{L}\d]+/gu
+      );
+      if (matches) {
+        count += matches.length;
+      }
     }
+    return count;
+  }, [segments]);
 
+  const virtuosoComponents = useMemo(
+    () => ({
+      Header: TranscriptListHeader,
+      Footer: TranscriptListFooter,
+    }),
+    []
+  );
+
+  // Scroll to active match
+  useEffect(() => {
+    if (isSearchOpen && searchMatches.length > 0 && searchMatchIndex >= 0) {
+      const match = searchMatches[searchMatchIndex];
+      const segmentIndex = segmentsRef.current.findIndex((s) => s.id === match.segmentId);
+
+      if (segmentIndex !== -1 && virtuosoRef.current) {
+        virtuosoRef.current.scrollToIndex({
+          index: segmentIndex,
+          align: 'center',
+          behavior: 'smooth',
+        });
+      }
+    }
+  }, [isSearchOpen, searchMatchIndex, searchMatches]);
+
+  if (segments.length === 0) {
     return (
-        <div className="transcript-editor">
-            <EditorToolbar />
-            {wordCount > 0 && (
-                <div className="word-count-badge">
-                    {t('editor.word_count', { count: wordCount, defaultValue: `${wordCount} words` })}
-                </div>
-            )}
-            <TranscriptUIContext.Provider value={uiStore}>
-                <Virtuoso<TranscriptSegment, TranscriptContext>
-                    ref={virtuosoRef}
-                    className="transcript-list"
-                    data={segments}
-                    context={contextValue}
-                    itemContent={itemContent}
-                    components={virtuosoComponents}
-                />
-            </TranscriptUIContext.Provider>
-            <SearchUI />
-        </div>
+      <div className="empty-state">
+        <PlusCircleIcon />
+        <p style={{ whiteSpace: 'pre-line' }}>{t('editor.empty_state')}</p>
+      </div>
     );
+  }
+
+  return (
+    <div className="transcript-editor">
+      <EditorToolbar />
+      {wordCount > 0 && (
+        <div className="word-count-badge">
+          {t('editor.word_count', { count: wordCount, defaultValue: `${wordCount} words` })}
+        </div>
+      )}
+      <TranscriptUIContext.Provider value={uiStore}>
+        <Virtuoso<TranscriptSegment, TranscriptContext>
+          ref={virtuosoRef}
+          className="transcript-list"
+          data={segments}
+          context={contextValue}
+          itemContent={itemContent}
+          components={virtuosoComponents}
+        />
+      </TranscriptUIContext.Provider>
+      <SearchUI />
+    </div>
+  );
 }
 
 export default TranscriptEditor;

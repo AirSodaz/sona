@@ -86,7 +86,9 @@
   border: 1px solid var(--color-border);
   background: var(--color-bg-secondary);
   color: var(--color-text-secondary);
-  transition: background-color var(--transition-fast, 0.15s) ease, border-color var(--transition-fast, 0.15s) ease;
+  transition:
+    background-color var(--transition-fast, 0.15s) ease,
+    border-color var(--transition-fast, 0.15s) ease;
 }
 
 .settings-dashboard-status-badge {
@@ -148,9 +150,10 @@
   border-radius: var(--radius-lg, 16px);
   border: 1px solid var(--color-border);
   background: var(--color-bg-elevated);
-  transition: border-color var(--transition-fast, 0.15s) ease,
-              box-shadow var(--transition-fast, 0.15s) ease,
-              transform var(--transition-fast, 0.15s) ease;
+  transition:
+    border-color var(--transition-fast, 0.15s) ease,
+    box-shadow var(--transition-fast, 0.15s) ease,
+    transform var(--transition-fast, 0.15s) ease;
 }
 
 .settings-dashboard-kpi-card:focus-visible,
@@ -163,7 +166,11 @@
 .settings-dashboard-kpi-card,
 .settings-dashboard-chart-card {
   --dashboard-accent: var(--color-accent-primary, #2f2f2f);
-  --dashboard-accent-soft: color-mix(in srgb, var(--dashboard-accent) 10%, var(--color-bg-secondary));
+  --dashboard-accent-soft: color-mix(
+    in srgb,
+    var(--dashboard-accent) 10%,
+    var(--color-bg-secondary)
+  );
   --dashboard-accent-strong: var(--dashboard-accent);
   --dashboard-chart-grid: color-mix(in srgb, var(--color-text-muted) 14%, transparent);
   --dashboard-chart-track: color-mix(in srgb, var(--color-text-muted) 10%, transparent);
@@ -584,13 +591,21 @@
 }
 
 @keyframes settings-dashboard-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes settings-dashboard-shimmer {
-  0% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

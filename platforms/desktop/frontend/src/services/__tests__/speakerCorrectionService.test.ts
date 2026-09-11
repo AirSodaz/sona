@@ -23,7 +23,6 @@ vi.mock('../tauri/invoke', () => ({
   invokeTauri: vi.fn(),
 }));
 
-import { invokeTauri } from '../tauri/invoke';
 import { useConfigStore } from '../../stores/configStore';
 import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
 import { useProjectStore } from '../../stores/projectStore';
@@ -34,6 +33,7 @@ import {
   buildSpeakerCorrectionProfileSections,
   speakerCorrectionService,
 } from '../speakerCorrectionService';
+import { invokeTauri } from '../tauri/invoke';
 
 function currentSegments(): TranscriptSegment[] {
   return useTranscriptSessionStore.getState().segments;
@@ -79,12 +79,11 @@ describe('speakerCorrectionService', () => {
         },
       ],
     }));
-
   });
 
   it('groups enabled global speaker profiles ahead of disabled profiles', () => {
     const sections = buildSpeakerCorrectionProfileSections(
-      useConfigStore.getState().config.speakerProfiles,
+      useConfigStore.getState().config.speakerProfiles
     );
 
     expect(sections.primaryProfiles.map((profile) => profile.id)).toEqual(['speaker-1']);
@@ -140,7 +139,7 @@ describe('speakerCorrectionService', () => {
 
     const result = await speakerCorrectionService.assignProfileToSpeakerGroup(
       'anonymous-1',
-      'speaker-2',
+      'speaker-2'
     );
 
     expect(invokeTauri).toHaveBeenCalledWith('apply_speaker_profile_to_group', {
@@ -164,12 +163,16 @@ describe('speakerCorrectionService', () => {
         speakerAttribution: rewrittenSegments[0].speakerAttribution,
       }),
     ]);
-    expect(useConfigStore.getState().config.speakerProfiles?.filter((profile) => profile.enabled).map((profile) => profile.id)).toEqual([
-      'speaker-1', 'speaker-2',
-    ]);
     expect(
-      useEffectiveConfigStore.getState().config.speakerProfiles?.find((profile) => profile.id === 'speaker-2')
-        ?.enabled,
+      useConfigStore
+        .getState()
+        .config.speakerProfiles?.filter((profile) => profile.enabled)
+        .map((profile) => profile.id)
+    ).toEqual(['speaker-1', 'speaker-2']);
+    expect(
+      useEffectiveConfigStore
+        .getState()
+        .config.speakerProfiles?.find((profile) => profile.id === 'speaker-2')?.enabled
     ).toBe(true);
   });
 
@@ -188,7 +191,12 @@ describe('speakerCorrectionService', () => {
 
     await speakerCorrectionService.assignProfileToSpeakerGroup('anonymous-1', 'speaker-1');
 
-    expect(useConfigStore.getState().config.speakerProfiles?.filter((profile) => profile.enabled).map((profile) => profile.id)).toEqual(['speaker-1']);
+    expect(
+      useConfigStore
+        .getState()
+        .config.speakerProfiles?.filter((profile) => profile.enabled)
+        .map((profile) => profile.id)
+    ).toEqual(['speaker-1']);
   });
 
   it('delegates reset group to anonymous to Rust and writes returned segments', async () => {

@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AppConfig } from '../../types/config';
-import { buildTestConfig } from '../../test-utils/configTestUtils';
 import onlineAsrProviderManifest from '../../../../../../core/src/ports/online-asr-providers.json';
+import { buildTestConfig } from '../../test-utils/configTestUtils';
+import type { AppConfig } from '../../types/config';
 import {
-  DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
-  VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
-  VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
   createVolcengineDoubaoSelection,
+  DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
   isAsrRequestConfigured,
   isVolcengineFlashBatchMode,
   resolveAsrTranscriptionRequest,
   syncLegacyAsrSelectionFields,
+  VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
+  VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
 } from '../asrConfigService';
 
 const mocks = vi.hoisted(() => {
@@ -198,9 +198,12 @@ describe('asrConfigService', () => {
   });
 
   it('resolves a local sherpa request with custom gpuAcceleration configuration', () => {
-    const request = resolveAsrTranscriptionRequest(buildAsrConfig({
-      gpuAcceleration: 'cuda',
-    }), 'live');
+    const request = resolveAsrTranscriptionRequest(
+      buildAsrConfig({
+        gpuAcceleration: 'cuda',
+      }),
+      'live'
+    );
 
     expect(request).toMatchObject({
       gpuAcceleration: 'cuda',
@@ -208,9 +211,12 @@ describe('asrConfigService', () => {
   });
 
   it('resolves a local sherpa batch request without VAD when batch VAD is disabled', () => {
-    const request = resolveAsrTranscriptionRequest(buildAsrConfig({
-      batchVadEnabled: false,
-    }), 'batch');
+    const request = resolveAsrTranscriptionRequest(
+      buildAsrConfig({
+        batchVadEnabled: false,
+      }),
+      'batch'
+    );
 
     expect(request).toMatchObject({
       engine: 'local',
@@ -225,12 +231,15 @@ describe('asrConfigService', () => {
   });
 
   it('falls back to legacy model paths when ASR selections are missing', () => {
-    const request = resolveAsrTranscriptionRequest(buildTestConfig({
-      streamingModelPath: 'C:/legacy/live',
-      batchModelPath: 'C:/legacy/batch',
-      liveVadBufferSize: 5,
-      asr: undefined,
-    }), 'voiceTyping');
+    const request = resolveAsrTranscriptionRequest(
+      buildTestConfig({
+        streamingModelPath: 'C:/legacy/live',
+        batchModelPath: 'C:/legacy/batch',
+        liveVadBufferSize: 5,
+        asr: undefined,
+      }),
+      'voiceTyping'
+    );
 
     expect(request).toMatchObject({
       engine: 'local',
@@ -315,11 +324,13 @@ describe('asrConfigService', () => {
 
   it('keeps the default Volcengine local batch provider on flash recognize mode', () => {
     const volcengineManifest = onlineAsrProviderManifest.providers.find(
-      (provider) => provider.id === 'volcengine-doubao',
+      (provider) => provider.id === 'volcengine-doubao'
     );
 
     expect(volcengineManifest?.defaults.batchEndpoint).toBe(VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT);
-    expect(volcengineManifest?.defaults.batchResourceId).toBe(VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID);
+    expect(volcengineManifest?.defaults.batchResourceId).toBe(
+      VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID
+    );
     expect(DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG).toMatchObject({
       batchEndpoint: VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT,
       batchResourceId: VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID,
@@ -374,7 +385,9 @@ describe('asrConfigService', () => {
 
     expect(isAsrRequestConfigured(resolveAsrTranscriptionRequest(config, 'live'))).toBe(false);
     expect(isAsrRequestConfigured(resolveAsrTranscriptionRequest(config, 'batch'))).toBe(false);
-    expect(isAsrRequestConfigured(resolveAsrTranscriptionRequest(buildAsrConfig(), 'live'))).toBe(true);
+    expect(isAsrRequestConfigured(resolveAsrTranscriptionRequest(buildAsrConfig(), 'live'))).toBe(
+      true
+    );
   });
 
   it('preserves Volcengine streaming provider config and keeps local batch on flash when updating a local legacy selection', () => {

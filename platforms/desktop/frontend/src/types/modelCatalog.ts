@@ -179,11 +179,7 @@ export const DEFAULT_MODEL_RULES: ModelRules = {
 export const PRESET_MODELS: ModelInfo[] = presetModelsData as ModelInfo[];
 
 export const PRESET_MODELS_MAP: Map<string, ModelInfo> = new Map(
-  PRESET_MODELS.map((model) => [model.id, model]),
+  PRESET_MODELS.map((model) => [model.id, model])
 );
 
-export type ProgressCallback = (
-  percentage: number,
-  status: string,
-  isFinished?: boolean,
-) => void;
+export type ProgressCallback = (percentage: number, status: string, isFinished?: boolean) => void;

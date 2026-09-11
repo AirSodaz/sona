@@ -1,10 +1,5 @@
 import type { AppConfig } from '../types/config';
-import {
-  getAppSetting,
-  loadAppConfig,
-  saveAppConfig,
-  setAppSetting,
-} from './tauri/app';
+import { getAppSetting, loadAppConfig, saveAppConfig, setAppSetting } from './tauri/app';
 import { emit, listen, type UnlistenFn } from './tauri/platform/events';
 
 export const STORE_KEY_CONFIG = 'sona-config';
@@ -53,7 +48,7 @@ export const settingsStore = {
 
   async onKeyChange<T>(
     key: string,
-    callback: (value: T | null | undefined) => void,
+    callback: (value: T | null | undefined) => void
   ): Promise<UnlistenFn> {
     return listen(APP_SETTING_UPDATED_EVENT, (event) => {
       const payload = event.payload as Partial<SettingUpdatePayload<T>>;

@@ -1,16 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createModelDownloadService } from '../modelDownloadService';
-import { parseDownloadProgressPayload } from '../modelDownloadService';
+import { createModelDownloadService, parseDownloadProgressPayload } from '../modelDownloadService';
 import type { ModelCatalogModel, ModelInfo } from '../modelService';
 
 const i18nMocks = vi.hoisted(() => ({
   t: vi.fn((key: string, params?: Record<string, unknown>) => {
     if (key === 'settings.model_download_status.done') return 'Done';
     if (key === 'settings.model_download_status.extracting') return 'Extracting';
-    if (key === 'settings.model_download_status.extracting_file') return `Extracting ${params?.filename}`;
-    if (key === 'settings.model_download_status.downloading_only') return `Downloading ${params?.label}`;
-    if (key === 'settings.model_download_status.downloading_from_mirror') return `Mirror ${params?.label}`;
-    if (key === 'settings.model_download_status.downloading') return `${params?.label}... ${params?.downloadedMB}/${params?.totalMB} (${params?.speed})`;
+    if (key === 'settings.model_download_status.extracting_file')
+      return `Extracting ${params?.filename}`;
+    if (key === 'settings.model_download_status.downloading_only')
+      return `Downloading ${params?.label}`;
+    if (key === 'settings.model_download_status.downloading_from_mirror')
+      return `Mirror ${params?.label}`;
+    if (key === 'settings.model_download_status.downloading')
+      return `${params?.label}... ${params?.downloadedMB}/${params?.totalMB} (${params?.speed})`;
     if (key === 'settings.model_download_status.download_label') return 'Downloading';
     return key;
   }),
@@ -32,9 +35,7 @@ function makeModel(overrides: Partial<ModelInfo> = {}): ModelInfo {
     size: '1 MB',
     isArchive: true,
     engine: 'sherpa-onnx',
-    artifacts: [
-      { url: 'https://example.com/model-a.tar.bz2', filename: 'model-a.tar.bz2' },
-    ],
+    artifacts: [{ url: 'https://example.com/model-a.tar.bz2', filename: 'model-a.tar.bz2' }],
     ...overrides,
   };
 }
@@ -98,10 +99,12 @@ describe('modelDownloadService', () => {
     });
 
     expect(result).toBe('/catalog/install');
-    expect(downloadFile).toHaveBeenCalledWith(expect.objectContaining({
-      url: 'https://example.com/model-a.tar.bz2',
-      outputPath: '/catalog/download.tar.bz2',
-    }));
+    expect(downloadFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'https://example.com/model-a.tar.bz2',
+        outputPath: '/catalog/download.tar.bz2',
+      })
+    );
     expect(extractTarBz2).toHaveBeenCalledWith({
       archivePath: '/catalog/download.tar.bz2',
       targetDir: '/catalog',
@@ -111,14 +114,14 @@ describe('modelDownloadService', () => {
   });
 
   it('delegates multi-file catalog models to the atomic preset installer', async () => {
-    const now = vi.spyOn(Date, 'now')
-      .mockReturnValueOnce(1_000)
-      .mockReturnValueOnce(2_000);
+    const now = vi.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(2_000);
     let progressHandler: ((event: { payload: unknown }) => void) | undefined;
-    listen.mockImplementation(async (_event: string, handler: (event: { payload: unknown }) => void) => {
-      progressHandler = handler;
-      return vi.fn();
-    });
+    listen.mockImplementation(
+      async (_event: string, handler: (event: { payload: unknown }) => void) => {
+        progressHandler = handler;
+        return vi.fn();
+      }
+    );
     downloadPresetModel.mockImplementation(async ({ downloadId }) => {
       progressHandler?.({ payload: [8 * 1024 * 1024, 16 * 1024 * 1024, downloadId] });
       return '/models/qwen3-asr-0.6b-q8-gguf';
@@ -135,24 +138,38 @@ describe('modelDownloadService', () => {
     });
     const onProgress = vi.fn();
 
-    await expect(service.downloadModel({
-      modelId: 'qwen3-asr-0.6b-q8-gguf',
-      model: makeCatalogModel({
-        id: 'qwen3-asr-0.6b-q8-gguf',
-        engine: 'llama-cpp',
-        isArchive: false,
-        installPath: '/models/qwen3-asr-0.6b-q8-gguf',
-        artifacts: [
-          { url: 'https://example.com/model.gguf', filename: 'model.gguf', sha256: 'a', sizeBytes: 768 },
-          { url: 'https://example.com/mmproj.gguf', filename: 'mmproj.gguf', sha256: 'b', sizeBytes: 256 },
-        ],
-      }),
-      onProgress,
-    })).resolves.toBe('/models/qwen3-asr-0.6b-q8-gguf');
+    await expect(
+      service.downloadModel({
+        modelId: 'qwen3-asr-0.6b-q8-gguf',
+        model: makeCatalogModel({
+          id: 'qwen3-asr-0.6b-q8-gguf',
+          engine: 'llama-cpp',
+          isArchive: false,
+          installPath: '/models/qwen3-asr-0.6b-q8-gguf',
+          artifacts: [
+            {
+              url: 'https://example.com/model.gguf',
+              filename: 'model.gguf',
+              sha256: 'a',
+              sizeBytes: 768,
+            },
+            {
+              url: 'https://example.com/mmproj.gguf',
+              filename: 'mmproj.gguf',
+              sha256: 'b',
+              sizeBytes: 256,
+            },
+          ],
+        }),
+        onProgress,
+      })
+    ).resolves.toBe('/models/qwen3-asr-0.6b-q8-gguf');
 
-    expect(downloadPresetModel).toHaveBeenCalledWith(expect.objectContaining({
-      modelId: 'qwen3-asr-0.6b-q8-gguf',
-    }));
+    expect(downloadPresetModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelId: 'qwen3-asr-0.6b-q8-gguf',
+      })
+    );
     expect(downloadFile).not.toHaveBeenCalled();
     expect(extractTarBz2).not.toHaveBeenCalled();
     expect(onProgress).toHaveBeenCalledWith(50, 'Downloading... 8/16 (8.0 MB/s)');
@@ -184,10 +201,12 @@ describe('modelDownloadService', () => {
       }),
     });
 
-    expect(downloadFile).toHaveBeenCalledWith(expect.objectContaining({
-      outputPath: '/models/model-a.tar.bz2',
-      expectedSha256: '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
-    }));
+    expect(downloadFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outputPath: '/models/model-a.tar.bz2',
+        expectedSha256: '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
+      })
+    );
   });
 
   it('returns the downloaded file path for non-archive models', async () => {
@@ -207,11 +226,13 @@ describe('modelDownloadService', () => {
       type: 'speaker-embedding',
     });
 
-    await expect(service.downloadModel({
-      modelId: 'speaker.onnx',
-      model,
-      onProgress: vi.fn(),
-    })).resolves.toBe('/models/speaker.onnx');
+    await expect(
+      service.downloadModel({
+        modelId: 'speaker.onnx',
+        model,
+        onProgress: vi.fn(),
+      })
+    ).resolves.toBe('/models/speaker.onnx');
 
     expect(extractTarBz2).not.toHaveBeenCalled();
     expect(remove).not.toHaveBeenCalled();
@@ -246,10 +267,12 @@ describe('modelDownloadService', () => {
       model,
     });
 
-    expect(downloadFile).toHaveBeenCalledWith(expect.objectContaining({
-      outputPath: '/models/speaker.onnx',
-      expectedSha256: '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
-    }));
+    expect(downloadFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outputPath: '/models/speaker.onnx',
+        expectedSha256: '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6',
+      })
+    );
   });
 
   it('retries the same candidate up to 3 times on failure', async () => {
@@ -267,21 +290,29 @@ describe('modelDownloadService', () => {
       .mockRejectedValueOnce(new Error('attempt 2 failed'))
       .mockRejectedValueOnce(new Error('attempt 3 failed'));
 
-    await expect(service.downloadModel({
-      modelId: 'model-a',
-      model: makeModel(),
-      mirror: 'ghproxy',
-    })).rejects.toThrow('attempt 3 failed');
+    await expect(
+      service.downloadModel({
+        modelId: 'model-a',
+        model: makeModel(),
+        mirror: 'ghproxy',
+      })
+    ).rejects.toThrow('attempt 3 failed');
 
     // example.com is not GitHub, so the ghproxy mirror does not apply and the
     // candidate chain is direct-only; the inner retry loop still runs 3 times.
     expect(downloadFile).toHaveBeenCalledTimes(3);
-    expect(downloadFile).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      url: 'https://example.com/model-a.tar.bz2',
-    }));
-    expect(downloadFile).toHaveBeenNthCalledWith(3, expect.objectContaining({
-      url: 'https://example.com/model-a.tar.bz2',
-    }));
+    expect(downloadFile).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        url: 'https://example.com/model-a.tar.bz2',
+      })
+    );
+    expect(downloadFile).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        url: 'https://example.com/model-a.tar.bz2',
+      })
+    );
   });
 
   it('stops retrying once an attempt succeeds', async () => {
@@ -298,16 +329,21 @@ describe('modelDownloadService', () => {
       .mockRejectedValueOnce(new Error('attempt 1 failed'))
       .mockResolvedValueOnce(undefined);
 
-    await expect(service.downloadModel({
-      modelId: 'model-a',
-      model: makeModel(),
-      mirror: 'ghnet',
-    })).resolves.toBe('/models/model-a');
+    await expect(
+      service.downloadModel({
+        modelId: 'model-a',
+        model: makeModel(),
+        mirror: 'ghnet',
+      })
+    ).resolves.toBe('/models/model-a');
 
     expect(downloadFile).toHaveBeenCalledTimes(2);
-    expect(downloadFile).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      url: 'https://example.com/model-a.tar.bz2',
-    }));
+    expect(downloadFile).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        url: 'https://example.com/model-a.tar.bz2',
+      })
+    );
   });
 
   it('falls back to the source mirror after direct fails', async () => {
@@ -326,22 +362,30 @@ describe('modelDownloadService', () => {
       .mockRejectedValueOnce(new Error('direct attempt 3'))
       .mockResolvedValueOnce(undefined);
 
-    await expect(service.downloadModel({
-      modelId: 'github-model',
-      model: makeModel({
-        id: 'github-model',
-        artifacts: [
-          { url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/github-model.tar.bz2', filename: 'github-model.tar.bz2' },
-        ],
-      }),
-    })).resolves.toBe('/models/github-model');
+    await expect(
+      service.downloadModel({
+        modelId: 'github-model',
+        model: makeModel({
+          id: 'github-model',
+          artifacts: [
+            {
+              url: 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/github-model.tar.bz2',
+              filename: 'github-model.tar.bz2',
+            },
+          ],
+        }),
+      })
+    ).resolves.toBe('/models/github-model');
 
     // Three direct attempts exhaust the inner retry loop, then the ghnet
     // mirror candidate succeeds.
     expect(downloadFile).toHaveBeenCalledTimes(4);
-    expect(downloadFile).toHaveBeenNthCalledWith(4, expect.objectContaining({
-      url: 'https://ghproxy.net/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/github-model.tar.bz2',
-    }));
+    expect(downloadFile).toHaveBeenNthCalledWith(
+      4,
+      expect.objectContaining({
+        url: 'https://ghproxy.net/https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/github-model.tar.bz2',
+      })
+    );
     // The partial file from the failed candidate must not be resumed.
     expect(remove).toHaveBeenCalledWith('/models/github-model.tar.bz2.download');
   });
@@ -377,10 +421,12 @@ describe('modelDownloadService', () => {
       .mockRejectedValueOnce(new Error('fail 3'))
       .mockRejectedValueOnce(new Error('fail 4'));
 
-    await expect(service.downloadModel({
-      modelId: 'model-a',
-      model: makeModel(),
-    })).rejects.toThrow('fail 4');
+    await expect(
+      service.downloadModel({
+        modelId: 'model-a',
+        model: makeModel(),
+      })
+    ).rejects.toThrow('fail 4');
 
     expect(downloadFile).toHaveBeenCalledTimes(4);
   });
@@ -402,11 +448,13 @@ describe('modelDownloadService', () => {
       throw new Error('cancelled by backend');
     });
 
-    await expect(service.downloadModel({
-      modelId: 'model-a',
-      model: makeModel(),
-      signal: controller.signal,
-    })).rejects.toThrow('Download cancelled');
+    await expect(
+      service.downloadModel({
+        modelId: 'model-a',
+        model: makeModel(),
+        signal: controller.signal,
+      })
+    ).rejects.toThrow('Download cancelled');
 
     expect(cancelDownload).toHaveBeenCalledTimes(1);
   });

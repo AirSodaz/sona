@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const frontendRoot = path.join(repoRoot, 'platforms', 'desktop', 'frontend');
-const eslintBin = path.join(frontendRoot, 'node_modules', 'eslint', 'bin', 'eslint.js');
+const biomeBin = path.join(frontendRoot, 'node_modules', '@biomejs', 'biome', 'bin', 'biome');
 const frontendPathPrefix = 'platforms/desktop/frontend/';
 const LINTABLE_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.ts', '.tsx']);
 
@@ -79,9 +79,10 @@ try {
   execFileSync(
     process.execPath,
     [
-      eslintBin,
-      '--max-warnings=0',
-      '--no-warn-ignored',
+      biomeBin,
+      'check',
+      '--error-on-warnings',
+      '--no-errors-on-unmatched',
       ...Array.from(lintTargets, (target) => path.relative(frontendRoot, path.join(repoRoot, target))),
     ],
     { cwd: frontendRoot, stdio: 'inherit' }

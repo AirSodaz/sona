@@ -45,7 +45,9 @@ vi.mock('../../Icons', () => ({
 }));
 
 vi.mock('../SegmentTimestamp', () => ({
-  SegmentTimestamp: ({ start }: { start: number }) => <span className="segment-timestamp">{start}</span>,
+  SegmentTimestamp: ({ start }: { start: number }) => (
+    <span className="segment-timestamp">{start}</span>
+  ),
 }));
 
 import { applySpeakerProfileToGroup } from '../../../services/tauri/speaker';
@@ -54,9 +56,9 @@ import { useProjectStore } from '../../../stores/projectStore';
 import { useTranscriptSessionStore } from '../../../stores/transcriptSessionStore';
 import { resetTranscriptStores } from '../../../test-utils/transcriptStoreTestUtils';
 import { normalizeTranscriptSegment } from '../../../utils/transcriptTiming';
+import { ContextMenuProvider } from '../../context-menu/ContextMenuProvider';
 import { SegmentItem } from '../SegmentItem';
 import { TranscriptUIContext, type TranscriptUIState } from '../TranscriptUIContext';
-import { ContextMenuProvider } from '../../context-menu/ContextMenuProvider';
 
 describe('SegmentItem speaker correction', () => {
   let uiStore: StoreApi<TranscriptUIState>;
@@ -108,15 +110,12 @@ describe('SegmentItem speaker correction', () => {
       };
 
       return {
-        segments: request.segments.map((segment) => (
-          segment.speaker?.id === request.groupId
-            ? { ...segment, speaker: nextSpeaker }
-            : segment
-        )),
-        enabledSpeakerProfileIds: Array.from(new Set([
-          ...request.enabledSpeakerProfileIds,
-          request.targetProfileId,
-        ])),
+        segments: request.segments.map((segment) =>
+          segment.speaker?.id === request.groupId ? { ...segment, speaker: nextSpeaker } : segment
+        ),
+        enabledSpeakerProfileIds: Array.from(
+          new Set([...request.enabledSpeakerProfileIds, request.targetProfileId])
+        ),
       };
     });
 
@@ -167,7 +166,7 @@ describe('SegmentItem speaker correction', () => {
             onAnimationEnd={vi.fn()}
           />
         </TranscriptUIContext.Provider>
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
   }
 
@@ -227,9 +226,12 @@ describe('SegmentItem speaker correction', () => {
           speaker: { id: 'anonymous-2', label: 'Speaker 2', kind: 'anonymous' },
         }),
       ]);
-      expect(useConfigStore.getState().config.speakerProfiles?.filter((profile) => profile.enabled).map((profile) => profile.id)).toEqual([
-        'speaker-1', 'speaker-2',
-      ]);
+      expect(
+        useConfigStore
+          .getState()
+          .config.speakerProfiles?.filter((profile) => profile.enabled)
+          .map((profile) => profile.id)
+      ).toEqual(['speaker-1', 'speaker-2']);
     });
   });
 });

@@ -1,11 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { TranscriptSegment } from '../types/transcript';
 import { useHistoryStore } from '../stores/historyStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
-import { computeSegmentsFingerprint } from '../utils/segmentUtils';
+import type { TranscriptSegment } from '../types/transcript';
 import { logger } from '../utils/logger';
+import { computeSegmentsFingerprint } from '../utils/segmentUtils';
 
 const DEFAULT_AUTO_SAVE_DELAY_MS = 2000;
 const LIVE_DRAFT_AUTO_SAVE_DELAY_MS = 500;
@@ -82,16 +82,13 @@ class TranscriptAutoSaveRuntime {
       this.pendingByHistoryId.delete(historyId);
       if (!pending || this.conflictedSessionIds.has(pending.editSessionId)) continue;
 
-      const baseline = this.baselinesBySessionId.get(pending.editSessionId)
-        ?? cloneSegments(pending.segments);
+      const baseline =
+        this.baselinesBySessionId.get(pending.editSessionId) ?? cloneSegments(pending.segments);
       try {
         logger.info('[AutoSave] Committing transcript edit...', historyId);
-        const result = await useHistoryStore.getState().commitTranscriptEdit(
-          historyId,
-          pending.editSessionId,
-          baseline,
-          pending.segments,
-        );
+        const result = await useHistoryStore
+          .getState()
+          .commitTranscriptEdit(historyId, pending.editSessionId, baseline, pending.segments);
         if (result.status === 'conflict') {
           this.conflictedSessionIds.add(pending.editSessionId);
           if (this.pendingByHistoryId.get(historyId)?.editSessionId === pending.editSessionId) {
@@ -106,8 +103,8 @@ class TranscriptAutoSaveRuntime {
 
         this.baselinesBySessionId.set(pending.editSessionId, cloneSegments(pending.segments));
         if (
-          this.editSessionIds.get(historyId) === pending.editSessionId
-          && !this.pendingByHistoryId.has(historyId)
+          this.editSessionIds.get(historyId) === pending.editSessionId &&
+          !this.pendingByHistoryId.has(historyId)
         ) {
           useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'saved');
         }
@@ -129,7 +126,10 @@ class TranscriptAutoSaveRuntime {
     }, delayMs);
   }
 
-  async flushPending(historyId?: string | null, segments?: TranscriptSegment[] | null): Promise<void> {
+  async flushPending(
+    historyId?: string | null,
+    segments?: TranscriptSegment[] | null
+  ): Promise<void> {
     if (this.timeout) {
       clearTimeout(this.timeout);
       this.timeout = null;
@@ -170,9 +170,10 @@ class TranscriptAutoSaveRuntime {
       if (currentFingerprint === this.lastFingerprint) return;
 
       this.lastFingerprint = currentFingerprint;
-      const delayMs = useTranscriptRuntimeStore.getState().mode === 'live'
-        ? LIVE_DRAFT_AUTO_SAVE_DELAY_MS
-        : DEFAULT_AUTO_SAVE_DELAY_MS;
+      const delayMs =
+        useTranscriptRuntimeStore.getState().mode === 'live'
+          ? LIVE_DRAFT_AUTO_SAVE_DELAY_MS
+          : DEFAULT_AUTO_SAVE_DELAY_MS;
       this.queueSave(currentId, state.segments, delayMs);
     });
   }

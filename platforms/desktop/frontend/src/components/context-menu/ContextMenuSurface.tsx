@@ -1,9 +1,7 @@
-import React, { useCallback, useLayoutEffect, useRef } from 'react';
+import type React from 'react';
+import { useCallback, useLayoutEffect, useRef } from 'react';
 import { ModalPortal } from '../ModalPortal';
-import type {
-  ContextMenuAction,
-  ContextMenuCloseReason,
-} from './types';
+import type { ContextMenuAction, ContextMenuCloseReason } from './types';
 
 interface ContextMenuSurfaceProps {
   actions: ContextMenuAction[];
@@ -22,9 +20,14 @@ export function ContextMenuSurface({
 }: ContextMenuSurfaceProps): React.JSX.Element {
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const getEnabledItems = useCallback(() => Array.from(
-    menuRef.current?.querySelectorAll<HTMLButtonElement>('.context-menu-item:not(:disabled)') ?? [],
-  ), []);
+  const getEnabledItems = useCallback(
+    () =>
+      Array.from(
+        menuRef.current?.querySelectorAll<HTMLButtonElement>('.context-menu-item:not(:disabled)') ??
+          []
+      ),
+    []
+  );
 
   useLayoutEffect(() => {
     const firstEnabledItem = getEnabledItems()[0];
@@ -115,7 +118,9 @@ export function ContextMenuSurface({
               'context-menu-item',
               action.tone === 'danger' ? 'context-menu-item--danger' : '',
               action.dividerBefore ? 'context-menu-item--with-divider' : '',
-            ].filter(Boolean).join(' ')}
+            ]
+              .filter(Boolean)
+              .join(' ')}
             role="menuitem"
             aria-label={action.label}
             disabled={action.disabled}

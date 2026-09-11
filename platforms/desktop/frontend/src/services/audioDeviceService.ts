@@ -1,15 +1,11 @@
-import { logger } from '../utils/logger';
-import { extractErrorMessage } from '../utils/errorUtils';
-import {
-  getMicrophoneDevices,
-  getSystemAudioDevices,
-  type AudioDevice,
-} from './tauri/audio';
 import type {
   DeviceOption,
   DeviceProbeResult,
   MicrophonePermissionState,
 } from '../types/diagnostics';
+import { extractErrorMessage } from '../utils/errorUtils';
+import { logger } from '../utils/logger';
+import { type AudioDevice, getMicrophoneDevices, getSystemAudioDevices } from './tauri/audio';
 
 export type {
   DeviceOption,
@@ -29,10 +25,7 @@ function createDefaultDeviceOption(defaultLabel: string): DeviceOption {
   };
 }
 
-function createFallbackProbeResult(
-  defaultLabel: string,
-  errorMessage: string,
-): DeviceProbeResult {
+function createFallbackProbeResult(defaultLabel: string, errorMessage: string): DeviceProbeResult {
   return {
     options: [createDefaultDeviceOption(defaultLabel)],
     available: false,
@@ -42,20 +35,18 @@ function createFallbackProbeResult(
 }
 
 function dedupeOptions(options: DeviceOption[]): DeviceOption[] {
-  return options.filter((option, index, currentOptions) => (
-    index === currentOptions.findIndex((candidate) => candidate.value === option.value)
-  ));
+  return options.filter(
+    (option, index, currentOptions) =>
+      index === currentOptions.findIndex((candidate) => candidate.value === option.value)
+  );
 }
 
 function mapDeviceOptions<TDevice>(
   defaultLabel: string,
   devices: TDevice[],
-  toOption: (device: TDevice) => DeviceOption,
+  toOption: (device: TDevice) => DeviceOption
 ): DeviceOption[] {
-  return dedupeOptions([
-    createDefaultDeviceOption(defaultLabel),
-    ...devices.map(toOption),
-  ]);
+  return dedupeOptions([createDefaultDeviceOption(defaultLabel), ...devices.map(toOption)]);
 }
 
 function toBrowserDeviceOption(device: MediaDeviceInfo): DeviceOption {
@@ -82,7 +73,7 @@ function hasVisibleDeviceLabels(devices: MediaDeviceInfo[]): boolean {
 
 function toBrowserDeviceOptions(
   audioInputDevices: MediaDeviceInfo[],
-  defaultLabel: string,
+  defaultLabel: string
 ): DeviceOption[] {
   return mapDeviceOptions(defaultLabel, audioInputDevices, toBrowserDeviceOption);
 }
@@ -130,7 +121,9 @@ export async function requestMicrophonePermission(): Promise<boolean> {
   }
 }
 
-export async function probeMicrophoneDeviceOptions(defaultLabel: string): Promise<DeviceProbeResult> {
+export async function probeMicrophoneDeviceOptions(
+  defaultLabel: string
+): Promise<DeviceProbeResult> {
   try {
     const nativeDevices = await getMicrophoneDevices();
     if (nativeDevices.length > 0) {
@@ -201,7 +194,9 @@ export async function listSystemAudioDeviceOptions(defaultLabel: string): Promis
   return probe.options;
 }
 
-export async function probeSystemAudioDeviceOptions(defaultLabel: string): Promise<DeviceProbeResult> {
+export async function probeSystemAudioDeviceOptions(
+  defaultLabel: string
+): Promise<DeviceProbeResult> {
   try {
     const devices = await getSystemAudioDevices();
     if (devices.length === 0) {

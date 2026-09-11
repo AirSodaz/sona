@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addLlmModel,
-  buildLlmConfigPatch,
-  createLlmSettings,
-  setFeatureModelSelection,
-  setFeatureTemperature,
-  setFeatureReasoningEnabled,
-  setFeatureReasoningLevel,
-  updateProviderSetting,
-} from '../state';
-import {
   getFeatureLlmConfig,
   isFeatureLlmConfigComplete,
   isSummaryLlmConfigComplete,
 } from '../configUtils';
 import { DEFAULT_LLM_TEMPERATURE } from '../providers';
+import {
+  addLlmModel,
+  buildLlmConfigPatch,
+  createLlmSettings,
+  setFeatureModelSelection,
+  setFeatureReasoningEnabled,
+  setFeatureReasoningLevel,
+  setFeatureTemperature,
+  updateProviderSetting,
+} from '../state';
 
 describe('llm runtime', () => {
   it('resolves feature configs independently', () => {
@@ -28,28 +28,37 @@ describe('llm runtime', () => {
       apiKey: 'anthropic-key',
     });
     llmSettings = addLlmModel(llmSettings, { provider: 'open_ai', model: 'gpt-4o-mini' });
-    llmSettings = addLlmModel(llmSettings, { provider: 'anthropic', model: 'claude-sonnet-4-20250514' });
+    llmSettings = addLlmModel(llmSettings, {
+      provider: 'anthropic',
+      model: 'claude-sonnet-4-20250514',
+    });
     llmSettings = setFeatureModelSelection(llmSettings, 'polish', llmSettings.modelOrder[0]);
     llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[1]);
     llmSettings = setFeatureModelSelection(llmSettings, 'summary', llmSettings.modelOrder[0]);
 
     const config = buildLlmConfigPatch(llmSettings);
 
-    expect(getFeatureLlmConfig(config, 'polish')).toEqual(expect.objectContaining({
-      provider: 'open_ai',
-      apiKey: 'openai-key',
-      model: 'gpt-4o-mini',
-    }));
-    expect(getFeatureLlmConfig(config, 'translation')).toEqual(expect.objectContaining({
-      provider: 'anthropic',
-      apiKey: 'anthropic-key',
-      model: 'claude-sonnet-4-20250514',
-    }));
-    expect(getFeatureLlmConfig(config, 'summary')).toEqual(expect.objectContaining({
-      provider: 'open_ai',
-      apiKey: 'openai-key',
-      model: 'gpt-4o-mini',
-    }));
+    expect(getFeatureLlmConfig(config, 'polish')).toEqual(
+      expect.objectContaining({
+        provider: 'open_ai',
+        apiKey: 'openai-key',
+        model: 'gpt-4o-mini',
+      })
+    );
+    expect(getFeatureLlmConfig(config, 'translation')).toEqual(
+      expect.objectContaining({
+        provider: 'anthropic',
+        apiKey: 'anthropic-key',
+        model: 'claude-sonnet-4-20250514',
+      })
+    );
+    expect(getFeatureLlmConfig(config, 'summary')).toEqual(
+      expect.objectContaining({
+        provider: 'open_ai',
+        apiKey: 'openai-key',
+        model: 'gpt-4o-mini',
+      })
+    );
   });
 
   it('resolves feature-specific temperatures independently', () => {
@@ -68,15 +77,21 @@ describe('llm runtime', () => {
 
     const config = buildLlmConfigPatch(llmSettings);
 
-    expect(getFeatureLlmConfig(config, 'polish')).toEqual(expect.objectContaining({
-      temperature: 0.2,
-    }));
-    expect(getFeatureLlmConfig(config, 'translation')).toEqual(expect.objectContaining({
-      temperature: 1.1,
-    }));
-    expect(getFeatureLlmConfig(config, 'summary')).toEqual(expect.objectContaining({
-      temperature: 0.4,
-    }));
+    expect(getFeatureLlmConfig(config, 'polish')).toEqual(
+      expect.objectContaining({
+        temperature: 0.2,
+      })
+    );
+    expect(getFeatureLlmConfig(config, 'translation')).toEqual(
+      expect.objectContaining({
+        temperature: 1.1,
+      })
+    );
+    expect(getFeatureLlmConfig(config, 'summary')).toEqual(
+      expect.objectContaining({
+        temperature: 0.4,
+      })
+    );
   });
 
   it('falls back to the global default temperature when feature temperature is unset', () => {
@@ -90,9 +105,11 @@ describe('llm runtime', () => {
 
     const config = buildLlmConfigPatch(llmSettings);
 
-    expect(getFeatureLlmConfig(config, 'polish')).toEqual(expect.objectContaining({
-      temperature: DEFAULT_LLM_TEMPERATURE,
-    }));
+    expect(getFeatureLlmConfig(config, 'polish')).toEqual(
+      expect.objectContaining({
+        temperature: DEFAULT_LLM_TEMPERATURE,
+      })
+    );
   });
 
   it('ignores provider-level temperature when feature temperature is unset', () => {
@@ -120,9 +137,11 @@ describe('llm runtime', () => {
       },
     } as any;
 
-    expect(getFeatureLlmConfig(config, 'polish')).toEqual(expect.objectContaining({
-      temperature: DEFAULT_LLM_TEMPERATURE,
-    }));
+    expect(getFeatureLlmConfig(config, 'polish')).toEqual(
+      expect.objectContaining({
+        temperature: DEFAULT_LLM_TEMPERATURE,
+      })
+    );
   });
 
   it('reports completeness from the feature-specific runtime selection', () => {
@@ -139,7 +158,9 @@ describe('llm runtime', () => {
 
     const missingSummarySelection = setFeatureModelSelection(llmSettings, 'summary', undefined);
     expect(isSummaryLlmConfigComplete({ llmSettings: missingSummarySelection })).toBe(false);
-    expect(isFeatureLlmConfigComplete({ llmSettings: missingSummarySelection }, 'summary')).toBe(false);
+    expect(isFeatureLlmConfigComplete({ llmSettings: missingSummarySelection }, 'summary')).toBe(
+      false
+    );
   });
 
   it('resolves runtime strategy for custom providers', () => {
@@ -162,13 +183,15 @@ describe('llm runtime', () => {
     });
     llmSettings = setFeatureModelSelection(llmSettings, 'summary', llmSettings.modelOrder[0]);
 
-    expect(getFeatureLlmConfig({ llmSettings }, 'summary')).toEqual(expect.objectContaining({
-      provider: 'custom-claude-gateway',
-      strategy: 'anthropic',
-      baseUrl: 'https://claude.example.com',
-      apiKey: 'claude-key',
-      model: 'claude-sonnet-4-20250514',
-    }));
+    expect(getFeatureLlmConfig({ llmSettings }, 'summary')).toEqual(
+      expect.objectContaining({
+        provider: 'custom-claude-gateway',
+        strategy: 'anthropic',
+        baseUrl: 'https://claude.example.com',
+        apiKey: 'claude-key',
+        model: 'claude-sonnet-4-20250514',
+      })
+    );
     expect(isFeatureLlmConfigComplete({ llmSettings }, 'summary')).toBe(true);
   });
 
@@ -187,13 +210,17 @@ describe('llm runtime', () => {
 
     const config = buildLlmConfigPatch(llmSettings);
 
-    expect(getFeatureLlmConfig(config, 'polish')).toEqual(expect.objectContaining({
-      reasoningEnabled: true,
-      reasoningLevel: 'high',
-    }));
-    expect(getFeatureLlmConfig(config, 'translation')).toEqual(expect.objectContaining({
-      reasoningEnabled: false,
-      reasoningLevel: undefined,
-    }));
+    expect(getFeatureLlmConfig(config, 'polish')).toEqual(
+      expect.objectContaining({
+        reasoningEnabled: true,
+        reasoningLevel: 'high',
+      })
+    );
+    expect(getFeatureLlmConfig(config, 'translation')).toEqual(
+      expect.objectContaining({
+        reasoningEnabled: false,
+        reasoningLevel: undefined,
+      })
+    );
   });
 });

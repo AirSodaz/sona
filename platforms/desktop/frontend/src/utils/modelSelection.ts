@@ -1,42 +1,41 @@
-import { PRESET_MODELS, type ModelInfo } from '../types/modelCatalog';
+import { type ModelInfo, PRESET_MODELS } from '../types/modelCatalog';
 
 function normalizeModelPath(modelPath: string): string {
-    return modelPath.replace(/\\/g, '/').toLowerCase();
+  return modelPath.replace(/\\/g, '/').toLowerCase();
 }
 
 function getModelPathToken(model: Pick<ModelInfo, 'filename' | 'id'>): string {
-    return (model.filename || model.id).replace(/\\/g, '/').toLowerCase();
+  return (model.filename || model.id).replace(/\\/g, '/').toLowerCase();
 }
 
 export function doesModelPathMatch(
-    modelPath: string,
-    model: Pick<ModelInfo, 'filename' | 'id'>,
+  modelPath: string,
+  model: Pick<ModelInfo, 'filename' | 'id'>
 ): boolean {
-    if (!modelPath.trim()) {
-        return false;
-    }
+  if (!modelPath.trim()) {
+    return false;
+  }
 
-    return normalizeModelPath(modelPath).includes(getModelPathToken(model));
+  return normalizeModelPath(modelPath).includes(getModelPathToken(model));
 }
 
 export function findSelectedModelByMode(
-    modelPath: string,
-    mode: 'streaming' | 'batch',
+  modelPath: string,
+  mode: 'streaming' | 'batch'
 ): ModelInfo | null {
-    return (
-        PRESET_MODELS.find(
-            (model) => model.modes?.includes(mode) && doesModelPathMatch(modelPath, model),
-        ) ?? null
-    );
+  return (
+    PRESET_MODELS.find(
+      (model) => model.modes?.includes(mode) && doesModelPathMatch(modelPath, model)
+    ) ?? null
+  );
 }
 
 export function findSelectedModelByType(
-    modelPath: string,
-    type: ModelInfo['type'],
+  modelPath: string,
+  type: ModelInfo['type']
 ): ModelInfo | null {
-    return (
-        PRESET_MODELS.find(
-            (model) => model.type === type && doesModelPathMatch(modelPath, model),
-        ) ?? null
-    );
+  return (
+    PRESET_MODELS.find((model) => model.type === type && doesModelPathMatch(modelPath, model)) ??
+    null
+  );
 }

@@ -1,6 +1,4 @@
-import { act, render, fireEvent, screen, waitFor } from '@testing-library/react';
-import { StrictMode, useState } from 'react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import {
   $getRoot,
   $getSelection,
@@ -9,10 +7,12 @@ import {
   FORMAT_TEXT_COMMAND,
   SELECT_ALL_COMMAND,
 } from 'lexical';
-import { SegmentEditor } from '../SegmentEditor';
+import { StrictMode, useState } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getActiveEditor } from '../../../stores/transcriptRuntimeStore';
 import { ContextMenuProvider } from '../../context-menu/ContextMenuProvider';
 import { useContextMenu } from '../../context-menu/useContextMenu';
+import { SegmentEditor } from '../SegmentEditor';
 
 const loggerErrorMock = vi.hoisted(() => vi.fn());
 
@@ -95,9 +95,7 @@ describe('SegmentEditor', () => {
         <ActiveContext />
       </ContextMenuProvider>
     );
-    const result = render(
-      strict ? <StrictMode>{editor}</StrictMode> : editor,
-    );
+    const result = render(strict ? <StrictMode>{editor}</StrictMode> : editor);
     const input = result.container.querySelector('[contenteditable="true"]') as HTMLDivElement;
     return { ...result, input };
   }
@@ -135,7 +133,12 @@ describe('SegmentEditor', () => {
     input.focus();
     const textSpan = input.querySelector('[data-lexical-text="true"]');
     const textNode = textSpan?.firstChild;
-    if (textNode && textNode.nodeType === Node.TEXT_NODE && textNode.textContent && textNode.textContent.length > 5) {
+    if (
+      textNode &&
+      textNode.nodeType === Node.TEXT_NODE &&
+      textNode.textContent &&
+      textNode.textContent.length > 5
+    ) {
       const range = document.createRange();
       range.setStart(textNode, 5);
       range.collapse(true);
@@ -159,7 +162,6 @@ describe('SegmentEditor', () => {
     fireEvent.keyDown(input, { key: 'S', metaKey: true, shiftKey: true });
     expect(dispatchSpy).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, 'strikethrough');
   });
-
 
   it('calls onSave with HTML on blur', () => {
     const { input } = renderEditor();
@@ -189,9 +191,15 @@ describe('SegmentEditor', () => {
     fireEvent.contextMenu(input, { clientX: 32, clientY: 48 });
     expect(screen.getByLabelText('Active context').textContent).toBe('editor:editing:seg-1');
     screen.getByRole('menu', { name: 'editor.context_menu_label' });
-    expect((screen.getByRole('menuitem', { name: 'common.cut' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('menuitem', { name: 'common.copy' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('menuitem', { name: 'common.paste' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(
+      (screen.getByRole('menuitem', { name: 'common.cut' }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    expect(
+      (screen.getByRole('menuitem', { name: 'common.copy' }) as HTMLButtonElement).disabled
+    ).toBe(true);
+    expect(
+      (screen.getByRole('menuitem', { name: 'common.paste' }) as HTMLButtonElement).disabled
+    ).toBe(false);
 
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     fireEvent.keyDown(input, { key: 'F10', shiftKey: true });
@@ -209,10 +217,15 @@ describe('SegmentEditor', () => {
       return activeEditor!;
     });
     await act(async () => {
-      await new Promise<void>((resolve) => editor.update(() => {
-        const text = $getRoot().getFirstDescendant();
-        if ($isTextNode(text)) text.select(0, 5);
-      }, { onUpdate: resolve }));
+      await new Promise<void>((resolve) =>
+        editor.update(
+          () => {
+            const text = $getRoot().getFirstDescendant();
+            if ($isTextNode(text)) text.select(0, 5);
+          },
+          { onUpdate: resolve }
+        )
+      );
     });
 
     fireEvent.contextMenu(input, { clientX: 12, clientY: 12 });
@@ -220,10 +233,15 @@ describe('SegmentEditor', () => {
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Hello'));
 
     await act(async () => {
-      await new Promise<void>((resolve) => editor.update(() => {
-        const text = $getRoot().getFirstDescendant();
-        if ($isTextNode(text)) text.select(0, 5);
-      }, { onUpdate: resolve }));
+      await new Promise<void>((resolve) =>
+        editor.update(
+          () => {
+            const text = $getRoot().getFirstDescendant();
+            if ($isTextNode(text)) text.select(0, 5);
+          },
+          { onUpdate: resolve }
+        )
+      );
     });
     fireEvent.contextMenu(input, { clientX: 12, clientY: 12 });
     fireEvent.click(screen.getByRole('menuitem', { name: 'common.cut' }));
@@ -234,18 +252,33 @@ describe('SegmentEditor', () => {
     const { input } = renderEditor();
     const editor = await waitFor(() => getActiveEditor()!);
     await act(async () => {
-      await new Promise<void>((resolve) => editor.update(() => {
-        const text = $getRoot().getFirstDescendant();
-        if ($isTextNode(text)) text.selectEnd();
-      }, { onUpdate: resolve }));
+      await new Promise<void>((resolve) =>
+        editor.update(
+          () => {
+            const text = $getRoot().getFirstDescendant();
+            if ($isTextNode(text)) text.selectEnd();
+          },
+          { onUpdate: resolve }
+        )
+      );
     });
 
     fireEvent.contextMenu(input, { clientX: 12, clientY: 12 });
-    expect((screen.getByRole('menuitem', { name: 'common.select_all' }) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole('menuitem', { name: 'editor.bold' }) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole('menuitem', { name: 'editor.italic' }) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole('menuitem', { name: 'editor.underline' }) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole('menuitem', { name: 'editor.strikethrough' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(
+      (screen.getByRole('menuitem', { name: 'common.select_all' }) as HTMLButtonElement).disabled
+    ).toBe(false);
+    expect(
+      (screen.getByRole('menuitem', { name: 'editor.bold' }) as HTMLButtonElement).disabled
+    ).toBe(false);
+    expect(
+      (screen.getByRole('menuitem', { name: 'editor.italic' }) as HTMLButtonElement).disabled
+    ).toBe(false);
+    expect(
+      (screen.getByRole('menuitem', { name: 'editor.underline' }) as HTMLButtonElement).disabled
+    ).toBe(false);
+    expect(
+      (screen.getByRole('menuitem', { name: 'editor.strikethrough' }) as HTMLButtonElement).disabled
+    ).toBe(false);
     fireEvent.click(screen.getByRole('menuitem', { name: 'common.paste' }));
 
     await waitFor(() => expect(input.textContent).toBe('Hello world pasted'));
@@ -259,23 +292,26 @@ describe('SegmentEditor', () => {
 
     fireEvent.contextMenu(input, { clientX: 12, clientY: 12 });
     fireEvent.click(screen.getByRole('menuitem', { name: 'common.select_all' }));
-    await waitFor(() => expect(dispatchSpy).toHaveBeenCalledWith(
-      SELECT_ALL_COMMAND,
-      expect.any(KeyboardEvent),
-    ));
+    await waitFor(() =>
+      expect(dispatchSpy).toHaveBeenCalledWith(SELECT_ALL_COMMAND, expect.any(KeyboardEvent))
+    );
     expect(focusSpy).toHaveBeenCalled();
-    await waitFor(() => editor.getEditorState().read(() => {
-      expect($getSelection()?.getTextContent()).toBe('Hello world');
-    }));
+    await waitFor(() =>
+      editor.getEditorState().read(() => {
+        expect($getSelection()?.getTextContent()).toBe('Hello world');
+      })
+    );
 
     for (const format of ['bold', 'italic', 'underline', 'strikethrough'] as const) {
       fireEvent.contextMenu(input, { clientX: 12, clientY: 12 });
       fireEvent.click(screen.getByRole('menuitem', { name: `editor.${format}` }));
       await waitFor(() => expect(dispatchSpy).toHaveBeenCalledWith(FORMAT_TEXT_COMMAND, format));
-      await waitFor(() => editor.getEditorState().read(() => {
-        const selection = $getSelection();
-        expect($isRangeSelection(selection) && selection.hasFormat(format)).toBe(true);
-      }));
+      await waitFor(() =>
+        editor.getEditorState().read(() => {
+          const selection = $getSelection();
+          expect($isRangeSelection(selection) && selection.hasFormat(format)).toBe(true);
+        })
+      );
     }
   });
 
@@ -284,10 +320,15 @@ describe('SegmentEditor', () => {
     const editor = await waitFor(() => getActiveEditor()!);
 
     await act(async () => {
-      await new Promise<void>((resolve) => editor.update(() => {
-        const text = $getRoot().getFirstDescendant();
-        if ($isTextNode(text)) text.select(6, 11);
-      }, { onUpdate: resolve }));
+      await new Promise<void>((resolve) =>
+        editor.update(
+          () => {
+            const text = $getRoot().getFirstDescendant();
+            if ($isTextNode(text)) text.select(6, 11);
+          },
+          { onUpdate: resolve }
+        )
+      );
     });
 
     await act(async () => {
@@ -310,14 +351,16 @@ describe('SegmentEditor', () => {
     renderEditor('<p>Hello <s>world</s> <code>x=1</code></p>');
     const editor = await waitFor(() => getActiveEditor()!);
 
-    await waitFor(() => editor.getEditorState().read(() => {
-      const texts = $getRoot().getAllTextNodes();
-      expect(texts.map((node) => node.getTextContent())).toEqual(['Hello ', 'world', ' ', 'x=1']);
-      expect(texts[1].hasFormat('strikethrough')).toBe(true);
-      expect(texts[1].hasFormat('code')).toBe(false);
-      expect(texts[3].hasFormat('code')).toBe(true);
-      expect(texts[3].hasFormat('strikethrough')).toBe(false);
-    }));
+    await waitFor(() =>
+      editor.getEditorState().read(() => {
+        const texts = $getRoot().getAllTextNodes();
+        expect(texts.map((node) => node.getTextContent())).toEqual(['Hello ', 'world', ' ', 'x=1']);
+        expect(texts[1].hasFormat('strikethrough')).toBe(true);
+        expect(texts[1].hasFormat('code')).toBe(false);
+        expect(texts[3].hasFormat('code')).toBe(true);
+        expect(texts[3].hasFormat('strikethrough')).toBe(false);
+      })
+    );
   });
 
   it('keeps text unchanged and logs when cutting cannot write to the clipboard', async () => {
@@ -326,19 +369,26 @@ describe('SegmentEditor', () => {
     const { input } = renderEditor();
     const editor = await waitFor(() => getActiveEditor()!);
     await act(async () => {
-      await new Promise<void>((resolve) => editor.update(() => {
-        const text = $getRoot().getFirstDescendant();
-        if ($isTextNode(text)) text.select(0, 5);
-      }, { onUpdate: resolve }));
+      await new Promise<void>((resolve) =>
+        editor.update(
+          () => {
+            const text = $getRoot().getFirstDescendant();
+            if ($isTextNode(text)) text.select(0, 5);
+          },
+          { onUpdate: resolve }
+        )
+      );
     });
 
     fireEvent.contextMenu(input, { clientX: 12, clientY: 12 });
     fireEvent.click(screen.getByRole('menuitem', { name: 'common.cut' }));
 
-    await waitFor(() => expect(loggerErrorMock).toHaveBeenCalledWith(
-      '[SegmentEditorContextMenu] Failed to cut text:',
-      cutError,
-    ));
+    await waitFor(() =>
+      expect(loggerErrorMock).toHaveBeenCalledWith(
+        '[SegmentEditorContextMenu] Failed to cut text:',
+        cutError
+      )
+    );
     expect(input.textContent).toBe('Hello world');
   });
 
@@ -350,10 +400,15 @@ describe('SegmentEditor', () => {
       return activeEditor!;
     });
     await act(async () => {
-      await new Promise<void>((resolve) => editor.update(() => {
-        const text = $getRoot().getFirstDescendant();
-        if ($isTextNode(text)) text.selectEnd();
-      }, { onUpdate: resolve }));
+      await new Promise<void>((resolve) =>
+        editor.update(
+          () => {
+            const text = $getRoot().getFirstDescendant();
+            if ($isTextNode(text)) text.selectEnd();
+          },
+          { onUpdate: resolve }
+        )
+      );
     });
 
     fireEvent.contextMenu(input, { clientX: 12, clientY: 12 });
@@ -364,16 +419,23 @@ describe('SegmentEditor', () => {
 
   it('pastes at the captured selection when a newer menu changes the live selection', async () => {
     let resolveRead!: (text: string) => void;
-    vi.mocked(navigator.clipboard.readText).mockReturnValue(new Promise((resolve) => {
-      resolveRead = resolve;
-    }));
+    vi.mocked(navigator.clipboard.readText).mockReturnValue(
+      new Promise((resolve) => {
+        resolveRead = resolve;
+      })
+    );
     const { input } = renderEditor();
     const editor = await waitFor(() => getActiveEditor()!);
     await act(async () => {
-      await new Promise<void>((resolve) => editor.update(() => {
-        const text = $getRoot().getFirstDescendant();
-        if ($isTextNode(text)) text.selectEnd();
-      }, { onUpdate: resolve }));
+      await new Promise<void>((resolve) =>
+        editor.update(
+          () => {
+            const text = $getRoot().getFirstDescendant();
+            if ($isTextNode(text)) text.selectEnd();
+          },
+          { onUpdate: resolve }
+        )
+      );
     });
 
     fireEvent.contextMenu(input, { clientX: 12, clientY: 12 });
@@ -382,10 +444,15 @@ describe('SegmentEditor', () => {
       await Promise.resolve();
     });
     await act(async () => {
-      await new Promise<void>((resolve) => editor.update(() => {
-        const text = $getRoot().getFirstDescendant();
-        if ($isTextNode(text)) text.selectStart();
-      }, { onUpdate: resolve }));
+      await new Promise<void>((resolve) =>
+        editor.update(
+          () => {
+            const text = $getRoot().getFirstDescendant();
+            if ($isTextNode(text)) text.selectStart();
+          },
+          { onUpdate: resolve }
+        )
+      );
     });
     fireEvent.contextMenu(input, { clientX: 24, clientY: 24 });
 
@@ -401,10 +468,12 @@ describe('SegmentEditor', () => {
     fireEvent.contextMenu(input, { clientX: 12, clientY: 12 });
     fireEvent.click(screen.getByRole('menuitem', { name: 'common.paste' }));
 
-    await waitFor(() => expect(loggerErrorMock).toHaveBeenCalledWith(
-      '[SegmentEditorContextMenu] Failed to paste text:',
-      pasteError,
-    ));
+    await waitFor(() =>
+      expect(loggerErrorMock).toHaveBeenCalledWith(
+        '[SegmentEditorContextMenu] Failed to paste text:',
+        pasteError
+      )
+    );
     await waitFor(() => expect(document.activeElement).toBe(input));
   });
 
@@ -416,7 +485,7 @@ describe('SegmentEditor', () => {
     result.rerender(
       <ContextMenuProvider>
         <ActiveContext />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     expect(screen.queryByRole('menu')).toBeNull();
@@ -470,9 +539,11 @@ describe('SegmentEditor', () => {
 
   it('does not focus or mutate after an asynchronous paste finishes post-unmount', async () => {
     let resolveRead!: (text: string) => void;
-    vi.mocked(navigator.clipboard.readText).mockReturnValue(new Promise((resolve) => {
-      resolveRead = resolve;
-    }));
+    vi.mocked(navigator.clipboard.readText).mockReturnValue(
+      new Promise((resolve) => {
+        resolveRead = resolve;
+      })
+    );
     const { input, unmount } = renderEditor();
     const editor = await waitFor(() => getActiveEditor()!);
     const focusSpy = vi.spyOn(input, 'focus');

@@ -1,8 +1,8 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { ProjectDeleteModal } from '../ProjectDeleteModal';
-import type { ProjectRecord } from '../../../types/project';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import i18n from '../../../i18n';
+import type { ProjectRecord } from '../../../types/project';
+import { ProjectDeleteModal } from '../ProjectDeleteModal';
 
 describe('ProjectDeleteModal', () => {
   const mockProject: ProjectRecord = {
@@ -32,11 +32,17 @@ describe('ProjectDeleteModal', () => {
 
     expect(screen.getByText('Delete Project')).toBeDefined();
     expect(screen.getByText('Are you sure you want to delete "Marketing Campaign"?')).toBeDefined();
-    expect(screen.getByText('This project contains 5 items. Choose how to handle them:')).toBeDefined();
+    expect(
+      screen.getByText('This project contains 5 items. Choose how to handle them:')
+    ).toBeDefined();
     expect(screen.getByText('Move to Inbox (Recommended)')).toBeDefined();
-    expect(screen.getByText('Keep all recordings and transcriptions; reset their project to Inbox.')).toBeDefined();
+    expect(
+      screen.getByText('Keep all recordings and transcriptions; reset their project to Inbox.')
+    ).toBeDefined();
     expect(screen.getByText('Move all items to Trash')).toBeDefined();
-    expect(screen.getByText('Soft-delete all associated items and send them to Trash.')).toBeDefined();
+    expect(
+      screen.getByText('Soft-delete all associated items and send them to Trash.')
+    ).toBeDefined();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDefined();
     expect(screen.getByRole('button', { name: 'Delete' })).toBeDefined();
   });

@@ -1,9 +1,9 @@
 import type { AppConfig, AsrSelectionSlot } from '../../types/config';
 import {
+  type AsrTranscriptionRequest,
   isAsrRequestConfigured,
   isLlamaCppBatchRequest,
   resolveAsrTranscriptionRequest,
-  type AsrTranscriptionRequest,
 } from '../asrConfigService';
 import { speakerService } from '../speakerService';
 import type { ProcessBatchFileRequest } from '../tauri/recognizer';
@@ -31,7 +31,9 @@ interface ResolvedBatchTranscriptionRequest {
   asrRequest: AsrTranscriptionRequest;
 }
 
-export function resolveStreamingSlot(instanceId: string): Extract<AsrSelectionSlot, 'live' | 'caption' | 'voiceTyping'> {
+export function resolveStreamingSlot(
+  instanceId: string
+): Extract<AsrSelectionSlot, 'live' | 'caption' | 'voiceTyping'> {
   if (instanceId === 'voice-typing') {
     return 'voiceTyping';
   }
@@ -44,7 +46,7 @@ export function resolveStreamingSlot(instanceId: string): Extract<AsrSelectionSl
 function applyRuntimeOptions(
   request: AsrTranscriptionRequest,
   modelPathOverride: string | undefined,
-  enableItn: boolean,
+  enableItn: boolean
 ): AsrTranscriptionRequest {
   if (request.engine === 'local') {
     return {
@@ -67,18 +69,14 @@ export function buildStreamingAsrRequest({
   language,
   enableItn,
 }: StreamingRequestOptions): AsrTranscriptionRequest {
-  const request = resolveAsrTranscriptionRequest(
-    appConfig,
-    resolveStreamingSlot(instanceId),
-    { language },
-  );
+  const request = resolveAsrTranscriptionRequest(appConfig, resolveStreamingSlot(instanceId), {
+    language,
+  });
 
   return {
     ...applyRuntimeOptions(request, modelPathOverride, enableItn),
     normalizationOptions: {
-      enableTimeline: instanceId === 'record'
-        ? (appConfig.enableTimeline ?? false)
-        : false,
+      enableTimeline: instanceId === 'record' ? (appConfig.enableTimeline ?? false) : false,
     },
   };
 }
@@ -110,7 +108,9 @@ export function buildBatchTranscriptionRequest({
     request: {
       filePath,
       saveToPath: isLlamaCpp ? null : saveToPath || null,
-      speakerProcessing: isLlamaCpp ? null : speakerService.buildProcessingConfig(appConfig, 'batch'),
+      speakerProcessing: isLlamaCpp
+        ? null
+        : speakerService.buildProcessingConfig(appConfig, 'batch'),
       asrRequest,
       ...(instanceId ? { instanceId } : {}),
     },

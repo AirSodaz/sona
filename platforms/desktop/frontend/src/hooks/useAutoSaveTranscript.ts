@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
-import type { TranscriptSegment } from '../types/transcript';
 import { transcriptAutoSaveRuntime } from '../services/transcriptAutoSaveRuntime';
+import type { TranscriptSegment } from '../types/transcript';
 
 export async function flushPendingAutoSave(
   historyId?: string | null,
-  segments?: TranscriptSegment[] | null,
+  segments?: TranscriptSegment[] | null
 ): Promise<void> {
   await transcriptAutoSaveRuntime.flushPending(historyId, segments);
 }

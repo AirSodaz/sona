@@ -1,6 +1,3 @@
-import type { RuntimeEnvironmentStatus } from './runtime';
-import type { SettingsTab } from './settings';
-import type { VoiceTypingReadinessSnapshot } from './voiceTyping';
 import type {
   DeviceProbeInput,
   DiagnosticsConfigInput,
@@ -12,6 +9,9 @@ import type {
   SelectedModelsInput,
   VoiceTypingReadinessInput,
 } from '../bindings';
+import type { RuntimeEnvironmentStatus } from './runtime';
+import type { SettingsTab } from './settings';
+import type { VoiceTypingReadinessSnapshot } from './voiceTyping';
 
 export interface DeviceOption {
   label: string;

@@ -12,10 +12,10 @@ export interface MigrationResult {
  * the existing frontend startup flow.
  */
 export async function migrateConfig(
-  savedConfig: AppConfig | null | undefined,
+  savedConfig: AppConfig | null | undefined
 ): Promise<MigrationResult> {
   return migrateAppConfig(
     savedConfig ?? null,
-    i18n.t('settings.default_rule_set_name', { defaultValue: 'Default Rules' }),
+    i18n.t('settings.default_rule_set_name', { defaultValue: 'Default Rules' })
   );
 }

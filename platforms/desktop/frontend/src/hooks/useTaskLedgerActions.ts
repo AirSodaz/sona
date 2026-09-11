@@ -1,15 +1,12 @@
 import { useMemo } from 'react';
+import { retryAutomationTaskFromLedger } from '../services/automationTaskRetryService';
+import { retryLlmTaskFromLedger } from '../services/llmTaskRetryService';
 import type { UpdateStatus } from '../stores/appUpdaterStore';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useRecoveryStore } from '../stores/recoveryStore';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
 import type { TaskLedgerRecord } from '../types/taskLedger';
-import {
-  isTaskLedgerActionableStatus,
-  isTaskLedgerActiveStatus,
-} from '../types/taskLedger';
-import { retryAutomationTaskFromLedger } from '../services/automationTaskRetryService';
-import { retryLlmTaskFromLedger } from '../services/llmTaskRetryService';
+import { isTaskLedgerActionableStatus, isTaskLedgerActiveStatus } from '../types/taskLedger';
 
 export type TaskCenterActionId =
   | 'retry'
@@ -125,7 +122,7 @@ function createOpenAutomationAction(deps: TaskCenterActionDependencies): TaskCen
 
 function createDismissTaskAction(
   deps: TaskCenterActionDependencies,
-  task: TaskLedgerRecord,
+  task: TaskLedgerRecord
 ): TaskCenterAction {
   return {
     id: 'dismiss',
@@ -137,7 +134,7 @@ function createDismissTaskAction(
 
 function createClearTaskAction(
   deps: TaskCenterActionDependencies,
-  task: TaskLedgerRecord,
+  task: TaskLedgerRecord
 ): TaskCenterAction {
   return {
     id: 'clear',
@@ -152,7 +149,7 @@ function isLlmTask(task: TaskLedgerRecord): boolean {
 }
 
 export function createTaskCenterActionRegistry(
-  deps: TaskCenterActionDependencies,
+  deps: TaskCenterActionDependencies
 ): TaskCenterActionRegistry {
   return {
     getLedgerTaskActions: (task) => {
@@ -180,9 +177,10 @@ export function createTaskCenterActionRegistry(
         return [
           {
             id: 'cancel',
-            label: task.status === 'cancelRequested'
-              ? deps.t('task_center.stopping', { defaultValue: 'Stopping' })
-              : deps.t('common.cancel'),
+            label:
+              task.status === 'cancelRequested'
+                ? deps.t('task_center.stopping', { defaultValue: 'Stopping' })
+                : deps.t('common.cancel'),
             variant: 'secondarySoft',
             disabled: !task.cancelable || task.status === 'cancelRequested',
             run: () => deps.requestTaskCancel(task.id),
@@ -191,7 +189,8 @@ export function createTaskCenterActionRegistry(
       }
 
       if (isTaskLedgerActionableStatus(task.status)) {
-        const canRetryAutomationFile = task.kind === 'automation' && Boolean(task.automationRuleId) && Boolean(task.filePath);
+        const canRetryAutomationFile =
+          task.kind === 'automation' && Boolean(task.automationRuleId) && Boolean(task.filePath);
         const canRetryBatch = task.kind === 'batchImport' && Boolean(task.filePath);
         const actions: TaskCenterAction[] = [];
 
@@ -249,11 +248,12 @@ export function createTaskCenterActionRegistry(
           run: () => deps.relaunchToUpdate(),
         };
       } else {
-        const label = status === 'downloading'
-          ? deps.t('settings.update_downloading')
-          : status === 'installing'
-            ? deps.t('settings.update_installing')
-            : deps.t('settings.update_btn_install');
+        const label =
+          status === 'downloading'
+            ? deps.t('settings.update_downloading')
+            : status === 'installing'
+              ? deps.t('settings.update_installing')
+              : deps.t('settings.update_btn_install');
 
         rowAction = {
           id: 'installUpdate',
@@ -314,35 +314,39 @@ export function useTaskLedgerActions({
   const discardRecoveryItem = useRecoveryStore((state) => state.discardItem);
   const addBatchFiles = useBatchQueueStore((state) => state.addFiles);
 
-  return useMemo(() => createTaskCenterActionRegistry({
-    t,
-    requestTaskCancel,
-    removeTask,
-    resumeRecoveryItem,
-    discardRecoveryItem,
-    retryAutomationTask: retryAutomationTaskFromLedger,
-    addBatchFiles,
-    retryLlmTask: retryLlmTaskFromLedger,
-    installUpdate: updater.installUpdate,
-    dismissUpdateNotification: updater.dismissNotification,
-    relaunchToUpdate: updater.relaunchToUpdate,
-    onOpenRecoveryCenter,
-    onOpenAutomationSettings,
-    closePanel,
-    onboard,
-  }), [
-    addBatchFiles,
-    closePanel,
-    discardRecoveryItem,
-    onOpenAutomationSettings,
-    onOpenRecoveryCenter,
-    removeTask,
-    requestTaskCancel,
-    resumeRecoveryItem,
-    t,
-    updater.dismissNotification,
-    updater.installUpdate,
-    updater.relaunchToUpdate,
-    onboard,
-  ]);
+  return useMemo(
+    () =>
+      createTaskCenterActionRegistry({
+        t,
+        requestTaskCancel,
+        removeTask,
+        resumeRecoveryItem,
+        discardRecoveryItem,
+        retryAutomationTask: retryAutomationTaskFromLedger,
+        addBatchFiles,
+        retryLlmTask: retryLlmTaskFromLedger,
+        installUpdate: updater.installUpdate,
+        dismissUpdateNotification: updater.dismissNotification,
+        relaunchToUpdate: updater.relaunchToUpdate,
+        onOpenRecoveryCenter,
+        onOpenAutomationSettings,
+        closePanel,
+        onboard,
+      }),
+    [
+      addBatchFiles,
+      closePanel,
+      discardRecoveryItem,
+      onOpenAutomationSettings,
+      onOpenRecoveryCenter,
+      removeTask,
+      requestTaskCancel,
+      resumeRecoveryItem,
+      t,
+      updater.dismissNotification,
+      updater.installUpdate,
+      updater.relaunchToUpdate,
+      onboard,
+    ]
+  );
 }

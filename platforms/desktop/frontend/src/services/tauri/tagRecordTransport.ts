@@ -1,5 +1,5 @@
-import type { TagRecord } from '../../types/tag';
 import type { TagRecord as GeneratedTagRecord } from '../../bindings';
+import type { TagRecord } from '../../types/tag';
 
 export function toTagRecordTransport(tag: TagRecord): GeneratedTagRecord {
   return {

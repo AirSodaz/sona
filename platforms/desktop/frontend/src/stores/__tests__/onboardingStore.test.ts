@@ -30,12 +30,15 @@ describe('onboardingStore', () => {
 
     expect(persistedState.status).toBe('deferred');
     expect(persistedState.reminderDismissedAt).toBeDefined();
-    
+
     // Verify it was saved to storage
     const { settingsStore, STORE_KEY_ONBOARDING } = await import('../../services/storageService');
-    expect(settingsStore.set).toHaveBeenCalledWith(STORE_KEY_ONBOARDING, expect.objectContaining({
-      status: 'deferred',
-      reminderDismissedAt: persistedState.reminderDismissedAt
-    }));
+    expect(settingsStore.set).toHaveBeenCalledWith(
+      STORE_KEY_ONBOARDING,
+      expect.objectContaining({
+        status: 'deferred',
+        reminderDismissedAt: persistedState.reminderDismissedAt,
+      })
+    );
   });
 });

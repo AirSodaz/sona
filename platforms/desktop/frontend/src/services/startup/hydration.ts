@@ -1,5 +1,5 @@
-import i18n from '../../i18n';
 import { resolveAppLanguagePreference } from '../../constants/appLanguages';
+import i18n from '../../i18n';
 import { useConfigStore } from '../../stores/configStore';
 import { useOnboardingStore } from '../../stores/onboardingStore';
 import { useProjectStore } from '../../stores/projectStore';
@@ -13,7 +13,7 @@ import {
   ONBOARDING_STORAGE_KEY,
 } from '../../utils/onboarding';
 import { migrateConfig } from '../configMigrationService';
-import { settingsStore, STORE_KEY_CONFIG, STORE_KEY_ONBOARDING } from '../storageService';
+import { STORE_KEY_CONFIG, STORE_KEY_ONBOARDING, settingsStore } from '../storageService';
 
 interface HydratedOnboardingResult {
   state: OnboardingState;
@@ -41,7 +41,7 @@ function applyHydratedConfig(config: AppConfig): void {
 
 async function hydrateOnboardingState(
   config: AppConfig,
-  configMigrated: boolean,
+  configMigrated: boolean
 ): Promise<HydratedOnboardingResult> {
   const savedOnboarding = await settingsStore.get<OnboardingState | null>(STORE_KEY_ONBOARDING);
 
@@ -62,7 +62,7 @@ async function hydrateOnboardingState(
       state: migrateOnboardingState(
         legacyOnboardingValue,
         JSON.stringify(config),
-        legacyFirstRunValue,
+        legacyFirstRunValue
       ),
       migrated: true,
       clearLegacyOnboarding: legacyOnboardingValue !== null,
@@ -116,10 +116,12 @@ export async function hydrateAppStartupState(): Promise<void> {
     applyHydratedConfig(loadedConfig);
 
     const onboarding = await hydrateOnboardingState(loadedConfig, configMigrated);
-    useOnboardingStore.getState().setPersistedState(
-      onboarding.state,
-      Boolean(loadedConfig.streamingModelPath && loadedConfig.batchModelPath),
-    );
+    useOnboardingStore
+      .getState()
+      .setPersistedState(
+        onboarding.state,
+        Boolean(loadedConfig.streamingModelPath && loadedConfig.batchModelPath)
+      );
 
     await useProjectStore.getState().loadProjects();
 

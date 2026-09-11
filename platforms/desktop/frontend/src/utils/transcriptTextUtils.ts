@@ -1,7 +1,8 @@
 const NORMALIZE_REGEX = /[^\p{L}\p{N}]/gu;
 const PUNCTUATION_ONLY_REGEX = /^[^\p{L}\p{N}]+$/u;
 const WHITESPACE_ONLY_REGEX = /^\s+$/;
-const LEXER_REGEX = /(<\/?(?:b|i|u|s|strong|em|code)>)|(<\/?p>)|(\s+)|([\p{sc=Han}])|([^<\s\p{sc=Han}]+)|(<)/gui;
+const LEXER_REGEX =
+  /(<\/?(?:b|i|u|s|strong|em|code)>)|(<\/?p>)|(\s+)|([\p{sc=Han}])|([^<\s\p{sc=Han}]+)|(<)/giu;
 
 export interface TimedTextToken<Timing> {
   text: string;
@@ -43,7 +44,7 @@ export function sanitizeTranscriptHtml(text: string): string {
 
     // Match double, single, or unquoted class values
     const classMatch = tag.match(/\bclass\s*=\s*(?:"([^"]*)"|'([^']*)'|([^>\s]+))/);
-    const clsVal = classMatch ? (classMatch[1] || classMatch[2] || classMatch[3]) : '';
+    const clsVal = classMatch ? classMatch[1] || classMatch[2] || classMatch[3] : '';
     const cls = classMatch ? ` class="${clsVal}"` : '';
     return `<${tagName}${cls}>`;
   });
@@ -92,12 +93,14 @@ function buildFormattedTextUnits(text: string): FormattedTextUnit[] {
     const isPunctuation = PUNCTUATION_ONLY_REGEX.test(full) && !WHITESPACE_ONLY_REGEX.test(full);
     const previousWord = words[words.length - 1];
     if (
-      words.length > 0
-      && isPunctuation
-      && !WHITESPACE_ONLY_REGEX.test(stripHtmlTags(previousWord))
+      words.length > 0 &&
+      isPunctuation &&
+      !WHITESPACE_ONLY_REGEX.test(stripHtmlTags(previousWord))
     ) {
       words[words.length - 1] += wrapped;
-      normalizedWords[normalizedWords.length - 1] = normalizeAlignmentText(stripHtmlTags(words[words.length - 1]));
+      normalizedWords[normalizedWords.length - 1] = normalizeAlignmentText(
+        stripHtmlTags(words[words.length - 1])
+      );
       continue;
     }
 
@@ -131,7 +134,7 @@ function buildTokenCharacterIndex(normalizedTokens: string[]): {
 
 function createFallbackTimingResolver<Timing>(
   tokens: Array<TimedTextToken<Timing>>,
-  charToTokenIndex: number[],
+  charToTokenIndex: number[]
 ): (charPos: number) => Timing | undefined {
   const lastMappedTokenIndex = charToTokenIndex[charToTokenIndex.length - 1];
 
@@ -155,16 +158,16 @@ function createFallbackTimingResolver<Timing>(
 /** Aligns formatted transcript text units to timing payloads from raw model tokens. */
 export function alignTextToTimedTokens<Timing>(
   text: string,
-  tokens: Array<TimedTextToken<Timing>>,
+  tokens: Array<TimedTextToken<Timing>>
 ): Array<AlignedTextUnit<Timing>> {
   const safeText = typeof text === 'string' ? text : String(text || '');
   if (!safeText || tokens.length === 0) {
     return [];
   }
 
-  const normalizedTokens = tokens.map((token) => (
+  const normalizedTokens = tokens.map((token) =>
     typeof token.text === 'string' ? normalizeAlignmentText(token.text) : ''
-  ));
+  );
   const textUnits = buildFormattedTextUnits(safeText);
   const { joinedTokens, charToTokenIndex } = buildTokenCharacterIndex(normalizedTokens);
   const getFallbackTiming = createFallbackTimingResolver(tokens, charToTokenIndex);
@@ -204,7 +207,10 @@ export function alignTextToTimedTokens<Timing>(
       }
 
       if (nextNormalizedText) {
-        const nextSearchWindow = joinedTokens.substring(charPos, charPos + searchLimit + nextNormalizedText.length);
+        const nextSearchWindow = joinedTokens.substring(
+          charPos,
+          charPos + searchLimit + nextNormalizedText.length
+        );
         const nextLocalIndex = nextSearchWindow.indexOf(nextNormalizedText);
         charPos = nextLocalIndex !== -1 ? charPos + nextLocalIndex : charPos + 1;
       } else {

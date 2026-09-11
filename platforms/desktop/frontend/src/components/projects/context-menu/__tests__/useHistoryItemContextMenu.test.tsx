@@ -1,8 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { HistoryItem } from '../../../../types/history';
-import type { OpenContextMenuOptions } from '../../../context-menu/types';
 import type { ContextMenuOpenRequest } from '../../../context-menu/trigger';
+import type { OpenContextMenuOptions } from '../../../context-menu/types';
 import { useHistoryItemContextMenu } from '../useHistoryItemContextMenu';
 
 const dummyItem1: HistoryItem = {
@@ -53,7 +53,8 @@ function createDummyRequest(): ContextMenuOpenRequest {
   };
 }
 
-const t = ((key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key) as any;
+const t = ((key: string, options?: { defaultValue?: string }) =>
+  options?.defaultValue ?? key) as any;
 
 describe('useHistoryItemContextMenu', () => {
   it('opens single item normal menu with open, copy, tags, move to inbox, rename, reveal, and delete', () => {
@@ -70,28 +71,30 @@ describe('useHistoryItemContextMenu', () => {
     const onShowInFolder = vi.fn();
     const onDeleteHistoryItem = vi.fn();
 
-    const { result } = renderHook(() => useHistoryItemContextMenu({
-      getItemById: (id) => (id === 'item-1' ? dummyItem1 : undefined),
-      isAllSelected: false,
-      isLockedLiveDraft: () => false,
-      isOpenDisabled: () => false,
-      isTrashScope: false,
-      onAssignProject,
-      onClearSelection: vi.fn(),
-      onCopyTitle,
-      onCopyTranscript,
-      onDeleteHistoryItem,
-      onDeleteHistoryItems: vi.fn(),
-      onMoveToInbox,
-      onOpenItem,
-      onRenameHistoryItem,
-      onRestoreHistoryItems: vi.fn(),
-      onSelectAllVisible: vi.fn(),
-      onShowInFolder,
-      openContextMenu,
-      selectedIds: [],
-      t,
-    }));
+    const { result } = renderHook(() =>
+      useHistoryItemContextMenu({
+        getItemById: (id) => (id === 'item-1' ? dummyItem1 : undefined),
+        isAllSelected: false,
+        isLockedLiveDraft: () => false,
+        isOpenDisabled: () => false,
+        isTrashScope: false,
+        onAssignProject,
+        onClearSelection: vi.fn(),
+        onCopyTitle,
+        onCopyTranscript,
+        onDeleteHistoryItem,
+        onDeleteHistoryItems: vi.fn(),
+        onMoveToInbox,
+        onOpenItem,
+        onRenameHistoryItem,
+        onRestoreHistoryItems: vi.fn(),
+        onSelectAllVisible: vi.fn(),
+        onShowInFolder,
+        openContextMenu,
+        selectedIds: [],
+        t,
+      })
+    );
 
     act(() => {
       result.current.openHistoryContextMenu('item-1', createDummyRequest());
@@ -147,25 +150,27 @@ describe('useHistoryItemContextMenu', () => {
     const onRestoreHistoryItems = vi.fn();
     const onDeleteHistoryItem = vi.fn();
 
-    const { result } = renderHook(() => useHistoryItemContextMenu({
-      getItemById: (id) => (id === 'item-trash' ? dummyTrashItem : undefined),
-      isAllSelected: false,
-      isLockedLiveDraft: () => false,
-      isOpenDisabled: () => false,
-      isTrashScope: true,
-      onAssignProject: vi.fn(),
-      onClearSelection: vi.fn(),
-      onDeleteHistoryItem,
-      onDeleteHistoryItems: vi.fn(),
-      onMoveToInbox: vi.fn(),
-      onOpenItem: vi.fn(),
-      onRenameHistoryItem: vi.fn(),
-      onRestoreHistoryItems,
-      onSelectAllVisible: vi.fn(),
-      openContextMenu,
-      selectedIds: [],
-      t,
-    }));
+    const { result } = renderHook(() =>
+      useHistoryItemContextMenu({
+        getItemById: (id) => (id === 'item-trash' ? dummyTrashItem : undefined),
+        isAllSelected: false,
+        isLockedLiveDraft: () => false,
+        isOpenDisabled: () => false,
+        isTrashScope: true,
+        onAssignProject: vi.fn(),
+        onClearSelection: vi.fn(),
+        onDeleteHistoryItem,
+        onDeleteHistoryItems: vi.fn(),
+        onMoveToInbox: vi.fn(),
+        onOpenItem: vi.fn(),
+        onRenameHistoryItem: vi.fn(),
+        onRestoreHistoryItems,
+        onSelectAllVisible: vi.fn(),
+        openContextMenu,
+        selectedIds: [],
+        t,
+      })
+    );
 
     act(() => {
       result.current.openHistoryContextMenu('item-trash', createDummyRequest());
@@ -195,26 +200,28 @@ describe('useHistoryItemContextMenu', () => {
     const onDeleteHistoryItems = vi.fn();
 
     const items = [dummyItem1, dummyItem2];
-    const { result } = renderHook(() => useHistoryItemContextMenu({
-      getItemById: (id) => items.find((item) => item.id === id),
-      isAllSelected: false,
-      isLockedLiveDraft: () => false,
-      isOpenDisabled: () => false,
-      isTrashScope: false,
-      onAssignProject,
-      onClearSelection: vi.fn(),
-      onCopyTranscripts,
-      onDeleteHistoryItem: vi.fn(),
-      onDeleteHistoryItems,
-      onMoveToInbox,
-      onOpenItem: vi.fn(),
-      onRenameHistoryItem: vi.fn(),
-      onRestoreHistoryItems: vi.fn(),
-      onSelectAllVisible: vi.fn(),
-      openContextMenu,
-      selectedIds: ['item-1', 'item-2'],
-      t,
-    }));
+    const { result } = renderHook(() =>
+      useHistoryItemContextMenu({
+        getItemById: (id) => items.find((item) => item.id === id),
+        isAllSelected: false,
+        isLockedLiveDraft: () => false,
+        isOpenDisabled: () => false,
+        isTrashScope: false,
+        onAssignProject,
+        onClearSelection: vi.fn(),
+        onCopyTranscripts,
+        onDeleteHistoryItem: vi.fn(),
+        onDeleteHistoryItems,
+        onMoveToInbox,
+        onOpenItem: vi.fn(),
+        onRenameHistoryItem: vi.fn(),
+        onRestoreHistoryItems: vi.fn(),
+        onSelectAllVisible: vi.fn(),
+        openContextMenu,
+        selectedIds: ['item-1', 'item-2'],
+        t,
+      })
+    );
 
     act(() => {
       result.current.openHistoryContextMenu('item-1', createDummyRequest());
@@ -241,7 +248,9 @@ describe('useHistoryItemContextMenu', () => {
     capturedOptions!.actions.find((action) => action.id === 'copy_transcripts_batch')?.onSelect();
     expect(onCopyTranscripts).toHaveBeenCalledWith(items);
 
-    const deleteBatchAction = capturedOptions!.actions.find((action) => action.id === 'delete_selected');
+    const deleteBatchAction = capturedOptions!.actions.find(
+      (action) => action.id === 'delete_selected'
+    );
     expect(deleteBatchAction?.tone).toBe('danger');
     deleteBatchAction?.onSelect();
     expect(onDeleteHistoryItems).toHaveBeenCalledWith(['item-1', 'item-2']);
@@ -255,25 +264,27 @@ describe('useHistoryItemContextMenu', () => {
     const onRestoreHistoryItems = vi.fn();
     const onDeleteHistoryItems = vi.fn();
 
-    const { result } = renderHook(() => useHistoryItemContextMenu({
-      getItemById: () => dummyTrashItem,
-      isAllSelected: true,
-      isLockedLiveDraft: () => false,
-      isOpenDisabled: () => false,
-      isTrashScope: true,
-      onAssignProject: vi.fn(),
-      onClearSelection: vi.fn(),
-      onDeleteHistoryItem: vi.fn(),
-      onDeleteHistoryItems,
-      onMoveToInbox: vi.fn(),
-      onOpenItem: vi.fn(),
-      onRenameHistoryItem: vi.fn(),
-      onRestoreHistoryItems,
-      onSelectAllVisible: vi.fn(),
-      openContextMenu,
-      selectedIds: ['item-trash', 'item-trash-2'],
-      t,
-    }));
+    const { result } = renderHook(() =>
+      useHistoryItemContextMenu({
+        getItemById: () => dummyTrashItem,
+        isAllSelected: true,
+        isLockedLiveDraft: () => false,
+        isOpenDisabled: () => false,
+        isTrashScope: true,
+        onAssignProject: vi.fn(),
+        onClearSelection: vi.fn(),
+        onDeleteHistoryItem: vi.fn(),
+        onDeleteHistoryItems,
+        onMoveToInbox: vi.fn(),
+        onOpenItem: vi.fn(),
+        onRenameHistoryItem: vi.fn(),
+        onRestoreHistoryItems,
+        onSelectAllVisible: vi.fn(),
+        openContextMenu,
+        selectedIds: ['item-trash', 'item-trash-2'],
+        t,
+      })
+    );
 
     act(() => {
       result.current.openHistoryContextMenu('item-trash', createDummyRequest());
@@ -286,7 +297,9 @@ describe('useHistoryItemContextMenu', () => {
     capturedOptions!.actions.find((action) => action.id === 'restore_selected')?.onSelect();
     expect(onRestoreHistoryItems).toHaveBeenCalledWith(['item-trash', 'item-trash-2']);
 
-    const purgeSelectedAction = capturedOptions!.actions.find((action) => action.id === 'purge_selected');
+    const purgeSelectedAction = capturedOptions!.actions.find(
+      (action) => action.id === 'purge_selected'
+    );
     expect(purgeSelectedAction?.tone).toBe('danger');
     purgeSelectedAction?.onSelect();
     expect(onDeleteHistoryItems).toHaveBeenCalledWith(['item-trash', 'item-trash-2']);
@@ -296,25 +309,27 @@ describe('useHistoryItemContextMenu', () => {
     const onClearSelection = vi.fn();
     const openContextMenu = vi.fn();
 
-    const { result } = renderHook(() => useHistoryItemContextMenu({
-      getItemById: (id) => (id === 'item-2' ? dummyItem2 : dummyItem1),
-      isAllSelected: false,
-      isLockedLiveDraft: () => false,
-      isOpenDisabled: () => false,
-      isTrashScope: false,
-      onAssignProject: vi.fn(),
-      onClearSelection,
-      onDeleteHistoryItem: vi.fn(),
-      onDeleteHistoryItems: vi.fn(),
-      onMoveToInbox: vi.fn(),
-      onOpenItem: vi.fn(),
-      onRenameHistoryItem: vi.fn(),
-      onRestoreHistoryItems: vi.fn(),
-      onSelectAllVisible: vi.fn(),
-      openContextMenu,
-      selectedIds: ['item-1'], // item-1 is selected, but user right-clicks item-2
-      t,
-    }));
+    const { result } = renderHook(() =>
+      useHistoryItemContextMenu({
+        getItemById: (id) => (id === 'item-2' ? dummyItem2 : dummyItem1),
+        isAllSelected: false,
+        isLockedLiveDraft: () => false,
+        isOpenDisabled: () => false,
+        isTrashScope: false,
+        onAssignProject: vi.fn(),
+        onClearSelection,
+        onDeleteHistoryItem: vi.fn(),
+        onDeleteHistoryItems: vi.fn(),
+        onMoveToInbox: vi.fn(),
+        onOpenItem: vi.fn(),
+        onRenameHistoryItem: vi.fn(),
+        onRestoreHistoryItems: vi.fn(),
+        onSelectAllVisible: vi.fn(),
+        openContextMenu,
+        selectedIds: ['item-1'], // item-1 is selected, but user right-clicks item-2
+        t,
+      })
+    );
 
     act(() => {
       result.current.openHistoryContextMenu('item-2', createDummyRequest());

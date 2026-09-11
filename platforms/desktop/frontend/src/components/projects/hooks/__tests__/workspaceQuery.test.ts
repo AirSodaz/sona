@@ -1,8 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HistoryItem } from '../../../../types/history';
-import { useWorkspaceQuery } from '../workspaceQuery';
 import type { WorkspaceQueryResult } from '../../types';
+import { useWorkspaceQuery } from '../workspaceQuery';
 
 const historyQueryWorkspaceMock = vi.hoisted(() => vi.fn());
 
@@ -70,10 +70,12 @@ describe('useWorkspaceQuery', () => {
     const { result } = renderHook(() => useWorkspaceQuery(baseParams));
 
     await waitFor(() => expect(result.current.filteredItems).toHaveLength(1));
-    expect(historyQueryWorkspaceMock).toHaveBeenCalledWith(expect.objectContaining({
-      limit: 100,
-      offset: 0,
-    }));
+    expect(historyQueryWorkspaceMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        limit: 100,
+        offset: 0,
+      })
+    );
   });
 
   it('exposes an initial error and retries the first page without treating it as empty data', async () => {
@@ -91,10 +93,13 @@ describe('useWorkspaceQuery', () => {
       await result.current.retryInitialLoad();
     });
 
-    expect(historyQueryWorkspaceMock).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      limit: 100,
-      offset: 0,
-    }));
+    expect(historyQueryWorkspaceMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        limit: 100,
+        offset: 0,
+      })
+    );
     expect(result.current.initialLoadError).toBe(false);
     expect(result.current.filteredItems.map((entry) => entry.id)).toEqual(['a']);
   });
@@ -111,10 +116,13 @@ describe('useWorkspaceQuery', () => {
       await result.current.loadMore();
     });
 
-    expect(historyQueryWorkspaceMock).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      limit: 100,
-      offset: 2,
-    }));
+    expect(historyQueryWorkspaceMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        limit: 100,
+        offset: 2,
+      })
+    );
     expect(result.current.filteredItems.map((entry) => entry.id)).toEqual(['a', 'b', 'c']);
     expect(result.current.hasMore).toBe(false);
   });
@@ -128,7 +136,7 @@ describe('useWorkspaceQuery', () => {
 
     const { result, rerender } = renderHook(
       (params: typeof baseParams) => useWorkspaceQuery(params),
-      { initialProps: baseParams },
+      { initialProps: baseParams }
     );
     await waitFor(() => expect(result.current.filteredItems[0]?.id).toBe('initial'));
 
@@ -167,9 +175,12 @@ describe('useWorkspaceQuery', () => {
     await act(async () => {
       await result.current.loadMore();
     });
-    expect(historyQueryWorkspaceMock).toHaveBeenNthCalledWith(3, expect.objectContaining({
-      offset: 1,
-    }));
+    expect(historyQueryWorkspaceMock).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        offset: 1,
+      })
+    );
     expect(result.current.filteredItems.map((entry) => entry.id)).toEqual(['a', 'b']);
     expect(result.current.loadMoreError).toBe(false);
   });
@@ -201,7 +212,7 @@ describe('useWorkspaceQuery', () => {
           historyItems: items,
           scope: { kind: 'inbox' as const },
         } as Parameters<typeof useWorkspaceQuery>[0],
-      },
+      }
     );
 
     await waitFor(() => {

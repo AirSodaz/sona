@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { ErrorDialog } from '../ErrorDialog';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useErrorDialogStore } from '../../stores/errorDialogStore';
+import { ErrorDialog } from '../ErrorDialog';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -59,7 +59,9 @@ describe('ErrorDialog', () => {
 
     render(<ErrorDialog />);
 
-    await waitFor(() => expect((document.activeElement as HTMLElement | null)?.textContent).toBe('Cancel'));
+    await waitFor(() =>
+      expect((document.activeElement as HTMLElement | null)?.textContent).toBe('Cancel')
+    );
   });
 
   it('resolves the primary action for actionable errors', () => {

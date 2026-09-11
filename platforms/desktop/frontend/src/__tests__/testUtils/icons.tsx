@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 
 type IconModule = Record<string, unknown>;
 
@@ -10,7 +10,7 @@ export function createNamedIconMock(name: string) {
 
 export async function buildPartialIconsMock<TModule extends IconModule>(
   importOriginal: () => Promise<TModule>,
-  overrides: Partial<TModule>,
+  overrides: Partial<TModule>
 ): Promise<TModule> {
   return {
     ...(await importOriginal()),

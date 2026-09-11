@@ -1,6 +1,3 @@
-import { logger } from '../utils/logger';
-import type { ScenarioModelPathConfig, ScenarioModelKind } from '../utils/scenarioModels';
-import { scenarioModelFieldKey } from '../utils/scenarioModels';
 import type {
   ModelCatalogModel,
   ModelCatalogSelectedIds,
@@ -10,6 +7,9 @@ import type {
   ModelSelectionPaths,
   ScenarioSelectedModelIds,
 } from '../types/modelCatalog';
+import { logger } from '../utils/logger';
+import type { ScenarioModelKind, ScenarioModelPathConfig } from '../utils/scenarioModels';
+import { scenarioModelFieldKey } from '../utils/scenarioModels';
 
 interface ModelRegistryServicePorts {
   getModelCatalogSnapshot: () => Promise<ModelCatalogSnapshot>;
@@ -35,65 +35,67 @@ class ModelRegistryService {
     return snapshot;
   }
 
-  async resolveModelCatalogSelectedIds(paths: ModelSelectionPaths): Promise<ModelCatalogSelectedIds> {
+  async resolveModelCatalogSelectedIds(
+    paths: ModelSelectionPaths
+  ): Promise<ModelCatalogSelectedIds> {
     return await this.ports.resolveModelCatalogSelectedIds(paths);
   }
 
   resolveModelCatalogSelectedIdsFromSnapshot(
     snapshot: ModelCatalogSnapshot,
-    paths: ModelSelectionPaths,
+    paths: ModelSelectionPaths
   ): ModelCatalogSelectedIds {
     return {
       streaming: resolveSelectedModelId(
         snapshot,
         paths.streamingModelPath,
-        snapshot.selectionOptions.streaming,
+        snapshot.selectionOptions.streaming
       ),
       batch: resolveSelectedModelId(
         snapshot,
         paths.batchModelPath,
-        snapshot.selectionOptions.batch,
+        snapshot.selectionOptions.batch
       ),
       speakerSegmentation: resolveSelectedModelId(
         snapshot,
         paths.speakerSegmentationModelPath,
-        snapshot.selectionOptions.speakerSegmentation,
+        snapshot.selectionOptions.speakerSegmentation
       ),
       speakerEmbedding: resolveSelectedModelId(
         snapshot,
         paths.speakerEmbeddingModelPath,
-        snapshot.selectionOptions.speakerEmbedding,
+        snapshot.selectionOptions.speakerEmbedding
       ),
     };
   }
 
   resolveAsrSelectedModelIdsFromSnapshot(
     snapshot: ModelCatalogSnapshot,
-    paths: Pick<ModelSelectionPaths, 'streamingModelPath' | 'batchModelPath'>,
+    paths: Pick<ModelSelectionPaths, 'streamingModelPath' | 'batchModelPath'>
   ): Pick<ModelCatalogSelectedIds, 'streaming' | 'batch'> {
     return {
       streaming: resolveSelectedModelId(
         snapshot,
         paths.streamingModelPath,
-        snapshot.selectionOptions.streaming,
+        snapshot.selectionOptions.streaming
       ),
       batch: resolveSelectedModelId(
         snapshot,
         paths.batchModelPath,
-        snapshot.selectionOptions.batch,
+        snapshot.selectionOptions.batch
       ),
     };
   }
 
   resolveScenarioSelectedModelIdsFromSnapshot(
     snapshot: ModelCatalogSnapshot,
-    config: ScenarioModelPathConfig,
+    config: ScenarioModelPathConfig
   ): ScenarioSelectedModelIds {
     const sectionModelsByType = new Map<string, Array<{ id: string }>>();
     for (const section of snapshot.sections) {
       sectionModelsByType.set(
         section.type,
-        section.groups.flatMap((group) => group.models),
+        section.groups.flatMap((group) => group.models)
       );
     }
 
@@ -114,7 +116,7 @@ class ModelRegistryService {
         ids[key] = resolveSelectedModelId(
           snapshot,
           config[scenarioModelFieldKey(kind, scenario)] ?? '',
-          options,
+          options
         );
       }
     }
@@ -122,16 +124,19 @@ class ModelRegistryService {
   }
 
   async resolveCatalogModel(modelId: string): Promise<ModelCatalogModel | undefined> {
-    const cachedModel = this.latestCatalogSnapshot?.models.find(model => model.id === modelId);
+    const cachedModel = this.latestCatalogSnapshot?.models.find((model) => model.id === modelId);
     if (cachedModel) {
       return cachedModel;
     }
 
     try {
       const snapshot = await this.getModelCatalogSnapshot();
-      return snapshot.models.find(model => model.id === modelId);
+      return snapshot.models.find((model) => model.id === modelId);
     } catch (error) {
-      logger.warn('[ModelService] Failed to resolve model metadata from Rust catalog snapshot:', error);
+      logger.warn(
+        '[ModelService] Failed to resolve model metadata from Rust catalog snapshot:',
+        error
+      );
       return undefined;
     }
   }
@@ -162,7 +167,7 @@ class ModelRegistryService {
   }
 
   getModelRules(modelId: string): ModelRules {
-    const snapshotModel = this.latestCatalogSnapshot?.models.find(model => model.id === modelId);
+    const snapshotModel = this.latestCatalogSnapshot?.models.find((model) => model.id === modelId);
     if (snapshotModel?.rules) {
       return snapshotModel.rules;
     }
@@ -182,7 +187,7 @@ function normalizeCatalogPath(path: string): string {
 function resolveSelectedModelId(
   snapshot: ModelCatalogSnapshot,
   modelPath: string,
-  options: Array<{ id: string }>,
+  options: Array<{ id: string }>
 ): string | null {
   if (!modelPath.trim()) {
     return null;
@@ -196,7 +201,7 @@ function resolveSelectedModelId(
 
   for (const option of options) {
     const token = snapshot.pathMatchTokens.find((item) => item.id === option.id);
-    if (token && token.token && normalizedPath.includes(token.token)) {
+    if (token?.token && normalizedPath.includes(token.token)) {
       return option.id;
     }
   }

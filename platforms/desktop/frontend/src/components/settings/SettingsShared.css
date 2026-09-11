@@ -12,8 +12,14 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* --- Section --- */
@@ -86,7 +92,10 @@
 /* For nested layout options */
 .settings-item-container.indented {
   border-left: 2px solid var(--color-border);
-  background: var(--color-bg-secondary-soft, color-mix(in srgb, var(--color-bg-primary) 96%, black));
+  background: var(
+    --color-bg-secondary-soft,
+    color-mix(in srgb, var(--color-bg-primary) 96%, black)
+  );
   padding-top: var(--spacing-md, 16px);
   padding-bottom: var(--spacing-md, 16px);
 }
@@ -498,12 +507,11 @@
   padding: var(--spacing-lg, 24px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg, 16px);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--color-bg-secondary) 72%, transparent),
-      var(--color-bg-primary)
-    );
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-bg-secondary) 72%, transparent),
+    var(--color-bg-primary)
+  );
 }
 
 .settings-status-card-header {
@@ -558,12 +566,11 @@
 /* --- API Server Status & Jobs --- */
 .settings-api-server-panel {
   padding: var(--spacing-md, 16px);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--color-bg-primary) 92%, var(--color-bg-secondary)),
-      var(--color-bg-primary)
-    );
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-bg-primary) 92%, var(--color-bg-secondary)),
+    var(--color-bg-primary)
+  );
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md, 16px);
@@ -581,7 +588,11 @@
   gap: var(--spacing-md, 16px);
   padding: 16px 18px;
   background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--color-primary) 8%, transparent), transparent 52%),
+    radial-gradient(
+      circle at top right,
+      color-mix(in srgb, var(--color-primary) 8%, transparent),
+      transparent 52%
+    ),
     linear-gradient(
       180deg,
       color-mix(in srgb, var(--color-bg-secondary) 78%, transparent),
@@ -627,8 +638,12 @@
   letter-spacing: -0.01em;
 }
 
-.text-success { color: var(--color-success, #4ea067); }
-.text-error { color: var(--color-error, #e03e3e); }
+.text-success {
+  color: var(--color-success, #4ea067);
+}
+.text-error {
+  color: var(--color-error, #e03e3e);
+}
 
 .api-server-jobs-container {
   background: var(--color-bg-elevated);
@@ -644,7 +659,8 @@
   font-size: 0.88rem;
 }
 
-.jobs-table th, .jobs-table td {
+.jobs-table th,
+.jobs-table td {
   padding: 12px 16px;
   text-align: left;
   border-bottom: 1px solid var(--color-border);

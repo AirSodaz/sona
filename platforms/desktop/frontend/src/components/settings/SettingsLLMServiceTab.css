@@ -4,7 +4,9 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg, 24px);
-  transition: background-color var(--transition-fast), opacity var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    opacity var(--transition-fast);
 }
 
 .llm-feature-tabs {
@@ -176,7 +178,9 @@
 }
 
 @media (max-width: 768px) {
-  .llm-feature-tabs { grid-template-columns: 1fr; }
+  .llm-feature-tabs {
+    grid-template-columns: 1fr;
+  }
   .feature-card {
     padding: 20px;
     gap: 20px;
@@ -298,7 +302,9 @@
 }
 
 @media (max-width: 768px) {
-  .provider-picker-grid { grid-template-columns: 1fr; }
+  .provider-picker-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .provider-modal-backdrop {
@@ -490,15 +496,15 @@
 }
 
 .provider-model-delete:hover {
-  color: var(--color-error) !important;
+  color: var(--color-error);
 }
 
 .provider-model-edit:hover {
-  color: var(--color-info) !important;
+  color: var(--color-info);
 }
 
 .provider-model-test:hover {
-  color: var(--color-success) !important;
+  color: var(--color-success);
 }
 
 .provider-model-metadata {
@@ -672,7 +678,6 @@
   gap: 8px;
 }
 
-
 /* Feature specific inputs */
 .feature-temperature-row {
   display: flex;
@@ -701,9 +706,21 @@
 
 .feature-temperature-slider {
   --temperature-track: color-mix(in srgb, var(--color-text-muted) 24%, var(--color-bg-secondary));
-  --temperature-fill: color-mix(in srgb, var(--color-text-primary) 84%, var(--color-text-secondary));
-  --temperature-thumb: color-mix(in srgb, var(--color-text-primary) 90%, var(--color-text-secondary));
-  --temperature-thumb-hover: color-mix(in srgb, var(--color-text-primary) 82%, var(--color-text-secondary));
+  --temperature-fill: color-mix(
+    in srgb,
+    var(--color-text-primary) 84%,
+    var(--color-text-secondary)
+  );
+  --temperature-thumb: color-mix(
+    in srgb,
+    var(--color-text-primary) 90%,
+    var(--color-text-secondary)
+  );
+  --temperature-thumb-hover: color-mix(
+    in srgb,
+    var(--color-text-primary) 82%,
+    var(--color-text-secondary)
+  );
   --temperature-focus-ring: color-mix(in srgb, var(--color-border-hover) 72%, transparent);
   --temperature-progress: 50%;
   -webkit-appearance: none;
@@ -714,13 +731,11 @@
   margin: 0;
   border: none;
   background:
-    radial-gradient(circle closest-side, var(--temperature-fill) 96%, transparent) var(--temperature-progress) center / 12px 12px no-repeat,
-    linear-gradient(var(--temperature-fill), var(--temperature-fill)) left center / var(--temperature-progress) 5px no-repeat,
-    linear-gradient(
-      to right,
-      var(--temperature-track) 0 100%
-    )
-    center / 100% 5px no-repeat;
+    radial-gradient(circle closest-side, var(--temperature-fill) 96%, transparent)
+    var(--temperature-progress) center / 12px 12px no-repeat,
+    linear-gradient(var(--temperature-fill), var(--temperature-fill)) left center /
+    var(--temperature-progress) 5px no-repeat,
+    linear-gradient(to right, var(--temperature-track) 0 100%) center / 100% 5px no-repeat;
   border-radius: var(--radius-full);
   overflow: hidden;
   cursor: pointer;
@@ -809,15 +824,15 @@
 
 /* Connection Feedback Integrated */
 .btn-success-flash {
-  background-color: rgba(34, 197, 94, 0.1) !important;
-  color: #16a34a !important;
-  border-color: #16a34a !important;
+  background-color: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+  border-color: #16a34a;
 }
 
 .btn-error-flash {
-  background-color: rgba(239, 68, 68, 0.1) !important;
-  color: #dc2626 !important;
-  border-color: #dc2626 !important;
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border-color: #dc2626;
 }
 
 .connection-error-detail {
@@ -835,12 +850,12 @@
 
 @media (prefers-color-scheme: dark) {
   .btn-success-flash {
-    background-color: rgba(74, 222, 128, 0.15) !important;
-    color: #4ade80 !important;
+    background-color: rgba(74, 222, 128, 0.15);
+    color: #4ade80;
   }
   .btn-error-flash {
-    background-color: rgba(248, 113, 113, 0.15) !important;
-    color: #f87171 !important;
+    background-color: rgba(248, 113, 113, 0.15);
+    color: #f87171;
   }
   .connection-error-detail {
     color: #f87171;

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useTaskLedgerStore } from '../taskLedgerStore';
 import type { TaskLedgerRecord, TaskLedgerSnapshot } from '../../types/taskLedger';
+import { useTaskLedgerStore } from '../taskLedgerStore';
 
 const loadSnapshotMock = vi.fn();
 const patchTaskMock = vi.fn();
@@ -80,13 +80,15 @@ describe('taskLedgerStore', () => {
 
     await useTaskLedgerStore.getState().loadTasks();
 
-    expect(useTaskLedgerStore.getState()).toEqual(expect.objectContaining({
-      tasks: [],
-      updatedAt: null,
-      isLoaded: true,
-      isBusy: false,
-      error: 'Ledger unavailable.',
-    }));
+    expect(useTaskLedgerStore.getState()).toEqual(
+      expect.objectContaining({
+        tasks: [],
+        updatedAt: null,
+        isLoaded: true,
+        isBusy: false,
+        error: 'Ledger unavailable.',
+      })
+    );
   });
 
   it('treats cancelRequested tasks from the backend snapshot as soft-cancelled', async () => {
@@ -101,13 +103,15 @@ describe('taskLedgerStore', () => {
   it('requests soft cancellation for cancelable running tasks', async () => {
     const runningTask = makeTask({ id: 'task-running', status: 'running', cancelable: true });
     useTaskLedgerStore.setState({ tasks: [runningTask] });
-    patchTaskMock.mockResolvedValueOnce(makeSnapshot([
-      {
-        ...runningTask,
-        status: 'cancelRequested',
-        cancelable: false,
-      },
-    ]));
+    patchTaskMock.mockResolvedValueOnce(
+      makeSnapshot([
+        {
+          ...runningTask,
+          status: 'cancelRequested',
+          cancelable: false,
+        },
+      ])
+    );
 
     await useTaskLedgerStore.getState().requestCancel('task-running');
 
@@ -145,11 +149,13 @@ describe('taskLedgerStore', () => {
       progress: 100,
       cancelable: false,
     });
-    expect(useTaskLedgerStore.getState().tasks[0]).toEqual(expect.objectContaining({
-      id: 'task-succeeded',
-      status: 'succeeded',
-      progress: 100,
-    }));
+    expect(useTaskLedgerStore.getState().tasks[0]).toEqual(
+      expect.objectContaining({
+        id: 'task-succeeded',
+        status: 'succeeded',
+        progress: 100,
+      })
+    );
   });
 
   it('keeps a locally completed task when an older durable snapshot arrives late', () => {
@@ -175,12 +181,14 @@ describe('taskLedgerStore', () => {
 
     useTaskLedgerStore.getState().applySnapshot(makeSnapshot([pendingTask]));
 
-    expect(useTaskLedgerStore.getState().tasks[0]).toEqual(expect.objectContaining({
-      id: 'task-race',
-      status: 'succeeded',
-      progress: 100,
-      cancelable: false,
-    }));
+    expect(useTaskLedgerStore.getState().tasks[0]).toEqual(
+      expect.objectContaining({
+        id: 'task-race',
+        status: 'succeeded',
+        progress: 100,
+        cancelable: false,
+      })
+    );
     expect(useTaskLedgerStore.getState().isCancelRequested('task-race')).toBe(false);
   });
 
@@ -192,9 +200,12 @@ describe('taskLedgerStore', () => {
       updatedAt: 100,
     });
     let resolveUpsert!: (snapshot: TaskLedgerSnapshot) => void;
-    upsertTaskMock.mockImplementationOnce(() => new Promise<TaskLedgerSnapshot>((resolve) => {
-      resolveUpsert = resolve;
-    }));
+    upsertTaskMock.mockImplementationOnce(
+      () =>
+        new Promise<TaskLedgerSnapshot>((resolve) => {
+          resolveUpsert = resolve;
+        })
+    );
     patchTaskMock.mockResolvedValueOnce(makeSnapshot([]));
 
     const upsertPromise = useTaskLedgerStore.getState().upsertTask(pendingTask);
@@ -220,10 +231,12 @@ describe('taskLedgerStore', () => {
       cancelable: false,
       updatedAt: 200,
     });
-    expect(useTaskLedgerStore.getState().tasks[0]).toEqual(expect.objectContaining({
-      id: 'task-serial',
-      status: 'succeeded',
-      progress: 100,
-    }));
+    expect(useTaskLedgerStore.getState().tasks[0]).toEqual(
+      expect.objectContaining({
+        id: 'task-serial',
+        status: 'succeeded',
+        progress: 100,
+      })
+    );
   });
 });

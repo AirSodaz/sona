@@ -1,18 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { FirstRunGuide } from '../FirstRunGuide';
-import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
-import { useConfigStore } from '../../stores/configStore';
-import { useOnboardingStore } from '../../stores/onboardingStore';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  listMicrophoneDeviceOptions,
+  requestMicrophonePermission,
+} from '../../services/audioDeviceService';
 import {
   downloadRecommendedOnboardingModels,
   getRecommendedOnboardingConfig,
   getRecommendedOnboardingModels,
 } from '../../services/onboardingService';
-import {
-  listMicrophoneDeviceOptions,
-  requestMicrophonePermission,
-} from '../../services/audioDeviceService';
+import { useConfigStore } from '../../stores/configStore';
+import { useOnboardingStore } from '../../stores/onboardingStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import { FirstRunGuide } from '../FirstRunGuide';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -32,11 +32,7 @@ vi.mock('../Dropdown', () => ({
     onChange: (value: string) => void;
     options: Array<{ label: string; value: string }>;
   }) => (
-    <select
-      aria-label={id}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-    >
+    <select aria-label={id} value={value} onChange={(event) => onChange(event.target.value)}>
       {options.map((option) => (
         <option key={option.value} value={option.value}>
           {option.label}
@@ -129,7 +125,10 @@ describe('FirstRunGuide', () => {
     render(<FirstRunGuide />);
 
     await waitFor(() => {
-      expect((screen.getByRole('button', { name: 'first_run.actions.continue' }) as HTMLButtonElement).disabled).toBe(false);
+      expect(
+        (screen.getByRole('button', { name: 'first_run.actions.continue' }) as HTMLButtonElement)
+          .disabled
+      ).toBe(false);
     });
 
     screen.getByRole('button', { name: 'first_run.actions.later' });
@@ -141,11 +140,14 @@ describe('FirstRunGuide', () => {
 
     await waitFor(() => {
       screen.getByText('first_run.microphone.heading');
-      expect((screen.getByRole('button', { name: 'first_run.actions.continue' }) as HTMLButtonElement).disabled).toBe(false);
+      expect(
+        (screen.getByRole('button', { name: 'first_run.actions.continue' }) as HTMLButtonElement)
+          .disabled
+      ).toBe(false);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.continue' }));
-    
+
     await waitFor(() => {
       screen.getByText('first_run.models.heading');
     });
@@ -154,7 +156,10 @@ describe('FirstRunGuide', () => {
 
     await waitFor(() => {
       screen.getByRole('button', { name: 'first_run.actions.finish' });
-      expect((screen.getByRole('button', { name: 'first_run.actions.finish' }) as HTMLButtonElement).disabled).toBe(false);
+      expect(
+        (screen.getByRole('button', { name: 'first_run.actions.finish' }) as HTMLButtonElement)
+          .disabled
+      ).toBe(false);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.finish' }));
@@ -167,14 +172,15 @@ describe('FirstRunGuide', () => {
   });
 
   it('shows later, back, and disables both while model download is in progress', async () => {
-    vi.mocked(downloadRecommendedOnboardingModels).mockImplementation(
-      () => new Promise(() => {})
-    );
+    vi.mocked(downloadRecommendedOnboardingModels).mockImplementation(() => new Promise(() => {}));
 
     render(<FirstRunGuide />);
 
     await waitFor(() => {
-      expect((screen.getByRole('button', { name: 'first_run.actions.continue' }) as HTMLButtonElement).disabled).toBe(false);
+      expect(
+        (screen.getByRole('button', { name: 'first_run.actions.continue' }) as HTMLButtonElement)
+          .disabled
+      ).toBe(false);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.continue' }));
@@ -188,24 +194,33 @@ describe('FirstRunGuide', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.download_recommended' }));
 
-    expect((screen.getByRole('button', { name: 'first_run.actions.later' }) as HTMLButtonElement).disabled)
-      .toBe(true);
-    expect((screen.getByRole('button', { name: 'first_run.actions.back' }) as HTMLButtonElement).disabled)
-      .toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'first_run.actions.later' }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'first_run.actions.back' }) as HTMLButtonElement).disabled
+    ).toBe(true);
   });
 
   it('can navigate back to microphone from models', async () => {
     render(<FirstRunGuide />);
 
     await waitFor(() => {
-      expect((screen.getByRole('button', { name: 'first_run.actions.continue' }) as HTMLButtonElement).disabled).toBe(false);
+      expect(
+        (screen.getByRole('button', { name: 'first_run.actions.continue' }) as HTMLButtonElement)
+          .disabled
+      ).toBe(false);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.continue' }));
 
     await waitFor(() => {
       screen.getByText('first_run.models.heading');
-      expect((screen.getByRole('button', { name: 'first_run.actions.back' }) as HTMLButtonElement).disabled).toBe(false);
+      expect(
+        (screen.getByRole('button', { name: 'first_run.actions.back' }) as HTMLButtonElement)
+          .disabled
+      ).toBe(false);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.back' }));
@@ -219,7 +234,10 @@ describe('FirstRunGuide', () => {
     render(<FirstRunGuide />);
 
     await waitFor(() => {
-      expect((screen.getByRole('button', { name: 'first_run.actions.later' }) as HTMLButtonElement).disabled).toBe(false);
+      expect(
+        (screen.getByRole('button', { name: 'first_run.actions.later' }) as HTMLButtonElement)
+          .disabled
+      ).toBe(false);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'first_run.actions.later' }));

@@ -1,10 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  buildSpeakerReviewSnapshot,
-  type SpeakerReviewSnapshot,
-} from '../speakerReviewService';
 import type { TranscriptSegment } from '../../types/transcript';
+import { buildSpeakerReviewSnapshot, type SpeakerReviewSnapshot } from '../speakerReviewService';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -97,9 +94,21 @@ function createSnapshot(): SpeakerReviewSnapshot {
     ],
     filterOptions: [
       { id: 'pending', labelKey: 'editor.speaker_review_filter_pending', countKey: 'pending' },
-      { id: 'suggested', labelKey: 'editor.speaker_review_filter_suggested', countKey: 'suggested' },
-      { id: 'anonymous', labelKey: 'editor.speaker_review_filter_anonymous', countKey: 'anonymous' },
-      { id: 'identified', labelKey: 'editor.speaker_review_filter_identified', countKey: 'identified' },
+      {
+        id: 'suggested',
+        labelKey: 'editor.speaker_review_filter_suggested',
+        countKey: 'suggested',
+      },
+      {
+        id: 'anonymous',
+        labelKey: 'editor.speaker_review_filter_anonymous',
+        countKey: 'anonymous',
+      },
+      {
+        id: 'identified',
+        labelKey: 'editor.speaker_review_filter_identified',
+        countKey: 'identified',
+      },
       { id: 'reviewed', labelKey: 'editor.speaker_review_filter_reviewed', countKey: 'reviewed' },
       { id: 'all', labelKey: 'editor.speaker_review_filter_all', countKey: 'total' },
     ],

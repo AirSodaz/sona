@@ -1,13 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
-import { polishService } from '../polishService';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  buildTestConfig as buildBaseTestConfig,
+  type DeepPartial,
+} from '../../test-utils/configTestUtils';
 import {
   resetTranscriptStores,
   useTranscriptStore,
 } from '../../test-utils/transcriptStoreTestUtils';
 import type { AppConfig } from '../../types/config';
-import { buildTestConfig as buildBaseTestConfig, type DeepPartial } from '../../test-utils/configTestUtils';
-import { TranscriptSegment } from '../../types/transcript';
+import type { TranscriptSegment } from '../../types/transcript';
+import { polishService } from '../polishService';
 
 const mockListenToLlmTaskChunks = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
@@ -77,7 +80,8 @@ vi.mock('../llmTaskTypes', () => ({
 vi.mock('../llmTaskEvents', () => ({
   listenToLlmTaskChunks: (...args: unknown[]) => mockListenToLlmTaskChunks(...args),
   listenToLlmTaskProgress: (...args: unknown[]) => mockListenToLlmTaskProgress(...args),
-  listenToTranscriptLlmJobUpdates: (...args: unknown[]) => mockListenToTranscriptLlmJobUpdates(...args),
+  listenToTranscriptLlmJobUpdates: (...args: unknown[]) =>
+    mockListenToTranscriptLlmJobUpdates(...args),
 }));
 
 vi.mock('../transcriptSnapshotService', () => ({
@@ -171,9 +175,7 @@ describe('PolishService', () => {
     useTranscriptStore.setState({
       config: buildPolishTestConfig({
         polishPresetId: 'custom-team',
-        polishCustomPresets: [
-          { id: 'custom-team', name: 'Team', context: 'Team sync notes' },
-        ],
+        polishCustomPresets: [{ id: 'custom-team', name: 'Team', context: 'Team sync notes' }],
       }),
     });
 
@@ -220,7 +222,7 @@ describe('PolishService', () => {
     ];
 
     (invoke as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
-      'error invoking command `polish_transcript_segments`: failed to deserialize response body: Caused by: LLM Error',
+      'error invoking command `polish_transcript_segments`: failed to deserialize response body: Caused by: LLM Error'
     );
 
     await expect(polishService.polishSegments(segments)).rejects.toThrow('LLM Error');
@@ -236,7 +238,12 @@ describe('PolishService', () => {
       sourceHistoryId: null,
     });
     mockListenToLlmTaskProgress.mockImplementation(async (_taskId, _taskType, onProgress) => {
-      onProgress({ taskId: 'polish-task-id', taskType: 'polish', completedChunks: 1, totalChunks: 2 });
+      onProgress({
+        taskId: 'polish-task-id',
+        taskType: 'polish',
+        completedChunks: 1,
+        totalChunks: 2,
+      });
       expect(useTranscriptStore.getState().getLlmState('current').polishProgress).toBe(50);
       return vi.fn();
     });
@@ -262,18 +269,20 @@ describe('PolishService', () => {
     expect(mockListenToLlmTaskProgress).toHaveBeenCalledWith(
       'polish-task-id',
       'polish',
-      expect.any(Function),
+      expect.any(Function)
     );
     expect(mockListenToTranscriptLlmJobUpdates).toHaveBeenCalledWith(
       'polish-task-id',
       'polish',
-      expect.any(Function),
+      expect.any(Function)
     );
     expect(useTranscriptStore.getState().segments[0]?.text).toBe('Hello');
-    expect(useTranscriptStore.getState().getLlmState('current')).toEqual(expect.objectContaining({
-      isPolishing: false,
-      polishProgress: 0,
-    }));
+    expect(useTranscriptStore.getState().getLlmState('current')).toEqual(
+      expect.objectContaining({
+        isPolishing: false,
+        polishProgress: 0,
+      })
+    );
   });
 
   it('delegates saved-history snapshot and writeback to the Rust transcript job', async () => {

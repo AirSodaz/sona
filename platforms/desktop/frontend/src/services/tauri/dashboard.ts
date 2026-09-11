@@ -7,7 +7,7 @@ export type DashboardSnapshotRequest = {
 };
 
 export async function getDashboardSnapshot(
-  request: DashboardSnapshotRequest,
+  request: DashboardSnapshotRequest
 ): Promise<DashboardSnapshot> {
   return invokeTauri(TauriCommand.dashboard.getSnapshot, { request });
 }

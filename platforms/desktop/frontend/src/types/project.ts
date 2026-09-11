@@ -1,4 +1,8 @@
-import type { TagRecord as GeneratedTagRecord, TagCreateInput as GeneratedCreateInput, TagUpdateInput as GeneratedUpdateInput } from './tag';
+import type {
+  TagCreateInput as GeneratedCreateInput,
+  TagRecord as GeneratedTagRecord,
+  TagUpdateInput as GeneratedUpdateInput,
+} from './tag';
 
 export type ProjectPipelineConfig = {
   enabled: boolean;

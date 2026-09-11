@@ -130,7 +130,7 @@
 }
 
 .notification-center-item::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0 0 auto;
   height: 2px;

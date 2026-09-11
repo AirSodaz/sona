@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { notifySyncLocalChangeForCommand } from '../tauri/syncLocalChangeBus';
-import { syncRuntimeService } from '../syncRuntimeService';
 import { useSyncStatusStore } from '../../stores/syncStatusStore';
 import type { SyncStatusSnapshot } from '../../types/sync';
+import { syncRuntimeService } from '../syncRuntimeService';
+import { notifySyncLocalChangeForCommand } from '../tauri/syncLocalChangeBus';
 
 const testContext = vi.hoisted(() => {
   const transcriptListeners = new Set<(state: any, previous: any) => void>();
@@ -39,22 +39,19 @@ vi.mock('../../stores/transcriptRuntimeStore', () => {
         testContext.transcriptListeners.add(listener);
         return () => testContext.transcriptListeners.delete(listener);
       },
-    },
+    }
   );
   return { useTranscriptRuntimeStore };
 });
 
 vi.mock('../../stores/batchQueueStore', () => {
-  const useBatchQueueStore = Object.assign(
-    (selector: any) => selector(testContext.batchState),
-    {
-      getState: () => testContext.batchState,
-      subscribe: (listener: any) => {
-        testContext.batchListeners.add(listener);
-        return () => testContext.batchListeners.delete(listener);
-      },
+  const useBatchQueueStore = Object.assign((selector: any) => selector(testContext.batchState), {
+    getState: () => testContext.batchState,
+    subscribe: (listener: any) => {
+      testContext.batchListeners.add(listener);
+      return () => testContext.batchListeners.delete(listener);
     },
-  );
+  });
   return { useBatchQueueStore };
 });
 

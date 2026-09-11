@@ -1,23 +1,21 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight, Mic, Plus, Trash2, Upload } from 'lucide-react';
+import type React from 'react';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
-import { useVocabularyConfig, useSetConfig } from '../../stores/configStore';
-import { useDialogStore } from '../../stores/dialogStore';
+import { speakerService } from '../../services/speakerService';
+import { openDialog } from '../../services/tauri/platform/dialog';
+import { remove } from '../../services/tauri/platform/fs';
 import { useAutomationStore } from '../../stores/automationStore';
+import { useSetConfig, useVocabularyConfig } from '../../stores/configStore';
+import { useDialogStore } from '../../stores/dialogStore';
+import type { SpeakerProfile, SpeakerProfileSample } from '../../types/speaker';
 import {
   deriveSpeakerProfileReadiness,
   normalizeSpeakerProfiles,
 } from '../../types/speakerNormalization';
-import type {
-  SpeakerProfile,
-  SpeakerProfileSample,
-} from '../../types/speaker';
-import { speakerService } from '../../services/speakerService';
-import { SettingsSection } from './SettingsLayout';
 import { Switch } from '../Switch';
-import { openDialog } from '../../services/tauri/platform/dialog';
-import { remove } from '../../services/tauri/platform/fs';
+import { SettingsSection } from './SettingsLayout';
 
 function formatSampleDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) {
@@ -80,9 +78,7 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
 
   const handleUpdateProfile = (profileId: string, updates: Partial<SpeakerProfile>) => {
     persistProfiles(
-      profiles.map((profile) => (
-        profile.id === profileId ? { ...profile, ...updates } : profile
-      )),
+      profiles.map((profile) => (profile.id === profileId ? { ...profile, ...updates } : profile))
     );
   };
 
@@ -106,11 +102,11 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
     }
 
     persistProfiles(
-      profiles.map((item) => (
+      profiles.map((item) =>
         item.id === profileId
           ? { ...item, samples: item.samples.filter((entry) => entry.id !== sampleId) }
           : item
-      )),
+      )
     );
 
     try {
@@ -125,10 +121,12 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
       const selected = await openDialog({
         multiple: true,
         directory: false,
-        filters: [{
-          name: t('settings.audio_files', { defaultValue: 'Audio Files' }),
-          extensions: ['wav', 'mp3', 'm4a', 'aac', 'ogg', 'flac', 'mp4', 'webm'],
-        }],
+        filters: [
+          {
+            name: t('settings.audio_files', { defaultValue: 'Audio Files' }),
+            extensions: ['wav', 'mp3', 'm4a', 'aac', 'ogg', 'flac', 'mp4', 'webm'],
+          },
+        ],
       });
 
       if (!selected) {
@@ -137,23 +135,25 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
 
       const filePaths = Array.isArray(selected) ? selected : [selected];
       const importedSamples = await Promise.all(
-        filePaths.map((filePath) => speakerService.importProfileSample(profile.id, filePath)),
+        filePaths.map((filePath) => speakerService.importProfileSample(profile.id, filePath))
       );
 
-      const nextProfiles = profiles.map((item) => (
+      const nextProfiles = profiles.map((item) =>
         item.id === profile.id
           ? {
               ...item,
-              samples: [...item.samples, ...importedSamples]
-                .reduce<SpeakerProfileSample[]>((accumulator, sample) => {
+              samples: [...item.samples, ...importedSamples].reduce<SpeakerProfileSample[]>(
+                (accumulator, sample) => {
                   if (!accumulator.some((entry) => entry.id === sample.id)) {
                     accumulator.push(sample);
                   }
                   return accumulator;
-                }, []),
+                },
+                []
+              ),
             }
           : item
-      ));
+      );
 
       persistProfiles(nextProfiles);
       setExpandedProfileIds((previous) => new Set(previous).add(profile.id));
@@ -174,19 +174,29 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
       title={t('settings.speaker_profiles_title', { defaultValue: 'Speaker Profiles' })}
       icon={<Mic size={20} />}
       description={t('settings.speaker_profiles_description', {
-        defaultValue: 'Build a global library of known speakers from local reference audio files. Projects can then choose which profiles are active.',
+        defaultValue:
+          'Build a global library of known speakers from local reference audio files. Projects can then choose which profiles are active.',
       })}
     >
-      <div style={{
-        display: 'flex',
-        gap: '12px',
-        padding: '24px',
-        background: 'var(--color-bg-primary)',
-        alignItems: 'flex-end',
-        borderBottom: '1px solid var(--color-border-subtle)',
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          gap: '12px',
+          padding: '24px',
+          background: 'var(--color-bg-primary)',
+          alignItems: 'flex-end',
+          borderBottom: '1px solid var(--color-border-subtle)',
+        }}
+      >
         <div style={{ flex: 1 }}>
-          <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '4px', color: 'var(--color-text-muted)' }}>
+          <label
+            style={{
+              display: 'block',
+              fontSize: '0.85rem',
+              marginBottom: '4px',
+              color: 'var(--color-text-muted)',
+            }}
+          >
             {t('settings.speaker_profile_name_label', { defaultValue: 'Profile Name' })}
           </label>
           <input
@@ -194,7 +204,9 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
             className="settings-input"
             value={newProfileName}
             onChange={(event) => setNewProfileName(event.target.value)}
-            placeholder={t('settings.speaker_profile_name_placeholder', { defaultValue: 'e.g. Alice' })}
+            placeholder={t('settings.speaker_profile_name_placeholder', {
+              defaultValue: 'e.g. Alice',
+            })}
             style={{ width: '100%' }}
           />
         </div>
@@ -202,168 +214,226 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
           className="btn btn-primary"
           onClick={handleAddProfile}
           disabled={!newProfileName.trim()}
-          style={{ height: '38px', display: 'flex', alignItems: 'center', gap: '6px', padding: '0 20px' }}
+          style={{
+            height: '38px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '0 20px',
+          }}
         >
           <Plus size={18} />
           {t('settings.add_speaker_profile', { defaultValue: 'Add Profile' })}
         </button>
       </div>
 
-      <div className="settings-list" style={{ background: 'var(--color-bg-primary)', overflow: 'hidden' }}>
+      <div
+        className="settings-list"
+        style={{ background: 'var(--color-bg-primary)', overflow: 'hidden' }}
+      >
         {profiles.length === 0 ? (
-          <div style={{
-            padding: '48px 24px',
-            textAlign: 'center',
-            color: 'var(--color-text-muted)',
-          }}>
+          <div
+            style={{
+              padding: '48px 24px',
+              textAlign: 'center',
+              color: 'var(--color-text-muted)',
+            }}
+          >
             {t('settings.no_speaker_profiles', { defaultValue: 'No speaker profiles yet.' })}
           </div>
         ) : (
           profiles.map((profile, index) => {
             const readiness = deriveSpeakerProfileReadiness(profile);
-            const readinessCopy = readiness.state === 'ready'
-              ? t('settings.speaker_profile_readiness_ready', {
-                  defaultValue: 'Ready for automatic matching',
-                })
-              : readiness.state === 'limited'
-                ? t('settings.speaker_profile_readiness_limited', {
-                    defaultValue: 'Can appear as a suggestion, but needs more usable samples before automatic matching.',
+            const readinessCopy =
+              readiness.state === 'ready'
+                ? t('settings.speaker_profile_readiness_ready', {
+                    defaultValue: 'Ready for automatic matching',
                   })
-                : t('settings.speaker_profile_readiness_not_ready', {
-                    defaultValue: 'Needs more usable samples before it can participate in speaker recognition.',
-                  });
+                : readiness.state === 'limited'
+                  ? t('settings.speaker_profile_readiness_limited', {
+                      defaultValue:
+                        'Can appear as a suggestion, but needs more usable samples before automatic matching.',
+                    })
+                  : t('settings.speaker_profile_readiness_not_ready', {
+                      defaultValue:
+                        'Needs more usable samples before it can participate in speaker recognition.',
+                    });
 
             return (
               <div
                 key={profile.id}
                 style={{
-                  borderBottom: index === profiles.length - 1 ? 'none' : '1px solid var(--color-border-subtle)',
+                  borderBottom:
+                    index === profiles.length - 1 ? 'none' : '1px solid var(--color-border-subtle)',
                   background: profile.enabled ? 'transparent' : 'var(--color-bg-secondary-soft)',
                 }}
               >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '16px 24px',
-                  cursor: 'pointer',
-                }}
-                onClick={() => toggleExpanded(profile.id)}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', color: 'var(--color-text-muted)' }}>
-                  {expandedProfileIds.has(profile.id) ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-                </div>
-
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <input
-                    type="text"
-                    className="settings-input-minimal"
-                    value={profile.name}
-                    onClick={(event) => event.stopPropagation()}
-                    onChange={(event) => handleUpdateProfile(profile.id, { name: event.target.value })}
-                    style={{ fontWeight: 600, fontSize: '1rem', width: 'auto', minWidth: '150px' }}
-                  />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', background: 'var(--color-bg-secondary)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>
-                    {t('settings.speaker_samples_count', {
-                      count: profile.samples.length,
-                      defaultValue: `${profile.samples.length} samples`,
-                    })}
-                  </span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                    {readinessCopy}
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }} onClick={(event) => event.stopPropagation()}>
-                  <Switch
-                    checked={profile.enabled}
-                    onChange={(checked) => handleUpdateProfile(profile.id, { enabled: checked })}
-                  />
-
-                  <button
-                    className="btn btn-icon btn-danger-soft"
-                    onClick={() => void handleDeleteProfile(profile)}
-                    title={t('settings.delete_speaker_profile', {
-                      name: profile.name,
-                      defaultValue: 'Delete {{name}}',
-                    })}
-                    aria-label={t('settings.delete_speaker_profile', {
-                      name: profile.name,
-                      defaultValue: 'Delete {{name}}',
-                    })}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '16px 24px',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => toggleExpanded(profile.id)}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      color: 'var(--color-text-muted)',
+                    }}
                   >
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-              </div>
-
-              {expandedProfileIds.has(profile.id) && (
-                <div style={{
-                  padding: '0 24px 24px 56px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px',
-                }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                  <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
-                    {t('settings.speaker_profile_samples_hint', {
-                      defaultValue: 'Import one or more local reference clips. They will be normalized to 16k mono WAV and stored under app-managed data.',
-                    })}
-                  </p>
-                  <div style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
-                    {t('settings.speaker_profile_readiness_meta', {
-                      usable: readiness.usableSampleCount,
-                      duration: formatSampleDuration(readiness.usableDurationSeconds),
-                      defaultValue: `${readiness.usableSampleCount} usable samples · ${formatSampleDuration(readiness.usableDurationSeconds)}`,
-                    })}
+                    {expandedProfileIds.has(profile.id) ? (
+                      <ChevronDown size={20} />
+                    ) : (
+                      <ChevronRight size={20} />
+                    )}
                   </div>
-                  <button
-                    className="btn btn-secondary-soft"
-                    onClick={() => void handleImportSamples(profile)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                  >
-                    <Upload size={16} />
-                    {t('settings.import_speaker_samples', { defaultValue: 'Import Samples' })}
-                  </button>
-                </div>
 
-                {profile.samples.length === 0 ? (
-                  <div style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
-                    {t('settings.no_speaker_samples', { defaultValue: 'No reference samples imported yet.' })}
-                  </div>
-                ) : (
-                  profile.samples.map((sample) => (
-                    <div
-                      key={sample.id}
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <input
+                      type="text"
+                      className="settings-input-minimal"
+                      value={profile.name}
+                      onClick={(event) => event.stopPropagation()}
+                      onChange={(event) =>
+                        handleUpdateProfile(profile.id, { name: event.target.value })
+                      }
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        padding: '10px 12px',
+                        fontWeight: 600,
+                        fontSize: '1rem',
+                        width: 'auto',
+                        minWidth: '150px',
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: '0.75rem',
+                        color: 'var(--color-text-muted)',
                         background: 'var(--color-bg-secondary)',
-                        borderRadius: 'var(--radius-md)',
+                        padding: '2px 8px',
+                        borderRadius: 'var(--radius-sm)',
                       }}
                     >
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 500 }}>{sample.sourceName}</div>
-                        <div style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
-                          {formatSampleDuration(sample.durationSeconds)}
-                        </div>
-                      </div>
+                      {t('settings.speaker_samples_count', {
+                        count: profile.samples.length,
+                        defaultValue: `${profile.samples.length} samples`,
+                      })}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                      {readinessCopy}
+                    </span>
+                  </div>
 
-                      <button
-                        className="btn btn-icon btn-danger-soft"
-                        onClick={() => void handleDeleteSample(profile.id, sample.id)}
-                        aria-label={t('common.delete')}
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: '20px' }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <Switch
+                      checked={profile.enabled}
+                      onChange={(checked) => handleUpdateProfile(profile.id, { enabled: checked })}
+                    />
+
+                    <button
+                      className="btn btn-icon btn-danger-soft"
+                      onClick={() => void handleDeleteProfile(profile)}
+                      title={t('settings.delete_speaker_profile', {
+                        name: profile.name,
+                        defaultValue: 'Delete {{name}}',
+                      })}
+                      aria-label={t('settings.delete_speaker_profile', {
+                        name: profile.name,
+                        defaultValue: 'Delete {{name}}',
+                      })}
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
+
+                {expandedProfileIds.has(profile.id) && (
+                  <div
+                    style={{
+                      padding: '0 24px 24px 56px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: '12px',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <p
+                        style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '0.85rem' }}
                       >
-                        <Trash2 size={14} />
+                        {t('settings.speaker_profile_samples_hint', {
+                          defaultValue:
+                            'Import one or more local reference clips. They will be normalized to 16k mono WAV and stored under app-managed data.',
+                        })}
+                      </p>
+                      <div style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
+                        {t('settings.speaker_profile_readiness_meta', {
+                          usable: readiness.usableSampleCount,
+                          duration: formatSampleDuration(readiness.usableDurationSeconds),
+                          defaultValue: `${readiness.usableSampleCount} usable samples · ${formatSampleDuration(readiness.usableDurationSeconds)}`,
+                        })}
+                      </div>
+                      <button
+                        className="btn btn-secondary-soft"
+                        onClick={() => void handleImportSamples(profile)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <Upload size={16} />
+                        {t('settings.import_speaker_samples', { defaultValue: 'Import Samples' })}
                       </button>
                     </div>
-                  ))
+
+                    {profile.samples.length === 0 ? (
+                      <div style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
+                        {t('settings.no_speaker_samples', {
+                          defaultValue: 'No reference samples imported yet.',
+                        })}
+                      </div>
+                    ) : (
+                      profile.samples.map((sample) => (
+                        <div
+                          key={sample.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            padding: '10px 12px',
+                            background: 'var(--color-bg-secondary)',
+                            borderRadius: 'var(--radius-md)',
+                          }}
+                        >
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 500 }}>{sample.sourceName}</div>
+                            <div style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
+                              {formatSampleDuration(sample.durationSeconds)}
+                            </div>
+                          </div>
+
+                          <button
+                            className="btn btn-icon btn-danger-soft"
+                            onClick={() => void handleDeleteSample(profile.id, sample.id)}
+                            aria-label={t('common.delete')}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 )}
-                </div>
-              )}
               </div>
             );
           })

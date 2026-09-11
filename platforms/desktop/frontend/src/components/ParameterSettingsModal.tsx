@@ -1,16 +1,14 @@
-import React, { useEffect, useMemo } from 'react';
+import type React from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dropdown } from './Dropdown';
-import { Switch } from './Switch';
-import { useConfigStore } from '../stores/configStore';
-import { Modal } from './Modal';
-import { FormField } from './FormField';
 import { asrConfigService } from '../services/asrConfigService';
+import { useConfigStore } from '../stores/configStore';
 import type { AsrSelectionSlot } from '../types/config';
-import {
-  buildLanguagePickerOptions,
-  type LanguagePickerOption,
-} from '../utils/languages';
+import { buildLanguagePickerOptions, type LanguagePickerOption } from '../utils/languages';
+import { Dropdown } from './Dropdown';
+import { FormField } from './FormField';
+import { Modal } from './Modal';
+import { Switch } from './Switch';
 
 interface ParameterSettingsModalProps {
   isOpen: boolean;
@@ -48,16 +46,17 @@ export function ParameterSettingsModal({
 
   const capability = useMemo(
     () => (isOpen ? asrConfigService.resolveActiveLanguageCapability(config, slot) : null),
-    [isOpen, config, slot],
+    [isOpen, config, slot]
   );
 
   const options = useMemo<LanguagePickerOption[]>(
-    () => buildLanguagePickerOptions(capability, appLocale).map((option) => (
-      option.group === 'common'
-        ? { ...option, group: t('languages.common', { defaultValue: 'Common' }) }
-        : option
-    )),
-    [capability, appLocale, t],
+    () =>
+      buildLanguagePickerOptions(capability, appLocale).map((option) =>
+        option.group === 'common'
+          ? { ...option, group: t('languages.common', { defaultValue: 'Common' }) }
+          : option
+      ),
+    [capability, appLocale, t]
   );
 
   // Persisted selections can go stale when the active model changes; align
@@ -75,9 +74,10 @@ export function ParameterSettingsModal({
   if (!isOpen) return null;
 
   const locksLanguage = capability?.languageMode === 'auto' || capability?.languageMode === 'fixed';
-  const languageHintKey = capability?.languageMode === 'fixed'
-    ? 'batch.language_hint_fixed'
-    : 'batch.language_hint_auto_detect';
+  const languageHintKey =
+    capability?.languageMode === 'fixed'
+      ? 'batch.language_hint_fixed'
+      : 'batch.language_hint_auto_detect';
 
   const dropdownStyle = {
     width: '180px',
@@ -132,11 +132,13 @@ export function ParameterSettingsModal({
               value: option.value,
               label: option.label,
               group: option.group,
-              ariaLabel: option.value === 'auto'
-                ? undefined
-                : `${option.label} (${option.value})`,
+              ariaLabel: option.value === 'auto' ? undefined : `${option.label} (${option.value})`,
             }))}
-            style={locksLanguage ? { ...dropdownStyle, pointerEvents: 'none', opacity: 0.75 } : dropdownStyle}
+            style={
+              locksLanguage
+                ? { ...dropdownStyle, pointerEvents: 'none', opacity: 0.75 }
+                : dropdownStyle
+            }
           />
         </FormField>
       </div>

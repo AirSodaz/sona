@@ -10,7 +10,7 @@ export type ExportTranscriptFileResult = TauriCommandResult<
 >;
 
 export async function exportTranscriptFile(
-  request: ExportTranscriptFileRequest,
+  request: ExportTranscriptFileRequest
 ): Promise<ExportTranscriptFileResult> {
   return invokeTauri(TauriCommand.export.transcriptFile, request);
 }

@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { SyncHeaderPill } from '../SyncHeaderPill';
-import { useSyncStatusStore } from '../../stores/syncStatusStore';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG, useConfigStore } from '../../stores/configStore';
+import { useSyncStatusStore } from '../../stores/syncStatusStore';
 import { DISABLED_SYNC_STATUS, type SyncStatusSnapshot } from '../../types/sync';
+import { SyncHeaderPill } from '../SyncHeaderPill';
 
 const testContext = vi.hoisted(() => ({
   runSyncNow: vi.fn().mockResolvedValue({}),

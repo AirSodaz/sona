@@ -13,13 +13,11 @@ export async function clearAuxWindowState(label: string): Promise<void> {
   await invokeTauri(TauriCommand.system.clearAuxWindowState, { label });
 }
 
-export async function injectText(
-  text: string,
-  shortcutModifiers?: string[],
-): Promise<void> {
-  await invokeTauri(TauriCommand.system.injectText, shortcutModifiers?.length
-    ? { text, shortcutModifiers }
-    : { text });
+export async function injectText(text: string, shortcutModifiers?: string[]): Promise<void> {
+  await invokeTauri(
+    TauriCommand.system.injectText,
+    shortcutModifiers?.length ? { text, shortcutModifiers } : { text }
+  );
 }
 
 export async function getMousePosition(): Promise<[number, number]> {

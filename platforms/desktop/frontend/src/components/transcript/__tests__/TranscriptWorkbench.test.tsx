@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { TranscriptWorkbench } from '../TranscriptWorkbench';
-import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
 import { DEFAULT_CONFIG } from '../../../stores/configStore';
+import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
+import { TranscriptWorkbench } from '../TranscriptWorkbench';
 
 const mockUpdateItemMeta = vi.fn();
 const mockHistoryItems = vi.hoisted(() => ({ current: [] as any[] }));
@@ -18,10 +18,13 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('../../../stores/historyStore', () => ({
-  useHistoryStore: (selector: (state: { items: any[]; updateItemMeta: typeof mockUpdateItemMeta }) => unknown) => selector({
-    items: mockHistoryItems.current,
-    updateItemMeta: mockUpdateItemMeta,
-  }),
+  useHistoryStore: (
+    selector: (state: { items: any[]; updateItemMeta: typeof mockUpdateItemMeta }) => unknown
+  ) =>
+    selector({
+      items: mockHistoryItems.current,
+      updateItemMeta: mockUpdateItemMeta,
+    }),
 }));
 
 vi.mock('../../Icons', () => ({
@@ -51,11 +54,13 @@ vi.mock('../TranscriptSummaryPanel', () => ({
 }));
 
 vi.mock('../TranscriptSpeakerReviewPanel', () => ({
-  TranscriptSpeakerReviewPanel: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>TranscriptSpeakerReviewPanel</div> : null),
+  TranscriptSpeakerReviewPanel: ({ isOpen }: { isOpen: boolean }) =>
+    isOpen ? <div>TranscriptSpeakerReviewPanel</div> : null,
 }));
 
 vi.mock('../TranscriptVersionPanel', () => ({
-  TranscriptVersionPanel: ({ isOpen }: { isOpen: boolean }) => (isOpen ? <div>TranscriptVersionPanel</div> : null),
+  TranscriptVersionPanel: ({ isOpen }: { isOpen: boolean }) =>
+    isOpen ? <div>TranscriptVersionPanel</div> : null,
 }));
 
 vi.mock('../../RenameModal', () => ({
@@ -64,19 +69,25 @@ vi.mock('../../RenameModal', () => ({
 
 vi.mock('../../PolishButton', () => ({
   PolishButton: ({ className = '' }: { className?: string }) => (
-    <button type="button" className={className} aria-label="PolishButton">PolishButton</button>
+    <button type="button" className={className} aria-label="PolishButton">
+      PolishButton
+    </button>
   ),
 }));
 
 vi.mock('../../TranslateButton', () => ({
   TranslateButton: ({ className = '' }: { className?: string }) => (
-    <button type="button" className={className} aria-label="TranslateButton">TranslateButton</button>
+    <button type="button" className={className} aria-label="TranslateButton">
+      TranslateButton
+    </button>
   ),
 }));
 
 vi.mock('../../ExportButton', () => ({
   ExportButton: ({ className = '' }: { className?: string }) => (
-    <button type="button" className={className} aria-label="ExportButton">ExportButton</button>
+    <button type="button" className={className} aria-label="ExportButton">
+      ExportButton
+    </button>
   ),
 }));
 
@@ -89,9 +100,7 @@ describe('TranscriptWorkbench', () => {
     vi.clearAllMocks();
     mockHistoryItems.current = [];
     useTranscriptStore.setState({
-      segments: [
-        { id: 'seg-1', start: 0, end: 1, text: 'Hello', isFinal: true },
-      ],
+      segments: [{ id: 'seg-1', start: 0, end: 1, text: 'Hello', isFinal: true }],
       audioUrl: null,
       config: DEFAULT_CONFIG,
       title: 'Transcript Title',
@@ -132,11 +141,16 @@ describe('TranscriptWorkbench', () => {
     const actionGroup = container.querySelector('.projects-detail-header-actions');
     expect(actionGroup).not.toBeNull();
 
-    const actionLabels = Array.from(actionGroup?.querySelectorAll('button') || []).map((button) => (
-      button.getAttribute('aria-label') || button.textContent || ''
-    ));
+    const actionLabels = Array.from(actionGroup?.querySelectorAll('button') || []).map(
+      (button) => button.getAttribute('aria-label') || button.textContent || ''
+    );
 
-    expect(actionLabels).toEqual(['PolishButton', 'TranslateButton', 'ExportButton', 'common.close']);
+    expect(actionLabels).toEqual([
+      'PolishButton',
+      'TranslateButton',
+      'ExportButton',
+      'common.close',
+    ]);
   });
 
   it('opens the version panel for saved transcript records', async () => {
@@ -251,6 +265,8 @@ describe('TranscriptWorkbench', () => {
     });
 
     expect(screen.queryByText('RenameModal')).toBeNull();
-    expect(screen.getByRole('button', { name: 'common.rename' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'common.rename' }).hasAttribute('disabled')).toBe(
+      true
+    );
   });
 });

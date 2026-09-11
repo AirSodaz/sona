@@ -41,7 +41,7 @@ const SCENARIO_MODEL_FIELDS: ScenarioModelFieldMap = {
 /** Resolves the concrete config field name for a scenario-scoped model kind. */
 export function scenarioModelFieldKey(
   kind: ScenarioModelKind,
-  scenario: AsrScenario,
+  scenario: AsrScenario
 ): ScenarioPathField {
   return SCENARIO_MODEL_FIELDS[scenario][kind];
 }
@@ -50,37 +50,43 @@ export function scenarioModelFieldKey(
 export function getScenarioModelPath(
   config: ScenarioModelPathConfig,
   kind: ScenarioModelKind,
-  scenario: AsrScenario,
+  scenario: AsrScenario
 ): string {
   const key = scenarioModelFieldKey(kind, scenario);
   return config[key]?.trim() || '';
 }
 
-export function getScenarioPunctuationModelPath(config: ScenarioModelPathConfig, scenario: AsrScenario): string {
+export function getScenarioPunctuationModelPath(
+  config: ScenarioModelPathConfig,
+  scenario: AsrScenario
+): string {
   return getScenarioModelPath(config, 'punctuationModelPath', scenario);
 }
 
-export function getScenarioVadModelPath(config: ScenarioModelPathConfig, scenario: AsrScenario): string {
+export function getScenarioVadModelPath(
+  config: ScenarioModelPathConfig,
+  scenario: AsrScenario
+): string {
   return getScenarioModelPath(config, 'vadModelPath', scenario);
 }
 
 export function getScenarioSpeakerSegmentationModelPath(
   config: ScenarioModelPathConfig,
-  scenario: AsrScenario,
+  scenario: AsrScenario
 ): string {
   return getScenarioModelPath(config, 'speakerSegmentationModelPath', scenario);
 }
 
 export function getScenarioSpeakerEmbeddingModelPath(
   config: ScenarioModelPathConfig,
-  scenario: AsrScenario,
+  scenario: AsrScenario
 ): string {
   return getScenarioModelPath(config, 'speakerEmbeddingModelPath', scenario);
 }
 
 export function getScenarioVadBufferSize(
   config: Pick<AppConfig, 'liveVadBufferSize' | 'batchVadBufferSize'>,
-  scenario: AsrScenario,
+  scenario: AsrScenario
 ): number {
   const value = scenario === 'batch' ? config.batchVadBufferSize : config.liveVadBufferSize;
   return Number.isFinite(value) && (value as number) > 0 ? (value as number) : 5;

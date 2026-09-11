@@ -12,7 +12,7 @@ export interface SyncPairingPayload {
 export function encodeSyncPairingToken(
   provider: WebDavObjectStoreConfig,
   vaultId: string,
-  includeProviderPassword = true,
+  includeProviderPassword = true
 ): string {
   const payload: SyncPairingPayload = {
     v: 1,
@@ -20,7 +20,9 @@ export function encodeSyncPairingToken(
     remoteRoot: provider.remoteRoot.trim(),
     username: provider.username.trim(),
     vaultId: vaultId.trim(),
-    ...(includeProviderPassword && provider.password ? { providerPassword: provider.password } : {}),
+    ...(includeProviderPassword && provider.password
+      ? { providerPassword: provider.password }
+      : {}),
   };
 
   const json = JSON.stringify(payload);
@@ -75,7 +77,8 @@ export function decodeSyncPairingToken(token: string): SyncPairingPayload | null
         remoteRoot: parsed.remoteRoot,
         username: parsed.username,
         vaultId: parsed.vaultId,
-        providerPassword: typeof parsed.providerPassword === 'string' ? parsed.providerPassword : '',
+        providerPassword:
+          typeof parsed.providerPassword === 'string' ? parsed.providerPassword : '',
       };
     }
     return null;

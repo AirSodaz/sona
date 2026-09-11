@@ -1,10 +1,7 @@
 import { useVoiceTypingRuntimeStore } from '../../stores/voiceTypingRuntimeStore';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { logger } from '../../utils/logger';
-import {
-  startMicrophoneCapture,
-  stopMicrophoneCapture,
-} from '../tauri/audio';
+import { startMicrophoneCapture, stopMicrophoneCapture } from '../tauri/audio';
 
 const VOICE_TYPING_INSTANCE_ID = 'voice-typing';
 
@@ -18,9 +15,7 @@ export class VoiceTypingMicrophoneRuntime {
 
     try {
       logger.info('[VoiceTypingService] Starting microphone capture for pre-warming...');
-      const deviceName = microphoneId && microphoneId !== 'default'
-        ? microphoneId
-        : null;
+      const deviceName = microphoneId && microphoneId !== 'default' ? microphoneId : null;
       await startMicrophoneCapture({
         deviceName,
         instanceId: VOICE_TYPING_INSTANCE_ID,

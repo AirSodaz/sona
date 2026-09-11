@@ -1,24 +1,18 @@
 /* eslint-disable react-refresh/only-export-components */
 
-import React from 'react';
+import type React from 'react';
 import type { ProjectRecord } from '../../types/project';
-import { ProjectVisual } from './ProjectVisual';
 import { InboxIcon, SummaryIcon, TrashIcon } from '../Icons';
 import { ALL_ITEMS_SCOPE, TRASH_SCOPE, UNTAGGED_SCOPE } from './constants';
-import type {
-  ProjectBrowseScope,
-  TranslationFn,
-} from './types';
+import { ProjectVisual } from './ProjectVisual';
+import type { ProjectBrowseScope, TranslationFn } from './types';
 
 export function formatTimestamp(timestamp: number): string {
   const date = new Date(timestamp);
   return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
 }
 
-export function formatSummaryDuration(
-  durationInSeconds: number,
-  t: TranslationFn,
-): string {
+export function formatSummaryDuration(durationInSeconds: number, t: TranslationFn): string {
   const totalMinutes = Math.max(0, Math.round(durationInSeconds / 60));
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -54,7 +48,7 @@ export function buildComparableProjectSettingsSnapshot(input: {
 export function renderScopeIcon(
   scope: ProjectBrowseScope,
   project?: ProjectRecord | null,
-  options?: { size?: 'xs' | 'sm' | 'md' | 'lg'; showBackground?: boolean },
+  options?: { size?: 'xs' | 'sm' | 'md' | 'lg'; showBackground?: boolean }
 ): React.ReactNode {
   if (scope === ALL_ITEMS_SCOPE) {
     return <SummaryIcon />;
@@ -84,7 +78,11 @@ interface RailItemContentProps {
   description?: string;
 }
 
-export function RailItemContent({ icon, title, description }: RailItemContentProps): React.JSX.Element {
+export function RailItemContent({
+  icon,
+  title,
+  description,
+}: RailItemContentProps): React.JSX.Element {
   return (
     <div className="projects-rail-item-main">
       <span className="projects-rail-item-icon" aria-hidden="true">

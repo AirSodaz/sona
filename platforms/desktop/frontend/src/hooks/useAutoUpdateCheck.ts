@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useConfigStore } from '../stores/configStore';
 import { useAppUpdaterStore } from '../stores/appUpdaterStore';
+import { useConfigStore } from '../stores/configStore';
 
 export function useAutoUpdateCheck(isLoaded: boolean) {
   const autoCheckUpdates = useConfigStore((state) => state.config.autoCheckUpdates ?? true);

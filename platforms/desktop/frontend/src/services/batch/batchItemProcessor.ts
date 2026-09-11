@@ -1,30 +1,30 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { AppConfig } from '../../types/config';
-import type { ExportFormat } from '../../utils/exportFormats';
+import { useHistoryStore } from '../../stores/historyStore';
+import { useProjectStore } from '../../stores/projectStore';
 import type { BatchQueueItem, BatchQueueItemStatus } from '../../types/batchQueue';
+import type { AppConfig } from '../../types/config';
 import type { HistoryItem } from '../../types/history';
 import type { RecoveryItemStage } from '../../types/recovery';
 import type { TranscriptSegment } from '../../types/transcript';
-import { transcriptionService } from '../transcriptionService';
-import { asrConfigService, isLlamaCppBatchRequest } from '../asrConfigService';
-import { historyService } from '../historyService';
-import { polishService } from '../polishService';
-import { translationService } from '../translationService';
-import { summaryService } from '../summaryService';
-import { exportService } from '../exportService';
-import { useHistoryStore } from '../../stores/historyStore';
-import { useProjectStore } from '../../stores/projectStore';
+import type { ExportFormat } from '../../utils/exportFormats';
 import { logger } from '../../utils/logger';
+import { asrConfigService, isLlamaCppBatchRequest } from '../asrConfigService';
+import { exportService } from '../exportService';
+import { historyService } from '../historyService';
+import { pipelineExecutionEngine } from '../pipeline/pipelineExecutionEngine';
+import { polishService } from '../polishService';
+import { resolveItemPipeline } from '../projectPipeline';
+import { summaryService } from '../summaryService';
 import { remove } from '../tauri/platform/fs';
 import { join, tempDir } from '../tauri/platform/path';
-import { pipelineExecutionEngine } from '../pipeline/pipelineExecutionEngine';
-import { resolveItemPipeline } from '../projectPipeline';
+import { transcriptionService } from '../transcriptionService';
+import { translationService } from '../translationService';
 
 export interface BatchItemProcessorCallbacks {
   updateStatus: (
     status: BatchQueueItemStatus,
     progress?: number,
-    lastKnownStage?: RecoveryItemStage,
+    lastKnownStage?: RecoveryItemStage
   ) => void;
   updateSegments: (segments: TranscriptSegment[]) => void;
   onHistorySaved: (historyItem: HistoryItem) => void | Promise<void>;
@@ -60,7 +60,10 @@ export class BatchItemProcessor {
     config,
     callbacks,
   }: ProcessBatchItemOptions): Promise<void> => {
-    if (item.projectId && !this.ports.useProjectStore?.getState?.().getProjectById(item.projectId)) {
+    if (
+      item.projectId &&
+      !this.ports.useProjectStore?.getState?.().getProjectById(item.projectId)
+    ) {
       item.projectId = null;
       item.pipelineSnapshot = undefined;
     }
@@ -95,9 +98,24 @@ export class BatchItemProcessor {
 
       const duration = this.calculateDuration(currentSegments);
       const convertedPath = batchAsr.engine === 'local' && !isLlamaCpp ? tempWavPath : undefined;
-      const historyItem = typeof this.ports.historyService.saveImportedFileToProject === 'function'
-        ? await this.ports.historyService.saveImportedFileToProject(item.filePath, currentSegments, duration, convertedPath, item.projectId, item.id)
-        : await this.ports.historyService.saveImportedFile(item.filePath, currentSegments, duration, convertedPath, item.projectId, item.id);
+      const historyItem =
+        typeof this.ports.historyService.saveImportedFileToProject === 'function'
+          ? await this.ports.historyService.saveImportedFileToProject(
+              item.filePath,
+              currentSegments,
+              duration,
+              convertedPath,
+              item.projectId,
+              item.id
+            )
+          : await this.ports.historyService.saveImportedFile(
+              item.filePath,
+              currentSegments,
+              duration,
+              convertedPath,
+              item.projectId,
+              item.id
+            );
 
       if (!historyItem) {
         return;
@@ -150,7 +168,7 @@ export class BatchItemProcessor {
         },
         language === 'auto' ? undefined : language,
         tempWavPath,
-        config,
+        config
       );
 
       this.throwIfCancelRequested(callbacks);
@@ -159,11 +177,13 @@ export class BatchItemProcessor {
       await persistHistorySnapshot();
 
       const engine = this.ports.pipelineExecutionEngine ?? pipelineExecutionEngine;
-      const pipeline = item.pipelineSnapshot ?? resolveItemPipeline(
-        item.projectId,
-        this.ports.useProjectStore?.getState?.().projects ?? [],
-        config,
-      );
+      const pipeline =
+        item.pipelineSnapshot ??
+        resolveItemPipeline(
+          item.projectId,
+          this.ports.useProjectStore?.getState?.().projects ?? [],
+          config
+        );
 
       const pipelineResult = await engine.execute({
         historyId: savedHistoryId || '',
@@ -172,13 +192,18 @@ export class BatchItemProcessor {
           ...pipeline,
           autoExport: pipeline.autoExport || Boolean(item.exportConfig),
           exportDirectory: item.exportConfig?.directory || pipeline.exportDirectory,
-          exportFormat: (item.exportConfig?.format as ExportFormat | undefined) || pipeline.exportFormat,
+          exportFormat:
+            (item.exportConfig?.format as ExportFormat | undefined) || pipeline.exportFormat,
           exportFileNamePrefix: item.exportFileNamePrefix || pipeline.exportFileNamePrefix,
         },
         globalConfig: config,
         baseFileName: this.buildAutomationExportBaseName(item),
         onProgress: (stage, progress) => {
-          callbacks.updateStatus('processing', progress, stage === 'summarizing' ? undefined : stage);
+          callbacks.updateStatus(
+            'processing',
+            progress,
+            stage === 'summarizing' ? undefined : stage
+          );
         },
         onSegmentsUpdated: async (updatedSegments) => {
           setCurrentSegments(updatedSegments);
@@ -210,7 +235,7 @@ export class BatchItemProcessor {
     } finally {
       await this.removeTempFile(tempWavPath);
     }
-  }
+  };
 
   private calculateDuration(segments: TranscriptSegment[]): number {
     return segments.length > 0 ? segments[segments.length - 1].end : 0;

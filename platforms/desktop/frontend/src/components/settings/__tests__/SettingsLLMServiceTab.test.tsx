@@ -1,22 +1,22 @@
-import { expect, vi, beforeEach, describe, it } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import * as tauriApi from '@tauri-apps/api/core';
-import { SettingsLLMServiceTab } from '../SettingsLLMServiceTab';
-import { ProviderDetailsModal } from '../llm/ProviderDetailsModal';
-import type { AppConfig } from '../../../types/config';
-import type { LlmProvider } from '../../../types/transcript';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   addLlmModel,
   buildLlmConfigPatch,
   createLlmSettings,
   findLlmModelId,
-  syncProviderDiscoveredModels,
   setFeatureModelSelection,
   setFeatureReasoningEnabled,
   setFeatureTemperature,
+  syncProviderDiscoveredModels,
   updateProviderSetting,
 } from '../../../services/llm/state';
 import { buildTestConfig } from '../../../test-utils/configTestUtils';
+import type { AppConfig } from '../../../types/config';
+import type { LlmProvider } from '../../../types/transcript';
+import { ProviderDetailsModal } from '../llm/ProviderDetailsModal';
+import { SettingsLLMServiceTab } from '../SettingsLLMServiceTab';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -64,14 +64,17 @@ const mockUpdateConfig = vi.fn();
 let currentConfig = buildConfig();
 
 function clickProviderHeader(providerLabel: string) {
-  const header = Array.from(document.querySelectorAll<HTMLElement>('.accordion-header'))
-    .find((candidate) => candidate.textContent?.includes(providerLabel));
+  const header = Array.from(document.querySelectorAll<HTMLElement>('.accordion-header')).find(
+    (candidate) => candidate.textContent?.includes(providerLabel)
+  );
   expect(header).toBeTruthy();
   fireEvent.click(header!);
 }
 
 vi.mock('../../../stores/configStore', async () => {
-  const actual = await vi.importActual<typeof import('../../../stores/configStore')>('../../../stores/configStore');
+  const actual = await vi.importActual<typeof import('../../../stores/configStore')>(
+    '../../../stores/configStore'
+  );
   return {
     ...actual,
     useLlmAssistantConfig: () => currentConfig,
@@ -96,9 +99,7 @@ describe('SettingsLLMServiceTab', () => {
 
   it('does not list provider models while inactive for tab prewarm', async () => {
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab isActive={false} />,
-      );
+      render(<SettingsLLMServiceTab isActive={false} />);
       await Promise.resolve();
     });
 
@@ -107,9 +108,7 @@ describe('SettingsLLMServiceTab', () => {
 
   it('shows provider details only after expanding a configured provider', async () => {
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     await act(async () => {
@@ -119,15 +118,16 @@ describe('SettingsLLMServiceTab', () => {
 
     currentConfig = buildConfig('google_translate_free', false);
     currentConfig.llmSettings = setFeatureModelSelection(
-      addLlmModel(currentConfig.llmSettings, { provider: 'google_translate_free', model: 'default' }),
+      addLlmModel(currentConfig.llmSettings, {
+        provider: 'google_translate_free',
+        model: 'default',
+      }),
       'translation',
-      'google_translate_free-default',
+      'google_translate_free-default'
     );
 
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     expect(screen.queryByRole('button', { name: 'settings.llm.test_connection' })).toBeNull();
@@ -136,9 +136,7 @@ describe('SettingsLLMServiceTab', () => {
   it('uses the llm_service tabpanel id expected by the settings tab button', async () => {
     let container!: HTMLElement;
     await act(async () => {
-      ({ container } = render(
-        <SettingsLLMServiceTab />,
-      ));
+      ({ container } = render(<SettingsLLMServiceTab />));
     });
 
     expect(container.querySelector('#settings-panel-llm_service')).not.toBeNull();
@@ -148,9 +146,7 @@ describe('SettingsLLMServiceTab', () => {
   it('renders feature cards in polish-translation-summary order and keeps the credentials section', async () => {
     let container!: HTMLElement;
     await act(async () => {
-      ({ container } = render(
-        <SettingsLLMServiceTab />,
-      ));
+      ({ container } = render(<SettingsLLMServiceTab />));
     });
 
     screen.getByText('settings.llm.title');
@@ -182,13 +178,11 @@ describe('SettingsLLMServiceTab', () => {
 
   it('renders active provider fields from llmSettings in accordion', async () => {
     const conf = buildConfig();
-    conf.llmSettings!.providers['open_ai']!.apiHost = 'test-host';
+    conf.llmSettings!.providers.open_ai!.apiHost = 'test-host';
     currentConfig = conf;
 
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     expect(screen.queryByTestId('provider-accordion-content-open_ai')).toBeNull();
@@ -201,13 +195,11 @@ describe('SettingsLLMServiceTab', () => {
 
   it('keeps expanded provider fields grouped inside the matching accordion content', async () => {
     const conf = buildConfig();
-    conf.llmSettings!.providers['open_ai']!.apiHost = 'test-host';
+    conf.llmSettings!.providers.open_ai!.apiHost = 'test-host';
     currentConfig = conf;
 
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     expect(screen.queryByTestId('provider-accordion-content-open_ai')).toBeNull();
@@ -222,9 +214,7 @@ describe('SettingsLLMServiceTab', () => {
 
   it('hides providers that are not configured', async () => {
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     await waitFor(() => {
@@ -235,13 +225,11 @@ describe('SettingsLLMServiceTab', () => {
 
   it('fills Gemini host with the default host in accordion', async () => {
     const conf = buildConfig('gemini');
-    conf.llmSettings!.providers['gemini']!.apiHost = 'gemini-host';
+    conf.llmSettings!.providers.gemini!.apiHost = 'gemini-host';
     currentConfig = conf;
 
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     await act(async () => {
@@ -259,9 +247,7 @@ describe('SettingsLLMServiceTab', () => {
     currentConfig = conf;
 
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     expect(screen.queryByText('Google Translate (Free)')).toBeNull();
@@ -278,9 +264,7 @@ describe('SettingsLLMServiceTab', () => {
 
   it('shows candidates only while the model input is focused', async () => {
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     const modelInputs = screen.getAllByPlaceholderText('gpt-4o-mini'); // Default placeholder for OpenAI
@@ -308,19 +292,22 @@ describe('SettingsLLMServiceTab', () => {
 
   it('uses persisted provider models instead of refetching candidates when they already exist', async () => {
     let llmSettings = buildConfig('open_ai').llmSettings!;
-    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
-      { model: 'gpt-4.1', contextWindow: 128000 },
-      { model: 'gpt-4.1-mini', supportsReasoning: true },
-    ], new Date().toISOString());
+    llmSettings = syncProviderDiscoveredModels(
+      llmSettings,
+      'open_ai',
+      [
+        { model: 'gpt-4.1', contextWindow: 128000 },
+        { model: 'gpt-4.1-mini', supportsReasoning: true },
+      ],
+      new Date().toISOString()
+    );
     currentConfig = {
       ...buildConfig('open_ai'),
       llmSettings,
     };
 
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     const modelInputs = screen.getAllByDisplayValue('gpt-4o');
@@ -334,40 +321,50 @@ describe('SettingsLLMServiceTab', () => {
       screen.getByText('gpt-4.1-mini');
     });
 
-    expect(vi.mocked(tauriApi.invoke)).not.toHaveBeenCalledWith('list_llm_models', expect.anything());
+    expect(vi.mocked(tauriApi.invoke)).not.toHaveBeenCalledWith(
+      'list_llm_models',
+      expect.anything()
+    );
   });
 
   it('refreshes expired persisted provider models for feature candidates and writes them back', async () => {
     let llmSettings = buildConfig('open_ai').llmSettings!;
-    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
-      { model: 'gpt-4.1' },
-    ], '2026-05-22T10:00:00.000Z');
+    llmSettings = syncProviderDiscoveredModels(
+      llmSettings,
+      'open_ai',
+      [{ model: 'gpt-4.1' }],
+      '2026-05-22T10:00:00.000Z'
+    );
     currentConfig = {
       ...buildConfig('open_ai'),
       llmSettings,
     };
 
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
       await Promise.resolve();
     });
 
     await waitFor(() => {
-      expect(vi.mocked(tauriApi.invoke)).toHaveBeenCalledWith('list_llm_models', expect.objectContaining({
-        request: expect.objectContaining({
-          provider: { Builtin: 'open_ai' },
-          apiKey: 'test-key',
-        }),
-      }));
+      expect(vi.mocked(tauriApi.invoke)).toHaveBeenCalledWith(
+        'list_llm_models',
+        expect.objectContaining({
+          request: expect.objectContaining({
+            provider: { Builtin: 'open_ai' },
+            apiKey: 'test-key',
+          }),
+        })
+      );
     });
 
-    const nextSettings = mockUpdateConfig.mock.calls[mockUpdateConfig.mock.calls.length - 1]?.[0].llmSettings;
-    expect(nextSettings.modelDiscovery.open_ai).toEqual(expect.objectContaining({
-      fetchedAt: expect.any(String),
-      expiresAt: expect.any(String),
-    }));
+    const nextSettings =
+      mockUpdateConfig.mock.calls[mockUpdateConfig.mock.calls.length - 1]?.[0].llmSettings;
+    expect(nextSettings.modelDiscovery.open_ai).toEqual(
+      expect.objectContaining({
+        fetchedAt: expect.any(String),
+        expiresAt: expect.any(String),
+      })
+    );
     expect(findLlmModelId(nextSettings, 'open_ai', 'gpt-4.1-mini')).toBeDefined();
   });
 
@@ -388,9 +385,7 @@ describe('SettingsLLMServiceTab', () => {
 
     let unmount!: () => void;
     await act(async () => {
-      ({ unmount } = render(
-        <SettingsLLMServiceTab />,
-      ));
+      ({ unmount } = render(<SettingsLLMServiceTab />));
     });
 
     const modelInputs = screen.getAllByPlaceholderText('gpt-4o-mini');
@@ -418,9 +413,7 @@ describe('SettingsLLMServiceTab', () => {
 
   it('renders unified temperature controls for all three features', async () => {
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     expect(screen.queryByTestId('provider-temperature-number')).toBeNull();
@@ -438,9 +431,7 @@ describe('SettingsLLMServiceTab', () => {
 
   it('updates polish temperature independently', async () => {
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     const sliders = screen.getAllByRole('spinbutton');
@@ -448,20 +439,20 @@ describe('SettingsLLMServiceTab', () => {
       fireEvent.change(sliders[0], { target: { value: '0.25' } });
     });
 
-    expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
-      llmSettings: expect.objectContaining({
-        selections: expect.objectContaining({
-          polishTemperature: 0.25,
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        llmSettings: expect.objectContaining({
+          selections: expect.objectContaining({
+            polishTemperature: 0.25,
+          }),
         }),
-      }),
-    }));
+      })
+    );
   });
 
   it('updates translation temperature independently', async () => {
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     await act(async () => {
@@ -473,20 +464,20 @@ describe('SettingsLLMServiceTab', () => {
       fireEvent.change(sliders[0], { target: { value: '1.1' } });
     });
 
-    expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
-      llmSettings: expect.objectContaining({
-        selections: expect.objectContaining({
-          translationTemperature: 1.1,
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        llmSettings: expect.objectContaining({
+          selections: expect.objectContaining({
+            translationTemperature: 1.1,
+          }),
         }),
-      }),
-    }));
+      })
+    );
   });
 
   it('updates summary temperature independently', async () => {
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     await act(async () => {
@@ -498,13 +489,15 @@ describe('SettingsLLMServiceTab', () => {
       fireEvent.change(sliders[0], { target: { value: '0.6' } });
     });
 
-    expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
-      llmSettings: expect.objectContaining({
-        selections: expect.objectContaining({
-          summaryTemperature: 0.6,
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        llmSettings: expect.objectContaining({
+          selections: expect.objectContaining({
+            summaryTemperature: 0.6,
+          }),
         }),
-      }),
-    }));
+      })
+    );
   });
 
   it('keeps temperature controls editable when reasoning mode is enabled', async () => {
@@ -514,7 +507,9 @@ describe('SettingsLLMServiceTab', () => {
       model: 'gpt-4.1-mini',
       metadata: { supportsReasoning: true },
     });
-    const reasoningModelId = llmSettings.modelOrder.find((id) => llmSettings.models[id]?.model === 'gpt-4.1-mini')!;
+    const reasoningModelId = llmSettings.modelOrder.find(
+      (id) => llmSettings.models[id]?.model === 'gpt-4.1-mini'
+    )!;
     llmSettings = setFeatureModelSelection(llmSettings, 'polish', reasoningModelId);
     llmSettings = setFeatureReasoningEnabled(llmSettings, 'polish', true);
     llmSettings = setFeatureTemperature(llmSettings, 'polish', 0.35);
@@ -524,9 +519,7 @@ describe('SettingsLLMServiceTab', () => {
     };
 
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     const temperatureInputs = screen.getAllByRole('spinbutton') as HTMLInputElement[];
@@ -537,14 +530,16 @@ describe('SettingsLLMServiceTab', () => {
       fireEvent.change(temperatureInputs[0], { target: { value: '0.55' } });
     });
 
-    expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
-      llmSettings: expect.objectContaining({
-        selections: expect.objectContaining({
-          polishReasoningEnabled: true,
-          polishTemperature: 0.55,
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        llmSettings: expect.objectContaining({
+          selections: expect.objectContaining({
+            polishReasoningEnabled: true,
+            polishTemperature: 0.55,
+          }),
         }),
-      }),
-    }));
+      })
+    );
   });
 
   it('does not render a summary enable toggle or feature status tag', async () => {
@@ -554,9 +549,7 @@ describe('SettingsLLMServiceTab', () => {
     };
 
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     await act(async () => {
@@ -573,7 +566,9 @@ describe('SettingsLLMServiceTab', () => {
       summaryEnabled: true,
       llmSettings: createLlmSettings('gemini'),
     });
-    config.llmSettings = updateProviderSetting(config.llmSettings, 'gemini', { apiKey: 'gemini-key' });
+    config.llmSettings = updateProviderSetting(config.llmSettings, 'gemini', {
+      apiKey: 'gemini-key',
+    });
     currentConfig = config;
 
     await act(async () => {
@@ -595,7 +590,9 @@ describe('SettingsLLMServiceTab', () => {
     });
 
     expect(screen.queryByText('settings.llm.model_selection_unsupported')).toBeNull();
-    const modelInput = screen.getByDisplayValue('settings.llm.model_selection_unsupported') as HTMLInputElement;
+    const modelInput = screen.getByDisplayValue(
+      'settings.llm.model_selection_unsupported'
+    ) as HTMLInputElement;
     expect(modelInput.disabled).toBe(true);
     expect(modelInput.readOnly).toBe(true);
     expect(modelInput.classList.contains('feature-model-unsupported-input')).toBe(true);
@@ -610,7 +607,10 @@ describe('SettingsLLMServiceTab', () => {
       metadata: { supportsTemperature: false },
     });
     llmSettings = setFeatureModelSelection(llmSettings, 'polish', llmSettings.modelOrder[0]);
-    currentConfig = { ...buildTestConfig({ summaryEnabled: true }), ...buildLlmConfigPatch(llmSettings) };
+    currentConfig = {
+      ...buildTestConfig({ summaryEnabled: true }),
+      ...buildLlmConfigPatch(llmSettings),
+    };
 
     await act(async () => {
       render(<SettingsLLMServiceTab />);
@@ -626,9 +626,7 @@ describe('SettingsLLMServiceTab', () => {
     currentConfig = config;
 
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     await act(async () => {
@@ -641,9 +639,7 @@ describe('SettingsLLMServiceTab', () => {
   it('surfaces normalized connection errors', async () => {
     const onOpenProviderDetails = vi.fn();
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab onOpenProviderDetails={onOpenProviderDetails} />,
-      );
+      render(<SettingsLLMServiceTab onOpenProviderDetails={onOpenProviderDetails} />);
     });
 
     await act(async () => {
@@ -659,9 +655,7 @@ describe('SettingsLLMServiceTab', () => {
   it('delegates provider details opening to the settings-level panel stack', async () => {
     const onOpenProviderDetails = vi.fn();
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab onOpenProviderDetails={onOpenProviderDetails} />,
-      );
+      render(<SettingsLLMServiceTab onOpenProviderDetails={onOpenProviderDetails} />);
     });
 
     await act(async () => {
@@ -681,9 +675,7 @@ describe('SettingsLLMServiceTab', () => {
     };
 
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab onOpenProviderDetails={onOpenProviderDetails} />,
-      );
+      render(<SettingsLLMServiceTab onOpenProviderDetails={onOpenProviderDetails} />);
     });
 
     await act(async () => {
@@ -698,23 +690,21 @@ describe('SettingsLLMServiceTab', () => {
 
   it('still renders provider details buttons while provider-level modal content is handled elsewhere', async () => {
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab onOpenProviderDetails={() => undefined} />,
-      );
+      render(<SettingsLLMServiceTab onOpenProviderDetails={() => undefined} />);
     });
 
     await act(async () => {
       clickProviderHeader('OpenAI');
     });
-    expect(screen.getAllByRole('button', { name: 'settings.llm.details' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'settings.llm.details' }).length).toBeGreaterThan(
+      0
+    );
   });
 
   it('passes the active provider through when opening details from the llm settings stack', async () => {
     const onOpenProviderDetails = vi.fn();
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab onOpenProviderDetails={onOpenProviderDetails} />,
-      );
+      render(<SettingsLLMServiceTab onOpenProviderDetails={onOpenProviderDetails} />);
     });
 
     await act(async () => {
@@ -728,7 +718,6 @@ describe('SettingsLLMServiceTab', () => {
   });
 
   it('keeps provider details on the shared leading slot and only uses provider-specific copy and toolbar classes', async () => {
-
     await act(async () => {
       render(
         <ProviderDetailsModal
@@ -740,7 +729,7 @@ describe('SettingsLLMServiceTab', () => {
           onClose={vi.fn()}
           applyLlmSettings={vi.fn()}
           t={(key) => key}
-        />,
+        />
       );
     });
 
@@ -749,13 +738,19 @@ describe('SettingsLLMServiceTab', () => {
     expect(screen.getAllByText('settings.llm.model_library').length).toBeGreaterThan(0);
     expect(dialog.querySelector('.provider-details-header')).toBeNull();
     expect(dialog.querySelector('.provider-details-header-copy')).toBeTruthy();
-    expect(dialog.querySelector('.provider-details-header-copy .provider-details-subtitle')).toBeNull();
+    expect(
+      dialog.querySelector('.provider-details-header-copy .provider-details-subtitle')
+    ).toBeNull();
     expect(dialog.querySelector('.provider-details-header-controls')).toBeNull();
     expect(dialog.querySelector('.provider-details-toolbar')).toBeTruthy();
     expect(dialog.querySelector('.provider-details-actions')).toBeTruthy();
     expect(dialog.querySelector('.provider-details-add-group')).toBeTruthy();
     expect(dialog.querySelector('.provider-details-refresh')).toBeTruthy();
-    expect(dialog.querySelector('.provider-details-toolbar')?.contains(screen.getByRole('button', { name: 'common.close' }))).toBe(false);
+    expect(
+      dialog
+        .querySelector('.provider-details-toolbar')
+        ?.contains(screen.getByRole('button', { name: 'common.close' }))
+    ).toBe(false);
   });
 
   it('renders provider model card edit and test actions as tooltip-only icon buttons', async () => {
@@ -785,11 +780,13 @@ describe('SettingsLLMServiceTab', () => {
           onClose={vi.fn()}
           applyLlmSettings={vi.fn()}
           t={(key) => key}
-        />,
+        />
       );
     });
 
-    const editButton = screen.getByRole('button', { name: 'settings.llm.edit_model_metadata gpt-4.1' });
+    const editButton = screen.getByRole('button', {
+      name: 'settings.llm.edit_model_metadata gpt-4.1',
+    });
     const testButton = screen.getByRole('button', { name: 'settings.llm.test_connection gpt-4.1' });
 
     expect(editButton.classList.contains('btn-icon')).toBe(true);
@@ -814,9 +811,12 @@ describe('SettingsLLMServiceTab', () => {
   it('only refreshes provider models from details after an explicit refresh click', async () => {
     const applyLlmSettings = vi.fn();
     let llmSettings = currentConfig.llmSettings!;
-    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
-      { model: 'gpt-4.1' },
-    ], new Date().toISOString());
+    llmSettings = syncProviderDiscoveredModels(
+      llmSettings,
+      'open_ai',
+      [{ model: 'gpt-4.1' }],
+      new Date().toISOString()
+    );
     currentConfig = {
       ...currentConfig,
       llmSettings,
@@ -843,13 +843,15 @@ describe('SettingsLLMServiceTab', () => {
           onClose={vi.fn()}
           applyLlmSettings={applyLlmSettings}
           t={(key) => key}
-        />,
+        />
       );
     });
 
     expect(tauriApi.invoke).not.toHaveBeenCalledWith('list_llm_models', expect.anything());
 
-    const refreshButton = screen.getByRole('button', { name: 'settings.llm.refresh_models' }) as HTMLButtonElement;
+    const refreshButton = screen.getByRole('button', {
+      name: 'settings.llm.refresh_models',
+    }) as HTMLButtonElement;
     expect(refreshButton.disabled).toBe(false);
 
     await act(async () => {
@@ -857,12 +859,15 @@ describe('SettingsLLMServiceTab', () => {
     });
 
     expect(tauriApi.invoke).toHaveBeenCalledTimes(1);
-    expect(tauriApi.invoke).toHaveBeenCalledWith('list_llm_models', expect.objectContaining({
-      request: expect.objectContaining({
-        provider: { Builtin: 'open_ai' },
-        apiKey: 'test-key',
-      }),
-    }));
+    expect(tauriApi.invoke).toHaveBeenCalledWith(
+      'list_llm_models',
+      expect.objectContaining({
+        request: expect.objectContaining({
+          provider: { Builtin: 'open_ai' },
+          apiKey: 'test-key',
+        }),
+      })
+    );
     expect(refreshButton.disabled).toBe(true);
     expect(applyLlmSettings).not.toHaveBeenCalled();
 
@@ -884,9 +889,12 @@ describe('SettingsLLMServiceTab', () => {
   it('auto-refreshes an expired provider model library when details open', async () => {
     const applyLlmSettings = vi.fn();
     let llmSettings = currentConfig.llmSettings!;
-    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
-      { model: 'gpt-4.1' },
-    ], '2026-05-22T10:00:00.000Z');
+    llmSettings = syncProviderDiscoveredModels(
+      llmSettings,
+      'open_ai',
+      [{ model: 'gpt-4.1' }],
+      '2026-05-22T10:00:00.000Z'
+    );
     currentConfig = {
       ...currentConfig,
       llmSettings,
@@ -903,18 +911,21 @@ describe('SettingsLLMServiceTab', () => {
           onClose={vi.fn()}
           applyLlmSettings={applyLlmSettings}
           t={(key) => key}
-        />,
+        />
       );
       await Promise.resolve();
     });
 
     await waitFor(() => {
-      expect(tauriApi.invoke).toHaveBeenCalledWith('list_llm_models', expect.objectContaining({
-        request: expect.objectContaining({
-          provider: { Builtin: 'open_ai' },
-          apiKey: 'test-key',
-        }),
-      }));
+      expect(tauriApi.invoke).toHaveBeenCalledWith(
+        'list_llm_models',
+        expect.objectContaining({
+          request: expect.objectContaining({
+            provider: { Builtin: 'open_ai' },
+            apiKey: 'test-key',
+          }),
+        })
+      );
     });
     expect(applyLlmSettings).toHaveBeenCalledTimes(1);
   });
@@ -922,9 +933,12 @@ describe('SettingsLLMServiceTab', () => {
   it('keeps fresh provider model library cache local when details open', async () => {
     const applyLlmSettings = vi.fn();
     let llmSettings = currentConfig.llmSettings!;
-    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
-      { model: 'gpt-4.1' },
-    ], new Date().toISOString());
+    llmSettings = syncProviderDiscoveredModels(
+      llmSettings,
+      'open_ai',
+      [{ model: 'gpt-4.1' }],
+      new Date().toISOString()
+    );
     currentConfig = {
       ...currentConfig,
       llmSettings,
@@ -941,7 +955,7 @@ describe('SettingsLLMServiceTab', () => {
           onClose={vi.fn()}
           applyLlmSettings={applyLlmSettings}
           t={(key) => key}
-        />,
+        />
       );
       await Promise.resolve();
     });
@@ -978,12 +992,14 @@ describe('SettingsLLMServiceTab', () => {
           onClose={vi.fn()}
           applyLlmSettings={applyLlmSettings}
           t={(key) => key}
-        />,
+        />
       );
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.edit_model_metadata gpt-4.1' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'settings.llm.edit_model_metadata gpt-4.1' })
+      );
     });
 
     await act(async () => {
@@ -1005,22 +1021,24 @@ describe('SettingsLLMServiceTab', () => {
     const nextSettings = applyLlmSettings.mock.calls[0][0];
     const modelId = findLlmModelId(nextSettings, 'open_ai', 'gpt-4.1');
     expect(modelId).toBeDefined();
-    expect(nextSettings.models[modelId!]).toEqual(expect.objectContaining({
-      metadata: expect.objectContaining({
-        contextWindow: 200000,
-        inputPrice: 1.25,
-        outputPrice: undefined,
-        supportsTools: false,
-        supportsReasoning: true,
-      }),
-      metadataOverrides: expect.objectContaining({
-        contextWindow: true,
-        inputPrice: true,
-        outputPrice: true,
-        supportsTools: true,
-        supportsReasoning: true,
-      }),
-    }));
+    expect(nextSettings.models[modelId!]).toEqual(
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          contextWindow: 200000,
+          inputPrice: 1.25,
+          outputPrice: undefined,
+          supportsTools: false,
+          supportsReasoning: true,
+        }),
+        metadataOverrides: expect.objectContaining({
+          contextWindow: true,
+          inputPrice: true,
+          outputPrice: true,
+          supportsTools: true,
+          supportsReasoning: true,
+        }),
+      })
+    );
   });
 
   it('edits manual provider model metadata while keeping manual-only delete available', async () => {
@@ -1030,9 +1048,12 @@ describe('SettingsLLMServiceTab', () => {
       provider: 'open_ai',
       model: 'manual-model',
     });
-    llmSettings = syncProviderDiscoveredModels(llmSettings, 'open_ai', [
-      { model: 'gpt-4.1' },
-    ], new Date().toISOString());
+    llmSettings = syncProviderDiscoveredModels(
+      llmSettings,
+      'open_ai',
+      [{ model: 'gpt-4.1' }],
+      new Date().toISOString()
+    );
     currentConfig = {
       ...currentConfig,
       llmSettings,
@@ -1049,7 +1070,7 @@ describe('SettingsLLMServiceTab', () => {
           onClose={vi.fn()}
           applyLlmSettings={applyLlmSettings}
           t={(key) => key}
-        />,
+        />
       );
     });
 
@@ -1062,7 +1083,9 @@ describe('SettingsLLMServiceTab', () => {
     expect(deleteButton.getAttribute('data-tooltip-pos')).toBe('top');
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.edit_model_metadata manual-model' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'settings.llm.edit_model_metadata manual-model' })
+      );
     });
 
     await act(async () => {
@@ -1077,17 +1100,19 @@ describe('SettingsLLMServiceTab', () => {
     const nextSettings = applyLlmSettings.mock.calls[0][0];
     const modelId = findLlmModelId(nextSettings, 'open_ai', 'manual-model');
     expect(modelId).toBeDefined();
-    expect(nextSettings.models[modelId!]).toEqual(expect.objectContaining({
-      source: 'manual',
-      metadata: expect.objectContaining({
-        maxOutputTokens: 8192,
-        supportsMultimodal: true,
-      }),
-      metadataOverrides: {
-        maxOutputTokens: true,
-        supportsMultimodal: true,
-      },
-    }));
+    expect(nextSettings.models[modelId!]).toEqual(
+      expect.objectContaining({
+        source: 'manual',
+        metadata: expect.objectContaining({
+          maxOutputTokens: 8192,
+          supportsMultimodal: true,
+        }),
+        metadataOverrides: {
+          maxOutputTokens: true,
+          supportsMultimodal: true,
+        },
+      })
+    );
   });
 
   it('cancels provider model metadata edits without applying settings', async () => {
@@ -1112,12 +1137,14 @@ describe('SettingsLLMServiceTab', () => {
           onClose={vi.fn()}
           applyLlmSettings={applyLlmSettings}
           t={(key) => key}
-        />,
+        />
       );
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.edit_model_metadata gpt-4.1' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'settings.llm.edit_model_metadata gpt-4.1' })
+      );
     });
 
     await act(async () => {
@@ -1153,12 +1180,14 @@ describe('SettingsLLMServiceTab', () => {
           onClose={vi.fn()}
           applyLlmSettings={applyLlmSettings}
           t={(key) => key}
-        />,
+        />
       );
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.edit_model_metadata gpt-4.1' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'settings.llm.edit_model_metadata gpt-4.1' })
+      );
     });
 
     await act(async () => {
@@ -1174,9 +1203,7 @@ describe('SettingsLLMServiceTab', () => {
 
   it('adds a custom provider and opens credential configuration', async () => {
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     await act(async () => {
@@ -1189,30 +1216,36 @@ describe('SettingsLLMServiceTab', () => {
       fireEvent.change(screen.getByLabelText('settings.llm.custom_provider_name'), {
         target: { value: 'Private Gateway' },
       });
-      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.api_mode_openai_responses' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'settings.llm.api_mode_openai_responses' })
+      );
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'settings.llm.add_custom_provider_confirm' }));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'settings.llm.add_custom_provider_confirm' })
+      );
     });
 
-    expect(mockUpdateConfig).toHaveBeenCalledWith(expect.objectContaining({
-      llmSettings: expect.objectContaining({
-        activeProvider: 'custom-private-gateway',
-        customProviders: expect.objectContaining({
-          'custom-private-gateway': expect.objectContaining({
-            name: 'Private Gateway',
-            strategy: 'openai_responses',
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        llmSettings: expect.objectContaining({
+          activeProvider: 'custom-private-gateway',
+          customProviders: expect.objectContaining({
+            'custom-private-gateway': expect.objectContaining({
+              name: 'Private Gateway',
+              strategy: 'openai_responses',
+            }),
+          }),
+          providers: expect.objectContaining({
+            'custom-private-gateway': expect.objectContaining({
+              apiHost: '',
+              apiPath: '/v1/responses',
+            }),
           }),
         }),
-        providers: expect.objectContaining({
-          'custom-private-gateway': expect.objectContaining({
-            apiHost: '',
-            apiPath: '/v1/responses',
-          }),
-        }),
-      }),
-    }));
+      })
+    );
 
     expect(screen.getAllByLabelText('settings.llm.api_key').at(-1)).toBeTruthy();
   });
@@ -1233,7 +1266,7 @@ describe('SettingsLLMServiceTab', () => {
       apiKey: 'gateway-key',
       apiPath: '/v1/chat/completions',
     };
-    conf.llmSettings!.providers['chatglm'] = {
+    conf.llmSettings!.providers.chatglm = {
       apiHost: 'https://open.bigmodel.cn/api/paas/v4/',
       apiKey: 'chatglm-key',
     };
@@ -1241,9 +1274,7 @@ describe('SettingsLLMServiceTab', () => {
 
     let container!: HTMLElement;
     await act(async () => {
-      ({ container } = render(
-        <SettingsLLMServiceTab />,
-      ));
+      ({ container } = render(<SettingsLLMServiceTab />));
     });
 
     const credentialsList = container.querySelector('.accordion-container');
@@ -1254,10 +1285,10 @@ describe('SettingsLLMServiceTab', () => {
     expect(credentialsList?.contains(customProvider)).toBe(true);
     expect(credentialsList?.contains(addButton)).toBe(true);
     expect(
-      lastBuiltInProvider.compareDocumentPosition(customProvider) & Node.DOCUMENT_POSITION_FOLLOWING,
+      lastBuiltInProvider.compareDocumentPosition(customProvider) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
     expect(
-      customProvider.compareDocumentPosition(addButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+      customProvider.compareDocumentPosition(addButton) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
   });
 
@@ -1280,9 +1311,7 @@ describe('SettingsLLMServiceTab', () => {
     currentConfig = conf;
 
     await act(async () => {
-      render(
-        <SettingsLLMServiceTab />,
-      );
+      render(<SettingsLLMServiceTab />);
     });
 
     await act(async () => {

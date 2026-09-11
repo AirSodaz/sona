@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/shallow';
 import type { Update } from '../services/tauri/platform/updater';
-import { useAppUpdaterStore, UpdateStatus } from '../stores/appUpdaterStore';
+import { type UpdateStatus, useAppUpdaterStore } from '../stores/appUpdaterStore';
 
 interface UseAppUpdaterReturn {
   status: UpdateStatus;
@@ -15,15 +15,17 @@ interface UseAppUpdaterReturn {
 }
 
 export function useAppUpdater(): UseAppUpdaterReturn {
-  return useAppUpdaterStore(useShallow((state) => ({
-    status: state.status,
-    error: state.error,
-    updateInfo: state.updateInfo,
-    checkUpdate: state.checkUpdate,
-    installUpdate: state.installUpdate,
-    progress: state.progress,
-    notificationVisible: state.notificationVisible,
-    dismissNotification: state.dismissNotification,
-    relaunchToUpdate: state.relaunchToUpdate,
-  })));
+  return useAppUpdaterStore(
+    useShallow((state) => ({
+      status: state.status,
+      error: state.error,
+      updateInfo: state.updateInfo,
+      checkUpdate: state.checkUpdate,
+      installUpdate: state.installUpdate,
+      progress: state.progress,
+      notificationVisible: state.notificationVisible,
+      dismissNotification: state.dismissNotification,
+      relaunchToUpdate: state.relaunchToUpdate,
+    }))
+  );
 }

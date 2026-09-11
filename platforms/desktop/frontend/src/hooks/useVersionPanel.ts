@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { transcriptSnapshotService } from '../services/transcriptSnapshotService';
 import { useDialogStore } from '../stores/dialogStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { setTranscriptSegments } from '../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import { transcriptSnapshotService } from '../services/transcriptSnapshotService';
 import type { TranscriptSegment } from '../types/transcript';
 import type {
   TranscriptDiffRow,
@@ -35,34 +35,38 @@ export function useVersionPanel({ isOpen, historyId }: UseVersionPanelProps) {
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadSnapshots = useCallback(async (preferredSnapshotId?: string | null) => {
-    if (!historyId) {
-      setSnapshots([]);
-      setSelectedSnapshotId(null);
-      setSelectedRowIds(new Set());
-      return;
-    }
+  const loadSnapshots = useCallback(
+    async (preferredSnapshotId?: string | null) => {
+      if (!historyId) {
+        setSnapshots([]);
+        setSelectedSnapshotId(null);
+        setSelectedRowIds(new Set());
+        return;
+      }
 
-    setIsLoading(true);
-    setError(null);
-    try {
-      const nextSnapshots = await transcriptSnapshotService.listSnapshots(historyId);
-      setSnapshots(nextSnapshots);
-      const nextSelectedId = preferredSnapshotId
-        && nextSnapshots.some((snapshot) => snapshot.id === preferredSnapshotId)
-        ? preferredSnapshotId
-        : nextSnapshots[0]?.id || null;
-      setSelectedSnapshotId(nextSelectedId);
-      setSelectedRowIds(new Set());
-    } catch {
-      setError(t('versions.error_load'));
-      setSnapshots([]);
-      setSelectedSnapshotId(null);
-      setSelectedRowIds(new Set());
-    } finally {
-      setIsLoading(false);
-    }
-  }, [historyId, t]);
+      setIsLoading(true);
+      setError(null);
+      try {
+        const nextSnapshots = await transcriptSnapshotService.listSnapshots(historyId);
+        setSnapshots(nextSnapshots);
+        const nextSelectedId =
+          preferredSnapshotId &&
+          nextSnapshots.some((snapshot) => snapshot.id === preferredSnapshotId)
+            ? preferredSnapshotId
+            : nextSnapshots[0]?.id || null;
+        setSelectedSnapshotId(nextSelectedId);
+        setSelectedRowIds(new Set());
+      } catch {
+        setError(t('versions.error_load'));
+        setSnapshots([]);
+        setSelectedSnapshotId(null);
+        setSelectedRowIds(new Set());
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [historyId, t]
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -97,7 +101,8 @@ export function useVersionPanel({ isOpen, historyId }: UseVersionPanelProps) {
       setError(null);
       setSelectedRecord(null);
 
-      void transcriptSnapshotService.loadSnapshot(historyId, selectedSnapshotId)
+      void transcriptSnapshotService
+        .loadSnapshot(historyId, selectedSnapshotId)
         .then((record) => {
           if (!cancelled) {
             setSelectedRecord(record);
@@ -132,7 +137,8 @@ export function useVersionPanel({ isOpen, historyId }: UseVersionPanelProps) {
 
       setIsDiffLoading(true);
       setError(null);
-      void transcriptSnapshotService.buildDiff(selectedRecord.segments, currentSegments)
+      void transcriptSnapshotService
+        .buildDiff(selectedRecord.segments, currentSegments)
         .then((result) => {
           if (cancelled) {
             return;
@@ -142,13 +148,9 @@ export function useVersionPanel({ isOpen, historyId }: UseVersionPanelProps) {
           setChangedCount(result.changedCount);
           setSelectedRowIds((current) => {
             const changedRowIds = new Set(
-              result.rows
-                .filter((row) => row.status !== 'unchanged')
-                .map((row) => row.id),
+              result.rows.filter((row) => row.status !== 'unchanged').map((row) => row.id)
             );
-            const next = new Set(
-              Array.from(current).filter((rowId) => changedRowIds.has(rowId)),
-            );
+            const next = new Set(Array.from(current).filter((rowId) => changedRowIds.has(rowId)));
             return next.size === current.size ? current : next;
           });
         })
@@ -175,7 +177,7 @@ export function useVersionPanel({ isOpen, historyId }: UseVersionPanelProps) {
 
   const changedRows = useMemo(
     () => diffRows.filter((row) => row.status !== 'unchanged'),
-    [diffRows],
+    [diffRows]
   );
 
   const toggleRow = useCallback((rowId: string) => {
@@ -191,21 +193,22 @@ export function useVersionPanel({ isOpen, historyId }: UseVersionPanelProps) {
   }, []);
 
   const handleToggleAll = useCallback(() => {
-    setSelectedRowIds((current) => (
-      current.size === changedRows.length
-        ? new Set()
-        : new Set(changedRows.map((row) => row.id))
-    ));
+    setSelectedRowIds((current) =>
+      current.size === changedRows.length ? new Set() : new Set(changedRows.map((row) => row.id))
+    );
   }, [changedRows]);
 
-  const persistRestoredSegments = useCallback(async (nextSegments: TranscriptSegment[]) => {
-    if (!historyId) {
-      return;
-    }
+  const persistRestoredSegments = useCallback(
+    async (nextSegments: TranscriptSegment[]) => {
+      if (!historyId) {
+        return;
+      }
 
-    await updateTranscript(historyId, nextSegments);
-    setTranscriptSegments(nextSegments);
-  }, [historyId, updateTranscript]);
+      await updateTranscript(historyId, nextSegments);
+      setTranscriptSegments(nextSegments);
+    },
+    [historyId, updateTranscript]
+  );
 
   const handleRestoreSelected = useCallback(async (): Promise<boolean> => {
     if (!historyId || !selectedRecord || selectedRowIds.size === 0) {
@@ -218,7 +221,7 @@ export function useVersionPanel({ isOpen, historyId }: UseVersionPanelProps) {
         title: t('versions.restore_selected'),
         confirmLabel: t('versions.restore_selected'),
         variant: 'warning',
-      },
+      }
     );
     if (!confirmed) {
       return false;
@@ -228,9 +231,15 @@ export function useVersionPanel({ isOpen, historyId }: UseVersionPanelProps) {
     setError(null);
     try {
       const latestSegments = useTranscriptSessionStore.getState().segments;
-      const latestDiff = await transcriptSnapshotService.buildDiff(selectedRecord.segments, latestSegments);
+      const latestDiff = await transcriptSnapshotService.buildDiff(
+        selectedRecord.segments,
+        latestSegments
+      );
       await transcriptSnapshotService.createSnapshot(historyId, 'restore', latestSegments);
-      const restoredSegments = await transcriptSnapshotService.restoreDiffRows(latestDiff.rows, selectedRowIds);
+      const restoredSegments = await transcriptSnapshotService.restoreDiffRows(
+        latestDiff.rows,
+        selectedRowIds
+      );
       await persistRestoredSegments(restoredSegments);
       await loadSnapshots();
       return true;
@@ -244,21 +253,27 @@ export function useVersionPanel({ isOpen, historyId }: UseVersionPanelProps) {
     } finally {
       setIsBusy(false);
     }
-  }, [confirm, historyId, loadSnapshots, persistRestoredSegments, selectedRecord, selectedRowIds, showError, t]);
+  }, [
+    confirm,
+    historyId,
+    loadSnapshots,
+    persistRestoredSegments,
+    selectedRecord,
+    selectedRowIds,
+    showError,
+    t,
+  ]);
 
   const handleRestoreAll = useCallback(async (): Promise<boolean> => {
     if (!historyId || !selectedRecord) {
       return false;
     }
 
-    const confirmed = await confirm(
-      t('versions.restore_all_confirm'),
-      {
-        title: t('versions.restore_all'),
-        confirmLabel: t('versions.restore_all'),
-        variant: 'warning',
-      },
-    );
+    const confirmed = await confirm(t('versions.restore_all_confirm'), {
+      title: t('versions.restore_all'),
+      confirmLabel: t('versions.restore_all'),
+      variant: 'warning',
+    });
     if (!confirmed) {
       return false;
     }

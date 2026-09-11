@@ -28,7 +28,7 @@ function normalizeLanguageCode(language: string | null | undefined): string {
 }
 
 export function resolveDetectedAppLanguage(
-  detected: string | readonly string[] | null | undefined,
+  detected: string | readonly string[] | null | undefined
 ): ResolvedAppLanguage {
   const candidates = Array.isArray(detected) ? detected : [detected];
 
@@ -52,10 +52,10 @@ export function resolveDetectedAppLanguage(
 
     if (normalized === 'zh' || normalized.startsWith('zh-')) {
       if (
-        normalized.includes('hant')
-        || normalized.includes('-tw')
-        || normalized.includes('-hk')
-        || normalized.includes('-mo')
+        normalized.includes('hant') ||
+        normalized.includes('-tw') ||
+        normalized.includes('-hk') ||
+        normalized.includes('-mo')
       ) {
         return 'zh-TW';
       }
@@ -69,7 +69,7 @@ export function resolveDetectedAppLanguage(
 
 export function resolveAppLanguagePreference(
   preference: AppLanguagePreference | string | null | undefined,
-  detected: string | readonly string[] | null | undefined,
+  detected: string | readonly string[] | null | undefined
 ): ResolvedAppLanguage {
   const normalized = normalizeLanguageCode(preference);
 

@@ -4,7 +4,7 @@ import { resolveEffectiveConfig as resolveEffectiveConfigInRust } from './tauri/
 
 export function resolveEffectiveConfig(
   globalConfig: AppConfig,
-  project: ProjectRecord | null,
+  project: ProjectRecord | null
 ): Promise<AppConfig> {
   return resolveEffectiveConfigInRust(globalConfig, project);
 }

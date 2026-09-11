@@ -16,14 +16,15 @@
   align-items: center;
   justify-content: center;
   z-index: 2100;
-  animation: shared-modal-overlay-fade var(--transition-normal) cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: shared-modal-overlay-fade var(--transition-normal) cubic-bezier(0.16, 1, 0.3, 1)
+    forwards;
 }
 
 .shared-modal-shell {
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: 
+  box-shadow:
     0 20px 25px -5px rgba(0, 0, 0, 0.15),
     0 10px 10px -5px rgba(0, 0, 0, 0.04),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -32,10 +33,12 @@
   max-width: 92vw;
   max-height: 85vh;
   outline: none;
-  animation: shared-modal-shell-scale var(--transition-normal) cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: shared-modal-shell-scale var(--transition-normal) cubic-bezier(0.34, 1.56, 0.64, 1)
+    forwards;
   overflow: hidden;
-  transition: width var(--transition-normal) cubic-bezier(0.16, 1, 0.3, 1),
-              height var(--transition-normal) cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    width var(--transition-normal) cubic-bezier(0.16, 1, 0.3, 1),
+    height var(--transition-normal) cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Modal Sizes */
@@ -88,7 +91,9 @@
 /* Close Button positioning */
 .shared-modal-close-btn {
   color: var(--color-text-secondary);
-  transition: color var(--transition-fast), background-color var(--transition-fast);
+  transition:
+    color var(--transition-fast),
+    background-color var(--transition-fast);
 }
 
 .shared-modal-close-btn:hover {
@@ -97,8 +102,12 @@
 
 /* Keyframes for smooth entries */
 @keyframes shared-modal-overlay-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes shared-modal-shell-scale {
@@ -111,7 +120,6 @@
     transform: scale(1) translateY(0);
   }
 }
-
 
 /* --- FormField Styles --- */
 .shared-form-field {
@@ -170,11 +178,17 @@
 }
 
 @keyframes form-error-shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-2px); }
-  75% { transform: translateX(2px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-2px);
+  }
+  75% {
+    transform: translateX(2px);
+  }
 }
-
 
 /* --- LoadingState Styles --- */
 .shared-loading-container {
@@ -197,7 +211,6 @@
   font-size: 0.875rem;
   font-weight: 500;
 }
-
 
 /* --- EmptyState Styles --- */
 .shared-empty-container {
@@ -249,7 +262,6 @@
 .shared-empty-action {
   margin-top: 4px;
 }
-
 
 /* --- SearchUI Styles --- */
 .search-ui-container {
@@ -318,6 +330,12 @@
 }
 
 @keyframes search-slide-up {
-  from { opacity: 0; transform: translate(-50%, 10px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+  from {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }

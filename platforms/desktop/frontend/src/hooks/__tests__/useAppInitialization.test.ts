@@ -47,9 +47,12 @@ describe('useAppInitialization', () => {
 
   it('marks the app as loaded right after hydration without waiting for background runtime startup', async () => {
     let resolveHydration: (() => void) | null = null;
-    mockHydrateAppStartupState.mockImplementation(() => new Promise<void>((resolve) => {
-      resolveHydration = resolve;
-    }));
+    mockHydrateAppStartupState.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveHydration = resolve;
+        })
+    );
     mockStartAppRuntimeServices.mockImplementation(() => new Promise<void>(() => undefined));
 
     const { result } = renderHook(() => useAppInitialization());
@@ -81,7 +84,7 @@ describe('useAppInitialization', () => {
     await waitFor(() => {
       expect(mockLoggerError).toHaveBeenCalledWith(
         '[Startup] Failed to start background runtime services:',
-        expect.any(Error),
+        expect.any(Error)
       );
     });
   });

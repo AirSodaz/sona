@@ -28,8 +28,16 @@
   border-radius: var(--radius-xl);
   border: 1px solid var(--color-border);
   background:
-    radial-gradient(circle at top right, color-mix(in srgb, #cbd5e1 18%, transparent), transparent 36%),
-    linear-gradient(180deg, color-mix(in srgb, var(--color-bg-primary) 96%, #dbeafe) 0%, var(--color-bg-primary) 100%);
+    radial-gradient(
+      circle at top right,
+      color-mix(in srgb, #cbd5e1 18%, transparent),
+      transparent 36%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-bg-primary) 96%, #dbeafe) 0%,
+      var(--color-bg-primary) 100%
+    );
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.24);
 }
 

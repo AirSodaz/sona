@@ -1,17 +1,15 @@
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useDialogStore } from '../../stores/dialogStore';
-import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
-import { useConfigStore } from '../../stores/configStore';
-import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
-import { useTranscriptSidecarStore } from '../../stores/transcriptSidecarStore';
+import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { isSummaryLlmConfigComplete } from '../../services/llm/configUtils';
 import { isSummaryRecordStale, summaryService } from '../../services/summaryService';
-import {
-  getSummaryTemplateOptions,
-  resolveSummaryTemplate,
-} from '../../utils/summaryTemplates';
-import { useEscapeKey } from '../../hooks/useEscapeKey';
+import { useConfigStore } from '../../stores/configStore';
+import { useDialogStore } from '../../stores/dialogStore';
+import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
+import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
+import { useTranscriptSidecarStore } from '../../stores/transcriptSidecarStore';
+import { getSummaryTemplateOptions, resolveSummaryTemplate } from '../../utils/summaryTemplates';
 import { Dropdown } from '../Dropdown';
 import { ProcessingIcon, SummaryIcon, XIcon } from '../Icons';
 
@@ -23,7 +21,10 @@ interface TranscriptSummaryPanelProps {
 /**
  * Modal dialog for displaying and generating transcript summaries.
  */
-export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPanelProps): React.JSX.Element | null {
+export function TranscriptSummaryPanel({
+  isOpen,
+  onClose,
+}: TranscriptSummaryPanelProps): React.JSX.Element | null {
   const { t } = useTranslation();
   const bodyId = useId();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -33,7 +34,9 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
   const segments = useTranscriptSessionStore((state) => state.segments);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
   const config = useEffectiveConfigStore((state) => state.config);
-  const summaryState = useTranscriptSidecarStore((state) => state.summaryStates[sourceHistoryId || 'current']);
+  const summaryState = useTranscriptSidecarStore(
+    (state) => state.summaryStates[sourceHistoryId || 'current']
+  );
   const setConfig = useConfigStore((state) => state.setConfig);
   const showError = useDialogStore((state) => state.showError);
 
@@ -47,16 +50,17 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
 
   const summaryConfigComplete = isSummaryLlmConfigComplete(config);
   const activeTemplate = useMemo(
-    () => resolveSummaryTemplate(
-      summaryState?.activeTemplateId || config.summaryTemplateId,
-      config.summaryCustomTemplates,
-      t,
-    ),
-    [config.summaryCustomTemplates, config.summaryTemplateId, summaryState?.activeTemplateId, t],
+    () =>
+      resolveSummaryTemplate(
+        summaryState?.activeTemplateId || config.summaryTemplateId,
+        config.summaryCustomTemplates,
+        t
+      ),
+    [config.summaryCustomTemplates, config.summaryTemplateId, summaryState?.activeTemplateId, t]
   );
   const templateOptions = useMemo(
     () => getSummaryTemplateOptions(config.summaryCustomTemplates, t),
-    [config.summaryCustomTemplates, t],
+    [config.summaryCustomTemplates, t]
   );
   const record = summaryState?.record;
   const streamingContent = summaryState?.streamingContent || '';
@@ -73,13 +77,16 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
     }
 
     const nextContent = editContentRef.current;
-    const hasStoredRecord = !!useTranscriptSidecarStore.getState().getSummaryState(sourceHistoryId || 'current').record;
+    const hasStoredRecord = !!useTranscriptSidecarStore
+      .getState()
+      .getSummaryState(sourceHistoryId || 'current').record;
     if (nextContent === lastSavedContentRef.current || (!hasStoredRecord && !nextContent.trim())) {
       return;
     }
 
     setIsSaving(true);
-    const savePromise = summaryService.updateSummaryRecord(nextContent)
+    const savePromise = summaryService
+      .updateSummaryRecord(nextContent)
       .then(() => {
         lastSavedContentRef.current = nextContent;
       })
@@ -126,14 +133,17 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
     }
   }, [isOpen]);
 
-  useEscapeKey((e) => {
-    e.preventDefault();
-    void handleCloseRequest();
-  }, {
-    enabled: isOpen,
-    checkTopMost: true,
-    containerRef: modalRef,
-  });
+  useEscapeKey(
+    (e) => {
+      e.preventDefault();
+      void handleCloseRequest();
+    },
+    {
+      enabled: isOpen,
+      checkTopMost: true,
+      containerRef: modalRef,
+    }
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -169,13 +179,14 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleCloseRequest, isOpen]);
 
-  useEffect(() => (
-    () => {
+  useEffect(
+    () => () => {
       if (copyResetTimerRef.current !== null) {
         window.clearTimeout(copyResetTimerRef.current);
       }
-    }
-  ), []);
+    },
+    []
+  );
 
   if (!isOpen) {
     return null;
@@ -246,7 +257,13 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
         : null;
 
   return (
-    <div className="settings-overlay" onClick={() => { void handleCloseRequest(); }} style={{ zIndex: 2000 }}>
+    <div
+      className="settings-overlay"
+      onClick={() => {
+        void handleCloseRequest();
+      }}
+      style={{ zIndex: 2000 }}
+    >
       <div
         ref={modalRef}
         className="dialog-modal transcript-summary-modal"
@@ -267,13 +284,15 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
           overflow: 'hidden',
         }}
       >
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: 'var(--spacing-lg) var(--spacing-lg) var(--spacing-md)',
-          borderBottom: '1px solid var(--color-border)',
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: 'var(--spacing-lg) var(--spacing-lg) var(--spacing-md)',
+            borderBottom: '1px solid var(--color-border)',
+          }}
+        >
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--spacing-md)' }}>
             <h3
               id="summary-modal-title"
@@ -301,7 +320,9 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
           <button
             ref={closeButtonRef}
             className="btn btn-icon"
-            onClick={() => { void handleCloseRequest(); }}
+            onClick={() => {
+              void handleCloseRequest();
+            }}
             aria-label={t('common.close')}
             data-tooltip={t('common.close')}
             data-tooltip-pos="bottom-left"
@@ -310,16 +331,27 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
           </button>
         </div>
 
-        <div className="transcript-summary-panel-controls" style={{
-          padding: 'var(--spacing-md) var(--spacing-lg)',
-          background: 'var(--color-bg-secondary)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 'var(--spacing-md)',
-          flexWrap: 'wrap',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '260px' }}>
+        <div
+          className="transcript-summary-panel-controls"
+          style={{
+            padding: 'var(--spacing-md) var(--spacing-lg)',
+            background: 'var(--color-bg-secondary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 'var(--spacing-md)',
+            flexWrap: 'wrap',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              flex: 1,
+              minWidth: '260px',
+            }}
+          >
             <span
               style={{
                 fontSize: '0.8125rem',
@@ -342,7 +374,10 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
             </div>
           </div>
 
-          <div className="transcript-summary-panel-actions" style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+          <div
+            className="transcript-summary-panel-actions"
+            style={{ display: 'flex', gap: 'var(--spacing-sm)' }}
+          >
             <button
               type="button"
               className="btn transcript-summary-generate-button"
@@ -389,7 +424,8 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
             }}
           >
             {t('summary.manual_only_hint', {
-              defaultValue: 'Configure an LLM service to generate summaries. You can still write and edit this summary manually.',
+              defaultValue:
+                'Configure an LLM service to generate summaries. You can still write and edit this summary manually.',
             })}
           </div>
         )}
@@ -413,7 +449,9 @@ export function TranscriptSummaryPanel({ isOpen, onClose }: TranscriptSummaryPan
             className="transcript-summary-content-text"
             value={editContent}
             onChange={handleContentChange}
-            onBlur={() => { void handleBlur(); }}
+            onBlur={() => {
+              void handleBlur();
+            }}
             placeholder={t('summary.placeholder')}
             style={{
               flex: 1,

@@ -1,133 +1,134 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { TranslateButton } from '../TranslateButton';
-import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useConfigStore } from '../../stores/configStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import { TranslateButton } from '../TranslateButton';
 
 // Mock dependencies
 vi.mock('react-i18next', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('react-i18next')>();
-    return {
-        ...actual,
-        useTranslation: () => ({
-            t: (key: string) => key,
-            i18n: { language: 'en' },
-        }),
-    };
+  const actual = await importOriginal<typeof import('react-i18next')>();
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (key: string) => key,
+      i18n: { language: 'en' },
+    }),
+  };
 });
 
 // Mock useDialogStore
 vi.mock('../../stores/dialogStore', () => ({
-    useDialogStore: (selector: any) => selector({
-        showError: vi.fn(),
+  useDialogStore: (selector: any) =>
+    selector({
+      showError: vi.fn(),
     }),
 }));
 
 describe('TranslateButton', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-        localStorage.clear();
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
 
-        // Reset store
-        useTranscriptStore.getState().setSegments([
-            { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true },
-        ]);
-        useTranscriptStore.setState({ llmStates: {} });
+    // Reset store
+    useTranscriptStore
+      .getState()
+      .setSegments([{ id: '1', start: 0, end: 1, text: 'Hello', isFinal: true }]);
+    useTranscriptStore.setState({ llmStates: {} });
 
-        useConfigStore.setState({
-            config: {
-                ...useConfigStore.getState().config,
-                translationLanguage: 'zh',
-                llmSettings: {
-                    activeProvider: 'open_ai',
-                    providers: {
-                        open_ai: {
-                            apiHost: 'https://api.test',
-                            apiKey: 'test-key',
-                            temperature: 0.7,
-                        },
-                    },
-                    models: {
-                        'open-ai-test': {
-                            id: 'open-ai-test',
-                            provider: 'open_ai',
-                            model: 'test-model',
-                        },
-                    },
-                    modelOrder: ['open-ai-test'],
-                    selections: {
-                        translationModelId: 'open-ai-test',
-                    },
-                },
-            } as any
-        });
-
-        useTranscriptStore.setState({
-            config: useConfigStore.getState().config as any,
-        });
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        translationLanguage: 'zh',
+        llmSettings: {
+          activeProvider: 'open_ai',
+          providers: {
+            open_ai: {
+              apiHost: 'https://api.test',
+              apiKey: 'test-key',
+              temperature: 0.7,
+            },
+          },
+          models: {
+            'open-ai-test': {
+              id: 'open-ai-test',
+              provider: 'open_ai',
+              model: 'test-model',
+            },
+          },
+          modelOrder: ['open-ai-test'],
+          selections: {
+            translationModelId: 'open-ai-test',
+          },
+        },
+      } as any,
     });
 
-    it('renders the translate button', () => {
-        render(<TranslateButton />);
-        const button = screen.getByRole('button', { expanded: false });
-        expect(button).toBeDefined();
+    useTranscriptStore.setState({
+      config: useConfigStore.getState().config as any,
     });
+  });
 
-    it('shows dropdown options when clicked', () => {
-        render(<TranslateButton />);
-        const button = screen.getByRole('button', { expanded: false });
-        fireEvent.click(button);
+  it('renders the translate button', () => {
+    render(<TranslateButton />);
+    const button = screen.getByRole('button', { expanded: false });
+    expect(button).toBeDefined();
+  });
 
-        screen.getByText('translation.start');
-        screen.getByText('translation.show_bilingual');
-        screen.getByPlaceholderText('translation.search_placeholder');
-        screen.getByText('translation.commonly_used');
-        screen.getByText('translation.all_languages');
-    });
+  it('shows dropdown options when clicked', () => {
+    render(<TranslateButton />);
+    const button = screen.getByRole('button', { expanded: false });
+    fireEvent.click(button);
 
-    it('filters languages by search query', () => {
-        render(<TranslateButton />);
-        fireEvent.click(screen.getByRole('button', { expanded: false }));
+    screen.getByText('translation.start');
+    screen.getByText('translation.show_bilingual');
+    screen.getByPlaceholderText('translation.search_placeholder');
+    screen.getByText('translation.commonly_used');
+    screen.getByText('translation.all_languages');
+  });
 
-        const searchInput = screen.getByPlaceholderText('translation.search_placeholder');
+  it('filters languages by search query', () => {
+    render(<TranslateButton />);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
 
-        // Let's filter to Spanish
-        fireEvent.change(searchInput, { target: { value: 'spanish' } });
+    const searchInput = screen.getByPlaceholderText('translation.search_placeholder');
 
-        screen.getByText('translation.search_results');
-        expect(screen.queryByText('translation.commonly_used')).toBeNull();
-        screen.getByText('Spanish');
-    });
+    // Let's filter to Spanish
+    fireEvent.change(searchInput, { target: { value: 'spanish' } });
 
-    it('displays no results when search query has no match', () => {
-        render(<TranslateButton />);
-        fireEvent.click(screen.getByRole('button', { expanded: false }));
+    screen.getByText('translation.search_results');
+    expect(screen.queryByText('translation.commonly_used')).toBeNull();
+    screen.getByText('Spanish');
+  });
 
-        const searchInput = screen.getByPlaceholderText('translation.search_placeholder');
-        fireEvent.change(searchInput, { target: { value: 'nonexistentlanguagequery' } });
+  it('displays no results when search query has no match', () => {
+    render(<TranslateButton />);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
 
-        screen.getByText('translation.no_results');
-    });
+    const searchInput = screen.getByPlaceholderText('translation.search_placeholder');
+    fireEvent.change(searchInput, { target: { value: 'nonexistentlanguagequery' } });
 
-    it('persists selected language to recent languages on selection', async () => {
-        const { unmount } = render(<TranslateButton />);
-        fireEvent.click(screen.getByRole('button', { expanded: false }));
+    screen.getByText('translation.no_results');
+  });
 
-        // Find Afrikaans in all languages list and click it
-        const afrikaansBtn = screen.getByText('Afrikaans');
-        fireEvent.click(afrikaansBtn);
+  it('persists selected language to recent languages on selection', async () => {
+    const { unmount } = render(<TranslateButton />);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
 
-        // Wait for state updates
-        expect(useConfigStore.getState().config.translationLanguage).toBe('af');
+    // Find Afrikaans in all languages list and click it
+    const afrikaansBtn = screen.getByText('Afrikaans');
+    fireEvent.click(afrikaansBtn);
 
-        // Unmount first instance to prevent duplicate elements in JSDOM
-        unmount();
+    // Wait for state updates
+    expect(useConfigStore.getState().config.translationLanguage).toBe('af');
 
-        // Re-open menu to verify it is stored in recent languages
-        render(<TranslateButton />);
-        fireEvent.click(screen.getByRole('button', { expanded: false }));
+    // Unmount first instance to prevent duplicate elements in JSDOM
+    unmount();
 
-        const storedRecents = localStorage.getItem('sona_recent_translation_languages');
-        expect(storedRecents).toContain('af');
-    });
+    // Re-open menu to verify it is stored in recent languages
+    render(<TranslateButton />);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+
+    const storedRecents = localStorage.getItem('sona_recent_translation_languages');
+    expect(storedRecents).toContain('af');
+  });
 });

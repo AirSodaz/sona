@@ -1,16 +1,14 @@
-import type { TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot } from '../../types/taskLedger';
 import type {
   TaskLedgerPatch_Deserialize,
   TaskLedgerRecord_Deserialize,
   TaskLedgerRecord_Serialize,
   TaskLedgerSnapshot_Serialize,
 } from '../../bindings';
+import type { TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot } from '../../types/taskLedger';
 import { TauriCommand } from './commands';
 import { invokeTauri } from './invoke';
 
-function toTaskLedgerRecordTransport(
-  record: TaskLedgerRecord,
-): TaskLedgerRecord_Deserialize {
+function toTaskLedgerRecordTransport(record: TaskLedgerRecord): TaskLedgerRecord_Deserialize {
   const { projectId, ...current } = record;
   return {
     ...current,
@@ -29,15 +27,9 @@ function toTaskLedgerRecordTransport(
   };
 }
 
-function toTaskLedgerPatchTransport(
-  patch: TaskLedgerPatch,
-): TaskLedgerPatch_Deserialize {
+function toTaskLedgerPatchTransport(patch: TaskLedgerPatch): TaskLedgerPatch_Deserialize {
   const { projectId, ...current } = patch;
-  const compatibilityTagIds = projectId === null
-    ? []
-    : projectId
-      ? [projectId]
-      : undefined;
+  const compatibilityTagIds = projectId === null ? [] : projectId ? [projectId] : undefined;
   return {
     ...current,
     ...(current.tagIds !== undefined
@@ -48,9 +40,7 @@ function toTaskLedgerPatchTransport(
   };
 }
 
-function normalizeTaskLedgerRecord(
-  record: TaskLedgerRecord_Serialize,
-): TaskLedgerRecord {
+function normalizeTaskLedgerRecord(record: TaskLedgerRecord_Serialize): TaskLedgerRecord {
   return {
     id: record.id,
     kind: record.kind,
@@ -66,9 +56,7 @@ function normalizeTaskLedgerRecord(
     ...(record.historyId != null ? { historyId: record.historyId } : {}),
     ...(record.tagIds !== undefined ? { tagIds: record.tagIds } : {}),
     ...(record.filePath != null ? { filePath: record.filePath } : {}),
-    ...(record.automationRuleId != null
-      ? { automationRuleId: record.automationRuleId }
-      : {}),
+    ...(record.automationRuleId != null ? { automationRuleId: record.automationRuleId } : {}),
     ...(record.tagAutomationRuleId != null
       ? { tagAutomationRuleId: record.tagAutomationRuleId }
       : {}),
@@ -78,20 +66,14 @@ function normalizeTaskLedgerRecord(
     ...(record.automationProfileSource != null
       ? { automationProfileSource: record.automationProfileSource }
       : {}),
-    ...(record.sourceFingerprint != null
-      ? { sourceFingerprint: record.sourceFingerprint }
-      : {}),
+    ...(record.sourceFingerprint != null ? { sourceFingerprint: record.sourceFingerprint } : {}),
     ...(record.errorMessage != null ? { errorMessage: record.errorMessage } : {}),
     ...(record.templateId != null ? { templateId: record.templateId } : {}),
-    ...(record.targetLanguage != null
-      ? { targetLanguage: record.targetLanguage }
-      : {}),
+    ...(record.targetLanguage != null ? { targetLanguage: record.targetLanguage } : {}),
   };
 }
 
-function normalizeTaskLedgerSnapshot(
-  snapshot: TaskLedgerSnapshot_Serialize,
-): TaskLedgerSnapshot {
+function normalizeTaskLedgerSnapshot(snapshot: TaskLedgerSnapshot_Serialize): TaskLedgerSnapshot {
   return {
     ...snapshot,
     tasks: snapshot.tasks.map(normalizeTaskLedgerRecord),
@@ -112,7 +94,7 @@ export async function taskLedgerUpsertTask(record: TaskLedgerRecord): Promise<Ta
 
 export async function taskLedgerPatchTask(
   id: string,
-  patch: TaskLedgerPatch,
+  patch: TaskLedgerPatch
 ): Promise<TaskLedgerSnapshot> {
   const snapshot = await invokeTauri(TauriCommand.taskLedger.patchTask, {
     id,

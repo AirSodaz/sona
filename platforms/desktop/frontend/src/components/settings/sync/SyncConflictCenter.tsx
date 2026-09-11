@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   AlertTriangle,
   BookOpen,
@@ -16,14 +15,15 @@ import {
   Trash2,
   User,
 } from 'lucide-react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { transcriptSnapshotService } from '../../../services/transcriptSnapshotService';
+import { syncRuntimeService } from '../../../services/syncRuntimeService';
 import {
   getSyncConflict,
   listSyncConflicts,
   resolveSyncConflict,
 } from '../../../services/tauri/sync';
-import { syncRuntimeService } from '../../../services/syncRuntimeService';
+import { transcriptSnapshotService } from '../../../services/transcriptSnapshotService';
 import { useDialogStore } from '../../../stores/dialogStore';
 import type {
   SyncConflictDetail,
@@ -57,9 +57,7 @@ function segmentText(segment: TranscriptSegment | undefined): string {
   if (!segment) {
     return '';
   }
-  return segment.translation?.trim()
-    ? `${segment.text}\n${segment.translation}`
-    : segment.text;
+  return segment.translation?.trim() ? `${segment.text}\n${segment.translation}` : segment.text;
 }
 
 function EntityKindIcon({ kind }: { kind: SyncEntityKind }): React.JSX.Element {
@@ -179,7 +177,7 @@ export function SyncConflictCenter({
         cause,
         titleKey: 'settings.sync.error_title',
       }),
-    [showError],
+    [showError]
   );
 
   const loadSummaries = React.useCallback(async () => {
@@ -289,7 +287,9 @@ export function SyncConflictCenter({
         ) : summaries.length === 0 ? (
           <div className="sync-empty-state is-clean">
             <CheckCircle2 size={18} />
-            {t('settings.sync.no_conflicts', { defaultValue: 'No unresolved conflicts. All data is in sync.' })}
+            {t('settings.sync.no_conflicts', {
+              defaultValue: 'No unresolved conflicts. All data is in sync.',
+            })}
           </div>
         ) : (
           <div className="sync-conflict-layout">
@@ -315,8 +315,9 @@ export function SyncConflictCenter({
                       })}
                     </strong>
                     <small>
-                      {summary.field ?? t('settings.sync.entity_delete', { defaultValue: 'Delete' })} ·{' '}
-                      {new Date(summary.createdAtMs).toLocaleTimeString()}
+                      {summary.field ??
+                        t('settings.sync.entity_delete', { defaultValue: 'Delete' })}{' '}
+                      · {new Date(summary.createdAtMs).toLocaleTimeString()}
                     </small>
                   </div>
                 </button>
@@ -331,7 +332,8 @@ export function SyncConflictCenter({
                     <FileDiff size={17} />
                     <strong>{detail.summary.entity.id}</strong>
                     <span className="sync-conflict-field-pill">
-                      {detail.summary.field || t('settings.sync.full_entity', { defaultValue: 'Entity' })}
+                      {detail.summary.field ||
+                        t('settings.sync.full_entity', { defaultValue: 'Entity' })}
                     </span>
                   </div>
 
@@ -357,7 +359,11 @@ export function SyncConflictCenter({
                       <div className="sync-conflict-version-col is-local">
                         <div className="sync-conflict-col-header">
                           <Laptop size={14} />
-                          <span>{t('settings.sync.current_value', { defaultValue: 'Current device version' })}</span>
+                          <span>
+                            {t('settings.sync.current_value', {
+                              defaultValue: 'Current device version',
+                            })}
+                          </span>
                         </div>
                         <div className="sync-conflict-col-body">
                           <FormattedConflictValue operation={detail.current} />
@@ -368,7 +374,11 @@ export function SyncConflictCenter({
                       <div className="sync-conflict-version-col is-remote">
                         <div className="sync-conflict-col-header">
                           <HardDrive size={14} />
-                          <span>{t('settings.sync.conflicting_value', { defaultValue: 'Remote conflict version' })}</span>
+                          <span>
+                            {t('settings.sync.conflicting_value', {
+                              defaultValue: 'Remote conflict version',
+                            })}
+                          </span>
                         </div>
                         <div className="sync-conflict-col-body">
                           <FormattedConflictValue operation={detail.conflicting} />
@@ -386,7 +396,9 @@ export function SyncConflictCenter({
                       onClick={() => void resolve('keep_current')}
                     >
                       <Check size={16} />
-                      <span>{t('settings.sync.keep_current', { defaultValue: 'Keep current version' })}</span>
+                      <span>
+                        {t('settings.sync.keep_current', { defaultValue: 'Keep current version' })}
+                      </span>
                     </button>
                     <button
                       type="button"
@@ -395,7 +407,9 @@ export function SyncConflictCenter({
                       onClick={() => void resolve('use_conflicting')}
                     >
                       <HardDrive size={16} />
-                      <span>{t('settings.sync.use_conflicting', { defaultValue: 'Use remote version' })}</span>
+                      <span>
+                        {t('settings.sync.use_conflicting', { defaultValue: 'Use remote version' })}
+                      </span>
                     </button>
                     {detail.summary.entity.kind === 'history_transcript' && (
                       <button
@@ -405,7 +419,11 @@ export function SyncConflictCenter({
                         onClick={() => void resolve('keep_both')}
                       >
                         <Copy size={16} />
-                        <span>{t('settings.sync.keep_both', { defaultValue: 'Keep both (create duplicate)' })}</span>
+                        <span>
+                          {t('settings.sync.keep_both', {
+                            defaultValue: 'Keep both (create duplicate)',
+                          })}
+                        </span>
                       </button>
                     )}
                   </div>
@@ -413,7 +431,11 @@ export function SyncConflictCenter({
               ) : (
                 <div className="sync-empty-state">
                   <FileDiff size={20} />
-                  <span>{t('settings.sync.choose_conflict', { defaultValue: 'Select a conflict to compare versions' })}</span>
+                  <span>
+                    {t('settings.sync.choose_conflict', {
+                      defaultValue: 'Select a conflict to compare versions',
+                    })}
+                  </span>
                 </div>
               )}
             </div>

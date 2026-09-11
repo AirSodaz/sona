@@ -1,142 +1,140 @@
-
-import { render, screen, act } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { SegmentItem } from '../SegmentItem';
-import { TranscriptUIContext, TranscriptUIState } from '../TranscriptUIContext';
+import { act, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStore } from 'zustand/vanilla';
 import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
 import { normalizeTranscriptSegment } from '../../../utils/transcriptTiming';
 import { ContextMenuProvider } from '../../context-menu/ContextMenuProvider';
+import { SegmentItem } from '../SegmentItem';
+import { TranscriptUIContext, type TranscriptUIState } from '../TranscriptUIContext';
 
 // Mock i18n
 vi.mock('react-i18next', () => ({
-    useTranslation: () => ({
-        t: (key: string) => key,
-    }),
-    initReactI18next: {
-        type: '3rdParty',
-        init: () => undefined,
-    },
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+  initReactI18next: {
+    type: '3rdParty',
+    init: () => undefined,
+  },
 }));
 
 // Mock Icons
 vi.mock('../../Icons', () => ({
-    EditIcon: () => <span data-testid="edit-icon" />,
-    TrashIcon: () => <span data-testid="trash-icon" />,
-    MergeIcon: () => <span data-testid="merge-icon" />,
+  EditIcon: () => <span data-testid="edit-icon" />,
+  TrashIcon: () => <span data-testid="trash-icon" />,
+  MergeIcon: () => <span data-testid="merge-icon" />,
 }));
 
 // Mock SegmentTimestamp
 vi.mock('../SegmentTimestamp', () => ({
-    SegmentTimestamp: ({ start }: { start: number }) => <span>{start}</span>,
+  SegmentTimestamp: ({ start }: { start: number }) => <span>{start}</span>,
 }));
 
 describe('SegmentItem Highlighting', () => {
-    let uiStore: any;
+  let uiStore: any;
 
-    const segment = normalizeTranscriptSegment({
-        id: 'test-seg',
-        start: 0,
-        end: 5,
-        text: 'Hello world test',
-        isFinal: true,
-        tokens: ['Hello', 'world', 'test'],
-        timestamps: [0.0, 1.5, 3.0]
-    });
+  const segment = normalizeTranscriptSegment({
+    id: 'test-seg',
+    start: 0,
+    end: 5,
+    text: 'Hello world test',
+    isFinal: true,
+    tokens: ['Hello', 'world', 'test'],
+    timestamps: [0.0, 1.5, 3.0],
+  });
 
-    const defaultProps = {
-        segment,
-        index: 0,
-        onSeek: vi.fn(),
-        onEdit: vi.fn(),
-        onSave: vi.fn(),
-        onDelete: vi.fn(),
-        onMergeWithNext: vi.fn(),
-        onAnimationEnd: vi.fn(),
-    };
+  const defaultProps = {
+    segment,
+    index: 0,
+    onSeek: vi.fn(),
+    onEdit: vi.fn(),
+    onSave: vi.fn(),
+    onDelete: vi.fn(),
+    onMergeWithNext: vi.fn(),
+    onAnimationEnd: vi.fn(),
+  };
 
-    beforeEach(() => {
-        useTranscriptStore.setState({ currentTime: 0 });
-        uiStore = createStore<TranscriptUIState>(() => ({
-            newSegmentIds: new Set(),
-            activeSegmentId: 'test-seg', // Active segment
-            editingSegmentId: null,
-            totalSegments: 1,
-            aligningSegmentIds: new Set(),
-        }));
-    });
+  beforeEach(() => {
+    useTranscriptStore.setState({ currentTime: 0 });
+    uiStore = createStore<TranscriptUIState>(() => ({
+      newSegmentIds: new Set(),
+      activeSegmentId: 'test-seg', // Active segment
+      editingSegmentId: null,
+      totalSegments: 1,
+      aligningSegmentIds: new Set(),
+    }));
+  });
 
-    const renderComponent = () => render(
-        <ContextMenuProvider>
-            <TranscriptUIContext.Provider value={uiStore}>
-                <SegmentItem {...defaultProps} />
-            </TranscriptUIContext.Provider>
-        </ContextMenuProvider>
+  const renderComponent = () =>
+    render(
+      <ContextMenuProvider>
+        <TranscriptUIContext.Provider value={uiStore}>
+          <SegmentItem {...defaultProps} />
+        </TranscriptUIContext.Provider>
+      </ContextMenuProvider>
     );
 
-    it('highlights the first token at start time', () => {
-        // currentTime 0 (start)
-        useTranscriptStore.setState({ currentTime: 0 });
-        renderComponent();
+  it('highlights the first token at start time', () => {
+    // currentTime 0 (start)
+    useTranscriptStore.setState({ currentTime: 0 });
+    renderComponent();
 
-        const token0 = screen.getByText('Hello');
-        const token1 = screen.getByText('world');
+    const token0 = screen.getByText('Hello');
+    const token1 = screen.getByText('world');
 
-        expect(token0.className).toContain('active-token');
-        expect(token1.className).not.toContain('active-token');
+    expect(token0.className).toContain('active-token');
+    expect(token1.className).not.toContain('active-token');
+  });
+
+  it('highlights the second token when time advances', () => {
+    useTranscriptStore.setState({ currentTime: 2.0 }); // 2.0 > 1.5 (world starts at 1.5)
+    renderComponent();
+
+    const token0 = screen.getByText('Hello');
+    const token1 = screen.getByText('world');
+    const token2 = screen.getByText('test');
+
+    expect(token0.className).not.toContain('active-token');
+    expect(token1.className).toContain('active-token');
+    expect(token2.className).not.toContain('active-token');
+  });
+
+  it('highlights the last token when time is near end', () => {
+    useTranscriptStore.setState({ currentTime: 4.0 }); // 4.0 > 3.0 (test starts at 3.0)
+    renderComponent();
+
+    const token1 = screen.getByText('world');
+    const token2 = screen.getByText('test');
+
+    expect(token1.className).not.toContain('active-token');
+    expect(token2.className).toContain('active-token');
+  });
+
+  it('updates highlighting when store updates (re-render check)', async () => {
+    useTranscriptStore.setState({ currentTime: 0 });
+    renderComponent();
+
+    expect(screen.getByText('Hello').className).toContain('active-token');
+
+    // Update store
+    act(() => {
+      useTranscriptStore.setState({ currentTime: 2.0 });
     });
 
-    it('highlights the second token when time advances', () => {
-        useTranscriptStore.setState({ currentTime: 2.0 }); // 2.0 > 1.5 (world starts at 1.5)
-        renderComponent();
+    // Re-render implicitly handled by store subscription?
+    // Wait, testing-library render doesn't auto-update from external store unless component re-renders.
+    // Zustand `useStore` triggers React re-render.
 
-        const token0 = screen.getByText('Hello');
-        const token1 = screen.getByText('world');
-        const token2 = screen.getByText('test');
+    expect(screen.getByText('world').className).toContain('active-token');
+    expect(screen.getByText('Hello').className).not.toContain('active-token');
+  });
 
-        expect(token0.className).not.toContain('active-token');
-        expect(token1.className).toContain('active-token');
-        expect(token2.className).not.toContain('active-token');
-    });
+  it('does not highlight tokens if segment is not active', () => {
+    useTranscriptStore.setState({ currentTime: 0 });
+    uiStore.setState({ activeSegmentId: 'other-seg' });
+    renderComponent();
 
-    it('highlights the last token when time is near end', () => {
-        useTranscriptStore.setState({ currentTime: 4.0 }); // 4.0 > 3.0 (test starts at 3.0)
-        renderComponent();
-
-        const token1 = screen.getByText('world');
-        const token2 = screen.getByText('test');
-
-        expect(token1.className).not.toContain('active-token');
-        expect(token2.className).toContain('active-token');
-    });
-
-    it('updates highlighting when store updates (re-render check)', async () => {
-        useTranscriptStore.setState({ currentTime: 0 });
-        renderComponent();
-
-        expect(screen.getByText('Hello').className).toContain('active-token');
-
-        // Update store
-        act(() => {
-            useTranscriptStore.setState({ currentTime: 2.0 });
-        });
-
-        // Re-render implicitly handled by store subscription?
-        // Wait, testing-library render doesn't auto-update from external store unless component re-renders.
-        // Zustand `useStore` triggers React re-render.
-
-        expect(screen.getByText('world').className).toContain('active-token');
-        expect(screen.getByText('Hello').className).not.toContain('active-token');
-    });
-
-    it('does not highlight tokens if segment is not active', () => {
-        useTranscriptStore.setState({ currentTime: 0 });
-        uiStore.setState({ activeSegmentId: 'other-seg' });
-        renderComponent();
-
-        const token0 = screen.getByText('Hello');
-        expect(token0.className).not.toContain('active-token');
-    });
-
-
+    const token0 = screen.getByText('Hello');
+    expect(token0.className).not.toContain('active-token');
+  });
 });

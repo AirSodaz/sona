@@ -1,25 +1,22 @@
-import {
+import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
+import type { AppConfig } from '../types/config';
+import type {
   ResolvedSummaryTemplate,
   SummaryTemplateId,
   TranscriptSegment,
   TranscriptSummaryRecord,
   TranscriptSummaryState,
 } from '../types/transcript';
-import type { AppConfig } from '../types/config';
-import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { computeSummarySourceFingerprint } from '../utils/segmentUtils';
-import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llm/configUtils';
-import type { SummaryTranscriptLlmJobRequest } from './llmTaskTypes';
-import { runTranscriptLlmTaskJob } from './llm/segmentTask';
 import { coerceSummaryTemplateId, resolveSummaryTemplate } from '../utils/summaryTemplates';
-import { runTranscriptLlmJob } from './tauri/llm';
-import {
-  createLlmTaskLedgerId,
-  isTaskLedgerCancelRequested,
-} from './taskLedgerBuilders';
+import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llm/configUtils';
+import { runTranscriptLlmTaskJob } from './llm/segmentTask';
+import type { SummaryTranscriptLlmJobRequest } from './llmTaskTypes';
 import { summarySidecarService } from './summarySidecarService';
+import { createLlmTaskLedgerId, isTaskLedgerCancelRequested } from './taskLedgerBuilders';
+import { runTranscriptLlmJob } from './tauri/llm';
 
 interface RetrySummaryTranscriptJobOptions {
   segments: TranscriptSegment[];
@@ -30,7 +27,7 @@ interface RetrySummaryTranscriptJobOptions {
 
 export function isSummaryRecordStale(
   record: TranscriptSummaryRecord | undefined,
-  segments: TranscriptSegment[],
+  segments: TranscriptSegment[]
 ): boolean {
   if (!record) {
     return false;
@@ -80,7 +77,7 @@ export class SummaryService {
     const summaryState = sidecarStore.getSummaryState(targetHistoryId);
     const activeTemplateId = coerceSummaryTemplateId(
       summaryState.activeTemplateId || config.summaryTemplateId,
-      config.summaryCustomTemplates,
+      config.summaryCustomTemplates
     );
     const hasMeaningfulContent = content.trim().length > 0;
 
@@ -89,16 +86,19 @@ export class SummaryService {
     }
 
     const sourceFingerprint = computeSummarySourceFingerprint(sessionStore.segments);
-    sidecarStore.updateSummaryState({
-      activeTemplateId,
-      record: {
-        templateId: activeTemplateId,
-        content,
-        generatedAt: new Date().toISOString(),
-        sourceFingerprint,
+    sidecarStore.updateSummaryState(
+      {
+        activeTemplateId,
+        record: {
+          templateId: activeTemplateId,
+          content,
+          generatedAt: new Date().toISOString(),
+          sourceFingerprint,
+        },
+        streamingContent: undefined,
       },
-      streamingContent: undefined,
-    }, targetHistoryId);
+      targetHistoryId
+    );
 
     if (targetHistoryId !== 'current') {
       await this.persistSummary(targetHistoryId);
@@ -149,8 +149,10 @@ export class SummaryService {
 
     const jobHistoryId = historyId || 'current';
     const resolvedTemplate = resolveSummaryTemplate(
-      templateId ?? sidecarStore.getSummaryState(jobHistoryId).activeTemplateId ?? config.summaryTemplateId,
-      config.summaryCustomTemplates,
+      templateId ??
+        sidecarStore.getSummaryState(jobHistoryId).activeTemplateId ??
+        config.summaryTemplateId,
+      config.summaryCustomTemplates
     );
     const activeTemplateId = resolvedTemplate.id;
 
@@ -160,14 +162,17 @@ export class SummaryService {
       sourceHistoryId: historyId,
       templateId: activeTemplateId,
       onStart: (startedHistoryId) => {
-        sidecarStore.updateSummaryState({
-          activeTemplateId,
-          isGenerating: true,
-          generationProgress: 0,
-          // Keep a dedicated transient buffer for streamed text so the final record can still
-          // be written atomically once the backend returns the finished summary payload.
-          streamingContent: '',
-        }, startedHistoryId);
+        sidecarStore.updateSummaryState(
+          {
+            activeTemplateId,
+            isGenerating: true,
+            generationProgress: 0,
+            // Keep a dedicated transient buffer for streamed text so the final record can still
+            // be written atomically once the backend returns the finished summary payload.
+            streamingContent: '',
+          },
+          startedHistoryId
+        );
       },
       onProgress: (generationProgress, progressHistoryId) => {
         this.updateJobSummaryState(progressHistoryId, {
@@ -181,7 +186,7 @@ export class SummaryService {
       },
       runTask: async (taskId, runningHistoryId) => {
         const result = await this.ports.runTranscriptLlmJob(
-          this.buildRequest(taskId, runningHistoryId, resolvedTemplate, segments, config),
+          this.buildRequest(taskId, runningHistoryId, resolvedTemplate, segments, config)
         );
         const summary = result.summary;
         const summaryRecord = summary?.record;
@@ -194,9 +199,15 @@ export class SummaryService {
           return;
         }
 
-        const resultTemplateId = coerceSummaryTemplateId(summary.activeTemplateId, config.summaryCustomTemplates);
+        const resultTemplateId = coerceSummaryTemplateId(
+          summary.activeTemplateId,
+          config.summaryCustomTemplates
+        );
         const record: TranscriptSummaryRecord = {
-          templateId: coerceSummaryTemplateId(summaryRecord.templateId, config.summaryCustomTemplates),
+          templateId: coerceSummaryTemplateId(
+            summaryRecord.templateId,
+            config.summaryCustomTemplates
+          ),
           content: summaryRecord.content,
           generatedAt: summaryRecord.generatedAt,
           sourceFingerprint: summaryRecord.sourceFingerprint,
@@ -231,7 +242,7 @@ export class SummaryService {
     jobHistoryId: string,
     template: ResolvedSummaryTemplate,
     segments: TranscriptSegment[],
-    config: AppConfig,
+    config: AppConfig
   ): SummaryTranscriptLlmJobRequest {
     return {
       taskId,
@@ -245,7 +256,7 @@ export class SummaryService {
 
   private updateJobSummaryState(
     jobHistoryId: string,
-    state: Partial<TranscriptSummaryState>,
+    state: Partial<TranscriptSummaryState>
   ): string {
     const targetHistoryId = this.resolveTargetHistoryId(jobHistoryId);
     this.ports.getTranscriptSidecarStore().updateSummaryState(state, targetHistoryId);

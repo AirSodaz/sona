@@ -1,6 +1,30 @@
-import { useTranscriptStore, type TranscriptStore, type SessionData } from './transcriptStore';
+import { type SessionData, type TranscriptStore, useTranscriptStore } from './transcriptStore';
 
-type SessionStoreActions = Pick<TranscriptStore, 'setSourceHistoryId' | 'setTitle' | 'setIcon' | 'setSegments' | 'addSegment' | 'upsertSegment' | 'updateSegment' | 'deleteSegment' | 'mergeSegments' | 'splitTranscriptSegment' | 'finalizeLastSegment' | 'applyTranscriptUpdate' | 'upsertTranscriptSegmentAndSetActive' | 'setEditingSegmentId' | 'addAligningSegmentId' | 'removeAligningSegmentId' | 'openSession' | 'loadTranscriptSession' | 'clearActiveTranscriptSession' | 'clearTranscriptSegments' | 'syncSavedRecordingMeta' | 'clearSegments'>;
+type SessionStoreActions = Pick<
+  TranscriptStore,
+  | 'setSourceHistoryId'
+  | 'setTitle'
+  | 'setIcon'
+  | 'setSegments'
+  | 'addSegment'
+  | 'upsertSegment'
+  | 'updateSegment'
+  | 'deleteSegment'
+  | 'mergeSegments'
+  | 'splitTranscriptSegment'
+  | 'finalizeLastSegment'
+  | 'applyTranscriptUpdate'
+  | 'upsertTranscriptSegmentAndSetActive'
+  | 'setEditingSegmentId'
+  | 'addAligningSegmentId'
+  | 'removeAligningSegmentId'
+  | 'openSession'
+  | 'loadTranscriptSession'
+  | 'clearActiveTranscriptSession'
+  | 'clearTranscriptSegments'
+  | 'syncSavedRecordingMeta'
+  | 'clearSegments'
+>;
 
 type SessionStoreState = SessionData & SessionStoreActions;
 
@@ -55,7 +79,11 @@ export const useTranscriptSessionStore = Object.assign(
   },
   {
     getState: () => getFacadeState(useTranscriptStore.getState()),
-    setState: (updater: Partial<SessionStoreState> | ((state: SessionStoreState) => Partial<SessionStoreState>)) => {
+    setState: (
+      updater:
+        | Partial<SessionStoreState>
+        | ((state: SessionStoreState) => Partial<SessionStoreState>)
+    ) => {
       const currentFacadeState = useTranscriptSessionStore.getState();
       const updates = typeof updater === 'function' ? updater(currentFacadeState) : updater;
 
@@ -64,28 +92,28 @@ export const useTranscriptSessionStore = Object.assign(
           ...s.sessions,
           [s.activeSessionId]: {
             ...(s.sessions[s.activeSessionId] || {}),
-            ...updates
-          }
-        }
+            ...updates,
+          },
+        },
       }));
     },
     subscribe: (listener: (state: SessionStoreState, prevState: SessionStoreState) => void) => {
-        let lastSessionId = useTranscriptStore.getState().activeSessionId;
-        let lastActiveSession = useTranscriptStore.getState().sessions[lastSessionId];
-        let lastFullState = useTranscriptSessionStore.getState();
+      let lastSessionId = useTranscriptStore.getState().activeSessionId;
+      let lastActiveSession = useTranscriptStore.getState().sessions[lastSessionId];
+      let lastFullState = useTranscriptSessionStore.getState();
 
-        return useTranscriptStore.subscribe((state) => {
-            const nextSessionId = state.activeSessionId;
-            const nextActiveSession = state.sessions[nextSessionId];
+      return useTranscriptStore.subscribe((state) => {
+        const nextSessionId = state.activeSessionId;
+        const nextActiveSession = state.sessions[nextSessionId];
 
-            if (nextActiveSession !== lastActiveSession || nextSessionId !== lastSessionId) {
-                const nextFullState = useTranscriptSessionStore.getState();
-                listener(nextFullState, lastFullState);
-                lastActiveSession = nextActiveSession;
-                lastSessionId = nextSessionId;
-                lastFullState = nextFullState;
-            }
-        });
+        if (nextActiveSession !== lastActiveSession || nextSessionId !== lastSessionId) {
+          const nextFullState = useTranscriptSessionStore.getState();
+          listener(nextFullState, lastFullState);
+          lastActiveSession = nextActiveSession;
+          lastSessionId = nextSessionId;
+          lastFullState = nextFullState;
+        }
+      });
     },
   }
 );

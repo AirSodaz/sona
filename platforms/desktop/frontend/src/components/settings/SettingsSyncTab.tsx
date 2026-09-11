@@ -1,9 +1,9 @@
+import { Cloud, CloudOff } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Cloud,
-  CloudOff,
-} from 'lucide-react';
+import { syncRuntimeService } from '../../services/syncRuntimeService';
+import { saveDialog } from '../../services/tauri/platform/dialog';
+import { writeFile } from '../../services/tauri/platform/fs';
 import {
   changeSyncMasterPassword,
   changeSyncPreset,
@@ -20,11 +20,8 @@ import {
   unlockSyncVault,
   unlockSyncVaultWithRecovery,
 } from '../../services/tauri/sync';
-import { syncRuntimeService } from '../../services/syncRuntimeService';
-import { saveDialog } from '../../services/tauri/platform/dialog';
-import { writeFile } from '../../services/tauri/platform/fs';
-import { useDialogStore } from '../../stores/dialogStore';
 import { useSetConfig, useUIConfig } from '../../stores/configStore';
+import { useDialogStore } from '../../stores/dialogStore';
 import { useSyncStatusStore } from '../../stores/syncStatusStore';
 import type {
   SyncCreateRequest,
@@ -38,13 +35,13 @@ import type {
   SyncUnlockRequest,
   WebDavObjectStoreConfig,
 } from '../../types/sync';
+import { Switch } from '../Switch';
 import {
+  SettingsItem,
   SettingsPageHeader,
   SettingsSection,
   SettingsTabContainer,
-  SettingsItem,
 } from './SettingsLayout';
-import { Switch } from '../Switch';
 import { SyncConflictCenter } from './sync/SyncConflictCenter';
 import { SyncConnectedPanel } from './sync/SyncConnectedPanel';
 import { SyncSetupPanel } from './sync/SyncSetupPanel';
@@ -80,138 +77,159 @@ export function SettingsSyncTab({
     }
   }, [isPrewarming, isVisible]);
 
-  const reportError = React.useCallback((action: string, cause: unknown) => showError({
-    code: `sync.${action}_failed`,
-    messageKey: 'errors.sync.operation_failed',
-    cause,
-    titleKey: 'settings.sync.error_title',
-  }), [showError]);
-
-  const runReturningAction = React.useCallback(async <T,>(
-    action: string,
-    task: () => Promise<T>,
-  ): Promise<T> => {
-    setBusyAction(action);
-    try {
-      return await task();
-    } catch (error) {
-      await reportError(action, error);
-      throw error;
-    } finally {
-      setBusyAction(null);
-    }
-  }, [reportError]);
-
-  const runAction = React.useCallback(async (
-    action: string,
-    task: () => Promise<void>,
-  ): Promise<void> => {
-    try {
-      await runReturningAction(action, task);
-    } catch {
-      // Handled by runReturningAction
-    }
-  }, [runReturningAction]);
-
-  const handleTestProvider = (provider: WebDavObjectStoreConfig): Promise<SyncProviderDescriptor> => runReturningAction(
-    'test_provider',
-    async () => {
-      const descriptor = await testWebDavSyncProvider(provider);
-      await alert(t('settings.sync.provider_ready', {
-        defaultValue: '{{provider}} is ready for sync.',
-        provider: descriptor.displayName,
-      }), { variant: 'success' });
-      return descriptor;
-    },
+  const reportError = React.useCallback(
+    (action: string, cause: unknown) =>
+      showError({
+        code: `sync.${action}_failed`,
+        messageKey: 'errors.sync.operation_failed',
+        cause,
+        titleKey: 'settings.sync.error_title',
+      }),
+    [showError]
   );
 
-  const handleCreate = (request: SyncCreateRequest): Promise<SyncCreateResult> => runReturningAction(
-    'create',
-    async () => {
+  const runReturningAction = React.useCallback(
+    async <T,>(action: string, task: () => Promise<T>): Promise<T> => {
+      setBusyAction(action);
+      try {
+        return await task();
+      } catch (error) {
+        await reportError(action, error);
+        throw error;
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [reportError]
+  );
+
+  const runAction = React.useCallback(
+    async (action: string, task: () => Promise<void>): Promise<void> => {
+      try {
+        await runReturningAction(action, task);
+      } catch {
+        // Handled by runReturningAction
+      }
+    },
+    [runReturningAction]
+  );
+
+  const handleTestProvider = (provider: WebDavObjectStoreConfig): Promise<SyncProviderDescriptor> =>
+    runReturningAction('test_provider', async () => {
+      const descriptor = await testWebDavSyncProvider(provider);
+      await alert(
+        t('settings.sync.provider_ready', {
+          defaultValue: '{{provider}} is ready for sync.',
+          provider: descriptor.displayName,
+        }),
+        { variant: 'success' }
+      );
+      return descriptor;
+    });
+
+  const handleCreate = (request: SyncCreateRequest): Promise<SyncCreateResult> =>
+    runReturningAction('create', async () => {
       const result = await createSyncVault(request);
       setSnapshot(result.status);
       setRecoveryKey(result.recoveryKey);
       await syncRuntimeService.refreshStatus();
       return result;
-    },
-  );
+    });
 
-  const handlePreviewJoin = (request: SyncPreviewJoinRequest): Promise<SyncJoinPreview> => runReturningAction(
-    'preview_join',
-    () => previewSyncJoin(request),
-  );
+  const handlePreviewJoin = (request: SyncPreviewJoinRequest): Promise<SyncJoinPreview> =>
+    runReturningAction('preview_join', () => previewSyncJoin(request));
 
-  const handleJoin = (request: SyncPreviewJoinRequest): Promise<SyncRunResult> => runReturningAction(
-    'join',
-    async () => {
+  const handleJoin = (request: SyncPreviewJoinRequest): Promise<SyncRunResult> =>
+    runReturningAction('join', async () => {
       const result = await joinSyncVault(request);
       setLastRunResult(result);
       await syncRuntimeService.refreshStatus();
       return result;
-    },
-  );
+    });
 
-  const handleUnlock = (request: SyncUnlockRequest): Promise<void> => runAction('unlock', async () => {
-    setSnapshot(await unlockSyncVault(request));
-    syncRuntimeService.requestSync(0);
-  });
-
-  const handleUnlockWithRecovery = (request: SyncUnlockRecoveryRequest): Promise<void> => runAction('unlock', async () => {
-    setSnapshot(await unlockSyncVaultWithRecovery(request));
-    syncRuntimeService.requestSync(0);
-  });
-
-  const handleRunNow = (): Promise<void> => runAction('run', async () => {
-    setLastRunResult(await runSyncNow());
-    await syncRuntimeService.refreshStatus();
-  });
-
-  const handleSetPaused = (paused: boolean): Promise<void> => runAction(paused ? 'pause' : 'resume', async () => {
-    setSnapshot(await setSyncPaused(paused));
-    if (!paused) {
+  const handleUnlock = (request: SyncUnlockRequest): Promise<void> =>
+    runAction('unlock', async () => {
+      setSnapshot(await unlockSyncVault(request));
       syncRuntimeService.requestSync(0);
-    }
-  });
+    });
 
-  const handleLock = (): Promise<void> => runAction('lock', async () => {
-    setSnapshot(await lockSyncVault());
-  });
+  const handleUnlockWithRecovery = (request: SyncUnlockRecoveryRequest): Promise<void> =>
+    runAction('unlock', async () => {
+      setSnapshot(await unlockSyncVaultWithRecovery(request));
+      syncRuntimeService.requestSync(0);
+    });
 
-  const handleChangePreset = (preset: SyncPresetV1): Promise<void> => runAction('change_preset', async () => {
-    setSnapshot(await changeSyncPreset(preset, true));
-  });
+  const handleRunNow = (): Promise<void> =>
+    runAction('run', async () => {
+      setLastRunResult(await runSyncNow());
+      await syncRuntimeService.refreshStatus();
+    });
 
-  const handleChangeMasterPassword = async (currentPassword: string, nextPassword: string): Promise<void> => {
+  const handleSetPaused = (paused: boolean): Promise<void> =>
+    runAction(paused ? 'pause' : 'resume', async () => {
+      setSnapshot(await setSyncPaused(paused));
+      if (!paused) {
+        syncRuntimeService.requestSync(0);
+      }
+    });
+
+  const handleLock = (): Promise<void> =>
+    runAction('lock', async () => {
+      setSnapshot(await lockSyncVault());
+    });
+
+  const handleChangePreset = (preset: SyncPresetV1): Promise<void> =>
+    runAction('change_preset', async () => {
+      setSnapshot(await changeSyncPreset(preset, true));
+    });
+
+  const handleChangeMasterPassword = async (
+    currentPassword: string,
+    nextPassword: string
+  ): Promise<void> => {
     await runAction('change_master_password', async () => {
       await changeSyncMasterPassword({
         currentMasterPassword: currentPassword,
         nextMasterPassword: nextPassword,
       });
-      await alert(t('settings.sync.password_changed_success', { defaultValue: 'Master password updated successfully.' }), { variant: 'success' });
+      await alert(
+        t('settings.sync.password_changed_success', {
+          defaultValue: 'Master password updated successfully.',
+        }),
+        { variant: 'success' }
+      );
     });
   };
 
-  const handleGenerateRecoveryKey = (): Promise<void> => runAction('generate_recovery_key', async () => {
-    const key = await generateSyncRecoveryKey();
-    setRecoveryKey(key);
-  });
+  const handleGenerateRecoveryKey = (): Promise<void> =>
+    runAction('generate_recovery_key', async () => {
+      const key = await generateSyncRecoveryKey();
+      setRecoveryKey(key);
+    });
 
   const handleCopyRecoveryKey = async (): Promise<void> => {
     if (!recoveryKey) return;
     await navigator.clipboard.writeText(recoveryKey);
   };
 
-  const handleExportRecoveryKey = (): Promise<void> => runAction('export_recovery_key', async () => {
-    if (!recoveryKey) return;
-    const outputPath = await saveDialog({
-      defaultPath: 'sona-recovery-key.txt',
-      filters: [{ name: 'Text file', extensions: ['txt'] }],
+  const handleExportRecoveryKey = (): Promise<void> =>
+    runAction('export_recovery_key', async () => {
+      if (!recoveryKey) return;
+      const outputPath = await saveDialog({
+        defaultPath: 'sona-recovery-key.txt',
+        filters: [{ name: 'Text file', extensions: ['txt'] }],
+      });
+      if (outputPath) {
+        await writeFile(outputPath, new TextEncoder().encode(`${recoveryKey}\n`));
+        await alert(
+          t('settings.sync.recovery_key_exported', {
+            defaultValue: 'Recovery key saved to {{path}}',
+            path: outputPath,
+          }),
+          { variant: 'success' }
+        );
+      }
     });
-    if (outputPath) {
-      await writeFile(outputPath, new TextEncoder().encode(`${recoveryKey}\n`));
-      await alert(t('settings.sync.recovery_key_exported', { defaultValue: 'Recovery key saved to {{path}}', path: outputPath }), { variant: 'success' });
-    }
-  });
 
   const handleDisconnect = async (): Promise<void> => {
     const approved = await confirm(
@@ -219,10 +237,12 @@ export function SettingsSyncTab({
         defaultValue: 'Disconnect this device from the sync vault? Local data stays intact.',
       }),
       {
-        title: t('settings.sync.disconnect_confirm_title', { defaultValue: 'Disconnect Sync Vault' }),
+        title: t('settings.sync.disconnect_confirm_title', {
+          defaultValue: 'Disconnect Sync Vault',
+        }),
         confirmLabel: t('settings.sync.disconnect', { defaultValue: 'Disconnect' }),
         variant: 'error',
-      },
+      }
     );
     if (!approved) return;
     await runAction('disconnect', async () => {
@@ -246,7 +266,8 @@ export function SettingsSyncTab({
         <SettingsItem
           title={t('settings.sync.enable_cloud_sync', { defaultValue: 'Enable Cloud Sync' })}
           hint={t('settings.sync.enable_cloud_sync_hint', {
-            defaultValue: 'Enable end-to-end encrypted WebDAV sync across devices and show status capsule in the header.',
+            defaultValue:
+              'Enable end-to-end encrypted WebDAV sync across devices and show status capsule in the header.',
           })}
         >
           <Switch
@@ -265,7 +286,8 @@ export function SettingsSyncTab({
           <div className="sync-disabled-feature-content">
             <strong>
               {t('settings.sync.disabled_feature_notice', {
-                defaultValue: 'Cloud sync is currently turned off. Turn it on to configure WebDAV sync and seamlessly sync transcripts and settings across devices.',
+                defaultValue:
+                  'Cloud sync is currently turned off. Turn it on to configure WebDAV sync and seamlessly sync transcripts and settings across devices.',
               })}
             </strong>
           </div>
@@ -273,7 +295,9 @@ export function SettingsSyncTab({
       ) : !isStatusLoaded ? (
         <SettingsSection>
           <div className="sync-banner-row">
-            <div className="sync-empty-state">{t('common.loading', { defaultValue: 'Loading...' })}</div>
+            <div className="sync-empty-state">
+              {t('common.loading', { defaultValue: 'Loading...' })}
+            </div>
           </div>
         </SettingsSection>
       ) : status.state === 'disabled' ? (

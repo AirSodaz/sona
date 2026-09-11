@@ -1,6 +1,17 @@
-import { useTranscriptStore, type TranscriptStore, type SessionData } from './transcriptStore';
+import { type SessionData, type TranscriptStore, useTranscriptStore } from './transcriptStore';
 
-type PlaybackStoreActions = Pick<TranscriptStore, 'setAudioFile' | 'setAudioUrl' | 'setCurrentTime' | 'setIsPlaying' | 'setActiveSegmentId' | 'resetActiveSegmentIndex' | 'requestSeek' | 'openSession' | 'clearActiveTranscriptSession'> & { clearSession: TranscriptStore['clearActiveTranscriptSession'] };
+type PlaybackStoreActions = Pick<
+  TranscriptStore,
+  | 'setAudioFile'
+  | 'setAudioUrl'
+  | 'setCurrentTime'
+  | 'setIsPlaying'
+  | 'setActiveSegmentId'
+  | 'resetActiveSegmentIndex'
+  | 'requestSeek'
+  | 'openSession'
+  | 'clearActiveTranscriptSession'
+> & { clearSession: TranscriptStore['clearActiveTranscriptSession'] };
 
 type PlaybackStoreState = SessionData & PlaybackStoreActions;
 
@@ -43,7 +54,11 @@ export const useTranscriptPlaybackStore = Object.assign(
   },
   {
     getState: () => getFacadeState(useTranscriptStore.getState()),
-    setState: (updater: Partial<PlaybackStoreState> | ((state: PlaybackStoreState) => Partial<PlaybackStoreState>)) => {
+    setState: (
+      updater:
+        | Partial<PlaybackStoreState>
+        | ((state: PlaybackStoreState) => Partial<PlaybackStoreState>)
+    ) => {
       const currentFacadeState = useTranscriptPlaybackStore.getState();
       const updates = typeof updater === 'function' ? updater(currentFacadeState) : updater;
 
@@ -52,28 +67,28 @@ export const useTranscriptPlaybackStore = Object.assign(
           ...s.sessions,
           [s.activeSessionId]: {
             ...(s.sessions[s.activeSessionId] || {}),
-            ...updates
-          }
-        }
+            ...updates,
+          },
+        },
       }));
     },
     subscribe: (listener: (state: PlaybackStoreState, prevState: PlaybackStoreState) => void) => {
-        let lastSessionId = useTranscriptStore.getState().activeSessionId;
-        let lastActiveSession = useTranscriptStore.getState().sessions[lastSessionId];
-        let lastFullState = useTranscriptPlaybackStore.getState();
+      let lastSessionId = useTranscriptStore.getState().activeSessionId;
+      let lastActiveSession = useTranscriptStore.getState().sessions[lastSessionId];
+      let lastFullState = useTranscriptPlaybackStore.getState();
 
-        return useTranscriptStore.subscribe((state) => {
-            const nextSessionId = state.activeSessionId;
-            const nextActiveSession = state.sessions[nextSessionId];
+      return useTranscriptStore.subscribe((state) => {
+        const nextSessionId = state.activeSessionId;
+        const nextActiveSession = state.sessions[nextSessionId];
 
-            if (nextActiveSession !== lastActiveSession || nextSessionId !== lastSessionId) {
-                const nextFullState = useTranscriptPlaybackStore.getState();
-                listener(nextFullState, lastFullState);
-                lastActiveSession = nextActiveSession;
-                lastSessionId = nextSessionId;
-                lastFullState = nextFullState;
-            }
-        });
+        if (nextActiveSession !== lastActiveSession || nextSessionId !== lastSessionId) {
+          const nextFullState = useTranscriptPlaybackStore.getState();
+          listener(nextFullState, lastFullState);
+          lastActiveSession = nextActiveSession;
+          lastSessionId = nextSessionId;
+          lastFullState = nextFullState;
+        }
+      });
     },
   }
 );

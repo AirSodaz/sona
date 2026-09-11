@@ -4,8 +4,8 @@ import { useTaskLedgerStore } from '../../stores/taskLedgerStore';
 import { logger } from '../../utils/logger';
 import { healthCheckService } from '../healthCheckService';
 import { runHistoryAudioCleanupForCurrentConfig } from '../historyAudioCleanupService';
-import { voiceTypingService } from '../voiceTypingService';
 import { syncRuntimeService } from '../syncRuntimeService';
+import { voiceTypingService } from '../voiceTypingService';
 
 async function runStartupStep(label: string, action: () => Promise<void>): Promise<void> {
   try {
@@ -16,17 +16,13 @@ async function runStartupStep(label: string, action: () => Promise<void>): Promi
 }
 
 export async function startAppRuntimeServices(): Promise<void> {
-  await runStartupStep('load task ledger', () => (
-    useTaskLedgerStore.getState().loadTasks()
-  ));
+  await runStartupStep('load task ledger', () => useTaskLedgerStore.getState().loadTasks());
 
-  await runStartupStep('load recovery state', () => (
-    useRecoveryStore.getState().loadRecovery()
-  ));
+  await runStartupStep('load recovery state', () => useRecoveryStore.getState().loadRecovery());
 
-  await runStartupStep('load automation runtime', () => (
+  await runStartupStep('load automation runtime', () =>
     useAutomationStore.getState().loadAndStart()
-  ));
+  );
 
   await runStartupStep('initialize voice typing service', async () => {
     voiceTypingService.init();
@@ -36,9 +32,7 @@ export async function startAppRuntimeServices(): Promise<void> {
     syncRuntimeService.init();
   });
 
-  await runStartupStep('run health check', () => (
-    healthCheckService.runHealthCheck()
-  ));
+  await runStartupStep('run health check', () => healthCheckService.runHealthCheck());
 
   await runStartupStep('clean up history audio', async () => {
     await runHistoryAudioCleanupForCurrentConfig();

@@ -20,10 +20,7 @@ export type TaskLedgerRecord = Omit<NormalizedTaskLedgerRecord, 'tagIds'> & {
 export type TaskLedgerSnapshot = Omit<GeneratedTaskLedgerSnapshot, 'tasks'> & {
   tasks: TaskLedgerRecord[];
 };
-export type TaskLedgerPatch = Omit<
-  NormalizedTaskLedgerPatch,
-  'errorMessage' | 'tagIds'
-> &
+export type TaskLedgerPatch = Omit<NormalizedTaskLedgerPatch, 'errorMessage' | 'tagIds'> &
   Pick<GeneratedTaskLedgerPatch, 'errorMessage'> & {
     tagIds?: string[] | null;
     /** @deprecated Compatibility input for persisted v1 tasks. */

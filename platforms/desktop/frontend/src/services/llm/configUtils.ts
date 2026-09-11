@@ -13,19 +13,21 @@ import {
   getProviderDefinition,
   normalizeProvider,
 } from './providers';
-import {
-  ensureProviderSetting,
-  getFeatureModelEntry,
-} from './state';
+import { ensureProviderSetting, getFeatureModelEntry } from './state';
 
-function customProviderFromConfig(llmConfig: LlmConfig): Partial<Record<LlmProvider, CustomLlmProvider>> | undefined {
+function customProviderFromConfig(
+  llmConfig: LlmConfig
+): Partial<Record<LlmProvider, CustomLlmProvider>> | undefined {
   if (!llmConfig.provider.startsWith('custom-')) {
     return undefined;
   }
 
-  const strategy: CustomLlmProviderStrategy = llmConfig.strategy === 'anthropic' || llmConfig.strategy === 'gemini' || llmConfig.strategy === 'openai_responses'
-    ? llmConfig.strategy
-    : 'openai_compatible';
+  const strategy: CustomLlmProviderStrategy =
+    llmConfig.strategy === 'anthropic' ||
+    llmConfig.strategy === 'gemini' ||
+    llmConfig.strategy === 'openai_responses'
+      ? llmConfig.strategy
+      : 'openai_compatible';
 
   return {
     [llmConfig.provider]: {
@@ -41,14 +43,22 @@ export function getActiveProvider(config: Pick<AppConfig, 'llmSettings'>): LlmPr
   return normalizeProvider(config.llmSettings?.activeProvider);
 }
 
-export function getActiveProviderSetting(config: Pick<AppConfig, 'llmSettings'>): LlmProviderSetting {
+export function getActiveProviderSetting(
+  config: Pick<AppConfig, 'llmSettings'>
+): LlmProviderSetting {
   const provider = getActiveProvider(config);
   return ensureProviderSetting(config.llmSettings, provider);
 }
 
-export function getActiveLlmConfig(config: Pick<AppConfig, 'llmSettings' | 'llmRequestTimeoutSeconds'>): LlmConfig {
+export function getActiveLlmConfig(
+  config: Pick<AppConfig, 'llmSettings' | 'llmRequestTimeoutSeconds'>
+): LlmConfig {
   const provider = getActiveProvider(config);
-  const baseConfig = buildLlmConfig(provider, getActiveProviderSetting(config), config.llmSettings?.customProviders);
+  const baseConfig = buildLlmConfig(
+    provider,
+    getActiveProviderSetting(config),
+    config.llmSettings?.customProviders
+  );
   return {
     ...baseConfig,
     timeoutSeconds: config.llmRequestTimeoutSeconds,
@@ -57,7 +67,7 @@ export function getActiveLlmConfig(config: Pick<AppConfig, 'llmSettings' | 'llmR
 
 function getFeatureTemperature(
   config: Pick<AppConfig, 'llmSettings'>,
-  feature: LlmFeature,
+  feature: LlmFeature
 ): number | undefined {
   let selectionTemperature: number | undefined;
 
@@ -86,7 +96,7 @@ const FEATURE_REASONING_LEVEL_KEYS = {
 
 export function getFeatureLlmConfig(
   config: Pick<AppConfig, 'llmSettings' | 'llmRequestTimeoutSeconds'>,
-  feature: LlmFeature,
+  feature: LlmFeature
 ): LlmConfig | null {
   const modelEntry = getFeatureModelEntry(config, feature);
   if (!modelEntry) {
@@ -127,7 +137,10 @@ export function isLlmConfigComplete(llmConfig: LlmConfig | null): boolean {
 export function isProviderConfigComplete(
   provider: LlmProvider,
   setting: LlmProviderSetting | undefined,
-  customProviders?: Pick<NonNullable<AppConfig['llmSettings']>, 'customProviders'>['customProviders'],
+  customProviders?: Pick<
+    NonNullable<AppConfig['llmSettings']>,
+    'customProviders'
+  >['customProviders']
 ): boolean {
   const definition = getProviderDefinition(provider, customProviders);
   const hasApiHost = Boolean(setting?.apiHost?.trim() || definition.defaultApiHost);
@@ -138,13 +151,13 @@ export function isProviderConfigComplete(
 
 export function isFeatureLlmConfigComplete(
   config: Pick<AppConfig, 'llmSettings' | 'llmRequestTimeoutSeconds'>,
-  feature: LlmFeature,
+  feature: LlmFeature
 ): boolean {
   return isLlmConfigComplete(getFeatureLlmConfig(config, feature));
 }
 
 export function isSummaryLlmConfigComplete(
-  config: Pick<AppConfig, 'llmSettings' | 'llmRequestTimeoutSeconds'>,
+  config: Pick<AppConfig, 'llmSettings' | 'llmRequestTimeoutSeconds'>
 ): boolean {
   return isFeatureLlmConfigComplete(config, 'summary');
 }

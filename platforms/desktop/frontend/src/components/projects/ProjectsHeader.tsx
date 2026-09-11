@@ -1,8 +1,8 @@
-import React from 'react';
-import { FileTextIcon, MicIcon, SettingsIcon } from '../Icons';
-import type { ProjectRecord } from '../../types/project';
-import type { ProjectSummaryChip, TranslationFn } from './types';
 import { Trash2 } from 'lucide-react';
+import type React from 'react';
+import type { ProjectRecord } from '../../types/project';
+import { FileTextIcon, MicIcon, SettingsIcon } from '../Icons';
+import type { ProjectSummaryChip, TranslationFn } from './types';
 
 interface ProjectsHeaderProps {
   browseProject: ProjectRecord | null;
@@ -57,7 +57,9 @@ export function ProjectsHeader({
                 className="btn btn-icon projects-header-icon"
                 onClick={onStartLiveRecord}
                 aria-label={t('projects.start_live_record', { defaultValue: 'Start Live Record' })}
-                data-tooltip={t('projects.start_live_record', { defaultValue: 'Start Live Record' })}
+                data-tooltip={t('projects.start_live_record', {
+                  defaultValue: 'Start Live Record',
+                })}
                 data-tooltip-pos="bottom"
               >
                 <MicIcon width={16} height={16} />
@@ -67,7 +69,9 @@ export function ProjectsHeader({
                 className="btn btn-icon projects-header-icon"
                 onClick={onOpenBatchImport}
                 aria-label={t('projects.open_batch_import', { defaultValue: 'Open Batch Import' })}
-                data-tooltip={t('projects.open_batch_import', { defaultValue: 'Open Batch Import' })}
+                data-tooltip={t('projects.open_batch_import', {
+                  defaultValue: 'Open Batch Import',
+                })}
                 data-tooltip-pos="bottom"
               >
                 <FileTextIcon width={16} height={16} />

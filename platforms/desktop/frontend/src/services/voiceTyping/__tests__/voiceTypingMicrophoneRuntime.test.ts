@@ -78,7 +78,7 @@ describe('VoiceTypingMicrophoneRuntime', () => {
         warmup: 'error',
         lastErrorSource: 'microphone',
         lastErrorMessage: 'Microphone denied.',
-      }),
+      })
     );
   });
 });

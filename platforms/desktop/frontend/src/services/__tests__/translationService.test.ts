@@ -1,13 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
-import { translationService } from '../translationService';
-import { historyService } from '../historyService';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  buildTestConfig as buildBaseTestConfig,
+  type DeepPartial,
+} from '../../test-utils/configTestUtils';
 import {
   resetTranscriptStores,
   useTranscriptStore,
 } from '../../test-utils/transcriptStoreTestUtils';
 import type { AppConfig } from '../../types/config';
-import { buildTestConfig as buildBaseTestConfig, type DeepPartial } from '../../test-utils/configTestUtils';
+import { historyService } from '../historyService';
+import { translationService } from '../translationService';
 
 const mockListenToLlmTaskChunks = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
@@ -77,7 +80,8 @@ vi.mock('../llmTaskTypes', () => ({
 vi.mock('../llmTaskEvents', () => ({
   listenToLlmTaskChunks: (...args: unknown[]) => mockListenToLlmTaskChunks(...args),
   listenToLlmTaskProgress: (...args: unknown[]) => mockListenToLlmTaskProgress(...args),
-  listenToTranscriptLlmJobUpdates: (...args: unknown[]) => mockListenToTranscriptLlmJobUpdates(...args),
+  listenToTranscriptLlmJobUpdates: (...args: unknown[]) =>
+    mockListenToTranscriptLlmJobUpdates(...args),
 }));
 
 vi.mock('../transcriptSnapshotService', () => ({
@@ -114,7 +118,12 @@ describe('TranslationService', () => {
       sourceHistoryId: null,
     });
     mockListenToLlmTaskProgress.mockImplementation(async (_taskId, _taskType, onProgress) => {
-      onProgress({ taskId: 'translate-task-id', taskType: 'translate', completedChunks: 1, totalChunks: 2 });
+      onProgress({
+        taskId: 'translate-task-id',
+        taskType: 'translate',
+        completedChunks: 1,
+        totalChunks: 2,
+      });
       expect(useTranscriptStore.getState().getLlmState('current').translationProgress).toBe(50);
       return vi.fn();
     });
@@ -123,7 +132,9 @@ describe('TranslationService', () => {
         taskId: 'translate-task-id',
         taskType: 'translate',
         jobHistoryId: null,
-        segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: 'こんにちは' }],
+        segments: [
+          { id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: 'こんにちは' },
+        ],
       });
       expect(useTranscriptStore.getState().segments[0]?.translation).toBe('こんにちは');
       return vi.fn();
@@ -132,7 +143,9 @@ describe('TranslationService', () => {
       taskId: 'translate-task-id',
       taskType: 'translate',
       jobHistoryId: null,
-      segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: 'こんにちは' }],
+      segments: [
+        { id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: 'こんにちは' },
+      ],
     });
 
     await translationService.translateCurrentTranscript();
@@ -149,11 +162,13 @@ describe('TranslationService', () => {
       }),
     });
     expect(useTranscriptStore.getState().segments[0]?.translation).toBe('こんにちは');
-    expect(useTranscriptStore.getState().getLlmState('current')).toEqual(expect.objectContaining({
-      isTranslating: false,
-      translationProgress: 100,
-      isTranslationVisible: true,
-    }));
+    expect(useTranscriptStore.getState().getLlmState('current')).toEqual(
+      expect.objectContaining({
+        isTranslating: false,
+        translationProgress: 100,
+        isTranslationVisible: true,
+      })
+    );
   });
 
   it('falls back to final result when no chunk event arrives', async () => {
@@ -174,7 +189,9 @@ describe('TranslationService', () => {
       taskId: 'translate-task-id',
       taskType: 'translate',
       jobHistoryId: null,
-      segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: 'こんにちは' }],
+      segments: [
+        { id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: 'こんにちは' },
+      ],
     });
 
     await translationService.translateCurrentTranscript();
@@ -203,7 +220,9 @@ describe('TranslationService', () => {
         taskId: 'translate-task-id',
         taskType: 'translate',
         jobHistoryId: 'history-a',
-        segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: '浣犲ソ' }],
+        segments: [
+          { id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: '浣犲ソ' },
+        ],
       });
       return vi.fn();
     });
@@ -211,7 +230,9 @@ describe('TranslationService', () => {
       taskId: 'translate-task-id',
       taskType: 'translate',
       jobHistoryId: 'history-a',
-      segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: '浣犲ソ' }],
+      segments: [
+        { id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: '浣犲ソ' },
+      ],
     });
 
     await translationService.translateCurrentTranscript();

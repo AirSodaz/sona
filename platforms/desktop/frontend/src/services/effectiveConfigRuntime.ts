@@ -4,9 +4,12 @@ import { useProjectStore } from '../stores/projectStore';
 import { logger } from '../utils/logger';
 
 function syncEffectiveConfig() {
-  void useEffectiveConfigStore.getState().syncConfig().catch((error) => {
-    logger.error('[EffectiveConfig] Failed to resolve effective config:', error);
-  });
+  void useEffectiveConfigStore
+    .getState()
+    .syncConfig()
+    .catch((error) => {
+      logger.error('[EffectiveConfig] Failed to resolve effective config:', error);
+    });
 }
 
 class EffectiveConfigRuntime {

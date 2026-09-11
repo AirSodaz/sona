@@ -1,346 +1,351 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
-import { BatchImport } from '../BatchImport';
-import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
-import { useConfigStore } from '../../stores/configStore';
-import { useBatchQueueStore } from '../../stores/batchQueueStore';
-import { useOnboardingStore } from '../../stores/onboardingStore';
+import { open } from '@tauri-apps/plugin-dialog';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { historyService } from '../../services/historyService';
 import { transcriptionService } from '../../services/transcriptionService';
-import { open } from '@tauri-apps/plugin-dialog';
+import { useBatchQueueStore } from '../../stores/batchQueueStore';
+import { useConfigStore } from '../../stores/configStore';
+import { useOnboardingStore } from '../../stores/onboardingStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import { BatchImport } from '../BatchImport';
 
 // Mock dependencies
 vi.mock('@tauri-apps/api/core', () => ({
-    convertFileSrc: vi.fn((path) => `asset://${path}`),
+  convertFileSrc: vi.fn((path) => `asset://${path}`),
 }));
 
 vi.mock('../../services/tauri/invoke', () => ({
-    invokeTauri: vi.fn((cmd, args: any) => {
-        if (cmd === 'check_media_formats') {
-            return Promise.resolve(args?.paths?.map(() => true) || []);
-        }
-        return Promise.resolve();
-    }),
+  invokeTauri: vi.fn((cmd, args: any) => {
+    if (cmd === 'check_media_formats') {
+      return Promise.resolve(args?.paths?.map(() => true) || []);
+    }
+    return Promise.resolve();
+  }),
 }));
 
 vi.mock('@tauri-apps/api/path', () => ({
-    tempDir: vi.fn(() => Promise.resolve('/tmp')),
-    join: vi.fn((...args) => Promise.resolve(args.join('/'))),
+  tempDir: vi.fn(() => Promise.resolve('/tmp')),
+  join: vi.fn((...args) => Promise.resolve(args.join('/'))),
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
-    listen: vi.fn().mockResolvedValue(() => { }),
+  listen: vi.fn().mockResolvedValue(() => {}),
 }));
 
 vi.mock('@tauri-apps/api/window', () => ({
-    getCurrentWindow: () => ({
-        listen: vi.fn().mockResolvedValue(() => { }),
-    }),
+  getCurrentWindow: () => ({
+    listen: vi.fn().mockResolvedValue(() => {}),
+  }),
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
-    open: vi.fn(),
-    message: vi.fn(),
+  open: vi.fn(),
+  message: vi.fn(),
 }));
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
-    exists: vi.fn(() => Promise.resolve(false)),
-    remove: vi.fn(() => Promise.resolve()),
-    mkdir: vi.fn(() => Promise.resolve()),
-    writeTextFile: vi.fn(() => Promise.resolve()),
-    readTextFile: vi.fn(() => Promise.resolve('')),
-    BaseDirectory: { AppData: 1, Resource: 2, AppLocalData: 3 },
+  exists: vi.fn(() => Promise.resolve(false)),
+  remove: vi.fn(() => Promise.resolve()),
+  mkdir: vi.fn(() => Promise.resolve()),
+  writeTextFile: vi.fn(() => Promise.resolve()),
+  readTextFile: vi.fn(() => Promise.resolve('')),
+  BaseDirectory: { AppData: 1, Resource: 2, AppLocalData: 3 },
 }));
 
 // Mock transcription service
 vi.mock('../../services/tauri/taskLedger', () => ({
-    taskLedgerUpsertTask: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
-    taskLedgerPatchTask: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
-    taskLedgerRemoveTask: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
-    taskLedgerClearResolved: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
-    taskLedgerLoadSnapshot: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
+  taskLedgerUpsertTask: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
+  taskLedgerPatchTask: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
+  taskLedgerRemoveTask: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
+  taskLedgerClearResolved: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
+  taskLedgerLoadSnapshot: vi.fn().mockResolvedValue({ version: 1, updatedAt: null, tasks: [] }),
 }));
 
 vi.mock('../../services/transcriptionService', () => ({
-    transcriptionService: {
-        setModelPath: vi.fn(),
-        setEnableITN: vi.fn(),
-        setITNModelPaths: vi.fn(),
+  transcriptionService: {
+    setModelPath: vi.fn(),
+    setEnableITN: vi.fn(),
+    setITNModelPaths: vi.fn(),
 
-
-        transcribeFile: vi.fn(),
-    }
+    transcribeFile: vi.fn(),
+  },
 }));
 
 vi.mock('../../services/modelService', () => ({
-    PRESET_MODELS: [],
-    PRESET_MODELS_MAP: new Map(),
-    modelService: {
-        getEnabledITNModelPaths: vi.fn().mockResolvedValue(['/itn/path']),
-    }
+  PRESET_MODELS: [],
+  PRESET_MODELS_MAP: new Map(),
+  modelService: {
+    getEnabledITNModelPaths: vi.fn().mockResolvedValue(['/itn/path']),
+  },
 }));
 
 vi.mock('../../services/historyService', async () => {
-    const { createHistoryServiceMockModule } = await import('../../__tests__/testUtils/history');
-    return createHistoryServiceMockModule();
+  const { createHistoryServiceMockModule } = await import('../../__tests__/testUtils/history');
+  return createHistoryServiceMockModule();
 });
 
 vi.mock('../../stores/projectStore', () => ({
-    useProjectStore: Object.assign(
-        (selector: (state: any) => unknown) => selector({
-            activeProjectId: null,
-            getActiveProject: vi.fn(() => null),
-            getProjectById: vi.fn(() => null),
-            setActiveProjectId: vi.fn().mockResolvedValue(undefined),
-        }),
-        {
-            getState: () => ({
-                activeProjectId: null,
-                getActiveProject: vi.fn(() => null),
-                getProjectById: vi.fn(() => null),
-                setActiveProjectId: vi.fn().mockResolvedValue(undefined),
-            }),
-        },
-    ),
+  useProjectStore: Object.assign(
+    (selector: (state: any) => unknown) =>
+      selector({
+        activeProjectId: null,
+        getActiveProject: vi.fn(() => null),
+        getProjectById: vi.fn(() => null),
+        setActiveProjectId: vi.fn().mockResolvedValue(undefined),
+      }),
+    {
+      getState: () => ({
+        activeProjectId: null,
+        getActiveProject: vi.fn(() => null),
+        getProjectById: vi.fn(() => null),
+        setActiveProjectId: vi.fn().mockResolvedValue(undefined),
+      }),
+    }
+  ),
 }));
 
 vi.mock('react-i18next', async () => {
-    const { createReactI18nextMock } = await import('../../__tests__/testUtils/i18n');
-    return createReactI18nextMock();
+  const { createReactI18nextMock } = await import('../../__tests__/testUtils/i18n');
+  return createReactI18nextMock();
 });
 
 describe('BatchImport Integration', () => {
-    beforeEach(() => {
-        vi.useRealTimers();
-        localStorage.clear();
-        // Reset stores
-        useTranscriptStore.setState({
-            segments: [],
-            audioUrl: null
-        });
-
-        useConfigStore.setState({
-            config: {
-                ...useConfigStore.getState().config,
-                streamingModelPath: "/path/to/model",
-                batchModelPath: '/mock/batch/model',
-                livePunctuationModelPath: '',
-                enableITN: false,
-                theme: 'auto',
-                font: 'system',
-                language: 'en',
-                appLanguage: 'auto'
-            }
-        });
-
-        useBatchQueueStore.setState({
-            queueItems: [],
-            activeItemId: null,
-            isQueueProcessing: false,
-        });
-        useOnboardingStore.setState({
-            persistedState: { version: 1, status: 'pending' },
-            currentStep: 'microphone',
-            entryContext: 'startup',
-            isOpen: false,
-            focusStartRecordingToken: 0,
-        });
-
-        vi.clearAllMocks();
+  beforeEach(() => {
+    vi.useRealTimers();
+    localStorage.clear();
+    // Reset stores
+    useTranscriptStore.setState({
+      segments: [],
+      audioUrl: null,
     });
 
-    it('renders drop zone initially', () => {
-        render(<BatchImport />);
-        screen.getByText('batch.drop_title');
-        screen.getByText('batch.drop_desc');
-        expect(screen.queryByRole('button', { name: 'automation.open_settings' })).toBeNull();
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        streamingModelPath: '/path/to/model',
+        batchModelPath: '/mock/batch/model',
+        livePunctuationModelPath: '',
+        enableITN: false,
+        theme: 'auto',
+        font: 'system',
+        language: 'en',
+        appLanguage: 'auto',
+      },
     });
 
-    it('adds files to queue and starts processing automatically', async () => {
-        let finishTranscription!: () => void;
-        const transcriptionGate = new Promise<void>((resolve) => {
-            finishTranscription = resolve;
-        });
-        const transcriptSegments = [{ id: '1', start: 0, end: 1, text: 'Test', isFinal: true }];
-
-        // Keep transcription pending until the processing-state assertions complete.
-        const mockTranscribe = vi.mocked(transcriptionService.transcribeFile).mockImplementation(
-            async (_path, onProgress, onSegment) => {
-                if (onProgress) onProgress(10);
-                if (onSegment) onSegment(transcriptSegments[0]);
-                await transcriptionGate;
-                return transcriptSegments;
-            }
-        );
-
-        render(<BatchImport />);
-
-        const { addFiles } = useBatchQueueStore.getState();
-
-        await act(async () => {
-            addFiles(['/path/to/test.wav']);
-        });
-
-        // 1. Check if sidebar appears
-        await waitFor(() => {
-            screen.getByText('Queue (1)');
-        });
-
-        // 2. Check if processing view appears
-        await waitFor(() => {
-            expect(screen.getAllByText('batch.processing_title').length).toBeGreaterThan(0);
-        });
-
-        // 3. Check progress bar updates
-        // Look within the processing view container to avoid ambiguity with sidebar
-        const processingView = screen.getAllByText('batch.processing_title')[0].closest('.batch-queue-processing');
-        if (!processingView) throw new Error('Processing view not found');
-        const progress = within(processingView as HTMLElement).getByRole('progressbar');
-        expect(progress.getAttribute('aria-valuenow')).toBe('10');
-
-        // 4. Check if service was called
-        expect(mockTranscribe).toHaveBeenCalled();
-
-        await act(async () => {
-            finishTranscription();
-            await transcriptionGate;
-        });
-
-        // 5. Verify the full history persistence contract succeeds
-        await waitFor(() => {
-            screen.getByText('batch.file_complete');
-        });
-
-        expect(historyService.saveImportedFile).toHaveBeenCalledWith(
-            '/path/to/test.wav',
-            [{ id: '1', start: 0, end: 1, text: 'Test', isFinal: true }],
-            1,
-            expect.stringMatching(/^\/tmp\/.+\.wav$/),
-            null,
-            expect.any(String),
-        );
-        expect(historyService.updateTranscript).toHaveBeenCalledWith(
-            'mock-history-id',
-            [{ id: '1', start: 0, end: 1, text: 'Test', isFinal: true }],
-        );
+    useBatchQueueStore.setState({
+      queueItems: [],
+      activeItemId: null,
+      isQueueProcessing: false,
+    });
+    useOnboardingStore.setState({
+      persistedState: { version: 1, status: 'pending' },
+      currentStep: 'microphone',
+      entryContext: 'startup',
+      isOpen: false,
+      focusStartRecordingToken: 0,
     });
 
-    it('shows error state when transcription fails', async () => {
-        vi.mocked(transcriptionService.transcribeFile).mockRejectedValue(new Error('Mock Error'));
+    vi.clearAllMocks();
+  });
 
-        render(<BatchImport />);
+  it('renders drop zone initially', () => {
+    render(<BatchImport />);
+    screen.getByText('batch.drop_title');
+    screen.getByText('batch.drop_desc');
+    expect(screen.queryByRole('button', { name: 'automation.open_settings' })).toBeNull();
+  });
 
-        const { addFiles } = useBatchQueueStore.getState();
+  it('adds files to queue and starts processing automatically', async () => {
+    let finishTranscription!: () => void;
+    const transcriptionGate = new Promise<void>((resolve) => {
+      finishTranscription = resolve;
+    });
+    const transcriptSegments = [{ id: '1', start: 0, end: 1, text: 'Test', isFinal: true }];
 
-        await act(async () => {
-            addFiles(['/path/to/fail.wav']);
-        });
+    // Keep transcription pending until the processing-state assertions complete.
+    const mockTranscribe = vi
+      .mocked(transcriptionService.transcribeFile)
+      .mockImplementation(async (_path, onProgress, onSegment) => {
+        if (onProgress) onProgress(10);
+        if (onSegment) onSegment(transcriptSegments[0]);
+        await transcriptionGate;
+        return transcriptSegments;
+      });
 
-        await waitFor(() => {
-            expect(screen.getAllByText('batch.file_failed').length).toBeGreaterThan(0);
-        });
+    render(<BatchImport />);
 
-        // Error details
-        const sidebar = screen.getByRole('list', { name: /Queue/ });
-        expect(within(sidebar).getByText('batch.file_failed')).toBeDefined();
+    const { addFiles } = useBatchQueueStore.getState();
+
+    await act(async () => {
+      addFiles(['/path/to/test.wav']);
     });
 
-    it('can remove items from queue', async () => {
-        render(<BatchImport />);
-        const { addFiles } = useBatchQueueStore.getState();
-
-        await act(async () => {
-            addFiles(['/path/to/file1.wav', '/path/to/file2.wav']);
-        });
-
-        // Wait for list
-        const sidebar = await screen.findByRole('list', { name: /Queue/ });
-
-        // Check initial length
-        await waitFor(() => {
-            expect(within(sidebar).getAllByRole('listitem')).toHaveLength(2);
-        });
-
-        // Find remove button for first item
-        const removeBtns = within(sidebar).getAllByLabelText('common.delete_item');
-        fireEvent.click(removeBtns[0]);
-
-        await waitFor(() => {
-            expect(within(sidebar).getAllByRole('listitem')).toHaveLength(1);
-        });
+    // 1. Check if sidebar appears
+    await waitFor(() => {
+      screen.getByText('Queue (1)');
     });
 
-    it('allows clearing the queue', async () => {
-        render(<BatchImport />);
-        const { addFiles } = useBatchQueueStore.getState();
-
-        await act(async () => {
-            addFiles(['/path/to/file1.wav']);
-        });
-
-        await waitFor(() => {
-            screen.getByText('Queue (1)');
-        });
-
-        const clearBtn = screen.getByLabelText('batch.clear_queue');
-        fireEvent.click(clearBtn);
-
-        await waitFor(() => {
-            expect(screen.queryByText('Queue (1)')).toBeNull();
-            // Should revert to drop zone
-            screen.getByText('batch.drop_title');
-        });
+    // 2. Check if processing view appears
+    await waitFor(() => {
+      expect(screen.getAllByText('batch.processing_title').length).toBeGreaterThan(0);
     });
 
-    it('allows adding more files while queue is processing', async () => {
-        // Setup initial state with processing item
-        useBatchQueueStore.setState({
-            queueItems: [{
-                id: '1',
-                filename: 'processing.wav',
-                filePath: '/path/to/processing.wav',
-                status: 'processing',
-                progress: 50,
-                segments: [],
-                audioUrl: 'asset:///path/to/processing.wav',
-                projectId: null,
-            }],
-            activeItemId: '1',
-            isQueueProcessing: true
-        });
+    // 3. Check progress bar updates
+    // Look within the processing view container to avoid ambiguity with sidebar
+    const processingView = screen
+      .getAllByText('batch.processing_title')[0]
+      .closest('.batch-queue-processing');
+    if (!processingView) throw new Error('Processing view not found');
+    const progress = within(processingView as HTMLElement).getByRole('progressbar');
+    expect(progress.getAttribute('aria-valuenow')).toBe('10');
 
-        render(<BatchImport />);
+    // 4. Check if service was called
+    expect(mockTranscribe).toHaveBeenCalled();
 
-        // Check if processing view is shown
-        screen.getByText('batch.processing_title');
-        expect(screen.queryByRole('button', { name: 'automation.open_settings' })).toBeNull();
-
-        // Check if "Add more files" button is present and NOT disabled
-        const addButton = screen.getByRole('button', { name: 'batch.add_more_files' }) as HTMLButtonElement;
-        expect(addButton).toBeDefined();
-        expect(addButton.disabled).toBe(false);
-
-        // Verify clicking it triggers file dialog
-        fireEvent.click(addButton);
+    await act(async () => {
+      finishTranscription();
+      await transcriptionGate;
     });
 
-    it('reopens onboarding when selecting a file without an Batch Model', async () => {
-        useConfigStore.setState({
-            config: {
-                ...useConfigStore.getState().config,
-                batchModelPath: '',
-            },
-        });
-        vi.mocked(open).mockResolvedValue(['/path/to/test.wav']);
-
-        render(<BatchImport />);
-
-        const dropZone = screen.getByRole('button', { name: 'batch.drop_desc' });
-        await act(async () => {
-            fireEvent.click(dropZone);
-        });
-
-        expect(useOnboardingStore.getState().isOpen).toBe(true);
-        expect(useOnboardingStore.getState().currentStep).toBe('models');
+    // 5. Verify the full history persistence contract succeeds
+    await waitFor(() => {
+      screen.getByText('batch.file_complete');
     });
+
+    expect(historyService.saveImportedFile).toHaveBeenCalledWith(
+      '/path/to/test.wav',
+      [{ id: '1', start: 0, end: 1, text: 'Test', isFinal: true }],
+      1,
+      expect.stringMatching(/^\/tmp\/.+\.wav$/),
+      null,
+      expect.any(String)
+    );
+    expect(historyService.updateTranscript).toHaveBeenCalledWith('mock-history-id', [
+      { id: '1', start: 0, end: 1, text: 'Test', isFinal: true },
+    ]);
+  });
+
+  it('shows error state when transcription fails', async () => {
+    vi.mocked(transcriptionService.transcribeFile).mockRejectedValue(new Error('Mock Error'));
+
+    render(<BatchImport />);
+
+    const { addFiles } = useBatchQueueStore.getState();
+
+    await act(async () => {
+      addFiles(['/path/to/fail.wav']);
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText('batch.file_failed').length).toBeGreaterThan(0);
+    });
+
+    // Error details
+    const sidebar = screen.getByRole('list', { name: /Queue/ });
+    expect(within(sidebar).getByText('batch.file_failed')).toBeDefined();
+  });
+
+  it('can remove items from queue', async () => {
+    render(<BatchImport />);
+    const { addFiles } = useBatchQueueStore.getState();
+
+    await act(async () => {
+      addFiles(['/path/to/file1.wav', '/path/to/file2.wav']);
+    });
+
+    // Wait for list
+    const sidebar = await screen.findByRole('list', { name: /Queue/ });
+
+    // Check initial length
+    await waitFor(() => {
+      expect(within(sidebar).getAllByRole('listitem')).toHaveLength(2);
+    });
+
+    // Find remove button for first item
+    const removeBtns = within(sidebar).getAllByLabelText('common.delete_item');
+    fireEvent.click(removeBtns[0]);
+
+    await waitFor(() => {
+      expect(within(sidebar).getAllByRole('listitem')).toHaveLength(1);
+    });
+  });
+
+  it('allows clearing the queue', async () => {
+    render(<BatchImport />);
+    const { addFiles } = useBatchQueueStore.getState();
+
+    await act(async () => {
+      addFiles(['/path/to/file1.wav']);
+    });
+
+    await waitFor(() => {
+      screen.getByText('Queue (1)');
+    });
+
+    const clearBtn = screen.getByLabelText('batch.clear_queue');
+    fireEvent.click(clearBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Queue (1)')).toBeNull();
+      // Should revert to drop zone
+      screen.getByText('batch.drop_title');
+    });
+  });
+
+  it('allows adding more files while queue is processing', async () => {
+    // Setup initial state with processing item
+    useBatchQueueStore.setState({
+      queueItems: [
+        {
+          id: '1',
+          filename: 'processing.wav',
+          filePath: '/path/to/processing.wav',
+          status: 'processing',
+          progress: 50,
+          segments: [],
+          audioUrl: 'asset:///path/to/processing.wav',
+          projectId: null,
+        },
+      ],
+      activeItemId: '1',
+      isQueueProcessing: true,
+    });
+
+    render(<BatchImport />);
+
+    // Check if processing view is shown
+    screen.getByText('batch.processing_title');
+    expect(screen.queryByRole('button', { name: 'automation.open_settings' })).toBeNull();
+
+    // Check if "Add more files" button is present and NOT disabled
+    const addButton = screen.getByRole('button', {
+      name: 'batch.add_more_files',
+    }) as HTMLButtonElement;
+    expect(addButton).toBeDefined();
+    expect(addButton.disabled).toBe(false);
+
+    // Verify clicking it triggers file dialog
+    fireEvent.click(addButton);
+  });
+
+  it('reopens onboarding when selecting a file without an Batch Model', async () => {
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        batchModelPath: '',
+      },
+    });
+    vi.mocked(open).mockResolvedValue(['/path/to/test.wav']);
+
+    render(<BatchImport />);
+
+    const dropZone = screen.getByRole('button', { name: 'batch.drop_desc' });
+    await act(async () => {
+      fireEvent.click(dropZone);
+    });
+
+    expect(useOnboardingStore.getState().isOpen).toBe(true);
+    expect(useOnboardingStore.getState().currentStep).toBe('models');
+  });
 });

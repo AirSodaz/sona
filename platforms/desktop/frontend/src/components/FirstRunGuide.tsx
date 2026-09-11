@@ -1,11 +1,11 @@
-import React from 'react';
+import type React from 'react';
 import { useTranslation } from 'react-i18next';
+import { type ModelStepStatus, useFirstRunGuide } from '../hooks/useFirstRunGuide';
+import type { OnboardingStep } from '../types/onboarding';
 import { Dropdown } from './Dropdown';
 import { CheckIcon, DownloadIcon } from './Icons';
-import { Modal } from './Modal';
 import { LanguageBadges } from './LanguageBadges';
-import { useFirstRunGuide, type ModelStepStatus } from '../hooks/useFirstRunGuide';
-import type { OnboardingStep } from '../types/onboarding';
+import { Modal } from './Modal';
 
 interface OnboardingActionsProps {
   backLabel: string;
@@ -22,12 +22,10 @@ interface OnboardingActionsProps {
 
 type OnboardingTranslate = (key: string) => string;
 
-
-
 function getSecondaryActionsDisabled(
   currentStep: OnboardingStep,
   modelStepStatus: ModelStepStatus,
-  isLoadingDevices: boolean,
+  isLoadingDevices: boolean
 ): boolean {
   switch (currentStep) {
     case 'models':
@@ -39,11 +37,9 @@ function getSecondaryActionsDisabled(
   }
 }
 
-
-
 function getSelectedMicrophoneLabel(
   selectedMicrophoneId: string,
-  defaultMicrophoneLabel: string,
+  defaultMicrophoneLabel: string
 ): string {
   if (selectedMicrophoneId === 'default') {
     return defaultMicrophoneLabel;
@@ -54,7 +50,7 @@ function getSelectedMicrophoneLabel(
 
 function getModelActionButtonText(
   modelStepStatus: ModelStepStatus,
-  t: OnboardingTranslate,
+  t: OnboardingTranslate
 ): string {
   if (modelStepStatus === 'error') {
     return t('first_run.actions.retry');
@@ -96,7 +92,9 @@ function StepIndicator({
   isComplete: boolean;
 }): React.JSX.Element {
   return (
-    <div className={`onboarding-step-chip ${isActive ? 'active' : ''} ${isComplete ? 'complete' : ''}`}>
+    <div
+      className={`onboarding-step-chip ${isActive ? 'active' : ''} ${isComplete ? 'complete' : ''}`}
+    >
       <div className="onboarding-step-dot" aria-hidden="true">
         {isComplete ? <CheckIcon /> : <span>{stepNumber}</span>}
       </div>
@@ -124,11 +122,7 @@ function OnboardingActions({
         {laterLabel}
       </button>
       {onBack && (
-        <button
-          className="btn btn-secondary"
-          onClick={onBack}
-          disabled={secondaryActionsDisabled}
-        >
+        <button className="btn btn-secondary" onClick={onBack} disabled={secondaryActionsDisabled}>
           {backLabel}
         </button>
       )}
@@ -148,7 +142,7 @@ function OnboardingActions({
  */
 export function FirstRunGuide(): React.JSX.Element | null {
   const { t } = useTranslation();
-  
+
   const {
     isOpen,
     currentStep,
@@ -180,7 +174,7 @@ export function FirstRunGuide(): React.JSX.Element | null {
   const areSecondaryActionsDisabled = getSecondaryActionsDisabled(
     currentStep,
     modelStepStatus,
-    isLoadingDevices,
+    isLoadingDevices
   );
   const modelPrimaryActionLabel = getModelPrimaryActionLabel({
     hasModelsConfigured,
@@ -189,7 +183,7 @@ export function FirstRunGuide(): React.JSX.Element | null {
   });
   const selectedMicrophoneLabel = getSelectedMicrophoneLabel(
     selectedMicrophoneId,
-    t('settings.mic_auto'),
+    t('settings.mic_auto')
   );
 
   let footer: React.ReactNode = null;
@@ -201,10 +195,12 @@ export function FirstRunGuide(): React.JSX.Element | null {
         onLater={defer}
         primaryAction={{
           disabled: isLoadingDevices || (permissionState !== 'denied' && !isMicrophoneReady),
-          label: permissionState === 'denied'
-            ? t('first_run.actions.retry_permission')
-            : t('first_run.actions.continue'),
-          onClick: permissionState === 'denied' ? handleRetryPermission : handleContinueFromMicrophone,
+          label:
+            permissionState === 'denied'
+              ? t('first_run.actions.retry_permission')
+              : t('first_run.actions.continue'),
+          onClick:
+            permissionState === 'denied' ? handleRetryPermission : handleContinueFromMicrophone,
         }}
         secondaryActionsDisabled={areSecondaryActionsDisabled}
       />
@@ -247,7 +243,11 @@ export function FirstRunGuide(): React.JSX.Element | null {
         <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--spacing-lg)' }}>
           {t('first_run.description')}
         </p>
-        <div className="onboarding-stepper" aria-label={t('first_run.stepper_label')} style={{ marginBottom: 'var(--spacing-xl)' }}>
+        <div
+          className="onboarding-stepper"
+          aria-label={t('first_run.stepper_label')}
+          style={{ marginBottom: 'var(--spacing-xl)' }}
+        >
           <StepIndicator
             stepNumber={1}
             title={t('first_run.steps.microphone')}
@@ -272,11 +272,15 @@ export function FirstRunGuide(): React.JSX.Element | null {
 
             <div className="onboarding-summary-card">
               <div>
-                <span className="onboarding-summary-label">{t('first_run.microphone.default_source_label')}</span>
+                <span className="onboarding-summary-label">
+                  {t('first_run.microphone.default_source_label')}
+                </span>
                 <strong>{t('first_run.microphone.default_source_value')}</strong>
               </div>
               <div>
-                <span className="onboarding-summary-label">{t('first_run.microphone.device_label')}</span>
+                <span className="onboarding-summary-label">
+                  {t('first_run.microphone.device_label')}
+                </span>
                 <strong>{selectedMicrophoneLabel}</strong>
               </div>
             </div>
@@ -292,9 +296,7 @@ export function FirstRunGuide(): React.JSX.Element | null {
                 options={deviceOptions}
                 style={{ width: '100%' }}
               />
-              <div className="settings-hint">
-                {t('first_run.microphone.device_hint')}
-              </div>
+              <div className="settings-hint">{t('first_run.microphone.device_hint')}</div>
             </div>
 
             {isLoadingDevices && (
@@ -341,9 +343,13 @@ export function FirstRunGuide(): React.JSX.Element | null {
                     {downloadState && (
                       <div className="progress-container-mini">
                         <div className="progress-info-mini" aria-live="polite">
-                          <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>{downloadState.status}</span>
+                          <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
+                            {downloadState.status}
+                          </span>
                           <span className={isDone ? 'success-text' : ''}>
-                            {isDone ? t('first_run.models.ready') : `${Math.round(downloadState.percentage)}%`}
+                            {isDone
+                              ? t('first_run.models.ready')
+                              : `${Math.round(downloadState.percentage)}%`}
                           </span>
                         </div>
                         <div
@@ -354,7 +360,10 @@ export function FirstRunGuide(): React.JSX.Element | null {
                           aria-valuemax={100}
                           aria-label={`${t('common.download')} ${model.name}`}
                         >
-                          <div className="progress-fill" style={{ width: `${downloadState.percentage}%` }} />
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${downloadState.percentage}%` }}
+                          />
                         </div>
                       </div>
                     )}

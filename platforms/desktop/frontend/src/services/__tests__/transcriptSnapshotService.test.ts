@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { transcriptSnapshotService } from '../transcriptSnapshotService';
-import { historyService } from '../historyService';
 import { useHistoryStore } from '../../stores/historyStore';
 import {
   resetTranscriptStores,
   useTranscriptStore,
 } from '../../test-utils/transcriptStoreTestUtils';
 import type { HistoryItem } from '../../types/history';
+import { historyService } from '../historyService';
+import { transcriptSnapshotService } from '../transcriptSnapshotService';
 
 vi.mock('../historyService', () => ({
   historyService: {
@@ -64,11 +64,15 @@ describe('transcriptSnapshotService', () => {
       sourceHistoryId: 'current',
       segments: [{ id: 'seg-1', start: 0, end: 1, text: 'hello', isFinal: true }],
     });
-    await expect(transcriptSnapshotService.createSnapshotForCurrentTranscript('polish')).resolves.toBeNull();
+    await expect(
+      transcriptSnapshotService.createSnapshotForCurrentTranscript('polish')
+    ).resolves.toBeNull();
 
     useHistoryStore.setState({ items: [historyItem('history-a', 'draft')] });
     useTranscriptStore.setState({ sourceHistoryId: 'history-a' });
-    await expect(transcriptSnapshotService.createSnapshotForCurrentTranscript('polish')).resolves.toBeNull();
+    await expect(
+      transcriptSnapshotService.createSnapshotForCurrentTranscript('polish')
+    ).resolves.toBeNull();
 
     expect(historyService.createTranscriptSnapshot).not.toHaveBeenCalled();
   });

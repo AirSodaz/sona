@@ -1,5 +1,5 @@
-import React from 'react';
-import { ListChecks, RotateCcw, FolderKanban, Trash2, X } from 'lucide-react';
+import { FolderKanban, ListChecks, RotateCcw, Trash2, X } from 'lucide-react';
+import type React from 'react';
 import type { TranslationFn } from './types';
 
 interface ProjectsSelectionBarProps {
@@ -50,12 +50,16 @@ export function ProjectsSelectionBar({
           className="btn btn-icon projects-toolbar-icon"
           onClick={isTrashScope ? onRestoreSelected : onAssignProject}
           disabled={selectedIds.length === 0}
-          aria-label={isTrashScope
-            ? t('history.restore', { defaultValue: 'Restore' })
-            : t('projects.assign_project', { defaultValue: 'Assign Project' })}
-          data-tooltip={isTrashScope
-            ? t('history.restore', { defaultValue: 'Restore' })
-            : t('projects.assign_project', { defaultValue: 'Assign Project' })}
+          aria-label={
+            isTrashScope
+              ? t('history.restore', { defaultValue: 'Restore' })
+              : t('projects.assign_project', { defaultValue: 'Assign Project' })
+          }
+          data-tooltip={
+            isTrashScope
+              ? t('history.restore', { defaultValue: 'Restore' })
+              : t('projects.assign_project', { defaultValue: 'Assign Project' })
+          }
           data-tooltip-pos="top"
         >
           {isTrashScope ? <RotateCcw size={16} /> : <FolderKanban size={16} />}

@@ -1,26 +1,20 @@
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
-import type { TranscriptSegment } from '../types/transcript';
 import type { AppConfig } from '../types/config';
-import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/configUtils';
-import { resolvePolishPreset } from '../utils/polishPresets';
+import type { TranscriptSegment } from '../types/transcript';
 import { resolvePolishKeywords } from '../utils/polishKeywords';
+import { resolvePolishPreset } from '../utils/polishPresets';
+import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/configUtils';
+import { runConfiguredSegmentTask, runTranscriptSegmentTaskJob } from './llm/segmentTask';
+import { listenToTranscriptLlmJobUpdates } from './llmTaskEvents';
 import type {
-  PolishSegmentsRequest,
   PolishedSegment,
+  PolishSegmentsRequest,
   TranscriptLlmJobResult,
 } from './llmTaskTypes';
-import { listenToTranscriptLlmJobUpdates } from './llmTaskEvents';
-import {
-  runConfiguredSegmentTask,
-  runTranscriptSegmentTaskJob,
-} from './llm/segmentTask';
+import { createLlmTaskLedgerId, isTaskLedgerCancelRequested } from './taskLedgerBuilders';
 import { runTranscriptLlmJob } from './tauri/llm';
-import {
-  createLlmTaskLedgerId,
-  isTaskLedgerCancelRequested,
-} from './taskLedgerBuilders';
 
 interface RetryPolishTranscriptJobOptions {
   segments: TranscriptSegment[];
@@ -37,7 +31,7 @@ function buildPolishedSegmentMap(polishedChunk: PolishedSegment[]): Map<string, 
 
 function applyPolishedChunkToSegments(
   segments: TranscriptSegment[],
-  polishedMap: ReadonlyMap<string, PolishedSegment>,
+  polishedMap: ReadonlyMap<string, PolishedSegment>
 ): TranscriptSegment[] {
   // Merge by id so polishing only rewrites transcript text and keeps each segment's
   // existing timing, speaker, and translation fields intact.
@@ -61,10 +55,13 @@ export class PolishService {
   constructor(private readonly ports: PolishServicePorts) {}
 
   async polishSegmentsWithConfig(
-    config: Pick<AppConfig, 'llmSettings' | 'polishPresetId' | 'polishCustomPresets' | 'polishKeywordSets'>,
+    config: Pick<
+      AppConfig,
+      'llmSettings' | 'polishPresetId' | 'polishCustomPresets' | 'polishKeywordSets'
+    >,
     segments: TranscriptSegment[],
     onChunkPolished?: (polishedChunk: PolishedSegment[]) => void | Promise<void>,
-    taskIdOverride?: string,
+    taskIdOverride?: string
   ): Promise<PolishedSegment[]> {
     return this.ports.runConfiguredSegmentTask({
       feature: 'polish',
@@ -73,20 +70,20 @@ export class PolishService {
       segments,
       onChunk: onChunkPolished,
       taskIdOverride,
-      buildRequest: ({ taskId, llmConfig, segments: inputSegments }) => this.buildRequest(
-        taskId,
-        llmConfig,
-        config,
-        inputSegments,
-      ),
+      buildRequest: ({ taskId, llmConfig, segments: inputSegments }) =>
+        this.buildRequest(taskId, llmConfig, config, inputSegments),
     });
   }
 
   async polishSegments(
     segments: TranscriptSegment[],
-    onChunkPolished?: (polishedChunk: PolishedSegment[]) => void | Promise<void>,
+    onChunkPolished?: (polishedChunk: PolishedSegment[]) => void | Promise<void>
   ): Promise<PolishedSegment[]> {
-    return this.polishSegmentsWithConfig(this.ports.getEffectiveConfigSnapshot(), segments, onChunkPolished);
+    return this.polishSegmentsWithConfig(
+      this.ports.getEffectiveConfigSnapshot(),
+      segments,
+      onChunkPolished
+    );
   }
 
   async polishTranscript() {
@@ -131,7 +128,7 @@ export class PolishService {
               return;
             }
             this.applyTranscriptJobUpdate(payload);
-          },
+          }
         );
         try {
           const result = await this.ports.runTranscriptLlmJob({
@@ -152,17 +149,20 @@ export class PolishService {
         }
       },
       onFinally: (jobHistoryId) => {
-        this.ports.getTranscriptSidecarStore().updateLlmState({
-          isPolishing: false,
-          polishProgress: 0,
-        }, jobHistoryId);
+        this.ports.getTranscriptSidecarStore().updateLlmState(
+          {
+            isPolishing: false,
+            polishProgress: 0,
+          },
+          jobHistoryId
+        );
       },
     });
   }
 
   applyPolishedSegmentsInMemory(
     segments: TranscriptSegment[],
-    polishedChunk: PolishedSegment[],
+    polishedChunk: PolishedSegment[]
   ): TranscriptSegment[] {
     return applyPolishedChunkToSegments(segments, buildPolishedSegmentMap(polishedChunk));
   }
@@ -170,8 +170,11 @@ export class PolishService {
   private buildRequest(
     taskId: string,
     llmConfig: NonNullable<ReturnType<typeof getFeatureLlmConfig>>,
-    config: Pick<AppConfig, 'llmSettings' | 'polishPresetId' | 'polishCustomPresets' | 'polishKeywordSets'>,
-    segments: TranscriptSegment[],
+    config: Pick<
+      AppConfig,
+      'llmSettings' | 'polishPresetId' | 'polishCustomPresets' | 'polishKeywordSets'
+    >,
+    segments: TranscriptSegment[]
   ): PolishSegmentsRequest {
     const preset = resolvePolishPreset(config.polishPresetId, config.polishCustomPresets);
 

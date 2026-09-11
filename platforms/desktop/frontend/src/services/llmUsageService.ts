@@ -1,7 +1,4 @@
-import type {
-  DashboardLlmUsageStats,
-  LlmUsageEventPayload,
-} from '../types/dashboard';
+import type { DashboardLlmUsageStats, LlmUsageEventPayload } from '../types/dashboard';
 import { getDashboardSnapshot } from './tauri/dashboard';
 import { llmUsageEnsureStorage } from './tauri/llmUsage';
 

@@ -46,13 +46,13 @@
   --color-recording-glow: rgba(224, 62, 62, 0.2);
 
   /* Project Palette Tokens */
-  --proj-indigo: #6366F1;
-  --proj-emerald: #10B981;
-  --proj-amber: #F59E0B;
-  --proj-rose: #F43F5E;
-  --proj-cyan: #06B6D4;
-  --proj-purple: #8B5CF6;
-  --proj-slate: #64748B;
+  --proj-indigo: #6366f1;
+  --proj-emerald: #10b981;
+  --proj-amber: #f59e0b;
+  --proj-rose: #f43f5e;
+  --proj-cyan: #06b6d4;
+  --proj-purple: #8b5cf6;
+  --proj-slate: #64748b;
 
   /* Border & Dividers */
   --color-border: rgba(55, 53, 47, 0.09);
@@ -93,34 +93,36 @@
     inset 0 1px 0 var(--apple-control-topline),
     inset 0 0 0 0.5px color-mix(in srgb, var(--color-bg-elevated) 40%, transparent);
   --apple-control-shadow-rest:
-    0 1px 2px rgba(0, 0, 0, 0.06),
-    inset 0 1px 0 var(--apple-control-topline),
+    0 1px 2px rgba(0, 0, 0, 0.06), inset 0 1px 0 var(--apple-control-topline),
     inset 0 0 0 0.5px color-mix(in srgb, var(--color-bg-elevated) 40%, transparent);
   --apple-control-shadow-hover:
-    0 2px 6px rgba(0, 0, 0, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 2px 6px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.78),
     inset 0 0 0 0.5px color-mix(in srgb, var(--color-bg-elevated) 44%, transparent);
   --apple-control-shadow-pressed:
-    inset 0 1px 1px rgba(0, 0, 0, 0.06),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.46),
+    inset 0 1px 1px rgba(0, 0, 0, 0.06), inset 0 0.5px 0 rgba(255, 255, 255, 0.46),
     inset 0 0 0 0.5px color-mix(in srgb, var(--color-bg-elevated) 36%, transparent);
   --apple-control-focus-ring:
     0 0 0 2px var(--color-bg-primary),
     0 0 0 4px color-mix(in srgb, var(--color-accent-primary) 18%, transparent);
   --apple-field-focus-surface: var(--color-bg-primary);
-  --apple-field-focus-border: color-mix(in srgb, var(--color-border-hover) 72%, var(--color-accent-primary));
+  --apple-field-focus-border: color-mix(
+    in srgb,
+    var(--color-border-hover) 72%,
+    var(--color-accent-primary)
+  );
   --apple-field-focus-halo: color-mix(in srgb, var(--color-accent-primary) 10%, transparent);
   --apple-field-focus-shadow:
-    var(--apple-control-shadow-flat),
-    0 0 0 3px var(--apple-field-focus-halo);
-  --apple-field-focus-shell-shadow:
-    var(--shadow-sm),
-    0 0 0 3px var(--apple-field-focus-halo);
+    var(--apple-control-shadow-flat), 0 0 0 3px var(--apple-field-focus-halo);
+  --apple-field-focus-shell-shadow: var(--shadow-sm), 0 0 0 3px var(--apple-field-focus-halo);
 
   /* Typography */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
-  --font-serif: 'Merriweather', 'Georgia', serif;
-  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, "PT Mono", "Liberation Mono", Courier, monospace;
+  --font-sans:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial,
+    sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+  --font-serif: "Merriweather", "Georgia", serif;
+  --font-mono:
+    "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "PT Mono", "Liberation Mono", Courier,
+    monospace;
 
   /* Transitions */
   --transition-fast: 150ms ease-out;
@@ -159,29 +161,27 @@
   --apple-control-border-strong: var(--color-border-hover);
   --apple-control-topline: rgba(255, 255, 255, 0.08);
   --apple-control-shadow-rest:
-    0 1px 2px rgba(0, 0, 0, 0.24),
-    inset 0 1px 0 var(--apple-control-topline),
+    0 1px 2px rgba(0, 0, 0, 0.24), inset 0 1px 0 var(--apple-control-topline),
     inset 0 0 0 0.5px rgba(255, 255, 255, 0.03);
   --apple-control-shadow-hover:
-    0 2px 8px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.1),
     inset 0 0 0 0.5px rgba(255, 255, 255, 0.04);
   --apple-control-shadow-pressed:
-    inset 0 1px 1px rgba(0, 0, 0, 0.24),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.05),
+    inset 0 1px 1px rgba(0, 0, 0, 0.24), inset 0 0.5px 0 rgba(255, 255, 255, 0.05),
     inset 0 0 0 0.5px rgba(255, 255, 255, 0.03);
   --apple-control-focus-ring:
     0 0 0 2px var(--color-bg-primary),
     0 0 0 4px color-mix(in srgb, var(--color-accent-primary) 24%, transparent);
   --apple-field-focus-surface: var(--color-bg-primary);
-  --apple-field-focus-border: color-mix(in srgb, var(--color-border-hover) 64%, var(--color-accent-primary));
+  --apple-field-focus-border: color-mix(
+    in srgb,
+    var(--color-border-hover) 64%,
+    var(--color-accent-primary)
+  );
   --apple-field-focus-halo: color-mix(in srgb, var(--color-accent-primary) 14%, transparent);
   --apple-field-focus-shadow:
-    var(--apple-control-shadow-flat),
-    0 0 0 3px var(--apple-field-focus-halo);
-  --apple-field-focus-shell-shadow:
-    var(--shadow-sm),
-    0 0 0 3px var(--apple-field-focus-halo);
+    var(--apple-control-shadow-flat), 0 0 0 3px var(--apple-field-focus-halo);
+  --apple-field-focus-shell-shadow: var(--shadow-sm), 0 0 0 3px var(--apple-field-focus-halo);
 }
 
 /* ===========================

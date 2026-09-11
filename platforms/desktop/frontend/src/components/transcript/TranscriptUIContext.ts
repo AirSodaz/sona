@@ -1,21 +1,21 @@
 import { createContext } from 'react';
-import { StoreApi } from 'zustand';
+import type { StoreApi } from 'zustand';
 
 /**
  * UI State for TranscriptEditor that changes frequently (e.g. animation states).
  * Separated from the main store to prevent full list re-renders.
  */
 export interface TranscriptUIState {
-    /** Set of segment IDs that are considered "new" and should be animated. */
-    newSegmentIds: Set<string>;
-    /** ID of the currently active segment. */
-    activeSegmentId: string | null;
-    /** ID of the segment currently being edited. */
-    editingSegmentId: string | null;
-    /** Total number of segments (for calculating hasNext). */
-    totalSegments: number;
-    /** Set of segment IDs currently being re-aligned. */
-    aligningSegmentIds: Set<string>;
+  /** Set of segment IDs that are considered "new" and should be animated. */
+  newSegmentIds: Set<string>;
+  /** ID of the currently active segment. */
+  activeSegmentId: string | null;
+  /** ID of the segment currently being edited. */
+  editingSegmentId: string | null;
+  /** Total number of segments (for calculating hasNext). */
+  totalSegments: number;
+  /** Set of segment IDs currently being re-aligned. */
+  aligningSegmentIds: Set<string>;
 }
 
 /**

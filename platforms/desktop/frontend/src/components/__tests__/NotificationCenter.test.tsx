@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { NotificationCenter } from '../NotificationCenter';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppUpdaterStore } from '../../stores/appUpdaterStore';
-import { shouldShowOnboardingReminder } from '../../utils/onboarding';
 import type { TaskLedgerRecord } from '../../types/taskLedger';
+import { shouldShowOnboardingReminder } from '../../utils/onboarding';
+import { NotificationCenter } from '../NotificationCenter';
 
 const taskLedgerState = {
   tasks: [] as TaskLedgerRecord[],
@@ -141,7 +141,8 @@ function translate(key: string, options?: Record<string, unknown>): string {
   if (key === 'task_center.active') return 'Active';
   if (key === 'task_center.recent') return 'Recent';
   if (key === 'task_center.clear_recent') return 'Clear recent';
-  if (key === 'task_center.cancel_pending_hint') return 'Stops after the current step and skips the final writeback.';
+  if (key === 'task_center.cancel_pending_hint')
+    return 'Stops after the current step and skips the final writeback.';
   if (key === 'settings.update_available') return `Update ${options?.version}`;
   if (key === 'settings.update_desc_default') return 'A new version of Sona is available.';
   if (key === 'settings.update_downloading') return 'Downloading update...';
@@ -155,8 +156,10 @@ function translate(key: string, options?: Record<string, unknown>): string {
   if (key === 'recovery.actions.open_center') return 'Open Recovery Center';
   if (key === 'automation.retry_failed') return 'Retry Failed';
   if (key === 'automation.open_settings') return 'Open Automation';
-  if (key === 'automation.notifications.failure_title') return `${options?.ruleName} needs attention`;
-  if (key === 'automation.notifications.failure_body') return `${options?.count} failed file(s). Latest: ${options?.fileName}`;
+  if (key === 'automation.notifications.failure_title')
+    return `${options?.ruleName} needs attention`;
+  if (key === 'automation.notifications.failure_body')
+    return `${options?.count} failed file(s). Latest: ${options?.fileName}`;
   if (key === 'automation.notifications.stage_detail') return `Latest stage: ${options?.stage}`;
   if (key === 'automation.notifications.file_unknown') return 'Latest item unavailable';
   if (key === 'recovery.stage.transcribing') return 'Transcribing';
@@ -225,10 +228,7 @@ describe('NotificationCenter task center', () => {
 
   it('shows an empty task center with no badge when there is no active or actionable task', () => {
     const { container } = render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />,
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
     );
 
     expect(container.querySelector('.notification-center-trigger-badge')).toBeNull();
@@ -249,14 +249,17 @@ describe('NotificationCenter task center', () => {
         updatedAt: 200,
         errorMessage: 'Transcription failed',
       }),
-      makeTask({ id: 'recent-task', status: 'succeeded', title: 'done.wav', progress: 100, updatedAt: 100 }),
+      makeTask({
+        id: 'recent-task',
+        status: 'succeeded',
+        title: 'done.wav',
+        progress: 100,
+        updatedAt: 100,
+      }),
     ];
 
     const { container } = render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />,
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
     );
 
     expect(container.querySelector('.notification-center-trigger-badge')?.textContent).toBe('2');
@@ -278,10 +281,7 @@ describe('NotificationCenter task center', () => {
     ];
 
     render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />,
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
@@ -302,10 +302,7 @@ describe('NotificationCenter task center', () => {
     ];
 
     render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />,
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
@@ -326,10 +323,7 @@ describe('NotificationCenter task center', () => {
     ];
 
     render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />,
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
@@ -357,7 +351,7 @@ describe('NotificationCenter task center', () => {
       <NotificationCenter
         onOpenRecoveryCenter={onOpenRecoveryCenter}
         onOpenAutomationSettings={vi.fn()}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
@@ -392,10 +386,7 @@ describe('NotificationCenter task center', () => {
     ];
 
     render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />,
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
@@ -433,10 +424,7 @@ describe('NotificationCenter task center', () => {
     ];
 
     const { container } = render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />,
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
     );
 
     expect(container.querySelector('.notification-center-trigger-badge')?.textContent).toBe('1');
@@ -460,10 +448,7 @@ describe('NotificationCenter task center', () => {
     ];
 
     render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />,
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
@@ -496,7 +481,7 @@ describe('NotificationCenter task center', () => {
       <NotificationCenter
         onOpenRecoveryCenter={vi.fn()}
         onOpenAutomationSettings={onOpenAutomationSettings}
-      />,
+      />
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
@@ -518,10 +503,7 @@ describe('NotificationCenter task center', () => {
     });
 
     const { container } = render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />,
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
     );
 
     expect(container.querySelector('.notification-center-trigger-badge')?.textContent).toBe('1');
@@ -542,15 +524,14 @@ describe('NotificationCenter task center', () => {
     });
 
     render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />,
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
 
-    const downloadingButton = screen.getByRole('button', { name: 'Downloading update...' }) as HTMLButtonElement;
+    const downloadingButton = screen.getByRole('button', {
+      name: 'Downloading update...',
+    }) as HTMLButtonElement;
     const closeButton = screen.getByRole('button', { name: 'Close' }) as HTMLButtonElement;
 
     expect(downloadingButton.disabled).toBe(true);
@@ -575,10 +556,7 @@ describe('NotificationCenter task center', () => {
     ];
 
     render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />,
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
@@ -600,10 +578,7 @@ describe('NotificationCenter task center', () => {
     taskLedgerState.tasks = [task];
 
     render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />,
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
@@ -632,10 +607,7 @@ describe('NotificationCenter task center', () => {
     });
 
     render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />,
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
@@ -658,10 +630,7 @@ describe('NotificationCenter task center', () => {
     onboardingState.persistedState = { version: 1, status: 'pending' };
 
     const { container } = render(
-      <NotificationCenter
-        onOpenRecoveryCenter={vi.fn()}
-        onOpenAutomationSettings={vi.fn()}
-      />,
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
     );
 
     expect(container.querySelector('.notification-center-trigger-badge')?.textContent).toBe('1');

@@ -40,7 +40,9 @@ vi.mock('../../storageService', () => ({
 }));
 
 vi.mock('../../../stores/configStore', async () => {
-  const actual = await vi.importActual<typeof import('../../../stores/configStore')>('../../../stores/configStore');
+  const actual = await vi.importActual<typeof import('../../../stores/configStore')>(
+    '../../../stores/configStore'
+  );
   return { ...actual, useConfigStore: { getState: vi.fn(() => configState) } };
 });
 
@@ -88,7 +90,7 @@ describe('hydrateAppStartupState', () => {
     expect(mockSetPersistedState).toHaveBeenCalled();
     expect(mockSettingsSet).toHaveBeenCalledWith(
       'sona-config',
-      expect.objectContaining({ appLanguage: 'zh-CN' }),
+      expect.objectContaining({ appLanguage: 'zh-CN' })
     );
     expect(mockSettingsSave).toHaveBeenCalledTimes(1);
   });

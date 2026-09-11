@@ -8,7 +8,7 @@ describe('FormField', () => {
     render(
       <FormField id="timeline-mode" label="Timeline mode">
         <Switch id="timeline-mode" checked={false} onChange={vi.fn()} />
-      </FormField>,
+      </FormField>
     );
 
     screen.getByRole('switch', { name: 'Timeline mode' });

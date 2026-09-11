@@ -2,38 +2,37 @@
    Floating Action Bar (FAB)
    =========================== */
 .projects-fab {
-  position: absolute !important;
-  bottom: var(--spacing-xl) !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  z-index: 1000 !important;
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  gap: var(--spacing-lg) !important;
-  padding: 12px 24px !important;
-  background: var(--color-bg-elevated) !important;
-  border: 1px solid var(--color-border) !important;
-  border-radius: var(--radius-full) !important;
-  box-shadow: var(--shadow-xl), var(--shadow-glow) !important;
-  animation: slideUpFade 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
-  width: max-content !important;
-  max-width: 90% !important;
-  white-space: nowrap !important;
+  position: absolute;
+  bottom: var(--spacing-xl);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: 12px 24px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-xl), var(--shadow-glow);
+  animation: slideUpFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  width: max-content;
+  max-width: 90%;
+  white-space: nowrap;
 }
 
 .projects-fab-actions {
-  display: flex !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  gap: var(--spacing-sm) !important;
-  flex-shrink: 0 !important;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
 }
 
 .projects-fab-actions .btn {
-  width: auto !important;
+  width: auto;
 }
-
 
 @keyframes slideUpFade {
   from {

@@ -12,11 +12,9 @@ export type DesktopReleaseChannel = 'stable' | 'nightly';
  */
 export function getAppReleaseChannel(
   version: string = packageJson.version,
-  envChannel?: string,
+  envChannel?: string
 ): DesktopReleaseChannel {
-  const normalizedEnv = (
-    envChannel ?? (import.meta.env?.VITE_APP_CHANNEL as string | undefined)
-  )
+  const normalizedEnv = (envChannel ?? (import.meta.env?.VITE_APP_CHANNEL as string | undefined))
     ?.toLowerCase()
     .trim();
 

@@ -61,9 +61,7 @@ describe('projectService', () => {
   });
 
   it('delegates the public project API to the Rust repository wrapper', async () => {
-    tauriProjectMocks.projectList
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([project]);
+    tauriProjectMocks.projectList.mockResolvedValueOnce([]).mockResolvedValueOnce([project]);
     tauriProjectMocks.projectGetActiveId.mockResolvedValueOnce('project-1');
 
     await projectService.init();

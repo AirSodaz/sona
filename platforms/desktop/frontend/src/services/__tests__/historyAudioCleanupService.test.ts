@@ -50,14 +50,16 @@ vi.mock('../../utils/logger', () => ({
   },
 }));
 
-function cleanupReport(overrides: Partial<{
-  eligibleCount: number;
-  removedCount: number;
-  removedBytes: number;
-  missingMarkedCount: number;
-  failedCount: number;
-  skippedActiveCount: number;
-}> = {}) {
+function cleanupReport(
+  overrides: Partial<{
+    eligibleCount: number;
+    removedCount: number;
+    removedBytes: number;
+    missingMarkedCount: number;
+    failedCount: number;
+    skippedActiveCount: number;
+  }> = {}
+) {
   return {
     eligibleCount: 0,
     removedCount: 0,
@@ -98,10 +100,12 @@ describe('historyAudioCleanupService', () => {
 
   it('runs cleanup for finite retention and refreshes history when statuses changed', async () => {
     mocks.config.historyAudioRetentionDays = 30;
-    mocks.cleanupAudio.mockResolvedValue(cleanupReport({
-      removedCount: 1,
-      missingMarkedCount: 1,
-    }));
+    mocks.cleanupAudio.mockResolvedValue(
+      cleanupReport({
+        removedCount: 1,
+        missingMarkedCount: 1,
+      })
+    );
 
     const result = await runHistoryAudioCleanupForCurrentConfig(new Date(2026, 6, 4));
 

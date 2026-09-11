@@ -26,7 +26,7 @@ export async function tagCreate(request: TagCreateRequest): Promise<TagRecord> {
 
 export async function tagUpdate(
   tagId: string,
-  updates: TagUpdateRequest,
+  updates: TagUpdateRequest
 ): Promise<TagRecord | null> {
   const tag = await invokeTauri(TauriCommand.tag.update, { tagId, updates });
   return tag ? normalizeTagRecord(tag) : null;

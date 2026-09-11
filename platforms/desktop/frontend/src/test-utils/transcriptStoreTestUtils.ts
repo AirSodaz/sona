@@ -1,28 +1,6 @@
-import type { AppConfig } from '../types/config';
-import type {
-  AppMode,
-  HistorySummaryPayload,
-  ProcessingStatus,
-  SummaryTemplateId,
-  TranscriptSegment,
-  TranscriptUpdate,
-} from '../types/transcript';
-import type { LlmState } from '../stores/transcriptSidecarStore';
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useProjectStore } from '../stores/projectStore';
-import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
-import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
-import {
-  INITIAL_TRANSCRIPT_PLAYBACK_STATE,
-  INITIAL_TRANSCRIPT_SESSION_STATE,
-} from '../stores/transcriptSessionState';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import {
-  DEFAULT_LLM_STATE,
-  INITIAL_TRANSCRIPT_HISTORY_SIDECAR_STATE,
-} from '../stores/transcriptSidecarState';
-import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import {
   applyTranscriptUpdate,
   clearActiveTranscriptSession,
@@ -34,7 +12,33 @@ import {
   updateTranscriptSegment,
   upsertTranscriptSegmentAndSetActive,
 } from '../stores/transcriptCoordinator';
-import { useTranscriptStore as useRealTranscriptStore, DEFAULT_SESSION_DATA, type TranscriptStore } from '../stores/transcriptStore';
+import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
+import {
+  INITIAL_TRANSCRIPT_PLAYBACK_STATE,
+  INITIAL_TRANSCRIPT_SESSION_STATE,
+} from '../stores/transcriptSessionState';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import {
+  DEFAULT_LLM_STATE,
+  INITIAL_TRANSCRIPT_HISTORY_SIDECAR_STATE,
+} from '../stores/transcriptSidecarState';
+import type { LlmState } from '../stores/transcriptSidecarStore';
+import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
+import {
+  DEFAULT_SESSION_DATA,
+  type TranscriptStore,
+  useTranscriptStore as useRealTranscriptStore,
+} from '../stores/transcriptStore';
+import type { AppConfig } from '../types/config';
+import type {
+  AppMode,
+  HistorySummaryPayload,
+  ProcessingStatus,
+  SummaryTemplateId,
+  TranscriptSegment,
+  TranscriptUpdate,
+} from '../types/transcript';
 import { buildTestConfig } from './configTestUtils';
 
 type LegacyTranscriptState = ReturnType<typeof getTranscriptTestState>;
@@ -49,7 +53,7 @@ type TranscriptStoreHook = {
   getState: () => LegacyTranscriptState;
   setState: (patch: TranscriptStatePatch) => void;
   subscribe: (
-    listener: (state: LegacyTranscriptState, previousState: LegacyTranscriptState) => void,
+    listener: (state: LegacyTranscriptState, previousState: LegacyTranscriptState) => void
   ) => () => void;
 };
 
@@ -117,11 +121,7 @@ const RUNTIME_KEYS = new Set<keyof RuntimePatch>([
   'isPaused',
 ]);
 
-const SIDECAR_KEYS = new Set<keyof SidecarPatch>([
-  'llmStates',
-  'summaryStates',
-  'autoSaveStates',
-]);
+const SIDECAR_KEYS = new Set<keyof SidecarPatch>(['llmStates', 'summaryStates', 'autoSaveStates']);
 
 function syncEffectiveConfig(): void {
   void useEffectiveConfigStore.getState().syncConfig();
@@ -137,8 +137,8 @@ function applySessionPatch(patch: SessionPatch): void {
       [state.activeSessionId]: {
         ...state.sessions[state.activeSessionId],
         ...patch,
-      }
-    }
+      },
+    },
   }));
 }
 
@@ -152,8 +152,8 @@ function applyPlaybackPatch(patch: PlaybackPatch): void {
       [state.activeSessionId]: {
         ...state.sessions[state.activeSessionId],
         ...patch,
-      }
-    }
+      },
+    },
   }));
 }
 
@@ -235,12 +235,12 @@ export function resetTranscriptStores(): void {
   store.setState({
     activeSessionId: 'default',
     sessions: {
-      'default': {
+      default: {
         ...DEFAULT_SESSION_DATA,
         ...INITIAL_TRANSCRIPT_SESSION_STATE,
         ...INITIAL_TRANSCRIPT_PLAYBACK_STATE,
         aligningSegmentIds: new Set<string>(),
-      }
+      },
     },
     mode: 'live',
     processingStatus: 'idle',
@@ -299,7 +299,7 @@ export function getTranscriptTestState() {
       segments: TranscriptSegment[],
       sourceHistoryId: string | null,
       title?: string | null,
-      icon?: string | null,
+      icon?: string | null
     ) => {
       loadTranscriptSession(segments, sourceHistoryId, title, icon);
     },
@@ -387,9 +387,7 @@ export const useTranscriptStore = ((selector?: TranscriptStateSelector<unknown>)
 
 useTranscriptStore.getState = getTranscriptTestState;
 useTranscriptStore.setState = (patch) => {
-  const partial = typeof patch === 'function'
-    ? patch(getTranscriptTestState())
-    : patch;
+  const partial = typeof patch === 'function' ? patch(getTranscriptTestState()) : patch;
   applyTranscriptStatePatch(partial);
 };
 useTranscriptStore.subscribe = (listener) => {

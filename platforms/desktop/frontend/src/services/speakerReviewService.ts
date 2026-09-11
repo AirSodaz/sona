@@ -1,7 +1,4 @@
-import type {
-  SpeakerReviewFilter,
-  SpeakerReviewSnapshot,
-} from '../types/speaker';
+import type { SpeakerReviewFilter, SpeakerReviewSnapshot } from '../types/speaker';
 import type { TranscriptSegment } from '../types/transcript';
 import { buildSpeakerReviewSnapshot as buildSpeakerReviewSnapshotFromRust } from './tauri/speaker';
 
@@ -26,10 +23,10 @@ export class SpeakerReviewService {
 
   buildSpeakerReviewSnapshot = async (
     segments: TranscriptSegment[],
-    activeFilter: SpeakerReviewFilter,
+    activeFilter: SpeakerReviewFilter
   ): Promise<SpeakerReviewSnapshot> => {
     return this.ports.buildSpeakerReviewSnapshotFromRust(segments, activeFilter);
-  }
+  };
 }
 
 export function createSpeakerReviewService(ports: SpeakerReviewServicePorts): SpeakerReviewService {
@@ -40,6 +37,4 @@ export const speakerReviewService = createSpeakerReviewService({
   buildSpeakerReviewSnapshotFromRust,
 });
 
-export const {
-  buildSpeakerReviewSnapshot,
-} = speakerReviewService;
+export const { buildSpeakerReviewSnapshot } = speakerReviewService;

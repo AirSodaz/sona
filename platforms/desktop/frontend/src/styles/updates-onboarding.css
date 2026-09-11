@@ -71,8 +71,6 @@
   margin-top: var(--spacing-xs);
 }
 
-
-
 .animate-spin {
   animation: spin 1s linear infinite;
   transform-origin: center;
@@ -357,5 +355,4 @@
   .onboarding-summary-card {
     grid-template-columns: 1fr;
   }
-
 }

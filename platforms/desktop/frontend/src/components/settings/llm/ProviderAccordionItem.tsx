@@ -1,17 +1,21 @@
-import React, { useState, useMemo } from 'react';
 import { Check, Loader2, Pencil, Trash2, X } from 'lucide-react';
-import { LlmProvider, LlmProviderSetting } from '../../../types/transcript';
-import { LlmAssistantConfig } from '../../../types/config';
-import type { LlmGenerateCommandRequest } from '../../../types/dashboard';
-import { normalizeError } from '../../../utils/errorUtils';
+import React, { useMemo, useState } from 'react';
 import {
   buildLlmConfig,
   createProviderSetting,
   getProviderDefinition,
 } from '../../../services/llm/providers';
 import { generateLlmText } from '../../../services/tauri/llm';
-import { getCurrentLlmSettings, getModelPlaceholder, isProviderConfiguredForConfig } from './helpers';
+import type { LlmAssistantConfig } from '../../../types/config';
+import type { LlmGenerateCommandRequest } from '../../../types/dashboard';
+import type { LlmProvider, LlmProviderSetting } from '../../../types/transcript';
+import { normalizeError } from '../../../utils/errorUtils';
 import { SettingsAccordion, SettingsItem } from '../SettingsLayout';
+import {
+  getCurrentLlmSettings,
+  getModelPlaceholder,
+  isProviderConfiguredForConfig,
+} from './helpers';
 
 interface ProviderAccordionItemProps {
   provider: LlmProvider;
@@ -44,13 +48,22 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
   const [testMessage, setTestMessage] = useState('');
 
   const handleTestConnection = async () => {
-    const effectiveSetting = setting || createProviderSetting(provider, currentLlmState.customProviders);
+    const effectiveSetting =
+      setting || createProviderSetting(provider, currentLlmState.customProviders);
     setTestStatus('loading');
     setTestMessage('');
     try {
-      const providerConfig = buildLlmConfig(provider, effectiveSetting, currentLlmState.customProviders);
-      const entryId = currentLlmState.modelOrder.find(id => currentLlmState.models[id].provider === provider);
-      const testModel = entryId ? currentLlmState.models[entryId].model : getModelPlaceholder(provider);
+      const providerConfig = buildLlmConfig(
+        provider,
+        effectiveSetting,
+        currentLlmState.customProviders
+      );
+      const entryId = currentLlmState.modelOrder.find(
+        (id) => currentLlmState.models[id].provider === provider
+      );
+      const testModel = entryId
+        ? currentLlmState.models[entryId].model
+        : getModelPlaceholder(provider);
       const testProviderConfig = { ...providerConfig, model: testModel };
 
       await generateLlmText({
@@ -74,35 +87,39 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
       return { type: 'ready', text: t('settings.llm.status_ready', { defaultValue: '已就绪' }) };
     }
     if (def.requiresApiKey) {
-      return { type: 'missing', text: t('settings.llm.status_missing_api_key', { defaultValue: '缺少 API Key' }) };
+      return {
+        type: 'missing',
+        text: t('settings.llm.status_missing_api_key', { defaultValue: '缺少 API Key' }),
+      };
     }
     return { type: 'off', text: t('settings.llm.status_off', { defaultValue: '未配置' }) };
   }, [isConfigured, def.requiresApiKey, t]);
 
-  const actions = (onEdit || onDelete) ? (
-    <div className="provider-header-actions" onClick={(e) => e.stopPropagation()}>
-      {onEdit && (
-        <button
-          type="button"
-          className="btn btn-icon btn-secondary-soft"
-          aria-label={t('settings.llm.edit_provider', { defaultValue: 'Edit provider' })}
-          onClick={onEdit}
-        >
-          <Pencil size={14} />
-        </button>
-      )}
-      {onDelete && (
-        <button
-          type="button"
-          className="btn btn-icon btn-secondary-soft"
-          aria-label={t('settings.llm.delete_provider', { defaultValue: 'Delete provider' })}
-          onClick={onDelete}
-        >
-          <Trash2 size={14} />
-        </button>
-      )}
-    </div>
-  ) : undefined;
+  const actions =
+    onEdit || onDelete ? (
+      <div className="provider-header-actions" onClick={(e) => e.stopPropagation()}>
+        {onEdit && (
+          <button
+            type="button"
+            className="btn btn-icon btn-secondary-soft"
+            aria-label={t('settings.llm.edit_provider', { defaultValue: 'Edit provider' })}
+            onClick={onEdit}
+          >
+            <Pencil size={14} />
+          </button>
+        )}
+        {onDelete && (
+          <button
+            type="button"
+            className="btn btn-icon btn-secondary-soft"
+            aria-label={t('settings.llm.delete_provider', { defaultValue: 'Delete provider' })}
+            onClick={onDelete}
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
+      </div>
+    ) : undefined;
 
   return (
     <SettingsAccordion
@@ -120,7 +137,11 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
       ) : (
         <>
           <SettingsItem
-            title={def.apiHostLabelKey ? t(def.apiHostLabelKey, { defaultValue: def.apiHostLabelDefault }) : t('settings.llm.base_url')}
+            title={
+              def.apiHostLabelKey
+                ? t(def.apiHostLabelKey, { defaultValue: def.apiHostLabelDefault })
+                : t('settings.llm.base_url')
+            }
           >
             <div style={{ width: '320px' }}>
               {def.editableApiHost === false ? (
@@ -145,9 +166,7 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
             </div>
           </SettingsItem>
 
-          <SettingsItem
-            title={t('settings.llm.api_key')}
-          >
+          <SettingsItem title={t('settings.llm.api_key')}>
             <div style={{ width: '320px' }}>
               <input
                 id={`llm-${def.id}-key`}
@@ -161,9 +180,7 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
           </SettingsItem>
 
           {setting?.apiVersion !== undefined && (
-            <SettingsItem
-              title={t('settings.llm.api_version')}
-            >
+            <SettingsItem title={t('settings.llm.api_version')}>
               <div style={{ width: '320px' }}>
                 <input
                   id={`llm-${def.id}-version`}
@@ -178,9 +195,7 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
           )}
 
           {setting?.apiPath !== undefined && (
-            <SettingsItem
-              title={t('settings.llm.api_path')}
-            >
+            <SettingsItem title={t('settings.llm.api_path')}>
               <div style={{ width: '320px' }}>
                 <input
                   id={`llm-${def.id}-path`}
@@ -188,7 +203,12 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
                   className="settings-input"
                   value={setting.apiPath}
                   onChange={(e) => applyProviderUpdates({ apiPath: e.target.value })}
-                  readOnly={def.editableApiHost === false || provider === 'open_ai_responses' || provider === 'volcengine' || provider === 'perplexity'}
+                  readOnly={
+                    def.editableApiHost === false ||
+                    provider === 'open_ai_responses' ||
+                    provider === 'volcengine' ||
+                    provider === 'perplexity'
+                  }
                 />
               </div>
             </SettingsItem>
@@ -197,7 +217,9 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
           {def.id !== 'google_translate' && (
             <SettingsItem
               title={t('settings.llm.models_management_title', { defaultValue: '模型管理' })}
-              hint={t('settings.llm.models_management_hint', { defaultValue: '管理和测试该供应商下的模型列表' })}
+              hint={t('settings.llm.models_management_hint', {
+                defaultValue: '管理和测试该供应商下的模型列表',
+              })}
             >
               <button
                 type="button"
@@ -206,7 +228,15 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
                 onClick={onOpenDetails}
                 disabled={!onOpenDetails}
               >
-                <div className="btn-content-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <div
+                  className="btn-content-inner"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                  }}
+                >
                   <span>{t('settings.llm.details')}</span>
                 </div>
               </button>
@@ -217,7 +247,14 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
             <SettingsItem
               title={t('settings.llm.test_connection_title', { defaultValue: '连接测试' })}
             >
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-end',
+                  gap: '8px',
+                }}
+              >
                 {(() => {
                   let testBtnClass = 'btn-secondary';
                   let icon = null;
@@ -244,7 +281,15 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
                       onClick={handleTestConnection}
                       disabled={testStatus === 'loading'}
                     >
-                      <div className="btn-content-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                      <div
+                        className="btn-content-inner"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                        }}
+                      >
                         {icon}
                         <span>{label}</span>
                       </div>

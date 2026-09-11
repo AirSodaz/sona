@@ -211,7 +211,9 @@
 
 .btn-danger-soft:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--color-bg-primary), 0 0 0 4px color-mix(in srgb, var(--color-error) 24%, transparent);
+  box-shadow:
+    0 0 0 2px var(--color-bg-primary),
+    0 0 0 4px color-mix(in srgb, var(--color-error) 24%, transparent);
 }
 
 .btn-danger-soft:active:not(:disabled),
@@ -305,8 +307,6 @@ select:focus,
   background: var(--apple-field-focus-surface);
 }
 
-
-
 select {
   padding-right: var(--spacing-xl);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23787774' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
@@ -337,7 +337,7 @@ input[type="checkbox"]:checked {
 }
 
 input[type="checkbox"]:checked::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 50%;
   left: 50%;
@@ -352,7 +352,9 @@ input[type="checkbox"]:checked::after {
 
 input[type="checkbox"]:focus {
   border-color: var(--color-text-primary);
-  box-shadow: 0 0 0 2px var(--color-bg-primary), 0 0 0 4px var(--color-border-hover);
+  box-shadow:
+    0 0 0 2px var(--color-bg-primary),
+    0 0 0 4px var(--color-border-hover);
 }
 
 /* Radio Buttons */
@@ -376,7 +378,7 @@ input[type="radio"]:checked {
 }
 
 input[type="radio"]:checked::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 50%;
   left: 50%;
@@ -389,7 +391,9 @@ input[type="radio"]:checked::after {
 
 input[type="radio"]:focus {
   border-color: var(--color-text-primary);
-  box-shadow: 0 0 0 2px var(--color-bg-primary), 0 0 0 4px var(--color-border-hover);
+  box-shadow:
+    0 0 0 2px var(--color-bg-primary),
+    0 0 0 4px var(--color-border-hover);
 }
 
 /* ===========================
@@ -486,7 +490,6 @@ input[type="radio"]:focus {
   box-shadow: var(--apple-control-focus-ring);
 }
 
-
 /* ===========================
    Record Button (Special)
    =========================== */
@@ -506,7 +509,7 @@ input[type="radio"]:focus {
 }
 
 .record-button::before {
-  content: '';
+  content: "";
   width: 24px;
   height: 24px;
   background: var(--color-recording);
@@ -531,7 +534,6 @@ input[type="radio"]:focus {
 }
 
 @keyframes pulse {
-
   0%,
   100% {
     box-shadow: 0 0 0 0 var(--color-recording-glow);

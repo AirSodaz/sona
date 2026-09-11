@@ -64,18 +64,18 @@ export type {
   LlmCompletionRequest,
   LlmCompletionResponse,
   LlmConfig,
+  LlmDiscoveredModelSummary,
   LlmExecutionMetadata,
   LlmFeature,
   LlmFeatureSelections,
   LlmGenerateSource,
   LlmJsonValue,
-  LlmDiscoveredModelSummary,
+  LlmModality,
   LlmModelDiscoveryStatus,
   LlmModelEntry,
   LlmModelMetadata,
   LlmModelMetadataSource,
   LlmModelSource,
-  LlmModality,
   LlmPromptCachePolicy,
   LlmProvider,
   LlmProviderSetting,
@@ -110,4 +110,12 @@ export type HistorySummaryPayload = CoreHistorySummaryPayload;
 
 // AppConfig is now defined as a composite type in ./config.ts.
 // Re-exported here for backward compatibility.
-export type { AppConfig, UIConfig, AudioConfig, ModelConfig, CaptionConfig, TranscriptionConfig, LlmAssistantConfig } from './config';
+export type {
+  AppConfig,
+  AudioConfig,
+  CaptionConfig,
+  LlmAssistantConfig,
+  ModelConfig,
+  TranscriptionConfig,
+  UIConfig,
+} from './config';

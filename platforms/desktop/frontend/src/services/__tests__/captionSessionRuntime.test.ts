@@ -46,33 +46,48 @@ vi.mock('../transcriptionService', () => ({
   },
 }));
 
-vi.stubGlobal('AudioContext', class {
-  state = 'running';
-  destination = {};
-  audioWorklet = {
-    addModule: vi.fn().mockResolvedValue(undefined),
-  };
-  createMediaStreamSource() {
-    return { connect: vi.fn() };
+vi.stubGlobal(
+  'AudioContext',
+  class {
+    state = 'running';
+    destination = {};
+    audioWorklet = {
+      addModule: vi.fn().mockResolvedValue(undefined),
+    };
+    createMediaStreamSource() {
+      return { connect: vi.fn() };
+    }
+    close = vi.fn().mockResolvedValue(undefined);
+    resume = vi.fn().mockResolvedValue(undefined);
   }
-  close = vi.fn().mockResolvedValue(undefined);
-  resume = vi.fn().mockResolvedValue(undefined);
-});
+);
 
-vi.stubGlobal('AudioWorkletNode', class {
-  port = { onmessage: null };
-  connect = vi.fn();
-});
-
-vi.stubGlobal('MediaStream', class {
-  tracks: any[];
-  constructor(tracks?: any[]) {
-    this.tracks = tracks || [];
+vi.stubGlobal(
+  'AudioWorkletNode',
+  class {
+    port = { onmessage: null };
+    connect = vi.fn();
   }
-  getAudioTracks() { return this.tracks; }
-  getVideoTracks() { return []; }
-  getTracks() { return this.tracks; }
-});
+);
+
+vi.stubGlobal(
+  'MediaStream',
+  class {
+    tracks: any[];
+    constructor(tracks?: any[]) {
+      this.tracks = tracks || [];
+    }
+    getAudioTracks() {
+      return this.tracks;
+    }
+    getVideoTracks() {
+      return [];
+    }
+    getTracks() {
+      return this.tracks;
+    }
+  }
+);
 
 describe('captionSessionRuntime', () => {
   const config = buildTestConfig({
@@ -104,12 +119,14 @@ describe('captionSessionRuntime', () => {
         sourceKind: 'system',
         deviceName: null,
         callbackOwner: 'caption',
-      },
+      }
     );
-    expect(captionWindowService.open).toHaveBeenCalledWith(expect.objectContaining({
-      width: config.captionWindowWidth,
-      fontSize: config.captionFontSize,
-    }));
+    expect(captionWindowService.open).toHaveBeenCalledWith(
+      expect.objectContaining({
+        width: config.captionWindowWidth,
+        fontSize: config.captionFontSize,
+      })
+    );
     expect(transcriptionServiceMocks.captionStop).toHaveBeenCalledTimes(1);
     expect(unlisten).toHaveBeenCalledTimes(1);
   });

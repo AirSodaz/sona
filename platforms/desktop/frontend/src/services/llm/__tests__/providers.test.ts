@@ -25,22 +25,30 @@ describe('llm providers', () => {
   });
 
   it('creates provider settings with the registry defaults for host, path, and version', () => {
-    expect(createProviderSetting('open_ai_responses')).toEqual(expect.objectContaining({
-      apiHost: 'https://api.openai.com',
-      apiPath: '/v1/responses',
-    }));
-    expect(createProviderSetting('azure_openai')).toEqual(expect.objectContaining({
-      apiHost: '',
-      apiVersion: '2024-10-21',
-    }));
-    expect(createProviderSetting('perplexity')).toEqual(expect.objectContaining({
-      apiHost: 'https://api.perplexity.ai',
-      apiPath: '/chat/completions',
-    }));
-    expect(createProviderSetting('volcengine')).toEqual(expect.objectContaining({
-      apiHost: 'https://ark.cn-beijing.volces.com',
-      apiPath: '/api/v3/chat/completions',
-    }));
+    expect(createProviderSetting('open_ai_responses')).toEqual(
+      expect.objectContaining({
+        apiHost: 'https://api.openai.com',
+        apiPath: '/v1/responses',
+      })
+    );
+    expect(createProviderSetting('azure_openai')).toEqual(
+      expect.objectContaining({
+        apiHost: '',
+        apiVersion: '2024-10-21',
+      })
+    );
+    expect(createProviderSetting('perplexity')).toEqual(
+      expect.objectContaining({
+        apiHost: 'https://api.perplexity.ai',
+        apiPath: '/chat/completions',
+      })
+    );
+    expect(createProviderSetting('volcengine')).toEqual(
+      expect.objectContaining({
+        apiHost: 'https://ark.cn-beijing.volces.com',
+        apiPath: '/api/v3/chat/completions',
+      })
+    );
   });
 
   it('builds provider-level runtime configs without choosing a model yet', () => {
@@ -68,7 +76,9 @@ describe('llm providers', () => {
   });
 
   it('does not expose OpenAI Compatible as a built-in provider', () => {
-    expect(BUILT_IN_LLM_PROVIDER_DEFINITIONS.map((provider) => provider.id)).not.toContain('open_ai_compatible');
+    expect(BUILT_IN_LLM_PROVIDER_DEFINITIONS.map((provider) => provider.id)).not.toContain(
+      'open_ai_compatible'
+    );
   });
 
   it('creates stable custom provider definitions from API modes', () => {
@@ -97,28 +107,36 @@ describe('llm providers', () => {
       createdAt: '2026-05-18T00:00:00.000Z',
     });
 
-    expect(openAiProvider).toEqual(expect.objectContaining({
-      id: 'custom-openai',
-      labelKey: 'Private Gateway',
-      labelDefault: 'Private Gateway',
-      defaultApiHost: '',
-      defaultApiPath: '/v1/chat/completions',
-      requiresApiKey: true,
-      supportsModelListing: true,
-      strategy: 'openai_compatible',
-    }));
-    expect(responsesProvider).toEqual(expect.objectContaining({
-      defaultApiPath: '/v1/responses',
-      strategy: 'openai_responses',
-    }));
-    expect(anthropicProvider).toEqual(expect.objectContaining({
-      supportsModelListing: false,
-      strategy: 'anthropic',
-    }));
-    expect(geminiProvider).toEqual(expect.objectContaining({
-      supportsModelListing: true,
-      strategy: 'gemini',
-    }));
+    expect(openAiProvider).toEqual(
+      expect.objectContaining({
+        id: 'custom-openai',
+        labelKey: 'Private Gateway',
+        labelDefault: 'Private Gateway',
+        defaultApiHost: '',
+        defaultApiPath: '/v1/chat/completions',
+        requiresApiKey: true,
+        supportsModelListing: true,
+        strategy: 'openai_compatible',
+      })
+    );
+    expect(responsesProvider).toEqual(
+      expect.objectContaining({
+        defaultApiPath: '/v1/responses',
+        strategy: 'openai_responses',
+      })
+    );
+    expect(anthropicProvider).toEqual(
+      expect.objectContaining({
+        supportsModelListing: false,
+        strategy: 'anthropic',
+      })
+    );
+    expect(geminiProvider).toEqual(
+      expect.objectContaining({
+        supportsModelListing: true,
+        strategy: 'gemini',
+      })
+    );
   });
 
   it('lists built-in and custom provider definitions together', () => {
@@ -132,27 +150,33 @@ describe('llm providers', () => {
     };
 
     const definitions = listProviderDefinitions(customProviders);
-    expect(definitions[definitions.length - 1]).toEqual(expect.objectContaining({
-      id: 'custom-private-gateway',
-      labelKey: 'Private Gateway',
-      labelDefault: 'Private Gateway',
-    }));
-    expect(getProviderDefinition('custom-private-gateway', customProviders)).toEqual(expect.objectContaining({
-      id: 'custom-private-gateway',
-      strategy: 'openai_compatible',
-    }));
+    expect(definitions[definitions.length - 1]).toEqual(
+      expect.objectContaining({
+        id: 'custom-private-gateway',
+        labelKey: 'Private Gateway',
+        labelDefault: 'Private Gateway',
+      })
+    );
+    expect(getProviderDefinition('custom-private-gateway', customProviders)).toEqual(
+      expect.objectContaining({
+        id: 'custom-private-gateway',
+        strategy: 'openai_compatible',
+      })
+    );
   });
 
   it('generates readable unique custom provider ids from names', () => {
     expect(createCustomProviderId('OpenAI Compatible', {})).toBe('custom-openai-compatible');
-    expect(createCustomProviderId('OpenAI Compatible', {
-      'custom-openai-compatible': {
-        id: 'custom-openai-compatible',
-        name: 'OpenAI Compatible',
-        strategy: 'openai_compatible',
-        createdAt: '2026-05-18T00:00:00.000Z',
-      },
-    })).toBe('custom-openai-compatible-2');
+    expect(
+      createCustomProviderId('OpenAI Compatible', {
+        'custom-openai-compatible': {
+          id: 'custom-openai-compatible',
+          name: 'OpenAI Compatible',
+          strategy: 'openai_compatible',
+          createdAt: '2026-05-18T00:00:00.000Z',
+        },
+      })
+    ).toBe('custom-openai-compatible-2');
   });
 
   it('forces buildLlmConfig to use the official endpoint for google_translate_free regardless of setting', () => {

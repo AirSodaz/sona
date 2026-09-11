@@ -1,5 +1,5 @@
-import { buildRecognizerOutputEvent } from '../../tauri/events';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildRecognizerOutputEvent } from '../../tauri/events';
 
 const mocks = vi.hoisted(() => {
   const listenCallbacks: Record<string, (event: any) => void> = {};
@@ -71,7 +71,7 @@ describe('RecognizerLifecycle', () => {
     expect(mocks.listen).toHaveBeenCalledTimes(1);
     expect(mocks.listen).toHaveBeenCalledWith(
       'recognizer-output-voice-typing',
-      expect.any(Function),
+      expect.any(Function)
     );
 
     mocks.listenCallbacks['recognizer-output-voice-typing']?.({
@@ -115,20 +115,22 @@ describe('RecognizerLifecycle', () => {
     mocks.listenCallbacks['recognizer-output-caption']?.({
       payload: {
         removeIds: [],
-        upsertSegments: [{
-          id: 'seg-2',
-          start: 0,
-          end: 1,
-          text: 'caption',
-          isFinal: true,
-        }],
+        upsertSegments: [
+          {
+            id: 'seg-2',
+            start: 0,
+            end: 1,
+            text: 'caption',
+            isFinal: true,
+          },
+        ],
       },
     });
 
     expect(firstUpdate).not.toHaveBeenCalled();
     expect(secondUpdate).toHaveBeenCalledTimes(1);
     expect(mocks.loggerInfo).toHaveBeenCalledWith(
-      expect.stringContaining('[TranscriptionService:caption] Replacing callback registration.'),
+      expect.stringContaining('[TranscriptionService:caption] Replacing callback registration.')
     );
   });
 
@@ -140,9 +142,9 @@ describe('RecognizerLifecycle', () => {
     const lifecycle = new RecognizerLifecycle('record');
     const onError = vi.fn();
 
-    await expect(
-      lifecycle.startExternal({ mode: 'streaming' } as never, onError),
-    ).rejects.toThrow('start failed');
+    await expect(lifecycle.startExternal({ mode: 'streaming' } as never, onError)).rejects.toThrow(
+      'start failed'
+    );
 
     expect(mocks.retireExternalLiveSource).toHaveBeenCalledWith('source-token');
     expect(onError).toHaveBeenCalledWith(expect.stringContaining('start failed'));
@@ -152,5 +154,4 @@ describe('RecognizerLifecycle', () => {
   it('builds the recognizer output event name from the instance id', () => {
     expect(buildRecognizerOutputEvent('voice-typing')).toBe('recognizer-output-voice-typing');
   });
-
 });

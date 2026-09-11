@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { migrateConfig } from '../configMigrationService';
 import { DEFAULT_CONFIG } from '../../stores/configStore';
 import type { AppConfig } from '../../types/config';
+import { migrateConfig } from '../configMigrationService';
 import { migrateAppConfig } from '../tauri/app';
 
 vi.mock('../../i18n', () => ({
@@ -41,10 +41,7 @@ describe('configMigrationService', () => {
 
     expect(result.migrated).toBe(true);
     expect(result.config.streamingModelPath).toBe('/legacy/model');
-    expect(migrateAppConfig).toHaveBeenCalledWith(
-      savedConfig,
-      'Default Rules',
-    );
+    expect(migrateAppConfig).toHaveBeenCalledWith(savedConfig, 'Default Rules');
   });
 
   it('passes nulls for missing startup config inputs', async () => {

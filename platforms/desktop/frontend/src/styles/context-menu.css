@@ -11,7 +11,9 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg-elevated);
-  box-shadow: 0 0 0 1px var(--color-border), var(--shadow-xl);
+  box-shadow:
+    0 0 0 1px var(--color-border),
+    var(--shadow-xl);
   color: var(--color-text-primary);
   outline: none;
   animation: context-menu-enter 90ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -36,7 +38,9 @@
   line-height: 1.2;
   text-align: left;
   cursor: default;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .context-menu-item:hover:not(:disabled),
@@ -72,7 +76,7 @@
 }
 
 .context-menu-item--with-divider::before {
-  content: '';
+  content: "";
   position: absolute;
   top: -3px;
   left: 6px;

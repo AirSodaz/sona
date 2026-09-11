@@ -5,10 +5,10 @@ import { ParameterSettingsModal } from './ParameterSettingsModal';
 
 /** Props for TranscriptionOptions component. */
 interface TranscriptionOptionsProps {
-    className?: string;
-    disabled?: boolean;
-    /** Which surface's active model governs the language picker inside the modal. */
-    surface?: 'live' | 'batch';
+  className?: string;
+  disabled?: boolean;
+  /** Which surface's active model governs the language picker inside the modal. */
+  surface?: 'live' | 'batch';
 }
 
 /**
@@ -19,40 +19,40 @@ interface TranscriptionOptionsProps {
  * @return The rendered component.
  */
 export const TranscriptionOptions = React.memo(function TranscriptionOptions({
-    className = '',
-    disabled = false,
-    surface = 'live'
+  className = '',
+  disabled = false,
+  surface = 'live',
 }: TranscriptionOptionsProps): React.JSX.Element {
-    const { t } = useTranslation();
-    const [isModalOpen, setIsModalOpen] = useState(false);
+  const { t } = useTranslation();
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-    return (
-        <div
-            className={`options-container ${className}`}
-            style={{
-                marginTop: 'auto', // Push to bottom of flex container
-                width: '100%',
-                padding: '16px 0 0 0', // Top padding only
-                display: 'flex',
-                justifyContent: 'center'
-            }}
-        >
-            <button
-                className="btn btn-parameter-settings"
-                onClick={() => setIsModalOpen(true)}
-                disabled={disabled}
-                aria-label={t('common.parameter_settings', { defaultValue: 'Parameter Settings' })}
-            >
-                <SettingsIcon width={16} height={16} />
-                <span>{t('common.parameter_settings', { defaultValue: 'Parameter Settings' })}</span>
-            </button>
+  return (
+    <div
+      className={`options-container ${className}`}
+      style={{
+        marginTop: 'auto', // Push to bottom of flex container
+        width: '100%',
+        padding: '16px 0 0 0', // Top padding only
+        display: 'flex',
+        justifyContent: 'center',
+      }}
+    >
+      <button
+        className="btn btn-parameter-settings"
+        onClick={() => setIsModalOpen(true)}
+        disabled={disabled}
+        aria-label={t('common.parameter_settings', { defaultValue: 'Parameter Settings' })}
+      >
+        <SettingsIcon width={16} height={16} />
+        <span>{t('common.parameter_settings', { defaultValue: 'Parameter Settings' })}</span>
+      </button>
 
-            <ParameterSettingsModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                surface={surface}
-                disabled={disabled}
-            />
-        </div>
-    );
+      <ParameterSettingsModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        surface={surface}
+        disabled={disabled}
+      />
+    </div>
+  );
 });

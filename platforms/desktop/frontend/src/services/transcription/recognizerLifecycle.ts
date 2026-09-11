@@ -1,7 +1,9 @@
 import type { TranscriptUpdate } from '../../types/transcript';
 import { logger } from '../../utils/logger';
 import { normalizeTranscriptUpdate } from '../../utils/transcriptTiming';
+import type { AsrTranscriptionRequest } from '../asrConfigService';
 import { buildRecognizerOutputEvent } from '../tauri/events';
+import { listen, type UnlistenFn } from '../tauri/platform/events';
 import {
   createExternalLiveSource,
   feedExternalLiveSource,
@@ -9,8 +11,6 @@ import {
   startExternalLiveTranscription,
   stopLiveTranscription,
 } from '../tauri/recognizer';
-import type { AsrTranscriptionRequest } from '../asrConfigService';
-import { listen, type UnlistenFn } from '../tauri/platform/events';
 
 const LOG_PREVIEW_MAX_CHARS = 24;
 
@@ -45,11 +45,7 @@ function shouldLogVoiceTypingDiagnostics(instanceId: string) {
 }
 
 function isDiagnosticsInstance(instanceId: string): boolean {
-  return (
-    instanceId === 'record' ||
-    instanceId === 'voice-typing' ||
-    instanceId === 'caption'
-  );
+  return instanceId === 'record' || instanceId === 'voice-typing' || instanceId === 'caption';
 }
 
 function formatSession(sessionId: string | null | undefined): string {
@@ -69,13 +65,10 @@ export class RecognizerLifecycle {
   registerCallback(
     onUpdate: RecognizerUpdateCallback,
     onError: RecognizerErrorCallback,
-    options?: RecognizerCallbackOptions,
+    options?: RecognizerCallbackOptions
   ): void {
     const existingRegistration = instanceCallbacks.get(this.instanceId);
-    if (
-      isDiagnosticsInstance(this.instanceId) &&
-      existingRegistration
-    ) {
+    if (isDiagnosticsInstance(this.instanceId) && existingRegistration) {
       logger.info(
         `[TranscriptionService:${this.instanceId}] Replacing callback registration. previous_registration=${existingRegistration.registrationId} previous_owner=${existingRegistration.owner} previous_session=${formatSession(existingRegistration.sessionId)}`
       );
@@ -88,21 +81,23 @@ export class RecognizerLifecycle {
       const currentRegistration = instanceCallbacks.get(this.instanceId);
       if (!currentRegistration || currentRegistration.registrationId !== registrationId) {
         if (shouldLogVoiceTypingDiagnostics(this.instanceId)) {
-          logger.info(
-            '[TranscriptionService:voice-typing] Skipped callback invocation',
-            {
-              instanceId: this.instanceId,
-              registrationId,
-              currentRegistrationId: currentRegistration?.registrationId ?? null,
-              segmentIds: update.upsertSegments.map((segment) => segment.id),
-              removeIds: update.removeIds,
-              rawTextLength: null,
-              processedTextLength: update.upsertSegments.reduce((sum, segment) => sum + segment.text.length, 0),
-              preview: previewTextForLog(update.upsertSegments.map((segment) => segment.text).join(' ')),
-              callbackInvoked: false,
-              dropReason: 'stale_registration',
-            }
-          );
+          logger.info('[TranscriptionService:voice-typing] Skipped callback invocation', {
+            instanceId: this.instanceId,
+            registrationId,
+            currentRegistrationId: currentRegistration?.registrationId ?? null,
+            segmentIds: update.upsertSegments.map((segment) => segment.id),
+            removeIds: update.removeIds,
+            rawTextLength: null,
+            processedTextLength: update.upsertSegments.reduce(
+              (sum, segment) => sum + segment.text.length,
+              0
+            ),
+            preview: previewTextForLog(
+              update.upsertSegments.map((segment) => segment.text).join(' ')
+            ),
+            callbackInvoked: false,
+            dropReason: 'stale_registration',
+          });
         }
         if (isDiagnosticsInstance(this.instanceId)) {
           logger.info(
@@ -113,19 +108,21 @@ export class RecognizerLifecycle {
       }
 
       if (shouldLogVoiceTypingDiagnostics(this.instanceId)) {
-        logger.info(
-          '[TranscriptionService:voice-typing] Invoking callback',
-          {
-            instanceId: this.instanceId,
-            registrationId,
-            segmentIds: update.upsertSegments.map((segment) => segment.id),
-            removeIds: update.removeIds,
-            rawTextLength: null,
-            processedTextLength: update.upsertSegments.reduce((sum, segment) => sum + segment.text.length, 0),
-            preview: previewTextForLog(update.upsertSegments.map((segment) => segment.text).join(' ')),
-            callbackInvoked: true,
-          }
-        );
+        logger.info('[TranscriptionService:voice-typing] Invoking callback', {
+          instanceId: this.instanceId,
+          registrationId,
+          segmentIds: update.upsertSegments.map((segment) => segment.id),
+          removeIds: update.removeIds,
+          rawTextLength: null,
+          processedTextLength: update.upsertSegments.reduce(
+            (sum, segment) => sum + segment.text.length,
+            0
+          ),
+          preview: previewTextForLog(
+            update.upsertSegments.map((segment) => segment.text).join(' ')
+          ),
+          callbackInvoked: true,
+        });
       }
       onUpdate(update);
     };
@@ -135,7 +132,7 @@ export class RecognizerLifecycle {
       onError,
       owner,
       sessionId,
-      registrationId
+      registrationId,
     });
 
     if (isDiagnosticsInstance(this.instanceId)) {
@@ -198,7 +195,7 @@ export class RecognizerLifecycle {
   async startExternal(
     asrRequest: AsrTranscriptionRequest,
     onError: RecognizerErrorCallback,
-    gain = 1,
+    gain = 1
   ): Promise<void> {
     if (this.isRunning) return;
     let sourceToken: string | null = null;

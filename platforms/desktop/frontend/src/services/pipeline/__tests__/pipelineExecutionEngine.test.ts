@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AppConfig } from '../../../types/config';
+import type { TranscriptSegment } from '../../../types/transcript';
+import type { EffectivePipelineSnapshot } from '../../projectPipeline';
 import {
   PipelineExecutionEngine,
   type PipelineExecutionEnginePorts,
 } from '../pipelineExecutionEngine';
-import type { AppConfig } from '../../../types/config';
-import type { TranscriptSegment } from '../../../types/transcript';
-import type { EffectivePipelineSnapshot } from '../../projectPipeline';
 
 describe('PipelineExecutionEngine', () => {
   let mockPorts: PipelineExecutionEnginePorts;
@@ -27,17 +27,19 @@ describe('PipelineExecutionEngine', () => {
         polishSegmentsWithConfig: vi.fn().mockImplementation(async (_cfg, _segments, cb) => {
           await cb([{ id: 'seg-1', text: 'Polished text' }]);
         }),
-        applyPolishedSegmentsInMemory: vi.fn().mockReturnValue([
-          { id: 'seg-1', start: 0, end: 5, text: 'Polished text' },
-        ]),
+        applyPolishedSegmentsInMemory: vi
+          .fn()
+          .mockReturnValue([{ id: 'seg-1', start: 0, end: 5, text: 'Polished text' }]),
       } as unknown as PipelineExecutionEnginePorts['polishService'],
       translationService: {
         translateSegmentsWithConfig: vi.fn().mockImplementation(async (_cfg, _segments, cb) => {
           await cb([{ id: 'seg-1', translation: '你好世界' }]);
         }),
-        applyTranslationsInMemory: vi.fn().mockReturnValue([
-          { id: 'seg-1', start: 0, end: 5, text: 'Polished text', translation: '你好世界' },
-        ]),
+        applyTranslationsInMemory: vi
+          .fn()
+          .mockReturnValue([
+            { id: 'seg-1', start: 0, end: 5, text: 'Polished text', translation: '你好世界' },
+          ]),
       } as unknown as PipelineExecutionEnginePorts['translationService'],
       summaryService: {
         retrySummaryTranscriptJob: vi.fn().mockResolvedValue(undefined),
@@ -90,20 +92,23 @@ describe('PipelineExecutionEngine', () => {
     expect(mockPorts.polishService.polishSegmentsWithConfig).toHaveBeenCalledWith(
       expect.objectContaining({ polishPresetId: 'custom-preset' }),
       expect.any(Array),
-      expect.any(Function),
+      expect.any(Function)
     );
-    expect(mockPorts.historyService.updateTranscript).toHaveBeenCalledWith('hist-1', expect.any(Array));
+    expect(mockPorts.historyService.updateTranscript).toHaveBeenCalledWith(
+      'hist-1',
+      expect.any(Array)
+    );
 
     // Verify translation called with project target language override
     expect(mockPorts.translationService.translateSegmentsWithConfig).toHaveBeenCalledWith(
       expect.objectContaining({ translationLanguage: 'ja' }),
       expect.any(Array),
-      expect.any(Function),
+      expect.any(Function)
     );
 
     // Verify summary called with project template override
     expect(mockPorts.summaryService.retrySummaryTranscriptJob).toHaveBeenCalledWith(
-      expect.objectContaining({ templateId: 'custom-template', historyId: 'hist-1' }),
+      expect.objectContaining({ templateId: 'custom-template', historyId: 'hist-1' })
     );
     expect(mockPorts.summaryService.persistSummary).toHaveBeenCalledWith('hist-1');
 
@@ -142,15 +147,15 @@ describe('PipelineExecutionEngine', () => {
     expect(mockPorts.polishService.polishSegmentsWithConfig).toHaveBeenCalledWith(
       expect.objectContaining({ polishPresetId: 'global-polish' }),
       expect.any(Array),
-      expect.any(Function),
+      expect.any(Function)
     );
     expect(mockPorts.translationService.translateSegmentsWithConfig).toHaveBeenCalledWith(
       expect.objectContaining({ translationLanguage: 'zh' }),
       expect.any(Array),
-      expect.any(Function),
+      expect.any(Function)
     );
     expect(mockPorts.summaryService.retrySummaryTranscriptJob).toHaveBeenCalledWith(
-      expect.objectContaining({ templateId: 'global-summary' }),
+      expect.objectContaining({ templateId: 'global-summary' })
     );
   });
 
@@ -175,7 +180,7 @@ describe('PipelineExecutionEngine', () => {
           cancel = true;
           return cancel;
         },
-      }),
+      })
     ).rejects.toThrow('Pipeline task cancelled.');
   });
 });

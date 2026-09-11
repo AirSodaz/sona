@@ -12,14 +12,9 @@ vi.mock('react-i18next', () => ({
 describe('PanelModal', () => {
   it('does not render when closed', () => {
     const { container } = render(
-      <PanelModal
-        isOpen={false}
-        onClose={vi.fn()}
-        ariaLabel="Test Panel"
-        title="Test Title"
-      >
+      <PanelModal isOpen={false} onClose={vi.fn()} ariaLabel="Test Panel" title="Test Title">
         <div>Body</div>
-      </PanelModal>,
+      </PanelModal>
     );
 
     expect(container.firstChild).toBeNull();
@@ -47,15 +42,22 @@ describe('PanelModal', () => {
         title="Test Title"
         description="Test description"
         headerActions={<button type="button">Action</button>}
-        meta={<><span>Meta Label</span><span>Meta Value</span></>}
+        meta={
+          <>
+            <span>Meta Label</span>
+            <span>Meta Value</span>
+          </>
+        }
         errorBanner={<div role="alert">Banner error</div>}
       >
         <div>Body</div>
-      </PanelModal>,
+      </PanelModal>
     );
 
     const dialog = screen.getByRole('dialog', { name: 'Test Panel' });
-    const overlay = document.querySelector('.panel-modal-overlay.test-overlay') as HTMLElement | null;
+    const overlay = document.querySelector(
+      '.panel-modal-overlay.test-overlay'
+    ) as HTMLElement | null;
     expect(dialog.classList.contains('panel-modal-shell')).toBe(true);
     expect(dialog.classList.contains('test-modal')).toBe(true);
     expect(dialog.classList.contains('panel-modal-size-settings')).toBe(true);
@@ -111,7 +113,7 @@ describe('PanelModal', () => {
         overlayClassName="test-overlay"
       >
         <div>Body</div>
-      </PanelModal>,
+      </PanelModal>
     );
 
     const overlay = document.querySelector('.panel-modal-overlay.test-overlay') as HTMLElement;
@@ -128,14 +130,9 @@ describe('PanelModal', () => {
   it('closes when the close button is pressed', () => {
     const onClose = vi.fn();
     render(
-      <PanelModal
-        isOpen
-        onClose={onClose}
-        ariaLabel="Test Panel"
-        title="Test Title"
-      >
+      <PanelModal isOpen onClose={onClose} ariaLabel="Test Panel" title="Test Title">
         <div>Body</div>
-      </PanelModal>,
+      </PanelModal>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
@@ -155,7 +152,7 @@ describe('PanelModal', () => {
         backLabel="Go Back"
       >
         <div>Body</div>
-      </PanelModal>,
+      </PanelModal>
     );
 
     const backButton = screen.getByRole('button', { name: 'Go Back' });
@@ -175,7 +172,7 @@ describe('PanelModal', () => {
         origin="standalone"
       >
         <div>Body</div>
-      </PanelModal>,
+      </PanelModal>
     );
 
     expect(screen.queryByRole('button', { name: 'Go Back' })).toBeNull();
@@ -191,7 +188,7 @@ describe('PanelModal', () => {
         closeLabel="Dismiss panel"
       >
         <div>Body</div>
-      </PanelModal>,
+      </PanelModal>
     );
 
     const closeButton = screen.getByRole('button', { name: 'Dismiss panel' });

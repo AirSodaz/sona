@@ -1,149 +1,147 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { exists } from '@tauri-apps/plugin-fs';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useConfigStore } from '../../stores/configStore';
 import { healthCheckService } from '../healthCheckService';
 import { historyService } from '../historyService';
-import { projectService } from '../projectService';
-import { useConfigStore } from '../../stores/configStore';
-import { exists } from '@tauri-apps/plugin-fs';
-import { settingsStore } from '../storageService';
 import { getPathStatusMap } from '../pathStatusService';
+import { projectService } from '../projectService';
+import { settingsStore } from '../storageService';
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
-    exists: vi.fn(),
-    BaseDirectory: { AppLocalData: 3 },
+  exists: vi.fn(),
+  BaseDirectory: { AppLocalData: 3 },
 }));
 
 vi.mock('../historyService', () => ({
-    historyService: {
-        getAll: vi.fn(),
-        deleteRecordings: vi.fn(),
-    },
+  historyService: {
+    getAll: vi.fn(),
+    deleteRecordings: vi.fn(),
+  },
 }));
 
 vi.mock('../projectService', () => ({
-    projectService: {
-        getAll: vi.fn(),
-    },
+  projectService: {
+    getAll: vi.fn(),
+  },
 }));
 
 vi.mock('../storageService', () => ({
-    settingsStore: {
-        set: vi.fn(),
-        save: vi.fn(),
-    },
-    STORE_KEY_CONFIG: 'sona-config',
+  settingsStore: {
+    set: vi.fn(),
+    save: vi.fn(),
+  },
+  STORE_KEY_CONFIG: 'sona-config',
 }));
 
 vi.mock('../pathStatusService', () => ({
-    getPathStatusMap: vi.fn(),
+  getPathStatusMap: vi.fn(),
 }));
 
 describe('healthCheckService', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('checkHistory', () => {
+    it('should remove items where both audio and transcript are missing', async () => {
+      const mockItems = [
+        { id: '1', audioPath: 'a1.wav', transcriptPath: 't1.json' }, // valid (audio exists)
+        { id: '2', audioPath: 'a2.wav', transcriptPath: 't2.json' }, // valid (transcript exists)
+        { id: '3', audioPath: 'a3.wav', transcriptPath: 't3.json' }, // invalid (both missing)
+        { id: '4', audioPath: 'a4.wav', transcriptPath: 't4.json' }, // valid (both exist)
+      ];
+
+      (historyService.getAll as any).mockResolvedValue(mockItems);
+
+      (exists as any).mockImplementation((path: string) => {
+        if (path.includes('a1.wav')) return Promise.resolve(true);
+        if (path.includes('t2.json')) return Promise.resolve(true);
+        if (path.includes('a3.wav')) return Promise.resolve(false);
+        if (path.includes('t3.json')) return Promise.resolve(false);
+        if (path.includes('a4.wav')) return Promise.resolve(true);
+        if (path.includes('t4.json')) return Promise.resolve(true);
+        return Promise.resolve(false);
+      });
+
+      await healthCheckService.checkHistory();
+
+      expect(historyService.deleteRecordings).toHaveBeenCalledWith(['3']);
     });
 
-    describe('checkHistory', () => {
-        it('should remove items where both audio and transcript are missing', async () => {
-            const mockItems = [
-                { id: '1', audioPath: 'a1.wav', transcriptPath: 't1.json' }, // valid (audio exists)
-                { id: '2', audioPath: 'a2.wav', transcriptPath: 't2.json' }, // valid (transcript exists)
-                { id: '3', audioPath: 'a3.wav', transcriptPath: 't3.json' }, // invalid (both missing)
-                { id: '4', audioPath: 'a4.wav', transcriptPath: 't4.json' }, // valid (both exist)
-            ];
+    it('keeps transcript-only history items created by light backups', async () => {
+      const lightBackupItem = {
+        id: 'light-1',
+        audioPath: 'missing-audio.webm',
+        transcriptPath: 'light-1.json',
+        projectId: null,
+        status: 'complete',
+      };
 
-            (historyService.getAll as any).mockResolvedValue(mockItems);
-            
-            (exists as any).mockImplementation((path: string) => {
-                if (path.includes('a1.wav')) return Promise.resolve(true);
-                if (path.includes('t2.json')) return Promise.resolve(true);
-                if (path.includes('a3.wav')) return Promise.resolve(false);
-                if (path.includes('t3.json')) return Promise.resolve(false);
-                if (path.includes('a4.wav')) return Promise.resolve(true);
-                if (path.includes('t4.json')) return Promise.resolve(true);
-                return Promise.resolve(false);
-            });
+      (historyService.getAll as any).mockResolvedValue([lightBackupItem]);
+      (exists as any).mockImplementation((path: string) => {
+        if (path.includes('missing-audio.webm')) return Promise.resolve(false);
+        if (path.includes('light-1.json')) return Promise.resolve(true);
+        return Promise.resolve(false);
+      });
 
-            await healthCheckService.checkHistory();
+      await healthCheckService.checkHistory();
 
-            expect(historyService.deleteRecordings).toHaveBeenCalledWith(['3']);
-        });
-
-        it('keeps transcript-only history items created by light backups', async () => {
-            const lightBackupItem = {
-                id: 'light-1',
-                audioPath: 'missing-audio.webm',
-                transcriptPath: 'light-1.json',
-                projectId: null,
-                status: 'complete',
-            };
-
-            (historyService.getAll as any).mockResolvedValue([lightBackupItem]);
-            (exists as any).mockImplementation((path: string) => {
-                if (path.includes('missing-audio.webm')) return Promise.resolve(false);
-                if (path.includes('light-1.json')) return Promise.resolve(true);
-                return Promise.resolve(false);
-            });
-
-            await healthCheckService.checkHistory();
-
-            expect(historyService.deleteRecordings).not.toHaveBeenCalled();
-        });
-
-        it('should do nothing if all items are valid', async () => {
-            const mockItems = [
-                { id: '1', audioPath: 'a1.wav', transcriptPath: 't1.json' },
-            ];
-
-            (historyService.getAll as any).mockResolvedValue(mockItems);
-            (exists as any).mockResolvedValue(true);
-
-            await healthCheckService.checkHistory();
-
-            expect(historyService.deleteRecordings).not.toHaveBeenCalled();
-        });
+      expect(historyService.deleteRecordings).not.toHaveBeenCalled();
     });
 
-    describe('checkModels', () => {
-        it('should clear invalid model paths from config', async () => {
-            useConfigStore.getState().setConfig({
-                batchModelPath: '/valid/path',
-                streamingModelPath: '/invalid/path',
-            });
+    it('should do nothing if all items are valid', async () => {
+      const mockItems = [{ id: '1', audioPath: 'a1.wav', transcriptPath: 't1.json' }];
 
-            (getPathStatusMap as any).mockResolvedValue({
-                '/valid/path': { path: '/valid/path', kind: 'directory', error: null },
-                '/invalid/path': { path: '/invalid/path', kind: 'missing', error: null },
-            });
+      (historyService.getAll as any).mockResolvedValue(mockItems);
+      (exists as any).mockResolvedValue(true);
 
-            await healthCheckService.checkModels();
+      await healthCheckService.checkHistory();
 
-            expect(useConfigStore.getState().config.streamingModelPath).toBe('');
-            expect(useConfigStore.getState().config.batchModelPath).toBe('/valid/path');
-            expect(settingsStore.set).toHaveBeenCalled();
-            expect(settingsStore.save).toHaveBeenCalled();
-        });
+      expect(historyService.deleteRecordings).not.toHaveBeenCalled();
+    });
+  });
 
-        it('should keep configured model paths when runtime validation is unknown', async () => {
-            useConfigStore.getState().setConfig({
-                batchModelPath: '/unknown/path',
-            });
+  describe('checkModels', () => {
+    it('should clear invalid model paths from config', async () => {
+      useConfigStore.getState().setConfig({
+        batchModelPath: '/valid/path',
+        streamingModelPath: '/invalid/path',
+      });
 
-            (getPathStatusMap as any).mockResolvedValue({
-                '/unknown/path': { path: '/unknown/path', kind: 'unknown', error: 'Scope denied' },
-            });
+      (getPathStatusMap as any).mockResolvedValue({
+        '/valid/path': { path: '/valid/path', kind: 'directory', error: null },
+        '/invalid/path': { path: '/invalid/path', kind: 'missing', error: null },
+      });
 
-            await healthCheckService.checkModels();
+      await healthCheckService.checkModels();
 
-            expect(useConfigStore.getState().config.batchModelPath).toBe('/unknown/path');
-            expect(settingsStore.set).not.toHaveBeenCalled();
-            expect(settingsStore.save).not.toHaveBeenCalled();
-        });
+      expect(useConfigStore.getState().config.streamingModelPath).toBe('');
+      expect(useConfigStore.getState().config.batchModelPath).toBe('/valid/path');
+      expect(settingsStore.set).toHaveBeenCalled();
+      expect(settingsStore.save).toHaveBeenCalled();
     });
 
-    describe('checkProjects', () => {
-        it('should call projectService.getAll', async () => {
-            await healthCheckService.checkProjects();
-            expect(projectService.getAll).toHaveBeenCalled();
-        });
+    it('should keep configured model paths when runtime validation is unknown', async () => {
+      useConfigStore.getState().setConfig({
+        batchModelPath: '/unknown/path',
+      });
+
+      (getPathStatusMap as any).mockResolvedValue({
+        '/unknown/path': { path: '/unknown/path', kind: 'unknown', error: 'Scope denied' },
+      });
+
+      await healthCheckService.checkModels();
+
+      expect(useConfigStore.getState().config.batchModelPath).toBe('/unknown/path');
+      expect(settingsStore.set).not.toHaveBeenCalled();
+      expect(settingsStore.save).not.toHaveBeenCalled();
     });
+  });
+
+  describe('checkProjects', () => {
+    it('should call projectService.getAll', async () => {
+      await healthCheckService.checkProjects();
+      expect(projectService.getAll).toHaveBeenCalled();
+    });
+  });
 });

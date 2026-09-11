@@ -12,7 +12,7 @@ const LOG_LEVEL_PRIORITY: Record<AppLogLevel, number> = {
 
 export function normalizeLogLevel(value: unknown): AppLogLevel {
   return typeof value === 'string' && APP_LOG_LEVELS.includes(value as AppLogLevel)
-    ? value as AppLogLevel
+    ? (value as AppLogLevel)
     : 'info';
 }
 

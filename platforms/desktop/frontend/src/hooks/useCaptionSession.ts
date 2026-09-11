@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  isAsrRequestConfigured,
+  resolveAsrTranscriptionRequest,
+} from '../services/asrConfigService';
 import { captionSessionRuntime } from '../services/captionSessionRuntime';
-import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from '../services/asrConfigService';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import type { AppConfig } from '../types/config';
 import { logger } from '../utils/logger';
@@ -9,10 +12,7 @@ interface CaptionSessionState {
   isInitializing: boolean;
 }
 
-export function useCaptionSession(
-  config: AppConfig,
-  isCaptionMode: boolean,
-): CaptionSessionState {
+export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): CaptionSessionState {
   const [isInitializing, setIsInitializing] = useState(false);
   const activeRef = useRef(isCaptionMode);
 
@@ -25,29 +25,36 @@ export function useCaptionSession(
     setIsInitializing(false);
   }, []);
 
-  const startCaptionSession = useCallback(async function startCaptionSession(): Promise<void> {
-    if (!isAsrRequestConfigured(resolveAsrTranscriptionRequest(getEffectiveConfigSnapshot(), 'caption'))) {
-      logger.warn('Cannot start caption: ASR is not configured.');
-      return;
-    }
+  const startCaptionSession = useCallback(
+    async function startCaptionSession(): Promise<void> {
+      if (
+        !isAsrRequestConfigured(
+          resolveAsrTranscriptionRequest(getEffectiveConfigSnapshot(), 'caption')
+        )
+      ) {
+        logger.warn('Cannot start caption: ASR is not configured.');
+        return;
+      }
 
-    try {
-      setIsInitializing(true);
-      await captionSessionRuntime.start(
-        config,
-        () => activeRef.current,
-        () => {
-          logger.info('[CaptionSession] Stream ended by user.');
-          void stopCaptionSession();
-        },
-      );
-    } catch (error) {
-      logger.error('[CaptionSession] Error starting session:', error);
-      void stopCaptionSession();
-    } finally {
-      setIsInitializing(false);
-    }
-  }, [config, stopCaptionSession]);
+      try {
+        setIsInitializing(true);
+        await captionSessionRuntime.start(
+          config,
+          () => activeRef.current,
+          () => {
+            logger.info('[CaptionSession] Stream ended by user.');
+            void stopCaptionSession();
+          }
+        );
+      } catch (error) {
+        logger.error('[CaptionSession] Error starting session:', error);
+        void stopCaptionSession();
+      } finally {
+        setIsInitializing(false);
+      }
+    },
+    [config, stopCaptionSession]
+  );
 
   useEffect(() => {
     queueMicrotask(() => {

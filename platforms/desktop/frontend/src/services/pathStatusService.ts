@@ -11,7 +11,9 @@ function createUnknownStatus(path: string, error?: string | null): RuntimePathSt
   };
 }
 
-export async function getPathStatusMap(paths: string[]): Promise<Record<string, RuntimePathStatus>> {
+export async function getPathStatusMap(
+  paths: string[]
+): Promise<Record<string, RuntimePathStatus>> {
   const normalizedPaths = paths
     .filter((path): path is string => typeof path === 'string')
     .map((path) => path.trim())
@@ -26,7 +28,7 @@ export async function getPathStatusMap(paths: string[]): Promise<Record<string, 
     const result = await getPathStatuses(uniquePaths);
 
     const pathStatusMap = Object.fromEntries(
-      uniquePaths.map((path) => [path, createUnknownStatus(path)]),
+      uniquePaths.map((path) => [path, createUnknownStatus(path)])
     ) as Record<string, RuntimePathStatus>;
 
     result.forEach((status) => {
@@ -47,7 +49,7 @@ export async function getPathStatusMap(paths: string[]): Promise<Record<string, 
     logger.error('[PathStatus] Failed to query runtime path statuses:', error);
 
     return Object.fromEntries(
-      uniquePaths.map((path) => [path, createUnknownStatus(path, errorMessage)]),
+      uniquePaths.map((path) => [path, createUnknownStatus(path, errorMessage)])
     ) as Record<string, RuntimePathStatus>;
   }
 }

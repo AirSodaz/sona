@@ -15,10 +15,10 @@ vi.mock('../historyService', () => ({
   },
 }));
 
-import { historyService } from '../historyService';
 import { openTranscriptSession, updateTranscriptSegment } from '../../stores/transcriptCoordinator';
-import { transcriptAutoSaveRuntime } from '../transcriptAutoSaveRuntime';
 import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
+import { historyService } from '../historyService';
+import { transcriptAutoSaveRuntime } from '../transcriptAutoSaveRuntime';
 
 describe('transcriptAutoSaveRuntime', () => {
   beforeEach(() => {
@@ -65,7 +65,7 @@ describe('transcriptAutoSaveRuntime', () => {
           id: 'seg-1',
           speaker: { id: 'speaker-1', label: 'Alice', kind: 'identified' },
         }),
-      ],
+      ]
     );
   });
 
@@ -74,7 +74,12 @@ describe('transcriptAutoSaveRuntime', () => {
       throw new Error('first save was not started');
     };
     vi.mocked(historyService.commitTranscriptEdit)
-      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          })
+      )
       .mockResolvedValue({ status: 'unchanged' });
     openTranscriptSession({
       sourceHistoryId: 'history-1',

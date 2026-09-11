@@ -1,29 +1,37 @@
-import { DEFAULT_PROJECT_PIPELINE, type ProjectCreateInput, type ProjectPipelineConfig, type ProjectRecord, type ProjectUpdateInput } from '../../types/project';
 import type { ProjectRecord as GeneratedProjectRecord } from '../../bindings';
-import type { TauriCommandArgs } from './contracts';
+import {
+  DEFAULT_PROJECT_PIPELINE,
+  type ProjectCreateInput,
+  type ProjectPipelineConfig,
+  type ProjectRecord,
+  type ProjectUpdateInput,
+} from '../../types/project';
 import { TauriCommand } from './commands';
+import type { TauriCommandArgs } from './contracts';
 import { invokeTauri } from './invoke';
 
 export type ProjectListRequest = TauriCommandArgs<typeof TauriCommand.project.list>;
 
 function normalizeProject(record: GeneratedProjectRecord): ProjectRecord {
-  const pipeline: ProjectPipelineConfig | undefined = record.pipeline ? {
-    ...DEFAULT_PROJECT_PIPELINE,
-    enabled: record.pipeline.enabled ?? false,
-    autoPolish: record.pipeline.autoPolish ?? false,
-    polishPresetId: record.pipeline.polishPresetId ?? undefined,
-    polishPromptOverride: record.pipeline.polishPromptOverride ?? undefined,
-    autoTranslate: record.pipeline.autoTranslate ?? false,
-    targetLanguage: record.pipeline.targetLanguage ?? undefined,
-    autoSummary: record.pipeline.autoSummary ?? false,
-    summaryTemplateId: record.pipeline.summaryTemplateId ?? undefined,
-    hotwordSetIds: record.pipeline.hotwordSetIds ?? [],
-    replacementSetIds: record.pipeline.replacementSetIds ?? [],
-    autoExport: record.pipeline.autoExport ?? false,
-    exportFormat: record.pipeline.exportFormat as ProjectPipelineConfig['exportFormat'],
-    exportDirectory: record.pipeline.exportDirectory ?? undefined,
-    exportFileNamePrefix: record.pipeline.exportFileNamePrefix ?? undefined,
-  } : undefined;
+  const pipeline: ProjectPipelineConfig | undefined = record.pipeline
+    ? {
+        ...DEFAULT_PROJECT_PIPELINE,
+        enabled: record.pipeline.enabled ?? false,
+        autoPolish: record.pipeline.autoPolish ?? false,
+        polishPresetId: record.pipeline.polishPresetId ?? undefined,
+        polishPromptOverride: record.pipeline.polishPromptOverride ?? undefined,
+        autoTranslate: record.pipeline.autoTranslate ?? false,
+        targetLanguage: record.pipeline.targetLanguage ?? undefined,
+        autoSummary: record.pipeline.autoSummary ?? false,
+        summaryTemplateId: record.pipeline.summaryTemplateId ?? undefined,
+        hotwordSetIds: record.pipeline.hotwordSetIds ?? [],
+        replacementSetIds: record.pipeline.replacementSetIds ?? [],
+        autoExport: record.pipeline.autoExport ?? false,
+        exportFormat: record.pipeline.exportFormat as ProjectPipelineConfig['exportFormat'],
+        exportDirectory: record.pipeline.exportDirectory ?? undefined,
+        exportFileNamePrefix: record.pipeline.exportFileNamePrefix ?? undefined,
+      }
+    : undefined;
   return {
     id: record.id,
     name: record.name,
@@ -47,12 +55,18 @@ export async function projectCreate(input: ProjectCreateInput): Promise<ProjectR
   return normalizeProject(await invokeTauri(TauriCommand.project.create, { input }));
 }
 
-export async function projectUpdate(projectId: string, updates: ProjectUpdateInput): Promise<ProjectRecord | null> {
+export async function projectUpdate(
+  projectId: string,
+  updates: ProjectUpdateInput
+): Promise<ProjectRecord | null> {
   const record = await invokeTauri(TauriCommand.project.update, { projectId, updates });
   return record ? normalizeProject(record) : null;
 }
 
-export async function projectDelete(projectId: string, cascadeAction: 'moveToInbox' | 'deleteItems' = 'moveToInbox'): Promise<void> {
+export async function projectDelete(
+  projectId: string,
+  cascadeAction: 'moveToInbox' | 'deleteItems' = 'moveToInbox'
+): Promise<void> {
   await invokeTauri(TauriCommand.project.delete, { projectId, cascadeAction });
 }
 

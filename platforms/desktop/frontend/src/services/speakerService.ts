@@ -1,19 +1,13 @@
 import type { AppConfig, AsrScenario } from '../types/config';
-import type { TranscriptSegment } from '../types/transcript';
-import type {
-  SpeakerProcessingConfig,
-  SpeakerProfileSample,
-} from '../types/speaker';
+import type { SpeakerProcessingConfig, SpeakerProfileSample } from '../types/speaker';
 import { normalizeSpeakerProfiles } from '../types/speakerNormalization';
+import type { TranscriptSegment } from '../types/transcript';
 import {
   getScenarioSpeakerEmbeddingModelPath,
   getScenarioSpeakerSegmentationModelPath,
   type ScenarioModelPathConfig,
 } from '../utils/scenarioModels';
-import {
-  annotateSpeakerSegmentsFromFile,
-  importSpeakerProfileSample,
-} from './tauri/speaker';
+import { annotateSpeakerSegmentsFromFile, importSpeakerProfileSample } from './tauri/speaker';
 
 type SpeakerConfigInput = Pick<AppConfig, 'speakerProfiles'> & Partial<ScenarioModelPathConfig>;
 
@@ -27,12 +21,15 @@ export class SpeakerService {
 
   isConfigured(config: SpeakerConfigInput, scenario: AsrScenario): boolean {
     return Boolean(
-      getScenarioSpeakerSegmentationModelPath(config, scenario)
-      && getScenarioSpeakerEmbeddingModelPath(config, scenario),
+      getScenarioSpeakerSegmentationModelPath(config, scenario) &&
+        getScenarioSpeakerEmbeddingModelPath(config, scenario)
     );
   }
 
-  buildProcessingConfig(config: SpeakerConfigInput, scenario: AsrScenario): SpeakerProcessingConfig | null {
+  buildProcessingConfig(
+    config: SpeakerConfigInput,
+    scenario: AsrScenario
+  ): SpeakerProcessingConfig | null {
     const segmentationModelPath = getScenarioSpeakerSegmentationModelPath(config, scenario);
     const embeddingModelPath = getScenarioSpeakerEmbeddingModelPath(config, scenario);
     if (!segmentationModelPath || !embeddingModelPath) {
@@ -50,7 +47,7 @@ export class SpeakerService {
     filePath: string,
     segments: TranscriptSegment[],
     config: SpeakerConfigInput,
-    scenario: AsrScenario = 'live',
+    scenario: AsrScenario = 'live'
   ): Promise<TranscriptSegment[]> {
     if (!filePath || segments.length === 0) {
       return segments;
@@ -67,7 +64,7 @@ export class SpeakerService {
   async importProfileSample(
     profileId: string,
     sourcePath: string,
-    sourceName?: string,
+    sourceName?: string
   ): Promise<SpeakerProfileSample> {
     return this.ports.importSpeakerProfileSample(profileId, sourcePath, sourceName);
   }

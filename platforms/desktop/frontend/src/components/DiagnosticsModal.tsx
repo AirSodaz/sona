@@ -1,5 +1,3 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -10,8 +8,12 @@ import {
   TriangleAlert,
   XCircle,
 } from 'lucide-react';
-import { diagnosticsService } from '../services/diagnosticsService';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { requestMicrophonePermission } from '../services/audioDeviceService';
+import { diagnosticsService } from '../services/diagnosticsService';
+import { openLogFolder } from '../services/tauri/app';
 import { voiceTypingService } from '../services/voiceTypingService';
 import type {
   DiagnosticAction,
@@ -22,7 +24,6 @@ import type {
 } from '../types/diagnostics';
 import type { SettingsTab } from '../types/settings';
 import { normalizeError } from '../utils/errorUtils';
-import { openLogFolder } from '../services/tauri/app';
 import { PanelModal } from './PanelModal';
 import './DiagnosticsModal.css';
 
@@ -35,7 +36,10 @@ interface DiagnosticsModalProps {
   onBack?: () => void;
 }
 
-function formatScannedAt(scannedAt: string, t: (key: string, options?: Record<string, unknown>) => string): string {
+function formatScannedAt(
+  scannedAt: string,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
   if (!scannedAt) {
     return t('settings.diagnostics.scanned_unknown', {
       defaultValue: 'Scan time unavailable',
@@ -67,7 +71,7 @@ function getStatusClass(status: DiagnosticStatus): string {
 
 function getStatusLabel(
   status: DiagnosticStatus,
-  t: (key: string, options?: Record<string, unknown>) => string,
+  t: (key: string, options?: Record<string, unknown>) => string
 ): string {
   return t(`settings.diagnostics.status_${status}`, {
     defaultValue: status,
@@ -102,7 +106,9 @@ function DiagnosticCard({
           onClick={() => void onAction(item.action!)}
           disabled={busyAction === item.action.kind}
         >
-          {busyAction === item.action.kind ? <Loader2 size={14} className="queue-icon-spin" /> : null}
+          {busyAction === item.action.kind ? (
+            <Loader2 size={14} className="queue-icon-spin" />
+          ) : null}
           {item.action.label}
         </button>
       ) : null}
@@ -141,7 +147,9 @@ function DiagnosticCheckRow({
           onClick={() => void onAction(check.action!)}
           disabled={busyAction === check.action.kind}
         >
-          {busyAction === check.action.kind ? <Loader2 size={14} className="queue-icon-spin" /> : null}
+          {busyAction === check.action.kind ? (
+            <Loader2 size={14} className="queue-icon-spin" />
+          ) : null}
           {check.action.label}
         </button>
       ) : null}
@@ -186,44 +194,49 @@ export function DiagnosticsModal({
     });
   }, [isOpen, loadSnapshot]);
 
-  const handleAction = useCallback(async (action: DiagnosticAction) => {
-    setBusyAction(action.kind);
-    try {
-      switch (action.kind) {
-        case 'open_settings':
-          onOpenSettingsTab(action.settingsTab);
-          return;
-        case 'run_first_run_setup':
-          onRunFirstRunSetup();
-          return;
-        case 'open_log_folder':
-          await openLogFolder();
-          break;
-        case 'request_microphone_permission':
-          await requestMicrophonePermission();
-          break;
-        case 'retry_voice_typing_warmup':
-          await voiceTypingService.retryWarmup();
-          break;
-        default:
-          break;
+  const handleAction = useCallback(
+    async (action: DiagnosticAction) => {
+      setBusyAction(action.kind);
+      try {
+        switch (action.kind) {
+          case 'open_settings':
+            onOpenSettingsTab(action.settingsTab);
+            return;
+          case 'run_first_run_setup':
+            onRunFirstRunSetup();
+            return;
+          case 'open_log_folder':
+            await openLogFolder();
+            break;
+          case 'request_microphone_permission':
+            await requestMicrophonePermission();
+            break;
+          case 'retry_voice_typing_warmup':
+            await voiceTypingService.retryWarmup();
+            break;
+          default:
+            break;
+        }
+
+        await loadSnapshot();
+      } catch (error) {
+        setLoadError(normalizeError(error).message);
+      } finally {
+        setBusyAction(null);
       }
+    },
+    [loadSnapshot, onOpenSettingsTab, onRunFirstRunSetup]
+  );
 
-      await loadSnapshot();
-    } catch (error) {
-      setLoadError(normalizeError(error).message);
-    } finally {
-      setBusyAction(null);
-    }
-  }, [loadSnapshot, onOpenSettingsTab, onRunFirstRunSetup]);
-
-  const scannedAtLabel = useMemo(() => (
-    snapshot
-      ? formatScannedAt(snapshot.scannedAt, t)
-      : t('settings.diagnostics.scanned_unknown', {
-          defaultValue: 'Scan time unavailable',
-        })
-  ), [snapshot, t]);
+  const scannedAtLabel = useMemo(
+    () =>
+      snapshot
+        ? formatScannedAt(snapshot.scannedAt, t)
+        : t('settings.diagnostics.scanned_unknown', {
+            defaultValue: 'Scan time unavailable',
+          }),
+    [snapshot, t]
+  );
 
   if (!isOpen) {
     return null;
@@ -240,21 +253,22 @@ export function DiagnosticsModal({
       backLabel={t('common.back', { defaultValue: 'Back' })}
       className="diagnostics-modal"
       overlayClassName="diagnostics-overlay"
-      badge={(
+      badge={
         <>
           <Stethoscope size={16} />
           <span>{t('settings.diagnostics.badge', { defaultValue: 'Diagnostics' })}</span>
         </>
-      )}
-      title={(
+      }
+      title={
         <h2 id="diagnostics-title">
           {t('settings.diagnostics.title', { defaultValue: 'Model & Environment Diagnostics' })}
         </h2>
-      )}
+      }
       description={t('settings.diagnostics.description', {
-        defaultValue: 'Review the local transcription path, packaged runtime dependencies, and the clearest next fix when something is off.',
+        defaultValue:
+          'Review the local transcription path, packaged runtime dependencies, and the clearest next fix when something is off.',
       })}
-      headerActions={(
+      headerActions={
         <>
           <button
             type="button"
@@ -262,46 +276,63 @@ export function DiagnosticsModal({
             onClick={() => void loadSnapshot()}
             disabled={isLoading}
           >
-            {isLoading ? <Loader2 size={14} className="queue-icon-spin" /> : <RefreshCw size={14} />}
+            {isLoading ? (
+              <Loader2 size={14} className="queue-icon-spin" />
+            ) : (
+              <RefreshCw size={14} />
+            )}
             {t('settings.diagnostics.refresh', { defaultValue: 'Refresh' })}
           </button>
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => void handleAction({
-              kind: 'open_log_folder',
-              label: t('settings.about_open_logs', { defaultValue: 'Open Log Folder' }),
-            })}
+            onClick={() =>
+              void handleAction({
+                kind: 'open_log_folder',
+                label: t('settings.about_open_logs', { defaultValue: 'Open Log Folder' }),
+              })
+            }
           >
             {t('settings.about_open_logs', { defaultValue: 'Open Log Folder' })}
           </button>
         </>
-      )}
-      meta={(
+      }
+      meta={
         <>
           <span className="panel-modal-meta-label diagnostics-meta-label">
             {t('settings.diagnostics.last_scanned', { defaultValue: 'Last scanned' })}
           </span>
           <span>{scannedAtLabel}</span>
         </>
-      )}
-      errorBanner={loadError ? (
-        <div className="diagnostics-error-banner" role="alert">
-          <strong>{t('settings.diagnostics.error_title', { defaultValue: 'Diagnostics unavailable' })}</strong>
-          <span>{loadError}</span>
-        </div>
-      ) : null}
+      }
+      errorBanner={
+        loadError ? (
+          <div className="diagnostics-error-banner" role="alert">
+            <strong>
+              {t('settings.diagnostics.error_title', { defaultValue: 'Diagnostics unavailable' })}
+            </strong>
+            <span>{loadError}</span>
+          </div>
+        ) : null
+      }
     >
       {isLoading && !snapshot ? (
         <div className="diagnostics-loading-state">
           <Loader2 size={18} className="queue-icon-spin" />
-          <span>{t('settings.diagnostics.loading', { defaultValue: 'Scanning your local environment...' })}</span>
+          <span>
+            {t('settings.diagnostics.loading', {
+              defaultValue: 'Scanning your local environment...',
+            })}
+          </span>
         </div>
       ) : null}
 
       {snapshot ? (
         <>
-          <section className="diagnostics-overview-grid" aria-label={t('settings.diagnostics.overview', { defaultValue: 'Overview' })}>
+          <section
+            className="diagnostics-overview-grid"
+            aria-label={t('settings.diagnostics.overview', { defaultValue: 'Overview' })}
+          >
             {snapshot.overview.map((item) => (
               <DiagnosticCard
                 key={item.id}
@@ -316,9 +347,13 @@ export function DiagnosticsModal({
           {snapshot.sections.map((section) => (
             <section className="panel-modal-section diagnostics-section" key={section.id}>
               <div className="panel-modal-section-header diagnostics-section-header">
-                <div className="panel-modal-section-title diagnostics-section-title">{section.title}</div>
+                <div className="panel-modal-section-title diagnostics-section-title">
+                  {section.title}
+                </div>
                 {section.description ? (
-                  <div className="panel-modal-section-description diagnostics-section-description">{section.description}</div>
+                  <div className="panel-modal-section-description diagnostics-section-description">
+                    {section.description}
+                  </div>
                 ) : null}
               </div>
               <div className="panel-modal-section-body diagnostics-section-body">

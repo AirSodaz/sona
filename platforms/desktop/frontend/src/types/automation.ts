@@ -1,7 +1,12 @@
 import type { ExportFormat, ExportMode } from '../utils/exportFormats';
+
 export type { AutomationRuleValidationResult } from '../bindings';
 
-export type AutomationPresetId = 'meeting_notes' | 'lecture_notes' | 'bilingual_subtitles' | 'custom';
+export type AutomationPresetId =
+  | 'meeting_notes'
+  | 'lecture_notes'
+  | 'bilingual_subtitles'
+  | 'custom';
 
 export type BuiltInAutomationPresetId = Exclude<AutomationPresetId, 'custom'>;
 

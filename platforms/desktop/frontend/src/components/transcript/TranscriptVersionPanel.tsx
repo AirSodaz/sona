@@ -1,20 +1,9 @@
-import React from 'react';
+import { CheckSquare, Clock3, FileDiff, Loader2, RotateCcw, Square, Undo2 } from 'lucide-react';
+import type React from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  CheckSquare,
-  Clock3,
-  FileDiff,
-  Loader2,
-  RotateCcw,
-  Square,
-  Undo2,
-} from 'lucide-react';
 import { useVersionPanel } from '../../hooks/useVersionPanel';
 import type { TranscriptSegment } from '../../types/transcript';
-import type {
-  TranscriptDiffRow,
-  TranscriptSnapshotReason,
-} from '../../types/transcriptSnapshot';
+import type { TranscriptDiffRow, TranscriptSnapshotReason } from '../../types/transcriptSnapshot';
 import { PanelModal } from '../PanelModal';
 import './TranscriptVersionPanel.css';
 
@@ -45,14 +34,14 @@ function getSegmentText(segment: TranscriptSegment | undefined): string {
 
 function getReasonLabel(
   reason: TranscriptSnapshotReason,
-  t: (key: string, options?: Record<string, unknown>) => string,
+  t: (key: string, options?: Record<string, unknown>) => string
 ): string {
   return t(`versions.reason.${reason}`);
 }
 
 function getStatusLabel(
   status: TranscriptDiffRow['status'],
-  t: (key: string, options?: Record<string, unknown>) => string,
+  t: (key: string, options?: Record<string, unknown>) => string
 ): string {
   return t(`versions.diff.${status}`);
 }
@@ -63,7 +52,7 @@ export function TranscriptVersionPanel({
   onClose,
 }: TranscriptVersionPanelProps): React.JSX.Element | null {
   const { t } = useTranslation();
-  
+
   const {
     snapshots,
     selectedSnapshotId,
@@ -88,7 +77,8 @@ export function TranscriptVersionPanel({
     return null;
   }
 
-  const allChangedRowsSelected = changedRows.length > 0 && selectedRowIds.size === changedRows.length;
+  const allChangedRowsSelected =
+    changedRows.length > 0 && selectedRowIds.size === changedRows.length;
 
   return (
     <PanelModal
@@ -103,15 +93,15 @@ export function TranscriptVersionPanel({
       toolbarClassName="transcript-version-actions"
       metaClassName="transcript-version-meta-row"
       contentClassName="transcript-version-content"
-      badge={(
+      badge={
         <>
           <FileDiff size={16} />
           <span>{t('versions.badge')}</span>
         </>
-      )}
+      }
       title={<h2 id="transcript-version-title">{t('versions.title')}</h2>}
       description={t('versions.description')}
-      headerActions={(
+      headerActions={
         <>
           <button
             type="button"
@@ -132,8 +122,8 @@ export function TranscriptVersionPanel({
             {t('versions.restore_all')}
           </button>
         </>
-      )}
-      meta={(
+      }
+      meta={
         <>
           <span className="panel-modal-meta-label">{t('versions.snapshot_count')}</span>
           <span>{snapshots.length}</span>
@@ -144,12 +134,14 @@ export function TranscriptVersionPanel({
             </>
           ) : null}
         </>
-      )}
-      errorBanner={error ? (
-        <div className="transcript-version-error" role="alert">
-          {error}
-        </div>
-      ) : null}
+      }
+      errorBanner={
+        error ? (
+          <div className="transcript-version-error" role="alert">
+            {error}
+          </div>
+        ) : null
+      }
     >
       <aside className="transcript-version-sidebar" aria-label={t('versions.list_label')}>
         {isLoading ? (
@@ -203,11 +195,11 @@ export function TranscriptVersionPanel({
                   disabled={isBusy || isDiffLoading || changedRows.length === 0}
                 >
                   {allChangedRowsSelected ? <CheckSquare size={14} /> : <Square size={14} />}
-                  {allChangedRowsSelected ? t('versions.clear_selection') : t('versions.select_all_changes')}
+                  {allChangedRowsSelected
+                    ? t('versions.clear_selection')
+                    : t('versions.select_all_changes')}
                 </button>
-                <span>
-                  {t('versions.selected_count', { count: selectedRowIds.size })}
-                </span>
+                <span>{t('versions.selected_count', { count: selectedRowIds.size })}</span>
               </div>
 
               <div className="transcript-version-diff-list">
@@ -239,7 +231,9 @@ export function TranscriptVersionPanel({
                       <div className="transcript-version-diff-columns">
                         <div className="transcript-version-diff-cell">
                           <span>{t('versions.before')}</span>
-                          <p>{getSegmentText(row.snapshotSegment) || t('versions.empty_segment')}</p>
+                          <p>
+                            {getSegmentText(row.snapshotSegment) || t('versions.empty_segment')}
+                          </p>
                         </div>
                         <div className="transcript-version-diff-cell">
                           <span>{t('versions.after')}</span>

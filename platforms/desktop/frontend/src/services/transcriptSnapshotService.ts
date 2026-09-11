@@ -22,39 +22,52 @@ export class TranscriptSnapshotService {
 
   private cloneSegments = (segments: TranscriptSegment[]): TranscriptSegment[] => {
     return JSON.parse(JSON.stringify(segments)) as TranscriptSegment[];
-  }
+  };
 
-  private resolveCurrentSnapshotTarget = (): { historyId: string | null; segments: TranscriptSegment[] } => {
+  private resolveCurrentSnapshotTarget = (): {
+    historyId: string | null;
+    segments: TranscriptSegment[];
+  } => {
     const session = this.ports.useTranscriptSessionStore.getState();
     return {
       historyId: session.sourceHistoryId,
       segments: session.segments,
     };
-  }
+  };
 
   private canSnapshotHistoryId = (historyId: string | null | undefined): historyId is string => {
     return Boolean(historyId && historyId !== 'current');
-  }
+  };
 
   private isDraftHistoryItem = (historyId: string): boolean => {
-    const item = this.ports.useHistoryStore.getState().items.find((candidate) => candidate.id === historyId);
+    const item = this.ports.useHistoryStore
+      .getState()
+      .items.find((candidate) => candidate.id === historyId);
     return item ? isHistoryItemDraft(item) : false;
-  }
+  };
 
   createSnapshot = async (
     historyId: string,
     reason: TranscriptSnapshotReason,
-    segments: TranscriptSegment[],
+    segments: TranscriptSegment[]
   ): Promise<TranscriptSnapshotMetadata | null> => {
-    if (!this.canSnapshotHistoryId(historyId) || this.isDraftHistoryItem(historyId) || segments.length === 0) {
+    if (
+      !this.canSnapshotHistoryId(historyId) ||
+      this.isDraftHistoryItem(historyId) ||
+      segments.length === 0
+    ) {
       return null;
     }
 
-    return this.ports.historyService.createTranscriptSnapshot(historyId, reason, this.cloneSegments(segments));
-  }
+    return this.ports.historyService.createTranscriptSnapshot(
+      historyId,
+      reason,
+      this.cloneSegments(segments)
+    );
+  };
 
   createSnapshotForCurrentTranscript = async (
-    reason: TranscriptSnapshotReason,
+    reason: TranscriptSnapshotReason
   ): Promise<TranscriptSnapshotMetadata | null> => {
     const { historyId, segments } = this.resolveCurrentSnapshotTarget();
     if (!this.canSnapshotHistoryId(historyId)) {
@@ -62,7 +75,7 @@ export class TranscriptSnapshotService {
     }
 
     return this.createSnapshot(historyId, reason, segments);
-  }
+  };
 
   listSnapshots = async (historyId: string): Promise<TranscriptSnapshotMetadata[]> => {
     if (!this.canSnapshotHistoryId(historyId)) {
@@ -70,35 +83,37 @@ export class TranscriptSnapshotService {
     }
 
     return this.ports.historyService.listTranscriptSnapshots(historyId);
-  }
+  };
 
   loadSnapshot = async (
     historyId: string,
-    snapshotId: string,
+    snapshotId: string
   ): Promise<TranscriptSnapshotRecord | null> => {
     if (!this.canSnapshotHistoryId(historyId)) {
       return null;
     }
 
     return this.ports.historyService.loadTranscriptSnapshot(historyId, snapshotId);
-  }
+  };
 
   buildDiff = async (
     snapshotSegments: TranscriptSegment[],
-    currentSegments: TranscriptSegment[],
+    currentSegments: TranscriptSegment[]
   ): Promise<TranscriptDiffResult> => {
     return this.ports.historyService.buildTranscriptDiff(snapshotSegments, currentSegments);
-  }
+  };
 
   restoreDiffRows = async (
     rows: TranscriptDiffRow[],
-    selectedRowIds: Iterable<string>,
+    selectedRowIds: Iterable<string>
   ): Promise<TranscriptSegment[]> => {
     return this.ports.historyService.restoreTranscriptDiffRows(rows, selectedRowIds);
-  }
+  };
 }
 
-export function createTranscriptSnapshotService(ports: TranscriptSnapshotServicePorts): TranscriptSnapshotService {
+export function createTranscriptSnapshotService(
+  ports: TranscriptSnapshotServicePorts
+): TranscriptSnapshotService {
   return new TranscriptSnapshotService(ports);
 }
 

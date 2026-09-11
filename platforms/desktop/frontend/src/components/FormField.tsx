@@ -23,20 +23,16 @@ export function FormField({
 }: FormFieldProps): React.JSX.Element {
   const isHorizontal = layout === 'horizontal';
   const labelId = id && label ? `${id}-label` : undefined;
-  const shouldLabelChild = (
-    labelId
-    && React.isValidElement(children)
-    && children.type !== React.Fragment
-    && !(children.props as Record<string, unknown>)['aria-label']
-    && !(children.props as Record<string, unknown>)['aria-labelledby']
-  );
+  const shouldLabelChild =
+    labelId &&
+    React.isValidElement(children) &&
+    children.type !== React.Fragment &&
+    !(children.props as Record<string, unknown>)['aria-label'] &&
+    !(children.props as Record<string, unknown>)['aria-labelledby'];
   const control = shouldLabelChild
-    ? React.cloneElement(
-      children as React.ReactElement<Record<string, unknown>>,
-      {
+    ? React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
         'aria-labelledby': labelId,
-      },
-    )
+      })
     : children;
 
   return (
@@ -50,25 +46,20 @@ export function FormField({
               {required && <span className="shared-form-field-required">*</span>}
             </label>
           )}
-          {description && (
-            <span className="shared-form-field-desc">
-              {description}
-            </span>
-          )}
+          {description && <span className="shared-form-field-desc">{description}</span>}
         </div>
       )}
 
       {/* Form Input / Component slot */}
-      <div className="shared-form-field-control" style={isHorizontal ? { flexShrink: 0 } : undefined}>
+      <div
+        className="shared-form-field-control"
+        style={isHorizontal ? { flexShrink: 0 } : undefined}
+      >
         {control}
       </div>
 
       {/* Validation Error Message */}
-      {error && (
-        <div className="shared-form-field-error">
-          {error}
-        </div>
-      )}
+      {error && <div className="shared-form-field-error">{error}</div>}
     </div>
   );
 }

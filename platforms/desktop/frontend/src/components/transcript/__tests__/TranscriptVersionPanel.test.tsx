@@ -1,18 +1,18 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { TranscriptVersionPanel } from '../TranscriptVersionPanel';
 import { transcriptSnapshotService } from '../../../services/transcriptSnapshotService';
 import { useHistoryStore } from '../../../stores/historyStore';
 import {
   resetTranscriptStores,
   useTranscriptStore,
 } from '../../../test-utils/transcriptStoreTestUtils';
+import { TranscriptVersionPanel } from '../TranscriptVersionPanel';
 
 const confirmMock = vi.fn();
 const showErrorMock = vi.fn();
-const tMock = vi.fn((key: string, options?: Record<string, unknown>) => (
+const tMock = vi.fn((key: string, options?: Record<string, unknown>) =>
   typeof options?.count === 'number' ? `${key}:${options.count}` : key
-));
+);
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -31,10 +31,13 @@ vi.mock('../../../services/transcriptSnapshotService', () => ({
 }));
 
 vi.mock('../../../stores/dialogStore', () => ({
-  useDialogStore: (selector: (state: { confirm: typeof confirmMock; showError: typeof showErrorMock }) => unknown) => selector({
-    confirm: confirmMock,
-    showError: showErrorMock,
-  }),
+  useDialogStore: (
+    selector: (state: { confirm: typeof confirmMock; showError: typeof showErrorMock }) => unknown
+  ) =>
+    selector({
+      confirm: confirmMock,
+      showError: showErrorMock,
+    }),
 }));
 
 describe('TranscriptVersionPanel', () => {
@@ -45,7 +48,9 @@ describe('TranscriptVersionPanel', () => {
     vi.mocked(transcriptSnapshotService.createSnapshot).mockResolvedValue(null);
     vi.mocked(transcriptSnapshotService.buildDiff).mockResolvedValue({ rows: [], changedCount: 0 });
     vi.mocked(transcriptSnapshotService.restoreDiffRows).mockResolvedValue([]);
-    useHistoryStore.setState({ updateTranscript: vi.fn().mockResolvedValue(undefined) } as Partial<ReturnType<typeof useHistoryStore.getState>>);
+    useHistoryStore.setState({ updateTranscript: vi.fn().mockResolvedValue(undefined) } as Partial<
+      ReturnType<typeof useHistoryStore.getState>
+    >);
   });
 
   it('renders an empty snapshot state', async () => {
@@ -62,7 +67,9 @@ describe('TranscriptVersionPanel', () => {
     const updateTranscript = vi.fn().mockResolvedValue(undefined);
     const currentSegment = { id: 'seg-1', start: 0, end: 1, text: 'new', isFinal: true };
     const snapshotSegment = { id: 'seg-1', start: 0, end: 1, text: 'old', isFinal: true };
-    useHistoryStore.setState({ updateTranscript } as Partial<ReturnType<typeof useHistoryStore.getState>>);
+    useHistoryStore.setState({ updateTranscript } as Partial<
+      ReturnType<typeof useHistoryStore.getState>
+    >);
     useTranscriptStore.setState({
       sourceHistoryId: 'history-a',
       segments: [currentSegment],
@@ -88,14 +95,16 @@ describe('TranscriptVersionPanel', () => {
     });
     vi.mocked(transcriptSnapshotService.buildDiff).mockResolvedValue({
       changedCount: 1,
-      rows: [{
-        id: 'diff-0-0',
-        status: 'modified',
-        snapshotSegment,
-        currentSegment,
-        snapshotIndex: 0,
-        currentIndex: 0,
-      }],
+      rows: [
+        {
+          id: 'diff-0-0',
+          status: 'modified',
+          snapshotSegment,
+          currentSegment,
+          snapshotIndex: 0,
+          currentIndex: 0,
+        },
+      ],
     });
     vi.mocked(transcriptSnapshotService.restoreDiffRows).mockResolvedValue([snapshotSegment]);
 
@@ -115,9 +124,10 @@ describe('TranscriptVersionPanel', () => {
     expect(transcriptSnapshotService.createSnapshot).toHaveBeenCalledWith('history-a', 'restore', [
       expect.objectContaining({ text: 'new' }),
     ]);
-    expect(transcriptSnapshotService.restoreDiffRows).toHaveBeenCalledWith([
-      expect.objectContaining({ id: 'diff-0-0', status: 'modified' }),
-    ], expect.any(Set));
+    expect(transcriptSnapshotService.restoreDiffRows).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: 'diff-0-0', status: 'modified' })],
+      expect.any(Set)
+    );
     expect(updateTranscript).toHaveBeenCalledWith('history-a', [
       expect.objectContaining({ text: 'old' }),
     ]);

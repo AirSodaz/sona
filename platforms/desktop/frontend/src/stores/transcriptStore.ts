@@ -1,11 +1,34 @@
-import { create, type StateCreator } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
-import type { TranscriptSegment, TranscriptUpdate, AppMode, ProcessingStatus, TranscriptSummaryState, HistorySummaryPayload } from '../types/transcript';
+import { create, type StateCreator } from 'zustand';
 import { areSpeakerTagsEqual } from '../types/speakerNormalization';
-import { normalizeTranscriptSegment, normalizeTranscriptSegments, normalizeTranscriptUpdate } from '../utils/transcriptTiming';
-import { findSegmentAndIndexForTime, stripHtmlTags, performSegmentSplit } from '../utils/segmentUtils';
+import type {
+  AppMode,
+  HistorySummaryPayload,
+  ProcessingStatus,
+  TranscriptSegment,
+  TranscriptSummaryState,
+  TranscriptUpdate,
+} from '../types/transcript';
+import {
+  findSegmentAndIndexForTime,
+  performSegmentSplit,
+  stripHtmlTags,
+} from '../utils/segmentUtils';
+import {
+  normalizeTranscriptSegment,
+  normalizeTranscriptSegments,
+  normalizeTranscriptUpdate,
+} from '../utils/transcriptTiming';
 
-import { createDefaultSummaryState, DEFAULT_LLM_STATE, type LlmState, type AutoSaveStatus, type AutoSaveState, rekeyCurrentSummaryState as rekeyCurrentSummaryStateEntry, resolveTranscriptHistoryKey } from './transcriptSidecarState';
+import {
+  type AutoSaveState,
+  type AutoSaveStatus,
+  createDefaultSummaryState,
+  DEFAULT_LLM_STATE,
+  type LlmState,
+  rekeyCurrentSummaryState as rekeyCurrentSummaryStateEntry,
+  resolveTranscriptHistoryKey,
+} from './transcriptSidecarState';
 
 export interface SessionData {
   // Session fields
@@ -66,12 +89,32 @@ export interface TranscriptStore {
   // --- Actions ---
   // Coordinator / Session Pointers
   setRecordingSessionId: (id: string | null) => void;
-  openSession: (args: string | { segments: TranscriptSegment[], sourceHistoryId: string | null, title?: string | null, icon?: string | null, audioUrl?: string | null }) => void;
-  loadTranscriptSession: (segments: TranscriptSegment[], sourceHistoryId: string | null, title?: string | null, icon?: string | null) => void;
-  clearActiveTranscriptSession: (options?: { clearAudio?: boolean, title?: string | null }) => void;
+  openSession: (
+    args:
+      | string
+      | {
+          segments: TranscriptSegment[];
+          sourceHistoryId: string | null;
+          title?: string | null;
+          icon?: string | null;
+          audioUrl?: string | null;
+        }
+  ) => void;
+  loadTranscriptSession: (
+    segments: TranscriptSegment[],
+    sourceHistoryId: string | null,
+    title?: string | null,
+    icon?: string | null
+  ) => void;
+  clearActiveTranscriptSession: (options?: { clearAudio?: boolean; title?: string | null }) => void;
   clearTranscriptSegments: () => void;
   clearSegments: () => void;
-  syncSavedRecordingMeta: (title: string, historyId: string, icon: string | null | undefined, audioUrl?: string | null) => void;
+  syncSavedRecordingMeta: (
+    title: string,
+    historyId: string,
+    icon: string | null | undefined,
+    audioUrl?: string | null
+  ) => void;
 
   // Runtime
   setMode: (mode: AppMode) => void;
@@ -95,7 +138,11 @@ export interface TranscriptStore {
   splitTranscriptSegment: (id: string, leftText: string, rightText: string) => string | null;
   finalizeLastSegment: () => void;
   applyTranscriptUpdate: (update: TranscriptUpdate, activeSegmentId?: string | null) => void;
-  applyTranscriptUpdateToSession: (sessionId: string, update: TranscriptUpdate, activeSegmentId?: string | null) => void;
+  applyTranscriptUpdateToSession: (
+    sessionId: string,
+    update: TranscriptUpdate,
+    activeSegmentId?: string | null
+  ) => void;
   upsertTranscriptSegmentAndSetActive: (segment: TranscriptSegment) => void;
   setEditingSegmentId: (id: string | null) => void;
   addAligningSegmentId: (id: string) => void;
@@ -132,14 +179,17 @@ type StoreSet = Parameters<StateCreator<TranscriptStore>>[0];
 type StoreGet = Parameters<StateCreator<TranscriptStore>>[1];
 
 // Helper to mutate active session
-function updateActiveSession(set: StoreSet, updater: (session: SessionData) => Partial<SessionData>) {
+function updateActiveSession(
+  set: StoreSet,
+  updater: (session: SessionData) => Partial<SessionData>
+) {
   set((state: TranscriptStore) => {
     const session = state.sessions[state.activeSessionId] || DEFAULT_SESSION_DATA;
     return {
       sessions: {
         ...state.sessions,
-        [state.activeSessionId]: { ...session, ...updater(session) }
-      }
+        [state.activeSessionId]: { ...session, ...updater(session) },
+      },
     };
   });
 }
@@ -149,7 +199,10 @@ function resolveHistoryKey(historyId: string | undefined, get: StoreGet): string
   return resolveTranscriptHistoryKey(historyId, activeSession.sourceHistoryId);
 }
 
-function calculateSegmentUpdate(segments: TranscriptSegment[], segment: TranscriptSegment): { segments: TranscriptSegment[]; index: number } {
+function calculateSegmentUpdate(
+  segments: TranscriptSegment[],
+  segment: TranscriptSegment
+): { segments: TranscriptSegment[]; index: number } {
   const length = segments.length;
   if (length > 0) {
     const lastIndex = length - 1;
@@ -178,7 +231,7 @@ function calculateSegmentUpdate(segments: TranscriptSegment[], segment: Transcri
 export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   activeSessionId: 'default',
   recordingSessionId: null,
-  sessions: { 'default': { ...DEFAULT_SESSION_DATA } },
+  sessions: { default: { ...DEFAULT_SESSION_DATA } },
 
   mode: 'live',
   processingStatus: 'idle',
@@ -187,8 +240,8 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   isCaptionMode: false,
   isPaused: false,
 
-  summaryStates: { 'current': createDefaultSummaryState() },
-  llmStates: { 'current': { ...DEFAULT_LLM_STATE } },
+  summaryStates: { current: createDefaultSummaryState() },
+  llmStates: { current: { ...DEFAULT_LLM_STATE } },
   autoSaveStates: {},
 
   // --- Runtime ---
@@ -203,14 +256,14 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   setRecordingSessionId: (id) => set({ recordingSessionId: id }),
   openSession: (args) => {
     if (typeof args === 'string') {
-        get().setAudioUrl(args);
-        return;
+      get().setAudioUrl(args);
+      return;
     }
     const { segments = [], sourceHistoryId, title, icon, audioUrl } = args;
     if (sourceHistoryId) {
       const autoSaveStates = { ...get().autoSaveStates };
       delete autoSaveStates[sourceHistoryId];
-      delete autoSaveStates['current'];
+      delete autoSaveStates.current;
       set({ autoSaveStates });
     }
     const sessionId = sourceHistoryId || uuidv4();
@@ -225,8 +278,8 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
           title: title || '',
           icon: icon || null,
           audioUrl: audioUrl !== undefined ? audioUrl : null,
-        }
-      }
+        },
+      },
     }));
   },
   loadTranscriptSession: (segments, sourceHistoryId, title, icon) => {
@@ -257,8 +310,8 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
           title,
           icon: icon || null,
           audioUrl: audioUrl !== undefined ? audioUrl : session.audioUrl,
-        }
-      }
+        },
+      },
     });
     get().rekeyCurrentSummaryState(historyId);
   },
@@ -267,9 +320,10 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   setSourceHistoryId: (sourceHistoryId) => updateActiveSession(set, () => ({ sourceHistoryId })),
   setTitle: (title) => updateActiveSession(set, () => ({ title: title || '' })),
   setIcon: (icon) => updateActiveSession(set, () => ({ icon })),
-  setSegments: (segments) => updateActiveSession(set, () => ({
-    segments: normalizeTranscriptSegments(segments).sort((a, b) => a.start - b.start)
-  })),
+  setSegments: (segments) =>
+    updateActiveSession(set, () => ({
+      segments: normalizeTranscriptSegments(segments).sort((a, b) => a.start - b.start),
+    })),
   setSegmentsForSession: (sessionId, segments) => {
     set((state: TranscriptStore) => ({
       sessions: {
@@ -277,51 +331,58 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         [sessionId]: {
           ...(state.sessions[sessionId] || DEFAULT_SESSION_DATA),
           segments: normalizeTranscriptSegments(segments).sort((a, b) => a.start - b.start),
-        }
-      }
+        },
+      },
     }));
   },
   addSegment: (segment) => {
     const id = uuidv4();
     const newSegment = normalizeTranscriptSegment({ ...segment, id });
     updateActiveSession(set, (session) => ({
-      segments: [...session.segments, newSegment].sort((a, b) => a.start - b.start)
+      segments: [...session.segments, newSegment].sort((a, b) => a.start - b.start),
     }));
     return id;
   },
   upsertSegment: (segment) => {
     updateActiveSession(set, (session) => ({
-      segments: calculateSegmentUpdate(session.segments, normalizeTranscriptSegment(segment)).segments
+      segments: calculateSegmentUpdate(session.segments, normalizeTranscriptSegment(segment))
+        .segments,
     }));
   },
   updateSegment: (id, updates) => {
     updateActiveSession(set, (session) => ({
-      segments: session.segments.map(s => s.id === id ? normalizeTranscriptSegment({ ...s, ...updates }) : s)
+      segments: session.segments.map((s) =>
+        s.id === id ? normalizeTranscriptSegment({ ...s, ...updates }) : s
+      ),
     }));
   },
-  deleteSegment: (id) => updateActiveSession(set, (session) => ({
-    segments: session.segments.filter(s => s.id !== id),
-    editingSegmentId: session.editingSegmentId === id ? null : session.editingSegmentId,
-    activeSegmentId: session.activeSegmentId === id ? null : session.activeSegmentId
-  })),
+  deleteSegment: (id) =>
+    updateActiveSession(set, (session) => ({
+      segments: session.segments.filter((s) => s.id !== id),
+      editingSegmentId: session.editingSegmentId === id ? null : session.editingSegmentId,
+      activeSegmentId: session.activeSegmentId === id ? null : session.activeSegmentId,
+    })),
   mergeSegments: (id1, id2) => {
     updateActiveSession(set, (session) => {
-      const seg1 = session.segments.find(s => s.id === id1);
-      const seg2 = session.segments.find(s => s.id === id2);
+      const seg1 = session.segments.find((s) => s.id === id1);
+      const seg2 = session.segments.find((s) => s.id === id2);
       if (!seg1 || !seg2) return {};
       const [first, second] = seg1.start <= seg2.start ? [seg1, seg2] : [seg2, seg1];
       if (!areSpeakerTagsEqual(first.speaker, second.speaker)) return {};
       const stripParagraph = (t: string) => t.replace(/<\/?p[^>]*>/gi, '');
       const merged: TranscriptSegment = {
-        id: first.id, start: first.start, end: second.end,
+        id: first.id,
+        start: first.start,
+        end: second.end,
         text: `<p>${stripParagraph(first.text)} ${stripParagraph(second.text)}</p>`,
         isFinal: first.isFinal && second.isFinal,
-        speaker: first.speaker, speakerAttribution: first.speakerAttribution,
+        speaker: first.speaker,
+        speakerAttribution: first.speakerAttribution,
       };
       return {
         segments: session.segments
-          .filter(s => s.id !== second.id)
-          .map(s => s.id === first.id ? normalizeTranscriptSegment(merged) : s)
+          .filter((s) => s.id !== second.id)
+          .map((s) => (s.id === first.id ? normalizeTranscriptSegment(merged) : s)),
       };
     });
   },
@@ -332,7 +393,14 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
     const plainText = stripHtmlTags(leftText) + stripHtmlTags(rightText);
     const caretOffset = stripHtmlTags(leftText).length;
     const newSegmentId = uuidv4();
-    const { segmentLeft, segmentRight } = performSegmentSplit(segment, caretOffset, plainText, leftText, rightText, newSegmentId);
+    const { segmentLeft, segmentRight } = performSegmentSplit(
+      segment,
+      caretOffset,
+      plainText,
+      leftText,
+      rightText,
+      newSegmentId
+    );
 
     const nextSegments = [...session.segments];
     const index = nextSegments.findIndex((s) => s.id === id);
@@ -345,29 +413,31 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
 
     updateActiveSession(set, () => ({
       segments: nextSegments,
-      editingSegmentId: newSegmentId
+      editingSegmentId: newSegmentId,
     }));
     return newSegmentId;
   },
-  finalizeLastSegment: () => updateActiveSession(set, (session) => {
-    if (session.segments.length === 0) return {};
-    const lastIndex = session.segments.length - 1;
-    const lastSegment = session.segments[lastIndex];
-    if (lastSegment.isFinal) return {};
-    const segments = [...session.segments];
-    segments[lastIndex] = { ...lastSegment, isFinal: true };
-    return { segments };
-  }),
+  finalizeLastSegment: () =>
+    updateActiveSession(set, (session) => {
+      if (session.segments.length === 0) return {};
+      const lastIndex = session.segments.length - 1;
+      const lastSegment = session.segments[lastIndex];
+      if (lastSegment.isFinal) return {};
+      const segments = [...session.segments];
+      segments[lastIndex] = { ...lastSegment, isFinal: true };
+      return { segments };
+    }),
   applyTranscriptUpdate: (update, activeSegmentIdParam) => {
     updateActiveSession(set, (session) => {
       const normalizedUpdate = normalizeTranscriptUpdate(update);
       const removeIds = new Set(normalizedUpdate.removeIds);
-      let nextSegments = removeIds.size > 0
-        ? session.segments.filter(s => !removeIds.has(s.id))
-        : [...session.segments];
+      let nextSegments =
+        removeIds.size > 0
+          ? session.segments.filter((s) => !removeIds.has(s.id))
+          : [...session.segments];
 
-      normalizedUpdate.upsertSegments.forEach(seg => {
-        const existingIndex = nextSegments.findIndex(c => c.id === seg.id);
+      normalizedUpdate.upsertSegments.forEach((seg) => {
+        const existingIndex = nextSegments.findIndex((c) => c.id === seg.id);
         if (existingIndex !== -1) nextSegments[existingIndex] = seg;
         else nextSegments = [...nextSegments, seg].sort((a, b) => a.start - b.start);
       });
@@ -376,13 +446,17 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       let nextActiveIndex = -1;
       if (activeSegmentIdParam !== undefined) {
         nextActiveId = activeSegmentIdParam;
-        nextActiveIndex = nextActiveId ? nextSegments.findIndex(s => s.id === nextActiveId) : -1;
+        nextActiveIndex = nextActiveId ? nextSegments.findIndex((s) => s.id === nextActiveId) : -1;
       } else if (nextActiveId && removeIds.has(nextActiveId)) {
-        const activeIndex = nextSegments.findIndex(s => s.id === nextActiveId);
+        const activeIndex = nextSegments.findIndex((s) => s.id === nextActiveId);
         if (activeIndex === -1) nextActiveId = null;
         else nextActiveIndex = activeIndex;
       }
-      return { segments: nextSegments, activeSegmentId: nextActiveId, activeSegmentIndex: nextActiveIndex };
+      return {
+        segments: nextSegments,
+        activeSegmentId: nextActiveId,
+        activeSegmentIndex: nextActiveIndex,
+      };
     });
   },
   applyTranscriptUpdateToSession: (sessionId, update, activeSegmentIdParam) => {
@@ -390,12 +464,13 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       const session = state.sessions[sessionId] || DEFAULT_SESSION_DATA;
       const normalizedUpdate = normalizeTranscriptUpdate(update);
       const removeIds = new Set(normalizedUpdate.removeIds);
-      let nextSegments = removeIds.size > 0
-        ? session.segments.filter(s => !removeIds.has(s.id))
-        : [...session.segments];
+      let nextSegments =
+        removeIds.size > 0
+          ? session.segments.filter((s) => !removeIds.has(s.id))
+          : [...session.segments];
 
-      normalizedUpdate.upsertSegments.forEach(seg => {
-        const existingIndex = nextSegments.findIndex(c => c.id === seg.id);
+      normalizedUpdate.upsertSegments.forEach((seg) => {
+        const existingIndex = nextSegments.findIndex((c) => c.id === seg.id);
         if (existingIndex !== -1) nextSegments[existingIndex] = seg;
         else nextSegments = [...nextSegments, seg].sort((a, b) => a.start - b.start);
       });
@@ -404,9 +479,9 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       let nextActiveIndex = -1;
       if (activeSegmentIdParam !== undefined) {
         nextActiveId = activeSegmentIdParam;
-        nextActiveIndex = nextActiveId ? nextSegments.findIndex(s => s.id === nextActiveId) : -1;
+        nextActiveIndex = nextActiveId ? nextSegments.findIndex((s) => s.id === nextActiveId) : -1;
       } else if (nextActiveId && removeIds.has(nextActiveId)) {
-        const activeIndex = nextSegments.findIndex(s => s.id === nextActiveId);
+        const activeIndex = nextSegments.findIndex((s) => s.id === nextActiveId);
         if (activeIndex === -1) nextActiveId = null;
         else nextActiveIndex = activeIndex;
       }
@@ -419,64 +494,95 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
             segments: nextSegments,
             activeSegmentId: nextActiveId,
             activeSegmentIndex: nextActiveIndex,
-          }
-        }
+          },
+        },
       };
     });
   },
-  upsertTranscriptSegmentAndSetActive: (segment) => updateActiveSession(set, (session) => {
-    const nextSegmentsData = calculateSegmentUpdate(session.segments, normalizeTranscriptSegment(segment));
-    let nextSegments = nextSegmentsData.segments;
-    const isCaptionMode = get().isCaptionMode;
-    if (isCaptionMode && nextSegments.length > 50) {
-      nextSegments = nextSegments.slice(-50);
-    }
-    const activeIndex = nextSegments.findIndex(c => c.id === segment.id);
-    return {
-      segments: nextSegments,
-      activeSegmentId: segment.id,
-      activeSegmentIndex: activeIndex === -1 ? nextSegments.length - 1 : activeIndex
-    };
-  }),
+  upsertTranscriptSegmentAndSetActive: (segment) =>
+    updateActiveSession(set, (session) => {
+      const nextSegmentsData = calculateSegmentUpdate(
+        session.segments,
+        normalizeTranscriptSegment(segment)
+      );
+      let nextSegments = nextSegmentsData.segments;
+      const isCaptionMode = get().isCaptionMode;
+      if (isCaptionMode && nextSegments.length > 50) {
+        nextSegments = nextSegments.slice(-50);
+      }
+      const activeIndex = nextSegments.findIndex((c) => c.id === segment.id);
+      return {
+        segments: nextSegments,
+        activeSegmentId: segment.id,
+        activeSegmentIndex: activeIndex === -1 ? nextSegments.length - 1 : activeIndex,
+      };
+    }),
   setEditingSegmentId: (id) => updateActiveSession(set, () => ({ editingSegmentId: id })),
-  addAligningSegmentId: (id) => updateActiveSession(set, (session) => {
-    const next = new Set(session.aligningSegmentIds);
-    next.add(id);
-    return { aligningSegmentIds: next };
-  }),
-  removeAligningSegmentId: (id) => updateActiveSession(set, (session) => {
-    const next = new Set(session.aligningSegmentIds);
-    next.delete(id);
-    return { aligningSegmentIds: next };
-  }),
+  addAligningSegmentId: (id) =>
+    updateActiveSession(set, (session) => {
+      const next = new Set(session.aligningSegmentIds);
+      next.add(id);
+      return { aligningSegmentIds: next };
+    }),
+  removeAligningSegmentId: (id) =>
+    updateActiveSession(set, (session) => {
+      const next = new Set(session.aligningSegmentIds);
+      next.delete(id);
+      return { aligningSegmentIds: next };
+    }),
 
   // --- Playback Mutations ---
-  setAudioFile: (file) => updateActiveSession(set, (session) => {
-    if (session.audioUrl) URL.revokeObjectURL(session.audioUrl);
-    return {
-      audioFile: file, audioUrl: file ? URL.createObjectURL(file) : null,
-      isPlaying: false, currentTime: 0, activeSegmentId: null, activeSegmentIndex: -1,
-      seekRequest: null, lastSeekTimestamp: 0
-    };
-  }),
-  setAudioUrl: (audioUrl) => updateActiveSession(set, () => ({
-    audioUrl, isPlaying: false, currentTime: 0, activeSegmentId: null,
-    activeSegmentIndex: -1, seekRequest: null, lastSeekTimestamp: 0
-  })),
-  setCurrentTime: (time) => updateActiveSession(set, (session) => {
-    const { segment, index } = findSegmentAndIndexForTime(session.segments, time, session.activeSegmentIndex);
-    if (segment?.id !== session.activeSegmentId) {
-      return { currentTime: time, activeSegmentId: segment?.id || null, activeSegmentIndex: index };
-    }
-    return { currentTime: time };
-  }),
+  setAudioFile: (file) =>
+    updateActiveSession(set, (session) => {
+      if (session.audioUrl) URL.revokeObjectURL(session.audioUrl);
+      return {
+        audioFile: file,
+        audioUrl: file ? URL.createObjectURL(file) : null,
+        isPlaying: false,
+        currentTime: 0,
+        activeSegmentId: null,
+        activeSegmentIndex: -1,
+        seekRequest: null,
+        lastSeekTimestamp: 0,
+      };
+    }),
+  setAudioUrl: (audioUrl) =>
+    updateActiveSession(set, () => ({
+      audioUrl,
+      isPlaying: false,
+      currentTime: 0,
+      activeSegmentId: null,
+      activeSegmentIndex: -1,
+      seekRequest: null,
+      lastSeekTimestamp: 0,
+    })),
+  setCurrentTime: (time) =>
+    updateActiveSession(set, (session) => {
+      const { segment, index } = findSegmentAndIndexForTime(
+        session.segments,
+        time,
+        session.activeSegmentIndex
+      );
+      if (segment?.id !== session.activeSegmentId) {
+        return {
+          currentTime: time,
+          activeSegmentId: segment?.id || null,
+          activeSegmentIndex: index,
+        };
+      }
+      return { currentTime: time };
+    }),
   setIsPlaying: (isPlaying) => updateActiveSession(set, () => ({ isPlaying })),
-  setActiveSegmentId: (activeSegmentId, activeSegmentIndex = -1) => updateActiveSession(set, () => ({ activeSegmentId, activeSegmentIndex })),
+  setActiveSegmentId: (activeSegmentId, activeSegmentIndex = -1) =>
+    updateActiveSession(set, () => ({ activeSegmentId, activeSegmentIndex })),
   resetActiveSegmentIndex: () => updateActiveSession(set, () => ({ activeSegmentIndex: -1 })),
   requestSeek: (time) => {
     get().setCurrentTime(time);
     const timestamp = Date.now();
-    updateActiveSession(set, () => ({ seekRequest: { time, timestamp }, lastSeekTimestamp: timestamp }));
+    updateActiveSession(set, () => ({
+      seekRequest: { time, timestamp },
+      lastSeekTimestamp: timestamp,
+    }));
   },
 
   // --- Sidecar Mutations ---
@@ -484,52 +590,79 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
     const id = resolveHistoryKey(historyId, get);
     return get().llmStates[id] || { ...DEFAULT_LLM_STATE };
   },
-  updateLlmState: (updates, historyId) => set((state) => {
-    const id = resolveHistoryKey(historyId, get);
-    return {
-      llmStates: { ...state.llmStates, [id]: { ...(state.llmStates[id] || { ...DEFAULT_LLM_STATE }), ...updates } }
-    };
-  }),
+  updateLlmState: (updates, historyId) =>
+    set((state) => {
+      const id = resolveHistoryKey(historyId, get);
+      return {
+        llmStates: {
+          ...state.llmStates,
+          [id]: { ...(state.llmStates[id] || { ...DEFAULT_LLM_STATE }), ...updates },
+        },
+      };
+    }),
   getSummaryState: (historyId) => {
     const id = resolveHistoryKey(historyId, get);
     return get().summaryStates[id] || createDefaultSummaryState();
   },
-  setSummaryState: (summaryState, historyId) => set((state) => {
-    const id = resolveHistoryKey(historyId, get);
-    return {
-      summaryStates: { ...state.summaryStates, [id]: { ...createDefaultSummaryState(), ...summaryState, record: summaryState.record } }
-    };
-  }),
-  updateSummaryState: (updates, historyId) => set((state) => {
-    const id = resolveHistoryKey(historyId, get);
-    return {
-      summaryStates: { ...state.summaryStates, [id]: { ...(state.summaryStates[id] || createDefaultSummaryState()), ...updates } }
-    };
-  }),
+  setSummaryState: (summaryState, historyId) =>
+    set((state) => {
+      const id = resolveHistoryKey(historyId, get);
+      return {
+        summaryStates: {
+          ...state.summaryStates,
+          [id]: { ...createDefaultSummaryState(), ...summaryState, record: summaryState.record },
+        },
+      };
+    }),
+  updateSummaryState: (updates, historyId) =>
+    set((state) => {
+      const id = resolveHistoryKey(historyId, get);
+      return {
+        summaryStates: {
+          ...state.summaryStates,
+          [id]: { ...(state.summaryStates[id] || createDefaultSummaryState()), ...updates },
+        },
+      };
+    }),
   hydrateSummaryState: (payload: HistorySummaryPayload, historyId) => {
     // Basic hydrate implementation to satisfy the type.
     const activeTemplateId = payload.activeTemplateId || 'default';
-    get().setSummaryState({ activeTemplateId, record: payload.record ?? undefined, streamingContent: undefined, isGenerating: false, generationProgress: 0 }, historyId);
+    get().setSummaryState(
+      {
+        activeTemplateId,
+        record: payload.record ?? undefined,
+        streamingContent: undefined,
+        isGenerating: false,
+        generationProgress: 0,
+      },
+      historyId
+    );
   },
-  clearSummaryState: (historyId) => set((state) => {
-    const id = resolveHistoryKey(historyId, get);
-    if (!state.summaryStates[id]) return state;
-    const summaryStates = { ...state.summaryStates };
-    delete summaryStates[id];
-    return { summaryStates };
-  }),
-  rekeyCurrentSummaryState: (nextHistoryId) => set((state) => ({
-    summaryStates: rekeyCurrentSummaryStateEntry(state.summaryStates, nextHistoryId)
-  })),
-  setAutoSaveState: (historyId, status) => set((state) => {
-    if (!historyId || historyId === 'current') return state;
-    return { autoSaveStates: { ...state.autoSaveStates, [historyId]: { status, updatedAt: Date.now() } } };
-  }),
-  clearAutoSaveState: (historyId) => set((state) => {
-    const id = resolveHistoryKey(historyId, get);
-    if (!id || id === 'current' || !state.autoSaveStates[id]) return state;
-    const autoSaveStates = { ...state.autoSaveStates };
-    delete autoSaveStates[id];
-    return { autoSaveStates };
-  })
+  clearSummaryState: (historyId) =>
+    set((state) => {
+      const id = resolveHistoryKey(historyId, get);
+      if (!state.summaryStates[id]) return state;
+      const summaryStates = { ...state.summaryStates };
+      delete summaryStates[id];
+      return { summaryStates };
+    }),
+  rekeyCurrentSummaryState: (nextHistoryId) =>
+    set((state) => ({
+      summaryStates: rekeyCurrentSummaryStateEntry(state.summaryStates, nextHistoryId),
+    })),
+  setAutoSaveState: (historyId, status) =>
+    set((state) => {
+      if (!historyId || historyId === 'current') return state;
+      return {
+        autoSaveStates: { ...state.autoSaveStates, [historyId]: { status, updatedAt: Date.now() } },
+      };
+    }),
+  clearAutoSaveState: (historyId) =>
+    set((state) => {
+      const id = resolveHistoryKey(historyId, get);
+      if (!id || id === 'current' || !state.autoSaveStates[id]) return state;
+      const autoSaveStates = { ...state.autoSaveStates };
+      delete autoSaveStates[id];
+      return { autoSaveStates };
+    }),
 }));

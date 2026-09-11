@@ -1,20 +1,20 @@
-import React from 'react';
 import { CircleAlert, Loader2, RefreshCw, Search } from 'lucide-react';
+import React from 'react';
 import {
-  Virtuoso,
-  VirtuosoGrid,
   type Components,
   type GridComponents,
+  Virtuoso,
+  VirtuosoGrid,
   type VirtuosoGridHandle,
   type VirtuosoHandle,
 } from 'react-virtuoso';
-import { HistoryItem } from '../history/HistoryItem';
-import { PlusCircleIcon } from '../Icons';
 import type { HistoryItem as HistoryItemType } from '../../types/history';
 import type { ProjectRecord } from '../../types/project';
 import type { WorkspaceItemSearchMatch } from '../../utils/workspaceSearch';
-import type { TranslationFn } from './types';
 import type { ContextMenuOpenRequest } from '../context-menu/trigger';
+import { HistoryItem } from '../history/HistoryItem';
+import { PlusCircleIcon } from '../Icons';
+import type { TranslationFn } from './types';
 
 interface ProjectsResultsProps {
   activeSearchResultId: string | null;
@@ -85,19 +85,32 @@ const ProjectsVirtualList = React.forwardRef<
   );
 });
 
-function ProjectsVirtualTopSpacer({ context }: { context?: ProjectsVirtualContext }): React.JSX.Element | null {
+function ProjectsVirtualTopSpacer({
+  context,
+}: {
+  context?: ProjectsVirtualContext;
+}): React.JSX.Element | null {
   if (context?.viewMode === 'table') {
     return null;
   }
 
-  return <div className="projects-virtual-spacer projects-virtual-spacer--top" aria-hidden="true" />;
+  return (
+    <div className="projects-virtual-spacer projects-virtual-spacer--top" aria-hidden="true" />
+  );
 }
 
-function ProjectsVirtualFooter({ context }: { context?: ProjectsVirtualContext }): React.JSX.Element {
+function ProjectsVirtualFooter({
+  context,
+}: {
+  context?: ProjectsVirtualContext;
+}): React.JSX.Element {
   return (
     <>
       {context?.viewMode !== 'table' && (
-        <div className="projects-virtual-spacer projects-virtual-spacer--bottom" aria-hidden="true" />
+        <div
+          className="projects-virtual-spacer projects-virtual-spacer--bottom"
+          aria-hidden="true"
+        />
       )}
       {context?.isLoadingMore && (
         <div
@@ -130,7 +143,11 @@ function ProjectsVirtualFooter({ context }: { context?: ProjectsVirtualContext }
   );
 }
 
-function ProjectsTableHeader({ context }: { context?: ProjectsVirtualContext }): React.JSX.Element | null {
+function ProjectsTableHeader({
+  context,
+}: {
+  context?: ProjectsVirtualContext;
+}): React.JSX.Element | null {
   if (context?.viewMode !== 'table') {
     return null;
   }
@@ -152,15 +169,24 @@ function ProjectsTableHeader({ context }: { context?: ProjectsVirtualContext }):
           {t('projects.table_header_name', { defaultValue: 'Name' })}
         </div>
         {showProjectBadge && (
-          <div className="projects-table-header-cell projects-table-header-project" role="columnheader">
+          <div
+            className="projects-table-header-cell projects-table-header-project"
+            role="columnheader"
+          >
             {t('projects.table_header_tags', { defaultValue: 'Tags' })}
           </div>
         )}
         <div className="projects-table-header-meta">
-          <div className="projects-table-header-cell projects-table-header-date" role="columnheader">
+          <div
+            className="projects-table-header-cell projects-table-header-date"
+            role="columnheader"
+          >
             {t('projects.table_header_date', { defaultValue: 'Date' })}
           </div>
-          <div className="projects-table-header-cell projects-table-header-duration" role="columnheader">
+          <div
+            className="projects-table-header-cell projects-table-header-duration"
+            role="columnheader"
+          >
             {t('projects.table_header_duration', { defaultValue: 'Duration' })}
           </div>
         </div>
@@ -176,7 +202,11 @@ function ProjectsTableHeader({ context }: { context?: ProjectsVirtualContext }):
   );
 }
 
-function ProjectsVirtualHeader({ context }: { context?: ProjectsVirtualContext }): React.JSX.Element {
+function ProjectsVirtualHeader({
+  context,
+}: {
+  context?: ProjectsVirtualContext;
+}): React.JSX.Element {
   return (
     <>
       <ProjectsVirtualTopSpacer context={context} />
@@ -233,15 +263,18 @@ export function ProjectsResults({
   const selectedIdsSet = React.useMemo(() => new Set(selectedIds), [selectedIds]);
   const showProjectBadge = isAllItemsScope;
   const scrollClassName = React.useMemo(() => getVirtualScrollClassName(viewMode), [viewMode]);
-  const listContext = React.useMemo<ProjectsVirtualContext>(() => ({
-    isSelectionMode,
-    isLoadingMore,
-    loadMoreError,
-    onLoadMore,
-    showProjectBadge,
-    t,
-    viewMode: viewMode === 'table' ? 'table' : 'list',
-  }), [isLoadingMore, isSelectionMode, loadMoreError, onLoadMore, showProjectBadge, t, viewMode]);
+  const listContext = React.useMemo<ProjectsVirtualContext>(
+    () => ({
+      isSelectionMode,
+      isLoadingMore,
+      loadMoreError,
+      onLoadMore,
+      showProjectBadge,
+      t,
+      viewMode: viewMode === 'table' ? 'table' : 'list',
+    }),
+    [isLoadingMore, isSelectionMode, loadMoreError, onLoadMore, showProjectBadge, t, viewMode]
+  );
   const isLoading = isHistoryLoading || isInitialLoading;
   const activeSearchResultIndex = React.useMemo(() => {
     if (!activeSearchResultId) {
@@ -270,55 +303,64 @@ export function ProjectsResults({
     virtuosoRef.current?.scrollToIndex(location);
   }, [activeSearchResultIndex, viewMode]);
 
-  const renderHistoryItem = React.useCallback((item: HistoryItemType) => {
-    const searchMatch = searchMatchByItemId.get(item.id) ?? null;
-    const isLockedHistoryItem = item.id === lockedHistoryId;
+  const renderHistoryItem = React.useCallback(
+    (item: HistoryItemType) => {
+      const searchMatch = searchMatchByItemId.get(item.id) ?? null;
+      const isLockedHistoryItem = item.id === lockedHistoryId;
 
-    return (
-      <HistoryItem
-        key={item.id}
-        item={item}
-        onLoad={handleOpenItem}
-        onDelete={onDeleteHistoryItem}
-        onRename={onRenameHistoryItem}
-        onOpenContextMenu={onOpenHistoryContextMenu}
-        isContextMenuOpen={activeContextId === `workspace:history:${item.id}` || Boolean(activeContextId?.startsWith('workspace:history:batch:') && selectedIdsSet.has(item.id))}
-        isLoadDisabled={isTrashScope || (lockedHistoryId != null && !isLockedHistoryItem)}
-        isRenameDisabled={isTrashScope || isLockedHistoryItem}
-        isDeleteDisabled={isLockedHistoryItem}
-        searchQuery={searchQuery}
-        searchTitleMatch={searchMatch?.titleMatch ?? null}
-        searchSnippet={searchMatch?.displaySnippet ?? null}
-        isSelectionMode={isSelectionMode}
-        isSelected={isSelectionMode ? selectedIdsSet.has(item.id) : selectedHistoryId === item.id}
-        isKeyboardActive={!isSelectionMode && activeSearchResultId === item.id}
-        onToggleSelection={onToggleSelection}
-        layout={viewMode}
-        showProjectBadge={showProjectBadge}
-      />
-    );
-  }, [
-    activeSearchResultId,
-    handleOpenItem,
-    isSelectionMode,
-    isTrashScope,
-    lockedHistoryId,
-    onDeleteHistoryItem,
-    onRenameHistoryItem,
-    onOpenHistoryContextMenu,
-    activeContextId,
-    onToggleSelection,
-    searchMatchByItemId,
-    searchQuery,
-    selectedHistoryId,
-    selectedIdsSet,
-    showProjectBadge,
-    viewMode,
-  ]);
+      return (
+        <HistoryItem
+          key={item.id}
+          item={item}
+          onLoad={handleOpenItem}
+          onDelete={onDeleteHistoryItem}
+          onRename={onRenameHistoryItem}
+          onOpenContextMenu={onOpenHistoryContextMenu}
+          isContextMenuOpen={
+            activeContextId === `workspace:history:${item.id}` ||
+            Boolean(
+              activeContextId?.startsWith('workspace:history:batch:') && selectedIdsSet.has(item.id)
+            )
+          }
+          isLoadDisabled={isTrashScope || (lockedHistoryId != null && !isLockedHistoryItem)}
+          isRenameDisabled={isTrashScope || isLockedHistoryItem}
+          isDeleteDisabled={isLockedHistoryItem}
+          searchQuery={searchQuery}
+          searchTitleMatch={searchMatch?.titleMatch ?? null}
+          searchSnippet={searchMatch?.displaySnippet ?? null}
+          isSelectionMode={isSelectionMode}
+          isSelected={isSelectionMode ? selectedIdsSet.has(item.id) : selectedHistoryId === item.id}
+          isKeyboardActive={!isSelectionMode && activeSearchResultId === item.id}
+          onToggleSelection={onToggleSelection}
+          layout={viewMode}
+          showProjectBadge={showProjectBadge}
+        />
+      );
+    },
+    [
+      activeSearchResultId,
+      handleOpenItem,
+      isSelectionMode,
+      isTrashScope,
+      lockedHistoryId,
+      onDeleteHistoryItem,
+      onRenameHistoryItem,
+      onOpenHistoryContextMenu,
+      activeContextId,
+      onToggleSelection,
+      searchMatchByItemId,
+      searchQuery,
+      selectedHistoryId,
+      selectedIdsSet,
+      showProjectBadge,
+      viewMode,
+    ]
+  );
 
-  const renderVirtualItem = React.useCallback((_index: number, item: HistoryItemType) => (
-    renderHistoryItem(item)
-  ), [renderHistoryItem]);
+  const renderVirtualItem = React.useCallback(
+    (_index: number, item: HistoryItemType) => renderHistoryItem(item),
+    [renderHistoryItem]
+  );
 
   const renderScrollableState = (children: React.ReactNode) => (
     <div className="projects-main-scroll" onScroll={onScroll}>
@@ -328,66 +370,78 @@ export function ProjectsResults({
 
   return (
     <>
-      {!isLoading && initialLoadError && (
-        renderScrollableState(<div className="projects-overview-card">
-          <CircleAlert size={28} />
-          <h4>
-            {t('projects.initial_load_failed_title', {
-              defaultValue: 'Workspace items could not be loaded',
-            })}
-          </h4>
-          <p>
-            {t('projects.initial_load_failed_hint', {
-              defaultValue: 'Check the connection and try again.',
-            })}
-          </p>
-          <button type="button" className="btn btn-secondary" onClick={onRetryInitialLoad}>
-            <RefreshCw size={16} />
-            {t('common.retry', { defaultValue: 'Retry' })}
-          </button>
-        </div>)
-      )}
-
-      {!isLoading && !initialLoadError && scopeItemCount === 0 && !searchQuery && (
-        renderScrollableState(<div className="projects-overview-card">
-          <PlusCircleIcon />
-          <h4>{t('projects.empty_state', { defaultValue: 'No items in this workspace yet.' })}</h4>
-          <p>
-            {isAllItemsScope
-              ? t('projects.empty_all_items_hint', {
-                defaultValue: 'Saved recordings and imports will appear here once you create some content.',
-              })
-              : browseProject
-              ? t('projects.empty_project_hint', {
-                defaultValue: 'Start a live recording or import files to begin building this project.',
-              })
-              : t('projects.empty_inbox_hint', {
-                defaultValue: 'New recordings and imports will arrive here until you move them into a project.',
+      {!isLoading &&
+        initialLoadError &&
+        renderScrollableState(
+          <div className="projects-overview-card">
+            <CircleAlert size={28} />
+            <h4>
+              {t('projects.initial_load_failed_title', {
+                defaultValue: 'Workspace items could not be loaded',
               })}
-          </p>
-        </div>)
-      )}
+            </h4>
+            <p>
+              {t('projects.initial_load_failed_hint', {
+                defaultValue: 'Check the connection and try again.',
+              })}
+            </p>
+            <button type="button" className="btn btn-secondary" onClick={onRetryInitialLoad}>
+              <RefreshCw size={16} />
+              {t('common.retry', { defaultValue: 'Retry' })}
+            </button>
+          </div>
+        )}
 
-      {!isLoading && !initialLoadError && (scopeItemCount > 0 || searchQuery) && filteredItemCount === 0 && (
-        renderScrollableState(<div className="projects-overview-card">
-          <Search size={28} />
-          <h4>{t('projects.no_results_title', { defaultValue: 'No matching items' })}</h4>
-          <p>
-            {t('projects.no_results_hint', {
-              defaultValue: 'Try a different search or clear the current filters.',
-            })}
-          </p>
-          <button type="button" className="btn btn-secondary" onClick={resetBrowseState}>
-            {t('projects.clear_filters', { defaultValue: 'Clear filters' })}
-          </button>
-        </div>)
-      )}
+      {!isLoading &&
+        !initialLoadError &&
+        scopeItemCount === 0 &&
+        !searchQuery &&
+        renderScrollableState(
+          <div className="projects-overview-card">
+            <PlusCircleIcon />
+            <h4>
+              {t('projects.empty_state', { defaultValue: 'No items in this workspace yet.' })}
+            </h4>
+            <p>
+              {isAllItemsScope
+                ? t('projects.empty_all_items_hint', {
+                    defaultValue:
+                      'Saved recordings and imports will appear here once you create some content.',
+                  })
+                : browseProject
+                  ? t('projects.empty_project_hint', {
+                      defaultValue:
+                        'Start a live recording or import files to begin building this project.',
+                    })
+                  : t('projects.empty_inbox_hint', {
+                      defaultValue:
+                        'New recordings and imports will arrive here until you move them into a project.',
+                    })}
+            </p>
+          </div>
+        )}
 
-      {isLoading && (
-        renderScrollableState(<div className="projects-list-empty">
-          {t('history.loading')}
-        </div>)
-      )}
+      {!isLoading &&
+        !initialLoadError &&
+        (scopeItemCount > 0 || searchQuery) &&
+        filteredItemCount === 0 &&
+        renderScrollableState(
+          <div className="projects-overview-card">
+            <Search size={28} />
+            <h4>{t('projects.no_results_title', { defaultValue: 'No matching items' })}</h4>
+            <p>
+              {t('projects.no_results_hint', {
+                defaultValue: 'Try a different search or clear the current filters.',
+              })}
+            </p>
+            <button type="button" className="btn btn-secondary" onClick={resetBrowseState}>
+              {t('projects.clear_filters', { defaultValue: 'Clear filters' })}
+            </button>
+          </div>
+        )}
+
+      {isLoading &&
+        renderScrollableState(<div className="projects-list-empty">{t('history.loading')}</div>)}
 
       {!isLoading && filteredAndSortedItems.length > 0 && viewMode === 'grid' && (
         <VirtuosoGrid

@@ -1,21 +1,4 @@
 import type {
-  AsrRuntimeMetricsSnapshot,
-  RuntimeEnvironmentStatus,
-  RuntimePathStatus,
-} from '../../types/runtime';
-import type { AppConfig, AppLogLevel } from '../../types/config';
-import type { ProjectRecord } from '../../types/project';
-import type {
-  ModelCatalogModel,
-  ModelCatalogRestoreDefaults,
-  ModelCatalogSectionType,
-  ModelCatalogSelectedIds as UiModelCatalogSelectedIds,
-  ModelCatalogSnapshot as UiModelCatalogSnapshot,
-  ModelInfo,
-  ModelRules,
-  TimestampSupportHint,
-} from '../../types/modelCatalog';
-import type {
   DiagnosticsCoreInput as CoreDiagnosticsInput,
   DiagnosticsCoreSnapshot as CoreDiagnosticsSnapshot,
   ModelCatalogModel as CoreModelCatalogModel,
@@ -23,14 +6,28 @@ import type {
   ModelCatalogSelectedIds as CoreModelCatalogSelectedIds,
   ModelCatalogSnapshot as CoreModelCatalogSnapshot,
 } from '../../bindings';
+import type { AppConfig, AppLogLevel } from '../../types/config';
+import type { DiagnosticsCoreFactsSnapshot, DiagnosticsCoreInput } from '../../types/diagnostics';
+import { flattenAppConfig } from '../../types/llm';
 import type {
-  DiagnosticsCoreInput,
-  DiagnosticsCoreFactsSnapshot,
-} from '../../types/diagnostics';
+  ModelCatalogModel,
+  ModelCatalogRestoreDefaults,
+  ModelCatalogSectionType,
+  ModelInfo,
+  ModelRules,
+  TimestampSupportHint,
+  ModelCatalogSelectedIds as UiModelCatalogSelectedIds,
+  ModelCatalogSnapshot as UiModelCatalogSnapshot,
+} from '../../types/modelCatalog';
+import type { ProjectRecord } from '../../types/project';
+import type {
+  AsrRuntimeMetricsSnapshot,
+  RuntimeEnvironmentStatus,
+  RuntimePathStatus,
+} from '../../types/runtime';
 import { TauriCommand } from './commands';
 import type { TauriCommandArgs, TauriCommandResult } from './contracts';
 import { invokeTauri } from './invoke';
-import { flattenAppConfig } from '../../types/llm';
 
 export type DownloadFileRequest = TauriCommandArgs<typeof TauriCommand.app.downloadFile>;
 
@@ -48,9 +45,7 @@ export type ModelSelectionPaths = TauriCommandArgs<
 
 export type ModelCatalogSelectedIds = UiModelCatalogSelectedIds;
 
-export type AppConfigMigrationResult = TauriCommandResult<
-  typeof TauriCommand.app.migrateAppConfig
->;
+export type AppConfigMigrationResult = TauriCommandResult<typeof TauriCommand.app.migrateAppConfig>;
 
 function buildDiagnosticsTransportInput(input: DiagnosticsCoreInput): CoreDiagnosticsInput {
   const normalizeProbe = (probe: DiagnosticsCoreInput['microphoneProbe']) => ({
@@ -71,9 +66,7 @@ function buildDiagnosticsTransportInput(input: DiagnosticsCoreInput): CoreDiagno
   };
 }
 
-function normalizePermissionState(
-  value: string,
-): DiagnosticsCoreFactsSnapshot['permissionState'] {
+function normalizePermissionState(value: string): DiagnosticsCoreFactsSnapshot['permissionState'] {
   switch (value) {
     case 'denied':
     case 'granted':
@@ -86,7 +79,7 @@ function normalizePermissionState(
 }
 
 function normalizeVoiceTypingState(
-  value: string,
+  value: string
 ): DiagnosticsCoreFactsSnapshot['voiceTypingReadiness']['state'] {
   switch (value) {
     case 'off':
@@ -103,7 +96,7 @@ function normalizeVoiceTypingState(
 }
 
 function normalizeDiagnosticsSnapshot(
-  snapshot: CoreDiagnosticsSnapshot,
+  snapshot: CoreDiagnosticsSnapshot
 ): DiagnosticsCoreFactsSnapshot {
   return {
     ...snapshot,
@@ -158,9 +151,7 @@ function normalizeModelType(value: string): ModelInfo['type'] {
   }
 }
 
-function normalizeModelModes(
-  modes: string[] | null | undefined,
-): ModelInfo['modes'] {
+function normalizeModelModes(modes: string[] | null | undefined): ModelInfo['modes'] {
   if (!modes) {
     return undefined;
   }
@@ -177,7 +168,7 @@ function normalizeModelModes(
 }
 
 function normalizeTimestampSupportHint(
-  value: string | null | undefined,
+  value: string | null | undefined
 ): TimestampSupportHint | undefined {
   switch (value) {
     case 'token':
@@ -218,11 +209,13 @@ function normalizeModelRules(modelRules: CoreModelCatalogModel['rules']): ModelR
 const LANGUAGE_MODES = ['selectable', 'auto', 'fixed', 'none'] as const;
 
 function normalizeLanguageMode(value: string): (typeof LANGUAGE_MODES)[number] {
-  return (LANGUAGE_MODES as readonly string[]).includes(value) ? value as (typeof LANGUAGE_MODES)[number] : 'none';
+  return (LANGUAGE_MODES as readonly string[]).includes(value)
+    ? (value as (typeof LANGUAGE_MODES)[number])
+    : 'none';
 }
 
 function normalizeModelArtifacts(
-  artifacts: CoreModelCatalogModel['artifacts'],
+  artifacts: CoreModelCatalogModel['artifacts']
 ): NonNullable<ModelInfo['artifacts']> {
   return (artifacts ?? []).map((artifact) => ({
     url: artifact.url,
@@ -272,7 +265,7 @@ function normalizeCatalogModel(model: CoreModelCatalogModel): ModelCatalogModel 
 }
 
 function normalizeRestoreDefaults(
-  restoreDefaults: CoreModelCatalogRestoreDefaults,
+  restoreDefaults: CoreModelCatalogRestoreDefaults
 ): ModelCatalogRestoreDefaults {
   const streamingModelPath = optionalString(restoreDefaults.streamingModelPath);
   const batchModelPath = optionalString(restoreDefaults.batchModelPath);
@@ -295,9 +288,7 @@ function normalizeRestoreDefaults(
   };
 }
 
-function normalizeModelCatalogSnapshot(
-  snapshot: CoreModelCatalogSnapshot,
-): UiModelCatalogSnapshot {
+function normalizeModelCatalogSnapshot(snapshot: CoreModelCatalogSnapshot): UiModelCatalogSnapshot {
   return {
     modelsDir: snapshot.modelsDir,
     models: snapshot.models.map(normalizeCatalogModel),
@@ -318,7 +309,7 @@ function normalizeModelCatalogSnapshot(
 }
 
 function normalizeModelCatalogSelectedIds(
-  selectedIds: CoreModelCatalogSelectedIds,
+  selectedIds: CoreModelCatalogSelectedIds
 ): UiModelCatalogSelectedIds {
   return {
     streaming: selectedIds.streaming ?? null,
@@ -336,9 +327,7 @@ export async function downloadFile(request: DownloadFileRequest): Promise<void> 
   await invokeTauri(TauriCommand.app.downloadFile, request);
 }
 
-export async function downloadPresetModel(
-  request: DownloadPresetModelRequest,
-): Promise<string> {
+export async function downloadPresetModel(request: DownloadPresetModelRequest): Promise<string> {
   return await invokeTauri(TauriCommand.app.downloadPresetModel, request);
 }
 
@@ -360,14 +349,14 @@ export async function getModelCatalogSnapshot(): Promise<UiModelCatalogSnapshot>
 }
 
 export async function resolveModelCatalogSelectedIds(
-  paths: ModelSelectionPaths,
+  paths: ModelSelectionPaths
 ): Promise<ModelCatalogSelectedIds> {
   const selectedIds = await invokeTauri(TauriCommand.app.resolveModelCatalogSelectedIds, { paths });
   return normalizeModelCatalogSelectedIds(selectedIds);
 }
 
 export async function getDiagnosticsCoreSnapshot(
-  input: DiagnosticsCoreInput,
+  input: DiagnosticsCoreInput
 ): Promise<DiagnosticsCoreFactsSnapshot> {
   const snapshot = await invokeTauri(TauriCommand.app.getDiagnosticsCoreSnapshot, {
     input: buildDiagnosticsTransportInput(input),
@@ -394,7 +383,7 @@ export async function setAppSetting(key: string, value: unknown): Promise<void> 
 
 export async function migrateAppConfig(
   savedConfig: AppConfig | null | undefined,
-  defaultRuleSetName: string,
+  defaultRuleSetName: string
 ): Promise<AppConfigMigrationResult> {
   const res = await invokeTauri(TauriCommand.app.migrateAppConfig, {
     savedConfig: savedConfig ?? null,
@@ -402,13 +391,13 @@ export async function migrateAppConfig(
   });
   return {
     ...res,
-    config: flattenAppConfig(res.config)
+    config: flattenAppConfig(res.config),
   };
 }
 
 export async function resolveEffectiveConfig(
   globalConfig: AppConfig,
-  project: ProjectRecord | null,
+  project: ProjectRecord | null
 ): Promise<AppConfig> {
   const res = await invokeTauri(TauriCommand.app.resolveEffectiveConfig, {
     globalConfig,

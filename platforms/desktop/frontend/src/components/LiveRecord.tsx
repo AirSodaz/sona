@@ -1,40 +1,44 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { Mic, Monitor, Pause, Play, Square } from 'lucide-react';
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
+import { type RecordSegmentDeliveryMeta, useAudioRecorder } from '../hooks/useAudioRecorder';
+import { useAudioVisualizer } from '../hooks/useAudioVisualizer';
+import { useCaptionSession } from '../hooks/useCaptionSession';
+import { captionWindowService } from '../services/captionWindowService';
+import { polishService } from '../services/polishService';
 import { useConfigStore } from '../stores/configStore';
+import { useOnboardingStore } from '../stores/onboardingStore';
 import {
-    applyTranscriptUpdateToSession,
-    openTranscriptSession,
-    setRecordingSessionId,
-    updateTranscriptSegment,
+  applyTranscriptUpdateToSession,
+  openTranscriptSession,
+  setRecordingSessionId,
+  updateTranscriptSegment,
 } from '../stores/transcriptCoordinator';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
-import { polishService } from '../services/polishService';
-import { Pause, Play, Square, Mic, Monitor } from 'lucide-react';
-import { RecordingTimer } from './RecordingTimer';
-import { Dropdown } from './Dropdown';
-import { TranscriptionOptions } from './TranscriptionOptions';
-import { Switch } from './Switch';
-import { captionWindowService } from '../services/captionWindowService';
-import { useCaptionSession } from '../hooks/useCaptionSession';
-import { useAudioVisualizer } from '../hooks/useAudioVisualizer';
-import { useAudioRecorder, type RecordSegmentDeliveryMeta } from '../hooks/useAudioRecorder';
-import { useOnboardingStore } from '../stores/onboardingStore';
+import type { TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
-import { TranscriptUpdate } from '../types/transcript';
+import { Dropdown } from './Dropdown';
+import { RecordingTimer } from './RecordingTimer';
+import { Switch } from './Switch';
+import { TranscriptionOptions } from './TranscriptionOptions';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
-    className?: string;
+  className?: string;
 }
 
 function getSourceIcon(source: 'microphone' | 'desktop' | 'file'): React.ReactElement {
-    switch (source) {
-        case 'microphone': return <Mic size={18} aria-hidden="true" />;
-        case 'desktop': return <Monitor size={18} aria-hidden="true" />;
-        default: return <Mic size={18} aria-hidden="true" />;
-    }
+  switch (source) {
+    case 'microphone':
+      return <Mic size={18} aria-hidden="true" />;
+    case 'desktop':
+      return <Monitor size={18} aria-hidden="true" />;
+    default:
+      return <Mic size={18} aria-hidden="true" />;
+  }
 }
 
 /**
@@ -47,290 +51,312 @@ function getSourceIcon(source: 'microphone' | 'desktop' | 'file'): React.ReactEl
  * @return The rendered LiveRecord component.
  */
 export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElement {
-    const { t } = useTranslation();
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const polishedIdsRef = useRef<Set<string>>(new Set());
-    const startButtonRef = useRef<HTMLButtonElement>(null);
+  const { t } = useTranslation();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const polishedIdsRef = useRef<Set<string>>(new Set());
+  const startButtonRef = useRef<HTMLButtonElement>(null);
 
-    // State from store
-    const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
-    const isPaused = useTranscriptRuntimeStore((state) => state.isPaused);
-    const focusStartRecordingToken = useOnboardingStore((state) => state.focusStartRecordingToken);
+  // State from store
+  const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
+  const isPaused = useTranscriptRuntimeStore((state) => state.isPaused);
+  const focusStartRecordingToken = useOnboardingStore((state) => state.focusStartRecordingToken);
 
-    // Local State
-    const [inputSource, setInputSource] = useState<'microphone' | 'desktop'>('microphone');
-    const isRecordingRef = useRef(false);
+  // Local State
+  const [inputSource, setInputSource] = useState<'microphone' | 'desktop'>('microphone');
+  const isRecordingRef = useRef(false);
 
-    // Sync refs with store state
-    useEffect(() => {
-        isRecordingRef.current = isRecording;
-    }, [isRecording]);
+  // Sync refs with store state
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
 
-    useEffect(() => {
-        if (!isRecording) {
-            startButtonRef.current?.focus();
-        }
-    }, [focusStartRecordingToken, isRecording]);
+  useEffect(() => {
+    if (!isRecording) {
+      startButtonRef.current?.focus();
+    }
+  }, [focusStartRecordingToken, isRecording]);
 
-    // Caption Mode
-    const isCaptionMode = useTranscriptRuntimeStore((state) => state.isCaptionMode);
-    const setIsCaptionMode = useTranscriptRuntimeStore((state) => state.setIsCaptionMode);
-    const config = useConfigStore((state) => state.config);
+  // Caption Mode
+  const isCaptionMode = useTranscriptRuntimeStore((state) => state.isCaptionMode);
+  const setIsCaptionMode = useTranscriptRuntimeStore((state) => state.setIsCaptionMode);
+  const config = useConfigStore((state) => state.config);
 
-    // Initialize dedicated caption session hook
-    useCaptionSession(config, isCaptionMode);
+  // Initialize dedicated caption session hook
+  useCaptionSession(config, isCaptionMode);
 
-    // Config Helpers
-    const lockWindow = config.lockWindow ?? false;
-    const alwaysOnTop = config.alwaysOnTop ?? true;
-    useEffect(() => {
-        captionWindowService.setClickThrough(lockWindow).catch(logger.error);
-        captionWindowService.setAlwaysOnTop(alwaysOnTop).catch(logger.error);
-    }, [lockWindow, alwaysOnTop]);
+  // Config Helpers
+  const lockWindow = config.lockWindow ?? false;
+  const alwaysOnTop = config.alwaysOnTop ?? true;
+  useEffect(() => {
+    captionWindowService.setClickThrough(lockWindow).catch(logger.error);
+    captionWindowService.setAlwaysOnTop(alwaysOnTop).catch(logger.error);
+  }, [lockWindow, alwaysOnTop]);
 
-    // Segment Handler
-    const onSegment = useCallback((update: TranscriptUpdate, meta: RecordSegmentDeliveryMeta) => {
-        const runtimeStore = useTranscriptRuntimeStore.getState();
-        const latestSegment = update.upsertSegments[update.upsertSegments.length - 1];
-        logger.info(
-            `[LiveRecord] onSegment ${meta.accepted ? 'accepted' : 'dropped'}. removes=${update.removeIds.length} upserts=${update.upsertSegments.length} latest_segment=${latestSegment?.id ?? 'none'} latest_final=${latestSegment?.isFinal === true} session=${meta.sessionId ?? 'none'} phase=${meta.phase} store_is_recording=${runtimeStore.isRecording}`
-        );
+  // Segment Handler
+  const onSegment = useCallback((update: TranscriptUpdate, meta: RecordSegmentDeliveryMeta) => {
+    const runtimeStore = useTranscriptRuntimeStore.getState();
+    const latestSegment = update.upsertSegments[update.upsertSegments.length - 1];
+    logger.info(
+      `[LiveRecord] onSegment ${meta.accepted ? 'accepted' : 'dropped'}. removes=${update.removeIds.length} upserts=${update.upsertSegments.length} latest_segment=${latestSegment?.id ?? 'none'} latest_final=${latestSegment?.isFinal === true} session=${meta.sessionId ?? 'none'} phase=${meta.phase} store_is_recording=${runtimeStore.isRecording}`
+    );
 
-        if (!meta.accepted) {
-            return;
-        }
-
-        if (meta.sessionId) {
-            applyTranscriptUpdateToSession(meta.sessionId, update, latestSegment?.id ?? null);
-        }
-
-        // Auto-Polish Logic
-        const config = useConfigStore.getState().config;
-        const autoPolish = config.autoPolish ?? false;
-        const frequency = config.autoPolishFrequency ?? 5;
-
-        if (autoPolish && frequency > 0) {
-            const session = meta.sessionId ? useTranscriptStore.getState().sessions[meta.sessionId] : null;
-            const allSegments = session?.segments || [];
-            const unpolished = allSegments.filter(s => s.isFinal && !polishedIdsRef.current.has(s.id));
-
-            if (unpolished.length >= frequency) {
-                const toPolish = unpolished.slice(0, frequency);
-                toPolish.forEach(s => polishedIdsRef.current.add(s.id));
-
-                polishService.polishSegments(toPolish, (chunk) => {
-                    chunk.forEach((polishedSegment) => {
-                        updateTranscriptSegment(polishedSegment.id, { text: polishedSegment.text });
-                    });
-                }).catch(err => {
-                    logger.error('[LiveRecord] Auto-polish failed:', err);
-                });
-            }
-        }
-    }, []);
-
-    // Audio Recorder Hook
-    const {
-        startRecording,
-        stopRecording,
-        pauseRecording,
-        resumeRecording,
-        isInitializing,
-        isTransitioning,
-        recordingElapsedMs,
-        peakLevelRef,
-        setRecordSessionId,
-    } = useAudioRecorder({
-        inputSource,
-        onSegment
-    });
-
-    // Visualizer Hook
-    const { startVisualizer, stopVisualizer } = useAudioVisualizer({
-        canvasRef,
-        peakLevelRef,
-        isPaused
-    });
-
-    const handleToggleRecording = useCallback(async () => {
-        if (isRecording) {
-            await stopRecording();
-            stopVisualizer();
-            setRecordingSessionId(null);
-        } else {
-            const historyId = uuidv4();
-            openTranscriptSession({
-                segments: [],
-                sourceHistoryId: historyId,
-                title: '',
-            });
-            setRecordSessionId(historyId);
-            setRecordingSessionId(historyId);
-
-            polishedIdsRef.current.clear();
-            const success = await startRecording();
-            if (success) {
-                startVisualizer();
-            }
-        }
-    }, [isRecording, startRecording, stopRecording, startVisualizer, stopVisualizer, setRecordSessionId]);
-
-    const handleTogglePause = useCallback(async () => {
-        if (isPaused) {
-            await resumeRecording();
-        } else {
-            await pauseRecording();
-        }
-    }, [isPaused, pauseRecording, resumeRecording]);
-
-    const handleCaptionToggle = useCallback((checked: boolean) => {
-        setIsCaptionMode(checked);
-    }, [setIsCaptionMode]);
-
-    function getRecordingStatusText(): string {
-        if (isRecording) {
-            return isPaused ? t('live.recording_paused') : t('live.recording_active');
-        }
-        return t('live.start_hint');
+    if (!meta.accepted) {
+      return;
     }
 
-    // Keyboard shortcuts
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            const shortcutStr = config.liveRecordShortcut || 'Ctrl + Space';
-            const parts = shortcutStr.split(' + ').map(p => p.trim());
+    if (meta.sessionId) {
+      applyTranscriptUpdateToSession(meta.sessionId, update, latestSegment?.id ?? null);
+    }
 
-            const needsCtrl = parts.includes('Ctrl');
-            const needsAlt = parts.includes('Alt');
-            const needsShift = parts.includes('Shift');
-            const needsMeta = parts.includes('Meta');
-            const mainKeyPart = parts[parts.length - 1];
+    // Auto-Polish Logic
+    const config = useConfigStore.getState().config;
+    const autoPolish = config.autoPolish ?? false;
+    const frequency = config.autoPolishFrequency ?? 5;
 
-            let eventKey = e.key;
-            if (eventKey === ' ') eventKey = 'Space';
-            else if (eventKey.length === 1) eventKey = eventKey.toUpperCase();
+    if (autoPolish && frequency > 0) {
+      const session = meta.sessionId
+        ? useTranscriptStore.getState().sessions[meta.sessionId]
+        : null;
+      const allSegments = session?.segments || [];
+      const unpolished = allSegments.filter((s) => s.isFinal && !polishedIdsRef.current.has(s.id));
 
-            const isStartStopMatch =
-                e.ctrlKey === needsCtrl &&
-                e.altKey === needsAlt &&
-                e.shiftKey === needsShift &&
-                e.metaKey === needsMeta &&
-                (eventKey === mainKeyPart || e.code === mainKeyPart || e.code === `Key${mainKeyPart}`);
+      if (unpolished.length >= frequency) {
+        const toPolish = unpolished.slice(0, frequency);
+        toPolish.forEach((s) => polishedIdsRef.current.add(s.id));
 
-            if (isStartStopMatch) {
-                e.preventDefault();
-                void handleToggleRecording();
-            } else if (e.code === 'Space' && !needsCtrl && !needsAlt && !needsShift && !needsMeta && mainKeyPart === 'Space') {
-                // If the user mapped start/stop to just "Space", we don't handle pause with "Space"
-                // to avoid double triggering. But if they didn't map it to just "Space", we can pause with "Space".
-                if (isRecordingRef.current) {
-                    e.preventDefault();
-                    void handleTogglePause();
-                }
-            } else if (e.code === 'Space' && isRecordingRef.current) {
-                e.preventDefault();
-                void handleTogglePause();
-            }
-        };
+        polishService
+          .polishSegments(toPolish, (chunk) => {
+            chunk.forEach((polishedSegment) => {
+              updateTranscriptSegment(polishedSegment.id, { text: polishedSegment.text });
+            });
+          })
+          .catch((err) => {
+            logger.error('[LiveRecord] Auto-polish failed:', err);
+          });
+      }
+    }
+  }, []);
 
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleToggleRecording, handleTogglePause, config.liveRecordShortcut]);
+  // Audio Recorder Hook
+  const {
+    startRecording,
+    stopRecording,
+    pauseRecording,
+    resumeRecording,
+    isInitializing,
+    isTransitioning,
+    recordingElapsedMs,
+    peakLevelRef,
+    setRecordSessionId,
+  } = useAudioRecorder({
+    inputSource,
+    onSegment,
+  });
 
-    return (
-        <div className={`live-record-container ${className}`}>
-            <div className="live-record-main-content">
-                <div className="visualizer-wrapper">
-                    <canvas
-                        ref={canvasRef}
-                        width={600}
-                        height={120}
-                        className="visualizer-canvas"
-                        role="img"
-                        aria-label={t('live.visualizer_label')}
-                    />
-                </div>
+  // Visualizer Hook
+  const { startVisualizer, stopVisualizer } = useAudioVisualizer({
+    canvasRef,
+    peakLevelRef,
+    isPaused,
+  });
 
-                <RecordingTimer elapsedMs={recordingElapsedMs} isRecording={isRecording} />
+  const handleToggleRecording = useCallback(async () => {
+    if (isRecording) {
+      await stopRecording();
+      stopVisualizer();
+      setRecordingSessionId(null);
+    } else {
+      const historyId = uuidv4();
+      openTranscriptSession({
+        segments: [],
+        sourceHistoryId: historyId,
+        title: '',
+      });
+      setRecordSessionId(historyId);
+      setRecordingSessionId(historyId);
 
-                <div className="record-controls">
-                    {!isRecording ? (
-                        <button
-                            ref={startButtonRef}
-                            className="control-button start"
-                            onClick={handleToggleRecording}
-                            disabled={isInitializing || isTransitioning}
-                            aria-label={t('live.start_recording')}
-                            data-tooltip={isInitializing ? 'Initializing...' : t('live.start_recording')}
-                            data-tooltip-pos="bottom"
-                            style={isInitializing || isTransitioning ? { opacity: 0.7, cursor: 'wait' } : {}}
-                        >
-                            <div className="control-button-inner" />
-                        </button>
-                    ) : (
-                        <>
-                            <button
-                                className="control-button pause"
-                                onClick={handleTogglePause}
-                                disabled={isInitializing || isTransitioning}
-                                aria-label={isPaused ? t('live.resume') : t('live.pause')}
-                                data-tooltip={isPaused ? t('live.resume') : t('live.pause')}
-                                data-tooltip-pos="bottom"
-                            >
-                                {isPaused ? <Play size={24} fill="currentColor" aria-hidden="true" /> : <Pause size={24} fill="currentColor" aria-hidden="true" />}
-                            </button>
+      polishedIdsRef.current.clear();
+      const success = await startRecording();
+      if (success) {
+        startVisualizer();
+      }
+    }
+  }, [
+    isRecording,
+    startRecording,
+    stopRecording,
+    startVisualizer,
+    stopVisualizer,
+    setRecordSessionId,
+  ]);
 
-                            <button
-                                className="control-button stop"
-                                onClick={handleToggleRecording}
-                                disabled={isInitializing || isTransitioning}
-                                aria-label={t('live.stop')}
-                                data-tooltip={t('live.stop')}
-                                data-tooltip-pos="bottom"
-                            >
-                                <Square size={28} fill="white" color="white" aria-hidden="true" />
-                            </button>
-                        </>
-                    )}
-                </div>
+  const handleTogglePause = useCallback(async () => {
+    if (isPaused) {
+      await resumeRecording();
+    } else {
+      await pauseRecording();
+    }
+  }, [isPaused, pauseRecording, resumeRecording]);
 
-                {!isRecording && (
-                    <div className="input-source-selector">
-                        <div className="source-select-wrapper">
-                            {getSourceIcon(inputSource)}
-                            <Dropdown
-                                value={inputSource}
-                                onChange={(value) => setInputSource(value as 'microphone' | 'desktop')}
-                                aria-label={t('live.source_select')}
-                                options={[
-                                    { value: 'microphone', label: t('live.source_microphone') },
-                                    { value: 'desktop', label: t('live.source_desktop') }
-                                ]}
-                                style={{ minWidth: '180px' }}
-                            />
-                        </div>
-                    </div>
-                )}
+  const handleCaptionToggle = useCallback(
+    (checked: boolean) => {
+      setIsCaptionMode(checked);
+    },
+    [setIsCaptionMode]
+  );
 
-                <p className="recording-status-text" aria-live="polite">
-                    {getRecordingStatusText()}
-                </p>
-            </div>
+  function getRecordingStatusText(): string {
+    if (isRecording) {
+      return isPaused ? t('live.recording_paused') : t('live.recording_active');
+    }
+    return t('live.start_hint');
+  }
 
-            <div className="live-caption-toggle">
-                <Switch
-                    checked={isCaptionMode}
-                    onChange={handleCaptionToggle}
-                    label={t('live.caption_mode')}
-                    disabled={false}
-                />
-                <span className="live-caption-hint">{t('live.caption_mode_hint')}</span>
-            </div>
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const shortcutStr = config.liveRecordShortcut || 'Ctrl + Space';
+      const parts = shortcutStr.split(' + ').map((p) => p.trim());
 
-            <TranscriptionOptions
-                surface="live"
-                disabled={isRecording}
-            />
+      const needsCtrl = parts.includes('Ctrl');
+      const needsAlt = parts.includes('Alt');
+      const needsShift = parts.includes('Shift');
+      const needsMeta = parts.includes('Meta');
+      const mainKeyPart = parts[parts.length - 1];
+
+      let eventKey = e.key;
+      if (eventKey === ' ') eventKey = 'Space';
+      else if (eventKey.length === 1) eventKey = eventKey.toUpperCase();
+
+      const isStartStopMatch =
+        e.ctrlKey === needsCtrl &&
+        e.altKey === needsAlt &&
+        e.shiftKey === needsShift &&
+        e.metaKey === needsMeta &&
+        (eventKey === mainKeyPart || e.code === mainKeyPart || e.code === `Key${mainKeyPart}`);
+
+      if (isStartStopMatch) {
+        e.preventDefault();
+        void handleToggleRecording();
+      } else if (
+        e.code === 'Space' &&
+        !needsCtrl &&
+        !needsAlt &&
+        !needsShift &&
+        !needsMeta &&
+        mainKeyPart === 'Space'
+      ) {
+        // If the user mapped start/stop to just "Space", we don't handle pause with "Space"
+        // to avoid double triggering. But if they didn't map it to just "Space", we can pause with "Space".
+        if (isRecordingRef.current) {
+          e.preventDefault();
+          void handleTogglePause();
+        }
+      } else if (e.code === 'Space' && isRecordingRef.current) {
+        e.preventDefault();
+        void handleTogglePause();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleToggleRecording, handleTogglePause, config.liveRecordShortcut]);
+
+  return (
+    <div className={`live-record-container ${className}`}>
+      <div className="live-record-main-content">
+        <div className="visualizer-wrapper">
+          <canvas
+            ref={canvasRef}
+            width={600}
+            height={120}
+            className="visualizer-canvas"
+            role="img"
+            aria-label={t('live.visualizer_label')}
+          />
         </div>
-    );
+
+        <RecordingTimer elapsedMs={recordingElapsedMs} isRecording={isRecording} />
+
+        <div className="record-controls">
+          {!isRecording ? (
+            <button
+              ref={startButtonRef}
+              className="control-button start"
+              onClick={handleToggleRecording}
+              disabled={isInitializing || isTransitioning}
+              aria-label={t('live.start_recording')}
+              data-tooltip={isInitializing ? 'Initializing...' : t('live.start_recording')}
+              data-tooltip-pos="bottom"
+              style={isInitializing || isTransitioning ? { opacity: 0.7, cursor: 'wait' } : {}}
+            >
+              <div className="control-button-inner" />
+            </button>
+          ) : (
+            <>
+              <button
+                className="control-button pause"
+                onClick={handleTogglePause}
+                disabled={isInitializing || isTransitioning}
+                aria-label={isPaused ? t('live.resume') : t('live.pause')}
+                data-tooltip={isPaused ? t('live.resume') : t('live.pause')}
+                data-tooltip-pos="bottom"
+              >
+                {isPaused ? (
+                  <Play size={24} fill="currentColor" aria-hidden="true" />
+                ) : (
+                  <Pause size={24} fill="currentColor" aria-hidden="true" />
+                )}
+              </button>
+
+              <button
+                className="control-button stop"
+                onClick={handleToggleRecording}
+                disabled={isInitializing || isTransitioning}
+                aria-label={t('live.stop')}
+                data-tooltip={t('live.stop')}
+                data-tooltip-pos="bottom"
+              >
+                <Square size={28} fill="white" color="white" aria-hidden="true" />
+              </button>
+            </>
+          )}
+        </div>
+
+        {!isRecording && (
+          <div className="input-source-selector">
+            <div className="source-select-wrapper">
+              {getSourceIcon(inputSource)}
+              <Dropdown
+                value={inputSource}
+                onChange={(value) => setInputSource(value as 'microphone' | 'desktop')}
+                aria-label={t('live.source_select')}
+                options={[
+                  { value: 'microphone', label: t('live.source_microphone') },
+                  { value: 'desktop', label: t('live.source_desktop') },
+                ]}
+                style={{ minWidth: '180px' }}
+              />
+            </div>
+          </div>
+        )}
+
+        <p className="recording-status-text" aria-live="polite">
+          {getRecordingStatusText()}
+        </p>
+      </div>
+
+      <div className="live-caption-toggle">
+        <Switch
+          checked={isCaptionMode}
+          onChange={handleCaptionToggle}
+          label={t('live.caption_mode')}
+          disabled={false}
+        />
+        <span className="live-caption-hint">{t('live.caption_mode_hint')}</span>
+      </div>
+
+      <TranscriptionOptions surface="live" disabled={isRecording} />
+    </div>
+  );
 }

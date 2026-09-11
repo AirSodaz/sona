@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -22,8 +21,10 @@ import {
   Trash2,
   Unplug,
 } from 'lucide-react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal } from '../../Modal';
+import { getSyncPairingInfo } from '../../../services/tauri/sync';
+import { useDialogStore } from '../../../stores/dialogStore';
 import type {
   SyncPairingInfo,
   SyncPresetV1,
@@ -31,11 +32,10 @@ import type {
   SyncUnlockRecoveryRequest,
   SyncUnlockRequest,
 } from '../../../types/sync';
-import { getSyncPairingInfo } from '../../../services/tauri/sync';
-import { useDialogStore } from '../../../stores/dialogStore';
+import { Modal } from '../../Modal';
 import { SettingsAccordion, SettingsItem, SettingsSection } from '../SettingsLayout';
-import { encodeSyncPairingToken } from './syncPairing';
 import { PasswordInput } from './PasswordInput';
+import { encodeSyncPairingToken } from './syncPairing';
 
 interface SyncConnectedPanelProps {
   busyAction: string | null;
@@ -59,12 +59,13 @@ interface SyncConnectedPanelProps {
 function formatFriendlyTime(
   value: number | null,
   fallback: string,
-  t: (key: string, options?: Record<string, unknown>) => string,
+  t: (key: string, options?: Record<string, unknown>) => string
 ): string {
   if (!value) return fallback;
   const now = Date.now();
   const diff = now - value;
-  if (diff < 0) return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (diff < 0)
+    return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   if (diff < 60_000) return t('settings.sync.just_now', { defaultValue: 'Just now' });
   if (diff < 3600_000) {
     const mins = Math.floor(diff / 60_000);
@@ -74,7 +75,12 @@ function formatFriendlyTime(
     const hours = Math.floor(diff / 3600_000);
     return t('settings.sync.hours_ago', { defaultValue: '{{count}}h ago', count: hours });
   }
-  return new Date(value).toLocaleDateString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date(value).toLocaleDateString([], {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 function formatPartiallyMaskedKey(key: string): string {
   if (!key) return '';
@@ -86,7 +92,6 @@ function formatPartiallyMaskedKey(key: string): string {
   const suffix = trimmed.slice(-4);
   return `${prefix}••••••••••••••••${suffix}`;
 }
-
 
 export function SyncConnectedPanel({
   busyAction,
@@ -118,14 +123,15 @@ export function SyncConnectedPanel({
   const [nextPassword, setNextPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [passwordError, setPasswordError] = React.useState<string | null>(null);
-  const [passwordChangeMode, setPasswordChangeMode] = React.useState<'password' | 'recovery'>('password');
+  const [passwordChangeMode, setPasswordChangeMode] = React.useState<'password' | 'recovery'>(
+    'password'
+  );
   // Pairing Modal state
   const [showPairingModal, setShowPairingModal] = React.useState(false);
   const [copiedToken, setCopiedToken] = React.useState(false);
   const [copiedKey, setCopiedKey] = React.useState(false);
   const [pairingInfo, setPairingInfo] = React.useState<SyncPairingInfo | null>(null);
   const [isKeyRevealed, setIsKeyRevealed] = React.useState(false);
-
 
   React.useEffect(() => {
     let active = true;
@@ -150,24 +156,25 @@ export function SyncConnectedPanel({
     }
   }, [serverUrl]);
 
-
   const isBusy = busyAction !== null || status.state === 'syncing';
   const handleDeleteRecoveryKey = async () => {
     const confirmed = await confirm(
       t('settings.sync.delete_recovery_key_confirm_message', {
-        defaultValue: 'Delete this recovery key from display? Make sure you have backed it up safely.',
+        defaultValue:
+          'Delete this recovery key from display? Make sure you have backed it up safely.',
       }),
       {
-        title: t('settings.sync.delete_recovery_key_confirm_title', { defaultValue: 'Delete Recovery Key' }),
+        title: t('settings.sync.delete_recovery_key_confirm_title', {
+          defaultValue: 'Delete Recovery Key',
+        }),
         confirmLabel: t('common.delete', { defaultValue: 'Delete' }),
         cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
-      },
+      }
     );
     if (confirmed) {
       onDeleteRecoveryKey?.();
     }
   };
-
 
   const stateLabel = t(`settings.sync.status_${status.state}`, {
     defaultValue: status.state,
@@ -175,7 +182,7 @@ export function SyncConnectedPanel({
   const retryLabel = formatFriendlyTime(
     status.nextRetryAtMs,
     t('settings.sync.not_scheduled', { defaultValue: 'Not scheduled' }),
-    t,
+    t
   );
 
   // Generate pairing token for the current vault
@@ -189,7 +196,7 @@ export function SyncConnectedPanel({
         password: '',
       },
       status.vaultId,
-      false,
+      false
     );
   }, [status.vaultId, pairingInfo]);
 
@@ -228,8 +235,12 @@ export function SyncConnectedPanel({
             <Lock size={20} />
           </div>
           <div>
-            <strong>{t('settings.sync.locked_title', { defaultValue: 'Sync vault locked' })}</strong>
-            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{status.vaultId}</span>
+            <strong>
+              {t('settings.sync.locked_title', { defaultValue: 'Sync vault locked' })}
+            </strong>
+            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>
+              {status.vaultId}
+            </span>
           </div>
         </div>
 
@@ -262,7 +273,9 @@ export function SyncConnectedPanel({
 
         <SettingsItem
           title={t('settings.sync.provider_password', { defaultValue: 'WebDAV password' })}
-          hint={t('settings.sync.provider_password_hint', { defaultValue: 'Enter your WebDAV application password' })}
+          hint={t('settings.sync.provider_password_hint', {
+            defaultValue: 'Enter your WebDAV application password',
+          })}
         >
           <PasswordInput
             id="sync-unlock-provider-password"
@@ -278,7 +291,9 @@ export function SyncConnectedPanel({
         {unlockMode === 'password' ? (
           <SettingsItem
             title={t('settings.sync.master_password', { defaultValue: 'Master password' })}
-            hint={t('settings.sync.master_password_hint', { defaultValue: 'Enter your vault master password' })}
+            hint={t('settings.sync.master_password_hint', {
+              defaultValue: 'Enter your vault master password',
+            })}
           >
             <PasswordInput
               id="sync-unlock-master-password"
@@ -293,7 +308,9 @@ export function SyncConnectedPanel({
         ) : (
           <SettingsItem
             title={t('settings.sync.recovery_key', { defaultValue: 'Recovery key' })}
-            hint={t('settings.sync.recovery_key_hint', { defaultValue: 'Enter your emergency recovery key' })}
+            hint={t('settings.sync.recovery_key_hint', {
+              defaultValue: 'Enter your emergency recovery key',
+            })}
           >
             <input
               id="sync-unlock-recovery-key"
@@ -365,11 +382,17 @@ export function SyncConnectedPanel({
               )}
             </div>
             <div className="sync-hero-meta">
-              <span>{t('settings.sync.vault_identifier_label', { defaultValue: 'Vault: ' })}<code>{status.vaultId}</code></span>
+              <span>
+                {t('settings.sync.vault_identifier_label', { defaultValue: 'Vault: ' })}
+                <code>{status.vaultId}</code>
+              </span>
               {serverHost && (
                 <>
                   <span className="sync-meta-divider">·</span>
-                  <span className="sync-hero-server-url" title={pairingInfo?.serverUrl || undefined}>
+                  <span
+                    className="sync-hero-server-url"
+                    title={pairingInfo?.serverUrl || undefined}
+                  >
                     {serverHost}
                   </span>
                 </>
@@ -385,7 +408,9 @@ export function SyncConnectedPanel({
               disabled={isBusy}
             >
               <QrCode size={14} />
-              <span>{t('settings.sync.pair_device_action', { defaultValue: 'Pair new device' })}</span>
+              <span>
+                {t('settings.sync.pair_device_action', { defaultValue: 'Pair new device' })}
+              </span>
             </button>
 
             <button
@@ -394,7 +419,10 @@ export function SyncConnectedPanel({
               onClick={() => void onRunNow()}
               disabled={isBusy || status.state === 'paused'}
             >
-              <RefreshCw size={14} className={status.state === 'syncing' ? 'queue-icon-spin' : undefined} />
+              <RefreshCw
+                size={14}
+                className={status.state === 'syncing' ? 'queue-icon-spin' : undefined}
+              />
               <span>
                 {status.state === 'syncing'
                   ? t('settings.sync.syncing', { defaultValue: 'Syncing...' })
@@ -437,7 +465,11 @@ export function SyncConnectedPanel({
               {t('settings.sync.last_success', { defaultValue: 'Last sync' })}
             </span>
             <strong className="sync-metric-value">
-              {formatFriendlyTime(status.lastSuccessAtMs, t('settings.sync.never', { defaultValue: 'Never' }), t)}
+              {formatFriendlyTime(
+                status.lastSuccessAtMs,
+                t('settings.sync.never', { defaultValue: 'Never' }),
+                t
+              )}
             </strong>
           </div>
 
@@ -446,7 +478,9 @@ export function SyncConnectedPanel({
               <ArrowUpRight size={13} />
               {t('settings.sync.pending', { defaultValue: 'Pending upload' })}
             </span>
-            <strong className={`sync-metric-value ${status.pendingOperationCount > 0 ? 'is-active' : ''}`}>
+            <strong
+              className={`sync-metric-value ${status.pendingOperationCount > 0 ? 'is-active' : ''}`}
+            >
               {status.pendingOperationCount}
             </strong>
           </div>
@@ -466,7 +500,9 @@ export function SyncConnectedPanel({
               <AlertTriangle size={13} />
               {t('settings.sync.conflicts', { defaultValue: 'Conflicts' })}
             </span>
-            <strong className={`sync-metric-value ${status.conflictCount > 0 ? 'sync-text-warning' : ''}`}>
+            <strong
+              className={`sync-metric-value ${status.conflictCount > 0 ? 'sync-text-warning' : ''}`}
+            >
               {status.conflictCount}
             </strong>
           </div>
@@ -506,23 +542,32 @@ export function SyncConnectedPanel({
           layout="vertical"
         >
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div className="settings-scenario-cards three-columns" style={{ width: '100%', padding: 0, background: 'transparent' }}>
+            <div
+              className="settings-scenario-cards three-columns"
+              style={{ width: '100%', padding: 0, background: 'transparent' }}
+            >
               {[
                 {
                   id: 'content' as const,
                   label: t('settings.sync.preset_content', { defaultValue: 'Content' }),
-                  description: t('settings.sync.scope_transcripts_only', { defaultValue: 'Transcripts & Projects' }),
+                  description: t('settings.sync.scope_transcripts_only', {
+                    defaultValue: 'Transcripts & Projects',
+                  }),
                 },
                 {
                   id: 'standard' as const,
                   label: t('settings.sync.preset_standard', { defaultValue: 'Standard' }),
-                  description: t('settings.sync.scope_standard_desc', { defaultValue: 'Transcripts, summaries, rules' }),
+                  description: t('settings.sync.scope_standard_desc', {
+                    defaultValue: 'Transcripts, summaries, rules',
+                  }),
                   badge: t('common.recommended', { defaultValue: 'Recommended' }),
                 },
                 {
                   id: 'full' as const,
                   label: t('settings.sync.preset_full', { defaultValue: 'Full' }),
-                  description: t('settings.sync.scope_full_desc', { defaultValue: 'Full workspace data' }),
+                  description: t('settings.sync.scope_full_desc', {
+                    defaultValue: 'Full workspace data',
+                  }),
                 },
               ].map((p) => {
                 const isSelected = selectedPreset === p.id;
@@ -540,11 +585,13 @@ export function SyncConnectedPanel({
                     <span className="settings-scenario-card-text">
                       <span className="settings-scenario-card-label">
                         {p.label}
-                        {p.badge && <span className="sync-scope-tag is-badge" style={{ marginLeft: '6px' }}>{p.badge}</span>}
+                        {p.badge && (
+                          <span className="sync-scope-tag is-badge" style={{ marginLeft: '6px' }}>
+                            {p.badge}
+                          </span>
+                        )}
                       </span>
-                      <span className="settings-scenario-card-description">
-                        {p.description}
-                      </span>
+                      <span className="settings-scenario-card-description">{p.description}</span>
                     </span>
                   </button>
                 );
@@ -572,231 +619,309 @@ export function SyncConnectedPanel({
 
       {/* Advanced Security & Key Accordion */}
       <SettingsSection>
-      <SettingsAccordion
-        defaultOpen={Boolean(recoveryKey)}
-        title={(
-          <div className="settings-accordion-copy">
-            <div className="settings-accordion-copy-title"><ShieldCheck size={16} />{t('settings.sync.security_title', { defaultValue: 'Vault Security & Recovery' })}</div>
-            <div className="settings-accordion-copy-hint">{t('settings.sync.security_hint', { defaultValue: 'Manage your encryption password and emergency recovery keys.' })}</div>
-          </div>
-        )}
-      >
-        <div className="sync-security-panel">
-          {/* Recovery Key Management */}
-          <SettingsItem
-            title={t('settings.sync.recovery_key_manage_title', { defaultValue: 'Emergency Recovery Key' })}
-            hint={t('settings.sync.recovery_key_manage_hint', { defaultValue: 'Used to recover your data if you forget the master password.' })}
-          >
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => void onGenerateRecoveryKey()}
-                disabled={isBusy}
-              >
-                <Sparkles size={14} />
-                <span>{t('settings.sync.regenerate_key_action', { defaultValue: 'Generate new key' })}</span>
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => void onLock()}
-                disabled={isBusy}
-                title={t('settings.sync.lock_and_test_recovery_action', { defaultValue: 'Lock & test recovery key' })}
-              >
-                <Lock size={14} />
-                <span>{t('settings.sync.lock_and_test_recovery_action', { defaultValue: 'Lock & test recovery key' })}</span>
-              </button>
-            </div>
-          </SettingsItem>
-
-          {recoveryKey && (
-            <div className="sync-recovery-output-card">
-              <div className="sync-recovery-card-header">
+        <SettingsAccordion
+          defaultOpen={Boolean(recoveryKey)}
+          title={
+            <div className="settings-accordion-copy">
+              <div className="settings-accordion-copy-title">
                 <ShieldCheck size={16} />
-                <strong>{t('settings.sync.new_recovery_key_title', { defaultValue: 'Active Recovery Key' })}</strong>
+                {t('settings.sync.security_title', { defaultValue: 'Vault Security & Recovery' })}
               </div>
-              <p>{t('settings.sync.recovery_key_save_warning', { defaultValue: 'Save this key in a secure location (e.g. password manager). It is not stored in plain text.' })}</p>
-              <div className="sync-recovery-box">
-                <code className="sync-recovery-key-text">
-                  {isKeyRevealed ? formatPartiallyMaskedKey(recoveryKey) : '••••••••••••••••••••••••'}
-                </code>
-                <div className="sync-recovery-actions">
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => setIsKeyRevealed((prev) => !prev)}
-                    title={isKeyRevealed ? t('settings.sync.hide_recovery_key', { defaultValue: 'Hide key' }) : t('settings.sync.view_recovery_key', { defaultValue: 'View key' })}
-                    aria-label={isKeyRevealed ? t('settings.sync.hide_recovery_key', { defaultValue: 'Hide key' }) : t('settings.sync.view_recovery_key', { defaultValue: 'View key' })}
-                  >
-                    {isKeyRevealed ? <EyeOff size={14} /> : <Eye size={14} />}
-                    <span>{isKeyRevealed ? t('settings.sync.hide_recovery_key', { defaultValue: 'Hide' }) : t('settings.sync.view_recovery_key', { defaultValue: 'View' })}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={handleCopyKeyWithFeedback}
-                    title={t('common.copy', { defaultValue: 'Copy' })}
-                  >
-                    {copiedKey ? <Check size={14} /> : <Copy size={14} />}
-                    <span>{copiedKey ? t('common.copied', { defaultValue: 'Copied' }) : t('common.copy', { defaultValue: 'Copy' })}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => void onExportRecoveryKey()}
-                    title={t('settings.sync.export_recovery_key', { defaultValue: 'Export recovery key' })}
-                  >
-                    <Download size={14} />
-                    <span>{t('settings.sync.export_recovery_key', { defaultValue: 'Export' })}</span>
-                  </button>
-                  {onDeleteRecoveryKey && (
+              <div className="settings-accordion-copy-hint">
+                {t('settings.sync.security_hint', {
+                  defaultValue: 'Manage your encryption password and emergency recovery keys.',
+                })}
+              </div>
+            </div>
+          }
+        >
+          <div className="sync-security-panel">
+            {/* Recovery Key Management */}
+            <SettingsItem
+              title={t('settings.sync.recovery_key_manage_title', {
+                defaultValue: 'Emergency Recovery Key',
+              })}
+              hint={t('settings.sync.recovery_key_manage_hint', {
+                defaultValue: 'Used to recover your data if you forget the master password.',
+              })}
+            >
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => void onGenerateRecoveryKey()}
+                  disabled={isBusy}
+                >
+                  <Sparkles size={14} />
+                  <span>
+                    {t('settings.sync.regenerate_key_action', { defaultValue: 'Generate new key' })}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => void onLock()}
+                  disabled={isBusy}
+                  title={t('settings.sync.lock_and_test_recovery_action', {
+                    defaultValue: 'Lock & test recovery key',
+                  })}
+                >
+                  <Lock size={14} />
+                  <span>
+                    {t('settings.sync.lock_and_test_recovery_action', {
+                      defaultValue: 'Lock & test recovery key',
+                    })}
+                  </span>
+                </button>
+              </div>
+            </SettingsItem>
+
+            {recoveryKey && (
+              <div className="sync-recovery-output-card">
+                <div className="sync-recovery-card-header">
+                  <ShieldCheck size={16} />
+                  <strong>
+                    {t('settings.sync.new_recovery_key_title', {
+                      defaultValue: 'Active Recovery Key',
+                    })}
+                  </strong>
+                </div>
+                <p>
+                  {t('settings.sync.recovery_key_save_warning', {
+                    defaultValue:
+                      'Save this key in a secure location (e.g. password manager). It is not stored in plain text.',
+                  })}
+                </p>
+                <div className="sync-recovery-box">
+                  <code className="sync-recovery-key-text">
+                    {isKeyRevealed
+                      ? formatPartiallyMaskedKey(recoveryKey)
+                      : '••••••••••••••••••••••••'}
+                  </code>
+                  <div className="sync-recovery-actions">
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
-                      onClick={() => void handleDeleteRecoveryKey()}
-                      title={t('settings.sync.delete_recovery_key', { defaultValue: 'Delete key' })}
-                      aria-label={t('settings.sync.delete_recovery_key', { defaultValue: 'Delete key' })}
+                      onClick={() => setIsKeyRevealed((prev) => !prev)}
+                      title={
+                        isKeyRevealed
+                          ? t('settings.sync.hide_recovery_key', { defaultValue: 'Hide key' })
+                          : t('settings.sync.view_recovery_key', { defaultValue: 'View key' })
+                      }
+                      aria-label={
+                        isKeyRevealed
+                          ? t('settings.sync.hide_recovery_key', { defaultValue: 'Hide key' })
+                          : t('settings.sync.view_recovery_key', { defaultValue: 'View key' })
+                      }
                     >
-                      <Trash2 size={14} />
-                      <span>{t('common.delete', { defaultValue: 'Delete' })}</span>
+                      {isKeyRevealed ? <EyeOff size={14} /> : <Eye size={14} />}
+                      <span>
+                        {isKeyRevealed
+                          ? t('settings.sync.hide_recovery_key', { defaultValue: 'Hide' })
+                          : t('settings.sync.view_recovery_key', { defaultValue: 'View' })}
+                      </span>
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={handleCopyKeyWithFeedback}
+                      title={t('common.copy', { defaultValue: 'Copy' })}
+                    >
+                      {copiedKey ? <Check size={14} /> : <Copy size={14} />}
+                      <span>
+                        {copiedKey
+                          ? t('common.copied', { defaultValue: 'Copied' })
+                          : t('common.copy', { defaultValue: 'Copy' })}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => void onExportRecoveryKey()}
+                      title={t('settings.sync.export_recovery_key', {
+                        defaultValue: 'Export recovery key',
+                      })}
+                    >
+                      <Download size={14} />
+                      <span>
+                        {t('settings.sync.export_recovery_key', { defaultValue: 'Export' })}
+                      </span>
+                    </button>
+                    {onDeleteRecoveryKey && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => void handleDeleteRecoveryKey()}
+                        title={t('settings.sync.delete_recovery_key', {
+                          defaultValue: 'Delete key',
+                        })}
+                        aria-label={t('settings.sync.delete_recovery_key', {
+                          defaultValue: 'Delete key',
+                        })}
+                      >
+                        <Trash2 size={14} />
+                        <span>{t('common.delete', { defaultValue: 'Delete' })}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Change Password Form */}
-          <form
-            className="sync-change-password-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (nextPassword !== confirmPassword) {
-                setPasswordError(t('settings.sync.validation_password_match', { defaultValue: 'The new master password confirmation does not match.' }));
-                return;
-              }
-              setPasswordError(null);
-              void onChangeMasterPassword(currentPassword, nextPassword).then(() => {
-                setCurrentPassword('');
-                setNextPassword('');
-                setConfirmPassword('');
-              });
-            }}
-          >
-            <div className="sync-security-form-header">
-              <KeyRound size={15} />
-              <span>{t('settings.sync.change_password', { defaultValue: 'Change master password' })}</span>
-            </div>
-
-            <div style={{ padding: '0 4px 6px 4px' }}>
-              <div className="sync-segmented-control">
-                <button
-                  type="button"
-                  className={`sync-segmented-btn ${passwordChangeMode === 'password' ? 'is-active' : ''}`}
-                  onClick={() => setPasswordChangeMode('password')}
-                >
-                  <KeyRound size={13} />
-                  <span>{t('settings.sync.change_password_mode_current', { defaultValue: 'Use current password' })}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`sync-segmented-btn ${passwordChangeMode === 'recovery' ? 'is-active' : ''}`}
-                  onClick={() => setPasswordChangeMode('recovery')}
-                >
-                  <ShieldCheck size={13} />
-                  <span>{t('settings.sync.change_password_mode_recovery', { defaultValue: 'Reset with recovery key' })}</span>
-                </button>
+            {/* Change Password Form */}
+            <form
+              className="sync-change-password-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (nextPassword !== confirmPassword) {
+                  setPasswordError(
+                    t('settings.sync.validation_password_match', {
+                      defaultValue: 'The new master password confirmation does not match.',
+                    })
+                  );
+                  return;
+                }
+                setPasswordError(null);
+                void onChangeMasterPassword(currentPassword, nextPassword).then(() => {
+                  setCurrentPassword('');
+                  setNextPassword('');
+                  setConfirmPassword('');
+                });
+              }}
+            >
+              <div className="sync-security-form-header">
+                <KeyRound size={15} />
+                <span>
+                  {t('settings.sync.change_password', { defaultValue: 'Change master password' })}
+                </span>
               </div>
-            </div>
 
-            <div className="sync-change-password-fields">
-              {passwordChangeMode === 'password' ? (
+              <div style={{ padding: '0 4px 6px 4px' }}>
+                <div className="sync-segmented-control">
+                  <button
+                    type="button"
+                    className={`sync-segmented-btn ${passwordChangeMode === 'password' ? 'is-active' : ''}`}
+                    onClick={() => setPasswordChangeMode('password')}
+                  >
+                    <KeyRound size={13} />
+                    <span>
+                      {t('settings.sync.change_password_mode_current', {
+                        defaultValue: 'Use current password',
+                      })}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sync-segmented-btn ${passwordChangeMode === 'recovery' ? 'is-active' : ''}`}
+                    onClick={() => setPasswordChangeMode('recovery')}
+                  >
+                    <ShieldCheck size={13} />
+                    <span>
+                      {t('settings.sync.change_password_mode_recovery', {
+                        defaultValue: 'Reset with recovery key',
+                      })}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="sync-change-password-fields">
+                {passwordChangeMode === 'password' ? (
+                  <SettingsItem
+                    title={t('settings.sync.current_password', {
+                      defaultValue: 'Current password',
+                    })}
+                  >
+                    <PasswordInput
+                      autoComplete="current-password"
+                      value={currentPassword}
+                      onChange={(event) => setCurrentPassword(event.target.value)}
+                      disabled={isBusy}
+                      style={{ width: '100%', maxWidth: '280px' }}
+                    />
+                  </SettingsItem>
+                ) : (
+                  <SettingsItem
+                    title={t('settings.sync.use_recovery_key', {
+                      defaultValue: 'Emergency recovery key',
+                    })}
+                    hint={t('settings.sync.recovery_key_placeholder', {
+                      defaultValue: 'Paste the recovery key saved during vault creation',
+                    })}
+                  >
+                    <input
+                      type="text"
+                      className="settings-input sync-monospace-input"
+                      placeholder={t('settings.sync.recovery_key_placeholder', {
+                        defaultValue: 'Paste the recovery key saved during vault creation',
+                      })}
+                      value={currentPassword}
+                      onChange={(event) => setCurrentPassword(event.target.value)}
+                      disabled={isBusy}
+                      style={{ width: '100%', maxWidth: '380px' }}
+                    />
+                  </SettingsItem>
+                )}
+
                 <SettingsItem
-                  title={t('settings.sync.current_password', { defaultValue: 'Current password' })}
+                  title={t('settings.sync.next_password', { defaultValue: 'New master password' })}
                 >
                   <PasswordInput
-                    autoComplete="current-password"
-                    value={currentPassword}
-                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    autoComplete="new-password"
+                    value={nextPassword}
+                    onChange={(event) => setNextPassword(event.target.value)}
                     disabled={isBusy}
                     style={{ width: '100%', maxWidth: '280px' }}
                   />
                 </SettingsItem>
-              ) : (
+
                 <SettingsItem
-                  title={t('settings.sync.use_recovery_key', { defaultValue: 'Emergency recovery key' })}
-                  hint={t('settings.sync.recovery_key_placeholder', { defaultValue: 'Paste the recovery key saved during vault creation' })}
+                  title={t('settings.sync.confirm_next_password', {
+                    defaultValue: 'Confirm new master password',
+                  })}
                 >
-                  <input
-                    type="text"
-                    className="settings-input sync-monospace-input"
-                    placeholder={t('settings.sync.recovery_key_placeholder', { defaultValue: 'Paste the recovery key saved during vault creation' })}
-                    value={currentPassword}
-                    onChange={(event) => setCurrentPassword(event.target.value)}
+                  <PasswordInput
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
                     disabled={isBusy}
-                    style={{ width: '100%', maxWidth: '380px' }}
+                    style={{ width: '100%', maxWidth: '280px' }}
                   />
                 </SettingsItem>
+              </div>
+
+              {passwordError && (
+                <div className="sync-banner-box is-error" role="alert" style={{ marginTop: '8px' }}>
+                  <AlertCircle size={15} />
+                  <span>{passwordError}</span>
+                </div>
               )}
 
-              <SettingsItem
-                title={t('settings.sync.next_password', { defaultValue: 'New master password' })}
-              >
-                <PasswordInput
-                  autoComplete="new-password"
-                  value={nextPassword}
-                  onChange={(event) => setNextPassword(event.target.value)}
-                  disabled={isBusy}
-                  style={{ width: '100%', maxWidth: '280px' }}
-                />
-              </SettingsItem>
-
-              <SettingsItem
-                title={t('settings.sync.confirm_next_password', { defaultValue: 'Confirm new master password' })}
-              >
-                <PasswordInput
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  disabled={isBusy}
-                  style={{ width: '100%', maxWidth: '280px' }}
-                />
-              </SettingsItem>
-            </div>
-
-            {passwordError && (
-              <div className="sync-banner-box is-error" role="alert" style={{ marginTop: '8px' }}>
-                <AlertCircle size={15} />
-                <span>{passwordError}</span>
+              <div className="sync-change-password-actions">
+                <button
+                  type="submit"
+                  className="btn btn-secondary btn-sm"
+                  disabled={isBusy || !currentPassword || !nextPassword || !confirmPassword}
+                >
+                  <KeyRound size={14} />
+                  <span>
+                    {busyAction === 'change_master_password'
+                      ? t('settings.sync.changing_password', {
+                          defaultValue: 'Updating password...',
+                        })
+                      : t('settings.sync.change_password_action', {
+                          defaultValue: 'Update password',
+                        })}
+                  </span>
+                </button>
               </div>
-            )}
-
-            <div className="sync-change-password-actions">
-              <button
-                type="submit"
-                className="btn btn-secondary btn-sm"
-                disabled={isBusy || !currentPassword || !nextPassword || !confirmPassword}
-              >
-                <KeyRound size={14} />
-                <span>
-                  {busyAction === 'change_master_password'
-                    ? t('settings.sync.changing_password', { defaultValue: 'Updating password...' })
-                    : t('settings.sync.change_password_action', { defaultValue: 'Update password' })}
-                </span>
-              </button>
-            </div>
-          </form>
-        </div>
-      </SettingsAccordion>
+            </form>
+          </div>
+        </SettingsAccordion>
       </SettingsSection>
 
       {/* Conflict Center */}
-      {conflictCenterSlot && (
-        <SettingsSection>
-          {conflictCenterSlot}
-        </SettingsSection>
-      )}
+      {conflictCenterSlot && <SettingsSection>{conflictCenterSlot}</SettingsSection>}
 
       {/* Disconnect Danger Zone */}
       <SettingsSection
@@ -804,7 +929,9 @@ export function SyncConnectedPanel({
       >
         <SettingsItem
           title={t('settings.sync.disconnect_title', { defaultValue: 'Disconnect this device' })}
-          hint={t('settings.sync.disconnect_hint', { defaultValue: 'Local data stays on this device. The remote vault is not deleted.' })}
+          hint={t('settings.sync.disconnect_hint', {
+            defaultValue: 'Local data stays on this device. The remote vault is not deleted.',
+          })}
         >
           <button
             type="button"
@@ -833,13 +960,13 @@ export function SyncConnectedPanel({
             >
               {t('common.close', { defaultValue: 'Close' })}
             </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleCopyPairingToken}
-            >
+            <button type="button" className="btn btn-primary" onClick={handleCopyPairingToken}>
               {copiedToken ? <Check size={14} /> : <Copy size={14} />}
-              <span>{copiedToken ? t('common.copied', { defaultValue: 'Copied' }) : t('settings.sync.copy_pairing_token', { defaultValue: 'Copy pairing code' })}</span>
+              <span>
+                {copiedToken
+                  ? t('common.copied', { defaultValue: 'Copied' })
+                  : t('settings.sync.copy_pairing_token', { defaultValue: 'Copy pairing code' })}
+              </span>
             </button>
           </>
         }
@@ -847,14 +974,17 @@ export function SyncConnectedPanel({
         <div className="sync-pairing-modal-body">
           <p className="sync-pairing-modal-desc">
             {t('settings.sync.pairing_modal_desc', {
-              defaultValue: 'Use this pairing code to quickly connect your second device without re-entering server parameters.',
+              defaultValue:
+                'Use this pairing code to quickly connect your second device without re-entering server parameters.',
             })}
           </p>
 
           <div className="sync-pairing-summary-card">
             <div className="sync-pairing-summary-row">
               <span>{t('settings.sync.server_url', { defaultValue: 'Server URL' })}</span>
-              <code title={pairingInfo?.serverUrl || undefined}>{pairingInfo?.serverUrl || '—'}</code>
+              <code title={pairingInfo?.serverUrl || undefined}>
+                {pairingInfo?.serverUrl || '—'}
+              </code>
             </div>
             <div className="sync-pairing-summary-row">
               <span>{t('settings.sync.username', { defaultValue: 'Username' })}</span>
@@ -877,8 +1007,16 @@ export function SyncConnectedPanel({
                 className="btn btn-secondary btn-sm sync-token-copy-inline-btn"
                 onClick={handleCopyPairingToken}
               >
-                {copiedToken ? <Check size={13} style={{ color: 'var(--color-success, #228b4e)' }} /> : <Copy size={13} />}
-                <span>{copiedToken ? t('common.copied', { defaultValue: 'Copied' }) : t('common.copy', { defaultValue: 'Copy' })}</span>
+                {copiedToken ? (
+                  <Check size={13} style={{ color: 'var(--color-success, #228b4e)' }} />
+                ) : (
+                  <Copy size={13} />
+                )}
+                <span>
+                  {copiedToken
+                    ? t('common.copied', { defaultValue: 'Copied' })
+                    : t('common.copy', { defaultValue: 'Copy' })}
+                </span>
               </button>
             </div>
             <textarea
@@ -895,15 +1033,27 @@ export function SyncConnectedPanel({
           <div className="sync-pairing-steps-guide">
             <div className="sync-pairing-step-item">
               <span className="sync-step-badge">1</span>
-              <span>{t('settings.sync.pair_step_1', { defaultValue: 'Open Sona on your second device' })}</span>
+              <span>
+                {t('settings.sync.pair_step_1', {
+                  defaultValue: 'Open Sona on your second device',
+                })}
+              </span>
             </div>
             <div className="sync-pairing-step-item">
               <span className="sync-step-badge">2</span>
-              <span>{t('settings.sync.pair_step_2', { defaultValue: 'Go to Settings -> Cloud Sync -> click "Import pairing code"' })}</span>
+              <span>
+                {t('settings.sync.pair_step_2', {
+                  defaultValue: 'Go to Settings -> Cloud Sync -> click "Import pairing code"',
+                })}
+              </span>
             </div>
             <div className="sync-pairing-step-item">
               <span className="sync-step-badge">3</span>
-              <span>{t('settings.sync.pair_step_3', { defaultValue: 'Paste the code above and enter your master password' })}</span>
+              <span>
+                {t('settings.sync.pair_step_3', {
+                  defaultValue: 'Paste the code above and enter your master password',
+                })}
+              </span>
             </div>
           </div>
 
@@ -911,7 +1061,8 @@ export function SyncConnectedPanel({
             <ShieldCheck size={15} />
             <span>
               {t('settings.sync.pairing_security_note', {
-                defaultValue: 'The pairing code contains server metadata only. You will still need to enter your Master Password on the second device to unlock.',
+                defaultValue:
+                  'The pairing code contains server metadata only. You will still need to enter your Master Password on the second device to unlock.',
               })}
             </span>
           </div>

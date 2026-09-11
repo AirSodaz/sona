@@ -1,11 +1,11 @@
-import { historyService } from './historyService';
 import { useConfigStore } from '../stores/configStore';
-import { settingsStore, STORE_KEY_CONFIG } from './storageService';
-import { projectService } from './projectService';
-import { getPathStatusMap } from './pathStatusService';
 import type { AppConfig } from '../types/config';
 import { isHistoryItemDraft } from '../types/history';
 import { logger } from '../utils/logger';
+import { historyService } from './historyService';
+import { getPathStatusMap } from './pathStatusService';
+import { projectService } from './projectService';
+import { STORE_KEY_CONFIG, settingsStore } from './storageService';
 import { BaseDirectory, exists } from './tauri/platform/fs';
 
 const HISTORY_DIR = 'history';
@@ -54,7 +54,7 @@ export class HealthCheckService {
     } catch (error) {
       logger.error('[HealthCheck] Error during health check:', error);
     }
-  }
+  };
 
   /**
    * Verifies that history items have at least one valid file (audio or transcript).
@@ -71,7 +71,9 @@ export class HealthCheckService {
       const transcriptPath = `${HISTORY_DIR}/${item.transcriptPath}`;
 
       try {
-        const transcriptExists = await this.ports.exists(transcriptPath, { baseDir: BaseDirectory.AppLocalData });
+        const transcriptExists = await this.ports.exists(transcriptPath, {
+          baseDir: BaseDirectory.AppLocalData,
+        });
         if (isHistoryItemDraft(item)) {
           if (!transcriptExists) {
             invalidIds.push(item.id);
@@ -79,7 +81,9 @@ export class HealthCheckService {
           continue;
         }
 
-        const audioExists = await this.ports.exists(audioPath, { baseDir: BaseDirectory.AppLocalData });
+        const audioExists = await this.ports.exists(audioPath, {
+          baseDir: BaseDirectory.AppLocalData,
+        });
 
         if (!audioExists && !transcriptExists) {
           invalidIds.push(item.id);
@@ -91,7 +95,9 @@ export class HealthCheckService {
     }
 
     if (invalidIds.length > 0) {
-      logger.info(`[HealthCheck] Found ${invalidIds.length} invalid history records. Removing silently...`);
+      logger.info(
+        `[HealthCheck] Found ${invalidIds.length} invalid history records. Removing silently...`
+      );
       try {
         // historyService.deleteRecordings handles index update and any remaining file cleanup
         await this.ports.historyService.deleteRecordings(invalidIds);
@@ -99,7 +105,7 @@ export class HealthCheckService {
         logger.error('[HealthCheck] Failed to remove invalid history records:', e);
       }
     }
-  }
+  };
 
   /**
    * Verifies that configured model paths still exist on disk.
@@ -131,12 +137,14 @@ export class HealthCheckService {
       }))
       .filter((model) => model.path.length > 0);
     const pathStatusMap = await this.ports.getPathStatusMap(
-      configuredModelFields.map((model) => model.path),
+      configuredModelFields.map((model) => model.path)
     );
 
     for (const model of configuredModelFields) {
       if (pathStatusMap[model.path]?.kind === 'missing') {
-        logger.warn(`[HealthCheck] Model path not found: ${model.path}. Clearing field ${model.key}.`);
+        logger.warn(
+          `[HealthCheck] Model path not found: ${model.path}. Clearing field ${model.key}.`
+        );
         patch[model.key] = '';
         changed = true;
       }
@@ -148,7 +156,7 @@ export class HealthCheckService {
       await this.ports.settingsStore.set(STORE_KEY_CONFIG, updatedConfig);
       await this.ports.settingsStore.save();
     }
-  }
+  };
 
   /**
    * Triggers project data normalization and migration.
@@ -160,7 +168,7 @@ export class HealthCheckService {
     } catch (e) {
       logger.error('[HealthCheck] Failed to check projects:', e);
     }
-  }
+  };
 }
 
 export function createHealthCheckService(ports: HealthCheckServicePorts): HealthCheckService {

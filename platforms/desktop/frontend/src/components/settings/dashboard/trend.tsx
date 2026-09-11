@@ -1,10 +1,10 @@
-import React from 'react';
-import { joinClassNames } from './classNames';
-import { DashboardTrendChart, type DashboardChartPoint } from './charts';
+import type React from 'react';
 import type {
   DashboardContentTrendPoint,
   DashboardLlmUsageTrendPoint,
 } from '../../../types/dashboard';
+import { type DashboardChartPoint, DashboardTrendChart } from './charts';
+import { joinClassNames } from './classNames';
 
 export function TrendCard({
   title,
@@ -20,7 +20,13 @@ export function TrendCard({
   tone?: 'accent' | 'info';
 }): React.JSX.Element {
   return (
-    <div className={joinClassNames('settings-dashboard-chart-card', 'settings-dashboard-trend-card', tone)}>
+    <div
+      className={joinClassNames(
+        'settings-dashboard-chart-card',
+        'settings-dashboard-trend-card',
+        tone
+      )}
+    >
       <div className="settings-dashboard-chart-header">
         <div className="settings-dashboard-subtitle">{title}</div>
         <div className="settings-dashboard-note">{description}</div>
@@ -45,7 +51,9 @@ export function ContentTrends({
   return (
     <div className="settings-dashboard-trend-grid">
       <TrendCard
-        title={t('settings.dashboard.recent_item_trend', { defaultValue: 'Recent 30 Day Item Trend' })}
+        title={t('settings.dashboard.recent_item_trend', {
+          defaultValue: 'Recent 30 Day Item Trend',
+        })}
         description={t('settings.dashboard.recent_item_trend_hint', {
           defaultValue: 'Saved recordings and imports per day.',
         })}
@@ -53,12 +61,14 @@ export function ContentTrends({
           label: point.dateLabel,
           value: point.itemCount,
         }))}
-        valueFormatter={(value) => (
+        valueFormatter={(value) =>
           points.find((point) => point.itemCount === value)?.itemCountDisplay || String(value)
-        )}
+        }
       />
       <TrendCard
-        title={t('settings.dashboard.recent_duration_trend', { defaultValue: 'Recent 30 Day Duration Trend' })}
+        title={t('settings.dashboard.recent_duration_trend', {
+          defaultValue: 'Recent 30 Day Duration Trend',
+        })}
         description={t('settings.dashboard.recent_duration_trend_hint', {
           defaultValue: 'Total saved duration per day.',
         })}
@@ -66,9 +76,9 @@ export function ContentTrends({
           label: point.dateLabel,
           value: point.durationSeconds,
         }))}
-        valueFormatter={(value) => (
+        valueFormatter={(value) =>
           points.find((point) => point.durationSeconds === value)?.durationDisplay || String(value)
-        )}
+        }
       />
     </div>
   );
@@ -83,7 +93,9 @@ export function TokenTrend({
 }): React.JSX.Element {
   return (
     <TrendCard
-      title={t('settings.dashboard.recent_token_trend', { defaultValue: 'Recent 30 Day Token Trend' })}
+      title={t('settings.dashboard.recent_token_trend', {
+        defaultValue: 'Recent 30 Day Token Trend',
+      })}
       description={t('settings.dashboard.recent_token_trend_hint', {
         defaultValue: 'Prompt + completion tokens recorded each day.',
       })}
@@ -91,9 +103,9 @@ export function TokenTrend({
         label: point.dateLabel,
         value: point.totalTokens,
       }))}
-      valueFormatter={(value) => (
+      valueFormatter={(value) =>
         points.find((point) => point.totalTokens === value)?.totalTokensDisplay || String(value)
-      )}
+      }
       tone="info"
     />
   );

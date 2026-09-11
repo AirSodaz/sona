@@ -53,7 +53,8 @@ vi.mock('../../healthCheckService', () => ({
 }));
 
 vi.mock('../../historyAudioCleanupService', () => ({
-  runHistoryAudioCleanupForCurrentConfig: (...args: unknown[]) => mockRunHistoryAudioCleanup(...args),
+  runHistoryAudioCleanupForCurrentConfig: (...args: unknown[]) =>
+    mockRunHistoryAudioCleanup(...args),
 }));
 
 vi.mock('../../../utils/logger', () => ({
@@ -88,7 +89,7 @@ describe('startAppRuntimeServices', () => {
     expect(mockRunHistoryAudioCleanup).toHaveBeenCalledTimes(1);
     expect(mockLoggerError).toHaveBeenCalledWith(
       '[Startup] Failed to load automation runtime:',
-      expect.any(Error),
+      expect.any(Error)
     );
   });
 
@@ -112,6 +113,12 @@ describe('startAppRuntimeServices', () => {
 
     await startAppRuntimeServices();
 
-    expect(callOrder).toEqual(['task-ledger', 'recovery', 'automation', 'health-check', 'audio-cleanup']);
+    expect(callOrder).toEqual([
+      'task-ledger',
+      'recovery',
+      'automation',
+      'health-check',
+      'audio-cleanup',
+    ]);
   });
 });

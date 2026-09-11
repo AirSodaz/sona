@@ -2,14 +2,17 @@ import { TauriCommand } from './commands';
 import type { TauriCommandArgs, TauriCommandResult } from './contracts';
 import { invokeTauri } from './invoke';
 
-export type AudioDevice =
-  TauriCommandResult<typeof TauriCommand.audio.getSystemAudioDevices>[number];
+export type AudioDevice = TauriCommandResult<
+  typeof TauriCommand.audio.getSystemAudioDevices
+>[number];
 
-export type StartAudioCaptureRequest =
-  TauriCommandArgs<typeof TauriCommand.audio.startSystemAudioCapture>;
+export type StartAudioCaptureRequest = TauriCommandArgs<
+  typeof TauriCommand.audio.startSystemAudioCapture
+>;
 
-export type SetCapturePausedRequest =
-  TauriCommandArgs<typeof TauriCommand.audio.setSystemAudioCapturePaused>;
+export type SetCapturePausedRequest = TauriCommandArgs<
+  typeof TauriCommand.audio.setSystemAudioCapturePaused
+>;
 
 export async function setSystemAudioMute(mute: boolean): Promise<void> {
   await invokeTauri(TauriCommand.audio.setSystemAudioMute, { mute });

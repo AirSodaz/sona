@@ -1,10 +1,11 @@
-import type { AutomationRule } from '../types/automation';
 import type {
   AutomationRuntimeCandidatePayload,
   AutomationRuntimePathCollectionResult,
   AutomationRuntimeReplaceResult,
   AutomationRuntimeRuleConfig,
 } from '../bindings';
+import type { AutomationRule } from '../types/automation';
+
 export type {
   AutomationRuntimeCandidatePayload,
   AutomationRuntimePathCollectionOutcome,
@@ -12,6 +13,7 @@ export type {
   AutomationRuntimeReplaceResult,
   AutomationRuntimeRuleConfig,
 } from '../bindings';
+
 import {
   collectAutomationRuntimeRulePaths as collectAutomationRuntimeRulePathsTauri,
   replaceAutomationRuntimeRules as replaceAutomationRuntimeRulesTauri,
@@ -25,7 +27,7 @@ export const DEFAULT_AUTOMATION_CANDIDATE_DEBOUNCE_MS = 250;
 export const DEFAULT_AUTOMATION_STABLE_WINDOW_MS = 5000;
 
 export function toAutomationRuntimeRuleConfig(
-  rule: Pick<AutomationRule, 'id' | 'watchDirectory' | 'recursive' | 'exportConfig'>,
+  rule: Pick<AutomationRule, 'id' | 'watchDirectory' | 'recursive' | 'exportConfig'>
 ): AutomationRuntimeRuleConfig {
   return {
     ruleId: rule.id,
@@ -38,28 +40,29 @@ export function toAutomationRuntimeRuleConfig(
 }
 
 export async function replaceAutomationRuntimeRules(
-  rules: AutomationRuntimeRuleConfig[],
+  rules: AutomationRuntimeRuleConfig[]
 ): Promise<AutomationRuntimeReplaceResult[]> {
   return replaceAutomationRuntimeRulesTauri(rules);
 }
 
-export async function scanAutomationRuntimeRule(
-  rule: AutomationRuntimeRuleConfig,
-): Promise<void> {
+export async function scanAutomationRuntimeRule(rule: AutomationRuntimeRuleConfig): Promise<void> {
   await scanAutomationRuntimeRuleTauri(rule);
 }
 
 export async function collectAutomationRuntimeRulePaths(
   rule: AutomationRuntimeRuleConfig,
-  filePaths: string[],
+  filePaths: string[]
 ): Promise<AutomationRuntimePathCollectionResult[]> {
   return collectAutomationRuntimeRulePathsTauri(rule, filePaths);
 }
 
 export async function listenToAutomationRuntimeCandidates(
-  onCandidate: (payload: AutomationRuntimeCandidatePayload) => void | Promise<void>,
+  onCandidate: (payload: AutomationRuntimeCandidatePayload) => void | Promise<void>
 ): Promise<UnlistenFn> {
-  return listen<AutomationRuntimeCandidatePayload>(AUTOMATION_RUNTIME_CANDIDATE_EVENT, ({ payload }) => {
-    void onCandidate(payload);
-  });
+  return listen<AutomationRuntimeCandidatePayload>(
+    AUTOMATION_RUNTIME_CANDIDATE_EVENT,
+    ({ payload }) => {
+      void onCandidate(payload);
+    }
+  );
 }

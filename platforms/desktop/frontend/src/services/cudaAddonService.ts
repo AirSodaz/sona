@@ -1,6 +1,6 @@
-import { invokeTauri } from './tauri/invoke';
-import { TauriCommand } from './tauri/commands';
 import type { CudaAddonInspection } from '../bindings';
+import { TauriCommand } from './tauri/commands';
+import { invokeTauri } from './tauri/invoke';
 import { listen, type UnlistenFn } from './tauri/platform/events';
 
 export interface CudaAddonDownloadProgress {
@@ -33,9 +33,7 @@ export const cudaAddonService = {
         const [downloadedBytes, totalBytes, eventId] = event.payload;
         if (eventId === downloadId && options.onProgress) {
           const progressPercent =
-            totalBytes > 0
-              ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100))
-              : 0;
+            totalBytes > 0 ? Math.min(100, Math.round((downloadedBytes / totalBytes) * 100)) : 0;
           options.onProgress({
             downloadedBytes,
             totalBytes,

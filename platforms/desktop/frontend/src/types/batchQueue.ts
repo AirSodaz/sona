@@ -1,8 +1,12 @@
+import type {
+  AutomationExportConfig,
+  AutomationResolutionSnapshot,
+  AutomationStageConfig,
+} from './automation';
 import type { AppConfig } from './config';
-import { TranscriptSegment } from './transcript';
-import type { AutomationExportConfig, AutomationResolutionSnapshot, AutomationStageConfig } from './automation';
-import type { RecoveryItemStage } from './recovery';
 import type { EffectivePipelineSnapshot } from './project';
+import type { RecoveryItemStage } from './recovery';
+import type { TranscriptSegment } from './transcript';
 
 /**
  * Status of a batch queue item.
@@ -15,59 +19,59 @@ export type BatchQueueItemOrigin = 'manual' | 'automation';
  * Represents a file in the batch transcription queue.
  */
 export interface BatchQueueItem {
-    /** Unique identifier for the queue item. */
-    id: string;
-    /** Original filename (display name). */
-    filename: string;
-    /** Saved history title used by the editor after the item is persisted. */
-    historyTitle?: string;
-    /** Full file path for processing. */
-    filePath: string;
-    /** Current processing status. */
-    status: BatchQueueItemStatus;
-    /** Processing progress (0-100). */
-    progress: number;
-    /** Transcription result segments. */
-    segments: TranscriptSegment[];
-    /** Error message if status is 'error'. */
-    errorMessage?: string;
-    /** Managed asset URL for audio playback, or null until a history copy is available. */
-    audioUrl?: string | null;
-    /** ID of the saved history item for this queue item. */
-    historyId?: string;
-    /** Tag context captured when this queue item was created. */
-    tagIds?: string[];
-    /** @deprecated Single-tag compatibility alias. */
-    projectId: string | null;
-    /** Immutable project pipeline captured when queued. */
-    pipelineSnapshot?: EffectivePipelineSnapshot;
-    /** How this queue item entered the pipeline. */
-    origin?: BatchQueueItemOrigin;
-    /** Automation rule ID when the item originated from folder monitoring. */
-    automationRuleId?: string;
-    /** Snapshot of the automation rule name for UI display. */
-    automationRuleName?: string;
-    /** Runtime config snapshot used when this item was queued. */
-    resolvedConfigSnapshot?: AppConfig;
-    /** Optional export settings used after processing. */
-    exportConfig?: AutomationExportConfig | null;
-    /** Optional automation stage settings captured at queue time. */
-    stageConfig?: AutomationStageConfig | null;
-    /** Immutable profile/rule selection made when this task entered the queue. */
-    automationResolutionSnapshot?: AutomationResolutionSnapshot;
-    /** Persistent fingerprint for automation dedupe. */
-    sourceFingerprint?: string;
-    /** Original source file stat snapshot used for automation manifest writes. */
-    fileStat?: {
-        size: number;
-        mtimeMs: number;
-    };
-    /** Exported output path when automation export succeeds. */
-    exportPath?: string;
-    /** Snapshot of the file-automation export filename prefix. */
-    exportFileNamePrefix?: string;
-    /** Recovery snapshot identifier when this item was restored after an interrupted run. */
-    recoveryId?: string;
-    /** Last known pipeline stage used by the recovery center. */
-    lastKnownStage?: RecoveryItemStage;
+  /** Unique identifier for the queue item. */
+  id: string;
+  /** Original filename (display name). */
+  filename: string;
+  /** Saved history title used by the editor after the item is persisted. */
+  historyTitle?: string;
+  /** Full file path for processing. */
+  filePath: string;
+  /** Current processing status. */
+  status: BatchQueueItemStatus;
+  /** Processing progress (0-100). */
+  progress: number;
+  /** Transcription result segments. */
+  segments: TranscriptSegment[];
+  /** Error message if status is 'error'. */
+  errorMessage?: string;
+  /** Managed asset URL for audio playback, or null until a history copy is available. */
+  audioUrl?: string | null;
+  /** ID of the saved history item for this queue item. */
+  historyId?: string;
+  /** Tag context captured when this queue item was created. */
+  tagIds?: string[];
+  /** @deprecated Single-tag compatibility alias. */
+  projectId: string | null;
+  /** Immutable project pipeline captured when queued. */
+  pipelineSnapshot?: EffectivePipelineSnapshot;
+  /** How this queue item entered the pipeline. */
+  origin?: BatchQueueItemOrigin;
+  /** Automation rule ID when the item originated from folder monitoring. */
+  automationRuleId?: string;
+  /** Snapshot of the automation rule name for UI display. */
+  automationRuleName?: string;
+  /** Runtime config snapshot used when this item was queued. */
+  resolvedConfigSnapshot?: AppConfig;
+  /** Optional export settings used after processing. */
+  exportConfig?: AutomationExportConfig | null;
+  /** Optional automation stage settings captured at queue time. */
+  stageConfig?: AutomationStageConfig | null;
+  /** Immutable profile/rule selection made when this task entered the queue. */
+  automationResolutionSnapshot?: AutomationResolutionSnapshot;
+  /** Persistent fingerprint for automation dedupe. */
+  sourceFingerprint?: string;
+  /** Original source file stat snapshot used for automation manifest writes. */
+  fileStat?: {
+    size: number;
+    mtimeMs: number;
+  };
+  /** Exported output path when automation export succeeds. */
+  exportPath?: string;
+  /** Snapshot of the file-automation export filename prefix. */
+  exportFileNamePrefix?: string;
+  /** Recovery snapshot identifier when this item was restored after an interrupted run. */
+  recoveryId?: string;
+  /** Last known pipeline stage used by the recovery center. */
+  lastKnownStage?: RecoveryItemStage;
 }

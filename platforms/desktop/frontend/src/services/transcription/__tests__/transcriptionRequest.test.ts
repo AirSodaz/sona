@@ -9,22 +9,25 @@ import {
 vi.mock('../../modelService', () => ({
   PRESET_MODELS: [],
   PRESET_MODELS_MAP: new Map([
-    ['qwen3-asr-0.6b-q8-gguf', {
-      id: 'qwen3-asr-0.6b-q8-gguf',
-      name: 'Qwen3 ASR',
-      description: '',
-      url: 'https://example.com/qwen.gguf',
-      type: 'qwen3-asr',
-      modes: ['batch'],
-      languages: ['en', 'zh'],
-      languageMode: 'auto',
-      size: '1 GB',
-      engine: 'llama-cpp',
-      fileConfig: {
-        model: 'Qwen3-ASR-0.6B-Q8_0.gguf',
-        mmproj: 'mmproj-Qwen3-ASR-0.6B-Q8_0.gguf',
+    [
+      'qwen3-asr-0.6b-q8-gguf',
+      {
+        id: 'qwen3-asr-0.6b-q8-gguf',
+        name: 'Qwen3 ASR',
+        description: '',
+        url: 'https://example.com/qwen.gguf',
+        type: 'qwen3-asr',
+        modes: ['batch'],
+        languages: ['en', 'zh'],
+        languageMode: 'auto',
+        size: '1 GB',
+        engine: 'llama-cpp',
+        fileConfig: {
+          model: 'Qwen3-ASR-0.6B-Q8_0.gguf',
+          mmproj: 'mmproj-Qwen3-ASR-0.6B-Q8_0.gguf',
+        },
       },
-    }],
+    ],
   ]),
   modelService: {
     getModelRules: vi.fn(() => ({
@@ -67,18 +70,20 @@ describe('transcriptionRequest helpers', () => {
       enableItn: true,
     });
 
-    expect(asrRequest).toEqual(expect.objectContaining({
-      engine: 'local',
-      mode: 'streaming',
-      modelPath: '/models/runtime-streaming',
-      language: 'ja',
-      enableItn: true,
-      normalizationOptions: { enableTimeline: true },
-      postprocessOptions: {
-        textReplacementSets: config.textReplacementSets,
-        dropFinalDotSegments: true,
-      },
-    }));
+    expect(asrRequest).toEqual(
+      expect.objectContaining({
+        engine: 'local',
+        mode: 'streaming',
+        modelPath: '/models/runtime-streaming',
+        language: 'ja',
+        enableItn: true,
+        normalizationOptions: { enableTimeline: true },
+        postprocessOptions: {
+          textReplacementSets: config.textReplacementSets,
+          dropFinalDotSegments: true,
+        },
+      })
+    );
   });
 
   it('disables timeline for non-record streaming instances', () => {
@@ -102,9 +107,7 @@ describe('transcriptionRequest helpers', () => {
       batchModelPath: '/models/batch',
       batchSpeakerSegmentationModelPath: '/models/speaker-segmentation',
       batchSpeakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
-      speakerProfiles: [
-        { id: 'profile-1', name: 'Alice', enabled: true, samples: [] },
-      ],
+      speakerProfiles: [{ id: 'profile-1', name: 'Alice', enabled: true, samples: [] }],
       textReplacementSets: [
         {
           id: 'set-1',
@@ -125,26 +128,26 @@ describe('transcriptionRequest helpers', () => {
       enableItn: false,
     });
 
-    expect(asrRequest).toEqual(expect.objectContaining({
-      mode: 'batch',
-      modelPath: '/models/runtime-offline',
-      language: 'zh',
-      enableItn: false,
-      batchSegmentationMode: 'vad',
-      postprocessOptions: {
-        textReplacementSets: config.textReplacementSets,
-        dropFinalDotSegments: true,
-      },
-    }));
+    expect(asrRequest).toEqual(
+      expect.objectContaining({
+        mode: 'batch',
+        modelPath: '/models/runtime-offline',
+        language: 'zh',
+        enableItn: false,
+        batchSegmentationMode: 'vad',
+        postprocessOptions: {
+          textReplacementSets: config.textReplacementSets,
+          dropFinalDotSegments: true,
+        },
+      })
+    );
     expect(request).toEqual({
       filePath: 'C:/audio/demo.wav',
       saveToPath: 'C:/audio/demo.json',
       speakerProcessing: {
         speakerSegmentationModelPath: '/models/speaker-segmentation',
         speakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
-        speakerProfiles: [
-          { id: 'profile-1', name: 'Alice', enabled: true, samples: [] },
-        ],
+        speakerProfiles: [{ id: 'profile-1', name: 'Alice', enabled: true, samples: [] }],
       },
       asrRequest,
     });
@@ -163,12 +166,14 @@ describe('transcriptionRequest helpers', () => {
       enableItn: true,
     });
 
-    expect(asrRequest).toEqual(expect.objectContaining({
-      mode: 'batch',
-      modelPath: '/models/batch',
-      vadModel: null,
-      batchSegmentationMode: 'whole',
-    }));
+    expect(asrRequest).toEqual(
+      expect.objectContaining({
+        mode: 'batch',
+        modelPath: '/models/batch',
+        vadModel: null,
+        batchSegmentationMode: 'whole',
+      })
+    );
     expect(request.asrRequest).toBe(asrRequest);
   });
 
@@ -202,19 +207,21 @@ describe('transcriptionRequest helpers', () => {
       enableItn: true,
     });
 
-    expect(asrRequest).toEqual(expect.objectContaining({
-      localEngine: 'llama-cpp',
-      language: 'auto',
-      enableItn: false,
-      hotwords: null,
-      vadModel: '/models/vad.onnx',
-      punctuationModel: null,
-      batchSegmentationMode: 'vad',
-      modelType: 'qwen3-asr',
-      fileConfig: expect.objectContaining({
-        mmproj: 'mmproj-Qwen3-ASR-0.6B-Q8_0.gguf',
-      }),
-    }));
+    expect(asrRequest).toEqual(
+      expect.objectContaining({
+        localEngine: 'llama-cpp',
+        language: 'auto',
+        enableItn: false,
+        hotwords: null,
+        vadModel: '/models/vad.onnx',
+        punctuationModel: null,
+        batchSegmentationMode: 'vad',
+        modelType: 'qwen3-asr',
+        fileConfig: expect.objectContaining({
+          mmproj: 'mmproj-Qwen3-ASR-0.6B-Q8_0.gguf',
+        }),
+      })
+    );
     expect(request.saveToPath).toBeNull();
     expect(request.speakerProcessing).toBeNull();
   });

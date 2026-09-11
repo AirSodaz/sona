@@ -1,15 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEscapeKey } from '../../../hooks/useEscapeKey';
 import type { HistoryItem as HistoryItemType } from '../../../types/history';
 import type { ProjectRecord } from '../../../types/project';
-import type {
-  TranslationFn,
-  WorkspaceQueryRequest,
-} from '../types';
-import { buildWorkspaceViewModel } from './workspaceViewModel';
+import type { TranslationFn, WorkspaceQueryRequest } from '../types';
 import { useWorkspaceBrowseControls } from './useWorkspaceBrowseControls';
-import { useWorkspaceQuery } from './workspaceQuery';
 import { useWorkspaceSearchNavigation } from './useWorkspaceSearchNavigation';
-import { useEscapeKey } from '../../../hooks/useEscapeKey';
+import { useWorkspaceQuery } from './workspaceQuery';
+import { buildWorkspaceViewModel } from './workspaceViewModel';
 
 interface UseWorkspaceBrowseStateParams {
   activeProjectId: string | null;
@@ -71,13 +69,16 @@ export function useWorkspaceBrowseState({
     };
   }, [filterMenuRef, isFilterMenuOpen, setIsFilterMenuOpen]);
 
-  useEscapeKey(() => {
-    setIsFilterMenuOpen(false);
-  }, {
-    enabled: isFilterMenuOpen,
-    checkTopMost: true,
-    containerRef: filterMenuRef,
-  });
+  useEscapeKey(
+    () => {
+      setIsFilterMenuOpen(false);
+    },
+    {
+      enabled: isFilterMenuOpen,
+      checkTopMost: true,
+      containerRef: filterMenuRef,
+    }
+  );
 
   const workspaceQueryScope = useMemo<WorkspaceQueryRequest['scope']>(() => {
     if (controls.isAllItemsScope) {
@@ -93,7 +94,12 @@ export function useWorkspaceBrowseState({
     }
 
     return { kind: 'project', projectId: controls.browseProjectId };
-  }, [controls.browseProjectId, controls.isAllItemsScope, controls.isInboxScope, controls.isTrashScope]);
+  }, [
+    controls.browseProjectId,
+    controls.isAllItemsScope,
+    controls.isInboxScope,
+    controls.isTrashScope,
+  ]);
 
   const workspaceQueryResult = useWorkspaceQuery({
     scope: workspaceQueryScope,
@@ -108,7 +114,7 @@ export function useWorkspaceBrowseState({
 
   const searchMatchByItemId = useMemo(
     () => new Map(Object.entries(workspaceQueryResult.searchMatchByItemId)),
-    [workspaceQueryResult.searchMatchByItemId],
+    [workspaceQueryResult.searchMatchByItemId]
   );
 
   const activeSearchResultId = useMemo(() => {
@@ -121,23 +127,27 @@ export function useWorkspaceBrowseState({
       : null;
   }, [controls.activeSearchResultIdState, filteredAndSortedItems, isSelectionMode]);
 
-  const viewModel = useMemo(() => buildWorkspaceViewModel({
-    browseProject: controls.browseProject,
-    browseScope: controls.browseScope,
-    dateFilter: controls.dateFilter,
-    filterType: controls.filterType,
-    projects,
-    queryResult: workspaceQueryResult,
-    t,
-  }), [
-    controls.browseProject,
-    controls.browseScope,
-    controls.dateFilter,
-    controls.filterType,
-    projects,
-    t,
-    workspaceQueryResult,
-  ]);
+  const viewModel = useMemo(
+    () =>
+      buildWorkspaceViewModel({
+        browseProject: controls.browseProject,
+        browseScope: controls.browseScope,
+        dateFilter: controls.dateFilter,
+        filterType: controls.filterType,
+        projects,
+        queryResult: workspaceQueryResult,
+        t,
+      }),
+    [
+      controls.browseProject,
+      controls.browseScope,
+      controls.dateFilter,
+      controls.filterType,
+      projects,
+      t,
+      workspaceQueryResult,
+    ]
+  );
 
   const handleWorkspaceSearchInputKeyDown = useWorkspaceSearchNavigation({
     activeSearchResultId,

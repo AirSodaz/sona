@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppConfig } from '../../../types/config';
 import {
   applySegmentItemsToTranscriptJob,
@@ -21,11 +21,12 @@ const taskLedgerContext = vi.hoisted(() => ({
   isTaskLedgerCancelRequested: vi.fn(() => false),
   buildLlmTaskLedgerRecord: vi.fn((input: any) => ({
     id: `llm-${input.taskId}`,
-    kind: input.taskType === 'polish'
-      ? 'llmPolish'
-      : input.taskType === 'summary'
-        ? 'llmSummary'
-        : 'llmTranslate',
+    kind:
+      input.taskType === 'polish'
+        ? 'llmPolish'
+        : input.taskType === 'summary'
+          ? 'llmSummary'
+          : 'llmTranslate',
     status: 'running',
     title: input.taskType,
     progress: 0,
@@ -60,11 +61,16 @@ vi.mock('../configUtils', () => ({
 }));
 
 vi.mock('../../taskLedgerBuilders', () => ({
-  buildLlmTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.buildLlmTaskLedgerRecord, undefined, args),
-  upsertTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.upsertTaskLedgerRecord, undefined, args),
-  patchTaskLedgerRecord: (...args: unknown[]) => Reflect.apply(taskLedgerContext.patchTaskLedgerRecord, undefined, args),
-  createLlmTaskLedgerId: (...args: unknown[]) => Reflect.apply(taskLedgerContext.createLlmTaskLedgerId, undefined, args),
-  isTaskLedgerCancelRequested: (...args: unknown[]) => Reflect.apply(taskLedgerContext.isTaskLedgerCancelRequested, undefined, args),
+  buildLlmTaskLedgerRecord: (...args: unknown[]) =>
+    Reflect.apply(taskLedgerContext.buildLlmTaskLedgerRecord, undefined, args),
+  upsertTaskLedgerRecord: (...args: unknown[]) =>
+    Reflect.apply(taskLedgerContext.upsertTaskLedgerRecord, undefined, args),
+  patchTaskLedgerRecord: (...args: unknown[]) =>
+    Reflect.apply(taskLedgerContext.patchTaskLedgerRecord, undefined, args),
+  createLlmTaskLedgerId: (...args: unknown[]) =>
+    Reflect.apply(taskLedgerContext.createLlmTaskLedgerId, undefined, args),
+  isTaskLedgerCancelRequested: (...args: unknown[]) =>
+    Reflect.apply(taskLedgerContext.isTaskLedgerCancelRequested, undefined, args),
 }));
 
 describe('segmentTask helpers', () => {
@@ -171,16 +177,21 @@ describe('segmentTask helpers', () => {
     expect(onSuccess).toHaveBeenCalledWith('current');
     expect(unlistenProgress).toHaveBeenCalledTimes(1);
     expect(onFinally).toHaveBeenCalledWith('current');
-    expect(taskLedgerContext.upsertTaskLedgerRecord).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'llm-shared-task-id',
-      kind: 'llmPolish',
-      status: 'running',
-      historyId: undefined,
-    }));
-    expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith('llm-shared-task-id', expect.objectContaining({
-      status: 'succeeded',
-      progress: 100,
-    }));
+    expect(taskLedgerContext.upsertTaskLedgerRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'llm-shared-task-id',
+        kind: 'llmPolish',
+        status: 'running',
+        historyId: undefined,
+      })
+    );
+    expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith(
+      'llm-shared-task-id',
+      expect.objectContaining({
+        status: 'succeeded',
+        progress: 100,
+      })
+    );
   });
 
   it('marks LLM segment jobs as cancelled when a soft cancel was requested', async () => {
@@ -195,10 +206,13 @@ describe('segmentTask helpers', () => {
     });
 
     expect(runTask).toHaveBeenCalledWith('shared-task-id', 'history-a');
-    expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith('llm-shared-task-id', expect.objectContaining({
-      status: 'cancelled',
-      progress: 0,
-    }));
+    expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith(
+      'llm-shared-task-id',
+      expect.objectContaining({
+        status: 'cancelled',
+        progress: 0,
+      })
+    );
   });
 
   it('runTranscriptLlmTaskJob wires summary progress, text updates, metadata, and cleanup', async () => {
@@ -247,19 +261,24 @@ describe('segmentTask helpers', () => {
     expect(onProgress).toHaveBeenCalledWith(25, 'history-summary');
     expect(onText).toHaveBeenCalledWith(
       expect.objectContaining({ text: 'Partial summary' }),
-      'history-summary',
+      'history-summary'
     );
     expect(runTask).toHaveBeenCalledWith('shared-task-id', 'history-summary');
-    expect(taskLedgerContext.buildLlmTaskLedgerRecord).toHaveBeenCalledWith(expect.objectContaining({
-      taskId: 'shared-task-id',
-      taskType: 'summary',
-      jobHistoryId: 'history-summary',
-      templateId: 'meeting',
-    }));
-    expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith('llm-shared-task-id', expect.objectContaining({
-      status: 'succeeded',
-      progress: 100,
-    }));
+    expect(taskLedgerContext.buildLlmTaskLedgerRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'shared-task-id',
+        taskType: 'summary',
+        jobHistoryId: 'history-summary',
+        templateId: 'meeting',
+      })
+    );
+    expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith(
+      'llm-shared-task-id',
+      expect.objectContaining({
+        status: 'succeeded',
+        progress: 100,
+      })
+    );
     expect(unlistenProgress).toHaveBeenCalledTimes(1);
     expect(unlistenText).toHaveBeenCalledTimes(1);
     expect(onFinally).toHaveBeenCalledWith('history-summary');
@@ -270,30 +289,38 @@ describe('segmentTask helpers', () => {
     const runTask = vi.fn().mockRejectedValue(new Error('backend aborted'));
     const onError = vi.fn();
 
-    await expect(runTranscriptLlmTaskJob({
-      taskType: 'summary',
-      segments: [{ id: 'seg-1', start: 0, end: 1, text: 'hello', isFinal: true }],
-      sourceHistoryId: 'history-a',
-      runTask,
-      onError,
-    })).rejects.toThrow('backend aborted');
+    await expect(
+      runTranscriptLlmTaskJob({
+        taskType: 'summary',
+        segments: [{ id: 'seg-1', start: 0, end: 1, text: 'hello', isFinal: true }],
+        sourceHistoryId: 'history-a',
+        runTask,
+        onError,
+      })
+    ).rejects.toThrow('backend aborted');
 
     expect(onError).not.toHaveBeenCalled();
-    expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith('llm-shared-task-id', expect.objectContaining({
-      status: 'cancelled',
-      progress: 0,
-    }));
-    expect(taskLedgerContext.patchTaskLedgerRecord).not.toHaveBeenCalledWith('llm-shared-task-id', expect.objectContaining({
-      status: 'failed',
-    }));
+    expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith(
+      'llm-shared-task-id',
+      expect.objectContaining({
+        status: 'cancelled',
+        progress: 0,
+      })
+    );
+    expect(taskLedgerContext.patchTaskLedgerRecord).not.toHaveBeenCalledWith(
+      'llm-shared-task-id',
+      expect.objectContaining({
+        status: 'failed',
+      })
+    );
   });
 
   it('applySegmentItemsToTranscriptJob patches the original background history record after navigation changes', async () => {
     const applyToCurrentTranscript = vi.fn();
     const updateTranscript = vi.fn().mockResolvedValue(undefined);
-    const loadTranscript = vi.fn().mockResolvedValue([
-      { id: 'seg-1', start: 0, end: 1, text: 'hello', isFinal: true },
-    ]);
+    const loadTranscript = vi
+      .fn()
+      .mockResolvedValue([{ id: 'seg-1', start: 0, end: 1, text: 'hello', isFinal: true }]);
 
     await applySegmentItemsToTranscriptJob({
       jobHistoryId: 'history-a',
@@ -303,9 +330,10 @@ describe('segmentTask helpers', () => {
       applyToCurrentTranscript,
       loadTranscript,
       updateTranscript,
-      mergeIntoSegments: (segments, items) => segments.map((segment) => (
-        segment.id === items[0].id ? { ...segment, text: items[0].text } : segment
-      )),
+      mergeIntoSegments: (segments, items) =>
+        segments.map((segment) =>
+          segment.id === items[0].id ? { ...segment, text: items[0].text } : segment
+        ),
     });
 
     expect(applyToCurrentTranscript).not.toHaveBeenCalled();

@@ -1,14 +1,14 @@
 import type {
   ContentStats_Serialize as GeneratedDashboardContentStats,
   ContentTrendPoint as GeneratedDashboardContentTrendPoint,
-  DashboardSnapshotDomainModel_Serialize as GeneratedDashboardSnapshot,
-  DashboardUsageBucket as GeneratedDashboardUsageBucket,
+  UsageBreakdown as GeneratedDashboardLlmUsageBreakdown,
   LlmUsageDashboardStats_Serialize as GeneratedDashboardLlmUsageStats,
+  UsageTrendPoint as GeneratedDashboardLlmUsageTrendPoint,
   OverviewStats_Serialize as GeneratedDashboardOverviewStats,
+  DashboardSnapshotDomainModel_Serialize as GeneratedDashboardSnapshot,
   SpeakerLeader as GeneratedDashboardSpeakerLeader,
   SpeakerStats as GeneratedDashboardSpeakerStats,
-  UsageBreakdown as GeneratedDashboardLlmUsageBreakdown,
-  UsageTrendPoint as GeneratedDashboardLlmUsageTrendPoint,
+  DashboardUsageBucket as GeneratedDashboardUsageBucket,
 } from '../bindings';
 import type { LlmConfig, LlmProvider } from './transcript';
 
@@ -20,10 +20,7 @@ export type LlmUsageCategory =
   | 'connection_test'
   | 'generic';
 
-export type LlmGenerateUsageSource =
-  | 'title_generation'
-  | 'connection_test'
-  | 'generic';
+export type LlmGenerateUsageSource = 'title_generation' | 'connection_test' | 'generic';
 
 export interface LlmGenerateCommandRequest {
   config: LlmConfig;

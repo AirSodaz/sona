@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/immutability */
-import React from 'react';
+
 import { ArrowLeft, X } from 'lucide-react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 
@@ -101,7 +102,7 @@ export function PanelModal({
       className={joinClassNames(
         'panel-modal-overlay',
         `panel-modal-origin-${origin}`,
-        overlayClassName,
+        overlayClassName
       )}
       onClick={onClose}
     >
@@ -135,12 +136,12 @@ export function PanelModal({
                   {headerLeading}
                 </div>
                 {badge ? (
-                  <div className={joinClassNames('panel-modal-badge', badgeClassName)}>
-                    {badge}
-                  </div>
+                  <div className={joinClassNames('panel-modal-badge', badgeClassName)}>{badge}</div>
                 ) : null}
               </div>
-              <div className={joinClassNames('panel-modal-header-controls', headerControlsClassName)}>
+              <div
+                className={joinClassNames('panel-modal-header-controls', headerControlsClassName)}
+              >
                 {headerActions ? (
                   <div className={joinClassNames('panel-modal-toolbar', toolbarClassName)}>
                     {headerActions}
@@ -163,25 +164,19 @@ export function PanelModal({
               )}
             </div>
             <div className={joinClassNames('panel-modal-header-copy', headerCopyClassName)}>
-              {typeof title === 'string'
-                ? <h2 id={ariaLabelledby}>{title}</h2>
-                : title}
+              {typeof title === 'string' ? <h2 id={ariaLabelledby}>{title}</h2> : title}
               {description ? <p>{description}</p> : null}
             </div>
           </div>
         )}
 
         {meta ? (
-          <div className={joinClassNames('panel-modal-meta-row', metaClassName)}>
-            {meta}
-          </div>
+          <div className={joinClassNames('panel-modal-meta-row', metaClassName)}>{meta}</div>
         ) : null}
 
         {errorBanner}
 
-        <div className={joinClassNames('panel-modal-content', contentClassName)}>
-          {children}
-        </div>
+        <div className={joinClassNames('panel-modal-content', contentClassName)}>{children}</div>
       </div>
     </div>
   );

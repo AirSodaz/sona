@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DiagnosticsModal } from '../DiagnosticsModal';
 
 const mocks = vi.hoisted(() => ({
@@ -98,7 +98,7 @@ describe('DiagnosticsModal', () => {
         onClose={vi.fn()}
         onOpenSettingsTab={vi.fn()}
         onRunFirstRunSetup={vi.fn()}
-      />,
+      />
     );
 
     expect(await screen.findByText('Model & Environment Diagnostics')).toBeDefined();
@@ -118,7 +118,7 @@ describe('DiagnosticsModal', () => {
         onRunFirstRunSetup={vi.fn()}
         origin="settings"
         onBack={vi.fn()}
-      />,
+      />
     );
 
     await screen.findByText('Model & Environment Diagnostics');
@@ -135,7 +135,7 @@ describe('DiagnosticsModal', () => {
         onClose={vi.fn()}
         onOpenSettingsTab={onOpenSettingsTab}
         onRunFirstRunSetup={vi.fn()}
-      />,
+      />
     );
 
     fireEvent.click(await screen.findByRole('button', { name: 'Open Model Settings' }));
@@ -150,7 +150,7 @@ describe('DiagnosticsModal', () => {
         onClose={vi.fn()}
         onOpenSettingsTab={vi.fn()}
         onRunFirstRunSetup={vi.fn()}
-      />,
+      />
     );
 
     await screen.findByText('Microphone Permission');

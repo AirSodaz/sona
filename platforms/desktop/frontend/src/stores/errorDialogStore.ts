@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ErrorDialogViewModel } from '../utils/errorUtils';
+import type { ErrorDialogViewModel } from '../utils/errorUtils';
 
 export type ErrorDialogResult = 'dismiss' | 'primary';
 

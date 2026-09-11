@@ -1,18 +1,14 @@
-import React, { useCallback, useEffect, useRef } from 'react';
-import { LexicalComposer, type InitialConfigType } from '@lexical/react/LexicalComposer';
-import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
-import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
-import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
+import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
+import { type InitialConfigType, LexicalComposer } from '@lexical/react/LexicalComposer';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
-import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
-import {
-  $getRoot,
-  FORMAT_TEXT_COMMAND,
-  type EditorState,
-  type LexicalEditor,
-} from 'lexical';
+import { HistoryPlugin } from '@lexical/react/LexicalHistoryPlugin';
+import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
+import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
+import { $getRoot, type EditorState, FORMAT_TEXT_COMMAND, type LexicalEditor } from 'lexical';
+import type React from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { setActiveEditor } from '../../stores/transcriptRuntimeStore';
 import { convertOldFormatToLexical } from '../../utils/dataMigrationUtils';
 import { serializeSplitBlocks } from '../../utils/lexicalSplitUtils';
@@ -101,7 +97,7 @@ export function SegmentEditor({
 
   const handleEditorReady = useCallback(
     (_editorState: EditorState, editor: LexicalEditor) => handleActiveEditor(editor),
-    [handleActiveEditor],
+    [handleActiveEditor]
   );
 
   /** Serializes current editor state to HTML. */
@@ -117,7 +113,11 @@ export function SegmentEditor({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key.toLowerCase() === 's' || e.code === 'KeyS')) {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.shiftKey &&
+        (e.key.toLowerCase() === 's' || e.code === 'KeyS')
+      ) {
         e.preventDefault();
         e.stopPropagation();
         const editor = editorRef.current;
@@ -155,7 +155,7 @@ export function SegmentEditor({
       }
       // Ctrl+B/I/U handled automatically by Lexical RichTextPlugin
     },
-    [onSave, onCancel, onSplit, getHtml],
+    [onSave, onCancel, onSplit, getHtml]
   );
 
   const handleCommit = useCallback(() => {

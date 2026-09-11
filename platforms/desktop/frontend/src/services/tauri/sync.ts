@@ -1,7 +1,8 @@
+import type { PreparedBackupImport } from '../../types/backup';
 import type {
   DiscoveredVaultSummary,
-  SyncChangePasswordRequest,
   LegacyRemoteBackupListResult,
+  SyncChangePasswordRequest,
   SyncConflictDetail,
   SyncConflictResolution,
   SyncConflictSummary,
@@ -10,6 +11,7 @@ import type {
   SyncCreateTransportRequest,
   SyncJoinPreview,
   SyncJoinRequest,
+  SyncPairingInfo,
   SyncPresetV1,
   SyncPreviewJoinRequest,
   SyncPreviewJoinTransportRequest,
@@ -19,10 +21,8 @@ import type {
   SyncStatusSnapshot,
   SyncUnlockRecoveryRequest,
   SyncUnlockRequest,
-  SyncPairingInfo,
   WebDavObjectStoreConfig,
 } from '../../types/sync';
-import type { PreparedBackupImport } from '../../types/backup';
 import { TauriCommand } from './commands';
 import { invokeTauri } from './invoke';
 
@@ -30,35 +30,33 @@ export const getSyncStatus = (): Promise<SyncStatusSnapshot> =>
   invokeTauri(TauriCommand.sync.getStatus);
 
 const webDavProviderInput = (
-  configuration: WebDavObjectStoreConfig,
+  configuration: WebDavObjectStoreConfig
 ): SyncProviderTransportInput => ({
   providerId: 'webdav',
   configuration,
 });
 
-const createTransportRequest = (
-  request: SyncCreateRequest,
-): SyncCreateTransportRequest => ({
+const createTransportRequest = (request: SyncCreateRequest): SyncCreateTransportRequest => ({
   ...request,
   provider: webDavProviderInput(request.provider),
 });
 
 const joinTransportRequest = (
-  request: SyncPreviewJoinRequest,
+  request: SyncPreviewJoinRequest
 ): SyncPreviewJoinTransportRequest => ({
   ...request,
   provider: webDavProviderInput(request.provider),
 });
 
 export const testWebDavSyncProvider = (
-  config: WebDavObjectStoreConfig,
+  config: WebDavObjectStoreConfig
 ): Promise<SyncProviderDescriptor> =>
   invokeTauri(TauriCommand.sync.testProvider, {
     provider: webDavProviderInput(config),
   });
 
 export const discoverWebDavSyncVaults = (
-  config: WebDavObjectStoreConfig,
+  config: WebDavObjectStoreConfig
 ): Promise<DiscoveredVaultSummary[]> =>
   invokeTauri(TauriCommand.sync.discoverWebDavVaults, { config });
 
@@ -66,26 +64,22 @@ export const getSyncPairingInfo = (): Promise<SyncPairingInfo | null> =>
   invokeTauri(TauriCommand.sync.getPairingInfo);
 
 export const listLegacyRemoteBackups = (
-  config: WebDavObjectStoreConfig,
+  config: WebDavObjectStoreConfig
 ): Promise<LegacyRemoteBackupListResult> =>
   invokeTauri(TauriCommand.sync.listLegacyBackups, { config });
 
 export const prepareLegacyRemoteBackupImport = (
   config: WebDavObjectStoreConfig,
-  key: string,
+  key: string
 ): Promise<PreparedBackupImport> =>
   invokeTauri(TauriCommand.sync.prepareLegacyBackupImport, { config, key });
 
-export const createSyncVault = (
-  request: SyncCreateRequest,
-): Promise<SyncCreateResult> =>
+export const createSyncVault = (request: SyncCreateRequest): Promise<SyncCreateResult> =>
   invokeTauri(TauriCommand.sync.createVault, {
     request: createTransportRequest(request),
   });
 
-export const previewSyncJoin = (
-  request: SyncPreviewJoinRequest,
-): Promise<SyncJoinPreview> =>
+export const previewSyncJoin = (request: SyncPreviewJoinRequest): Promise<SyncJoinPreview> =>
   invokeTauri(TauriCommand.sync.previewJoin, {
     request: joinTransportRequest(request),
   });
@@ -95,18 +89,14 @@ export const joinSyncVault = (request: SyncJoinRequest): Promise<SyncRunResult> 
     request: joinTransportRequest(request),
   });
 
-export const unlockSyncVault = (
-  request: SyncUnlockRequest,
-): Promise<SyncStatusSnapshot> =>
+export const unlockSyncVault = (request: SyncUnlockRequest): Promise<SyncStatusSnapshot> =>
   invokeTauri(TauriCommand.sync.unlock, { request });
 
 export const unlockSyncVaultWithRecovery = (
-  request: SyncUnlockRecoveryRequest,
-): Promise<SyncStatusSnapshot> =>
-  invokeTauri(TauriCommand.sync.unlockWithRecovery, { request });
+  request: SyncUnlockRecoveryRequest
+): Promise<SyncStatusSnapshot> => invokeTauri(TauriCommand.sync.unlockWithRecovery, { request });
 
-export const lockSyncVault = (): Promise<SyncStatusSnapshot> =>
-  invokeTauri(TauriCommand.sync.lock);
+export const lockSyncVault = (): Promise<SyncStatusSnapshot> => invokeTauri(TauriCommand.sync.lock);
 
 export const setSyncPaused = (paused: boolean): Promise<SyncStatusSnapshot> =>
   invokeTauri(TauriCommand.sync.setPaused, { paused });
@@ -114,18 +104,15 @@ export const setSyncPaused = (paused: boolean): Promise<SyncStatusSnapshot> =>
 export const disconnectSyncVault = (): Promise<SyncStatusSnapshot> =>
   invokeTauri(TauriCommand.sync.disconnect);
 
-export const runSyncNow = (): Promise<SyncRunResult> =>
-  invokeTauri(TauriCommand.sync.runNow);
+export const runSyncNow = (): Promise<SyncRunResult> => invokeTauri(TauriCommand.sync.runNow);
 
 export const changeSyncPreset = (
   preset: SyncPresetV1,
-  confirmShrink: boolean,
+  confirmShrink: boolean
 ): Promise<SyncStatusSnapshot> =>
   invokeTauri(TauriCommand.sync.changePreset, { preset, confirmShrink });
 
-export const changeSyncMasterPassword = (
-  request: SyncChangePasswordRequest,
-): Promise<void> =>
+export const changeSyncMasterPassword = (request: SyncChangePasswordRequest): Promise<void> =>
   invokeTauri(TauriCommand.sync.changeMasterPassword, { request });
 
 export const generateSyncRecoveryKey = (): Promise<string> =>
@@ -134,13 +121,10 @@ export const generateSyncRecoveryKey = (): Promise<string> =>
 export const listSyncConflicts = (): Promise<SyncConflictSummary[]> =>
   invokeTauri(TauriCommand.sync.listConflicts);
 
-export const getSyncConflict = (
-  conflictId: string,
-): Promise<SyncConflictDetail | null> =>
+export const getSyncConflict = (conflictId: string): Promise<SyncConflictDetail | null> =>
   invokeTauri(TauriCommand.sync.getConflict, { conflictId });
 
 export const resolveSyncConflict = (
   conflictId: string,
-  resolution: SyncConflictResolution,
-): Promise<void> =>
-  invokeTauri(TauriCommand.sync.resolveConflict, { conflictId, resolution });
+  resolution: SyncConflictResolution
+): Promise<void> => invokeTauri(TauriCommand.sync.resolveConflict, { conflictId, resolution });

@@ -1,6 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import {
+  debug as tauriDebug,
+  error as tauriError,
+  info as tauriInfo,
+  trace as tauriTrace,
+  warn as tauriWarn,
+} from '@tauri-apps/plugin-log';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getLoggerLevel, logger, setLoggerLevel } from './logger';
-import { debug as tauriDebug, info as tauriInfo, warn as tauriWarn, error as tauriError, trace as tauriTrace } from '@tauri-apps/plugin-log';
 
 vi.mock('@tauri-apps/plugin-log', () => ({
   trace: vi.fn().mockResolvedValue(undefined),
@@ -25,11 +31,36 @@ describe('logger utility', () => {
 
   it('formats and forwards plain messages at every level', async () => {
     const cases = [
-      { level: 'trace', run: () => logger.trace('Test trace'), plugin: tauriTrace, expected: 'Test trace' },
-      { level: 'debug', run: () => logger.debug('Test debug', { data: 123 }), plugin: tauriDebug, expected: 'Test debug [{"data":123}]' },
-      { level: 'info', run: () => logger.info('Test info'), plugin: tauriInfo, expected: 'Test info' },
-      { level: 'warn', run: () => logger.warn('Test warn', 'warning', 42), plugin: tauriWarn, expected: 'Test warn ["warning",42]' },
-      { level: 'error', run: () => logger.error('Test error', new Error('test')), plugin: tauriError, expected: expect.stringContaining('Test error') },
+      {
+        level: 'trace',
+        run: () => logger.trace('Test trace'),
+        plugin: tauriTrace,
+        expected: 'Test trace',
+      },
+      {
+        level: 'debug',
+        run: () => logger.debug('Test debug', { data: 123 }),
+        plugin: tauriDebug,
+        expected: 'Test debug [{"data":123}]',
+      },
+      {
+        level: 'info',
+        run: () => logger.info('Test info'),
+        plugin: tauriInfo,
+        expected: 'Test info',
+      },
+      {
+        level: 'warn',
+        run: () => logger.warn('Test warn', 'warning', 42),
+        plugin: tauriWarn,
+        expected: 'Test warn ["warning",42]',
+      },
+      {
+        level: 'error',
+        run: () => logger.error('Test error', new Error('test')),
+        plugin: tauriError,
+        expected: expect.stringContaining('Test error'),
+      },
     ] as const;
 
     for (const { level, run, plugin, expected } of cases) {

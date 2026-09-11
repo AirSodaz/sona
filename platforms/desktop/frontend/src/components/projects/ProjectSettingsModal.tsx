@@ -1,19 +1,20 @@
-import React, { useMemo } from 'react';
+import { FolderOpen, Zap } from 'lucide-react';
+import type React from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Zap, FolderOpen } from 'lucide-react';
-import type { ProjectPipelineConfig, ProjectRecord } from '../../types/project';
-import { DEFAULT_PROJECT_PIPELINE } from '../../types/project';
-import { FolderIcon } from '../Icons';
-import { IconPicker } from '../IconPicker';
-import { Modal } from '../Modal';
-import { Dropdown, type DropdownOption } from '../Dropdown';
-import { Switch } from '../Switch';
-import { getPolishPresetOptions } from '../../utils/polishPresets';
-import { getSummaryTemplateOptions } from '../../utils/summaryTemplates';
 import { LANGUAGE_OPTIONS } from '../../constants/languages';
-import { getLocalizedLanguageName } from '../../utils/languageUtils';
 import { openDialog } from '../../services/tauri/platform/dialog';
 import { useConfigStore } from '../../stores/configStore';
+import type { ProjectPipelineConfig, ProjectRecord } from '../../types/project';
+import { DEFAULT_PROJECT_PIPELINE } from '../../types/project';
+import { getLocalizedLanguageName } from '../../utils/languageUtils';
+import { getPolishPresetOptions } from '../../utils/polishPresets';
+import { getSummaryTemplateOptions } from '../../utils/summaryTemplates';
+import { Dropdown, type DropdownOption } from '../Dropdown';
+import { IconPicker } from '../IconPicker';
+import { FolderIcon } from '../Icons';
+import { Modal } from '../Modal';
+import { Switch } from '../Switch';
 
 const EXPORT_FORMAT_OPTIONS: DropdownOption[] = [
   { value: 'txt', label: 'TXT' },
@@ -63,12 +64,14 @@ export function ProjectSettingsModal({
   const replacementSets = config.textReplacementSets || [];
   const polishPresetOptions = useMemo(() => getPolishPresetOptions(undefined, t), [t]);
   const summaryTemplateOptions = useMemo(() => getSummaryTemplateOptions(undefined, t), [t]);
-  const languageOptions = useMemo(() => (
-    LANGUAGE_OPTIONS.map((language) => ({
-      value: language.code,
-      label: getLocalizedLanguageName(language.code, i18n?.language || 'zh'),
-    }))
-  ), [i18n?.language]);
+  const languageOptions = useMemo(
+    () =>
+      LANGUAGE_OPTIONS.map((language) => ({
+        value: language.code,
+        label: getLocalizedLanguageName(language.code, i18n?.language || 'zh'),
+      })),
+    [i18n?.language]
+  );
 
   if (!isOpen || !project) {
     return null;
@@ -97,10 +100,19 @@ export function ProjectSettingsModal({
       onClose={onClose}
       title={
         <div>
-          <span style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--color-text-primary)' }}>
+          <span
+            style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--color-text-primary)' }}
+          >
             {t('projects.project_settings_title', { defaultValue: 'Project settings' })}
           </span>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', margin: '4px 0 0 0', fontWeight: 400 }}>
+          <p
+            style={{
+              fontSize: '0.8125rem',
+              color: 'var(--color-text-secondary)',
+              margin: '4px 0 0 0',
+              fontWeight: 400,
+            }}
+          >
             {t('projects.project_settings_hint', {
               defaultValue: 'Configure project details and its deterministic processing pipeline.',
             })}
@@ -109,11 +121,26 @@ export function ProjectSettingsModal({
       }
       size="lg"
       footer={
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: '12px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
+            gap: '12px',
+          }}
+        >
           <button type="button" className="btn btn-danger" onClick={() => void onDelete()}>
             {t('projects.delete_project', { defaultValue: 'Delete Project' })}
           </button>
-          <div style={{ display: 'flex', gap: 'var(--spacing-sm)', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <div
+            style={{
+              display: 'flex',
+              gap: 'var(--spacing-sm)',
+              flexWrap: 'wrap',
+              justifyContent: 'flex-end',
+            }}
+          >
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               {t('common.cancel', { defaultValue: 'Cancel' })}
             </button>
@@ -124,7 +151,10 @@ export function ProjectSettingsModal({
         </div>
       }
     >
-      <div className="settings-content-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}>
+      <div
+        className="settings-content-scroll"
+        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-lg)' }}
+      >
         {/* Basic Info */}
         <div className="projects-field">
           <label htmlFor="project-settings-name">
@@ -151,7 +181,6 @@ export function ProjectSettingsModal({
           </div>
         </div>
 
-
         <div className="projects-field">
           <label htmlFor="project-settings-description">
             {t('projects.project_description', { defaultValue: 'Description' })}
@@ -176,7 +205,9 @@ export function ProjectSettingsModal({
               <Switch
                 checked={Boolean(pipeline.enabled)}
                 onChange={(checked) => updatePipeline({ enabled: checked })}
-                aria-label={t('projects.pipeline_enable', { defaultValue: 'Enable Project Pipeline' })}
+                aria-label={t('projects.pipeline_enable', {
+                  defaultValue: 'Enable Project Pipeline',
+                })}
               />
             </div>
 
@@ -220,7 +251,9 @@ export function ProjectSettingsModal({
                         onChange={(value) => updatePipeline({ targetLanguage: value })}
                         options={languageOptions}
                         style={{ width: '100%' }}
-                        aria-label={t('automation.auto_translate', { defaultValue: 'Auto Translate' })}
+                        aria-label={t('automation.auto_translate', {
+                          defaultValue: 'Auto Translate',
+                        })}
                       />
                     </div>
                   )}
@@ -258,15 +291,24 @@ export function ProjectSettingsModal({
                     />
                   </div>
                   {pipeline.autoExport && (
-                    <div className="project-pipeline-item-content" style={{ flexDirection: 'column', gap: 6 }}>
+                    <div
+                      className="project-pipeline-item-content"
+                      style={{ flexDirection: 'column', gap: 6 }}
+                    >
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <div style={{ width: 110, flexShrink: 0 }}>
                           <Dropdown
                             value={pipeline.exportFormat || 'txt'}
-                            onChange={(value) => updatePipeline({ exportFormat: value as ProjectPipelineConfig['exportFormat'] })}
+                            onChange={(value) =>
+                              updatePipeline({
+                                exportFormat: value as ProjectPipelineConfig['exportFormat'],
+                              })
+                            }
                             options={EXPORT_FORMAT_OPTIONS}
                             style={{ width: '100%' }}
-                            aria-label={t('automation.export_format', { defaultValue: 'Export Format' })}
+                            aria-label={t('automation.export_format', {
+                              defaultValue: 'Export Format',
+                            })}
                           />
                         </div>
                         <input
@@ -274,7 +316,9 @@ export function ProjectSettingsModal({
                           className="settings-input"
                           value={pipeline.exportDirectory || ''}
                           onChange={(e) => updatePipeline({ exportDirectory: e.target.value })}
-                          placeholder={t('automation.export_directory_placeholder', { defaultValue: 'Export directory' })}
+                          placeholder={t('automation.export_directory_placeholder', {
+                            defaultValue: 'Export directory',
+                          })}
                           style={{ flex: 1 }}
                         />
                         <button
@@ -282,7 +326,13 @@ export function ProjectSettingsModal({
                           className="btn btn-secondary"
                           onClick={() => void handleBrowseExportDir()}
                           title={t('settings.browse', { defaultValue: 'Browse' })}
-                          style={{ height: 32, padding: '0 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                          style={{
+                            height: 32,
+                            padding: '0 10px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
                         >
                           <FolderOpen size={14} />
                         </button>
@@ -294,12 +344,29 @@ export function ProjectSettingsModal({
                 {/* Hotword Sets */}
                 {hotwordSets.length > 0 && (
                   <div className="project-pipeline-item">
-                    <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                    <span
+                      style={{
+                        fontSize: '0.8125rem',
+                        fontWeight: 500,
+                        color: 'var(--color-text-secondary)',
+                      }}
+                    >
                       {t('projects.pipeline_hotwords', { defaultValue: 'Hotword Sets' })}
                     </span>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
+                    <div
+                      style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}
+                    >
                       {hotwordSets.map((set) => (
-                        <label key={set.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8125rem', cursor: 'pointer' }}>
+                        <label
+                          key={set.id}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.8125rem',
+                            cursor: 'pointer',
+                          }}
+                        >
                           <input
                             type="checkbox"
                             checked={Boolean(pipeline.hotwordSetIds?.includes(set.id))}
@@ -321,12 +388,31 @@ export function ProjectSettingsModal({
                 {/* Text Replacement Sets */}
                 {replacementSets.length > 0 && (
                   <div className="project-pipeline-item">
-                    <span style={{ fontSize: '0.8125rem', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-                      {t('projects.pipeline_replacements', { defaultValue: 'Text Replacement Sets' })}
+                    <span
+                      style={{
+                        fontSize: '0.8125rem',
+                        fontWeight: 500,
+                        color: 'var(--color-text-secondary)',
+                      }}
+                    >
+                      {t('projects.pipeline_replacements', {
+                        defaultValue: 'Text Replacement Sets',
+                      })}
                     </span>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}>
+                    <div
+                      style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}
+                    >
                       {replacementSets.map((set) => (
-                        <label key={set.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8125rem', cursor: 'pointer' }}>
+                        <label
+                          key={set.id}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.8125rem',
+                            cursor: 'pointer',
+                          }}
+                        >
                           <input
                             type="checkbox"
                             checked={Boolean(pipeline.replacementSetIds?.includes(set.id))}

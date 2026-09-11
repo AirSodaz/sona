@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  DEFAULT_MODEL_RULES,
-  PRESET_MODELS_MAP,
-  type ModelCatalogSnapshot,
-} from '../modelService';
 import { createModelRegistryService } from '../modelRegistryService';
+import { DEFAULT_MODEL_RULES, type ModelCatalogSnapshot, PRESET_MODELS_MAP } from '../modelService';
 
 const snapshotModel = {
   id: 'snapshot-model',
@@ -105,8 +101,12 @@ describe('modelRegistryService', () => {
     await registry.getModelCatalogSnapshot();
 
     await expect(registry.getModelPath(snapshotModel.id)).resolves.toBe(snapshotModel.installPath);
-    await expect(registry.getModelPath(filenameModel!.id)).resolves.toBe(`/app/data/models/${filenameModel!.filename}`);
-    await expect(registry.getModelPath(directoryModel!.id)).resolves.toBe(`/app/data/models/${directoryModel!.id}`);
+    await expect(registry.getModelPath(filenameModel!.id)).resolves.toBe(
+      `/app/data/models/${filenameModel!.filename}`
+    );
+    await expect(registry.getModelPath(directoryModel!.id)).resolves.toBe(
+      `/app/data/models/${directoryModel!.id}`
+    );
   });
 
   it('returns snapshot rules before preset rules and falls back to defaults', async () => {
@@ -137,12 +137,14 @@ describe('modelRegistryService', () => {
       defaultModelRules: DEFAULT_MODEL_RULES,
     });
 
-    await expect(registry.resolveModelCatalogSelectedIds({
-      streamingModelPath: '/streaming',
-      batchModelPath: '',
-      speakerSegmentationModelPath: '',
-      speakerEmbeddingModelPath: '',
-    })).resolves.toEqual({
+    await expect(
+      registry.resolveModelCatalogSelectedIds({
+        streamingModelPath: '/streaming',
+        batchModelPath: '',
+        speakerSegmentationModelPath: '',
+        speakerEmbeddingModelPath: '',
+      })
+    ).resolves.toEqual({
       streaming: 'streaming-id',
       batch: null,
       speakerSegmentation: null,

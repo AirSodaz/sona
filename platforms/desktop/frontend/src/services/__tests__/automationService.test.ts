@@ -114,8 +114,14 @@ describe('automationService repository persistence', () => {
     await saveAutomationRepositoryState([rule], [processedEntry]);
 
     expect(testContext.automationPersistRulesMock).toHaveBeenCalledWith([rule]);
-    expect(testContext.automationPersistProcessedEntriesMock).toHaveBeenCalledWith([processedEntry]);
-    expect(testContext.automationPersistRepositoryStateMock).toHaveBeenCalledWith([rule], [processedEntry], undefined);
+    expect(testContext.automationPersistProcessedEntriesMock).toHaveBeenCalledWith([
+      processedEntry,
+    ]);
+    expect(testContext.automationPersistRepositoryStateMock).toHaveBeenCalledWith(
+      [rule],
+      [processedEntry],
+      undefined
+    );
   });
 
   it('delegates activation validation to the native repository command', async () => {
@@ -124,8 +130,14 @@ describe('automationService repository persistence', () => {
     const project = { id: 'project-1', name: 'Team Sync' } as any;
     testContext.automationValidateRuleActivationMock.mockResolvedValue({ valid: true });
 
-    await expect(validateAutomationRuleForActivation(rule, config, project)).resolves.toEqual({ valid: true });
+    await expect(validateAutomationRuleForActivation(rule, config, project)).resolves.toEqual({
+      valid: true,
+    });
 
-    expect(testContext.automationValidateRuleActivationMock).toHaveBeenCalledWith(rule, config, project);
+    expect(testContext.automationValidateRuleActivationMock).toHaveBeenCalledWith(
+      rule,
+      config,
+      project
+    );
   });
 });

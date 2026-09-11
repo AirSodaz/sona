@@ -1,6 +1,7 @@
 /// <reference types="vitest" />
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+
+import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
 
 const host = process.env.TAURI_DEV_HOST;
 
@@ -25,10 +26,10 @@ export default defineConfig(async () => ({
     host: host || false,
     hmr: host
       ? {
-        protocol: "ws",
-        host,
-        port: 1421,
-      }
+          protocol: 'ws',
+          host,
+          port: 1421,
+        }
       : undefined,
     watch: {
       // 3. tell Vite to ignore watching the desktop host
@@ -36,8 +37,8 @@ export default defineConfig(async () => ({
     },
   },
   optimizeDeps: {
-    entries: ["index.html", "src/main.tsx"],
-    exclude: ["@tauri-apps/api"]
+    entries: ['index.html', 'src/main.tsx'],
+    exclude: ['@tauri-apps/api'],
   },
   build: {
     rollupOptions: {
@@ -47,61 +48,69 @@ export default defineConfig(async () => ({
           includeDependenciesRecursively: false,
           groups: [
             {
-              name: "tauri-vendor",
-              test: (id) => id.replace(/\\/g, "/").includes("/node_modules/@tauri-apps/"),
+              name: 'tauri-vendor',
+              test: (id) => id.replace(/\\/g, '/').includes('/node_modules/@tauri-apps/'),
             },
             {
-              name: "dnd-vendor",
-              test: (id) => id.replace(/\\/g, "/").includes("/node_modules/@dnd-kit/"),
+              name: 'dnd-vendor',
+              test: (id) => id.replace(/\\/g, '/').includes('/node_modules/@dnd-kit/'),
             },
             {
-              name: "react-vendor",
+              name: 'react-vendor',
               test: (id) => {
-                const normalizedId = id.replace(/\\/g, "/");
-                return normalizedId.includes("/node_modules/.pnpm/react@")
-                  || normalizedId.includes("/node_modules/.pnpm/react-dom@")
-                  || normalizedId.includes("/node_modules/.pnpm/scheduler@")
-                  || normalizedId.includes("/node_modules/react/")
-                  || normalizedId.includes("/node_modules/react-dom/")
-                  || normalizedId.includes("/node_modules/scheduler/")
-                  || normalizedId.includes("/node_modules/.vite/deps/react.js")
-                  || normalizedId.includes("/node_modules/.vite/deps/react-dom");
+                const normalizedId = id.replace(/\\/g, '/');
+                return (
+                  normalizedId.includes('/node_modules/.pnpm/react@') ||
+                  normalizedId.includes('/node_modules/.pnpm/react-dom@') ||
+                  normalizedId.includes('/node_modules/.pnpm/scheduler@') ||
+                  normalizedId.includes('/node_modules/react/') ||
+                  normalizedId.includes('/node_modules/react-dom/') ||
+                  normalizedId.includes('/node_modules/scheduler/') ||
+                  normalizedId.includes('/node_modules/.vite/deps/react.js') ||
+                  normalizedId.includes('/node_modules/.vite/deps/react-dom')
+                );
               },
             },
             {
-              name: "virtual-list-vendor",
+              name: 'virtual-list-vendor',
               test: (id) => {
-                const normalizedId = id.replace(/\\/g, "/");
-                return normalizedId.includes("/node_modules/.pnpm/react-virtuoso@")
-                  || normalizedId.includes("/node_modules/react-virtuoso/")
-                  || normalizedId.includes("/node_modules/.vite/deps/react-virtuoso");
+                const normalizedId = id.replace(/\\/g, '/');
+                return (
+                  normalizedId.includes('/node_modules/.pnpm/react-virtuoso@') ||
+                  normalizedId.includes('/node_modules/react-virtuoso/') ||
+                  normalizedId.includes('/node_modules/.vite/deps/react-virtuoso')
+                );
               },
             },
             {
-              name: "icons-vendor",
-              test: (id) => id.replace(/\\/g, "/").includes("/node_modules/lucide-react/"),
+              name: 'icons-vendor',
+              test: (id) => id.replace(/\\/g, '/').includes('/node_modules/lucide-react/'),
             },
             {
-              name: "i18n-vendor",
+              name: 'i18n-vendor',
               test: (id) => {
-                const normalizedId = id.replace(/\\/g, "/");
-                return normalizedId.includes("/node_modules/i18next/")
-                  || normalizedId.includes("/node_modules/react-i18next/")
-                  || normalizedId.includes("/node_modules/i18next-browser-languagedetector/")
-                  || normalizedId.includes("/src/i18n.ts");
+                const normalizedId = id.replace(/\\/g, '/');
+                return (
+                  normalizedId.includes('/node_modules/i18next/') ||
+                  normalizedId.includes('/node_modules/react-i18next/') ||
+                  normalizedId.includes('/node_modules/i18next-browser-languagedetector/') ||
+                  normalizedId.includes('/src/i18n.ts')
+                );
               },
             },
             {
-              name: "i18n-locales",
-              test: (id) => id.replace(/\\/g, "/").includes("/src/locales/"),
+              name: 'i18n-locales',
+              test: (id) => id.replace(/\\/g, '/').includes('/src/locales/'),
             },
 
             {
-              name: "projects-surface",
+              name: 'projects-surface',
               test: (id) => {
-                const normalizedId = id.replace(/\\/g, "/");
-                return normalizedId.includes("/src/components/projects/")
-                  || normalizedId.includes("/src/components/ProjectsView.tsx");
+                const normalizedId = id.replace(/\\/g, '/');
+                return (
+                  normalizedId.includes('/src/components/projects/') ||
+                  normalizedId.includes('/src/components/ProjectsView.tsx')
+                );
               },
             },
           ],

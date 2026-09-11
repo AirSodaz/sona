@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { DEFAULT_PROJECT_PIPELINE, type ProjectPipelineConfig, type ProjectRecord } from '../../../types/project';
+import type { useDialogStore } from '../../../stores/dialogStore';
+import {
+  DEFAULT_PROJECT_PIPELINE,
+  type ProjectPipelineConfig,
+  type ProjectRecord,
+} from '../../../types/project';
 import type { TranslationFn } from '../types';
-import { useDialogStore } from '../../../stores/dialogStore';
 
 type ConfirmFn = ReturnType<typeof useDialogStore.getState>['confirm'];
 
@@ -22,22 +26,27 @@ export function useProjectSettingsDraft({
   const [draftIcon, setDraftIcon] = useState('');
   const [draftColor, setDraftColor] = useState('#64748b');
   const [draftPipeline, setDraftPipeline] = useState<ProjectPipelineConfig | undefined>(undefined);
-  const resetProjectSettingsDraft = useCallback((project: ProjectRecord | null = browseProject) => {
-    if (!project) {
-      setDraftName('');
-      setDraftDescription('');
-      setDraftIcon('');
-      setDraftColor('#64748b');
-      setDraftPipeline(undefined);
-      return;
-    }
+  const resetProjectSettingsDraft = useCallback(
+    (project: ProjectRecord | null = browseProject) => {
+      if (!project) {
+        setDraftName('');
+        setDraftDescription('');
+        setDraftIcon('');
+        setDraftColor('#64748b');
+        setDraftPipeline(undefined);
+        return;
+      }
 
-    setDraftName(project.name);
-    setDraftDescription(project.description);
-    setDraftIcon(project.icon || '');
-    setDraftColor(project.color || '#64748b');
-    setDraftPipeline(project.pipeline ? { ...DEFAULT_PROJECT_PIPELINE, ...project.pipeline } : undefined);
-  }, [browseProject]);
+      setDraftName(project.name);
+      setDraftDescription(project.description);
+      setDraftIcon(project.icon || '');
+      setDraftColor(project.color || '#64748b');
+      setDraftPipeline(
+        project.pipeline ? { ...DEFAULT_PROJECT_PIPELINE, ...project.pipeline } : undefined
+      );
+    },
+    [browseProject]
+  );
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -68,7 +77,9 @@ export function useProjectSettingsDraft({
       description: browseProject.description,
       icon: browseProject.icon || '',
       color: browseProject.color || '#64748b',
-      pipeline: browseProject.pipeline ? { ...DEFAULT_PROJECT_PIPELINE, ...browseProject.pipeline } : undefined,
+      pipeline: browseProject.pipeline
+        ? { ...DEFAULT_PROJECT_PIPELINE, ...browseProject.pipeline }
+        : undefined,
     };
 
     return JSON.stringify(currentDraft) !== JSON.stringify(savedProject);
@@ -94,14 +105,17 @@ export function useProjectSettingsDraft({
           defaultValue: 'Keep editing',
         }),
         variant: 'warning',
-      },
+      }
     );
   }, [confirm, isProjectSettingsDirty, isSettingsOpen, t]);
 
-  const discardProjectSettingsDraft = useCallback((project: ProjectRecord | null = browseProject) => {
-    resetProjectSettingsDraft(project);
-    setIsSettingsOpen(false);
-  }, [browseProject, resetProjectSettingsDraft]);
+  const discardProjectSettingsDraft = useCallback(
+    (project: ProjectRecord | null = browseProject) => {
+      resetProjectSettingsDraft(project);
+      setIsSettingsOpen(false);
+    },
+    [browseProject, resetProjectSettingsDraft]
+  );
 
   const handleRequestCloseProjectSettings = useCallback(async () => {
     const shouldDiscard = await confirmDiscardProjectSettingsChanges();

@@ -1,16 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  backupService,
-  type BackupServicePorts,
-} from '../../../services/backupService';
-import type {
-  BackupManifestV1,
-  PreparedBackupImport,
-} from '../../../types/backup';
-import {
-  buildBackupImportDetails,
-  runPreparedBackupImportFlow,
-} from './backupImportFlow';
+import { type BackupServicePorts, backupService } from '../../../services/backupService';
+import type { BackupManifestV1, PreparedBackupImport } from '../../../types/backup';
+import { buildBackupImportDetails, runPreparedBackupImportFlow } from './backupImportFlow';
 import { preparedBackupImportActions } from './useBackupSettingsController';
 
 const TEST_APP_VERSION = 'test-version';
@@ -57,11 +48,9 @@ function buildPreparedImport(): PreparedBackupImport {
 
 describe('buildBackupImportDetails', () => {
   it('uses the canonical tag count from a schema v2 manifest', () => {
-    const t = vi.fn((key: string, options?: Record<string, unknown>) => (
-      key === 'settings.backup.summary_projects'
-        ? `Workspace tags: ${String(options?.count)}`
-        : key
-    ));
+    const t = vi.fn((key: string, options?: Record<string, unknown>) =>
+      key === 'settings.backup.summary_projects' ? `Workspace tags: ${String(options?.count)}` : key
+    );
 
     const details = buildBackupImportDetails(t, buildManifest());
 

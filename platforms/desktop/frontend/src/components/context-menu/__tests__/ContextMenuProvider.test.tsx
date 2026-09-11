@@ -1,11 +1,8 @@
-import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  ContextMenuProvider,
-} from '../ContextMenuProvider';
+import { ContextMenuProvider } from '../ContextMenuProvider';
 import { useContextMenu } from '../useContextMenu';
-
 
 function ContextMenuHarness(): React.JSX.Element {
   const { activeContextId, openContextMenu } = useContextMenu();
@@ -43,7 +40,7 @@ describe('ContextMenuProvider', () => {
     render(
       <ContextMenuProvider>
         <ContextMenuHarness />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Open menu' }));
@@ -63,7 +60,7 @@ describe('ContextMenuProvider', () => {
       const open = (
         event: React.MouseEvent<HTMLButtonElement>,
         contextId: string,
-        label: string,
+        label: string
       ) => {
         openContextMenu({
           contextId,
@@ -78,8 +75,12 @@ describe('ContextMenuProvider', () => {
 
       return (
         <>
-          <button type="button" onClick={(event) => open(event, 'first', 'First menu')}>First</button>
-          <button type="button" onClick={(event) => open(event, 'second', 'Second menu')}>Second</button>
+          <button type="button" onClick={(event) => open(event, 'first', 'First menu')}>
+            First
+          </button>
+          <button type="button" onClick={(event) => open(event, 'second', 'Second menu')}>
+            Second
+          </button>
         </>
       );
     }
@@ -87,7 +88,7 @@ describe('ContextMenuProvider', () => {
     render(
       <ContextMenuProvider>
         <ReplacementHarness />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'First' }));
@@ -108,7 +109,7 @@ describe('ContextMenuProvider', () => {
       const open = (
         event: React.MouseEvent<HTMLButtonElement>,
         contextId: string,
-        label: string,
+        label: string
       ) => {
         openContextMenu({
           contextId,
@@ -117,19 +118,24 @@ describe('ContextMenuProvider', () => {
           anchor: event.currentTarget,
           point: { x: 12, y: 18 },
           invocation: 'pointer',
-          onClose: contextId === 'first'
-            ? (reason) => {
-                closeReasons.push(reason);
-                closeContextMenu();
-              }
-            : undefined,
+          onClose:
+            contextId === 'first'
+              ? (reason) => {
+                  closeReasons.push(reason);
+                  closeContextMenu();
+                }
+              : undefined,
         });
       };
 
       return (
         <>
-          <button type="button" onClick={(event) => open(event, 'first', 'First menu')}>First</button>
-          <button type="button" onClick={(event) => open(event, 'second', 'Second menu')}>Second</button>
+          <button type="button" onClick={(event) => open(event, 'first', 'First menu')}>
+            First
+          </button>
+          <button type="button" onClick={(event) => open(event, 'second', 'Second menu')}>
+            Second
+          </button>
         </>
       );
     }
@@ -137,7 +143,7 @@ describe('ContextMenuProvider', () => {
     render(
       <ContextMenuProvider>
         <ReentrantReplacementHarness />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'First' }));
@@ -162,11 +168,13 @@ describe('ContextMenuProvider', () => {
               openContextMenu({
                 contextId: 'action-menu',
                 ariaLabel: 'Action menu',
-                actions: [{
-                  id: 'rename',
-                  label: 'Rename',
-                  onSelect: () => calls.push('select'),
-                }],
+                actions: [
+                  {
+                    id: 'rename',
+                    label: 'Rename',
+                    onSelect: () => calls.push('select'),
+                  },
+                ],
                 anchor: event.currentTarget,
                 point: { x: 20, y: 24 },
                 invocation: 'pointer',
@@ -184,7 +192,7 @@ describe('ContextMenuProvider', () => {
     render(
       <ContextMenuProvider>
         <ActionHarness />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Show actions' }));
@@ -205,19 +213,23 @@ describe('ContextMenuProvider', () => {
         <>
           <button
             type="button"
-            onClick={(event) => openContextMenu({
-              contextId: 'programmatic-menu',
-              ariaLabel: 'Programmatic menu',
-              actions: [{ id: 'open', label: 'Open', onSelect: vi.fn() }],
-              anchor: event.currentTarget,
-              point: { x: 12, y: 12 },
-              invocation: 'pointer',
-              onClose,
-            })}
+            onClick={(event) =>
+              openContextMenu({
+                contextId: 'programmatic-menu',
+                ariaLabel: 'Programmatic menu',
+                actions: [{ id: 'open', label: 'Open', onSelect: vi.fn() }],
+                anchor: event.currentTarget,
+                point: { x: 12, y: 12 },
+                invocation: 'pointer',
+                onClose,
+              })
+            }
           >
             Open programmatic menu
           </button>
-          <button type="button" onClick={closeContextMenu}>Close programmatic menu</button>
+          <button type="button" onClick={closeContextMenu}>
+            Close programmatic menu
+          </button>
           <output aria-label="Programmatic context">{activeContextId ?? 'none'}</output>
         </>
       );
@@ -226,7 +238,7 @@ describe('ContextMenuProvider', () => {
     render(
       <ContextMenuProvider>
         <ProgrammaticCloseHarness />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Open programmatic menu' }));
@@ -270,7 +282,7 @@ describe('ContextMenuProvider', () => {
     render(
       <ContextMenuProvider>
         <KeyboardHarness />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Keyboard trigger' }));
@@ -323,7 +335,7 @@ describe('ContextMenuProvider', () => {
     render(
       <ContextMenuProvider>
         <DisabledHarness />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     const trigger = screen.getByRole('button', { name: 'Disabled trigger' });
@@ -368,7 +380,7 @@ describe('ContextMenuProvider', () => {
     render(
       <ContextMenuProvider>
         <EscapeHarness />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     const trigger = screen.getByRole('button', { name: 'Escape trigger' });
@@ -409,13 +421,15 @@ describe('ContextMenuProvider', () => {
         >
           Removed anchor trigger
         </button>
-      ) : <span>Trigger removed</span>;
+      ) : (
+        <span>Trigger removed</span>
+      );
     }
 
     render(
       <ContextMenuProvider>
         <RemovedAnchorHarness />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Removed anchor trigger' }));
@@ -458,7 +472,7 @@ describe('ContextMenuProvider', () => {
     render(
       <ContextMenuProvider>
         <GlobalDismissHarness />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     const trigger = screen.getByRole('button', { name: 'Global trigger' });
@@ -500,15 +514,17 @@ describe('ContextMenuProvider', () => {
         <div data-testid="nested-scroll-container">
           <button
             type="button"
-            onClick={(event) => openContextMenu({
-              contextId: 'nested-scroll-menu',
-              ariaLabel: 'Nested scroll menu',
-              actions: [{ id: 'open', label: 'Open', onSelect: vi.fn() }],
-              anchor: event.currentTarget,
-              point: { x: 8, y: 12 },
-              invocation: 'pointer',
-              onClose,
-            })}
+            onClick={(event) =>
+              openContextMenu({
+                contextId: 'nested-scroll-menu',
+                ariaLabel: 'Nested scroll menu',
+                actions: [{ id: 'open', label: 'Open', onSelect: vi.fn() }],
+                anchor: event.currentTarget,
+                point: { x: 8, y: 12 },
+                invocation: 'pointer',
+                onClose,
+              })
+            }
           >
             Nested scroll trigger
           </button>
@@ -519,7 +535,7 @@ describe('ContextMenuProvider', () => {
     render(
       <ContextMenuProvider>
         <NestedScrollHarness />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Nested scroll trigger' }));
@@ -530,7 +546,8 @@ describe('ContextMenuProvider', () => {
   });
 
   it('clamps the menu position inside the viewport with an eight pixel margin', () => {
-    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
       .mockImplementation(function getRect(this: HTMLElement) {
         const width = this.classList.contains('context-menu') ? 180 : 0;
         const height = this.classList.contains('context-menu') ? 160 : 0;
@@ -556,14 +573,16 @@ describe('ContextMenuProvider', () => {
       return (
         <button
           type="button"
-          onClick={(event) => openContextMenu({
-            contextId: 'position-menu',
-            ariaLabel: 'Position menu',
-            actions: [{ id: 'open', label: 'Open', onSelect: vi.fn() }],
-            anchor: event.currentTarget,
-            point: { x: 950, y: 750 },
-            invocation: 'pointer',
-          })}
+          onClick={(event) =>
+            openContextMenu({
+              contextId: 'position-menu',
+              ariaLabel: 'Position menu',
+              actions: [{ id: 'open', label: 'Open', onSelect: vi.fn() }],
+              anchor: event.currentTarget,
+              point: { x: 950, y: 750 },
+              invocation: 'pointer',
+            })
+          }
         >
           Position trigger
         </button>
@@ -573,7 +592,7 @@ describe('ContextMenuProvider', () => {
     render(
       <ContextMenuProvider>
         <PositionHarness />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Position trigger' }));
@@ -588,7 +607,8 @@ describe('ContextMenuProvider', () => {
   });
 
   it('clamps negative menu coordinates to the top-left eight pixel margin', () => {
-    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
       .mockImplementation(function getRect(this: HTMLElement) {
         const width = this.classList.contains('context-menu') ? 180 : 0;
         const height = this.classList.contains('context-menu') ? 160 : 0;
@@ -610,14 +630,16 @@ describe('ContextMenuProvider', () => {
       return (
         <button
           type="button"
-          onClick={(event) => openContextMenu({
-            contextId: 'negative-position-menu',
-            ariaLabel: 'Negative position menu',
-            actions: [{ id: 'open', label: 'Open', onSelect: vi.fn() }],
-            anchor: event.currentTarget,
-            point: { x: -50, y: -30 },
-            invocation: 'pointer',
-          })}
+          onClick={(event) =>
+            openContextMenu({
+              contextId: 'negative-position-menu',
+              ariaLabel: 'Negative position menu',
+              actions: [{ id: 'open', label: 'Open', onSelect: vi.fn() }],
+              anchor: event.currentTarget,
+              point: { x: -50, y: -30 },
+              invocation: 'pointer',
+            })
+          }
         >
           Negative position trigger
         </button>
@@ -627,7 +649,7 @@ describe('ContextMenuProvider', () => {
     render(
       <ContextMenuProvider>
         <NegativePositionHarness />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Negative position trigger' }));
@@ -645,22 +667,26 @@ describe('ContextMenuProvider', () => {
       return (
         <button
           type="button"
-          onClick={(event) => openContextMenu({
-            contextId: 'descriptor-menu',
-            ariaLabel: 'Descriptor menu',
-            actions: [{
-              id: 'delete',
-              label: 'Delete',
-              icon: <span data-testid="delete-icon">icon</span>,
-              shortcut: 'Delete',
-              dividerBefore: true,
-              tone: 'danger',
-              onSelect: vi.fn(),
-            }],
-            anchor: event.currentTarget,
-            point: { x: 12, y: 12 },
-            invocation: 'pointer',
-          })}
+          onClick={(event) =>
+            openContextMenu({
+              contextId: 'descriptor-menu',
+              ariaLabel: 'Descriptor menu',
+              actions: [
+                {
+                  id: 'delete',
+                  label: 'Delete',
+                  icon: <span data-testid="delete-icon">icon</span>,
+                  shortcut: 'Delete',
+                  dividerBefore: true,
+                  tone: 'danger',
+                  onSelect: vi.fn(),
+                },
+              ],
+              anchor: event.currentTarget,
+              point: { x: 12, y: 12 },
+              invocation: 'pointer',
+            })
+          }
         >
           Descriptor trigger
         </button>
@@ -670,7 +696,7 @@ describe('ContextMenuProvider', () => {
     render(
       <ContextMenuProvider>
         <DescriptorHarness />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Descriptor trigger' }));
@@ -682,7 +708,6 @@ describe('ContextMenuProvider', () => {
     expect(action.classList.contains('context-menu-item--with-divider')).toBe(true);
   });
 
-
   it('reports a programmatic close when the provider unmounts with an open menu', () => {
     const onClose = vi.fn();
 
@@ -691,15 +716,17 @@ describe('ContextMenuProvider', () => {
       return (
         <button
           type="button"
-          onClick={(event) => openContextMenu({
-            contextId: 'unmount-menu',
-            ariaLabel: 'Unmount menu',
-            actions: [{ id: 'open', label: 'Open', onSelect: vi.fn() }],
-            anchor: event.currentTarget,
-            point: { x: 12, y: 12 },
-            invocation: 'pointer',
-            onClose,
-          })}
+          onClick={(event) =>
+            openContextMenu({
+              contextId: 'unmount-menu',
+              ariaLabel: 'Unmount menu',
+              actions: [{ id: 'open', label: 'Open', onSelect: vi.fn() }],
+              anchor: event.currentTarget,
+              point: { x: 12, y: 12 },
+              invocation: 'pointer',
+              onClose,
+            })
+          }
         >
           Unmount trigger
         </button>
@@ -709,7 +736,7 @@ describe('ContextMenuProvider', () => {
     const { unmount } = render(
       <ContextMenuProvider>
         <UnmountHarness />
-      </ContextMenuProvider>,
+      </ContextMenuProvider>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Unmount trigger' }));

@@ -3,7 +3,7 @@ import type { HistoryItem } from '../../types/history';
 
 export function buildImportedHistoryItem(
   filePath = '/path/to/test.wav',
-  overrides: Partial<HistoryItem> = {},
+  overrides: Partial<HistoryItem> = {}
 ): HistoryItem {
   const id = overrides.id ?? 'mock-history-id';
   const filename = filePath.split(/[/\\]/).pop() || 'test.wav';
@@ -28,9 +28,10 @@ export function createHistoryServiceMockModule(options?: {
   filePath?: string;
   importedItem?: HistoryItem | null;
 }) {
-  const importedItem = options?.importedItem === undefined
-    ? buildImportedHistoryItem(options?.filePath)
-    : options.importedItem;
+  const importedItem =
+    options?.importedItem === undefined
+      ? buildImportedHistoryItem(options?.filePath)
+      : options.importedItem;
 
   return {
     historyService: {

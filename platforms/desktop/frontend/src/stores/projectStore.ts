@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import type { ProjectPipelineConfig, ProjectRecord, ProjectUpdateInput } from '../types/project';
 import { historyService } from '../services/historyService';
 import { projectService } from '../services/projectService';
+import type { ProjectPipelineConfig, ProjectRecord, ProjectUpdateInput } from '../types/project';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 
@@ -44,7 +44,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         projectService.getActiveProjectId(),
       ]);
 
-      const isValidActiveProject = !activeProjectId || projects.some((item) => item.id === activeProjectId);
+      const isValidActiveProject =
+        !activeProjectId || projects.some((item) => item.id === activeProjectId);
       const normalizedActiveProjectId = isValidActiveProject ? activeProjectId : null;
 
       if (activeProjectId && !isValidActiveProject) {
@@ -92,7 +93,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   updateProjectPipeline: async (id, pipeline) => {
     const updated = await projectService.updatePipeline(id, pipeline);
     if (!updated) return;
-    set((state) => ({ projects: state.projects.map((item) => item.id === id ? updated : item) }));
+    set((state) => ({ projects: state.projects.map((item) => (item.id === id ? updated : item)) }));
   },
 
   deleteProject: async (id, cascadeAction = 'moveToInbox') => {

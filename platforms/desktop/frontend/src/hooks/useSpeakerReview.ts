@@ -1,15 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useDialogStore } from '../stores/dialogStore';
-import { useConfigStore } from '../stores/configStore';
-import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildSpeakerCorrectionProfileSections,
   speakerCorrectionService,
 } from '../services/speakerCorrectionService';
-import {
-  buildSpeakerReviewSnapshot,
-} from '../services/speakerReviewService';
+import { buildSpeakerReviewSnapshot } from '../services/speakerReviewService';
+import { useConfigStore } from '../stores/configStore';
+import { useDialogStore } from '../stores/dialogStore';
+import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type {
   SpeakerReviewCounts,
   SpeakerReviewFilter,
@@ -45,9 +44,7 @@ function resolveNextActiveGroupId(groupId: string, groups: SpeakerReviewGroup[])
     return groups[0]?.groupId || null;
   }
 
-  return groups[currentIndex + 1]?.groupId
-    || groups[currentIndex - 1]?.groupId
-    || null;
+  return groups[currentIndex + 1]?.groupId || groups[currentIndex - 1]?.groupId || null;
 }
 
 function isShortcutIgnoredTarget(target: EventTarget | null): boolean {
@@ -73,26 +70,27 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
   const requestSeek = useTranscriptPlaybackStore((state) => state.requestSeek);
   const profileSections = useMemo(
     () => buildSpeakerCorrectionProfileSections(speakerProfiles),
-    [speakerProfiles],
+    [speakerProfiles]
   );
-  
+
   const [activeFilter, setActiveFilter] = useState<SpeakerReviewFilter>('pending');
-  const [snapshot, setSnapshot] = useState<SpeakerReviewSnapshot>(() => createEmptySpeakerReviewSnapshot());
+  const [snapshot, setSnapshot] = useState<SpeakerReviewSnapshot>(() =>
+    createEmptySpeakerReviewSnapshot()
+  );
   const [isSnapshotLoading, setIsSnapshotLoading] = useState(false);
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
   const [busyGroupId, setBusyGroupId] = useState<string | null>(null);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
-  
+
   const visibleGroups = snapshot.visibleGroups;
-  const effectiveActiveGroupId = (
+  const effectiveActiveGroupId =
     activeGroupId && visibleGroups.some((group) => group.groupId === activeGroupId)
       ? activeGroupId
-      : visibleGroups[0]?.groupId || null
-  );
-  
+      : visibleGroups[0]?.groupId || null;
+
   const activeGroup = useMemo(
     () => visibleGroups.find((group) => group.groupId === effectiveActiveGroupId) || null,
-    [effectiveActiveGroupId, visibleGroups],
+    [effectiveActiveGroupId, visibleGroups]
   );
 
   useEffect(() => {
@@ -118,11 +116,11 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
         }
 
         setSnapshot(nextSnapshot);
-        setActiveGroupId((current) => (
+        setActiveGroupId((current) =>
           current && nextSnapshot.visibleGroups.some((group) => group.groupId === current)
             ? current
             : nextSnapshot.visibleGroups[0]?.groupId || null
-        ));
+        );
       })
       .catch(async (error) => {
         if (cancelled || snapshotRequestIdRef.current !== requestId) {
@@ -147,83 +145,94 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
     };
   }, [activeFilter, isOpen, segments, showError]);
 
-  const runGroupAction = useCallback(async (
-    groupId: string,
-    action: () => Promise<unknown>,
-    errorCode: string,
-  ) => {
-    if (busyGroupIdRef.current) {
-      return;
-    }
-
-    try {
-      busyGroupIdRef.current = groupId;
-      setBusyGroupId(groupId);
-      await action();
-      setActiveGroupId(resolveNextActiveGroupId(groupId, visibleGroups));
-    } catch (error) {
-      await showError({
-        code: errorCode,
-        messageKey: 'editor.speaker_correction_failed',
-        cause: error,
-      });
-    } finally {
-      busyGroupIdRef.current = null;
-      setBusyGroupId(null);
-    }
-  }, [showError, visibleGroups]);
-
-  const handleConfirmGroup = useCallback(async (groupId: string) => {
-    await runGroupAction(
-      groupId,
-      () => speakerCorrectionService.confirmSpeakerGroupReview(groupId),
-      'speaker_review.confirm_failed',
-    );
-  }, [runGroupAction]);
-
-  const handleAssignProfile = useCallback(async (groupId: string, profileId: string) => {
-    await runGroupAction(
-      groupId,
-      () => speakerCorrectionService.assignProfileToSpeakerGroup(groupId, profileId),
-      'speaker_review.apply_failed',
-    );
-  }, [runGroupAction]);
-
-  const handleResetGroup = useCallback(async (groupId: string) => {
-    await runGroupAction(
-      groupId,
-      () => speakerCorrectionService.resetGroupToAnonymous(groupId),
-      'speaker_review.reset_failed',
-    );
-  }, [runGroupAction]);
-
-  const handleJumpToGroup = useCallback((group: SpeakerReviewGroup) => {
-    requestSeek(group.firstStart);
-    onClose();
-  }, [onClose, requestSeek]);
-
-  const moveActiveGroup = useCallback((direction: 1 | -1) => {
-    setActiveGroupId((current) => {
-      if (visibleGroups.length === 0) {
-        return null;
+  const runGroupAction = useCallback(
+    async (groupId: string, action: () => Promise<unknown>, errorCode: string) => {
+      if (busyGroupIdRef.current) {
+        return;
       }
 
-      const currentIndex = current
-        ? visibleGroups.findIndex((group) => group.groupId === current)
-        : -1;
-      if (currentIndex < 0) {
-        return direction > 0
-          ? visibleGroups[0].groupId
-          : visibleGroups[visibleGroups.length - 1].groupId;
+      try {
+        busyGroupIdRef.current = groupId;
+        setBusyGroupId(groupId);
+        await action();
+        setActiveGroupId(resolveNextActiveGroupId(groupId, visibleGroups));
+      } catch (error) {
+        await showError({
+          code: errorCode,
+          messageKey: 'editor.speaker_correction_failed',
+          cause: error,
+        });
+      } finally {
+        busyGroupIdRef.current = null;
+        setBusyGroupId(null);
       }
+    },
+    [showError, visibleGroups]
+  );
 
-      const nextIndex = Math.min(
-        visibleGroups.length - 1,
-        Math.max(0, currentIndex + direction),
+  const handleConfirmGroup = useCallback(
+    async (groupId: string) => {
+      await runGroupAction(
+        groupId,
+        () => speakerCorrectionService.confirmSpeakerGroupReview(groupId),
+        'speaker_review.confirm_failed'
       );
-      return visibleGroups[nextIndex].groupId;
-    });
-  }, [visibleGroups]);
+    },
+    [runGroupAction]
+  );
+
+  const handleAssignProfile = useCallback(
+    async (groupId: string, profileId: string) => {
+      await runGroupAction(
+        groupId,
+        () => speakerCorrectionService.assignProfileToSpeakerGroup(groupId, profileId),
+        'speaker_review.apply_failed'
+      );
+    },
+    [runGroupAction]
+  );
+
+  const handleResetGroup = useCallback(
+    async (groupId: string) => {
+      await runGroupAction(
+        groupId,
+        () => speakerCorrectionService.resetGroupToAnonymous(groupId),
+        'speaker_review.reset_failed'
+      );
+    },
+    [runGroupAction]
+  );
+
+  const handleJumpToGroup = useCallback(
+    (group: SpeakerReviewGroup) => {
+      requestSeek(group.firstStart);
+      onClose();
+    },
+    [onClose, requestSeek]
+  );
+
+  const moveActiveGroup = useCallback(
+    (direction: 1 | -1) => {
+      setActiveGroupId((current) => {
+        if (visibleGroups.length === 0) {
+          return null;
+        }
+
+        const currentIndex = current
+          ? visibleGroups.findIndex((group) => group.groupId === current)
+          : -1;
+        if (currentIndex < 0) {
+          return direction > 0
+            ? visibleGroups[0].groupId
+            : visibleGroups[visibleGroups.length - 1].groupId;
+        }
+
+        const nextIndex = Math.min(visibleGroups.length - 1, Math.max(0, currentIndex + direction));
+        return visibleGroups[nextIndex].groupId;
+      });
+    },
+    [visibleGroups]
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -232,9 +241,9 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (
-        event.target instanceof Node
-        && modalRef.current
-        && !modalRef.current.contains(event.target)
+        event.target instanceof Node &&
+        modalRef.current &&
+        !modalRef.current.contains(event.target)
       ) {
         return;
       }

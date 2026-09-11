@@ -136,7 +136,7 @@ export const LANGUAGE_OPTIONS: readonly LanguageDefinition[] = [
   { code: 'xh', englishName: 'Xhosa' },
   { code: 'yi', englishName: 'Yiddish' },
   { code: 'yo', englishName: 'Yoruba' },
-  { code: 'zu', englishName: 'Zulu' }
+  { code: 'zu', englishName: 'Zulu' },
 ] as const;
 
-export type LanguageOption = typeof LANGUAGE_OPTIONS[number]['code'];
+export type LanguageOption = (typeof LANGUAGE_OPTIONS)[number]['code'];

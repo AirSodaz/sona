@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot } from '../../types/taskLedger';
 import {
   getCancelRequestedIds,
   mergeSnapshotWithLocalTasks,
@@ -6,7 +7,6 @@ import {
   patchTaskRecord,
   snapshotToTaskLedgerState,
 } from '../taskLedgerState';
-import type { TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot } from '../../types/taskLedger';
 
 function makeTask(overrides: Partial<TaskLedgerRecord> = {}): TaskLedgerRecord {
   return {
@@ -49,9 +49,7 @@ describe('taskLedgerState', () => {
       cancelable: false,
     });
 
-    expect(mergeSnapshotWithLocalTasks([pendingTask], [succeededTask])).toEqual([
-      succeededTask,
-    ]);
+    expect(mergeSnapshotWithLocalTasks([pendingTask], [succeededTask])).toEqual([succeededTask]);
   });
 
   it('drops stale cancel requests for resolved tasks', () => {
@@ -83,9 +81,11 @@ describe('taskLedgerState', () => {
 
     const clearErrorPatch: TaskLedgerPatch = { errorMessage: null };
 
-    expect(patchTaskRecord(failedTask, clearErrorPatch)).toEqual(expect.objectContaining({
-      errorMessage: undefined,
-    }));
+    expect(patchTaskRecord(failedTask, clearErrorPatch)).toEqual(
+      expect.objectContaining({
+        errorMessage: undefined,
+      })
+    );
   });
 
   it('creates store-ready state from a backend snapshot', () => {

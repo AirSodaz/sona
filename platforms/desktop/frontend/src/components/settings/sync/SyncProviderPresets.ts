@@ -31,7 +31,8 @@ export const SYNC_PROVIDER_PRESETS: readonly SyncProviderPreset[] = [
     defaultRemoteRoot: 'Sona',
     usernamePlaceholder: 'account@example.com',
     helpKey: 'settings.sync.preset_help_nutstore',
-    helpDefault: 'Generate an app password in Nutstore: Account Info -> Security -> Third-party apps.',
+    helpDefault:
+      'Generate an app password in Nutstore: Account Info -> Security -> Third-party apps.',
     authDocUrl: 'https://help.jianguoyun.com/?p=2064',
   },
   {
@@ -44,7 +45,8 @@ export const SYNC_PROVIDER_PRESETS: readonly SyncProviderPreset[] = [
     defaultRemoteRoot: 'Sona',
     usernamePlaceholder: 'username',
     helpKey: 'settings.sync.preset_help_nextcloud',
-    helpDefault: 'Generate an app password in Nextcloud: Personal Settings -> Security -> Devices & Sessions.',
+    helpDefault:
+      'Generate an app password in Nextcloud: Personal Settings -> Security -> Devices & Sessions.',
   },
   {
     id: 'infinicloud',
@@ -99,8 +101,14 @@ export const SYNC_PROVIDER_PRESETS: readonly SyncProviderPreset[] = [
 export function detectProviderPresetId(serverUrl: string): WellKnownSyncProviderId {
   const normalized = serverUrl.trim().toLowerCase();
   if (normalized.includes('jianguoyun.com')) return 'nutstore';
-  if (normalized.includes('teracloud.jp') || normalized.includes('infinicloud')) return 'infinicloud';
-  if (normalized.includes('remote.php/dav') || normalized.includes('nextcloud') || normalized.includes('owncloud')) return 'nextcloud';
+  if (normalized.includes('teracloud.jp') || normalized.includes('infinicloud'))
+    return 'infinicloud';
+  if (
+    normalized.includes('remote.php/dav') ||
+    normalized.includes('nextcloud') ||
+    normalized.includes('owncloud')
+  )
+    return 'nextcloud';
   if (normalized.includes(':5006') || normalized.includes('synology')) return 'synology';
   if (normalized.includes('/dav') && normalized.includes('alist')) return 'alist';
   return 'custom';

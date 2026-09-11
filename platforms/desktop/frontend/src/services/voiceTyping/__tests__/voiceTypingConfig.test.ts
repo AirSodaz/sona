@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { buildTestConfig } from '../../../test-utils/configTestUtils';
+import type { AppConfig } from '../../../types/config';
+import { resolveAsrTranscriptionRequest } from '../../asrConfigService';
 import {
   buildVoiceTypingAsrSignature,
   getVoiceTypingShortcutModifiers,
   resolveVoiceTypingConfigSnapshot,
   resolveVoiceTypingRuntimeChange,
 } from '../voiceTypingConfig';
-import { buildTestConfig } from '../../../test-utils/configTestUtils';
-import { resolveAsrTranscriptionRequest } from '../../asrConfigService';
-import type { AppConfig } from '../../../types/config';
 
 describe('voiceTypingConfig', () => {
   it('builds a stable signature from the ASR fields that affect runtime warm-up', () => {
@@ -26,34 +26,39 @@ describe('voiceTypingConfig', () => {
     });
     const asr = resolveAsrTranscriptionRequest(config, 'voiceTyping');
 
-    expect(buildVoiceTypingAsrSignature(asr)).toBe(JSON.stringify({
-      engine: 'local',
-      mode: 'streaming',
-      modelPath: '/models/live',
-
-    }));
+    expect(buildVoiceTypingAsrSignature(asr)).toBe(
+      JSON.stringify({
+        engine: 'local',
+        mode: 'streaming',
+        modelPath: '/models/live',
+      })
+    );
   });
 
   it('detects shortcut, ASR, VAD, microphone, language, and ITN changes separately', () => {
-    const previous = resolveVoiceTypingConfigSnapshot(buildTestConfig({
-      voiceTypingEnabled: true,
-      voiceTypingShortcut: 'Alt+V',
-      liveVadModelPath: '/models/vad',
-      microphoneId: 'default',
-      keepMicrophoneActive: true,
-      language: 'auto',
-      enableITN: true,
-    }));
-    const next = resolveVoiceTypingConfigSnapshot(buildTestConfig({
-      voiceTypingEnabled: true,
-      voiceTypingShortcut: 'Ctrl+Space',
-      streamingModelPath: '/models/live-next',
-      liveVadModelPath: '/models/vad-next',
-      microphoneId: 'usb',
-      keepMicrophoneActive: false,
-      language: 'zh',
-      enableITN: false,
-    }));
+    const previous = resolveVoiceTypingConfigSnapshot(
+      buildTestConfig({
+        voiceTypingEnabled: true,
+        voiceTypingShortcut: 'Alt+V',
+        liveVadModelPath: '/models/vad',
+        microphoneId: 'default',
+        keepMicrophoneActive: true,
+        language: 'auto',
+        enableITN: true,
+      })
+    );
+    const next = resolveVoiceTypingConfigSnapshot(
+      buildTestConfig({
+        voiceTypingEnabled: true,
+        voiceTypingShortcut: 'Ctrl+Space',
+        streamingModelPath: '/models/live-next',
+        liveVadModelPath: '/models/vad-next',
+        microphoneId: 'usb',
+        keepMicrophoneActive: false,
+        language: 'zh',
+        enableITN: false,
+      })
+    );
 
     expect(resolveVoiceTypingRuntimeChange(previous, next)).toEqual({
       enabledChanged: false,
@@ -70,9 +75,11 @@ describe('voiceTypingConfig', () => {
   });
 
   it('includes the global microphone persistence preference in the runtime snapshot', () => {
-    const snapshot = resolveVoiceTypingConfigSnapshot(buildTestConfig({
-      keepMicrophoneActive: false,
-    }));
+    const snapshot = resolveVoiceTypingConfigSnapshot(
+      buildTestConfig({
+        keepMicrophoneActive: false,
+      })
+    );
 
     expect(snapshot.keepMicrophoneActive).toBe(false);
   });
@@ -90,7 +97,10 @@ describe('voiceTypingConfig', () => {
 
   it('parses shortcut modifiers in injection order', () => {
     expect(getVoiceTypingShortcutModifiers('Ctrl + Shift + V')).toEqual(['control', 'shift']);
-    expect(getVoiceTypingShortcutModifiers('CmdOrCtrl + Option + Space')).toEqual(['control', 'alt']);
+    expect(getVoiceTypingShortcutModifiers('CmdOrCtrl + Option + Space')).toEqual([
+      'control',
+      'alt',
+    ]);
     expect(getVoiceTypingShortcutModifiers('Win + Alt + V')).toEqual(['meta', 'alt']);
     expect(getVoiceTypingShortcutModifiers('Space')).toEqual([]);
   });

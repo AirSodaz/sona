@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { ProjectBadge, ProjectVisual } from '../ProjectVisual';
+import { describe, expect, it, vi } from 'vitest';
 import { ProjectCreateModal } from '../ProjectCreateModal';
+import { ProjectBadge, ProjectVisual } from '../ProjectVisual';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -29,7 +29,9 @@ describe('ProjectVisual', () => {
   });
 
   it('renders system icon with color', () => {
-    const { container } = render(<ProjectVisual icon="system:mic" color="#8B5CF6" size="lg" showBackground />);
+    const { container } = render(
+      <ProjectVisual icon="system:mic" color="#8B5CF6" size="lg" showBackground />
+    );
     const visual = container.querySelector('.project-visual');
     expect(visual?.classList.contains('project-visual--lg')).toBe(true);
     expect(visual?.classList.contains('project-visual--with-bg')).toBe(true);
@@ -41,9 +43,7 @@ describe('ProjectVisual', () => {
 
 describe('ProjectBadge', () => {
   it('renders project name and visual mark with CSS variable for contrast styling', () => {
-    const { container } = render(
-      <ProjectBadge name="Audio Docs" icon="🎙️" color="#6366F1" />
-    );
+    const { container } = render(<ProjectBadge name="Audio Docs" icon="🎙️" color="#6366F1" />);
 
     const badge = container.querySelector('.history-item-project-badge');
     expect(badge).not.toBeNull();

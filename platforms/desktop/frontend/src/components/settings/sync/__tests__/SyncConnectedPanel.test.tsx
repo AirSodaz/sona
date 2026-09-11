@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { SyncConnectedPanel } from '../SyncConnectedPanel';
-import type { SyncStatusSnapshot } from '../../../../types/sync';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useDialogStore } from '../../../../stores/dialogStore';
+import type { SyncStatusSnapshot } from '../../../../types/sync';
+import { SyncConnectedPanel } from '../SyncConnectedPanel';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -79,7 +79,7 @@ describe('SyncConnectedPanel', () => {
         onUnlock={onUnlock}
         onUnlockWithRecovery={onUnlockWithRecovery}
         onDeleteRecoveryKey={onDeleteRecoveryKey}
-      />,
+      />
     );
 
     // Should find the 3 scenario card buttons
@@ -126,7 +126,7 @@ describe('SyncConnectedPanel', () => {
         onUnlock={onUnlock}
         onUnlockWithRecovery={onUnlockWithRecovery}
         onDeleteRecoveryKey={onDeleteRecoveryKey}
-      />,
+      />
     );
 
     // Recovery card should be rendered
@@ -187,7 +187,7 @@ describe('SyncConnectedPanel', () => {
         onUnlock={onUnlock}
         onUnlockWithRecovery={onUnlockWithRecovery}
         onDeleteRecoveryKey={onDeleteRecoveryKey}
-      />,
+      />
     );
 
     // Verify Disconnect button is present even in locked state

@@ -77,7 +77,9 @@
 
 .control-button.start:focus-visible,
 .control-button.stop:focus-visible {
-  box-shadow: var(--apple-control-focus-ring), 0 4px 12px var(--color-recording-glow);
+  box-shadow:
+    var(--apple-control-focus-ring),
+    0 4px 12px var(--color-recording-glow);
 }
 
 .control-button.pause {

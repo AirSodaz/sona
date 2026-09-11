@@ -1,4 +1,3 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BrainCircuit,
   Check,
@@ -14,15 +13,12 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import type { LlmGenerateCommandRequest } from '../../../types/dashboard';
-import type {
-  LlmAssistantConfig,
-} from '../../../types/config';
-import type {
-  LlmModelEntry,
-  LlmProvider,
-} from '../../../types/transcript';
-import { normalizeError } from '../../../utils/errorUtils';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  buildLlmConfig,
+  createProviderSetting,
+  getProviderDefinition,
+} from '../../../services/llm/providers';
 import {
   addLlmModel,
   enrichLlmModelMetadata,
@@ -34,12 +30,11 @@ import {
   syncProviderDiscoveredModels,
   updateLlmModelMetadata,
 } from '../../../services/llm/state';
-import {
-  buildLlmConfig,
-  createProviderSetting,
-  getProviderDefinition,
-} from '../../../services/llm/providers';
 import { describeLlmModel, generateLlmText, listLlmModels } from '../../../services/tauri/llm';
+import type { LlmAssistantConfig } from '../../../types/config';
+import type { LlmGenerateCommandRequest } from '../../../types/dashboard';
+import type { LlmModelEntry, LlmProvider } from '../../../types/transcript';
+import { normalizeError } from '../../../utils/errorUtils';
 import { PanelModal } from '../../PanelModal';
 import { getCurrentLlmSettings } from './helpers';
 import { ModelMetadataEditor } from './ModelMetadataEditor';
@@ -76,10 +71,12 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
 }: ProviderDetailsModalProps) {
   const currentLlmState = getCurrentLlmSettings(config);
   const definition = getProviderDefinition(provider, currentLlmState.customProviders);
-  const setting = currentLlmState.providers[provider] ?? createProviderSetting(provider, currentLlmState.customProviders);
+  const setting =
+    currentLlmState.providers[provider] ??
+    createProviderSetting(provider, currentLlmState.customProviders);
   const providerModels = useMemo(
     () => getProviderLlmModels(currentLlmState, provider),
-    [currentLlmState, provider],
+    [currentLlmState, provider]
   );
   const [refreshState, setRefreshState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [refreshMessage, setRefreshMessage] = useState('');
@@ -94,12 +91,15 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
   openProviderRef.current = { isOpen, provider };
   const savedModelCount = providerModels.length;
 
-  const applyTrackedLlmSettings = useCallback((nextSettings: LlmAssistantConfig['llmSettings']) => {
-    if (nextSettings) {
-      latestLlmStateRef.current = nextSettings;
-    }
-    applyLlmSettings(nextSettings);
-  }, [applyLlmSettings]);
+  const applyTrackedLlmSettings = useCallback(
+    (nextSettings: LlmAssistantConfig['llmSettings']) => {
+      if (nextSettings) {
+        latestLlmStateRef.current = nextSettings;
+      }
+      applyLlmSettings(nextSettings);
+    },
+    [applyLlmSettings]
+  );
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -122,7 +122,9 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
         baseUrl: setting.apiHost,
         apiKey: setting.apiKey,
       });
-      applyTrackedLlmSettings(syncProviderDiscoveredModels(latestLlmStateRef.current, provider, result, fetchedAt));
+      applyTrackedLlmSettings(
+        syncProviderDiscoveredModels(latestLlmStateRef.current, provider, result, fetchedAt)
+      );
       setRefreshState('idle');
     } catch (error) {
       setRefreshState('error');
@@ -202,30 +204,32 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
     void describeLlmModel({
       ...buildLlmConfig(provider, setting, currentLlmState.customProviders),
       model,
-    }).then((summary) => {
-      const requestContext = openProviderRef.current;
-      if (
-        !isMountedRef.current
-        || !requestContext.isOpen
-        || requestContext.provider !== provider
-        || !modelId
-        || !summary
-        || summary.model !== model
-      ) {
-        return;
-      }
-      const metadata = modelSummaryToMetadata(summary);
-      if (Object.keys(metadata).length === 0) {
-        return;
-      }
-      const latestState = latestLlmStateRef.current;
-      const enrichedState = enrichLlmModelMetadata(latestState, modelId, metadata);
-      if (enrichedState !== latestState) {
-        applyTrackedLlmSettings(enrichedState);
-      }
-    }).catch(() => {
-      // Catalog enrichment is best-effort and must not block a manual model.
-    });
+    })
+      .then((summary) => {
+        const requestContext = openProviderRef.current;
+        if (
+          !isMountedRef.current ||
+          !requestContext.isOpen ||
+          requestContext.provider !== provider ||
+          !modelId ||
+          !summary ||
+          summary.model !== model
+        ) {
+          return;
+        }
+        const metadata = modelSummaryToMetadata(summary);
+        if (Object.keys(metadata).length === 0) {
+          return;
+        }
+        const latestState = latestLlmStateRef.current;
+        const enrichedState = enrichLlmModelMetadata(latestState, modelId, metadata);
+        if (enrichedState !== latestState) {
+          applyTrackedLlmSettings(enrichedState);
+        }
+      })
+      .catch(() => {
+        // Catalog enrichment is best-effort and must not block a manual model.
+      });
   };
 
   const handleDeleteModel = (entry: LlmModelEntry) => {
@@ -242,7 +246,7 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
 
   const handleSaveMetadata = (
     entry: LlmModelEntry,
-    metadata: Partial<NonNullable<LlmModelEntry['metadata']>>,
+    metadata: Partial<NonNullable<LlmModelEntry['metadata']>>
   ) => {
     applyTrackedLlmSettings(updateLlmModelMetadata(latestLlmStateRef.current, entry.id, metadata));
     setEditingModelId(null);
@@ -298,14 +302,14 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
       overlayClassName="provider-details-overlay"
       headerCopyClassName="provider-details-header-copy"
       toolbarClassName="provider-details-toolbar"
-      badge={(
+      badge={
         <>
           <LibraryBig size={16} />
           <span>{t('settings.llm.model_library')}</span>
         </>
-      )}
+      }
       title={<h2>{t(definition.labelKey, { defaultValue: definition.labelDefault })}</h2>}
-      headerActions={(
+      headerActions={
         <div className="provider-details-actions">
           <div className="provider-details-add-group">
             <input
@@ -331,18 +335,22 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
               onClick={handleRefresh}
               disabled={refreshState === 'loading'}
             >
-              {refreshState === 'loading' ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+              {refreshState === 'loading' ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <RefreshCw size={16} />
+              )}
               <span>{t('settings.llm.refresh_models')}</span>
             </button>
           ) : null}
         </div>
-      )}
-      meta={(
+      }
+      meta={
         <>
           <span className="panel-modal-meta-label">{t('settings.llm.model_library')}</span>
           <span>{savedModelCount}</span>
         </>
-      )}
+      }
     >
       {!definition.supportsModelListing ? (
         <div className="settings-hint">{t('settings.llm.manual_only_provider_hint')}</div>
@@ -372,7 +380,9 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
                 <div className="provider-model-heading">
                   <div className="provider-model-name-row">
                     <div>
-                      <div className="provider-model-name">{entry.metadata?.displayName || entry.model}</div>
+                      <div className="provider-model-name">
+                        {entry.metadata?.displayName || entry.model}
+                      </div>
                       {entry.metadata?.displayName ? (
                         <div className="provider-model-id">{entry.model}</div>
                       ) : null}
@@ -446,11 +456,13 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
                     onClick={() => void handleTestModel(entry)}
                     disabled={testState.status === 'loading'}
                   >
-                    {testState.status === 'loading'
-                      ? <Loader2 size={16} className="animate-spin" />
-                      : testState.status === 'success'
-                        ? <Check size={16} />
-                        : <PlugZap size={16} />}
+                    {testState.status === 'loading' ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : testState.status === 'success' ? (
+                      <Check size={16} />
+                    ) : (
+                      <PlugZap size={16} />
+                    )}
                   </button>
                   {entry.source === 'manual' ? (
                     <button

@@ -3,9 +3,9 @@ import {
   buildLanguagePickerOptions,
   coerceLanguage,
   formatLanguagesTooltip,
+  type LanguageCapable,
   languageDisplayName,
   MAX_TOOLTIP_LANGUAGES,
-  type LanguageCapable,
 } from '../languages';
 
 const selectableModel: LanguageCapable = {
@@ -19,14 +19,16 @@ describe('buildLanguagePickerOptions', () => {
 
     expect(options[0]).toMatchObject({ value: 'auto' });
     expect(options.map((option) => option.value)).toEqual(['auto', 'en', 'ja', 'ko', 'yue', 'zh']);
-    const grouped = options.filter((option) => option.group === 'common').map((option) => option.value);
+    const grouped = options
+      .filter((option) => option.group === 'common')
+      .map((option) => option.value);
     expect(grouped).toEqual(['en', 'ja', 'ko', 'yue', 'zh']);
   });
 
   it('locks auto-detect models to a single auto option', () => {
     const options = buildLanguagePickerOptions(
       { languages: ['ar', 'de', 'en'], languageMode: 'auto' },
-      'en',
+      'en'
     );
 
     expect(options).toHaveLength(1);
@@ -91,9 +93,36 @@ describe('formatLanguagesTooltip', () => {
 
   it('summarizes long language list when exceeding MAX_TOOLTIP_LANGUAGES', () => {
     const longLanguages = [
-      'af', 'am', 'ar', 'as', 'az', 'ba', 'be', 'bg', 'bn', 'bo',
-      'br', 'bs', 'ca', 'cs', 'cy', 'da', 'de', 'el', 'en', 'es',
-      'et', 'eu', 'fa', 'fi', 'fil', 'fo', 'fr', 'gl', 'gu', 'ha',
+      'af',
+      'am',
+      'ar',
+      'as',
+      'az',
+      'ba',
+      'be',
+      'bg',
+      'bn',
+      'bo',
+      'br',
+      'bs',
+      'ca',
+      'cs',
+      'cy',
+      'da',
+      'de',
+      'el',
+      'en',
+      'es',
+      'et',
+      'eu',
+      'fa',
+      'fi',
+      'fil',
+      'fo',
+      'fr',
+      'gl',
+      'gu',
+      'ha',
     ];
     expect(longLanguages.length).toBeGreaterThan(MAX_TOOLTIP_LANGUAGES);
 
@@ -106,7 +135,8 @@ describe('formatLanguagesTooltip', () => {
 
   it('uses t translation function when provided', () => {
     const longLanguages = Array.from({ length: 30 }, (_, i) => `lang-${i}`);
-    const mockT = (_key: string, opts?: Record<string, unknown>) => `${String(opts?.sample ?? '')} | total:${String(opts?.count ?? '')}`;
+    const mockT = (_key: string, opts?: Record<string, unknown>) =>
+      `${String(opts?.sample ?? '')} | total:${String(opts?.count ?? '')}`;
     const result = formatLanguagesTooltip(longLanguages, 'zh', mockT);
     expect(result).toContain('| total:30');
   });

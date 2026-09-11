@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { VISIBLE_LANGUAGE_TAGS, formatLanguagesTooltip } from '../utils/languages';
+import { formatLanguagesTooltip, VISIBLE_LANGUAGE_TAGS } from '../utils/languages';
 
 interface LanguageBadgesProps {
   languages: string[] | undefined;
@@ -42,11 +42,11 @@ export const LanguageBadges = React.memo(function LanguageBadges({
       aria-label={tooltipText}
     >
       {visible.map((code) => (
-        <span key={code} className="model-tag">{code.toUpperCase()}</span>
+        <span key={code} className="model-tag">
+          {code.toUpperCase()}
+        </span>
       ))}
-      {overflow > 0 && (
-        <span className="model-tag model-tag-overflow">+{overflow}</span>
-      )}
+      {overflow > 0 && <span className="model-tag model-tag-overflow">+{overflow}</span>}
     </span>
   );
 });

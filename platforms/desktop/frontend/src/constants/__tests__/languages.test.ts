@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { LANGUAGE_OPTIONS } from '../languages';
 
 describe('LANGUAGE_OPTIONS', () => {
   it('should contain key translation languages', () => {
-    const codes = LANGUAGE_OPTIONS.map(opt => opt.code);
+    const codes = LANGUAGE_OPTIONS.map((opt) => opt.code);
     expect(codes).toContain('zh');
     expect(codes).toContain('en');
     expect(codes).toContain('ja');

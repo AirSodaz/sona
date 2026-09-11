@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { ProjectSettingsModal } from '../ProjectSettingsModal';
+import { describe, expect, it, vi } from 'vitest';
 import type { ProjectRecord } from '../../../types/project';
+import { ProjectSettingsModal } from '../ProjectSettingsModal';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

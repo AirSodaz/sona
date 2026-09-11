@@ -8,12 +8,10 @@ vi.mock('@tauri-apps/api/path', () => ({
 }));
 
 vi.mock('../tauri/export', () => ({
-  exportTranscriptFile: vi.fn(
-    async ({ outputPath }: { outputPath: string }) => ({
-      outputPath,
-      bytesWritten: 42,
-    }),
-  ),
+  exportTranscriptFile: vi.fn(async ({ outputPath }: { outputPath: string }) => ({
+    outputPath,
+    bytesWritten: 42,
+  })),
 }));
 
 describe('exportService', () => {

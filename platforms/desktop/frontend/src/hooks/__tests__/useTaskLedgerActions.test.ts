@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { TaskLedgerRecord } from '../../types/taskLedger';
 import {
   createTaskCenterActionRegistry,
   type TaskCenterAction,
   type TaskCenterActionDependencies,
 } from '../useTaskLedgerActions';
-import type { TaskLedgerRecord } from '../../types/taskLedger';
 
 function translate(key: string, options?: Record<string, unknown>): string {
   if (key === 'task_center.retry') return 'Retry';
@@ -26,7 +26,7 @@ function translate(key: string, options?: Record<string, unknown>): string {
 }
 
 function makeDeps(
-  overrides: Partial<TaskCenterActionDependencies> = {},
+  overrides: Partial<TaskCenterActionDependencies> = {}
 ): TaskCenterActionDependencies {
   return {
     t: translate,
@@ -140,17 +140,26 @@ describe('createTaskCenterActionRegistry', () => {
 
   it('keeps failed automation file tasks when retry preflight fails', async () => {
     const deps = makeDeps({
-      retryAutomationTask: vi.fn().mockRejectedValue(new Error('Source file is no longer available for retry.')),
+      retryAutomationTask: vi
+        .fn()
+        .mockRejectedValue(new Error('Source file is no longer available for retry.')),
     });
     const registry = createTaskCenterActionRegistry(deps);
 
-    await expect(getAction(registry.getLedgerTaskActions(makeTask({
-      id: 'automation-failed-file',
-      kind: 'automation',
-      status: 'failed',
-      automationRuleId: 'rule-1',
-      filePath: 'C:\\watch\\failed.wav',
-    })), 'retry').run()).rejects.toThrow('Source file is no longer available for retry.');
+    await expect(
+      getAction(
+        registry.getLedgerTaskActions(
+          makeTask({
+            id: 'automation-failed-file',
+            kind: 'automation',
+            status: 'failed',
+            automationRuleId: 'rule-1',
+            filePath: 'C:\\watch\\failed.wav',
+          })
+        ),
+        'retry'
+      ).run()
+    ).rejects.toThrow('Source file is no longer available for retry.');
 
     expect(deps.removeTask).not.toHaveBeenCalled();
   });
@@ -159,14 +168,16 @@ describe('createTaskCenterActionRegistry', () => {
     const deps = makeDeps();
     const registry = createTaskCenterActionRegistry(deps);
 
-    const actions = registry.getLedgerTaskActions(makeTask({
-      id: 'automation-rule-failed',
-      kind: 'automation',
-      status: 'failed',
-      title: 'Meeting Inbox',
-      filePath: undefined,
-      automationRuleId: 'rule-1',
-    }));
+    const actions = registry.getLedgerTaskActions(
+      makeTask({
+        id: 'automation-rule-failed',
+        kind: 'automation',
+        status: 'failed',
+        title: 'Meeting Inbox',
+        filePath: undefined,
+        automationRuleId: 'rule-1',
+      })
+    );
 
     expect(actions.map((action) => action.id)).toEqual(['openTarget', 'dismiss']);
 
@@ -199,16 +210,25 @@ describe('createTaskCenterActionRegistry', () => {
 
   it('keeps failed LLM ledger tasks when retry preflight fails', async () => {
     const deps = makeDeps({
-      retryLlmTask: vi.fn().mockRejectedValue(new Error('Transcript is no longer available for retry.')),
+      retryLlmTask: vi
+        .fn()
+        .mockRejectedValue(new Error('Transcript is no longer available for retry.')),
     });
     const registry = createTaskCenterActionRegistry(deps);
 
-    await expect(getAction(registry.getLedgerTaskActions(makeTask({
-      id: 'llm-failed',
-      kind: 'llmTranslate',
-      status: 'failed',
-      filePath: undefined,
-    })), 'retry').run()).rejects.toThrow('Transcript is no longer available for retry.');
+    await expect(
+      getAction(
+        registry.getLedgerTaskActions(
+          makeTask({
+            id: 'llm-failed',
+            kind: 'llmTranslate',
+            status: 'failed',
+            filePath: undefined,
+          })
+        ),
+        'retry'
+      ).run()
+    ).rejects.toThrow('Transcript is no longer available for retry.');
 
     expect(deps.removeTask).not.toHaveBeenCalled();
   });

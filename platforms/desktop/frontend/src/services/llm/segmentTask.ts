@@ -2,13 +2,20 @@ import type { AppConfig } from '../../types/config';
 import type { LlmConfig, TranscriptSegment } from '../../types/transcript';
 import { normalizeError } from '../../utils/errorUtils';
 import { logger } from '../../utils/logger';
-import { createLlmTaskId, type LlmTaskType, type LlmTaskTextPayload, type PolishedSegment, type PolishSegmentsRequest, type TranslatedSegment, type TranslateSegmentsRequest } from '../llmTaskTypes';
-import { listenToLlmTaskChunks, listenToLlmTaskProgress, listenToLlmTaskText } from '../llmTaskEvents';
-import { getFeatureLlmConfig, isLlmConfigComplete } from './configUtils';
 import {
-  polishTranscriptSegments,
-  translateTranscriptSegments,
-} from '../tauri/llm';
+  listenToLlmTaskChunks,
+  listenToLlmTaskProgress,
+  listenToLlmTaskText,
+} from '../llmTaskEvents';
+import {
+  createLlmTaskId,
+  type LlmTaskTextPayload,
+  type LlmTaskType,
+  type PolishedSegment,
+  type PolishSegmentsRequest,
+  type TranslatedSegment,
+  type TranslateSegmentsRequest,
+} from '../llmTaskTypes';
 import {
   buildLlmTaskLedgerRecord,
   createLlmTaskLedgerId,
@@ -16,6 +23,8 @@ import {
   patchTaskLedgerRecord,
   upsertTaskLedgerRecord,
 } from '../taskLedgerBuilders';
+import { polishTranscriptSegments, translateTranscriptSegments } from '../tauri/llm';
+import { getFeatureLlmConfig, isLlmConfigComplete } from './configUtils';
 
 type SegmentTaskFeature = 'translation' | 'polish';
 type SegmentTaskType = Extract<LlmTaskType, 'translate' | 'polish'>;
@@ -125,9 +134,9 @@ export async function runConfiguredSegmentTask<
   let receivedChunkEvent = false;
   const unlistenChunk = onChunk
     ? await listenToLlmTaskChunks(taskId, taskType, async (payload) => {
-      receivedChunkEvent = true;
-      await onChunk(payload.items as TItem[]);
-    })
+        receivedChunkEvent = true;
+        await onChunk(payload.items as TItem[]);
+      })
     : () => undefined;
 
   try {
@@ -182,13 +191,15 @@ export async function runTranscriptLlmTaskJob<TTaskType extends TranscriptLlmTas
   let unlistenText: () => void = () => undefined;
 
   try {
-    upsertTaskLedgerRecord(buildLlmTaskLedgerRecord({
-      taskId,
-      taskType,
-      jobHistoryId,
-      targetLanguage,
-      templateId,
-    }));
+    upsertTaskLedgerRecord(
+      buildLlmTaskLedgerRecord({
+        taskId,
+        taskType,
+        jobHistoryId,
+        targetLanguage,
+        templateId,
+      })
+    );
     await onStart?.(jobHistoryId);
     unlistenProgress = await listenToLlmTaskProgress(
       taskId,
@@ -206,23 +217,18 @@ export async function runTranscriptLlmTaskJob<TTaskType extends TranscriptLlmTas
         if (onProgress) {
           void onProgress(progress, jobHistoryId);
         }
-      },
+      }
     );
     if (taskType === 'summary' && onText) {
-      unlistenText = await listenToLlmTaskText(
-        taskId,
-        'summary',
-        (payload) => {
-          if (isTaskLedgerCancelRequested(ledgerId)) {
-            return;
-          }
+      unlistenText = await listenToLlmTaskText(taskId, 'summary', (payload) => {
+        if (isTaskLedgerCancelRequested(ledgerId)) {
+          return;
+        }
 
-          void (onText as (payload: LlmTaskTextPayload, jobHistoryId: string) => void | Promise<void>)(
-            payload,
-            jobHistoryId,
-          );
-        },
-      );
+        void (
+          onText as (payload: LlmTaskTextPayload, jobHistoryId: string) => void | Promise<void>
+        )(payload, jobHistoryId);
+      });
     }
     await runTask(taskId, jobHistoryId);
 

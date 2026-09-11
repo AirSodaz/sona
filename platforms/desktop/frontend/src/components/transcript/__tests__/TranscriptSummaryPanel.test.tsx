@@ -1,9 +1,14 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { TranscriptSummaryPanel } from '../TranscriptSummaryPanel';
-import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
+import {
+  addLlmModel,
+  createLlmSettings,
+  setFeatureModelSelection,
+  updateProviderSetting,
+} from '../../../services/llm/state';
 import { DEFAULT_CONFIG } from '../../../stores/configStore';
-import { addLlmModel, createLlmSettings, setFeatureModelSelection, updateProviderSetting } from '../../../services/llm/state';
+import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
+import { TranscriptSummaryPanel } from '../TranscriptSummaryPanel';
 
 const mockLoadSummary = vi.fn();
 const mockSetActiveTemplate = vi.fn();
@@ -30,7 +35,9 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('../../../services/summaryService', async () => {
-  const actual = await vi.importActual<typeof import('../../../services/summaryService')>('../../../services/summaryService');
+  const actual = await vi.importActual<typeof import('../../../services/summaryService')>(
+    '../../../services/summaryService'
+  );
   return {
     ...actual,
     summaryService: {
@@ -87,9 +94,7 @@ describe('TranscriptSummaryPanel', () => {
   it('renders content when isOpen is true and supports template switching, generating, and copying', async () => {
     useTranscriptStore.setState({
       sourceHistoryId: 'history-1',
-      segments: [
-        { id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true },
-      ],
+      segments: [{ id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true }],
       summaryStates: {
         'history-1': {
           activeTemplateId: 'general',
@@ -149,9 +154,7 @@ describe('TranscriptSummaryPanel', () => {
   it('auto-saves draft edits on blur, before template switches, before regenerate, and before close', async () => {
     useTranscriptStore.setState({
       sourceHistoryId: 'history-1',
-      segments: [
-        { id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true },
-      ],
+      segments: [{ id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true }],
       summaryStates: {
         'history-1': {
           activeTemplateId: 'general',
@@ -216,9 +219,7 @@ describe('TranscriptSummaryPanel', () => {
 
   it('shows generating status and progress', async () => {
     useTranscriptStore.setState({
-      segments: [
-        { id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true },
-      ],
+      segments: [{ id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true }],
       summaryStates: {
         current: {
           activeTemplateId: 'general',
@@ -237,7 +238,10 @@ describe('TranscriptSummaryPanel', () => {
 
     screen.getByText('summary.generating_progress:42');
     screen.getByText('summary.generating_short');
-    expect((screen.getByRole('button', { name: 'summary.generating_short' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'summary.generating_short' }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
     await waitFor(() => {
       screen.getByDisplayValue('Streaming summary text');
     });
@@ -245,9 +249,7 @@ describe('TranscriptSummaryPanel', () => {
 
   it('shows a textarea immediately when no record exists', async () => {
     useTranscriptStore.setState({
-      segments: [
-        { id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true },
-      ],
+      segments: [{ id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true }],
       summaryStates: {
         current: {
           activeTemplateId: 'general',
@@ -267,9 +269,7 @@ describe('TranscriptSummaryPanel', () => {
 
   it('keeps unsaved streamed content visible after generation stops', async () => {
     useTranscriptStore.setState({
-      segments: [
-        { id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true },
-      ],
+      segments: [{ id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true }],
       summaryStates: {
         current: {
           activeTemplateId: 'general',
@@ -294,9 +294,7 @@ describe('TranscriptSummaryPanel', () => {
   it('keeps the panel open for manual editing when summary generation is unavailable', () => {
     const readyConfig = createSummaryReadyConfig();
     useTranscriptStore.setState({
-      segments: [
-        { id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true },
-      ],
+      segments: [{ id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true }],
       config: {
         ...readyConfig,
         llmSettings: updateProviderSetting(readyConfig.llmSettings, 'open_ai', {
@@ -309,7 +307,9 @@ describe('TranscriptSummaryPanel', () => {
     render(<TranscriptSummaryPanel isOpen={true} onClose={mockOnClose} />);
 
     screen.getByText('summary.manual_only_hint');
-    expect((screen.getByRole('button', { name: 'summary.generate' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: 'summary.generate' }) as HTMLButtonElement).disabled
+    ).toBe(true);
     screen.getByRole('textbox');
   });
 });

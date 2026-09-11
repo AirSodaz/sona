@@ -1,244 +1,259 @@
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { useCaptionSession } from '../useCaptionSession';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { captionWindowService } from '../../services/captionWindowService';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { buildTestConfig } from '../../test-utils/configTestUtils';
+import { useCaptionSession } from '../useCaptionSession';
 
 const tauriCoreMocks = vi.hoisted(() => ({
-    invoke: vi.fn(),
+  invoke: vi.fn(),
 }));
 
 const tauriEventMocks = vi.hoisted(() => ({
-    listen: vi.fn(),
+  listen: vi.fn(),
 }));
 
 const tauriFsMocks = vi.hoisted(() => ({
-    remove: vi.fn(),
+  remove: vi.fn(),
 }));
 
 const effectiveConfigMocks = vi.hoisted(() => ({
-    config: null as ReturnType<typeof buildTestConfig> | null,
+  config: null as ReturnType<typeof buildTestConfig> | null,
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({
-    invoke: tauriCoreMocks.invoke,
+  invoke: tauriCoreMocks.invoke,
 }));
 
 vi.mock('@tauri-apps/api/event', () => ({
-    listen: tauriEventMocks.listen,
+  listen: tauriEventMocks.listen,
 }));
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
-    remove: tauriFsMocks.remove,
+  remove: tauriFsMocks.remove,
 }));
 
 vi.mock('../../services/captionWindowService', () => ({
-    captionWindowService: {
-        open: vi.fn().mockResolvedValue(undefined),
-        close: vi.fn().mockResolvedValue(undefined),
-        sendSegments: vi.fn().mockResolvedValue(undefined),
-        updateStyle: vi.fn().mockResolvedValue(undefined),
-    }
+  captionWindowService: {
+    open: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn().mockResolvedValue(undefined),
+    sendSegments: vi.fn().mockResolvedValue(undefined),
+    updateStyle: vi.fn().mockResolvedValue(undefined),
+  },
 }));
 
 vi.mock('../../services/modelService', () => ({
-    PRESET_MODELS: [],
-    PRESET_MODELS_MAP: new Map(),
-    modelService: {
-        getEnabledITNModelPaths: vi.fn().mockResolvedValue([]),
-        getModelRules: vi.fn(() => ({
-            requiresPunctuation: false,
-            requiresVad: false,
-        })),
-    }
+  PRESET_MODELS: [],
+  PRESET_MODELS_MAP: new Map(),
+  modelService: {
+    getEnabledITNModelPaths: vi.fn().mockResolvedValue([]),
+    getModelRules: vi.fn(() => ({
+      requiresPunctuation: false,
+      requiresVad: false,
+    })),
+  },
 }));
 
 vi.mock('../../stores/effectiveConfigStore', () => ({
-    getEffectiveConfigSnapshot: vi.fn(() => effectiveConfigMocks.config),
+  getEffectiveConfigSnapshot: vi.fn(() => effectiveConfigMocks.config),
 }));
 
 const transcriptionServiceMocks = vi.hoisted(() => ({
-    recordStart: vi.fn(),
-    recordStop: vi.fn(),
-    recordSendAudioInt16: vi.fn(),
-    captionStart: vi.fn(),
-    captionRestart: vi.fn(),
-    captionStop: vi.fn(),
-    captionSendAudioInt16: vi.fn(),
+  recordStart: vi.fn(),
+  recordStop: vi.fn(),
+  recordSendAudioInt16: vi.fn(),
+  captionStart: vi.fn(),
+  captionRestart: vi.fn(),
+  captionStop: vi.fn(),
+  captionSendAudioInt16: vi.fn(),
 }));
 
 vi.mock('../../services/transcriptionService', () => ({
-    transcriptionService: {
-        start: transcriptionServiceMocks.recordStart,
-        startNative: transcriptionServiceMocks.recordStart,
-        startExternal: transcriptionServiceMocks.recordStart,
-        restartStream: transcriptionServiceMocks.recordStart,
-        stop: transcriptionServiceMocks.recordStop,
-        sendAudioInt16: transcriptionServiceMocks.recordSendAudioInt16,
-    },
-    captionTranscriptionService: {
-        start: transcriptionServiceMocks.captionStart,
-        startNative: transcriptionServiceMocks.captionStart,
-        startExternal: transcriptionServiceMocks.captionStart,
-        restartStream: transcriptionServiceMocks.captionRestart,
-        stop: transcriptionServiceMocks.captionStop,
-        sendAudioInt16: transcriptionServiceMocks.captionSendAudioInt16,
-    }
+  transcriptionService: {
+    start: transcriptionServiceMocks.recordStart,
+    startNative: transcriptionServiceMocks.recordStart,
+    startExternal: transcriptionServiceMocks.recordStart,
+    restartStream: transcriptionServiceMocks.recordStart,
+    stop: transcriptionServiceMocks.recordStop,
+    sendAudioInt16: transcriptionServiceMocks.recordSendAudioInt16,
+  },
+  captionTranscriptionService: {
+    start: transcriptionServiceMocks.captionStart,
+    startNative: transcriptionServiceMocks.captionStart,
+    startExternal: transcriptionServiceMocks.captionStart,
+    restartStream: transcriptionServiceMocks.captionRestart,
+    stop: transcriptionServiceMocks.captionStop,
+    sendAudioInt16: transcriptionServiceMocks.captionSendAudioInt16,
+  },
 }));
 
 const audioContextMocks = vi.hoisted(() => ({
-    close: vi.fn().mockResolvedValue(undefined),
-    resume: vi.fn().mockResolvedValue(undefined),
-    addModule: vi.fn().mockResolvedValue(undefined),
+  close: vi.fn().mockResolvedValue(undefined),
+  resume: vi.fn().mockResolvedValue(undefined),
+  addModule: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.stubGlobal('AudioContext', class {
+vi.stubGlobal(
+  'AudioContext',
+  class {
     state = 'running';
     destination = {};
     audioWorklet = {
-        addModule: audioContextMocks.addModule,
+      addModule: audioContextMocks.addModule,
     };
     createMediaStreamSource() {
-        return { connect: vi.fn() };
+      return { connect: vi.fn() };
     }
     close = audioContextMocks.close;
     resume = audioContextMocks.resume;
-});
+  }
+);
 
-vi.stubGlobal('AudioWorkletNode', class {
+vi.stubGlobal(
+  'AudioWorkletNode',
+  class {
     port = { onmessage: null };
     connect = vi.fn();
-});
+  }
+);
 
-vi.stubGlobal('MediaStream', class {
+vi.stubGlobal(
+  'MediaStream',
+  class {
     tracks: any[];
     constructor(tracks?: any[]) {
-        this.tracks = tracks || [];
+      this.tracks = tracks || [];
     }
-    getAudioTracks() { return this.tracks; }
-    getVideoTracks() { return []; }
-    getTracks() { return this.tracks; }
-});
+    getAudioTracks() {
+      return this.tracks;
+    }
+    getVideoTracks() {
+      return [];
+    }
+    getTracks() {
+      return this.tracks;
+    }
+  }
+);
 
 describe('useCaptionSession', () => {
-    let mockStream: any;
-    const flushMicrotasks = async () => {
-        await act(async () => {
-            await Promise.resolve();
-        });
+  let mockStream: any;
+  const flushMicrotasks = async () => {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  };
+
+  const defaultConfig = buildTestConfig({
+    streamingModelPath: '/path/to/model',
+    batchModelPath: '/path/to/model',
+    language: 'en',
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    effectiveConfigMocks.config = defaultConfig;
+
+    mockStream = {
+      getAudioTracks: () => [{ onended: null, stop: vi.fn() }],
+      getVideoTracks: () => [{ stop: vi.fn() }],
+      getTracks: () => [{ stop: vi.fn() }],
     };
 
-    const defaultConfig = buildTestConfig({
-        streamingModelPath: '/path/to/model',
-        batchModelPath: '/path/to/model',
-        language: 'en',
+    transcriptionServiceMocks.captionStart.mockResolvedValue(undefined);
+    transcriptionServiceMocks.captionRestart.mockResolvedValue(undefined);
+    transcriptionServiceMocks.captionStop.mockResolvedValue(undefined);
+    transcriptionServiceMocks.recordStart.mockResolvedValue(undefined);
+    transcriptionServiceMocks.recordStop.mockResolvedValue(undefined);
+    tauriCoreMocks.invoke.mockRejectedValue(new Error('Native capture not supported'));
+    tauriEventMocks.listen.mockResolvedValue(vi.fn());
+    tauriFsMocks.remove.mockResolvedValue(undefined);
+
+    if (!navigator.mediaDevices) {
+      Object.defineProperty(navigator, 'mediaDevices', {
+        value: {},
+        writable: true,
+      });
+    }
+
+    navigator.mediaDevices.getDisplayMedia = vi.fn().mockResolvedValue(mockStream);
+  });
+
+  it('uses captionTranscriptionService for caption lifecycle and cleanup', async () => {
+    const { rerender } = renderHook(
+      (props) => useCaptionSession(props.config, props.isCaptionMode),
+      { initialProps: { config: defaultConfig, isCaptionMode: true } }
+    );
+
+    await waitFor(() => expect(transcriptionServiceMocks.captionStart).toHaveBeenCalled());
+
+    expect(transcriptionServiceMocks.recordStart).not.toHaveBeenCalled();
+
+    rerender({ config: defaultConfig, isCaptionMode: false });
+
+    await waitFor(() => expect(transcriptionServiceMocks.captionStop).toHaveBeenCalled());
+
+    expect(transcriptionServiceMocks.recordStop).not.toHaveBeenCalled();
+  });
+
+  it('does not touch the record service when caption is toggled off during initialization', async () => {
+    let resolveDisplayMedia: (value: any) => void = () => {};
+
+    navigator.mediaDevices.getDisplayMedia = vi.fn().mockImplementation(() => {
+      return new Promise((resolve) => {
+        resolveDisplayMedia = resolve;
+      });
+    });
+    transcriptionServiceMocks.captionStart.mockRejectedValueOnce(
+      new Error('Native capture not supported')
+    );
+
+    const { rerender, unmount } = renderHook(
+      (props) => useCaptionSession(props.config, props.isCaptionMode),
+      { initialProps: { config: defaultConfig, isCaptionMode: true } }
+    );
+
+    await waitFor(() => expect(navigator.mediaDevices.getDisplayMedia).toHaveBeenCalled());
+
+    await act(async () => {
+      rerender({ config: defaultConfig, isCaptionMode: false });
+      await Promise.resolve();
     });
 
-    beforeEach(() => {
-        vi.clearAllMocks();
-        effectiveConfigMocks.config = defaultConfig;
+    await waitFor(() => expect(captionWindowService.close).toHaveBeenCalled());
 
-        mockStream = {
-            getAudioTracks: () => [{ onended: null, stop: vi.fn() }],
-            getVideoTracks: () => [{ stop: vi.fn() }],
-            getTracks: () => [{ stop: vi.fn() }],
-        };
-
-        transcriptionServiceMocks.captionStart.mockResolvedValue(undefined);
-        transcriptionServiceMocks.captionRestart.mockResolvedValue(undefined);
-        transcriptionServiceMocks.captionStop.mockResolvedValue(undefined);
-        transcriptionServiceMocks.recordStart.mockResolvedValue(undefined);
-        transcriptionServiceMocks.recordStop.mockResolvedValue(undefined);
-        tauriCoreMocks.invoke.mockRejectedValue(new Error('Native capture not supported'));
-        tauriEventMocks.listen.mockResolvedValue(vi.fn());
-        tauriFsMocks.remove.mockResolvedValue(undefined);
-
-        if (!navigator.mediaDevices) {
-            Object.defineProperty(navigator, 'mediaDevices', {
-                value: {},
-                writable: true,
-            });
-        }
-
-        navigator.mediaDevices.getDisplayMedia = vi.fn().mockResolvedValue(mockStream);
+    await act(async () => {
+      resolveDisplayMedia(mockStream);
+      await Promise.resolve();
     });
+    await flushMicrotasks();
 
-    it('uses captionTranscriptionService for caption lifecycle and cleanup', async () => {
-        const { rerender } = renderHook(
-            (props) => useCaptionSession(props.config, props.isCaptionMode),
-            { initialProps: { config: defaultConfig, isCaptionMode: true } }
-        );
+    expect(captionWindowService.open).not.toHaveBeenCalled();
+    expect(transcriptionServiceMocks.recordStart).not.toHaveBeenCalled();
+    expect(transcriptionServiceMocks.recordStop).not.toHaveBeenCalled();
 
-        await waitFor(() => expect(transcriptionServiceMocks.captionStart).toHaveBeenCalled());
+    unmount();
+  });
 
-        expect(transcriptionServiceMocks.recordStart).not.toHaveBeenCalled();
+  it('starts and cleans up native caption capture without display media fallback', async () => {
+    const { rerender } = renderHook(
+      (props) => useCaptionSession(props.config, props.isCaptionMode),
+      { initialProps: { config: defaultConfig, isCaptionMode: true } }
+    );
 
-        rerender({ config: defaultConfig, isCaptionMode: false });
+    await waitFor(() => expect(transcriptionServiceMocks.captionStart).toHaveBeenCalled());
 
-        await waitFor(() => expect(transcriptionServiceMocks.captionStop).toHaveBeenCalled());
+    expect(transcriptionServiceMocks.captionStart).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.any(Function),
+      expect.objectContaining({ sourceKind: 'system', deviceName: null })
+    );
+    expect(navigator.mediaDevices.getDisplayMedia).not.toHaveBeenCalled();
+    expect(captionWindowService.open).toHaveBeenCalled();
 
-        expect(transcriptionServiceMocks.recordStop).not.toHaveBeenCalled();
-    });
+    rerender({ config: defaultConfig, isCaptionMode: false });
 
-    it('does not touch the record service when caption is toggled off during initialization', async () => {
-        let resolveDisplayMedia: (value: any) => void = () => { };
+    await waitFor(() => expect(transcriptionServiceMocks.captionStop).toHaveBeenCalled());
 
-        navigator.mediaDevices.getDisplayMedia = vi.fn().mockImplementation(() => {
-            return new Promise((resolve) => {
-                resolveDisplayMedia = resolve;
-            });
-        });
-        transcriptionServiceMocks.captionStart.mockRejectedValueOnce(
-            new Error('Native capture not supported'),
-        );
-
-        const { rerender, unmount } = renderHook(
-            (props) => useCaptionSession(props.config, props.isCaptionMode),
-            { initialProps: { config: defaultConfig, isCaptionMode: true } }
-        );
-
-        await waitFor(() => expect(navigator.mediaDevices.getDisplayMedia).toHaveBeenCalled());
-
-        await act(async () => {
-            rerender({ config: defaultConfig, isCaptionMode: false });
-            await Promise.resolve();
-        });
-
-        await waitFor(() => expect(captionWindowService.close).toHaveBeenCalled());
-
-        await act(async () => {
-            resolveDisplayMedia(mockStream);
-            await Promise.resolve();
-        });
-        await flushMicrotasks();
-
-        expect(captionWindowService.open).not.toHaveBeenCalled();
-        expect(transcriptionServiceMocks.recordStart).not.toHaveBeenCalled();
-        expect(transcriptionServiceMocks.recordStop).not.toHaveBeenCalled();
-
-        unmount();
-    });
-
-    it('starts and cleans up native caption capture without display media fallback', async () => {
-        const { rerender } = renderHook(
-            (props) => useCaptionSession(props.config, props.isCaptionMode),
-            { initialProps: { config: defaultConfig, isCaptionMode: true } }
-        );
-
-        await waitFor(() => expect(transcriptionServiceMocks.captionStart).toHaveBeenCalled());
-
-        expect(transcriptionServiceMocks.captionStart).toHaveBeenCalledWith(
-            expect.any(Function),
-            expect.any(Function),
-            expect.objectContaining({ sourceKind: 'system', deviceName: null }),
-        );
-        expect(navigator.mediaDevices.getDisplayMedia).not.toHaveBeenCalled();
-        expect(captionWindowService.open).toHaveBeenCalled();
-
-        rerender({ config: defaultConfig, isCaptionMode: false });
-
-        await waitFor(() => expect(transcriptionServiceMocks.captionStop).toHaveBeenCalled());
-
-        expect(tauriFsMocks.remove).not.toHaveBeenCalled();
-    });
+    expect(tauriFsMocks.remove).not.toHaveBeenCalled();
+  });
 });
