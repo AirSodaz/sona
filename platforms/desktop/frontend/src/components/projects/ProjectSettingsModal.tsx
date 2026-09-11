@@ -170,7 +170,7 @@ export function ProjectSettingsModal({
           <div className="project-pipeline-section">
             <div className="project-pipeline-toggle">
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Zap size={15} style={{ color: 'var(--color-accent, #6366F1)' }} />
+                <Zap size={15} style={{ color: 'var(--color-accent-primary, #64748b)' }} />
                 {t('projects.pipeline_enable', { defaultValue: 'Enable Project Pipeline' })}
               </span>
               <Switch

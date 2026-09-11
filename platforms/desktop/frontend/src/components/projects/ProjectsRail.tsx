@@ -105,6 +105,7 @@ function SortableProjectItem({
       <button
         type="button"
         className={`projects-rail-item ${isActive ? 'active' : ''} ${isContextMenuOpen ? 'context-menu-active' : ''}`}
+        style={project.color ? ({ '--item-accent-color': project.color } as React.CSSProperties) : undefined}
         onClick={() => void onSwitchScope(project.id)}
         {...attributes}
         {...listeners}
@@ -115,33 +116,32 @@ function SortableProjectItem({
           onOpenContextMenu(project.id, createPointerContextMenuRequest(event));
         }}
         aria-pressed={isActive}
+        title={project.description ? `${project.name}\n${project.description}` : project.name}
       >
         <RailItemContent
           icon={renderScopeIcon(project.id, project)}
           title={project.name}
-          description={project.description || t('projects.items_title', {
-            count: projectCount,
-            defaultValue: `${projectCount} items`,
-          })}
         />
-        {project.pipeline?.enabled && (
-          <span className="projects-rail-pipeline-badge" title={t('projects.pipeline_enabled', { defaultValue: '流水线已启用' })}>
-            <Zap size={13} />
-          </span>
-        )}
-        <span className="projects-rail-count">{projectCount}</span>
-        <button
-          type="button"
-          className="projects-rail-menu-btn"
-          aria-label={t('common.more_options', { defaultValue: 'More options' })}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onOpenContextMenu(project.id, createPointerContextMenuRequest(event));
-          }}
-        >
-          <MoreHorizontal size={14} />
-        </button>
+        <div className="projects-rail-actions">
+          {project.pipeline?.enabled && (
+            <span className="projects-rail-pipeline-badge" title={t('projects.pipeline_enabled', { defaultValue: '流水线已启用' })}>
+              <Zap size={13} />
+            </span>
+          )}
+          <span className="projects-rail-count">{projectCount}</span>
+          <button
+            type="button"
+            className="projects-rail-menu-btn"
+            aria-label={t('common.more_options', { defaultValue: 'More options' })}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onOpenContextMenu(project.id, createPointerContextMenuRequest(event));
+            }}
+          >
+            <MoreHorizontal size={14} />
+          </button>
+        </div>
       </button>
     </div>
   );
@@ -235,7 +235,9 @@ export function ProjectsRail({
             icon={renderScopeIcon(ALL_ITEMS_SCOPE)}
             title={t('projects.all_items', { defaultValue: 'All Items' })}
           />
-          <span className="projects-rail-count">{historyItemsCount}</span>
+          <div className="projects-rail-actions">
+            <span className="projects-rail-count">{historyItemsCount}</span>
+          </div>
         </button>
 
         <button
@@ -248,7 +250,9 @@ export function ProjectsRail({
             icon={renderScopeIcon(TRASH_SCOPE)}
             title={t('projects.trash', { defaultValue: 'Trash' })}
           />
-          <span className="projects-rail-count">{trashCount}</span>
+          <div className="projects-rail-actions">
+            <span className="projects-rail-count">{trashCount}</span>
+          </div>
         </button>
       </div>
 
@@ -264,7 +268,9 @@ export function ProjectsRail({
               icon={renderScopeIcon(UNTAGGED_SCOPE)}
               title={t('projects.inbox', { defaultValue: 'Inbox' })}
             />
-            <span className="projects-rail-count">{inboxCount}</span>
+            <div className="projects-rail-actions">
+              <span className="projects-rail-count">{inboxCount}</span>
+            </div>
           </button>
 
           {projects.length === 0 && (
@@ -313,16 +319,15 @@ export function ProjectsRail({
                   <button
                     type="button"
                     className={`projects-rail-item ${browseProjectId === activeId ? 'active' : ''}`}
+                    style={activeDragProject?.color ? ({ '--item-accent-color': activeDragProject.color } as React.CSSProperties) : undefined}
                   >
                     <RailItemContent
                       icon={renderScopeIcon(activeId, activeDragProject)}
                       title={activeDragProject?.name || ''}
-                      description={activeDragProject?.description || t('projects.items_title', {
-                        count: itemCounts.get(activeId) || 0,
-                        defaultValue: `${itemCounts.get(activeId) || 0} items`,
-                      })}
                     />
-                    <span className="projects-rail-count">{itemCounts.get(activeId) || 0}</span>
+                    <div className="projects-rail-actions">
+                      <span className="projects-rail-count">{itemCounts.get(activeId) || 0}</span>
+                    </div>
                   </button>
                 </div>
               ) : null}

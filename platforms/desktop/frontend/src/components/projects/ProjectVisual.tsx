@@ -2,7 +2,7 @@ import React from 'react';
 import { FolderIcon } from '../Icons';
 import { SYSTEM_ICONS } from '../IconPicker';
 
-export const DEFAULT_PROJECT_COLOR = '#6366F1';
+export const DEFAULT_PROJECT_COLOR = '#64748B';
 
 export interface ProjectVisualProps {
   icon?: string | null;

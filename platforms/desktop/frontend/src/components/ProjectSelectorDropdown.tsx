@@ -75,7 +75,7 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState('');
   const [createDescription, setCreateDescription] = useState('');
-  const [createColor, setCreateColor] = useState('#6366F1');
+  const [createColor, setCreateColor] = useState('#64748b');
   const [createIcon, setCreateIcon] = useState('');
   const ref = useRef<HTMLDivElement>(null);
 
