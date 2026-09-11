@@ -1,9 +1,7 @@
 import type { AppConfig } from '../types/config';
-import type { ProjectPipelineConfig, ProjectRecord } from '../types/project';
+import type { EffectivePipelineSnapshot, ProjectPipelineConfig, ProjectRecord } from '../types/project';
 
-export type EffectivePipelineSnapshot = ProjectPipelineConfig & {
-  isProjectPipeline: boolean;
-};
+export type { EffectivePipelineSnapshot };
 
 function globalDefaults(config: AppConfig): ProjectPipelineConfig {
   return {

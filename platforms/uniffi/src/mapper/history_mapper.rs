@@ -674,10 +674,10 @@ impl From<FfiHistoryWorkspaceSortOrderV1> for HistoryWorkspaceSortOrder {
 impl From<HistoryItemRecord> for FfiHistoryItemRecordV1 {
     fn from(value: HistoryItemRecord) -> Self {
         let mut tag_ids = value.tag_ids;
-        if tag_ids.is_empty() {
-            if let Some(pid) = value.project_id.as_ref() {
-                tag_ids.push(pid.clone());
-            }
+        if tag_ids.is_empty()
+            && let Some(pid) = value.project_id.as_ref()
+        {
+            tag_ids.push(pid.clone());
         }
         Self {
             id: value.id,

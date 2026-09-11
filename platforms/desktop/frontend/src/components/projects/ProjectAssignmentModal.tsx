@@ -4,6 +4,8 @@ import { Modal } from '../Modal';
 import { Dropdown, type DropdownOption } from '../Dropdown';
 import { InboxIcon } from '../Icons';
 import { ProjectVisual } from './ProjectVisual';
+import type { HistoryItem } from '../../types/history';
+import type { ProjectRecord } from '../../types/project';
 
 interface ProjectAssignmentModalProps {
   isOpen: boolean;

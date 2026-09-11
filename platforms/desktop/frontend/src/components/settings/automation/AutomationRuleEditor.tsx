@@ -7,7 +7,13 @@ import { Switch } from '../../Switch';
 import { SettingsItem } from '../SettingsLayout';
 import { useProjectStore } from '../../../stores/projectStore';
 import type { ExportFormat } from '../../../utils/exportFormats';
-import { setDraftField, setExportConfigField, setActionField } from './automationRuleDraft';
+import {
+    type AutomationRuleDraft,
+    type AutomationDraftUpdate,
+    setDraftField,
+    setExportConfigField,
+    setActionField,
+} from './automationRuleDraft';
 import { getPolishPresetOptions } from '../../../utils/polishPresets';
 import { LANGUAGE_OPTIONS } from '../../../constants/languages';
 import { getLocalizedLanguageName } from '../../../utils/languageUtils';

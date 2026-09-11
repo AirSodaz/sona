@@ -194,19 +194,19 @@ describe('useWorkspaceQuery', () => {
       .mockReturnValueOnce(pendingQuery.promise);
 
     const { result, rerender } = renderHook(
-      (params: typeof baseParams & { historyItems: HistoryItem[] }) => useWorkspaceQuery(params),
+      (params: Parameters<typeof useWorkspaceQuery>[0]) => useWorkspaceQuery(params),
       {
         initialProps: {
           ...baseParams,
           historyItems: items,
           scope: { kind: 'inbox' as const },
-        },
+        } as Parameters<typeof useWorkspaceQuery>[0],
       },
     );
 
     await waitFor(() => {
       expect(result.current.itemCounts.untagged).toBe(1);
-      expect(result.current.itemCounts.byTagId['project-a']).toBe(2);
+      expect(result.current.itemCounts.byTagId?.['project-a']).toBe(2);
     });
 
     // Switch scope to project-a (query is now in-flight via pendingQuery)
@@ -219,7 +219,7 @@ describe('useWorkspaceQuery', () => {
     // During loading of the new scope, itemCounts and summary must remain stable (not 0)
     expect(result.current.isInitialLoading).toBe(true);
     expect(result.current.itemCounts.untagged).toBe(1);
-    expect(result.current.itemCounts.byTagId['project-a']).toBe(2);
+    expect(result.current.itemCounts.byTagId?.['project-a']).toBe(2);
     expect(result.current.summary.totalItems).toBe(2);
     expect(result.current.filteredItemCount).toBe(2);
 

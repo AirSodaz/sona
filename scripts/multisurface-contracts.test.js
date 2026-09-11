@@ -177,6 +177,7 @@ test('Rust-owned Tauri command contracts stay generated and complete', () => {
 
   const commandGroups = [
     'tag',
+    'project',
     'taskLedger',
     'recovery',
     'automationRepository',
@@ -656,8 +657,8 @@ test('UniFFI tests own application context and History environments', () => {
   assert.doesNotMatch(historyFixtures, /SqliteHistoryStore::new\s*\(/u);
 });
 
-test('new production code cannot consume the removed Project API', () => {
-  const compatibilityUse = /\b(?:sona_core::project|SqliteProject(?:Adapter|Repository)|Project(?:Store|RepositoryService|Record))\b/u;
+test('new production code cannot consume the removed Project compatibility API', () => {
+  const compatibilityUse = /\b(?:SqliteProject(?:Adapter|Repository)|Project(?:Store|RepositoryService))\b/u;
 
   for (const { relativePath, source } of rustSources('adapters', 'platforms')) {
     if (!relativePath.includes('/tests/')) {

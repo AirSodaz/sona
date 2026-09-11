@@ -12,9 +12,13 @@ export type ProjectPipelineConfig = {
   hotwordSetIds?: string[];
   replacementSetIds?: string[];
   autoExport: boolean;
-  exportFormat?: 'txt' | 'srt' | 'vtt' | 'json' | 'docx';
+  exportFormat?: 'txt' | 'srt' | 'vtt' | 'json' | 'docx' | 'md';
   exportDirectory?: string;
   exportFileNamePrefix?: string;
+};
+
+export type EffectivePipelineSnapshot = ProjectPipelineConfig & {
+  isProjectPipeline: boolean;
 };
 
 export type ProjectRecord = Omit<GeneratedTagRecord, 'color' | 'sortOrder'> & {

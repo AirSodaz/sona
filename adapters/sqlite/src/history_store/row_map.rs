@@ -92,10 +92,10 @@ pub(super) fn map_row_to_item(row: &rusqlite::Row) -> rusqlite::Result<HistoryIt
 
     let mut tag_ids = serde_json::from_str::<Vec<String>>(&tag_ids_json)
         .map_err(|error| invalid_history_column(row, "tag_ids", Type::Text, error.to_string()))?;
-    if tag_ids.is_empty() {
-        if let Some(pid) = &project_id {
-            tag_ids.push(pid.clone());
-        }
+    if tag_ids.is_empty()
+        && let Some(pid) = &project_id
+    {
+        tag_ids.push(pid.clone());
     }
     let deleted_at = deleted_at_value
         .map(|value| checked_history_u64_column(row, "deleted_at", value))

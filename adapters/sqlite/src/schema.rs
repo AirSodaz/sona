@@ -29,11 +29,9 @@ pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
                 "INSERT INTO schema_version (version) VALUES (?1)",
                 [CURRENT_SCHEMA_VERSION],
             )?;
-        } else if applied_version < CURRENT_SCHEMA_VERSION {
-            if applied_version < 8 {
-                migrate_v8(tx)?;
-                tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [8])?;
-            }
+        } else if applied_version < 8 {
+            migrate_v8(tx)?;
+            tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [8])?;
         }
         Ok(())
     })

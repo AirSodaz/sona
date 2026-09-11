@@ -2,7 +2,7 @@ import type { AppConfig } from './config';
 import { TranscriptSegment } from './transcript';
 import type { AutomationExportConfig, AutomationResolutionSnapshot, AutomationStageConfig } from './automation';
 import type { RecoveryItemStage } from './recovery';
-import type { EffectivePipelineSnapshot } from '../services/projectPipeline';
+import type { EffectivePipelineSnapshot } from './project';
 
 /**
  * Status of a batch queue item.

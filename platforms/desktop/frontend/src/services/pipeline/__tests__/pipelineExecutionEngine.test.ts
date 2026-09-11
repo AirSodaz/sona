@@ -12,7 +12,7 @@ describe('PipelineExecutionEngine', () => {
   let engine: PipelineExecutionEngine;
 
   const mockSegments: TranscriptSegment[] = [
-    { id: 'seg-1', start: 0, end: 5, text: 'Hello world' },
+    { id: 'seg-1', start: 0, end: 5, text: 'Hello world', isFinal: true },
   ];
 
   const baseConfig: AppConfig = {
@@ -24,7 +24,7 @@ describe('PipelineExecutionEngine', () => {
   beforeEach(() => {
     mockPorts = {
       polishService: {
-        polishSegmentsWithConfig: vi.fn().mockImplementation(async (_cfg, segments, cb) => {
+        polishSegmentsWithConfig: vi.fn().mockImplementation(async (_cfg, _segments, cb) => {
           await cb([{ id: 'seg-1', text: 'Polished text' }]);
         }),
         applyPolishedSegmentsInMemory: vi.fn().mockReturnValue([
@@ -32,7 +32,7 @@ describe('PipelineExecutionEngine', () => {
         ]),
       } as unknown as PipelineExecutionEnginePorts['polishService'],
       translationService: {
-        translateSegmentsWithConfig: vi.fn().mockImplementation(async (_cfg, segments, cb) => {
+        translateSegmentsWithConfig: vi.fn().mockImplementation(async (_cfg, _segments, cb) => {
           await cb([{ id: 'seg-1', translation: '你好世界' }]);
         }),
         applyTranslationsInMemory: vi.fn().mockReturnValue([

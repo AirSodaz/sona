@@ -20,12 +20,14 @@ export function useWorkspaceSelectionState({
   setIsSelectionMode,
 }: UseWorkspaceSelectionStateParams) {
   const visibleItemsRef = useRef<HistoryItemType[]>([]);
+  const [visibleItemCount, setVisibleItemCount] = useState(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const defaultMoveTarget = browseProjectId ? INBOX_SCOPE : projects[0]?.id || INBOX_SCOPE;
   const [moveTarget, setMoveTarget] = useState(defaultMoveTarget);
 
   const syncVisibleItems = useCallback((items: HistoryItemType[]) => {
     visibleItemsRef.current = items;
+    setVisibleItemCount(items.length);
     const visibleIds = new Set(items.map((item) => item.id));
     setSelectedIds((current) => {
       const next = current.filter((id) => visibleIds.has(id));
@@ -60,14 +62,14 @@ export function useWorkspaceSelectionState({
 
     setSelectedIds(visibleItems.map((item) => item.id));
   }, [selectedIds]);
-
+  const isAllSelected = selectedIds.length > 0 && selectedIds.length === visibleItemCount;
   const currentScopeMoveTarget = isAllItemsScope ? null : browseProjectId || INBOX_SCOPE;
-
   return {
     isSelectionMode,
     setIsSelectionMode,
     selectedIds,
     setSelectedIds,
+    isAllSelected,
     moveTarget,
     setMoveTarget,
     currentScopeMoveTarget,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HistoryItem as HistoryItemType } from '../../../types/history';
 import { historyQueryWorkspace } from '../../../services/tauri/history';
+import type { HistoryWorkspaceItemCounts, HistoryWorkspaceSummary } from '../../../bindings';
 import type {
   ProjectDateFilter,
   ProjectFilterType,

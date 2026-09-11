@@ -33,6 +33,7 @@ import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type { HistoryItem as HistoryItemType } from '../types/history';
 import { isLiveRecordDraftHistoryItem } from '../types/history';
+import type { ProjectRecord } from '../types/project';
 import { useContextMenu } from './context-menu/useContextMenu';
 
 interface ProjectsViewProps {

@@ -178,7 +178,7 @@ export class BatchItemProcessor {
         globalConfig: config,
         baseFileName: this.buildAutomationExportBaseName(item),
         onProgress: (stage, progress) => {
-          callbacks.updateStatus('processing', progress, stage);
+          callbacks.updateStatus('processing', progress, stage === 'summarizing' ? undefined : stage);
         },
         onSegmentsUpdated: async (updatedSegments) => {
           setCurrentSegments(updatedSegments);
@@ -214,24 +214,6 @@ export class BatchItemProcessor {
 
   private calculateDuration(segments: TranscriptSegment[]): number {
     return segments.length > 0 ? segments[segments.length - 1].end : 0;
-  }
-
-  private getAutomationStageConfig(item: BatchQueueItem, config: AppConfig): AutomationStageConfig {
-    if (item.pipelineSnapshot) {
-      return {
-        autoPolish: item.pipelineSnapshot.autoPolish,
-        polishPresetId: item.pipelineSnapshot.polishPresetId || undefined,
-        autoTranslate: item.pipelineSnapshot.autoTranslate,
-        translationLanguage: item.pipelineSnapshot.targetLanguage || undefined,
-        autoSummary: item.pipelineSnapshot.autoSummary,
-        exportEnabled: item.pipelineSnapshot.autoExport,
-      };
-    }
-    return item.stageConfig || {
-      autoPolish: config.autoPolish ?? false,
-      autoTranslate: false,
-      exportEnabled: false,
-    };
   }
 
   private buildAutomationExportBaseName(item: BatchQueueItem): string {

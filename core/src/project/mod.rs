@@ -193,12 +193,14 @@ mod tests {
 
     #[test]
     fn enabled_project_pipeline_overrides_and_inherits() {
-        let mut pipeline = ProjectPipelineConfig::default();
-        pipeline.enabled = true;
-        pipeline.auto_polish = false;
-        pipeline.auto_translate = true;
-        pipeline.target_language = Some("en".into());
-        pipeline.hotword_set_ids = vec!["hot".into()];
+        let pipeline = ProjectPipelineConfig {
+            enabled: true,
+            auto_polish: false,
+            auto_translate: true,
+            target_language: Some("en".into()),
+            hotword_set_ids: vec!["hot".into()],
+            ..Default::default()
+        };
         let snapshot = resolve_item_pipeline(Some("p1"), &[project(Some(pipeline))], &config());
         assert!(snapshot.is_project_pipeline);
         assert!(!snapshot.auto_polish);
