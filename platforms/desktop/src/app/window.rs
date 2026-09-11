@@ -14,7 +14,6 @@ pub fn create_main_window<R: Runtime>(
         .title(MAIN_WINDOW_TITLE)
         .inner_size(MAIN_WINDOW_WIDTH, MAIN_WINDOW_HEIGHT)
         .min_inner_size(MAIN_WINDOW_MIN_WIDTH, MAIN_WINDOW_MIN_HEIGHT)
-        .drag_and_drop(true)
         .build()?;
     Ok(window)
 }
