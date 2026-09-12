@@ -18,6 +18,7 @@ import { TranscriptWorkbench } from './components/transcript/TranscriptWorkbench
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
 import { useAutoUpdateCheck } from './hooks/useAutoUpdateCheck';
+import { useNumberStepperHoverEffect } from './hooks/useNumberStepperHoverEffect';
 import { useTranscriptionServiceSync } from './hooks/useTranscriptionServiceSync';
 import { useTrayHandling } from './hooks/useTrayHandling';
 import { diagnosticsService } from './services/diagnosticsService';
@@ -115,6 +116,8 @@ function App(): React.JSX.Element {
 
   // Keep TranscriptionService synced and preloaded in background
   useTranscriptionServiceSync();
+
+  useNumberStepperHoverEffect();
 
   const preloadSettings = useCallback((tab: SettingsTab = 'general') => {
     void preloadSettingsTab(tab);

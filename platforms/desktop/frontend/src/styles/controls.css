@@ -315,6 +315,93 @@ select {
   cursor: pointer;
 }
 
+/* Rebuild Chromium's native stepper to match the dark theme. */
+@property --number-stepper-up-level {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --number-stepper-down-level {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+input[type="number"] {
+  /* Keep this width in sync with useNumberStepperHoverEffect. */
+  --number-stepper-width: 20px;
+  --number-stepper-icons: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cg fill='%23000' stroke='%23000' stroke-width='1.6' stroke-linejoin='round'%3E%3Cpath d='M8 2.2 10.7 5.4 5.3 5.4Z'/%3E%3Cpath d='M8 13.8 5.3 10.6 10.7 10.6Z'/%3E%3C/g%3E%3C/svg%3E");
+  --number-stepper-up-level: 0;
+  --number-stepper-down-level: 0;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    --number-stepper-up-level var(--transition-fast),
+    --number-stepper-down-level var(--transition-fast);
+}
+
+input[type="number"]:hover,
+input[type="number"]:focus {
+  --number-stepper-up-level: 0.4;
+  --number-stepper-down-level: 0.4;
+}
+
+input[type="number"][data-spin="up"] {
+  --number-stepper-up-level: 1;
+}
+
+input[type="number"][data-spin="down"] {
+  --number-stepper-down-level: 1;
+}
+
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: var(--number-stepper-width);
+  height: 20px;
+  margin-left: var(--spacing-xs);
+  background-color: currentColor;
+  /* Combine the chevrons with a mask that controls each half's opacity. */
+  -webkit-mask-image:
+    var(--number-stepper-icons),
+    linear-gradient(
+      to bottom,
+      rgb(0 0 0 / var(--number-stepper-up-level)) 0 50%,
+      rgb(0 0 0 / var(--number-stepper-down-level)) 50% 100%
+    );
+  mask-image:
+    var(--number-stepper-icons),
+    linear-gradient(
+      to bottom,
+      rgb(0 0 0 / var(--number-stepper-up-level)) 0 50%,
+      rgb(0 0 0 / var(--number-stepper-down-level)) 50% 100%
+    );
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 20px 20px;
+  mask-size: 20px 20px;
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  opacity: 1;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+input[type="number"]:disabled::-webkit-inner-spin-button {
+  opacity: 0.4;
+  cursor: default;
+}
+
 /* Checkboxes */
 input[type="checkbox"] {
   -webkit-appearance: none;
