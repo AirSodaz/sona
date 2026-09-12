@@ -87,11 +87,11 @@ test('desktop backup contract follows Rust schema v3 and tags', () => {
   assert.match(frontendBackup, /BACKUP_SCHEMA_VERSION\s*=\s*3\s+as const/u);
   assert.match(
     desktopBindings,
-    /export type BackupManifestCounts_Serialize = \{[\s\S]*?\btags: number;/u,
+    /export type BackupManifestCounts_Serialize = \{[\s\S]*?\btags: number[;,]/u,
   );
   assert.doesNotMatch(
     desktopBindings,
-    /export type BackupManifestCounts_Serialize = \{[\s\S]*?\bprojects: number;/u,
+    /export type BackupManifestCounts_Serialize = \{[\s\S]*?\bprojects: number[;,]/u,
   );
 });
 

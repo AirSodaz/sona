@@ -2,1547 +2,1318 @@
 export type AppAsrConfig = AppAsrConfig_Serialize | AppAsrConfig_Deserialize;
 
 export type AppAsrConfig_Deserialize = {
-  selections: AppAsrSelections_Deserialize;
-  providers?: AppAsrProviderConfig_Deserialize | null;
+	selections: AppAsrSelections_Deserialize,
+	providers?: AppAsrProviderConfig_Deserialize | null,
 };
 
 export type AppAsrConfig_Serialize = {
-  selections: AppAsrSelections_Serialize;
-  providers?: AppAsrProviderConfig_Serialize | null;
+	selections: AppAsrSelections_Serialize,
+	providers?: AppAsrProviderConfig_Serialize | null,
 };
 
-export type AppAsrModelSelection =
-  | AppAsrModelSelection_Serialize
-  | AppAsrModelSelection_Deserialize;
+export type AppAsrModelSelection = AppAsrModelSelection_Serialize | AppAsrModelSelection_Deserialize;
 
 export type AppAsrModelSelection_Deserialize = {
-  engine: AsrEngine_Deserialize;
-  mode: AsrMode_Deserialize;
-  modelId?: string | null;
-  modelPath: string;
-  providerId?: string | null;
-  profileId?: string | null;
+	engine: AsrEngine_Deserialize,
+	mode: AsrMode_Deserialize,
+	modelId?: string | null,
+	modelPath: string,
+	providerId?: string | null,
+	profileId?: string | null,
 };
 
 export type AppAsrModelSelection_Serialize = {
-  engine: AsrEngine_Serialize;
-  mode: AsrMode_Serialize;
-  modelId?: string | null;
-  modelPath: string;
-  providerId?: string | null;
-  profileId?: string | null;
+	engine: AsrEngine_Serialize,
+	mode: AsrMode_Serialize,
+	modelId?: string | null,
+	modelPath: string,
+	providerId?: string | null,
+	profileId?: string | null,
 };
 
-export type AppAsrProviderConfig =
-  | AppAsrProviderConfig_Serialize
-  | AppAsrProviderConfig_Deserialize;
+export type AppAsrProviderConfig = AppAsrProviderConfig_Serialize | AppAsrProviderConfig_Deserialize;
 
 export type AppAsrProviderConfig_Deserialize = {
-  online?: { [key in string]: unknown } | null;
-  volcengineDoubao?: unknown | null;
-  groqWhisper?: unknown | null;
+	online?: { [key in string]: unknown } | null,
+	volcengineDoubao?: unknown | null,
+	groqWhisper?: unknown | null,
 };
 
 export type AppAsrProviderConfig_Serialize = {
-  online?: { [key in string]: unknown } | null;
-  volcengineDoubao?: unknown | null;
-  groqWhisper?: unknown | null;
+	online?: { [key in string]: unknown } | null,
+	volcengineDoubao?: unknown | null,
+	groqWhisper?: unknown | null,
 };
 
 export type AppAsrSelections = AppAsrSelections_Serialize | AppAsrSelections_Deserialize;
 
 export type AppAsrSelections_Deserialize = {
-  live: AppAsrModelSelection_Deserialize;
-  caption: AppAsrModelSelection_Deserialize;
-  voiceTyping: AppAsrModelSelection_Deserialize;
-  batch: AppAsrModelSelection_Deserialize;
+	live: AppAsrModelSelection_Deserialize,
+	caption: AppAsrModelSelection_Deserialize,
+	voiceTyping: AppAsrModelSelection_Deserialize,
+	batch: AppAsrModelSelection_Deserialize,
 };
 
 export type AppAsrSelections_Serialize = {
-  live: AppAsrModelSelection_Serialize;
-  caption: AppAsrModelSelection_Serialize;
-  voiceTyping: AppAsrModelSelection_Serialize;
-  batch: AppAsrModelSelection_Serialize;
+	live: AppAsrModelSelection_Serialize,
+	caption: AppAsrModelSelection_Serialize,
+	voiceTyping: AppAsrModelSelection_Serialize,
+	batch: AppAsrModelSelection_Serialize,
 };
 
 export type AppConfig = AppConfig_Serialize | AppConfig_Deserialize;
 
 export type AppConfig_Deserialize = {
-  configVersion?: number | null;
-  appLanguage?: AppLanguagePreference | null;
-  theme?: AppTheme | null;
-  font?: AppFont | null;
-  minimizeToTrayOnExit?: boolean | null;
-  autoCheckUpdates?: boolean | null;
-  logLevel?: AppLogLevel | null;
-  projectsViewMode?: ProjectsViewMode | null;
-  liveRecordShortcut?: string | null;
-  microphoneId?: string | null;
-  microphoneBoost?: number | null;
-  systemAudioDeviceId?: string | null;
-  muteDuringRecording?: boolean | null;
-  keepMicrophoneActive?: boolean | null;
-  ffmpegPath?: string | null;
-  asr?: AppAsrConfig_Deserialize | null;
-  streamingModelPath?: string | null;
-  batchModelPath?: string | null;
-  livePunctuationModelPath?: string | null;
-  liveVadModelPath?: string | null;
-  liveSpeakerSegmentationModelPath?: string | null;
-  liveSpeakerEmbeddingModelPath?: string | null;
-  batchPunctuationModelPath?: string | null;
-  batchVadModelPath?: string | null;
-  batchSpeakerSegmentationModelPath?: string | null;
-  batchSpeakerEmbeddingModelPath?: string | null;
-  modelDownloadMirror?: string | null;
-  lockWindow?: boolean | null;
-  alwaysOnTop?: boolean | null;
-  startOnLaunch?: boolean | null;
-  captionWindowWidth?: number | null;
-  captionFontSize?: number | null;
-  captionFontColor?: string | null;
-  captionBackgroundOpacity?: number | null;
-  language?: string | null;
-  enableTimeline?: boolean | null;
-  batchVadEnabled?: boolean | null;
-  liveVadBufferSize?: number | null;
-  batchVadBufferSize?: number | null;
-  maxConcurrent?: number | null;
-  gpuAcceleration?: GpuAcceleration_Deserialize | null;
-  llmSettings?: unknown | null;
-  summaryEnabled?: boolean | null;
-  summaryTemplateId?: string | null;
-  summaryCustomTemplates?: SummaryTemplateRecord[] | null;
-  translationLanguage?: string | null;
-  polishKeywords?: string | null;
-  polishPresetId?: string | null;
-  polishCustomPresets?: PolishPresetRecord[] | null;
-  polishContext?: string | null;
-  polishScenario?: string | null;
-  autoPolish?: boolean | null;
-  autoPolishFrequency?: number | null;
-  llmRequestTimeoutSeconds?: number | null;
-  textReplacementSets?: TextReplacementSetRecord[] | null;
-  hotwordSets?: HotwordSetRecord[] | null;
-  polishKeywordSets?: PolishKeywordSetRecord[] | null;
-  speakerProfiles?: SpeakerProfile[] | null;
-  hotwords?: string[] | null;
-  textReplacements?: TextReplacementRuleRecord[] | null;
-  voiceTypingEnabled?: boolean | null;
-  voiceTypingShortcut?: string | null;
-  voiceTypingMode?: VoiceTypingMode | null;
-  httpServerEnabled?: boolean | null;
-  httpServerHost?: string | null;
-  httpServerPort?: number | null;
-  httpServerApiKey?: string | null;
-  httpServerMaxConcurrent?: number | null;
-  httpServerMaxQueueSize?: number | null;
-  httpServerMaxStreaming?: number | null;
-  httpServerJobTtlMinutes?: number | null;
-  httpServerIpWhitelist?: string | null;
-  historyAudioRetentionDays?: number | null;
+	configVersion?: number | null,
+	appLanguage?: AppLanguagePreference | null,
+	theme?: AppTheme | null,
+	font?: AppFont | null,
+	minimizeToTrayOnExit?: boolean | null,
+	autoCheckUpdates?: boolean | null,
+	logLevel?: AppLogLevel | null,
+	projectsViewMode?: ProjectsViewMode | null,
+	liveRecordShortcut?: string | null,
+	microphoneId?: string | null,
+	microphoneBoost?: number | null,
+	systemAudioDeviceId?: string | null,
+	muteDuringRecording?: boolean | null,
+	keepMicrophoneActive?: boolean | null,
+	ffmpegPath?: string | null,
+	asr?: AppAsrConfig_Deserialize | null,
+	streamingModelPath?: string | null,
+	batchModelPath?: string | null,
+	livePunctuationModelPath?: string | null,
+	liveVadModelPath?: string | null,
+	liveSpeakerSegmentationModelPath?: string | null,
+	liveSpeakerEmbeddingModelPath?: string | null,
+	batchPunctuationModelPath?: string | null,
+	batchVadModelPath?: string | null,
+	batchSpeakerSegmentationModelPath?: string | null,
+	batchSpeakerEmbeddingModelPath?: string | null,
+	modelDownloadMirror?: string | null,
+	lockWindow?: boolean | null,
+	alwaysOnTop?: boolean | null,
+	startOnLaunch?: boolean | null,
+	captionWindowWidth?: number | null,
+	captionFontSize?: number | null,
+	captionFontColor?: string | null,
+	captionBackgroundOpacity?: number | null,
+	language?: string | null,
+	enableTimeline?: boolean | null,
+	batchVadEnabled?: boolean | null,
+	liveVadBufferSize?: number | null,
+	batchVadBufferSize?: number | null,
+	maxConcurrent?: number | null,
+	gpuAcceleration?: GpuAcceleration_Deserialize | null,
+	llmSettings?: unknown | null,
+	summaryEnabled?: boolean | null,
+	summaryTemplateId?: string | null,
+	summaryCustomTemplates?: SummaryTemplateRecord[] | null,
+	translationLanguage?: string | null,
+	polishKeywords?: string | null,
+	polishPresetId?: string | null,
+	polishCustomPresets?: PolishPresetRecord[] | null,
+	polishContext?: string | null,
+	polishScenario?: string | null,
+	autoPolish?: boolean | null,
+	autoPolishFrequency?: number | null,
+	llmRequestTimeoutSeconds?: number | null,
+	textReplacementSets?: TextReplacementSetRecord[] | null,
+	hotwordSets?: HotwordSetRecord[] | null,
+	polishKeywordSets?: PolishKeywordSetRecord[] | null,
+	speakerProfiles?: SpeakerProfile[] | null,
+	hotwords?: string[] | null,
+	textReplacements?: TextReplacementRuleRecord[] | null,
+	voiceTypingEnabled?: boolean | null,
+	voiceTypingShortcut?: string | null,
+	voiceTypingMode?: VoiceTypingMode | null,
+	httpServerEnabled?: boolean | null,
+	httpServerHost?: string | null,
+	httpServerPort?: number | null,
+	httpServerApiKey?: string | null,
+	httpServerMaxConcurrent?: number | null,
+	httpServerMaxQueueSize?: number | null,
+	httpServerMaxStreaming?: number | null,
+	httpServerJobTtlMinutes?: number | null,
+	httpServerIpWhitelist?: string | null,
+	historyAudioRetentionDays?: number | null,
 } & {
-  enableITN?: boolean | null;
+	enableITN?: boolean | null,
 } & {
-  httpServerMaxUploadSizeMB?: number | null;
+	httpServerMaxUploadSizeMB?: number | null,
 };
 
 export type AppConfig_Serialize = {
-  configVersion?: number | null;
-  appLanguage?: AppLanguagePreference | null;
-  theme?: AppTheme | null;
-  font?: AppFont | null;
-  minimizeToTrayOnExit?: boolean | null;
-  autoCheckUpdates?: boolean | null;
-  logLevel?: AppLogLevel | null;
-  projectsViewMode?: ProjectsViewMode | null;
-  liveRecordShortcut?: string | null;
-  microphoneId?: string | null;
-  microphoneBoost?: number | null;
-  systemAudioDeviceId?: string | null;
-  muteDuringRecording?: boolean | null;
-  keepMicrophoneActive?: boolean | null;
-  ffmpegPath?: string | null;
-  asr?: AppAsrConfig_Serialize | null;
-  streamingModelPath?: string | null;
-  batchModelPath?: string | null;
-  livePunctuationModelPath?: string | null;
-  liveVadModelPath?: string | null;
-  liveSpeakerSegmentationModelPath?: string | null;
-  liveSpeakerEmbeddingModelPath?: string | null;
-  batchPunctuationModelPath?: string | null;
-  batchVadModelPath?: string | null;
-  batchSpeakerSegmentationModelPath?: string | null;
-  batchSpeakerEmbeddingModelPath?: string | null;
-  modelDownloadMirror?: string | null;
-  lockWindow?: boolean | null;
-  alwaysOnTop?: boolean | null;
-  startOnLaunch?: boolean | null;
-  captionWindowWidth?: number | null;
-  captionFontSize?: number | null;
-  captionFontColor?: string | null;
-  captionBackgroundOpacity?: number | null;
-  language?: string | null;
-  enableTimeline?: boolean | null;
-  enableITN?: boolean | null;
-  batchVadEnabled?: boolean | null;
-  liveVadBufferSize?: number | null;
-  batchVadBufferSize?: number | null;
-  maxConcurrent?: number | null;
-  gpuAcceleration?: GpuAcceleration_Serialize | null;
-  llmSettings?: unknown | null;
-  summaryEnabled?: boolean | null;
-  summaryTemplateId?: string | null;
-  summaryCustomTemplates?: SummaryTemplateRecord[] | null;
-  translationLanguage?: string | null;
-  polishKeywords?: string | null;
-  polishPresetId?: string | null;
-  polishCustomPresets?: PolishPresetRecord[] | null;
-  polishContext?: string | null;
-  polishScenario?: string | null;
-  autoPolish?: boolean | null;
-  autoPolishFrequency?: number | null;
-  llmRequestTimeoutSeconds?: number | null;
-  textReplacementSets?: TextReplacementSetRecord[] | null;
-  hotwordSets?: HotwordSetRecord[] | null;
-  polishKeywordSets?: PolishKeywordSetRecord[] | null;
-  speakerProfiles?: SpeakerProfile[] | null;
-  hotwords?: string[] | null;
-  textReplacements?: TextReplacementRuleRecord[] | null;
-  voiceTypingEnabled?: boolean | null;
-  voiceTypingShortcut?: string | null;
-  voiceTypingMode?: VoiceTypingMode | null;
-  httpServerEnabled?: boolean | null;
-  httpServerHost?: string | null;
-  httpServerPort?: number | null;
-  httpServerApiKey?: string | null;
-  httpServerMaxConcurrent?: number | null;
-  httpServerMaxQueueSize?: number | null;
-  httpServerMaxStreaming?: number | null;
-  httpServerMaxUploadSizeMB?: number | null;
-  httpServerJobTtlMinutes?: number | null;
-  httpServerIpWhitelist?: string | null;
-  historyAudioRetentionDays?: number | null;
+	configVersion?: number | null,
+	appLanguage?: AppLanguagePreference | null,
+	theme?: AppTheme | null,
+	font?: AppFont | null,
+	minimizeToTrayOnExit?: boolean | null,
+	autoCheckUpdates?: boolean | null,
+	logLevel?: AppLogLevel | null,
+	projectsViewMode?: ProjectsViewMode | null,
+	liveRecordShortcut?: string | null,
+	microphoneId?: string | null,
+	microphoneBoost?: number | null,
+	systemAudioDeviceId?: string | null,
+	muteDuringRecording?: boolean | null,
+	keepMicrophoneActive?: boolean | null,
+	ffmpegPath?: string | null,
+	asr?: AppAsrConfig_Serialize | null,
+	streamingModelPath?: string | null,
+	batchModelPath?: string | null,
+	livePunctuationModelPath?: string | null,
+	liveVadModelPath?: string | null,
+	liveSpeakerSegmentationModelPath?: string | null,
+	liveSpeakerEmbeddingModelPath?: string | null,
+	batchPunctuationModelPath?: string | null,
+	batchVadModelPath?: string | null,
+	batchSpeakerSegmentationModelPath?: string | null,
+	batchSpeakerEmbeddingModelPath?: string | null,
+	modelDownloadMirror?: string | null,
+	lockWindow?: boolean | null,
+	alwaysOnTop?: boolean | null,
+	startOnLaunch?: boolean | null,
+	captionWindowWidth?: number | null,
+	captionFontSize?: number | null,
+	captionFontColor?: string | null,
+	captionBackgroundOpacity?: number | null,
+	language?: string | null,
+	enableTimeline?: boolean | null,
+	enableITN?: boolean | null,
+	batchVadEnabled?: boolean | null,
+	liveVadBufferSize?: number | null,
+	batchVadBufferSize?: number | null,
+	maxConcurrent?: number | null,
+	gpuAcceleration?: GpuAcceleration_Serialize | null,
+	llmSettings?: unknown | null,
+	summaryEnabled?: boolean | null,
+	summaryTemplateId?: string | null,
+	summaryCustomTemplates?: SummaryTemplateRecord[] | null,
+	translationLanguage?: string | null,
+	polishKeywords?: string | null,
+	polishPresetId?: string | null,
+	polishCustomPresets?: PolishPresetRecord[] | null,
+	polishContext?: string | null,
+	polishScenario?: string | null,
+	autoPolish?: boolean | null,
+	autoPolishFrequency?: number | null,
+	llmRequestTimeoutSeconds?: number | null,
+	textReplacementSets?: TextReplacementSetRecord[] | null,
+	hotwordSets?: HotwordSetRecord[] | null,
+	polishKeywordSets?: PolishKeywordSetRecord[] | null,
+	speakerProfiles?: SpeakerProfile[] | null,
+	hotwords?: string[] | null,
+	textReplacements?: TextReplacementRuleRecord[] | null,
+	voiceTypingEnabled?: boolean | null,
+	voiceTypingShortcut?: string | null,
+	voiceTypingMode?: VoiceTypingMode | null,
+	httpServerEnabled?: boolean | null,
+	httpServerHost?: string | null,
+	httpServerPort?: number | null,
+	httpServerApiKey?: string | null,
+	httpServerMaxConcurrent?: number | null,
+	httpServerMaxQueueSize?: number | null,
+	httpServerMaxStreaming?: number | null,
+	httpServerMaxUploadSizeMB?: number | null,
+	httpServerJobTtlMinutes?: number | null,
+	httpServerIpWhitelist?: string | null,
+	historyAudioRetentionDays?: number | null,
 };
 
-export type AppFont = 'system' | 'serif' | 'sans' | 'mono' | 'arial' | 'georgia';
+export type AppFont = "system" | "serif" | "sans" | "mono" | "arial" | "georgia";
 
-export type AppLanguagePreference = 'auto' | 'en' | 'zh' | 'zh-TW' | 'ja' | 'ko';
+export type AppLanguagePreference = "auto" | "en" | "zh" | "zh-TW" | "ja" | "ko";
 
-export type AppLogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
+export type AppLogLevel = "trace" | "debug" | "info" | "warn" | "error";
 
-export type AppTheme = 'auto' | 'light' | 'dark';
+export type AppTheme = "auto" | "light" | "dark";
 
 export type AsrEngine = AsrEngine_Serialize | AsrEngine_Deserialize;
 
 export type AsrEngineConfig = AsrEngineConfig_Serialize | AsrEngineConfig_Deserialize;
 
 export type AsrEngineConfig_Deserialize =
-  /**
-   *  Local offline transcription through a provider-crate engine.
-   *
-   *  The `local-sherpa` alias keeps configs persisted by older versions
-   *  deserializable; every write path emits the neutral `local` tag.
-   */
-  | ({
-      engine: 'local';
-      localEngine?: LocalAsrEngine;
-      modelId?: string | null;
-      modelPath: string;
-      numThreads: number;
-      punctuationModel?: string | null;
-      vadModel?: string | null;
-      vadBuffer: number;
-      batchSegmentationMode?: BatchSegmentationMode;
-      modelType: string;
-      fileConfig?: {
-        encoder: string | null;
-        decoder: string | null;
-        model: string | null;
-        joiner: string | null;
-        tokens: string | null;
-        convFrontend: string | null;
-        encoderAdaptor: string | null;
-        llm: string | null;
-        embedding: string | null;
-        tokenizer: string | null;
-        mmproj: string | null;
-        preprocessor: string | null;
-        uncachedDecoder: string | null;
-        cachedDecoder: string | null;
-        mergedDecoder: string | null;
-      } | null;
-      gpuAcceleration?: string | null;
-      initialRefreshRateMs?: number | null;
-      ffmpegPath?: string | null;
-    } & { onlineProvider?: never })
-  /**
-   *  Local offline transcription through a provider-crate engine.
-   *
-   *  The `local-sherpa` alias keeps configs persisted by older versions
-   *  deserializable; every write path emits the neutral `local` tag.
-   */
-  | ({
-      engine: 'local-sherpa';
-      localEngine?: LocalAsrEngine;
-      modelId?: string | null;
-      modelPath: string;
-      numThreads: number;
-      punctuationModel?: string | null;
-      vadModel?: string | null;
-      vadBuffer: number;
-      batchSegmentationMode?: BatchSegmentationMode;
-      modelType: string;
-      fileConfig?: {
-        encoder: string | null;
-        decoder: string | null;
-        model: string | null;
-        joiner: string | null;
-        tokens: string | null;
-        convFrontend: string | null;
-        encoderAdaptor: string | null;
-        llm: string | null;
-        embedding: string | null;
-        tokenizer: string | null;
-        mmproj: string | null;
-        preprocessor: string | null;
-        uncachedDecoder: string | null;
-        cachedDecoder: string | null;
-        mergedDecoder: string | null;
-      } | null;
-      gpuAcceleration?: string | null;
-      initialRefreshRateMs?: number | null;
-      ffmpegPath?: string | null;
-    } & { onlineProvider?: never })
-  | ({ engine: 'online'; onlineProvider: OnlineAsrProviderRequest } & {
-      batchSegmentationMode?: never;
-      ffmpegPath?: never;
-      fileConfig?: never;
-      gpuAcceleration?: never;
-      initialRefreshRateMs?: never;
-      localEngine?: never;
-      modelId?: never;
-      modelPath?: never;
-      modelType?: never;
-      numThreads?: never;
-      punctuationModel?: never;
-      vadBuffer?: never;
-      vadModel?: never;
-    });
+/**
+ *  Local offline transcription through a provider-crate engine.
+ *
+ *  The `local-sherpa` alias keeps configs persisted by older versions
+ *  deserializable; every write path emits the neutral `local` tag.
+ */
+({ engine: "local"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
+	encoder: string | null,
+	decoder: string | null,
+	model: string | null,
+	joiner: string | null,
+	tokens: string | null,
+	convFrontend: string | null,
+	encoderAdaptor: string | null,
+	llm: string | null,
+	embedding: string | null,
+	tokenizer: string | null,
+	mmproj: string | null,
+	preprocessor: string | null,
+	uncachedDecoder: string | null,
+	cachedDecoder: string | null,
+	mergedDecoder: string | null,
+} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; ffmpegPath?: string | null }) & { onlineProvider?: never } |
+/**
+ *  Local offline transcription through a provider-crate engine.
+ *
+ *  The `local-sherpa` alias keeps configs persisted by older versions
+ *  deserializable; every write path emits the neutral `local` tag.
+ */
+({ engine: "local-sherpa"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
+	encoder: string | null,
+	decoder: string | null,
+	model: string | null,
+	joiner: string | null,
+	tokens: string | null,
+	convFrontend: string | null,
+	encoderAdaptor: string | null,
+	llm: string | null,
+	embedding: string | null,
+	tokenizer: string | null,
+	mmproj: string | null,
+	preprocessor: string | null,
+	uncachedDecoder: string | null,
+	cachedDecoder: string | null,
+	mergedDecoder: string | null,
+} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; ffmpegPath?: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { batchSegmentationMode?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngineConfig_Serialize =
-  /**
-   *  Local offline transcription through a provider-crate engine.
-   *
-   *  The `local-sherpa` alias keeps configs persisted by older versions
-   *  deserializable; every write path emits the neutral `local` tag.
-   */
-  | ({
-      engine: 'local';
-      localEngine: LocalAsrEngine;
-      modelId: string | null;
-      modelPath: string;
-      numThreads: number;
-      punctuationModel: string | null;
-      vadModel: string | null;
-      vadBuffer: number;
-      batchSegmentationMode: BatchSegmentationMode;
-      modelType: string;
-      fileConfig: {
-        encoder: string | null;
-        decoder: string | null;
-        model: string | null;
-        joiner: string | null;
-        tokens: string | null;
-        convFrontend: string | null;
-        encoderAdaptor: string | null;
-        llm: string | null;
-        embedding: string | null;
-        tokenizer: string | null;
-        mmproj: string | null;
-        preprocessor: string | null;
-        uncachedDecoder: string | null;
-        cachedDecoder: string | null;
-        mergedDecoder: string | null;
-      } | null;
-      gpuAcceleration: string | null;
-      initialRefreshRateMs: number | null;
-      ffmpegPath: string | null;
-    } & { onlineProvider?: never })
-  | ({ engine: 'online'; onlineProvider: OnlineAsrProviderRequest } & {
-      batchSegmentationMode?: never;
-      ffmpegPath?: never;
-      fileConfig?: never;
-      gpuAcceleration?: never;
-      initialRefreshRateMs?: never;
-      localEngine?: never;
-      modelId?: never;
-      modelPath?: never;
-      modelType?: never;
-      numThreads?: never;
-      punctuationModel?: never;
-      vadBuffer?: never;
-      vadModel?: never;
-    });
+/**
+ *  Local offline transcription through a provider-crate engine.
+ *
+ *  The `local-sherpa` alias keeps configs persisted by older versions
+ *  deserializable; every write path emits the neutral `local` tag.
+ */
+({ engine: "local"; localEngine: LocalAsrEngine; modelId: string | null; modelPath: string; numThreads: number; punctuationModel: string | null; vadModel: string | null; vadBuffer: number; batchSegmentationMode: BatchSegmentationMode; modelType: string; fileConfig: {
+	encoder: string | null,
+	decoder: string | null,
+	model: string | null,
+	joiner: string | null,
+	tokens: string | null,
+	convFrontend: string | null,
+	encoderAdaptor: string | null,
+	llm: string | null,
+	embedding: string | null,
+	tokenizer: string | null,
+	mmproj: string | null,
+	preprocessor: string | null,
+	uncachedDecoder: string | null,
+	cachedDecoder: string | null,
+	mergedDecoder: string | null,
+} | null; gpuAcceleration: string | null; initialRefreshRateMs: number | null; ffmpegPath: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { batchSegmentationMode?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngine_Deserialize =
-  /**  Local offline transcription. */
-  | 'local'
-  /**  Local offline transcription. */
-  | 'local-sherpa'
-  | 'online';
+/**  Local offline transcription. */
+"local" |
+/**  Local offline transcription. */
+"local-sherpa" | "online";
 
 export type AsrEngine_Serialize =
-  /**  Local offline transcription. */
-  'local' | 'online';
+/**  Local offline transcription. */
+"local" | "online";
 
 export type AsrInferenceMetric = {
-  occurredAtMs: number;
-  source: string;
-  instanceId: string | null;
-  stage: string;
-  isFinal: boolean;
-  audioDurationMs: number;
-  bufferedSamples: number;
-  audioExtractMs: number | null;
-  decodeMs: number;
-  emitLatencyMs: number | null;
-  totalMs: number | null;
-  rtf: number | null;
-  segmentCount: number | null;
-  processRssMb: number | null;
+	occurredAtMs: number,
+	source: string,
+	instanceId: string | null,
+	stage: string,
+	isFinal: boolean,
+	audioDurationMs: number,
+	bufferedSamples: number,
+	audioExtractMs: number | null,
+	decodeMs: number,
+	emitLatencyMs: number | null,
+	totalMs: number | null,
+	rtf: number | null,
+	segmentCount: number | null,
+	processRssMb: number | null,
 };
 
 export type AsrMode = AsrMode_Serialize | AsrMode_Deserialize;
 
-export type AsrMode_Deserialize = 'streaming' | 'batch' | 'offline';
+export type AsrMode_Deserialize = "streaming" | "batch" | "offline";
 
-export type AsrMode_Serialize = 'streaming' | 'batch';
+export type AsrMode_Serialize = "streaming" | "batch";
 
 export type AsrModelLoadMetric = {
-  occurredAtMs: number;
-  instanceId: string;
-  modelPath: string;
-  modelType: string;
-  recognizerKind: string;
-  numThreads: number;
-  reusedFromPool: boolean;
-  loadMs: number;
-  rssBeforeMb: number | null;
-  rssAfterMb: number | null;
-  rssDeltaMb: number | null;
-  processRssMb: number | null;
+	occurredAtMs: number,
+	instanceId: string,
+	modelPath: string,
+	modelType: string,
+	recognizerKind: string,
+	numThreads: number,
+	reusedFromPool: boolean,
+	loadMs: number,
+	rssBeforeMb: number | null,
+	rssAfterMb: number | null,
+	rssDeltaMb: number | null,
+	processRssMb: number | null,
 };
 
 export type AsrRuntimeMetricsSnapshot = {
-  modelLoad: AsrModelLoadMetric | null;
-  liveInference: AsrInferenceMetric | null;
-  batchInference: AsrInferenceMetric | null;
+	modelLoad: AsrModelLoadMetric | null,
+	liveInference: AsrInferenceMetric | null,
+	batchInference: AsrInferenceMetric | null,
 };
 
-export type AsrTranscriptionRequest =
-  | AsrTranscriptionRequest_Serialize
-  | AsrTranscriptionRequest_Deserialize;
+export type AsrTranscriptionRequest = AsrTranscriptionRequest_Serialize | AsrTranscriptionRequest_Deserialize;
 
 export type AsrTranscriptionRequest_Deserialize = {
-  mode: AsrMode_Deserialize;
-  language: string;
-  enableItn: boolean;
-  normalizationOptions: TranscriptNormalizationOptions;
-  postprocessOptions: TranscriptPostprocessOptions;
-  hotwords: string | null;
-  speakerProcessing: SpeakerProcessingConfig | null;
+	mode: AsrMode_Deserialize,
+	language: string,
+	enableItn: boolean,
+	normalizationOptions: TranscriptNormalizationOptions,
+	postprocessOptions: TranscriptPostprocessOptions,
+	hotwords: string | null,
+	speakerProcessing: SpeakerProcessingConfig | null,
 } & AsrEngineConfig_Deserialize;
 
 export type AsrTranscriptionRequest_Serialize = {
-  mode: AsrMode_Serialize;
-  language: string;
-  enableItn: boolean;
-  normalizationOptions: TranscriptNormalizationOptions;
-  postprocessOptions: TranscriptPostprocessOptions;
-  hotwords: string | null;
-  speakerProcessing: SpeakerProcessingConfig | null;
+	mode: AsrMode_Serialize,
+	language: string,
+	enableItn: boolean,
+	normalizationOptions: TranscriptNormalizationOptions,
+	postprocessOptions: TranscriptPostprocessOptions,
+	hotwords: string | null,
+	speakerProcessing: SpeakerProcessingConfig | null,
 } & AsrEngineConfig_Serialize;
 
 export type AudioUsageCategory = {
-  bytes: number;
-  historyAudioBytes: number;
-  speakerSampleBytes: number;
-  fileCount: number;
+	bytes: number,
+	historyAudioBytes: number,
+	speakerSampleBytes: number,
+	fileCount: number,
 };
 
-export type AutomationProcessedInput =
-  | AutomationProcessedInput_Serialize
-  | AutomationProcessedInput_Deserialize;
+export type AutomationProcessedInput = AutomationProcessedInput_Serialize | AutomationProcessedInput_Deserialize;
 
 export type AutomationProcessedInput_Deserialize = {
-  id?: string | null;
-  ruleId?: string;
-  kind?: string;
-  inputVersion?: string;
-  attempt?: number;
-  filePath?: string;
-  sourceFingerprint?: string;
-  size?: number;
-  mtimeMs?: number;
-  status?: string;
-  processedAt?: number;
-  historyId?: string | null;
-  exportPath?: string | null;
-  errorMessage?: string | null;
+	id?: string | null,
+	ruleId?: string,
+	kind?: string,
+	inputVersion?: string,
+	attempt?: number,
+	filePath?: string,
+	sourceFingerprint?: string,
+	size?: number,
+	mtimeMs?: number,
+	status?: string,
+	processedAt?: number,
+	historyId?: string | null,
+	exportPath?: string | null,
+	errorMessage?: string | null,
 };
 
 export type AutomationProcessedInput_Serialize = {
-  id?: string | null;
-  ruleId: string;
-  kind: string;
-  inputVersion: string;
-  attempt: number;
-  filePath: string;
-  sourceFingerprint: string;
-  size: number;
-  mtimeMs: number;
-  status: string;
-  processedAt: number;
-  historyId?: string | null;
-  exportPath?: string | null;
-  errorMessage?: string | null;
+	id?: string | null,
+	ruleId: string,
+	kind: string,
+	inputVersion: string,
+	attempt: number,
+	filePath: string,
+	sourceFingerprint: string,
+	size: number,
+	mtimeMs: number,
+	status: string,
+	processedAt: number,
+	historyId?: string | null,
+	exportPath?: string | null,
+	errorMessage?: string | null,
 };
 
-export type AutomationProcessedRecord =
-  | AutomationProcessedRecord_Serialize
-  | AutomationProcessedRecord_Deserialize;
+export type AutomationProcessedRecord = AutomationProcessedRecord_Serialize | AutomationProcessedRecord_Deserialize;
 
 export type AutomationProcessedRecord_Deserialize = {
-  id: string;
-  ruleId: string;
-  kind?: string;
-  inputVersion?: string;
-  attempt?: number;
-  filePath: string;
-  sourceFingerprint: string;
-  size: number;
-  mtimeMs: number;
-  status: string;
-  processedAt: number;
-  historyId: string | null;
-  exportPath: string | null;
-  errorMessage: string | null;
+	id: string,
+	ruleId: string,
+	kind?: string,
+	inputVersion?: string,
+	attempt?: number,
+	filePath: string,
+	sourceFingerprint: string,
+	size: number,
+	mtimeMs: number,
+	status: string,
+	processedAt: number,
+	historyId: string | null,
+	exportPath: string | null,
+	errorMessage: string | null,
 };
 
 export type AutomationProcessedRecord_Serialize = {
-  id: string;
-  ruleId: string;
-  kind: string;
-  inputVersion: string;
-  attempt: number;
-  filePath: string;
-  sourceFingerprint: string;
-  size: number;
-  mtimeMs: number;
-  status: string;
-  processedAt: number;
-  historyId?: string | null;
-  exportPath?: string | null;
-  errorMessage?: string | null;
+	id: string,
+	ruleId: string,
+	kind: string,
+	inputVersion: string,
+	attempt: number,
+	filePath: string,
+	sourceFingerprint: string,
+	size: number,
+	mtimeMs: number,
+	status: string,
+	processedAt: number,
+	historyId?: string | null,
+	exportPath?: string | null,
+	errorMessage?: string | null,
 };
 
-export type AutomationProfileInput =
-  | AutomationProfileInput_Serialize
-  | AutomationProfileInput_Deserialize;
+export type AutomationProfileInput = AutomationProfileInput_Serialize | AutomationProfileInput_Deserialize;
 
 export type AutomationProfileInput_Deserialize = {
-  id?: string | null;
-  name?: string;
-  translationLanguage?: string;
-  polishPresetId?: string;
-  summaryTemplateId?: string;
-  enabledTextReplacementSetIds?: string[];
-  enabledHotwordSetIds?: string[];
-  enabledPolishKeywordSetIds?: string[];
-  enabledSpeakerProfileIds?: string[];
-  createdAt?: number;
-  updatedAt?: number;
+	id?: string | null,
+	name?: string,
+	translationLanguage?: string,
+	polishPresetId?: string,
+	summaryTemplateId?: string,
+	enabledTextReplacementSetIds?: string[],
+	enabledHotwordSetIds?: string[],
+	enabledPolishKeywordSetIds?: string[],
+	enabledSpeakerProfileIds?: string[],
+	createdAt?: number,
+	updatedAt?: number,
 };
 
 export type AutomationProfileInput_Serialize = {
-  id?: string | null;
-  name: string;
-  translationLanguage: string;
-  polishPresetId: string;
-  summaryTemplateId: string;
-  enabledTextReplacementSetIds: string[];
-  enabledHotwordSetIds: string[];
-  enabledPolishKeywordSetIds: string[];
-  enabledSpeakerProfileIds: string[];
-  createdAt: number;
-  updatedAt: number;
+	id?: string | null,
+	name: string,
+	translationLanguage: string,
+	polishPresetId: string,
+	summaryTemplateId: string,
+	enabledTextReplacementSetIds: string[],
+	enabledHotwordSetIds: string[],
+	enabledPolishKeywordSetIds: string[],
+	enabledSpeakerProfileIds: string[],
+	createdAt: number,
+	updatedAt: number,
 };
 
 export type AutomationProfileRecord = {
-  id: string;
-  name: string;
-  translationLanguage: string;
-  polishPresetId: string;
-  summaryTemplateId: string;
-  enabledTextReplacementSetIds: string[];
-  enabledHotwordSetIds: string[];
-  enabledPolishKeywordSetIds: string[];
-  enabledSpeakerProfileIds: string[];
-  createdAt: number;
-  updatedAt: number;
+	id: string,
+	name: string,
+	translationLanguage: string,
+	polishPresetId: string,
+	summaryTemplateId: string,
+	enabledTextReplacementSetIds: string[],
+	enabledHotwordSetIds: string[],
+	enabledPolishKeywordSetIds: string[],
+	enabledSpeakerProfileIds: string[],
+	createdAt: number,
+	updatedAt: number,
 };
 
-export type AutomationRepositoryInput =
-  | AutomationRepositoryInput_Serialize
-  | AutomationRepositoryInput_Deserialize;
+export type AutomationRepositoryInput = AutomationRepositoryInput_Serialize | AutomationRepositoryInput_Deserialize;
 
 export type AutomationRepositoryInput_Deserialize = {
-  profiles?: AutomationProfileInput_Deserialize[];
-  rules?: AutomationRuleInput_Deserialize[];
-  processedEntries?: AutomationProcessedInput_Deserialize[];
+	profiles?: AutomationProfileInput_Deserialize[],
+	rules?: AutomationRuleInput_Deserialize[],
+	processedEntries?: AutomationProcessedInput_Deserialize[],
 };
 
 export type AutomationRepositoryInput_Serialize = {
-  profiles: AutomationProfileInput_Serialize[];
-  rules: AutomationRuleInput_Serialize[];
-  processedEntries: AutomationProcessedInput_Serialize[];
+	profiles: AutomationProfileInput_Serialize[],
+	rules: AutomationRuleInput_Serialize[],
+	processedEntries: AutomationProcessedInput_Serialize[],
 };
 
-export type AutomationRepositoryState =
-  | AutomationRepositoryState_Serialize
-  | AutomationRepositoryState_Deserialize;
+export type AutomationRepositoryState = AutomationRepositoryState_Serialize | AutomationRepositoryState_Deserialize;
 
 export type AutomationRepositoryState_Deserialize = {
-  profiles: AutomationProfileRecord[];
-  rules: AutomationRuleRecord_Deserialize[];
-  processedEntries: AutomationProcessedRecord_Deserialize[];
+	profiles: AutomationProfileRecord[],
+	rules: AutomationRuleRecord_Deserialize[],
+	processedEntries: AutomationProcessedRecord_Deserialize[],
 };
 
 export type AutomationRepositoryState_Serialize = {
-  profiles: AutomationProfileRecord[];
-  rules: AutomationRuleRecord_Serialize[];
-  processedEntries: AutomationProcessedRecord_Serialize[];
+	profiles: AutomationProfileRecord[],
+	rules: AutomationRuleRecord_Serialize[],
+	processedEntries: AutomationProcessedRecord_Serialize[],
 };
 
 export type AutomationRule = {
-  name?: string;
-  saveHistory?: boolean;
-  tagIds?: string[];
-  watchDirectory?: string;
-  stageConfig?: AutomationRuleStageConfig;
-  exportConfig?: AutomationRuleExportConfig;
+	name?: string,
+	saveHistory?: boolean,
+	tagIds?: string[],
+	watchDirectory?: string,
+	stageConfig?: AutomationRuleStageConfig,
+	exportConfig?: AutomationRuleExportConfig,
 };
 
 export type AutomationRuleExportConfig = {
-  directory?: string;
-  mode?: string;
+	directory?: string,
+	mode?: string,
 };
 
 export type AutomationRuleInput = AutomationRuleInput_Serialize | AutomationRuleInput_Deserialize;
 
 export type AutomationRuleInputActions = {
-  autoPolish?: boolean;
-  autoTranslate?: boolean;
-  autoSummary?: boolean;
+	autoPolish?: boolean,
+	autoTranslate?: boolean,
+	autoSummary?: boolean,
 };
 
 export type AutomationRuleInputExportConfig = {
-  directory?: string;
-  format?: string;
-  mode?: string;
-  prefix?: string;
+	directory?: string,
+	format?: string,
+	mode?: string,
+	prefix?: string,
 };
 
 export type AutomationRuleInputStageConfig = {
-  autoPolish?: boolean;
-  polishPresetId?: string;
-  autoTranslate?: boolean;
-  translationLanguage?: string;
-  exportEnabled?: boolean;
+	autoPolish?: boolean,
+	polishPresetId?: string,
+	autoTranslate?: boolean,
+	translationLanguage?: string,
+	exportEnabled?: boolean,
 };
 
 export type AutomationRuleInput_Deserialize = {
-  id?: string | null;
-  name?: string;
-  kind?: string;
-  priority?: number;
-  profileId?: string | null;
-  profileSource?: string;
-  saveHistory?: boolean;
-  tagIds?: string[];
-  presetId?: string;
-  watchDirectory?: string;
-  recursive?: boolean;
-  enabled?: boolean;
-  actions?: AutomationRuleInputActions;
-  stageConfig?: AutomationRuleInputStageConfig;
-  exportConfig?: AutomationRuleInputExportConfig;
-  createdAt?: number;
-  updatedAt?: number;
-  migrationNotice?: string | null;
+	id?: string | null,
+	name?: string,
+	kind?: string,
+	priority?: number,
+	profileId?: string | null,
+	profileSource?: string,
+	saveHistory?: boolean,
+	tagIds?: string[],
+	presetId?: string,
+	watchDirectory?: string,
+	recursive?: boolean,
+	enabled?: boolean,
+	actions?: AutomationRuleInputActions,
+	stageConfig?: AutomationRuleInputStageConfig,
+	exportConfig?: AutomationRuleInputExportConfig,
+	createdAt?: number,
+	updatedAt?: number,
+	migrationNotice?: string | null,
 };
 
 export type AutomationRuleInput_Serialize = {
-  id?: string | null;
-  name: string;
-  kind: string;
-  priority: number;
-  profileId?: string | null;
-  profileSource: string;
-  saveHistory: boolean;
-  tagIds: string[];
-  presetId: string;
-  watchDirectory: string;
-  recursive: boolean;
-  enabled: boolean;
-  actions: AutomationRuleInputActions;
-  stageConfig: AutomationRuleInputStageConfig;
-  exportConfig: AutomationRuleInputExportConfig;
-  createdAt: number;
-  updatedAt: number;
-  migrationNotice?: string | null;
+	id?: string | null,
+	name: string,
+	kind: string,
+	priority: number,
+	profileId?: string | null,
+	profileSource: string,
+	saveHistory: boolean,
+	tagIds: string[],
+	presetId: string,
+	watchDirectory: string,
+	recursive: boolean,
+	enabled: boolean,
+	actions: AutomationRuleInputActions,
+	stageConfig: AutomationRuleInputStageConfig,
+	exportConfig: AutomationRuleInputExportConfig,
+	createdAt: number,
+	updatedAt: number,
+	migrationNotice?: string | null,
 };
 
-export type AutomationRuleRecord =
-  | AutomationRuleRecord_Serialize
-  | AutomationRuleRecord_Deserialize;
+export type AutomationRuleRecord = AutomationRuleRecord_Serialize | AutomationRuleRecord_Deserialize;
 
 export type AutomationRuleRecordExportConfig = {
-  directory: string;
-  format: string;
-  mode: string;
-  prefix: string;
+	directory: string,
+	format: string,
+	mode: string,
+	prefix: string,
 };
 
 export type AutomationRuleRecordStageConfig = {
-  autoPolish: boolean;
-  polishPresetId: string;
-  autoTranslate: boolean;
-  translationLanguage: string;
-  exportEnabled: boolean;
+	autoPolish: boolean,
+	polishPresetId: string,
+	autoTranslate: boolean,
+	translationLanguage: string,
+	exportEnabled: boolean,
 };
 
 export type AutomationRuleRecord_Deserialize = {
-  id: string;
-  name: string;
-  kind: string;
-  priority: number;
-  profileId: string | null;
-  profileSource: string;
-  saveHistory: boolean;
-  tagIds: string[];
-  presetId: string;
-  watchDirectory: string;
-  recursive: boolean;
-  enabled: boolean;
-  actions: AutomationRuleInputActions;
-  stageConfig: AutomationRuleRecordStageConfig;
-  exportConfig: AutomationRuleRecordExportConfig;
-  createdAt: number;
-  updatedAt: number;
-  migrationNotice: string | null;
+	id: string,
+	name: string,
+	kind: string,
+	priority: number,
+	profileId: string | null,
+	profileSource: string,
+	saveHistory: boolean,
+	tagIds: string[],
+	presetId: string,
+	watchDirectory: string,
+	recursive: boolean,
+	enabled: boolean,
+	actions: AutomationRuleInputActions,
+	stageConfig: AutomationRuleRecordStageConfig,
+	exportConfig: AutomationRuleRecordExportConfig,
+	createdAt: number,
+	updatedAt: number,
+	migrationNotice: string | null,
 };
 
 export type AutomationRuleRecord_Serialize = {
-  id: string;
-  name: string;
-  kind: string;
-  priority: number;
-  profileId?: string | null;
-  profileSource: string;
-  saveHistory: boolean;
-  tagIds: string[];
-  presetId: string;
-  watchDirectory: string;
-  recursive: boolean;
-  enabled: boolean;
-  actions: AutomationRuleInputActions;
-  stageConfig: AutomationRuleRecordStageConfig;
-  exportConfig: AutomationRuleRecordExportConfig;
-  createdAt: number;
-  updatedAt: number;
-  migrationNotice?: string | null;
+	id: string,
+	name: string,
+	kind: string,
+	priority: number,
+	profileId?: string | null,
+	profileSource: string,
+	saveHistory: boolean,
+	tagIds: string[],
+	presetId: string,
+	watchDirectory: string,
+	recursive: boolean,
+	enabled: boolean,
+	actions: AutomationRuleInputActions,
+	stageConfig: AutomationRuleRecordStageConfig,
+	exportConfig: AutomationRuleRecordExportConfig,
+	createdAt: number,
+	updatedAt: number,
+	migrationNotice?: string | null,
 };
 
 export type AutomationRuleStageConfig = {
-  autoPolish?: boolean;
-  autoTranslate?: boolean;
+	autoPolish?: boolean,
+	autoTranslate?: boolean,
 };
 
-export type AutomationRuleValidationResult =
-  | AutomationRuleValidationResult_Serialize
-  | AutomationRuleValidationResult_Deserialize;
+export type AutomationRuleValidationResult = AutomationRuleValidationResult_Serialize | AutomationRuleValidationResult_Deserialize;
 
 export type AutomationRuleValidationResult_Deserialize = {
-  valid: boolean;
-  code: string | null;
-  message: string | null;
+	valid: boolean,
+	code: string | null,
+	message: string | null,
 };
 
 export type AutomationRuleValidationResult_Serialize = {
-  valid: boolean;
-  code?: string | null;
-  message?: string | null;
+	valid: boolean,
+	code?: string | null,
+	message?: string | null,
 };
 
 export type AutomationRuntimeCandidatePayload = {
-  ruleId: string;
-  filePath: string;
-  sourceFingerprint: string;
-  size: number;
-  mtimeMs: number;
+	ruleId: string,
+	filePath: string,
+	sourceFingerprint: string,
+	size: number,
+	mtimeMs: number,
 };
 
-export type AutomationRuntimePathCollectionOutcome =
-  | 'candidate'
-  | 'missing'
-  | 'unsupported'
-  | 'excluded'
-  | 'not_file'
-  | 'error';
+export type AutomationRuntimePathCollectionOutcome = "candidate" | "missing" | "unsupported" | "excluded" | "not_file" | "error";
 
 export type AutomationRuntimePathCollectionResult = {
-  filePath: string;
-  outcome: AutomationRuntimePathCollectionOutcome;
-  candidate: AutomationRuntimeCandidatePayload | null;
-  error: string | null;
+	filePath: string,
+	outcome: AutomationRuntimePathCollectionOutcome,
+	candidate: AutomationRuntimeCandidatePayload | null,
+	error: string | null,
 };
 
 export type AutomationRuntimeReplaceResult = {
-  ruleId: string;
-  started: boolean;
-  error: string | null;
+	ruleId: string,
+	started: boolean,
+	error: string | null,
 };
 
 export type AutomationRuntimeRuleConfig = {
-  ruleId: string;
-  watchDirectory: string;
-  recursive: boolean;
-  excludeDirectory: string;
-  debounceMs: number;
-  stableWindowMs: number;
+	ruleId: string,
+	watchDirectory: string,
+	recursive: boolean,
+	excludeDirectory: string,
+	debounceMs: number,
+	stableWindowMs: number,
 };
 
 export type BackupApplyPreparedImportRequest = {
-  importId: string;
-  defaultRuleSetName: string;
+	importId: string,
+	defaultRuleSetName: string,
 };
 
 export type BackupApplyResult = BackupApplyResult_Serialize | BackupApplyResult_Deserialize;
 
 export type BackupApplyResult_Deserialize = {
-  importId: string;
-  manifest: BackupManifest_Deserialize;
+	importId: string,
+	manifest: BackupManifest_Deserialize,
 };
 
 export type BackupApplyResult_Serialize = {
-  importId: string;
-  manifest: BackupManifest_Serialize;
+	importId: string,
+	manifest: BackupManifest_Serialize,
 };
 
 export type BackupExportRequest = {
-  archivePath: string;
-  appVersion: string;
+	archivePath: string,
+	appVersion: string,
 };
 
 export type BackupImportRequest = {
-  archivePath: string;
-  defaultRuleSetName: string;
-  confirmReplace: boolean;
+	archivePath: string,
+	defaultRuleSetName: string,
+	confirmReplace: boolean,
 };
 
 export type BackupInspectRequest = {
-  archivePath: string;
+	archivePath: string,
 };
 
 export type BackupManifest = BackupManifest_Serialize | BackupManifest_Deserialize;
 
-export type BackupManifestCounts =
-  | BackupManifestCounts_Serialize
-  | BackupManifestCounts_Deserialize;
+export type BackupManifestCounts = BackupManifestCounts_Serialize | BackupManifestCounts_Deserialize;
 
-export type BackupManifestCounts_Deserialize =
-  | ({
-      historyItems: number;
-      transcriptFiles: number;
-      summaryFiles: number;
-      automationProfiles?: number;
-      automationRules: number;
-      automationProcessedEntries: number;
-      analyticsFiles: number;
-    } & {
-      tags: number;
-    })
-  | {
-      projects: number;
-    };
+export type BackupManifestCounts_Deserialize = {
+	historyItems: number,
+	transcriptFiles: number,
+	summaryFiles: number,
+	automationProfiles?: number,
+	automationRules: number,
+	automationProcessedEntries: number,
+	analyticsFiles: number,
+} & {
+	tags: number,
+} | {
+	projects: number,
+};
 
 export type BackupManifestCounts_Serialize = {
-  tags: number;
-  historyItems: number;
-  transcriptFiles: number;
-  summaryFiles: number;
-  automationProfiles: number;
-  automationRules: number;
-  automationProcessedEntries: number;
-  analyticsFiles: number;
+	tags: number,
+	historyItems: number,
+	transcriptFiles: number,
+	summaryFiles: number,
+	automationProfiles: number,
+	automationRules: number,
+	automationProcessedEntries: number,
+	analyticsFiles: number,
 };
 
 export type BackupManifestScopes = {
-  config: boolean;
-  workspace: boolean;
-  history: boolean;
-  automation: boolean;
-  analytics: boolean;
+	config: boolean,
+	workspace: boolean,
+	history: boolean,
+	automation: boolean,
+	analytics: boolean,
 };
 
 export type BackupManifest_Deserialize = {
-  schemaVersion: number;
-  createdAt: string;
-  appVersion: string;
-  historyMode: string;
-  scopes: BackupManifestScopes;
-  counts: BackupManifestCounts_Deserialize;
+	schemaVersion: number,
+	createdAt: string,
+	appVersion: string,
+	historyMode: string,
+	scopes: BackupManifestScopes,
+	counts: BackupManifestCounts_Deserialize,
 };
 
 export type BackupManifest_Serialize = {
-  schemaVersion: number;
-  createdAt: string;
-  appVersion: string;
-  historyMode: string;
-  scopes: BackupManifestScopes;
-  counts: BackupManifestCounts_Serialize;
+	schemaVersion: number,
+	createdAt: string,
+	appVersion: string,
+	historyMode: string,
+	scopes: BackupManifestScopes,
+	counts: BackupManifestCounts_Serialize,
 };
 
 export type BackupPrepareImportRequest = {
-  archivePath: string;
+	archivePath: string,
 };
 
-export type BatchSegmentationMode = 'vad' | 'whole';
+export type BatchSegmentationMode = "vad" | "whole";
 
 export type BuiltinLlmProvider = BuiltinLlmProvider_Serialize | BuiltinLlmProvider_Deserialize;
 
-export type BuiltinLlmProvider_Deserialize =
-  | 'google_translate'
-  | 'google_translate_free'
-  | 'open_ai'
-  | 'open_ai_responses'
-  | 'azure_openai'
-  | 'anthropic'
-  | 'gemini'
-  | 'ollama'
-  | 'deep_seek'
-  | 'moonshot_ai'
-  | 'moonshot_cn'
-  | 'xiaomi'
-  | 'kimi'
-  | 'silicon_flow'
-  | 'qwen'
-  | 'qwen_portal'
-  | 'minimax_global'
-  | 'minimax_cn'
-  | 'openrouter'
-  | 'lm_studio'
-  | 'groq'
-  | 'x_ai'
-  | 'mistral_ai'
-  | 'perplexity'
-  | 'volcengine'
-  | 'chatglm'
-  | 'copilot'
-  | 'github_copilot'
-  | 'custom-openai-compatible'
-  | 'openai_compatible'
-  | 'open_ai_compatible';
+export type BuiltinLlmProvider_Deserialize = "google_translate" | "google_translate_free" | "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "openrouter" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "github_copilot" | "custom-openai-compatible" | "openai_compatible" | "open_ai_compatible";
 
-export type BuiltinLlmProvider_Serialize =
-  | 'google_translate'
-  | 'google_translate_free'
-  | 'open_ai'
-  | 'open_ai_responses'
-  | 'azure_openai'
-  | 'anthropic'
-  | 'gemini'
-  | 'ollama'
-  | 'deep_seek'
-  | 'moonshot_ai'
-  | 'moonshot_cn'
-  | 'xiaomi'
-  | 'kimi'
-  | 'silicon_flow'
-  | 'qwen'
-  | 'qwen_portal'
-  | 'minimax_global'
-  | 'minimax_cn'
-  | 'openrouter'
-  | 'lm_studio'
-  | 'groq'
-  | 'x_ai'
-  | 'mistral_ai'
-  | 'perplexity'
-  | 'volcengine'
-  | 'chatglm'
-  | 'copilot'
-  | 'custom-openai-compatible';
+export type BuiltinLlmProvider_Serialize = "google_translate" | "google_translate_free" | "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "openrouter" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "custom-openai-compatible";
 
-export type BuiltinPolishPresetId =
-  | 'general'
-  | 'customer_service'
-  | 'meeting'
-  | 'interview'
-  | 'lecture'
-  | 'podcast';
+export type BuiltinPolishPresetId = "general" | "customer_service" | "meeting" | "interview" | "lecture" | "podcast";
 
-export type BuiltinSummaryTemplateId = 'general' | 'meeting' | 'lecture';
+export type BuiltinSummaryTemplateId = "general" | "meeting" | "lecture";
 
 export type ContentStats = ContentStats_Serialize | ContentStats_Deserialize;
 
 export type ContentStats_Deserialize = {
-  overview: OverviewStats_Deserialize;
-  speakers: SpeakerStats | null;
+	overview: OverviewStats_Deserialize,
+	speakers: SpeakerStats | null,
 };
 
 export type ContentStats_Serialize = {
-  overview: OverviewStats_Serialize;
-  speakers: SpeakerStats | null;
+	overview: OverviewStats_Serialize,
+	speakers: SpeakerStats | null,
 };
 
 export type ContentTrendPoint = {
-  date: string;
-  dateLabel: string;
-  itemCount: number;
-  itemCountDisplay: string;
-  durationSeconds: number;
-  durationDisplay: string;
+	date: string,
+	dateLabel: string,
+	itemCount: number,
+	itemCountDisplay: string,
+	durationSeconds: number,
+	durationDisplay: string,
 };
 
 export type CudaAddonInspection = {
-  isInstalled: boolean;
-  isActive: boolean;
-  path: string;
-  missingFiles: string[];
-  version: string | null;
-  cudaVersion: string | null;
+	isInstalled: boolean,
+	isActive: boolean,
+	path: string,
+	missingFiles: string[],
+	version: string | null,
+	cudaVersion: string | null,
 };
 
-export type DashboardSnapshotDomainModel =
-  | DashboardSnapshotDomainModel_Serialize
-  | DashboardSnapshotDomainModel_Deserialize;
+export type DashboardSnapshotDomainModel = DashboardSnapshotDomainModel_Serialize | DashboardSnapshotDomainModel_Deserialize;
 
 export type DashboardSnapshotDomainModel_Deserialize = {
-  content: ContentStats_Deserialize;
-  llmUsage: LlmUsageDashboardStats_Deserialize;
-  generatedAt: string;
+	content: ContentStats_Deserialize,
+	llmUsage: LlmUsageDashboardStats_Deserialize,
+	generatedAt: string,
 };
 
 export type DashboardSnapshotDomainModel_Serialize = {
-  content: ContentStats_Serialize;
-  llmUsage: LlmUsageDashboardStats_Serialize;
-  generatedAt: string;
+	content: ContentStats_Serialize,
+	llmUsage: LlmUsageDashboardStats_Serialize,
+	generatedAt: string,
 };
 
 export type DashboardUsageBucket = {
-  callCount: number;
-  callCountDisplay: string;
-  callsWithUsage: number;
-  callsWithUsageDisplay: string;
-  callsWithoutUsage: number;
-  callsWithoutUsageDisplay: string;
-  promptTokens: number;
-  promptTokensDisplay: string;
-  completionTokens: number;
-  completionTokensDisplay: string;
-  totalTokens: number;
-  totalTokensDisplay: string;
+	callCount: number,
+	callCountDisplay: string,
+	callsWithUsage: number,
+	callsWithUsageDisplay: string,
+	callsWithoutUsage: number,
+	callsWithoutUsageDisplay: string,
+	promptTokens: number,
+	promptTokensDisplay: string,
+	completionTokens: number,
+	completionTokensDisplay: string,
+	totalTokens: number,
+	totalTokensDisplay: string,
 };
 
 export type DatabaseUsageCategory = {
-  bytes: number;
-  sqlite: SQLiteUsageSummary;
+	bytes: number,
+	sqlite: SQLiteUsageSummary,
 };
 
 export type DeviceOptionInput = {
-  label: string;
-  value: string;
+	label: string,
+	value: string,
 };
 
 export type DeviceProbeInput = {
-  options: DeviceOptionInput[];
-  available: boolean;
-  errorMessage: string | null;
+	options: DeviceOptionInput[],
+	available: boolean,
+	errorMessage: string | null,
 };
 
 export type DiagnosticsConfigInput = {
-  streamingModelPath: string;
-  batchModelPath: string;
-  vadModelPath?: string;
-  punctuationModelPath?: string;
-  microphoneId?: string;
-  ffmpegPath?: string;
+	streamingModelPath: string,
+	batchModelPath: string,
+	vadModelPath?: string,
+	punctuationModelPath?: string,
+	microphoneId?: string,
+	ffmpegPath?: string,
 };
 
 export type DiagnosticsCoreInput = {
-  config: DiagnosticsConfigInput;
-  selectedModels?: SelectedModelsInput;
-  modelRules?: ModelRulesInput;
-  pathStatuses?: PathStatusesInput;
-  permissionState: string;
-  microphoneProbe: DeviceProbeInput;
-  systemAudioProbe: DeviceProbeInput;
-  voiceTypingReadiness: VoiceTypingReadinessInput;
-  runtimeEnvironment?: RuntimeEnvironmentStatus;
-  asrRuntimeMetrics?: AsrRuntimeMetricsSnapshot;
-  liveTranscription?: LiveTranscriptionDiagnosticsSnapshot;
-  onboardingReady?: boolean;
-  punctuationRequired?: boolean;
+	config: DiagnosticsConfigInput,
+	selectedModels?: SelectedModelsInput,
+	modelRules?: ModelRulesInput,
+	pathStatuses?: PathStatusesInput,
+	permissionState: string,
+	microphoneProbe: DeviceProbeInput,
+	systemAudioProbe: DeviceProbeInput,
+	voiceTypingReadiness: VoiceTypingReadinessInput,
+	runtimeEnvironment?: RuntimeEnvironmentStatus,
+	asrRuntimeMetrics?: AsrRuntimeMetricsSnapshot,
+	liveTranscription?: LiveTranscriptionDiagnosticsSnapshot,
+	onboardingReady?: boolean,
+	punctuationRequired?: boolean,
 };
 
 export type DiagnosticsCoreSnapshot = {
-  scannedAt: string;
-  config: DiagnosticsConfigInput;
-  selectedModels: SelectedModelsInput;
-  modelRules: ModelRulesInput;
-  pathStatuses: PathStatusesInput;
-  permissionState: string;
-  microphoneProbe: DeviceProbeInput;
-  systemAudioProbe: DeviceProbeInput;
-  voiceTypingReadiness: VoiceTypingReadinessInput;
-  runtimeEnvironment: RuntimeEnvironmentStatus;
-  asrRuntimeMetrics: AsrRuntimeMetricsSnapshot;
-  liveTranscription: LiveTranscriptionDiagnosticsSnapshot;
-  onboardingReady: boolean;
-  punctuationRequired: boolean;
+	scannedAt: string,
+	config: DiagnosticsConfigInput,
+	selectedModels: SelectedModelsInput,
+	modelRules: ModelRulesInput,
+	pathStatuses: PathStatusesInput,
+	permissionState: string,
+	microphoneProbe: DeviceProbeInput,
+	systemAudioProbe: DeviceProbeInput,
+	voiceTypingReadiness: VoiceTypingReadinessInput,
+	runtimeEnvironment: RuntimeEnvironmentStatus,
+	asrRuntimeMetrics: AsrRuntimeMetricsSnapshot,
+	liveTranscription: LiveTranscriptionDiagnosticsSnapshot,
+	onboardingReady: boolean,
+	punctuationRequired: boolean,
 };
 
 export type EffectivePipelineSnapshot = {
-  isProjectPipeline: boolean;
-  autoPolish: boolean;
-  polishPresetId: string | null;
-  polishPromptOverride: string | null;
-  autoTranslate: boolean;
-  targetLanguage: string | null;
-  autoSummary: boolean;
-  summaryTemplateId: string | null;
-  hotwordSetIds: string[];
-  replacementSetIds: string[];
-  autoExport: boolean;
-  exportFormat: string | null;
-  exportDirectory: string | null;
-  exportFileNamePrefix: string | null;
+	isProjectPipeline: boolean,
+	autoPolish: boolean,
+	polishPresetId: string | null,
+	polishPromptOverride: string | null,
+	autoTranslate: boolean,
+	targetLanguage: string | null,
+	autoSummary: boolean,
+	summaryTemplateId: string | null,
+	hotwordSetIds: string[],
+	replacementSetIds: string[],
+	autoExport: boolean,
+	exportFormat: string | null,
+	exportDirectory: string | null,
+	exportFileNamePrefix: string | null,
 };
 
 /**  Supported transcript export formats for every Sona frontend. */
-export type ExportFormat = 'json' | 'txt' | 'srt' | 'vtt' | 'md';
+export type ExportFormat = "json" | "txt" | "srt" | "vtt" | "md";
 
 /**  Selects which transcript text fields are included in an export. */
-export type ExportMode = 'original' | 'translation' | 'bilingual';
+export type ExportMode = "original" | "translation" | "bilingual";
 
-export type ExportTranscriptFileRequest =
-  | ExportTranscriptFileRequest_Serialize
-  | ExportTranscriptFileRequest_Deserialize;
+export type ExportTranscriptFileRequest = ExportTranscriptFileRequest_Serialize | ExportTranscriptFileRequest_Deserialize;
 
 export type ExportTranscriptFileRequest_Deserialize = {
-  segments: TranscriptSegment_Deserialize[];
-  format: ExportFormat;
-  mode: ExportMode;
-  outputPath: string;
+	segments: TranscriptSegment_Deserialize[],
+	format: ExportFormat,
+	mode: ExportMode,
+	outputPath: string,
 };
 
 export type ExportTranscriptFileRequest_Serialize = {
-  segments: TranscriptSegment_Serialize[];
-  format: ExportFormat;
-  mode: ExportMode;
-  outputPath: string;
+	segments: TranscriptSegment_Serialize[],
+	format: ExportFormat,
+	mode: ExportMode,
+	outputPath: string,
 };
 
 export type ExportTranscriptFileResult = {
-  outputPath: string;
-  bytesWritten: number;
+	outputPath: string,
+	bytesWritten: number,
 };
 
 export type FileUsageCategory = {
-  bytes: number;
-  fileCount: number;
+	bytes: number,
+	fileCount: number,
 };
 
 export type GpuAcceleration = GpuAcceleration_Serialize | GpuAcceleration_Deserialize;
 
-export type GpuAcceleration_Deserialize =
-  | 'auto'
-  | 'directml'
-  | 'cpu'
-  | 'vulkan'
-  | 'metal'
-  | 'coreml'
-  | 'cuda';
+export type GpuAcceleration_Deserialize = "auto" | "directml" | "cpu" | "vulkan" | "metal" | "coreml" | "cuda";
 
-export type GpuAcceleration_Serialize = 'auto' | 'cpu' | 'vulkan' | 'metal' | 'cuda';
+export type GpuAcceleration_Serialize = "auto" | "cpu" | "vulkan" | "metal" | "cuda";
 
 export type HistoryAudioCleanupReport = {
-  eligibleCount: number;
-  removedCount: number;
-  removedBytes: number;
-  missingMarkedCount: number;
-  failedCount: number;
-  skippedActiveCount: number;
+	eligibleCount: number,
+	removedCount: number,
+	removedBytes: number,
+	missingMarkedCount: number,
+	failedCount: number,
+	skippedActiveCount: number,
 };
 
-export type HistoryAudioCleanupRequest =
-  | HistoryAudioCleanupRequest_Serialize
-  | HistoryAudioCleanupRequest_Deserialize;
+export type HistoryAudioCleanupRequest = HistoryAudioCleanupRequest_Serialize | HistoryAudioCleanupRequest_Deserialize;
 
 export type HistoryAudioCleanupRequest_Deserialize = {
-  retentionDays?: number | null;
-  excludeHistoryId?: string | null;
+	retentionDays?: number | null,
+	excludeHistoryId?: string | null,
 };
 
 export type HistoryAudioCleanupRequest_Serialize = {
-  retentionDays?: number | null;
-  excludeHistoryId?: string | null;
+	retentionDays?: number | null,
+	excludeHistoryId?: string | null,
 };
 
-export type HistoryAudioStatus = 'available' | 'missing' | 'removed';
+export type HistoryAudioStatus = "available" | "missing" | "removed";
 
-export type HistoryCommitTranscriptEditRequest =
-  | HistoryCommitTranscriptEditRequest_Serialize
-  | HistoryCommitTranscriptEditRequest_Deserialize;
+export type HistoryCommitTranscriptEditRequest = HistoryCommitTranscriptEditRequest_Serialize | HistoryCommitTranscriptEditRequest_Deserialize;
 
 export type HistoryCommitTranscriptEditRequest_Deserialize = {
-  historyId: string;
-  editSessionId: string;
-  baseSegments: TranscriptSegment_Deserialize[];
-  editedSegments: TranscriptSegment_Deserialize[];
+	historyId: string,
+	editSessionId: string,
+	baseSegments: TranscriptSegment_Deserialize[],
+	editedSegments: TranscriptSegment_Deserialize[],
 };
 
 export type HistoryCommitTranscriptEditRequest_Serialize = {
-  historyId: string;
-  editSessionId: string;
-  baseSegments: TranscriptSegment_Serialize[];
-  editedSegments: TranscriptSegment_Serialize[];
+	historyId: string,
+	editSessionId: string,
+	baseSegments: TranscriptSegment_Serialize[],
+	editedSegments: TranscriptSegment_Serialize[],
 };
 
-export type HistoryCommitTranscriptEditResult =
-  | HistoryCommitTranscriptEditResult_Serialize
-  | HistoryCommitTranscriptEditResult_Deserialize;
+export type HistoryCommitTranscriptEditResult = HistoryCommitTranscriptEditResult_Serialize | HistoryCommitTranscriptEditResult_Deserialize;
 
-export type HistoryCommitTranscriptEditResult_Deserialize =
-  | ({ status: 'unchanged' } & { current_segments?: never; item?: never; snapshot?: never })
-  | ({ status: 'committed'; item: HistoryItemRecord; snapshot: TranscriptSnapshotMetadata } & {
-      current_segments?: never;
-    })
-  | ({ status: 'conflict'; current_segments: TranscriptSegment_Deserialize[] } & {
-      item?: never;
-      snapshot?: never;
-    });
+export type HistoryCommitTranscriptEditResult_Deserialize = ({ status: "unchanged" }) & { current_segments?: never; item?: never; snapshot?: never } | ({ status: "committed"; item: HistoryItemRecord; snapshot: TranscriptSnapshotMetadata }) & { current_segments?: never } | ({ status: "conflict"; current_segments: TranscriptSegment_Deserialize[] }) & { item?: never; snapshot?: never };
 
-export type HistoryCommitTranscriptEditResult_Serialize =
-  | ({ status: 'unchanged' } & { current_segments?: never; item?: never; snapshot?: never })
-  | ({ status: 'committed'; item: HistoryItemRecord; snapshot: TranscriptSnapshotMetadata } & {
-      current_segments?: never;
-    })
-  | ({ status: 'conflict'; current_segments: TranscriptSegment_Serialize[] } & {
-      item?: never;
-      snapshot?: never;
-    });
+export type HistoryCommitTranscriptEditResult_Serialize = ({ status: "unchanged" }) & { current_segments?: never; item?: never; snapshot?: never } | ({ status: "committed"; item: HistoryItemRecord; snapshot: TranscriptSnapshotMetadata }) & { current_segments?: never } | ({ status: "conflict"; current_segments: TranscriptSegment_Serialize[] }) & { item?: never; snapshot?: never };
 
-export type HistoryCompleteLiveDraftRequest =
-  | HistoryCompleteLiveDraftRequest_Serialize
-  | HistoryCompleteLiveDraftRequest_Deserialize;
+export type HistoryCompleteLiveDraftRequest = HistoryCompleteLiveDraftRequest_Serialize | HistoryCompleteLiveDraftRequest_Deserialize;
 
 export type HistoryCompleteLiveDraftRequest_Deserialize = {
-  historyId: string;
-  segments: TranscriptSegment_Deserialize[];
-  duration: number;
+	historyId: string,
+	segments: TranscriptSegment_Deserialize[],
+	duration: number,
 };
 
 export type HistoryCompleteLiveDraftRequest_Serialize = {
-  historyId: string;
-  segments: TranscriptSegment_Serialize[];
-  duration: number;
+	historyId: string,
+	segments: TranscriptSegment_Serialize[],
+	duration: number,
 };
 
 export type HistoryCreateLiveDraftRequest = {
-  id: string | null;
-  audioExtension: string;
-  tagIds?: string[];
-  projectId: string | null;
-  icon: string | null;
+	id: string | null,
+	audioExtension: string,
+	tagIds?: string[],
+	projectId: string | null,
+	icon: string | null,
 };
 
-export type HistoryCreateTranscriptSnapshotRequest =
-  | HistoryCreateTranscriptSnapshotRequest_Serialize
-  | HistoryCreateTranscriptSnapshotRequest_Deserialize;
+export type HistoryCreateTranscriptSnapshotRequest = HistoryCreateTranscriptSnapshotRequest_Serialize | HistoryCreateTranscriptSnapshotRequest_Deserialize;
 
 export type HistoryCreateTranscriptSnapshotRequest_Deserialize = {
-  historyId: string;
-  reason: TranscriptSnapshotReason;
-  segments: TranscriptSegment_Deserialize[];
+	historyId: string,
+	reason: TranscriptSnapshotReason,
+	segments: TranscriptSegment_Deserialize[],
 };
 
 export type HistoryCreateTranscriptSnapshotRequest_Serialize = {
-  historyId: string;
-  reason: TranscriptSnapshotReason;
-  segments: TranscriptSegment_Serialize[];
+	historyId: string,
+	reason: TranscriptSnapshotReason,
+	segments: TranscriptSegment_Serialize[],
 };
 
 export type HistoryDeleteItemsRequest = {
-  ids: string[];
+	ids: string[],
 };
 
-export type HistoryDraftSource = 'live_record';
+export type HistoryDraftSource = "live_record";
 
-export type HistoryItemKind = 'batch' | 'recording';
+export type HistoryItemKind = "batch" | "recording";
 
-export type HistoryItemMetaPatch =
-  | HistoryItemMetaPatch_Serialize
-  | HistoryItemMetaPatch_Deserialize;
+export type HistoryItemMetaPatch = HistoryItemMetaPatch_Serialize | HistoryItemMetaPatch_Deserialize;
 
 export type HistoryItemMetaPatch_Deserialize = {
-  timestamp?: number | null;
-  duration?: number | null;
-  audioPath?: string | null;
-  audioStatus?: HistoryAudioStatus | null;
-  transcriptPath?: string | null;
-  title?: string | null;
-  previewText?: string | null;
-  icon?: string | null;
-  type?: HistoryItemKind | null;
-  searchContent?: string | null;
-  status?: HistoryItemStatus | null;
-  draftSource?: HistoryDraftSource | null;
+	timestamp?: number | null,
+	duration?: number | null,
+	audioPath?: string | null,
+	audioStatus?: HistoryAudioStatus | null,
+	transcriptPath?: string | null,
+	title?: string | null,
+	previewText?: string | null,
+	icon?: string | null,
+	type?: HistoryItemKind | null,
+	searchContent?: string | null,
+	status?: HistoryItemStatus | null,
+	draftSource?: HistoryDraftSource | null,
 };
 
 export type HistoryItemMetaPatch_Serialize = {
-  timestamp?: number | null;
-  duration?: number | null;
-  audioPath?: string | null;
-  audioStatus?: HistoryAudioStatus | null;
-  transcriptPath?: string | null;
-  title?: string | null;
-  previewText?: string | null;
-  icon?: string | null;
-  type?: HistoryItemKind | null;
-  searchContent?: string | null;
-  status?: HistoryItemStatus | null;
-  draftSource?: HistoryDraftSource | null;
+	timestamp?: number | null,
+	duration?: number | null,
+	audioPath?: string | null,
+	audioStatus?: HistoryAudioStatus | null,
+	transcriptPath?: string | null,
+	title?: string | null,
+	previewText?: string | null,
+	icon?: string | null,
+	type?: HistoryItemKind | null,
+	searchContent?: string | null,
+	status?: HistoryItemStatus | null,
+	draftSource?: HistoryDraftSource | null,
 };
 
 export type HistoryItemRecord = {
-  id: string;
-  timestamp: number;
-  duration: number;
-  audioPath: string;
-  audioStatus: HistoryAudioStatus;
-  transcriptPath: string;
-  title: string;
-  previewText: string;
-  icon: string | null;
-  type: HistoryItemKind;
-  searchContent: string;
-  projectId: string | null;
-  /**
-   *  Single project ownership. `tag_ids` is retained only for legacy backup
-   *  decoding and is not used by new runtime code.
-   */
-  tagIds?: string[];
-  deletedAt?: number | null;
-  status: HistoryItemStatus;
-  draftSource: HistoryDraftSource | null;
+	id: string,
+	timestamp: number,
+	duration: number,
+	audioPath: string,
+	audioStatus: HistoryAudioStatus,
+	transcriptPath: string,
+	title: string,
+	previewText: string,
+	icon: string | null,
+	type: HistoryItemKind,
+	searchContent: string,
+	projectId: string | null,
+	/**
+	 *  Single project ownership. `tag_ids` is retained only for legacy backup
+	 *  decoding and is not used by new runtime code.
+	 */
+	tagIds?: string[],
+	deletedAt?: number | null,
+	status: HistoryItemStatus,
+	draftSource: HistoryDraftSource | null,
 };
 
-export type HistoryItemStatus = 'draft' | 'complete';
+export type HistoryItemStatus = "draft" | "complete";
 
 export type HistoryReplaceTagAssignmentsRequest = {
-  ids: string[];
-  tagIds: string[];
+	ids: string[],
+	tagIds: string[],
 };
 
-export type HistorySaveImportedFileRequest =
-  | HistorySaveImportedFileRequest_Serialize
-  | HistorySaveImportedFileRequest_Deserialize;
+export type HistorySaveImportedFileRequest = HistorySaveImportedFileRequest_Serialize | HistorySaveImportedFileRequest_Deserialize;
 
 export type HistorySaveImportedFileRequest_Deserialize = {
-  id?: string | null;
-  sourcePath: string;
-  segments: TranscriptSegment_Deserialize[];
-  duration: number;
-  tagIds?: string[];
-  projectId: string | null;
-  convertedSourcePath?: string | null;
+	id?: string | null,
+	sourcePath: string,
+	segments: TranscriptSegment_Deserialize[],
+	duration: number,
+	tagIds?: string[],
+	projectId: string | null,
+	convertedSourcePath?: string | null,
 };
 
 export type HistorySaveImportedFileRequest_Serialize = {
-  id?: string | null;
-  sourcePath: string;
-  segments: TranscriptSegment_Serialize[];
-  duration: number;
-  tagIds?: string[];
-  projectId: string | null;
-  convertedSourcePath?: string | null;
+	id?: string | null,
+	sourcePath: string,
+	segments: TranscriptSegment_Serialize[],
+	duration: number,
+	tagIds?: string[],
+	projectId: string | null,
+	convertedSourcePath?: string | null,
 };
 
-export type HistorySaveRecordingRequest =
-  | HistorySaveRecordingRequest_Serialize
-  | HistorySaveRecordingRequest_Deserialize;
+export type HistorySaveRecordingRequest = HistorySaveRecordingRequest_Serialize | HistorySaveRecordingRequest_Deserialize;
 
 export type HistorySaveRecordingRequest_Deserialize = {
-  segments: TranscriptSegment_Deserialize[];
-  duration: number;
-  tagIds?: string[];
-  projectId: string | null;
-  audioBytes?: number[] | null;
-  nativeAudioPath?: string | null;
-  audioExtension?: string | null;
+	segments: TranscriptSegment_Deserialize[],
+	duration: number,
+	tagIds?: string[],
+	projectId: string | null,
+	audioBytes?: number[] | null,
+	nativeAudioPath?: string | null,
+	audioExtension?: string | null,
 };
 
 export type HistorySaveRecordingRequest_Serialize = {
-  segments: TranscriptSegment_Serialize[];
-  duration: number;
-  tagIds?: string[];
-  projectId: string | null;
-  audioBytes?: number[] | null;
-  nativeAudioPath?: string | null;
-  audioExtension?: string | null;
+	segments: TranscriptSegment_Serialize[],
+	duration: number,
+	tagIds?: string[],
+	projectId: string | null,
+	audioBytes?: number[] | null,
+	nativeAudioPath?: string | null,
+	audioExtension?: string | null,
 };
 
-export type HistorySummaryPayload =
-  | HistorySummaryPayload_Serialize
-  | HistorySummaryPayload_Deserialize;
+export type HistorySummaryPayload = HistorySummaryPayload_Serialize | HistorySummaryPayload_Deserialize;
 
 export type HistorySummaryPayload_Deserialize = {
-  activeTemplateId: string;
-  record: TranscriptSummaryRecordPayload | null;
+	activeTemplateId: string,
+	record: TranscriptSummaryRecordPayload | null,
 };
 
 export type HistorySummaryPayload_Serialize = {
-  activeTemplateId: string;
-  record?: TranscriptSummaryRecordPayload | null;
+	activeTemplateId: string,
+	record?: TranscriptSummaryRecordPayload | null,
 };
 
 export type HistoryTrashItemsRequest = {
-  ids: string[];
-  deletedAt: number;
+	ids: string[],
+	deletedAt: number,
 };
 
-export type HistoryUpdateItemMetaRequest =
-  | HistoryUpdateItemMetaRequest_Serialize
-  | HistoryUpdateItemMetaRequest_Deserialize;
+export type HistoryUpdateItemMetaRequest = HistoryUpdateItemMetaRequest_Serialize | HistoryUpdateItemMetaRequest_Deserialize;
 
 export type HistoryUpdateItemMetaRequest_Deserialize = {
-  historyId: string;
-  updates: HistoryItemMetaPatch_Deserialize;
+	historyId: string,
+	updates: HistoryItemMetaPatch_Deserialize,
 };
 
 export type HistoryUpdateItemMetaRequest_Serialize = {
-  historyId: string;
-  updates: HistoryItemMetaPatch_Serialize;
+	historyId: string,
+	updates: HistoryItemMetaPatch_Serialize,
 };
 
 export type HistoryUpdateTagAssignmentsRequest = {
-  ids: string[];
-  addTagIds: string[];
-  removeTagIds: string[];
+	ids: string[],
+	addTagIds: string[],
+	removeTagIds: string[],
 };
 
-export type HistoryUpdateTranscriptRequest =
-  | HistoryUpdateTranscriptRequest_Serialize
-  | HistoryUpdateTranscriptRequest_Deserialize;
+export type HistoryUpdateTranscriptRequest = HistoryUpdateTranscriptRequest_Serialize | HistoryUpdateTranscriptRequest_Deserialize;
 
 export type HistoryUpdateTranscriptRequest_Deserialize = {
-  historyId: string;
-  segments: TranscriptSegment_Deserialize[];
+	historyId: string,
+	segments: TranscriptSegment_Deserialize[],
 };
 
 export type HistoryUpdateTranscriptRequest_Serialize = {
-  historyId: string;
-  segments: TranscriptSegment_Serialize[];
+	historyId: string,
+	segments: TranscriptSegment_Serialize[],
 };
 
-export type HistoryWorkspaceDateFilter = 'all' | 'today' | 'week' | 'month';
+export type HistoryWorkspaceDateFilter = "all" | "today" | "week" | "month";
 
-export type HistoryWorkspaceFilterType = 'all' | 'recording' | 'batch';
+export type HistoryWorkspaceFilterType = "all" | "recording" | "batch";
 
 export type HistoryWorkspaceItemCounts = {
-  untagged: number;
-  inbox?: number;
-  trash: number;
-  byTagId: { [key in string]: number };
-  byProjectId?: { [key in string]: number };
+	untagged: number,
+	inbox?: number,
+	trash: number,
+	byTagId: { [key in string]: number },
+	byProjectId?: { [key in string]: number },
 };
 
 export type HistoryWorkspaceItemSearchMatch = {
-  matchedField: string;
-  titleMatch: HistoryWorkspaceSearchRange | null;
-  displaySnippet: HistoryWorkspaceSearchSnippet;
+	matchedField: string,
+	titleMatch: HistoryWorkspaceSearchRange | null,
+	displaySnippet: HistoryWorkspaceSearchSnippet,
 };
 
 export type HistoryWorkspaceQueryRequest = {
-  scope: HistoryWorkspaceScope;
-  query: string;
-  filterType: HistoryWorkspaceFilterType;
-  dateFilter: HistoryWorkspaceDateFilter;
-  sortOrder: HistoryWorkspaceSortOrder;
-  limit: number;
-  offset: number;
+	scope: HistoryWorkspaceScope,
+	query: string,
+	filterType: HistoryWorkspaceFilterType,
+	dateFilter: HistoryWorkspaceDateFilter,
+	sortOrder: HistoryWorkspaceSortOrder,
+	limit: number,
+	offset: number,
 };
 
 export type HistoryWorkspaceQueryResult = {
-  filteredItems: HistoryItemRecord[];
-  searchMatchByItemId: { [key in string]: HistoryWorkspaceItemSearchMatch | null };
-  filteredItemCount: number;
-  hasMore: boolean;
-  summary: HistoryWorkspaceSummary;
-  itemCounts: HistoryWorkspaceItemCounts;
+	filteredItems: HistoryItemRecord[],
+	searchMatchByItemId: { [key in string]: HistoryWorkspaceItemSearchMatch | null },
+	filteredItemCount: number,
+	hasMore: boolean,
+	summary: HistoryWorkspaceSummary,
+	itemCounts: HistoryWorkspaceItemCounts,
 };
 
-export type HistoryWorkspaceScope =
-  | { kind: 'all' }
-  | { kind: 'inbox' }
-  | { kind: 'project'; projectId: string }
-  | { kind: 'trash' };
+export type HistoryWorkspaceScope = { kind: "all" } | { kind: "inbox" } | { kind: "project"; projectId: string } | { kind: "trash" };
 
 export type HistoryWorkspaceSearchRange = {
-  start: number;
-  end: number;
+	start: number,
+	end: number,
 };
 
 export type HistoryWorkspaceSearchSnippet = {
-  text: string;
-  highlightStart: number;
-  highlightEnd: number;
+	text: string,
+	highlightStart: number,
+	highlightEnd: number,
 };
 
-export type HistoryWorkspaceSortOrder =
-  | 'newest'
-  | 'oldest'
-  | 'duration_desc'
-  | 'duration_asc'
-  | 'title_asc';
+export type HistoryWorkspaceSortOrder = "newest" | "oldest" | "duration_desc" | "duration_asc" | "title_asc";
 
 export type HistoryWorkspaceSummary = {
-  totalItems: number;
-  totalDuration: number;
-  latestTimestamp: number | null;
-  recordingCount: number;
-  batchCount: number;
+	totalItems: number,
+	totalDuration: number,
+	latestTimestamp: number | null,
+	recordingCount: number,
+	batchCount: number,
 };
 
 export type HotwordRuleRecord = {
-  id: string;
-  text: string;
+	id: string,
+	text: string,
 };
 
 export type HotwordSetRecord = {
-  id: string;
-  name: string;
-  enabled: boolean;
-  rules: HotwordRuleRecord[];
+	id: string,
+	name: string,
+	enabled: boolean,
+	rules: HotwordRuleRecord[],
 };
 
 export type HybridLogicalClock = {
-  physical_ms: number;
-  logical: number;
+	physical_ms: number,
+	logical: number,
 };
 
 /**
@@ -1555,2059 +1326,1899 @@ export type HybridLogicalClock = {
  *  - [`LanguageMode::None`]: not a speech-recognition model; no picker
  */
 export type LanguageMode =
-  /**  The engine accepts an explicit language parameter. */
-  | 'selectable'
-  /**  The engine ignores language overrides and detects language itself. */
-  | 'auto'
-  /**  The engine always recognizes its single supported language. */
-  | 'fixed'
-  /**  Not applicable (companion models such as VAD or speaker diarization). */
-  | 'none';
+/**  The engine accepts an explicit language parameter. */
+"selectable" |
+/**  The engine ignores language overrides and detects language itself. */
+"auto" |
+/**  The engine always recognizes its single supported language. */
+"fixed" |
+/**  Not applicable (companion models such as VAD or speaker diarization). */
+"none";
 
 export type LiveRecordingDraftResult = {
-  item: HistoryItemRecord;
-  audioAbsolutePath: string;
+	item: HistoryItemRecord,
+	audioAbsolutePath: string,
 };
 
 export type LiveTranscriptionDiagnosticsSnapshot = {
-  activeSources: number;
-  activePipelines: number;
-  activeConsumers: number;
-  sharedPipelines: number;
-  avoidedFeedCount: number;
+	activeSources: number,
+	activePipelines: number,
+	activeConsumers: number,
+	sharedPipelines: number,
+	avoidedFeedCount: number,
 };
 
-export type LlmCapabilityPolicy = 'strict' | 'compatible';
+export type LlmCapabilityPolicy = "strict" | "compatible";
 
 export type LlmCompletionOptions = {
-  temperature?: number | null;
-  maxOutputTokens?: number | null;
-  reasoningEnabled?: boolean | null;
-  reasoningLevel?: string | null;
-  responseFormat?: LlmResponseFormat;
-  promptCache?: LlmPromptCachePolicy;
-  capabilityPolicy?: LlmCapabilityPolicy;
+	temperature?: number | null,
+	maxOutputTokens?: number | null,
+	reasoningEnabled?: boolean | null,
+	reasoningLevel?: string | null,
+	responseFormat?: LlmResponseFormat,
+	promptCache?: LlmPromptCachePolicy,
+	capabilityPolicy?: LlmCapabilityPolicy,
 };
 
-export type LlmCompletionRequest =
-  | LlmCompletionRequest_Serialize
-  | LlmCompletionRequest_Deserialize;
+export type LlmCompletionRequest = LlmCompletionRequest_Serialize | LlmCompletionRequest_Deserialize;
 
 export type LlmCompletionRequest_Deserialize = {
-  config: LlmConfig_Deserialize;
-  systemPrompt?: string | null;
-  input: string;
-  options?: LlmCompletionOptions;
-  source?: LlmGenerateSource | null;
+	config: LlmConfig_Deserialize,
+	systemPrompt?: string | null,
+	input: string,
+	options?: LlmCompletionOptions,
+	source?: LlmGenerateSource | null,
 };
 
 export type LlmCompletionRequest_Serialize = {
-  config: LlmConfig_Serialize;
-  systemPrompt: string | null;
-  input: string;
-  options: LlmCompletionOptions;
-  source: LlmGenerateSource | null;
+	config: LlmConfig_Serialize,
+	systemPrompt: string | null,
+	input: string,
+	options: LlmCompletionOptions,
+	source: LlmGenerateSource | null,
 };
 
-export type LlmCompletionResponse =
-  | LlmCompletionResponse_Serialize
-  | LlmCompletionResponse_Deserialize;
+export type LlmCompletionResponse = LlmCompletionResponse_Serialize | LlmCompletionResponse_Deserialize;
 
 export type LlmCompletionResponse_Deserialize = {
-  text: string;
-  json: unknown | null;
-  usage: TokenUsage | null;
-  execution: LlmExecutionMetadata;
+	text: string,
+	json: unknown | null,
+	usage: TokenUsage | null,
+	execution: LlmExecutionMetadata,
 };
 
 export type LlmCompletionResponse_Serialize = {
-  text: string;
-  json?: unknown | null;
-  usage: TokenUsage | null;
-  execution: LlmExecutionMetadata;
+	text: string,
+	json?: unknown | null,
+	usage: TokenUsage | null,
+	execution: LlmExecutionMetadata,
 };
 
 export type LlmConfig = LlmConfig_Serialize | LlmConfig_Deserialize;
 
 export type LlmConfig_Deserialize = {
-  provider: LlmProvider_Deserialize;
-  strategy: LlmProviderStrategy;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  apiPath: string | null;
-  apiVersion: string | null;
-  temperature: number | null;
-  reasoningEnabled: boolean | null;
-  reasoningLevel: string | null;
-  timeoutSeconds: number | null;
+	provider: LlmProvider_Deserialize,
+	strategy: LlmProviderStrategy,
+	baseUrl: string,
+	apiKey: string,
+	model: string,
+	apiPath: string | null,
+	apiVersion: string | null,
+	temperature: number | null,
+	reasoningEnabled: boolean | null,
+	reasoningLevel: string | null,
+	timeoutSeconds: number | null,
 };
 
 export type LlmConfig_Serialize = {
-  provider: LlmProvider_Serialize;
-  strategy: LlmProviderStrategy;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  apiPath: string | null;
-  apiVersion: string | null;
-  temperature: number | null;
-  reasoningEnabled: boolean | null;
-  reasoningLevel: string | null;
-  timeoutSeconds: number | null;
+	provider: LlmProvider_Serialize,
+	strategy: LlmProviderStrategy,
+	baseUrl: string,
+	apiKey: string,
+	model: string,
+	apiPath: string | null,
+	apiVersion: string | null,
+	temperature: number | null,
+	reasoningEnabled: boolean | null,
+	reasoningLevel: string | null,
+	timeoutSeconds: number | null,
 };
 
 export type LlmExecutionMetadata = {
-  requestedFormat: LlmResponseFormatKind;
-  appliedFormat: LlmResponseFormatKind;
-  warnings: string[];
-  attempts: number;
+	requestedFormat: LlmResponseFormatKind,
+	appliedFormat: LlmResponseFormatKind,
+	warnings: string[],
+	attempts: number,
 };
 
 export type LlmGenerateRequest = LlmGenerateRequest_Serialize | LlmGenerateRequest_Deserialize;
 
 export type LlmGenerateRequest_Deserialize = {
-  config: LlmConfig_Deserialize;
-  input: string;
-  source: LlmGenerateSource | null;
+	config: LlmConfig_Deserialize,
+	input: string,
+	source: LlmGenerateSource | null,
 };
 
 export type LlmGenerateRequest_Serialize = {
-  config: LlmConfig_Serialize;
-  input: string;
-  source: LlmGenerateSource | null;
+	config: LlmConfig_Serialize,
+	input: string,
+	source: LlmGenerateSource | null,
 };
 
-export type LlmGenerateSource = 'title_generation' | 'connection_test' | 'generic';
+export type LlmGenerateSource = "title_generation" | "connection_test" | "generic";
 
-export type LlmModality = 'text' | 'image' | 'audio' | 'video' | 'pdf';
+export type LlmModality = "text" | "image" | "audio" | "video" | "pdf";
 
-export type LlmModelMetadataSource = 'provider' | 'models_dev';
+export type LlmModelMetadataSource = "provider" | "models_dev";
 
 export type LlmModelSummary = {
-  model: string;
-  displayName?: string | null;
-  inputPrice: number | null;
-  outputPrice: number | null;
-  cacheReadPrice?: number | null;
-  cacheWritePrice?: number | null;
-  contextWindow: number | null;
-  maxOutputTokens: number | null;
-  knowledgeCutoff?: string | null;
-  releaseDate?: string | null;
-  lastUpdated?: string | null;
-  inputModalities?: LlmModality[];
-  outputModalities?: LlmModality[];
-  supportsMultimodal: boolean | null;
-  supportsTools: boolean | null;
-  supportsReasoning: boolean | null;
-  supportsStructuredOutput?: boolean | null;
-  supportsPromptCaching?: boolean | null;
-  metadataSources?: LlmModelMetadataSource[];
+	model: string,
+	displayName?: string | null,
+	inputPrice: number | null,
+	outputPrice: number | null,
+	cacheReadPrice?: number | null,
+	cacheWritePrice?: number | null,
+	contextWindow: number | null,
+	maxOutputTokens: number | null,
+	knowledgeCutoff?: string | null,
+	releaseDate?: string | null,
+	lastUpdated?: string | null,
+	inputModalities?: LlmModality[],
+	outputModalities?: LlmModality[],
+	supportsMultimodal: boolean | null,
+	supportsTools: boolean | null,
+	supportsReasoning: boolean | null,
+	supportsStructuredOutput?: boolean | null,
+	supportsPromptCaching?: boolean | null,
+	metadataSources?: LlmModelMetadataSource[],
 };
 
 export type LlmModelsRequest = LlmModelsRequest_Serialize | LlmModelsRequest_Deserialize;
 
 export type LlmModelsRequest_Deserialize = {
-  provider: LlmProvider_Deserialize;
-  strategy?: LlmProviderStrategy | null;
-  baseUrl: string;
-  apiKey: string;
+	provider: LlmProvider_Deserialize,
+	strategy?: LlmProviderStrategy | null,
+	baseUrl: string,
+	apiKey: string,
 };
 
 export type LlmModelsRequest_Serialize = {
-  provider: LlmProvider_Serialize;
-  strategy: LlmProviderStrategy | null;
-  baseUrl: string;
-  apiKey: string;
+	provider: LlmProvider_Serialize,
+	strategy: LlmProviderStrategy | null,
+	baseUrl: string,
+	apiKey: string,
 };
 
-export type LlmPromptCachePolicy = 'disabled' | 'automatic';
+export type LlmPromptCachePolicy = "disabled" | "automatic";
 
 export type LlmProvider = LlmProvider_Serialize | LlmProvider_Deserialize;
 
-export type LlmProviderStrategy =
-  | 'open_ai'
-  | 'open_ai_responses'
-  | 'azure_openai'
-  | 'anthropic'
-  | 'gemini'
-  | 'ollama'
-  | 'deep_seek'
-  | 'moonshot_ai'
-  | 'moonshot_cn'
-  | 'xiaomi'
-  | 'kimi'
-  | 'silicon_flow'
-  | 'qwen'
-  | 'qwen_portal'
-  | 'minimax_global'
-  | 'minimax_cn'
-  | 'open_router'
-  | 'lm_studio'
-  | 'groq'
-  | 'x_ai'
-  | 'mistral_ai'
-  | 'perplexity'
-  | 'volcengine'
-  | 'chatglm'
-  | 'copilot'
-  | 'google_translate'
-  | 'google_translate_free'
-  | 'open_ai_compatible'
-  | 'open_ai_compatible_custom_path';
+export type LlmProviderStrategy = "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "open_router" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "google_translate" | "google_translate_free" | "open_ai_compatible" | "open_ai_compatible_custom_path";
 
-export type LlmProvider_Deserialize =
-  | ({ Builtin: BuiltinLlmProvider_Deserialize } & { Custom?: never })
-  | ({ Custom: string } & { Builtin?: never });
+export type LlmProvider_Deserialize = ({ Builtin: BuiltinLlmProvider_Deserialize }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
 
-export type LlmProvider_Serialize =
-  | ({ Builtin: BuiltinLlmProvider_Serialize } & { Custom?: never })
-  | ({ Custom: string } & { Builtin?: never });
+export type LlmProvider_Serialize = ({ Builtin: BuiltinLlmProvider_Serialize }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
 
-export type LlmResponseFormat =
-  | { type: 'text' }
-  | { type: 'json_object' }
-  | { type: 'json_schema'; name: string; schema: unknown };
+export type LlmResponseFormat = { type: "text" } | { type: "json_object" } | { type: "json_schema"; name: string; schema: unknown };
 
-export type LlmResponseFormatKind = 'text' | 'json_object' | 'json_schema';
+export type LlmResponseFormatKind = "text" | "json_object" | "json_schema";
 
 export type LlmSegmentInput = {
-  id: string;
-  text: string;
+	id: string,
+	text: string,
 };
 
 export type LlmStreamDelta = {
-  text: string;
-  delta: string;
+	text: string,
+	delta: string,
 };
 
 export type LlmTaskChunkPayload<T> = {
-  taskId: string;
-  taskType: LlmTaskType;
-  chunkIndex: number;
-  totalChunks: number;
-  items: T[];
+	taskId: string,
+	taskType: LlmTaskType,
+	chunkIndex: number,
+	totalChunks: number,
+	items: T[],
 };
 
 export type LlmTaskProgressPayload = {
-  taskId: string;
-  taskType: LlmTaskType;
-  completedChunks: number;
-  totalChunks: number;
+	taskId: string,
+	taskType: LlmTaskType,
+	completedChunks: number,
+	totalChunks: number,
 };
 
 export type LlmTaskTextPayload = {
-  taskId: string;
-  taskType: LlmTaskType;
-  text: string;
-  delta: string;
-  reset: boolean;
+	taskId: string,
+	taskType: LlmTaskType,
+	text: string,
+	delta: string,
+	reset: boolean,
 };
 
-export type LlmTaskType = 'polish' | 'translate' | 'summary';
+export type LlmTaskType = "polish" | "translate" | "summary";
 
-export type LlmUsageCategory =
-  | 'summary'
-  | 'translation'
-  | 'polish'
-  | 'title_generation'
-  | 'connection_test'
-  | 'generic';
+export type LlmUsageCategory = "summary" | "translation" | "polish" | "title_generation" | "connection_test" | "generic";
 
-export type LlmUsageDashboardStats =
-  | LlmUsageDashboardStats_Serialize
-  | LlmUsageDashboardStats_Deserialize;
+export type LlmUsageDashboardStats = LlmUsageDashboardStats_Serialize | LlmUsageDashboardStats_Deserialize;
 
 export type LlmUsageDashboardStats_Deserialize = {
-  startedAt: string | null;
-  lastUpdatedAt: string | null;
-  trackingSinceDisplay: string | null;
-  lastUpdatedDisplay: string | null;
-  totals: DashboardUsageBucket;
-  byProvider: UsageBreakdown[];
-  byProviderTopRows: UsageBreakdown[];
-  byProviderMaxValue: number;
-  byCategory: UsageBreakdown[];
-  byCategoryTopRows: UsageBreakdown[];
-  byCategoryMaxValue: number;
-  recentDaily: UsageTrendPoint[];
+	startedAt: string | null,
+	lastUpdatedAt: string | null,
+	trackingSinceDisplay: string | null,
+	lastUpdatedDisplay: string | null,
+	totals: DashboardUsageBucket,
+	byProvider: UsageBreakdown[],
+	byProviderTopRows: UsageBreakdown[],
+	byProviderMaxValue: number,
+	byCategory: UsageBreakdown[],
+	byCategoryTopRows: UsageBreakdown[],
+	byCategoryMaxValue: number,
+	recentDaily: UsageTrendPoint[],
 };
 
 export type LlmUsageDashboardStats_Serialize = {
-  startedAt?: string | null;
-  lastUpdatedAt?: string | null;
-  trackingSinceDisplay?: string | null;
-  lastUpdatedDisplay?: string | null;
-  totals: DashboardUsageBucket;
-  byProvider: UsageBreakdown[];
-  byProviderTopRows: UsageBreakdown[];
-  byProviderMaxValue: number;
-  byCategory: UsageBreakdown[];
-  byCategoryTopRows: UsageBreakdown[];
-  byCategoryMaxValue: number;
-  recentDaily: UsageTrendPoint[];
+	startedAt?: string | null,
+	lastUpdatedAt?: string | null,
+	trackingSinceDisplay?: string | null,
+	lastUpdatedDisplay?: string | null,
+	totals: DashboardUsageBucket,
+	byProvider: UsageBreakdown[],
+	byProviderTopRows: UsageBreakdown[],
+	byProviderMaxValue: number,
+	byCategory: UsageBreakdown[],
+	byCategoryTopRows: UsageBreakdown[],
+	byCategoryMaxValue: number,
+	recentDaily: UsageTrendPoint[],
 };
 
-export type LlmUsageEventPayload =
-  | LlmUsageEventPayload_Serialize
-  | LlmUsageEventPayload_Deserialize;
+export type LlmUsageEventPayload = LlmUsageEventPayload_Serialize | LlmUsageEventPayload_Deserialize;
 
 export type LlmUsageEventPayload_Deserialize = {
-  occurredAt: string;
-  provider: LlmProvider_Deserialize;
-  model: string;
-  category: LlmUsageCategory;
-  usage: TokenUsage | null;
+	occurredAt: string,
+	provider: LlmProvider_Deserialize,
+	model: string,
+	category: LlmUsageCategory,
+	usage: TokenUsage | null,
 };
 
 export type LlmUsageEventPayload_Serialize = {
-  occurredAt: string;
-  provider: LlmProvider_Serialize;
-  model: string;
-  category: LlmUsageCategory;
-  usage: TokenUsage | null;
+	occurredAt: string,
+	provider: LlmProvider_Serialize,
+	model: string,
+	category: LlmUsageCategory,
+	usage: TokenUsage | null,
 };
 
-export type LocalAsrEngine = 'sherpa-onnx' | 'llama-cpp';
+export type LocalAsrEngine = "sherpa-onnx" | "llama-cpp";
 
 export type ModelCatalogGroup = ModelCatalogGroup_Serialize | ModelCatalogGroup_Deserialize;
 
 export type ModelCatalogGroup_Deserialize = {
-  key: string;
-  models: ModelCatalogModel_Deserialize[];
+	key: string,
+	models: ModelCatalogModel_Deserialize[],
 };
 
 export type ModelCatalogGroup_Serialize = {
-  key: string;
-  models: ModelCatalogModel_Serialize[];
+	key: string,
+	models: ModelCatalogModel_Serialize[],
 };
 
 export type ModelCatalogModel = ModelCatalogModel_Serialize | ModelCatalogModel_Deserialize;
 
 export type ModelCatalogModel_Deserialize = {
-  id: string;
-  name: string;
-  description: string;
-  type: string;
-  modes: string[] | null;
-  /**
-   *  All languages the model can recognize, sorted ascending ISO 639 codes
-   *  (`yue` covers Cantonese). Empty for non-ASR models.
-   */
-  languages: string[];
-  languageMode: LanguageMode;
-  size: string;
-  artifacts: PresetModelArtifact[];
-  isRecommended: boolean | null;
-  isArchive: boolean;
-  filename: string | null;
-  engine: string;
-  rules: ModelRules;
-  groupId: string | null;
-  versionLabel: string | null;
-  installPath: string;
-  downloadPath: string;
-  isInstalled: boolean;
+	id: string,
+	name: string,
+	description: string,
+	type: string,
+	modes: string[] | null,
+	/**
+	 *  All languages the model can recognize, sorted ascending ISO 639 codes
+	 *  (`yue` covers Cantonese). Empty for non-ASR models.
+	 */
+	languages: string[],
+	languageMode: LanguageMode,
+	size: string,
+	artifacts: PresetModelArtifact[],
+	isRecommended: boolean | null,
+	isArchive: boolean,
+	filename: string | null,
+	engine: string,
+	rules: ModelRules,
+	groupId: string | null,
+	versionLabel: string | null,
+	installPath: string,
+	downloadPath: string,
+	isInstalled: boolean,
 };
 
 export type ModelCatalogModel_Serialize = {
-  id: string;
-  name: string;
-  description: string;
-  type: string;
-  modes?: string[] | null;
-  /**
-   *  All languages the model can recognize, sorted ascending ISO 639 codes
-   *  (`yue` covers Cantonese). Empty for non-ASR models.
-   */
-  languages: string[];
-  languageMode: LanguageMode;
-  size: string;
-  artifacts?: PresetModelArtifact[];
-  isRecommended?: boolean | null;
-  isArchive: boolean;
-  filename?: string | null;
-  engine: string;
-  rules: ModelRules;
-  groupId?: string | null;
-  versionLabel?: string | null;
-  installPath: string;
-  downloadPath: string;
-  isInstalled: boolean;
+	id: string,
+	name: string,
+	description: string,
+	type: string,
+	modes?: string[] | null,
+	/**
+	 *  All languages the model can recognize, sorted ascending ISO 639 codes
+	 *  (`yue` covers Cantonese). Empty for non-ASR models.
+	 */
+	languages: string[],
+	languageMode: LanguageMode,
+	size: string,
+	artifacts?: PresetModelArtifact[],
+	isRecommended?: boolean | null,
+	isArchive: boolean,
+	filename?: string | null,
+	engine: string,
+	rules: ModelRules,
+	groupId?: string | null,
+	versionLabel?: string | null,
+	installPath: string,
+	downloadPath: string,
+	isInstalled: boolean,
 };
 
 export type ModelCatalogPathMatchToken = {
-  id: string;
-  token: string;
+	id: string,
+	token: string,
 };
 
-export type ModelCatalogRestoreDefaults =
-  | ModelCatalogRestoreDefaults_Serialize
-  | ModelCatalogRestoreDefaults_Deserialize;
+export type ModelCatalogRestoreDefaults = ModelCatalogRestoreDefaults_Serialize | ModelCatalogRestoreDefaults_Deserialize;
 
 export type ModelCatalogRestoreDefaults_Deserialize = {
-  streamingModelPath: string | null;
-  batchModelPath: string | null;
-  vadModelPath: string | null;
-  punctuationModelPath: string | null;
-  speakerSegmentationModelPath: string | null;
-  speakerEmbeddingModelPath: string | null;
-  enableItn: boolean;
-  batchVadEnabled: boolean;
-  vadBufferSize: number | null;
-  maxConcurrent: number;
+	streamingModelPath: string | null,
+	batchModelPath: string | null,
+	vadModelPath: string | null,
+	punctuationModelPath: string | null,
+	speakerSegmentationModelPath: string | null,
+	speakerEmbeddingModelPath: string | null,
+	enableItn: boolean,
+	batchVadEnabled: boolean,
+	vadBufferSize: number | null,
+	maxConcurrent: number,
 };
 
 export type ModelCatalogRestoreDefaults_Serialize = {
-  streamingModelPath?: string | null;
-  batchModelPath?: string | null;
-  vadModelPath?: string | null;
-  punctuationModelPath: string | null;
-  speakerSegmentationModelPath: string | null;
-  speakerEmbeddingModelPath: string | null;
-  enableItn: boolean;
-  batchVadEnabled: boolean;
-  vadBufferSize: number | null;
-  maxConcurrent: number;
+	streamingModelPath?: string | null,
+	batchModelPath?: string | null,
+	vadModelPath?: string | null,
+	punctuationModelPath: string | null,
+	speakerSegmentationModelPath: string | null,
+	speakerEmbeddingModelPath: string | null,
+	enableItn: boolean,
+	batchVadEnabled: boolean,
+	vadBufferSize: number | null,
+	maxConcurrent: number,
 };
 
 export type ModelCatalogSection = ModelCatalogSection_Serialize | ModelCatalogSection_Deserialize;
 
-export type ModelCatalogSectionType =
-  | 'asr'
-  | 'punctuation'
-  | 'vad'
-  | 'speaker-segmentation'
-  | 'speaker-embedding';
+export type ModelCatalogSectionType = "asr" | "punctuation" | "vad" | "speaker-segmentation" | "speaker-embedding";
 
 export type ModelCatalogSection_Deserialize = {
-  type: ModelCatalogSectionType;
-  groups: ModelCatalogGroup_Deserialize[];
+	type: ModelCatalogSectionType,
+	groups: ModelCatalogGroup_Deserialize[],
 };
 
 export type ModelCatalogSection_Serialize = {
-  type: ModelCatalogSectionType;
-  groups: ModelCatalogGroup_Serialize[];
+	type: ModelCatalogSectionType,
+	groups: ModelCatalogGroup_Serialize[],
 };
 
 export type ModelCatalogSelectedIds = {
-  streaming: string | null;
-  batch: string | null;
-  speakerSegmentation: string | null;
-  speakerEmbedding: string | null;
+	streaming: string | null,
+	batch: string | null,
+	speakerSegmentation: string | null,
+	speakerEmbedding: string | null,
 };
 
 export type ModelCatalogSelectionOptions = {
-  streaming: ModelSelectionOption[];
-  batch: ModelSelectionOption[];
-  speakerSegmentation: ModelSelectionOption[];
-  speakerEmbedding: ModelSelectionOption[];
+	streaming: ModelSelectionOption[],
+	batch: ModelSelectionOption[],
+	speakerSegmentation: ModelSelectionOption[],
+	speakerEmbedding: ModelSelectionOption[],
 };
 
-export type ModelCatalogSnapshot =
-  | ModelCatalogSnapshot_Serialize
-  | ModelCatalogSnapshot_Deserialize;
+export type ModelCatalogSnapshot = ModelCatalogSnapshot_Serialize | ModelCatalogSnapshot_Deserialize;
 
 export type ModelCatalogSnapshot_Deserialize = {
-  modelsDir: string;
-  models: ModelCatalogModel_Deserialize[];
-  sections: ModelCatalogSection_Deserialize[];
-  selectionOptions: ModelCatalogSelectionOptions;
-  modelPathById: { [key in string]: string };
-  modelIdByNormalizedPath: { [key in string]: string };
-  pathMatchTokens: ModelCatalogPathMatchToken[];
-  dependencyRequestsByModelId: { [key in string]: ModelDependencyRequest[] };
-  restoreDefaults: ModelCatalogRestoreDefaults_Deserialize;
+	modelsDir: string,
+	models: ModelCatalogModel_Deserialize[],
+	sections: ModelCatalogSection_Deserialize[],
+	selectionOptions: ModelCatalogSelectionOptions,
+	modelPathById: { [key in string]: string },
+	modelIdByNormalizedPath: { [key in string]: string },
+	pathMatchTokens: ModelCatalogPathMatchToken[],
+	dependencyRequestsByModelId: { [key in string]: ModelDependencyRequest[] },
+	restoreDefaults: ModelCatalogRestoreDefaults_Deserialize,
 };
 
 export type ModelCatalogSnapshot_Serialize = {
-  modelsDir: string;
-  models: ModelCatalogModel_Serialize[];
-  sections: ModelCatalogSection_Serialize[];
-  selectionOptions: ModelCatalogSelectionOptions;
-  modelPathById: { [key in string]: string };
-  modelIdByNormalizedPath: { [key in string]: string };
-  pathMatchTokens: ModelCatalogPathMatchToken[];
-  dependencyRequestsByModelId: { [key in string]: ModelDependencyRequest[] };
-  restoreDefaults: ModelCatalogRestoreDefaults_Serialize;
+	modelsDir: string,
+	models: ModelCatalogModel_Serialize[],
+	sections: ModelCatalogSection_Serialize[],
+	selectionOptions: ModelCatalogSelectionOptions,
+	modelPathById: { [key in string]: string },
+	modelIdByNormalizedPath: { [key in string]: string },
+	pathMatchTokens: ModelCatalogPathMatchToken[],
+	dependencyRequestsByModelId: { [key in string]: ModelDependencyRequest[] },
+	restoreDefaults: ModelCatalogRestoreDefaults_Serialize,
 };
 
-export type ModelDependencyConfigKey = 'vadModelPath' | 'punctuationModelPath';
+export type ModelDependencyConfigKey = "vadModelPath" | "punctuationModelPath";
 
 export type ModelDependencyRequest = {
-  modelId: string;
-  configKey: ModelDependencyConfigKey;
-  installPath: string;
-  isInstalled: boolean;
+	modelId: string,
+	configKey: ModelDependencyConfigKey,
+	installPath: string,
+	isInstalled: boolean,
 };
 
 export type ModelFileConfig = {
-  encoder: string | null;
-  decoder: string | null;
-  model: string | null;
-  joiner: string | null;
-  tokens: string | null;
-  convFrontend: string | null;
-  encoderAdaptor: string | null;
-  llm: string | null;
-  embedding: string | null;
-  tokenizer: string | null;
-  mmproj: string | null;
-  preprocessor: string | null;
-  uncachedDecoder: string | null;
-  cachedDecoder: string | null;
-  mergedDecoder: string | null;
+	encoder: string | null,
+	decoder: string | null,
+	model: string | null,
+	joiner: string | null,
+	tokens: string | null,
+	convFrontend: string | null,
+	encoderAdaptor: string | null,
+	llm: string | null,
+	embedding: string | null,
+	tokenizer: string | null,
+	mmproj: string | null,
+	preprocessor: string | null,
+	uncachedDecoder: string | null,
+	cachedDecoder: string | null,
+	mergedDecoder: string | null,
 };
 
 export type ModelRuleInput = {
-  requiresVad: boolean;
-  requiresPunctuation: boolean;
+	requiresVad: boolean,
+	requiresPunctuation: boolean,
 };
 
 /**  Companion-model requirements for a preset model. */
 export type ModelRules = {
-  requiresVad: boolean;
-  requiresPunctuation: boolean;
-  timestampSupportHint: TimestampSupportHint | null;
-  initialRefreshRateMs: number | null;
+	requiresVad: boolean,
+	requiresPunctuation: boolean,
+	timestampSupportHint: TimestampSupportHint | null,
+	initialRefreshRateMs: number | null,
 };
 
 export type ModelRulesInput = {
-  live: ModelRuleInput | null;
-  batch: ModelRuleInput | null;
+	live: ModelRuleInput | null,
+	batch: ModelRuleInput | null,
 };
 
 export type ModelSelectionOption = {
-  id: string;
-  label: string;
-  installPath: string;
-  isInstalled: boolean;
+	id: string,
+	label: string,
+	installPath: string,
+	isInstalled: boolean,
 };
 
 export type ModelSelectionPaths = {
-  streamingModelPath: string;
-  batchModelPath: string;
-  speakerSegmentationModelPath: string;
-  speakerEmbeddingModelPath: string;
+	streamingModelPath: string,
+	batchModelPath: string,
+	speakerSegmentationModelPath: string,
+	speakerEmbeddingModelPath: string,
 };
 
 export type ModelSummaryInput = {
-  id: string;
-  name: string;
+	id: string,
+	name: string,
 };
 
 export type OnlineAsrBatchCapability = {
-  requiresApiKey: boolean;
-  requiredConfigFields: string[];
-  localFileMode: OnlineAsrLocalFileBatchMode;
+	requiresApiKey: boolean,
+	requiredConfigFields: string[],
+	localFileMode: OnlineAsrLocalFileBatchMode,
 };
 
 export type OnlineAsrCapability = {
-  supported: boolean | null;
-  requiresApiKey: boolean;
-  requiredConfigFields: string[];
+	supported: boolean | null,
+	requiresApiKey: boolean,
+	requiredConfigFields: string[],
 };
 
 export type OnlineAsrLocalFileBatchMode = {
-  supported: boolean;
-  endpoint: string;
-  resourceId: string;
-  unsupportedMessage: string;
+	supported: boolean,
+	endpoint: string,
+	resourceId: string,
+	unsupportedMessage: string,
 };
 
 export type OnlineAsrProvider = {
-  id: string;
-  /**
-   *  Languages the hosted model can recognize, sorted ascending ISO 639
-   *  codes (`yue` covers Cantonese).
-   */
-  languages: string[];
-  languageMode: LanguageMode;
-  profileId: string;
-  defaults: unknown;
-  streaming: OnlineAsrCapability;
-  batch: OnlineAsrBatchCapability;
+	id: string,
+	/**
+	 *  Languages the hosted model can recognize, sorted ascending ISO 639
+	 *  codes (`yue` covers Cantonese).
+	 */
+	languages: string[],
+	languageMode: LanguageMode,
+	profileId: string,
+	defaults: unknown,
+	streaming: OnlineAsrCapability,
+	batch: OnlineAsrBatchCapability,
 };
 
 export type OnlineAsrProviderRequest = {
-  providerId: string;
-  profileId: string;
-  config?: unknown;
+	providerId: string,
+	profileId: string,
+	config?: unknown,
 };
 
 export type OverviewStats = OverviewStats_Serialize | OverviewStats_Deserialize;
 
 export type OverviewStats_Deserialize = {
-  itemCount: number;
-  itemCountDisplay: string;
-  tagCount: number;
-  tagCountDisplay: string;
-  totalDurationSeconds: number;
-  totalDurationDisplay: string;
-  transcriptCharacterCount: number | null;
-  transcriptCharacterCountDisplay: string | null;
-  recordingCount: number;
-  recordingCountDisplay: string;
-  batchCount: number;
-  batchCountDisplay: string;
-  untaggedCount: number;
-  untaggedCountDisplay: string;
-  taggedCount: number;
-  taggedCountDisplay: string;
-  recentDailyItems: ContentTrendPoint[];
-  isDeepLoaded: boolean;
+	itemCount: number,
+	itemCountDisplay: string,
+	tagCount: number,
+	tagCountDisplay: string,
+	totalDurationSeconds: number,
+	totalDurationDisplay: string,
+	transcriptCharacterCount: number | null,
+	transcriptCharacterCountDisplay: string | null,
+	recordingCount: number,
+	recordingCountDisplay: string,
+	batchCount: number,
+	batchCountDisplay: string,
+	untaggedCount: number,
+	untaggedCountDisplay: string,
+	taggedCount: number,
+	taggedCountDisplay: string,
+	recentDailyItems: ContentTrendPoint[],
+	isDeepLoaded: boolean,
 };
 
 export type OverviewStats_Serialize = {
-  itemCount: number;
-  itemCountDisplay: string;
-  tagCount: number;
-  tagCountDisplay: string;
-  totalDurationSeconds: number;
-  totalDurationDisplay: string;
-  transcriptCharacterCount?: number | null;
-  transcriptCharacterCountDisplay?: string | null;
-  recordingCount: number;
-  recordingCountDisplay: string;
-  batchCount: number;
-  batchCountDisplay: string;
-  untaggedCount: number;
-  untaggedCountDisplay: string;
-  taggedCount: number;
-  taggedCountDisplay: string;
-  recentDailyItems: ContentTrendPoint[];
-  isDeepLoaded: boolean;
+	itemCount: number,
+	itemCountDisplay: string,
+	tagCount: number,
+	tagCountDisplay: string,
+	totalDurationSeconds: number,
+	totalDurationDisplay: string,
+	transcriptCharacterCount?: number | null,
+	transcriptCharacterCountDisplay?: string | null,
+	recordingCount: number,
+	recordingCountDisplay: string,
+	batchCount: number,
+	batchCountDisplay: string,
+	untaggedCount: number,
+	untaggedCountDisplay: string,
+	taggedCount: number,
+	taggedCountDisplay: string,
+	recentDailyItems: ContentTrendPoint[],
+	isDeepLoaded: boolean,
 };
 
 export type PathStatusesInput = {
-  liveModel: RuntimePathStatus | null;
-  batchModel: RuntimePathStatus | null;
-  vad: RuntimePathStatus | null;
-  punctuation: RuntimePathStatus | null;
+	liveModel: RuntimePathStatus | null,
+	batchModel: RuntimePathStatus | null,
+	vad: RuntimePathStatus | null,
+	punctuation: RuntimePathStatus | null,
 };
 
 export type PolishKeywordSetRecord = {
-  id: string;
-  name: string;
-  enabled: boolean;
-  keywords: string;
+	id: string,
+	name: string,
+	enabled: boolean,
+	keywords: string,
 };
 
-export type PolishPresetId =
-  | ({ Builtin: BuiltinPolishPresetId } & { Custom?: never })
-  | ({ Custom: string } & { Builtin?: never });
+export type PolishPresetId = ({ Builtin: BuiltinPolishPresetId }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
 
 export type PolishPresetRecord = {
-  id: string;
-  name: string;
-  context: string;
+	id: string,
+	name: string,
+	context: string,
 };
 
-export type PolishSegmentsRequest =
-  | PolishSegmentsRequest_Serialize
-  | PolishSegmentsRequest_Deserialize;
+export type PolishSegmentsRequest = PolishSegmentsRequest_Serialize | PolishSegmentsRequest_Deserialize;
 
 export type PolishSegmentsRequest_Deserialize = {
-  taskId: string;
-  config: LlmConfig_Deserialize;
-  segments: LlmSegmentInput[];
-  chunkSize: number | null;
-  context: string | null;
-  keywords: string | null;
+	taskId: string,
+	config: LlmConfig_Deserialize,
+	segments: LlmSegmentInput[],
+	chunkSize: number | null,
+	context: string | null,
+	keywords: string | null,
 };
 
 export type PolishSegmentsRequest_Serialize = {
-  taskId: string;
-  config: LlmConfig_Serialize;
-  segments: LlmSegmentInput[];
-  chunkSize: number | null;
-  context: string | null;
-  keywords: string | null;
+	taskId: string,
+	config: LlmConfig_Serialize,
+	segments: LlmSegmentInput[],
+	chunkSize: number | null,
+	context: string | null,
+	keywords: string | null,
 };
 
 export type PolishedSegment = {
-  id: string;
-  text: string;
+	id: string,
+	text: string,
 };
 
-export type PreparedBackupImport =
-  | PreparedBackupImport_Serialize
-  | PreparedBackupImport_Deserialize;
+export type PreparedBackupImport = PreparedBackupImport_Serialize | PreparedBackupImport_Deserialize;
 
-export type PreparedBackupImport_Deserialize =
-  | ({
-      importId: string;
-      archivePath: string;
-      manifest: BackupManifest_Deserialize;
-      config: unknown;
-      automationProfiles?: unknown[];
-      automationRules: unknown[];
-      automationProcessedEntries: unknown[];
-      analyticsContent: string;
-    } & {
-      tags: unknown[];
-    })
-  | {
-      projects: unknown[];
-    };
+export type PreparedBackupImport_Deserialize = {
+	importId: string,
+	archivePath: string,
+	manifest: BackupManifest_Deserialize,
+	config: unknown,
+	automationProfiles?: unknown[],
+	automationRules: unknown[],
+	automationProcessedEntries: unknown[],
+	analyticsContent: string,
+} & {
+	tags: unknown[],
+} | {
+	projects: unknown[],
+};
 
 export type PreparedBackupImport_Serialize = {
-  importId: string;
-  archivePath: string;
-  manifest: BackupManifest_Serialize;
-  config: unknown;
-  tags: unknown[];
-  automationProfiles: unknown[];
-  automationRules: unknown[];
-  automationProcessedEntries: unknown[];
-  analyticsContent: string;
+	importId: string,
+	archivePath: string,
+	manifest: BackupManifest_Serialize,
+	config: unknown,
+	tags: unknown[],
+	automationProfiles: unknown[],
+	automationRules: unknown[],
+	automationProcessedEntries: unknown[],
+	analyticsContent: string,
 };
 
 export type PresetModelArtifact = {
-  url: string;
-  filename: string;
-  /**  Present when the published file has a known integrity hash. */
-  sha256: string | null;
-  /**  Exact byte size when known; archives publish without one. */
-  sizeBytes: number | null;
+	url: string,
+	filename: string,
+	/**  Present when the published file has a known integrity hash. */
+	sha256: string | null,
+	/**  Exact byte size when known; archives publish without one. */
+	sizeBytes: number | null,
 };
 
 export type ProjectCreateInput = {
-  name?: string;
-  description?: string | null;
-  icon?: string | null;
-  color?: string | null;
-  pipeline?: ProjectPipelineConfig | null;
+	name?: string,
+	description?: string | null,
+	icon?: string | null,
+	color?: string | null,
+	pipeline?: ProjectPipelineConfig | null,
 };
 
 export type ProjectPipelineConfig = {
-  enabled?: boolean;
-  autoPolish?: boolean;
-  polishPresetId?: string | null;
-  polishPromptOverride?: string | null;
-  autoTranslate?: boolean;
-  targetLanguage?: string | null;
-  autoSummary?: boolean;
-  summaryTemplateId?: string | null;
-  hotwordSetIds?: string[];
-  replacementSetIds?: string[];
-  autoExport?: boolean;
-  exportFormat?: string | null;
-  exportDirectory?: string | null;
-  exportFileNamePrefix?: string | null;
+	enabled?: boolean,
+	autoPolish?: boolean,
+	polishPresetId?: string | null,
+	polishPromptOverride?: string | null,
+	autoTranslate?: boolean,
+	targetLanguage?: string | null,
+	autoSummary?: boolean,
+	summaryTemplateId?: string | null,
+	hotwordSetIds?: string[],
+	replacementSetIds?: string[],
+	autoExport?: boolean,
+	exportFormat?: string | null,
+	exportDirectory?: string | null,
+	exportFileNamePrefix?: string | null,
 };
 
 export type ProjectRecord = ProjectRecord_Serialize | ProjectRecord_Deserialize;
 
 export type ProjectRecord_Deserialize = {
-  id: string;
-  name: string;
-  description?: string;
-  icon?: string | null;
-  color?: string | null;
-  sortOrder: number;
-  createdAt: number;
-  updatedAt: number;
-  pipeline?: ProjectPipelineConfig | null;
+	id: string,
+	name: string,
+	description?: string,
+	icon?: string | null,
+	color?: string | null,
+	sortOrder: number,
+	createdAt: number,
+	updatedAt: number,
+	pipeline?: ProjectPipelineConfig | null,
 };
 
 export type ProjectRecord_Serialize = {
-  id: string;
-  name: string;
-  description: string;
-  icon: string | null;
-  color: string | null;
-  sortOrder: number;
-  createdAt: number;
-  updatedAt: number;
-  pipeline?: ProjectPipelineConfig | null;
+	id: string,
+	name: string,
+	description: string,
+	icon: string | null,
+	color: string | null,
+	sortOrder: number,
+	createdAt: number,
+	updatedAt: number,
+	pipeline?: ProjectPipelineConfig | null,
 };
 
 export type ProjectUpdateInput = {
-  name?: string | null;
-  description?: string | null;
-  icon?: string | null;
-  color?: string | null;
-  pipeline?: ProjectPipelineConfig | null;
+	name?: string | null,
+	description?: string | null,
+	icon?: string | null,
+	color?: string | null,
+	pipeline?: ProjectPipelineConfig | null,
 };
 
-export type ProjectsViewMode = 'list' | 'grid' | 'table';
+export type ProjectsViewMode = "list" | "grid" | "table";
 
 export type RecoveredQueueItem = RecoveredQueueItem_Serialize | RecoveredQueueItem_Deserialize;
 
 export type RecoveredQueueItem_Deserialize = {
-  id: string;
-  filename: string;
-  filePath: string;
-  source: RecoverySource;
-  resolution: RecoveryResolution;
-  progress: number;
-  segments: RecoveredTranscriptSegment_Deserialize[];
-  tagIds?: string[];
-  historyId: string | null;
-  historyTitle: string | null;
-  lastKnownStage: RecoveryItemStage;
-  updatedAt: number;
-  hasSourceFile: boolean;
-  canResume: boolean;
-  automationRuleId: string | null;
-  automationRuleName: string | null;
-  resolvedConfigSnapshot: unknown | null;
-  automationResolutionSnapshot: unknown | null;
-  exportConfig: unknown;
-  stageConfig: unknown;
-  sourceFingerprint: string | null;
-  fileStat: RecoveryFileStat | null;
-  exportFileNamePrefix: string | null;
-  attemptCount?: number;
-  lastError?: string | null;
-  retryable?: boolean;
+	id: string,
+	filename: string,
+	filePath: string,
+	source: RecoverySource,
+	resolution: RecoveryResolution,
+	progress: number,
+	segments: RecoveredTranscriptSegment_Deserialize[],
+	tagIds?: string[],
+	historyId: string | null,
+	historyTitle: string | null,
+	lastKnownStage: RecoveryItemStage,
+	updatedAt: number,
+	hasSourceFile: boolean,
+	canResume: boolean,
+	automationRuleId: string | null,
+	automationRuleName: string | null,
+	resolvedConfigSnapshot: unknown | null,
+	automationResolutionSnapshot: unknown | null,
+	exportConfig: unknown,
+	stageConfig: unknown,
+	sourceFingerprint: string | null,
+	fileStat: RecoveryFileStat | null,
+	exportFileNamePrefix: string | null,
+	attemptCount?: number,
+	lastError?: string | null,
+	retryable?: boolean,
 };
 
 export type RecoveredQueueItem_Serialize = {
-  id: string;
-  filename: string;
-  filePath: string;
-  source: RecoverySource;
-  resolution: RecoveryResolution;
-  progress: number;
-  segments: RecoveredTranscriptSegment_Serialize[];
-  tagIds: string[];
-  historyId?: string | null;
-  historyTitle?: string | null;
-  lastKnownStage: RecoveryItemStage;
-  updatedAt: number;
-  hasSourceFile: boolean;
-  canResume: boolean;
-  automationRuleId?: string | null;
-  automationRuleName?: string | null;
-  resolvedConfigSnapshot?: unknown | null;
-  automationResolutionSnapshot?: unknown | null;
-  exportConfig: unknown;
-  stageConfig: unknown;
-  sourceFingerprint?: string | null;
-  fileStat?: RecoveryFileStat | null;
-  exportFileNamePrefix?: string | null;
-  attemptCount: number;
-  lastError?: string | null;
-  retryable: boolean;
+	id: string,
+	filename: string,
+	filePath: string,
+	source: RecoverySource,
+	resolution: RecoveryResolution,
+	progress: number,
+	segments: RecoveredTranscriptSegment_Serialize[],
+	tagIds: string[],
+	historyId?: string | null,
+	historyTitle?: string | null,
+	lastKnownStage: RecoveryItemStage,
+	updatedAt: number,
+	hasSourceFile: boolean,
+	canResume: boolean,
+	automationRuleId?: string | null,
+	automationRuleName?: string | null,
+	resolvedConfigSnapshot?: unknown | null,
+	automationResolutionSnapshot?: unknown | null,
+	exportConfig: unknown,
+	stageConfig: unknown,
+	sourceFingerprint?: string | null,
+	fileStat?: RecoveryFileStat | null,
+	exportFileNamePrefix?: string | null,
+	attemptCount: number,
+	lastError?: string | null,
+	retryable: boolean,
 };
 
-export type RecoveredTranscriptSegment =
-  | RecoveredTranscriptSegment_Serialize
-  | RecoveredTranscriptSegment_Deserialize;
+export type RecoveredTranscriptSegment = RecoveredTranscriptSegment_Serialize | RecoveredTranscriptSegment_Deserialize;
 
 export type RecoveredTranscriptSegment_Deserialize = {
-  id?: string;
-  text?: string;
-  start?: number;
-  end?: number;
-  isFinal?: boolean;
-  timing?: RecoveredTranscriptTiming | null;
-  tokens: string[] | null;
-  timestamps: number[] | null;
-  durations: number[] | null;
-  translation: string | null;
-  speaker?: SpeakerTag_Deserialize | null;
-  speakerAttribution?: SpeakerAttribution | null;
+	id?: string,
+	text?: string,
+	start?: number,
+	end?: number,
+	isFinal?: boolean,
+	timing?: RecoveredTranscriptTiming | null,
+	tokens: string[] | null,
+	timestamps: number[] | null,
+	durations: number[] | null,
+	translation: string | null,
+	speaker?: SpeakerTag_Deserialize | null,
+	speakerAttribution?: SpeakerAttribution | null,
 };
 
 export type RecoveredTranscriptSegment_Serialize = {
-  id: string;
-  text: string;
-  start: number;
-  end: number;
-  isFinal: boolean;
-  timing?: RecoveredTranscriptTiming | null;
-  tokens?: string[] | null;
-  timestamps?: number[] | null;
-  durations?: number[] | null;
-  translation?: string | null;
-  speaker?: SpeakerTag_Serialize | null;
-  speakerAttribution?: SpeakerAttribution | null;
+	id: string,
+	text: string,
+	start: number,
+	end: number,
+	isFinal: boolean,
+	timing?: RecoveredTranscriptTiming | null,
+	tokens?: string[] | null,
+	timestamps?: number[] | null,
+	durations?: number[] | null,
+	translation?: string | null,
+	speaker?: SpeakerTag_Serialize | null,
+	speakerAttribution?: SpeakerAttribution | null,
 };
 
 export type RecoveredTranscriptTiming = {
-  level: TranscriptTimingLevel;
-  source: TranscriptTimingSource;
-  units: RecoveredTranscriptTimingUnit[];
+	level: TranscriptTimingLevel,
+	source: TranscriptTimingSource,
+	units: RecoveredTranscriptTimingUnit[],
 };
 
 export type RecoveredTranscriptTimingUnit = {
-  text?: string;
-  start?: number;
-  end?: number;
+	text?: string,
+	start?: number,
+	end?: number,
 };
 
 export type RecoveryFileStat = {
-  size: number;
-  mtimeMs: number;
+	size: number,
+	mtimeMs: number,
 };
 
 export type RecoveryItemInput = RecoveryItemInput_Serialize | RecoveryItemInput_Deserialize;
 
 export type RecoveryItemInput_Deserialize = {
-  id?: string | null;
-  recoveryId?: string | null;
-  filename?: string | null;
-  filePath?: string | null;
-  source?: string | null;
-  origin?: string | null;
-  resolution?: string | null;
-  status?: string | null;
-  progress?: number | null;
-  segments?: RecoveredTranscriptSegment_Deserialize[];
-  tagIds?: string[];
-  projectId?: string | null;
-  historyId?: string | null;
-  historyTitle?: string | null;
-  lastKnownStage?: string | null;
-  updatedAt?: number | null;
-  hasSourceFile?: boolean | null;
-  canResume?: boolean | null;
-  automationRuleId?: string | null;
-  automationRuleName?: string | null;
-  resolvedConfigSnapshot?: unknown | null;
-  automationResolutionSnapshot?: unknown | null;
-  exportConfig?: unknown | null;
-  stageConfig?: unknown | null;
-  sourceFingerprint?: string | null;
-  fileStat?: RecoveryFileStat | null;
-  exportFileNamePrefix?: string | null;
-  attemptCount?: number | null;
-  lastError?: string | null;
-  retryable?: boolean;
+	id?: string | null,
+	recoveryId?: string | null,
+	filename?: string | null,
+	filePath?: string | null,
+	source?: string | null,
+	origin?: string | null,
+	resolution?: string | null,
+	status?: string | null,
+	progress?: number | null,
+	segments?: RecoveredTranscriptSegment_Deserialize[],
+	tagIds?: string[],
+	projectId?: string | null,
+	historyId?: string | null,
+	historyTitle?: string | null,
+	lastKnownStage?: string | null,
+	updatedAt?: number | null,
+	hasSourceFile?: boolean | null,
+	canResume?: boolean | null,
+	automationRuleId?: string | null,
+	automationRuleName?: string | null,
+	resolvedConfigSnapshot?: unknown | null,
+	automationResolutionSnapshot?: unknown | null,
+	exportConfig?: unknown | null,
+	stageConfig?: unknown | null,
+	sourceFingerprint?: string | null,
+	fileStat?: RecoveryFileStat | null,
+	exportFileNamePrefix?: string | null,
+	attemptCount?: number | null,
+	lastError?: string | null,
+	retryable?: boolean,
 };
 
 export type RecoveryItemInput_Serialize = {
-  id?: string | null;
-  recoveryId?: string | null;
-  filename?: string | null;
-  filePath?: string | null;
-  source?: string | null;
-  origin?: string | null;
-  resolution?: string | null;
-  status?: string | null;
-  progress?: number | null;
-  segments: RecoveredTranscriptSegment_Serialize[];
-  tagIds?: string[];
-  projectId?: string | null;
-  historyId?: string | null;
-  historyTitle?: string | null;
-  lastKnownStage?: string | null;
-  updatedAt?: number | null;
-  hasSourceFile?: boolean | null;
-  canResume?: boolean | null;
-  automationRuleId?: string | null;
-  automationRuleName?: string | null;
-  resolvedConfigSnapshot?: unknown | null;
-  automationResolutionSnapshot?: unknown | null;
-  exportConfig?: unknown | null;
-  stageConfig?: unknown | null;
-  sourceFingerprint?: string | null;
-  fileStat?: RecoveryFileStat | null;
-  exportFileNamePrefix?: string | null;
-  attemptCount?: number | null;
-  lastError?: string | null;
-  retryable: boolean;
+	id?: string | null,
+	recoveryId?: string | null,
+	filename?: string | null,
+	filePath?: string | null,
+	source?: string | null,
+	origin?: string | null,
+	resolution?: string | null,
+	status?: string | null,
+	progress?: number | null,
+	segments: RecoveredTranscriptSegment_Serialize[],
+	tagIds?: string[],
+	projectId?: string | null,
+	historyId?: string | null,
+	historyTitle?: string | null,
+	lastKnownStage?: string | null,
+	updatedAt?: number | null,
+	hasSourceFile?: boolean | null,
+	canResume?: boolean | null,
+	automationRuleId?: string | null,
+	automationRuleName?: string | null,
+	resolvedConfigSnapshot?: unknown | null,
+	automationResolutionSnapshot?: unknown | null,
+	exportConfig?: unknown | null,
+	stageConfig?: unknown | null,
+	sourceFingerprint?: string | null,
+	fileStat?: RecoveryFileStat | null,
+	exportFileNamePrefix?: string | null,
+	attemptCount?: number | null,
+	lastError?: string | null,
+	retryable: boolean,
 };
 
-export type RecoveryItemStage =
-  | 'queued'
-  | 'transcribing'
-  | 'polishing'
-  | 'translating'
-  | 'exporting';
+export type RecoveryItemStage = "queued" | "transcribing" | "polishing" | "translating" | "exporting";
 
-export type RecoveryResolution = 'pending' | 'resumed' | 'discarded';
+export type RecoveryResolution = "pending" | "resumed" | "discarded";
 
 export type RecoverySnapshot = RecoverySnapshot_Serialize | RecoverySnapshot_Deserialize;
 
-export type RecoverySnapshotInput =
-  | RecoverySnapshotInput_Serialize
-  | RecoverySnapshotInput_Deserialize;
+export type RecoverySnapshotInput = RecoverySnapshotInput_Serialize | RecoverySnapshotInput_Deserialize;
 
 export type RecoverySnapshotInput_Deserialize = {
-  updatedAt?: number | null;
-  items?: RecoveryItemInput_Deserialize[];
+	updatedAt?: number | null,
+	items?: RecoveryItemInput_Deserialize[],
 };
 
 export type RecoverySnapshotInput_Serialize = {
-  updatedAt: number | null;
-  items: RecoveryItemInput_Serialize[];
+	updatedAt: number | null,
+	items: RecoveryItemInput_Serialize[],
 };
 
 export type RecoverySnapshot_Deserialize = {
-  version: number;
-  updatedAt: number | null;
-  items: RecoveredQueueItem_Deserialize[];
+	version: number,
+	updatedAt: number | null,
+	items: RecoveredQueueItem_Deserialize[],
 };
 
 export type RecoverySnapshot_Serialize = {
-  version: number;
-  updatedAt: number | null;
-  items: RecoveredQueueItem_Serialize[];
+	version: number,
+	updatedAt: number | null,
+	items: RecoveredQueueItem_Serialize[],
 };
 
-export type RecoverySource = 'batch_import' | 'automation' | 'transcript_edit';
+export type RecoverySource = "batch_import" | "automation" | "transcript_edit";
 
 export type RuntimeEnvironmentStatus = {
-  ffmpegPath: string;
-  ffmpegExists: boolean;
-  logDirPath: string;
+	ffmpegPath: string,
+	ffmpegExists: boolean,
+	logDirPath: string,
 };
 
-export type RuntimePathKind = 'file' | 'directory' | 'missing' | 'unknown';
+export type RuntimePathKind = "file" | "directory" | "missing" | "unknown";
 
 export type RuntimePathStatus = {
-  path: string;
-  kind: RuntimePathKind;
-  error: string | null;
+	path: string,
+	kind: RuntimePathKind,
+	error: string | null,
 };
 
 export type SQLiteIndexUsageEntry = {
-  schema: string;
-  name: string;
-  bytes: number;
+	schema: string,
+	name: string,
+	bytes: number,
 };
 
 export type SQLiteUsageSummary = {
-  mainDbBytes: number;
-  mainWalBytes: number;
-  mainShmBytes: number;
-  analyticsDbBytes: number;
-  analyticsWalBytes: number;
-  analyticsShmBytes: number;
-  dataBytes: number;
-  indexBytes: number;
-  freePageBytes: number;
-  indexEntries: SQLiteIndexUsageEntry[];
-  dbstatAvailable: boolean;
+	mainDbBytes: number,
+	mainWalBytes: number,
+	mainShmBytes: number,
+	analyticsDbBytes: number,
+	analyticsWalBytes: number,
+	analyticsShmBytes: number,
+	dataBytes: number,
+	indexBytes: number,
+	freePageBytes: number,
+	indexEntries: SQLiteIndexUsageEntry[],
+	dbstatAvailable: boolean,
 };
 
 export type SelectedModelsInput = {
-  live: ModelSummaryInput | null;
-  batch: ModelSummaryInput | null;
+	live: ModelSummaryInput | null,
+	batch: ModelSummaryInput | null,
 };
 
 export type SpeakerAttribution = {
-  groupId: string;
-  anonymousLabel: string;
-  state: string;
-  source: string;
-  confidence: string;
-  candidates: SpeakerCandidate[];
+	groupId: string,
+	anonymousLabel: string,
+	state: string,
+	source: string,
+	confidence: string,
+	candidates: SpeakerCandidate[],
 };
 
 export type SpeakerCandidate = {
-  profileId: string;
-  profileName: string;
-  score: number;
-  rank: number;
+	profileId: string,
+	profileName: string,
+	score: number,
+	rank: number,
 };
 
 export type SpeakerLeader = {
-  speakerId: string;
-  label: string;
-  durationSeconds: number;
-  durationDisplay: string;
-  segmentCount: number;
-  segmentCountDisplay: string;
-  itemCount: number;
-  itemCountDisplay: string;
+	speakerId: string,
+	label: string,
+	durationSeconds: number,
+	durationDisplay: string,
+	segmentCount: number,
+	segmentCountDisplay: string,
+	itemCount: number,
+	itemCountDisplay: string,
 };
 
 export type SpeakerProcessingConfig = {
-  speakerSegmentationModelPath: string | null;
-  speakerEmbeddingModelPath: string | null;
-  speakerProfiles: SpeakerProfile[] | null;
+	speakerSegmentationModelPath: string | null,
+	speakerEmbeddingModelPath: string | null,
+	speakerProfiles: SpeakerProfile[] | null,
 };
 
 export type SpeakerProfile = {
-  id: string;
-  name: string;
-  enabled: boolean;
-  samples: SpeakerProfileSample[];
+	id: string,
+	name: string,
+	enabled: boolean,
+	samples: SpeakerProfileSample[],
 };
 
 export type SpeakerProfileSample = {
-  id: string;
-  filePath: string;
-  sourceName: string;
-  durationSeconds: number;
+	id: string,
+	filePath: string,
+	sourceName: string,
+	durationSeconds: number,
 };
 
 export type SpeakerStats = {
-  annotatedItemCount: number;
-  annotatedItemCountDisplay: string;
-  speakerAttributedDuration: number;
-  speakerAttributedDurationDisplay: string;
-  identifiedSpeakerCount: number;
-  identifiedSpeakerCountDisplay: string;
-  anonymousSpeakerSlotCount: number;
-  anonymousSpeakerSlotCountDisplay: string;
-  speakerTaggedSegmentCount: number;
-  speakerTaggedSegmentCountDisplay: string;
-  totalSegmentCount: number;
-  totalSegmentCountDisplay: string;
-  totalSegmentDuration: number;
-  totalSegmentDurationDisplay: string;
-  identifiedDuration: number;
-  identifiedDurationDisplay: string;
-  anonymousDuration: number;
-  anonymousDurationDisplay: string;
-  segmentCoverageRatio: number;
-  segmentCoverageLabel: string;
-  durationCoverageRatio: number;
-  durationCoverageLabel: string;
-  topIdentifiedSpeakers: SpeakerLeader[];
-  topIdentifiedSpeakerRows: SpeakerLeader[];
-  topIdentifiedSpeakerMaxValue: number;
-  isDeepLoaded: boolean;
+	annotatedItemCount: number,
+	annotatedItemCountDisplay: string,
+	speakerAttributedDuration: number,
+	speakerAttributedDurationDisplay: string,
+	identifiedSpeakerCount: number,
+	identifiedSpeakerCountDisplay: string,
+	anonymousSpeakerSlotCount: number,
+	anonymousSpeakerSlotCountDisplay: string,
+	speakerTaggedSegmentCount: number,
+	speakerTaggedSegmentCountDisplay: string,
+	totalSegmentCount: number,
+	totalSegmentCountDisplay: string,
+	totalSegmentDuration: number,
+	totalSegmentDurationDisplay: string,
+	identifiedDuration: number,
+	identifiedDurationDisplay: string,
+	anonymousDuration: number,
+	anonymousDurationDisplay: string,
+	segmentCoverageRatio: number,
+	segmentCoverageLabel: string,
+	durationCoverageRatio: number,
+	durationCoverageLabel: string,
+	topIdentifiedSpeakers: SpeakerLeader[],
+	topIdentifiedSpeakerRows: SpeakerLeader[],
+	topIdentifiedSpeakerMaxValue: number,
+	isDeepLoaded: boolean,
 };
 
 export type SpeakerTag = SpeakerTag_Serialize | SpeakerTag_Deserialize;
 
 export type SpeakerTag_Deserialize = {
-  id: string;
-  label: string;
-  kind: string;
-  score?: number | null;
+	id: string,
+	label: string,
+	kind: string,
+	score?: number | null,
 };
 
 export type SpeakerTag_Serialize = {
-  id: string;
-  label: string;
-  kind: string;
-  score?: number | null;
+	id: string,
+	label: string,
+	kind: string,
+	score?: number | null,
 };
 
-export type StorageUsageCategories =
-  | StorageUsageCategories_Serialize
-  | StorageUsageCategories_Deserialize;
+export type StorageUsageCategories = StorageUsageCategories_Serialize | StorageUsageCategories_Deserialize;
 
 export type StorageUsageCategories_Deserialize = {
-  audio: AudioUsageCategory;
-  database: DatabaseUsageCategory;
-  models: FileUsageCategory;
-  temporary: FileUsageCategory;
-  webviewCache: WebviewCacheUsageCategory_Deserialize;
-  other: FileUsageCategory;
+	audio: AudioUsageCategory,
+	database: DatabaseUsageCategory,
+	models: FileUsageCategory,
+	temporary: FileUsageCategory,
+	webviewCache: WebviewCacheUsageCategory_Deserialize,
+	other: FileUsageCategory,
 };
 
 export type StorageUsageCategories_Serialize = {
-  audio: AudioUsageCategory;
-  database: DatabaseUsageCategory;
-  models: FileUsageCategory;
-  temporary: FileUsageCategory;
-  webviewCache: WebviewCacheUsageCategory_Serialize;
-  other: FileUsageCategory;
+	audio: AudioUsageCategory,
+	database: DatabaseUsageCategory,
+	models: FileUsageCategory,
+	temporary: FileUsageCategory,
+	webviewCache: WebviewCacheUsageCategory_Serialize,
+	other: FileUsageCategory,
 };
 
-export type StorageUsageSnapshot =
-  | StorageUsageSnapshot_Serialize
-  | StorageUsageSnapshot_Deserialize;
+export type StorageUsageSnapshot = StorageUsageSnapshot_Serialize | StorageUsageSnapshot_Deserialize;
 
 export type StorageUsageSnapshot_Deserialize = {
-  generatedAt: string;
-  totalBytes: number;
-  categories: StorageUsageCategories_Deserialize;
+	generatedAt: string,
+	totalBytes: number,
+	categories: StorageUsageCategories_Deserialize,
 };
 
 export type StorageUsageSnapshot_Serialize = {
-  generatedAt: string;
-  totalBytes: number;
-  categories: StorageUsageCategories_Serialize;
+	generatedAt: string,
+	totalBytes: number,
+	categories: StorageUsageCategories_Serialize,
 };
 
-export type SummarizeTranscriptRequest =
-  | SummarizeTranscriptRequest_Serialize
-  | SummarizeTranscriptRequest_Deserialize;
+export type SummarizeTranscriptRequest = SummarizeTranscriptRequest_Serialize | SummarizeTranscriptRequest_Deserialize;
 
 export type SummarizeTranscriptRequest_Deserialize = {
-  taskId: string;
-  config: LlmConfig_Deserialize;
-  template: SummaryTemplateConfig;
-  segments: SummarySegmentInput[];
-  chunkCharBudget: number | null;
+	taskId: string,
+	config: LlmConfig_Deserialize,
+	template: SummaryTemplateConfig,
+	segments: SummarySegmentInput[],
+	chunkCharBudget: number | null,
 };
 
 export type SummarizeTranscriptRequest_Serialize = {
-  taskId: string;
-  config: LlmConfig_Serialize;
-  template: SummaryTemplateConfig;
-  segments: SummarySegmentInput[];
-  chunkCharBudget: number | null;
+	taskId: string,
+	config: LlmConfig_Serialize,
+	template: SummaryTemplateConfig,
+	segments: SummarySegmentInput[],
+	chunkCharBudget: number | null,
 };
 
 export type SummarySegmentInput = {
-  id: string;
-  text: string;
-  start: number | null;
-  end: number | null;
-  isFinal: boolean;
+	id: string,
+	text: string,
+	start: number | null,
+	end: number | null,
+	isFinal: boolean,
 };
 
 export type SummaryTemplateConfig = {
-  id: string;
-  name: string;
-  instructions: string;
+	id: string,
+	name: string,
+	instructions: string,
 };
 
-export type SummaryTemplateId =
-  | ({ Builtin: BuiltinSummaryTemplateId } & { Custom?: never })
-  | ({ Custom: string } & { Builtin?: never });
+export type SummaryTemplateId = ({ Builtin: BuiltinSummaryTemplateId }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
 
 export type SummaryTemplateRecord = {
-  id: string;
-  name: string;
-  instructions: string;
+	id: string,
+	name: string,
+	instructions: string,
 };
 
 export type SyncCausalContext = {
-  observedSequences: { [key in string]: number };
+	observedSequences: { [key in string]: number },
 };
 
 export type SyncConflict = {
-  kind: SyncConflictKind;
-  winner: SyncOperation;
-  loser: SyncOperation;
+	kind: SyncConflictKind,
+	winner: SyncOperation,
+	loser: SyncOperation,
 };
 
 export type SyncConflictDetail = {
-  summary: SyncConflictSummary;
-  current: SyncOperation;
-  conflicting: SyncOperation;
+	summary: SyncConflictSummary,
+	current: SyncOperation,
+	conflicting: SyncOperation,
 };
 
-export type SyncConflictKind = 'concurrent_write' | 'delete_vs_write';
+export type SyncConflictKind = "concurrent_write" | "delete_vs_write";
 
-export type SyncConflictResolution = 'keep_current' | 'use_conflicting' | 'keep_both';
+export type SyncConflictResolution = "keep_current" | "use_conflicting" | "keep_both";
 
 export type SyncConflictSummary = {
-  conflictId: string;
-  kind: SyncConflictKind;
-  entity: SyncEntityKey;
-  field: string | null;
-  createdAtMs: number;
+	conflictId: string,
+	kind: SyncConflictKind,
+	entity: SyncEntityKey,
+	field: string | null,
+	createdAtMs: number,
 };
 
 export type SyncEntityKey = {
-  kind: SyncEntityKind;
-  id: string;
+	kind: SyncEntityKind,
+	id: string,
 };
 
-export type SyncEntityKind =
-  | 'tag'
-  | 'project'
-  | 'history_item'
-  | 'history_transcript'
-  | 'history_summary'
-  | 'transcript_snapshot'
-  | 'setting'
-  | 'summary_template'
-  | 'polish_preset'
-  | 'vocabulary_set'
-  | 'vocabulary_rule'
-  | 'speaker_profile'
-  | 'automation_profile'
-  | 'automation_rule'
-  | 'credential_profile';
+export type SyncEntityKind = "tag" | "project" | "history_item" | "history_transcript" | "history_summary" | "transcript_snapshot" | "setting" | "summary_template" | "polish_preset" | "vocabulary_set" | "vocabulary_rule" | "speaker_profile" | "automation_profile" | "automation_rule" | "credential_profile";
 
 export type SyncErrorSnapshot = {
-  code: string;
-  message: string;
-  retryable: boolean;
+	code: string,
+	message: string,
+	retryable: boolean,
 };
 
 export type SyncJoinPreview = {
-  localOperationCount: number;
-  remoteOperationCount: number;
-  projectedConflictCount: number;
+	localOperationCount: number,
+	remoteOperationCount: number,
+	projectedConflictCount: number,
 };
 
-export type SyncLifecycleState = 'disabled' | 'locked' | 'idle' | 'syncing' | 'paused' | 'error';
+export type SyncLifecycleState = "disabled" | "locked" | "idle" | "syncing" | "paused" | "error";
 
 export type SyncOperation = {
-  operationId: string;
-  sourceDeviceId: string;
-  sourceSequence: number;
-  causalContext: SyncCausalContext;
-  version: SyncVersion;
-  entity: SyncEntityKey;
-  kind: SyncOperationKind;
+	operationId: string,
+	sourceDeviceId: string,
+	sourceSequence: number,
+	causalContext: SyncCausalContext,
+	version: SyncVersion,
+	entity: SyncEntityKey,
+	kind: SyncOperationKind,
 };
 
-export type SyncOperationKind =
-  | { kind: 'set_field'; field: string; value: unknown }
-  | { kind: 'delete_entity' };
+export type SyncOperationKind = { kind: "set_field"; field: string; value: unknown } | { kind: "delete_entity" };
 
-export type SyncPresetV1 = 'content' | 'standard' | 'full';
+export type SyncPresetV1 = "content" | "standard" | "full";
 
 export type SyncProviderDescriptor = {
-  id: string;
-  displayName: string;
+	id: string,
+	displayName: string,
 };
 
 export type SyncRunResult = {
-  pulledSegmentCount: number;
-  pulledCheckpointCount: number;
-  pushedSegmentCount: number;
-  appliedOperationCount: number;
-  publishedOperationCount: number;
-  conflictCount: number;
-  checkpointPublished: boolean;
+	pulledSegmentCount: number,
+	pulledCheckpointCount: number,
+	pushedSegmentCount: number,
+	appliedOperationCount: number,
+	publishedOperationCount: number,
+	conflictCount: number,
+	checkpointPublished: boolean,
 };
 
 export type SyncStatusSnapshot = {
-  state: SyncLifecycleState;
-  providerId: string | null;
-  vaultId: string | null;
-  preset: SyncPresetV1 | null;
-  lastSuccessAtMs: number | null;
-  pendingOperationCount: number;
-  conflictCount: number;
-  nextRetryAtMs: number | null;
-  lastError: SyncErrorSnapshot | null;
+	state: SyncLifecycleState,
+	providerId: string | null,
+	vaultId: string | null,
+	preset: SyncPresetV1 | null,
+	lastSuccessAtMs: number | null,
+	pendingOperationCount: number,
+	conflictCount: number,
+	nextRetryAtMs: number | null,
+	lastError: SyncErrorSnapshot | null,
 };
 
 export type SyncVersion = {
-  clock: HybridLogicalClock;
-  deviceId: string;
-  operationId: string;
+	clock: HybridLogicalClock,
+	deviceId: string,
+	operationId: string,
 };
 
 export type TagCreateInput = {
-  name: string;
-  description?: string | null;
-  icon?: string | null;
-  color?: string | null;
+	name: string,
+	description?: string | null,
+	icon?: string | null,
+	color?: string | null,
 };
 
 export type TagRecord = {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  color: string;
-  sortOrder: number;
-  createdAt: number;
-  updatedAt: number;
+	id: string,
+	name: string,
+	description: string,
+	icon: string,
+	color: string,
+	sortOrder: number,
+	createdAt: number,
+	updatedAt: number,
 };
 
 export type TagRepositorySnapshot = {
-  tags: TagRecord[];
-  activeTagId: string | null;
+	tags: TagRecord[],
+	activeTagId: string | null,
 };
 
 export type TagUpdateInput = {
-  name?: string | null;
-  icon?: string | null;
-  color?: string | null;
-  description?: string | null;
+	name?: string | null,
+	icon?: string | null,
+	color?: string | null,
+	description?: string | null,
 };
 
-export type TaskLedgerKind =
-  | 'batchImport'
-  | 'automation'
-  | 'llmPolish'
-  | 'llmTranslate'
-  | 'llmSummary'
-  | 'recovery'
-  | 'update';
+export type TaskLedgerKind = "batchImport" | "automation" | "llmPolish" | "llmTranslate" | "llmSummary" | "recovery" | "update";
 
 export type TaskLedgerPatch = TaskLedgerPatch_Serialize | TaskLedgerPatch_Deserialize;
 
 export type TaskLedgerPatch_Deserialize = {
-  kind?: TaskLedgerKind | null;
-  status?: TaskLedgerStatus | null;
-  title?: string | null;
-  progress?: number | null;
-  createdAt?: number | null;
-  updatedAt?: number | null;
-  retryable?: boolean | null;
-  cancelable?: boolean | null;
-  recoverable?: boolean | null;
-  stage?: string | null;
-  historyId?: string | null;
-  tagIds?: string[] | null;
-  filePath?: string | null;
-  automationRuleId?: string | null;
-  tagAutomationRuleId?: string | null;
-  automationProfileId?: string | null;
-  automationProfileSource?: string | null;
-  sourceFingerprint?: string | null;
-  errorMessage?: string | null;
-  templateId?: string | null;
-  targetLanguage?: string | null;
+	kind?: TaskLedgerKind | null,
+	status?: TaskLedgerStatus | null,
+	title?: string | null,
+	progress?: number | null,
+	createdAt?: number | null,
+	updatedAt?: number | null,
+	retryable?: boolean | null,
+	cancelable?: boolean | null,
+	recoverable?: boolean | null,
+	stage?: string | null,
+	historyId?: string | null,
+	tagIds?: string[] | null,
+	filePath?: string | null,
+	automationRuleId?: string | null,
+	tagAutomationRuleId?: string | null,
+	automationProfileId?: string | null,
+	automationProfileSource?: string | null,
+	sourceFingerprint?: string | null,
+	errorMessage?: string | null,
+	templateId?: string | null,
+	targetLanguage?: string | null,
 };
 
 export type TaskLedgerPatch_Serialize = {
-  kind?: TaskLedgerKind | null;
-  status?: TaskLedgerStatus | null;
-  title?: string | null;
-  progress?: number | null;
-  createdAt?: number | null;
-  updatedAt?: number | null;
-  retryable?: boolean | null;
-  cancelable?: boolean | null;
-  recoverable?: boolean | null;
-  stage?: string | null;
-  historyId?: string | null;
-  tagIds?: string[] | null;
-  filePath?: string | null;
-  automationRuleId?: string | null;
-  tagAutomationRuleId?: string | null;
-  automationProfileId?: string | null;
-  automationProfileSource?: string | null;
-  sourceFingerprint?: string | null;
-  errorMessage?: string | null;
-  templateId?: string | null;
-  targetLanguage?: string | null;
+	kind?: TaskLedgerKind | null,
+	status?: TaskLedgerStatus | null,
+	title?: string | null,
+	progress?: number | null,
+	createdAt?: number | null,
+	updatedAt?: number | null,
+	retryable?: boolean | null,
+	cancelable?: boolean | null,
+	recoverable?: boolean | null,
+	stage?: string | null,
+	historyId?: string | null,
+	tagIds?: string[] | null,
+	filePath?: string | null,
+	automationRuleId?: string | null,
+	tagAutomationRuleId?: string | null,
+	automationProfileId?: string | null,
+	automationProfileSource?: string | null,
+	sourceFingerprint?: string | null,
+	errorMessage?: string | null,
+	templateId?: string | null,
+	targetLanguage?: string | null,
 };
 
 export type TaskLedgerRecord = TaskLedgerRecord_Serialize | TaskLedgerRecord_Deserialize;
 
 export type TaskLedgerRecord_Deserialize = {
-  id: string;
-  kind: TaskLedgerKind;
-  status: TaskLedgerStatus;
-  title: string;
-  progress: number;
-  createdAt: number;
-  updatedAt: number;
-  retryable: boolean;
-  cancelable: boolean;
-  recoverable: boolean;
-  stage: string | null;
-  historyId: string | null;
-  tagIds?: string[];
-  filePath: string | null;
-  automationRuleId: string | null;
-  tagAutomationRuleId: string | null;
-  automationProfileId: string | null;
-  automationProfileSource: string | null;
-  sourceFingerprint: string | null;
-  errorMessage: string | null;
-  templateId: string | null;
-  targetLanguage: string | null;
+	id: string,
+	kind: TaskLedgerKind,
+	status: TaskLedgerStatus,
+	title: string,
+	progress: number,
+	createdAt: number,
+	updatedAt: number,
+	retryable: boolean,
+	cancelable: boolean,
+	recoverable: boolean,
+	stage: string | null,
+	historyId: string | null,
+	tagIds?: string[],
+	filePath: string | null,
+	automationRuleId: string | null,
+	tagAutomationRuleId: string | null,
+	automationProfileId: string | null,
+	automationProfileSource: string | null,
+	sourceFingerprint: string | null,
+	errorMessage: string | null,
+	templateId: string | null,
+	targetLanguage: string | null,
 };
 
 export type TaskLedgerRecord_Serialize = {
-  id: string;
-  kind: TaskLedgerKind;
-  status: TaskLedgerStatus;
-  title: string;
-  progress: number;
-  createdAt: number;
-  updatedAt: number;
-  retryable: boolean;
-  cancelable: boolean;
-  recoverable: boolean;
-  stage?: string | null;
-  historyId?: string | null;
-  tagIds?: string[];
-  filePath?: string | null;
-  automationRuleId?: string | null;
-  tagAutomationRuleId?: string | null;
-  automationProfileId?: string | null;
-  automationProfileSource?: string | null;
-  sourceFingerprint?: string | null;
-  errorMessage?: string | null;
-  templateId?: string | null;
-  targetLanguage?: string | null;
+	id: string,
+	kind: TaskLedgerKind,
+	status: TaskLedgerStatus,
+	title: string,
+	progress: number,
+	createdAt: number,
+	updatedAt: number,
+	retryable: boolean,
+	cancelable: boolean,
+	recoverable: boolean,
+	stage?: string | null,
+	historyId?: string | null,
+	tagIds?: string[],
+	filePath?: string | null,
+	automationRuleId?: string | null,
+	tagAutomationRuleId?: string | null,
+	automationProfileId?: string | null,
+	automationProfileSource?: string | null,
+	sourceFingerprint?: string | null,
+	errorMessage?: string | null,
+	templateId?: string | null,
+	targetLanguage?: string | null,
 };
 
 export type TaskLedgerSnapshot = TaskLedgerSnapshot_Serialize | TaskLedgerSnapshot_Deserialize;
 
 export type TaskLedgerSnapshot_Deserialize = {
-  version: number;
-  updatedAt: number | null;
-  tasks: TaskLedgerRecord_Deserialize[];
+	version: number,
+	updatedAt: number | null,
+	tasks: TaskLedgerRecord_Deserialize[],
 };
 
 export type TaskLedgerSnapshot_Serialize = {
-  version: number;
-  updatedAt: number | null;
-  tasks: TaskLedgerRecord_Serialize[];
+	version: number,
+	updatedAt: number | null,
+	tasks: TaskLedgerRecord_Serialize[],
 };
 
-export type TaskLedgerStatus =
-  | 'pending'
-  | 'running'
-  | 'cancelRequested'
-  | 'failed'
-  | 'recoverable'
-  | 'interrupted'
-  | 'cancelled'
-  | 'succeeded';
+export type TaskLedgerStatus = "pending" | "running" | "cancelRequested" | "failed" | "recoverable" | "interrupted" | "cancelled" | "succeeded";
 
 export type TextReplacementRuleRecord = {
-  id: string;
-  from: string;
-  to: string;
+	id: string,
+	from: string,
+	to: string,
 };
 
 export type TextReplacementSetRecord = {
-  id: string;
-  name: string;
-  enabled: boolean;
-  ignoreCase: boolean;
-  rules: TextReplacementRuleRecord[];
+	id: string,
+	name: string,
+	enabled: boolean,
+	ignoreCase: boolean,
+	rules: TextReplacementRuleRecord[],
 };
 
-export type TimestampSupportHint = 'token' | 'segment' | 'unknown';
+export type TimestampSupportHint = "token" | "segment" | "unknown";
 
 export type TokenUsage = {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-  cachedInputTokens?: number;
-  cacheCreationInputTokens?: number;
-  reasoningTokens?: number;
+	promptTokens: number,
+	completionTokens: number,
+	totalTokens: number,
+	cachedInputTokens?: number,
+	cacheCreationInputTokens?: number,
+	reasoningTokens?: number,
 };
 
-export type TranscriptDiffResult =
-  | TranscriptDiffResult_Serialize
-  | TranscriptDiffResult_Deserialize;
+export type TranscriptDiffResult = TranscriptDiffResult_Serialize | TranscriptDiffResult_Deserialize;
 
 export type TranscriptDiffResult_Deserialize = {
-  rows: TranscriptDiffRow_Deserialize[];
-  changedCount: number;
+	rows: TranscriptDiffRow_Deserialize[],
+	changedCount: number,
 };
 
 export type TranscriptDiffResult_Serialize = {
-  rows: TranscriptDiffRow_Serialize[];
-  changedCount: number;
+	rows: TranscriptDiffRow_Serialize[],
+	changedCount: number,
 };
 
 export type TranscriptDiffRow = TranscriptDiffRow_Serialize | TranscriptDiffRow_Deserialize;
 
 export type TranscriptDiffRow_Deserialize = {
-  id: string;
-  status: TranscriptDiffStatus;
-  snapshotSegment: TranscriptSegment_Deserialize | null;
-  currentSegment: TranscriptSegment_Deserialize | null;
-  snapshotIndex: number | null;
-  currentIndex: number | null;
+	id: string,
+	status: TranscriptDiffStatus,
+	snapshotSegment: TranscriptSegment_Deserialize | null,
+	currentSegment: TranscriptSegment_Deserialize | null,
+	snapshotIndex: number | null,
+	currentIndex: number | null,
 };
 
 export type TranscriptDiffRow_Serialize = {
-  id: string;
-  status: TranscriptDiffStatus;
-  snapshotSegment?: TranscriptSegment_Serialize | null;
-  currentSegment?: TranscriptSegment_Serialize | null;
-  snapshotIndex: number | null;
-  currentIndex: number | null;
+	id: string,
+	status: TranscriptDiffStatus,
+	snapshotSegment?: TranscriptSegment_Serialize | null,
+	currentSegment?: TranscriptSegment_Serialize | null,
+	snapshotIndex: number | null,
+	currentIndex: number | null,
 };
 
-export type TranscriptDiffStatus = 'unchanged' | 'modified' | 'added' | 'removed';
+export type TranscriptDiffStatus = "unchanged" | "modified" | "added" | "removed";
 
-export type TranscriptLlmJobRequest =
-  | TranscriptLlmJobRequest_Serialize
-  | TranscriptLlmJobRequest_Deserialize;
+export type TranscriptLlmJobRequest = TranscriptLlmJobRequest_Serialize | TranscriptLlmJobRequest_Deserialize;
 
 export type TranscriptLlmJobRequest_Deserialize = {
-  taskId: string;
-  taskType: LlmTaskType;
-  jobHistoryId: string | null;
-  config: LlmConfig_Deserialize;
-  segments: TranscriptSegment_Deserialize[];
-  targetLanguage: string | null;
-  targetLanguageName: string | null;
-  context: string | null;
-  keywords: string | null;
-  template: SummaryTemplateConfig | null;
-  chunkSize: number | null;
-  chunkCharBudget: number | null;
+	taskId: string,
+	taskType: LlmTaskType,
+	jobHistoryId: string | null,
+	config: LlmConfig_Deserialize,
+	segments: TranscriptSegment_Deserialize[],
+	targetLanguage: string | null,
+	targetLanguageName: string | null,
+	context: string | null,
+	keywords: string | null,
+	template: SummaryTemplateConfig | null,
+	chunkSize: number | null,
+	chunkCharBudget: number | null,
 };
 
 export type TranscriptLlmJobRequest_Serialize = {
-  taskId: string;
-  taskType: LlmTaskType;
-  jobHistoryId: string | null;
-  config: LlmConfig_Serialize;
-  segments: TranscriptSegment_Serialize[];
-  targetLanguage: string | null;
-  targetLanguageName: string | null;
-  context: string | null;
-  keywords: string | null;
-  template: SummaryTemplateConfig | null;
-  chunkSize: number | null;
-  chunkCharBudget: number | null;
+	taskId: string,
+	taskType: LlmTaskType,
+	jobHistoryId: string | null,
+	config: LlmConfig_Serialize,
+	segments: TranscriptSegment_Serialize[],
+	targetLanguage: string | null,
+	targetLanguageName: string | null,
+	context: string | null,
+	keywords: string | null,
+	template: SummaryTemplateConfig | null,
+	chunkSize: number | null,
+	chunkCharBudget: number | null,
 };
 
 export type TranscriptNormalizationOptions = {
-  enableTimeline: boolean;
+	enableTimeline: boolean,
 };
 
 export type TranscriptPostprocessOptions = {
-  textReplacementSets?: TranscriptTextReplacementRuleSet[];
-  dropFinalDotSegments?: boolean;
+	textReplacementSets?: TranscriptTextReplacementRuleSet[],
+	dropFinalDotSegments?: boolean,
 };
 
 export type TranscriptSegment = TranscriptSegment_Serialize | TranscriptSegment_Deserialize;
 
 export type TranscriptSegment_Deserialize = {
-  id: string;
-  text: string;
-  start: number;
-  end: number;
-  isFinal: boolean;
-  timing: TranscriptTiming | null;
-  tokens: string[] | null;
-  timestamps: number[] | null;
-  durations: number[] | null;
-  translation: string | null;
-  speaker: SpeakerTag_Deserialize | null;
-  speakerAttribution: SpeakerAttribution | null;
+	id: string,
+	text: string,
+	start: number,
+	end: number,
+	isFinal: boolean,
+	timing: TranscriptTiming | null,
+	tokens: string[] | null,
+	timestamps: number[] | null,
+	durations: number[] | null,
+	translation: string | null,
+	speaker: SpeakerTag_Deserialize | null,
+	speakerAttribution: SpeakerAttribution | null,
 };
 
 export type TranscriptSegment_Serialize = {
-  id: string;
-  text: string;
-  start: number;
-  end: number;
-  isFinal: boolean;
-  timing?: TranscriptTiming | null;
-  tokens?: string[] | null;
-  timestamps?: number[] | null;
-  durations?: number[] | null;
-  translation?: string | null;
-  speaker?: SpeakerTag_Serialize | null;
-  speakerAttribution?: SpeakerAttribution | null;
+	id: string,
+	text: string,
+	start: number,
+	end: number,
+	isFinal: boolean,
+	timing?: TranscriptTiming | null,
+	tokens?: string[] | null,
+	timestamps?: number[] | null,
+	durations?: number[] | null,
+	translation?: string | null,
+	speaker?: SpeakerTag_Serialize | null,
+	speakerAttribution?: SpeakerAttribution | null,
 };
 
 export type TranscriptSnapshotMetadata = {
-  id: string;
-  historyId: string;
-  reason: TranscriptSnapshotReason;
-  createdAt: number;
-  segmentCount: number;
+	id: string,
+	historyId: string,
+	reason: TranscriptSnapshotReason,
+	createdAt: number,
+	segmentCount: number,
 };
 
-export type TranscriptSnapshotReason =
-  | 'polish'
-  | 'translate'
-  | 'retranscribe'
-  | 'restore'
-  | 'manual_edit';
+export type TranscriptSnapshotReason = "polish" | "translate" | "retranscribe" | "restore" | "manual_edit";
 
-export type TranscriptSnapshotRecord =
-  | TranscriptSnapshotRecord_Serialize
-  | TranscriptSnapshotRecord_Deserialize;
+export type TranscriptSnapshotRecord = TranscriptSnapshotRecord_Serialize | TranscriptSnapshotRecord_Deserialize;
 
 export type TranscriptSnapshotRecord_Deserialize = {
-  metadata: TranscriptSnapshotMetadata;
-  segments: TranscriptSegment_Deserialize[];
+	metadata: TranscriptSnapshotMetadata,
+	segments: TranscriptSegment_Deserialize[],
 };
 
 export type TranscriptSnapshotRecord_Serialize = {
-  metadata: TranscriptSnapshotMetadata;
-  segments: TranscriptSegment_Serialize[];
+	metadata: TranscriptSnapshotMetadata,
+	segments: TranscriptSegment_Serialize[],
 };
 
 export type TranscriptSummaryRecordPayload = {
-  templateId: string;
-  content: string;
-  generatedAt: string;
-  sourceFingerprint: string;
+	templateId: string,
+	content: string,
+	generatedAt: string,
+	sourceFingerprint: string,
 };
 
 export type TranscriptSummaryResult = {
-  templateId: string;
-  content: string;
+	templateId: string,
+	content: string,
 };
 
 export type TranscriptTextReplacementRule = {
-  from?: string;
-  to?: string;
+	from?: string,
+	to?: string,
 };
 
 export type TranscriptTextReplacementRuleSet = {
-  enabled?: boolean;
-  ignoreCase?: boolean;
-  rules?: TranscriptTextReplacementRule[];
+	enabled?: boolean,
+	ignoreCase?: boolean,
+	rules?: TranscriptTextReplacementRule[],
 };
 
 export type TranscriptTiming = {
-  level: TranscriptTimingLevel;
-  source: TranscriptTimingSource;
-  units: TranscriptTimingUnit[];
+	level: TranscriptTimingLevel,
+	source: TranscriptTimingSource,
+	units: TranscriptTimingUnit[],
 };
 
-export type TranscriptTimingLevel = 'token' | 'segment';
+export type TranscriptTimingLevel = "token" | "segment";
 
-export type TranscriptTimingSource = 'model' | 'derived';
+export type TranscriptTimingSource = "model" | "derived";
 
 export type TranscriptTimingUnit = {
-  text: string;
-  start: number;
-  end: number;
+	text: string,
+	start: number,
+	end: number,
 };
 
-export type TranslateSegmentsRequest =
-  | TranslateSegmentsRequest_Serialize
-  | TranslateSegmentsRequest_Deserialize;
+export type TranslateSegmentsRequest = TranslateSegmentsRequest_Serialize | TranslateSegmentsRequest_Deserialize;
 
 export type TranslateSegmentsRequest_Deserialize = {
-  taskId: string;
-  config: LlmConfig_Deserialize;
-  segments: LlmSegmentInput[];
-  chunkSize: number | null;
-  targetLanguage: string;
-  targetLanguageName: string | null;
+	taskId: string,
+	config: LlmConfig_Deserialize,
+	segments: LlmSegmentInput[],
+	chunkSize: number | null,
+	targetLanguage: string,
+	targetLanguageName: string | null,
 };
 
 export type TranslateSegmentsRequest_Serialize = {
-  taskId: string;
-  config: LlmConfig_Serialize;
-  segments: LlmSegmentInput[];
-  chunkSize: number | null;
-  targetLanguage: string;
-  targetLanguageName: string | null;
+	taskId: string,
+	config: LlmConfig_Serialize,
+	segments: LlmSegmentInput[],
+	chunkSize: number | null,
+	targetLanguage: string,
+	targetLanguageName: string | null,
 };
 
 export type TranslatedSegment = {
-  id: string;
-  translation: string;
+	id: string,
+	translation: string,
 };
 
 export type UsageBreakdown = {
-  key: string;
-  label: string;
-  stats: DashboardUsageBucket;
-  value: number;
-  valueDisplay: string;
+	key: string,
+	label: string,
+	stats: DashboardUsageBucket,
+	value: number,
+	valueDisplay: string,
 };
 
 export type UsageTrendPoint = {
-  date: string;
-  dateLabel: string;
+	date: string,
+	dateLabel: string,
 } & DashboardUsageBucket;
 
-export type VoiceTypingMode = 'hold' | 'toggle';
+export type VoiceTypingMode = "hold" | "toggle";
 
 export type VoiceTypingReadinessInput = {
-  state: string;
-  lastErrorMessage: string | null;
+	state: string,
+	lastErrorMessage: string | null,
 };
 
 export type VolcengineDoubaoAsrConfig = {
-  apiKey?: string;
-  streamingEndpoint?: string;
-  streamingResourceId?: string;
-  batchEndpoint?: string;
-  batchResourceId?: string;
+	apiKey?: string,
+	streamingEndpoint?: string,
+	streamingResourceId?: string,
+	batchEndpoint?: string,
+	batchResourceId?: string,
 };
 
 export type WebviewBrowsingDataClearResult = {
-  beforeBytes: number | null;
-  afterBytes: number | null;
-  clearRequested: boolean;
+	beforeBytes: number | null,
+	afterBytes: number | null,
+	clearRequested: boolean,
 };
 
-export type WebviewCacheUsageCategory =
-  | WebviewCacheUsageCategory_Serialize
-  | WebviewCacheUsageCategory_Deserialize;
+export type WebviewCacheUsageCategory = WebviewCacheUsageCategory_Serialize | WebviewCacheUsageCategory_Deserialize;
 
 export type WebviewCacheUsageCategory_Deserialize = {
-  bytes: number | null;
-  clearSupported: boolean;
-  path: string | null;
+	bytes: number | null,
+	clearSupported: boolean,
+	path: string | null,
 };
 
 export type WebviewCacheUsageCategory_Serialize = {
-  bytes: number | null;
-  clearSupported: boolean;
-  path?: string | null;
+	bytes: number | null,
+	clearSupported: boolean,
+	path?: string | null,
 };
 
 export type RustTauriCommandContractMap = {
-  project_list: {
-    args: undefined;
-    result: ProjectRecord[];
-  };
-  project_create: {
-    args: { input: ProjectCreateInput };
-    result: ProjectRecord;
-  };
-  project_update: {
-    args: { projectId: string; updates: ProjectUpdateInput };
-    result: ProjectRecord | null;
-  };
-  project_delete: {
-    args: { projectId: string; cascadeAction?: string };
-    result: undefined;
-  };
-  project_reorder: {
-    args: { projectIds: string[] };
-    result: ProjectRecord[];
-  };
-  project_get_active_id: {
-    args: undefined;
-    result: string | null;
-  };
-  project_set_active_id: {
-    args: { projectId: string | null };
-    result: undefined;
-  };
-  tag_list: {
-    args: {
-      fallbackEnabledPolishKeywordSetIds?: string[] | null;
-      fallbackEnabledSpeakerProfileIds?: string[] | null;
-    };
-    result: TagRecord[];
-  };
-  tag_save_all: {
-    args: { tags: TagRecord[] };
-    result: undefined;
-  };
-  tag_create: {
-    args: {
-      name: string;
-      description?: string | null;
-      icon?: string | null;
-      color?: string | null;
-    };
-    result: TagRecord;
-  };
-  tag_update: {
-    args: { tagId: string; updates: TagUpdateInput };
-    result: TagRecord | null;
-  };
-  tag_delete: {
-    args: { tagId: string };
-    result: undefined;
-  };
-  tag_reorder: {
-    args: { tagIds: string[] };
-    result: TagRecord[];
-  };
-  tag_get_active_id: {
-    args: undefined;
-    result: string | null;
-  };
-  tag_set_active_id: {
-    args: { tagId: string | null };
-    result: undefined;
-  };
-  task_ledger_load_snapshot: {
-    args: undefined;
-    result: TaskLedgerSnapshot_Serialize;
-  };
-  task_ledger_upsert_task: {
-    args: { record: TaskLedgerRecord_Deserialize };
-    result: TaskLedgerSnapshot_Serialize;
-  };
-  task_ledger_patch_task: {
-    args: { id: string; patch: TaskLedgerPatch_Deserialize };
-    result: TaskLedgerSnapshot_Serialize;
-  };
-  task_ledger_remove_task: {
-    args: { id: string };
-    result: TaskLedgerSnapshot_Serialize;
-  };
-  task_ledger_clear_resolved: {
-    args: undefined;
-    result: TaskLedgerSnapshot_Serialize;
-  };
-  recovery_load_snapshot: {
-    args: undefined;
-    result: RecoverySnapshot_Serialize;
-  };
-  recovery_save_snapshot: {
-    args: { items: RecoveryItemInput_Deserialize[] };
-    result: RecoverySnapshot_Serialize;
-  };
-  recovery_persist_queue_snapshot: {
-    args: { queueItems: RecoveryItemInput_Deserialize[]; resolvedIds?: string[] | null };
-    result: undefined;
-  };
-  automation_load_repository_state: {
-    args: undefined;
-    result: AutomationRepositoryState_Serialize;
-  };
-  automation_persist_rules: {
-    args: { rules: AutomationRuleInput_Deserialize[] };
-    result: undefined;
-  };
-  automation_persist_profiles: {
-    args: { profiles: AutomationProfileInput_Deserialize[] };
-    result: undefined;
-  };
-  automation_persist_processed_entries: {
-    args: { processedEntries: AutomationProcessedInput_Deserialize[] };
-    result: undefined;
-  };
-  automation_persist_repository_state: {
-    args: {
-      profiles: AutomationProfileInput_Deserialize[];
-      rules: AutomationRuleInput_Deserialize[];
-      processedEntries: AutomationProcessedInput_Deserialize[];
-    };
-    result: undefined;
-  };
-  automation_validate_rule_activation: {
-    args: { rule: AutomationRule; globalConfig: unknown; tags: unknown[] };
-    result: AutomationRuleValidationResult_Serialize;
-  };
-  replace_automation_runtime_rules: {
-    args: { rules: AutomationRuntimeRuleConfig[] };
-    result: AutomationRuntimeReplaceResult[];
-  };
-  scan_automation_runtime_rule: {
-    args: { rule: AutomationRuntimeRuleConfig };
-    result: undefined;
-  };
-  collect_automation_runtime_rule_paths: {
-    args: { rule: AutomationRuntimeRuleConfig; filePaths: string[] };
-    result: AutomationRuntimePathCollectionResult[];
-  };
-  history_list_items: {
-    args: { limit?: number | null; offset?: number | null } | undefined;
-    result: HistoryItemRecord[];
-  };
-  history_query_workspace: {
-    args: HistoryWorkspaceQueryRequest;
-    result: HistoryWorkspaceQueryResult;
-  };
-  history_create_live_draft: {
-    args: HistoryCreateLiveDraftRequest;
-    result: LiveRecordingDraftResult;
-  };
-  history_complete_live_draft: {
-    args: HistoryCompleteLiveDraftRequest_Deserialize;
-    result: HistoryItemRecord;
-  };
-  history_save_recording: {
-    args: HistorySaveRecordingRequest_Deserialize;
-    result: HistoryItemRecord;
-  };
-  history_save_recording_to_project: {
-    args: {
-      segments: TranscriptSegment_Deserialize[];
-      duration: number;
-      projectId: string | null;
-      audioBytes?: number[] | null;
-      nativeAudioPath?: string | null;
-      audioExtension?: string | null;
-    };
-    result: HistoryItemRecord;
-  };
-  history_save_imported_file: {
-    args: HistorySaveImportedFileRequest_Deserialize;
-    result: HistoryItemRecord;
-  };
-  history_save_imported_file_to_project: {
-    args: {
-      id?: string | null;
-      sourcePath: string;
-      segments: TranscriptSegment_Deserialize[];
-      duration: number;
-      projectId: string | null;
-      convertedSourcePath?: string | null;
-    };
-    result: HistoryItemRecord;
-  };
-  history_delete_items: {
-    args: HistoryDeleteItemsRequest;
-    result: undefined;
-  };
-  history_trash_items: {
-    args: HistoryTrashItemsRequest;
-    result: undefined;
-  };
-  history_restore_items: {
-    args: HistoryDeleteItemsRequest;
-    result: undefined;
-  };
-  history_purge_items: {
-    args: HistoryDeleteItemsRequest;
-    result: undefined;
-  };
-  history_load_transcript: {
-    args: { historyId: string };
-    result: TranscriptSegment_Serialize[] | null;
-  };
-  history_update_transcript: {
-    args: HistoryUpdateTranscriptRequest_Deserialize;
-    result: HistoryItemRecord;
-  };
-  history_commit_transcript_edit: {
-    args: HistoryCommitTranscriptEditRequest_Deserialize;
-    result: HistoryCommitTranscriptEditResult_Serialize;
-  };
-  history_create_transcript_snapshot: {
-    args: HistoryCreateTranscriptSnapshotRequest_Deserialize;
-    result: TranscriptSnapshotMetadata;
-  };
-  history_list_transcript_snapshots: {
-    args: { historyId: string };
-    result: TranscriptSnapshotMetadata[];
-  };
-  history_load_transcript_snapshot: {
-    args: { historyId: string; snapshotId: string };
-    result: TranscriptSnapshotRecord_Serialize | null;
-  };
-  history_build_transcript_diff: {
-    args: {
-      snapshotSegments: TranscriptSegment_Deserialize[];
-      currentSegments: TranscriptSegment_Deserialize[];
-    };
-    result: TranscriptDiffResult_Serialize;
-  };
-  history_restore_transcript_diff_rows: {
-    args: { rows: TranscriptDiffRow_Deserialize[]; selectedRowIds: string[] };
-    result: TranscriptSegment_Serialize[];
-  };
-  history_update_item_meta: {
-    args: HistoryUpdateItemMetaRequest_Deserialize;
-    result: undefined;
-  };
-  history_update_project_assignments: {
-    args: { ids: string[]; projectId: string | null };
-    result: undefined;
-  };
-  history_reassign_project: {
-    args: { currentProjectId: string; nextProjectId: string | null };
-    result: undefined;
-  };
-  history_update_tag_assignments: {
-    args: HistoryUpdateTagAssignmentsRequest;
-    result: undefined;
-  };
-  history_replace_tag_assignments: {
-    args: HistoryReplaceTagAssignmentsRequest;
-    result: undefined;
-  };
-  history_load_summary: {
-    args: { historyId: string };
-    result: HistorySummaryPayload_Serialize | null;
-  };
-  history_save_summary: {
-    args: { historyId: string; summaryPayload: HistorySummaryPayload_Deserialize };
-    result: undefined;
-  };
-  history_delete_summary: {
-    args: { historyId: string };
-    result: undefined;
-  };
-  history_resolve_audio_path: {
-    args: { historyId: string };
-    result: string | null;
-  };
-  history_preview_audio_cleanup: {
-    args: HistoryAudioCleanupRequest_Deserialize;
-    result: HistoryAudioCleanupReport;
-  };
-  history_cleanup_audio: {
-    args: HistoryAudioCleanupRequest_Deserialize;
-    result: HistoryAudioCleanupReport;
-  };
-  history_open_folder: {
-    args: undefined;
-    result: undefined;
-  };
+	"project_list": {
+		args: undefined;
+		result: ProjectRecord[];
+	};
+	"project_create": {
+		args: { input: ProjectCreateInput };
+		result: ProjectRecord;
+	};
+	"project_update": {
+		args: { projectId: string; updates: ProjectUpdateInput };
+		result: ProjectRecord | null;
+	};
+	"project_delete": {
+		args: { projectId: string; cascadeAction?: string };
+		result: void;
+	};
+	"project_reorder": {
+		args: { projectIds: string[] };
+		result: ProjectRecord[];
+	};
+	"project_get_active_id": {
+		args: undefined;
+		result: string | null;
+	};
+	"project_set_active_id": {
+		args: { projectId: string | null };
+		result: void;
+	};
+	"tag_list": {
+		args: { fallbackEnabledPolishKeywordSetIds?: string[] | null; fallbackEnabledSpeakerProfileIds?: string[] | null };
+		result: TagRecord[];
+	};
+	"tag_save_all": {
+		args: { tags: TagRecord[] };
+		result: void;
+	};
+	"tag_create": {
+		args: { name: string; description?: string | null; icon?: string | null; color?: string | null };
+		result: TagRecord;
+	};
+	"tag_update": {
+		args: { tagId: string; updates: TagUpdateInput };
+		result: TagRecord | null;
+	};
+	"tag_delete": {
+		args: { tagId: string };
+		result: void;
+	};
+	"tag_reorder": {
+		args: { tagIds: string[] };
+		result: TagRecord[];
+	};
+	"tag_get_active_id": {
+		args: undefined;
+		result: string | null;
+	};
+	"tag_set_active_id": {
+		args: { tagId: string | null };
+		result: void;
+	};
+	"task_ledger_load_snapshot": {
+		args: undefined;
+		result: TaskLedgerSnapshot_Serialize;
+	};
+	"task_ledger_upsert_task": {
+		args: { record: TaskLedgerRecord_Deserialize };
+		result: TaskLedgerSnapshot_Serialize;
+	};
+	"task_ledger_patch_task": {
+		args: { id: string; patch: TaskLedgerPatch_Deserialize };
+		result: TaskLedgerSnapshot_Serialize;
+	};
+	"task_ledger_remove_task": {
+		args: { id: string };
+		result: TaskLedgerSnapshot_Serialize;
+	};
+	"task_ledger_clear_resolved": {
+		args: undefined;
+		result: TaskLedgerSnapshot_Serialize;
+	};
+	"recovery_load_snapshot": {
+		args: undefined;
+		result: RecoverySnapshot_Serialize;
+	};
+	"recovery_save_snapshot": {
+		args: { items: RecoveryItemInput_Deserialize[] };
+		result: RecoverySnapshot_Serialize;
+	};
+	"recovery_persist_queue_snapshot": {
+		args: { queueItems: RecoveryItemInput_Deserialize[]; resolvedIds?: string[] | null };
+		result: void;
+	};
+	"automation_load_repository_state": {
+		args: undefined;
+		result: AutomationRepositoryState_Serialize;
+	};
+	"automation_persist_rules": {
+		args: { rules: AutomationRuleInput_Deserialize[] };
+		result: void;
+	};
+	"automation_persist_profiles": {
+		args: { profiles: AutomationProfileInput_Deserialize[] };
+		result: void;
+	};
+	"automation_persist_processed_entries": {
+		args: { processedEntries: AutomationProcessedInput_Deserialize[] };
+		result: void;
+	};
+	"automation_persist_repository_state": {
+		args: { profiles: AutomationProfileInput_Deserialize[]; rules: AutomationRuleInput_Deserialize[]; processedEntries: AutomationProcessedInput_Deserialize[] };
+		result: void;
+	};
+	"automation_validate_rule_activation": {
+		args: { rule: AutomationRule; globalConfig: unknown; tags: unknown[] };
+		result: AutomationRuleValidationResult_Serialize;
+	};
+	"replace_automation_runtime_rules": {
+		args: { rules: AutomationRuntimeRuleConfig[] };
+		result: AutomationRuntimeReplaceResult[];
+	};
+	"scan_automation_runtime_rule": {
+		args: { rule: AutomationRuntimeRuleConfig };
+		result: void;
+	};
+	"collect_automation_runtime_rule_paths": {
+		args: { rule: AutomationRuntimeRuleConfig; filePaths: string[] };
+		result: AutomationRuntimePathCollectionResult[];
+	};
+	"history_list_items": {
+		args: { limit?: number | null; offset?: number | null } | undefined;
+		result: HistoryItemRecord[];
+	};
+	"history_query_workspace": {
+		args: HistoryWorkspaceQueryRequest;
+		result: HistoryWorkspaceQueryResult;
+	};
+	"history_create_live_draft": {
+		args: HistoryCreateLiveDraftRequest;
+		result: LiveRecordingDraftResult;
+	};
+	"history_complete_live_draft": {
+		args: HistoryCompleteLiveDraftRequest_Deserialize;
+		result: HistoryItemRecord;
+	};
+	"history_save_recording": {
+		args: HistorySaveRecordingRequest_Deserialize;
+		result: HistoryItemRecord;
+	};
+	"history_save_recording_to_project": {
+		args: { segments: TranscriptSegment_Deserialize[]; duration: number; projectId: string | null; audioBytes?: number[] | null; nativeAudioPath?: string | null; audioExtension?: string | null };
+		result: HistoryItemRecord;
+	};
+	"history_save_imported_file": {
+		args: HistorySaveImportedFileRequest_Deserialize;
+		result: HistoryItemRecord;
+	};
+	"history_save_imported_file_to_project": {
+		args: { id?: string | null; sourcePath: string; segments: TranscriptSegment_Deserialize[]; duration: number; projectId: string | null; convertedSourcePath?: string | null };
+		result: HistoryItemRecord;
+	};
+	"history_delete_items": {
+		args: HistoryDeleteItemsRequest;
+		result: void;
+	};
+	"history_trash_items": {
+		args: HistoryTrashItemsRequest;
+		result: void;
+	};
+	"history_restore_items": {
+		args: HistoryDeleteItemsRequest;
+		result: void;
+	};
+	"history_purge_items": {
+		args: HistoryDeleteItemsRequest;
+		result: void;
+	};
+	"history_load_transcript": {
+		args: { historyId: string };
+		result: TranscriptSegment_Serialize[] | null;
+	};
+	"history_update_transcript": {
+		args: HistoryUpdateTranscriptRequest_Deserialize;
+		result: HistoryItemRecord;
+	};
+	"history_commit_transcript_edit": {
+		args: HistoryCommitTranscriptEditRequest_Deserialize;
+		result: HistoryCommitTranscriptEditResult_Serialize;
+	};
+	"history_create_transcript_snapshot": {
+		args: HistoryCreateTranscriptSnapshotRequest_Deserialize;
+		result: TranscriptSnapshotMetadata;
+	};
+	"history_list_transcript_snapshots": {
+		args: { historyId: string };
+		result: TranscriptSnapshotMetadata[];
+	};
+	"history_load_transcript_snapshot": {
+		args: { historyId: string; snapshotId: string };
+		result: TranscriptSnapshotRecord_Serialize | null;
+	};
+	"history_build_transcript_diff": {
+		args: { snapshotSegments: TranscriptSegment_Deserialize[]; currentSegments: TranscriptSegment_Deserialize[] };
+		result: TranscriptDiffResult_Serialize;
+	};
+	"history_restore_transcript_diff_rows": {
+		args: { rows: TranscriptDiffRow_Deserialize[]; selectedRowIds: string[] };
+		result: TranscriptSegment_Serialize[];
+	};
+	"history_update_item_meta": {
+		args: HistoryUpdateItemMetaRequest_Deserialize;
+		result: void;
+	};
+	"history_update_project_assignments": {
+		args: { ids: string[]; projectId: string | null };
+		result: void;
+	};
+	"history_reassign_project": {
+		args: { currentProjectId: string; nextProjectId: string | null };
+		result: void;
+	};
+	"history_update_tag_assignments": {
+		args: HistoryUpdateTagAssignmentsRequest;
+		result: void;
+	};
+	"history_replace_tag_assignments": {
+		args: HistoryReplaceTagAssignmentsRequest;
+		result: void;
+	};
+	"history_load_summary": {
+		args: { historyId: string };
+		result: HistorySummaryPayload_Serialize | null;
+	};
+	"history_save_summary": {
+		args: { historyId: string; summaryPayload: HistorySummaryPayload_Deserialize };
+		result: void;
+	};
+	"history_delete_summary": {
+		args: { historyId: string };
+		result: void;
+	};
+	"history_resolve_audio_path": {
+		args: { historyId: string };
+		result: string | null;
+	};
+	"history_preview_audio_cleanup": {
+		args: HistoryAudioCleanupRequest_Deserialize;
+		result: HistoryAudioCleanupReport;
+	};
+	"history_cleanup_audio": {
+		args: HistoryAudioCleanupRequest_Deserialize;
+		result: HistoryAudioCleanupReport;
+	};
+	"history_open_folder": {
+		args: undefined;
+		result: void;
+	};
 };
