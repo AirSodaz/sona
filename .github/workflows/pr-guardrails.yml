@@ -47,7 +47,8 @@ jobs:
     permissions:
       contents: read
     env:
-      LLAMA_BUILD_SHARED_LIBS: 0
+      LLAMA_BUILD_SHARED_LIBS: 1
+      CARGO_TARGET_DIR: target
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
