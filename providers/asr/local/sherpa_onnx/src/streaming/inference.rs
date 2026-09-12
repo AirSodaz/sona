@@ -12,7 +12,7 @@ use sona_core::transcription::transcript::{
     select_final_transcript_text,
 };
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
 use sona_core::transcription::transcript::normalize_recognizer_text;
@@ -167,6 +167,7 @@ pub(super) fn run_offline_inference(
     postprocessor: TranscriptPostprocessor,
     record_metrics: bool,
     triggered_at: Instant,
+    last_partial_decode_ms: Option<Arc<AtomicU64>>,
 ) {
     if speech_buffer.is_empty() {
         if let Some(label) = diagnostics_instance_label(instance_id) {
@@ -192,6 +193,12 @@ pub(super) fn run_offline_inference(
     let decode_result = decode_offline_samples(r, &full_audio);
     debug!("[Offline] FFI: Decode finished");
     let decode_ms = duration_to_ms(decode_started.elapsed());
+
+    if stage == "partial"
+        && let Some(target) = last_partial_decode_ms.as_ref()
+    {
+        target.store(decode_ms.round() as u64, Ordering::Release);
+    }
 
     let record_metric = |emit_latency_ms: Option<f64>| {
         if record_metrics {

@@ -44,7 +44,7 @@ fn silero_config(model: &str, options: &VadDetectionOptions) -> VadModelConfig {
             min_silence_duration: options.min_silence_duration,
             min_speech_duration: options.min_speech_duration,
             window_size: 512,
-            ..Default::default()
+            max_speech_duration: 30.0,
         },
         sample_rate: SUPPORTED_SAMPLE_RATE as i32,
         num_threads: super::shared::NUM_THREADS,

@@ -439,6 +439,7 @@ async fn flush_session_impl_inner(
                         postprocessor,
                         true,
                         triggered_at,
+                        None,
                     );
                 }
             };
@@ -451,7 +452,9 @@ async fn flush_session_impl_inner(
             info!("[Sherpa] {label} flush found no pending offline speech buffer.");
         }
         instance.current_segment_id = None;
-        instance.offline_state = OfflineState::default();
+        let initial_refresh = instance.offline_state.backoff().initial_interval_ms();
+        instance.offline_state = OfflineState::with_initial_refresh_rate(initial_refresh);
+        instance.last_partial_decode_ms.store(0, Ordering::Release);
         if let Some(label) = diagnostics_instance_label(instance_id) {
             info!("[Sherpa] flush_session({label}) complete. mode=offline");
         }
@@ -650,6 +653,25 @@ async fn feed_audio_samples_inner(
         if currently_speaking {
             instance.offline_state.push_speech_chunk(samples.to_vec());
 
+            let previous_decode_ms = instance.last_partial_decode_ms.swap(0, Ordering::AcqRel);
+            if previous_decode_ms > 0 {
+                let level_before = instance.offline_state.backoff().level();
+                instance
+                    .offline_state
+                    .record_decode_duration(previous_decode_ms);
+                let level_after = instance.offline_state.backoff().level();
+                if level_after != level_before
+                    && let Some(label) = diagnostics_instance_label(instance_id)
+                {
+                    info!(
+                        "[Sherpa] {label} decode duration exceeded threshold ({}ms), stepping down refresh rate. level={:?} interval={:?}",
+                        previous_decode_ms,
+                        level_after,
+                        instance.offline_state.backoff().current_interval_ms()
+                    );
+                }
+            }
+
             let now = std::time::Instant::now();
             if instance.offline_state.should_run_partial(now) {
                 let slot_available = prepare_partial_inference_slot(pending_inference).await?;
@@ -697,6 +719,7 @@ async fn feed_audio_samples_inner(
                         );
                     }
 
+                    let partial_decode_target = instance.last_partial_decode_ms.clone();
                     let task = move || {
                         if let Some(safe_r) = recognizer_copy.offline() {
                             run_offline_inference(
@@ -714,6 +737,7 @@ async fn feed_audio_samples_inner(
                                 postprocessor,
                                 should_record_partial_metric,
                                 triggered_at,
+                                Some(partial_decode_target),
                             );
                         }
                     };
@@ -724,6 +748,13 @@ async fn feed_audio_samples_inner(
         }
 
         if !currently_speaking {
+            let previous_decode_ms = instance.last_partial_decode_ms.swap(0, Ordering::AcqRel);
+            if previous_decode_ms > 0 {
+                instance
+                    .offline_state
+                    .record_decode_duration(previous_decode_ms);
+            }
+
             if instance.offline_state.is_speech_active() {
                 if let Some(label) = diagnostics_instance_label(instance_id) {
                     info!(
@@ -787,6 +818,7 @@ async fn feed_audio_samples_inner(
                             postprocessor,
                             true,
                             triggered_at,
+                            None,
                         );
                     }
                     if let Some(boundary) = boundary.as_ref() {

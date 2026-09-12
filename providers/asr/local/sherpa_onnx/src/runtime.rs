@@ -5,7 +5,7 @@ use sona_core::ports::asr::TranscriptNormalizationOptions;
 use sona_core::transcription::postprocess::TranscriptPostprocessor;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 use tokio::sync::{Mutex, OnceCell};
 
@@ -137,6 +137,7 @@ fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
     instance.current_segment_id = None;
     instance.clear_partial_metric_sample();
     instance.record_diagnostics = RecordDiagnosticsState::default();
+    instance.last_partial_decode_ms.store(0, Ordering::Release);
 }
 
 #[derive(Default)]
@@ -156,6 +157,7 @@ pub struct SherpaInstance {
     pub record_diagnostics: RecordDiagnosticsState,
     pub normalization_options: TranscriptNormalizationOptions,
     pub postprocessor: TranscriptPostprocessor,
+    pub last_partial_decode_ms: Arc<AtomicU64>,
 }
 
 impl SherpaInstance {
@@ -511,6 +513,10 @@ impl OfflineState {
 
     pub fn record_overrun(&mut self) {
         self.backoff.record_overrun();
+    }
+
+    pub fn record_decode_duration(&mut self, decode_ms: u64) {
+        self.backoff.record_decode_duration(decode_ms);
     }
 
     pub fn on_utterance_end(&mut self, clean: bool) {

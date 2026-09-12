@@ -51,7 +51,7 @@ fn ten_config(model: &str) -> VadModelConfig {
             min_silence_duration: MIN_SILENCE_DURATION,
             min_speech_duration: MIN_SPEECH_DURATION,
             window_size: WINDOW_SIZE,
-            ..Default::default()
+            max_speech_duration: 30.0,
         },
         sample_rate: SUPPORTED_SAMPLE_RATE as i32,
         num_threads: super::shared::NUM_THREADS,

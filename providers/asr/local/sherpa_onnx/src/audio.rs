@@ -20,6 +20,7 @@ pub struct VadDetectorOptions {
     pub min_silence_duration: f32,
     pub min_speech_duration: f32,
     pub window_size: i32,
+    pub max_speech_duration: f32,
     pub sample_rate: i32,
     pub num_threads: i32,
 }
@@ -31,6 +32,7 @@ impl Default for VadDetectorOptions {
             min_silence_duration: 0.5,
             min_speech_duration: 0.25,
             window_size: 512,
+            max_speech_duration: 30.0,
             sample_rate: 16000,
             num_threads: 1,
         }
@@ -192,7 +194,7 @@ pub(crate) fn create_vad_config(
         min_silence_duration: options.min_silence_duration,
         min_speech_duration: options.min_speech_duration,
         window_size: options.window_size,
-        ..Default::default()
+        max_speech_duration: options.max_speech_duration,
     };
     Ok(VadConfig {
         silero_vad,
@@ -310,5 +312,30 @@ mod tests {
 
         assert_eq!(error.kind, AsrPortErrorKind::Model);
         assert!(error.message.contains("Model path does not exist"));
+    }
+
+    #[test]
+    fn vad_detector_options_defaults_max_speech_duration_to_thirty_seconds() {
+        use super::VadDetectorOptions;
+        let options = VadDetectorOptions::default();
+        assert_eq!(options.max_speech_duration, 30.0);
+    }
+
+    #[test]
+    fn create_vad_config_applies_max_speech_duration() {
+        use super::{VadDetectorOptions, create_vad_config};
+        let root = std::env::temp_dir().join(format!("sona-vad-model-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let onnx_path = root.join("silero_vad.onnx");
+        fs::write(&onnx_path, "onnx").unwrap();
+
+        let options = VadDetectorOptions {
+            max_speech_duration: 25.0,
+            ..Default::default()
+        };
+        let config = create_vad_config(&onnx_path, options).unwrap();
+        assert_eq!(config.silero_vad.max_speech_duration, 25.0);
+
+        fs::remove_dir_all(root).unwrap();
     }
 }
