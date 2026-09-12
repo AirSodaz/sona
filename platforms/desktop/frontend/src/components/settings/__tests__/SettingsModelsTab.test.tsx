@@ -698,6 +698,7 @@ describe('SettingsModelsTab speaker model selections', () => {
 
     await waitFor(() => {
       expect(useConfigStore.getState().config.modelDownloadMirror).toBe('hf-mirror');
+      expect(mirrorDropdownTrigger.textContent).toContain('镜像站 (hf-mirror.com)');
     });
   });
 });

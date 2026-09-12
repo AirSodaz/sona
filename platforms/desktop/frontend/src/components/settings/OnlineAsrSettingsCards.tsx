@@ -23,12 +23,12 @@ function useProviderStatus(providerId: string, isConfigured: boolean) {
   );
 
   if (isEnabled) {
-    return { type: 'ready', text: t('settings.asr.active', { defaultValue: '已启用' }) };
+    return { type: 'ready', text: t('settings.asr.active') };
   }
   if (isConfigured) {
-    return { type: 'off', text: t('settings.asr.configured', { defaultValue: '已就绪' }) };
+    return { type: 'off', text: t('settings.asr.configured') };
   }
-  return { type: 'off', text: t('settings.asr.not_configured', { defaultValue: '未配置' }) };
+  return { type: 'off', text: t('settings.asr.not_configured') };
 }
 
 export function VolcengineSettingsCard({ provider }: ProviderSettingsProps) {

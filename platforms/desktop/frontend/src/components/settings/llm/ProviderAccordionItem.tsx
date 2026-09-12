@@ -84,15 +84,15 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
   };
   const status = useMemo(() => {
     if (isConfigured) {
-      return { type: 'ready', text: t('settings.llm.status_ready', { defaultValue: '已就绪' }) };
+      return { type: 'ready', text: t('settings.llm.status_ready') };
     }
     if (def.requiresApiKey) {
       return {
         type: 'missing',
-        text: t('settings.llm.status_missing_api_key', { defaultValue: '缺少 API Key' }),
+        text: t('settings.llm.status_missing_api_key', { defaultValue: 'Missing API Key' }),
       };
     }
-    return { type: 'off', text: t('settings.llm.status_off', { defaultValue: '未配置' }) };
+    return { type: 'off', text: t('settings.llm.status_off', { defaultValue: 'Not configured' }) };
   }, [isConfigured, def.requiresApiKey, t]);
 
   const actions =

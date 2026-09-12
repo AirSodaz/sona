@@ -213,6 +213,7 @@ const MODEL_KEYS: (keyof ModelConfig)[] = [
   'batchVadModelPath',
   'batchSpeakerSegmentationModelPath',
   'batchSpeakerEmbeddingModelPath',
+  'modelDownloadMirror',
 ];
 
 const CAPTION_KEYS: (keyof CaptionConfig)[] = [

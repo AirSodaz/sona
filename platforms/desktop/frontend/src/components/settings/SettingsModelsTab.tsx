@@ -776,10 +776,9 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({
         type: 'ready',
         text:
           type === 'vad' || type === 'punctuation'
-            ? t('settings.ready', { defaultValue: '已就绪' })
+            ? t('common.ready')
             : t('settings.installed_count', {
                 count: installedCount,
-                defaultValue: `已安装 ${installedCount} 个`,
               }),
       };
     }
