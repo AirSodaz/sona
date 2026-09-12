@@ -267,7 +267,7 @@ export function Dropdown({
         ref={triggerRef}
         type="button"
         id={id}
-        className={`dropdown-trigger ${isOpen ? 'active' : ''}`}
+        className={`dropdown-trigger ${isOpen ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
         onClick={() => {
           if (disabled) {
             return;

@@ -1096,6 +1096,7 @@
       "remote_changes": "遠端操作數",
       "projected_conflicts": "預計衝突數",
       "disconnect": "解除綁定",
+      "pairing_export_desc": "複製此配對口令並貼到第二台裝置上以連線。",
       "pairing_modal_desc": "在另一台裝置上輸入此配對口令即可快速連線此同步庫。",
       "scope_rules": "詞庫與自動化規則",
       "scope_summaries": "摘要歷史記錄",

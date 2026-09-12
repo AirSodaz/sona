@@ -887,7 +887,7 @@
       "save_and_enable": "保存并开启同步",
       "test_provider_btn": "测试连接",
       "pairing_modal_title": "导入设备配对口令",
-      "pairing_import_desc": "粘贴在其他设备上生成的配对口令 (sonasync://...)，可快速自动回填连接参数与同步库 ID。",
+      "pairing_modal_desc": "粘贴在其他设备上生成的配对口令 (sonasync://...)，可快速自动回填连接参数与同步库 ID。",
       "pairing_applied_notice": "已成功导入来自其他设备的连接参数（同步库：{{vaultId}}）",
       "multi_vault_detected_title": "检测到多个同步库",
       "multi_vault_detected_desc": "该 WebDAV 存储上已存在多个独立的同步库。请选择要加入的同步库，或新建独立库：",
