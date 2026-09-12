@@ -6,7 +6,7 @@ import type {
   ModelCatalogSelectedIds as CoreModelCatalogSelectedIds,
   ModelCatalogSnapshot as CoreModelCatalogSnapshot,
 } from '../../bindings';
-import type { AppConfig, AppLogLevel } from '../../types/config';
+import type { AppConfig, AppLogLevel, ResolvedAppTheme } from '../../types/config';
 import type { DiagnosticsCoreFactsSnapshot, DiagnosticsCoreInput } from '../../types/diagnostics';
 import { flattenAppConfig } from '../../types/llm';
 import type {
@@ -436,4 +436,14 @@ export async function setMinimizeToTray(enabled: boolean): Promise<void> {
 
 export async function setLogLevel(level: AppLogLevel): Promise<void> {
   await invokeTauri(TauriCommand.app.setLogLevel, { level });
+}
+
+/**
+ * Recolors the native window frame to match the resolved application theme.
+ *
+ * The frame is drawn by the OS, so it cannot read our CSS custom properties;
+ * this keeps it in sync with `--color-bg-secondary` as the theme changes.
+ */
+export async function setWindowTheme(theme: ResolvedAppTheme): Promise<void> {
+  await invokeTauri(TauriCommand.app.setWindowTheme, { theme });
 }

@@ -27,12 +27,23 @@ export type AppLanguagePreference = GeneratedAppLanguagePreference;
 /** Resolved UI language loaded by i18next. */
 export type ResolvedAppLanguage = Exclude<AppLanguagePreference, 'auto'>;
 
+/** Application theme preference as stored in config. */
+export type AppThemePreference = 'auto' | 'light' | 'dark';
+
+/**
+ * Concrete theme after `auto` has been matched against the OS color scheme.
+ *
+ * This is what gets applied to the DOM and pushed to the native window frame,
+ * both of which need a definite value rather than a preference.
+ */
+export type ResolvedAppTheme = Exclude<AppThemePreference, 'auto'>;
+
 /** Application-level UI preferences. */
 export interface UIConfig {
   /** Application UI language preference. */
   appLanguage: AppLanguagePreference;
   /** Application theme preference. */
-  theme?: 'auto' | 'light' | 'dark';
+  theme?: AppThemePreference;
   /** Font preference. */
   font?: 'system' | 'serif' | 'sans' | 'mono' | 'arial' | 'georgia';
   /** Whether to minimize to tray on exit. Default: true. */

@@ -122,6 +122,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::system::update_tray_menu,
         crate::commands::system::set_minimize_to_tray,
         crate::commands::system::set_log_level,
+        crate::commands::system::set_window_theme,
         crate::commands::system::set_aux_window_state,
         crate::commands::system::get_aux_window_state,
         crate::commands::system::clear_aux_window_state,

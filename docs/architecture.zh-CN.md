@@ -195,6 +195,27 @@ schema 的数据库以及 v0.8.0 之前的 JSON 存储布局不再在运行时�
 
 当前没有已登记的 outbound-adapter 互依例外。每个 outbound adapter 只应依赖 Core（以及已评审的 Application，如 `sona-sync-webdav -> sona-sync`）。
 
+<a id="native-window-chrome"></a>
+## 原生窗口边框跟随应用主题
+
+桌面宿主保留操作系统窗口边框，而不自行绘制。改为给边框重新着色，使其看起来属于应用本身：
+
+- `platforms/desktop/src/platform/system/windows_chrome.rs` 负责颜色策略。它把已解析主题映射到
+  `frontend/src/styles/base.css` 中的 `--color-bg-secondary`、`--color-text-primary` 和
+  `--color-bg-tertiary`，并通过 `DwmSetWindowAttribute`（`DWMWA_CAPTION_COLOR`、`DWMWA_TEXT_COLOR`、
+  `DWMWA_BORDER_COLOR`、`DWMWA_WINDOW_CORNER_PREFERENCE`）应用。
+- 以应用主题为准：标题栏**不**跟随 Windows 系统主题，因此在应用内切换浅色/深色时边框同步变化。
+- `ResolvedTheme` 只接受 `light` 与 `dark`。`auto` 在跨越 IPC 边界之前已由前端根据
+  `prefers-color-scheme` 解析完毕，宿主无需猜测 webview 当前显示的内容。
+- `useThemeEffect` 在每次主题变化时把已解析主题推送给 `set_window_theme`，包括由操作系统驱动的
+  `auto` 切换。该调用是 fire-and-forget 的：失败只会让边框停留在上一个颜色，绝不能影响主题应用本身。
+- `create_main_window` 在首帧绘制前先应用浅色主题，避免启动时闪出错色；随后前端会按已保存的偏好纠正。
+- `DWMWA_CAPTION_COLOR` 需要 Windows 11（build 22000）。所有属性写入都是尽力而为并记录 debug 日志；
+  Windows 10 保留默认边框，只损失颜色一致性，不损失窗口行为。
+
+macOS 与 Linux 在此为 no-op：它们的边框由平台层负责主题，而 `caption` / `voice-typing` 辅助浮层
+本就有意无边框（`decorations: false`），因此不经过此路径。
+
 <a id="compatibility-debt"></a>
 ## 兼容债务清单
 

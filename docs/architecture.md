@@ -197,6 +197,38 @@ current SQLite payload and applies post-v0.8.0 field upgrades.
 
 There are currently no registered outbound-adapter-to-outbound-adapter exceptions. Each outbound adapter should depend only on Core (and reviewed Application edges such as `sona-sync-webdav -> sona-sync`).
 
+<a id="native-window-chrome"></a>
+## Native window chrome follows the application theme
+
+The desktop host keeps the operating system window frame rather than drawing its
+own. The frame is recolored instead, so it reads as part of the application:
+
+- `platforms/desktop/src/platform/system/windows_chrome.rs` owns the color
+  policy. It maps a resolved theme to the `--color-bg-secondary`,
+  `--color-text-primary` and `--color-bg-tertiary` values from
+  `frontend/src/styles/base.css` and applies them through
+  `DwmSetWindowAttribute` (`DWMWA_CAPTION_COLOR`, `DWMWA_TEXT_COLOR`,
+  `DWMWA_BORDER_COLOR`, `DWMWA_WINDOW_CORNER_PREFERENCE`).
+- The application theme is authoritative: the caption does **not** follow the
+  Windows system theme, so an in-app light/dark switch moves the frame too.
+- `ResolvedTheme` accepts only `light` and `dark`. `auto` is resolved by the
+  frontend against `prefers-color-scheme` before crossing the IPC boundary, so
+  the host never has to guess what the webview is showing.
+- `useThemeEffect` pushes the resolved theme to `set_window_theme` on every
+  change, including OS-driven `auto` transitions. The call is fire-and-forget:
+  a failure leaves the frame on its previous color and must never break theme
+  application itself.
+- `create_main_window` applies the light theme before the first paint to avoid a
+  wrong-color flash on startup, then the frontend corrects it if the persisted
+  preference differs.
+- `DWMWA_CAPTION_COLOR` requires Windows 11 (build 22000). Every attribute write
+  is best-effort and logged at debug level; Windows 10 keeps the default frame
+  and loses only the color match, not the window behaviors.
+
+macOS and Linux are no-ops here. They theme their frames at the platform level,
+and the auxiliary `caption` / `voice-typing` overlays are intentionally
+frameless (`decorations: false`), so they are excluded from this path.
+
 <a id="compatibility-debt"></a>
 ## Compatibility debt inventory
 

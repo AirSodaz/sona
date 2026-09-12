@@ -31,6 +31,7 @@ __pycache__/
 *.sw?
 .claude/
 .agents/
+.workbuddy-ai/
 
 # Playwright
 playwright-report/

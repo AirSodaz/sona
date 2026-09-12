@@ -25,7 +25,7 @@ import type {
 } from '../../bindings';
 import type { ApiServerDashboardSnapshot } from '../../types/apiServer';
 import type { BackupManifestV1, PreparedBackupImport } from '../../types/backup';
-import type { AppConfig, AppLogLevel } from '../../types/config';
+import type { AppConfig, AppLogLevel, ResolvedAppTheme } from '../../types/config';
 import type { DashboardSnapshot } from '../../types/dashboard';
 import type {
   PolishedSegment,
@@ -254,6 +254,10 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.app.setLogLevel]: {
     args: { level: AppLogLevel };
+    result: undefined;
+  };
+  [TauriCommand.app.setWindowTheme]: {
+    args: { theme: ResolvedAppTheme };
     result: undefined;
   };
   [TauriCommand.app.checkMediaFormats]: {

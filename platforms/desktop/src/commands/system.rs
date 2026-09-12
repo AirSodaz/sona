@@ -1,6 +1,6 @@
 use serde_json::Value;
 use std::sync::Arc;
-use tauri::{AppHandle, Runtime, State};
+use tauri::{AppHandle, Manager, Runtime, State};
 
 use sona_core::recovery::types::{RecoveryItemInput, RecoverySnapshot};
 use sona_core::task_ledger::types::{TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot};
@@ -81,6 +81,24 @@ pub fn set_log_level(
     level: String,
 ) -> Result<(), String> {
     crate::app::settings::set_log_level(state, level)
+}
+
+/// Recolors the main window's native frame to match the resolved app theme.
+///
+/// Called by the frontend whenever the effective theme changes, including
+/// `auto` transitions driven by the OS color-scheme. Returns `Ok(())` on
+/// platforms where the native frame needs no theming.
+#[tauri::command]
+pub fn set_window_theme(
+    app: AppHandle,
+    theme: crate::platform::system::ResolvedTheme,
+) -> Result<(), String> {
+    let Some(window) = app.get_webview_window(crate::app::window::MAIN_WINDOW_LABEL) else {
+        // The window can already be gone during shutdown; nothing to theme.
+        return Ok(());
+    };
+
+    crate::app::window::apply_main_window_chrome(&window, theme)
 }
 
 #[tauri::command]

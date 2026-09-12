@@ -29,6 +29,7 @@ export const TauriCommand = {
     updateTrayMenu: 'update_tray_menu',
     setMinimizeToTray: 'set_minimize_to_tray',
     setLogLevel: 'set_log_level',
+    setWindowTheme: 'set_window_theme',
     checkMediaFormats: 'check_media_formats',
   },
   audio: {
