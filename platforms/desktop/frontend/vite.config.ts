@@ -9,10 +9,49 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react()],
   test: {
-    environment: 'jsdom',
     globals: true,
-    setupFiles: ['./src/__tests__/setup.ts'],
-    exclude: ['**/node_modules/**', 'tests/e2e/**'],
+    exclude: ['**/node_modules/**', 'tests/e2e/**', 'playwright-report/**'],
+    projects: [
+      {
+        test: {
+          name: 'unit',
+          environment: 'node',
+          globals: true,
+          include: [
+            'src/locales/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/types/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/constants/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/utils/**/__tests__/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/stores/__tests__/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/services/llm/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/services/batch/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/services/pipeline/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/services/transcription/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/services/automation/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/services/voiceTyping/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+          ],
+          exclude: ['**/node_modules/**', 'tests/e2e/**', 'playwright-report/**'],
+        },
+      },
+      {
+        test: {
+          name: 'dom',
+          environment: 'jsdom',
+          globals: true,
+          setupFiles: ['./src/__tests__/setup.ts'],
+          include: [
+            'src/components/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/hooks/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/__tests__/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/services/__tests__/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/services/startup/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/services/tauri/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/utils/*.{test,spec}.?(c|m)[jt]s?(x)',
+          ],
+          exclude: ['**/node_modules/**', 'tests/e2e/**', 'playwright-report/**'],
+        },
+      },
+    ],
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
