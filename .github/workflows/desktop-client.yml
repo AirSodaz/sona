@@ -54,8 +54,8 @@ jobs:
       LLAMA_ENABLE_VULKAN: ${{ contains(matrix.args, 'llama-vulkan') && '1' || '0' }}
       LLAMA_ENABLE_METAL: ${{ contains(matrix.args, 'llama-metal') && '1' || '0' }}
       # Keep the CLI sidecar and Tauri host build on one Cargo target tree.
-      # The Windows build-env action replaces this with its short junction path.
-      CARGO_TARGET_DIR: target
+      # Use an absolute path because Tauri invokes Cargo from platforms/desktop.
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 16
     steps:
       - name: Checkout repository
