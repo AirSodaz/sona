@@ -914,6 +914,7 @@
       "enter_master_password": "請輸入同步庫的主密碼",
       "pair_device_action": "配對新裝置",
       "pair_device_modal_title": "配對新裝置",
+      "pairing_export_desc": "複製此配對口令並貼到第二台裝置上以連線。",
       "pairing_instructions": "在另一台裝置上開啟 Sona -> 雲端同步 -> 選擇「加入同步庫」並貼上下方配對口令。",
       "pairing_security_note": "配對口令僅包含伺服器連線元資料，在新裝置上仍需輸入主密碼以完成解鎖。",
       "copy_pairing_token": "複製配對口令",
