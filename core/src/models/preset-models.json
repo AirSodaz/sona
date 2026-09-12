@@ -46,6 +46,51 @@
     "versionLabel": "Int8"
   },
   {
+    "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
+    "name": "SenseVoice",
+    "description": "settings.descriptions.sensevoice",
+    "type": "sensevoice",
+    "modes": [
+      "streaming",
+      "batch"
+    ],
+    "languages": [
+      "en",
+      "ja",
+      "ko",
+      "yue",
+      "zh"
+    ],
+    "languageMode": "selectable",
+    "size": "~894 MB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "token"
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx",
+        "filename": "model.onnx",
+        "sha256": "977016bd9c79f9eb343430b5cc305e07ab64d5212dff41b0dcfa1694bee9a8cb",
+        "sizeBytes": 937617178
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc",
+        "sizeBytes": 315894
+      }
+    ],
+    "fileConfig": {
+      "model": "model.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "sensevoice",
+    "versionLabel": "Fp32"
+  },
+  {
     "id": "qwen3-asr-0.6b-q8-gguf",
     "name": "Qwen3 ASR",
     "description": "settings.descriptions.qwen3_asr",
@@ -284,176 +329,10 @@
     "versionLabel": "0.6B Int8 (ONNX)"
   },
   {
-    "id": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
-    "name": "Parakeet TDT",
-    "description": "settings.descriptions.parakeet_tdt",
-    "type": "parakeet-tdt",
-    "modes": [
-      "streaming",
-      "batch"
-    ],
-    "languages": [
-      "bg",
-      "cs",
-      "da",
-      "de",
-      "el",
-      "en",
-      "es",
-      "et",
-      "fi",
-      "fr",
-      "hr",
-      "hu",
-      "it",
-      "lt",
-      "lv",
-      "mt",
-      "nl",
-      "pl",
-      "pt",
-      "ro",
-      "ru",
-      "sk",
-      "sl",
-      "sv",
-      "uk"
-    ],
-    "languageMode": "auto",
-    "size": "~670 MB",
-    "engine": "sherpa-onnx",
-    "rules": {
-      "requiresVad": true,
-      "requiresPunctuation": false,
-      "timestampSupportHint": "segment",
-      "initialRefreshRateMs": 200
-    },
-    "artifacts": [
-      {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/encoder.int8.onnx",
-        "filename": "encoder.int8.onnx",
-        "sha256": "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247",
-        "sizeBytes": 652184281
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/decoder.int8.onnx",
-        "filename": "decoder.int8.onnx",
-        "sha256": "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e",
-        "sizeBytes": 11845275
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/joiner.int8.onnx",
-        "filename": "joiner.int8.onnx",
-        "sha256": "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3",
-        "sizeBytes": 6355277
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/tokens.txt",
-        "filename": "tokens.txt",
-        "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
-        "sizeBytes": 93939
-      }
-    ],
-    "fileConfig": {
-      "encoder": "encoder.int8.onnx",
-      "decoder": "decoder.int8.onnx",
-      "joiner": "joiner.int8.onnx",
-      "tokens": "tokens.txt"
-    },
-    "groupId": "parakeet-tdt",
-    "versionLabel": "0.6B V3 Int8"
-  },
-  {
-    "id": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3",
-    "name": "Parakeet TDT",
-    "description": "settings.descriptions.parakeet_tdt",
-    "type": "parakeet-tdt",
-    "modes": [
-      "streaming",
-      "batch"
-    ],
-    "languages": [
-      "bg",
-      "cs",
-      "da",
-      "de",
-      "el",
-      "en",
-      "es",
-      "et",
-      "fi",
-      "fr",
-      "hr",
-      "hu",
-      "it",
-      "lt",
-      "lv",
-      "mt",
-      "nl",
-      "pl",
-      "pt",
-      "ro",
-      "ru",
-      "sk",
-      "sl",
-      "sv",
-      "uk"
-    ],
-    "languageMode": "auto",
-    "size": "~2.55 GB",
-    "engine": "sherpa-onnx",
-    "rules": {
-      "requiresVad": true,
-      "requiresPunctuation": false,
-      "timestampSupportHint": "segment",
-      "initialRefreshRateMs": 200
-    },
-    "artifacts": [
-      {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main/encoder.onnx",
-        "filename": "encoder.onnx",
-        "sha256": "3eed7ce424bf8339ad09233533c687e2dbd07e74ccf5027b5e7344019ea373b0",
-        "sizeBytes": 41766257
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main/encoder.weights",
-        "filename": "encoder.weights",
-        "sha256": "3af3f51af5f2d01dbbf5af47d42c7962a2c205f11004254bb4f2b979862f39a8",
-        "sizeBytes": 2435420160
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main/decoder.onnx",
-        "filename": "decoder.onnx",
-        "sha256": "d593cdb0e571f5a457ec2219af9968cbf6b0e8198e8f7839b40a8754593bf68c",
-        "sizeBytes": 47233743
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main/joiner.onnx",
-        "filename": "joiner.onnx",
-        "sha256": "b9b0bcf88ac571902e69a6536223ed2d94885e981b85045410f1403d53121a63",
-        "sizeBytes": 25286330
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main/tokens.txt",
-        "filename": "tokens.txt",
-        "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
-        "sizeBytes": 93939
-      }
-    ],
-    "fileConfig": {
-      "encoder": "encoder.onnx",
-      "decoder": "decoder.onnx",
-      "joiner": "joiner.onnx",
-      "tokens": "tokens.txt"
-    },
-    "groupId": "parakeet-tdt",
-    "versionLabel": "0.6B V3 Fp32"
-  },
-  {
-    "id": "sherpa-onnx-moonshine-base-zh-quantized-2026-02-27",
-    "name": "Moonshine",
-    "description": "settings.descriptions.moonshine",
-    "type": "moonshine",
+    "id": "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26",
+    "name": "FireRedASR2-AED",
+    "description": "settings.descriptions.firered_asr",
+    "type": "fire-red-asr",
     "modes": [
       "streaming",
       "batch"
@@ -463,224 +342,33 @@
       "zh"
     ],
     "languageMode": "auto",
-    "size": "~141 MB",
+    "size": "~1.23 GB",
+    "isRecommended": true,
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": false,
-      "timestampSupportHint": "segment",
-      "initialRefreshRateMs": 200
-    },
-    "artifacts": [
-      {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-zh-quantized-2026-02-27/resolve/main/encoder_model.ort",
-        "filename": "encoder_model.ort",
-        "sha256": "c725a24b58595905921ea2a47e2bcf0f18c78f4d171d96136f2dcbc8c77a58a6",
-        "sizeBytes": 31326816
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-zh-quantized-2026-02-27/resolve/main/decoder_model_merged.ort",
-        "filename": "decoder_model_merged.ort",
-        "sha256": "bf79fce626e123739ec37eceb2b2a010a93d720da266dd5d8ef9a47ef9a7dc36",
-        "sizeBytes": 109424520
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-zh-quantized-2026-02-27/resolve/main/tokens.txt",
-        "filename": "tokens.txt",
-        "sha256": "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
-        "sizeBytes": 549350
-      }
-    ],
-    "fileConfig": {
-      "encoder": "encoder_model.ort",
-      "decoder": "decoder_model_merged.ort",
-      "tokens": "tokens.txt"
-    },
-    "groupId": "moonshine-v2",
-    "versionLabel": "Base Zh Quantized"
-  },
-  {
-    "id": "sherpa-onnx-moonshine-base-en-quantized-2026-02-27",
-    "name": "Moonshine",
-    "description": "settings.descriptions.moonshine",
-    "type": "moonshine",
-    "modes": [
-      "streaming",
-      "batch"
-    ],
-    "languages": [
-      "en"
-    ],
-    "languageMode": "fixed",
-    "size": "~141 MB",
-    "engine": "sherpa-onnx",
-    "rules": {
-      "requiresVad": true,
-      "requiresPunctuation": false,
-      "timestampSupportHint": "segment",
-      "initialRefreshRateMs": 200
-    },
-    "artifacts": [
-      {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-en-quantized-2026-02-27/resolve/main/encoder_model.ort",
-        "filename": "encoder_model.ort",
-        "sha256": "7c66495948d0d08ec1af454cd4b5514862ae6511e94712a60e6d83eaec8dc8cf",
-        "sizeBytes": 31326816
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-en-quantized-2026-02-27/resolve/main/decoder_model_merged.ort",
-        "filename": "decoder_model_merged.ort",
-        "sha256": "d9d7b333af34bc552580576ddcf248a1c6c839e0d3b43b09afb9376ed009899d",
-        "sizeBytes": 109424400
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-en-quantized-2026-02-27/resolve/main/tokens.txt",
-        "filename": "tokens.txt",
-        "sha256": "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
-        "sizeBytes": 549350
-      }
-    ],
-    "fileConfig": {
-      "encoder": "encoder_model.ort",
-      "decoder": "decoder_model_merged.ort",
-      "tokens": "tokens.txt"
-    },
-    "groupId": "moonshine-v2",
-    "versionLabel": "Base En Quantized"
-  },
-  {
-    "id": "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27",
-    "name": "Moonshine",
-    "description": "settings.descriptions.moonshine",
-    "type": "moonshine",
-    "modes": [
-      "streaming",
-      "batch"
-    ],
-    "languages": [
-      "en"
-    ],
-    "languageMode": "fixed",
-    "size": "~44 MB",
-    "engine": "sherpa-onnx",
-    "rules": {
-      "requiresVad": true,
-      "requiresPunctuation": false,
-      "timestampSupportHint": "segment",
-      "initialRefreshRateMs": 200
-    },
-    "artifacts": [
-      {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/resolve/main/encoder_model.ort",
-        "filename": "encoder_model.ort",
-        "sha256": "94e90a4654fc45cdfedb77c4c08e1739f48862998e58fada384b25118134f221",
-        "sizeBytes": 13281600
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/resolve/main/decoder_model_merged.ort",
-        "filename": "decoder_model_merged.ort",
-        "sha256": "cf524c4862d36e9e5ab032eddc73637efd822d70e868ac575cf1a46e1e4708a0",
-        "sizeBytes": 30412256
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/resolve/main/tokens.txt",
-        "filename": "tokens.txt",
-        "sha256": "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
-        "sizeBytes": 549350
-      }
-    ],
-    "fileConfig": {
-      "encoder": "encoder_model.ort",
-      "decoder": "decoder_model_merged.ort",
-      "tokens": "tokens.txt"
-    },
-    "groupId": "moonshine-v2",
-    "versionLabel": "Tiny En Quantized"
-  },
-  {
-    "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
-    "name": "SenseVoice",
-    "description": "settings.descriptions.sensevoice",
-    "type": "sensevoice",
-    "modes": [
-      "streaming",
-      "batch"
-    ],
-    "languages": [
-      "en",
-      "ja",
-      "ko",
-      "yue",
-      "zh"
-    ],
-    "languageMode": "selectable",
-    "size": "~894 MB",
-    "engine": "sherpa-onnx",
-    "rules": {
-      "requiresVad": true,
-      "requiresPunctuation": false,
-      "timestampSupportHint": "token"
-    },
-    "artifacts": [
-      {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/model.onnx",
-        "filename": "model.onnx",
-        "sha256": "977016bd9c79f9eb343430b5cc305e07ab64d5212dff41b0dcfa1694bee9a8cb",
-        "sizeBytes": 937617178
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main/tokens.txt",
-        "filename": "tokens.txt",
-        "sha256": "f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc",
-        "sizeBytes": 315894
-      }
-    ],
-    "fileConfig": {
-      "model": "model.onnx",
-      "tokens": "tokens.txt"
-    },
-    "groupId": "sensevoice",
-    "versionLabel": "Fp32"
-  },
-  {
-    "id": "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en-int8",
-    "name": "Paraformer",
-    "description": "settings.descriptions.paraformer",
-    "type": "paraformer",
-    "modes": [
-      "streaming"
-    ],
-    "languages": [
-      "en",
-      "yue",
-      "zh"
-    ],
-    "languageMode": "auto",
-    "size": "~227 MB",
-    "engine": "sherpa-onnx",
-    "rules": {
-      "requiresVad": false,
       "requiresPunctuation": true,
-      "timestampSupportHint": "token"
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 600
     },
     "artifacts": [
       {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/encoder.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26/resolve/main/encoder.int8.onnx",
         "filename": "encoder.int8.onnx",
-        "sha256": "6047a644b41b236d9d8e89e3b94ef39d1b7037daab028131b722ca52e10b0357",
-        "sizeBytes": 166362800
+        "sha256": "54048d66b6e8f3c80ea7ce95efe794587b0fd81d7271651d0decd3803852ae82",
+        "sizeBytes": 817286833
       },
       {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/decoder.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26/resolve/main/decoder.int8.onnx",
         "filename": "decoder.int8.onnx",
-        "sha256": "545427acf508452b7d89969be082c8128c681e3432ff43aef09f6159f4b61a7e",
-        "sizeBytes": 72062549
+        "sha256": "b840ce7196ae4a14d05ae84bbf56082b6b61ccec5610fda907dddbcea37354ff",
+        "sizeBytes": 417291928
       },
       {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/tokens.txt",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26/resolve/main/tokens.txt",
         "filename": "tokens.txt",
-        "sha256": "45b31504211675dd52aa88f998a6f6161703a2834e86760c1cda645a22538085",
-        "sizeBytes": 81289
+        "sha256": "1bc613de2112d257e61a349c3e72d1b1a9cf19c33d3ca954197ad2171e5ea07b",
+        "sizeBytes": 79172
       }
     ],
     "fileConfig": {
@@ -688,48 +376,55 @@
       "decoder": "decoder.int8.onnx",
       "tokens": "tokens.txt"
     },
-    "groupId": "paraformer",
+    "groupId": "firered-asr2-aed",
     "versionLabel": "Int8"
   },
   {
-    "id": "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en",
-    "name": "Paraformer",
-    "description": "settings.descriptions.paraformer",
-    "type": "paraformer",
+    "id": "sherpa-onnx-fire-red-asr2-zh_en-2026-02-26",
+    "name": "FireRedASR2-AED",
+    "description": "settings.descriptions.firered_asr",
+    "type": "fire-red-asr",
     "modes": [
-      "streaming"
+      "streaming",
+      "batch"
     ],
     "languages": [
       "en",
-      "yue",
       "zh"
     ],
     "languageMode": "auto",
-    "size": "~825 MB",
+    "size": "~4.69 GB",
     "engine": "sherpa-onnx",
     "rules": {
-      "requiresVad": false,
+      "requiresVad": true,
       "requiresPunctuation": true,
-      "timestampSupportHint": "token"
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 900
     },
     "artifacts": [
       {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/encoder.onnx",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-2026-02-26/resolve/main/encoder.onnx",
         "filename": "encoder.onnx",
-        "sha256": "f2a433bc1a24dd89bcbc48237cdc0c901646c17521f0a9f783d9f80d241ae85f",
-        "sizeBytes": 636349018
+        "sha256": "26b73ad336ef17ec79a778d5e5021c2d40d246a497fc603b0e092a5a5cbe2fb9",
+        "sizeBytes": 696607
       },
       {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/decoder.onnx",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-2026-02-26/resolve/main/encoder.weights",
+        "filename": "encoder.weights",
+        "sha256": "6774fd9b68017f4ddd3dcf3bbb34c791f5825cfa04f306cd0b120223c2c13053",
+        "sizeBytes": 3103167616
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-2026-02-26/resolve/main/decoder.onnx",
         "filename": "decoder.onnx",
-        "sha256": "c70d89e394a6ab082953a8807006b69e4d511fe0ed4d0e5e6254c9e5fad2464e",
-        "sizeBytes": 228663089
+        "sha256": "c67df92a5dcccec7d0f6b1527706c9f08d21ca18ca37b7b29f32cc68801c6c51",
+        "sizeBytes": 1584394636
       },
       {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/tokens.txt",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-2026-02-26/resolve/main/tokens.txt",
         "filename": "tokens.txt",
-        "sha256": "45b31504211675dd52aa88f998a6f6161703a2834e86760c1cda645a22538085",
-        "sizeBytes": 81289
+        "sha256": "1bc613de2112d257e61a349c3e72d1b1a9cf19c33d3ca954197ad2171e5ea07b",
+        "sizeBytes": 79172
       }
     ],
     "fileConfig": {
@@ -737,7 +432,7 @@
       "decoder": "decoder.onnx",
       "tokens": "tokens.txt"
     },
-    "groupId": "paraformer",
+    "groupId": "firered-asr2-aed",
     "versionLabel": "Fp32"
   },
   {
@@ -1087,18 +782,164 @@
     "versionLabel": "Medium-AISHELL"
   },
   {
-    "id": "sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30",
-    "name": "Streaming Zipformer - ZH XLarge (Int8)",
-    "description": "settings.descriptions.zipformer_xlarge",
-    "type": "zipformer",
+    "id": "sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05",
+    "name": "Omnilingual ASR",
+    "description": "settings.descriptions.omnilingual_asr",
+    "type": "omnilingual",
+    "modes": [
+      "streaming",
+      "batch"
+    ],
+    "languages": [
+      "ar",
+      "bn",
+      "de",
+      "el",
+      "en",
+      "es",
+      "fa",
+      "fil",
+      "fr",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "ms",
+      "my",
+      "nl",
+      "pl",
+      "pt",
+      "ro",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "ur",
+      "vi",
+      "yue",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~1.03 GB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": true,
+      "timestampSupportHint": "token",
+      "initialRefreshRateMs": 500
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05/resolve/main/model.int8.onnx",
+        "filename": "model.int8.onnx",
+        "sha256": "8af72da192fc2c8567c328d4f8059bdf47f182a0369077893c295ef39740c637",
+        "sizeBytes": 1032239439
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "7d99997ef207ff14c2cfe825f2aa037528ea250113cc3c6392bfe49326884ba6",
+        "sizeBytes": 90630
+      }
+    ],
+    "fileConfig": {
+      "model": "model.int8.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "omnilingual-asr",
+    "versionLabel": "1B Int8"
+  },
+  {
+    "id": "sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05",
+    "name": "Omnilingual ASR",
+    "description": "settings.descriptions.omnilingual_asr",
+    "type": "omnilingual",
+    "modes": [
+      "streaming",
+      "batch"
+    ],
+    "languages": [
+      "ar",
+      "bn",
+      "de",
+      "el",
+      "en",
+      "es",
+      "fa",
+      "fil",
+      "fr",
+      "hi",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "ms",
+      "my",
+      "nl",
+      "pl",
+      "pt",
+      "ro",
+      "ru",
+      "th",
+      "tr",
+      "uk",
+      "ur",
+      "vi",
+      "yue",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~3.90 GB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": true,
+      "timestampSupportHint": "token",
+      "initialRefreshRateMs": 800
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05/resolve/main/model.onnx",
+        "filename": "model.onnx",
+        "sha256": "3d08282016bdf2055bfbe6f8f7c36f59ee4d2d924e5106689675ee31e848730a",
+        "sizeBytes": 1417766
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05/resolve/main/model.weights",
+        "filename": "model.weights",
+        "sha256": "27289649ac05b6db8275a8c437f4766a8a40991fb272c74e51542729bbdf0446",
+        "sizeBytes": 3902699712
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "7d99997ef207ff14c2cfe825f2aa037528ea250113cc3c6392bfe49326884ba6",
+        "sizeBytes": 90630
+      }
+    ],
+    "fileConfig": {
+      "model": "model.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "omnilingual-asr",
+    "versionLabel": "1B Fp32"
+  },
+  {
+    "id": "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en-int8",
+    "name": "Paraformer",
+    "description": "settings.descriptions.paraformer",
+    "type": "paraformer",
     "modes": [
       "streaming"
     ],
     "languages": [
+      "en",
+      "yue",
       "zh"
     ],
-    "languageMode": "fixed",
-    "size": "~771 MB",
+    "languageMode": "auto",
+    "size": "~227 MB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": false,
@@ -1107,42 +948,80 @@
     },
     "artifacts": [
       {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/main/encoder.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/encoder.int8.onnx",
         "filename": "encoder.int8.onnx",
-        "sha256": "f2c543a0330e1ed0bd09c82e4ae7d3f1cbee10a15feca638fcc4f88083a36b8a",
-        "sizeBytes": 761133737
+        "sha256": "6047a644b41b236d9d8e89e3b94ef39d1b7037daab028131b722ca52e10b0357",
+        "sizeBytes": 166362800
       },
       {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/main/decoder.onnx",
-        "filename": "decoder.onnx",
-        "sha256": "8f9c903da2818f207304a3f30b9eeb30028e30398f333c1e95e12c97704173e6",
-        "sizeBytes": 8533022
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/decoder.int8.onnx",
+        "filename": "decoder.int8.onnx",
+        "sha256": "545427acf508452b7d89969be082c8128c681e3432ff43aef09f6159f4b61a7e",
+        "sizeBytes": 72062549
       },
       {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/main/joiner.int8.onnx",
-        "filename": "joiner.int8.onnx",
-        "sha256": "f76ffce14b6ef80098cfdbce8846896ff68133970abc314eafab632f910df0d7",
-        "sizeBytes": 1545417
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/main/tokens.txt",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/tokens.txt",
         "filename": "tokens.txt",
-        "sha256": "6722bd1585f46f84456b29c3550a343a3cc375b971645773c02ed8e0b4e2405c",
-        "sizeBytes": 18626
-      },
-      {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/main/bpe.model",
-        "filename": "bpe.model",
-        "sha256": "867a7355801cb43939962ad757ba1cb7941b6171b5a6902772483b4e3a623377",
-        "sizeBytes": 263956
+        "sha256": "45b31504211675dd52aa88f998a6f6161703a2834e86760c1cda645a22538085",
+        "sizeBytes": 81289
       }
     ],
     "fileConfig": {
       "encoder": "encoder.int8.onnx",
-      "decoder": "decoder.onnx",
-      "joiner": "joiner.int8.onnx",
+      "decoder": "decoder.int8.onnx",
       "tokens": "tokens.txt"
-    }
+    },
+    "groupId": "paraformer",
+    "versionLabel": "Int8"
+  },
+  {
+    "id": "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en",
+    "name": "Paraformer",
+    "description": "settings.descriptions.paraformer",
+    "type": "paraformer",
+    "modes": [
+      "streaming"
+    ],
+    "languages": [
+      "en",
+      "yue",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~825 MB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": true,
+      "timestampSupportHint": "token"
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/encoder.onnx",
+        "filename": "encoder.onnx",
+        "sha256": "f2a433bc1a24dd89bcbc48237cdc0c901646c17521f0a9f783d9f80d241ae85f",
+        "sizeBytes": 636349018
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/decoder.onnx",
+        "filename": "decoder.onnx",
+        "sha256": "c70d89e394a6ab082953a8807006b69e4d511fe0ed4d0e5e6254c9e5fad2464e",
+        "sizeBytes": 228663089
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "45b31504211675dd52aa88f998a6f6161703a2834e86760c1cda645a22538085",
+        "sizeBytes": 81289
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder.onnx",
+      "decoder": "decoder.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "paraformer",
+    "versionLabel": "Fp32"
   },
   {
     "id": "sherpa-onnx-funasr-nano-int8-2025-12-30",
@@ -1361,110 +1240,228 @@
     "versionLabel": "Fp32"
   },
   {
-    "id": "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26",
-    "name": "FireRedASR2-AED",
-    "description": "settings.descriptions.firered_asr",
-    "type": "fire-red-asr",
+    "id": "sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30",
+    "name": "Streaming Zipformer - ZH XLarge (Int8)",
+    "description": "settings.descriptions.zipformer_xlarge",
+    "type": "zipformer",
+    "modes": [
+      "streaming"
+    ],
+    "languages": [
+      "zh"
+    ],
+    "languageMode": "fixed",
+    "size": "~771 MB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": true,
+      "timestampSupportHint": "token"
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/main/encoder.int8.onnx",
+        "filename": "encoder.int8.onnx",
+        "sha256": "f2c543a0330e1ed0bd09c82e4ae7d3f1cbee10a15feca638fcc4f88083a36b8a",
+        "sizeBytes": 761133737
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/main/decoder.onnx",
+        "filename": "decoder.onnx",
+        "sha256": "8f9c903da2818f207304a3f30b9eeb30028e30398f333c1e95e12c97704173e6",
+        "sizeBytes": 8533022
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/main/joiner.int8.onnx",
+        "filename": "joiner.int8.onnx",
+        "sha256": "f76ffce14b6ef80098cfdbce8846896ff68133970abc314eafab632f910df0d7",
+        "sizeBytes": 1545417
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "6722bd1585f46f84456b29c3550a343a3cc375b971645773c02ed8e0b4e2405c",
+        "sizeBytes": 18626
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30/resolve/main/bpe.model",
+        "filename": "bpe.model",
+        "sha256": "867a7355801cb43939962ad757ba1cb7941b6171b5a6902772483b4e3a623377",
+        "sizeBytes": 263956
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder.int8.onnx",
+      "decoder": "decoder.onnx",
+      "joiner": "joiner.int8.onnx",
+      "tokens": "tokens.txt"
+    }
+  },
+  {
+    "id": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
+    "name": "Parakeet TDT",
+    "description": "settings.descriptions.parakeet_tdt",
+    "type": "parakeet-tdt",
     "modes": [
       "streaming",
       "batch"
     ],
     "languages": [
+      "bg",
+      "cs",
+      "da",
+      "de",
+      "el",
       "en",
-      "zh"
+      "es",
+      "et",
+      "fi",
+      "fr",
+      "hr",
+      "hu",
+      "it",
+      "lt",
+      "lv",
+      "mt",
+      "nl",
+      "pl",
+      "pt",
+      "ro",
+      "ru",
+      "sk",
+      "sl",
+      "sv",
+      "uk"
     ],
     "languageMode": "auto",
-    "size": "~1.23 GB",
+    "size": "~670 MB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": true,
+      "requiresPunctuation": false,
       "timestampSupportHint": "segment",
-      "initialRefreshRateMs": 600
+      "initialRefreshRateMs": 200
     },
     "artifacts": [
       {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26/resolve/main/encoder.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/encoder.int8.onnx",
         "filename": "encoder.int8.onnx",
-        "sha256": "54048d66b6e8f3c80ea7ce95efe794587b0fd81d7271651d0decd3803852ae82",
-        "sizeBytes": 817286833
+        "sha256": "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247",
+        "sizeBytes": 652184281
       },
       {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26/resolve/main/decoder.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/decoder.int8.onnx",
         "filename": "decoder.int8.onnx",
-        "sha256": "b840ce7196ae4a14d05ae84bbf56082b6b61ccec5610fda907dddbcea37354ff",
-        "sizeBytes": 417291928
+        "sha256": "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e",
+        "sizeBytes": 11845275
       },
       {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26/resolve/main/tokens.txt",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/joiner.int8.onnx",
+        "filename": "joiner.int8.onnx",
+        "sha256": "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3",
+        "sizeBytes": 6355277
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/tokens.txt",
         "filename": "tokens.txt",
-        "sha256": "1bc613de2112d257e61a349c3e72d1b1a9cf19c33d3ca954197ad2171e5ea07b",
-        "sizeBytes": 79172
+        "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+        "sizeBytes": 93939
       }
     ],
     "fileConfig": {
       "encoder": "encoder.int8.onnx",
       "decoder": "decoder.int8.onnx",
+      "joiner": "joiner.int8.onnx",
       "tokens": "tokens.txt"
     },
-    "groupId": "firered-asr2-aed",
-    "versionLabel": "Int8"
+    "groupId": "parakeet-tdt",
+    "versionLabel": "0.6B V3 Int8"
   },
   {
-    "id": "sherpa-onnx-fire-red-asr2-zh_en-2026-02-26",
-    "name": "FireRedASR2-AED",
-    "description": "settings.descriptions.firered_asr",
-    "type": "fire-red-asr",
+    "id": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3",
+    "name": "Parakeet TDT",
+    "description": "settings.descriptions.parakeet_tdt",
+    "type": "parakeet-tdt",
     "modes": [
       "streaming",
       "batch"
     ],
     "languages": [
+      "bg",
+      "cs",
+      "da",
+      "de",
+      "el",
       "en",
-      "zh"
+      "es",
+      "et",
+      "fi",
+      "fr",
+      "hr",
+      "hu",
+      "it",
+      "lt",
+      "lv",
+      "mt",
+      "nl",
+      "pl",
+      "pt",
+      "ro",
+      "ru",
+      "sk",
+      "sl",
+      "sv",
+      "uk"
     ],
     "languageMode": "auto",
-    "size": "~4.69 GB",
+    "size": "~2.55 GB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": true,
+      "requiresPunctuation": false,
       "timestampSupportHint": "segment",
-      "initialRefreshRateMs": 900
+      "initialRefreshRateMs": 200
     },
     "artifacts": [
       {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-2026-02-26/resolve/main/encoder.onnx",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main/encoder.onnx",
         "filename": "encoder.onnx",
-        "sha256": "26b73ad336ef17ec79a778d5e5021c2d40d246a497fc603b0e092a5a5cbe2fb9",
-        "sizeBytes": 696607
+        "sha256": "3eed7ce424bf8339ad09233533c687e2dbd07e74ccf5027b5e7344019ea373b0",
+        "sizeBytes": 41766257
       },
       {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-2026-02-26/resolve/main/encoder.weights",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main/encoder.weights",
         "filename": "encoder.weights",
-        "sha256": "6774fd9b68017f4ddd3dcf3bbb34c791f5825cfa04f306cd0b120223c2c13053",
-        "sizeBytes": 3103167616
+        "sha256": "3af3f51af5f2d01dbbf5af47d42c7962a2c205f11004254bb4f2b979862f39a8",
+        "sizeBytes": 2435420160
       },
       {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-2026-02-26/resolve/main/decoder.onnx",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main/decoder.onnx",
         "filename": "decoder.onnx",
-        "sha256": "c67df92a5dcccec7d0f6b1527706c9f08d21ca18ca37b7b29f32cc68801c6c51",
-        "sizeBytes": 1584394636
+        "sha256": "d593cdb0e571f5a457ec2219af9968cbf6b0e8198e8f7839b40a8754593bf68c",
+        "sizeBytes": 47233743
       },
       {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-fire-red-asr2-zh_en-2026-02-26/resolve/main/tokens.txt",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main/joiner.onnx",
+        "filename": "joiner.onnx",
+        "sha256": "b9b0bcf88ac571902e69a6536223ed2d94885e981b85045410f1403d53121a63",
+        "sizeBytes": 25286330
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/main/tokens.txt",
         "filename": "tokens.txt",
-        "sha256": "1bc613de2112d257e61a349c3e72d1b1a9cf19c33d3ca954197ad2171e5ea07b",
-        "sizeBytes": 79172
+        "sha256": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+        "sizeBytes": 93939
       }
     ],
     "fileConfig": {
       "encoder": "encoder.onnx",
       "decoder": "decoder.onnx",
+      "joiner": "joiner.onnx",
       "tokens": "tokens.txt"
     },
-    "groupId": "firered-asr2-aed",
-    "versionLabel": "Fp32"
+    "groupId": "parakeet-tdt",
+    "versionLabel": "0.6B V3 Fp32"
   },
   {
     "id": "sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02",
@@ -1627,148 +1624,152 @@
     "versionLabel": "Fp32"
   },
   {
-    "id": "sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05",
-    "name": "Omnilingual ASR",
-    "description": "settings.descriptions.omnilingual_asr",
-    "type": "omnilingual",
+    "id": "sherpa-onnx-moonshine-base-zh-quantized-2026-02-27",
+    "name": "Moonshine",
+    "description": "settings.descriptions.moonshine",
+    "type": "moonshine",
     "modes": [
       "streaming",
       "batch"
     ],
     "languages": [
-      "ar",
-      "bn",
-      "de",
-      "el",
       "en",
-      "es",
-      "fa",
-      "fil",
-      "fr",
-      "hi",
-      "id",
-      "it",
-      "ja",
-      "ko",
-      "ms",
-      "my",
-      "nl",
-      "pl",
-      "pt",
-      "ro",
-      "ru",
-      "th",
-      "tr",
-      "uk",
-      "ur",
-      "vi",
-      "yue",
       "zh"
     ],
     "languageMode": "auto",
-    "size": "~1.03 GB",
+    "size": "~141 MB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": true,
-      "timestampSupportHint": "token",
-      "initialRefreshRateMs": 500
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 200
     },
     "artifacts": [
       {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05/resolve/main/model.int8.onnx",
-        "filename": "model.int8.onnx",
-        "sha256": "8af72da192fc2c8567c328d4f8059bdf47f182a0369077893c295ef39740c637",
-        "sizeBytes": 1032239439
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-zh-quantized-2026-02-27/resolve/main/encoder_model.ort",
+        "filename": "encoder_model.ort",
+        "sha256": "c725a24b58595905921ea2a47e2bcf0f18c78f4d171d96136f2dcbc8c77a58a6",
+        "sizeBytes": 31326816
       },
       {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05/resolve/main/tokens.txt",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-zh-quantized-2026-02-27/resolve/main/decoder_model_merged.ort",
+        "filename": "decoder_model_merged.ort",
+        "sha256": "bf79fce626e123739ec37eceb2b2a010a93d720da266dd5d8ef9a47ef9a7dc36",
+        "sizeBytes": 109424520
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-zh-quantized-2026-02-27/resolve/main/tokens.txt",
         "filename": "tokens.txt",
-        "sha256": "7d99997ef207ff14c2cfe825f2aa037528ea250113cc3c6392bfe49326884ba6",
-        "sizeBytes": 90630
+        "sha256": "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+        "sizeBytes": 549350
       }
     ],
     "fileConfig": {
-      "model": "model.int8.onnx",
+      "encoder": "encoder_model.ort",
+      "decoder": "decoder_model_merged.ort",
       "tokens": "tokens.txt"
     },
-    "groupId": "omnilingual-asr",
-    "versionLabel": "1B Int8"
+    "groupId": "moonshine-v2",
+    "versionLabel": "Base Zh Quantized"
   },
   {
-    "id": "sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05",
-    "name": "Omnilingual ASR",
-    "description": "settings.descriptions.omnilingual_asr",
-    "type": "omnilingual",
+    "id": "sherpa-onnx-moonshine-base-en-quantized-2026-02-27",
+    "name": "Moonshine",
+    "description": "settings.descriptions.moonshine",
+    "type": "moonshine",
     "modes": [
       "streaming",
       "batch"
     ],
     "languages": [
-      "ar",
-      "bn",
-      "de",
-      "el",
-      "en",
-      "es",
-      "fa",
-      "fil",
-      "fr",
-      "hi",
-      "id",
-      "it",
-      "ja",
-      "ko",
-      "ms",
-      "my",
-      "nl",
-      "pl",
-      "pt",
-      "ro",
-      "ru",
-      "th",
-      "tr",
-      "uk",
-      "ur",
-      "vi",
-      "yue",
-      "zh"
+      "en"
     ],
-    "languageMode": "auto",
-    "size": "~3.90 GB",
+    "languageMode": "fixed",
+    "size": "~141 MB",
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
-      "requiresPunctuation": true,
-      "timestampSupportHint": "token",
-      "initialRefreshRateMs": 800
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 200
     },
     "artifacts": [
       {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05/resolve/main/model.onnx",
-        "filename": "model.onnx",
-        "sha256": "3d08282016bdf2055bfbe6f8f7c36f59ee4d2d924e5106689675ee31e848730a",
-        "sizeBytes": 1417766
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-en-quantized-2026-02-27/resolve/main/encoder_model.ort",
+        "filename": "encoder_model.ort",
+        "sha256": "7c66495948d0d08ec1af454cd4b5514862ae6511e94712a60e6d83eaec8dc8cf",
+        "sizeBytes": 31326816
       },
       {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05/resolve/main/model.weights",
-        "filename": "model.weights",
-        "sha256": "27289649ac05b6db8275a8c437f4766a8a40991fb272c74e51542729bbdf0446",
-        "sizeBytes": 3902699712
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-en-quantized-2026-02-27/resolve/main/decoder_model_merged.ort",
+        "filename": "decoder_model_merged.ort",
+        "sha256": "d9d7b333af34bc552580576ddcf248a1c6c839e0d3b43b09afb9376ed009899d",
+        "sizeBytes": 109424400
       },
       {
-        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05/resolve/main/tokens.txt",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-base-en-quantized-2026-02-27/resolve/main/tokens.txt",
         "filename": "tokens.txt",
-        "sha256": "7d99997ef207ff14c2cfe825f2aa037528ea250113cc3c6392bfe49326884ba6",
-        "sizeBytes": 90630
+        "sha256": "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+        "sizeBytes": 549350
       }
     ],
     "fileConfig": {
-      "model": "model.onnx",
+      "encoder": "encoder_model.ort",
+      "decoder": "decoder_model_merged.ort",
       "tokens": "tokens.txt"
     },
-    "groupId": "omnilingual-asr",
-    "versionLabel": "1B Fp32"
+    "groupId": "moonshine-v2",
+    "versionLabel": "Base En Quantized"
+  },
+  {
+    "id": "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27",
+    "name": "Moonshine",
+    "description": "settings.descriptions.moonshine",
+    "type": "moonshine",
+    "modes": [
+      "streaming",
+      "batch"
+    ],
+    "languages": [
+      "en"
+    ],
+    "languageMode": "fixed",
+    "size": "~44 MB",
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 200
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/resolve/main/encoder_model.ort",
+        "filename": "encoder_model.ort",
+        "sha256": "94e90a4654fc45cdfedb77c4c08e1739f48862998e58fada384b25118134f221",
+        "sizeBytes": 13281600
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/resolve/main/decoder_model_merged.ort",
+        "filename": "decoder_model_merged.ort",
+        "sha256": "cf524c4862d36e9e5ab032eddc73637efd822d70e868ac575cf1a46e1e4708a0",
+        "sizeBytes": 30412256
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "2870d843e14c1e187bf1913a521562a63b53933814bd7f2145120468f494a049",
+        "sizeBytes": 549350
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder_model.ort",
+      "decoder": "decoder_model_merged.ort",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "moonshine-v2",
+    "versionLabel": "Tiny En Quantized"
   },
   {
     "id": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8",

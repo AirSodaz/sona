@@ -282,6 +282,7 @@ fn firered_asr2_aed_presets_are_verified_bundles() {
         expected_decoder,
         expected_artifacts,
         expected_refresh,
+        expected_recommended,
     ) in [
         (
             "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26",
@@ -290,6 +291,7 @@ fn firered_asr2_aed_presets_are_verified_bundles() {
             "decoder.int8.onnx",
             3,
             600,
+            Some(true),
         ),
         (
             "sherpa-onnx-fire-red-asr2-zh_en-2026-02-26",
@@ -298,6 +300,7 @@ fn firered_asr2_aed_presets_are_verified_bundles() {
             "decoder.onnx",
             4,
             900,
+            None,
         ),
     ] {
         let model = find_preset_model(id).unwrap();
@@ -309,6 +312,7 @@ fn firered_asr2_aed_presets_are_verified_bundles() {
         assert_eq!(model.languages, vec!["en", "zh"]);
         assert_eq!(model.group_id.as_deref(), Some("firered-asr2-aed"));
         assert_eq!(model.version_label.as_deref(), Some(expected_version));
+        assert_eq!(model.is_recommended, expected_recommended);
 
         let rules = model.resolved_rules();
         assert!(rules.requires_vad);
@@ -321,6 +325,35 @@ fn firered_asr2_aed_presets_are_verified_bundles() {
         assert_eq!(file_config.tokens.as_deref(), Some("tokens.txt"));
         assert_eq!(model.artifacts.len(), expected_artifacts);
     }
+}
+
+#[test]
+fn asr_catalog_sections_follow_specified_display_order() {
+    let snapshot =
+        build_model_catalog_snapshot_with_installed_ids(Path::new("C:/models"), &HashSet::new());
+    let asr_section = snapshot
+        .sections
+        .iter()
+        .find(|section| section.section_type == ModelCatalogSectionType::Asr)
+        .unwrap();
+
+    let group_keys: Vec<&str> = asr_section.groups.iter().map(|g| g.key.as_str()).collect();
+    assert_eq!(
+        group_keys,
+        vec![
+            "sensevoice",
+            "qwen3-asr",
+            "firered-asr2-aed",
+            "whisper",
+            "omnilingual-asr",
+            "paraformer",
+            "funasr-nano",
+            "sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30",
+            "parakeet-tdt",
+            "dolphin",
+            "moonshine-v2",
+        ]
+    );
 }
 #[test]
 fn whisper_presets_are_verified_bundles() {
