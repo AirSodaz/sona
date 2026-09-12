@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProjectStore } from '../../../stores/projectStore';
 import { HistoryItem } from '../HistoryItem';
@@ -100,17 +100,19 @@ describe('HistoryItem', () => {
 
     const historyItem = screen.getByRole('listitem');
     const contentButton = screen.getByRole('button', { name: 'Load Client Call' });
-    fireEvent.contextMenu(historyItem, {
+    const contextMenuEvent = createEvent.contextMenu(historyItem, {
       button: 2,
       clientX: 140,
       clientY: 180,
     });
+    fireEvent(historyItem, contextMenuEvent);
 
     expect(onOpenContextMenu).toHaveBeenCalledWith('hist-1', {
       anchor: contentButton,
       point: { x: 140, y: 180 },
       invocation: 'pointer',
     });
+    expect(contextMenuEvent.defaultPrevented).toBe(true);
     expect(historyItem.classList.contains('context-menu-active')).toBe(true);
     expect(onLoad).not.toHaveBeenCalled();
   });

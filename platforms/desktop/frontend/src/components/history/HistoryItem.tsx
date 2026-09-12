@@ -216,8 +216,8 @@ function HistoryItemComponent({
     if (!onOpenContextMenu) {
       return;
     }
+    event.preventDefault();
     event.stopPropagation();
-
     const request = createPointerContextMenuRequest(event);
     onOpenContextMenu(item.id, {
       ...request,

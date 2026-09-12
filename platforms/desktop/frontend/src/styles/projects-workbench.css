@@ -524,7 +524,7 @@
   box-shadow: var(--apple-field-focus-shell-shadow);
 }
 
-.projects-search input {
+.projects-search input[type="text"] {
   border: none;
   background: transparent;
   box-shadow: none;

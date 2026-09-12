@@ -96,7 +96,7 @@ export function useHistoryItemContextMenu({
               id: 'restore_selected',
               label: t('history.restore_selected', {
                 count: selectedIds.length,
-                defaultValue: `恢复选中的 ${selectedIds.length} 项`,
+                defaultValue: `Restore selected (${selectedIds.length})`,
               }),
               icon: <RotateCcw size={16} />,
               disabled: hasLockedItem,
@@ -106,7 +106,7 @@ export function useHistoryItemContextMenu({
             },
             {
               id: 'clear_selection',
-              label: t('common.clear_selection', { defaultValue: '取消选择' }),
+              label: t('common.clear_selection', { defaultValue: 'Clear Selection' }),
               icon: <X size={16} />,
               dividerBefore: true,
               onSelect: () => {
@@ -117,7 +117,7 @@ export function useHistoryItemContextMenu({
               id: 'purge_selected',
               label: t('history.purge_selected', {
                 count: selectedIds.length,
-                defaultValue: `彻底删除选中的 ${selectedIds.length} 项`,
+                defaultValue: `Delete selected (${selectedIds.length})`,
               }),
               icon: <Trash2 size={16} />,
               tone: 'danger',
@@ -132,7 +132,7 @@ export function useHistoryItemContextMenu({
 
           openContextMenu({
             contextId,
-            ariaLabel: t('history.batch_actions', { defaultValue: '批量操作' }),
+            ariaLabel: t('history.batch_actions', { defaultValue: 'Batch Actions' }),
             actions,
             ...request,
           });
@@ -145,7 +145,7 @@ export function useHistoryItemContextMenu({
             id: 'assign_project_batch',
             label: t('projects.assign_project_count', {
               count: selectedIds.length,
-              defaultValue: `分配项目 (${selectedIds.length})`,
+              defaultValue: `Assign Project (${selectedIds.length})`,
             }),
             icon: <Tags size={16} />,
             disabled: hasLockedItem,
@@ -157,7 +157,7 @@ export function useHistoryItemContextMenu({
             id: 'move_to_inbox_batch',
             label: t('projects.move_to_inbox_count', {
               count: selectedIds.length,
-              defaultValue: `移至收件箱 (${selectedIds.length})`,
+              defaultValue: `Move to Inbox (${selectedIds.length})`,
             }),
             icon: <Inbox size={16} />,
             disabled: hasLockedItem,
@@ -172,7 +172,7 @@ export function useHistoryItemContextMenu({
             id: 'copy_transcripts_batch',
             label: t('history.copy_transcripts', {
               count: selectedItems.length,
-              defaultValue: `批量复制转录内容 (${selectedItems.length})`,
+              defaultValue: `Copy Transcripts (${selectedItems.length})`,
             }),
             icon: <Copy size={16} />,
             dividerBefore: true,
@@ -186,8 +186,8 @@ export function useHistoryItemContextMenu({
           {
             id: 'select_all_visible',
             label: isAllSelected
-              ? t('common.clear_selection', { defaultValue: '取消选择' })
-              : t('common.select_all', { defaultValue: '全选' }),
+              ? t('common.clear_selection', { defaultValue: 'Clear Selection' })
+              : t('common.select_all', { defaultValue: 'Select All' }),
             icon: isAllSelected ? <X size={16} /> : <ListChecks size={16} />,
             dividerBefore: true,
             onSelect: () => {
@@ -202,7 +202,7 @@ export function useHistoryItemContextMenu({
             id: 'delete_selected',
             label: t('history.delete_selected', {
               count: selectedIds.length,
-              defaultValue: `删除选中的 ${selectedIds.length} 项`,
+              defaultValue: `Delete selected (${selectedIds.length})`,
             }),
             icon: <Trash2 size={16} />,
             tone: 'danger',
@@ -217,7 +217,7 @@ export function useHistoryItemContextMenu({
 
         openContextMenu({
           contextId,
-          ariaLabel: t('history.batch_actions', { defaultValue: '批量操作' }),
+          ariaLabel: t('history.batch_actions', { defaultValue: 'Batch Actions' }),
           actions,
           ...request,
         });
@@ -294,7 +294,7 @@ export function useHistoryItemContextMenu({
       if (onCopyTranscript) {
         actions.push({
           id: 'copy_transcript',
-          label: t('history.copy_transcript', { defaultValue: '复制转录文本' }),
+          label: t('history.copy_transcript', { defaultValue: 'Copy Transcript' }),
           icon: <Copy size={16} />,
           dividerBefore: true,
           onSelect: () => {
@@ -306,7 +306,7 @@ export function useHistoryItemContextMenu({
       if (onCopyTitle) {
         actions.push({
           id: 'copy_title',
-          label: t('history.copy_title', { defaultValue: '复制标题' }),
+          label: t('history.copy_title', { defaultValue: 'Copy Title' }),
           icon: <FileText size={16} />,
           onSelect: () => {
             onCopyTitle(item);
@@ -330,7 +330,7 @@ export function useHistoryItemContextMenu({
       if (item.projectId != null) {
         actions.push({
           id: 'move_to_inbox',
-          label: t('projects.move_to_inbox', { defaultValue: '移入收件箱' }),
+          label: t('projects.move_to_inbox', { defaultValue: 'Move to Inbox' }),
           icon: <Inbox size={16} />,
           disabled: locked,
           onSelect: () => {
@@ -354,7 +354,7 @@ export function useHistoryItemContextMenu({
       if (onShowInFolder) {
         actions.push({
           id: 'reveal_file',
-          label: t('history.reveal_in_folder', { defaultValue: '在文件管理器中显示' }),
+          label: t('history.reveal_in_folder', { defaultValue: 'Show in File Explorer' }),
           icon: <FolderSearch size={16} />,
           dividerBefore: true,
           onSelect: () => {
@@ -388,7 +388,6 @@ export function useHistoryItemContextMenu({
       });
     },
     [
-      getItemById,
       isAllSelected,
       isLockedLiveDraft,
       isOpenDisabled,

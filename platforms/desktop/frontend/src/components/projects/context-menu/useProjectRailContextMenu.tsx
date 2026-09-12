@@ -65,7 +65,7 @@ export function useProjectRailContextMenu({
           },
           {
             id: 'set_active',
-            label: t('projects.set_as_active', { defaultValue: '设为当前活跃' }),
+            label: t('projects.set_as_active', { defaultValue: 'Set as Active' }),
             icon: <Check size={16} />,
             disabled: activeProjectId === project.id,
             onSelect: () => {
@@ -84,7 +84,7 @@ export function useProjectRailContextMenu({
           },
           {
             id: 'delete',
-            label: t('projects.delete_project', { defaultValue: '删除项目' }),
+            label: t('projects.delete_project', { defaultValue: 'Delete Project' }),
             icon: <Trash2 size={16} />,
             tone: 'danger',
             dividerBefore: true,
@@ -116,7 +116,7 @@ export function useProjectRailContextMenu({
         const actions: ContextMenuAction[] = [
           {
             id: 'open_inbox',
-            label: t('projects.open_inbox', { defaultValue: '打开收件箱' }),
+            label: t('projects.open_inbox', { defaultValue: 'Open Inbox' }),
             icon: <FolderOpen size={16} />,
             disabled: isCurrentInbox || isLockedLiveDraft,
             onSelect: () => {
@@ -125,7 +125,7 @@ export function useProjectRailContextMenu({
           },
           {
             id: 'set_active_inbox',
-            label: t('projects.set_as_active', { defaultValue: '设为当前活跃' }),
+            label: t('projects.set_as_active', { defaultValue: 'Set as Active' }),
             icon: <Check size={16} />,
             disabled: activeProjectId === null,
             onSelect: () => {
@@ -136,7 +136,7 @@ export function useProjectRailContextMenu({
 
         openContextMenu({
           contextId,
-          ariaLabel: t('projects.inbox', { defaultValue: '收件箱' }),
+          ariaLabel: t('projects.inbox', { defaultValue: 'Inbox' }),
           actions,
           ...request,
         });
@@ -152,7 +152,7 @@ export function useProjectRailContextMenu({
         const actions: ContextMenuAction[] = [
           {
             id: 'open_trash',
-            label: t('projects.open_trash', { defaultValue: '打开回收站' }),
+            label: t('projects.open_trash', { defaultValue: 'Open Trash' }),
             icon: <FolderOpen size={16} />,
             disabled: isCurrentTrash || isLockedLiveDraft,
             onSelect: () => {
@@ -177,7 +177,7 @@ export function useProjectRailContextMenu({
 
         openContextMenu({
           contextId,
-          ariaLabel: t('projects.trash', { defaultValue: '回收站' }),
+          ariaLabel: t('projects.trash', { defaultValue: 'Trash' }),
           actions,
           ...request,
         });
@@ -193,7 +193,7 @@ export function useProjectRailContextMenu({
         const actions: ContextMenuAction[] = [
           {
             id: 'open_all',
-            label: t('projects.open_all_items', { defaultValue: '打开全部内容' }),
+            label: t('projects.open_all_items', { defaultValue: 'Open All Items' }),
             icon: <FolderOpen size={16} />,
             disabled: isCurrentAll || isLockedLiveDraft,
             onSelect: () => {
@@ -204,7 +204,7 @@ export function useProjectRailContextMenu({
 
         openContextMenu({
           contextId,
-          ariaLabel: t('projects.all_items', { defaultValue: '全部内容' }),
+          ariaLabel: t('projects.all_items', { defaultValue: 'All Items' }),
           actions,
           ...request,
         });
@@ -219,7 +219,7 @@ export function useProjectRailContextMenu({
         const actions: ContextMenuAction[] = [
           {
             id: 'new_project',
-            label: t('projects.new_project_button', { defaultValue: '新建项目' }),
+            label: t('projects.new_project_button', { defaultValue: 'New Project' }),
             icon: <Plus size={16} />,
             onSelect: () => {
               onOpenCreateModal();
@@ -229,7 +229,7 @@ export function useProjectRailContextMenu({
 
         openContextMenu({
           contextId,
-          ariaLabel: t('projects.rail_menu', { defaultValue: '项目栏操作' }),
+          ariaLabel: t('projects.rail_menu', { defaultValue: 'Project rail actions' }),
           actions,
           ...request,
         });
