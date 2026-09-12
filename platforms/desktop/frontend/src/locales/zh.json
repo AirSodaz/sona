@@ -40,6 +40,7 @@
     "select_all": "全选",
     "deselect_all": "取消全选",
     "clear_selection": "取消选择",
+    "clear_search": "清除搜索",
     "parameter_settings": "参数设置",
     "recommended": "推荐",
     "ready": "就绪",
