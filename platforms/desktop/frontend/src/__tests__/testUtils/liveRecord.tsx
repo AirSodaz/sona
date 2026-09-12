@@ -216,10 +216,11 @@ export function createLiveRecordHistoryServiceMockModule(
       saveTranscriptFile: vi.fn(),
       getAll: vi.fn().mockResolvedValue([]),
       init: vi.fn(),
+      commitTranscriptEdit: vi
+        .fn()
+        .mockResolvedValue({ status: 'committed', item: { id: 'test-id' } }),
       loadSummary: vi.fn().mockResolvedValue(null),
       deleteSummary: vi.fn().mockResolvedValue(undefined),
-      saveSummary: vi.fn().mockResolvedValue(undefined),
-      loadAllSummaries: vi.fn().mockResolvedValue([]),
     },
   };
 }
