@@ -298,3 +298,171 @@ fn local_sherpa_streaming_rejects_llama_engine_with_shared_error() {
         "Local ASR adapter 'sherpa-onnx' cannot execute engine 'llama-cpp'."
     );
 }
+
+#[test]
+fn local_sherpa_streaming_inherits_qwen3_initial_refresh_rate_from_preset_rules() {
+    let mut request = AsrTranscriptionRequest::local_sherpa(
+        AsrMode::Streaming,
+        "models/qwen3-asr".to_string(),
+        4,
+        false,
+        "auto".to_string(),
+        None,
+        Some("models/silero-vad".to_string()),
+        3.0,
+        "qwen3-asr".to_string(),
+        None,
+        None,
+        TranscriptNormalizationOptions::default(),
+        TranscriptPostprocessOptions::default(),
+        None,
+        None,
+    );
+    let AsrEngineConfig::Local { model_id, .. } = &mut request.engine_config else {
+        unreachable!();
+    };
+    *model_id = Some("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25".to_string());
+
+    let streaming_request =
+        LocalSherpaStreamingRequest::from_local_sherpa_request("live-qwen3".to_string(), request)
+            .unwrap();
+
+    assert_eq!(streaming_request.instance_id, "live-qwen3");
+    assert_eq!(streaming_request.model_type, "qwen3-asr");
+    assert_eq!(streaming_request.initial_refresh_rate_ms, Some(400));
+}
+
+#[test]
+fn local_sherpa_streaming_inherits_whisper_initial_refresh_rate_from_preset_rules() {
+    let mut request = AsrTranscriptionRequest::local_sherpa(
+        AsrMode::Streaming,
+        "models/whisper-turbo".to_string(),
+        4,
+        false,
+        "auto".to_string(),
+        None,
+        Some("models/silero-vad".to_string()),
+        3.0,
+        "whisper".to_string(),
+        None,
+        None,
+        TranscriptNormalizationOptions::default(),
+        TranscriptPostprocessOptions::default(),
+        None,
+        None,
+    );
+    let AsrEngineConfig::Local { model_id, .. } = &mut request.engine_config else {
+        unreachable!();
+    };
+    *model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+
+    let streaming_request =
+        LocalSherpaStreamingRequest::from_local_sherpa_request("live-whisper".to_string(), request)
+            .unwrap();
+
+    assert_eq!(streaming_request.instance_id, "live-whisper");
+    assert_eq!(streaming_request.model_type, "whisper");
+    assert_eq!(streaming_request.initial_refresh_rate_ms, Some(400));
+}
+
+#[test]
+fn local_sherpa_streaming_inherits_funasr_nano_initial_refresh_rate_from_preset_rules() {
+    let mut request = AsrTranscriptionRequest::local_sherpa(
+        AsrMode::Streaming,
+        "models/funasr-nano".to_string(),
+        4,
+        false,
+        "auto".to_string(),
+        Some("models/punct".to_string()),
+        Some("models/silero-vad".to_string()),
+        3.0,
+        "funasr-nano".to_string(),
+        None,
+        None,
+        TranscriptNormalizationOptions::default(),
+        TranscriptPostprocessOptions::default(),
+        None,
+        None,
+    );
+    let AsrEngineConfig::Local { model_id, .. } = &mut request.engine_config else {
+        unreachable!();
+    };
+    *model_id = Some("sherpa-onnx-funasr-nano-int8-2025-12-30".to_string());
+
+    let streaming_request =
+        LocalSherpaStreamingRequest::from_local_sherpa_request("live-funasr".to_string(), request)
+            .unwrap();
+
+    assert_eq!(streaming_request.instance_id, "live-funasr");
+    assert_eq!(streaming_request.model_type, "funasr-nano");
+    assert_eq!(streaming_request.initial_refresh_rate_ms, Some(500));
+}
+
+#[test]
+fn local_sherpa_streaming_inherits_firered_initial_refresh_rate_from_preset_rules() {
+    let mut request = AsrTranscriptionRequest::local_sherpa(
+        AsrMode::Streaming,
+        "models/firered".to_string(),
+        4,
+        false,
+        "auto".to_string(),
+        Some("models/punct".to_string()),
+        Some("models/silero-vad".to_string()),
+        3.0,
+        "fire-red-asr".to_string(),
+        None,
+        None,
+        TranscriptNormalizationOptions::default(),
+        TranscriptPostprocessOptions::default(),
+        None,
+        None,
+    );
+    let AsrEngineConfig::Local { model_id, .. } = &mut request.engine_config else {
+        unreachable!();
+    };
+    *model_id = Some("sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26".to_string());
+
+    let streaming_request =
+        LocalSherpaStreamingRequest::from_local_sherpa_request("live-firered".to_string(), request)
+            .unwrap();
+
+    assert_eq!(streaming_request.instance_id, "live-firered");
+    assert_eq!(streaming_request.model_type, "fire-red-asr");
+    assert_eq!(streaming_request.initial_refresh_rate_ms, Some(600));
+}
+
+#[test]
+fn local_sherpa_streaming_inherits_omnilingual_initial_refresh_rate_from_preset_rules() {
+    let mut request = AsrTranscriptionRequest::local_sherpa(
+        AsrMode::Streaming,
+        "models/omnilingual".to_string(),
+        4,
+        false,
+        "auto".to_string(),
+        Some("models/punct".to_string()),
+        Some("models/silero-vad".to_string()),
+        3.0,
+        "omnilingual".to_string(),
+        None,
+        None,
+        TranscriptNormalizationOptions::default(),
+        TranscriptPostprocessOptions::default(),
+        None,
+        None,
+    );
+    let AsrEngineConfig::Local { model_id, .. } = &mut request.engine_config else {
+        unreachable!();
+    };
+    *model_id =
+        Some("sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05".to_string());
+
+    let streaming_request = LocalSherpaStreamingRequest::from_local_sherpa_request(
+        "live-omnilingual".to_string(),
+        request,
+    )
+    .unwrap();
+
+    assert_eq!(streaming_request.instance_id, "live-omnilingual");
+    assert_eq!(streaming_request.model_type, "omnilingual");
+    assert_eq!(streaming_request.initial_refresh_rate_ms, Some(500));
+}

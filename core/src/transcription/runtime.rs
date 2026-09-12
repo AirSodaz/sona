@@ -138,7 +138,10 @@ impl LiveTranscribePlan {
             normalization_options: Default::default(),
             postprocess_options: Default::default(),
             gpu_acceleration: self.gpu_acceleration.clone(),
-            initial_refresh_rate_ms: None,
+            initial_refresh_rate_ms: crate::models::preset_models::find_preset_model(
+                &self.model_id,
+            )
+            .and_then(|m| m.resolved_rules().initial_refresh_rate_ms),
         }
     }
 }

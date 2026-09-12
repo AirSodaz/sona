@@ -19,7 +19,11 @@ fn qwen_presets_are_verified_batch_bundles() {
     let onnx_model = find_preset_model("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25").unwrap();
     assert_eq!(onnx_model.engine.as_deref(), Some("sherpa-onnx"));
     assert!(onnx_model.supports_mode("batch"));
-    assert!(!onnx_model.supports_mode("streaming"));
+    assert!(onnx_model.supports_mode("streaming"));
+    let onnx_rules = onnx_model.resolved_rules();
+    assert!(onnx_rules.requires_vad);
+    assert!(!onnx_rules.requires_punctuation);
+    assert_eq!(onnx_rules.initial_refresh_rate_ms, Some(400));
     assert_eq!(onnx_model.artifacts.len(), 6);
     let onnx_fc = onnx_model.file_config.as_ref().unwrap();
     assert_eq!(onnx_fc.conv_frontend.as_deref(), Some("conv_frontend.onnx"));
@@ -209,14 +213,83 @@ fn paraformer_presets_are_verified_streaming_bundles() {
     }
 }
 #[test]
-fn firered_asr2_aed_presets_are_verified_batch_bundles() {
-    for (id, expected_version, expected_encoder, expected_decoder, expected_artifacts) in [
+fn funasr_nano_presets_are_verified_bundles() {
+    for (
+        id,
+        expected_version,
+        expected_adaptor,
+        expected_llm,
+        expected_embedding,
+        expected_refresh,
+    ) in [
+        (
+            "sherpa-onnx-funasr-nano-int8-2025-12-30",
+            "Int8",
+            "encoder_adaptor.int8.onnx",
+            "llm.int8.onnx",
+            "embedding.int8.onnx",
+            500,
+        ),
+        (
+            "sherpa-onnx-funasr-nano-fp16-2025-12-30",
+            "Fp16",
+            "encoder_adaptor.int8.onnx",
+            "llm.fp16.onnx",
+            "embedding.int8.onnx",
+            600,
+        ),
+        (
+            "sherpa-onnx-funasr-nano-2025-12-30",
+            "Fp32",
+            "encoder_adaptor.onnx",
+            "llm.fp32.onnx",
+            "embedding.onnx",
+            800,
+        ),
+    ] {
+        let model = find_preset_model(id).unwrap();
+        assert_eq!(model.model_type, "funasr-nano");
+        assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
+        assert!(model.supports_mode("streaming"));
+        assert!(model.supports_mode("batch"));
+        assert_eq!(model.language_mode, LanguageMode::Selectable);
+        assert_eq!(model.languages, vec!["en", "ja", "zh"]);
+        assert_eq!(model.group_id.as_deref(), Some("funasr-nano"));
+        assert_eq!(model.version_label.as_deref(), Some(expected_version));
+
+        let rules = model.resolved_rules();
+        assert!(rules.requires_vad);
+        assert!(rules.requires_punctuation);
+        assert_eq!(rules.initial_refresh_rate_ms, Some(expected_refresh));
+
+        let file_config = model.file_config.as_ref().unwrap();
+        assert_eq!(
+            file_config.encoder_adaptor.as_deref(),
+            Some(expected_adaptor)
+        );
+        assert_eq!(file_config.llm.as_deref(), Some(expected_llm));
+        assert_eq!(file_config.embedding.as_deref(), Some(expected_embedding));
+        assert_eq!(file_config.tokenizer.as_deref(), Some("Qwen3-0.6B"));
+    }
+}
+
+#[test]
+fn firered_asr2_aed_presets_are_verified_bundles() {
+    for (
+        id,
+        expected_version,
+        expected_encoder,
+        expected_decoder,
+        expected_artifacts,
+        expected_refresh,
+    ) in [
         (
             "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26",
             "Int8",
             "encoder.int8.onnx",
             "decoder.int8.onnx",
             3,
+            600,
         ),
         (
             "sherpa-onnx-fire-red-asr2-zh_en-2026-02-26",
@@ -224,13 +297,14 @@ fn firered_asr2_aed_presets_are_verified_batch_bundles() {
             "encoder.onnx",
             "decoder.onnx",
             4,
+            900,
         ),
     ] {
         let model = find_preset_model(id).unwrap();
         assert_eq!(model.model_type, "fire-red-asr");
         assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
         assert!(model.supports_mode("batch"));
-        assert!(!model.supports_mode("streaming"));
+        assert!(model.supports_mode("streaming"));
         assert_eq!(model.language_mode, LanguageMode::Auto);
         assert_eq!(model.languages, vec!["en", "zh"]);
         assert_eq!(model.group_id.as_deref(), Some("firered-asr2-aed"));
@@ -239,6 +313,7 @@ fn firered_asr2_aed_presets_are_verified_batch_bundles() {
         let rules = model.resolved_rules();
         assert!(rules.requires_vad);
         assert!(rules.requires_punctuation);
+        assert_eq!(rules.initial_refresh_rate_ms, Some(expected_refresh));
 
         let file_config = model.file_config.as_ref().unwrap();
         assert_eq!(file_config.encoder.as_deref(), Some(expected_encoder));
@@ -247,6 +322,63 @@ fn firered_asr2_aed_presets_are_verified_batch_bundles() {
         assert_eq!(model.artifacts.len(), expected_artifacts);
     }
 }
+#[test]
+fn whisper_presets_are_verified_bundles() {
+    for (
+        id,
+        expected_version,
+        expected_encoder,
+        expected_decoder,
+        expected_tokens,
+        expected_refresh,
+    ) in [
+        (
+            "sherpa-onnx-whisper-turbo",
+            "Large Turbo",
+            "turbo-encoder.int8.onnx",
+            "turbo-decoder.int8.onnx",
+            "turbo-tokens.txt",
+            400,
+        ),
+        (
+            "sherpa-onnx-whisper-large-v3",
+            "Large-v3",
+            "large-v3-encoder.int8.onnx",
+            "large-v3-decoder.int8.onnx",
+            "large-v3-tokens.txt",
+            800,
+        ),
+        (
+            "sherpa-onnx-whisper-medium-aishell",
+            "Medium-AISHELL",
+            "medium-aishell-encoder.int8.onnx",
+            "medium-aishell-decoder.int8.onnx",
+            "medium-aishell-tokens.txt",
+            600,
+        ),
+    ] {
+        let model = find_preset_model(id).unwrap();
+        assert_eq!(model.model_type, "whisper");
+        assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
+        assert!(model.supports_mode("streaming"));
+        assert!(model.supports_mode("batch"));
+        assert_eq!(model.language_mode, LanguageMode::Selectable);
+        assert_eq!(model.group_id.as_deref(), Some("whisper"));
+        assert_eq!(model.version_label.as_deref(), Some(expected_version));
+
+        let rules = model.resolved_rules();
+        assert!(rules.requires_vad);
+        assert!(!rules.requires_punctuation);
+        assert_eq!(rules.initial_refresh_rate_ms, Some(expected_refresh));
+
+        let file_config = model.file_config.as_ref().unwrap();
+        assert_eq!(file_config.encoder.as_deref(), Some(expected_encoder));
+        assert_eq!(file_config.decoder.as_deref(), Some(expected_decoder));
+        assert_eq!(file_config.tokens.as_deref(), Some(expected_tokens));
+        assert_eq!(model.artifacts.len(), 3);
+    }
+}
+
 #[test]
 fn sensevoice_presets_are_verified_bundles() {
     for (id, expected_version, expected_model) in [
@@ -281,25 +413,27 @@ fn sensevoice_presets_are_verified_bundles() {
     }
 }
 #[test]
-fn omnilingual_presets_are_verified_batch_bundles() {
-    for (id, expected_version, expected_model, expected_artifacts) in [
+fn omnilingual_presets_are_verified_bundles() {
+    for (id, expected_version, expected_model, expected_artifacts, expected_refresh) in [
         (
             "sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05",
             "1B Int8",
             "model.int8.onnx",
             2,
+            500,
         ),
         (
             "sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05",
             "1B Fp32",
             "model.onnx",
             3,
+            800,
         ),
     ] {
         let model = find_preset_model(id).unwrap();
         assert_eq!(model.model_type, "omnilingual");
         assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
-        assert!(!model.supports_mode("streaming"));
+        assert!(model.supports_mode("streaming"));
         assert!(model.supports_mode("batch"));
         assert_eq!(model.language_mode, LanguageMode::Auto);
         assert_eq!(model.group_id.as_deref(), Some("omnilingual-asr"));
@@ -308,6 +442,7 @@ fn omnilingual_presets_are_verified_batch_bundles() {
         let rules = model.resolved_rules();
         assert!(rules.requires_vad);
         assert!(rules.requires_punctuation);
+        assert_eq!(rules.initial_refresh_rate_ms, Some(expected_refresh));
 
         let file_config = model.file_config.as_ref().unwrap();
         assert_eq!(file_config.model.as_deref(), Some(expected_model));

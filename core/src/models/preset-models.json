@@ -192,6 +192,7 @@
     "description": "settings.descriptions.qwen3_asr",
     "type": "qwen3-asr",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -232,7 +233,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": false,
-      "timestampSupportHint": "segment"
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 400
     },
     "artifacts": [
       {
@@ -744,6 +746,7 @@
     "description": "settings.descriptions.whisper_turbo",
     "type": "whisper",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -854,7 +857,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": false,
-      "timestampSupportHint": "token"
+      "timestampSupportHint": "token",
+      "initialRefreshRateMs": 400
     },
     "artifacts": [
       {
@@ -890,6 +894,7 @@
     "description": "settings.descriptions.whisper_large",
     "type": "whisper",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -1000,7 +1005,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": false,
-      "timestampSupportHint": "token"
+      "timestampSupportHint": "token",
+      "initialRefreshRateMs": 800
     },
     "artifacts": [
       {
@@ -1036,6 +1042,7 @@
     "description": "settings.descriptions.whisper_medium_aishell",
     "type": "whisper",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -1048,7 +1055,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": false,
-      "timestampSupportHint": "token"
+      "timestampSupportHint": "token",
+      "initialRefreshRateMs": 600
     },
     "artifacts": [
       {
@@ -1142,6 +1150,7 @@
     "description": "settings.descriptions.funasr_nano",
     "type": "funasr-nano",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -1155,7 +1164,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": true,
-      "timestampSupportHint": "segment"
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 500
     },
     "artifacts": [
       {
@@ -1210,6 +1220,7 @@
     "description": "settings.descriptions.funasr_nano",
     "type": "funasr-nano",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -1223,7 +1234,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": true,
-      "timestampSupportHint": "segment"
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 600
     },
     "artifacts": [
       {
@@ -1278,6 +1290,7 @@
     "description": "settings.descriptions.funasr_nano",
     "type": "funasr-nano",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -1291,7 +1304,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": true,
-      "timestampSupportHint": "segment"
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 800
     },
     "artifacts": [
       {
@@ -1352,6 +1366,7 @@
     "description": "settings.descriptions.firered_asr",
     "type": "fire-red-asr",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -1364,7 +1379,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": true,
-      "timestampSupportHint": "segment"
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 600
     },
     "artifacts": [
       {
@@ -1400,6 +1416,7 @@
     "description": "settings.descriptions.firered_asr",
     "type": "fire-red-asr",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -1412,7 +1429,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": true,
-      "timestampSupportHint": "segment"
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 900
     },
     "artifacts": [
       {
@@ -1614,6 +1632,7 @@
     "description": "settings.descriptions.omnilingual_asr",
     "type": "omnilingual",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -1652,7 +1671,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": true,
-      "timestampSupportHint": "token"
+      "timestampSupportHint": "token",
+      "initialRefreshRateMs": 500
     },
     "artifacts": [
       {
@@ -1681,6 +1701,7 @@
     "description": "settings.descriptions.omnilingual_asr",
     "type": "omnilingual",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -1719,7 +1740,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": true,
-      "timestampSupportHint": "token"
+      "timestampSupportHint": "token",
+      "initialRefreshRateMs": 800
     },
     "artifacts": [
       {

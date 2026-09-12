@@ -198,6 +198,47 @@ fn installed_funasr_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
     (dir, input_path, models_dir)
 }
 
+fn installed_firered_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
+    let dir = tempdir().unwrap();
+    let input_path = dir.path().join("sample.wav");
+    let models_dir = dir.path().join("models");
+    fs::write(&input_path, "").unwrap();
+    fs::create_dir_all(models_dir.join("sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26")).unwrap();
+    fs::write(models_dir.join("silero_vad_v5.onnx"), "").unwrap();
+    fs::create_dir_all(
+        models_dir.join("sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"),
+    )
+    .unwrap();
+    (dir, input_path, models_dir)
+}
+
+fn installed_llama_qwen_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
+    let dir = tempdir().unwrap();
+    let input_path = dir.path().join("sample.wav");
+    let models_dir = dir.path().join("models");
+    fs::write(&input_path, "").unwrap();
+    fs::create_dir_all(models_dir.join("qwen3-asr-0.6b-q8-gguf")).unwrap();
+    fs::write(models_dir.join("silero_vad_v5.onnx"), "").unwrap();
+    (dir, input_path, models_dir)
+}
+
+fn installed_omnilingual_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
+    let dir = tempdir().unwrap();
+    let input_path = dir.path().join("sample.wav");
+    let models_dir = dir.path().join("models");
+    fs::write(&input_path, "").unwrap();
+    fs::create_dir_all(
+        models_dir.join("sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05"),
+    )
+    .unwrap();
+    fs::write(models_dir.join("silero_vad_v5.onnx"), "").unwrap();
+    fs::create_dir_all(
+        models_dir.join("sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"),
+    )
+    .unwrap();
+    (dir, input_path, models_dir)
+}
+
 fn temp_live_options() -> LiveTranscribeOptions {
     LiveTranscribeOptions {
         output: None,
@@ -274,9 +315,9 @@ fn live_plan_resolves_streaming_model_companions_and_config_precedence() {
 
 #[test]
 fn live_plan_rejects_batch_only_models() {
-    let (_dir, _input_path, models_dir) = installed_whisper_fixture();
+    let (_dir, _input_path, models_dir) = installed_llama_qwen_fixture();
     let mut cli = temp_live_options();
-    cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+    cli.model_id = Some("qwen3-asr-0.6b-q8-gguf".to_string());
     cli.models_dir = Some(models_dir);
 
     let error = resolve_live_transcribe_plan_with_install_checker(cli, None, test_model_exists)
@@ -285,8 +326,90 @@ fn live_plan_rejects_batch_only_models() {
     assert_eq!(error.subject, "model_id");
     assert_eq!(
         error.message,
-        "Model 'sherpa-onnx-whisper-turbo' does not support streaming transcription."
+        "Model 'qwen3-asr-0.6b-q8-gguf' does not support streaming transcription."
     );
+}
+
+#[test]
+fn live_plan_resolves_firered_streaming_model() {
+    let (_dir, _input_path, models_dir) = installed_firered_fixture();
+    let mut cli = temp_live_options();
+    cli.model_id = Some("sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26".to_string());
+    cli.models_dir = Some(models_dir.clone());
+
+    let plan =
+        resolve_live_transcribe_plan_with_install_checker(cli, None, test_model_exists).unwrap();
+
+    assert_eq!(
+        plan.model_id,
+        "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26"
+    );
+    assert!(plan.vad_model.is_some());
+    assert!(plan.punctuation_model.is_some());
+    let request = plan.to_local_streaming_request("cli-firered-live");
+    assert_eq!(request.instance_id, "cli-firered-live");
+    assert_eq!(request.model_type, "fire-red-asr");
+    assert_eq!(request.initial_refresh_rate_ms, Some(600));
+}
+
+#[test]
+fn live_plan_resolves_omnilingual_streaming_model() {
+    let (_dir, _input_path, models_dir) = installed_omnilingual_fixture();
+    let mut cli = temp_live_options();
+    cli.model_id =
+        Some("sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05".to_string());
+    cli.models_dir = Some(models_dir.clone());
+
+    let plan =
+        resolve_live_transcribe_plan_with_install_checker(cli, None, test_model_exists).unwrap();
+
+    assert_eq!(
+        plan.model_id,
+        "sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05"
+    );
+    assert!(plan.vad_model.is_some());
+    assert!(plan.punctuation_model.is_some());
+    let request = plan.to_local_streaming_request("cli-omnilingual-live");
+    assert_eq!(request.instance_id, "cli-omnilingual-live");
+    assert_eq!(request.model_type, "omnilingual");
+    assert_eq!(request.initial_refresh_rate_ms, Some(500));
+}
+
+#[test]
+fn live_plan_resolves_funasr_nano_streaming_model() {
+    let (_dir, _input_path, models_dir) = installed_funasr_fixture();
+    let mut cli = temp_live_options();
+    cli.model_id = Some("sherpa-onnx-funasr-nano-int8-2025-12-30".to_string());
+    cli.models_dir = Some(models_dir.clone());
+
+    let plan =
+        resolve_live_transcribe_plan_with_install_checker(cli, None, test_model_exists).unwrap();
+
+    assert_eq!(plan.model_id, "sherpa-onnx-funasr-nano-int8-2025-12-30");
+    assert!(plan.vad_model.is_some());
+    assert!(plan.punctuation_model.is_some());
+    let request = plan.to_local_streaming_request("cli-funasr-live");
+    assert_eq!(request.instance_id, "cli-funasr-live");
+    assert_eq!(request.model_type, "funasr-nano");
+    assert_eq!(request.initial_refresh_rate_ms, Some(500));
+}
+
+#[test]
+fn live_plan_resolves_whisper_turbo_streaming_model() {
+    let (_dir, _input_path, models_dir) = installed_whisper_fixture();
+    let mut cli = temp_live_options();
+    cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+    cli.models_dir = Some(models_dir.clone());
+
+    let plan =
+        resolve_live_transcribe_plan_with_install_checker(cli, None, test_model_exists).unwrap();
+
+    assert_eq!(plan.model_id, "sherpa-onnx-whisper-turbo");
+    assert!(plan.vad_model.is_some());
+    let request = plan.to_local_streaming_request("cli-whisper-live");
+    assert_eq!(request.instance_id, "cli-whisper-live");
+    assert_eq!(request.model_type, "whisper");
+    assert_eq!(request.initial_refresh_rate_ms, Some(400));
 }
 
 #[test]
