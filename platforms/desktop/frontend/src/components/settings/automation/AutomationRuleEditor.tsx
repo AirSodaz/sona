@@ -126,7 +126,6 @@ export function AutomationRuleEditor({
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => onBrowseDirectory('watchDirectory')}
-                  title={t('settings.browse', { defaultValue: 'Browse' })}
                   style={{
                     height: 36,
                     padding: '0 12px',
@@ -466,7 +465,7 @@ export function AutomationRuleEditor({
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', paddingTop: '8px' }}>
-        <button type="button" className="btn" onClick={onCancel}>
+        <button type="button" className="btn btn-secondary" onClick={onCancel}>
           {t('common.cancel')}
         </button>
         <button type="button" className="btn btn-primary" onClick={onSave}>

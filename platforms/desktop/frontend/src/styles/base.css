@@ -30,6 +30,38 @@
   /* Notion Gray */
   --color-text-muted: #9b9a97;
   --color-text-disabled: #d3d1cb;
+  /* Shared checked state for switch controls */
+  --color-switch-checked: #4a4a4a;
+
+  /* Button semantic surfaces */
+  --button-primary-bg: var(--color-accent-gradient);
+  --button-primary-bg-hover: var(--color-accent-gradient);
+  --button-primary-bg-pressed: var(--color-accent-primary);
+  --button-primary-text: #ffffff;
+  --button-secondary-bg: var(--color-bg-tertiary);
+  --button-secondary-bg-hover: var(--color-bg-hover);
+  --button-secondary-bg-pressed: var(--color-bg-secondary);
+  --button-secondary-border: var(--color-border);
+  --button-secondary-border-hover: var(--color-border-hover);
+  --button-secondary-text: var(--color-text-primary);
+  --button-soft-bg: var(--color-bg-tertiary);
+  --button-soft-bg-hover: var(--color-bg-hover);
+  --button-soft-bg-pressed: var(--color-bg-secondary);
+  --button-soft-border: var(--color-border);
+  --button-soft-border-hover: var(--color-border-hover);
+  --button-soft-text: var(--color-text-primary);
+  --button-danger-bg: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-error) 88%, white 12%),
+    var(--color-error)
+  );
+  --button-danger-bg-hover: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-error) 84%, white 16%),
+    color-mix(in srgb, var(--color-error) 96%, black 4%)
+  );
+  --button-danger-bg-pressed: var(--color-error);
+  --button-danger-text: #ffffff;
 
   /* Status Colors (Softened) */
   --color-success: #4ea067;
@@ -143,6 +175,7 @@
   --color-text-secondary: #9b9a97;
   --color-text-muted: #707070;
   --color-text-disabled: #4a4a4a;
+  --color-switch-checked: #4a4a4a;
 
   --color-border: rgba(255, 255, 255, 0.08);
   --color-border-hover: rgba(255, 255, 255, 0.14);
@@ -172,6 +205,27 @@
   --apple-control-focus-ring:
     0 0 0 2px var(--color-bg-primary),
     0 0 0 4px color-mix(in srgb, var(--color-accent-primary) 24%, transparent);
+  --button-primary-bg: #d4d4d4;
+  --button-primary-bg-hover: #eeeeee;
+  --button-primary-bg-pressed: #bdbdbd;
+  --button-primary-text: #191919;
+  --button-secondary-bg: #252525;
+  --button-secondary-bg-hover: #303030;
+  --button-secondary-bg-pressed: #202020;
+  --button-secondary-border: #4a4a4a;
+  --button-secondary-border-hover: #666666;
+  --button-secondary-text: #d4d4d4;
+  --button-soft-bg: transparent;
+  --button-soft-bg-hover: #292929;
+  --button-soft-bg-pressed: #202020;
+  --button-soft-border: transparent;
+  --button-soft-border-hover: #4a4a4a;
+  --button-soft-text: #9b9a97;
+  --button-danger-bg: #6f2a2a;
+  --button-danger-bg-hover: #8b3535;
+  --button-danger-bg-pressed: #5c2323;
+  --button-danger-text: #ffe4e1;
+
   --apple-field-focus-surface: var(--color-bg-primary);
   --apple-field-focus-border: color-mix(
     in srgb,

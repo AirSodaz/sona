@@ -253,7 +253,7 @@ export function AutomationRuleCard({
           )}
 
           {onDelete && (
-            <button className="btn btn-secondary" onClick={onDelete} title={t('common.delete')}>
+            <button className="btn btn-danger" onClick={onDelete} title={t('common.delete')}>
               <TrashIcon />
               <span>{t('common.delete')}</span>
             </button>

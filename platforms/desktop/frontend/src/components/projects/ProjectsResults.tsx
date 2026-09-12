@@ -9,7 +9,6 @@ import {
   type VirtuosoHandle,
 } from 'react-virtuoso';
 import type { HistoryItem as HistoryItemType } from '../../types/history';
-import type { ProjectRecord } from '../../types/project';
 import type { WorkspaceItemSearchMatch } from '../../utils/workspaceSearch';
 import type { ContextMenuOpenRequest } from '../context-menu/trigger';
 import { HistoryItem } from '../history/HistoryItem';
@@ -18,7 +17,6 @@ import type { TranslationFn } from './types';
 
 interface ProjectsResultsProps {
   activeSearchResultId: string | null;
-  browseProject: ProjectRecord | null;
   filteredAndSortedItems: HistoryItemType[];
   handleOpenItem: (item: HistoryItemType) => Promise<void>;
   initialLoadError: boolean;
@@ -228,7 +226,6 @@ const PROJECTS_GRID_COMPONENTS: GridComponents = {
 
 export function ProjectsResults({
   activeSearchResultId,
-  browseProject,
   filteredAndSortedItems,
   handleOpenItem,
   initialLoadError,
@@ -391,33 +388,14 @@ export function ProjectsResults({
             </button>
           </div>
         )}
-
       {!isLoading &&
         !initialLoadError &&
         scopeItemCount === 0 &&
         !searchQuery &&
         renderScrollableState(
-          <div className="projects-overview-card">
+          <div className="empty-state">
             <PlusCircleIcon />
-            <h4>
-              {t('projects.empty_state', { defaultValue: 'No items in this workspace yet.' })}
-            </h4>
-            <p>
-              {isAllItemsScope
-                ? t('projects.empty_all_items_hint', {
-                    defaultValue:
-                      'Saved recordings and imports will appear here once you create some content.',
-                  })
-                : browseProject
-                  ? t('projects.empty_project_hint', {
-                      defaultValue:
-                        'Start a live recording or import files to begin building this project.',
-                    })
-                  : t('projects.empty_inbox_hint', {
-                      defaultValue:
-                        'New recordings and imports will arrive here until you move them into a project.',
-                    })}
-            </p>
+            <p>{t('projects.empty_state', { defaultValue: 'No items in this workspace yet.' })}</p>
           </div>
         )}
 

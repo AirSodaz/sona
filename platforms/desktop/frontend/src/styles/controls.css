@@ -33,21 +33,24 @@
 }
 
 .btn-primary {
-  background: var(--color-accent-gradient);
-  color: white;
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+  border: 1px solid transparent;
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.14),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
+  background: var(--button-primary-bg-hover);
   box-shadow:
     0 4px 12px rgba(0, 0, 0, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.24);
   transform: translateY(-1px);
 }
 
-.btn-primary:active {
+.btn-primary:active:not(:disabled) {
+  background: var(--button-primary-bg-pressed);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.14),
     inset 0 1px 1px rgba(0, 0, 0, 0.12);
@@ -55,21 +58,21 @@
 }
 
 .btn-secondary {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
+  border: 1px solid var(--button-secondary-border);
   box-shadow: var(--apple-control-shadow-flat);
 }
 
-.btn-secondary:hover {
-  background: var(--color-bg-hover);
-  border-color: var(--color-border-hover);
+.btn-secondary:hover:not(:disabled) {
+  background: var(--button-secondary-bg-hover);
+  border-color: var(--button-secondary-border-hover);
   box-shadow: var(--apple-control-shadow-flat);
 }
 
-.btn-secondary:active {
-  background: var(--color-bg-secondary);
-  box-shadow: var(--apple-control-shadow-flat);
+.btn-secondary:active:not(:disabled) {
+  background: var(--button-secondary-bg-pressed);
+  box-shadow: var(--apple-control-shadow-pressed);
 }
 
 .btn-text {
@@ -92,34 +95,27 @@
 }
 
 .btn-danger {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-error) 88%, white 12%),
-    var(--color-error)
-  );
-  color: white;
+  background: var(--button-danger-bg);
+  color: var(--button-danger-text);
+  border: 1px solid transparent;
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
-.btn-danger:hover {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--color-error) 84%, white 16%),
-    color-mix(in srgb, var(--color-error) 96%, black 4%)
-  );
+.btn-danger:hover:not(:disabled) {
+  background: var(--button-danger-bg-hover);
   box-shadow:
     0 4px 10px rgba(0, 0, 0, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.btn-danger:active {
+.btn-danger:active:not(:disabled) {
+  background: var(--button-danger-bg-pressed);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.12),
     inset 0 1px 1px rgba(0, 0, 0, 0.12);
 }
-
 .btn-sm {
   padding: 4px 8px;
   font-size: 0.75rem;
@@ -170,22 +166,23 @@
   color: var(--color-text-primary);
 }
 
-.btn-icon-sm:focus-visible {
-  outline: none;
-  box-shadow: var(--apple-control-focus-ring);
-}
-
 .btn-secondary-soft {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
-  box-shadow: var(--apple-control-shadow-flat);
-  border: 1px solid var(--color-border);
+  background: var(--button-soft-bg);
+  color: var(--button-soft-text);
+  border: 1px solid var(--button-soft-border);
+  box-shadow: none;
 }
 
 .btn-secondary-soft:hover:not(:disabled) {
-  background: var(--color-bg-hover);
-  border-color: var(--color-border-hover);
+  background: var(--button-soft-bg-hover);
+  border-color: var(--button-soft-border-hover);
+  color: var(--color-text-primary);
   box-shadow: var(--apple-control-shadow-flat);
+}
+
+.btn-secondary-soft:active:not(:disabled) {
+  background: var(--button-soft-bg-pressed);
+  box-shadow: var(--apple-control-shadow-pressed);
 }
 
 .btn-secondary-soft:focus-visible {
@@ -227,25 +224,24 @@
 }
 
 .btn-restore-defaults {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-secondary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
   font-size: 0.8125rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--button-secondary-border);
   box-shadow: var(--apple-control-shadow-flat);
 }
 
-.btn-restore-defaults:hover {
-  background: var(--color-bg-hover);
-  border-color: var(--color-border-hover);
+.btn-restore-defaults:hover:not(:disabled) {
+  background: var(--button-secondary-bg-hover);
+  border-color: var(--button-secondary-border-hover);
   box-shadow: var(--apple-control-shadow-flat);
-  color: var(--color-text-primary);
+  color: var(--button-secondary-text);
 }
 
-.btn-restore-defaults:active {
-  background: var(--color-bg-secondary);
-  box-shadow: var(--apple-control-shadow-flat);
+.btn-restore-defaults:active:not(:disabled) {
+  background: var(--button-secondary-bg-pressed);
+  box-shadow: var(--apple-control-shadow-pressed);
 }
-
 .btn-restore-defaults svg {
   width: 14px;
   height: 14px;
@@ -524,13 +520,13 @@ input[type="radio"]:focus {
 }
 
 .switch-container.checked .switch-track {
-  background-color: var(--color-text-primary);
-  border-color: var(--color-text-primary);
+  background-color: var(--color-switch-checked);
+  border-color: var(--color-switch-checked);
 }
 
 .switch-container.checked:hover:not(.disabled) .switch-track {
-  background-color: color-mix(in srgb, var(--color-text-primary) 92%, var(--color-bg-primary));
-  border-color: color-mix(in srgb, var(--color-text-primary) 92%, var(--color-bg-primary));
+  background-color: color-mix(in srgb, var(--color-switch-checked) 92%, var(--color-bg-primary));
+  border-color: color-mix(in srgb, var(--color-switch-checked) 92%, var(--color-bg-primary));
 }
 
 .switch-thumb {

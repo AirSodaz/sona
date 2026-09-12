@@ -991,7 +991,6 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           <ProjectsResults
             activeContextId={activeContextId}
             activeSearchResultId={browseState.activeSearchResultId}
-            browseProject={browseState.browseProject}
             filteredAndSortedItems={browseState.filteredAndSortedItems}
             handleOpenItem={handleOpenItem}
             initialLoadError={browseState.initialLoadError}

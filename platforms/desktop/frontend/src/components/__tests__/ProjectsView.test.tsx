@@ -885,7 +885,6 @@ describe('ProjectsView', () => {
       <ProjectsResults
         activeContextId={null}
         activeSearchResultId={null}
-        browseProject={null}
         filteredAndSortedItems={liveDrafts}
         filteredItemCount={liveDrafts.length}
         handleOpenItem={vi.fn()}

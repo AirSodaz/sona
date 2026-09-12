@@ -84,7 +84,6 @@
 }
 
 .automation-rule-wrapper.is-disabled {
-  opacity: 0.75;
   background: color-mix(in srgb, var(--color-bg-primary) 92%, var(--color-bg-secondary));
 }
 
