@@ -19,6 +19,14 @@ class RecordingViewModel(
         viewModelScope.launch { controller.stop() }
     }
 
+    fun pauseRecording() {
+        viewModelScope.launch { controller.pause() }
+    }
+
+    fun resumeRecording() {
+        viewModelScope.launch { controller.resume() }
+    }
+
     companion object {
         fun factory(
             controller: LiveRecordingController,

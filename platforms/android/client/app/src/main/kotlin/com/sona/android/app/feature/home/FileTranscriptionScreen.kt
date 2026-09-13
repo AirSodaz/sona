@@ -23,6 +23,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import com.sona.android.app.feature.library.messageRes
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -223,7 +224,11 @@ private fun FailedImport(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SelectedFileCard(selectedName, selectedSize)
-        Text(stringResource(R.string.home_status_failed), color = MaterialTheme.colorScheme.error)
+        Text(
+            text = stringResource(state.reason?.messageRes() ?: R.string.home_status_failed),
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodyMedium,
+        )
         if (state.reason == AudioImportFailure.CONFIGURATION) {
             FilledTonalButton(onClick = onConfigure) { Text(stringResource(R.string.action_configure)) }
         } else {

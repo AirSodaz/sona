@@ -15,6 +15,10 @@
     <string name="llm_save">Save</string>
     <string name="llm_saved">Saved</string>
     <string name="llm_clear">Clear LLM configuration</string>
+    <string name="llm_clear_confirm_title">Clear LLM configuration?</string>
+    <string name="llm_clear_confirm_message">This will remove the saved API key and reset LLM settings.</string>
+    <string name="llm_show_api_key">Show API Key</string>
+    <string name="llm_hide_api_key">Hide API Key</string>
     <string name="llm_configuration_failed">Configuration could not be saved</string>
     <string name="llm_summarize">Summarize</string>
     <string name="llm_translate">Translate</string>
@@ -34,6 +38,8 @@
     <string name="engine_label">Recognition engine</string>
     <string name="record_action_description">Start recording</string>
     <string name="record_stop_description">Stop recording</string>
+    <string name="record_pause_description">Pause recording</string>
+    <string name="record_resume_description">Resume recording</string>
     <string name="transcript_waiting">Waiting for transcription</string>
     <string name="status_loading">Initializing</string>
     <string name="status_error">Initialization failed</string>
@@ -45,6 +51,7 @@
     <string name="recording_needs_configuration">Recognition setup required</string>
     <string name="recording_preparing">Preparing recording</string>
     <string name="recording_active">Recording</string>
+    <string name="recording_paused">Recording paused</string>
     <string name="recording_stopping">Saving</string>
     <string name="recording_completed">Recording saved</string>
     <string name="recording_completed_warning">Recording saved; some processing did not finish</string>
@@ -87,45 +94,44 @@
     <string name="library_item_metadata">%1$s · %2$s · %3$s</string>
     <string name="library_detail_heading">Recording</string>
     <string name="library_draft_notice">This recording is still a draft and has been preserved.</string>
-    <string name="library_transcript_heading">Transcript</string>
     <string name="library_transcript_empty">No transcript yet</string>
     <string name="library_transcript_load_failed">Transcript could not be loaded</string>
-    <string name="history_search" translatable="false">Search history</string>
-    <string name="history_scope_all" translatable="false">All</string>
-    <string name="history_scope_untagged" translatable="false">Untagged</string>
-    <string name="history_scope_trash" translatable="false">Trash</string>
-    <plurals name="history_selected_count" translatable="false">
+    <string name="history_search">Search history</string>
+    <string name="history_scope_all">All</string>
+    <string name="history_scope_untagged">Untagged</string>
+    <string name="history_scope_trash">Trash</string>
+    <plurals name="history_selected_count">
         <item quantity="one">%1$d item selected</item>
         <item quantity="other">%1$d items selected</item>
     </plurals>
-    <string name="history_restore" translatable="false">Restore</string>
-    <string name="history_delete_forever" translatable="false">Delete permanently</string>
-    <string name="history_move_to_trash" translatable="false">Move to trash</string>
-    <string name="history_clear_selection" translatable="false">Clear selection</string>
-    <string name="history_manage_selected_tags" translatable="false">Manage selected tags</string>
-    <string name="history_add_tag" translatable="false">Add %1$s</string>
-    <string name="history_remove_tag" translatable="false">Remove %1$s</string>
-    <string name="history_delete_confirm_title" translatable="false">Delete permanently?</string>
-    <plurals name="history_delete_confirm_body" translatable="false">
+    <string name="history_restore">Restore</string>
+    <string name="history_delete_forever">Delete permanently</string>
+    <string name="history_move_to_trash">Move to trash</string>
+    <string name="history_clear_selection">Clear selection</string>
+    <string name="history_manage_selected_tags">Manage selected tags</string>
+    <string name="history_add_tag">Add %1$s</string>
+    <string name="history_remove_tag">Remove %1$s</string>
+    <string name="history_delete_confirm_title">Delete permanently?</string>
+    <plurals name="history_delete_confirm_body">
         <item quantity="one">%1$d history item and its lightweight transcript data will be permanently deleted.</item>
         <item quantity="other">%1$d history items and their lightweight transcript data will be permanently deleted.</item>
     </plurals>
-    <string name="history_edit_title" translatable="false">Edit title</string>
-    <string name="history_tags" translatable="false">Tags</string>
-    <string name="history_create_tag" translatable="false">Create tag</string>
-    <string name="history_tag_name" translatable="false">Tag name</string>
-    <string name="history_snapshots" translatable="false">Transcript snapshots</string>
-    <string name="history_snapshot_empty" translatable="false">No transcript snapshots</string>
-    <string name="history_snapshot_title" translatable="false">Snapshot · %1$s</string>
-    <string name="history_export_transcript" translatable="false">Export transcript</string>
-    <string name="history_export_format" translatable="false">Format</string>
-    <string name="history_export_content" translatable="false">Content</string>
-    <string name="history_export_original" translatable="false">Original</string>
-    <string name="history_export_translation" translatable="false">Translation</string>
-    <string name="history_export_bilingual" translatable="false">Bilingual</string>
-    <string name="history_operation_failed" translatable="false">The history operation could not be completed.</string>
-    <string name="action_save" translatable="false">Save</string>
-    <string name="action_close" translatable="false">Close</string>
+    <string name="history_edit_title">Edit title</string>
+    <string name="history_tags">Tags</string>
+    <string name="history_create_tag">Create tag</string>
+    <string name="history_tag_name">Tag name</string>
+    <string name="history_snapshots">Transcript snapshots</string>
+    <string name="history_snapshot_empty">No transcript snapshots</string>
+    <string name="history_snapshot_title">Snapshot · %1$s</string>
+    <string name="history_export_transcript">Export transcript</string>
+    <string name="history_export_format">Format</string>
+    <string name="history_export_content">Content</string>
+    <string name="history_export_original">Original</string>
+    <string name="history_export_translation">Translation</string>
+    <string name="history_export_bilingual">Bilingual</string>
+    <string name="history_operation_failed">The history operation could not be completed.</string>
+    <string name="action_save">Save</string>
+    <string name="action_close">Close</string>
     <string name="action_cloud_transcribe">Cloud transcribe</string>
     <string name="action_transcribe_current_engine">Transcribe again</string>
     <string name="cloud_transcription_heading">Cloud transcription</string>
@@ -206,32 +212,32 @@
     <string name="action_delete_model">Delete model</string>
     <string name="action_refresh_model_catalog">Refresh model catalog</string>
     <string name="action_delete">Delete</string>
-    <string name="action_discard" translatable="false">Discard</string>
-    <string name="action_done" translatable="false">Done</string>
-    <string name="transcript_auto_save_saving" translatable="false">Saving...</string>
-    <string name="transcript_auto_save_unsaved" translatable="false">Unsaved</string>
-    <string name="transcript_auto_save_saved" translatable="false">Saved</string>
-    <string name="action_undo" translatable="false">Undo</string>
-    <string name="action_redo" translatable="false">Redo</string>
-    <string name="transcript_unsaved_title" translatable="false">Unsaved transcript edits</string>
-    <string name="transcript_unsaved_body" translatable="false">Save the draft before leaving this recording?</string>
-    <string name="transcript_edit" translatable="false">Edit transcript</string>
-    <string name="transcript_edit_invalid" translatable="false">This edit is not valid for the selected segment.</string>
-    <string name="transcript_edit_save_failed" translatable="false">Transcript could not be saved.</string>
-    <string name="transcript_edit_conflict" translatable="false">Transcript changed elsewhere. Reload the current version before saving.</string>
-    <string name="transcript_original" translatable="false">Original</string>
-    <string name="transcript_translation" translatable="false">Translation</string>
-    <string name="transcript_split" translatable="false">Split segment</string>
-    <string name="transcript_merge_next" translatable="false">Merge with next segment</string>
-    <string name="transcript_left_original" translatable="false">Left original</string>
-    <string name="transcript_right_original" translatable="false">Right original</string>
-    <string name="transcript_left_translation" translatable="false">Left translation</string>
-    <string name="transcript_right_translation" translatable="false">Right translation</string>
-    <string name="playback_play" translatable="false">Play</string>
-    <string name="playback_pause" translatable="false">Pause</string>
-    <string name="playback_back_five" translatable="false">Back 5 seconds</string>
-    <string name="playback_forward_five" translatable="false">Forward 5 seconds</string>
-    <string name="playback_failed" translatable="false">Audio playback is unavailable.</string>
+    <string name="action_discard">Discard</string>
+    <string name="action_done">Done</string>
+    <string name="transcript_auto_save_saving">Saving&#8230;</string>
+    <string name="transcript_auto_save_unsaved">Unsaved</string>
+    <string name="transcript_auto_save_saved">Saved</string>
+    <string name="action_undo">Undo</string>
+    <string name="action_redo">Redo</string>
+    <string name="transcript_unsaved_title">Unsaved transcript edits</string>
+    <string name="transcript_unsaved_body">Save the draft before leaving this recording?</string>
+    <string name="transcript_edit">Edit transcript</string>
+    <string name="transcript_edit_invalid">This edit is not valid for the selected segment.</string>
+    <string name="transcript_edit_save_failed">Transcript could not be saved.</string>
+    <string name="transcript_edit_conflict">Transcript changed elsewhere. Reload the current version before saving.</string>
+    <string name="transcript_original">Original</string>
+    <string name="transcript_translation">Translation</string>
+    <string name="transcript_split">Split segment</string>
+    <string name="transcript_merge_next">Merge with next segment</string>
+    <string name="transcript_left_original">Left original</string>
+    <string name="transcript_right_original">Right original</string>
+    <string name="transcript_left_translation">Left translation</string>
+    <string name="transcript_right_translation">Right translation</string>
+    <string name="playback_play">Play</string>
+    <string name="playback_pause">Pause</string>
+    <string name="playback_back_five">Back 5 seconds</string>
+    <string name="playback_forward_five">Forward 5 seconds</string>
+    <string name="playback_failed">Audio playback is unavailable.</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_configure">Open settings</string>
     <string name="recognition_live_model">Live recording model</string>
@@ -245,6 +251,8 @@
     <string name="home_status_idle">Ready to start</string>
     <string name="home_status_preparing">Preparing</string>
     <string name="home_status_recording">Recording</string>
+    <string name="home_status_paused">Paused</string>
+    <string name="home_status_stopping">Saving</string>
     <string name="home_status_processing">Processing</string>
     <string name="home_status_completed">Completed</string>
     <string name="home_status_failed">Needs attention</string>
@@ -255,98 +263,126 @@
     <string name="file_start_transcription">Start transcription</string>
     <string name="file_view_result">View result</string>
     <string name="file_select_another">Choose another file</string>
-    <string name="settings_sync_heading" translatable="false">Sync</string>
-    <string name="settings_sync_summary" translatable="false">WebDAV vault, status, and conflicts</string>
-    <string name="settings_data_heading" translatable="false">Data and recovery</string>
-    <string name="settings_data_summary" translatable="false">Backup, restore, and interrupted tasks</string>
-    <string name="sync_create" translatable="false">Create vault</string>
-    <string name="sync_server_url" translatable="false">WebDAV server URL</string>
-    <string name="sync_remote_root" translatable="false">Remote root</string>
-    <string name="sync_username" translatable="false">Username</string>
-    <string name="sync_provider_password" translatable="false">WebDAV password</string>
-    <string name="sync_master_password" translatable="false">Master password</string>
-    <string name="sync_vault_id" translatable="false">Vault ID</string>
-    <string name="sync_test" translatable="false">Test connection</string>
-    <string name="sync_recovery_key" translatable="false">Recovery key</string>
-    <string name="sync_unlock" translatable="false">Unlock</string>
-    <string name="sync_counts" translatable="false">Pending %1$d · Conflicts %2$d</string>
-    <string name="sync_now" translatable="false">Sync now</string>
-    <string name="sync_pause" translatable="false">Pause</string>
-    <string name="sync_resume" translatable="false">Resume</string>
-    <string name="sync_lock" translatable="false">Lock</string>
-    <string name="sync_disconnect" translatable="false">Disconnect</string>
-    <string name="sync_generate_recovery_key" translatable="false">Generate recovery key</string>
-    <string name="sync_preset" translatable="false">Sync preset</string>
-    <string name="sync_current_master_password" translatable="false">Current master password</string>
-    <string name="sync_new_master_password" translatable="false">New master password</string>
-    <string name="sync_change_master_password" translatable="false">Change master password</string>
-    <string name="sync_keep_current" translatable="false">Keep current</string>
-    <string name="sync_use_remote" translatable="false">Use remote</string>
-    <string name="sync_keep_both" translatable="false">Keep both</string>
-    <string name="sync_import_pairing_token" translatable="false">Import pairing code</string>
-    <string name="sync_have_device_hint" translatable="false">Have another device already configured?</string>
-    <string name="sync_pairing_modal_title" translatable="false">Import Pairing Code</string>
-    <string name="sync_pairing_modal_desc" translatable="false">Paste the pairing code (sonasync://...) generated on your other device to quickly fill connection parameters.</string>
-    <string name="sync_pairing_token_label" translatable="false">Pairing code</string>
-    <string name="sync_pairing_security_note" translatable="false">The pairing code contains server metadata only. You will still need to enter your Master Password to unlock.</string>
-    <string name="sync_pair_device_modal_title" translatable="false">Pair New Device</string>
-    <string name="sync_copy_pairing_token" translatable="false">Copy pairing code</string>
-    <string name="sync_pair_step_1" translatable="false">1. Open Sona on your second device</string>
-    <string name="sync_pair_step_2" translatable="false">2. Go to Settings -> Sync -> tap \"Import pairing code\"</string>
-    <string name="sync_pair_step_3" translatable="false">3. Paste the code and enter your master password</string>
-    <string name="sync_preset_label" translatable="false">Provider Preset</string>
-    <string name="sync_auth_mode" translatable="false">Authentication Method</string>
-    <string name="sync_use_master_password" translatable="false">Master password</string>
-    <string name="sync_use_recovery_key" translatable="false">Emergency recovery key</string>
-    <string name="sync_advanced_title" translatable="false">Advanced Settings</string>
-    <string name="sync_advanced_desc" translatable="false">Remote root, custom Vault ID, sync scope, recovery key</string>
-    <string name="sync_create_recovery_key_label" translatable="false">Emergency Recovery Key</string>
-    <string name="sync_create_recovery_key_hint" translatable="false">Generate a recovery key to restore access if you forget your master password.</string>
-    <string name="sync_multi_vault_title" translatable="false">Multiple Sync Vaults Detected</string>
-    <string name="sync_multi_vault_desc" translatable="false">Found existing vaults on this server. Choose one to join or create a new vault:</string>
-    <string name="sync_create_new_vault_option" translatable="false">Create a new vault</string>
-    <string name="sync_join_selected_vault" translatable="false">Join Selected Vault</string>
-    <string name="sync_danger_zone" translatable="false">Danger Zone</string>
-    <string name="sync_disconnect_warning" translatable="false">Disconnecting this device will clear local sync state and credentials. Your local records will remain intact.</string>
-    <string name="sync_security_title" translatable="false">Vault Security &amp; Recovery</string>
-    <string name="sync_security_hint" translatable="false">Manage your encryption password and emergency recovery keys.</string>
-    <string name="sync_recovery_key_manage_title" translatable="false">Emergency Recovery Key</string>
-    <string name="sync_recovery_key_manage_hint" translatable="false">Used to recover your data if you forget the master password.</string>
-    <string name="sync_active_recovery_key" translatable="false">Active Recovery Key</string>
-    <string name="sync_recovery_key_save_warning" translatable="false">Save this key in a secure location (e.g. password manager). It is not stored in plain text.</string>
-    <string name="sync_change_password_mode_current" translatable="false">Use current password</string>
-    <string name="sync_change_password_mode_recovery" translatable="false">Reset with recovery key</string>
-    <string name="sync_confirm_new_password" translatable="false">Confirm new master password</string>
-    <string name="sync_password_mismatch" translatable="false">The new master password confirmation does not match.</string>
-    <string name="sync_pair_btn" translatable="false">Pair New Device</string>
-    <string name="sync_connect" translatable="false">Connect</string>
-    <string name="action_copy" translatable="false">Copy</string>
-    <string name="action_export" translatable="false">Export</string>
-    <string name="action_refresh" translatable="false">Refresh</string>
-    <string name="backup_heading" translatable="false">Backup</string>
-    <string name="backup_blocked" translatable="false">Stop recording, imports, sync, and recovery work first.</string>
-    <string name="backup_export" translatable="false">Export backup</string>
-    <string name="backup_import" translatable="false">Import backup</string>
-    <string name="backup_excludes" translatable="false">Backups exclude audio, device credentials, local models, and sync secrets.</string>
-    <string name="backup_confirm_title" translatable="false">Replace local data?</string>
-    <string name="backup_confirm_body" translatable="false">Archive contents · History: %1$d · Transcripts: %2$d · Tags: %3$d. Current local data will be replaced.</string>
-    <string name="backup_manifest_details" translatable="false">Schema %1$d · Created %2$s · App %3$s</string>
-    <string name="backup_replace_scopes" translatable="false">Restore replaces local config, workspace, lightweight history, automation, and analytics included by this archive.</string>
-    <string name="backup_restore" translatable="false">Restore</string>
-    <string name="recovery_heading" translatable="false">Interrupted tasks</string>
-    <plurals name="recovery_pending_notice" translatable="false">
+    <string name="settings_sync_heading">Sync</string>
+    <string name="settings_sync_summary">WebDAV vault, status, and conflicts</string>
+    <string name="settings_data_heading">Data and recovery</string>
+    <string name="settings_data_summary">Backup, restore, and interrupted tasks</string>
+    <string name="sync_create">Create vault</string>
+    <string name="sync_server_url">WebDAV server URL</string>
+    <string name="sync_remote_root">Remote root</string>
+    <string name="sync_username">Username</string>
+    <string name="sync_provider_password">WebDAV password</string>
+    <string name="sync_master_password">Master password</string>
+    <string name="sync_vault_id">Vault ID</string>
+    <string name="sync_test">Test connection</string>
+    <string name="sync_recovery_key">Recovery key</string>
+    <string name="sync_unlock">Unlock</string>
+    <string name="sync_counts">Pending %1$d · Conflicts %2$d</string>
+    <string name="sync_now">Sync now</string>
+    <string name="sync_pause">Pause</string>
+    <string name="sync_resume">Resume</string>
+    <string name="sync_lock">Lock</string>
+    <string name="sync_disconnect">Disconnect</string>
+    <string name="sync_generate_recovery_key">Generate recovery key</string>
+    <string name="sync_preset">Sync preset</string>
+    <string name="sync_current_master_password">Current master password</string>
+    <string name="sync_new_master_password">New master password</string>
+    <string name="sync_change_master_password">Change master password</string>
+    <string name="sync_keep_current">Keep current</string>
+    <string name="sync_use_remote">Use remote</string>
+    <string name="sync_keep_both">Keep both</string>
+    <string name="sync_import_pairing_token">Import pairing code</string>
+    <string name="sync_have_device_hint">Have another device already configured?</string>
+    <string name="sync_pairing_modal_title">Import Pairing Code</string>
+    <string name="sync_pairing_modal_desc">Paste the pairing code (sonasync://&#8230;) generated on your other device to quickly fill connection parameters.</string>
+    <string name="sync_pairing_token_label">Pairing code</string>
+    <string name="sync_pairing_security_note">The pairing code contains server metadata only. You will still need to enter your Master Password to unlock.</string>
+    <string name="sync_pair_device_modal_title">Pair New Device</string>
+    <string name="sync_copy_pairing_token">Copy pairing code</string>
+    <string name="sync_pair_step_1">1. Open Sona on your second device</string>
+    <string name="sync_pair_step_2">2. Go to Settings -> Sync -> tap \"Import pairing code\"</string>
+    <string name="sync_pair_step_3">3. Paste the code and enter your master password</string>
+    <string name="sync_preset_label">Provider Preset</string>
+    <string name="sync_auth_mode">Authentication Method</string>
+    <string name="sync_use_master_password">Master password</string>
+    <string name="sync_use_recovery_key">Emergency recovery key</string>
+    <string name="sync_advanced_title">Advanced Settings</string>
+    <string name="sync_advanced_desc">Remote root, custom Vault ID, sync scope, recovery key</string>
+    <string name="sync_create_recovery_key_label">Emergency Recovery Key</string>
+    <string name="sync_create_recovery_key_hint">Generate a recovery key to restore access if you forget your master password.</string>
+    <string name="sync_multi_vault_title">Multiple Sync Vaults Detected</string>
+    <string name="sync_multi_vault_desc">Found existing vaults on this server. Choose one to join or create a new vault:</string>
+    <string name="sync_create_new_vault_option">Create a new vault</string>
+    <string name="sync_join_selected_vault">Join Selected Vault</string>
+    <string name="sync_danger_zone">Danger Zone</string>
+    <string name="sync_disconnect_warning">Disconnecting this device will clear local sync state and credentials. Your local records will remain intact.</string>
+    <string name="sync_security_title">Vault Security &amp; Recovery</string>
+    <string name="sync_security_hint">Manage your encryption password and emergency recovery keys.</string>
+    <string name="sync_recovery_key_manage_title">Emergency Recovery Key</string>
+    <string name="sync_recovery_key_manage_hint">Used to recover your data if you forget the master password.</string>
+    <string name="sync_active_recovery_key">Active Recovery Key</string>
+    <string name="sync_recovery_key_save_warning">Save this key in a secure location (e.g. password manager). It is not stored in plain text.</string>
+    <string name="sync_change_password_mode_current">Use current password</string>
+    <string name="sync_change_password_mode_recovery">Reset with recovery key</string>
+    <string name="sync_confirm_new_password">Confirm new master password</string>
+    <string name="sync_password_mismatch">The new master password confirmation does not match.</string>
+    <string name="sync_pair_btn">Pair New Device</string>
+    <string name="sync_connect">Connect</string>
+    <string name="action_copy">Copy</string>
+    <string name="action_export">Export</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="backup_heading">Backup</string>
+    <string name="backup_blocked">Stop recording, imports, sync, and recovery work first.</string>
+    <string name="backup_export">Export backup</string>
+    <string name="backup_import">Import backup</string>
+    <string name="backup_excludes">Backups exclude audio, device credentials, local models, and sync secrets.</string>
+    <string name="backup_confirm_title">Replace local data?</string>
+    <string name="backup_confirm_body">Archive contents · History: %1$d · Transcripts: %2$d · Tags: %3$d. Current local data will be replaced.</string>
+    <string name="backup_manifest_details">Schema %1$d · Created %2$s · App %3$s</string>
+    <string name="backup_replace_scopes">Restore replaces local config, workspace, lightweight history, automation, and analytics included by this archive.</string>
+    <string name="backup_restore">Restore</string>
+    <string name="recovery_heading">Interrupted tasks</string>
+    <plurals name="recovery_pending_notice">
         <item quantity="one">%1$d interrupted task needs attention</item>
         <item quantity="other">%1$d interrupted tasks need attention</item>
     </plurals>
-    <string name="recovery_resume" translatable="false">Resume</string>
-    <string name="recovery_resume_all" translatable="false">Resume all available</string>
-    <string name="recovery_unavailable_source" translatable="false">Source file is missing</string>
-    <string name="recovery_unavailable_model" translatable="false">Recognition model is missing</string>
-    <string name="recovery_unavailable_credential" translatable="false">Provider credential is missing</string>
-    <string name="recovery_unavailable_automation" translatable="false">Automation recovery is unavailable on Android</string>
-    <string name="recovery_unavailable_payload" translatable="false">Recovery data is invalid or from an unsupported version</string>
-    <string name="recovery_unavailable_history" translatable="false">Recording no longer exists</string>
-    <string name="recovery_unavailable_transcript_changed" translatable="false">Transcript changed after this draft was created</string>
-    <string name="recovery_discard" translatable="false">Discard</string>
-    <string name="recovery_clear_resolved" translatable="false">Clear resolved</string>
+    <string name="recovery_resume">Resume</string>
+    <string name="recovery_resume_all">Resume all available</string>
+    <string name="recovery_unavailable_source">Source file is missing</string>
+    <string name="recovery_unavailable_model">Recognition model is missing</string>
+    <string name="recovery_unavailable_credential">Provider credential is missing</string>
+    <string name="recovery_unavailable_automation">Automation recovery is unavailable on Android</string>
+    <string name="recovery_unavailable_payload">Recovery data is invalid or from an unsupported version</string>
+    <string name="recovery_unavailable_history">Recording no longer exists</string>
+    <string name="recovery_unavailable_transcript_changed">Transcript changed after this draft was created</string>
+    <string name="recovery_discard">Discard</string>
+    <string name="recovery_clear_resolved">Clear resolved</string>
+    <string name="history_filter_all">All status</string>
+    <string name="history_filter_recording">Live recording</string>
+    <string name="history_filter_batch">File transcription</string>
+    <string name="history_date_all">All time</string>
+    <string name="history_date_today">Today</string>
+    <string name="history_date_week">This week</string>
+    <string name="history_date_month">This month</string>
+    <string name="history_sort_newest">Newest first</string>
+    <string name="history_sort_oldest">Oldest first</string>
+    <string name="history_sort_duration_desc">Longest duration</string>
+    <string name="history_sort_duration_asc">Shortest duration</string>
+    <string name="history_sort_title_asc">Title (A-Z)</string>
+    <string name="action_clear_search">Clear search</string>
+    <string name="action_ai_actions">AI tools</string>
+    <string name="action_more_options">More options</string>
+    <string name="snapshot_reason_polish">AI Polish</string>
+    <string name="snapshot_reason_translate">AI Translation</string>
+    <string name="snapshot_reason_retranscribe">Re-transcribed</string>
+    <string name="snapshot_reason_restore">Restored</string>
+    <string name="snapshot_reason_manual_edit">Manual edit</string>
+    <string name="audio_import_error_invalid_source">The audio file source could not be found or opened.</string>
+    <string name="audio_import_error_unsupported_audio">The audio format is not supported for transcription.</string>
+    <string name="audio_import_error_duration_limit">The audio file exceeds the maximum supported duration.</string>
+    <string name="audio_import_error_storage">Insufficient storage space to process this audio file.</string>
+    <string name="audio_import_error_configuration">Transcription engine is not configured or unavailable.</string>
+    <string name="audio_import_error_transcoding">Failed to convert audio into the required format.</string>
+    <string name="audio_import_error_transcription">Speech recognition failed during file transcription.</string>
+    <string name="audio_import_error_persistence">Failed to save the imported recording and transcript.</string>
 </resources>

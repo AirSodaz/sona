@@ -188,6 +188,16 @@ internal fun LibraryScreen(
                 value = state.query.query,
                 onValueChange = onSearchChanged,
                 label = { Text(stringResource(R.string.history_search)) },
+                trailingIcon = {
+                    if (state.query.query.isNotEmpty()) {
+                        IconButton(onClick = { onSearchChanged("") }) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = stringResource(R.string.action_clear_search),
+                            )
+                        }
+                    }
+                },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -207,13 +217,25 @@ internal fun LibraryScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 HistoryFilterType.entries.forEach { value ->
-                    FilterChip(selected = state.query.filterType == value, onClick = { onFilterChanged(value) }, label = { Text(value.name.lowercase()) })
+                    FilterChip(
+                        selected = state.query.filterType == value,
+                        onClick = { onFilterChanged(value) },
+                        label = { Text(stringResource(value.labelRes())) },
+                    )
                 }
                 HistoryDateFilter.entries.forEach { value ->
-                    FilterChip(selected = state.query.dateFilter == value, onClick = { onDateChanged(value) }, label = { Text(value.name.lowercase()) })
+                    FilterChip(
+                        selected = state.query.dateFilter == value,
+                        onClick = { onDateChanged(value) },
+                        label = { Text(stringResource(value.labelRes())) },
+                    )
                 }
                 HistorySortOrder.entries.forEach { value ->
-                    FilterChip(selected = state.query.sortOrder == value, onClick = { onSortChanged(value) }, label = { Text(value.name.lowercase().replace('_', ' ')) })
+                    FilterChip(
+                        selected = state.query.sortOrder == value,
+                        onClick = { onSortChanged(value) },
+                        label = { Text(stringResource(value.labelRes())) },
+                    )
                 }
             }
             if (state.selectedIds.isNotEmpty()) {

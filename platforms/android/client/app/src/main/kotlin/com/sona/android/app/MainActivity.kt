@@ -179,6 +179,8 @@ class MainActivity : AppCompatActivity() {
                 onCheckForUpdates = aboutSettingsViewModel::checkForUpdates,
                 onRetryBootstrap = bootstrapViewModel::refresh,
                 onStartRecording = recordingViewModel::startRecording,
+                onPauseRecording = recordingViewModel::pauseRecording,
+                onResumeRecording = recordingViewModel::resumeRecording,
                 onStopRecording = recordingViewModel::stopRecording,
                 onRefreshLibrary = libraryViewModel::refresh,
                 onLoadMoreLibrary = libraryViewModel::loadNextPage,

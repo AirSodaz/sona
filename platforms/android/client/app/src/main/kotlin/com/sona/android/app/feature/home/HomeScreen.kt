@@ -211,8 +211,13 @@ private fun AsrModelSelection?.modelLabel(state: RecognitionSettingsUiState): St
 
 @Composable
 private fun LiveRecordingState.liveStatus(available: Boolean): String = when (this) {
-    is LiveRecordingState.Recording -> stringResource(R.string.home_status_recording)
+    is LiveRecordingState.Recording -> if (isPaused) {
+        stringResource(R.string.home_status_paused)
+    } else {
+        stringResource(R.string.home_status_recording)
+    }
     is LiveRecordingState.Preparing -> stringResource(R.string.home_status_preparing)
+    is LiveRecordingState.Stopping -> stringResource(R.string.home_status_stopping)
     else -> stringResource(if (available) R.string.home_status_idle else R.string.home_status_unavailable)
 }
 

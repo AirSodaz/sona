@@ -22,6 +22,7 @@ data class LlmSettingsUiState(
     val baseUrl: String = "https://api.openai.com",
     val apiPath: String = "",
     val apiVersion: String = "",
+    val apiKeyInput: String = "",
     val hasApiKey: Boolean = false,
     val saving: Boolean = false,
     val saved: Boolean = false,
@@ -86,11 +87,16 @@ class LlmSettingsViewModel(private val repository: LlmConfigurationPort) : ViewM
     fun baseUrl(value: String) = mutableState.update { it.copy(baseUrl = value, saved = false) }
     fun apiPath(value: String) = mutableState.update { it.copy(apiPath = value, saved = false) }
     fun apiVersion(value: String) = mutableState.update { it.copy(apiVersion = value, saved = false) }
-    fun apiKey(value: String) { apiKeyDraft = value; mutableState.update { it.copy(saved = false) } }
+    fun apiKey(value: String) {
+        apiKeyDraft = value
+        mutableState.update { it.copy(apiKeyInput = value, saved = false) }
+    }
     fun save() {
         val current = state.value
-        if (current.model.isBlank() || current.baseUrl.isBlank() || (apiKeyDraft.isBlank() && !current.hasApiKey)) {
-            mutableState.update { it.copy(error = true) }; return
+        val effectiveKey = current.apiKeyInput.ifBlank { apiKeyDraft }
+        if (current.model.isBlank() || current.baseUrl.isBlank() || (effectiveKey.isBlank() && !current.hasApiKey)) {
+            mutableState.update { it.copy(error = true) }
+            return
         }
         viewModelScope.launch {
             mutableState.update { it.copy(saving = true, error = false) }
@@ -105,13 +111,25 @@ class LlmSettingsViewModel(private val repository: LlmConfigurationPort) : ViewM
                         apiVersion = current.apiVersion.ifBlank { null },
                         configured = true,
                     ),
-                    apiKeyDraft.ifBlank { repository.loadApiKey().orEmpty() },
+                    effectiveKey.ifBlank { repository.loadApiKey().orEmpty() },
                 )
-            }.onSuccess { apiKeyDraft = ""; mutableState.update { it.copy(saving = false, hasApiKey = true, saved = true) } }
-                .onFailure { mutableState.update { it.copy(saving = false, error = true) } }
+            }.onSuccess {
+                apiKeyDraft = ""
+                mutableState.update {
+                    it.copy(apiKeyInput = "", saving = false, hasApiKey = true, saved = true)
+                }
+            }.onFailure {
+                mutableState.update { it.copy(saving = false, error = true) }
+            }
         }
     }
-    fun clear() { viewModelScope.launch { repository.clear(); apiKeyDraft = ""; mutableState.value = LlmSettingsUiState(providers = state.value.providers) } }
+    fun clear() {
+        viewModelScope.launch {
+            repository.clear()
+            apiKeyDraft = ""
+            mutableState.value = LlmSettingsUiState(providers = state.value.providers)
+        }
+    }
 
     companion object {
         fun factory(repository: LlmConfigurationPort) = object : ViewModelProvider.Factory {

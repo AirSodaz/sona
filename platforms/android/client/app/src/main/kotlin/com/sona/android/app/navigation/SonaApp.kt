@@ -17,6 +17,7 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -93,6 +94,8 @@ internal fun SonaApp(
     onCheckForUpdates: () -> Unit,
     onRetryBootstrap: () -> Unit,
     onStartRecording: () -> Unit,
+    onPauseRecording: () -> Unit = {},
+    onResumeRecording: () -> Unit = {},
     onStopRecording: () -> Unit,
     onRefreshLibrary: () -> Unit,
     onLoadMoreLibrary: () -> Unit,
@@ -187,7 +190,7 @@ internal fun SonaApp(
     onLlmProvider: (String) -> Unit = {}, onLlmModel: (String) -> Unit = {}, onLlmBaseUrl: (String) -> Unit = {}, onLlmPath: (String) -> Unit = {}, onLlmVersion: (String) -> Unit = {}, onLlmApiKey: (String) -> Unit = {}, onLlmSave: () -> Unit = {}, onLlmClear: () -> Unit = {},
 ) {
     var cloudCredentialFocusRequested by remember { mutableStateOf(false) }
-    var detailExitRequestToken by remember { mutableStateOf(0) }
+    var detailExitRequestToken by remember { mutableIntStateOf(0) }
     var pendingDetailDestination by remember { mutableStateOf<String?>(null) }
     val recoveryPendingCount = dataRecoveryState.recovery.items.count {
         it.resolution == RecoveryResolution.PENDING
@@ -335,6 +338,8 @@ internal fun SonaApp(
                             recognitionSettings = recognitionSettingsState,
                             onRetryBootstrap = onRetryBootstrap,
                             onStartRecording = onStartRecording,
+                            onPauseRecording = onPauseRecording,
+                            onResumeRecording = onResumeRecording,
                             onStopRecording = onStopRecording,
                             onConfigureCredential = onConfigureCredential,
                             onConfigureRecognition = onConfigureRecognition,

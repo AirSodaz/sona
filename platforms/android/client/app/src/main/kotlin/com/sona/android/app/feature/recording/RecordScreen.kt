@@ -37,6 +37,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Card
@@ -48,6 +50,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -94,6 +97,8 @@ internal fun RecordScreen(
     recognitionSettings: RecognitionSettingsUiState,
     onRetryBootstrap: () -> Unit,
     onStartRecording: () -> Unit,
+    onPauseRecording: () -> Unit = {},
+    onResumeRecording: () -> Unit = {},
     onStopRecording: () -> Unit,
     onConfigureCredential: () -> Unit,
     onConfigureRecognition: () -> Unit,
@@ -287,6 +292,8 @@ internal fun RecordScreen(
             presentation = presentation,
             bootstrapReady = bootstrapReady && !configurationMissing,
             onStart = requestRecording,
+            onPause = onPauseRecording,
+            onResume = onResumeRecording,
             onStop = onStopRecording,
         )
     }
@@ -563,9 +570,12 @@ private fun RecordControls(
     presentation: RecordingPresentation,
     bootstrapReady: Boolean,
     onStart: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
     onStop: () -> Unit,
 ) {
     val recording = state is LiveRecordingState.Recording
+    val isPaused = (state as? LiveRecordingState.Recording)?.isPaused == true
     val recordingColor = LocalSonaRecordingColor.current
 
     Column(
@@ -578,9 +588,23 @@ private fun RecordControls(
             text = formatRecordingTimer(elapsedMillis),
             style = MaterialTheme.typography.displayMedium,
             fontWeight = FontWeight.SemiBold,
-            color = if (recording) recordingColor else MaterialTheme.colorScheme.onSurface
+            color = if (recording && !isPaused) recordingColor else MaterialTheme.colorScheme.onSurface
         )
-        Spacer(Modifier.height(20.dp))
+        if (isPaused) {
+            Surface(
+                shape = MaterialTheme.shapes.extraSmall,
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                modifier = Modifier.padding(top = 4.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.recording_paused),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(if (isPaused) 12.dp else 20.dp))
         if (state is LiveRecordingState.Preparing || state is LiveRecordingState.Stopping) {
             Box(
                 modifier = Modifier.size(96.dp),
@@ -588,9 +612,9 @@ private fun RecordControls(
             ) {
                 CircularProgressIndicator(Modifier.size(44.dp))
             }
-        } else {
+        } else if (recording) {
             val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-            val pulseScale by if (recording) {
+            val pulseScale by if (!isPaused) {
                 infiniteTransition.animateFloat(
                     initialValue = 1.0f,
                     targetValue = 1.35f,
@@ -604,7 +628,7 @@ private fun RecordControls(
                 remember { mutableFloatStateOf(1.0f) }
             }
 
-            val pulseAlpha by if (recording) {
+            val pulseAlpha by if (!isPaused) {
                 infiniteTransition.animateFloat(
                     initialValue = 0.45f,
                     targetValue = 0.0f,
@@ -618,46 +642,91 @@ private fun RecordControls(
                 remember { mutableFloatStateOf(0.0f) }
             }
 
-            val enabled = if (recording) {
-                presentation.isStopAvailable
-            } else {
-                presentation.isStartAvailable && bootstrapReady
-            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(28.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FloatingActionButton(
+                    onClick = {
+                        if (isPaused) onResume() else onPause()
+                    },
+                    shape = CircleShape,
+                    containerColor = if (isPaused) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                    },
+                    contentColor = if (isPaused) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    elevation = FloatingActionButtonDefaults.elevation(
+                        defaultElevation = 2.dp,
+                        pressedElevation = 1.dp
+                    ),
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isPaused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
+                        contentDescription = stringResource(
+                            if (isPaused) R.string.record_resume_description else R.string.record_pause_description
+                        ),
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
 
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(96.dp)
+                ) {
+                    if (!isPaused) {
+                        Box(
+                            modifier = Modifier
+                                .size(76.dp)
+                                .scale(pulseScale)
+                                .background(
+                                    color = recordingColor.copy(alpha = pulseAlpha),
+                                    shape = CircleShape
+                                )
+                        )
+                    }
+
+                    FloatingActionButton(
+                        onClick = onStop,
+                        shape = CircleShape,
+                        containerColor = recordingColor,
+                        contentColor = Color.White,
+                        elevation = FloatingActionButtonDefaults.elevation(
+                            defaultElevation = 4.dp,
+                            pressedElevation = 2.dp
+                        ),
+                        modifier = Modifier.size(76.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Stop,
+                            contentDescription = stringResource(R.string.record_stop_description),
+                            modifier = Modifier.size(34.dp),
+                        )
+                    }
+                }
+            }
+        } else {
+            val enabled = presentation.isStartAvailable && bootstrapReady
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size(110.dp)
             ) {
-                if (recording) {
-                    Box(
-                        modifier = Modifier
-                            .size(76.dp)
-                            .scale(pulseScale)
-                            .background(
-                                color = recordingColor.copy(alpha = pulseAlpha),
-                                shape = CircleShape
-                            )
-                    )
-                }
-
                 FloatingActionButton(
-                    onClick = {
-                        if (enabled) {
-                            if (recording) onStop() else onStart()
-                        }
-                    },
+                    onClick = { if (enabled) onStart() },
                     shape = CircleShape,
                     containerColor = if (!enabled) {
                         MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                    } else if (recording) {
-                        recordingColor
                     } else {
                         MaterialTheme.colorScheme.primaryContainer
                     },
                     contentColor = if (!enabled) {
                         MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    } else if (recording) {
-                        Color.White
                     } else {
                         MaterialTheme.colorScheme.onPrimaryContainer
                     },
@@ -668,14 +737,8 @@ private fun RecordControls(
                     modifier = Modifier.size(76.dp)
                 ) {
                     Icon(
-                        imageVector = if (recording) Icons.Rounded.Stop else Icons.Rounded.Mic,
-                        contentDescription = stringResource(
-                            if (recording) {
-                                R.string.record_stop_description
-                            } else {
-                                R.string.record_action_description
-                            }
-                        ),
+                        imageVector = Icons.Rounded.Mic,
+                        contentDescription = stringResource(R.string.record_action_description),
                         modifier = Modifier.size(34.dp),
                     )
                 }
@@ -752,6 +815,7 @@ private fun RecordingStatusCategory.labelRes(): Int = when (this) {
     RecordingStatusCategory.NEEDS_CONFIGURATION -> R.string.recording_needs_configuration
     RecordingStatusCategory.PREPARING -> R.string.recording_preparing
     RecordingStatusCategory.RECORDING -> R.string.recording_active
+    RecordingStatusCategory.PAUSED -> R.string.recording_paused
     RecordingStatusCategory.STOPPING -> R.string.recording_stopping
     RecordingStatusCategory.COMPLETED -> R.string.recording_completed
     RecordingStatusCategory.COMPLETED_WITH_WARNING -> R.string.recording_completed_warning

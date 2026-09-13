@@ -9,6 +9,7 @@ enum class RecordingStatusCategory {
     NEEDS_CONFIGURATION,
     PREPARING,
     RECORDING,
+    PAUSED,
     STOPPING,
     COMPLETED,
     COMPLETED_WITH_WARNING,
@@ -22,6 +23,8 @@ enum class RecordingStatusCategory {
 data class RecordingPresentation(
     val isStartAvailable: Boolean,
     val isStopAvailable: Boolean,
+    val isPauseAvailable: Boolean = false,
+    val isResumeAvailable: Boolean = false,
     val statusCategory: RecordingStatusCategory,
 )
 
@@ -54,7 +57,9 @@ fun LiveRecordingState.toRecordingPresentation(): RecordingPresentation = when (
     is LiveRecordingState.Recording -> RecordingPresentation(
         isStartAvailable = false,
         isStopAvailable = true,
-        statusCategory = RecordingStatusCategory.RECORDING,
+        isPauseAvailable = !isPaused,
+        isResumeAvailable = isPaused,
+        statusCategory = if (isPaused) RecordingStatusCategory.PAUSED else RecordingStatusCategory.RECORDING,
     )
 
     is LiveRecordingState.Stopping -> RecordingPresentation(
