@@ -406,6 +406,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  min-height: 100%;
   height: 100%;
   gap: var(--spacing-md);
   color: var(--color-text-muted);
@@ -417,9 +418,28 @@
   opacity: 0.5;
 }
 
+.empty-state h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  text-align: center;
+}
+
 .empty-state p {
+  margin: 0;
   text-align: center;
   font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.empty-state-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  max-width: 360px;
 }
 
 /* ===========================

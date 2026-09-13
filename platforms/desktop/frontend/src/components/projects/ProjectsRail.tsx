@@ -116,7 +116,6 @@ function SortableProjectItem({
           onOpenContextMenu(project.id, createPointerContextMenuRequest(event));
         }}
         aria-pressed={isActive}
-        title={project.description ? `${project.name}\n${project.description}` : project.name}
       >
         <RailItemContent icon={renderScopeIcon(project.id, project)} title={project.name} />
         <div className="projects-rail-actions">

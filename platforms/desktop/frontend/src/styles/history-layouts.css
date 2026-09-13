@@ -201,8 +201,7 @@
 
 .history-item {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
   align-items: flex-start;
   gap: var(--spacing-md);
   width: 100%;
@@ -214,11 +213,13 @@
   border-radius: var(--radius-md);
   padding: 14px 16px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .history-item.is-selection-mode {
-  grid-template-columns: auto minmax(0, 1fr);
   padding-left: 12px;
 }
 
@@ -245,7 +246,6 @@
 }
 
 .history-item-checkbox {
-  grid-column: 1;
   display: flex;
   align-items: center;
   height: 24px;
@@ -254,7 +254,6 @@
 }
 
 .history-item-content {
-  grid-column: 1;
   flex: 1;
   min-width: 0;
   width: 100%;
@@ -269,10 +268,6 @@
   cursor: pointer;
   text-align: left;
   font: inherit;
-}
-
-.history-item.is-selection-mode .history-item-content {
-  grid-column: 2;
 }
 
 .history-item-content:focus-visible {
@@ -717,14 +712,12 @@
 }
 
 .history-item-actions {
-  grid-column: 2;
-  grid-row: 1;
   display: flex;
   align-items: center;
   gap: var(--spacing-xs);
-  justify-self: end;
   min-width: max-content;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .history-item--table .history-item-actions {

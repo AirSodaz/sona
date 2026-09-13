@@ -37,9 +37,8 @@
 }
 
 .sync-header-pill-btn:focus-visible {
-  outline: 2px solid
-    color-mix(in srgb, var(--color-accent-primary, var(--color-primary)) 48%, transparent);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
 }
 
 .sync-header-pill-btn.is-syncing {

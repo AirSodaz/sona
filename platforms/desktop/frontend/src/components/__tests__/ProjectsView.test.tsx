@@ -314,7 +314,9 @@ describe('ProjectsView', () => {
 
   const selectDropdownOption = (ariaLabel: string, optionLabel: string) => {
     fireEvent.click(screen.getByRole('button', { name: ariaLabel }));
-    fireEvent.click(screen.getByRole('option', { name: optionLabel }));
+    const option = screen.getByRole('option', { name: optionLabel });
+    fireEvent.mouseDown(option);
+    fireEvent.click(option);
   };
 
   const openFilterMenu = () => {
@@ -1473,6 +1475,7 @@ describe('ProjectsView', () => {
     const historyItem = await screen.findByTestId('history-item-hist-trash');
     expect(historyItem.dataset.loadDisabled).toBe('true');
     expect(historyItem.dataset.renameDisabled).toBe('true');
+    expect(screen.queryByRole('button', { name: 'Rename Trash' })).toBeNull();
 
     fireEvent.contextMenu(historyItem, { clientX: 160, clientY: 220 });
     screen.getByRole('menuitem', { name: 'Restore' });
@@ -1774,6 +1777,27 @@ describe('ProjectsView', () => {
       screen.getByText('Client Call');
     });
     screen.getByRole('button', { name: 'Sort items' });
+  });
+
+  it('keeps the filter popover open when selecting a dropdown option via mousedown', async () => {
+    useProjectStore.setState({ activeProjectId: 'project-1' });
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    openFilterMenu();
+    expect(screen.getByRole('dialog', { name: 'Filter' })).toBeTruthy();
+
+    // Open "Filter by type" dropdown
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by type' }));
+    const option = screen.getByRole('option', { name: 'Recordings' });
+
+    // mousedown on portaled dropdown item should NOT close filter dialog
+    fireEvent.mouseDown(option);
+    expect(screen.getByRole('dialog', { name: 'Filter' })).toBeTruthy();
+
+    // Click applies selection and filter popover remains open
+    fireEvent.click(option);
+    expect(screen.getByRole('dialog', { name: 'Filter' })).toBeTruthy();
   });
 
   it('focuses the workspace search with Ctrl+F when the detail pane is not focused', async () => {

@@ -301,6 +301,7 @@ export function ProjectsResults({
     (item: HistoryItemType) => {
       const searchMatch = searchMatchByItemId.get(item.id) ?? null;
       const isLockedHistoryItem = item.id === lockedHistoryId;
+      const isItemInTrash = isTrashScope || item.deletedAt != null;
 
       return (
         <HistoryItem
@@ -308,7 +309,7 @@ export function ProjectsResults({
           item={item}
           onLoad={handleOpenItem}
           onDelete={onDeleteHistoryItem}
-          onRename={onRenameHistoryItem}
+          onRename={isItemInTrash ? undefined : onRenameHistoryItem}
           onOpenContextMenu={onOpenHistoryContextMenu}
           isContextMenuOpen={
             activeContextId === `workspace:history:${item.id}` ||
@@ -316,8 +317,8 @@ export function ProjectsResults({
               activeContextId?.startsWith('workspace:history:batch:') && selectedIdsSet.has(item.id)
             )
           }
-          isLoadDisabled={isTrashScope || (lockedHistoryId != null && !isLockedHistoryItem)}
-          isRenameDisabled={isTrashScope || isLockedHistoryItem}
+          isLoadDisabled={isItemInTrash || (lockedHistoryId != null && !isLockedHistoryItem)}
+          isRenameDisabled={isItemInTrash || isLockedHistoryItem}
           isDeleteDisabled={isLockedHistoryItem}
           searchQuery={searchQuery}
           searchTitleMatch={searchMatch?.titleMatch ?? null}
@@ -401,14 +402,16 @@ export function ProjectsResults({
         (scopeItemCount > 0 || searchQuery) &&
         filteredItemCount === 0 &&
         renderScrollableState(
-          <div className="projects-overview-card">
-            <Search size={28} />
-            <h4>{t('projects.no_results_title', { defaultValue: 'No matching items' })}</h4>
-            <p>
-              {t('projects.no_results_hint', {
-                defaultValue: 'Try a different search or clear the current filters.',
-              })}
-            </p>
+          <div className="empty-state">
+            <Search size={48} />
+            <div className="empty-state-copy">
+              <h4>{t('projects.no_results_title', { defaultValue: 'No matching items' })}</h4>
+              <p>
+                {t('projects.no_results_hint', {
+                  defaultValue: 'Try a different search or clear the current filters.',
+                })}
+              </p>
+            </div>
             <button type="button" className="btn btn-secondary" onClick={resetBrowseState}>
               {t('projects.clear_filters', { defaultValue: 'Clear filters' })}
             </button>

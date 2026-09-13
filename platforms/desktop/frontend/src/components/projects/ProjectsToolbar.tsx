@@ -1,7 +1,15 @@
-import { CheckSquare, LayoutGrid, LayoutList, List, Search, SlidersHorizontal } from 'lucide-react';
+import {
+  CheckSquare,
+  LayoutGrid,
+  LayoutList,
+  List,
+  Search,
+  SlidersHorizontal,
+  X,
+} from 'lucide-react';
 import type React from 'react';
 import { Dropdown } from '../Dropdown';
-import { FolderIcon, XIcon } from '../Icons';
+import { FolderIcon } from '../Icons';
 import type {
   ProjectDateFilter,
   ProjectFilterType,
@@ -98,11 +106,14 @@ export function ProjectsToolbar({
           {searchQuery && (
             <button
               type="button"
-              className="btn btn-icon btn-text projects-search-clear"
-              onClick={onClearSearch}
+              className="projects-search-clear"
+              onClick={() => {
+                onClearSearch();
+                searchInputRef.current?.focus();
+              }}
               aria-label={t('common.clear_search', { defaultValue: 'Clear search' })}
             >
-              <XIcon width={14} height={14} />
+              <X size={12} strokeWidth={2.25} />
             </button>
           )}
         </div>

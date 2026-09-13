@@ -296,54 +296,150 @@
   flex: 1;
   min-width: 160px;
   max-width: 300px;
+  height: 36px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  box-shadow: var(--apple-control-shadow-flat);
+  overflow: hidden;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
-.settings-model-search-wrapper .settings-model-search {
+.settings-model-search-wrapper:hover {
+  border-color: var(--color-border-hover);
+}
+
+.settings-model-search-wrapper:focus-within {
+  background: var(--apple-field-focus-surface, var(--color-bg-elevated));
+  border-color: var(--apple-field-focus-border);
+  box-shadow: var(--apple-field-focus-shadow);
+}
+
+.settings-model-search-wrapper input[type="text"],
+.settings-model-search-wrapper input[type="search"],
+.settings-model-search-wrapper input.settings-model-search {
   width: 100%;
-  padding-left: 30px;
-  padding-right: 28px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+  padding: 0 32px 0 34px;
+  flex: 1;
+  line-height: normal;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.settings-model-search-wrapper input[type="text"]:focus,
+.settings-model-search-wrapper input[type="search"]:focus,
+.settings-model-search-wrapper input.settings-model-search:focus {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.settings-model-search-wrapper .settings-model-search::placeholder {
+  color: var(--color-text-muted);
 }
 
 .settings-model-search-icon {
   position: absolute;
   left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--color-text-muted);
   pointer-events: none;
+  flex-shrink: 0;
+  transition: color var(--transition-fast);
+}
+
+.settings-model-search-wrapper:focus-within .settings-model-search-icon {
+  color: var(--color-text-secondary);
 }
 
 /* The custom clear button replaces the native search cancel affordance. */
-.settings-model-search::-webkit-search-cancel-button {
+.settings-model-search::-webkit-search-cancel-button,
+.settings-model-search::-webkit-search-decoration {
   -webkit-appearance: none;
   appearance: none;
+  display: none;
 }
 
 .settings-model-search-clear {
   position: absolute;
-  right: 6px;
+  right: 8px;
+  top: 0;
+  bottom: 0;
+  margin-top: auto;
+  margin-bottom: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 20px;
   height: 20px;
+  min-width: 20px;
   padding: 0;
   border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
   color: var(--color-text-muted);
   cursor: pointer;
+  outline: none;
+  box-shadow: none;
+  animation: settings-model-search-clear-enter 120ms cubic-bezier(0.16, 1, 0.3, 1);
   transition:
-    background var(--transition-fast, 0.15s) ease,
-    color var(--transition-fast, 0.15s) ease;
+    background var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .settings-model-search-clear:hover {
-  background: var(--color-bg-hover);
+  background: color-mix(in srgb, var(--color-text-primary) 18%, transparent);
+  color: var(--color-text-primary);
+  transform: scale(1.05);
+}
+
+.settings-model-search-clear:active {
+  background: color-mix(in srgb, var(--color-text-primary) 24%, transparent);
+  color: var(--color-text-primary);
+  transform: scale(0.92);
+}
+
+.settings-model-search-clear:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-primary) 42%, transparent);
   color: var(--color-text-primary);
 }
 
 .settings-model-search-clear svg {
   width: 12px;
   height: 12px;
+  flex-shrink: 0;
+}
+
+@keyframes settings-model-search-clear-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-model-search-clear {
+    animation: none;
+  }
 }
 
 .settings-model-empty {

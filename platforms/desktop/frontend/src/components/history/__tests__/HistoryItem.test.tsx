@@ -60,6 +60,54 @@ describe('HistoryItem', () => {
     expect(onLoad).not.toHaveBeenCalled();
   });
 
+  it('renders rename action and triggers onRename without opening the item', () => {
+    const onLoad = vi.fn();
+    const onRename = vi.fn();
+
+    render(<HistoryItem item={item} onLoad={onLoad} onDelete={vi.fn()} onRename={onRename} />);
+
+    const renameBtn = screen.getByRole('button', { name: 'Rename Client Call' });
+    expect(renameBtn).toBeDefined();
+
+    fireEvent.click(renameBtn);
+
+    expect(onRename).toHaveBeenCalledTimes(1);
+    expect(onRename).toHaveBeenCalledWith('hist-1');
+    expect(onLoad).not.toHaveBeenCalled();
+  });
+
+  it('hides the rename action when onRename is not provided', () => {
+    render(<HistoryItem item={item} onLoad={vi.fn()} onDelete={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: 'Rename Client Call' })).toBeNull();
+  });
+
+  it('hides the rename action when the item is in trash (deletedAt is set)', () => {
+    const onRename = vi.fn();
+    const trashedItem = { ...item, deletedAt: Date.now() };
+
+    render(
+      <HistoryItem item={trashedItem} onLoad={vi.fn()} onDelete={vi.fn()} onRename={onRename} />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Rename Client Call' })).toBeNull();
+  });
+
+  it('disables the rename action when isRenameDisabled is true', () => {
+    render(
+      <HistoryItem
+        item={item}
+        onLoad={vi.fn()}
+        onDelete={vi.fn()}
+        onRename={vi.fn()}
+        isRenameDisabled
+      />
+    );
+
+    const renameBtn = screen.getByRole('button', { name: 'Rename Client Call' });
+    expect((renameBtn as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('hides the delete action in selection mode and toggles selection from the row content', () => {
     const onLoad = vi.fn();
     const onDelete = vi.fn();

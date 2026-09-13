@@ -70,7 +70,15 @@ export function Dropdown({
       }
     };
 
-    const handleScroll = () => {
+    const handleScroll = (event: Event) => {
+      const targetNode = event.target as Node | null;
+      if (
+        menuRef.current &&
+        targetNode &&
+        (menuRef.current === targetNode || menuRef.current.contains(targetNode))
+      ) {
+        return;
+      }
       setIsOpen(false);
     };
 

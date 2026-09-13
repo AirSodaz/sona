@@ -55,7 +55,21 @@ export function useWorkspaceBrowseState({
     }
 
     const handlePointerDown = (event: MouseEvent) => {
-      if (filterMenuRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node | null;
+      if (!target) {
+        return;
+      }
+
+      if (filterMenuRef.current?.contains(target)) {
+        return;
+      }
+
+      const targetElement =
+        event.target instanceof Element
+          ? event.target
+          : (event.target as Node | null)?.parentElement;
+
+      if (targetElement?.closest('.dropdown-menu')) {
         return;
       }
 

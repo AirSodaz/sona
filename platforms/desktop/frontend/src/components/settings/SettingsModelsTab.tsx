@@ -1,4 +1,4 @@
-import { Mic, PlaySquare, Search, Settings2 } from 'lucide-react';
+import { Mic, PlaySquare, Search, Settings2, X } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,7 +34,7 @@ import {
 } from '../../utils/scenarioModels';
 import { markSettingsPerf } from '../../utils/settingsPerf';
 import { Dropdown, type DropdownOption } from '../Dropdown';
-import { ModelIcon, OnlineIcon, RestoreIcon, XIcon } from '../Icons';
+import { ModelIcon, OnlineIcon, RestoreIcon } from '../Icons';
 import { Switch } from '../Switch';
 import { ModelCard } from './ModelCard';
 import {
@@ -298,13 +298,18 @@ function LocalModelManagementSection({
             style={{ width: '120px' }}
           />
           <div className="settings-model-search-wrapper">
-            <Search size={14} className="settings-model-search-icon" />
+            <Search size={16} className="settings-model-search-icon" />
             <input
               id="settings-model-search"
-              className="settings-input settings-model-search"
-              type="search"
+              className="settings-model-search"
+              type="text"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setSearchQuery('');
+                }
+              }}
               placeholder={t('settings.model_filter_search_placeholder', {
                 defaultValue: '搜索模型…',
               })}
@@ -316,11 +321,13 @@ function LocalModelManagementSection({
               <button
                 type="button"
                 className="settings-model-search-clear"
-                onClick={() => setSearchQuery('')}
+                onClick={() => {
+                  setSearchQuery('');
+                  document.getElementById('settings-model-search')?.focus();
+                }}
                 aria-label={t('settings.model_search_clear', { defaultValue: '清除搜索' })}
-                data-tooltip={t('settings.model_search_clear', { defaultValue: '清除搜索' })}
               >
-                <XIcon />
+                <X size={12} strokeWidth={2.25} />
               </button>
             )}
           </div>

@@ -321,7 +321,7 @@ export function HistoryItem({
 
       {!isSelectionMode && (
         <div className="history-item-actions" role={layout === 'table' ? 'cell' : undefined}>
-          {onRename && (
+          {onRename && item.deletedAt == null && (
             <button
               type="button"
               className="btn btn-icon history-item-rename"

@@ -25,16 +25,25 @@
   max-width: 190px;
   padding: 4px 10px;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm, 6px);
   background: var(--color-bg-elevated);
   color: var(--color-text-primary);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 .project-selector-trigger:hover {
   border-color: var(--color-border-hover);
-  background: var(--color-bg-primary);
+  background: var(--color-bg-hover);
+}
+.project-selector-trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
 }
 .project-selector-trigger:disabled {
   opacity: 0.55;
