@@ -187,6 +187,7 @@ function TokenListComponent({
       ) : (
         <span dangerouslySetInnerHTML={{ __html: sanitizeTranscriptHtml(segmentText) }} />
       )}
+      {!isFinal && <span className="transcript-caret-pulse" aria-hidden="true" />}
     </p>
   );
 }

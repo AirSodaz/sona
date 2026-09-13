@@ -183,4 +183,14 @@ describe('TranscriptEditor', () => {
     expect(segmentRenderCounts.get('2')).toBe(1);
     expect(segmentRenderCounts.get('3')).toBe(1);
   });
+
+  it('renders standard empty state when segments are empty regardless of recording', () => {
+    act(() => {
+      useTranscriptStore.setState({ segments: [], isRecording: true, isPaused: false });
+    });
+
+    const { container } = render(<TranscriptEditor />);
+    expect(container.querySelector('.empty-state')).toBeTruthy();
+    expect(container.querySelector('.transcript-ghost-segment')).toBeNull();
+  });
 });

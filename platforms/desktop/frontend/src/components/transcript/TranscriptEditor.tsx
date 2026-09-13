@@ -19,6 +19,7 @@ import { EditorToolbar } from '../EditorToolbar';
 import { PlusCircleIcon } from '../Icons';
 import { SearchUI } from '../SearchUI';
 import { SegmentItem } from './SegmentItem';
+import { TranscriptAnticipationIndicator } from './TranscriptAnticipationIndicator';
 import { TranscriptUIContext } from './TranscriptUIContext';
 
 const TranscriptListHeader = React.memo(function TranscriptListHeader(): React.JSX.Element {
@@ -30,7 +31,12 @@ const TranscriptListHeader = React.memo(function TranscriptListHeader(): React.J
 });
 
 const TranscriptListFooter = React.memo(function TranscriptListFooter(): React.JSX.Element {
-  return <div className="transcript-list-footer-spacer" aria-hidden="true" />;
+  return (
+    <div className="transcript-list-footer">
+      <TranscriptAnticipationIndicator />
+      <div className="transcript-list-footer-spacer" aria-hidden="true" />
+    </div>
+  );
 });
 
 /** Context passed to virtualized list items via Virtuoso. */

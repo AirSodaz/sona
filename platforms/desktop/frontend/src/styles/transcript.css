@@ -263,7 +263,7 @@
   grid-template-columns: 60px 1fr auto;
   /* Gutter | Content | Actions */
   gap: var(--spacing-md);
-  align-items: baseline;
+  align-items: start;
 }
 
 .transcript-segment:hover {
@@ -293,6 +293,10 @@
     color var(--transition-fast);
   user-select: none;
   cursor: pointer;
+  height: calc(1.125rem * 1.8);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .transcript-segment:hover .segment-timestamp,
@@ -556,9 +560,84 @@
   opacity: 0;
   transition: opacity var(--transition-fast);
   justify-content: flex-end;
+  height: calc(1.125rem * 1.8);
+  align-items: center;
 }
 
 .transcript-segment:hover .segment-actions,
 .segment-actions:focus-within {
   opacity: 1;
+}
+
+/* ==========================================================================
+   Transcript Anticipation & Breathing Caret
+   Whisper Caret: Ultra-subtle, non-intrusive typing caret in theme gray
+   ========================================================================== */
+
+@keyframes transcriptCaretPulse {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.transcript-caret-pulse {
+  display: inline-block;
+  width: 1.5px;
+  height: 1.15em;
+  background-color: var(--color-text-secondary, #787774);
+  border-radius: 1px;
+  vertical-align: -0.15em;
+  margin-left: 2px;
+  animation: transcriptCaretPulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.transcript-ghost-segment {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--spacing-xs) var(--spacing-md);
+  pointer-events: none;
+}
+
+.transcript-ghost-main {
+  display: grid;
+  grid-template-columns: 60px 1fr auto;
+  gap: var(--spacing-md);
+  align-items: start;
+}
+
+.transcript-ghost-gutter {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  text-align: right;
+  opacity: 0.55;
+  user-select: none;
+  height: calc(1.125rem * 1.8);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.transcript-ghost-content {
+  min-width: 0;
+  font-family: var(--font-serif);
+  font-size: 1.125rem;
+  line-height: 1.8;
+  height: calc(1.125rem * 1.8);
+  display: flex;
+  align-items: center;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .transcript-caret-pulse {
+    animation: none;
+    opacity: 0.6;
+  }
 }
