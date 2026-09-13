@@ -4,6 +4,7 @@ import { ArrowLeft, X } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useFocusTrap } from '../hooks/useFocusTrap';
+import { ModalPortal } from './ModalPortal';
 
 import './PanelModal.css';
 
@@ -98,86 +99,90 @@ export function PanelModal({
   }
 
   return (
-    <div
-      className={joinClassNames(
-        'panel-modal-overlay',
-        `panel-modal-origin-${origin}`,
-        overlayClassName
-      )}
-      onClick={onClose}
-    >
+    <ModalPortal>
       <div
-        ref={internalRef}
-        className={joinClassNames('panel-modal-shell', `panel-modal-size-${size}`, className)}
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={ariaLabel}
-        aria-labelledby={ariaLabelledby}
-        tabIndex={-1}
+        className={joinClassNames(
+          'panel-modal-overlay',
+          `panel-modal-origin-${origin}`,
+          overlayClassName
+        )}
+        onClick={onClose}
       >
-        {!hideHeader && (
-          <div className={joinClassNames('panel-modal-header', headerClassName)}>
-            <div className="panel-modal-top-row">
-              <div className="panel-modal-top-leading">
-                <div className="panel-modal-header-leading">
-                  {origin === 'settings' && onBack ? (
+        <div
+          ref={internalRef}
+          className={joinClassNames('panel-modal-shell', `panel-modal-size-${size}`, className)}
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-label={ariaLabel}
+          aria-labelledby={ariaLabelledby}
+          tabIndex={-1}
+        >
+          {!hideHeader && (
+            <div className={joinClassNames('panel-modal-header', headerClassName)}>
+              <div className="panel-modal-top-row">
+                <div className="panel-modal-top-leading">
+                  <div className="panel-modal-header-leading">
+                    {origin === 'settings' && onBack ? (
+                      <button
+                        type="button"
+                        className="btn btn-icon panel-modal-back"
+                        onClick={onBack}
+                        aria-label={resolvedBackLabel}
+                        data-tooltip={resolvedBackLabel}
+                        data-tooltip-pos="bottom"
+                      >
+                        <ArrowLeft size={16} />
+                      </button>
+                    ) : null}
+                    {headerLeading}
+                  </div>
+                  {badge ? (
+                    <div className={joinClassNames('panel-modal-badge', badgeClassName)}>
+                      {badge}
+                    </div>
+                  ) : null}
+                </div>
+                <div
+                  className={joinClassNames('panel-modal-header-controls', headerControlsClassName)}
+                >
+                  {headerActions ? (
+                    <div className={joinClassNames('panel-modal-toolbar', toolbarClassName)}>
+                      {headerActions}
+                    </div>
+                  ) : null}
+                </div>
+                {!hideCloseButton && (
+                  <div className="panel-modal-close-slot">
                     <button
                       type="button"
-                      className="btn btn-icon panel-modal-back"
-                      onClick={onBack}
-                      aria-label={resolvedBackLabel}
-                      data-tooltip={resolvedBackLabel}
-                      data-tooltip-pos="bottom"
+                      className="btn btn-icon panel-modal-close"
+                      onClick={onClose}
+                      aria-label={resolvedCloseLabel}
+                      data-tooltip={resolvedCloseLabel}
+                      data-tooltip-pos="bottom-left"
                     >
-                      <ArrowLeft size={16} />
+                      <X size={18} />
                     </button>
-                  ) : null}
-                  {headerLeading}
-                </div>
-                {badge ? (
-                  <div className={joinClassNames('panel-modal-badge', badgeClassName)}>{badge}</div>
-                ) : null}
-              </div>
-              <div
-                className={joinClassNames('panel-modal-header-controls', headerControlsClassName)}
-              >
-                {headerActions ? (
-                  <div className={joinClassNames('panel-modal-toolbar', toolbarClassName)}>
-                    {headerActions}
                   </div>
-                ) : null}
+                )}
               </div>
-              {!hideCloseButton && (
-                <div className="panel-modal-close-slot">
-                  <button
-                    type="button"
-                    className="btn btn-icon panel-modal-close"
-                    onClick={onClose}
-                    aria-label={resolvedCloseLabel}
-                    data-tooltip={resolvedCloseLabel}
-                    data-tooltip-pos="bottom-left"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-              )}
+              <div className={joinClassNames('panel-modal-header-copy', headerCopyClassName)}>
+                {typeof title === 'string' ? <h2 id={ariaLabelledby}>{title}</h2> : title}
+                {description ? <p>{description}</p> : null}
+              </div>
             </div>
-            <div className={joinClassNames('panel-modal-header-copy', headerCopyClassName)}>
-              {typeof title === 'string' ? <h2 id={ariaLabelledby}>{title}</h2> : title}
-              {description ? <p>{description}</p> : null}
-            </div>
-          </div>
-        )}
+          )}
 
-        {meta ? (
-          <div className={joinClassNames('panel-modal-meta-row', metaClassName)}>{meta}</div>
-        ) : null}
+          {meta ? (
+            <div className={joinClassNames('panel-modal-meta-row', metaClassName)}>{meta}</div>
+          ) : null}
 
-        {errorBanner}
+          {errorBanner}
 
-        <div className={joinClassNames('panel-modal-content', contentClassName)}>{children}</div>
+          <div className={joinClassNames('panel-modal-content', contentClassName)}>{children}</div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

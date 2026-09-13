@@ -12,6 +12,7 @@ import { useTranscriptSidecarStore } from '../../stores/transcriptSidecarStore';
 import { getSummaryTemplateOptions, resolveSummaryTemplate } from '../../utils/summaryTemplates';
 import { Dropdown } from '../Dropdown';
 import { ProcessingIcon, SummaryIcon, XIcon } from '../Icons';
+import { ModalPortal } from '../ModalPortal';
 
 interface TranscriptSummaryPanelProps {
   isOpen: boolean;
@@ -275,235 +276,237 @@ export function TranscriptSummaryPanel({
         : null;
 
   return (
-    <div
-      className="settings-overlay"
-      onClick={() => {
-        void handleCloseRequest();
-      }}
-      style={{ zIndex: 2000 }}
-    >
+    <ModalPortal>
       <div
-        ref={modalRef}
-        className="dialog-modal transcript-summary-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="summary-modal-title"
-        style={{
-          background: 'var(--color-bg-elevated)',
-          borderRadius: 'var(--radius-lg)',
-          boxShadow: 'var(--shadow-xl)',
-          width: '700px',
-          maxWidth: '92vw',
-          maxHeight: '85vh',
-          display: 'flex',
-          flexDirection: 'column',
-          border: '1px solid var(--color-border)',
-          overflow: 'hidden',
+        className="settings-overlay"
+        onClick={() => {
+          void handleCloseRequest();
         }}
+        style={{ zIndex: 2000 }}
       >
         <div
+          ref={modalRef}
+          className="dialog-modal transcript-summary-modal"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="summary-modal-title"
           style={{
+            background: 'var(--color-bg-elevated)',
+            borderRadius: 'var(--radius-lg)',
+            boxShadow: 'var(--shadow-xl)',
+            width: '700px',
+            maxWidth: '92vw',
+            maxHeight: '85vh',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: 'var(--spacing-lg) var(--spacing-lg) var(--spacing-md)',
-            borderBottom: '1px solid var(--color-border)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--spacing-md)' }}>
-            <h3
-              id="summary-modal-title"
-              style={{
-                fontSize: '1.125rem',
-                fontWeight: 600,
-                color: 'var(--color-text-primary)',
-                margin: 0,
-              }}
-            >
-              {t('summary.title')}
-            </h3>
-            {statusLabel && (
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  color: isGenerating ? 'var(--color-primary)' : 'var(--color-warning)',
-                  fontWeight: 500,
-                }}
-              >
-                {statusLabel}
-              </span>
-            )}
-          </div>
-          <button
-            ref={closeButtonRef}
-            className="btn btn-icon"
-            onClick={() => {
-              void handleCloseRequest();
-            }}
-            aria-label={t('common.close')}
-            data-tooltip={t('common.close')}
-            data-tooltip-pos="bottom-left"
-          >
-            <XIcon />
-          </button>
-        </div>
-
-        <div
-          className="transcript-summary-panel-controls"
-          style={{
-            padding: 'var(--spacing-md) var(--spacing-lg)',
-            background: 'var(--color-bg-secondary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 'var(--spacing-md)',
-            flexWrap: 'wrap',
+            flexDirection: 'column',
+            border: '1px solid var(--color-border)',
+            overflow: 'hidden',
           }}
         >
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '12px',
-              flex: 1,
-              minWidth: '260px',
+              justifyContent: 'space-between',
+              padding: 'var(--spacing-lg) var(--spacing-lg) var(--spacing-md)',
+              borderBottom: '1px solid var(--color-border)',
             }}
           >
-            <span
-              style={{
-                fontSize: '0.8125rem',
-                fontWeight: 600,
-                color: 'var(--color-text-secondary)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {t('summary.templates_label')}
-            </span>
-            <div style={{ flex: 1, minWidth: '220px' }}>
-              <Dropdown
-                value={activeTemplate.id}
-                onChange={(value: string) => {
-                  void handleTemplateChange(value);
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--spacing-md)' }}>
+              <h3
+                id="summary-modal-title"
+                style={{
+                  fontSize: '1.125rem',
+                  fontWeight: 600,
+                  color: 'var(--color-text-primary)',
+                  margin: 0,
                 }}
-                options={templateOptions}
-                style={{ width: '100%' }}
-              />
-            </div>
-          </div>
-
-          <div
-            className="transcript-summary-panel-actions"
-            style={{ display: 'flex', gap: 'var(--spacing-sm)' }}
-          >
-            <button
-              type="button"
-              className="btn transcript-summary-generate-button"
-              onClick={handleGenerate}
-              disabled={isGenerating || !summaryConfigComplete}
-            >
-              {isGenerating ? (
-                <>
-                  <ProcessingIcon />
-                  <span>{t('summary.generating_short')}</span>
-                </>
-              ) : (
-                <>
-                  <SummaryIcon />
-                  <span>{record ? t('summary.regenerate') : t('summary.generate')}</span>
-                </>
+              >
+                {t('summary.title')}
+              </h3>
+              {statusLabel && (
+                <span
+                  style={{
+                    fontSize: '0.75rem',
+                    color: isGenerating ? 'var(--color-primary)' : 'var(--color-warning)',
+                    fontWeight: 500,
+                  }}
+                >
+                  {statusLabel}
+                </span>
               )}
-            </button>
-
+            </div>
             <button
-              type="button"
-              className="btn btn-secondary transcript-summary-copy-button"
-              onClick={handleCopy}
-              disabled={!editContent.trim()}
-              style={{ padding: '5px 12px', fontSize: '0.78rem' }}
+              ref={closeButtonRef}
+              className="btn btn-icon"
+              onClick={() => {
+                void handleCloseRequest();
+              }}
+              aria-label={t('common.close')}
+              data-tooltip={t('common.close')}
+              data-tooltip-pos="bottom-left"
             >
-              {copied ? t('summary.copied') : t('summary.copy')}
+              <XIcon />
             </button>
           </div>
-        </div>
 
-        {!summaryConfigComplete && !isManualHintDismissed && (
           <div
+            className="transcript-summary-panel-controls"
             style={{
-              margin: '0 var(--spacing-lg)',
-              marginTop: 'var(--spacing-md)',
-              padding: '10px 12px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px dashed var(--color-border)',
+              padding: 'var(--spacing-md) var(--spacing-lg)',
               background: 'var(--color-bg-secondary)',
-              color: 'var(--color-text-secondary)',
-              fontSize: '0.8125rem',
-              lineHeight: 1.5,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: 'var(--spacing-md)',
+              flexWrap: 'wrap',
             }}
           >
-            <span>
-              {t('summary.manual_only_hint', {
-                defaultValue:
-                  'Configure an LLM service to generate summaries. You can still write and edit this summary manually.',
-              })}
-            </span>
-            <button
-              type="button"
-              className="btn-icon-sm"
-              onClick={handleDismissManualHint}
-              aria-label={t('common.dismiss', { defaultValue: 'Dismiss' })}
-              data-tooltip={t('common.dismiss', { defaultValue: 'Dismiss' })}
-              data-tooltip-pos="left"
-              style={{ flexShrink: 0 }}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                flex: 1,
+                minWidth: '260px',
+              }}
             >
-              <XIcon width={14} height={14} />
-            </button>
-          </div>
-        )}
+              <span
+                style={{
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  color: 'var(--color-text-secondary)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {t('summary.templates_label')}
+              </span>
+              <div style={{ flex: 1, minWidth: '220px' }}>
+                <Dropdown
+                  value={activeTemplate.id}
+                  onChange={(value: string) => {
+                    void handleTemplateChange(value);
+                  }}
+                  options={templateOptions}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
 
-        <div
-          id={bodyId}
-          className="transcript-summary-panel-body"
-          data-summary-template={activeTemplate.id}
-          style={{
-            flex: 1,
-            overflowY: 'auto',
-            padding: 'var(--spacing-lg)',
-            border: 'none',
-            background: 'var(--color-bg-primary)',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          <textarea
-            ref={textareaRef}
-            className="transcript-summary-content-text"
-            value={editContent}
-            onChange={handleContentChange}
-            onBlur={() => {
-              void handleBlur();
-            }}
-            placeholder={t('summary.placeholder')}
+            <div
+              className="transcript-summary-panel-actions"
+              style={{ display: 'flex', gap: 'var(--spacing-sm)' }}
+            >
+              <button
+                type="button"
+                className="btn transcript-summary-generate-button"
+                onClick={handleGenerate}
+                disabled={isGenerating || !summaryConfigComplete}
+              >
+                {isGenerating ? (
+                  <>
+                    <ProcessingIcon />
+                    <span>{t('summary.generating_short')}</span>
+                  </>
+                ) : (
+                  <>
+                    <SummaryIcon />
+                    <span>{record ? t('summary.regenerate') : t('summary.generate')}</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary transcript-summary-copy-button"
+                onClick={handleCopy}
+                disabled={!editContent.trim()}
+                style={{ padding: '5px 12px', fontSize: '0.78rem' }}
+              >
+                {copied ? t('summary.copied') : t('summary.copy')}
+              </button>
+            </div>
+          </div>
+
+          {!summaryConfigComplete && !isManualHintDismissed && (
+            <div
+              style={{
+                margin: '0 var(--spacing-lg)',
+                marginTop: 'var(--spacing-md)',
+                padding: '10px 12px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px dashed var(--color-border)',
+                background: 'var(--color-bg-secondary)',
+                color: 'var(--color-text-secondary)',
+                fontSize: '0.8125rem',
+                lineHeight: 1.5,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 'var(--spacing-md)',
+              }}
+            >
+              <span>
+                {t('summary.manual_only_hint', {
+                  defaultValue:
+                    'Configure an LLM service to generate summaries. You can still write and edit this summary manually.',
+                })}
+              </span>
+              <button
+                type="button"
+                className="btn-icon-sm"
+                onClick={handleDismissManualHint}
+                aria-label={t('common.dismiss', { defaultValue: 'Dismiss' })}
+                data-tooltip={t('common.dismiss', { defaultValue: 'Dismiss' })}
+                data-tooltip-pos="left"
+                style={{ flexShrink: 0 }}
+              >
+                <XIcon width={14} height={14} />
+              </button>
+            </div>
+          )}
+
+          <div
+            id={bodyId}
+            className="transcript-summary-panel-body"
+            data-summary-template={activeTemplate.id}
             style={{
               flex: 1,
-              width: '100%',
+              overflowY: 'auto',
+              padding: 'var(--spacing-lg)',
               border: 'none',
-              outline: 'none',
-              resize: 'none',
-              background: 'transparent',
-              padding: 0,
-              margin: 0,
-              display: 'block',
-              minHeight: '400px',
+              background: 'var(--color-bg-primary)',
+              display: 'flex',
+              flexDirection: 'column',
             }}
-          />
+          >
+            <textarea
+              ref={textareaRef}
+              className="transcript-summary-content-text"
+              value={editContent}
+              onChange={handleContentChange}
+              onBlur={() => {
+                void handleBlur();
+              }}
+              placeholder={t('summary.placeholder')}
+              style={{
+                flex: 1,
+                width: '100%',
+                border: 'none',
+                outline: 'none',
+                resize: 'none',
+                background: 'transparent',
+                padding: 0,
+                margin: 0,
+                display: 'block',
+                minHeight: '400px',
+              }}
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
