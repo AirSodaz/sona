@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import type React from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import type { Match } from '../../stores/searchStore';
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import type { TranscriptSegment, TranscriptTimingUnit } from '../../types/transcript';
@@ -96,7 +97,7 @@ function doTimingUnitsMatchSegmentText(
  * Pure component to render the list of tokens.
  * Only re-renders when the active token changes.
  */
-function TokenListComponent({
+function TokenList({
   segmentText,
   isFinal,
   alignedUnits,
@@ -110,8 +111,7 @@ function TokenListComponent({
   onContextMenuKeyDown,
 }: TokenListProps): React.JSX.Element {
   // Calculate token indices for highlighting
-  // This is cheap enough to do in render for a single segment, but could be memoized if needed.
-  // Since this is inside a React.memo, it runs only when props change.
+  // Optimized by React Compiler to re-calculate only when alignedUnits changes.
 
   const tokensWithIndices = useMemo(() => {
     if (!alignedUnits) return null;
@@ -192,9 +192,6 @@ function TokenListComponent({
   );
 }
 
-const TokenList = React.memo(TokenListComponent);
-TokenList.displayName = 'TokenList';
-
 /**
  * Helper component that subscribes to the store for time updates.
  * Only mounted for the active segment.
@@ -235,7 +232,7 @@ function ActiveSegmentWrapper({
  * Optimization: Only the active segment subscribes to high-frequency time updates.
  * Inactive segments render a static list, avoiding 1000s of unnecessary selector executions per frame.
  */
-function SegmentTokensComponent({
+export function SegmentTokens({
   segment,
   isActive,
   onSeek,
@@ -281,5 +278,3 @@ function SegmentTokensComponent({
 
   return renderTokenList(-1);
 }
-
-export const SegmentTokens = React.memo(SegmentTokensComponent);

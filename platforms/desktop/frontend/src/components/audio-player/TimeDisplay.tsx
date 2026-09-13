@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import type React from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { formatDisplayTime } from '../../utils/exportFormats';
 
@@ -6,7 +7,7 @@ import { formatDisplayTime } from '../../utils/exportFormats';
  * Displays the current audio time.
  * Subscribes directly to store to avoid React re-renders on every tick.
  */
-function TimeDisplayComponent(): React.JSX.Element {
+export function TimeDisplay(): React.JSX.Element {
   const spanRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
@@ -33,5 +34,3 @@ function TimeDisplayComponent(): React.JSX.Element {
     </span>
   );
 }
-
-export const TimeDisplay = React.memo(TimeDisplayComponent);

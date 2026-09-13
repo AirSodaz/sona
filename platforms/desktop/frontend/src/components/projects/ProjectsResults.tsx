@@ -257,21 +257,18 @@ export function ProjectsResults({
 }: ProjectsResultsProps): React.JSX.Element {
   const virtuosoRef = React.useRef<VirtuosoHandle | null>(null);
   const virtuosoGridRef = React.useRef<VirtuosoGridHandle | null>(null);
-  const selectedIdsSet = React.useMemo(() => new Set(selectedIds), [selectedIds]);
+  const selectedIdsSet = new Set(selectedIds);
   const showProjectBadge = isAllItemsScope;
-  const scrollClassName = React.useMemo(() => getVirtualScrollClassName(viewMode), [viewMode]);
-  const listContext = React.useMemo<ProjectsVirtualContext>(
-    () => ({
-      isSelectionMode,
-      isLoadingMore,
-      loadMoreError,
-      onLoadMore,
-      showProjectBadge,
-      t,
-      viewMode: viewMode === 'table' ? 'table' : 'list',
-    }),
-    [isLoadingMore, isSelectionMode, loadMoreError, onLoadMore, showProjectBadge, t, viewMode]
-  );
+  const scrollClassName = getVirtualScrollClassName(viewMode);
+  const listContext: ProjectsVirtualContext = {
+    isSelectionMode,
+    isLoadingMore,
+    loadMoreError,
+    onLoadMore,
+    showProjectBadge,
+    t,
+    viewMode: viewMode === 'table' ? 'table' : 'list',
+  };
   const isLoading = isHistoryLoading || isInitialLoading;
   const activeSearchResultIndex = React.useMemo(() => {
     if (!activeSearchResultId) {

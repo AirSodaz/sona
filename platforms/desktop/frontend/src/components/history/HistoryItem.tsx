@@ -138,7 +138,7 @@ function formatRelativeDate(timestamp: number, locale: string): string {
   }
 }
 
-function HistoryItemComponent({
+export function HistoryItem({
   item,
   onLoad,
   onDelete,
@@ -161,12 +161,10 @@ function HistoryItemComponent({
   const { t, i18n } = useTranslation();
   const contentButtonRef = React.useRef<HTMLButtonElement>(null);
   const projects = useProjectStore((state) => state.projects);
-  const itemTags = React.useMemo(() => {
-    const itemTagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
-    return itemTagIds
-      .map((tagId) => projects.find((tag) => tag.id === tagId))
-      .filter((tag): tag is NonNullable<typeof tag> => !!tag);
-  }, [item.projectId, item.tagIds, projects]);
+  const itemTagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
+  const itemTags = itemTagIds
+    .map((tagId) => projects.find((tag) => tag.id === tagId))
+    .filter((tag): tag is NonNullable<typeof tag> => !!tag);
   const visibleTags = itemTags.slice(0, 2);
   const hiddenTagCount = Math.max(0, itemTags.length - visibleTags.length);
   const tagChips = (
@@ -364,5 +362,3 @@ function HistoryItemComponent({
     </div>
   );
 }
-
-export const HistoryItem = React.memo(HistoryItemComponent);

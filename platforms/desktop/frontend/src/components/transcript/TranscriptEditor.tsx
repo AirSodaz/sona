@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { useAutoScroll } from '../../hooks/useAutoScroll';
@@ -22,22 +23,22 @@ import { SegmentItem } from './SegmentItem';
 import { TranscriptAnticipationIndicator } from './TranscriptAnticipationIndicator';
 import { TranscriptUIContext } from './TranscriptUIContext';
 
-const TranscriptListHeader = React.memo(function TranscriptListHeader(): React.JSX.Element {
+function TranscriptListHeader(): React.JSX.Element {
   return (
     <div className="transcript-list-header">
       <div className="transcript-list-opening-spacer" aria-hidden="true" />
     </div>
   );
-});
+}
 
-const TranscriptListFooter = React.memo(function TranscriptListFooter(): React.JSX.Element {
+function TranscriptListFooter(): React.JSX.Element {
   return (
     <div className="transcript-list-footer">
       <TranscriptAnticipationIndicator />
       <div className="transcript-list-footer-spacer" aria-hidden="true" />
     </div>
   );
-});
+}
 
 /** Context passed to virtualized list items via Virtuoso. */
 interface TranscriptContext {

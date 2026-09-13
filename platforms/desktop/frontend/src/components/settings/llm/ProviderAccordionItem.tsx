@@ -1,5 +1,5 @@
 import { Check, Loader2, Pencil, Trash2, X } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   buildLlmConfig,
   createProviderSetting,
@@ -29,7 +29,7 @@ interface ProviderAccordionItemProps {
   t: (key: string, options?: Record<string, unknown>) => string;
 }
 
-export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
+export function ProviderAccordionItem({
   provider,
   config,
   isOpen,
@@ -310,4 +310,4 @@ export const ProviderAccordionItem = React.memo(function ProviderAccordionItem({
       )}
     </SettingsAccordion>
   );
-});
+}

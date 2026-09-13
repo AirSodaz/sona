@@ -9,7 +9,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { requestMicrophonePermission } from '../services/audioDeviceService';
 import { diagnosticsService } from '../services/diagnosticsService';
@@ -194,49 +194,42 @@ export function DiagnosticsModal({
     });
   }, [isOpen, loadSnapshot]);
 
-  const handleAction = useCallback(
-    async (action: DiagnosticAction) => {
-      setBusyAction(action.kind);
-      try {
-        switch (action.kind) {
-          case 'open_settings':
-            onOpenSettingsTab(action.settingsTab);
-            return;
-          case 'run_first_run_setup':
-            onRunFirstRunSetup();
-            return;
-          case 'open_log_folder':
-            await openLogFolder();
-            break;
-          case 'request_microphone_permission':
-            await requestMicrophonePermission();
-            break;
-          case 'retry_voice_typing_warmup':
-            await voiceTypingService.retryWarmup();
-            break;
-          default:
-            break;
-        }
-
-        await loadSnapshot();
-      } catch (error) {
-        setLoadError(normalizeError(error).message);
-      } finally {
-        setBusyAction(null);
+  const handleAction = async (action: DiagnosticAction) => {
+    setBusyAction(action.kind);
+    try {
+      switch (action.kind) {
+        case 'open_settings':
+          onOpenSettingsTab(action.settingsTab);
+          return;
+        case 'run_first_run_setup':
+          onRunFirstRunSetup();
+          return;
+        case 'open_log_folder':
+          await openLogFolder();
+          break;
+        case 'request_microphone_permission':
+          await requestMicrophonePermission();
+          break;
+        case 'retry_voice_typing_warmup':
+          await voiceTypingService.retryWarmup();
+          break;
+        default:
+          break;
       }
-    },
-    [loadSnapshot, onOpenSettingsTab, onRunFirstRunSetup]
-  );
 
-  const scannedAtLabel = useMemo(
-    () =>
-      snapshot
-        ? formatScannedAt(snapshot.scannedAt, t)
-        : t('settings.diagnostics.scanned_unknown', {
-            defaultValue: 'Scan time unavailable',
-          }),
-    [snapshot, t]
-  );
+      await loadSnapshot();
+    } catch (error) {
+      setLoadError(normalizeError(error).message);
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const scannedAtLabel = snapshot
+    ? formatScannedAt(snapshot.scannedAt, t)
+    : t('settings.diagnostics.scanned_unknown', {
+        defaultValue: 'Scan time unavailable',
+      });
 
   if (!isOpen) {
     return null;

@@ -1,4 +1,5 @@
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import type React from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
@@ -38,7 +39,7 @@ export interface SegmentItemProps {
  * Individual transcript segment item.
  * Supports viewing, seeking, editing, deleting, and merging.
  */
-function SegmentItemComponent({
+export function SegmentItem({
   segment,
   index,
   showSpeakerLabel = false,
@@ -487,5 +488,3 @@ function SegmentItemComponent({
     </div>
   );
 }
-
-export const SegmentItem = React.memo(SegmentItemComponent);

@@ -5,9 +5,19 @@ import { defineConfig } from 'vite';
 
 const host = process.env.TAURI_DEV_HOST;
 
+const ReactCompilerConfig = {
+  target: '19',
+};
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react()],
+  plugins: [
+    react({
+      babel: {
+        plugins: [['babel-plugin-react-compiler', ReactCompilerConfig]],
+      },
+    }),
+  ],
   test: {
     globals: true,
     exclude: ['**/node_modules/**', 'tests/e2e/**', 'playwright-report/**'],

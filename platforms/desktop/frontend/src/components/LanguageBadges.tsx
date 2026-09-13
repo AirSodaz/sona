@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatLanguagesTooltip, VISIBLE_LANGUAGE_TAGS } from '../utils/languages';
 
@@ -11,21 +11,14 @@ interface LanguageBadgesProps {
  * plus a `+N` overflow chip, with a styled custom tooltip showing the full or
  * summarized localized languages list.
  */
-export const LanguageBadges = React.memo(function LanguageBadges({
-  languages,
-}: LanguageBadgesProps): React.JSX.Element | null {
+export function LanguageBadges({ languages }: LanguageBadgesProps): React.JSX.Element | null {
   const { t, i18n } = useTranslation();
-
-  const tooltipText = useMemo(() => {
-    if (!languages || languages.length === 0) {
-      return '';
-    }
-    return formatLanguagesTooltip(languages, i18n?.language ?? 'zh', t);
-  }, [languages, i18n?.language, t]);
 
   if (!languages || languages.length === 0) {
     return null;
   }
+
+  const tooltipText = formatLanguagesTooltip(languages, i18n?.language ?? 'zh', t);
 
   const visible = languages.slice(0, VISIBLE_LANGUAGE_TAGS);
   const overflow = languages.length - visible.length;
@@ -49,4 +42,4 @@ export const LanguageBadges = React.memo(function LanguageBadges({
       {overflow > 0 && <span className="model-tag model-tag-overflow">+{overflow}</span>}
     </span>
   );
-});
+}

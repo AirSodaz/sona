@@ -1,5 +1,6 @@
 import { Loader2 } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildLlmConfig,
   DEFAULT_LLM_TEMPERATURE,
@@ -42,7 +43,7 @@ interface FeatureCardProps {
   showHeaderTitle?: boolean;
 }
 
-export const FeatureCard = React.memo(function FeatureCard({
+export function FeatureCard({
   stepNumber,
   featureId,
   title,
@@ -619,4 +620,4 @@ export const FeatureCard = React.memo(function FeatureCard({
       </div>
     </div>
   );
-});
+}

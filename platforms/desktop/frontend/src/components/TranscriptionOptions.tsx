@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import type React from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SettingsIcon } from './Icons';
 import { ParameterSettingsModal } from './ParameterSettingsModal';
@@ -18,7 +19,7 @@ interface TranscriptionOptionsProps {
  * @param props Component props.
  * @return The rendered component.
  */
-export const TranscriptionOptions = React.memo(function TranscriptionOptions({
+export function TranscriptionOptions({
   className = '',
   disabled = false,
   surface = 'live',
@@ -55,4 +56,4 @@ export const TranscriptionOptions = React.memo(function TranscriptionOptions({
       />
     </div>
   );
-});
+}

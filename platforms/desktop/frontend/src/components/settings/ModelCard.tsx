@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { type ModelInfo, resolveModelLabels, resolveModelRatings } from '../../types/modelCatalog';
 import { CheckIcon, DownloadIcon, TrashIcon, XIcon } from '../Icons';
@@ -177,7 +177,7 @@ function ModelDownloadProgress({
  * while the destructive delete turns red on hover so it never competes with
  * the primary flow.
  */
-const ModelCardActions = React.memo(function ModelCardActions({
+function ModelCardActions({
   model,
   isInstalled,
   isDownloading,
@@ -229,9 +229,9 @@ const ModelCardActions = React.memo(function ModelCardActions({
       <DownloadIcon />
     </button>
   );
-});
+}
 
-export const ModelCard = React.memo(function ModelCard({
+export function ModelCard({
   models,
   installedModels,
   downloads,
@@ -358,4 +358,4 @@ export const ModelCard = React.memo(function ModelCard({
       )}
     </div>
   );
-});
+}

@@ -1,5 +1,6 @@
 import { Mic, PlaySquare, Search, Settings2 } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CudaAddonInspection } from '../../bindings';
 import { useModelManagerContext } from '../../hooks/useModelManager';
@@ -157,7 +158,7 @@ interface LocalModelManagementSectionProps {
   t: ReturnType<typeof useTranslation>['t'];
 }
 
-const LocalModelManagementSection = React.memo(function LocalModelManagementSection({
+function LocalModelManagementSection({
   catalogLoadState,
   catalogLoadError,
   sectionProps,
@@ -483,9 +484,9 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
       )}
     </SettingsSection>
   );
-});
+}
 
-export const SettingsModelsTab = React.memo(function SettingsModelsTab({
+export function SettingsModelsTab({
   isActive: _isActive = true,
 }: SettingsModelsTabProps): React.JSX.Element {
   const { t } = useTranslation();
@@ -1355,4 +1356,4 @@ export const SettingsModelsTab = React.memo(function SettingsModelsTab({
       </div>
     </SettingsTabContainer>
   );
-});
+}

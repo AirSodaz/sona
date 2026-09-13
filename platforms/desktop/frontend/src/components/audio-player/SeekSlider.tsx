@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import type React from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { formatDisplayTime } from '../../utils/exportFormats';
 
@@ -16,7 +17,7 @@ export interface SeekSliderProps {
  * Slider for seeking through audio.
  * Subscribes directly to store to avoid React re-renders.
  */
-function SeekSliderComponent({ duration, onSeek, seekLabel }: SeekSliderProps): React.JSX.Element {
+export function SeekSlider({ duration, onSeek, seekLabel }: SeekSliderProps): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const isDragging = useRef(false);
 
@@ -79,5 +80,3 @@ function SeekSliderComponent({ duration, onSeek, seekLabel }: SeekSliderProps): 
     />
   );
 }
-
-export const SeekSlider = React.memo(SeekSliderComponent);

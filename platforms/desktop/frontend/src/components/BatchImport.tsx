@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_MEDIA_EXTENSIONS } from '../constants/mediaExtensions';
 import {
@@ -28,7 +29,7 @@ import { TranscriptionOptions } from './TranscriptionOptions';
  *
  * @return The status display component.
  */
-function ActiveItemStatusComponent(): React.JSX.Element | null {
+function ActiveItemStatus(): React.JSX.Element | null {
   const { t } = useTranslation();
   const item = useBatchQueueStore(
     (state) => state.queueItems.find((i) => i.id === state.activeItemId) || null
@@ -96,9 +97,6 @@ function ActiveItemStatusComponent(): React.JSX.Element | null {
       );
   }
 }
-
-// Optimization: Memoize to prevent re-renders unless the active item changes
-const ActiveItemStatus = React.memo(ActiveItemStatusComponent);
 
 /** Props for BatchImport. */
 interface BatchImportProps {
@@ -324,32 +322,26 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
     };
   }, [handleTauriDrop]);
 
-  const handleDragOver = useCallback(
-    (e: React.DragEvent): void => {
-      e.preventDefault();
-      if (!isDragOver) setIsDragOver(true);
-    },
-    [isDragOver]
-  );
+  const handleDragOver = (e: React.DragEvent): void => {
+    e.preventDefault();
+    if (!isDragOver) setIsDragOver(true);
+  };
 
-  const handleDragEnter = useCallback((e: React.DragEvent): void => {
+  const handleDragEnter = (e: React.DragEvent): void => {
     e.preventDefault();
     setIsDragOver(true);
-  }, []);
+  };
 
-  const handleDragLeave = useCallback((e: React.DragEvent): void => {
+  const handleDragLeave = (e: React.DragEvent): void => {
     e.preventDefault();
     setIsDragOver(false);
-  }, []);
+  };
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent): void => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        void handleClick();
-      }
-    },
-    [handleClick]
-  );
+  const handleKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      void handleClick();
+    }
+  };
 
   // Render the queue view when we have items
   if (hasQueueItems) {

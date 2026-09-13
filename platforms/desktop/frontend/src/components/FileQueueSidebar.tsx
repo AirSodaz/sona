@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import React from 'react';
+import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
@@ -43,7 +43,7 @@ interface QueueItemProps {
  * Individual queue item component.
  * Memoized to prevent re-renders of the entire list when only one item updates.
  */
-function QueueItemComponent({
+function QueueItem({
   item,
   isActive,
   projects,
@@ -170,8 +170,6 @@ function QueueItemComponent({
     </div>
   );
 }
-
-const QueueItem = React.memo(QueueItemComponent);
 
 /**
  * Container for QueueItem that handles subscription to specific item updates.

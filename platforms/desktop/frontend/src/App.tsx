@@ -1,6 +1,6 @@
 import { Type } from 'lucide-react';
 import type React from 'react';
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BatchImport } from './components/BatchImport';
 import { ErrorDialog } from './components/ErrorDialog';
@@ -119,11 +119,11 @@ function App(): React.JSX.Element {
 
   useNumberStepperHoverEffect();
 
-  const preloadSettings = useCallback((tab: SettingsTab = 'general') => {
+  const preloadSettings = (tab: SettingsTab = 'general') => {
     void preloadSettingsTab(tab);
-  }, []);
+  };
 
-  const preloadAllSettings = useCallback(() => {
+  const preloadAllSettings = () => {
     markSettingsPerf('settings.preload.all.start');
     void loadSettingsModule()
       .then(() => preloadAllSettingsTabs())
@@ -135,15 +135,12 @@ function App(): React.JSX.Element {
       .catch((error) => {
         markSettingsPerf('settings.preload.all.fail', getSettingsPerfErrorDetail(error));
       });
-  }, []);
+  };
 
-  const setPreloadedSettingsInitialTab = useCallback(
-    (tab: SettingsTab) => {
-      preloadSettings(tab);
-      setSettingsInitialTab(tab);
-    },
-    [preloadSettings]
-  );
+  const setPreloadedSettingsInitialTab = (tab: SettingsTab) => {
+    preloadSettings(tab);
+    setSettingsInitialTab(tab);
+  };
 
   // Handle tray events
   useTrayHandling(setIsSettingsOpen, setPreloadedSettingsInitialTab);
@@ -152,27 +149,24 @@ function App(): React.JSX.Element {
     if (!isLoaded) return;
 
     preloadAllSettings();
-  }, [isLoaded, preloadAllSettings]);
+  }, [isLoaded]);
 
-  const openDefaultSettings = useCallback(() => {
+  const openDefaultSettings = () => {
     markSettingsPerf('settings.open.default.click', { tab: 'general', source: 'header' });
     preloadSettings('general');
     setSettingsInitialTab('general');
     setIsSettingsOpen(true);
-  }, [preloadSettings]);
+  };
 
-  const openSettingsTab = useCallback(
-    (tab: SettingsTab) => {
-      markSettingsPerf('settings.open.tab.click', { tab });
-      preloadSettings(tab);
-      setActivePanelModal((current) => (current?.origin === 'settings' ? null : current));
-      setSettingsInitialTab(tab);
-      setIsSettingsOpen(true);
-    },
-    [preloadSettings]
-  );
+  const openSettingsTab = (tab: SettingsTab) => {
+    markSettingsPerf('settings.open.tab.click', { tab });
+    preloadSettings(tab);
+    setActivePanelModal((current) => (current?.origin === 'settings' ? null : current));
+    setSettingsInitialTab(tab);
+    setIsSettingsOpen(true);
+  };
 
-  const openDiagnostics = useCallback(() => {
+  const openDiagnostics = () => {
     const origin = isSettingsOpen ? 'settings' : 'standalone';
     setActivePanelModal({
       kind: 'diagnostics',
@@ -181,62 +175,56 @@ function App(): React.JSX.Element {
     if (origin === 'standalone') {
       setIsDiagnosticsOpen(true);
     }
-  }, [isSettingsOpen]);
+  };
 
-  const closeDiagnostics = useCallback(() => {
+  const closeDiagnostics = () => {
     setIsDiagnosticsOpen(false);
     setActivePanelModal((current) => (current?.kind === 'diagnostics' ? null : current));
-  }, []);
+  };
 
-  const openProviderDetailsFromSettings = useCallback(
-    (provider?: LlmProvider) => {
-      const nextProvider = provider ?? llmConfig.llmSettings?.activeProvider ?? 'open_ai';
-      setActivePanelModal({
-        kind: 'provider_details',
-        origin: 'settings',
-        provider: nextProvider,
-      });
-    },
-    [llmConfig.llmSettings?.activeProvider]
-  );
+  const openProviderDetailsFromSettings = (provider?: LlmProvider) => {
+    const nextProvider = provider ?? llmConfig.llmSettings?.activeProvider ?? 'open_ai';
+    setActivePanelModal({
+      kind: 'provider_details',
+      origin: 'settings',
+      provider: nextProvider,
+    });
+  };
 
-  const handlePanelBack = useCallback(() => {
+  const handlePanelBack = () => {
     setActivePanelModal(null);
-  }, []);
+  };
 
-  const openRecoveryCenter = useCallback(() => {
+  const openRecoveryCenter = () => {
     setIsRecoveryCenterOpen(true);
-  }, []);
+  };
 
-  const openAutomationSettings = useCallback(() => {
+  const openAutomationSettings = () => {
     useAutomationStore.getState().setFocusTagId(null);
     openSettingsTab('automation');
-  }, [openSettingsTab]);
+  };
 
-  const openAutomationSettingsForTag = useCallback(
-    (tagId: string) => {
-      useAutomationStore.getState().setFocusTagId(tagId);
-      openSettingsTab('automation');
-    },
-    [openSettingsTab]
-  );
+  const openAutomationSettingsForTag = (tagId: string) => {
+    useAutomationStore.getState().setFocusTagId(tagId);
+    openSettingsTab('automation');
+  };
 
-  const openVoiceTypingSettings = useCallback(() => {
+  const openVoiceTypingSettings = () => {
     openSettingsTab('subtitle');
-  }, [openSettingsTab]);
+  };
 
-  const runFirstRunSetupFromDiagnostics = useCallback(() => {
+  const runFirstRunSetupFromDiagnostics = () => {
     setIsDiagnosticsOpen(false);
     reopenOnboarding(diagnosticsService.getResumeOnboardingStep(), 'startup');
-  }, [reopenOnboarding]);
+  };
 
-  const closeTranscriptSession = useCallback(() => {
+  const closeTranscriptSession = () => {
     if (mode === 'batch') {
       useBatchQueueStore.getState().setActiveItem(null);
     } else {
       clearActiveTranscriptSession({ clearAudio: true });
     }
-  }, [mode]);
+  };
 
   if (!isLoaded) {
     return <></>; // Wait for config and onboarding state to load

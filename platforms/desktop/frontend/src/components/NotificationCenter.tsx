@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppUpdater } from '../hooks/useAppUpdater';
@@ -361,11 +361,11 @@ export function NotificationCenter({
   const containerRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
 
-  const closePanel = useCallback(() => {
+  const closePanel = () => {
     setIsOpen(false);
-  }, []);
+  };
 
-  const handleDismissOnboarding = useCallback(async () => {
+  const handleDismissOnboarding = async () => {
     const confirmed = await confirm(t('first_run.banner.dismiss_confirm_message'), {
       title: t('first_run.banner.dismiss_confirm_title'),
       variant: 'warning',
@@ -376,7 +376,7 @@ export function NotificationCenter({
     }
 
     dismissOnboardingReminder();
-  }, [confirm, dismissOnboardingReminder, t]);
+  };
 
   const taskActions = useTaskLedgerActions({
     t,
@@ -478,7 +478,7 @@ export function NotificationCenter({
   );
 
   const badgeCount = groupedEntries.needsAction.length + groupedEntries.active.length;
-  const notificationBadgeLabel = useMemo(() => getNotificationBadgeLabel(badgeCount), [badgeCount]);
+  const notificationBadgeLabel = getNotificationBadgeLabel(badgeCount);
 
   useEffect(() => {
     if (!isOpen) {

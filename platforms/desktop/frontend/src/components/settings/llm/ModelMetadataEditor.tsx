@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import type { LlmModality, LlmModelEntry, LlmModelMetadata } from '../../../types/transcript';
 
 type ModelMetadataDraft = {
@@ -70,12 +70,7 @@ function parseOptionalText(value: string): string | undefined {
   return value.trim() || undefined;
 }
 
-export const ModelMetadataEditor = React.memo(function ModelMetadataEditor({
-  entry,
-  onCancel,
-  onSave,
-  t,
-}: ModelMetadataEditorProps) {
+export function ModelMetadataEditor({ entry, onCancel, onSave, t }: ModelMetadataEditorProps) {
   const [draft, setDraft] = useState<ModelMetadataDraft>(() => createDraft(entry));
   const [dirtyFields, setDirtyFields] = useState<Set<keyof ModelMetadataDraft>>(() => new Set());
   const [error, setError] = useState('');
@@ -294,4 +289,4 @@ export const ModelMetadataEditor = React.memo(function ModelMetadataEditor({
       </div>
     </div>
   );
-});
+}

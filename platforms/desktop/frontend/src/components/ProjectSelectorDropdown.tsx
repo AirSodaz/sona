@@ -123,6 +123,7 @@ import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import type { ProjectRecord } from '../types/project';
 import { ProjectCreateModal } from './projects/ProjectCreateModal';
 import { ProjectVisual } from './projects/ProjectVisual';
 
@@ -131,7 +132,7 @@ type Props = { onOpenProjects: () => void };
 export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.Element {
   const { t } = useTranslation();
   const projectsValue = useProjectStore((state) => state.projects);
-  const projects = useMemo(() => projectsValue ?? [], [projectsValue]);
+  const projects: ProjectRecord[] = projectsValue ?? [];
   const activeProjectId = useProjectStore((state) => state.activeProjectId) ?? null;
   const setActiveProjectId =
     useProjectStore((state) => state.setActiveProjectId) ?? (async () => undefined);
@@ -150,10 +151,7 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
   const [createIcon, setCreateIcon] = useState('');
   const ref = useRef<HTMLDivElement>(null);
 
-  const countInbox = useMemo(
-    () => historyItems.filter((i) => !i.deletedAt && !i.projectId).length,
-    [historyItems]
-  );
+  const countInbox = historyItems.filter((i) => !i.deletedAt && !i.projectId).length;
   const projectCounts = useMemo(() => {
     const map = new Map<string, number>();
     for (const item of historyItems) {

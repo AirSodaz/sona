@@ -13,7 +13,7 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   buildLlmConfig,
   createProviderSetting,
@@ -59,7 +59,7 @@ function formatOptionalNumber(value: number | undefined): string {
   return typeof value === 'number' ? String(value) : '—';
 }
 
-export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
+export function ProviderDetailsModal({
   provider,
   config,
   isOpen,
@@ -524,4 +524,4 @@ export const ProviderDetailsModal = React.memo(function ProviderDetailsModal({
       </div>
     </PanelModal>
   );
-});
+}

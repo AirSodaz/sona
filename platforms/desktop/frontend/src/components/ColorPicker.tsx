@@ -1,6 +1,6 @@
 import { ChevronsUpDown, Pipette } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ModalPortal } from './ModalPortal';
 
 export interface ColorPickerProps {
@@ -182,27 +182,24 @@ export function ColorPicker({
   }, [isOpen, onClose, anchorRef]);
 
   // Saturation / Value board drag
-  const updateBoardCoords = useCallback(
-    (clientX: number, clientY: number) => {
-      if (!boardRef.current) return;
-      const rect = boardRef.current.getBoundingClientRect();
-      const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
-      const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
-      const s = Math.round((x / rect.width) * 100);
-      const v = Math.round((1 - y / rect.height) * 100);
+  const updateBoardCoords = (clientX: number, clientY: number) => {
+    if (!boardRef.current) return;
+    const rect = boardRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
+    const s = Math.round((x / rect.width) * 100);
+    const v = Math.round((1 - y / rect.height) * 100);
 
-      setHsv((prev) => {
-        const next = { ...prev, s, v };
-        const nextRgb = hsvToRgb(next.h, next.s, next.v);
-        const nextHex = rgbToHex(nextRgb.r, nextRgb.g, nextRgb.b);
-        setRgb(nextRgb);
-        setHexInput(nextHex);
-        onChange(nextHex);
-        return next;
-      });
-    },
-    [onChange]
-  );
+    setHsv((prev) => {
+      const next = { ...prev, s, v };
+      const nextRgb = hsvToRgb(next.h, next.s, next.v);
+      const nextHex = rgbToHex(nextRgb.r, nextRgb.g, nextRgb.b);
+      setRgb(nextRgb);
+      setHexInput(nextHex);
+      onChange(nextHex);
+      return next;
+    });
+  };
 
   const handleBoardPointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -232,31 +229,28 @@ export function ColorPicker({
     window.addEventListener('pointerup', onPointerUp);
   };
 
-  const updateHueCoords = useCallback(
-    (clientX: number) => {
-      if (!hueRef.current) return;
-      const rect = hueRef.current.getBoundingClientRect();
-      if (rect.width <= 0) return;
-      const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
-      const rawH = Math.round((x / rect.width) * 360);
-      const h = Math.min(360, Math.max(0, rawH)) % 360;
+  const updateHueCoords = (clientX: number) => {
+    if (!hueRef.current) return;
+    const rect = hueRef.current.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+    const rawH = Math.round((x / rect.width) * 360);
+    const h = Math.min(360, Math.max(0, rawH)) % 360;
 
-      setHsv((prev) => {
-        let s = prev.s;
-        let v = prev.v;
-        if (s === 0) s = 100;
-        if (v === 0) v = 100;
-        const next = { ...prev, h, s, v };
-        const nextRgb = hsvToRgb(next.h, next.s, next.v);
-        const nextHex = rgbToHex(nextRgb.r, nextRgb.g, nextRgb.b);
-        setRgb(nextRgb);
-        setHexInput(nextHex);
-        onChange(nextHex);
-        return next;
-      });
-    },
-    [onChange]
-  );
+    setHsv((prev) => {
+      let s = prev.s;
+      let v = prev.v;
+      if (s === 0) s = 100;
+      if (v === 0) v = 100;
+      const next = { ...prev, h, s, v };
+      const nextRgb = hsvToRgb(next.h, next.s, next.v);
+      const nextHex = rgbToHex(nextRgb.r, nextRgb.g, nextRgb.b);
+      setRgb(nextRgb);
+      setHexInput(nextHex);
+      onChange(nextHex);
+      return next;
+    });
+  };
 
   const handleHuePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();

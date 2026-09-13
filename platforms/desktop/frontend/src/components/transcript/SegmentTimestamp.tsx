@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatDisplayTime } from '../../utils/exportFormats';
 
@@ -9,10 +9,9 @@ export interface SegmentTimestampProps {
 }
 
 /**
- * Memoized timestamp display to prevent flickering during text updates.
- * Only re-renders when the start time changes.
+ * Timestamp display to seek to a specific audio position.
  */
-function SegmentTimestampComponent({ start, onSeek }: SegmentTimestampProps): React.JSX.Element {
+export function SegmentTimestamp({ start, onSeek }: SegmentTimestampProps): React.JSX.Element {
   const { t } = useTranslation();
 
   function handleClick(e: React.MouseEvent): void {
@@ -42,8 +41,3 @@ function SegmentTimestampComponent({ start, onSeek }: SegmentTimestampProps): Re
     </span>
   );
 }
-
-export const SegmentTimestamp = React.memo(
-  SegmentTimestampComponent,
-  (prevProps, nextProps) => prevProps.start === nextProps.start
-);
