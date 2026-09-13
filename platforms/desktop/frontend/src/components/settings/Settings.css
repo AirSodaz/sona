@@ -254,6 +254,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 12px;
 }
 
 .model-name {
@@ -270,22 +271,26 @@
 
 .model-tags {
   display: flex;
-  gap: 12px;
-  margin-top: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
+/* Borderless pill base; semantic tint variants live in SettingsShared.css.
+   The transparent border keeps every tag the same height as bordered ones. */
 .model-tag {
   background: var(--color-bg-secondary);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
 }
 
 .model-tag-overflow {
   cursor: help;
-  border-style: dashed;
+  background: transparent;
+  border: 1px dashed var(--color-border-hover);
 }
 
 .language-badges {
@@ -310,12 +315,6 @@
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   font-weight: normal;
   letter-spacing: normal;
-}
-
-.model-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
 }
 
 /* ===========================

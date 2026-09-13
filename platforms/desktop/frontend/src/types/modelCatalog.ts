@@ -19,6 +19,22 @@ export interface ModelArtifact {
   sizeBytes?: number;
 }
 
+/**
+ * Curated 1-5 quality hints rendered as dot meters on model cards. Values are
+ * relative within the preset catalog, not benchmark scores, and are optional
+ * so companion models can omit dimensions that make no sense for them.
+ */
+export interface ModelRatings {
+  accuracy?: number;
+  speed?: number;
+}
+
+/**
+ * Curated family-level marks shown as tags and used by the label filter:
+ * `accurate` for high-accuracy families, `lite` for lightweight ones.
+ */
+export type ModelLabel = 'accurate' | 'lite';
+
 export interface ModelInfo {
   id: string;
   name: string;
@@ -50,6 +66,8 @@ export interface ModelInfo {
   isArchive?: boolean;
   filename?: string;
   engine: 'sherpa-onnx' | 'llama-cpp';
+  ratings?: ModelRatings;
+  labels?: ModelLabel[];
   rules?: ModelRules;
   fileConfig?: ModelFileConfig;
   groupId?: string;
@@ -181,5 +199,19 @@ export const PRESET_MODELS: ModelInfo[] = presetModelsData as ModelInfo[];
 export const PRESET_MODELS_MAP: Map<string, ModelInfo> = new Map(
   PRESET_MODELS.map((model) => [model.id, model])
 );
+
+/**
+ * Snapshot models arrive from the Rust core without curated metadata, so
+ * callers fall back to the shared preset JSON bundled with the frontend. Once
+ * the core forwards these fields, the snapshot value wins.
+ */
+export function resolveModelRatings(model: ModelInfo): ModelRatings | undefined {
+  return model.ratings ?? PRESET_MODELS_MAP.get(model.id)?.ratings;
+}
+
+/** Same fallback strategy as resolveModelRatings, for family labels. */
+export function resolveModelLabels(model: ModelInfo): ModelLabel[] | undefined {
+  return model.labels ?? PRESET_MODELS_MAP.get(model.id)?.labels;
+}
 
 export type ProgressCallback = (percentage: number, status: string, isFinished?: boolean) => void;

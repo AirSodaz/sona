@@ -1,4 +1,4 @@
-import { Mic, PlaySquare, Settings2 } from 'lucide-react';
+import { Mic, PlaySquare, Search, Settings2 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { CudaAddonInspection } from '../../bindings';
@@ -21,8 +21,10 @@ import type { LocalAsrEngine } from '../../types/asr';
 import type {
   ModelCatalogModel,
   ModelCatalogSectionType,
+  ModelLabel,
   ModelSelectionOption,
 } from '../../types/modelCatalog';
+import { resolveModelLabels } from '../../types/modelCatalog';
 import { findSelectedModelByMode } from '../../utils/modelSelection';
 import {
   getScenarioVadBufferSize,
@@ -31,7 +33,7 @@ import {
 } from '../../utils/scenarioModels';
 import { markSettingsPerf } from '../../utils/settingsPerf';
 import { Dropdown, type DropdownOption } from '../Dropdown';
-import { ModelIcon, OnlineIcon, RestoreIcon } from '../Icons';
+import { ModelIcon, OnlineIcon, RestoreIcon, XIcon } from '../Icons';
 import { Switch } from '../Switch';
 import { ModelCard } from './ModelCard';
 import {
@@ -84,38 +86,15 @@ function toDropdownOptions(
     }));
 }
 
-interface LocalModelManagementSectionProps {
-  catalogLoadState: ReturnType<typeof useModelManagerContext>['catalogLoadState'];
-  catalogLoadError: ReturnType<typeof useModelManagerContext>['catalogLoadError'];
-  sectionProps: Pick<
-    ReturnType<typeof useModelManagerContext>,
-    'installedModels' | 'downloads' | 'handleDelete' | 'handleDownload' | 'handleCancelDownload'
-  >;
-  localModelActionsDisabled: boolean;
-  getSectionGroups: (
-    type: ModelCatalogSectionType
-  ) => ReturnType<typeof useModelManagerContext>['modelCatalog']['sections'][number]['groups'];
-  getSectionStatus: (type: ModelCatalogSectionType) => { type: string; text: string };
-  t: ReturnType<typeof useTranslation>['t'];
-}
-
-const LocalModelManagementSection = React.memo(function LocalModelManagementSection({
-  catalogLoadState,
-  catalogLoadError,
-  sectionProps,
-  localModelActionsDisabled,
-  getSectionGroups,
-  getSectionStatus,
-  t,
-}: LocalModelManagementSectionProps): React.JSX.Element {
+/**
+ * Section-level download-mirror picker. Rendered in the section header rather
+ * than the filter toolbar because it is a persistent download preference,
+ * not a filter criterion.
+ */
+function MirrorDownloadPicker(): React.JSX.Element {
+  const { t } = useTranslation();
   const modelConfig = useModelConfig();
   const updateConfig = useSetConfig();
-
-  const [engineFilter, setEngineFilter] = useState<'all' | LocalAsrEngine>('all');
-  const [statusFilter, setStatusFilter] = useState<
-    'all' | 'installed' | 'not-installed' | 'downloading'
-  >('all');
-  const [searchQuery, setSearchQuery] = useState('');
 
   const mirrorOptions: DropdownOption[] = useMemo(
     () => [
@@ -148,10 +127,62 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
     [t]
   );
 
+  return (
+    <div className="settings-mirror-picker">
+      <span className="settings-mirror-picker-label">{t('settings.model_download_mirror')}</span>
+      <Dropdown
+        id="settings-download-mirror"
+        aria-label={t('settings.model_download_mirror')}
+        value={modelConfig.modelDownloadMirror || 'auto'}
+        onChange={(value) => updateConfig({ modelDownloadMirror: value })}
+        options={mirrorOptions}
+        style={{ width: '150px' }}
+      />
+    </div>
+  );
+}
+
+interface LocalModelManagementSectionProps {
+  catalogLoadState: ReturnType<typeof useModelManagerContext>['catalogLoadState'];
+  catalogLoadError: ReturnType<typeof useModelManagerContext>['catalogLoadError'];
+  sectionProps: Pick<
+    ReturnType<typeof useModelManagerContext>,
+    'installedModels' | 'downloads' | 'handleDelete' | 'handleDownload' | 'handleCancelDownload'
+  >;
+  localModelActionsDisabled: boolean;
+  getSectionGroups: (
+    type: ModelCatalogSectionType
+  ) => ReturnType<typeof useModelManagerContext>['modelCatalog']['sections'][number]['groups'];
+  getSectionStatus: (type: ModelCatalogSectionType) => { type: string; text: string };
+  t: ReturnType<typeof useTranslation>['t'];
+}
+
+const LocalModelManagementSection = React.memo(function LocalModelManagementSection({
+  catalogLoadState,
+  catalogLoadError,
+  sectionProps,
+  localModelActionsDisabled,
+  getSectionGroups,
+  getSectionStatus,
+  t,
+}: LocalModelManagementSectionProps): React.JSX.Element {
+  const [engineFilter, setEngineFilter] = useState<'all' | LocalAsrEngine>('all');
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'installed' | 'not-installed' | 'downloading'
+  >('all');
+  const [labelFilter, setLabelFilter] = useState<'all' | ModelLabel>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
   const engineFilterOptions = [
     { value: 'all', label: t('settings.model_filter_engine_all', { defaultValue: '全部引擎' }) },
     { value: 'sherpa-onnx', label: 'ONNX' },
     { value: 'llama-cpp', label: 'GGUF' },
+  ];
+
+  const labelFilterOptions = [
+    { value: 'all', label: t('settings.model_filter_tag_all', { defaultValue: '全部标签' }) },
+    { value: 'accurate', label: t('settings.model_tag_accurate', { defaultValue: '准确' }) },
+    { value: 'lite', label: t('settings.model_tag_lite', { defaultValue: '轻量' }) },
   ];
 
   const statusFilterOptions = [
@@ -175,6 +206,10 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
       const query = searchQuery.trim().toLowerCase();
       return models.filter((model) => {
         if (engineFilter !== 'all' && model.engine !== engineFilter) return false;
+        // Snapshot models lack curated labels; fall back to the preset JSON.
+        if (labelFilter !== 'all' && !(resolveModelLabels(model) ?? []).includes(labelFilter)) {
+          return false;
+        }
         const isInstalled = sectionProps.installedModels.has(model.id);
         const isDownloading = !!sectionProps.downloads[model.id];
         if (statusFilter === 'installed' && !isInstalled) return false;
@@ -190,7 +225,14 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
         return true;
       });
     },
-    [engineFilter, searchQuery, statusFilter, sectionProps.downloads, sectionProps.installedModels]
+    [
+      engineFilter,
+      labelFilter,
+      searchQuery,
+      statusFilter,
+      sectionProps.downloads,
+      sectionProps.installedModels,
+    ]
   );
 
   const filteredGroupsByType = useMemo(() => {
@@ -226,6 +268,7 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
     <SettingsSection
       title={t('settings.batch_model_management', { defaultValue: '离线模型管理' })}
       icon={<RestoreIcon />}
+      actions={<MirrorDownloadPicker />}
     >
       {isCatalogReady && (
         <div className="settings-model-toolbar">
@@ -245,27 +288,41 @@ const LocalModelManagementSection = React.memo(function LocalModelManagementSect
             options={statusFilterOptions}
             style={{ width: '130px' }}
           />
-          <input
-            id="settings-model-search"
-            className="settings-input settings-model-search"
-            type="search"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder={t('settings.model_filter_search_placeholder', {
-              defaultValue: '搜索模型…',
-            })}
-            aria-label={t('settings.model_filter_search_placeholder', {
-              defaultValue: '搜索模型…',
-            })}
-          />
           <Dropdown
-            id="settings-download-mirror"
-            aria-label={t('settings.model_download_mirror')}
-            value={modelConfig.modelDownloadMirror || 'auto'}
-            onChange={(value) => updateConfig({ modelDownloadMirror: value })}
-            options={mirrorOptions}
-            style={{ width: '180px', marginLeft: 'auto' }}
+            id="settings-model-label-filter"
+            aria-label={t('settings.model_filter_tag_label', { defaultValue: '按标签筛选' })}
+            value={labelFilter}
+            onChange={(value) => setLabelFilter(value as 'all' | ModelLabel)}
+            options={labelFilterOptions}
+            style={{ width: '120px' }}
           />
+          <div className="settings-model-search-wrapper">
+            <Search size={14} className="settings-model-search-icon" />
+            <input
+              id="settings-model-search"
+              className="settings-input settings-model-search"
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder={t('settings.model_filter_search_placeholder', {
+                defaultValue: '搜索模型…',
+              })}
+              aria-label={t('settings.model_filter_search_placeholder', {
+                defaultValue: '搜索模型…',
+              })}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="settings-model-search-clear"
+                onClick={() => setSearchQuery('')}
+                aria-label={t('settings.model_search_clear', { defaultValue: '清除搜索' })}
+                data-tooltip={t('settings.model_search_clear', { defaultValue: '清除搜索' })}
+              >
+                <XIcon />
+              </button>
+            )}
+          </div>
         </div>
       )}
       {isCatalogLoading && (

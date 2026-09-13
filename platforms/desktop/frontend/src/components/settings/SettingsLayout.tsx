@@ -52,6 +52,8 @@ interface SettingsSectionProps {
   title?: string;
   description?: string;
   icon?: ReactNode;
+  /** Right-aligned header content (e.g. section-level pickers or actions). */
+  actions?: ReactNode;
   className?: string;
   contentClassName?: string;
   children: ReactNode;
@@ -61,6 +63,7 @@ export function SettingsSection({
   title,
   description,
   icon,
+  actions,
   className = '',
   contentClassName = '',
   children,
@@ -69,13 +72,16 @@ export function SettingsSection({
     <section className={`settings-section ${className}`.trim()}>
       {(title || description) && (
         <div className="settings-section-header">
-          {title && (
-            <div className="settings-section-title-wrapper">
-              {icon && <span className="settings-section-icon">{icon}</span>}
-              <span>{title}</span>
-            </div>
-          )}
-          {description && <div className="settings-section-description">{description}</div>}
+          <div className="settings-section-header-main">
+            {title && (
+              <div className="settings-section-title-wrapper">
+                {icon && <span className="settings-section-icon">{icon}</span>}
+                <span>{title}</span>
+              </div>
+            )}
+            {description && <div className="settings-section-description">{description}</div>}
+          </div>
+          {actions && <div className="settings-section-actions">{actions}</div>}
         </div>
       )}
       <div className={`settings-section-content ${contentClassName}`.trim()}>{children}</div>

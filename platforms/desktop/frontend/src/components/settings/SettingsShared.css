@@ -31,9 +31,39 @@
 
 .settings-section-header {
   display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md, 16px);
+  margin-bottom: var(--spacing-xs, 4px);
+}
+
+/* Title/description column; takes the full row when no actions are present. */
+.settings-section-header-main {
+  display: flex;
   flex-direction: column;
   gap: var(--spacing-xs, 4px);
-  margin-bottom: var(--spacing-xs, 4px);
+  flex: 1;
+  min-width: 0;
+}
+
+/* Right-aligned header slot for section-level pickers/actions. */
+.settings-section-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.settings-mirror-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+}
+
+.settings-mirror-picker-label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .settings-section-title-wrapper {
@@ -258,8 +288,62 @@
   background: var(--color-bg-primary);
 }
 
-.settings-model-toolbar .settings-model-search {
-  width: 200px;
+/* Search field with a leading icon and a clear button that appears on input. */
+.settings-model-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 160px;
+  max-width: 300px;
+}
+
+.settings-model-search-wrapper .settings-model-search {
+  width: 100%;
+  padding-left: 30px;
+  padding-right: 28px;
+}
+
+.settings-model-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+/* The custom clear button replaces the native search cancel affordance. */
+.settings-model-search::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.settings-model-search-clear {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast, 0.15s) ease,
+    color var(--transition-fast, 0.15s) ease;
+}
+
+.settings-model-search-clear:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.settings-model-search-clear svg {
+  width: 12px;
+  height: 12px;
 }
 
 .settings-model-empty {
@@ -404,15 +488,269 @@
   box-shadow: var(--shadow-sm);
   padding: var(--spacing-lg, 24px);
   margin-bottom: var(--spacing-sm, 8px);
-  transition: border-color var(--transition-fast, 150ms) ease;
+  transition:
+    border-color var(--transition-fast, 150ms) ease,
+    box-shadow var(--transition-fast, 150ms) ease;
 }
 
 .settings-section-content .accordion-content-panel .model-card:hover {
   border-color: var(--color-border-hover);
+  box-shadow: var(--shadow-md);
 }
 
 .settings-section-content .accordion-content-panel .model-card:last-child {
   margin-bottom: 0;
+}
+
+/* --- Model card internals --- */
+.model-card-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.model-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.model-card-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Family tag row: group-level tags left, one rating set right-aligned. */
+.model-card-tags-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.model-card-side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.model-size {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* Status chip in the card header: install state is visible at a glance. */
+.model-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 2px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.model-status-chip svg {
+  width: 11px;
+  height: 11px;
+}
+
+.model-status-installed {
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: color-mix(in srgb, var(--color-success) 82%, var(--color-text-primary) 18%);
+}
+
+.model-status-downloading {
+  background: color-mix(in srgb, var(--color-info) 12%, transparent);
+  color: color-mix(in srgb, var(--color-info) 85%, var(--color-text-primary) 15%);
+}
+
+.model-status-not-installed {
+  background: transparent;
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+}
+
+/* Semantic tag tints: scenario, engine, recommendation. */
+.model-tag-mode {
+  background: color-mix(in srgb, var(--color-info) 10%, transparent);
+  color: color-mix(in srgb, var(--color-info) 85%, var(--color-text-primary) 15%);
+}
+
+.model-tag-engine {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.model-tag-recommended {
+  background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+  color: color-mix(in srgb, var(--color-warning) 62%, var(--color-text-primary) 38%);
+}
+
+/* Curated family labels: accurate = success tint, lite = quiet accent tint. */
+.model-tag-accurate {
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: color-mix(in srgb, var(--color-success) 82%, var(--color-text-primary) 18%);
+}
+
+.model-tag-lite {
+  background: color-mix(in srgb, var(--color-accent-primary) 8%, transparent);
+  color: color-mix(in srgb, var(--color-accent-primary) 80%, var(--color-text-primary) 20%);
+}
+
+/* Curated 1-5 quality hints as dot meters. */
+.model-ratings {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.model-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.model-rating-label {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.model-rating-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.model-rating-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-bg-tertiary);
+}
+
+.model-rating-dot.filled {
+  background: var(--color-accent-primary);
+}
+
+/* Multi-version rows: hairline-separated, hover-reactive mini rows. */
+.model-versions {
+  display: flex;
+  flex-direction: column;
+}
+
+.model-version-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 6px;
+  margin: 0 -6px;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast, 0.15s) ease;
+}
+
+.model-version-row + .model-version-row {
+  border-top: 1px solid var(--color-border);
+}
+
+.model-version-row:hover {
+  background: var(--color-bg-hover);
+}
+
+.model-version-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* Rows already provide vertical rhythm; the progress block adds its own
+   margin otherwise. */
+.model-version-row .progress-container-mini {
+  margin-top: 0;
+}
+
+.model-version-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.model-version-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.model-version-check {
+  width: 13px;
+  height: 13px;
+  color: var(--color-success);
+}
+
+/* Ghost icon button for card actions: borderless, quiet, 28×28 square.
+   Download/cancel use the neutral hover; delete adds the danger variant. */
+.model-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background var(--transition-fast, 0.15s) ease,
+    color var(--transition-fast, 0.15s) ease;
+}
+
+.model-action-icon:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.model-action-icon:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.model-action-icon:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
+}
+
+.model-action-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Delete only signals danger on hover, staying quiet the rest of the time. */
+.model-action-delete:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
+  color: var(--color-error);
 }
 
 /* --- Premium Settings Items inside accordion panels --- */

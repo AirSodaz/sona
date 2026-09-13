@@ -17,6 +17,10 @@
     ],
     "languageMode": "selectable",
     "size": "~228 MB",
+    "ratings": {
+      "accuracy": 3,
+      "speed": 5
+    },
     "isRecommended": true,
     "engine": "sherpa-onnx",
     "rules": {
@@ -43,7 +47,11 @@
       "tokens": "tokens.txt"
     },
     "groupId": "sensevoice",
-    "versionLabel": "Int8"
+    "versionLabel": "Int8",
+    "labels": [
+      "accurate",
+      "lite"
+    ]
   },
   {
     "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
@@ -63,6 +71,10 @@
     ],
     "languageMode": "selectable",
     "size": "~894 MB",
+    "ratings": {
+      "accuracy": 3,
+      "speed": 5
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -88,7 +100,11 @@
       "tokens": "tokens.txt"
     },
     "groupId": "sensevoice",
-    "versionLabel": "Fp32"
+    "versionLabel": "Fp32",
+    "labels": [
+      "accurate",
+      "lite"
+    ]
   },
   {
     "id": "qwen3-asr-0.6b-q8-gguf",
@@ -132,6 +148,10 @@
     ],
     "languageMode": "auto",
     "size": "~1.02 GB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 4
+    },
     "isRecommended": true,
     "isArchive": false,
     "engine": "llama-cpp",
@@ -159,7 +179,10 @@
       "mmproj": "mmproj-Qwen3-ASR-0.6B-Q8_0.gguf"
     },
     "groupId": "qwen3-asr",
-    "versionLabel": "0.6B Q8_0"
+    "versionLabel": "0.6B Q8_0",
+    "labels": [
+      "accurate"
+    ]
   },
   {
     "id": "qwen3-asr-1.7b-q8-gguf",
@@ -203,6 +226,10 @@
     ],
     "languageMode": "auto",
     "size": "~2.52 GB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 4
+    },
     "isArchive": false,
     "engine": "llama-cpp",
     "rules": {
@@ -229,7 +256,10 @@
       "mmproj": "mmproj-Qwen3-ASR-1.7B-Q8_0.gguf"
     },
     "groupId": "qwen3-asr",
-    "versionLabel": "1.7B Q8_0"
+    "versionLabel": "1.7B Q8_0",
+    "labels": [
+      "accurate"
+    ]
   },
   {
     "id": "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25",
@@ -274,6 +304,10 @@
     ],
     "languageMode": "auto",
     "size": "~987 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 4
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -326,7 +360,10 @@
       "tokenizer": "tokenizer"
     },
     "groupId": "qwen3-asr",
-    "versionLabel": "0.6B Int8 (ONNX)"
+    "versionLabel": "0.6B Int8",
+    "labels": [
+      "accurate"
+    ]
   },
   {
     "id": "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26",
@@ -343,6 +380,10 @@
     ],
     "languageMode": "auto",
     "size": "~1.23 GB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 3
+    },
     "isRecommended": true,
     "engine": "sherpa-onnx",
     "rules": {
@@ -377,7 +418,10 @@
       "tokens": "tokens.txt"
     },
     "groupId": "firered-asr2-aed",
-    "versionLabel": "Int8"
+    "versionLabel": "Int8",
+    "labels": [
+      "accurate"
+    ]
   },
   {
     "id": "sherpa-onnx-fire-red-asr2-zh_en-2026-02-26",
@@ -394,6 +438,10 @@
     ],
     "languageMode": "auto",
     "size": "~4.69 GB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 3
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -433,7 +481,10 @@
       "tokens": "tokens.txt"
     },
     "groupId": "firered-asr2-aed",
-    "versionLabel": "Fp32"
+    "versionLabel": "Fp32",
+    "labels": [
+      "accurate"
+    ]
   },
   {
     "id": "sherpa-onnx-whisper-turbo",
@@ -548,6 +599,10 @@
     ],
     "languageMode": "selectable",
     "size": "~1.04 GB",
+    "ratings": {
+      "accuracy": 3,
+      "speed": 4
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -696,6 +751,10 @@
     ],
     "languageMode": "selectable",
     "size": "~1.78 GB",
+    "ratings": {
+      "accuracy": 3,
+      "speed": 4
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -746,6 +805,10 @@
     ],
     "languageMode": "selectable",
     "size": "~946 MB",
+    "ratings": {
+      "accuracy": 3,
+      "speed": 4
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -822,6 +885,10 @@
     ],
     "languageMode": "auto",
     "size": "~1.03 GB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 3
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -891,6 +958,10 @@
     ],
     "languageMode": "auto",
     "size": "~3.90 GB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 2
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -940,6 +1011,10 @@
     ],
     "languageMode": "auto",
     "size": "~227 MB",
+    "ratings": {
+      "accuracy": 3,
+      "speed": 5
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": false,
@@ -989,6 +1064,10 @@
     ],
     "languageMode": "auto",
     "size": "~825 MB",
+    "ratings": {
+      "accuracy": 3,
+      "speed": 5
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": false,
@@ -1039,6 +1118,10 @@
     ],
     "languageMode": "selectable",
     "size": "~1.01 GB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 3
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -1091,7 +1174,10 @@
       "tokenizer": "Qwen3-0.6B"
     },
     "groupId": "funasr-nano",
-    "versionLabel": "Int8"
+    "versionLabel": "Int8",
+    "labels": [
+      "accurate"
+    ]
   },
   {
     "id": "sherpa-onnx-funasr-nano-fp16-2025-12-30",
@@ -1109,6 +1195,10 @@
     ],
     "languageMode": "selectable",
     "size": "~1.60 GB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 3
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -1161,7 +1251,10 @@
       "tokenizer": "Qwen3-0.6B"
     },
     "groupId": "funasr-nano",
-    "versionLabel": "Fp16"
+    "versionLabel": "Fp16",
+    "labels": [
+      "accurate"
+    ]
   },
   {
     "id": "sherpa-onnx-funasr-nano-2025-12-30",
@@ -1179,6 +1272,10 @@
     ],
     "languageMode": "selectable",
     "size": "~3.95 GB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 3
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -1237,7 +1334,10 @@
       "tokenizer": "Qwen3-0.6B"
     },
     "groupId": "funasr-nano",
-    "versionLabel": "Fp32"
+    "versionLabel": "Fp32",
+    "labels": [
+      "accurate"
+    ]
   },
   {
     "id": "sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30",
@@ -1252,6 +1352,10 @@
     ],
     "languageMode": "fixed",
     "size": "~771 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 4
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": false,
@@ -1335,6 +1439,10 @@
     ],
     "languageMode": "auto",
     "size": "~670 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -1415,6 +1523,10 @@
     ],
     "languageMode": "auto",
     "size": "~2.55 GB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 3
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -1516,6 +1628,10 @@
     ],
     "languageMode": "auto",
     "size": "~250 MB",
+    "ratings": {
+      "accuracy": 3,
+      "speed": 5
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -1541,7 +1657,10 @@
       "tokens": "tokens.txt"
     },
     "groupId": "dolphin",
-    "versionLabel": "Int8"
+    "versionLabel": "Int8",
+    "labels": [
+      "lite"
+    ]
   },
   {
     "id": "sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02",
@@ -1596,6 +1715,10 @@
     ],
     "languageMode": "auto",
     "size": "~821 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 4
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -1621,7 +1744,10 @@
       "tokens": "tokens.txt"
     },
     "groupId": "dolphin",
-    "versionLabel": "Fp32"
+    "versionLabel": "Fp32",
+    "labels": [
+      "lite"
+    ]
   },
   {
     "id": "sherpa-onnx-moonshine-base-zh-quantized-2026-02-27",
@@ -1638,6 +1764,10 @@
     ],
     "languageMode": "auto",
     "size": "~141 MB",
+    "ratings": {
+      "accuracy": 2,
+      "speed": 5
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -1671,7 +1801,10 @@
       "tokens": "tokens.txt"
     },
     "groupId": "moonshine-v2",
-    "versionLabel": "Base Zh Quantized"
+    "versionLabel": "Base Zh Quantized",
+    "labels": [
+      "lite"
+    ]
   },
   {
     "id": "sherpa-onnx-moonshine-base-en-quantized-2026-02-27",
@@ -1687,6 +1820,10 @@
     ],
     "languageMode": "fixed",
     "size": "~141 MB",
+    "ratings": {
+      "accuracy": 2,
+      "speed": 5
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -1720,7 +1857,10 @@
       "tokens": "tokens.txt"
     },
     "groupId": "moonshine-v2",
-    "versionLabel": "Base En Quantized"
+    "versionLabel": "Base En Quantized",
+    "labels": [
+      "lite"
+    ]
   },
   {
     "id": "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27",
@@ -1736,6 +1876,10 @@
     ],
     "languageMode": "fixed",
     "size": "~44 MB",
+    "ratings": {
+      "accuracy": 2,
+      "speed": 5
+    },
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,
@@ -1769,7 +1913,10 @@
       "tokens": "tokens.txt"
     },
     "groupId": "moonshine-v2",
-    "versionLabel": "Tiny En Quantized"
+    "versionLabel": "Tiny En Quantized",
+    "labels": [
+      "lite"
+    ]
   },
   {
     "id": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8",
@@ -1779,6 +1926,10 @@
     "languages": [],
     "languageMode": "none",
     "size": "~299 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 4
+    },
     "engine": "sherpa-onnx",
     "artifacts": [
       {
@@ -1803,6 +1954,10 @@
     "languages": [],
     "languageMode": "none",
     "size": "~6.0 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
     "rules": {
       "requiresVad": false,
       "requiresPunctuation": false
@@ -1825,6 +1980,10 @@
     "languages": [],
     "languageMode": "none",
     "size": "~9.5 MB",
+    "ratings": {
+      "accuracy": 3,
+      "speed": 5
+    },
     "rules": {
       "requiresVad": false,
       "requiresPunctuation": false
@@ -1847,6 +2006,10 @@
     "languages": [],
     "languageMode": "none",
     "size": "~393 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 4
+    },
     "rules": {
       "requiresVad": false,
       "requiresPunctuation": false
@@ -1869,6 +2032,10 @@
     "languages": [],
     "languageMode": "none",
     "size": "~28 MB",
+    "ratings": {
+      "accuracy": 3,
+      "speed": 5
+    },
     "isArchive": false,
     "filename": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
     "rules": {
@@ -1893,6 +2060,10 @@
     "languages": [],
     "languageMode": "none",
     "size": "~71 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
     "isArchive": false,
     "filename": "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
     "rules": {
@@ -1917,6 +2088,10 @@
     "languages": [],
     "languageMode": "none",
     "size": "~116 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 4
+    },
     "isArchive": false,
     "filename": "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
     "rules": {
@@ -1941,6 +2116,10 @@
     "languages": [],
     "languageMode": "none",
     "size": "~221 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 3
+    },
     "isArchive": false,
     "filename": "3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
     "rules": {
@@ -1965,6 +2144,10 @@
     "languages": [],
     "languageMode": "none",
     "size": "~1.8 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
     "isArchive": false,
     "filename": "silero_vad.onnx",
     "engine": "sherpa-onnx",
@@ -1985,6 +2168,10 @@
     "languages": [],
     "languageMode": "none",
     "size": "~315 KB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
     "isArchive": false,
     "filename": "ten-vad.onnx",
     "engine": "sherpa-onnx",
@@ -2005,6 +2192,10 @@
     "languages": [],
     "languageMode": "none",
     "size": "~2.3 MB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 5
+    },
     "isArchive": false,
     "filename": "silero_vad_v5.onnx",
     "engine": "sherpa-onnx",

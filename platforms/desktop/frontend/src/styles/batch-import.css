@@ -303,6 +303,12 @@
   color: var(--color-text-secondary);
 }
 
+/* Leading status line inside .progress-info-mini (e.g. current chunk). */
+.progress-status-mini {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
 .progress-bar-mini {
   height: 6px;
   background: var(--color-bg-tertiary);
