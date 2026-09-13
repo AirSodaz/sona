@@ -1729,7 +1729,7 @@
       {
         "url": "https://huggingface.co/csukuangfj/sherpa-onnx-dolphin-small-ctc-multi-lang-2025-04-02/resolve/main/model.onnx",
         "filename": "model.onnx",
-        "sha256": "18fbe954bc67761066c07153a71b2d71590fc3a0bcf5e06a3bfad87c2b5368a4",
+        "sha256": "72eedbd3a2199c1d92011a8c21328e54646e7323e0cf282220283b9cd9b2c7fa",
         "sizeBytes": 820945619
       },
       {
@@ -1919,8 +1919,8 @@
     ]
   },
   {
-    "id": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8",
-    "name": "Punctuation - CT Transformer (Int8)",
+    "id": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12",
+    "name": "Punctuation - CT Transformer",
     "description": "settings.descriptions.ct_punctuation",
     "type": "punctuation",
     "languages": [],
@@ -1935,7 +1935,7 @@
       {
         "url": "https://huggingface.co/csukuangfj/sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12/resolve/main/model.onnx",
         "filename": "model.onnx",
-        "sha256": "3b8ef4a444a77e9bc4bc0a67977462cb3d950ec63ad46cf67f62dff788cb974b",
+        "sha256": "e93593a6dbd69a07f8734ef269dbe861a379755f8d1c8354719432116f2c44bd",
         "sizeBytes": 294372519
       },
       {
@@ -1967,7 +1967,7 @@
       {
         "url": "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/main/model.onnx",
         "filename": "model.onnx",
-        "sha256": "64a78189679f29ae0069c9b4e3e3b33df1972b22bb8db33aa9655f466472fa41",
+        "sha256": "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079",
         "sizeBytes": 5992913
       }
     ]
@@ -1993,7 +1993,7 @@
       {
         "url": "https://huggingface.co/csukuangfj/sherpa-onnx-reverb-diarization-v1/resolve/main/model.onnx",
         "filename": "model.onnx",
-        "sha256": "6b889396f42c161947fb72a29ef19baeeecdbf27a692a831e5083ef2882aa7ad",
+        "sha256": "8249e2e323f8fb0566a387d94b40a73d0b75d54ee60d02dcd729a56a5ba8ecea",
         "sizeBytes": 9512223
       }
     ]
@@ -2019,7 +2019,7 @@
       {
         "url": "https://huggingface.co/csukuangfj/sherpa-onnx-reverb-diarization-v2/resolve/main/model.onnx",
         "filename": "model.onnx",
-        "sha256": "7f171060938ff5d5ca3518a287fa327c1f8a846c434cf092780e816a7f50a80e",
+        "sha256": "1823794e58b63c721450a69f79799ba56a3c81e8d65021fb23096cbd569145f7",
         "sizeBytes": 392921403
       }
     ]
@@ -2047,7 +2047,7 @@
       {
         "url": "https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
         "filename": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
-        "sha256": "2a98f192b02f83d9aa17865c3bb56093959c5d1223945d8b8a07ad99c15d4fc2",
+        "sha256": "aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2",
         "sizeBytes": 28281164
       }
     ]
@@ -2075,7 +2075,7 @@
       {
         "url": "https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
         "filename": "3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx",
-        "sha256": "18f7fba0b9a6fe402d28bb5a6dfceb2a472c694a15993708a283b8d601b099d0",
+        "sha256": "bf1a75b9930474cf3389ef415e6e5d38ca96fea4a3a00f7e301d080a58ee2239",
         "sizeBytes": 71441526
       }
     ]
@@ -2103,7 +2103,7 @@
       {
         "url": "https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
         "filename": "3dspeaker_speech_eres2net_large_sv_zh-cn_3dspeaker_16k.onnx",
-        "sha256": "b91f09cfa35a49c6934c9c34f2d93e15b5e39695669527f078d46df34ffea210",
+        "sha256": "19547e85b6c14ec44b8add4e7cb9ce353c7e995d4f1c9ffd408176ac3a2d6895",
         "sizeBytes": 116058710
       }
     ]
@@ -2131,7 +2131,7 @@
       {
         "url": "https://huggingface.co/csukuangfj/speaker-embedding-models/resolve/main/3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
         "filename": "3dspeaker_speech_eres2net_sv_zh-cn_16k-common.onnx",
-        "sha256": "d9fa2435d886981881735d4f3b7db2eb2aa0ba09c55b62b168925239e2c668ec",
+        "sha256": "2b9c4219b25326473524f006f1a09050ac28ccaf58c1f7dbc53e7631fa2fb1df",
         "sizeBytes": 220623485
       }
     ]
@@ -2155,7 +2155,7 @@
       {
         "url": "https://huggingface.co/csukuangfj/vad/resolve/main/silero_vad.onnx",
         "filename": "silero_vad.onnx",
-        "sha256": "ad338b7d41f39185a0ca06b3a3ab8ba1a8626f212267f8152541c8fc02804b40",
+        "sha256": "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28",
         "sizeBytes": 1807522
       }
     ]
@@ -2179,7 +2179,7 @@
       {
         "url": "https://huggingface.co/TigreGotico/ten-vad-onnx/resolve/main/ten-vad.onnx",
         "filename": "ten-vad.onnx",
-        "sha256": "145942475a8a1eb2a0e28d5786ba1ea94fe3d1ce0340dbdb4066916893e36e1b",
+        "sha256": "e10b98a0cab1c98e847fbdda14cb3d45a38336d47535a3f63a0fb6c4e0f4cdf4",
         "sizeBytes": 315449
       }
     ]
@@ -2203,7 +2203,7 @@
       {
         "url": "https://huggingface.co/csukuangfj/vad/resolve/main/silero_vad_v5.onnx",
         "filename": "silero_vad_v5.onnx",
-        "sha256": "e06c7104b2b62145e54d3cb863779e563adfa955f269a84a6fbfe4d87cf0a604",
+        "sha256": "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396",
         "sizeBytes": 2313101
       }
     ]

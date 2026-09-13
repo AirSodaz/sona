@@ -57,7 +57,7 @@ export function VolcengineSettingsCard({ provider }: ProviderSettingsProps) {
     >
       <SettingsItem
         title={t('settings.asr.api_key', { defaultValue: 'API Key' })}
-        hint={t('settings.asr.api_key_hint', {
+        hint={t('settings.asr.volcengine_api_key_hint', {
           defaultValue: '新版控制台的 X-Api-Key；不会写入日志。',
         })}
       >
@@ -141,7 +141,7 @@ export function GroqWhisperSettingsCard({ provider }: ProviderSettingsProps) {
     >
       <SettingsItem
         title={t('settings.asr.api_key', { defaultValue: 'API Key' })}
-        hint={t('settings.asr.api_key_hint', { defaultValue: '不写入日志' })}
+        hint={t('settings.asr.api_key_hint', { defaultValue: '不会写入日志。' })}
       >
         <div style={{ width: '320px' }}>
           <input

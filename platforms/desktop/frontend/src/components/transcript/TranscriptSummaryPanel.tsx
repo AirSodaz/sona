@@ -18,6 +18,8 @@ interface TranscriptSummaryPanelProps {
   onClose: () => void;
 }
 
+const SUMMARY_MANUAL_HINT_DISMISSED_KEY = 'sona_summary_manual_hint_dismissed';
+
 /**
  * Modal dialog for displaying and generating transcript summaries.
  */
@@ -43,10 +45,26 @@ export function TranscriptSummaryPanel({
   const [copied, setCopied] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isManualHintDismissed, setIsManualHintDismissed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(SUMMARY_MANUAL_HINT_DISMISSED_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
   const copyResetTimerRef = useRef<number | null>(null);
   const editContentRef = useRef('');
   const lastSavedContentRef = useRef('');
   const saveInFlightRef = useRef<Promise<void> | null>(null);
+
+  const handleDismissManualHint = useCallback(() => {
+    setIsManualHintDismissed(true);
+    try {
+      localStorage.setItem(SUMMARY_MANUAL_HINT_DISMISSED_KEY, 'true');
+    } catch {
+      // Quietly ignore storage errors
+    }
+  }, []);
 
   const summaryConfigComplete = isSummaryLlmConfigComplete(config);
   const activeTemplate = useMemo(
@@ -409,7 +427,7 @@ export function TranscriptSummaryPanel({
           </div>
         </div>
 
-        {!summaryConfigComplete && (
+        {!summaryConfigComplete && !isManualHintDismissed && (
           <div
             style={{
               margin: '0 var(--spacing-lg)',
@@ -421,12 +439,29 @@ export function TranscriptSummaryPanel({
               color: 'var(--color-text-secondary)',
               fontSize: '0.8125rem',
               lineHeight: 1.5,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 'var(--spacing-md)',
             }}
           >
-            {t('summary.manual_only_hint', {
-              defaultValue:
-                'Configure an LLM service to generate summaries. You can still write and edit this summary manually.',
-            })}
+            <span>
+              {t('summary.manual_only_hint', {
+                defaultValue:
+                  'Configure an LLM service to generate summaries. You can still write and edit this summary manually.',
+              })}
+            </span>
+            <button
+              type="button"
+              className="btn-icon-sm"
+              onClick={handleDismissManualHint}
+              aria-label={t('common.dismiss', { defaultValue: 'Dismiss' })}
+              data-tooltip={t('common.dismiss', { defaultValue: 'Dismiss' })}
+              data-tooltip-pos="left"
+              style={{ flexShrink: 0 }}
+            >
+              <XIcon width={14} height={14} />
+            </button>
           </div>
         )}
 

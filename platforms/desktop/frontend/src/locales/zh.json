@@ -454,6 +454,7 @@
     "exit_to_inbox": "退出到 Inbox",
     "create_action": "创建项目",
     "new_project_button": "新建项目",
+    "open_projects_center": "打开项目中心",
     "new_project_title": "新建项目",
     "new_project_name": "项目名称",
     "new_project_description": "简短描述",
@@ -1370,6 +1371,9 @@
     "not_installed": "未安装",
     "downloading_progress": "正在下载 ({{progress}}%)",
     "asr": {
+      "api_key": "API 密钥",
+      "api_key_hint": "不会写入日志。",
+      "volcengine_api_key_hint": "新版控制台的 X-Api-Key；不会写入日志。",
       "volcengine_doubao_option": "豆包语音 (火山)",
       "volcengine_title": "豆包语音 (火山)",
       "groq_whisper_option": "Whisper (Groq)",
@@ -1429,7 +1433,7 @@
       "parakeet_tdt": "由 NVIDIA 开发的高性能多语言语音识别模型，基于 FastConformer 与标记持续时间变换器（TDT）架构，具备极速批量转写能力，原生支持 25 种欧洲语言并自带标点符号与大小写。",
       "moonshine": "由 Useful Sensors 开发。专为边缘设备优化的轻量级、超快速本地语音识别模型，具备极低的推理延迟与资源占用。",
       "omnilingual_asr": "由 Meta AI (FAIR) 开发。覆盖 1,600 多种语言的大规模多语种语音识别模型，基于 Wav2Vec 2.0 与 CTC 架构，具备极速离线转写能力。",
-      "ct_punctuation": "为原始语音转录结果添加准确的标点符号。使用 Int8 量化进行了优化。",
+      "ct_punctuation": "为原始语音转录结果添加准确的标点符号。",
       "silero_vad": "由 Silero 开发。高度准确的语音活动检测 (VAD) 模型，可将音频分割为语音和静音。",
       "ten_vad": "由 TEN 开发。轻量、高精度的语音活动检测（VAD）模型，可将音频分割为语音和静音。",
       "silero_v5_vad": "由 Silero 开发。高精度语音活动检测（VAD）模型的第 5 版，可将音频分割为语音和静音。",
@@ -2121,7 +2125,8 @@
       "polish": "润色前",
       "translate": "翻译前",
       "retranscribe": "重新转录前",
-      "restore": "恢复前"
+      "restore": "恢复前",
+      "manual_edit": "手动编辑前"
     },
     "diff": {
       "unchanged": "未变化",

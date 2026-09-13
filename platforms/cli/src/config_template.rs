@@ -20,13 +20,13 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 
 # gpu_acceleration = "auto"
 # vad_model_id = "silero-vad"
-# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
+# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12"
 
 [transcribe]
 # models_dir = "..."
 # gpu_acceleration = "auto"
 # vad_model_id = "silero-vad"
-# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
+# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12"
 # model_id = "sherpa-onnx-whisper-turbo"
 # language = "auto"
 # threads = 4
@@ -49,7 +49,7 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # models_dir = "..."
 # gpu_acceleration = "auto"
 # vad_model_id = "silero-vad"
-# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
+# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12"
 # model_id = "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"
 # language = "auto"
 # threads = 4
@@ -62,7 +62,7 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # models_dir = "..."
 # gpu_acceleration = "auto"
 # vad_model_id = "silero-vad"
-# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8"
+# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12"
 # host = "127.0.0.1"
 # port = 14200
 # api_key = ""

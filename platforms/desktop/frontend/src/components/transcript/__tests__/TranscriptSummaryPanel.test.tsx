@@ -66,6 +66,7 @@ function createSummaryReadyConfig() {
 
 describe('TranscriptSummaryPanel', () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.clearAllMocks();
     mockLoadSummary.mockResolvedValue(undefined);
     mockSetActiveTemplate.mockResolvedValue(undefined);
@@ -311,5 +312,30 @@ describe('TranscriptSummaryPanel', () => {
       (screen.getByRole('button', { name: 'summary.generate' }) as HTMLButtonElement).disabled
     ).toBe(true);
     screen.getByRole('textbox');
+  });
+
+  it('allows dismissing the manual-only hint', async () => {
+    const readyConfig = createSummaryReadyConfig();
+    useTranscriptStore.setState({
+      segments: [{ id: '1', text: 'Transcript text', start: 0, end: 1, isFinal: true }],
+      config: {
+        ...readyConfig,
+        llmSettings: updateProviderSetting(readyConfig.llmSettings, 'open_ai', {
+          apiHost: 'https://api.openai.com',
+          apiKey: '',
+        }),
+      },
+    });
+
+    render(<TranscriptSummaryPanel isOpen={true} onClose={mockOnClose} />);
+
+    expect(screen.getByText('summary.manual_only_hint')).toBeDefined();
+    const dismissBtn = screen.getByRole('button', { name: 'common.dismiss' });
+    await act(async () => {
+      fireEvent.click(dismissBtn);
+    });
+
+    expect(screen.queryByText('summary.manual_only_hint')).toBeNull();
+    expect(localStorage.getItem('sona_summary_manual_hint_dismissed')).toBe('true');
   });
 });

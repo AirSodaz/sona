@@ -454,6 +454,7 @@
     "exit_to_inbox": "Exit to Inbox",
     "create_action": "Create Project",
     "new_project_button": "New Project",
+    "open_projects_center": "Open Project Center",
     "new_project_title": "New Project",
     "new_project_name": "Project name",
     "new_project_description": "Short description",
@@ -1370,6 +1371,9 @@
     "not_installed": "Not installed",
     "downloading_progress": "Downloading ({{progress}}%)",
     "asr": {
+      "api_key": "API Key",
+      "api_key_hint": "Not written to logs.",
+      "volcengine_api_key_hint": "X-Api-Key from the new console. Not written to logs.",
       "volcengine_doubao_option": "Doubao (Volcengine)",
       "volcengine_title": "Doubao (Volcengine)",
       "groq_whisper_option": "Whisper (Groq)",
@@ -1429,7 +1433,7 @@
       "parakeet_tdt": "Developed by NVIDIA. A high-performance multilingual ASR model based on FastConformer and Token-and-Duration Transducer (TDT), featuring ultra-fast batch transcription and built-in punctuation for 25 European languages.",
       "moonshine": "Developed by Useful Sensors. A lightweight, ultra-fast on-device ASR model optimized for edge devices and real-time speech transcription.",
       "omnilingual_asr": "Developed by Meta AI (FAIR). A massive multilingual ASR model supporting over 1,600 languages based on Wav2Vec 2.0 and CTC architecture for ultra-fast offline transcription.",
-      "ct_punctuation": "Adds accurate punctuation and capitalization to raw speech transcripts. Optimized with Int8 quantization.",
+      "ct_punctuation": "Adds accurate punctuation and capitalization to raw speech transcripts.",
       "silero_vad": "Developed by Silero. Highly accurate Voice Activity Detection (VAD) model to segment audio into speech and silence.",
       "ten_vad": "Developed by TEN. Lightweight, high-precision Voice Activity Detection (VAD) model that segments audio into speech and silence.",
       "silero_v5_vad": "Developed by Silero. Version 5 of the highly accurate Voice Activity Detection (VAD) model that segments audio into speech and silence.",
@@ -2124,7 +2128,8 @@
       "polish": "Before Polish",
       "translate": "Before Translation",
       "retranscribe": "Before Re-transcribe",
-      "restore": "Before Restore"
+      "restore": "Before Restore",
+      "manual_edit": "Before Manual Edit"
     },
     "diff": {
       "unchanged": "Unchanged",

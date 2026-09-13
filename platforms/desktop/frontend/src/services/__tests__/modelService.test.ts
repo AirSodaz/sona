@@ -516,7 +516,7 @@ describe('ModelService', () => {
       const silero = PRESET_MODELS.find((model) => model.id === 'silero-vad');
 
       expect(silero?.artifacts?.[0]).toMatchObject({
-        sha256: 'ad338b7d41f39185a0ca06b3a3ab8ba1a8626f212267f8152541c8fc02804b40',
+        sha256: 'a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28',
       });
       expect(singleFileModels.length).toBeGreaterThan(0);
       expect(
@@ -598,7 +598,7 @@ describe('ModelService', () => {
           artifacts: [
             expect.objectContaining({
               filename: 'model.onnx',
-              sha256: '64a78189679f29ae0069c9b4e3e3b33df1972b22bb8db33aa9655f466472fa41',
+              sha256: '220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079',
             }),
           ],
           type: 'speaker-segmentation',
@@ -609,7 +609,7 @@ describe('ModelService', () => {
           artifacts: [
             expect.objectContaining({
               filename: 'model.onnx',
-              sha256: '6b889396f42c161947fb72a29ef19baeeecdbf27a692a831e5083ef2882aa7ad',
+              sha256: '8249e2e323f8fb0566a387d94b40a73d0b75d54ee60d02dcd729a56a5ba8ecea',
             }),
           ],
           type: 'speaker-segmentation',
@@ -620,7 +620,7 @@ describe('ModelService', () => {
           artifacts: [
             expect.objectContaining({
               filename: 'model.onnx',
-              sha256: '7f171060938ff5d5ca3518a287fa327c1f8a846c434cf092780e816a7f50a80e',
+              sha256: '1823794e58b63c721450a69f79799ba56a3c81e8d65021fb23096cbd569145f7',
             }),
           ],
           type: 'speaker-segmentation',

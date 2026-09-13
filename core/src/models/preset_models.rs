@@ -15,7 +15,7 @@ const DEFAULT_SENSEVOICE_FP32_MODEL_ID: &str = "sherpa-onnx-sense-voice-zh-en-ja
 
 pub const DEFAULT_SILERO_VAD_MODEL_ID: &str = "silero-v5-vad";
 pub const DEFAULT_PUNCTUATION_MODEL_ID: &str =
-    "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12-int8";
+    "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12";
 
 /// Default model rules used when a preset omits explicit requirements.
 pub const DEFAULT_MODEL_RULES: ModelRules = ModelRules {
