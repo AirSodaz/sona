@@ -57,7 +57,9 @@ export function FeatureCard({
   const currentLlmState = getCurrentLlmSettings(config);
   const latestLlmStateRef = useRef(currentLlmState);
   const isMountedRef = useRef(true);
-  latestLlmStateRef.current = currentLlmState;
+  useEffect(() => {
+    latestLlmStateRef.current = currentLlmState;
+  });
   const applyTrackedLlmSettings = useCallback(
     (nextSettings: LlmAssistantConfig['llmSettings']) => {
       if (nextSettings) {
@@ -183,8 +185,6 @@ export function FeatureCard({
     localProvider === selectedProvider ? localModelName || selectedModel : localModelName,
     localProvider === selectedProvider ? modelEntry?.metadata : undefined
   );
-  const providerApiHost = currentLlmState.providers[localProvider]?.apiHost;
-  const providerApiKey = currentLlmState.providers[localProvider]?.apiKey;
 
   const providerOptions = useMemo(() => {
     const filtered = listProviderDefinitions(currentLlmState.customProviders).filter((p) => {
@@ -282,7 +282,7 @@ export function FeatureCard({
         setIsLoadingCandidates(false);
       }
     },
-    [applyTrackedLlmSettings]
+    [applyTrackedLlmSettings, featureId]
   );
 
   useEffect(() => {
@@ -301,15 +301,7 @@ export function FeatureCard({
     queueMicrotask(() => {
       void fetchModelCandidates(localProvider);
     });
-  }, [
-    currentLlmState,
-    fetchModelCandidates,
-    isActive,
-    localProvider,
-    persistedProviderModels,
-    providerApiHost,
-    providerApiKey,
-  ]);
+  }, [currentLlmState, fetchModelCandidates, isActive, localProvider, persistedProviderModels]);
 
   const commitModelChange = (providerToSave: LlmProvider, modelToSave: string) => {
     const trimmedModel = modelToSave.trim();

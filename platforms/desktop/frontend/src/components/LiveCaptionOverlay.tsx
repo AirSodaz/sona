@@ -32,7 +32,7 @@ export function LiveCaptionOverlay({
 
   // Auto-scroll to bottom when new segments arrive
   useEffect(() => {
-    if (containerRef.current) {
+    if (containerRef.current && visibleSegments.length > 0) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
   }, [visibleSegments]);

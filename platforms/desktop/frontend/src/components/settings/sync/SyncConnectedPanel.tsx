@@ -134,6 +134,10 @@ export function SyncConnectedPanel({
   const [isKeyRevealed, setIsKeyRevealed] = React.useState(false);
 
   React.useEffect(() => {
+    if (!status.vaultId) {
+      setPairingInfo(null);
+      return;
+    }
     let active = true;
     getSyncPairingInfo()
       .then((info) => {

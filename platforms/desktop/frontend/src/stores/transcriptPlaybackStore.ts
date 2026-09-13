@@ -48,47 +48,49 @@ function getFacadeState(state: TranscriptStore): PlaybackStoreState {
   return cachedFacadeState;
 }
 
+export const transcriptPlaybackStore = {
+  getState: () => getFacadeState(useTranscriptStore.getState()),
+  setState: (
+    updater:
+      | Partial<PlaybackStoreState>
+      | ((state: PlaybackStoreState) => Partial<PlaybackStoreState>)
+  ) => {
+    const currentFacadeState = transcriptPlaybackStore.getState();
+    const updates = typeof updater === 'function' ? updater(currentFacadeState) : updater;
+
+    useTranscriptStore.setState((s) => ({
+      sessions: {
+        ...s.sessions,
+        [s.activeSessionId]: {
+          ...(s.sessions[s.activeSessionId] || {}),
+          ...updates,
+        },
+      },
+    }));
+  },
+  subscribe: (listener: (state: PlaybackStoreState, prevState: PlaybackStoreState) => void) => {
+    let lastSessionId = useTranscriptStore.getState().activeSessionId;
+    let lastActiveSession = useTranscriptStore.getState().sessions[lastSessionId];
+    let lastFullState = transcriptPlaybackStore.getState();
+
+    return useTranscriptStore.subscribe((state) => {
+      const nextSessionId = state.activeSessionId;
+      const nextActiveSession = state.sessions[nextSessionId];
+
+      if (nextActiveSession !== lastActiveSession || nextSessionId !== lastSessionId) {
+        const nextFullState = transcriptPlaybackStore.getState();
+        listener(nextFullState, lastFullState);
+        lastActiveSession = nextActiveSession;
+        lastSessionId = nextSessionId;
+        lastFullState = nextFullState;
+      }
+    });
+  },
+};
+
 export const useTranscriptPlaybackStore = Object.assign(
   <T>(selector: (state: PlaybackStoreState) => T) => {
     return useTranscriptStore((state) => selector(getFacadeState(state)));
   },
-  {
-    getState: () => getFacadeState(useTranscriptStore.getState()),
-    setState: (
-      updater:
-        | Partial<PlaybackStoreState>
-        | ((state: PlaybackStoreState) => Partial<PlaybackStoreState>)
-    ) => {
-      const currentFacadeState = useTranscriptPlaybackStore.getState();
-      const updates = typeof updater === 'function' ? updater(currentFacadeState) : updater;
-
-      useTranscriptStore.setState((s) => ({
-        sessions: {
-          ...s.sessions,
-          [s.activeSessionId]: {
-            ...(s.sessions[s.activeSessionId] || {}),
-            ...updates,
-          },
-        },
-      }));
-    },
-    subscribe: (listener: (state: PlaybackStoreState, prevState: PlaybackStoreState) => void) => {
-      let lastSessionId = useTranscriptStore.getState().activeSessionId;
-      let lastActiveSession = useTranscriptStore.getState().sessions[lastSessionId];
-      let lastFullState = useTranscriptPlaybackStore.getState();
-
-      return useTranscriptStore.subscribe((state) => {
-        const nextSessionId = state.activeSessionId;
-        const nextActiveSession = state.sessions[nextSessionId];
-
-        if (nextActiveSession !== lastActiveSession || nextSessionId !== lastSessionId) {
-          const nextFullState = useTranscriptPlaybackStore.getState();
-          listener(nextFullState, lastFullState);
-          lastActiveSession = nextActiveSession;
-          lastSessionId = nextSessionId;
-          lastFullState = nextFullState;
-        }
-      });
-    },
-  }
+  transcriptPlaybackStore
 );

@@ -48,7 +48,7 @@ export function useReadonlySegmentContextMenu({
 
   useEffect(
     () => () => {
-      if (ownsMenuRef.current) {
+      if (contextId && ownsMenuRef.current) {
         closeContextMenu();
       }
     },

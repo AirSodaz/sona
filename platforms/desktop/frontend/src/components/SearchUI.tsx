@@ -42,7 +42,7 @@ export function SearchUI(): React.JSX.Element | null {
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && typeof query === 'string') {
       performSearch(segments);
     }
   }, [isOpen, performSearch, query, segments]);

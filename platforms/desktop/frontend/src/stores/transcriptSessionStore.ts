@@ -73,47 +73,47 @@ function getFacadeState(state: TranscriptStore): SessionStoreState {
   return cachedFacadeState;
 }
 
+export const transcriptSessionStore = {
+  getState: () => getFacadeState(useTranscriptStore.getState()),
+  setState: (
+    updater: Partial<SessionStoreState> | ((state: SessionStoreState) => Partial<SessionStoreState>)
+  ) => {
+    const currentFacadeState = transcriptSessionStore.getState();
+    const updates = typeof updater === 'function' ? updater(currentFacadeState) : updater;
+
+    useTranscriptStore.setState((s) => ({
+      sessions: {
+        ...s.sessions,
+        [s.activeSessionId]: {
+          ...(s.sessions[s.activeSessionId] || {}),
+          ...updates,
+        },
+      },
+    }));
+  },
+  subscribe: (listener: (state: SessionStoreState, prevState: SessionStoreState) => void) => {
+    let lastSessionId = useTranscriptStore.getState().activeSessionId;
+    let lastActiveSession = useTranscriptStore.getState().sessions[lastSessionId];
+    let lastFullState = transcriptSessionStore.getState();
+
+    return useTranscriptStore.subscribe((state) => {
+      const nextSessionId = state.activeSessionId;
+      const nextActiveSession = state.sessions[nextSessionId];
+
+      if (nextActiveSession !== lastActiveSession || nextSessionId !== lastSessionId) {
+        const nextFullState = transcriptSessionStore.getState();
+        listener(nextFullState, lastFullState);
+        lastActiveSession = nextActiveSession;
+        lastSessionId = nextSessionId;
+        lastFullState = nextFullState;
+      }
+    });
+  },
+};
+
 export const useTranscriptSessionStore = Object.assign(
   <T>(selector: (state: SessionStoreState) => T) => {
     return useTranscriptStore((state) => selector(getFacadeState(state)));
   },
-  {
-    getState: () => getFacadeState(useTranscriptStore.getState()),
-    setState: (
-      updater:
-        | Partial<SessionStoreState>
-        | ((state: SessionStoreState) => Partial<SessionStoreState>)
-    ) => {
-      const currentFacadeState = useTranscriptSessionStore.getState();
-      const updates = typeof updater === 'function' ? updater(currentFacadeState) : updater;
-
-      useTranscriptStore.setState((s) => ({
-        sessions: {
-          ...s.sessions,
-          [s.activeSessionId]: {
-            ...(s.sessions[s.activeSessionId] || {}),
-            ...updates,
-          },
-        },
-      }));
-    },
-    subscribe: (listener: (state: SessionStoreState, prevState: SessionStoreState) => void) => {
-      let lastSessionId = useTranscriptStore.getState().activeSessionId;
-      let lastActiveSession = useTranscriptStore.getState().sessions[lastSessionId];
-      let lastFullState = useTranscriptSessionStore.getState();
-
-      return useTranscriptStore.subscribe((state) => {
-        const nextSessionId = state.activeSessionId;
-        const nextActiveSession = state.sessions[nextSessionId];
-
-        if (nextActiveSession !== lastActiveSession || nextSessionId !== lastSessionId) {
-          const nextFullState = useTranscriptSessionStore.getState();
-          listener(nextFullState, lastFullState);
-          lastActiveSession = nextActiveSession;
-          lastSessionId = nextSessionId;
-          lastFullState = nextFullState;
-        }
-      });
-    },
-  }
+  transcriptSessionStore
 );

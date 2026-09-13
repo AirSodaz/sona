@@ -48,7 +48,7 @@ export function SegmentEditorContextMenuPlugin({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (ownsMenuRef.current) {
+      if (contextId && ownsMenuRef.current) {
         closeContextMenu();
       }
     };

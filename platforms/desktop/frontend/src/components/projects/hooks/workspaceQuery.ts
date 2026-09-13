@@ -212,6 +212,7 @@ export function useWorkspaceQuery({
   const isInitialLoading = !hasCurrentSnapshot && !initialLoadError;
 
   useEffect(() => {
+    if (retryAttempt < 0) return;
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
     loadingMoreRef.current = false;

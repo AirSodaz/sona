@@ -1,6 +1,6 @@
 import { Type } from 'lucide-react';
 import type React from 'react';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BatchImport } from './components/BatchImport';
 import { ErrorDialog } from './components/ErrorDialog';
@@ -123,7 +123,7 @@ function App(): React.JSX.Element {
     void preloadSettingsTab(tab);
   };
 
-  const preloadAllSettings = () => {
+  const preloadAllSettings = useCallback(() => {
     markSettingsPerf('settings.preload.all.start');
     void loadSettingsModule()
       .then(() => preloadAllSettingsTabs())
@@ -135,7 +135,7 @@ function App(): React.JSX.Element {
       .catch((error) => {
         markSettingsPerf('settings.preload.all.fail', getSettingsPerfErrorDetail(error));
       });
-  };
+  }, []);
 
   const setPreloadedSettingsInitialTab = (tab: SettingsTab) => {
     preloadSettings(tab);
@@ -149,7 +149,7 @@ function App(): React.JSX.Element {
     if (!isLoaded) return;
 
     preloadAllSettings();
-  }, [isLoaded]);
+  }, [isLoaded, preloadAllSettings]);
 
   const openDefaultSettings = () => {
     markSettingsPerf('settings.open.default.click', { tab: 'general', source: 'header' });

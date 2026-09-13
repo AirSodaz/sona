@@ -78,8 +78,8 @@ export function Modal({
     const updateHeight = () => {
       if (!modalRef.current) return;
 
-      const headerH = headerRef.current?.offsetHeight || 0;
-      const footerH = footerRef.current?.offsetHeight || 0;
+      const headerH = (hasTitle && headerRef.current?.offsetHeight) || 0;
+      const footerH = (hasFooter && footerRef.current?.offsetHeight) || 0;
       const bodyContentH = bodyContentRef.current?.offsetHeight || 0;
 
       if (cachedPaddingTotal === null && bodyContentRef.current?.parentElement) {
@@ -112,9 +112,9 @@ export function Modal({
 
     const observer = new ResizeObserver(updateHeight);
 
-    if (headerRef.current) observer.observe(headerRef.current);
+    if (hasTitle && headerRef.current) observer.observe(headerRef.current);
     if (bodyContentRef.current) observer.observe(bodyContentRef.current);
-    if (footerRef.current) observer.observe(footerRef.current);
+    if (hasFooter && footerRef.current) observer.observe(footerRef.current);
 
     // Initial measurement
     const timeoutId = setTimeout(updateHeight, 0);

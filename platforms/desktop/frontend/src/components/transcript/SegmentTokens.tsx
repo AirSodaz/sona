@@ -157,7 +157,7 @@ function TokenList({
 
           return (
             <span
-              key={i}
+              key={`${tokenObj.start}-${tokenObj.end}-${i}`}
               className={className}
               data-tooltip={formatDisplayTime(tokenObj.start)}
               data-tooltip-pos="top"

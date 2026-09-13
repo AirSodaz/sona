@@ -87,8 +87,10 @@ export function ProviderDetailsModal({
   const latestLlmStateRef = useRef(currentLlmState);
   const isMountedRef = useRef(true);
   const openProviderRef = useRef({ isOpen, provider });
-  latestLlmStateRef.current = currentLlmState;
-  openProviderRef.current = { isOpen, provider };
+  useEffect(() => {
+    latestLlmStateRef.current = currentLlmState;
+    openProviderRef.current = { isOpen, provider };
+  });
   const savedModelCount = providerModels.length;
 
   const applyTrackedLlmSettings = useCallback(
@@ -279,11 +281,12 @@ export function ProviderDetailsModal({
         },
       }));
     } catch (error) {
+      const message = normalizeError(error).message;
       setModelTests((current) => ({
         ...current,
         [entry.id]: {
           status: 'error',
-          message: normalizeError(error).message,
+          message,
         },
       }));
     }

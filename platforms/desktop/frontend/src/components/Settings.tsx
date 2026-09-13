@@ -1,6 +1,6 @@
 import { BarChart3, Cloud, HardDrive, Server } from 'lucide-react';
 import type React from 'react';
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
@@ -235,14 +235,17 @@ export function Settings({
     [mountedTabs, renderedTab, shouldRender]
   );
 
-  const navigateToTab = (nextTab: (typeof SETTINGS_TABS)[number]) => {
-    markSettingsPerf('settings.tab.click', { tab: nextTab, previousTab: renderedTab });
-    setActiveTab(nextTab);
-    requestAnimationFrame(() => {
-      const btn = document.getElementById(`settings-tab-${nextTab}`);
-      btn?.focus();
-    });
-  };
+  const navigateToTab = useCallback(
+    (nextTab: (typeof SETTINGS_TABS)[number]) => {
+      markSettingsPerf('settings.tab.click', { tab: nextTab, previousTab: renderedTab });
+      setActiveTab(nextTab);
+      requestAnimationFrame(() => {
+        const btn = document.getElementById(`settings-tab-${nextTab}`);
+        btn?.focus();
+      });
+    },
+    [renderedTab, setActiveTab]
+  );
   const navigationContextValue = {
     activeTab: renderedTab,
     navigateToTab,
@@ -254,7 +257,7 @@ export function Settings({
   // Reset scroll position on active tab change
   useEffect(() => {
     if (!isOpen) return;
-    if (scrollContainerRef.current) {
+    if (activeTab && scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0;
     }
   }, [activeTab, isOpen]);

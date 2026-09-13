@@ -193,7 +193,7 @@ export function SyncConflictCenter({
   }, [reportError]);
 
   React.useEffect(() => {
-    const timer = isOpen ? setTimeout(() => void loadSummaries(), 0) : null;
+    const timer = isOpen && conflictCount >= 0 ? setTimeout(() => void loadSummaries(), 0) : null;
     return () => {
       if (timer) {
         clearTimeout(timer);

@@ -71,7 +71,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
   }, [isRecording]);
 
   useEffect(() => {
-    if (!isRecording) {
+    if (focusStartRecordingToken && !isRecording) {
       startButtonRef.current?.focus();
     }
   }, [focusStartRecordingToken, isRecording]);

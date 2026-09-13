@@ -68,6 +68,17 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
   }, [isCaptionMode, startCaptionSession, stopCaptionSession]);
 
   useEffect(() => {
+    const _recognizerConfig = [
+      config.streamingModelPath,
+      config.asr,
+      config.language,
+      config.enableITN,
+      config.livePunctuationModelPath,
+      config.liveVadModelPath,
+      config.liveVadBufferSize,
+    ];
+    void _recognizerConfig;
+
     async function restartCaptionRecognizer(): Promise<void> {
       if (!isCaptionMode || isInitializing) {
         return;

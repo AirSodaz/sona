@@ -196,7 +196,7 @@ export function TranscriptSummaryPanel({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleCloseRequest, isOpen]);
+  }, [isOpen]);
 
   useEffect(
     () => () => {

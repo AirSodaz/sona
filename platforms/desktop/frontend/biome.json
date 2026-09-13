@@ -62,7 +62,7 @@
         "useFocusableInteractive": "off"
       },
       "correctness": {
-        "useExhaustiveDependencies": "off"
+        "useExhaustiveDependencies": "error"
       },
       "security": {
         "noDangerouslySetInnerHtml": "off",

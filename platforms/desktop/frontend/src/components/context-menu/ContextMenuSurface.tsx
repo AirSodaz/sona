@@ -30,6 +30,7 @@ export function ContextMenuSurface({
   );
 
   useLayoutEffect(() => {
+    if (actions.length === 0) return;
     const firstEnabledItem = getEnabledItems()[0];
     if (firstEnabledItem) {
       firstEnabledItem.focus();

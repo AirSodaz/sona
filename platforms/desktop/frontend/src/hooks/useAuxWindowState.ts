@@ -115,7 +115,7 @@ export function useAuxWindowState<T extends { revision: number }>(
         unlisten();
       }
     };
-  }, [defaultState.revision, eventName, label]);
+  }, [eventName, label]);
 
   return state;
 }

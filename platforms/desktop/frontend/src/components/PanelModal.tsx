@@ -1,5 +1,3 @@
-/* eslint-disable react-hooks/immutability */
-
 import { ArrowLeft, X } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -84,13 +82,7 @@ export function PanelModal({
 
   const internalRef = React.useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
-    if (typeof shellRef === 'function') {
-      shellRef(internalRef.current);
-    } else if (shellRef) {
-      (shellRef as React.MutableRefObject<HTMLDivElement | null>).current = internalRef.current;
-    }
-  }, [shellRef]);
+  React.useImperativeHandle(shellRef, () => internalRef.current as HTMLDivElement);
 
   useFocusTrap(isOpen, onClose, internalRef);
 

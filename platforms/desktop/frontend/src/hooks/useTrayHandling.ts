@@ -23,6 +23,7 @@ export function useTrayHandling(
 
   // Update tray menu language when locale changes or caption state changes
   useEffect(() => {
+    if (!i18n.language) return;
     const updateTray = async () => {
       try {
         await updateTrayMenu({

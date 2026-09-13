@@ -136,7 +136,9 @@ export function VoiceTypingOverlay() {
   }, [isSegment, overlayState.revision, overlayState.sessionId, phase, text]);
 
   useEffect(() => {
-    void resizeVoiceTypingWindow(rootRef.current);
+    if (displayText !== undefined || phase !== undefined || resolvedTheme !== undefined) {
+      void resizeVoiceTypingWindow(rootRef.current);
+    }
   }, [displayText, phase, resolvedTheme]);
 
   let containerStyle: CSSProperties;

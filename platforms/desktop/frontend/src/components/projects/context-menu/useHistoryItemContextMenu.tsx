@@ -388,6 +388,7 @@ export function useHistoryItemContextMenu({
       });
     },
     [
+      getItemById,
       isAllSelected,
       isLockedLiveDraft,
       isOpenDisabled,

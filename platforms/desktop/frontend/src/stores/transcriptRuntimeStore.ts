@@ -13,13 +13,15 @@ export function getActiveEditor(): LexicalEditor | null {
   return activeEditor;
 }
 
+export const transcriptRuntimeStore = {
+  getState: () => useTranscriptStore.getState(),
+  setState: useTranscriptStore.setState,
+  subscribe: useTranscriptStore.subscribe,
+};
+
 export const useTranscriptRuntimeStore = Object.assign(
   <T>(selector: (state: TranscriptStore) => T) => {
     return useTranscriptStore(selector);
   },
-  {
-    getState: () => useTranscriptStore.getState(),
-    setState: useTranscriptStore.setState,
-    subscribe: useTranscriptStore.subscribe,
-  }
+  transcriptRuntimeStore
 );

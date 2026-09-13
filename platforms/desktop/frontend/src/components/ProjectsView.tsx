@@ -53,11 +53,13 @@ interface WorkspaceMenuSnapshot {
   revision: string;
 }
 
-function getLiveDraftLockState(): LiveDraftLockState {
-  const { isRecording } = useTranscriptRuntimeStore.getState();
-  const { sourceHistoryId } = useTranscriptSessionStore.getState();
+function getLiveDraftLockState(
+  isRecording = useTranscriptRuntimeStore.getState().isRecording,
+  sourceHistoryId = useTranscriptSessionStore.getState().sourceHistoryId,
+  historyItems = useHistoryStore.getState().items
+): LiveDraftLockState {
   const sourceItem = sourceHistoryId
-    ? useHistoryStore.getState().items.find((item) => item.id === sourceHistoryId)
+    ? historyItems.find((item) => item.id === sourceHistoryId)
     : null;
 
   return {
@@ -76,21 +78,28 @@ function createWorkspaceMenuRevision(
   browseScope: string,
   viewMode: string,
   isSelectionMode: boolean,
-  isActive: boolean
+  isActive: boolean,
+  historyItems = useHistoryStore.getState().items,
+  projects = useProjectStore.getState().projects,
+  lockState?: LiveDraftLockState
 ): string {
   const historyPrefix = 'workspace:history:';
   const projectPrefix = 'workspace:project:';
-  const historyState = useHistoryStore.getState();
-  const projectState = useProjectStore.getState();
-  const lockState = getLiveDraftLockState();
+  const resolvedLockState =
+    lockState ??
+    getLiveDraftLockState(
+      useTranscriptRuntimeStore.getState().isRecording,
+      useTranscriptSessionStore.getState().sourceHistoryId,
+      historyItems
+    );
   let target: unknown = null;
 
   if (contextId.startsWith(historyPrefix)) {
     const id = contextId.slice(historyPrefix.length);
-    target = historyState.items.find((item) => item.id === id) ?? null;
+    target = historyItems.find((item) => item.id === id) ?? null;
   } else if (contextId.startsWith(projectPrefix)) {
     const id = contextId.slice(projectPrefix.length);
-    target = projectState.projects.find((project) => project.id === id) ?? null;
+    target = projects.find((project) => project.id === id) ?? null;
   }
 
   return JSON.stringify({
@@ -99,7 +108,7 @@ function createWorkspaceMenuRevision(
     viewMode,
     isSelectionMode,
     isActive,
-    lockState,
+    lockState: resolvedLockState,
   });
 }
 
@@ -284,12 +293,16 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return;
     }
 
+    const lockState = getLiveDraftLockState(isRecording, sourceHistoryId, historyItems);
     const latestRevision = createWorkspaceMenuRevision(
       activeContextId,
       browseState.browseScope,
       viewMode,
       selectionState.isSelectionMode,
-      isActive
+      isActive,
+      historyItems,
+      projects,
+      lockState
     );
     if (latestRevision !== snapshot.revision) {
       closeContextMenu();

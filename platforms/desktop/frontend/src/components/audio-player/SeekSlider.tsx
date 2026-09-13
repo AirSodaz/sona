@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useEffect, useRef } from 'react';
-import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
+import { transcriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { formatDisplayTime } from '../../utils/exportFormats';
 
 /** Props for the SeekSlider component. */
@@ -23,13 +23,13 @@ export function SeekSlider({ duration, onSeek, seekLabel }: SeekSliderProps): Re
 
   useEffect(() => {
     if (inputRef.current) {
-      const currentTime = useTranscriptPlaybackStore.getState().currentTime;
+      const currentTime = transcriptPlaybackStore.getState().currentTime;
       inputRef.current.value = String(currentTime);
       inputRef.current.setAttribute('aria-valuenow', String(currentTime));
       inputRef.current.setAttribute('aria-valuetext', formatDisplayTime(currentTime));
     }
 
-    const unsubscribe = useTranscriptPlaybackStore.subscribe((state, prevState) => {
+    const unsubscribe = transcriptPlaybackStore.subscribe((state, prevState) => {
       if (state.currentTime === prevState.currentTime) return;
 
       const time = state.currentTime;
@@ -68,7 +68,7 @@ export function SeekSlider({ duration, onSeek, seekLabel }: SeekSliderProps): Re
       min={0}
       max={duration || 0}
       step={0.1}
-      defaultValue={useTranscriptPlaybackStore.getState().currentTime}
+      defaultValue={0}
       onChange={handleChange}
       onMouseDown={handleInteractionStart}
       onMouseUp={handleInteractionEnd}

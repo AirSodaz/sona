@@ -455,9 +455,6 @@ export function SettingsMicrophoneTab({
     };
   }, [
     arePreviewDependenciesReady,
-    canReusePersistentVoiceTypingMic,
-    isActiveSession,
-    isActiveTab,
     microphoneId,
     shouldRunActiveEffects,
     startMicrophonePreview,

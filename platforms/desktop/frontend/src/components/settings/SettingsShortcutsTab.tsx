@@ -109,10 +109,10 @@ export function SettingsShortcutsTab(): React.JSX.Element {
         description={t('settings.shortcuts_description')}
       />
 
-      {sections.map((section, index) => (
-        <SettingsSection key={index} title={section.title} icon={section.icon}>
-          {section.items.map((item, i) => (
-            <SettingsItem key={i} title={item.description}>
+      {sections.map((section) => (
+        <SettingsSection key={section.title} title={section.title} icon={section.icon}>
+          {section.items.map((item) => (
+            <SettingsItem key={item.id} title={item.description}>
               {item.editable && item.id === 'liveRecordShortcut' ? (
                 <SettingsShortcutInput
                   value={config.liveRecordShortcut || 'Ctrl + Space'}
@@ -124,7 +124,7 @@ export function SettingsShortcutsTab(): React.JSX.Element {
                   style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}
                 >
                   {item.key.split(' / ').map((k, kIndex, arr) => (
-                    <React.Fragment key={kIndex}>
+                    <React.Fragment key={`${item.id}-${k}-${kIndex}`}>
                       <kbd className="kbd">{k}</kbd>
                       {kIndex < arr.length - 1 && <span className="text-muted mx-1">/</span>}
                     </React.Fragment>

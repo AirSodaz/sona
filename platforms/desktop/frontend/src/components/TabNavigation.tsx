@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -27,33 +27,36 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
   const mode = useTranscriptRuntimeStore((state) => state.mode);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
 
-  const handleTabChange = (newMode: AppMode) => {
-    if (mode === newMode) {
-      if (newMode === 'projects') {
-        document.querySelector('.projects-main-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
-        document.querySelector('.projects-rail-list')?.scrollTo({ top: 0, behavior: 'smooth' });
-      } else if (newMode === 'batch') {
-        document.querySelector('.queue-list')?.scrollTo({ top: 0, behavior: 'smooth' });
+  const handleTabChange = useCallback(
+    (newMode: AppMode) => {
+      if (mode === newMode) {
+        if (newMode === 'projects') {
+          document.querySelector('.projects-main-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
+          document.querySelector('.projects-rail-list')?.scrollTo({ top: 0, behavior: 'smooth' });
+        } else if (newMode === 'batch') {
+          document.querySelector('.queue-list')?.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        return;
       }
-      return;
-    }
-    setMode(newMode);
+      setMode(newMode);
 
-    if (newMode === 'live') {
-      const recordingSessionId = useTranscriptStore.getState().recordingSessionId;
-      useTranscriptStore.setState({ activeSessionId: recordingSessionId || 'default' });
-    }
+      if (newMode === 'live') {
+        const recordingSessionId = useTranscriptStore.getState().recordingSessionId;
+        useTranscriptStore.setState({ activeSessionId: recordingSessionId || 'default' });
+      }
 
-    if (newMode === 'batch') {
-      const activeItemId = useBatchQueueStore.getState().activeItemId;
-      if (activeItemId) {
-        const sessions = useTranscriptStore.getState().sessions;
-        if (sessions[activeItemId]) {
-          useTranscriptStore.setState({ activeSessionId: activeItemId });
+      if (newMode === 'batch') {
+        const activeItemId = useBatchQueueStore.getState().activeItemId;
+        if (activeItemId) {
+          const sessions = useTranscriptStore.getState().sessions;
+          if (sessions[activeItemId]) {
+            useTranscriptStore.setState({ activeSessionId: activeItemId });
+          }
         }
       }
-    }
-  };
+    },
+    [mode, setMode]
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

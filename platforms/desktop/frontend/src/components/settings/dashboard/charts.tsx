@@ -83,7 +83,7 @@ function DashboardTooltip({
 
         return (
           <div
-            key={`${entry.name ?? 'value'}-${index}`}
+            key={entry.dataKey ? String(entry.dataKey) : entry.name || `row-${index}`}
             className="settings-dashboard-chart-tooltip-row"
           >
             <span

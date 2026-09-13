@@ -101,7 +101,7 @@ export function useFirstRunGuide() {
   }, [config.microphoneId, isOpen]);
 
   useEffect(() => {
-    if (!isOpen || currentStep !== 'microphone') {
+    if (!isOpen || currentStep !== 'microphone' || microphoneRefreshToken < 0) {
       return;
     }
 

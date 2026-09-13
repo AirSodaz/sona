@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LANGUAGE_OPTIONS } from '../constants/languages';
 import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llm/configUtils';
@@ -58,10 +58,10 @@ export function TranslateButton({
     return [];
   });
 
-  const closeMenu = () => {
+  const closeMenu = useCallback(() => {
     setIsOpen(false);
     setSearchQuery('');
-  };
+  }, []);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -112,7 +112,7 @@ export function TranslateButton({
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen]);
+  }, [isOpen, closeMenu]);
 
   // Focus management when opening
   useEffect(() => {

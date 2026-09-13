@@ -61,7 +61,7 @@ export function ErrorDialog(): React.JSX.Element | null {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, close]);
+  }, [isOpen]);
 
   useEscapeKey(
     (e) => {

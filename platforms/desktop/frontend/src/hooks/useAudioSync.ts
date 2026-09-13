@@ -57,14 +57,16 @@ export function useAudioSync({
 
   // Reset duration when audioUrl changes
   useEffect(() => {
-    setDuration(0);
-    lastUpdateTimeRef.current = 0;
+    if (audioUrl !== undefined) {
+      setDuration(0);
+      lastUpdateTimeRef.current = 0;
+    }
   }, [audioUrl, setDuration, lastUpdateTimeRef]);
 
   // Handle audio events
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || audioUrl === undefined) return;
 
     const handleTimeUpdate = () => {
       // This updates the store, triggering re-renders in subscribers (TimeDisplay, SeekSlider)
