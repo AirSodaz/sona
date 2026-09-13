@@ -1597,6 +1597,30 @@ class LiveRecordingCoordinatorTest {
         assertEquals(1, fakes.calls.count { it == "microphone.stop" })
     }
 
+    @Test
+    fun `pause and resume update recording state and ignore audio frames while paused`() = runTest {
+        val fakes = RecordingFakes()
+        val coordinator = createCoordinator(fakes, backgroundScope)
+
+        coordinator.start()
+        runCurrent()
+        val initialRecording = coordinator.state.value as LiveRecordingState.Recording
+        assertFalse(initialRecording.isPaused)
+
+        coordinator.pause()
+        runCurrent()
+        val pausedRecording = coordinator.state.value as LiveRecordingState.Recording
+        assertTrue(pausedRecording.isPaused)
+
+        coordinator.resume()
+        runCurrent()
+        val resumedRecording = coordinator.state.value as LiveRecordingState.Recording
+        assertFalse(resumedRecording.isPaused)
+
+        coordinator.stop()
+        runCurrent()
+    }
+
     private fun segment(id: String, text: String): TranscriptSegment = TranscriptSegment(
         id = id,
         text = text,

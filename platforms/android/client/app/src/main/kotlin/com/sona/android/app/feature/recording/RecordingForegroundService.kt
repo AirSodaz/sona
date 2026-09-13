@@ -63,6 +63,8 @@ class RecordingForegroundService : Service() {
             when (intent?.action) {
                 ACTION_START -> session.start()
                 ACTION_STOP -> session.stop()
+                ACTION_PAUSE -> session.pause()
+                ACTION_RESUME -> session.resume()
                 else -> finishService()
             }
         } catch (_: Exception) {
@@ -115,6 +117,18 @@ class RecordingForegroundService : Service() {
             intent(this, ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val pauseIntent = PendingIntent.getService(
+            this,
+            PAUSE_RECORDING_REQUEST_CODE,
+            intent(this, ACTION_PAUSE),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val resumeIntent = PendingIntent.getService(
+            this,
+            RESUME_RECORDING_REQUEST_CODE,
+            intent(this, ACTION_RESUME),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_recording)
             .setContentTitle(BuildConfig.APP_NAME)
@@ -125,12 +139,40 @@ class RecordingForegroundService : Service() {
             .setOnlyAlertOnce(true)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .apply {
-                if (phase != RecordingNotificationPhase.STOPPING) {
-                    addAction(
-                        R.drawable.ic_notification_stop,
-                        getString(R.string.recording_notification_stop),
-                        stopIntent,
-                    )
+                when (phase) {
+                    RecordingNotificationPhase.RECORDING,
+                    RecordingNotificationPhase.AUDIO_ONLY -> {
+                        addAction(
+                            R.drawable.ic_notification_pause,
+                            getString(R.string.recording_notification_pause),
+                            pauseIntent,
+                        )
+                        addAction(
+                            R.drawable.ic_notification_stop,
+                            getString(R.string.recording_notification_stop),
+                            stopIntent,
+                        )
+                    }
+                    RecordingNotificationPhase.PAUSED -> {
+                        addAction(
+                            R.drawable.ic_notification_resume,
+                            getString(R.string.recording_notification_resume),
+                            resumeIntent,
+                        )
+                        addAction(
+                            R.drawable.ic_notification_stop,
+                            getString(R.string.recording_notification_stop),
+                            stopIntent,
+                        )
+                    }
+                    RecordingNotificationPhase.PREPARING -> {
+                        addAction(
+                            R.drawable.ic_notification_stop,
+                            getString(R.string.recording_notification_stop),
+                            stopIntent,
+                        )
+                    }
+                    RecordingNotificationPhase.STOPPING -> Unit
                 }
             }
             .build()
@@ -164,6 +206,7 @@ class RecordingForegroundService : Service() {
         @StringRes get() = when (this) {
             RecordingNotificationPhase.PREPARING -> R.string.recording_notification_preparing
             RecordingNotificationPhase.RECORDING -> R.string.recording_notification_active
+            RecordingNotificationPhase.PAUSED -> R.string.recording_notification_paused
             RecordingNotificationPhase.AUDIO_ONLY -> R.string.recording_notification_audio_only
             RecordingNotificationPhase.STOPPING -> R.string.recording_notification_stopping
         }
@@ -171,10 +214,14 @@ class RecordingForegroundService : Service() {
     companion object {
         internal const val ACTION_START = "com.sona.android.action.START_RECORDING"
         internal const val ACTION_STOP = "com.sona.android.action.STOP_RECORDING"
+        internal const val ACTION_PAUSE = "com.sona.android.action.PAUSE_RECORDING"
+        internal const val ACTION_RESUME = "com.sona.android.action.RESUME_RECORDING"
         private const val NOTIFICATION_CHANNEL_ID = "recording"
         private const val NOTIFICATION_ID = 1001
         private const val OPEN_APP_REQUEST_CODE = 1001
         private const val STOP_RECORDING_REQUEST_CODE = 1002
+        private const val PAUSE_RECORDING_REQUEST_CODE = 1003
+        private const val RESUME_RECORDING_REQUEST_CODE = 1004
 
         internal fun intent(context: Context, action: String): Intent =
             Intent(context, RecordingForegroundService::class.java).setAction(action)

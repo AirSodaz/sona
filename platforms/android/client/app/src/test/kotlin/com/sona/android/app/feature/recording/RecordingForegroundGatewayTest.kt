@@ -27,6 +27,18 @@ class RecordingForegroundGatewayTest {
     }
 
     @Test
+    fun `pause and resume dispatch service commands`() = runTest {
+        val launcher = FakeRecordingServiceCommandLauncher()
+        val gateway = RecordingForegroundGateway(launcher, backgroundScope)
+
+        gateway.pause()
+        gateway.resume()
+
+        assertEquals(1, launcher.pauseCalls)
+        assertEquals(1, launcher.resumeCalls)
+    }
+
+    @Test
     fun `service launch failure is exposed as a startup failure`() = runTest {
         val launcher = FakeRecordingServiceCommandLauncher(failStart = true)
         val gateway = RecordingForegroundGateway(launcher, backgroundScope)
@@ -77,6 +89,10 @@ private class FakeRecordingServiceCommandLauncher(
         private set
     var stopCalls = 0
         private set
+    var pauseCalls = 0
+        private set
+    var resumeCalls = 0
+        private set
 
     override fun startRecording() {
         startCalls += 1
@@ -85,6 +101,14 @@ private class FakeRecordingServiceCommandLauncher(
 
     override fun stopRecording() {
         stopCalls += 1
+    }
+
+    override fun pauseRecording() {
+        pauseCalls += 1
+    }
+
+    override fun resumeRecording() {
+        resumeCalls += 1
     }
 }
 

@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 data class LlmSettingsUiState(
     val providers: List<LlmProvider> = emptyList(),
     val providerId: String = "open_ai_compatible",
+    val strategy: String = "OPEN_AI_COMPATIBLE",
     val model: String = "gpt-4o-mini",
     val baseUrl: String = "https://api.openai.com",
     val apiPath: String = "",
@@ -38,11 +39,34 @@ class LlmSettingsViewModel(private val repository: LlmConfigurationPort) : ViewM
             mutableState.update { it.copy(providers = providers) }
             val initialConfig = repository.configuration.first()
             val initialProvider = providers.firstOrNull { it.id == initialConfig.providerId }
-            mutableState.update { it.copy(providerId = initialConfig.providerId, model = initialConfig.model, baseUrl = initialConfig.baseUrl, apiPath = initialConfig.apiPath ?: initialProvider?.apiPath.orEmpty(), apiVersion = initialConfig.apiVersion ?: initialProvider?.apiVersion.orEmpty()) }
+            val initialStrategy = initialConfig.strategy.ifBlank {
+                initialProvider?.strategy ?: "OPEN_AI_COMPATIBLE"
+            }
+            mutableState.update {
+                it.copy(
+                    providerId = initialConfig.providerId,
+                    strategy = initialStrategy,
+                    model = initialConfig.model,
+                    baseUrl = initialConfig.baseUrl,
+                    apiPath = initialConfig.apiPath ?: initialProvider?.apiPath.orEmpty(),
+                    apiVersion = initialConfig.apiVersion ?: initialProvider?.apiVersion.orEmpty(),
+                )
+            }
             mutableState.update { it.copy(hasApiKey = !repository.loadApiKey().isNullOrBlank()) }
             repository.configuration.drop(1).collect { config ->
                 val provider = providers.firstOrNull { it.id == config.providerId }
-                mutableState.update { it.copy(providerId = config.providerId, model = config.model, baseUrl = config.baseUrl, apiPath = config.apiPath ?: provider?.apiPath.orEmpty(), apiVersion = config.apiVersion ?: provider?.apiVersion.orEmpty(), hasApiKey = it.hasApiKey || config.configured) }
+                val strategy = config.strategy.ifBlank { provider?.strategy ?: "OPEN_AI_COMPATIBLE" }
+                mutableState.update {
+                    it.copy(
+                        providerId = config.providerId,
+                        strategy = strategy,
+                        model = config.model,
+                        baseUrl = config.baseUrl,
+                        apiPath = config.apiPath ?: provider?.apiPath.orEmpty(),
+                        apiVersion = config.apiVersion ?: provider?.apiVersion.orEmpty(),
+                        hasApiKey = it.hasApiKey || config.configured,
+                    )
+                }
             }
         }
     }
@@ -51,6 +75,7 @@ class LlmSettingsViewModel(private val repository: LlmConfigurationPort) : ViewM
         val provider = it.providers.firstOrNull { candidate -> candidate.id == value }
         it.copy(
             providerId = value,
+            strategy = provider?.strategy ?: it.strategy,
             baseUrl = provider?.apiHost?.ifBlank { it.baseUrl } ?: it.baseUrl,
             apiPath = provider?.apiPath ?: it.apiPath,
             apiVersion = provider?.apiVersion ?: it.apiVersion,
@@ -70,7 +95,18 @@ class LlmSettingsViewModel(private val repository: LlmConfigurationPort) : ViewM
         viewModelScope.launch {
             mutableState.update { it.copy(saving = true, error = false) }
             runCatching {
-                repository.save(LlmConfig(providerId = current.providerId, strategy = "OPEN_AI_COMPATIBLE", baseUrl = current.baseUrl, model = current.model, apiPath = current.apiPath.ifBlank { null }, apiVersion = current.apiVersion.ifBlank { null }, configured = true), apiKeyDraft.ifBlank { repository.loadApiKey().orEmpty() })
+                repository.save(
+                    LlmConfig(
+                        providerId = current.providerId,
+                        strategy = current.strategy,
+                        baseUrl = current.baseUrl,
+                        model = current.model,
+                        apiPath = current.apiPath.ifBlank { null },
+                        apiVersion = current.apiVersion.ifBlank { null },
+                        configured = true,
+                    ),
+                    apiKeyDraft.ifBlank { repository.loadApiKey().orEmpty() },
+                )
             }.onSuccess { apiKeyDraft = ""; mutableState.update { it.copy(saving = false, hasApiKey = true, saved = true) } }
                 .onFailure { mutableState.update { it.copy(saving = false, error = true) } }
         }

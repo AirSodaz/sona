@@ -34,6 +34,9 @@
     <string name="recording_notification_audio_only">録音中です。リアルタイム文字起こしは利用できません</string>
     <string name="recording_notification_stopping">録音を停止して保存中</string>
     <string name="recording_notification_stop">停止して保存</string>
+    <string name="recording_notification_paused">録音一時停止中</string>
+    <string name="recording_notification_pause">一時停止</string>
+    <string name="recording_notification_resume">再開</string>
     <string name="microphone_silenced">システムによりマイク入力が一時停止されています</string>
     <string name="microphone_monitoring_unavailable">現在のマイク状態を監視できません</string>
     <string name="microphone_device_changed">現在の入力：%1$s</string>

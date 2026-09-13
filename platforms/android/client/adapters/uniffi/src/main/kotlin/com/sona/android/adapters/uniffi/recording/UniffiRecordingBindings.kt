@@ -2,10 +2,14 @@ package com.sona.android.adapters.uniffi.recording
 
 import uniffi.sona_uniffi_bind.FfiAsrStreamingObserver
 import uniffi.sona_uniffi_bind.FfiAsrStreamingSession
+import uniffi.sona_uniffi_bind.FfiHistoryAudioStatusV1
 import uniffi.sona_uniffi_bind.FfiHistoryCompleteLiveDraftRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryCreateLiveDraftRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryDeleteItemsRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryDraftSourceV1
+import uniffi.sona_uniffi_bind.FfiHistoryItemKindV1
 import uniffi.sona_uniffi_bind.FfiHistoryItemRecordV1
+import uniffi.sona_uniffi_bind.FfiHistoryItemStatusV1
 import uniffi.sona_uniffi_bind.FfiHistorySaveImportedFileRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryUpdateTranscriptRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceQueryRequestV1
@@ -18,6 +22,7 @@ import uniffi.sona_uniffi_bind.FfiHistorySummaryPayloadV1
 import uniffi.sona_uniffi_bind.FfiHistoryCreateTranscriptSnapshotRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryCommitTranscriptEditRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryCommitTranscriptEditResultV1
+import uniffi.sona_uniffi_bind.FfiTranscriptSnapshotReasonV1
 import uniffi.sona_uniffi_bind.FfiTranscriptSnapshotRecordV1
 import uniffi.sona_uniffi_bind.FfiLiveRecordingDraftResultV1
 import uniffi.sona_uniffi_bind.FfiTranscriptSegment
@@ -177,22 +182,75 @@ internal interface UniffiHistoryBindings {
         historyId: String,
     ): List<FfiTranscriptSegment>?
 
-    suspend fun updateItemMeta(appDataDir: String, request: FfiHistoryUpdateItemMetaRequestV1)
-    suspend fun updateTagAssignments(appDataDir: String, request: FfiHistoryUpdateTagAssignmentsRequestV1)
-    suspend fun trashItems(appDataDir: String, request: FfiHistoryTrashItemsRequestV1)
-    suspend fun restoreItems(appDataDir: String, request: FfiHistoryDeleteItemsRequestV1)
-    suspend fun listSnapshots(appDataDir: String, historyId: String): List<FfiTranscriptSnapshotMetadataV1>
-    suspend fun loadSnapshot(appDataDir: String, historyId: String, snapshotId: String): FfiTranscriptSnapshotRecordV1?
-    suspend fun createSnapshot(appDataDir: String, request: FfiHistoryCreateTranscriptSnapshotRequestV1): FfiTranscriptSnapshotMetadataV1 { throw UnsupportedOperationException() }
-    suspend fun commitTranscriptEdit(appDataDir: String, request: FfiHistoryCommitTranscriptEditRequestV1): FfiHistoryCommitTranscriptEditResultV1 { throw UnsupportedOperationException() }
+    suspend fun updateItemMeta(appDataDir: String, request: FfiHistoryUpdateItemMetaRequestV1) {}
+    suspend fun updateTagAssignments(appDataDir: String, request: FfiHistoryUpdateTagAssignmentsRequestV1) {}
+    suspend fun trashItems(appDataDir: String, request: FfiHistoryTrashItemsRequestV1) {}
+    suspend fun restoreItems(appDataDir: String, request: FfiHistoryDeleteItemsRequestV1) {}
+    suspend fun listSnapshots(appDataDir: String, historyId: String): List<FfiTranscriptSnapshotMetadataV1> = emptyList()
+    suspend fun loadSnapshot(appDataDir: String, historyId: String, snapshotId: String): FfiTranscriptSnapshotRecordV1? = null
+    suspend fun createSnapshot(
+        appDataDir: String,
+        request: FfiHistoryCreateTranscriptSnapshotRequestV1,
+    ): FfiTranscriptSnapshotMetadataV1 = FfiTranscriptSnapshotMetadataV1(
+        id = "snapshot-${request.historyId}",
+        historyId = request.historyId,
+        reason = request.reason,
+        createdAt = 0uL,
+        segmentCount = request.segments.size.toULong(),
+    )
+    suspend fun commitTranscriptEdit(
+        appDataDir: String,
+        request: FfiHistoryCommitTranscriptEditRequestV1,
+    ): FfiHistoryCommitTranscriptEditResultV1 = FfiHistoryCommitTranscriptEditResultV1.Committed(
+        item = FfiHistoryItemRecordV1(
+            id = request.historyId,
+            timestamp = 0uL,
+            duration = 0.0,
+            audioPath = "",
+            audioStatus = FfiHistoryAudioStatusV1.AVAILABLE,
+            transcriptPath = "",
+            title = "",
+            previewText = "",
+            icon = null,
+            kind = FfiHistoryItemKindV1.RECORDING,
+            searchContent = "",
+            tagIds = emptyList(),
+            deletedAt = null,
+            status = FfiHistoryItemStatusV1.COMPLETE,
+            draftSource = null,
+        ),
+        snapshot = FfiTranscriptSnapshotMetadataV1(
+            id = "snapshot-${request.historyId}",
+            historyId = request.historyId,
+            reason = FfiTranscriptSnapshotReasonV1.MANUAL_EDIT,
+            createdAt = 0uL,
+            segmentCount = request.editedSegments.size.toULong(),
+        ),
+    )
     suspend fun loadSummary(appDataDir: String, historyId: String): FfiHistorySummaryPayloadV1? = null
-    suspend fun saveSummary(appDataDir: String, historyId: String, payload: FfiHistorySummaryPayloadV1) { throw UnsupportedOperationException() }
-    suspend fun deleteSummary(appDataDir: String, historyId: String) { throw UnsupportedOperationException() }
+    suspend fun saveSummary(appDataDir: String, historyId: String, payload: FfiHistorySummaryPayloadV1) {}
+    suspend fun deleteSummary(appDataDir: String, historyId: String) {}
 
     suspend fun saveImported(
         appDataDir: String,
         request: FfiHistorySaveImportedFileRequestV1,
-    ): FfiHistoryItemRecordV1 = throw UnsupportedOperationException("Imported history is unavailable.")
+    ): FfiHistoryItemRecordV1 = FfiHistoryItemRecordV1(
+        id = request.id ?: "imported-1",
+        timestamp = 0uL,
+        duration = request.duration,
+        audioPath = request.sourcePath,
+        audioStatus = FfiHistoryAudioStatusV1.AVAILABLE,
+        transcriptPath = "",
+        title = "Imported",
+        previewText = "",
+        icon = null,
+        kind = FfiHistoryItemKindV1.BATCH,
+        searchContent = "",
+        tagIds = request.tagIds,
+        deletedAt = null,
+        status = FfiHistoryItemStatusV1.COMPLETE,
+        draftSource = null,
+    )
 }
 
 internal object GeneratedUniffiHistoryBindings : UniffiHistoryBindings {

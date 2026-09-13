@@ -19,6 +19,8 @@ import kotlinx.coroutines.launch
 internal interface RecordingServiceCommandLauncher {
     fun startRecording()
     fun stopRecording()
+    fun pauseRecording() {}
+    fun resumeRecording() {}
 }
 
 internal class AndroidRecordingServiceCommandLauncher(
@@ -36,6 +38,18 @@ internal class AndroidRecordingServiceCommandLauncher(
     override fun stopRecording() {
         appContext.startService(
             RecordingForegroundService.intent(appContext, RecordingForegroundService.ACTION_STOP),
+        )
+    }
+
+    override fun pauseRecording() {
+        appContext.startService(
+            RecordingForegroundService.intent(appContext, RecordingForegroundService.ACTION_PAUSE),
+        )
+    }
+
+    override fun resumeRecording() {
+        appContext.startService(
+            RecordingForegroundService.intent(appContext, RecordingForegroundService.ACTION_RESUME),
         )
     }
 }
@@ -56,6 +70,14 @@ internal class RecordingForegroundGateway(
 
     override suspend fun stop() {
         dispatchCommand(launcher::stopRecording)
+    }
+
+    override suspend fun pause() {
+        dispatchCommand(launcher::pauseRecording)
+    }
+
+    override suspend fun resume() {
+        dispatchCommand(launcher::resumeRecording)
     }
 
     fun attach(sessionState: StateFlow<LiveRecordingState>) {

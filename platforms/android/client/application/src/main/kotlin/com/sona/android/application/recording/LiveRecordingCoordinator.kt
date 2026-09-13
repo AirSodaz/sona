@@ -206,6 +206,7 @@ class LiveRecordingCoordinator(
             session.frameJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
                 try {
                     openedMicrophone.frames.collect { frame ->
+                        if (session.isPaused) return@collect
                         var feedFailed = false
                         session.transcriptionMutex.withLock {
                             val activeTranscription = session.transcription
@@ -340,9 +341,13 @@ class LiveRecordingCoordinator(
             session.elapsedJob = scope.launch {
                 while (true) {
                     delay(elapsedUpdateIntervalMillis)
-                    val elapsedMillis =
-                        (monotonicClock.elapsedRealtimeMillis() - session.startedAtMillis)
+                    val elapsedMillis = if (session.isPaused) {
+                        (session.pausedAtMillis - session.startedAtMillis - session.totalPausedMillis)
                             .coerceAtLeast(0)
+                    } else {
+                        (monotonicClock.elapsedRealtimeMillis() - session.startedAtMillis - session.totalPausedMillis)
+                            .coerceAtLeast(0)
+                    }
                     mutableState.update { current ->
                         if (current is LiveRecordingState.Recording) {
                             current.copy(elapsedMillis = elapsedMillis)
@@ -432,6 +437,43 @@ class LiveRecordingCoordinator(
             null -> {
                 mutableState.value = LiveRecordingState.NeedsConfiguration
                 null
+            }
+        }
+    }
+
+    override suspend fun pause() {
+        commandMutex.withLock {
+            val session = activeSession ?: return
+            if (session.isPaused) return
+            session.isPaused = true
+            session.pausedAtMillis = monotonicClock.elapsedRealtimeMillis()
+            session.publicationMutex.withLock {
+                mutableState.update { current ->
+                    if (current is LiveRecordingState.Recording) {
+                        current.copy(isPaused = true)
+                    } else {
+                        current
+                    }
+                }
+            }
+        }
+    }
+
+    override suspend fun resume() {
+        commandMutex.withLock {
+            val session = activeSession ?: return
+            if (!session.isPaused) return
+            session.totalPausedMillis += (monotonicClock.elapsedRealtimeMillis() - session.pausedAtMillis)
+                .coerceAtLeast(0)
+            session.isPaused = false
+            session.publicationMutex.withLock {
+                mutableState.update { current ->
+                    if (current is LiveRecordingState.Recording) {
+                        current.copy(isPaused = false)
+                    } else {
+                        current
+                    }
+                }
             }
         }
     }
@@ -712,6 +754,9 @@ class LiveRecordingCoordinator(
         var persistenceFailure: RecordingFailure? = null
         var streamingStatus: StreamingStatus = StreamingStatus.Connected
         var inputStatus: AudioInputStatus = AudioInputStatus.Active
+        var isPaused: Boolean = false
+        var pausedAtMillis: Long = 0
+        var totalPausedMillis: Long = 0
         var startedAtMillis: Long = 0
         var elapsedJob: Job? = null
         lateinit var checkpointJob: Job

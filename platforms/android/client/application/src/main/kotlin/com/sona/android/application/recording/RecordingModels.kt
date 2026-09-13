@@ -110,6 +110,7 @@ sealed interface LiveRecordingState {
         val segments: List<TranscriptSegment>,
         val streamingStatus: StreamingStatus,
         val inputStatus: AudioInputStatus,
+        val isPaused: Boolean = false,
     ) : LiveRecordingState
 
     data class Stopping(

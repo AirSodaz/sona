@@ -7,4 +7,6 @@ interface LiveRecordingController {
 
     suspend fun start()
     suspend fun stop()
+    suspend fun pause() {}
+    suspend fun resume() {}
 }

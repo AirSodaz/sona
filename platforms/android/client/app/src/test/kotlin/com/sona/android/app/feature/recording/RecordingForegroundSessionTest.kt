@@ -128,6 +128,44 @@ class RecordingForegroundSessionTest {
         assertTrue(finished)
     }
 
+    @Test
+    fun `pause command dispatches to controller and updates phase to PAUSED`() = runTest {
+        val phases = mutableListOf<RecordingNotificationPhase>()
+        val controller = FakeSessionController(sessionRecordingState()).apply {
+            pauseAction = {
+                mutableState.value = sessionRecordingState().copy(isPaused = true)
+            }
+        }
+        val session = createSession(controller, onPhaseChanged = phases::add)
+        session.start()
+        runCurrent()
+
+        session.pause()
+        runCurrent()
+
+        assertEquals(RecordingNotificationPhase.PAUSED, phases.last())
+        assertEquals(1, controller.pauseCalls)
+    }
+
+    @Test
+    fun `resume command dispatches to controller and updates phase back to RECORDING`() = runTest {
+        val phases = mutableListOf<RecordingNotificationPhase>()
+        val controller = FakeSessionController(sessionRecordingState().copy(isPaused = true)).apply {
+            resumeAction = {
+                mutableState.value = sessionRecordingState().copy(isPaused = false)
+            }
+        }
+        val session = createSession(controller, onPhaseChanged = phases::add)
+        session.start()
+        runCurrent()
+
+        session.resume()
+        runCurrent()
+
+        assertEquals(RecordingNotificationPhase.RECORDING, phases.last())
+        assertEquals(1, controller.resumeCalls)
+    }
+
     private fun TestScope.createSession(
         controller: LiveRecordingController,
         onPhaseChanged: (RecordingNotificationPhase) -> Unit = {},
@@ -151,8 +189,14 @@ private class FakeSessionController(
         private set
     var stopCalls = 0
         private set
+    var pauseCalls = 0
+        private set
+    var resumeCalls = 0
+        private set
     var startAction: suspend () -> Unit = {}
     var stopAction: suspend () -> Unit = {}
+    var pauseAction: suspend () -> Unit = {}
+    var resumeAction: suspend () -> Unit = {}
 
     override suspend fun start() {
         startCalls += 1
@@ -162,6 +206,16 @@ private class FakeSessionController(
     override suspend fun stop() {
         stopCalls += 1
         stopAction()
+    }
+
+    override suspend fun pause() {
+        pauseCalls += 1
+        pauseAction()
+    }
+
+    override suspend fun resume() {
+        resumeCalls += 1
+        resumeAction()
     }
 }
 

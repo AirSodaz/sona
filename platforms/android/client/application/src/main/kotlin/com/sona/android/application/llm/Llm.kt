@@ -9,6 +9,7 @@ data class LlmProvider(
     val apiHost: String = "",
     val apiPath: String? = null,
     val apiVersion: String? = null,
+    val strategy: String = "OPEN_AI_COMPATIBLE",
 )
 
 data class LlmConfig(

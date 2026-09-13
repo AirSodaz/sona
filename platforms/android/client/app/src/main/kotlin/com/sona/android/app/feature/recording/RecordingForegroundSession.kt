@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 internal enum class RecordingNotificationPhase {
     PREPARING,
     RECORDING,
+    PAUSED,
     AUDIO_ONLY,
     STOPPING,
 }
@@ -48,6 +49,18 @@ internal class RecordingForegroundSession(
 
         publish(RecordingNotificationPhase.PREPARING)
         runCommand(controller::start)
+    }
+
+    fun pause() {
+        if (finished) return
+        commandReceived = true
+        runCommand(controller::pause)
+    }
+
+    fun resume() {
+        if (finished) return
+        commandReceived = true
+        runCommand(controller::resume)
     }
 
     fun stop() {
@@ -109,9 +122,10 @@ internal class RecordingForegroundSession(
 
 private fun LiveRecordingState.notificationPhase(): RecordingNotificationPhase? = when (this) {
     is LiveRecordingState.Preparing -> RecordingNotificationPhase.PREPARING
-    is LiveRecordingState.Recording -> when (streamingStatus) {
-        StreamingStatus.Connected -> RecordingNotificationPhase.RECORDING
-        is StreamingStatus.AudioOnly -> RecordingNotificationPhase.AUDIO_ONLY
+    is LiveRecordingState.Recording -> when {
+        isPaused -> RecordingNotificationPhase.PAUSED
+        streamingStatus is StreamingStatus.AudioOnly -> RecordingNotificationPhase.AUDIO_ONLY
+        else -> RecordingNotificationPhase.RECORDING
     }
     is LiveRecordingState.Stopping -> RecordingNotificationPhase.STOPPING
     LiveRecordingState.Idle,
