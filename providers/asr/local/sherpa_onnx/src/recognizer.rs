@@ -360,6 +360,8 @@ pub struct OnlineDecodeResult {
 enum RecognizerInner {
     Online(SafeOnlineRecognizer),
     Offline(SafeOfflineRecognizer),
+    #[cfg(test)]
+    TestDummy,
 }
 
 pub struct Recognizer {
@@ -408,21 +410,37 @@ fn get_base_offline_config(
 }
 
 impl Recognizer {
+    #[cfg(test)]
+    pub fn test_dummy() -> Self {
+        Self {
+            inner: RecognizerInner::TestDummy,
+        }
+    }
+
     pub fn kind_label(&self) -> &'static str {
         match &self.inner {
             RecognizerInner::Online(_) => "online",
             RecognizerInner::Offline(_) => "offline",
+            #[cfg(test)]
+            RecognizerInner::TestDummy => "test-dummy",
         }
     }
 
     pub fn is_offline(&self) -> bool {
-        matches!(&self.inner, RecognizerInner::Offline(_))
+        match &self.inner {
+            RecognizerInner::Offline(_) => true,
+            RecognizerInner::Online(_) => false,
+            #[cfg(test)]
+            RecognizerInner::TestDummy => true,
+        }
     }
 
     pub fn offline(&self) -> Option<&SafeOfflineRecognizer> {
         match &self.inner {
             RecognizerInner::Offline(recognizer) => Some(recognizer),
             RecognizerInner::Online(_) => None,
+            #[cfg(test)]
+            RecognizerInner::TestDummy => None,
         }
     }
 
@@ -430,6 +448,8 @@ impl Recognizer {
         match &self.inner {
             RecognizerInner::Online(recognizer) => Some(recognizer),
             RecognizerInner::Offline(_) => None,
+            #[cfg(test)]
+            RecognizerInner::TestDummy => None,
         }
     }
 
@@ -751,6 +771,11 @@ pub fn create_offline_recognizer(
     {
         RecognizerInner::Offline(recognizer) => Ok(recognizer),
         RecognizerInner::Online(_) => Err(AsrPortError::new(
+            AsrPortErrorKind::Unsupported,
+            "Unsupported offline model type",
+        )),
+        #[cfg(test)]
+        RecognizerInner::TestDummy => Err(AsrPortError::new(
             AsrPortErrorKind::Unsupported,
             "Unsupported offline model type",
         )),

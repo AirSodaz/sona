@@ -5,6 +5,7 @@ use sona_core::ports::asr::{
     AsrEngine, AsrPortError, AsrPortErrorKind, AsrRuntimeObserver, AsrStreamingSession,
     NoopAsrRuntimeObserver, StreamingAsrFactoryPort, StreamingInferenceSpec,
 };
+use sona_sherpa_onnx::runtime::RecognizerPool;
 use std::sync::Arc;
 
 /// Desktop composition root for streaming ASR. The application coordinator owns
@@ -12,11 +13,15 @@ use std::sync::Arc;
 /// through the local engine registry.
 pub struct DesktopStreamingAsrFactory {
     registry: LocalAsrRegistry,
+    recognizer_pool: RecognizerPool,
 }
 
 impl DesktopStreamingAsrFactory {
-    pub fn new(registry: LocalAsrRegistry) -> Self {
-        Self { registry }
+    pub fn new(registry: LocalAsrRegistry, recognizer_pool: RecognizerPool) -> Self {
+        Self {
+            registry,
+            recognizer_pool,
+        }
     }
 
     pub fn coordinator(&self) -> LiveTranscriptionCoordinator {
@@ -56,6 +61,7 @@ impl Clone for DesktopStreamingAsrFactory {
     fn clone(&self) -> Self {
         Self {
             registry: self.registry.clone(),
+            recognizer_pool: self.recognizer_pool.clone(),
         }
     }
 }
@@ -71,6 +77,8 @@ impl StreamingAsrFactoryPort for DesktopStreamingAsrFactory {
             AsrEngine::Online => {
                 let request = spec.engine_request();
                 sona_online_asr::resolve_online_asr_provider_id(&request)?;
+                self.recognizer_pool.prune_all_idle().await;
+                sona_llama_cpp::prune_idle_llama_models();
                 Ok(())
             }
         }
@@ -90,6 +98,8 @@ impl StreamingAsrFactoryPort for DesktopStreamingAsrFactory {
             AsrEngine::Online => {
                 let request = spec.engine_request();
                 sona_online_asr::resolve_online_asr_provider_id(&request)?;
+                self.recognizer_pool.prune_all_idle().await;
+                sona_llama_cpp::prune_idle_llama_models();
                 sona_online_asr::OnlineAsrAdapter.create_streaming_session(
                     pipeline_id.to_string(),
                     request,

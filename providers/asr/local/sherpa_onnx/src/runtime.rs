@@ -32,6 +32,63 @@ impl RecognizerPool {
         }
     }
 
+    fn prune_idle_recognizers_locked(
+        recognizers: &mut HashMap<ModelConfigKey, RecognizerCell>,
+        active_key: Option<&ModelConfigKey>,
+        allowed_providers: Option<&[Option<String>]>,
+    ) {
+        recognizers.retain(|k, cell| {
+            if let Some(active) = active_key
+                && k.is_same_model_config(active)
+            {
+                if let Some(allowed) = allowed_providers {
+                    if allowed.contains(&k.gpu_provider) {
+                        return true;
+                    }
+                } else {
+                    return true;
+                }
+            }
+            if let Some(recognizer) = cell.get() {
+                Arc::strong_count(recognizer) > 1
+            } else {
+                Arc::strong_count(cell) > 1
+            }
+        });
+    }
+
+    fn prune_idle_punctuations_locked(
+        punctuations: &mut HashMap<String, PunctuationCell>,
+        active_path: Option<&str>,
+    ) {
+        punctuations.retain(|path, cell| {
+            if let Some(active) = active_path
+                && path.as_str() == active
+            {
+                return true;
+            }
+            if let Some(punctuation) = cell.get() {
+                Arc::strong_count(punctuation) > 1
+            } else {
+                Arc::strong_count(cell) > 1
+            }
+        });
+    }
+
+    pub async fn prune_all_idle(&self) {
+        let mut recognizers = self.recognizers.lock().await;
+        Self::prune_idle_recognizers_locked(&mut recognizers, None, None);
+        drop(recognizers);
+
+        let mut punctuations = self.punctuations.lock().await;
+        Self::prune_idle_punctuations_locked(&mut punctuations, None);
+    }
+
+    pub async fn prune_idle_punctuations(&self, active_path: Option<&str>) {
+        let mut punctuations = self.punctuations.lock().await;
+        Self::prune_idle_punctuations_locked(&mut punctuations, active_path);
+    }
+
     pub async fn recognizer_cell_for_gpu_plan(
         &self,
         key: &ModelConfigKey,
@@ -39,6 +96,8 @@ impl RecognizerPool {
         primary_provider: Option<String>,
     ) -> (RecognizerCell, bool) {
         let mut recognizers = self.recognizers.lock().await;
+        Self::prune_idle_recognizers_locked(&mut recognizers, Some(key), Some(&provider_options));
+
         let existing = provider_options
             .into_iter()
             .find_map(|provider| recognizers.get(&key.with_gpu_provider(provider)).cloned());
@@ -66,10 +125,21 @@ impl RecognizerPool {
 
     pub async fn punctuation_cell_for_path(&self, path: String) -> PunctuationCell {
         let mut punctuations = self.punctuations.lock().await;
+        Self::prune_idle_punctuations_locked(&mut punctuations, Some(&path));
         punctuations
             .entry(path)
             .or_insert_with(|| Arc::new(OnceCell::new()))
             .clone()
+    }
+
+    #[cfg(test)]
+    pub async fn cached_recognizer_count(&self) -> usize {
+        self.recognizers.lock().await.len()
+    }
+
+    #[cfg(test)]
+    pub async fn cached_punctuation_count(&self) -> usize {
+        self.punctuations.lock().await.len()
     }
 }
 
@@ -110,6 +180,15 @@ impl ModelConfigKey {
             gpu_provider,
             ..self.clone()
         }
+    }
+
+    pub fn is_same_model_config(&self, other: &ModelConfigKey) -> bool {
+        self.model_path == other.model_path
+            && self.model_type == other.model_type
+            && self.num_threads == other.num_threads
+            && self.enable_itn == other.enable_itn
+            && self.language == other.language
+            && self.hotwords == other.hotwords
     }
 }
 
@@ -628,6 +707,151 @@ mod tests {
             .await;
 
         assert!(Arc::ptr_eq(&first, &second));
+    }
+
+    #[tokio::test]
+    async fn recognizer_pool_evicts_idle_models_on_key_switch() {
+        let pool = RecognizerPool::new();
+        let key1 = key(None);
+        let mut key2 = key(None);
+        key2.model_type = "whisper".to_string();
+        key2.model_path = "C:/models/whisper".to_string();
+        let mut key3 = key(None);
+        key3.model_type = "paraformer".to_string();
+        key3.model_path = "C:/models/paraformer".to_string();
+
+        // 1. Load model 1 into pool
+        let (cell1, is_new1) = pool
+            .recognizer_cell_for_gpu_plan(
+                &key1,
+                vec![Some("cpu".to_string())],
+                Some("cpu".to_string()),
+            )
+            .await;
+        assert!(is_new1);
+        let rec1 = Arc::new(Recognizer::test_dummy());
+        assert!(cell1.set(rec1.clone()).is_ok());
+        // Drop local reference so only cell1 holds rec1 (strong_count == 1)
+        drop(rec1);
+        assert_eq!(pool.cached_recognizer_count().await, 1);
+
+        // 2. Switch to model 2: model 1 is idle and should be evicted
+        let (cell2, is_new2) = pool
+            .recognizer_cell_for_gpu_plan(
+                &key2,
+                vec![Some("cpu".to_string())],
+                Some("cpu".to_string()),
+            )
+            .await;
+        assert!(is_new2);
+        // Only model 2 remains in pool
+        assert_eq!(pool.cached_recognizer_count().await, 1);
+
+        // 3. Model 2 is actively used by a session (strong_count == 2)
+        let rec2 = Arc::new(Recognizer::test_dummy());
+        assert!(cell2.set(rec2.clone()).is_ok());
+        let active_session_rec2 = rec2.clone();
+        drop(rec2);
+        assert_eq!(Arc::strong_count(&active_session_rec2), 2);
+
+        // 4. Switch to model 3 while model 2 is still active in a session
+        let (cell3, is_new3) = pool
+            .recognizer_cell_for_gpu_plan(
+                &key3,
+                vec![Some("cpu".to_string())],
+                Some("cpu".to_string()),
+            )
+            .await;
+        assert!(is_new3);
+        // Both model 2 (active) and model 3 (new) are in the pool
+        assert_eq!(pool.cached_recognizer_count().await, 2);
+
+        // 5. Session finishes and releases model 2 (strong_count drops to 1)
+        drop(active_session_rec2);
+
+        // Re-querying or pruning with model 3 active evicts model 2
+        let (cell3_again, is_new3_again) = pool
+            .recognizer_cell_for_gpu_plan(
+                &key3,
+                vec![Some("cpu".to_string())],
+                Some("cpu".to_string()),
+            )
+            .await;
+        assert!(!is_new3_again);
+        assert!(Arc::ptr_eq(&cell3, &cell3_again));
+        // Model 2 was evicted, only model 3 remains
+        assert_eq!(pool.cached_recognizer_count().await, 1);
+
+        // 6. prune_all_idle removes model 3 as well if it's idle
+        let rec3 = Arc::new(Recognizer::test_dummy());
+        assert!(cell3.set(rec3).is_ok());
+        pool.prune_all_idle().await;
+        assert_eq!(pool.cached_recognizer_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn recognizer_pool_evicts_idle_model_on_gpu_provider_switch() {
+        let pool = RecognizerPool::new();
+        let key_base = key(None);
+
+        // Load model on directml
+        let (cell_dml, is_new1) = pool
+            .recognizer_cell_for_gpu_plan(
+                &key_base,
+                vec![Some("directml".to_string())],
+                Some("directml".to_string()),
+            )
+            .await;
+        assert!(is_new1);
+        let rec_dml = Arc::new(Recognizer::test_dummy());
+        assert!(cell_dml.set(rec_dml).is_ok());
+        assert_eq!(pool.cached_recognizer_count().await, 1);
+
+        // Switch to cpu only: directml is idle and should be evicted
+        let (cell_cpu, is_new2) = pool
+            .recognizer_cell_for_gpu_plan(
+                &key_base,
+                vec![Some("cpu".to_string())],
+                Some("cpu".to_string()),
+            )
+            .await;
+        assert!(is_new2);
+        assert!(!Arc::ptr_eq(&cell_dml, &cell_cpu));
+        // DirectML instance was evicted, only CPU instance remains
+        assert_eq!(pool.cached_recognizer_count().await, 1);
+    }
+
+    #[tokio::test]
+    async fn punctuation_pool_evicts_idle_punctuations_on_switch() {
+        let pool = RecognizerPool::new();
+        let path1 = "C:/models/punct1.onnx".to_string();
+        let path2 = "C:/models/punct2.onnx".to_string();
+
+        let cell1 = pool.punctuation_cell_for_path(path1.clone()).await;
+        let punct1 = Arc::new(Punctuation::test_dummy());
+        assert!(cell1.set(punct1).is_ok());
+        assert_eq!(pool.cached_punctuation_count().await, 1);
+
+        // Switch to punct2: punct1 is idle and should be evicted
+        let cell2 = pool.punctuation_cell_for_path(path2.clone()).await;
+        assert_eq!(pool.cached_punctuation_count().await, 1);
+
+        // Actively held punct2
+        let punct2 = Arc::new(Punctuation::test_dummy());
+        assert!(cell2.set(punct2.clone()).is_ok());
+        let active_session_punct = punct2.clone();
+        drop(punct2);
+
+        // Re-accessing punct1 while punct2 is active keeps punct2
+        let _ = pool.punctuation_cell_for_path(path1.clone()).await;
+        assert_eq!(pool.cached_punctuation_count().await, 2);
+
+        drop(active_session_punct);
+        pool.prune_idle_punctuations(Some(&path1)).await;
+        assert_eq!(pool.cached_punctuation_count().await, 1);
+
+        pool.prune_all_idle().await;
+        assert_eq!(pool.cached_punctuation_count().await, 0);
     }
 
     #[test]

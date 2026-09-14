@@ -51,7 +51,7 @@ impl AsrState {
     pub fn new() -> Self {
         let recognizer_pool = RecognizerPool::new();
         let registry = local_asr_registry(recognizer_pool.clone());
-        let factory = DesktopStreamingAsrFactory::new(registry.clone());
+        let factory = DesktopStreamingAsrFactory::new(registry.clone(), recognizer_pool.clone());
         Self {
             recognizer_pool,
             registry,
@@ -81,7 +81,7 @@ impl AsrState {
         observer: Arc<dyn AsrRuntimeObserver>,
     ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
         let spec = StreamingInferenceSpec::from_request(request)?;
-        DesktopStreamingAsrFactory::new(self.registry.clone())
+        DesktopStreamingAsrFactory::new(self.registry.clone(), self.recognizer_pool.clone())
             .create(session_id, &spec, observer)
             .await
     }

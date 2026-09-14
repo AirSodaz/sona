@@ -3,11 +3,24 @@ use sherpa_onnx::{OfflinePunctuation, OfflinePunctuationConfig, OfflinePunctuati
 use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 use std::path::Path;
 
+enum PunctuationInner {
+    Real(OfflinePunctuation),
+    #[cfg(test)]
+    TestDummy,
+}
+
 pub struct Punctuation {
-    inner: OfflinePunctuation,
+    inner: PunctuationInner,
 }
 
 impl Punctuation {
+    #[cfg(test)]
+    pub fn test_dummy() -> Self {
+        Self {
+            inner: PunctuationInner::TestDummy,
+        }
+    }
+
     pub fn new(model_path: &str, num_threads: i32) -> Result<Self, AsrPortError> {
         let config = OfflinePunctuationConfig {
             model: OfflinePunctuationModelConfig {
@@ -25,13 +38,19 @@ impl Punctuation {
             )
         })?;
 
-        Ok(Self { inner })
+        Ok(Self {
+            inner: PunctuationInner::Real(inner),
+        })
     }
 
     pub fn add_punct(&self, text: &str) -> String {
-        self.inner
-            .add_punctuation(text)
-            .unwrap_or_else(|| text.to_string())
+        match &self.inner {
+            PunctuationInner::Real(punct) => punct
+                .add_punctuation(text)
+                .unwrap_or_else(|| text.to_string()),
+            #[cfg(test)]
+            PunctuationInner::TestDummy => text.to_string(),
+        }
     }
 }
 

@@ -255,6 +255,9 @@ async fn load_streaming_resources(
     }
 
     let punctuation = resolve_punctuation(recognizer_pool, request.punctuation_model.clone()).await;
+    if punctuation.is_none() {
+        recognizer_pool.prune_idle_punctuations(None).await;
+    }
     Ok(LocalStreamingResources {
         recognizer,
         punctuation,

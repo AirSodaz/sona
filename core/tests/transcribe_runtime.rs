@@ -191,10 +191,7 @@ fn installed_funasr_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
     fs::write(&input_path, "").unwrap();
     fs::create_dir_all(models_dir.join("sherpa-onnx-funasr-nano-int8-2025-12-30")).unwrap();
     fs::write(models_dir.join("silero_vad_v5.onnx"), "").unwrap();
-    fs::create_dir_all(
-        models_dir.join(DEFAULT_PUNCTUATION_MODEL_ID),
-    )
-    .unwrap();
+    fs::create_dir_all(models_dir.join(DEFAULT_PUNCTUATION_MODEL_ID)).unwrap();
     (dir, input_path, models_dir)
 }
 
@@ -205,10 +202,7 @@ fn installed_firered_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
     fs::write(&input_path, "").unwrap();
     fs::create_dir_all(models_dir.join("sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26")).unwrap();
     fs::write(models_dir.join("silero_vad_v5.onnx"), "").unwrap();
-    fs::create_dir_all(
-        models_dir.join(DEFAULT_PUNCTUATION_MODEL_ID),
-    )
-    .unwrap();
+    fs::create_dir_all(models_dir.join(DEFAULT_PUNCTUATION_MODEL_ID)).unwrap();
     (dir, input_path, models_dir)
 }
 
@@ -232,10 +226,7 @@ fn installed_omnilingual_fixture() -> (tempfile::TempDir, PathBuf, PathBuf) {
     )
     .unwrap();
     fs::write(models_dir.join("silero_vad_v5.onnx"), "").unwrap();
-    fs::create_dir_all(
-        models_dir.join(DEFAULT_PUNCTUATION_MODEL_ID),
-    )
-    .unwrap();
+    fs::create_dir_all(models_dir.join(DEFAULT_PUNCTUATION_MODEL_ID)).unwrap();
     (dir, input_path, models_dir)
 }
 
@@ -265,10 +256,7 @@ fn installed_streaming_paraformer_fixture() -> (tempfile::TempDir, PathBuf) {
         models_dir.join("sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en"),
     )
     .unwrap();
-    fs::create_dir_all(
-        models_dir.join(DEFAULT_PUNCTUATION_MODEL_ID),
-    )
-    .unwrap();
+    fs::create_dir_all(models_dir.join(DEFAULT_PUNCTUATION_MODEL_ID)).unwrap();
     (dir, models_dir)
 }
 

@@ -806,6 +806,14 @@ fn load_model(
         return Ok(Arc::clone(model));
     }
 
+    // Evict idle models that do not match the requested cache_key before loading a new one.
+    cache.retain(|k, model| {
+        if k == &cache_key {
+            return true;
+        }
+        Arc::strong_count(model) > 1
+    });
+
     // An explicit count is required: `LlamaModelParams::default()` carries
     // n_gpu_layers=-1, which auto-offloads as soon as any GPU backend is
     // registered — silently ignoring an explicit 'cpu' request.
@@ -823,6 +831,15 @@ fn load_model(
     );
     cache.insert(cache_key, Arc::clone(&model));
     Ok(model)
+}
+
+/// Prunes all idle models from the batch model cache whose strong reference count is 1.
+pub fn prune_idle_llama_models() {
+    if let Some(cache) = MODEL_CACHE.get() {
+        if let Ok(mut cache) = cache.lock() {
+            cache.retain(|_, model| Arc::strong_count(model) > 1);
+        }
+    }
 }
 /// Qwen3-ASR consumes hotwords as background knowledge inside the ChatML
 /// system message — the channel the model was trained on for context
