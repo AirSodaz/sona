@@ -141,8 +141,8 @@
     "notifications_empty": "현재 알림이 없습니다."
   },
   "task_center": {
-    "panel_title": "작업 센터",
-    "empty": "현재 실행 중인 작업이 없습니다.",
+    "panel_title": "메시지 센터",
+    "empty": "현재 활성화된 메시지가 없습니다.",
     "needs_action": "확인 필요",
     "active": "진행 중",
     "recent": "최근",

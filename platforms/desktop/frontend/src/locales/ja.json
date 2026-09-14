@@ -141,8 +141,8 @@
     "notifications_empty": "現在通知はありません。"
   },
   "task_center": {
-    "panel_title": "タスクセンター",
-    "empty": "現在アクティブなタスクはありません。",
+    "panel_title": "メッセージセンター",
+    "empty": "現在アクティブなメッセージはありません。",
     "needs_action": "対応が必要です",
     "active": "アクティブ",
     "recent": "最近の",

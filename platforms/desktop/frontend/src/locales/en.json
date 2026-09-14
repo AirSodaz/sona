@@ -141,8 +141,8 @@
     "notifications_empty": "No notifications right now."
   },
   "task_center": {
-    "panel_title": "Task Center",
-    "empty": "No active tasks right now.",
+    "panel_title": "Message Center",
+    "empty": "No active messages right now.",
     "needs_action": "Needs action",
     "active": "Active",
     "recent": "Recent",

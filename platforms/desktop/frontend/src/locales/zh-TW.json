@@ -141,8 +141,8 @@
     "notifications_empty": "暫時沒有通知。"
   },
   "task_center": {
-    "panel_title": "任務中心",
-    "empty": "目前沒有正在處理的任務。",
+    "panel_title": "訊息中心",
+    "empty": "目前沒有正在處理的訊息。",
     "needs_action": "需要處理",
     "active": "進行中",
     "recent": "最近",

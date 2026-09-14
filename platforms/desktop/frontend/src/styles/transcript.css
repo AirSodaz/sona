@@ -469,6 +469,8 @@
   line-height: 1.8;
   /* Relaxed reading height */
   word-wrap: break-word;
+  font-variant-numeric: lining-nums;
+  /* Merriweather defaults to oldstyle figures; lining-nums keeps all digits at cap height */
 }
 
 .segment-text.partial {
@@ -516,6 +518,7 @@
   min-height: 1.8em;
   /* Ensure at least one line height */
   overflow-y: auto;
+  font-variant-numeric: lining-nums;
 }
 
 .editor-bold {
