@@ -256,7 +256,7 @@ export function Dropdown({
 
   const filteredOptions = showSearch
     ? options.filter((opt) => {
-        const labelText = typeof opt.label === 'string' ? opt.label : '';
+        const labelText = typeof opt.label === 'string' ? opt.label : (opt.ariaLabel ?? '');
         return (
           labelText.toLowerCase().includes(searchQuery.toLowerCase()) ||
           opt.value.toLowerCase().includes(searchQuery.toLowerCase())

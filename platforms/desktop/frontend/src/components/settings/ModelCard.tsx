@@ -2,6 +2,7 @@ import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { type ModelInfo, resolveModelLabels, resolveModelRatings } from '../../types/modelCatalog';
 import { CheckIcon, DownloadIcon, TrashIcon, XIcon } from '../Icons';
+import { isAsrModel, ModelBrandLogo, resolveModelBrand } from '../icons/ModelLogos';
 import { LanguageBadges } from '../LanguageBadges';
 
 const ENGINE_LABEL: Record<ModelInfo['engine'], string> = {
@@ -23,6 +24,7 @@ interface ModelCardProps {
   onDownload: (model: ModelInfo) => void;
   onCancelDownload: (modelId: string) => void;
   actionsDisabled?: boolean;
+  isAsr?: boolean;
 }
 
 interface ModelCardActionsProps {
@@ -239,6 +241,7 @@ export function ModelCard({
   onDownload,
   onCancelDownload,
   actionsDisabled = false,
+  isAsr: isAsrProp,
 }: ModelCardProps): React.JSX.Element {
   const { t } = useTranslation();
 
@@ -247,6 +250,9 @@ export function ModelCard({
   const baseModel = models[0];
   const isMultiVersion = models.length > 1;
   const baseDownload = downloads[baseModel.id];
+
+  const isAsr = isAsrProp ?? isAsrModel(baseModel);
+  const brand = isAsr ? resolveModelBrand(baseModel) : null;
 
   const headerStatus: ModelStatus = (() => {
     if (!isMultiVersion) {
@@ -266,12 +272,19 @@ export function ModelCard({
   return (
     <div className="model-card">
       <div className="model-card-header">
-        <div className="model-card-title">
-          <span className="model-name">
-            {baseModel.name}
-            {!isMultiVersion && baseModel.versionLabel ? ` (${baseModel.versionLabel})` : ''}
-          </span>
-          <LanguageBadges languages={baseModel.languages} />
+        <div className="model-card-identity">
+          {brand && (
+            <div className="model-card-logo-badge">
+              <ModelBrandLogo brand={brand} size={36} />
+            </div>
+          )}
+          <div className="model-card-title">
+            <span className="model-name">
+              {baseModel.name}
+              {!isMultiVersion && baseModel.versionLabel ? ` (${baseModel.versionLabel})` : ''}
+            </span>
+            <LanguageBadges languages={baseModel.languages} />
+          </div>
         </div>
         <ModelStatusChip status={headerStatus} />
       </div>

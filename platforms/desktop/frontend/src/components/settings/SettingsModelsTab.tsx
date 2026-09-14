@@ -35,6 +35,7 @@ import {
 import { markSettingsPerf } from '../../utils/settingsPerf';
 import { Dropdown, type DropdownOption } from '../Dropdown';
 import { ModelIcon, OnlineIcon, RestoreIcon } from '../Icons';
+import { ModelBrandLogo } from '../icons/ModelLogos';
 import { Switch } from '../Switch';
 import { ModelCard } from './ModelCard';
 import {
@@ -77,13 +78,24 @@ function scheduleAfterFrame(callback: () => void): () => void {
 
 function toDropdownOptions(
   options: ModelSelectionOption[],
-  selectedId: string
-): Array<{ value: string; label: string }> {
+  selectedId: string,
+  withIcon = false
+): Array<{ value: string; label: React.ReactNode; ariaLabel?: string }> {
   return options
     .filter((option) => option.isInstalled || option.id === selectedId)
     .map((option) => ({
       value: option.id,
-      label: option.label,
+      ariaLabel: option.label,
+      label: withIcon ? (
+        <span className="model-dropdown-option">
+          <span className="model-dropdown-option-icon">
+            <ModelBrandLogo model={{ id: option.id, name: option.label }} size={16} />
+          </span>
+          <span>{option.label}</span>
+        </span>
+      ) : (
+        option.label
+      ),
     }));
 }
 
@@ -361,6 +373,7 @@ function LocalModelManagementSection({
               <ModelCard
                 key={group.key}
                 models={group.models}
+                isAsr={true}
                 installedModels={sectionProps.installedModels}
                 downloads={sectionProps.downloads}
                 onDelete={sectionProps.handleDelete}
@@ -388,6 +401,7 @@ function LocalModelManagementSection({
               <ModelCard
                 key={group.key}
                 models={group.models}
+                isAsr={false}
                 installedModels={sectionProps.installedModels}
                 downloads={sectionProps.downloads}
                 onDelete={sectionProps.handleDelete}
@@ -415,6 +429,7 @@ function LocalModelManagementSection({
               <ModelCard
                 key={group.key}
                 models={group.models}
+                isAsr={false}
                 installedModels={sectionProps.installedModels}
                 downloads={sectionProps.downloads}
                 onDelete={sectionProps.handleDelete}
@@ -444,6 +459,7 @@ function LocalModelManagementSection({
               <ModelCard
                 key={group.key}
                 models={group.models}
+                isAsr={false}
                 installedModels={sectionProps.installedModels}
                 downloads={sectionProps.downloads}
                 onDelete={sectionProps.handleDelete}
@@ -473,6 +489,7 @@ function LocalModelManagementSection({
               <ModelCard
                 key={group.key}
                 models={group.models}
+                isAsr={false}
                 installedModels={sectionProps.installedModels}
                 downloads={sectionProps.downloads}
                 onDelete={sectionProps.handleDelete}
@@ -761,7 +778,7 @@ export function SettingsModelsTab({
 
   const streamingOptions = useMemo(() => {
     return [
-      ...toDropdownOptions(selectionOptions.streaming, selectedStreamingModelId),
+      ...toDropdownOptions(selectionOptions.streaming, selectedStreamingModelId, true),
       ...ONLINE_ASR_PROVIDER_DEFINITIONS.filter(
         (provider) => provider.id !== GROQ_WHISPER_PROVIDER_ID && provider.defaultConfig
       ) // Groq doesn't support streaming. In future, we can check provider.streaming?.supported !== false. Wait! The definition might not have streaming field directly. Let's just filter groq-whisper directly here to be safe and clean since there's no full manifest typed.
@@ -778,21 +795,27 @@ export function SettingsModelsTab({
             'streaming'
           );
         })
-        .map((provider) => ({
-          value: provider.id,
-          label: (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel })}
-              <OnlineIcon style={{ color: 'var(--color-text-muted)' }} />
-            </span>
-          ),
-        })),
+        .map((provider) => {
+          const labelText = t(provider.optionLabelKey, {
+            defaultValue: provider.optionDefaultLabel,
+          });
+          return {
+            value: provider.id,
+            ariaLabel: labelText,
+            label: (
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {labelText}
+                <OnlineIcon style={{ color: 'var(--color-text-muted)' }} />
+              </span>
+            ),
+          };
+        }),
     ];
   }, [selectedStreamingModelId, selectionOptions.streaming, t, modelConfig.asr?.providers]);
 
   const batchOptions = useMemo(() => {
     return [
-      ...toDropdownOptions(selectionOptions.batch, selectedBatchModelId),
+      ...toDropdownOptions(selectionOptions.batch, selectedBatchModelId, true),
       ...ONLINE_ASR_PROVIDER_DEFINITIONS.filter((provider) => {
         if (provider.id === selectedBatchModelId) return true;
         const providerConfig =
@@ -802,15 +825,19 @@ export function SettingsModelsTab({
             : undefined) ??
           provider.defaultConfig;
         return provider.isConfigured(providerConfig as typeof provider.defaultConfig, 'batch');
-      }).map((provider) => ({
-        value: provider.id,
-        label: (
-          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel })}
-            <OnlineIcon style={{ color: 'var(--color-text-muted)' }} />
-          </span>
-        ),
-      })),
+      }).map((provider) => {
+        const labelText = t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel });
+        return {
+          value: provider.id,
+          ariaLabel: labelText,
+          label: (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {labelText}
+              <OnlineIcon style={{ color: 'var(--color-text-muted)' }} />
+            </span>
+          ),
+        };
+      }),
     ];
   }, [selectedBatchModelId, selectionOptions.batch, t, modelConfig.asr?.providers]);
 
