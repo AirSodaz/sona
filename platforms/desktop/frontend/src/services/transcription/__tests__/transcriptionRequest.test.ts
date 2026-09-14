@@ -153,10 +153,19 @@ describe('transcriptionRequest helpers', () => {
     });
   });
 
-  it('builds batch process requests in whole-file mode when batch VAD is disabled', () => {
+  it('builds batch process requests in whole-file mode when batch VAD is disabled for exempt models', () => {
     const config = buildTestConfig({
-      batchModelPath: '/models/batch',
       batchVadEnabled: false,
+      asr: {
+        selections: {
+          batch: {
+            engine: 'local',
+            mode: 'batch',
+            modelId: 'qwen3-asr-0.6b-q8-gguf',
+            modelPath: '/models/qwen3-asr-0.6b-q8-gguf',
+          },
+        },
+      },
     });
 
     const { request, asrRequest } = buildBatchTranscriptionRequest({
@@ -169,12 +178,35 @@ describe('transcriptionRequest helpers', () => {
     expect(asrRequest).toEqual(
       expect.objectContaining({
         mode: 'batch',
-        modelPath: '/models/batch',
+        modelPath: '/models/qwen3-asr-0.6b-q8-gguf',
         vadModel: null,
         batchSegmentationMode: 'whole',
       })
     );
     expect(request.asrRequest).toBe(asrRequest);
+  });
+
+  it('forces batch VAD segmentation for non-exempt models even when batch VAD is disabled', () => {
+    const config = buildTestConfig({
+      batchModelPath: '/models/batch',
+      batchVadEnabled: false,
+      batchVadModelPath: '/models/vad.onnx',
+    });
+
+    const { asrRequest } = buildBatchTranscriptionRequest({
+      appConfig: config,
+      filePath: 'C:/audio/demo.wav',
+      language: 'auto',
+      enableItn: true,
+    });
+
+    expect(asrRequest).toEqual(
+      expect.objectContaining({
+        mode: 'batch',
+        modelPath: '/models/batch',
+        batchSegmentationMode: 'vad',
+      })
+    );
   });
 
   it('strips unsupported llama.cpp options but keeps VAD segmentation for Qwen batch requests', () => {

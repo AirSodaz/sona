@@ -1460,6 +1460,7 @@
     "vad_path_label": "VAD モデル",
     "batch_vad_enabled": "バッチ VAD セグメンテーション",
     "batch_vad_enabled_hint": "音声アクティビティごとにローカル バッチ文字起こしを分割します。ファイル全体を一度に認識するにはこれをオフにすると、速度が遅くなり、より多くのメモリを使用する可能性があります。",
+    "batch_vad_forced_hint": "Qwen3 ASR および Parakeet TDT 以外の現在のモデルでは、正常な認識とセグメンテーションを確保するためにバッチ VAD 分割が強制的に有効化されています。",
     "vad_buffer_size": "VAD バッファ サイズ (秒)",
     "vad_buffer_hint": "音声が検出される前にキャプチャするバッファ期間 (秒)。文頭が途切れるのを防ぐのに役立ちます。",
     "max_concurrent_label": "最大同時文字起こし数",

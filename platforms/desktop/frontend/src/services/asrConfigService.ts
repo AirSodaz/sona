@@ -156,10 +156,31 @@ export class AsrConfigService {
       : { requiresPunctuation: false, requiresVad: false };
 
     const scenario: AsrScenario = slot === 'batch' ? 'batch' : 'live';
-    const batchVadEnabled = scenario !== 'batch' || config.batchVadEnabled !== false;
+    const modelType = (modelInfo?.type || '').toLowerCase();
+    const idLower = (selection.modelId || '').toLowerCase();
+    const pathLower = (selection.modelPath || '').toLowerCase();
+    const isExempt =
+      modelType === 'qwen3-asr' ||
+      modelType === 'parakeet-tdt' ||
+      idLower.includes('qwen3-asr') ||
+      idLower.includes('qwen3_asr') ||
+      idLower.includes('parakeet-tdt') ||
+      idLower.includes('parakeet_tdt') ||
+      pathLower.includes('qwen3-asr') ||
+      pathLower.includes('qwen3_asr') ||
+      pathLower.includes('parakeet-tdt') ||
+      pathLower.includes('parakeet_tdt');
+    const hasBatchModel = Boolean(selection.modelId || selection.modelPath);
+    const isBatchVadForced =
+      scenario === 'batch' && selection.engine === 'local' && hasBatchModel && !isExempt;
+    const batchVadEnabled =
+      isBatchVadForced || scenario !== 'batch' || config.batchVadEnabled !== false;
     const vadModelPath = getScenarioVadModelPath(config, scenario);
     const punctuationModelPath = getScenarioPunctuationModelPath(config, scenario);
-    const vadModel = batchVadEnabled && rules.requiresVad && vadModelPath ? vadModelPath : null;
+    const vadModel =
+      batchVadEnabled && (rules.requiresVad || isBatchVadForced) && vadModelPath
+        ? vadModelPath
+        : null;
     const punctuationModel =
       rules.requiresPunctuation && punctuationModelPath ? punctuationModelPath : null;
 

@@ -185,6 +185,7 @@ function buildModelCatalog(installedModels: Set<string>) {
       speakerSegmentationModelPath: '',
       speakerEmbeddingModelPath: '',
       enableITN: true,
+      batchVadEnabled: true,
       vadBufferSize: 5,
       maxConcurrent: 2,
     },
@@ -327,6 +328,98 @@ describe('SettingsModelsTab speaker model selections', () => {
     await waitFor(() => {
       expect(useConfigStore.getState().config.batchVadEnabled).toBe(true);
       expect(batchVadSwitch.getAttribute('aria-checked')).toBe('true');
+    });
+  });
+
+  it('forces batch VAD switch on and disables it when FunASR Nano is selected for batch', async () => {
+    setTestConfig({
+      batchVadEnabled: false,
+      asr: {
+        selections: {
+          live: { engine: 'local', modelPath: '', mode: 'streaming' },
+          batch: {
+            engine: 'local',
+            modelPath: 'C:/models/sherpa-onnx-funasr-nano-int8-2025-12-30',
+            modelId: 'sherpa-onnx-funasr-nano-int8-2025-12-30',
+            mode: 'batch',
+          },
+        },
+      } as any,
+    });
+
+    renderTab(new Set());
+    await activateBatchScenarioAndExpandAdvanced();
+
+    screen.getByText('settings.batch_vad_enabled');
+    screen.getByText('settings.batch_vad_forced_hint');
+
+    const row = screen.getByText('settings.batch_vad_enabled').closest('.settings-item-container');
+    const batchVadSwitch = within(row as HTMLElement).getByRole('switch');
+    expect(batchVadSwitch.getAttribute('aria-checked')).toBe('true');
+    expect(batchVadSwitch.getAttribute('aria-disabled')).toBe('true');
+    expect(batchVadSwitch.className).toContain('disabled');
+  });
+
+  it('forces batch VAD switch on and disables it for non-exempt models like SenseVoice', async () => {
+    setTestConfig({
+      batchVadEnabled: false,
+      asr: {
+        selections: {
+          live: { engine: 'local', modelPath: '', mode: 'streaming' },
+          batch: {
+            engine: 'local',
+            modelPath: 'C:/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17',
+            modelId: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17',
+            mode: 'batch',
+          },
+        },
+      } as any,
+    });
+
+    renderTab(new Set());
+    await activateBatchScenarioAndExpandAdvanced();
+
+    screen.getByText('settings.batch_vad_enabled');
+    screen.getByText('settings.batch_vad_forced_hint');
+
+    const row = screen.getByText('settings.batch_vad_enabled').closest('.settings-item-container');
+    const batchVadSwitch = within(row as HTMLElement).getByRole('switch');
+    expect(batchVadSwitch.getAttribute('aria-checked')).toBe('true');
+    expect(batchVadSwitch.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('allows toggling batch VAD for exempt models like Qwen3 ASR and Parakeet TDT', async () => {
+    setTestConfig({
+      batchVadEnabled: true,
+      asr: {
+        selections: {
+          live: { engine: 'local', modelPath: '', mode: 'streaming' },
+          batch: {
+            engine: 'local',
+            modelPath: 'C:/models/qwen3-asr-0.6b-q8-gguf',
+            modelId: 'qwen3-asr-0.6b-q8-gguf',
+            mode: 'batch',
+          },
+        },
+      } as any,
+    });
+
+    renderTab(new Set());
+    await activateBatchScenarioAndExpandAdvanced();
+
+    screen.getByText('settings.batch_vad_enabled');
+    screen.getByText('settings.batch_vad_enabled_hint');
+
+    const row = screen.getByText('settings.batch_vad_enabled').closest('.settings-item-container');
+    const batchVadSwitch = within(row as HTMLElement).getByRole('switch');
+    expect(batchVadSwitch.getAttribute('aria-checked')).toBe('true');
+    expect(batchVadSwitch.getAttribute('aria-disabled')).toBe('false');
+
+    fireEvent.click(batchVadSwitch);
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.batchVadEnabled).toBe(false);
+      expect(batchVadSwitch.getAttribute('aria-checked')).toBe('false');
     });
   });
 

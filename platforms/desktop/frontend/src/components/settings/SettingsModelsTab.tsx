@@ -25,7 +25,7 @@ import type {
   ModelLabel,
   ModelSelectionOption,
 } from '../../types/modelCatalog';
-import { resolveModelLabels } from '../../types/modelCatalog';
+import { PRESET_MODELS_MAP, resolveModelLabels } from '../../types/modelCatalog';
 import { findSelectedModelByMode } from '../../utils/modelSelection';
 import {
   getScenarioVadBufferSize,
@@ -540,6 +540,42 @@ export function SettingsModelsTab({
   const localModelActionsDisabled = !isCatalogReady;
   const isBatchScenario = activeScenario === 'batch';
   const activeVadBufferSize = getScenarioVadBufferSize(transcriptionConfig, activeScenario);
+
+  const isBatchVadForced = useMemo(() => {
+    if (!isBatchScenario) {
+      return false;
+    }
+    const selection = modelConfig.asr?.selections.batch;
+    if (selection?.engine !== 'local') {
+      return false;
+    }
+    const modelInfo = selection.modelId
+      ? undefined
+      : findSelectedModelByMode(selection.modelPath, 'batch');
+    const modelId = selection.modelId ?? modelInfo?.id;
+    const preset = modelId ? PRESET_MODELS_MAP.get(modelId) : undefined;
+    const modelType = (preset?.type || modelInfo?.type || '').toLowerCase();
+    const idLower = (modelId || '').toLowerCase();
+    const pathLower = (selection.modelPath || '').toLowerCase();
+
+    if (!modelId && !pathLower) {
+      return false;
+    }
+
+    const isExempt =
+      modelType === 'qwen3-asr' ||
+      modelType === 'parakeet-tdt' ||
+      idLower.includes('qwen3-asr') ||
+      idLower.includes('qwen3_asr') ||
+      idLower.includes('parakeet-tdt') ||
+      idLower.includes('parakeet_tdt') ||
+      pathLower.includes('qwen3-asr') ||
+      pathLower.includes('qwen3_asr') ||
+      pathLower.includes('parakeet-tdt') ||
+      pathLower.includes('parakeet_tdt');
+
+    return !isExempt;
+  }, [isBatchScenario, modelConfig.asr?.selections.batch]);
 
   const [cudaStatus, setCudaStatus] = useState<CudaAddonInspection | null>(null);
   const [cudaDownloading, setCudaDownloading] = useState(false);
@@ -1176,10 +1212,15 @@ export function SettingsModelsTab({
           {isBatchScenario && (
             <SettingsItem
               title={t('settings.batch_vad_enabled')}
-              hint={t('settings.batch_vad_enabled_hint')}
+              hint={
+                isBatchVadForced
+                  ? t('settings.batch_vad_forced_hint')
+                  : t('settings.batch_vad_enabled_hint')
+              }
             >
               <Switch
-                checked={batchVadEnabled}
+                checked={isBatchVadForced || batchVadEnabled}
+                disabled={isBatchVadForced}
                 onChange={(checked) => updateConfig({ batchVadEnabled: checked })}
               />
             </SettingsItem>

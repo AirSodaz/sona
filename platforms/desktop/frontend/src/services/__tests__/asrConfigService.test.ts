@@ -210,7 +210,40 @@ describe('asrConfigService', () => {
     });
   });
 
-  it('resolves a local sherpa batch request without VAD when batch VAD is disabled', () => {
+  it('resolves a local sherpa batch request without VAD when batch VAD is disabled for exempt models (e.g. Qwen3 ASR)', () => {
+    const base = buildAsrConfig({ batchVadEnabled: false });
+    const request = resolveAsrTranscriptionRequest(
+      {
+        ...base,
+        asr: {
+          ...base.asr!,
+          selections: {
+            ...base.asr!.selections,
+            batch: {
+              engine: 'local',
+              modelPath: 'C:/models/qwen3-asr-0.6b-q8-gguf',
+              modelId: 'qwen3-asr-0.6b-q8-gguf',
+              mode: 'batch',
+            },
+          },
+        },
+      },
+      'batch'
+    );
+
+    expect(request).toMatchObject({
+      engine: 'local',
+      mode: 'batch',
+      modelId: 'qwen3-asr-0.6b-q8-gguf',
+      modelPath: 'C:/models/qwen3-asr-0.6b-q8-gguf',
+      vadModel: null,
+      punctuationModel: null,
+      vadBuffer: 8,
+      batchSegmentationMode: 'whole',
+    });
+  });
+
+  it('forces batch VAD segmentation for non-exempt models even when batch VAD is disabled in config', () => {
     const request = resolveAsrTranscriptionRequest(
       buildAsrConfig({
         batchVadEnabled: false,
@@ -223,10 +256,37 @@ describe('asrConfigService', () => {
       mode: 'batch',
       modelId: 'local-batch',
       modelPath: 'C:/models/local-batch',
-      vadModel: null,
-      punctuationModel: 'C:/models/punct',
-      vadBuffer: 8,
-      batchSegmentationMode: 'whole',
+      batchSegmentationMode: 'vad',
+      vadModel: 'C:/models/silero_vad.onnx',
+    });
+  });
+
+  it('forces batch VAD segmentation for FunASR Nano even when batch VAD is disabled in config', () => {
+    const base = buildAsrConfig({ batchVadEnabled: false });
+    const request = resolveAsrTranscriptionRequest(
+      {
+        ...base,
+        asr: {
+          ...base.asr!,
+          selections: {
+            ...base.asr!.selections,
+            batch: {
+              engine: 'local',
+              modelPath: 'C:/models/sherpa-onnx-funasr-nano-int8-2025-12-30',
+              modelId: 'sherpa-onnx-funasr-nano-int8-2025-12-30',
+              mode: 'batch',
+            },
+          },
+        },
+      },
+      'batch'
+    );
+
+    expect(request).toMatchObject({
+      engine: 'local',
+      mode: 'batch',
+      batchSegmentationMode: 'vad',
+      vadModel: 'C:/models/silero_vad.onnx',
     });
   });
 

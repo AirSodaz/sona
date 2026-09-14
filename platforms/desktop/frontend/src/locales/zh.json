@@ -1460,6 +1460,7 @@
     "vad_path_label": "VAD 模型",
     "batch_vad_enabled": "批量 VAD 分割",
     "batch_vad_enabled_hint": "本地批量转录时按语音活动分割音频。关闭后会整段识别文件，可能更慢并占用更多内存。",
+    "batch_vad_forced_hint": "除 Qwen3 ASR 与 Parakeet TDT 外，当前模型必须开启批量 VAD 分割以保证正常识别与分段。",
     "vad_buffer_size": "VAD 缓冲时间 (秒)",
     "vad_buffer_hint": "在检测到语音之前采集的缓冲时长。有助于避免切掉句首。",
     "max_concurrent_label": "最大并行转录数",

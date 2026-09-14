@@ -16,9 +16,7 @@ use sona_core::ports::punctuation::{
 };
 use sona_core::ports::vad::{VadDetectionOptions, VadEngineSet};
 use sona_core::transcription::runtime::BatchTranscribePlan;
-use sona_core::transcription::segmentation::{
-    AudioSegment, BATCH_SEGMENTATION_SAMPLE_RATE, segment_batch_audio,
-};
+use sona_core::transcription::segmentation::{BATCH_SEGMENTATION_SAMPLE_RATE, segment_batch_audio};
 use sona_core::transcription::transcript::{
     TranscriptSegment, TranscriptUpdate, ensure_transcript_segment_timing,
     normalize_recognizer_text, synthesize_durations,
@@ -239,6 +237,12 @@ fn transcribe_samples(
     batch_segmentation_mode: BatchSegmentationMode,
     observer: &dyn BatchTranscriptionObserver,
 ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+    let is_funasr_nano = recognizer.model_type() == "funasr-nano";
+    let batch_segmentation_mode = if is_batch_vad_forced_model(recognizer.model_type()) {
+        BatchSegmentationMode::Vad
+    } else {
+        batch_segmentation_mode
+    };
     let vad_engine = vad_engines.resolve(vad_model);
     let mut vad_options = VadDetectionOptions::batch_defaults(vad_model.unwrap_or(Path::new("")));
     vad_options.buffer_seconds = vad_buffer;
@@ -249,7 +253,7 @@ fn transcribe_samples(
         vad_engine.as_deref(),
         &vad_options,
     );
-    let audio_segments = split_audio_segments_for_model(audio_segments, recognizer.model_type());
+    let effective_punctuation = if is_funasr_nano { None } else { punctuation };
 
     let total_duration = samples.len() as f32 / 16_000.0;
     let mut results = Vec::new();
@@ -260,7 +264,7 @@ fn transcribe_samples(
                 continue;
             }
 
-            let text = finalize_transcript_text(&cleaned_text, punctuation);
+            let text = finalize_transcript_text(&cleaned_text, effective_punctuation);
             if text.is_empty() {
                 continue;
             }
@@ -320,35 +324,8 @@ fn finalize_transcript_text(
     apply_optional_punctuation(punctuation, &result)
 }
 
-fn split_audio_segments_for_model(
-    segments: Vec<AudioSegment>,
-    model_type: &str,
-) -> Vec<AudioSegment> {
-    let max_duration = match model_type {
-        "funasr-nano" => 15.0,
-        _ => return segments,
-    };
-
-    let mut result = Vec::with_capacity(segments.len());
-    for seg in segments {
-        if seg.duration <= max_duration {
-            result.push(seg);
-        } else {
-            let num_splits = (seg.duration / max_duration).ceil() as usize;
-            let split_size = seg.samples.len().div_ceil(num_splits);
-            for (i, chunk) in seg.samples.chunks(split_size).enumerate() {
-                let chunk_start_offset =
-                    (i * split_size) as f32 / BATCH_SEGMENTATION_SAMPLE_RATE as f32;
-                let chunk_duration = chunk.len() as f32 / BATCH_SEGMENTATION_SAMPLE_RATE as f32;
-                result.push(AudioSegment {
-                    samples: chunk.to_vec(),
-                    start_time: seg.start_time + chunk_start_offset,
-                    duration: chunk_duration,
-                });
-            }
-        }
-    }
-    result
+fn is_batch_vad_forced_model(model_type: &str) -> bool {
+    !matches!(model_type, "qwen3-asr" | "parakeet-tdt")
 }
 
 #[cfg(test)]

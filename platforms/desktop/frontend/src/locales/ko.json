@@ -1460,6 +1460,7 @@
     "vad_path_label": "VAD 모델",
     "batch_vad_enabled": "Batch VAD 세그먼트 분리",
     "batch_vad_enabled_hint": "Split 로컬 batch 전사 by speech activity. Turn this off to recognize the whole 파일 at once, which may be slower and use more memory.",
+    "batch_vad_forced_hint": "Qwen3 ASR 및 Parakeet TDT를 제외한 현재 모델은 정상적인 인식 및 세그먼트 분리를 위해 배치 VAD 분할이 강제로 활성화됩니다.",
     "vad_buffer_size": "VAD Buffer Size (s)",
     "vad_buffer_hint": "음성이 감지되기 전에 확보할 버퍼 길이(초)입니다. 문장 시작이 잘리는 것을 줄입니다.",
     "max_concurrent_label": "최대 동시 전사 수",
