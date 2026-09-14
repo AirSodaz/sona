@@ -18,6 +18,7 @@ Sona uses seven stable roles. The role is the reviewed dependency contract; work
 | `sona-export` | outbound-adapter |
 | `sona-sherpa-onnx` | provider |
 | `sona-vad` | provider |
+| `sona-punct` | provider |
 | `sona-llama-cpp` | provider |
 | `sona-media-detector` | outbound-adapter |
 | `sona-model-downloads` | outbound-adapter |

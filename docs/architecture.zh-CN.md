@@ -18,6 +18,7 @@ Sona 使用七种稳定角色。角色是经过评审的依赖契约；工作区
 | `sona-export` | outbound-adapter |
 | `sona-sherpa-onnx` | provider |
 | `sona-vad` | provider |
+| `sona-punct` | provider |
 | `sona-llama-cpp` | provider |
 | `sona-media-detector` | outbound-adapter |
 | `sona-model-downloads` | outbound-adapter |

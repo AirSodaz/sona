@@ -12,7 +12,7 @@ Sona is a good fit if you want to:
 
 - capture meetings, lectures, interviews, or notes with `Live Record`
 - transcribe existing audio or video files with `Batch Import`
-- organize saved recordings and imports with `Workspace`, `Projects`, and `Inbox`
+- organize saved recordings and imports with `Project Center`, `Projects`, and `Inbox`
 - review timestamps, speaker labels, and edit transcripts segment by segment
 - use `Speaker Profiles` and `Speaker Review` to confirm suggested or anonymous speaker groups
 - optionally use `LLM Polish` or `Translate` after configuring your own provider
@@ -20,7 +20,7 @@ Sona is a good fit if you want to:
 - export subtitles or plain text in common formats
 - optionally use `Voice Typing` to dictate text into other applications
 
-If you mainly came for `Live Caption`, jump to `Live Record`. If you mainly want to organize saved work, jump to `Workspace, Projects, And Inbox`. If you mainly need speaker cleanup or version rollback, jump to `Transcript Editing And Playback`. If you mainly want `Voice Typing`, jump to `Export And Settings`, especially the `Settings > Voice Typing` section.
+If you mainly came for `Live Caption`, jump to `Live Record`. If you mainly want to organize saved work, jump to `Project Center, Pipelines, And Inbox`. If you mainly need speaker cleanup or version rollback, jump to `Transcript Editing And Playback`. If you mainly want `Voice Typing`, jump to `Export And Settings`, especially the `Settings > Voice Typing` section.
 
 ## 2. Install And Launch
 
@@ -102,8 +102,8 @@ Use `Live Record` when you want to capture speech in real time and see transcrip
 
 - Transcript segments appear in the editor on the right.
 - The active segment follows the live recording state.
-- While recording is still active, Sona can already surface the session as a `Draft` item in `Workspace`.
-- When recording stops, Sona keeps the finished transcript available for editing, polishing, translation, export, and later reopening from `Workspace`, and it completes that same draft item instead of creating a second saved copy.
+- While recording is still active, Sona can already surface the session as a `Draft` item in `Projects`.
+- When recording stops, Sona keeps the finished transcript available for editing, polishing, translation, export, and later reopening from `Projects`, and it completes that same draft item instead of creating a second saved copy.
 - If you were not already inside a project, the saved item usually lands in `Inbox`.
 
 ### Notes
@@ -149,7 +149,7 @@ After Sona creates transcript segments, the editor becomes the main place to rev
 
 ### Preconditions
 
-- You already created transcript content with `Live Record`, `Batch Import`, or `Workspace`.
+- You already created transcript content with `Live Record`, `Batch Import`, or `Projects`.
 
 ### Steps
 
@@ -165,7 +165,7 @@ After Sona creates transcript segments, the editor becomes the main place to rev
 10. Use the audio player to play, pause, seek, change speed, or control volume when an audio file is available.
 11. If a segment shows a speaker badge, click it to assign the whole speaker group to a `Speaker Profile`, reveal additional global profiles, or restore that group to its anonymous label.
 12. Open `Speaker Review` from the transcript header when you want a concentrated pass before export. You can filter by `Needs review`, `Suggestions`, `Anonymous`, `Identified`, `Reviewed`, or `All`, preview the first segments in each group, jump to the first matching segment, confirm the current label, apply a candidate profile, assign another profile, or reset a group to anonymous.
-13. Open `Version Snapshots` from the transcript header when the transcript is a saved non-draft workspace item. You can compare an earlier snapshot with the current transcript, restore selected changed rows, or revert the whole transcript.
+13. Open `Version Snapshots` from the transcript header when the transcript is a saved non-draft project item. You can compare an earlier snapshot with the current transcript, restore selected changed rows, or revert the whole transcript.
 
 ### Result
 
@@ -181,7 +181,7 @@ After Sona creates transcript segments, the editor becomes the main place to rev
 - Search can jump between matching segments without leaving the editor.
 - `Speaker Review` appears with the transcript tools when there are transcript segments. If the transcript has no speaker metadata yet, the review list can be empty.
 - `Speaker Profiles` are created in `Settings > Vocabulary`; project settings can choose which profiles are active for that project. Profiles help with candidates and automatic matching, but you can still confirm, reassign, or reset labels manually.
-- `Version Snapshots` only appears for saved workspace items that are not drafts or the temporary `current` transcript. Snapshots are saved before bulk rewrites such as `LLM Polish`, `Translate`, `Re-transcribe`, and before a restore operation.
+- `Version Snapshots` only appears for saved project items that are not drafts or the temporary `current` transcript. Snapshots are saved before bulk rewrites such as `LLM Polish`, `Translate`, `Re-transcribe`, and before a restore operation.
 
 ## 7. LLM Polish, Translation, And Summary
 
@@ -199,7 +199,7 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 3. In `Provider Credentials`, open the provider you want to use and fill in its connection details such as `Base URL`, `API Key`, `Endpoint`, `Deployment Name`, or provider-specific fields.
 4. If the selected model supports it, enable `Reasoning Mode` and choose a `Reasoning Level`.
 5. Click `Test Connection` after entering credentials.
-6. Return to the main workspace after the required feature model is assigned.
+6. Return to the main editor after the required feature model is assigned.
 
 ### Steps For `LLM Polish`
 
@@ -243,7 +243,7 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 - If `AI Summary` is not fully configured yet, you can still open the summary editor and write or revise the text manually.
 - Sona keeps one current summary record per transcript. Changing templates changes the next generation target or project default; it does not create a separate saved summary for every template.
 - Translation target languages currently include `Chinese (Simplified)`, `English`, `Japanese`, `Korean`, `French`, `German`, and `Spanish`.
-- `Re-transcribe` is only available when the current transcript came from a saved workspace item.
+- `Re-transcribe` is only available when the current transcript came from a saved project item.
 - Summary output is editable in the editor. You can revise it directly, let Sona auto-save it, and use the panel's copy button when you need it elsewhere.
 - If a polish, translation, or re-transcription pass changes more than you wanted, use `Version Snapshots` from the transcript header to restore selected changed rows or revert the whole transcript.
 
@@ -277,25 +277,25 @@ Export is available when the transcript contains at least one segment.
 - `Original` mode is always available.
 - If speaker labels matter for your exported text or review process, run `Speaker Review` before exporting so suggested and anonymous groups are checked first.
 
-## 9. Workspace, Projects, And Inbox
+## 9. Project Center, Pipelines, And Inbox
 
-Use `Workspace` when you want to organize saved recordings and imports without leaving the main editing surface.
+Use `Project Center` when you want to organize saved recordings and imports without leaving the main editing surface.
 
 ### What Each Scope Means
 
 - `All Items` gives you a cross-project overview of everything saved in `Inbox` and every project.
 - `Inbox` holds recordings and imports that are not assigned to a project yet.
-- A project gives you its own focused workspace, project-specific defaults, and quick entry points for new work.
+- A project gives you its own focused project environment, project-specific defaults, and quick entry points for new work.
 
 ### Steps
 
-1. Open `Workspace`.
+1. Open the `Projects` tab.
 2. Use the left rail to switch between `All Items`, `Inbox`, and any named project.
 3. Click `New Project` when you want a dedicated space for a client, course, meeting series, or other recurring work.
 4. Enter the project name and optional description, then create it. New projects start without a custom icon.
 5. Open a project when you want new recordings or imports to stay attached to that project.
 6. Use the project header buttons to start `Live Record` or open `Batch Import` while keeping the current project context.
-7. Click any saved item to open it in the built-in detail pane and continue editing without leaving `Workspace`.
+7. Click any saved item to open it in the built-in detail pane and continue editing without leaving `Project Center`.
 8. Right-click a project for `Open` or `Project Settings`, and right-click a saved item for `Open`, `Rename`, or `Delete`. The keyboard context-menu key or `Shift + F10` opens the same actions for the focused row.
 9. Use search, filters, sort, and `List View` / `Grid View` / `Table View` to narrow the current scope.
 10. Turn on selection mode if you want to move items between `Inbox` and projects, or delete several items at once.
@@ -312,7 +312,7 @@ Use `Workspace` when you want to organize saved recordings and imports without l
 
 ### Result
 
-- `Workspace` becomes the main place to organize saved content while keeping the editor close at hand.
+- `Project Center` becomes the main place to organize saved content while keeping the editor close at hand.
 - Project-specific defaults apply whenever that project is active.
 - New work created from inside a project keeps that project context unless you move it later.
 
@@ -328,7 +328,7 @@ Use `Workspace` when you want to organize saved recordings and imports without l
 
 ## 10. Export And Settings
 
-Use `Export` when you are ready to write files out of Sona, and use `Settings` to manage app-wide defaults. If you want to reopen or organize saved work, return to `Workspace` instead of looking for a separate saved-items surface.
+Use `Export` when you are ready to write files out of Sona, and use `Settings` to manage app-wide defaults. If you want to reopen or organize saved work, return to `Projects` instead of looking for a separate saved-items surface.
 
 ### Export Reminder
 
@@ -356,7 +356,7 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 - `Settings > LLM Service`
   feature model bindings, reasoning options, and provider credentials
 - `Settings > Shortcuts`
-  live recording, playback, search, workspace navigation, and editor shortcuts
+  live recording, playback, search, project navigation, and editor shortcuts
 - `Settings > About`
   source code, logs, and update-related actions
 
@@ -369,18 +369,44 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 - The same page also shows whether the current blocker is the shortcut, model, VAD, input device, or background warm-up state.
 - `Settings > Input Device > Keep Microphone Active` is off by default. Turn it on if you want lower voice typing latency by leaving the microphone warm while idle; leave it off if you prefer Sona to release the microphone whenever you are not recording, dictating, or previewing input.
 
+### Cloud Sync (End-to-End Encrypted)
+
+Sona features a dedicated multi-device sync architecture designed around privacy:
+
+1. **End-to-End Encryption (E2EE)**: All transcripts, summaries, project hierarchies, vocabularies, and settings are encrypted locally before leaving your device. Remote WebDAV servers only store encrypted ciphertext.
+2. **Master Password & Emergency Recovery**:
+   - `Master Password`: The primary secret used to encrypt and decrypt your sync vault.
+   - `Emergency Recovery Key`: Generated when creating a new vault. If you forget your master password, use this key to unlock and reset your credentials. The recovery key is never stored in plaintext on any server.
+3. **Multi-Device Pairing (Vault ID)**: Initializing a vault generates a unique hex identifier. Enter this Vault ID, your WebDAV endpoint, and your master password on other desktop or Android devices to pair them.
+4. **Sync Scope Presets**:
+   - `Content`: Transcripts, summaries, and project groupings.
+   - `Standard`: Content + speaker profiles + hotwords + prompt/summary templates + app settings.
+   - `Full`: Entire project state + automation rules and execution logs.
+5. **Conflict Center**: When multiple devices edit concurrently offline, Sona detects revision divergence and provides side-by-side comparison in `Settings > Sync > Conflict Center`, letting you keep current, adopt conflicting, or keep both copies.
+6. **Sync Header Pill**: Indicates real-time sync state (Ready, Syncing, Locked, Error) in the top bar with one-click access to sync settings.
+7. **Audio Stays Local**: Audio recordings remain strictly on the recording machine and are never uploaded to the cloud, guaranteeing voiceprint privacy and saving bandwidth.
+
+### Storage Management
+
+Manage disk consumption and external binaries in `Settings > Storage Management`:
+
+- **Directory Overview**: View and inspect paths for application data, offline models, and temporary caches with quick links to system file explorers.
+- **Custom FFmpeg Path**: If your system lacks a global FFmpeg or requires a specific decoder version for proprietary video/audio containers, specify the binary path directly here.
+- **Audio Retention Policy**: Configure automatic retention periods for recorded audio files (`Keep Forever`, `Delete Immediately`, `7 days`, `30 days`, `90 days`, `180 days`, `365 days`). When expired, raw audio is purged while text transcripts and summaries are preserved.
+- **WebView Cache Cleanup**: Clear internal WebView cache and storage with a single click.
+
+### Task Center And Cancellation
+
+The header `Task Center` displays batch transcription and background pipeline tasks in real time:
+
+- View active queue progress, current stage, and elapsed time.
+- Cancel running batch imports or automation runs instantly without corrupting completed records.
+- Recover or discard interrupted tasks when resuming an abnormal app shutdown.
+
 ### Diagnostics And Backup
 
 - In `Settings > General`, use `Diagnostics` to inspect the local transcription chain, runtime readiness, and packaging environment.
-- In the same page, use `Backup & Restore` to export or import a light archive of config, workspace, light history transcripts and summaries, automation state, and dashboard LLM usage.
-- Light backup archives restore text history and summaries, but they do not include original audio files; restored entries may reopen without playback.
-- `WebDAV Cloud Sync` lives inside `Backup & Restore`. It stores credentials locally on this device and helps you upload or restore backup archives manually.
-
-### Notification Center
-
-- The header notification center groups updates, `Recovery Center`, and automation results in one place.
-- Use it when Sona detects interrupted batch or automation work, when an update is ready to relaunch, or when an automation rule succeeds or fails.
-- `Recovery Center` lets you resume or discard interrupted batch and automation items. `Diagnostics` and `Backup & Restore` stay under `Settings > General`.
+- In the same page, use `Backup & Restore` to export or import lightweight `.sonabackup` archives containing config, project data, summaries, automation rules, and LLM usage statistics (excluding raw audio).
 
 ### Notes
 
@@ -431,20 +457,20 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 
 ### I cannot find `Version Snapshots`
 
-- `Version Snapshots` only appears for saved workspace items that already contain transcript segments.
+- `Version Snapshots` only appears for saved project items that already contain transcript segments.
 - It is hidden for the temporary `current` transcript and for live recording drafts that are still in progress.
 - Snapshots are created before bulk rewrite operations such as `LLM Polish`, `Translate`, `Re-transcribe`, and before restoring from another snapshot.
 
 ### A restored backup opens text but no audio playback
 
-- Backup archives are intentionally lightweight. They include config, workspace data, light history transcripts and summaries, automation state, and dashboard LLM usage.
+- Backup archives are intentionally lightweight. They include config, project data, light history transcripts and summaries, automation state, and dashboard LLM usage.
 - Original audio files are not included, so restored entries may reopen for reading and editing but lack playback until the source audio is available through another path.
 
 ### Why do new items appear in `Inbox` first
 
 - `Inbox` is the default holding area for recordings and imports that are not assigned to a project yet.
 - Open a specific project before starting `Live Record` or `Batch Import` if you want new items to stay in that project automatically.
-- You can also move saved items later from `Inbox` into a project from `Workspace`.
+- You can also move saved items later from `Inbox` into a project from `Projects`.
 
 ### What happens when I delete a project
 
@@ -453,7 +479,7 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 
 ### Why do I see a `Draft` item while I am still recording
 
-- During an active live recording, Sona can create a visible `Draft` item so the session already has a saved place in `Workspace`.
+- During an active live recording, Sona can create a visible `Draft` item so the session already has a saved place in `Projects`.
 - When you stop recording, Sona completes that same item instead of creating a second saved copy.
 - Treat the draft as the live session while capture is still running; the finished transcript becomes available from the same entry.
 
@@ -478,6 +504,35 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 ### Playback controls are missing
 
 - The audio player only appears when the current transcript has an audio source available, such as a saved recording or processed file.
+
+### What if I forget my Master Password for Cloud Sync (WebDAV E2EE)?
+
+- If you saved your `Emergency Recovery Key` when creating the sync vault, select `Reset with Recovery Key` on the unlock prompt, paste the key, and set a new master password.
+- If both the master password and emergency recovery key are lost, remote data cannot be decrypted. You will need to disconnect the device and initialize a fresh vault.
+
+### Does Cloud Sync upload my audio recordings to the cloud?
+
+- No. Sona is designed with absolute voice privacy in mind. Only lightweight text transcripts, summaries, speaker profiles, vocabularies, and configuration items are synced. Raw audio recordings stay strictly on the local device where they were recorded.
+
+### Why does Cloud Sync show a conflict?
+
+- A conflict occurs when two devices edit the same transcript, project, or vocabulary set while offline or before sync completes.
+- Open `Settings > Sync > Conflict Center` to view the differences side by side. You can keep the current local version, adopt the remote version, or keep both copies.
+
+### How do I recover an accidentally deleted transcript?
+
+- Open `Trash` from the `Projects` left rail.
+- Locate the deleted transcript, right-click, and select `Restore`. The item returns to its original project or to `Inbox`.
+- Items are only permanently erased when you choose `Delete permanently` or `Empty Trash`.
+
+### Can I cancel an in-progress batch transcription job?
+
+- Yes. Open the header `Task Center` and click the stop/cancel icon next to the running batch job. Sona safely halts processing at the current stage; previously completed files in the batch remain saved.
+
+### What if media import fails or reports a missing decoder?
+
+- Ensure the file is not corrupted and uses a standard media container.
+- If decoding proprietary or unusual audio/video formats fails, install FFmpeg on your system or specify a custom FFmpeg binary path under `Settings > Storage Management > Custom FFmpeg Path`.
 
 ### I want to build or develop Sona
 

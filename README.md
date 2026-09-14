@@ -2,22 +2,23 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-**Sona** is a powerful, offline transcript editor built with [Tauri](https://tauri.app), [React](https://react.dev), and [Sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). It provides fast, accurate, and private speech-to-text capabilities directly on your local machine using a high-performance Rust backend.
+**Sona** is a powerful, offline transcript editor built with [Tauri](https://tauri.app), [React](https://react.dev), [Sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx), and [llama.cpp](https://github.com/ggerganov/llama.cpp). It provides fast, accurate, and private speech-to-text capabilities directly on your local machine using a high-performance Rust backend.
 
 ## ✨ Features
 
-- **🔒 Offline & Private**: All speech processing happens locally on your device. No data leaves your machine.
-- **🎙️ Real-time Transcription**: Record and transcribe audio in real-time with low latency.
-- **📁 Batch Processing**: Import multiple audio or video files for bulk transcription in the background.
-- **🗂️ Workspace Organization**: Use `Workspace`, `Projects`, and `Inbox` to organize saved recordings and imports.
-- **📝 Interactive Editor**: A rich text editor synchronized with audio playback for corrections, speaker labels, and version snapshots.
-- **👥 Speaker Profiles & Review**: Build local speaker profiles, correct speaker badges segment by segment, and review suggested or anonymous speaker groups before export.
-- **✨ LLM Assistant**: Polish, translate, and summarize transcripts using OpenAI, Anthropic, Gemini, or Ollama.
-- **🗣️ Live Caption & Voice Typing**: Reuse the same offline live transcription stack for floating captions or dictation into other applications.
-- **📤 Smart Export**: Export in multiple formats (TXT, SRT, VTT, JSON) with bilingual support.
-- **🛟 Recovery, Backup & Diagnostics**: Resume interrupted work, export lightweight backups of config, workspace, and text history, and inspect model/runtime health from the app.
-- **🔔 Notifications & Automation**: Use the header notification center for updates, recovery, and automation results, and configure watched-folder automation rules in Settings.
-- **🤖 Advanced AI Models**: Powered by state-of-the-art models like **SenseVoice**, **Whisper**, and **Paraformer**.
+- **🔒 Offline & Private**: Speech processing happens locally on your device. Audio recordings never leave your machine.
+- **🎙️ Real-time Transcription**: Record and transcribe audio in real time with low latency.
+- **📁 Batch Processing**: Import audio or video files for background batch transcription with real-time cancellation support.
+- **☁️ End-to-End Encrypted Cloud Sync**: Multi-device sync via WebDAV with client-side end-to-end encryption (E2EE), master password, emergency recovery keys, configurable sync scopes (Content, Standard, Full), and conflict resolution.
+- **📱 Cross-Platform & Android**: Core application capabilities available on desktop (Windows, macOS, Linux) and Android via UniFFI.
+- **🗂️ Project Center & Automated Pipelines**: Organize work with `Project Center`, `Inbox`, and `Trash`. Assign Notion-style automated pipelines (hotwords, replacement rules, prompt presets, translation languages) per project.
+- **📝 Rich Interactive Editor**: Synchronized playback editor supporting inline segment splitting/merging, speaker badges, version snapshots, formatting (bold, italic, underline, strikethrough `Ctrl+Shift+S`, inline code), and anticipation carets.
+- **👥 Speaker Profiles & Review**: Build local speaker profiles, adjust speaker badges segment by segment, and batch-review suggested or anonymous speaker groups before export.
+- **✨ LLM Assistant**: Polish, translate, and summarize transcripts using OpenAI, Anthropic, Gemini, DeepSeek, or Ollama.
+- **🗣️ Live Caption & Voice Typing**: Reuse the offline live transcription stack for floating system captions or system-wide dictation into other applications.
+- **📤 Smart Export**: Export in multiple formats (TXT, SRT, VTT, JSON, Markdown) with bilingual support and clipboard copy.
+- **🛟 Recovery, Backup & Storage**: Resume interrupted tasks via the Task Center, export lightweight backups, manage storage directories, set custom FFmpeg paths, and configure audio retention cleanup policies.
+- **🤖 Advanced AI Models**: Powered by state-of-the-art models including **Qwen3-ASR** (via llama.cpp), **FireRedASR2-AED**, **SenseVoice**, **Whisper**, **Paraformer**, and **Silero VAD v5**.
 
 ## 🚀 Getting Started
 
@@ -27,7 +28,7 @@ The easiest way to install Sona is to download the pre-built binaries for your p
 
 ### User Guide
 
-For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md). It covers first-run setup, `Live Record`, `Batch Import`, `Workspace` / `Projects` / `Inbox`, transcript editing, speaker review, version snapshots, LLM features, `Voice Typing`, export, `Dashboard` / backup / recovery entry points, and troubleshooting.
+For end-user setup and daily workflows, read the [User Guide](docs/user-guide.md). It covers first-run setup, `Live Record`, `Batch Import`, `Projects` / `Inbox`, transcript editing, speaker review, version snapshots, LLM features, `Voice Typing`, export, `Dashboard` / backup / recovery entry points, and troubleshooting.
 
 ## 📚 Documentation
 

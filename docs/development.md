@@ -31,6 +31,7 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
     libayatana-appindicator3-dev \
     librsvg2-dev \
     libasound2-dev
+```
 
 ## Install
 
@@ -43,30 +44,33 @@ pnpm install
 
 ## Develop
 
-Run the desktop application through the repository Tauri wrapper:
+Run the desktop application through the repository's Tauri wrapper:
 
 ```bash
 pnpm run tauri dev
 ```
 
-Run only the frontend development server when the native host is not needed:
+Run only the frontend development server when native host behavior is not needed:
 
 ```bash
 pnpm run dev
 ```
 
-## Test And Check
+## Test and Validate
 
-Use the smallest command that covers the area you changed:
+Pick the narrowest commands that cover your changes:
 
 ```bash
 pnpm test
 pnpm run test:scripts
 pnpm run lint:ci
 pnpm run build:ci
+pnpm run verify:android-client
+pnpm run verify:android-uniffi
 ```
 
-Rust packages should be tested with focused Cargo package or test selectors. Contributor-specific validation guidance lives in [CONTRIBUTING.md](../CONTRIBUTING.md).
+If you modified cross-platform contracts exposed to UniFFI or Android, run `pnpm run generate:sona-context` to regenerate the composition root.
+Rust crates should be tested with focused Cargo package or test selectors. See [CONTRIBUTING.md](../CONTRIBUTING.md) for contributor verification expectations.
 
 ## Build The Desktop Application
 

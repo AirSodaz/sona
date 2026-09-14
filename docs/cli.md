@@ -1,6 +1,6 @@
 # Sona CLI
 
-`sona-cli` is a stateless command-line transcription host. It does not open or manage the Sona SQLite application database, History/Tag workspace, sync state, or online LLM tasks. Transcripts are written to stdout or to an explicitly supplied output file.
+`sona-cli` is a stateless command-line transcription host. It does not open or manage the Sona SQLite application database, project database, history storage, sync state, or online LLM tasks. Transcripts are written to stdout or to an explicitly supplied output file.
 
 The standalone CLI ships these commands:
 

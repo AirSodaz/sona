@@ -31,6 +31,7 @@ sudo apt-get install libwebkit2gtk-4.1-dev \
     libayatana-appindicator3-dev \
     librsvg2-dev \
     libasound2-dev
+```
 
 ## 安装
 
@@ -64,8 +65,11 @@ pnpm test
 pnpm run test:scripts
 pnpm run lint:ci
 pnpm run build:ci
+pnpm run verify:android-client
+pnpm run verify:android-uniffi
 ```
 
+如果修改了面向 UniFFI 或移动端的接口契约，请运行 `pnpm run generate:sona-context` 重新生成组合根代码。
 Rust 包应使用聚焦的 Cargo package 或 test selector 进行测试。贡献者相关的验证要求请查看 [CONTRIBUTING.md](../CONTRIBUTING.md)。
 
 ## 构建桌面应用
