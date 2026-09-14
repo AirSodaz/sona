@@ -54,6 +54,12 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
           }
         }
       }
+
+      if (newMode === 'projects') {
+        // Reset to a neutral session so the batch item's transcript is not
+        // shown in the projects view while a batch run is in progress.
+        useTranscriptStore.setState({ activeSessionId: 'default' });
+      }
     },
     [mode, setMode]
   );

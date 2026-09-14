@@ -328,7 +328,9 @@ function App(): React.JSX.Element {
                 <div style={{ display: mode === 'live' ? undefined : 'none', height: '100%' }}>
                   <LiveRecord />
                 </div>
-                {mode === 'batch' && <BatchImport />}
+                <div style={{ display: mode === 'batch' ? undefined : 'none', height: '100%' }}>
+                  <BatchImport />
+                </div>
               </div>
             </div>
 

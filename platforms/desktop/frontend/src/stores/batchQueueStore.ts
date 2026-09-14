@@ -307,7 +307,12 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         if (get().activeItemId === id) {
           transcriptStore.rekeyCurrentSummaryState(savedMeta.historyId);
           transcriptStore.setAudioUrl(savedMeta.audioUrl ?? null);
-          void useProjectStore.getState().setActiveProjectId(savedMeta.projectId ?? null);
+          // Only update the active project when still in batch mode,
+          // to avoid overriding the browse scope in the projects view.
+          const currentMode = useTranscriptStore.getState().mode;
+          if (currentMode === 'batch') {
+            void useProjectStore.getState().setActiveProjectId(savedMeta.projectId ?? null);
+          }
         }
       },
       setItemExportPath: (id, exportPath) => {
