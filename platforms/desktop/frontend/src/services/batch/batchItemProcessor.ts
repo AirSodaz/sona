@@ -31,6 +31,8 @@ export interface BatchItemProcessorCallbacks {
   onExportComplete: (exportPath: string) => void;
   isActiveItem: () => boolean;
   isCancelRequested: () => boolean;
+  /** Called as soon as the batch `instanceId` is known, so the store can persist it for cancellation. */
+  onInstanceIdAssigned: (instanceId: string) => void;
 }
 
 export interface ProcessBatchItemOptions {
@@ -168,7 +170,10 @@ export class BatchItemProcessor {
         },
         language === 'auto' ? undefined : language,
         tempWavPath,
-        config
+        config,
+        (instanceId) => {
+          callbacks.onInstanceIdAssigned(instanceId);
+        }
       );
 
       this.throwIfCancelRequested(callbacks);

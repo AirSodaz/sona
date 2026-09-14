@@ -74,4 +74,10 @@ export interface BatchQueueItem {
   recoveryId?: string;
   /** Last known pipeline stage used by the recovery center. */
   lastKnownStage?: RecoveryItemStage;
+  /**
+   * Instance ID of the currently running `process_batch_file` Tauri call.
+   * Set when transcription starts, cleared when it ends. Used by `removeItem`
+   * to send a real-time cancellation signal to the Rust backend.
+   */
+  activeInstanceId?: string | null;
 }

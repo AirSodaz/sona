@@ -68,7 +68,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
     async fn process_file(
         &self,
         emitter: Arc<dyn crate::platform::event::EventEmitterPort>,
-        _state: &AsrState,
+        state: &AsrState,
         file_path: std::path::PathBuf,
         save_to_path: Option<std::path::PathBuf>,
         request: AsrTranscriptionRequest,
@@ -117,9 +117,43 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
         let transcriber = sona_application::local_asr::LocalBatchTranscriberRouter::new(
             super::local_asr_registry_default(),
         );
-        let segments = transcriber
-            .transcribe_with_observer(plan, observer.clone())
-            .await?;
+
+        // Register with the cancel registry so an in-progress task can be
+        // interrupted. We deregister unconditionally in the `finally` block
+        // regardless of how the transcription ends.
+        let cancel_rx = if let Some(id) = &request.instance_id {
+            Some((id.clone(), state.batch_cancel.register(id).await))
+        } else {
+            None
+        };
+
+        let transcribe_fut = transcriber.transcribe_with_observer(plan, observer.clone());
+
+        let segments = if let Some((id, mut rx)) = cancel_rx {
+            let result = tokio::select! {
+                result = transcribe_fut => result,
+                _ = async {
+                    // Wait until the channel value changes to `true` (cancelled).
+                    loop {
+                        if *rx.borrow() {
+                            break;
+                        }
+                        if rx.changed().await.is_err() {
+                            // Sender was dropped — treat as cancellation.
+                            break;
+                        }
+                        if *rx.borrow() {
+                            break;
+                        }
+                    }
+                } => Err(AsrPortError::runtime("Task cancelled.")),
+            };
+            state.batch_cancel.remove(&id).await;
+            result?
+        } else {
+            transcribe_fut.await?
+        };
+
         let normalized =
             super::transcript::apply_timeline_normalization(segments, normalization_options);
         let output = postprocessor.process_segments(normalized);

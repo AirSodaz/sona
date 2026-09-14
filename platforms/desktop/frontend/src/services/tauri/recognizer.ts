@@ -210,3 +210,8 @@ export async function processBatchFile(
     asrRequest: normalizeAsrRequest(request.asrRequest),
   });
 }
+
+/** Cancels an in-flight batch transcription task by its instance ID. */
+export async function cancelBatchTask(instanceId: string): Promise<void> {
+  await invokeTauri(TauriCommand.recognizer.cancelBatchTask, { instanceId });
+}

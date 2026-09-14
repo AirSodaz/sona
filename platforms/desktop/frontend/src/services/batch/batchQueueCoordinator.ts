@@ -40,6 +40,8 @@ export interface BatchQueueLifecyclePorts {
     historyItem: HistoryItem
   ) => void | Promise<void>;
   setItemExportPath: (itemId: string, exportPath: string) => void;
+  /** Persists or clears the active Rust instance ID used for real-time cancellation. */
+  setItemActiveInstanceId: (itemId: string, instanceId: string | null) => void;
   isActiveItem: (itemId: string) => boolean;
   scheduleNext: () => void;
 }
@@ -211,8 +213,13 @@ export class BatchQueueCoordinator {
           isActiveItem: () => lifecyclePorts.isActiveItem(itemId),
           isCancelRequested: () =>
             this.ports.isTaskLedgerCancelRequested(this.ports.createBatchTaskLedgerId(itemId)),
+          onInstanceIdAssigned: (instanceId) => {
+            lifecyclePorts.setItemActiveInstanceId(itemId, instanceId);
+          },
         },
       });
+      // Clear the instance ID once processing ends (success or cancel check below).
+      lifecyclePorts.setItemActiveInstanceId(itemId, null);
 
       if (this.ports.isTaskLedgerCancelRequested(this.ports.createBatchTaskLedgerId(itemId))) {
         await this.settleCancelledItem(item, lifecyclePorts);

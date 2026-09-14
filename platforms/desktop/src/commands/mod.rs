@@ -181,6 +181,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::asr::stop_native_live_transcription,
         crate::commands::asr::get_live_transcription_metrics,
         crate::commands::asr::process_batch_file,
+        crate::commands::asr::cancel_batch_task,
         crate::commands::asr::get_asr_runtime_metrics,
         crate::commands::export::export_transcript_file,
         crate::commands::system::annotate_speaker_segments_from_file,

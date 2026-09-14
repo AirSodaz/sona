@@ -18,6 +18,7 @@ import {
   patchTaskLedgerRecord,
   upsertTaskLedgerRecord,
 } from '../services/taskLedgerBuilders';
+import { cancelBatchTask } from '../services/tauri/recognizer';
 import type {
   AutomationExportConfig,
   AutomationResolutionSnapshot,
@@ -34,6 +35,7 @@ import type { TranscriptSegment } from '../types/transcript';
 import { useConfigStore } from './configStore';
 import { getEffectiveConfigSnapshot } from './effectiveConfigStore';
 import { useProjectStore } from './projectStore';
+import { useTaskLedgerStore } from './taskLedgerStore';
 import { clearActiveTranscriptSession, setTranscriptSegments } from './transcriptCoordinator';
 import { useTranscriptSessionStore } from './transcriptSessionStore';
 import { DEFAULT_SESSION_DATA, useTranscriptStore } from './transcriptStore';
@@ -128,6 +130,14 @@ interface BatchQueueState {
   clearQueue: () => void;
   /** internal helper */
   _processItem: (itemId: string) => Promise<void>;
+  /**
+   * Records the active Rust `process_batch_file` instance ID on the queue
+   * item so that `removeItem` / `clearQueue` can cancel it in real time.
+   *
+   * @param id Queue item ID.
+   * @param instanceId Rust instance ID, or null to clear after completion.
+   */
+  setItemActiveInstanceId: (id: string, instanceId: string | null) => void;
 }
 
 function getQueueRecoveryIds(item: BatchQueueItem): string[] {
@@ -322,6 +332,13 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
           ),
         }));
       },
+      setItemActiveInstanceId: (id, instanceId) => {
+        set((currentState) => ({
+          queueItems: currentState.queueItems.map((queueItem) =>
+            queueItem.id === id ? { ...queueItem, activeInstanceId: instanceId } : queueItem
+          ),
+        }));
+      },
       isActiveItem: (id) => get().activeItemId === id,
       scheduleNext: () => {
         void get().processQueue();
@@ -482,6 +499,16 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
     const state = get();
     const removedItem = state.queueItems.find((item) => item.id === id);
+
+    // Signal cancellation to the task ledger so isCancelRequested() fires
+    // inside the running pipeline, and tell Rust to abort the transcription.
+    if (removedItem && (removedItem.status === 'processing' || removedItem.status === 'pending')) {
+      void useTaskLedgerStore.getState().requestCancel(createBatchTaskLedgerId(id));
+      if (removedItem.activeInstanceId) {
+        void cancelBatchTask(removedItem.activeInstanceId);
+      }
+    }
+
     const newItems = state.queueItems.filter((item) => item.id !== id);
     const isActiveItem = state.activeItemId === id;
     const newActiveId = newItems.length > 0 ? newItems[0].id : null;
@@ -518,6 +545,18 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     }
 
     const state = get();
+
+    // Signal cancellation for every active/pending item so in-flight
+    // tasks are interrupted both at the JS pipeline level and in Rust.
+    state.queueItems.forEach((item) => {
+      if (item.status === 'processing' || item.status === 'pending') {
+        void useTaskLedgerStore.getState().requestCancel(createBatchTaskLedgerId(item.id));
+        if (item.activeInstanceId) {
+          void cancelBatchTask(item.activeInstanceId);
+        }
+      }
+    });
+
     set({
       queueItems: [],
       activeItemId: null,
@@ -532,6 +571,14 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       })
     );
     clearActiveTranscriptSession({ clearAudio: true });
+  },
+
+  setItemActiveInstanceId: (id, instanceId) => {
+    set((currentState) => ({
+      queueItems: currentState.queueItems.map((queueItem) =>
+        queueItem.id === id ? { ...queueItem, activeInstanceId: instanceId } : queueItem
+      ),
+    }));
   },
 }));
 

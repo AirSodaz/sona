@@ -15,13 +15,60 @@ use sona_sherpa_onnx::runtime::RecognizerPool;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, watch};
+
+/// Registry that maps batch `instance_id` to a cancellation-signal sender.
+///
+/// Each in-flight `process_batch_file` call registers itself here. The
+/// corresponding `cancel_batch_task` Tauri command looks up the sender and
+/// sends a cancellation signal; the processor's `tokio::select!` branch then
+/// wins and returns an error immediately.
+#[derive(Default)]
+pub(crate) struct BatchCancelRegistry {
+    senders: Mutex<HashMap<String, watch::Sender<bool>>>,
+}
+
+impl BatchCancelRegistry {
+    /// Register a new cancellation channel for `instance_id`.
+    ///
+    /// Returns the receiver that the processor should watch. Dropping the
+    /// sender (on registry removal) also signals cancellation, so the
+    /// processor is always unblocked when the entry is cleaned up.
+    pub async fn register(&self, instance_id: &str) -> watch::Receiver<bool> {
+        let (tx, rx) = watch::channel(false);
+        self.senders
+            .lock()
+            .await
+            .insert(instance_id.to_string(), tx);
+        rx
+    }
+
+    /// Send the cancellation signal for `instance_id`.
+    ///
+    /// Returns `true` if a live registration was found, `false` otherwise.
+    pub async fn cancel(&self, instance_id: &str) -> bool {
+        let senders = self.senders.lock().await;
+        if let Some(tx) = senders.get(instance_id) {
+            let _ = tx.send(true);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Remove the registration for `instance_id` once the task has finished
+    /// (either normally or by cancellation).
+    pub async fn remove(&self, instance_id: &str) {
+        self.senders.lock().await.remove(instance_id);
+    }
+}
 
 pub struct AsrState {
     pub(crate) recognizer_pool: RecognizerPool,
     pub(crate) registry: LocalAsrRegistry,
     pub(crate) metrics: AsrMetricsStore,
     pub(crate) live_coordinator: LiveTranscriptionCoordinator,
+    pub(crate) batch_cancel: Arc<BatchCancelRegistry>,
     external_sources: Mutex<HashMap<String, ExternalSourceState>>,
     next_external_generation: AtomicU64,
 }
@@ -57,6 +104,7 @@ impl AsrState {
             registry,
             metrics: new_metrics_store(),
             live_coordinator: factory.coordinator(),
+            batch_cancel: Arc::new(BatchCancelRegistry::default()),
             external_sources: Mutex::new(HashMap::new()),
             next_external_generation: AtomicU64::new(1),
         }

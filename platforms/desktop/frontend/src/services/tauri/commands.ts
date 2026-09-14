@@ -149,6 +149,7 @@ export const TauriCommand = {
     stopLive: 'stop_live_transcription',
     getLiveMetrics: 'get_live_transcription_metrics',
     processBatchFile: 'process_batch_file',
+    cancelBatchTask: 'cancel_batch_task',
   },
   recovery: {
     loadSnapshot: 'recovery_load_snapshot',

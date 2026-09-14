@@ -85,6 +85,18 @@ vi.mock('../../services/taskLedgerBuilders', () => ({
     Reflect.apply(taskLedgerContext.isTaskLedgerCancelRequested, undefined, args),
 }));
 
+vi.mock('../taskLedgerStore', () => ({
+  useTaskLedgerStore: {
+    getState: () => ({
+      requestCancel: vi.fn().mockResolvedValue(undefined),
+    }),
+  },
+}));
+
+vi.mock('../../services/tauri/recognizer', () => ({
+  cancelBatchTask: vi.fn().mockResolvedValue(undefined),
+}));
+
 describe('batchQueueStore', () => {
   beforeEach(() => {
     useBatchQueueStore.getState().clearQueue();
@@ -334,6 +346,7 @@ describe('batchQueueStore', () => {
         onExportComplete: vi.fn(),
         isActiveItem: () => false,
         isCancelRequested: () => false,
+        onInstanceIdAssigned: vi.fn(),
       },
     });
 
@@ -344,7 +357,8 @@ describe('batchQueueStore', () => {
       expect.any(Function),
       undefined,
       expect.any(String),
-      config
+      config,
+      expect.any(Function)
     );
     expect(updateSegments).toHaveBeenCalledWith([expect.objectContaining({ text: '云端结果' })]);
     expect(updateStatus).toHaveBeenCalledWith('processing', 0, 'transcribing');

@@ -123,6 +123,7 @@ describe('BatchItemProcessor', () => {
       onExportComplete: vi.fn(),
       isActiveItem: vi.fn().mockReturnValue(true),
       isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
     };
 
     await processor.processBatchQueueItem({ item, config, callbacks });

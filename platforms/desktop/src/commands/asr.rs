@@ -8,6 +8,19 @@ use sona_core::ports::asr::AsrRuntimeObserver;
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
+/// Cancels an in-flight `process_batch_file` call identified by `instance_id`.
+///
+/// The command is a no-op when no matching task is registered (e.g. the task
+/// already finished before the signal arrived).
+#[tauri::command]
+pub async fn cancel_batch_task(
+    state: State<'_, AsrState>,
+    instance_id: String,
+) -> Result<(), String> {
+    state.batch_cancel.cancel(&instance_id).await;
+    Ok(())
+}
+
 async fn run_native_capture_start<F>(
     task: F,
 ) -> Result<crate::integrations::audio::LiveCaptureLease, AsrPortError>

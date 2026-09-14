@@ -468,6 +468,10 @@ type ManualTauriCommandContractMap = {
     };
     result: TranscriptSegment[];
   };
+  [TauriCommand.recognizer.cancelBatchTask]: {
+    args: { instanceId: string };
+    result: undefined;
+  };
   [TauriCommand.backup.exportArchive]: {
     args: { request: ExportBackupArchiveRequest };
     result: BackupManifestV1;

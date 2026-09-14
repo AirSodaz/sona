@@ -304,7 +304,8 @@ export class TranscriptionService {
     onSegment?: TranscriptionCallback,
     language?: string,
     saveToPath?: string,
-    configOverride?: AppConfig
+    configOverride?: AppConfig,
+    onInstanceId?: (instanceId: string) => void
   ): Promise<TranscriptSegment[]> {
     try {
       return await this._transcribeFileInternal(
@@ -314,7 +315,8 @@ export class TranscriptionService {
         onSegment,
         language,
         saveToPath,
-        configOverride
+        configOverride,
+        onInstanceId
       );
     } catch (error) {
       if (extractErrorMessage(error).includes('COREML_FAILURE')) {
@@ -325,7 +327,8 @@ export class TranscriptionService {
           onSegment,
           language,
           saveToPath,
-          configOverride
+          configOverride,
+          onInstanceId
         );
       }
       throw error;
@@ -339,10 +342,16 @@ export class TranscriptionService {
     onSegment?: TranscriptionCallback,
     language?: string,
     _saveToPath?: string,
-    configOverride?: AppConfig
+    configOverride?: AppConfig,
+    onInstanceId?: (instanceId: string) => void
   ): Promise<TranscriptSegment[]> {
     const appConfig = configOverride || this.ports.getEffectiveConfigSnapshot();
     const instanceId = `batch-${uuidv4()}`;
+
+    // Notify the caller of the instance ID before any async work so it can
+    // register the ID for potential cancellation.
+    onInstanceId?.(instanceId);
+
     const { request: batchRequest, asrRequest } = buildBatchTranscriptionRequest({
       appConfig,
       filePath,
