@@ -169,16 +169,7 @@ pub fn ensure_transcript_segment_timing(segment: &mut TranscriptSegment) {
 }
 
 pub fn normalize_recognizer_text(text: &str) -> String {
-    let mut result = text.trim();
-
-    while result.starts_with("<|") && result.contains("|>") {
-        let Some(tag_end) = result.find("|>") else {
-            break;
-        };
-        result = result[tag_end + 2..].trim();
-    }
-
-    result.trim().to_string()
+    crate::transcription::postprocess::strip_model_control_tags(text)
 }
 
 pub fn synthesize_durations(timestamps: &[f32], end_time: f32) -> Option<Vec<f32>> {
@@ -1019,6 +1010,22 @@ mod tests {
         assert_eq!(
             normalize_recognizer_text("  <|zh|><|withitn|><|noise|> 123. "),
             "123."
+        );
+    }
+
+    #[test]
+    fn normalize_recognizer_text_strips_sil_tags() {
+        assert_eq!(normalize_recognizer_text("<sil>"), "");
+        assert_eq!(normalize_recognizer_text("  <sil>  "), "");
+        assert_eq!(normalize_recognizer_text("<sil> 123. "), "123.");
+        assert_eq!(normalize_recognizer_text("123. <sil>"), "123.");
+        assert_eq!(
+            normalize_recognizer_text("  <|zh|><|withitn|><sil> 123. "),
+            "123."
+        );
+        assert_eq!(
+            normalize_recognizer_text("<sil>你好<sil>世界<sil>"),
+            "你好世界"
         );
     }
 

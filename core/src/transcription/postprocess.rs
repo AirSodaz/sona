@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use regex::{NoExpand, Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "specta")]
@@ -5,6 +7,29 @@ use specta::Type;
 
 use crate::transcription::TranscriptPostprocessError;
 use crate::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
+
+/// Matches ASR model control and event tags that should not leak into transcript text:
+/// - SenseVoice / Whisper style: `<|zh|>`, `<|withitn|>`, `<|HAPPY|>`, `<|silence|>`, etc.
+/// - FunASR / CTC style: `<sil>`
+static MODEL_CONTROL_TAG_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)<\|[^|]+?\|>|<sil>").expect("valid model tag regex"));
+
+/// Strips known model control tags from text and trims surrounding whitespace.
+pub fn strip_model_control_tags(text: &str) -> String {
+    if !text.contains('<') {
+        return text.trim().to_string();
+    }
+    MODEL_CONTROL_TAG_REGEX
+        .replace_all(text, "")
+        .trim()
+        .to_string()
+}
+
+/// Checks if text represents a trivial non-speech placeholder (e.g. Whisper's "." or FunASR's "<sil>").
+pub fn is_trivial_placeholder(text: &str) -> bool {
+    let trimmed = text.trim();
+    text == "." || trimmed.is_empty() || trimmed.eq_ignore_ascii_case("<sil>")
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(Type))]
@@ -102,9 +127,13 @@ impl TranscriptPostprocessor {
         segments
             .into_iter()
             .filter_map(|mut segment| {
-                if self.drop_final_dot_segments && segment.is_final && segment.text == "." {
+                if self.drop_final_dot_segments
+                    && segment.is_final
+                    && is_trivial_placeholder(&segment.text)
+                {
                     return None;
                 }
+                segment.text = strip_model_control_tags(&segment.text);
                 segment.text = self.apply_text_replacements(&segment.text);
                 Some(segment)
             })
@@ -116,12 +145,16 @@ impl TranscriptPostprocessor {
         let mut upsert_segments = Vec::with_capacity(update.upsert_segments.len());
 
         for mut segment in update.upsert_segments {
-            if self.drop_final_dot_segments && segment.is_final && segment.text == "." {
+            if self.drop_final_dot_segments
+                && segment.is_final
+                && is_trivial_placeholder(&segment.text)
+            {
                 if !remove_ids.iter().any(|id| id == &segment.id) {
                     remove_ids.push(segment.id);
                 }
                 continue;
             }
+            segment.text = strip_model_control_tags(&segment.text);
             segment.text = self.apply_text_replacements(&segment.text);
             upsert_segments.push(segment);
         }
@@ -331,5 +364,85 @@ mod tests {
             vec!["existing".to_string(), "segment-1".to_string()]
         );
         assert!(update.upsert_segments.is_empty());
+    }
+
+    #[test]
+    fn postprocess_segments_drops_final_sil_tag_segments() {
+        let processor = TranscriptPostprocessor::compile(TranscriptPostprocessOptions {
+            text_replacement_sets: Vec::new(),
+            drop_final_dot_segments: true,
+        })
+        .unwrap();
+        let mut partial_sil = sample_segment("<sil>", 0.0, 0.5);
+        partial_sil.id = "partial-sil".to_string();
+        partial_sil.is_final = false;
+        let mut final_sil = sample_segment("<sil>", 0.5, 1.0);
+        final_sil.id = "final-sil".to_string();
+        let mut spaced_sil = sample_segment(" <sil> ", 1.0, 1.5);
+        spaced_sil.id = "spaced-sil".to_string();
+
+        let processed = processor.process_segments(vec![partial_sil, final_sil, spaced_sil]);
+
+        assert_eq!(
+            processed
+                .iter()
+                .map(|segment| segment.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["partial-sil"]
+        );
+    }
+
+    #[test]
+    fn postprocess_update_removes_dropped_final_sil_segment_id() {
+        let processor = TranscriptPostprocessor::compile(TranscriptPostprocessOptions {
+            text_replacement_sets: Vec::new(),
+            drop_final_dot_segments: true,
+        })
+        .unwrap();
+        let update = processor.process_update(TranscriptUpdate {
+            remove_ids: vec!["existing".to_string()],
+            upsert_segments: vec![sample_segment("<sil>", 0.0, 0.5)],
+        });
+
+        assert_eq!(
+            update.remove_ids,
+            vec!["existing".to_string(), "segment-1".to_string()]
+        );
+        assert!(update.upsert_segments.is_empty());
+    }
+
+    #[test]
+    fn postprocess_segments_sanitizes_model_control_tags_in_valid_segments() {
+        let processor = TranscriptPostprocessor::compile(TranscriptPostprocessOptions {
+            text_replacement_sets: Vec::new(),
+            drop_final_dot_segments: true,
+        })
+        .unwrap();
+
+        let processed = processor.process_segments(vec![
+            sample_segment("<sil>Hello world<sil>", 0.0, 1.0),
+            sample_segment("<|zh|><|withitn|>你好世界", 1.0, 2.0),
+        ]);
+
+        assert_eq!(processed.len(), 2);
+        assert_eq!(processed[0].text, "Hello world");
+        assert_eq!(processed[1].text, "你好世界");
+    }
+
+    #[test]
+    fn strip_model_control_tags_handles_various_formats() {
+        assert_eq!(strip_model_control_tags("<sil>"), "");
+        assert_eq!(strip_model_control_tags("  <sil>  "), "");
+        assert_eq!(strip_model_control_tags("<sil> 123. "), "123.");
+        assert_eq!(strip_model_control_tags("123. <sil>"), "123.");
+        assert_eq!(
+            strip_model_control_tags("  <|zh|><|withitn|><sil> 123. "),
+            "123."
+        );
+        assert_eq!(
+            strip_model_control_tags("<sil>你好<sil>世界<sil>"),
+            "你好世界"
+        );
+        assert_eq!(strip_model_control_tags("plain text"), "plain text");
     }
 }

@@ -561,7 +561,7 @@ describe('voiceTypingService', () => {
     ]);
   });
 
-  it('keeps an existing candidate visible when later partials collapse to tags or empty text', async () => {
+  it('keeps an existing candidate visible when later partials collapse to empty text', async () => {
     let onSegment: ((segment: any) => void) | undefined;
     mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
       onSegment = segmentCallback;
@@ -573,19 +573,11 @@ describe('voiceTypingService', () => {
 
     onSegment?.({ id: 'seg-1', text: '测试123', isFinal: false });
     await flushMicrotasks(8);
-    onSegment?.({ id: 'seg-1', text: '<|zh|><|withitn|>', isFinal: false });
-    await flushMicrotasks(8);
     onSegment?.({ id: 'seg-1', text: '   ', isFinal: false });
     await flushMicrotasks(8);
 
     expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.phase)).toEqual(['segment']);
     expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.text)).toEqual(['测试123']);
-    expect(mocks.loggerInfo).toHaveBeenCalledWith(
-      '[VoiceTypingSessionMachine] Dropped segment update',
-      expect.objectContaining({
-        dropReason: 'tag_only',
-      })
-    );
     expect(mocks.loggerInfo).toHaveBeenCalledWith(
       '[VoiceTypingSessionMachine] Dropped segment update',
       expect.objectContaining({

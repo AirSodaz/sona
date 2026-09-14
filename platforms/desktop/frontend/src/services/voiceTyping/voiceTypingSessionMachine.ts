@@ -14,11 +14,7 @@ const ERROR_VISIBILITY_MS = 700;
 const FLUSH_EVENT_SETTLE_MS = 80;
 
 type SessionState = 'idle' | 'preparing' | 'listening' | 'composing' | 'stopping' | 'error';
-type SegmentDropReason =
-  | 'stale_session'
-  | 'manual_stop_pending'
-  | 'empty_after_normalize'
-  | 'tag_only';
+type SegmentDropReason = 'stale_session' | 'manual_stop_pending' | 'empty_after_normalize';
 
 interface VoiceTypingSessionMachineOptions {
   transcriptionService: TranscriptionService;
@@ -37,24 +33,8 @@ function delay(ms: number) {
   });
 }
 
-function normalizeCandidateText(text: string) {
-  let result = text.trim();
-
-  while (result.startsWith('<|') && result.includes('|>')) {
-    const tagEnd = result.indexOf('|>');
-    result = result.slice(tagEnd + 2).trim();
-  }
-
-  return result;
-}
-
-function isControlTagOnlyText(text: string) {
-  const trimmed = text.trim();
-  if (!trimmed?.includes('<|')) {
-    return false;
-  }
-
-  return trimmed.replace(/(?:<\|[^|]+?\|>\s*)+/g, '').trim().length === 0;
+function normalizeCandidateText(text: string): string {
+  return (text || '').trim();
 }
 
 function analyzeCandidateText(text: string) {
@@ -71,7 +51,7 @@ function analyzeCandidateText(text: string) {
   return {
     normalizedText,
     hasVisibleText: false,
-    dropReason: isControlTagOnlyText(text) ? 'tag_only' : 'empty_after_normalize',
+    dropReason: 'empty_after_normalize',
   } satisfies {
     normalizedText: string;
     hasVisibleText: boolean;
