@@ -252,3 +252,359 @@ fn build_model_config_constructs_offline_omnilingual_when_files_present() {
         other => panic!("expected OfflineOmnilingual, got {other:?}"),
     }
 }
+
+#[test]
+fn build_model_config_normalizes_language_for_funasr_nano() {
+    let model_path = Path::new("C:/models/funasr-nano");
+    let file_config = Some(ModelFileConfig {
+        encoder_adaptor: Some("encoder_adaptor.onnx".to_string()),
+        llm: Some("llm.onnx".to_string()),
+        embedding: Some("embedding.onnx".to_string()),
+        tokenizer: Some("tokenizer".to_string()),
+        ..Default::default()
+    });
+
+    for lang in ["auto", "multilingual"] {
+        let model = build_model_config(model_path, "funasr-nano", &file_config, false, lang, None)
+            .expect("funasr-nano model should build");
+        match model {
+            ModelType::OfflineFunASRNano { language, .. } => {
+                assert_eq!(
+                    language, "",
+                    "language '{lang}' should be normalized to empty string"
+                );
+            }
+            other => panic!("expected OfflineFunASRNano, got {other:?}"),
+        }
+    }
+
+    let model = build_model_config(model_path, "funasr-nano", &file_config, false, "zh", None)
+        .expect("funasr-nano model should build");
+    match model {
+        ModelType::OfflineFunASRNano { language, .. } => {
+            assert_eq!(language, "zh");
+        }
+        other => panic!("expected OfflineFunASRNano, got {other:?}"),
+    }
+}
+
+// Regression test: sherpa-onnx's OfflineFunASRNanoModelConfig defaults
+// max_new_tokens to 0, which prevents the model from generating any tokens
+// and causes empty transcription output. The recognizer builder must
+// explicitly override it with a positive value.
+#[test]
+fn build_model_config_funasr_nano_sets_nonzero_max_new_tokens() {
+    let model_path = Path::new("C:/models/funasr-nano");
+    let file_config = Some(ModelFileConfig {
+        encoder_adaptor: Some("encoder_adaptor.int8.onnx".to_string()),
+        llm: Some("llm.int8.onnx".to_string()),
+        embedding: Some("embedding.int8.onnx".to_string()),
+        tokenizer: Some("Qwen3-0.6B".to_string()),
+        ..Default::default()
+    });
+
+    for lang in ["auto", "multilingual", "zh", "en", ""] {
+        let result =
+            build_offline_model_config(model_path, "funasr-nano", &file_config, false, lang, None);
+        assert!(
+            result.is_ok(),
+            "funasr-nano config should succeed for language={lang:?}: {:?}",
+            result.err()
+        );
+    }
+}
+
+#[test]
+fn build_model_config_normalizes_language_for_whisper_and_sensevoice() {
+    let model_path = Path::new("C:/models/test");
+    let whisper_config = Some(ModelFileConfig {
+        encoder: Some("encoder.onnx".to_string()),
+        decoder: Some("decoder.onnx".to_string()),
+        tokens: Some("tokens.txt".to_string()),
+        ..Default::default()
+    });
+
+    for lang in ["auto", "multilingual"] {
+        let model = build_model_config(model_path, "whisper", &whisper_config, false, lang, None)
+            .expect("whisper should build");
+        match model {
+            ModelType::OfflineWhisper { language, .. } => {
+                assert_eq!(
+                    language, "",
+                    "whisper language '{lang}' should be normalized to empty string"
+                );
+            }
+            other => panic!("expected OfflineWhisper, got {other:?}"),
+        }
+    }
+
+    let sensevoice_config = Some(ModelFileConfig {
+        model: Some("model.onnx".to_string()),
+        tokens: Some("tokens.txt".to_string()),
+        ..Default::default()
+    });
+
+    for lang in ["", "multilingual"] {
+        let model = build_model_config(
+            model_path,
+            "sensevoice",
+            &sensevoice_config,
+            false,
+            lang,
+            None,
+        )
+        .expect("sensevoice should build");
+        match model {
+            ModelType::OfflineSenseVoice { language, .. } => {
+                assert_eq!(
+                    language, "auto",
+                    "sensevoice language '{lang}' should be normalized to 'auto'"
+                );
+            }
+            other => panic!("expected OfflineSenseVoice, got {other:?}"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_funasr_nano_decode_not_empty_with_auto_language() {
+    use sona_core::ports::asr::BatchTranscriberPort;
+    use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
+
+    let model_dir = Path::new(r"D:\projects\models\sherpa-onnx-funasr-nano-int8-2025-12-30");
+    let wav_path = Path::new(r"D:\projects\sona\platforms\desktop\sample.wav");
+    if !model_dir.exists() || !wav_path.exists() {
+        return;
+    }
+    let file_config = Some(ModelFileConfig {
+        encoder_adaptor: Some("encoder_adaptor.int8.onnx".to_string()),
+        llm: Some("llm.int8.onnx".to_string()),
+        embedding: Some("embedding.int8.onnx".to_string()),
+        tokenizer: Some("Qwen3-0.6B".to_string()),
+        ..Default::default()
+    });
+
+    for lang in ["auto", "zh", ""] {
+        let model_type =
+            build_offline_model_config(model_dir, "funasr-nano", &file_config, false, lang, None)
+                .unwrap();
+        let recognizer = create_offline_recognizer(model_type, 4, None).unwrap();
+        let mut reader = hound::WavReader::open(wav_path).unwrap();
+        let samples: Vec<f32> = reader
+            .samples::<i16>()
+            .map(|s| s.unwrap() as f32 / 32768.0)
+            .collect();
+        let result = sona_sherpa_onnx::recognizer::decode_offline_samples(&recognizer, &samples)
+            .expect("should decode");
+        println!(
+            "FunASR Nano decode result with lang='{lang}': text='{}', tokens_len={}, timestamps={:?}",
+            result.text,
+            result.tokens.len(),
+            result.timestamps
+        );
+
+        // Also test short slices (like in pseudo-streaming or short VAD chunks):
+        for duration_s in [0.2, 0.4, 0.6, 0.8] {
+            let num_samples = (16000.0 * duration_s) as usize;
+            let slice = &samples[..num_samples.min(samples.len())];
+            let slice_result =
+                sona_sherpa_onnx::recognizer::decode_offline_samples(&recognizer, slice);
+            println!(
+                "  slice duration={duration_s}s: text='{}'",
+                slice_result
+                    .as_ref()
+                    .map(|r| r.text.as_str())
+                    .unwrap_or("<None>")
+            );
+        }
+        assert!(
+            !result.text.trim().is_empty(),
+            "Transcribed text should not be empty for lang='{lang}', got: {:?}",
+            result.text
+        );
+    }
+
+    // Test with VAD enabled (as in real app)
+    let vad_path = Path::new(r"D:\projects\models\silero_vad.onnx");
+    let punct_path = Path::new(
+        r"D:\projects\models\sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12\model.onnx",
+    );
+
+    let vad_model = if vad_path.exists() {
+        Some(vad_path.to_string_lossy().to_string())
+    } else {
+        None
+    };
+    let punctuation_model = if punct_path.exists() {
+        Some(punct_path.to_string_lossy().to_string())
+    } else {
+        None
+    };
+
+    println!(
+        "Testing batch with vad_model={:?}, punctuation_model={:?}",
+        vad_model, punctuation_model
+    );
+
+    let plan = BatchTranscribePlan {
+        input_path: wav_path.to_path_buf(),
+        save_to_path: None,
+        engine: sona_core::ports::asr::LocalAsrEngine::SherpaOnnx,
+        model_path: model_dir.to_string_lossy().to_string(),
+        num_threads: 4,
+        enable_itn: false,
+        language: "auto".to_string(),
+        punctuation_model,
+        vad_model,
+        vad_buffer: 5.0,
+        batch_segmentation_mode: sona_core::ports::asr::BatchSegmentationMode::Vad,
+        model_type: "funasr-nano".to_string(),
+        file_config: file_config.clone(),
+        hotwords: None,
+        speaker_processing: None,
+        gpu_acceleration: Some("cpu".to_string()),
+        export_format: sona_core::export::ExportFormat::Json,
+        output_target: OutputTarget::Stdout,
+        quiet: false,
+        ffmpeg_path: Some(r"C:\Users\asoda\scoop\shims\ffmpeg.exe".to_string()),
+    };
+
+    let segments = sona_sherpa_onnx::batch::LocalBatchAsrAdapter::default()
+        .transcribe(plan)
+        .await
+        .expect("batch transcribe should succeed");
+    println!("Batch transcribe segments count: {}", segments.len());
+    for (i, seg) in segments.iter().enumerate() {
+        println!(
+            "  seg[{i}]: start={}, end={}, text='{}'",
+            seg.start, seg.end, seg.text
+        );
+    }
+    assert!(!segments.is_empty(), "Batch segments should not be empty!");
+}
+
+#[tokio::test]
+async fn test_funasr_nano_user_history_audio() {
+    use sona_core::ports::asr::BatchTranscriberPort;
+    use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
+
+    let model_dir = Path::new(r"D:\projects\models\sherpa-onnx-funasr-nano-int8-2025-12-30");
+    let wav_path = Path::new(
+        r"C:\Users\asoda\AppData\Local\com.asoda.sona\history\97f391f9-1baf-4b1e-abe3-2918939c1580.wav",
+    );
+    if !model_dir.exists() || !wav_path.exists() {
+        println!("Skipping test: model or user history audio not found");
+        return;
+    }
+    let file_config = Some(ModelFileConfig {
+        encoder_adaptor: Some("encoder_adaptor.int8.onnx".to_string()),
+        llm: Some("llm.int8.onnx".to_string()),
+        embedding: Some("embedding.int8.onnx".to_string()),
+        tokenizer: Some("Qwen3-0.6B".to_string()),
+        ..Default::default()
+    });
+
+    let vad_path = Path::new(r"D:\projects\models\silero_vad.onnx");
+    let punct_path = Path::new(
+        r"D:\projects\models\sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12\model.onnx",
+    );
+
+    let vad_model = if vad_path.exists() {
+        Some(vad_path.to_string_lossy().to_string())
+    } else {
+        None
+    };
+    let punctuation_model = if punct_path.exists() {
+        Some(punct_path.to_string_lossy().to_string())
+    } else {
+        None
+    };
+
+    let plan = BatchTranscribePlan {
+        input_path: wav_path.to_path_buf(),
+        save_to_path: None,
+        engine: sona_core::ports::asr::LocalAsrEngine::SherpaOnnx,
+        model_path: model_dir.to_string_lossy().to_string(),
+        num_threads: 4,
+        enable_itn: false,
+        language: "auto".to_string(),
+        punctuation_model,
+        vad_model,
+        vad_buffer: 5.0,
+        batch_segmentation_mode: sona_core::ports::asr::BatchSegmentationMode::Vad,
+        model_type: "funasr-nano".to_string(),
+        file_config: file_config.clone(),
+        hotwords: None,
+        speaker_processing: None,
+        gpu_acceleration: Some("cpu".to_string()),
+        export_format: sona_core::export::ExportFormat::Json,
+        output_target: OutputTarget::Stdout,
+        quiet: false,
+        ffmpeg_path: Some(r"C:\Users\asoda\scoop\shims\ffmpeg.exe".to_string()),
+    };
+
+    let segments = sona_sherpa_onnx::batch::LocalBatchAsrAdapter::default()
+        .transcribe(plan)
+        .await
+        .expect("batch transcribe should succeed");
+    println!(
+        "User history audio batch transcribe segments count: {}",
+        segments.len()
+    );
+    for (i, seg) in segments.iter().enumerate() {
+        println!(
+            "  seg[{i}]: start={}, end={}, text='{}'",
+            seg.start, seg.end, seg.text
+        );
+    }
+    assert!(
+        !segments.is_empty(),
+        "Batch segments should not be empty on user history audio!"
+    );
+}
+
+#[tokio::test]
+async fn test_funasr_nano_durations() {
+    let model_dir = Path::new(r"D:\projects\models\sherpa-onnx-funasr-nano-int8-2025-12-30");
+    let wav_path = Path::new(
+        r"C:\Users\asoda\AppData\Local\com.asoda.sona\history\97f391f9-1baf-4b1e-abe3-2918939c1580.wav",
+    );
+    if !model_dir.exists() || !wav_path.exists() {
+        return;
+    }
+    let file_config = Some(ModelFileConfig {
+        encoder_adaptor: Some("encoder_adaptor.int8.onnx".to_string()),
+        llm: Some("llm.int8.onnx".to_string()),
+        embedding: Some("embedding.int8.onnx".to_string()),
+        tokenizer: Some("Qwen3-0.6B".to_string()),
+        ..Default::default()
+    });
+
+    let model_type =
+        build_offline_model_config(model_dir, "funasr-nano", &file_config, false, "auto", None)
+            .unwrap();
+    let recognizer = create_offline_recognizer(model_type, 4, None).unwrap();
+
+    let mut reader = hound::WavReader::open(wav_path).unwrap();
+    let all_samples: Vec<f32> = reader
+        .samples::<i16>()
+        .map(|s| s.unwrap() as f32 / 32768.0)
+        .collect();
+
+    for seconds in [2, 5, 8, 10, 12, 15, 18, 20, 25, 30] {
+        let n = (16000 * seconds).min(all_samples.len());
+        let slice = &all_samples[..n];
+        let res = sona_sherpa_onnx::recognizer::decode_offline_samples(&recognizer, slice);
+        println!(
+            "Duration {}s: text='{}' tokens_len={}",
+            seconds,
+            res.as_ref().map(|r| r.text.as_str()).unwrap_or("<None>"),
+            res.as_ref().map(|r| r.tokens.len()).unwrap_or(0),
+        );
+        let res = res.expect("decode should return a result");
+        assert!(
+            !res.text.trim().is_empty(),
+            "FunASR Nano output must not be empty for duration {seconds}s"
+        );
+    }
+}

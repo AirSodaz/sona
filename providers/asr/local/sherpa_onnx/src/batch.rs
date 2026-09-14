@@ -16,7 +16,9 @@ use sona_core::ports::punctuation::{
 };
 use sona_core::ports::vad::{VadDetectionOptions, VadEngineSet};
 use sona_core::transcription::runtime::BatchTranscribePlan;
-use sona_core::transcription::segmentation::{BATCH_SEGMENTATION_SAMPLE_RATE, segment_batch_audio};
+use sona_core::transcription::segmentation::{
+    AudioSegment, BATCH_SEGMENTATION_SAMPLE_RATE, segment_batch_audio,
+};
 use sona_core::transcription::transcript::{
     TranscriptSegment, TranscriptUpdate, ensure_transcript_segment_timing,
     normalize_recognizer_text, synthesize_durations,
@@ -247,6 +249,7 @@ fn transcribe_samples(
         vad_engine.as_deref(),
         &vad_options,
     );
+    let audio_segments = split_audio_segments_for_model(audio_segments, recognizer.model_type());
 
     let total_duration = samples.len() as f32 / 16_000.0;
     let mut results = Vec::new();
@@ -315,6 +318,37 @@ fn finalize_transcript_text(
     }
 
     apply_optional_punctuation(punctuation, &result)
+}
+
+fn split_audio_segments_for_model(
+    segments: Vec<AudioSegment>,
+    model_type: &str,
+) -> Vec<AudioSegment> {
+    let max_duration = match model_type {
+        "funasr-nano" => 15.0,
+        _ => return segments,
+    };
+
+    let mut result = Vec::with_capacity(segments.len());
+    for seg in segments {
+        if seg.duration <= max_duration {
+            result.push(seg);
+        } else {
+            let num_splits = (seg.duration / max_duration).ceil() as usize;
+            let split_size = seg.samples.len().div_ceil(num_splits);
+            for (i, chunk) in seg.samples.chunks(split_size).enumerate() {
+                let chunk_start_offset =
+                    (i * split_size) as f32 / BATCH_SEGMENTATION_SAMPLE_RATE as f32;
+                let chunk_duration = chunk.len() as f32 / BATCH_SEGMENTATION_SAMPLE_RATE as f32;
+                result.push(AudioSegment {
+                    samples: chunk.to_vec(),
+                    start_time: seg.start_time + chunk_start_offset,
+                    duration: chunk_duration,
+                });
+            }
+        }
+    }
+    result
 }
 
 #[cfg(test)]

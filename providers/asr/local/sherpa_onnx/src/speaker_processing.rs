@@ -874,6 +874,10 @@ fn apply_speaker_tags_to_segments(
         ));
     }
 
+    if annotated.is_empty() && !segments.is_empty() {
+        return segments.to_vec();
+    }
+
     annotated.sort_by(|left, right| {
         left.start
             .partial_cmp(&right.start)
@@ -1085,7 +1089,11 @@ fn assign_speakers_to_segment(
         ensure_transcript_segment_timing(segment);
     }
 
-    segments
+    if !segments.is_empty() {
+        return segments;
+    }
+
+    vec![apply_speaker_to_whole_segment(segment, fallback_speaker)]
 }
 
 fn apply_speaker_to_whole_segment(
@@ -1704,5 +1712,16 @@ mod tests {
         assert_eq!(units[0].text, "Hello,");
         assert_eq!(units[1].text, " ");
         assert_eq!(units[2].text, "world!");
+    }
+
+    #[test]
+    fn apply_speaker_tags_to_segments_never_drops_original_segments() {
+        let segment = sample_segment(0.0, 1.0, "preserved text");
+        let clusters = Vec::new();
+        let assignments = HashMap::new();
+
+        let annotated = apply_speaker_tags_to_segments(&[segment], &clusters, &assignments);
+        assert_eq!(annotated.len(), 1);
+        assert_eq!(annotated[0].text, "preserved text");
     }
 }

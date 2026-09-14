@@ -179,10 +179,16 @@ pub fn build_model_config(
         "sensevoice" => {
             let model = get_path(&fc.model)?;
             let tokens = get_path(&fc.tokens)?;
+            let language = if language.is_empty() || language == "multilingual" {
+                "auto"
+            } else {
+                language
+            }
+            .to_string();
             Ok(ModelType::OfflineSenseVoice {
                 model,
                 tokens,
-                language: language.to_string(),
+                language,
                 use_itn: enable_itn,
             })
         }
@@ -190,7 +196,12 @@ pub fn build_model_config(
             let encoder = get_path(&fc.encoder)?;
             let decoder = get_path(&fc.decoder)?;
             let tokens = get_path(&fc.tokens)?;
-            let language = if language == "auto" { "" } else { language }.to_string();
+            let language = if language == "auto" || language == "multilingual" {
+                ""
+            } else {
+                language
+            }
+            .to_string();
             Ok(ModelType::OfflineWhisper {
                 encoder,
                 decoder,
@@ -208,7 +219,7 @@ pub fn build_model_config(
                 .as_ref()
                 .map(|_| get_path(&fc.tokens))
                 .transpose()?;
-            let language = if language == "multilingual" {
+            let language = if language == "auto" || language == "multilingual" {
                 ""
             } else {
                 language
@@ -333,9 +344,15 @@ pub struct SafeOnlineRecognizer(OnlineRecognizer);
 unsafe impl Send for SafeOnlineRecognizer {}
 unsafe impl Sync for SafeOnlineRecognizer {}
 
-pub struct SafeOfflineRecognizer(OfflineRecognizer);
+pub struct SafeOfflineRecognizer(pub(crate) OfflineRecognizer, pub(crate) String);
 unsafe impl Send for SafeOfflineRecognizer {}
 unsafe impl Sync for SafeOfflineRecognizer {}
+
+impl SafeOfflineRecognizer {
+    pub fn model_type(&self) -> &str {
+        &self.1
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct OfflineDecodeResult {
@@ -462,6 +479,8 @@ impl Recognizer {
             "[Recognizer::new] start model_type={:?} num_threads={num_threads}",
             model_type
         );
+        let model_type_name = model_type.model_type_name().to_string();
+        let make_safe_offline = |r| SafeOfflineRecognizer(r, model_type_name.clone());
         let rec = match model_type {
             ModelType::OnlineTransducer {
                 encoder,
@@ -530,7 +549,7 @@ impl Recognizer {
                     )
                 })?;
                 debug!("Successfully created OfflineRecognizer (OfflineSenseVoice)");
-                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+                RecognizerInner::Offline(make_safe_offline(recognizer))
             }
             ModelType::OfflineWhisper {
                 encoder,
@@ -553,7 +572,7 @@ impl Recognizer {
                     )
                 })?;
                 debug!("Successfully created OfflineRecognizer (OfflineWhisper)");
-                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+                RecognizerInner::Offline(make_safe_offline(recognizer))
             }
             ModelType::OfflineFunASRNano {
                 encoder_adaptor,
@@ -574,6 +593,9 @@ impl Recognizer {
                 config.model_config.funasr_nano.tokenizer =
                     Some(tokenizer.to_string_lossy().to_string());
                 config.model_config.funasr_nano.language = Some(language);
+                config.model_config.funasr_nano.temperature = 1e-6;
+                config.model_config.funasr_nano.top_p = 0.8;
+                config.model_config.funasr_nano.max_new_tokens = 512;
 
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineFunASRNano)");
                 let recognizer = OfflineRecognizer::create(&config).ok_or_else(|| {
@@ -583,7 +605,7 @@ impl Recognizer {
                     )
                 })?;
                 debug!("Successfully created OfflineRecognizer (OfflineFunASRNano)");
-                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+                RecognizerInner::Offline(make_safe_offline(recognizer))
             }
             ModelType::OfflineFireRedAsr {
                 encoder,
@@ -606,7 +628,7 @@ impl Recognizer {
                     )
                 })?;
                 debug!("Successfully created OfflineRecognizer (OfflineFireRedAsr)");
-                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+                RecognizerInner::Offline(make_safe_offline(recognizer))
             }
             ModelType::OfflineDolphin { model, tokens } => {
                 info!("[Recognizer::new] branch=OfflineDolphin");
@@ -620,7 +642,7 @@ impl Recognizer {
                     )
                 })?;
                 debug!("Successfully created OfflineRecognizer (OfflineDolphin)");
-                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+                RecognizerInner::Offline(make_safe_offline(recognizer))
             }
             ModelType::OfflineQwen3Asr {
                 conv_frontend,
@@ -647,7 +669,7 @@ impl Recognizer {
                     )
                 })?;
                 debug!("Successfully created OfflineRecognizer (OfflineQwen3Asr)");
-                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+                RecognizerInner::Offline(make_safe_offline(recognizer))
             }
             ModelType::OfflineParakeetTdt {
                 encoder,
@@ -673,7 +695,7 @@ impl Recognizer {
                     )
                 })?;
                 debug!("Successfully created OfflineRecognizer (OfflineParakeetTdt)");
-                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+                RecognizerInner::Offline(make_safe_offline(recognizer))
             }
             ModelType::OfflineMoonshine {
                 preprocessor,
@@ -704,7 +726,7 @@ impl Recognizer {
                     )
                 })?;
                 debug!("Successfully created OfflineRecognizer (OfflineMoonshine)");
-                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+                RecognizerInner::Offline(make_safe_offline(recognizer))
             }
             ModelType::OfflineOmnilingual { model, tokens } => {
                 info!("[Recognizer::new] branch=OfflineOmnilingual");
@@ -720,7 +742,7 @@ impl Recognizer {
                     )
                 })?;
                 debug!("Successfully created OfflineRecognizer (OfflineOmnilingual)");
-                RecognizerInner::Offline(SafeOfflineRecognizer(recognizer))
+                RecognizerInner::Offline(make_safe_offline(recognizer))
             }
         };
         Ok(Self { inner: rec })
@@ -782,10 +804,21 @@ pub fn create_offline_recognizer(
     }
 }
 
+/// Maximum audio chunk duration (in samples at 16kHz) for FunASR Nano.
+/// FunASR Nano's ONNX models have a hard-coded KV cache capacity of 512 tokens.
+/// Prompts use ~29 tokens, and audio generates ~16.6 tokens per second.
+/// A chunk of 15 seconds corresponds to ~250 audio tokens, leaving ~233 tokens
+/// for generated text without any KV cache overflow.
+pub const FUNASR_NANO_MAX_CHUNK_SAMPLES: usize = 15 * 16_000;
+
 pub fn decode_offline_samples(
     recognizer: &SafeOfflineRecognizer,
     samples: &[f32],
 ) -> Option<OfflineDecodeResult> {
+    if recognizer.model_type() == "funasr-nano" && samples.len() > FUNASR_NANO_MAX_CHUNK_SAMPLES {
+        return decode_offline_samples_chunked(recognizer, samples, FUNASR_NANO_MAX_CHUNK_SAMPLES);
+    }
+
     let stream = recognizer.0.create_stream();
     stream.accept_waveform(16000, samples);
     recognizer.0.decode(&stream);
@@ -795,6 +828,52 @@ pub fn decode_offline_samples(
         tokens: result.tokens,
         timestamps: result.timestamps,
     })
+}
+
+fn decode_offline_samples_chunked(
+    recognizer: &SafeOfflineRecognizer,
+    samples: &[f32],
+    max_chunk_size: usize,
+) -> Option<OfflineDecodeResult> {
+    let num_splits = samples.len().div_ceil(max_chunk_size);
+    let split_size = samples.len().div_ceil(num_splits);
+
+    let mut combined_text = String::new();
+    let mut combined_tokens = Vec::new();
+    let mut combined_timestamps = Vec::new();
+    let mut has_timestamps = false;
+    let mut any_success = false;
+
+    for (i, chunk) in samples.chunks(split_size).enumerate() {
+        let chunk_offset_sec = (i * split_size) as f32 / 16000.0;
+        let stream = recognizer.0.create_stream();
+        stream.accept_waveform(16000, chunk);
+        recognizer.0.decode(&stream);
+
+        if let Some(result) = stream.get_result() {
+            any_success = true;
+            combined_text.push_str(&result.text);
+            combined_tokens.extend(result.tokens);
+            if let Some(ts) = result.timestamps {
+                has_timestamps = true;
+                combined_timestamps.extend(ts.into_iter().map(|t| t + chunk_offset_sec));
+            }
+        }
+    }
+
+    if any_success {
+        Some(OfflineDecodeResult {
+            text: combined_text,
+            tokens: combined_tokens,
+            timestamps: if has_timestamps {
+                Some(combined_timestamps)
+            } else {
+                None
+            },
+        })
+    } else {
+        None
+    }
 }
 
 pub fn create_online_stream(recognizer: &SafeOnlineRecognizer) -> SafeStream {
