@@ -77,6 +77,7 @@ jobs:
 
       - name: Sync llama.cpp runtime libraries
         run: |
+          rm -rf target/debug/examples
           for out_lib in target/debug/build/llama-cpp-sys-2-*/out/lib; do
             if [ -d "$out_lib" ]; then
               mkdir -p target/debug/deps
@@ -90,7 +91,21 @@ jobs:
         run: cargo test -p sona-core -p sona-application -p sona-api-server -p sona-archive -p sona-export -p sona-sherpa-onnx -p sona-vad -p sona-punct -p sona-llama-cpp -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-recovery-fs -p sona-runtime-fs -p sona-sqlite -p sona-sync -p sona-sync-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli
 
       - name: Compile desktop tests
-        run: cargo test --manifest-path platforms/desktop/Cargo.toml --no-run
+        run: |
+          rm -rf target/debug/examples
+          cargo test --manifest-path platforms/desktop/Cargo.toml --no-run
+
+      - name: Sync desktop llama.cpp runtime libraries
+        run: |
+          rm -rf target/debug/examples
+          for out_lib in target/debug/build/llama-cpp-sys-2-*/out/lib; do
+            if [ -d "$out_lib" ]; then
+              mkdir -p target/debug/deps
+              cp -a --remove-destination "$out_lib"/* target/debug/ 2>/dev/null || true
+              cp -a --remove-destination "$out_lib"/* target/debug/deps/ 2>/dev/null || true
+            fi
+          done
+          find target/debug -xtype l -delete 2>/dev/null || true
 
       - name: Run desktop tests
         run: |
