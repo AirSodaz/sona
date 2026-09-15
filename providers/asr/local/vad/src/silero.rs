@@ -34,6 +34,15 @@ impl VadEnginePort for SileroOnnxEngine {
         let config = silero_config(&model_path.to_string_lossy(), options);
         detect_with_config(samples, sample_rate, &config, options.buffer_seconds)
     }
+
+    fn create_stream_detector(
+        &self,
+        options: &VadDetectionOptions,
+    ) -> Result<Box<dyn sona_core::ports::vad::StreamingVadPort>, AsrPortError> {
+        let model_path = super::shared::resolve_model_onnx_path(&options.model_path)?;
+        let config = silero_config(&model_path.to_string_lossy(), options);
+        super::shared::create_streaming_detector_with_config(&config, options.buffer_seconds)
+    }
 }
 
 fn silero_config(model: &str, options: &VadDetectionOptions) -> VadModelConfig {

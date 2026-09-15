@@ -1,4 +1,4 @@
-import { type ModelInfo, PRESET_MODELS } from '../types/modelCatalog';
+import { type ModelInfo, type ModelMode, PRESET_MODELS } from '../types/modelCatalog';
 
 function normalizeModelPath(modelPath: string): string {
   return modelPath.replace(/\\/g, '/').toLowerCase();
@@ -19,13 +19,12 @@ export function doesModelPathMatch(
   return normalizeModelPath(modelPath).includes(getModelPathToken(model));
 }
 
-export function findSelectedModelByMode(
-  modelPath: string,
-  mode: 'streaming' | 'batch'
-): ModelInfo | null {
+export function findSelectedModelByMode(modelPath: string, mode: ModelMode): ModelInfo | null {
+  const targetModes = mode === 'live' || mode === 'streaming' ? ['live', 'streaming'] : [mode];
   return (
     PRESET_MODELS.find(
-      (model) => model.modes?.includes(mode) && doesModelPathMatch(modelPath, model)
+      (model) =>
+        model.modes?.some((m) => targetModes.includes(m)) && doesModelPathMatch(modelPath, model)
     ) ?? null
   );
 }

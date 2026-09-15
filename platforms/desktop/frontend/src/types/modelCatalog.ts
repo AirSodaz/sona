@@ -5,11 +5,13 @@ export type TimestampSupportHint = 'token' | 'segment' | 'unknown';
 
 /** How a model handles ASR language selection; drives client language pickers. */
 export type LanguageMode = 'selectable' | 'auto' | 'fixed' | 'none';
+export type ModelMode = 'live' | 'streaming' | 'batch';
 
 export interface ModelRules {
   requiresVad: boolean;
   requiresPunctuation: boolean;
   timestampSupportHint?: TimestampSupportHint;
+  initialRefreshRateMs?: number;
 }
 
 export interface ModelArtifact {
@@ -56,7 +58,7 @@ export interface ModelInfo {
     | 'speaker-segmentation'
     | 'speaker-embedding'
     | 'omnilingual';
-  modes?: ('streaming' | 'batch')[];
+  modes?: ModelMode[];
   /** All recognizable languages, sorted ascending ISO 639 codes (`yue` = Cantonese). */
   languages: string[];
   languageMode: LanguageMode;

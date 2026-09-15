@@ -352,6 +352,8 @@ export class AsrConfigService {
       asr: voiceTypingPatch.asr,
     };
   };
+  syncLiveAsrSelectionFields = this.syncStreamingAsrSelectionFields;
+  syncLiveOnlineAsrSelectionFields = this.syncStreamingOnlineAsrSelectionFields;
 
   // --- Private helpers ---
 
@@ -528,4 +530,6 @@ export const {
   syncVolcengineDoubaoProviderConfig,
   syncLegacyAsrSelectionFields,
   syncStreamingAsrSelectionFields,
+  syncLiveAsrSelectionFields,
+  syncLiveOnlineAsrSelectionFields,
 } = asrConfigService;

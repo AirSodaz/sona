@@ -1325,7 +1325,7 @@
     "speaker_profile_import_failed": "Failed to import one or more speaker reference samples.",
     "streaming_model_label": "Live Record Model",
     "streaming_model_hint": "Used for real-time microphone transcription.",
-    "select_streaming_model": "Select streaming model...",
+    "select_streaming_model": "Select live model...",
     "local_model_label": "Batch Import Model",
     "local_model_hint": "Used for processing audio/video files.",
     "select_local_model": "Select local model...",

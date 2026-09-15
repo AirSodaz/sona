@@ -95,6 +95,32 @@ pub trait VadEnginePort: Send + Sync {
         sample_rate: u32,
         options: &VadDetectionOptions,
     ) -> Result<Vec<SpeechSpan>, AsrPortError>;
+
+    /// Creates a streaming voice activity detector for the model specified in `options`.
+    fn create_stream_detector(
+        &self,
+        _options: &VadDetectionOptions,
+    ) -> Result<Box<dyn StreamingVadPort>, AsrPortError> {
+        Err(AsrPortError::new(
+            crate::ports::asr::AsrPortErrorKind::Unsupported,
+            "Streaming VAD is not supported by this engine",
+        ))
+    }
+}
+
+/// Stream-oriented voice activity detector interface.
+///
+/// Implemented by VAD engine providers (e.g. Silero VAD) to support
+/// online/pseudo-streaming speech segmentation chunk by chunk.
+pub trait StreamingVadPort: Send {
+    /// Feed incoming mono PCM audio samples (typically 16 kHz) to the detector.
+    fn accept_samples(&mut self, samples: &[f32]);
+
+    /// Returns whether speech is currently detected in the stream.
+    fn is_speech_detected(&self) -> bool;
+
+    /// Resets the detector's internal state for a fresh stream or utterance.
+    fn reset(&mut self);
 }
 
 /// Composition-time set of VAD engines available on this host, mirroring the
@@ -134,6 +160,23 @@ impl VadEngineSet {
             .iter()
             .find(|engine| engine.can_handle(path))
             .cloned()
+    }
+
+    /// Creates a streaming VAD detector using the first engine capable of handling `options.model_path`.
+    pub fn create_stream_detector(
+        &self,
+        options: &VadDetectionOptions,
+    ) -> Result<Box<dyn StreamingVadPort>, AsrPortError> {
+        let engine = self.resolve(Some(&options.model_path)).ok_or_else(|| {
+            AsrPortError::new(
+                crate::ports::asr::AsrPortErrorKind::Model,
+                format!(
+                    "No registered VAD engine can handle model path: {}",
+                    options.model_path.display()
+                ),
+            )
+        })?;
+        engine.create_stream_detector(options)
     }
 }
 

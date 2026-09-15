@@ -2,6 +2,7 @@ pub mod asr_metrics;
 mod error;
 pub mod postprocess;
 pub mod provider_resolution;
+pub mod pseudo_streaming;
 pub mod runtime;
 pub mod segmentation;
 pub mod speaker;
