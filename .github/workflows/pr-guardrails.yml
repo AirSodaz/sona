@@ -47,7 +47,7 @@ jobs:
     permissions:
       contents: read
     env:
-      LLAMA_BUILD_SHARED_LIBS: 1
+      LLAMA_BUILD_SHARED_LIBS: 0
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
     steps:
       - name: Checkout repository
