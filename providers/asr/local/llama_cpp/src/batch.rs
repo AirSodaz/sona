@@ -835,10 +835,10 @@ fn load_model(
 
 /// Prunes all idle models from the batch model cache whose strong reference count is 1.
 pub fn prune_idle_llama_models() {
-    if let Some(cache) = MODEL_CACHE.get() {
-        if let Ok(mut cache) = cache.lock() {
-            cache.retain(|_, model| Arc::strong_count(model) > 1);
-        }
+    if let Some(cache) = MODEL_CACHE.get()
+        && let Ok(mut cache) = cache.lock()
+    {
+        cache.retain(|_, model| Arc::strong_count(model) > 1);
     }
 }
 /// Qwen3-ASR consumes hotwords as background knowledge inside the ChatML

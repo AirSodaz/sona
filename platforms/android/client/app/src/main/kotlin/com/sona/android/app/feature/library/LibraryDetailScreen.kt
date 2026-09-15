@@ -813,7 +813,7 @@ internal fun LibraryDetailScreen(
                                     onTranscribeWithCloud(item)
                                 },
                                 leadingIcon = { Icon(Icons.Rounded.CloudSync, null) },
-                                enabled = !editor.dirty && cloudTranscription !is CloudTranscriptionUiState.Running,
+                                enabled = item.audioAvailable && !editor.dirty && cloudTranscription !is CloudTranscriptionUiState.Running,
                             )
                         }
                     }
