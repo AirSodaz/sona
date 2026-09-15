@@ -47,7 +47,7 @@ jobs:
     permissions:
       contents: read
     env:
-      LLAMA_BUILD_SHARED_LIBS: 0
+      LLAMA_BUILD_SHARED_LIBS: 1
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
     steps:
       - name: Checkout repository
@@ -74,6 +74,17 @@ jobs:
 
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Sync llama.cpp runtime libraries
+        run: |
+          for out_lib in target/debug/build/llama-cpp-sys-*/out/lib; do
+            if [ -d "$out_lib" ]; then
+              mkdir -p target/debug/deps
+              cp -a --remove-destination "$out_lib"/* target/debug/ 2>/dev/null || true
+              cp -a --remove-destination "$out_lib"/* target/debug/deps/ 2>/dev/null || true
+            fi
+          done
+          find target/debug -xtype l -delete 2>/dev/null || true
 
       - name: Run workspace tests (excluding desktop host crate)
         run: cargo test -p sona-core -p sona-application -p sona-api-server -p sona-archive -p sona-export -p sona-sherpa-onnx -p sona-vad -p sona-punct -p sona-llama-cpp -p sona-media-detector -p sona-model-downloads -p sona-online-llm -p sona-online-asr -p sona-recovery-fs -p sona-runtime-fs -p sona-sqlite -p sona-sync -p sona-sync-webdav -p sona-ts-bind -p sona-uniffi-bind -p sona-cli
