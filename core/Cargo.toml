@@ -31,6 +31,9 @@ toml = { workspace = true }
 infer = { workspace = true }
 jsonschema = { workspace = true }
 
+tokio = { workspace = true, features = ["sync", "rt"] }
+uuid = { workspace = true }
+
 [dev-dependencies]
 axum = { workspace = true, features = ["macros"] }
 tempfile = { workspace = true }

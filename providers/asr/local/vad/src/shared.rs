@@ -60,6 +60,43 @@ fn detector_capacity_seconds(buffer_seconds: f32) -> f32 {
     }
 }
 
+pub struct SherpaStreamingVad {
+    detector: VoiceActivityDetector,
+}
+
+impl SherpaStreamingVad {
+    pub fn new(detector: VoiceActivityDetector) -> Self {
+        Self { detector }
+    }
+}
+
+unsafe impl Send for SherpaStreamingVad {}
+
+impl sona_core::ports::vad::StreamingVadPort for SherpaStreamingVad {
+    fn accept_samples(&mut self, samples: &[f32]) {
+        self.detector.accept_waveform(samples);
+    }
+
+    fn is_speech_detected(&self) -> bool {
+        self.detector.detected()
+    }
+
+    fn reset(&mut self) {
+        self.detector.reset();
+        self.detector.clear();
+    }
+}
+
+pub(crate) fn create_streaming_detector_with_config(
+    config: &VadModelConfig,
+    buffer_seconds: f32,
+) -> Result<Box<dyn sona_core::ports::vad::StreamingVadPort>, AsrPortError> {
+    let capacity = detector_capacity_seconds(buffer_seconds);
+    let detector = VoiceActivityDetector::create(config, capacity)
+        .ok_or_else(|| AsrPortError::runtime("Failed to create VoiceActivityDetector"))?;
+    Ok(Box::new(SherpaStreamingVad::new(detector)))
+}
+
 fn extract_spans(
     detector: &mut VoiceActivityDetector,
     sample_rate: u32,

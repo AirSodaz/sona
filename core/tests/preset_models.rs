@@ -46,10 +46,11 @@ fn qwen_presets_are_verified_batch_bundles() {
         let model = find_preset_model(id).unwrap();
         assert_eq!(model.engine.as_deref(), Some("llama-cpp"));
         assert!(model.supports_mode("batch"));
-        assert!(!model.supports_mode("streaming"));
+        assert!(model.supports_mode("streaming"));
         let rules = model.resolved_rules();
         assert!(rules.requires_vad);
         assert!(!rules.requires_punctuation);
+        assert!(rules.initial_refresh_rate_ms.is_some());
         assert_eq!(model.artifacts.len(), 2);
         assert_eq!(
             model.file_config.as_ref().unwrap().model.as_deref(),

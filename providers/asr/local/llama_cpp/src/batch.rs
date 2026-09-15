@@ -33,12 +33,12 @@ use sona_core::transcription::transcript::{
     normalize_recognizer_text,
 };
 
-const MODEL_TYPE_QWEN3_ASR: &str = "qwen3-asr";
-const N_BATCH: i32 = 512;
-const MAX_GENERATED_TOKENS: usize = 4096;
+pub(crate) const MODEL_TYPE_QWEN3_ASR: &str = "qwen3-asr";
+pub(crate) const N_BATCH: i32 = 512;
+pub(crate) const MAX_GENERATED_TOKENS: usize = 4096;
 /// Qwen3-ASR GGUFs ship a 65536-token context, so a generous hotword budget
 /// stays negligible against audio and generation tokens.
-const QWEN3_ASR_HOTWORDS_MAX_CHARS: usize = 2048;
+pub(crate) const QWEN3_ASR_HOTWORDS_MAX_CHARS: usize = 2048;
 
 static BACKEND: OnceLock<Result<LlamaBackend, String>> = OnceLock::new();
 /// Cache key: canonical model path plus the resolved GPU layer count.
@@ -633,7 +633,7 @@ struct ValidatedOptions {
 /// value. Supported backends are Metal (macOS) and Vulkan (Windows, Linux);
 /// `cuda` is accepted as an alias for compatible builds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum GpuOffload {
+pub(crate) enum GpuOffload {
     Disabled,
     Enabled,
     /// Decide at model-load time from the devices the linked runtime exposes.
@@ -653,7 +653,7 @@ pub(crate) fn gpu_backend_available() -> bool {
 /// VRAM implied by any present accelerator.
 const GPU_OFFLOAD_ALL_LAYERS: u32 = u32::MAX;
 
-fn resolve_gpu_offload(value: Option<&str>) -> Result<GpuOffload, AsrPortError> {
+pub(crate) fn resolve_gpu_offload(value: Option<&str>) -> Result<GpuOffload, AsrPortError> {
     match value.map(str::trim).filter(|value| !value.is_empty()) {
         None | Some("cpu") => Ok(GpuOffload::Disabled),
         Some("auto") => Ok(GpuOffload::Auto),
@@ -667,7 +667,7 @@ fn resolve_gpu_offload(value: Option<&str>) -> Result<GpuOffload, AsrPortError> 
     }
 }
 
-fn resolve_auto_gpu_offload(gpu_present: bool) -> GpuOffload {
+pub(crate) fn resolve_auto_gpu_offload(gpu_present: bool) -> GpuOffload {
     if gpu_present {
         GpuOffload::Enabled
     } else {
@@ -732,7 +732,7 @@ fn validate_supported_options(
     })
 }
 
-fn backend() -> Result<&'static LlamaBackend, AsrPortError> {
+pub(crate) fn backend() -> Result<&'static LlamaBackend, AsrPortError> {
     BACKEND
         .get_or_init(|| LlamaBackend::init().map_err(|error| error.to_string()))
         .as_ref()
@@ -747,7 +747,7 @@ fn backend() -> Result<&'static LlamaBackend, AsrPortError> {
 /// Loads the model and multimodal projector. `n_gpu_layers` is explicit so
 /// CPU runs stay on CPU even when a GPU backend is registered
 /// (`LlamaModelParams` defaults to auto-offload).
-fn init_inference(
+pub(crate) fn init_inference(
     backend: &'static LlamaBackend,
     model_path: &Path,
     mmproj_path: &Path,
@@ -845,7 +845,7 @@ pub fn prune_idle_llama_models() {
 /// system message — the channel the model was trained on for context
 /// biasing — and forces a language by prefilling
 /// `language <Name><asr_text>` after the generation prompt.
-fn qwen3_asr_prompt(
+pub(crate) fn qwen3_asr_prompt(
     model: &LlamaModel,
     hotwords: &[String],
     language_prefill: Option<&str>,
@@ -887,7 +887,7 @@ fn qwen3_asr_prompt(
     Ok(prompt)
 }
 
-fn resolve_required_model_file(
+pub(crate) fn resolve_required_model_file(
     model_root: &Path,
     config: &ModelFileConfig,
     mmproj: bool,
@@ -930,7 +930,7 @@ fn path_to_str<'a>(path: &'a Path, label: &str) -> Result<&'a str, AsrPortError>
     })
 }
 
-fn parse_qwen3_asr_output(output: &str) -> String {
+pub(crate) fn parse_qwen3_asr_output(output: &str) -> String {
     let transcript = match output.split_once("<asr_text>") {
         Some((_, transcript)) => transcript,
         // Upstream llama.cpp (#26749): some builds leak the trained
@@ -940,7 +940,7 @@ fn parse_qwen3_asr_output(output: &str) -> String {
     normalize_recognizer_text(transcript.trim())
 }
 
-fn parse_qwen3_asr_partial_output(output: &str, language_forced: bool) -> String {
+pub(crate) fn parse_qwen3_asr_partial_output(output: &str, language_forced: bool) -> String {
     if let Some((_, transcript)) = output.split_once("<asr_text>") {
         return normalize_recognizer_text(transcript.trim());
     }
@@ -972,7 +972,7 @@ fn strip_leaked_language_prefix(output: &str) -> &str {
 /// Splits the shared hotword string on ASCII commas and newlines, trims each
 /// entry, drops sherpa-style ` :weight` suffixes (no llama.cpp model has a
 /// weight concept), and truncates to the model's character budget.
-fn normalize_hotwords(raw: &str, max_chars: usize) -> Vec<String> {
+pub(crate) fn normalize_hotwords(raw: &str, max_chars: usize) -> Vec<String> {
     let terms: Vec<String> = raw
         .split([',', '\n'])
         .map(str::trim)
@@ -1051,7 +1051,7 @@ const QWEN3_ASR_LANGUAGES: &[(&str, &str)] = &[
 /// Maps Sona's language value onto the trained prefill name. `None` means
 /// auto-detect; unmapped values fail with typed feedback instead of being
 /// silently ignored.
-fn qwen3_asr_language(language: &str) -> Result<Option<&'static str>, AsrPortError> {
+pub(crate) fn qwen3_asr_language(language: &str) -> Result<Option<&'static str>, AsrPortError> {
     let trimmed = language.trim();
     if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("auto") {
         return Ok(None);

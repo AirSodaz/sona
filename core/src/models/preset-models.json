@@ -112,6 +112,7 @@
     "description": "settings.descriptions.qwen3_asr",
     "type": "qwen3-asr",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -158,7 +159,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": false,
-      "timestampSupportHint": "segment"
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 400
     },
     "artifacts": [
       {
@@ -190,6 +192,7 @@
     "description": "settings.descriptions.qwen3_asr",
     "type": "qwen3-asr",
     "modes": [
+      "streaming",
       "batch"
     ],
     "languages": [
@@ -235,7 +238,8 @@
     "rules": {
       "requiresVad": true,
       "requiresPunctuation": false,
-      "timestampSupportHint": "segment"
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 600
     },
     "artifacts": [
       {
