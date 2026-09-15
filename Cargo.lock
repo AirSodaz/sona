@@ -6163,7 +6163,7 @@ dependencies = [
 
 [[package]]
 name = "sona"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -6230,7 +6230,7 @@ dependencies = [
 
 [[package]]
 name = "sona-api-server"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -6255,7 +6255,7 @@ dependencies = [
 
 [[package]]
 name = "sona-application"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6272,7 +6272,7 @@ dependencies = [
 
 [[package]]
 name = "sona-archive"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "bzip2 0.5.2",
  "serde",
@@ -6287,7 +6287,7 @@ dependencies = [
 
 [[package]]
 name = "sona-cli"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "clap",
@@ -6320,7 +6320,7 @@ dependencies = [
 
 [[package]]
 name = "sona-core"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -6345,7 +6345,7 @@ dependencies = [
 
 [[package]]
 name = "sona-export"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "serde",
  "sona-application",
@@ -6355,7 +6355,7 @@ dependencies = [
 
 [[package]]
 name = "sona-llama-cpp"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "encoding_rs",
@@ -6368,7 +6368,7 @@ dependencies = [
 
 [[package]]
 name = "sona-media-detector"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "sona-core",
@@ -6378,7 +6378,7 @@ dependencies = [
 
 [[package]]
 name = "sona-model-downloads"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "axum",
  "bzip2 0.5.2",
@@ -6397,7 +6397,7 @@ dependencies = [
 
 [[package]]
 name = "sona-online-asr"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -6415,7 +6415,7 @@ dependencies = [
 
 [[package]]
 name = "sona-online-llm"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -6432,7 +6432,7 @@ dependencies = [
 
 [[package]]
 name = "sona-punct"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "log",
  "sherpa-onnx",
@@ -6441,7 +6441,7 @@ dependencies = [
 
 [[package]]
 name = "sona-recovery-fs"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "log",
  "serde",
@@ -6453,7 +6453,7 @@ dependencies = [
 
 [[package]]
 name = "sona-runtime-fs"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "chrono",
  "glob",
@@ -6469,7 +6469,7 @@ dependencies = [
 
 [[package]]
 name = "sona-sherpa-onnx"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "glob",
@@ -6488,7 +6488,7 @@ dependencies = [
 
 [[package]]
 name = "sona-sqlite"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6511,7 +6511,7 @@ dependencies = [
 
 [[package]]
 name = "sona-sync"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "argon2",
  "async-trait",
@@ -6535,7 +6535,7 @@ dependencies = [
 
 [[package]]
 name = "sona-sync-webdav"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -6558,7 +6558,7 @@ dependencies = [
 
 [[package]]
 name = "sona-ts-bind"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -6571,7 +6571,7 @@ dependencies = [
 
 [[package]]
 name = "sona-uniffi-bind"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "hex",
@@ -6603,14 +6603,14 @@ dependencies = [
 
 [[package]]
 name = "sona-uniffi-bindgen"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "uniffi",
 ]
 
 [[package]]
 name = "sona-vad"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "log",
  "sherpa-onnx",
