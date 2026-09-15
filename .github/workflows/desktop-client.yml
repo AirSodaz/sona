@@ -109,7 +109,7 @@ jobs:
           LIB_DIR="${{ steps.setup-llama.outputs.lib-dir }}"
           echo "LLAMA_CPP_LIB_DIR=$LIB_DIR" >> $GITHUB_ENV
 
-          if [[ "${{ matrix.platform }}" == "macos-13" ]] || [[ "${{ matrix.platform }}" == "macos-14" ]]; then
+          if [[ "${{ matrix.platform }}" == "macos-latest" ]] || [[ "${{ matrix.platform }}" == "macos-13" ]] || [[ "${{ matrix.platform }}" == "macos-14" ]]; then
             echo "DYLD_LIBRARY_PATH=$LIB_DIR:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
           elif [[ "${{ matrix.platform }}" == "ubuntu-22.04" ]]; then
             echo "LD_LIBRARY_PATH=$LIB_DIR:$LD_LIBRARY_PATH" >> $GITHUB_ENV

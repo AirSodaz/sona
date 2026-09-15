@@ -7,7 +7,7 @@ use super::telemetry::{
     record_live_metric,
 };
 use crate::audio::{accept_vad_samples, vad_detected};
-use crate::gpu::resolve_gpu_acceleration_plan;
+use crate::gpu::{is_int8_model, resolve_gpu_acceleration_plan};
 use crate::punctuation::{Punctuation, load_punctuation};
 use crate::recognizer::{
     Recognizer, accept_online_samples, build_model_config, create_online_stream,
@@ -176,7 +176,9 @@ async fn load_streaming_resources(
     request: &LocalSherpaStreamingRequest,
     observer: Option<&dyn AsrRuntimeObserver>,
 ) -> Result<LocalStreamingResources, AsrPortError> {
-    let gpu_plan = resolve_gpu_acceleration_plan(request.gpu_acceleration.as_deref()).await;
+    let is_int8 = is_int8_model(Path::new(&request.model_path), request.file_config.as_ref());
+    let gpu_plan =
+        resolve_gpu_acceleration_plan(request.gpu_acceleration.as_deref(), is_int8).await;
     let config_key = ModelConfigKey::new(
         request.model_path.clone(),
         request.model_type.clone(),
