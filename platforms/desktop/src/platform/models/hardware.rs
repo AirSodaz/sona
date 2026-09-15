@@ -9,12 +9,16 @@ pub async fn check_gpu_availability() -> Result<bool, String> {
 
 pub(crate) async fn resolve_gpu_acceleration_plan(
     gpu_acceleration: Option<&str>,
+    is_int8: bool,
 ) -> GpuAccelerationPlan {
-    sona_sherpa_onnx::gpu::resolve_gpu_acceleration_plan(gpu_acceleration).await
+    sona_sherpa_onnx::gpu::resolve_gpu_acceleration_plan(gpu_acceleration, is_int8).await
 }
 
-pub async fn resolve_gpu_acceleration(gpu_acceleration: Option<&str>) -> Option<String> {
-    let resolved = resolve_gpu_acceleration_plan(gpu_acceleration)
+pub async fn resolve_gpu_acceleration(
+    gpu_acceleration: Option<&str>,
+    is_int8: bool,
+) -> Option<String> {
+    let resolved = resolve_gpu_acceleration_plan(gpu_acceleration, is_int8)
         .await
         .provider_options()
         .first()
@@ -36,13 +40,31 @@ mod tests {
 
     #[tokio::test]
     async fn test_resolve_gpu_acceleration() {
-        let result = resolve_gpu_acceleration(Some("cuda")).await;
-        assert_eq!(result, Some("cuda".to_string()));
+        #[cfg(not(target_os = "macos"))]
+        {
+            let result = resolve_gpu_acceleration(Some("cuda"), false).await;
+            assert_eq!(result, Some("cuda".to_string()));
 
-        let result = resolve_gpu_acceleration(Some("cpu")).await;
+            let result_int8 = resolve_gpu_acceleration(Some("cuda"), true).await;
+            assert_eq!(result_int8, Some("cpu".to_string()));
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            let result = resolve_gpu_acceleration(Some("cuda"), false).await;
+            assert_eq!(result, Some("cpu".to_string()));
+
+            let result_int8 = resolve_gpu_acceleration(Some("cuda"), true).await;
+            assert_eq!(result_int8, Some("cpu".to_string()));
+        }
+
+        let result = resolve_gpu_acceleration(Some("cpu"), false).await;
         assert_eq!(result, Some("cpu".to_string()));
 
-        let result = resolve_gpu_acceleration(Some("auto")).await;
+        let result = resolve_gpu_acceleration(Some("auto"), false).await;
         assert!(result.is_some());
+
+        let result_none = resolve_gpu_acceleration(None, false).await;
+        assert_eq!(result_none, None);
     }
 }

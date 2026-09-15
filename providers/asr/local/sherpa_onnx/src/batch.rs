@@ -1,5 +1,5 @@
 use crate::audio::{extract_and_resample_audio_with_ffmpeg, save_wav_file};
-use crate::gpu::{GpuFallbackNotice, resolve_gpu_acceleration_plan};
+use crate::gpu::{GpuFallbackNotice, is_int8_model, resolve_gpu_acceleration_plan};
 use crate::recognizer::{
     SafeOfflineRecognizer, build_offline_model_config, create_offline_recognizer,
     decode_offline_samples,
@@ -133,7 +133,9 @@ impl BatchTranscriptionJob {
         self,
         observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        let gpu_plan = resolve_gpu_acceleration_plan(self.gpu_acceleration.as_deref()).await;
+        let is_int8 = is_int8_model(&self.model_path, self.file_config.as_ref());
+        let gpu_plan =
+            resolve_gpu_acceleration_plan(self.gpu_acceleration.as_deref(), is_int8).await;
         let mut last_error = None;
         let mut fallback_notice: Option<GpuFallbackNotice> = None;
 
