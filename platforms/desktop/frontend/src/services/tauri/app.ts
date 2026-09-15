@@ -158,6 +158,7 @@ function normalizeModelModes(modes: string[] | null | undefined): ModelInfo['mod
 
   return modes.map((mode) => {
     switch (mode) {
+      case 'live':
       case 'streaming':
       case 'batch':
         return mode;

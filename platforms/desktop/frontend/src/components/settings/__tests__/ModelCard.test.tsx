@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ModelInfo } from '../../../types/modelCatalog';
-import { ModelCard } from '../ModelCard';
+import { formatModelModeTag, ModelCard, resolveUniqueModeTags } from '../ModelCard';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -111,5 +111,57 @@ describe('ModelCard with ModelBrandLogo', () => {
 
     expect(container.querySelector('.model-card-logo-badge')).toBeNull();
     expect(screen.getByText('Silero - VAD')).toBeTruthy();
+  });
+});
+
+describe('ModelCard mode tags', () => {
+  it('renders "Live" tag instead of "Streaming" for models with streaming mode', () => {
+    const streamingModel: ModelInfo = {
+      ...mockModel,
+      modes: ['streaming'],
+    };
+
+    render(
+      <ModelCard
+        models={[streamingModel]}
+        installedModels={new Set([streamingModel.id])}
+        downloads={{}}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Live')).toBeTruthy();
+    expect(screen.queryByText('Streaming')).toBeNull();
+  });
+
+  it('renders "Live" and "Batch" tags without duplication', () => {
+    const dualModeModel: ModelInfo = {
+      ...mockModel,
+      modes: ['streaming', 'batch'],
+    };
+
+    render(
+      <ModelCard
+        models={[dualModeModel]}
+        installedModels={new Set([dualModeModel.id])}
+        downloads={{}}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Live')).toBeTruthy();
+    expect(screen.getByText('Batch')).toBeTruthy();
+    expect(screen.queryByText('Streaming')).toBeNull();
+  });
+
+  it('formats model mode tags correctly and deduplicates equivalent modes', () => {
+    expect(formatModelModeTag('streaming')).toBe('Live');
+    expect(formatModelModeTag('live')).toBe('Live');
+    expect(formatModelModeTag('batch')).toBe('Batch');
+    expect(resolveUniqueModeTags(['streaming', 'live', 'batch'])).toEqual(['Live', 'Batch']);
   });
 });
