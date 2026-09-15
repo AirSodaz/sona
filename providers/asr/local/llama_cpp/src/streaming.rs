@@ -29,6 +29,8 @@ use crate::batch::{
     resolve_gpu_offload, resolve_required_model_file,
 };
 
+const MAX_PARTIAL_GENERATED_TOKENS: usize = 256;
+
 /// Engine-ready configuration parsed from a streaming request.
 #[derive(Debug)]
 pub(crate) struct ValidatedStreamingRequest {
@@ -266,7 +268,11 @@ impl PseudoStreamDecoder for Qwen3PseudoStreamDecoder {
         let mut decoder = encoding_rs::UTF_8.new_decoder();
         let mut generated = String::new();
         let available = context.n_ctx().saturating_sub(n_past.max(0) as u32) as usize;
-        let generation_limit = MAX_GENERATED_TOKENS.min(available);
+        let max_tokens = match stage {
+            DecodeStage::Partial => MAX_PARTIAL_GENERATED_TOKENS,
+            DecodeStage::Final => MAX_GENERATED_TOKENS,
+        };
+        let generation_limit = max_tokens.min(available);
         let generation_end =
             n_past.saturating_add(i32::try_from(generation_limit).unwrap_or(i32::MAX));
 

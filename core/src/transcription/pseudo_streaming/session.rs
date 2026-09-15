@@ -22,6 +22,11 @@ use crate::transcription::transcript::{
 use super::buffer::PseudoStreamAudioBuffer;
 use super::decoder::{DecodeStage, PseudoStreamDecoder};
 
+const SAMPLE_RATE: f64 = 16_000.0;
+const PRE_ROLL_DURATION_SECONDS: f64 = 0.3;
+const PRE_ROLL_SAMPLES: usize = (SAMPLE_RATE * PRE_ROLL_DURATION_SECONDS) as usize;
+const RING_BUFFER_TRIM_SLACK_SAMPLES: usize = 4_000;
+
 type PendingInferenceTask = JoinHandle<Result<(), AsrPortError>>;
 
 /// Configuration parameters to initialize a [`PseudoStreamingSession`].
@@ -186,7 +191,7 @@ fn execute_inference_pass(
         return Ok(());
     }
 
-    let global_end = global_start + (audio_samples.len() as f64 / 16000.0);
+    let global_end = global_start + (audio_samples.len() as f64 / SAMPLE_RATE);
     let timestamps_abs: Option<Vec<f32>> = result
         .timestamps
         .as_ref()
@@ -223,7 +228,7 @@ fn execute_inference_pass(
     });
 
     let total_elapsed = duration_to_ms(triggered_at.elapsed());
-    let audio_duration_ms = (audio_samples.len() as f64 / 16000.0) * 1000.0;
+    let audio_duration_ms = (audio_samples.len() as f64 / SAMPLE_RATE) * 1000.0;
     let rtf = if audio_duration_ms > 0.0 {
         Some(decode_ms / audio_duration_ms)
     } else {
@@ -274,7 +279,7 @@ impl AsrStreamingSession for PseudoStreamingSession {
         let mut buffer = self.buffer.lock().await;
         if buffer.buffered_speech_chunk_count() > 0 {
             let audio_samples = buffer.flatten_speech_buffer();
-            let global_start = buffer.utterance_start_seconds(16000.0);
+            let global_start = buffer.utterance_start_seconds(SAMPLE_RATE);
             let seg_id = self
                 .current_segment_id
                 .lock()
@@ -348,8 +353,7 @@ impl AsrStreamingSession for PseudoStreamingSession {
 
         if currently_speaking && !buffer.is_speech_active() {
             // Speech onset: capture pre-roll context
-            let samples_to_keep = (16000.0 * 0.3) as usize;
-            buffer.begin_speech(samples_to_keep);
+            buffer.begin_speech(PRE_ROLL_SAMPLES);
         }
 
         if currently_speaking {
@@ -367,7 +371,7 @@ impl AsrStreamingSession for PseudoStreamingSession {
                     buffer.record_overrun();
                 } else {
                     let audio_samples = buffer.flatten_speech_buffer();
-                    let global_start = buffer.utterance_start_seconds(16000.0);
+                    let global_start = buffer.utterance_start_seconds(SAMPLE_RATE);
                     let decoder = self.decoder.clone();
                     let punctuation = self.punctuation.clone();
                     let observer = self.observer.clone();
@@ -409,7 +413,7 @@ impl AsrStreamingSession for PseudoStreamingSession {
                 // Speech offset: finalize utterance
                 buffer.finish_speech_with_chunk(samples.to_vec());
                 let audio_samples = buffer.flatten_speech_buffer();
-                let global_start = buffer.utterance_start_seconds(16000.0);
+                let global_start = buffer.utterance_start_seconds(SAMPLE_RATE);
                 let decoder = self.decoder.clone();
                 let punctuation = self.punctuation.clone();
                 let observer = self.observer.clone();
@@ -446,8 +450,11 @@ impl AsrStreamingSession for PseudoStreamingSession {
                 *self.current_segment_id.lock().await = Some(uuid::Uuid::new_v4().to_string());
             }
 
-            let max_ring_samples = (16000.0 * 0.3) as usize;
-            buffer.push_ring_chunk_with_sample_limit(samples.to_vec(), max_ring_samples, 4_000);
+            buffer.push_ring_chunk_with_sample_limit(
+                samples.to_vec(),
+                PRE_ROLL_SAMPLES,
+                RING_BUFFER_TRIM_SLACK_SAMPLES,
+            );
         }
 
         buffer.advance_total_samples(samples.len());

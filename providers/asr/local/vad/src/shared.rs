@@ -69,14 +69,14 @@ impl SherpaStreamingVad {
         Self { detector }
     }
 }
-
-unsafe impl Send for SherpaStreamingVad {}
-
 impl sona_core::ports::vad::StreamingVadPort for SherpaStreamingVad {
     fn accept_samples(&mut self, samples: &[f32]) {
         self.detector.accept_waveform(samples);
+        // Pop completed segments to prevent unbounded memory accumulation in long streams.
+        while !self.detector.is_empty() {
+            self.detector.pop();
+        }
     }
-
     fn is_speech_detected(&self) -> bool {
         self.detector.detected()
     }

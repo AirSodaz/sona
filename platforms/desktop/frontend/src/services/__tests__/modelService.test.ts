@@ -533,7 +533,7 @@ describe('ModelService', () => {
   describe('Qwen3 ASR metadata', () => {
     const qwen3ModelId = 'qwen3-asr-0.6b-q8-gguf';
 
-    it('registers Qwen3-ASR GGUF as a llama.cpp batch-only model', () => {
+    it('registers Qwen3-ASR GGUF as a llama.cpp streaming and batch model', () => {
       const qwen3Model = PRESET_MODELS.find((model) => model.id === qwen3ModelId);
       const batchModelIds = PRESET_MODELS.filter((model) => model.modes?.includes('batch')).map(
         (model) => model.id
@@ -545,7 +545,7 @@ describe('ModelService', () => {
       expect(qwen3Model).toMatchObject({
         id: qwen3ModelId,
         type: 'qwen3-asr',
-        modes: ['batch'],
+        modes: ['streaming', 'batch'],
         fileConfig: {
           model: 'Qwen3-ASR-0.6B-Q8_0.gguf',
           mmproj: 'mmproj-Qwen3-ASR-0.6B-Q8_0.gguf',
@@ -558,11 +558,12 @@ describe('ModelService', () => {
       });
       expect(qwen3Model?.fileConfig).not.toHaveProperty('tokens');
       expect(batchModelIds).toContain(qwen3ModelId);
-      expect(streamingModelIds).not.toContain(qwen3ModelId);
+      expect(streamingModelIds).toContain(qwen3ModelId);
       expect(modelService.getModelRules(qwen3ModelId)).toEqual({
         requiresVad: true,
         requiresPunctuation: false,
         timestampSupportHint: 'segment',
+        initialRefreshRateMs: 400,
       });
     });
   });

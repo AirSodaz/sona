@@ -11,6 +11,7 @@ export interface ModelRules {
   requiresVad: boolean;
   requiresPunctuation: boolean;
   timestampSupportHint?: TimestampSupportHint;
+  initialRefreshRateMs?: number;
 }
 
 export interface ModelArtifact {
