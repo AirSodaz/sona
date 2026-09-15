@@ -29,6 +29,7 @@ pub enum ResolvedTheme {
 /// Keeping them here (rather than reading CSS) is intentional: the window
 /// frame is drawn by DWM in the native coordinate space and must not block
 /// on the webview.
+#[cfg(any(target_os = "windows", test))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct ChromePalette {
     /// Base caption color. Must be opaque.
@@ -45,10 +46,12 @@ struct ChromePalette {
 /// `COLORREF` is `0x00BBGGRR`, i.e. *byte-reversed* relative to the familiar
 /// `0xRRGGBB` hex notation. Passing an RGB literal straight through produces
 /// a blue/red swap, which is the classic symptom of getting this wrong.
+#[cfg(any(target_os = "windows", test))]
 const fn colorref(r: u8, g: u8, b: u8) -> u32 {
     (b as u32) << 16 | (g as u32) << 8 | r as u32
 }
 
+#[cfg(any(target_os = "windows", test))]
 const LIGHT_PALETTE: ChromePalette = ChromePalette {
     // #f3f3f2 - --color-bg-secondary
     caption: colorref(0xf3, 0xf3, 0xf2),
@@ -58,6 +61,7 @@ const LIGHT_PALETTE: ChromePalette = ChromePalette {
     border: colorref(0xe5, 0xe5, 0xe5),
 };
 
+#[cfg(any(target_os = "windows", test))]
 const DARK_PALETTE: ChromePalette = ChromePalette {
     // #202020 - --color-bg-secondary
     caption: colorref(0x20, 0x20, 0x20),
@@ -67,6 +71,7 @@ const DARK_PALETTE: ChromePalette = ChromePalette {
     border: colorref(0x2c, 0x2c, 0x2c),
 };
 
+#[cfg(any(target_os = "windows", test))]
 impl ResolvedTheme {
     const fn palette(self) -> ChromePalette {
         match self {
