@@ -45,7 +45,9 @@ pub use streaming::{
     extract_anthropic_stream_usage, extract_openai_responses_stream_usage,
     try_stream_completion_with_provider, try_stream_text_with_provider,
 };
-pub use transport::{LlmApiUrl, parse_llm_api_host, post_json_request, validate_llm_api_host};
+pub use transport::{
+    LlmApiUrl, is_local_or_lan_host, parse_llm_api_host, post_json_request, validate_llm_api_host,
+};
 
 use async_trait::async_trait;
 use sona_core::llm::provider_protocol::{LlmModelSummary, StandardLlmResponse};

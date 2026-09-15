@@ -10,7 +10,7 @@ use sona_core::llm::provider_protocol::{LlmModality, LlmModelMetadataSource, Llm
 use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
 
-use crate::transport::{http_status_port_error, reqwest_port_error};
+use crate::transport::{http_status_port_error, is_local_or_lan_host, reqwest_port_error};
 
 const MODELS_DEV_ENDPOINT: &str = "https://models.dev/api.json";
 const MODELS_DEV_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
@@ -295,8 +295,5 @@ pub fn should_enrich_model_metadata(provider: &LlmProvider, base_url: &str) -> b
     let Ok(url) = reqwest::Url::parse(base_url) else {
         return false;
     };
-    !url.host_str().is_some_and(|host| {
-        let host = host.trim_matches(['[', ']']);
-        host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
-    })
+    !is_local_or_lan_host(&url)
 }

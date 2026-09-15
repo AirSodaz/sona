@@ -93,6 +93,14 @@ fn models_dev_skips_private_providers_and_loopback_endpoints() {
         &LlmProvider::Builtin(BuiltinLlmProvider::OpenAi),
         "http://127.0.0.1:1234"
     ));
+    assert!(!should_enrich_model_metadata(
+        &LlmProvider::Builtin(BuiltinLlmProvider::OpenAi),
+        "http://192.168.1.50:1234"
+    ));
+    assert!(!should_enrich_model_metadata(
+        &LlmProvider::Builtin(BuiltinLlmProvider::OpenAi),
+        "http://ollama.local:11434"
+    ));
     assert!(should_enrich_model_metadata(
         &LlmProvider::Builtin(BuiltinLlmProvider::OpenAi),
         "https://api.openai.com"
