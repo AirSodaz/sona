@@ -196,6 +196,24 @@ pub(crate) fn resolve_http_client(
     }
 }
 
+fn is_default_or_empty(base_url: &str, defaults: &[&str]) -> bool {
+    let trimmed = base_url.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return true;
+    }
+    defaults
+        .iter()
+        .any(|d| trimmed.eq_ignore_ascii_case(d.trim_end_matches('/')))
+}
+
+fn strip_version_suffix(base_url: &str, suffix: &str) -> String {
+    let trimmed = base_url.trim().trim_end_matches('/');
+    if let Some(stripped) = trimmed.strip_suffix(suffix) {
+        stripped.trim_end_matches('/').to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
 impl RigModel {
     pub fn from_request(request: &LlmCompletionRequest) -> Result<Self, LlmPortError> {
         let config = &request.config;
@@ -211,7 +229,10 @@ impl RigModel {
                 let mut builder = openai::Client::builder()
                     .api_key(key)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &["https://api.openai.com", "https://api.openai.com/v1"],
+                ) {
                     let base_url =
                         normalize_openai_base_url(&config.base_url, config.api_path.as_deref());
                     builder = builder.base_url(base_url);
@@ -239,8 +260,11 @@ impl RigModel {
                 let mut builder = anthropic::Client::builder()
                     .api_key(key)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
-                    builder = builder.base_url(&config.base_url);
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &["https://api.anthropic.com", "https://api.anthropic.com/v1"],
+                ) {
+                    builder = builder.base_url(strip_version_suffix(&config.base_url, "/v1"));
                 }
                 let client = builder
                     .build()
@@ -257,7 +281,10 @@ impl RigModel {
                 let mut builder = gemini::Client::builder()
                     .api_key(key)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &["https://generativelanguage.googleapis.com"],
+                ) {
                     let base_url =
                         sona_core::llm::provider_protocol::clean_gemini_base_url(&config.base_url);
                     builder = builder.base_url(base_url);
@@ -274,8 +301,11 @@ impl RigModel {
                     ollama::Client::builder().api_key(config.api_key.as_str())
                 }
                 .http_client(http_client);
-                if !config.base_url.is_empty() {
-                    builder = builder.base_url(&config.base_url);
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &["http://127.0.0.1:11434", "http://localhost:11434"],
+                ) {
+                    builder = builder.base_url(config.base_url.trim().trim_end_matches('/'));
                 }
                 let client = builder
                     .build()
@@ -286,7 +316,7 @@ impl RigModel {
                 let mut builder = copilot::Client::builder()
                     .api_key(key)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
+                if !is_default_or_empty(&config.base_url, &["https://api.githubcopilot.com"]) {
                     builder = builder.base_url(&config.base_url);
                 }
                 let client = builder
@@ -298,8 +328,15 @@ impl RigModel {
                 let mut builder = cohere::Client::builder()
                     .api_key(key)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
-                    builder = builder.base_url(&config.base_url);
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &[
+                        "https://api.cohere.ai",
+                        "https://api.cohere.com",
+                        "https://api.cohere.com/v2",
+                    ],
+                ) {
+                    builder = builder.base_url(strip_version_suffix(&config.base_url, "/v2"));
                 }
                 let client = builder
                     .build()
@@ -310,8 +347,11 @@ impl RigModel {
                 let mut builder = deepseek::Client::builder()
                     .api_key(key)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
-                    builder = builder.base_url(&config.base_url);
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &["https://api.deepseek.com", "https://api.deepseek.com/v1"],
+                ) {
+                    builder = builder.base_url(strip_version_suffix(&config.base_url, "/v1"));
                 }
                 let client = builder
                     .build()
@@ -322,8 +362,15 @@ impl RigModel {
                 let mut builder = groq::Client::builder()
                     .api_key(key)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
-                    builder = builder.base_url(&config.base_url);
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &[
+                        "https://api.groq.com/openai/v1",
+                        "https://api.groq.com/openai",
+                        "https://api.groq.com",
+                    ],
+                ) {
+                    builder = builder.base_url(config.base_url.trim().trim_end_matches('/'));
                 }
                 let client = builder
                     .build()
@@ -334,22 +381,48 @@ impl RigModel {
                 let mut builder = mistral::Client::builder()
                     .api_key(key)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
-                    builder = builder.base_url(&config.base_url);
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &["https://api.mistral.ai", "https://api.mistral.ai/v1"],
+                ) {
+                    builder = builder.base_url(strip_version_suffix(&config.base_url, "/v1"));
                 }
                 let client = builder
                     .build()
                     .map_err(|e| classify_llm_port_error(e.to_string()))?;
                 Ok(Self::Mistral(client.completion_model(&config.model)))
             }
-            LlmProviderStrategy::MoonshotAi
-            | LlmProviderStrategy::MoonshotCn
-            | LlmProviderStrategy::Kimi => {
+            LlmProviderStrategy::MoonshotAi => {
                 let mut builder = moonshot::Client::builder()
                     .api_key(key)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
-                    builder = builder.base_url(&config.base_url);
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &["https://api.moonshot.ai/v1", "https://api.moonshot.ai"],
+                ) {
+                    builder = builder.base_url(normalize_openai_base_url(&config.base_url, None));
+                }
+                let client = builder
+                    .build()
+                    .map_err(|e| classify_llm_port_error(e.to_string()))?;
+                Ok(Self::Moonshot(client.completion_model(&config.model)))
+            }
+            LlmProviderStrategy::MoonshotCn | LlmProviderStrategy::Kimi => {
+                let mut builder = moonshot::Client::builder()
+                    .api_key(key)
+                    .http_client(http_client);
+                if is_default_or_empty(
+                    &config.base_url,
+                    &[
+                        "https://api.moonshot.cn/v1",
+                        "https://api.moonshot.cn",
+                        "https://api.moonshot.ai/v1",
+                        "https://api.moonshot.ai",
+                    ],
+                ) {
+                    builder = builder.base_url(moonshot::CHINA_API_BASE_URL);
+                } else {
+                    builder = builder.base_url(normalize_openai_base_url(&config.base_url, None));
                 }
                 let client = builder
                     .build()
@@ -360,7 +433,14 @@ impl RigModel {
                 let mut builder = openrouter::Client::builder()
                     .api_key(key)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &[
+                        "https://openrouter.ai/api/v1",
+                        "https://openrouter.ai/api",
+                        "https://openrouter.ai",
+                    ],
+                ) {
                     builder = builder.base_url(&config.base_url);
                 }
                 let client = builder
@@ -372,7 +452,7 @@ impl RigModel {
                 let mut builder = perplexity::Client::builder()
                     .api_key(key)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
+                if !is_default_or_empty(&config.base_url, &["https://api.perplexity.ai"]) {
                     builder = builder.base_url(&config.base_url);
                 }
                 let client = builder
@@ -384,8 +464,11 @@ impl RigModel {
                 let mut builder = together::Client::builder()
                     .api_key(key)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
-                    builder = builder.base_url(&config.base_url);
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &["https://api.together.xyz", "https://api.together.xyz/v1"],
+                ) {
+                    builder = builder.base_url(strip_version_suffix(&config.base_url, "/v1"));
                 }
                 let client = builder
                     .build()
@@ -394,8 +477,11 @@ impl RigModel {
             }
             LlmProviderStrategy::XAi => {
                 let mut builder = xai::Client::builder().api_key(key).http_client(http_client);
-                if !config.base_url.is_empty() {
-                    builder = builder.base_url(&config.base_url);
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &["https://api.x.ai", "https://api.x.ai/v1"],
+                ) {
+                    builder = builder.base_url(strip_version_suffix(&config.base_url, "/v1"));
                 }
                 let client = builder
                     .build()
@@ -406,7 +492,14 @@ impl RigModel {
                 let mut builder = venice::Client::builder()
                     .api_key(key)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &[
+                        "https://api.venice.ai/api/v1",
+                        "https://api.venice.ai/api",
+                        "https://api.venice.ai",
+                    ],
+                ) {
                     builder = builder.base_url(&config.base_url);
                 }
                 let client = builder
@@ -418,8 +511,14 @@ impl RigModel {
                 let mut builder = hyperbolic::Client::builder()
                     .api_key(key)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
-                    builder = builder.base_url(&config.base_url);
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &[
+                        "https://api.hyperbolic.xyz",
+                        "https://api.hyperbolic.xyz/v1",
+                    ],
+                ) {
+                    builder = builder.base_url(strip_version_suffix(&config.base_url, "/v1"));
                 }
                 let client = builder
                     .build()
@@ -430,8 +529,16 @@ impl RigModel {
                 let mut builder = llamafile::Client::builder()
                     .api_key(Nothing)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
-                    builder = builder.base_url(&config.base_url);
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &[
+                        "http://localhost:8080",
+                        "http://127.0.0.1:8080",
+                        "http://localhost:8080/v1",
+                        "http://127.0.0.1:8080/v1",
+                    ],
+                ) {
+                    builder = builder.base_url(strip_version_suffix(&config.base_url, "/v1"));
                 }
                 let client = builder
                     .build()
@@ -443,7 +550,10 @@ impl RigModel {
                 let mut builder = openai::Client::builder()
                     .api_key(key)
                     .http_client(http_client);
-                if !config.base_url.is_empty() {
+                if !is_default_or_empty(
+                    &config.base_url,
+                    &["https://api.openai.com", "https://api.openai.com/v1"],
+                ) {
                     let base_url =
                         normalize_openai_base_url(&config.base_url, config.api_path.as_deref());
                     builder = builder.base_url(base_url);

@@ -63,7 +63,7 @@ describe('llm providers', () => {
 
     expect(config).toEqual({
       provider: 'open_ai',
-      baseUrl: 'https://api.openai.com',
+      baseUrl: 'https://example.com',
       apiKey: 'test-key',
       model: '',
       strategy: 'open_ai',
@@ -201,16 +201,23 @@ describe('llm providers', () => {
     });
   });
 
-  it('enforces fixed endpoint for built-in providers and allows custom apiHost for custom providers', () => {
+  it('allows custom apiHost for built-in providers with editableApiHost and custom providers', () => {
     const openAiConfig = buildLlmConfig('open_ai', {
       apiHost: 'https://custom-gateway.example.com',
       apiKey: 'sk-test',
       apiPath: undefined,
       apiVersion: undefined,
     });
-    expect(openAiConfig.baseUrl).toBe('https://api.openai.com');
+    expect(openAiConfig.baseUrl).toBe('https://custom-gateway.example.com');
     expect(openAiConfig.apiKey).toBe('sk-test');
 
+    const defaultOpenAiConfig = buildLlmConfig('open_ai', {
+      apiHost: '',
+      apiKey: 'sk-test',
+      apiPath: undefined,
+      apiVersion: undefined,
+    });
+    expect(defaultOpenAiConfig.baseUrl).toBe('https://api.openai.com');
     const customId = 'custom-my-gateway' as CustomLlmProviderId;
     const customConfig = buildLlmConfig(
       customId,

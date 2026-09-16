@@ -298,13 +298,37 @@ fn streamed_protocol_usage_keeps_provider_breakdowns() {
     );
 }
 
+fn read_http_request(stream: &mut std::net::TcpStream) -> String {
+    let mut data = Vec::new();
+    let mut buf = [0u8; 1024];
+    loop {
+        let n = stream.read(&mut buf).unwrap();
+        if n == 0 {
+            break;
+        }
+        data.extend_from_slice(&buf[..n]);
+        if let Some(pos) = data.windows(4).position(|w| w == b"\r\n\r\n") {
+            let header_str = String::from_utf8_lossy(&data[..pos]);
+            let content_length = header_str
+                .lines()
+                .find(|line| line.to_ascii_lowercase().starts_with("content-length:"))
+                .and_then(|line| line.split(':').nth(1))
+                .and_then(|val| val.trim().parse::<usize>().ok())
+                .unwrap_or(0);
+            if data.len() >= pos + 4 + content_length {
+                break;
+            }
+        }
+    }
+    String::from_utf8_lossy(&data).to_string()
+}
 #[tokio::test]
 async fn transport_preserves_retryable_error_metadata() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
     let server = thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
-        let _ = stream.read(&mut [0; 1024]);
+        let _ = read_http_request(&mut stream);
         stream
             .write_all(
                 b"HTTP/1.1 429 Too Many Requests\r\nRetry-After: 9\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
@@ -350,7 +374,7 @@ async fn streaming_transport_preserves_retryable_status_metadata() {
         let retry_after = retry_after.map(str::to_string);
         let server = thread::spawn(move || {
             let (mut stream, _) = listener.accept().unwrap();
-            let _ = stream.read(&mut [0; 2048]);
+            let _ = read_http_request(&mut stream);
             let retry_header = retry_after
                 .map(|value| format!("Retry-After: {value}\r\n"))
                 .unwrap_or_default();
@@ -387,28 +411,7 @@ async fn openai_adapter_posts_to_chat_completions_with_messages() {
     let address = listener.local_addr().unwrap();
     let server = thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
-        let mut data = Vec::new();
-        let mut buf = [0u8; 1024];
-        loop {
-            let n = stream.read(&mut buf).unwrap();
-            if n == 0 {
-                break;
-            }
-            data.extend_from_slice(&buf[..n]);
-            if let Some(pos) = data.windows(4).position(|w| w == b"\r\n\r\n") {
-                let header_str = String::from_utf8_lossy(&data[..pos]);
-                let content_length = header_str
-                    .lines()
-                    .find(|line| line.to_ascii_lowercase().starts_with("content-length:"))
-                    .and_then(|line| line.split(':').nth(1))
-                    .and_then(|val| val.trim().parse::<usize>().ok())
-                    .unwrap_or(0);
-                if data.len() >= pos + 4 + content_length {
-                    break;
-                }
-            }
-        }
-        let request_str = String::from_utf8_lossy(&data).to_string();
+        let request_str = read_http_request(&mut stream);
         assert!(
             request_str.starts_with("POST /v1/chat/completions HTTP/1.1"),
             "expected POST /v1/chat/completions but got request line: {}",
@@ -436,4 +439,131 @@ async fn openai_adapter_posts_to_chat_completions_with_messages() {
     let response = OnlineLlmAdapter.complete(completion_request).await.unwrap();
     server.join().unwrap();
     assert_eq!(response.text, "test answer");
+}
+#[tokio::test]
+async fn native_rig_providers_post_to_expected_endpoint_paths() {
+    let test_cases = [
+        (
+            LlmProviderStrategy::Cohere,
+            "POST /v2/chat HTTP/1.1",
+            r#"{"id":"cohere-1","finish_reason":"COMPLETE","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}"#,
+        ),
+        (
+            LlmProviderStrategy::Together,
+            "POST /v1/chat/completions HTTP/1.1",
+            r#"{"id":"tgt-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"#,
+        ),
+        (
+            LlmProviderStrategy::Hyperbolic,
+            "POST /v1/chat/completions HTTP/1.1",
+            r#"{"id":"hyp-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"#,
+        ),
+        (
+            LlmProviderStrategy::Llamafile,
+            "POST /v1/chat/completions HTTP/1.1",
+            r#"{"id":"lf-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"#,
+        ),
+        (
+            LlmProviderStrategy::MistralAi,
+            "POST /v1/chat/completions HTTP/1.1",
+            r#"{"id":"mis-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"#,
+        ),
+        (
+            LlmProviderStrategy::Groq,
+            "POST /chat/completions HTTP/1.1",
+            r#"{"id":"grq-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"#,
+        ),
+        (
+            LlmProviderStrategy::MoonshotAi,
+            "POST /v1/chat/completions HTTP/1.1",
+            r#"{"id":"ms-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"#,
+        ),
+        (
+            LlmProviderStrategy::DeepSeek,
+            "POST /chat/completions HTTP/1.1",
+            r#"{"id":"ds-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":1}}"#,
+        ),
+    ];
+
+    for (strategy, expected_prefix, mock_response) in test_cases {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let expected_prefix = expected_prefix.to_string();
+        let mock_response = mock_response.to_string();
+
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let request_str = read_http_request(&mut stream);
+            assert!(
+                request_str.starts_with(&expected_prefix),
+                "strategy {:?} expected start with '{}', got: '{}'",
+                strategy,
+                expected_prefix,
+                request_str.lines().next().unwrap_or_default()
+            );
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                mock_response.len(),
+                mock_response
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+        });
+
+        let mut req = request();
+        req.config.strategy = strategy;
+        req.config.base_url = format!("http://{address}");
+        req.options.reasoning_enabled = Some(false);
+        req.options.response_format = LlmResponseFormat::Text;
+
+        let res = OnlineLlmAdapter.complete(req).await;
+        server.join().unwrap();
+        assert!(
+            res.is_ok(),
+            "strategy {:?} failed: {:?}",
+            strategy,
+            res.err()
+        );
+        assert_eq!(res.unwrap().text, "ok");
+    }
+}
+
+#[test]
+fn native_rig_models_build_successfully_from_default_configurations() {
+    use sona_online_llm::rig_adapter::RigModel;
+
+    let strategies = [
+        LlmProviderStrategy::OpenAi,
+        LlmProviderStrategy::OpenAiResponses,
+        LlmProviderStrategy::Anthropic,
+        LlmProviderStrategy::Gemini,
+        LlmProviderStrategy::Ollama,
+        LlmProviderStrategy::Copilot,
+        LlmProviderStrategy::Cohere,
+        LlmProviderStrategy::DeepSeek,
+        LlmProviderStrategy::Groq,
+        LlmProviderStrategy::MistralAi,
+        LlmProviderStrategy::MoonshotAi,
+        LlmProviderStrategy::MoonshotCn,
+        LlmProviderStrategy::Kimi,
+        LlmProviderStrategy::OpenRouter,
+        LlmProviderStrategy::Perplexity,
+        LlmProviderStrategy::Together,
+        LlmProviderStrategy::XAi,
+        LlmProviderStrategy::Venice,
+        LlmProviderStrategy::Hyperbolic,
+        LlmProviderStrategy::Llamafile,
+    ];
+
+    for strategy in strategies {
+        let mut req = request();
+        req.config.strategy = strategy;
+        req.config.base_url = String::new(); // use rig default
+        let model = RigModel::from_request(&req);
+        assert!(
+            model.is_ok(),
+            "RigModel::from_request failed for strategy {:?}: {:?}",
+            strategy,
+            model.err()
+        );
+    }
 }

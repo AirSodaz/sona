@@ -39,6 +39,8 @@ export interface TranslateSegmentsRequest {
   chunkSize?: number;
   targetLanguage: string;
   targetLanguageName?: string;
+  context?: string;
+  keywords?: string;
 }
 
 export type SummarySegmentInput = Omit<GeneratedSummarySegmentInput, 'start' | 'end'> & {

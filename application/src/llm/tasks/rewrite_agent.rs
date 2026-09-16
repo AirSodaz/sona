@@ -141,6 +141,7 @@ where
     let response = match complete_fn(initial_request).await {
         Ok(res) => res,
         Err(LlmRuntimeError::InvalidResponse { reason }) => {
+            reflection_count += 1;
             let repair_prompt =
                 sona_core::llm::tasks::build_structured_repair_input(&current_input, &reason, None);
             let repair_request = structured_agent_request(
@@ -349,5 +350,85 @@ mod tests {
 
         assert!(result.is_ok());
         assert_eq!(call_count.load(Ordering::SeqCst), 2);
+    }
+    #[tokio::test]
+    async fn initial_invalid_response_counts_toward_reflections() {
+        use sona_core::llm::runtime::LlmExecutionMetadata;
+        use sona_core::llm::tasks::PolishedSegment;
+
+        let config = LlmConfig {
+            provider: sona_core::domain::LlmProvider::Builtin(
+                sona_core::domain::BuiltinLlmProvider::OpenAi,
+            ),
+            strategy: sona_core::llm::tasks::LlmProviderStrategy::OpenAi,
+            base_url: "https://example.com".to_string(),
+            api_key: "key".to_string(),
+            model: "model".to_string(),
+            timeout_seconds: None,
+            api_path: None,
+            api_version: None,
+            reasoning_enabled: Some(false),
+            reasoning_level: None,
+            temperature: None,
+        };
+        let expected = vec![sample_segment("s1", "test")];
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let counter = call_count.clone();
+
+        let result = execute_agent_chunk_with_reflection(
+            &RewriteAgentTask::Polish,
+            &config,
+            "initial prompt".to_string(),
+            &expected,
+            1,
+            LlmPromptCachePolicy::Disabled,
+            None,
+            move |_req: LlmCompletionRequest| {
+                let c = counter.clone();
+                async move {
+                    let attempt = c.fetch_add(1, Ordering::SeqCst);
+                    if attempt == 0 {
+                        Err(LlmRuntimeError::InvalidResponse {
+                            reason: "malformed JSON".to_string(),
+                        })
+                    } else {
+                        Ok(LlmCompletionResponse {
+                            text: if attempt == 1 {
+                                "still invalid".to_string()
+                            } else {
+                                "valid".to_string()
+                            },
+                            json: None,
+                            usage: None,
+                            execution: LlmExecutionMetadata {
+                                requested_format:
+                                    sona_core::llm::runtime::LlmResponseFormatKind::JsonSchema,
+                                applied_format:
+                                    sona_core::llm::runtime::LlmResponseFormatKind::JsonSchema,
+                                warnings: Vec::new(),
+                                attempts: 1,
+                            },
+                        })
+                    }
+                }
+            },
+            |res: &LlmCompletionResponse, _exp, _num| {
+                if res.text == "valid" {
+                    Ok(vec![PolishedSegment {
+                        id: "s1".to_string(),
+                        text: "polished test".to_string(),
+                    }])
+                } else {
+                    Err(LlmTaskError::InvalidResponse {
+                        reason: "failed validation: expected valid JSON".to_string(),
+                    })
+                }
+            },
+        )
+        .await;
+
+        assert!(result.is_ok());
+        // 1 initial (Err) + 1 repair (attempt 1 -> "still invalid") + 1 reflection (attempt 2 -> "valid") = 3 calls
+        assert_eq!(call_count.load(Ordering::SeqCst), 3);
     }
 }

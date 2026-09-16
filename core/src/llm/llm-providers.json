@@ -3,7 +3,9 @@
   "providers": [
     {
       "id": "open_ai",
-      "aliases": ["openai"],
+      "aliases": [
+        "openai"
+      ],
       "strategy": "open_ai",
       "ui": {
         "labelKey": "settings.llm_providers.open_ai",
@@ -15,7 +17,7 @@
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -32,12 +34,14 @@
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
       "id": "azure_openai",
-      "aliases": ["azure_open_ai"],
+      "aliases": [
+        "azure_open_ai"
+      ],
       "strategy": "azure_openai",
       "ui": {
         "labelKey": "settings.llm_providers.azure_openai",
@@ -70,7 +74,7 @@
       "capabilities": {
         "supportsModelListing": false,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -86,7 +90,7 @@
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -102,12 +106,14 @@
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": false,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
       "id": "deep_seek",
-      "aliases": ["deepseek"],
+      "aliases": [
+        "deepseek"
+      ],
       "strategy": "deep_seek",
       "ui": {
         "labelKey": "settings.llm_providers.deep_seek",
@@ -119,7 +125,7 @@
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -130,29 +136,32 @@
         "labelDefault": "Moonshot AI"
       },
       "defaults": {
-        "apiHost": "https://api.moonshot.ai"
+        "apiHost": "https://api.moonshot.ai/v1"
       },
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
       "id": "moonshot_cn",
-      "aliases": ["moonshot", "kimi"],
+      "aliases": [
+        "moonshot",
+        "kimi"
+      ],
       "strategy": "moonshot_cn",
       "ui": {
         "labelKey": "settings.llm_providers.moonshot_cn",
         "labelDefault": "Moonshot CN"
       },
       "defaults": {
-        "apiHost": "https://api.moonshot.cn"
+        "apiHost": "https://api.moonshot.cn/v1"
       },
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -168,24 +177,26 @@
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
       "id": "silicon_flow",
-      "aliases": ["siliconflow"],
+      "aliases": [
+        "siliconflow"
+      ],
       "strategy": "silicon_flow",
       "ui": {
         "labelKey": "settings.llm_providers.silicon_flow",
         "labelDefault": "SiliconFlow"
       },
       "defaults": {
-        "apiHost": "https://api.siliconflow.cn"
+        "apiHost": "https://api.siliconflow.cn/v1"
       },
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -201,7 +212,7 @@
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -217,7 +228,7 @@
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -233,7 +244,7 @@
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -249,7 +260,7 @@
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -265,7 +276,7 @@
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -281,7 +292,7 @@
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": false,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -292,12 +303,12 @@
         "labelDefault": "Groq"
       },
       "defaults": {
-        "apiHost": "https://api.groq.com/openai"
+        "apiHost": "https://api.groq.com/openai/v1"
       },
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -313,7 +324,7 @@
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -324,12 +335,12 @@
         "labelDefault": "Mistral AI"
       },
       "defaults": {
-        "apiHost": "https://api.mistral.ai/v1"
+        "apiHost": "https://api.mistral.ai"
       },
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -363,7 +374,7 @@
       "capabilities": {
         "supportsModelListing": false,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -380,12 +391,14 @@
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
       "id": "copilot",
-      "aliases": ["github_copilot"],
+      "aliases": [
+        "github_copilot"
+      ],
       "strategy": "copilot",
       "ui": {
         "labelKey": "settings.llm_providers.copilot",
@@ -397,7 +410,7 @@
       "capabilities": {
         "supportsModelListing": false,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -408,12 +421,12 @@
         "labelDefault": "Cohere"
       },
       "defaults": {
-        "apiHost": "https://api.cohere.com/v2"
+        "apiHost": "https://api.cohere.ai"
       },
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -424,12 +437,12 @@
         "labelDefault": "Together AI"
       },
       "defaults": {
-        "apiHost": "https://api.together.xyz/v1"
+        "apiHost": "https://api.together.xyz"
       },
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -445,7 +458,7 @@
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -456,12 +469,12 @@
         "labelDefault": "Hyperbolic"
       },
       "defaults": {
-        "apiHost": "https://api.hyperbolic.xyz/v1"
+        "apiHost": "https://api.hyperbolic.xyz"
       },
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": true,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     },
     {
@@ -472,12 +485,12 @@
         "labelDefault": "Llamafile"
       },
       "defaults": {
-        "apiHost": "http://127.0.0.1:8080/v1"
+        "apiHost": "http://127.0.0.1:8080"
       },
       "capabilities": {
         "supportsModelListing": true,
         "requiresApiKey": false,
-        "editableApiHost": false
+        "editableApiHost": true
       }
     }
   ]
