@@ -1619,6 +1619,8 @@ describe('tauri boundary wrappers', () => {
         chunkSize: null,
         targetLanguage: 'zh',
         targetLanguageName: null,
+        context: null,
+        keywords: null,
       },
     });
     expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.llm.summarizeTranscript, {

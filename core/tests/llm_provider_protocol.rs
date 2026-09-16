@@ -144,6 +144,31 @@ fn provider_strategy_and_standard_input_helpers_are_core_owned() {
         strategy_supports_structured_output(LlmProviderStrategy::OpenAi),
         None
     );
+    assert_eq!(
+        strategy_supports_structured_output(LlmProviderStrategy::MoonshotAi),
+        Some(false)
+    );
+    assert_eq!(
+        strategy_supports_structured_output(LlmProviderStrategy::MoonshotCn),
+        Some(false)
+    );
+    assert_eq!(
+        strategy_supports_structured_output(LlmProviderStrategy::Xiaomi),
+        Some(false)
+    );
+
+    assert_eq!(
+        serde_json::from_str::<LlmProviderStrategy>(r#""moonshot_ai""#).unwrap(),
+        LlmProviderStrategy::MoonshotAi
+    );
+    assert_eq!(
+        serde_json::from_str::<LlmProviderStrategy>(r#""moonshot_cn""#).unwrap(),
+        LlmProviderStrategy::MoonshotCn
+    );
+    assert_eq!(
+        serde_json::from_str::<LlmProviderStrategy>(r#""xiaomi""#).unwrap(),
+        LlmProviderStrategy::Xiaomi
+    );
 
     let request = StandardLlmRequest {
         messages: vec![
