@@ -7,7 +7,10 @@ use crate::transport::{
 };
 use futures_util::{StreamExt, stream};
 use log::{info, warn};
-use reqwest::{Client, StatusCode, header::RETRY_AFTER};
+use reqwest::{
+    Client, StatusCode,
+    header::{ACCEPT, ACCEPT_LANGUAGE, RETRY_AFTER, USER_AGENT},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sona_core::llm::provider_protocol::{StandardLlmResponse, extract_text_from_json_response};
@@ -18,6 +21,8 @@ use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
 const GOOGLE_TRANSLATE_FREE_MAX_RETRIES: usize = 2;
 const GOOGLE_TRANSLATE_FREE_MAX_RETRY_AFTER_SECS: u64 = 5;
 const GOOGLE_TRANSLATE_FREE_RETRY_DELAYS_MS: [u64; GOOGLE_TRANSLATE_FREE_MAX_RETRIES] = [500, 1000];
+
+pub const GOOGLE_TRANSLATE_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36";
 
 #[derive(Serialize)]
 pub struct GoogleTranslateRequest {
@@ -151,17 +156,34 @@ fn google_translate_free_error_summary(error: &GoogleTranslateFreeAttemptError) 
     }
 }
 
-fn extract_google_translate_free_translation(
+pub fn extract_google_translate_free_translation(
     body: &Value,
 ) -> Result<String, GoogleTranslateFreeAttemptError> {
     let mut translated = String::new();
 
     if let Some(outer_arr) = body.as_array()
-        && let Some(inner_arr) = outer_arr.first().and_then(|value| value.as_array())
+        && let Some(first) = outer_arr.first()
     {
-        for part in inner_arr {
-            if let Some(text) = part.get(0).and_then(|value| value.as_str()) {
-                translated.push_str(text);
+        if let Some(inner_arr) = first.as_array() {
+            if let Some(first_elem) = inner_arr.first() {
+                if first_elem.is_array() {
+                    // Format A: [[["translated text", "orig", ...], ...], ...]
+                    for part in inner_arr {
+                        if let Some(text) = part.get(0).and_then(|value| value.as_str()) {
+                            translated.push_str(text);
+                        }
+                    }
+                } else if let Some(text) = first_elem.as_str() {
+                    // Format B: [["translated text", "src_lang"]]
+                    translated.push_str(text);
+                }
+            }
+        } else if first.is_string() {
+            // Format C: ["translated text 1", "translated text 2"]
+            for item in outer_arr {
+                if let Some(text) = item.as_str() {
+                    translated.push_str(text);
+                }
             }
         }
     }
@@ -175,39 +197,134 @@ fn extract_google_translate_free_translation(
     Ok(translated)
 }
 
+pub fn build_google_translate_free_candidate_urls(
+    base_url: &LlmApiUrl,
+    target_language: &str,
+    text: &str,
+) -> Vec<LlmApiUrl> {
+    let encoded = urlencoding::encode(text);
+    let base_str = base_url.as_str();
+    let mut candidates = Vec::with_capacity(4);
+
+    if base_str.contains("translate_a/t") {
+        if let Ok(url) = base_url.with_query(&format!(
+            "client=dict-chrome-ex&sl=auto&tl={target_language}&q={encoded}"
+        )) {
+            candidates.push(url);
+        }
+        if let Ok(url) = LlmApiUrl::parse(&format!(
+            "https://translate.googleapis.com/translate_a/single?client=at&sl=auto&tl={target_language}&dt=t&q={encoded}"
+        )) {
+            candidates.push(url);
+        }
+    } else {
+        // Standard endpoint candidate chain:
+        // 1. client=at on base_url (solves 429 on client=gtx)
+        if let Ok(url) = base_url.with_query(&format!(
+            "client=at&sl=auto&tl={target_language}&dt=t&q={encoded}"
+        )) {
+            candidates.push(url);
+        }
+        // 2. clients5.google.com Chrome extension fallback
+        if let Ok(url) = LlmApiUrl::parse(&format!(
+            "https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=auto&tl={target_language}&q={encoded}"
+        )) {
+            candidates.push(url);
+        }
+        // 3. translate.google.com fallback with client=at
+        if let Ok(url) = LlmApiUrl::parse(&format!(
+            "https://translate.google.com/translate_a/single?client=at&sl=auto&tl={target_language}&dt=t&q={encoded}"
+        )) {
+            candidates.push(url);
+        }
+        // 4. legacy client=gtx on base_url
+        if let Ok(url) = base_url.with_query(&format!(
+            "client=gtx&sl=auto&tl={target_language}&dt=t&q={encoded}"
+        )) {
+            candidates.push(url);
+        }
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    candidates.retain(|c| seen.insert(c.as_str().to_string()));
+    candidates
+}
+
 pub async fn fetch_google_translate_free_translation(
     client: &Client,
     base_url: &LlmApiUrl,
     target_language: &str,
     text: &str,
 ) -> Result<String, GoogleTranslateFreeAttemptError> {
-    let url = base_url
-        .with_query(&format!(
-            "client=gtx&sl=auto&tl={}&dt=t&q={}",
-            target_language,
-            urlencoding::encode(text)
-        ))
-        .map_err(GoogleTranslateFreeAttemptError::Port)?;
-    let response = client
-        .get(url.reqwest_url())
-        .send()
-        .await
-        .map_err(reqwest_port_error)
-        .map_err(GoogleTranslateFreeAttemptError::Port)?;
-
-    if !response.status().is_success() {
-        return Err(GoogleTranslateFreeAttemptError::HttpStatus {
-            status: response.status(),
-            retry_after: parse_google_translate_free_retry_after(response.headers()),
-        });
+    let candidates = build_google_translate_free_candidate_urls(base_url, target_language, text);
+    if candidates.is_empty() {
+        return Err(GoogleTranslateFreeAttemptError::Message(
+            "No valid translation endpoints".to_string(),
+        ));
     }
 
-    let body: Value = response
-        .json()
-        .await
-        .map_err(reqwest_port_error)
-        .map_err(GoogleTranslateFreeAttemptError::Port)?;
-    extract_google_translate_free_translation(&body)
+    let mut last_error = None;
+
+    for candidate_url in &candidates {
+        let response = match client
+            .get(candidate_url.reqwest_url())
+            .header(USER_AGENT, GOOGLE_TRANSLATE_USER_AGENT)
+            .header(ACCEPT, "*/*")
+            .header(ACCEPT_LANGUAGE, "en-US,en;q=0.9")
+            .send()
+            .await
+        {
+            Ok(resp) => resp,
+            Err(err) => {
+                log::debug!(
+                    "[LLM] google_translate_free request to {} failed: {}",
+                    candidate_url.as_str(),
+                    err
+                );
+                last_error = Some(GoogleTranslateFreeAttemptError::Port(reqwest_port_error(
+                    err,
+                )));
+                continue;
+            }
+        };
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let retry_after = parse_google_translate_free_retry_after(response.headers());
+            log::info!(
+                "[LLM] google_translate_free endpoint {} returned status {}, trying next candidate if available",
+                candidate_url.as_str(),
+                status
+            );
+            last_error = Some(GoogleTranslateFreeAttemptError::HttpStatus {
+                status,
+                retry_after,
+            });
+            continue;
+        }
+
+        let body: Value = match response.json().await {
+            Ok(b) => b,
+            Err(err) => {
+                last_error = Some(GoogleTranslateFreeAttemptError::Port(reqwest_port_error(
+                    err,
+                )));
+                continue;
+            }
+        };
+
+        match extract_google_translate_free_translation(&body) {
+            Ok(translation) => return Ok(translation),
+            Err(err) => {
+                last_error = Some(err);
+                continue;
+            }
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| {
+        GoogleTranslateFreeAttemptError::Message("All translation endpoints failed".to_string())
+    }))
 }
 
 pub async fn execute_google_translate_free_request<FetchFn, FetchFuture, SleepFn, SleepFuture>(

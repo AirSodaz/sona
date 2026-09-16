@@ -31,11 +31,12 @@ pub use openai_compatible::{
     generate_with_openai_custom_path,
 };
 pub use providers::{
-    GoogleTranslateAdapter, GoogleTranslateData, GoogleTranslateFreeAttemptError,
-    GoogleTranslateRequest, GoogleTranslateResponse, GoogleTranslateTranslation,
+    GOOGLE_TRANSLATE_USER_AGENT, GoogleTranslateAdapter, GoogleTranslateData,
+    GoogleTranslateFreeAttemptError, GoogleTranslateRequest, GoogleTranslateResponse,
+    GoogleTranslateTranslation, build_google_translate_free_candidate_urls,
     execute_google_translate_free_request, execute_google_translate_request,
-    fetch_google_translate_free_translation, parse_google_translate_free_retry_after,
-    run_google_translate_free_requests_in_order,
+    extract_google_translate_free_translation, fetch_google_translate_free_translation,
+    parse_google_translate_free_retry_after, run_google_translate_free_requests_in_order,
 };
 pub use responses::{build_openai_responses_payload, generate_with_openai_responses_api};
 pub use streaming::{
@@ -58,7 +59,6 @@ use sona_core::ports::llm::{
 };
 
 use crate::models_dev::default_models_dev_catalog;
-use crate::providers::google_translate_free_port_error;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OnlineLlmAdapter;
@@ -162,14 +162,25 @@ impl LlmTranslationPort for OnlineLlmAdapter {
             sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree => {
                 let mut indexed = Vec::with_capacity(request.texts.len());
                 for (index, text) in request.texts.into_iter().enumerate() {
-                    let translation = fetch_google_translate_free_translation(
-                        &client,
-                        &base_url,
-                        &target_language,
-                        &text,
+                    let fetch_client = client.clone();
+                    let base_url = base_url.clone();
+                    let (_, translation) = execute_google_translate_free_request(
+                        index,
+                        text,
+                        target_language.clone(),
+                        move |text, target| {
+                            let client = fetch_client.clone();
+                            let base_url = base_url.clone();
+                            async move {
+                                fetch_google_translate_free_translation(
+                                    &client, &base_url, &target, &text,
+                                )
+                                .await
+                            }
+                        },
+                        tokio::time::sleep,
                     )
-                    .await
-                    .map_err(google_translate_free_port_error)?;
+                    .await?;
                     indexed.push((index, translation));
                 }
                 indexed.sort_by_key(|(index, _)| *index);
