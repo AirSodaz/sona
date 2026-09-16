@@ -257,6 +257,8 @@ class UniffiLlmAdapterTest {
         assertEquals("android-translate-rec-tr", req.taskId)
         assertEquals("es", req.targetLanguage)
         assertEquals("Spanish", req.targetLanguageName)
+        assertEquals(null, req.context)
+        assertEquals(null, req.keywords)
 
         assertEquals(2, recordedStates.size)
         assertTrue(recordedStates[0] is LlmTaskState.Running)

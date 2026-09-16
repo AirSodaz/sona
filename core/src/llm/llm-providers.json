@@ -3,8 +3,10 @@
   "providers": [
     {
       "id": "open_ai",
-      "aliases": ["openai"],
-      "strategy": "openai_compatible",
+      "aliases": [
+        "openai"
+      ],
+      "strategy": "open_ai",
       "ui": {
         "labelKey": "settings.llm_providers.open_ai",
         "labelDefault": "OpenAI"
@@ -37,7 +39,9 @@
     },
     {
       "id": "azure_openai",
-      "aliases": ["azure_open_ai"],
+      "aliases": [
+        "azure_open_ai"
+      ],
       "strategy": "azure_openai",
       "ui": {
         "labelKey": "settings.llm_providers.azure_openai",
@@ -107,8 +111,10 @@
     },
     {
       "id": "deep_seek",
-      "aliases": ["deepseek"],
-      "strategy": "openai_compatible",
+      "aliases": [
+        "deepseek"
+      ],
+      "strategy": "deep_seek",
       "ui": {
         "labelKey": "settings.llm_providers.deep_seek",
         "labelDefault": "DeepSeek"
@@ -124,13 +130,13 @@
     },
     {
       "id": "moonshot_ai",
-      "strategy": "openai_compatible",
+      "strategy": "moonshot_ai",
       "ui": {
         "labelKey": "settings.llm_providers.moonshot_ai",
         "labelDefault": "Moonshot AI"
       },
       "defaults": {
-        "apiHost": "https://api.moonshot.ai"
+        "apiHost": "https://api.moonshot.ai/v1"
       },
       "capabilities": {
         "supportsModelListing": true,
@@ -140,14 +146,17 @@
     },
     {
       "id": "moonshot_cn",
-      "aliases": ["moonshot", "kimi"],
-      "strategy": "openai_compatible",
+      "aliases": [
+        "moonshot",
+        "kimi"
+      ],
+      "strategy": "moonshot_cn",
       "ui": {
         "labelKey": "settings.llm_providers.moonshot_cn",
         "labelDefault": "Moonshot CN"
       },
       "defaults": {
-        "apiHost": "https://api.moonshot.cn"
+        "apiHost": "https://api.moonshot.cn/v1"
       },
       "capabilities": {
         "supportsModelListing": true,
@@ -157,13 +166,13 @@
     },
     {
       "id": "xiaomi",
-      "strategy": "openai_compatible",
+      "strategy": "xiaomi",
       "ui": {
         "labelKey": "settings.llm_providers.xiaomi",
         "labelDefault": "Xiaomi"
       },
       "defaults": {
-        "apiHost": "https://api.xiaomimimo.com"
+        "apiHost": "https://api.xiaomimimo.com/v1"
       },
       "capabilities": {
         "supportsModelListing": true,
@@ -171,17 +180,18 @@
         "editableApiHost": true
       }
     },
-
     {
       "id": "silicon_flow",
-      "aliases": ["siliconflow"],
-      "strategy": "openai_compatible",
+      "aliases": [
+        "siliconflow"
+      ],
+      "strategy": "silicon_flow",
       "ui": {
         "labelKey": "settings.llm_providers.silicon_flow",
         "labelDefault": "SiliconFlow"
       },
       "defaults": {
-        "apiHost": "https://api.siliconflow.cn"
+        "apiHost": "https://api.siliconflow.cn/v1"
       },
       "capabilities": {
         "supportsModelListing": true,
@@ -191,7 +201,7 @@
     },
     {
       "id": "qwen",
-      "strategy": "openai_compatible",
+      "strategy": "qwen",
       "ui": {
         "labelKey": "settings.llm_providers.qwen",
         "labelDefault": "Qwen"
@@ -207,7 +217,7 @@
     },
     {
       "id": "qwen_portal",
-      "strategy": "openai_compatible",
+      "strategy": "qwen_portal",
       "ui": {
         "labelKey": "settings.llm_providers.qwen_portal",
         "labelDefault": "Qwen Portal"
@@ -223,7 +233,7 @@
     },
     {
       "id": "minimax_global",
-      "strategy": "openai_compatible",
+      "strategy": "minimax_global",
       "ui": {
         "labelKey": "settings.llm_providers.minimax_global",
         "labelDefault": "MiniMax Global"
@@ -239,7 +249,7 @@
     },
     {
       "id": "minimax_cn",
-      "strategy": "openai_compatible",
+      "strategy": "minimax_cn",
       "ui": {
         "labelKey": "settings.llm_providers.minimax_cn",
         "labelDefault": "MiniMax CN"
@@ -255,7 +265,7 @@
     },
     {
       "id": "openrouter",
-      "strategy": "openai_compatible",
+      "strategy": "open_router",
       "ui": {
         "labelKey": "settings.llm_providers.openrouter",
         "labelDefault": "OpenRouter"
@@ -271,7 +281,7 @@
     },
     {
       "id": "lm_studio",
-      "strategy": "openai_compatible",
+      "strategy": "lm_studio",
       "ui": {
         "labelKey": "settings.llm_providers.lm_studio",
         "labelDefault": "LM Studio"
@@ -287,13 +297,13 @@
     },
     {
       "id": "groq",
-      "strategy": "openai_compatible",
+      "strategy": "groq",
       "ui": {
         "labelKey": "settings.llm_providers.groq",
         "labelDefault": "Groq"
       },
       "defaults": {
-        "apiHost": "https://api.groq.com/openai"
+        "apiHost": "https://api.groq.com/openai/v1"
       },
       "capabilities": {
         "supportsModelListing": true,
@@ -303,7 +313,7 @@
     },
     {
       "id": "x_ai",
-      "strategy": "openai_compatible",
+      "strategy": "x_ai",
       "ui": {
         "labelKey": "settings.llm_providers.x_ai",
         "labelDefault": "xAI"
@@ -319,13 +329,13 @@
     },
     {
       "id": "mistral_ai",
-      "strategy": "openai_compatible",
+      "strategy": "mistral_ai",
       "ui": {
         "labelKey": "settings.llm_providers.mistral_ai",
         "labelDefault": "Mistral AI"
       },
       "defaults": {
-        "apiHost": "https://api.mistral.ai/v1"
+        "apiHost": "https://api.mistral.ai"
       },
       "capabilities": {
         "supportsModelListing": true,
@@ -369,13 +379,14 @@
     },
     {
       "id": "chatglm",
-      "strategy": "openai_compatible",
+      "strategy": "chatglm",
       "ui": {
         "labelKey": "settings.llm_providers.chatglm",
         "labelDefault": "ChatGLM"
       },
       "defaults": {
-        "apiHost": "https://open.bigmodel.cn/api/paas/v4/"
+        "apiHost": "https://open.bigmodel.cn/api/paas/v4/",
+        "apiPath": "/chat/completions"
       },
       "capabilities": {
         "supportsModelListing": true,
@@ -385,7 +396,9 @@
     },
     {
       "id": "copilot",
-      "aliases": ["github_copilot"],
+      "aliases": [
+        "github_copilot"
+      ],
       "strategy": "copilot",
       "ui": {
         "labelKey": "settings.llm_providers.copilot",
@@ -397,6 +410,86 @@
       "capabilities": {
         "supportsModelListing": false,
         "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "cohere",
+      "strategy": "cohere",
+      "ui": {
+        "labelKey": "settings.llm_providers.cohere",
+        "labelDefault": "Cohere"
+      },
+      "defaults": {
+        "apiHost": "https://api.cohere.ai"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "together",
+      "strategy": "together",
+      "ui": {
+        "labelKey": "settings.llm_providers.together",
+        "labelDefault": "Together AI"
+      },
+      "defaults": {
+        "apiHost": "https://api.together.xyz"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "venice",
+      "strategy": "venice",
+      "ui": {
+        "labelKey": "settings.llm_providers.venice",
+        "labelDefault": "Venice AI"
+      },
+      "defaults": {
+        "apiHost": "https://api.venice.ai/api/v1"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "hyperbolic",
+      "strategy": "hyperbolic",
+      "ui": {
+        "labelKey": "settings.llm_providers.hyperbolic",
+        "labelDefault": "Hyperbolic"
+      },
+      "defaults": {
+        "apiHost": "https://api.hyperbolic.xyz"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": true,
+        "editableApiHost": true
+      }
+    },
+    {
+      "id": "llamafile",
+      "strategy": "llamafile",
+      "ui": {
+        "labelKey": "settings.llm_providers.llamafile",
+        "labelDefault": "Llamafile"
+      },
+      "defaults": {
+        "apiHost": "http://127.0.0.1:8080"
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": false,
         "editableApiHost": true
       }
     }

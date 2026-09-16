@@ -302,6 +302,8 @@ function normalizeTranslateRequest(
     chunkSize: nullableNonNegativeSafeInteger(request.chunkSize, 'request.chunkSize'),
     targetLanguage: request.targetLanguage,
     targetLanguageName: request.targetLanguageName ?? null,
+    context: request.context ?? null,
+    keywords: request.keywords ?? null,
   };
 }
 

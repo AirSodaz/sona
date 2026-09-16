@@ -241,7 +241,25 @@ fn dynamic_response(request: &LlmCompletionRequest) -> StandardLlmResponse {
             serde_json::json!({"items": items}).to_string()
         }
         LlmResponseFormat::Text => "partial summary".to_string(),
-        LlmResponseFormat::JsonObject => unreachable!(),
+        LlmResponseFormat::JsonObject => {
+            if request.input.contains("translation") {
+                let items = segments(8)
+                    .into_iter()
+                    .filter(|segment| request.input.contains(&format!(r#""id":"{}""#, segment.id)))
+                    .map(|segment| {
+                        serde_json::json!({"id": segment.id, "translation": format!("translated {}", segment.text)})
+                    })
+                    .collect::<Vec<_>>();
+                serde_json::json!({"items": items}).to_string()
+            } else {
+                let items = segments(8)
+                    .into_iter()
+                    .filter(|segment| request.input.contains(&format!(r#""id":"{}""#, segment.id)))
+                    .map(|segment| serde_json::json!({"id": segment.id, "text": segment.text}))
+                    .collect::<Vec<_>>();
+                serde_json::json!({"items": items}).to_string()
+            }
+        }
     };
     StandardLlmResponse { text, usage: None }
 }
@@ -409,6 +427,8 @@ async fn structured_chunks_run_two_at_a_time_and_merge_in_input_order() {
                 chunk_size: Some(4),
                 target_language: "ja".to_string(),
                 target_language_name: Some("Japanese".to_string()),
+                context: None,
+                keywords: None,
             },
             &(),
         )
@@ -445,6 +465,8 @@ async fn google_translate_free_uses_core_concurrency_per_segment() {
                 chunk_size: Some(4),
                 target_language: "ja".to_string(),
                 target_language_name: None,
+                context: None,
+                keywords: None,
             },
             &(),
         )

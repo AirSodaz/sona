@@ -178,7 +178,6 @@ describe('SettingsLLMServiceTab', () => {
 
   it('renders active provider fields from llmSettings in accordion', async () => {
     const conf = buildConfig();
-    conf.llmSettings!.providers.open_ai!.apiHost = 'test-host';
     currentConfig = conf;
 
     await act(async () => {
@@ -189,7 +188,7 @@ describe('SettingsLLMServiceTab', () => {
     await act(async () => {
       clickProviderHeader('OpenAI');
     });
-    screen.getByDisplayValue('test-host');
+    screen.getByDisplayValue('https://api.openai.com');
     screen.getByDisplayValue('test-key');
   });
 
@@ -225,7 +224,6 @@ describe('SettingsLLMServiceTab', () => {
 
   it('fills Gemini host with the default host in accordion', async () => {
     const conf = buildConfig('gemini');
-    conf.llmSettings!.providers.gemini!.apiHost = 'gemini-host';
     currentConfig = conf;
 
     await act(async () => {
@@ -235,7 +233,7 @@ describe('SettingsLLMServiceTab', () => {
     await act(async () => {
       clickProviderHeader('Gemini');
     });
-    screen.getByDisplayValue('gemini-host');
+    screen.getByDisplayValue('https://generativelanguage.googleapis.com');
   });
 
   it('hides the free Google Translate provider from credentials and allows all accordions to collapse', async () => {

@@ -273,9 +273,6 @@ impl LlmApiUrl {
         }
 
         let mut builder = Client::builder();
-        if self.https_only {
-            builder = builder.https_only(true);
-        }
         if let Some(secs) = timeout_seconds {
             builder = builder.timeout(Duration::from_secs(secs));
         }

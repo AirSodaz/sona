@@ -53,6 +53,11 @@ pub enum FfiLlmProviderStrategy {
     Volcengine,
     Chatglm,
     Copilot,
+    Cohere,
+    Together,
+    Venice,
+    Hyperbolic,
+    Llamafile,
     GoogleTranslate,
     GoogleTranslateFree,
     OpenAiCompatible,
@@ -137,6 +142,8 @@ pub struct FfiTranslateSegmentsRequest {
     pub chunk_size: Option<u64>,
     pub target_language: String,
     pub target_language_name: Option<String>,
+    pub context: Option<String>,
+    pub keywords: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -191,6 +198,11 @@ pub fn llm_provider_strategy_to_ffi(strategy: LlmProviderStrategy) -> FfiLlmProv
         LlmProviderStrategy::Volcengine => FfiLlmProviderStrategy::Volcengine,
         LlmProviderStrategy::Chatglm => FfiLlmProviderStrategy::Chatglm,
         LlmProviderStrategy::Copilot => FfiLlmProviderStrategy::Copilot,
+        LlmProviderStrategy::Cohere => FfiLlmProviderStrategy::Cohere,
+        LlmProviderStrategy::Together => FfiLlmProviderStrategy::Together,
+        LlmProviderStrategy::Venice => FfiLlmProviderStrategy::Venice,
+        LlmProviderStrategy::Hyperbolic => FfiLlmProviderStrategy::Hyperbolic,
+        LlmProviderStrategy::Llamafile => FfiLlmProviderStrategy::Llamafile,
         LlmProviderStrategy::GoogleTranslate => FfiLlmProviderStrategy::GoogleTranslate,
         LlmProviderStrategy::GoogleTranslateFree => FfiLlmProviderStrategy::GoogleTranslateFree,
         LlmProviderStrategy::OpenAiCompatible => FfiLlmProviderStrategy::OpenAiCompatible,
@@ -300,6 +312,8 @@ pub fn translate_segments_request_to_ffi(
         chunk_size: request.chunk_size.map(|value| value as u64),
         target_language: request.target_language,
         target_language_name: request.target_language_name,
+        context: request.context,
+        keywords: request.keywords,
     }
 }
 
@@ -411,6 +425,11 @@ fn llm_provider_strategy_from_ffi(strategy: FfiLlmProviderStrategy) -> LlmProvid
         FfiLlmProviderStrategy::Volcengine => LlmProviderStrategy::Volcengine,
         FfiLlmProviderStrategy::Chatglm => LlmProviderStrategy::Chatglm,
         FfiLlmProviderStrategy::Copilot => LlmProviderStrategy::Copilot,
+        FfiLlmProviderStrategy::Cohere => LlmProviderStrategy::Cohere,
+        FfiLlmProviderStrategy::Together => LlmProviderStrategy::Together,
+        FfiLlmProviderStrategy::Venice => LlmProviderStrategy::Venice,
+        FfiLlmProviderStrategy::Hyperbolic => LlmProviderStrategy::Hyperbolic,
+        FfiLlmProviderStrategy::Llamafile => LlmProviderStrategy::Llamafile,
         FfiLlmProviderStrategy::GoogleTranslate => LlmProviderStrategy::GoogleTranslate,
         FfiLlmProviderStrategy::GoogleTranslateFree => LlmProviderStrategy::GoogleTranslateFree,
         FfiLlmProviderStrategy::OpenAiCompatible => LlmProviderStrategy::OpenAiCompatible,
@@ -451,6 +470,8 @@ pub(crate) fn translate_segments_request_from_ffi(
         chunk_size: optional_u64_to_usize(request.chunk_size, "chunk size")?,
         target_language: request.target_language,
         target_language_name: request.target_language_name,
+        context: request.context,
+        keywords: request.keywords,
     })
 }
 
