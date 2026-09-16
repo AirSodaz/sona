@@ -169,6 +169,8 @@ fn translate_request_validation_requires_target_language() {
         chunk_size: None,
         target_language: "  ".to_string(),
         target_language_name: None,
+        context: None,
+        keywords: None,
     };
 
     let error = validate_translate_segments_request(&request).unwrap_err();

@@ -451,6 +451,8 @@ pub(crate) fn translate_segments_request_from_ffi(
         chunk_size: optional_u64_to_usize(request.chunk_size, "chunk size")?,
         target_language: request.target_language,
         target_language_name: request.target_language_name,
+        context: None,
+        keywords: None,
     })
 }
 

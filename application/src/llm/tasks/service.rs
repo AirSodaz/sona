@@ -228,10 +228,12 @@ where
             },
             budget,
             |segments| {
-                sona_core::llm::tasks::build_translate_task_input(
+                sona_core::llm::tasks::build_translate_task_input_with_context(
                     segments,
                     &request.target_language,
                     request.target_language_name.as_deref(),
+                    request.context.as_deref(),
+                    request.keywords.as_deref(),
                 )
             },
         )?;
@@ -692,38 +694,53 @@ where
                 &partials,
                 budget,
             );
-            let mut reduced = Vec::with_capacity(groups.len());
-            for group in groups {
-                let prompt =
-                    sona_core::llm::tasks::build_summary_reduce_prompt(&request.template, &group);
-                if !sona_core::llm::tasks::summary_prompt_fits_budget(
-                    sona_core::llm::tasks::SUMMARY_REDUCE_SYSTEM_PROMPT,
-                    &prompt,
-                    budget,
-                ) {
-                    return Err(LlmTaskError::InvalidResponse {
-                        reason: "An intermediate summary exceeds the model context budget"
-                            .to_string(),
-                    });
-                }
-                let response = self
-                    .complete_text(
-                        request.config.clone(),
-                        sona_core::llm::tasks::SUMMARY_REDUCE_SYSTEM_PROMPT,
-                        prompt,
-                        LlmPromptCachePolicy::Automatic,
-                        summary_reduce_output_tokens(budget),
-                        "summary reduce",
-                    )
-                    .await?;
-                let text = response.text.trim();
-                if text.is_empty() {
-                    return Err(LlmTaskError::InvalidResponse {
-                        reason: "Summary reduce returned empty text".to_string(),
-                    });
-                }
-                reduced.push(text.to_string());
+            let groups_count = groups.len();
+            let config = request.config.clone();
+            let template = &request.template;
+            let reduce_tokens = summary_reduce_output_tokens(budget);
+            let mut reduce_stream = stream::iter(groups.into_iter().enumerate())
+                .map(|(idx, group)| {
+                    let config = config.clone();
+                    let prompt =
+                        sona_core::llm::tasks::build_summary_reduce_prompt(template, &group);
+                    async move {
+                        if !sona_core::llm::tasks::summary_prompt_fits_budget(
+                            sona_core::llm::tasks::SUMMARY_REDUCE_SYSTEM_PROMPT,
+                            &prompt,
+                            budget,
+                        ) {
+                            return Err(LlmTaskError::InvalidResponse {
+                                reason: "An intermediate summary exceeds the model context budget"
+                                    .to_string(),
+                            });
+                        }
+                        let response = self
+                            .complete_text(
+                                config,
+                                sona_core::llm::tasks::SUMMARY_REDUCE_SYSTEM_PROMPT,
+                                prompt,
+                                LlmPromptCachePolicy::Automatic,
+                                reduce_tokens,
+                                "summary reduce",
+                            )
+                            .await?;
+                        let text = response.text.trim();
+                        if text.is_empty() {
+                            return Err(LlmTaskError::InvalidResponse {
+                                reason: "Summary reduce returned empty text".to_string(),
+                            });
+                        }
+                        Ok((idx, text.to_string()))
+                    }
+                })
+                .buffer_unordered(self.max_concurrency);
+
+            let mut reduced_ordered = vec![None; groups_count];
+            while let Some(res) = reduce_stream.next().await {
+                let (idx, text) = res?;
+                reduced_ordered[idx] = Some(text);
             }
+            let reduced = reduced_ordered.into_iter().flatten().collect::<Vec<_>>();
 
             let reduced_chars = reduced
                 .iter()
@@ -994,13 +1011,13 @@ fn parse_polish_response(
     expected: &[sona_core::llm::tasks::LlmSegmentInput],
     chunk_number: usize,
 ) -> Result<Vec<sona_core::llm::tasks::PolishedSegment>, LlmTaskError> {
-    let value = response
-        .json
-        .as_ref()
-        .ok_or_else(|| LlmTaskError::InvalidResponse {
-            reason: "structured response did not include parsed JSON".to_string(),
-        })?;
-    sona_core::llm::tasks::parse_polish_object(value, expected, chunk_number)
+    if let Some(value) = response.json.as_ref() {
+        if let Ok(items) = sona_core::llm::tasks::parse_polish_object(value, expected, chunk_number)
+        {
+            return Ok(items);
+        }
+    }
+    sona_core::llm::tasks::parse_polish_chunk(&response.text, expected, chunk_number)
 }
 
 fn parse_translate_response(
@@ -1008,13 +1025,14 @@ fn parse_translate_response(
     expected: &[sona_core::llm::tasks::LlmSegmentInput],
     chunk_number: usize,
 ) -> Result<Vec<sona_core::llm::tasks::TranslatedSegment>, LlmTaskError> {
-    let value = response
-        .json
-        .as_ref()
-        .ok_or_else(|| LlmTaskError::InvalidResponse {
-            reason: "structured response did not include parsed JSON".to_string(),
-        })?;
-    sona_core::llm::tasks::parse_translate_object(value, expected, chunk_number)
+    if let Some(value) = response.json.as_ref() {
+        if let Ok(items) =
+            sona_core::llm::tasks::parse_translate_object(value, expected, chunk_number)
+        {
+            return Ok(items);
+        }
+    }
+    sona_core::llm::tasks::parse_translate_chunk(&response.text, expected, chunk_number)
 }
 
 fn runtime_error(stage: &str, source: LlmRuntimeError) -> LlmTaskError {

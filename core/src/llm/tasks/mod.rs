@@ -174,22 +174,39 @@ pub struct SummarySegmentInput {
     pub is_final: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, schemars::JsonSchema)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct PolishedSegment {
+    #[schemars(description = "Segment ID matching the input")]
     pub id: String,
+    #[schemars(description = "The polished speech-to-text content")]
     pub text: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, schemars::JsonSchema)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct TranslatedSegment {
+    #[schemars(description = "Segment ID matching the input")]
     pub id: String,
+    #[schemars(description = "The translated text content")]
     pub translation: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PolishedSegmentsBatch {
+    #[schemars(description = "List of edited speech-to-text segments")]
+    pub items: Vec<PolishedSegment>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TranslatedSegmentsBatch {
+    #[schemars(description = "List of translated speech-to-text segments")]
+    pub items: Vec<TranslatedSegment>,
+}
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]

@@ -234,6 +234,10 @@ pub struct TranslateSegmentsRequest {
     pub chunk_size: Option<usize>,
     pub target_language: String,
     pub target_language_name: Option<String>,
+    #[serde(default)]
+    pub context: Option<String>,
+    #[serde(default)]
+    pub keywords: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
