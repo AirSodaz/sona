@@ -149,7 +149,7 @@ export function ProviderAccordionItem({
                   id={`llm-${def.id}-host`}
                   type="text"
                   className="settings-input"
-                  value={setting?.apiHost || def.defaultApiHost}
+                  value={def.defaultApiHost}
                   readOnly
                   disabled
                 />

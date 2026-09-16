@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CustomLlmProvider } from '../../../types/transcript';
+import type { CustomLlmProvider, CustomLlmProviderId } from '../../../types/transcript';
 import {
   BUILT_IN_LLM_PROVIDER_DEFINITIONS,
   buildLlmConfig,
@@ -21,6 +21,8 @@ describe('llm providers', () => {
     expect(normalizeProvider('azure_open_ai')).toBe('azure_openai');
     expect(normalizeProvider('deepseek')).toBe('deep_seek');
     expect(normalizeProvider('siliconflow')).toBe('silicon_flow');
+    expect(normalizeProvider('moonshot')).toBe('moonshot_cn');
+    expect(normalizeProvider('kimi')).toBe('moonshot_cn');
     expect(normalizeProvider('unknown-provider')).toBe(DEFAULT_LLM_PROVIDER);
   });
 
@@ -61,10 +63,10 @@ describe('llm providers', () => {
 
     expect(config).toEqual({
       provider: 'open_ai',
-      baseUrl: 'https://example.com',
+      baseUrl: 'https://api.openai.com',
       apiKey: 'test-key',
       model: '',
-      strategy: 'openai_compatible',
+      strategy: 'open_ai',
       apiPath: '/v1/chat/completions',
       apiVersion: undefined,
       temperature: DEFAULT_LLM_TEMPERATURE,
@@ -199,15 +201,34 @@ describe('llm providers', () => {
     });
   });
 
-  it('allows custom apiHost for non-free providers in buildLlmConfig', () => {
-    const config = buildLlmConfig('open_ai', {
+  it('enforces fixed endpoint for built-in providers and allows custom apiHost for custom providers', () => {
+    const openAiConfig = buildLlmConfig('open_ai', {
       apiHost: 'https://custom-gateway.example.com',
       apiKey: 'sk-test',
       apiPath: undefined,
       apiVersion: undefined,
     });
+    expect(openAiConfig.baseUrl).toBe('https://api.openai.com');
+    expect(openAiConfig.apiKey).toBe('sk-test');
 
-    expect(config.baseUrl).toBe('https://custom-gateway.example.com');
-    expect(config.apiKey).toBe('sk-test');
+    const customId = 'custom-my-gateway' as CustomLlmProviderId;
+    const customConfig = buildLlmConfig(
+      customId,
+      {
+        apiHost: 'https://custom-gateway.example.com',
+        apiKey: 'sk-test',
+        apiPath: undefined,
+        apiVersion: undefined,
+      },
+      {
+        [customId]: {
+          id: customId,
+          name: 'My Gateway',
+          strategy: 'openai_compatible',
+          createdAt: '2026-05-18T00:00:00.000Z',
+        },
+      }
+    );
+    expect(customConfig.baseUrl).toBe('https://custom-gateway.example.com');
   });
 });

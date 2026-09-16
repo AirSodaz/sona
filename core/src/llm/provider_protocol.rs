@@ -184,6 +184,10 @@ pub fn strategy_uses_openai_chat_payload(strategy: LlmProviderStrategy) -> bool 
             | LlmProviderStrategy::MistralAi
             | LlmProviderStrategy::Chatglm
             | LlmProviderStrategy::Volcengine
+            | LlmProviderStrategy::Together
+            | LlmProviderStrategy::Venice
+            | LlmProviderStrategy::Hyperbolic
+            | LlmProviderStrategy::Llamafile
     )
 }
 
@@ -203,7 +207,12 @@ pub fn strategy_supports_structured_output(strategy: LlmProviderStrategy) -> Opt
         | LlmProviderStrategy::Volcengine
         | LlmProviderStrategy::Perplexity
         | LlmProviderStrategy::GoogleTranslate
-        | LlmProviderStrategy::GoogleTranslateFree => Some(false),
+        | LlmProviderStrategy::GoogleTranslateFree
+        | LlmProviderStrategy::Cohere
+        | LlmProviderStrategy::Together
+        | LlmProviderStrategy::Venice
+        | LlmProviderStrategy::Hyperbolic
+        | LlmProviderStrategy::Llamafile => Some(false),
         _ => None,
     }
 }

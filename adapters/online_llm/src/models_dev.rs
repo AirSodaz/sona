@@ -279,7 +279,12 @@ pub fn models_dev_provider_id(strategy: LlmProviderStrategy) -> Option<&'static 
         LlmProviderStrategy::Perplexity => "perplexity",
         LlmProviderStrategy::Chatglm => "zhipuai",
         LlmProviderStrategy::Copilot => "github-copilot",
-        LlmProviderStrategy::Volcengine
+        LlmProviderStrategy::Cohere => "cohere",
+        LlmProviderStrategy::Together => "together",
+        LlmProviderStrategy::Venice => "venice",
+        LlmProviderStrategy::Hyperbolic => "hyperbolic",
+        LlmProviderStrategy::Llamafile
+        | LlmProviderStrategy::Volcengine
         | LlmProviderStrategy::GoogleTranslate
         | LlmProviderStrategy::GoogleTranslateFree
         | LlmProviderStrategy::OpenAiCompatible

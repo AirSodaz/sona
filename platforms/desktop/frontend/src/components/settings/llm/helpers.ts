@@ -25,8 +25,12 @@ export function getModelPlaceholder(provider: LlmProvider): string {
       return 'qwen3:8b';
     case 'deep_seek':
       return 'deepseek-chat';
+    case 'moonshot_cn':
+    case 'moonshot_ai':
     case 'kimi':
       return 'moonshot-v1-8k';
+    case 'chatglm':
+      return 'glm-4-flash';
     case 'qwen':
     case 'qwen_portal':
       return 'qwen-max';
@@ -38,6 +42,16 @@ export function getModelPlaceholder(provider: LlmProvider): string {
       return 'mistral-large-latest';
     case 'perplexity':
       return 'sonar';
+    case 'cohere':
+      return 'command-r-plus';
+    case 'together':
+      return 'meta-llama/Llama-3.3-70B-Instruct-Turbo';
+    case 'venice':
+      return 'llama-3.3-70b';
+    case 'hyperbolic':
+      return 'meta-llama/Llama-3.3-70B-Instruct';
+    case 'llamafile':
+      return 'default';
     case 'google_translate':
     case 'google_translate_free':
       return 'default';

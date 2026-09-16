@@ -45,6 +45,7 @@ export const BUILT_IN_LLM_PROVIDER_DEFINITIONS: LlmProviderDefinition[] = [
     defaultApiHost: 'https://translate.googleapis.com/translate_a/single',
     supportsModelListing: false,
     requiresApiKey: false,
+    editableApiHost: false,
   },
   {
     id: 'google_translate',
@@ -54,6 +55,7 @@ export const BUILT_IN_LLM_PROVIDER_DEFINITIONS: LlmProviderDefinition[] = [
     defaultApiHost: 'https://translation.googleapis.com/language/translate/v2',
     supportsModelListing: false,
     requiresApiKey: true,
+    editableApiHost: false,
   },
   ...llmProvidersManifest.providers.map((p) => ({
     id: p.id as LlmProvider,
@@ -93,8 +95,8 @@ const LEGACY_PROVIDER_MAP: Record<string, LlmProvider> = {
   deep_seek: 'deep_seek',
   deepseek: 'deep_seek',
   gemini: 'gemini',
-  kimi: 'kimi',
-  moonshot: 'kimi',
+  kimi: 'moonshot_cn',
+  moonshot: 'moonshot_cn',
   ollama: 'ollama',
   open_ai: 'open_ai',
   openai_compatible: 'custom-openai-compatible',
@@ -266,10 +268,15 @@ export function buildLlmConfig(
 
   // This returns a provider-level runtime snapshot without picking a concrete model yet.
   // Feature helpers layer the selected model and temperature on top of this base shape.
+  const effectiveBaseUrl =
+    definition.editableApiHost === false
+      ? definition.defaultApiHost
+      : setting.apiHost || definition.defaultApiHost;
+
   return {
     provider,
     strategy: definition.strategy,
-    baseUrl: setting.apiHost,
+    baseUrl: effectiveBaseUrl,
     apiKey: setting.apiKey,
     model: '',
     apiPath: setting.apiPath,

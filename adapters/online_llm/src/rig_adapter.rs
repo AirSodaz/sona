@@ -2,7 +2,10 @@ use rig_core::client::{CompletionClient, Nothing};
 use rig_core::completion::{
     CompletionError, CompletionModel, CompletionRequest, CompletionResponse,
 };
-use rig_core::providers::{anthropic, azure, gemini, ollama, openai};
+use rig_core::providers::{
+    anthropic, azure, cohere, copilot, deepseek, gemini, groq, hyperbolic, llamafile, mistral,
+    moonshot, ollama, openai, openrouter, perplexity, together, venice, xai,
+};
 use rig_core::streaming::StreamingCompletionResponse;
 use sona_core::llm::provider_protocol::StandardLlmResponse;
 use sona_core::llm::runtime::LlmCompletionRequest;
@@ -23,6 +26,19 @@ pub enum RigModel {
     Anthropic(anthropic::completion::CompletionModel),
     Gemini(gemini::completion::CompletionModel),
     Ollama(ollama::CompletionModel),
+    Copilot(copilot::CompletionModel),
+    Cohere(cohere::completion::CompletionModel),
+    DeepSeek(deepseek::CompletionModel),
+    Groq(groq::CompletionModel),
+    Mistral(mistral::CompletionModel),
+    Moonshot(moonshot::CompletionModel),
+    OpenRouter(openrouter::CompletionModel),
+    Perplexity(perplexity::CompletionModel),
+    Together(together::CompletionModel),
+    XAi(xai::CompletionModel),
+    Venice(venice::CompletionModel),
+    Hyperbolic(hyperbolic::CompletionModel),
+    Llamafile(llamafile::CompletionModel),
 }
 
 impl CompletionModel for RigModel {
@@ -37,6 +53,19 @@ impl CompletionModel for RigModel {
             Self::Anthropic(m) => m.completion(request).await,
             Self::Gemini(m) => m.completion(request).await,
             Self::Ollama(m) => m.completion(request).await,
+            Self::Copilot(m) => m.completion(request).await,
+            Self::Cohere(m) => m.completion(request).await,
+            Self::DeepSeek(m) => m.completion(request).await,
+            Self::Groq(m) => m.completion(request).await,
+            Self::Mistral(m) => m.completion(request).await,
+            Self::Moonshot(m) => m.completion(request).await,
+            Self::OpenRouter(m) => m.completion(request).await,
+            Self::Perplexity(m) => m.completion(request).await,
+            Self::Together(m) => m.completion(request).await,
+            Self::XAi(m) => m.completion(request).await,
+            Self::Venice(m) => m.completion(request).await,
+            Self::Hyperbolic(m) => m.completion(request).await,
+            Self::Llamafile(m) => m.completion(request).await,
         }
     }
 
@@ -51,6 +80,19 @@ impl CompletionModel for RigModel {
             Self::Anthropic(m) => m.stream(request).await,
             Self::Gemini(m) => m.stream(request).await,
             Self::Ollama(m) => m.stream(request).await,
+            Self::Copilot(m) => m.stream(request).await,
+            Self::Cohere(m) => m.stream(request).await,
+            Self::DeepSeek(m) => m.stream(request).await,
+            Self::Groq(m) => m.stream(request).await,
+            Self::Mistral(m) => m.stream(request).await,
+            Self::Moonshot(m) => m.stream(request).await,
+            Self::OpenRouter(m) => m.stream(request).await,
+            Self::Perplexity(m) => m.stream(request).await,
+            Self::Together(m) => m.stream(request).await,
+            Self::XAi(m) => m.stream(request).await,
+            Self::Venice(m) => m.stream(request).await,
+            Self::Hyperbolic(m) => m.stream(request).await,
+            Self::Llamafile(m) => m.stream(request).await,
         }
     }
 }
@@ -239,6 +281,162 @@ impl RigModel {
                     .build()
                     .map_err(|e| classify_llm_port_error(e.to_string()))?;
                 Ok(Self::Ollama(client.completion_model(&config.model)))
+            }
+            LlmProviderStrategy::Copilot => {
+                let mut builder = copilot::Client::builder()
+                    .api_key(key)
+                    .http_client(http_client);
+                if !config.base_url.is_empty() {
+                    builder = builder.base_url(&config.base_url);
+                }
+                let client = builder
+                    .build()
+                    .map_err(|e| classify_llm_port_error(e.to_string()))?;
+                Ok(Self::Copilot(client.completion_model(&config.model)))
+            }
+            LlmProviderStrategy::Cohere => {
+                let mut builder = cohere::Client::builder()
+                    .api_key(key)
+                    .http_client(http_client);
+                if !config.base_url.is_empty() {
+                    builder = builder.base_url(&config.base_url);
+                }
+                let client = builder
+                    .build()
+                    .map_err(|e| classify_llm_port_error(e.to_string()))?;
+                Ok(Self::Cohere(client.completion_model(&config.model)))
+            }
+            LlmProviderStrategy::DeepSeek => {
+                let mut builder = deepseek::Client::builder()
+                    .api_key(key)
+                    .http_client(http_client);
+                if !config.base_url.is_empty() {
+                    builder = builder.base_url(&config.base_url);
+                }
+                let client = builder
+                    .build()
+                    .map_err(|e| classify_llm_port_error(e.to_string()))?;
+                Ok(Self::DeepSeek(client.completion_model(&config.model)))
+            }
+            LlmProviderStrategy::Groq => {
+                let mut builder = groq::Client::builder()
+                    .api_key(key)
+                    .http_client(http_client);
+                if !config.base_url.is_empty() {
+                    builder = builder.base_url(&config.base_url);
+                }
+                let client = builder
+                    .build()
+                    .map_err(|e| classify_llm_port_error(e.to_string()))?;
+                Ok(Self::Groq(client.completion_model(&config.model)))
+            }
+            LlmProviderStrategy::MistralAi => {
+                let mut builder = mistral::Client::builder()
+                    .api_key(key)
+                    .http_client(http_client);
+                if !config.base_url.is_empty() {
+                    builder = builder.base_url(&config.base_url);
+                }
+                let client = builder
+                    .build()
+                    .map_err(|e| classify_llm_port_error(e.to_string()))?;
+                Ok(Self::Mistral(client.completion_model(&config.model)))
+            }
+            LlmProviderStrategy::MoonshotAi
+            | LlmProviderStrategy::MoonshotCn
+            | LlmProviderStrategy::Kimi => {
+                let mut builder = moonshot::Client::builder()
+                    .api_key(key)
+                    .http_client(http_client);
+                if !config.base_url.is_empty() {
+                    builder = builder.base_url(&config.base_url);
+                }
+                let client = builder
+                    .build()
+                    .map_err(|e| classify_llm_port_error(e.to_string()))?;
+                Ok(Self::Moonshot(client.completion_model(&config.model)))
+            }
+            LlmProviderStrategy::OpenRouter => {
+                let mut builder = openrouter::Client::builder()
+                    .api_key(key)
+                    .http_client(http_client);
+                if !config.base_url.is_empty() {
+                    builder = builder.base_url(&config.base_url);
+                }
+                let client = builder
+                    .build()
+                    .map_err(|e| classify_llm_port_error(e.to_string()))?;
+                Ok(Self::OpenRouter(client.completion_model(&config.model)))
+            }
+            LlmProviderStrategy::Perplexity => {
+                let mut builder = perplexity::Client::builder()
+                    .api_key(key)
+                    .http_client(http_client);
+                if !config.base_url.is_empty() {
+                    builder = builder.base_url(&config.base_url);
+                }
+                let client = builder
+                    .build()
+                    .map_err(|e| classify_llm_port_error(e.to_string()))?;
+                Ok(Self::Perplexity(client.completion_model(&config.model)))
+            }
+            LlmProviderStrategy::Together => {
+                let mut builder = together::Client::builder()
+                    .api_key(key)
+                    .http_client(http_client);
+                if !config.base_url.is_empty() {
+                    builder = builder.base_url(&config.base_url);
+                }
+                let client = builder
+                    .build()
+                    .map_err(|e| classify_llm_port_error(e.to_string()))?;
+                Ok(Self::Together(client.completion_model(&config.model)))
+            }
+            LlmProviderStrategy::XAi => {
+                let mut builder = xai::Client::builder().api_key(key).http_client(http_client);
+                if !config.base_url.is_empty() {
+                    builder = builder.base_url(&config.base_url);
+                }
+                let client = builder
+                    .build()
+                    .map_err(|e| classify_llm_port_error(e.to_string()))?;
+                Ok(Self::XAi(client.completion_model(&config.model)))
+            }
+            LlmProviderStrategy::Venice => {
+                let mut builder = venice::Client::builder()
+                    .api_key(key)
+                    .http_client(http_client);
+                if !config.base_url.is_empty() {
+                    builder = builder.base_url(&config.base_url);
+                }
+                let client = builder
+                    .build()
+                    .map_err(|e| classify_llm_port_error(e.to_string()))?;
+                Ok(Self::Venice(client.completion_model(&config.model)))
+            }
+            LlmProviderStrategy::Hyperbolic => {
+                let mut builder = hyperbolic::Client::builder()
+                    .api_key(key)
+                    .http_client(http_client);
+                if !config.base_url.is_empty() {
+                    builder = builder.base_url(&config.base_url);
+                }
+                let client = builder
+                    .build()
+                    .map_err(|e| classify_llm_port_error(e.to_string()))?;
+                Ok(Self::Hyperbolic(client.completion_model(&config.model)))
+            }
+            LlmProviderStrategy::Llamafile => {
+                let mut builder = llamafile::Client::builder()
+                    .api_key(Nothing)
+                    .http_client(http_client);
+                if !config.base_url.is_empty() {
+                    builder = builder.base_url(&config.base_url);
+                }
+                let client = builder
+                    .build()
+                    .map_err(|e| classify_llm_port_error(e.to_string()))?;
+                Ok(Self::Llamafile(client.completion_model(&config.model)))
             }
             _ => {
                 // OpenAI Chat Completions compatible (works for standard OpenAI, DeepSeek, Moonshot, Qwen, vLLM, LiteLLM, New API, etc.)

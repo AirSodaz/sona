@@ -745,6 +745,11 @@
       "volcengine": "VolcEngine",
       "chatglm": "ChatGLM",
       "copilot": "GitHub Copilot",
+      "cohere": "Cohere",
+      "together": "Together AI",
+      "venice": "Venice AI",
+      "hyperbolic": "Hyperbolic",
+      "llamafile": "Llamafile",
       "google_translate": "Google Translate",
       "google_translate_free": "Google Translate(Free)"
     },

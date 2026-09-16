@@ -142,6 +142,11 @@ pub enum BuiltinLlmProvider {
     Chatglm,
     #[serde(rename = "copilot", alias = "github_copilot")]
     Copilot,
+    Cohere,
+    Together,
+    Venice,
+    Hyperbolic,
+    Llamafile,
     #[serde(
         rename = "custom-openai-compatible",
         alias = "openai_compatible",
@@ -163,7 +168,7 @@ impl BuiltinLlmProvider {
             Self::DeepSeek => "https://api.deepseek.com",
             Self::MoonshotAi => "https://api.moonshot.ai",
             Self::MoonshotCn | Self::Kimi => "https://api.moonshot.cn",
-            Self::Xiaomi => "https://api.xiaomimimo.com",
+            Self::Xiaomi => "https://api.xiaomimimo.com/v1",
             Self::SiliconFlow => "https://api.siliconflow.cn",
             Self::Qwen => "https://dashscope.aliyuncs.com/compatible-mode/v1",
             Self::QwenPortal => "https://portal.qwen.ai/v1",
@@ -178,6 +183,11 @@ impl BuiltinLlmProvider {
             Self::Volcengine => "https://ark.cn-beijing.volces.com",
             Self::Chatglm => "https://open.bigmodel.cn/api/paas/v4/",
             Self::Copilot => "https://api.githubcopilot.com",
+            Self::Cohere => "https://api.cohere.com/v2",
+            Self::Together => "https://api.together.xyz/v1",
+            Self::Venice => "https://api.venice.ai/api/v1",
+            Self::Hyperbolic => "https://api.hyperbolic.xyz/v1",
+            Self::Llamafile => "http://127.0.0.1:8080/v1",
             Self::CustomOpenAiCompatible => "",
         }
     }
@@ -185,7 +195,7 @@ impl BuiltinLlmProvider {
     pub fn requires_api_key(&self) -> bool {
         !matches!(
             self,
-            Self::GoogleTranslateFree | Self::Ollama | Self::LmStudio
+            Self::GoogleTranslateFree | Self::Ollama | Self::LmStudio | Self::Llamafile
         )
     }
 }
