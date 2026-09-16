@@ -1,4 +1,4 @@
-use sona_core::llm::provider_protocol::LlmModelSummary;
+use sona_core::llm::provider_protocol::{LlmModelSummary, strategy_supports_structured_output};
 use sona_core::llm::requests::{LlmConfig, LlmModelsRequest};
 use sona_core::llm::runtime::{
     LlmCapabilityPolicy, LlmCompletionRequest, LlmCompletionResponse, LlmResponseFormat,
@@ -41,7 +41,6 @@ where
             prepared.warnings,
         )
     }
-
     pub async fn stream(
         &self,
         request: LlmCompletionRequest,
@@ -78,13 +77,17 @@ where
             LlmResponseFormat::JsonSchema { schema, .. } => Some(schema.clone()),
             _ => None,
         };
+        let supports_structured = match self
+            .metadata
+            .describe_model(&request.config)
+            .await?
+            .and_then(|model| model.supports_structured_output)
+        {
+            Some(supported) => Some(supported),
+            None => strategy_supports_structured_output(request.config.strategy),
+        };
         if let Some(schema) = requested_schema
-            && self
-                .metadata
-                .describe_model(&request.config)
-                .await?
-                .and_then(|model| model.supports_structured_output)
-                == Some(false)
+            && supports_structured == Some(false)
         {
             if request.options.capability_policy == LlmCapabilityPolicy::Strict {
                 return Err(LlmRuntimeError::UnsupportedCapability {

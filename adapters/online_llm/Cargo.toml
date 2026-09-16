@@ -14,7 +14,7 @@ async-trait = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }
 reqwest = { workspace = true, features = ["rustls", "json"] }
-rig-core = "0.39"
+rig-core = { version = "0.42", features = ["rustls", "reqwest"] }
 schemars = "1.2"
 serde = { workspace = true }
 serde_json = { workspace = true }

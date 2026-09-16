@@ -1,20 +1,8 @@
-use async_trait::async_trait;
-use reqwest::Client;
-use rig_core::client::CompletionClient;
-use rig_core::providers::anthropic;
 use serde_json::{Value, json};
-use sona_core::llm::provider_protocol::{
-    StandardLlmResponse, extract_anthropic_text_response, join_url,
-};
 use sona_core::llm::runtime::{LlmCompletionRequest, LlmPromptCachePolicy};
 use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
 
-use crate::completion::{
-    LlmAdapter, build_rig_completion_request, completion_input, extract_text_response,
-    reasoning_budget_tokens, structured_schema, token_usage_from_rig_usage,
-};
-use crate::transport::{LlmApiUrl, classify_llm_port_error, post_json_request};
-
+use crate::completion::{completion_input, reasoning_budget_tokens, structured_schema};
 pub fn build_anthropic_payload_for_request(
     request: &LlmCompletionRequest,
     stream: bool,
@@ -71,58 +59,4 @@ pub fn build_anthropic_payload_for_request(
         });
     }
     Ok(payload)
-}
-
-pub struct AnthropicAdapter;
-
-#[async_trait]
-impl LlmAdapter for AnthropicAdapter {
-    async fn generate(
-        &self,
-        _client: &Client,
-        request: &LlmCompletionRequest,
-    ) -> Result<StandardLlmResponse, LlmPortError> {
-        let config = &request.config;
-        if request.effective_reasoning_enabled() {
-            let url = LlmApiUrl::parse(&join_url(&config.base_url, "/v1/messages"))?;
-            let payload = build_anthropic_payload_for_request(request, false)?;
-
-            let response = post_json_request(
-                &url,
-                vec![
-                    ("x-api-key", config.api_key.clone()),
-                    ("anthropic-version", "2023-06-01".to_string()),
-                ],
-                payload,
-                config.timeout_seconds,
-            )
-            .await?;
-
-            let (text, usage) = extract_anthropic_text_response(&response)?;
-
-            return Ok(StandardLlmResponse { text, usage });
-        }
-
-        let reqwest_client = LlmApiUrl::parse(&config.base_url)?.client(config.timeout_seconds)?;
-        let client = anthropic::Client::builder()
-            .api_key(&config.api_key)
-            .base_url(&config.base_url)
-            .http_client(reqwest_client)
-            .build()
-            .map_err(|error| classify_llm_port_error(error.to_string()))?;
-
-        let mut model = client.completion_model(&config.model);
-        if request.options.prompt_cache == LlmPromptCachePolicy::Automatic {
-            model = model.with_automatic_caching();
-        }
-        let response = build_rig_completion_request(model, request)?
-            .send()
-            .await
-            .map_err(|error| classify_llm_port_error(error.to_string()))?;
-
-        Ok(StandardLlmResponse {
-            text: extract_text_response(&response.choice)?,
-            usage: token_usage_from_rig_usage(Some(response.usage)),
-        })
-    }
 }

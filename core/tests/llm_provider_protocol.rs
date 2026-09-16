@@ -5,7 +5,7 @@ use sona_core::llm::provider_protocol::{
     extract_anthropic_text_response, extract_text_from_json_response,
     extract_usage_from_json_response, format_gemini_models_url, format_openai_models_urls,
     gemini_model_to_summary, join_url, openai_model_to_summary, strategy_supports_model_listing,
-    strategy_uses_openai_chat_payload,
+    strategy_supports_structured_output, strategy_uses_openai_chat_payload,
 };
 use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::llm::usage::TokenUsage;
@@ -132,6 +132,18 @@ fn provider_strategy_and_standard_input_helpers_are_core_owned() {
     assert!(!strategy_uses_openai_chat_payload(
         LlmProviderStrategy::Gemini
     ));
+    assert_eq!(
+        strategy_supports_structured_output(LlmProviderStrategy::DeepSeek),
+        Some(false)
+    );
+    assert_eq!(
+        strategy_supports_structured_output(LlmProviderStrategy::Qwen),
+        Some(false)
+    );
+    assert_eq!(
+        strategy_supports_structured_output(LlmProviderStrategy::OpenAi),
+        None
+    );
 
     let request = StandardLlmRequest {
         messages: vec![

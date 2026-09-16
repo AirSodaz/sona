@@ -1,5 +1,3 @@
-use async_trait::async_trait;
-use reqwest::Client;
 use rig_core::completion::{CompletionModel, CompletionRequestBuilder};
 use serde_json::{Value, json};
 use sona_core::llm::provider_protocol::{
@@ -11,28 +9,15 @@ use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::llm::usage::TokenUsage;
 use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
 
-use crate::anthropic::AnthropicAdapter;
-use crate::gemini::GeminiAdapter;
-use crate::ollama::OllamaAdapter;
-use crate::openai_compatible::{AzureAdapter, CopilotAdapter, OpenAiAdapter, PerplexityAdapter};
-use crate::providers::{GenericHttpAdapter, GoogleTranslateAdapter};
+use crate::providers::GoogleTranslateAdapter;
 use crate::transport::LlmApiUrl;
-
-#[async_trait]
-pub(crate) trait LlmAdapter: Send + Sync {
-    async fn generate(
-        &self,
-        client: &Client,
-        request: &LlmCompletionRequest,
-    ) -> Result<StandardLlmResponse, LlmPortError>;
-}
 
 pub(crate) fn build_rig_completion_request<M>(
     model: M,
     request: &LlmCompletionRequest,
 ) -> Result<CompletionRequestBuilder<M>, LlmPortError>
 where
-    M: CompletionModel,
+    M: CompletionModel + Clone,
 {
     let input = completion_input(request);
     let mut builder = model
@@ -48,33 +33,138 @@ where
         builder = builder.preamble(system_prompt.to_string());
     }
 
+    let mut extra_params = serde_json::Map::new();
+
     match &request.options.response_format {
         LlmResponseFormat::Text => {}
         LlmResponseFormat::JsonObject => {
             if let Some(params) = rig_json_object_parameters(request.config.strategy) {
-                builder = builder.additional_params(params);
+                if let Some(obj) = params.as_object() {
+                    for (k, v) in obj {
+                        extra_params.insert(k.clone(), v.clone());
+                    }
+                }
             }
         }
         LlmResponseFormat::JsonSchema { name, schema } => {
-            let mut schema = schema.clone();
-            if let Some(object) = schema.as_object_mut() {
-                object
-                    .entry("title".to_string())
-                    .or_insert_with(|| Value::String(name.clone()));
+            if request.config.strategy == LlmProviderStrategy::OpenAi
+                || request.config.strategy == LlmProviderStrategy::AzureOpenAi
+            {
+                let mut schema = schema.clone();
+                if let Some(object) = schema.as_object_mut() {
+                    object
+                        .entry("title".to_string())
+                        .or_insert_with(|| Value::String(name.clone()));
+                }
+                builder =
+                    builder.output_schema(schemars::Schema::try_from(schema).map_err(|error| {
+                        LlmPortError::new(
+                            LlmPortErrorKind::InvalidRequest,
+                            format!("Invalid JSON Schema: {error}"),
+                        )
+                    })?);
+            } else if let Some(params) = rig_json_object_parameters(request.config.strategy) {
+                if let Some(obj) = params.as_object() {
+                    for (k, v) in obj {
+                        extra_params.insert(k.clone(), v.clone());
+                    }
+                }
             }
-            builder =
-                builder.output_schema(schemars::Schema::try_from(schema).map_err(|error| {
-                    LlmPortError::new(
-                        LlmPortErrorKind::InvalidRequest,
-                        format!("Invalid JSON Schema: {error}"),
-                    )
-                })?);
         }
+    }
+
+    builder = configure_rig_reasoning(builder, request, &mut extra_params)?;
+
+    if !extra_params.is_empty() {
+        builder = builder.additional_params(Value::Object(extra_params));
     }
 
     Ok(builder)
 }
 
+fn configure_rig_reasoning<M>(
+    mut builder: CompletionRequestBuilder<M>,
+    request: &LlmCompletionRequest,
+    extra_params: &mut serde_json::Map<String, Value>,
+) -> Result<CompletionRequestBuilder<M>, LlmPortError>
+where
+    M: CompletionModel + Clone,
+{
+    if !request.effective_reasoning_enabled() {
+        return Ok(builder);
+    }
+
+    let level = request.effective_reasoning_level().unwrap_or("medium");
+    let budget = reasoning_budget_tokens(request.effective_reasoning_level());
+
+    match request.config.strategy {
+        LlmProviderStrategy::Anthropic => {
+            let max_tokens = request.options.max_output_tokens.unwrap_or(8192);
+            let max_budget = max_tokens.saturating_sub(1).min(u64::from(u32::MAX)) as u32;
+            if max_budget < 1024 {
+                return Err(LlmPortError::new(
+                    LlmPortErrorKind::InvalidRequest,
+                    "Anthropic reasoning requires max_output_tokens to be greater than 1024",
+                ));
+            }
+            extra_params.insert(
+                "thinking".to_string(),
+                json!({
+                    "type": "enabled",
+                    "budget_tokens": budget.min(max_budget),
+                }),
+            );
+            builder = builder.temperature(1.0);
+        }
+        LlmProviderStrategy::Gemini => {
+            let gemini_level =
+                reasoning_level_label(request.effective_reasoning_level()).to_lowercase();
+            let thinking_config = json!({
+                "thinking_budget": budget,
+                "thinking_level": gemini_level,
+                "include_thoughts": true,
+            });
+            if let Some(existing) = extra_params
+                .get_mut("generation_config")
+                .and_then(Value::as_object_mut)
+            {
+                existing.insert("thinking_config".to_string(), thinking_config);
+            } else {
+                extra_params.insert(
+                    "generation_config".to_string(),
+                    json!({
+                        "thinking_config": thinking_config,
+                    }),
+                );
+            }
+        }
+        LlmProviderStrategy::OpenAiResponses => {
+            extra_params.insert(
+                "reasoning".to_string(),
+                json!({
+                    "effort": level,
+                }),
+            );
+        }
+        LlmProviderStrategy::Ollama => {
+            extra_params.insert("think".to_string(), json!(true));
+        }
+        LlmProviderStrategy::DeepSeek => {
+            extra_params.insert(
+                "thinking".to_string(),
+                json!({
+                    "type": "enabled",
+                }),
+            );
+            extra_params.insert("reasoning_effort".to_string(), json!(level));
+        }
+        _ => {
+            extra_params.insert("reasoning_effort".to_string(), json!(level));
+        }
+    }
+
+    Ok(builder)
+}
 fn rig_json_object_parameters(strategy: LlmProviderStrategy) -> Option<Value> {
     if strategy_uses_openai_chat_payload(strategy)
         || matches!(
@@ -138,7 +228,7 @@ pub(crate) fn reasoning_level_label(reasoning_level: Option<&str>) -> &'static s
 }
 
 pub fn extract_text_response(
-    choice: &rig_core::OneOrMany<rig_core::completion::AssistantContent>,
+    choice: &[rig_core::completion::AssistantContent],
 ) -> Result<String, LlmPortError> {
     let parts = choice
         .iter()
@@ -171,48 +261,17 @@ pub fn token_usage_from_rig_usage(
     })
 }
 
-struct AdapterFactory;
-
-impl AdapterFactory {
-    fn create(strategy: LlmProviderStrategy) -> Box<dyn LlmAdapter> {
-        match strategy {
-            LlmProviderStrategy::OpenAi
-            | LlmProviderStrategy::DeepSeek
-            | LlmProviderStrategy::MoonshotAi
-            | LlmProviderStrategy::MoonshotCn
-            | LlmProviderStrategy::Xiaomi
-            | LlmProviderStrategy::Kimi
-            | LlmProviderStrategy::SiliconFlow
-            | LlmProviderStrategy::Qwen
-            | LlmProviderStrategy::QwenPortal
-            | LlmProviderStrategy::MinimaxGlobal
-            | LlmProviderStrategy::MinimaxCn
-            | LlmProviderStrategy::OpenRouter
-            | LlmProviderStrategy::LmStudio
-            | LlmProviderStrategy::Groq
-            | LlmProviderStrategy::XAi
-            | LlmProviderStrategy::MistralAi => Box::new(OpenAiAdapter),
-            LlmProviderStrategy::Anthropic => Box::new(AnthropicAdapter),
-            LlmProviderStrategy::Ollama => Box::new(OllamaAdapter),
-            LlmProviderStrategy::Gemini => Box::new(GeminiAdapter),
-            LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree => {
-                Box::new(GoogleTranslateAdapter)
-            }
-            LlmProviderStrategy::AzureOpenAi => Box::new(AzureAdapter),
-            LlmProviderStrategy::Copilot => Box::new(CopilotAdapter),
-            LlmProviderStrategy::Perplexity => Box::new(PerplexityAdapter),
-            _ => Box::new(GenericHttpAdapter),
-        }
-    }
-}
-
 pub async fn complete_with_provider(
     request: LlmCompletionRequest,
 ) -> Result<StandardLlmResponse, LlmPortError> {
-    let adapter = AdapterFactory::create(request.config.strategy);
-    let url = LlmApiUrl::parse(&request.config.base_url)?;
-    let client = url.client(request.config.timeout_seconds)?;
-    adapter.generate(&client, &request).await
+    match request.config.strategy {
+        LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree => {
+            let url = LlmApiUrl::parse(&request.config.base_url)?;
+            let client = url.client(request.config.timeout_seconds)?;
+            GoogleTranslateAdapter.generate(&client, &request).await
+        }
+        _ => crate::rig_adapter::execute_rig_completion(&request).await,
+    }
 }
 
 pub fn build_standard_user_input(input: impl Into<String>, temperature: f32) -> String {
@@ -243,5 +302,18 @@ mod tests {
             rig_json_object_parameters(LlmProviderStrategy::Anthropic),
             None
         );
+    }
+
+    #[test]
+    fn configure_rig_reasoning_maps_thinking_budget_and_level_across_models() {
+        assert_eq!(reasoning_budget_tokens(Some("low")), 1024);
+        assert_eq!(reasoning_budget_tokens(Some("high")), 4096);
+        assert_eq!(reasoning_budget_tokens(Some("medium")), 2048);
+        assert_eq!(reasoning_budget_tokens(None), 2048);
+
+        assert_eq!(reasoning_level_label(Some("low")), "LOW");
+        assert_eq!(reasoning_level_label(Some("high")), "HIGH");
+        assert_eq!(reasoning_level_label(Some("medium")), "MEDIUM");
+        assert_eq!(reasoning_level_label(None), "MEDIUM");
     }
 }

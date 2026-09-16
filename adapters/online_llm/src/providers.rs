@@ -1,7 +1,10 @@
 use std::future::Future;
 use std::time::Duration;
 
-use async_trait::async_trait;
+use crate::transport::{
+    LlmApiUrl, classify_llm_port_error, http_status_port_error, post_json_request,
+    reqwest_port_error,
+};
 use futures_util::{StreamExt, stream};
 use log::{info, warn};
 use reqwest::{Client, StatusCode, header::RETRY_AFTER};
@@ -11,14 +14,6 @@ use sona_core::llm::provider_protocol::{StandardLlmResponse, extract_text_from_j
 use sona_core::llm::runtime::LlmCompletionRequest;
 use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
-
-use crate::completion::LlmAdapter;
-use crate::openai_compatible::generate_with_openai_custom_path;
-use crate::responses::generate_with_openai_responses_api;
-use crate::transport::{
-    LlmApiUrl, classify_llm_port_error, http_status_port_error, post_json_request,
-    reqwest_port_error,
-};
 
 const GOOGLE_TRANSLATE_FREE_MAX_RETRIES: usize = 2;
 const GOOGLE_TRANSLATE_FREE_MAX_RETRY_AFTER_SECS: u64 = 5;
@@ -297,9 +292,8 @@ where
 
 pub struct GoogleTranslateAdapter;
 
-#[async_trait]
-impl LlmAdapter for GoogleTranslateAdapter {
-    async fn generate(
+impl GoogleTranslateAdapter {
+    pub async fn generate(
         &self,
         client: &Client,
         request: &LlmCompletionRequest,
@@ -372,26 +366,5 @@ pub(crate) fn google_translate_free_port_error(
         }
         GoogleTranslateFreeAttemptError::Message(message) => classify_llm_port_error(message),
         GoogleTranslateFreeAttemptError::Port(error) => error,
-    }
-}
-
-pub struct GenericHttpAdapter;
-
-#[async_trait]
-impl LlmAdapter for GenericHttpAdapter {
-    async fn generate(
-        &self,
-        _client: &Client,
-        request: &LlmCompletionRequest,
-    ) -> Result<StandardLlmResponse, LlmPortError> {
-        let config = &request.config;
-        let response = match config.strategy {
-            LlmProviderStrategy::OpenAiResponses => {
-                generate_with_openai_responses_api(request).await?
-            }
-            _ => generate_with_openai_custom_path(request).await?,
-        };
-
-        Ok(response)
     }
 }

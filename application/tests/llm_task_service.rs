@@ -241,7 +241,25 @@ fn dynamic_response(request: &LlmCompletionRequest) -> StandardLlmResponse {
             serde_json::json!({"items": items}).to_string()
         }
         LlmResponseFormat::Text => "partial summary".to_string(),
-        LlmResponseFormat::JsonObject => unreachable!(),
+        LlmResponseFormat::JsonObject => {
+            if request.input.contains("translation") {
+                let items = segments(8)
+                    .into_iter()
+                    .filter(|segment| request.input.contains(&format!(r#""id":"{}""#, segment.id)))
+                    .map(|segment| {
+                        serde_json::json!({"id": segment.id, "translation": format!("translated {}", segment.text)})
+                    })
+                    .collect::<Vec<_>>();
+                serde_json::json!({"items": items}).to_string()
+            } else {
+                let items = segments(8)
+                    .into_iter()
+                    .filter(|segment| request.input.contains(&format!(r#""id":"{}""#, segment.id)))
+                    .map(|segment| serde_json::json!({"id": segment.id, "text": segment.text}))
+                    .collect::<Vec<_>>();
+                serde_json::json!({"items": items}).to_string()
+            }
+        }
     };
     StandardLlmResponse { text, usage: None }
 }

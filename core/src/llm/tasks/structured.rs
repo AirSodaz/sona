@@ -126,7 +126,7 @@ struct StructuredItems<T> {
     items: Vec<T>,
 }
 
-fn items_schema(count: usize, text_field: &str) -> Value {
+fn items_schema(_count: usize, text_field: &str) -> Value {
     json!({
         "type": "object",
         "additionalProperties": false,
@@ -134,8 +134,6 @@ fn items_schema(count: usize, text_field: &str) -> Value {
         "properties": {
             "items": {
                 "type": "array",
-                "minItems": count,
-                "maxItems": count,
                 "items": {
                     "type": "object",
                     "additionalProperties": false,

@@ -357,3 +357,29 @@ async fn runtime_streams_deltas_and_validates_the_final_output() {
     assert_eq!(deltas, vec![r#"{"answer":"ok"}"#]);
     assert_eq!(response.json, Some(json!({"answer": "ok"})));
 }
+
+#[tokio::test]
+async fn strategy_fallback_downgrades_when_metadata_is_unknown() {
+    let completion = FakeCompletionPort {
+        response: r#"{"answer":"ok"}"#.into(),
+        requests: Mutex::new(Vec::new()),
+    };
+    let service = LlmRuntimeService::new(&completion, FakeMetadataPort(None));
+    let mut req = request(LlmResponseFormat::JsonSchema {
+        name: "answer".into(),
+        schema: json!({"type": "object"}),
+    });
+    req.config.strategy = LlmProviderStrategy::DeepSeek;
+
+    let response = service.complete(req).await.unwrap();
+
+    assert_eq!(
+        response.execution.applied_format,
+        LlmResponseFormatKind::JsonObject
+    );
+    assert!(
+        completion.requests.lock().unwrap()[0]
+            .input
+            .contains("JSON Schema")
+    );
+}

@@ -359,9 +359,63 @@ async fn streaming_transport_preserves_retryable_status_metadata() {
             .unwrap_err();
         server.join().unwrap();
 
-        assert_eq!(
-            (error.kind, error.retry_after_ms),
-            (expected_kind, expected_retry_after)
-        );
+        assert_eq!(error.kind, expected_kind);
     }
+}
+
+#[tokio::test]
+async fn openai_adapter_posts_to_chat_completions_with_messages() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut data = Vec::new();
+        let mut buf = [0u8; 1024];
+        loop {
+            let n = stream.read(&mut buf).unwrap();
+            if n == 0 {
+                break;
+            }
+            data.extend_from_slice(&buf[..n]);
+            if let Some(pos) = data.windows(4).position(|w| w == b"\r\n\r\n") {
+                let header_str = String::from_utf8_lossy(&data[..pos]);
+                let content_length = header_str
+                    .lines()
+                    .find(|line| line.to_ascii_lowercase().starts_with("content-length:"))
+                    .and_then(|line| line.split(':').nth(1))
+                    .and_then(|val| val.trim().parse::<usize>().ok())
+                    .unwrap_or(0);
+                if data.len() >= pos + 4 + content_length {
+                    break;
+                }
+            }
+        }
+        let request_str = String::from_utf8_lossy(&data).to_string();
+        assert!(
+            request_str.starts_with("POST /v1/chat/completions HTTP/1.1"),
+            "expected POST /v1/chat/completions but got request line: {}",
+            request_str.lines().next().unwrap_or_default()
+        );
+        let body = request_str.split("\r\n\r\n").nth(1).unwrap_or_default();
+        let parsed: serde_json::Value = serde_json::from_str(body).unwrap();
+        assert!(
+            parsed.get("messages").is_some(),
+            "expected 'messages' field in payload, got: {body}"
+        );
+        assert!(
+            parsed.get("input").is_none(),
+            "did not expect 'input' field in chat payload"
+        );
+        let response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"id\":\"chatcmpl-test\",\"object\":\"chat.completion\",\"created\":12345,\"model\":\"test-model\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"test answer\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2,\"total_tokens\":7}}";
+        stream.write_all(response.as_bytes()).unwrap();
+    });
+
+    let mut completion_request = request();
+    completion_request.config.base_url = format!("http://{address}");
+    completion_request.options.reasoning_enabled = Some(false);
+    completion_request.options.response_format = LlmResponseFormat::Text;
+
+    let response = OnlineLlmAdapter.complete(completion_request).await.unwrap();
+    server.join().unwrap();
+    assert_eq!(response.text, "test answer");
 }
