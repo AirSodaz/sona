@@ -225,6 +225,22 @@ fn request_reasoning_option_overrides_legacy_config() {
 }
 
 #[test]
+fn rig_model_from_request_supports_azure_openai() {
+    let mut azure_request = request();
+    azure_request.config.strategy = LlmProviderStrategy::AzureOpenAi;
+    azure_request.config.base_url = "https://example.openai.azure.com/".into();
+    azure_request.config.api_key = "azure-key".into();
+    azure_request.config.model = "gpt-4o".into();
+    azure_request.config.api_version = Some("2024-10-21".into());
+
+    let model = sona_online_llm::rig_adapter::RigModel::from_request(&azure_request);
+    assert!(matches!(
+        model,
+        Ok(sona_online_llm::rig_adapter::RigModel::Azure(_))
+    ));
+}
+
+#[test]
 fn gemini_usage_preserves_cache_and_reasoning_breakdown() {
     let usage = extract_gemini_usage(&json!({
         "promptTokenCount": 10,
@@ -358,8 +374,10 @@ async fn streaming_transport_preserves_retryable_status_metadata() {
             .await
             .unwrap_err();
         server.join().unwrap();
-
-        assert_eq!(error.kind, expected_kind);
+        assert_eq!(
+            (error.kind, error.retry_after_ms),
+            (expected_kind, expected_retry_after)
+        );
     }
 }
 

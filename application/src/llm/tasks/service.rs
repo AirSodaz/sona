@@ -254,6 +254,7 @@ where
         let cache = task_cache_policy(total_chunks);
         let config = request.config.clone();
         let target_language = request.target_language.clone();
+        let target_language_name = request.target_language_name.clone();
         let segments = &request.segments;
         let direct_translation = matches!(
             request.config.strategy,
@@ -265,6 +266,7 @@ where
                 let chunk = segments[planned.start..planned.end].to_vec();
                 let config = config.clone();
                 let target_language = target_language.clone();
+                let target_language_name = target_language_name.clone();
                 let lookbehind_start = planned.start.saturating_sub(4);
                 let lookbehind = segments[lookbehind_start..planned.start].to_vec();
                 let prompt = if planned.start == 0 {
@@ -273,7 +275,7 @@ where
                     super::rewrite_agent::build_agent_chunk_input(
                         &super::rewrite_agent::RewriteAgentTask::Translate {
                             target_language: target_language.clone(),
-                            target_language_name: request.target_language_name.clone(),
+                            target_language_name: target_language_name.clone(),
                         },
                         &chunk,
                         &lookbehind,
@@ -293,6 +295,8 @@ where
                             chunk_index + 1,
                             cache,
                             budget.max_output_tokens,
+                            target_language,
+                            target_language_name,
                         )
                         .await
                     };
@@ -514,11 +518,12 @@ where
             cache,
             max_output_tokens,
             |req| self.complete_with_retry(req),
-            |res, exp, num| parse_polish_response(res, exp, num),
+            parse_polish_response,
         )
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn complete_translate_chunk(
         &self,
         config: LlmConfig,
@@ -527,11 +532,13 @@ where
         chunk_number: usize,
         cache: LlmPromptCachePolicy,
         max_output_tokens: Option<u64>,
+        target_language: String,
+        target_language_name: Option<String>,
     ) -> Result<Vec<sona_core::llm::tasks::TranslatedSegment>, LlmTaskError> {
         super::rewrite_agent::execute_agent_chunk_with_reflection(
             &super::rewrite_agent::RewriteAgentTask::Translate {
-                target_language: "target".to_string(),
-                target_language_name: None,
+                target_language,
+                target_language_name,
             },
             &config,
             input,
@@ -540,7 +547,7 @@ where
             cache,
             max_output_tokens,
             |req| self.complete_with_retry(req),
-            |res, exp, num| parse_translate_response(res, exp, num),
+            parse_translate_response,
         )
         .await
     }
@@ -953,11 +960,10 @@ fn parse_polish_response(
     expected: &[sona_core::llm::tasks::LlmSegmentInput],
     chunk_number: usize,
 ) -> Result<Vec<sona_core::llm::tasks::PolishedSegment>, LlmTaskError> {
-    if let Some(value) = response.json.as_ref() {
-        if let Ok(items) = sona_core::llm::tasks::parse_polish_object(value, expected, chunk_number)
-        {
-            return Ok(items);
-        }
+    if let Some(value) = response.json.as_ref()
+        && let Ok(items) = sona_core::llm::tasks::parse_polish_object(value, expected, chunk_number)
+    {
+        return Ok(items);
     }
     sona_core::llm::tasks::parse_polish_chunk(&response.text, expected, chunk_number)
 }
@@ -967,12 +973,11 @@ fn parse_translate_response(
     expected: &[sona_core::llm::tasks::LlmSegmentInput],
     chunk_number: usize,
 ) -> Result<Vec<sona_core::llm::tasks::TranslatedSegment>, LlmTaskError> {
-    if let Some(value) = response.json.as_ref() {
-        if let Ok(items) =
+    if let Some(value) = response.json.as_ref()
+        && let Ok(items) =
             sona_core::llm::tasks::parse_translate_object(value, expected, chunk_number)
-        {
-            return Ok(items);
-        }
+    {
+        return Ok(items);
     }
     sona_core::llm::tasks::parse_translate_chunk(&response.text, expected, chunk_number)
 }

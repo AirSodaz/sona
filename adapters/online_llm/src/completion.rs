@@ -38,11 +38,11 @@ where
     match &request.options.response_format {
         LlmResponseFormat::Text => {}
         LlmResponseFormat::JsonObject => {
-            if let Some(params) = rig_json_object_parameters(request.config.strategy) {
-                if let Some(obj) = params.as_object() {
-                    for (k, v) in obj {
-                        extra_params.insert(k.clone(), v.clone());
-                    }
+            if let Some(params) = rig_json_object_parameters(request.config.strategy)
+                && let Some(obj) = params.as_object()
+            {
+                for (k, v) in obj {
+                    extra_params.insert(k.clone(), v.clone());
                 }
             }
         }
@@ -63,11 +63,11 @@ where
                             format!("Invalid JSON Schema: {error}"),
                         )
                     })?);
-            } else if let Some(params) = rig_json_object_parameters(request.config.strategy) {
-                if let Some(obj) = params.as_object() {
-                    for (k, v) in obj {
-                        extra_params.insert(k.clone(), v.clone());
-                    }
+            } else if let Some(params) = rig_json_object_parameters(request.config.strategy)
+                && let Some(obj) = params.as_object()
+            {
+                for (k, v) in obj {
+                    extra_params.insert(k.clone(), v.clone());
                 }
             }
         }
@@ -117,13 +117,24 @@ where
             builder = builder.temperature(1.0);
         }
         LlmProviderStrategy::Gemini => {
-            let gemini_level =
-                reasoning_level_label(request.effective_reasoning_level()).to_lowercase();
-            let thinking_config = json!({
-                "thinking_budget": budget,
-                "thinking_level": gemini_level,
-                "include_thoughts": true,
-            });
+            let thinking_config = if request.config.model.contains("gemini-2.5") {
+                let budget = request
+                    .options
+                    .max_output_tokens
+                    .map(|limit| budget.min(limit.min(u64::from(u32::MAX)) as u32))
+                    .unwrap_or(budget);
+                json!({
+                    "thinking_budget": budget,
+                    "include_thoughts": true,
+                })
+            } else {
+                let gemini_level =
+                    reasoning_level_label(request.effective_reasoning_level()).to_lowercase();
+                json!({
+                    "thinking_level": gemini_level,
+                    "include_thoughts": true,
+                })
+            };
             if let Some(existing) = extra_params
                 .get_mut("generation_config")
                 .and_then(Value::as_object_mut)

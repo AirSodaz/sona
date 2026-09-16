@@ -104,6 +104,7 @@ pub fn build_agent_chunk_input(
 /// If the language model hallucinates, drops segment IDs, or returns invalid JSON,
 /// the agent critic identifies the discrepancy and constructs a targeted self-correction
 /// critique prompt to instruct the model to repair itself.
+#[allow(clippy::too_many_arguments)]
 pub async fn execute_agent_chunk_with_reflection<CompleteFn, CompleteFut, ParseFn, T>(
     task: &RewriteAgentTask,
     config: &LlmConfig,
