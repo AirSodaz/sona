@@ -92,6 +92,18 @@ fn convert_http_headers(headers: &rig_core::http_client::HeaderMap) -> reqwest::
     }
     reqwest_headers
 }
+fn format_error_chain(error: &dyn std::error::Error) -> String {
+    let mut messages = vec![error.to_string()];
+    let mut current = error.source();
+    while let Some(src) = current {
+        let msg = src.to_string();
+        if !messages.iter().any(|m| m.contains(&msg)) {
+            messages.push(msg);
+        }
+        current = src.source();
+    }
+    messages.join(": ")
+}
 
 pub fn classify_rig_completion_error(error: CompletionError) -> LlmPortError {
     match error {
@@ -119,7 +131,7 @@ pub fn classify_rig_completion_error(error: CompletionError) -> LlmPortError {
                 .unwrap_or_default();
             http_status_port_error(reqwest_status, &reqwest_headers, err.body)
         }
-        other => classify_llm_port_error(other.to_string()),
+        other => classify_llm_port_error(format_error_chain(&other)),
     }
 }
 

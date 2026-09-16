@@ -2900,6 +2900,8 @@ export type TranslateSegmentsRequest_Deserialize = {
 	chunkSize: number | null,
 	targetLanguage: string,
 	targetLanguageName: string | null,
+	context?: string | null,
+	keywords?: string | null,
 };
 
 export type TranslateSegmentsRequest_Serialize = {
@@ -2909,6 +2911,8 @@ export type TranslateSegmentsRequest_Serialize = {
 	chunkSize: number | null,
 	targetLanguage: string,
 	targetLanguageName: string | null,
+	context: string | null,
+	keywords: string | null,
 };
 
 export type TranslatedSegment = {
