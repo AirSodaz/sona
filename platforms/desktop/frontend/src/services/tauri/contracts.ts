@@ -596,6 +596,16 @@ type ManualTauriCommandContractMap = {
     };
     result: SpeakerProfileSample;
   };
+  [TauriCommand.speaker.enrollProfileSampleFromAudio]: {
+    args: {
+      profileId: string;
+      sourceAudioPath: string;
+      startSeconds: number;
+      endSeconds: number;
+      sampleName?: string | null;
+    };
+    result: SpeakerProfileSample;
+  };
   [TauriCommand.speaker.buildReviewSnapshot]: {
     args: {
       segments: TranscriptSegment[];

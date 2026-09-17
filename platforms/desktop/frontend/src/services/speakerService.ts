@@ -7,13 +7,18 @@ import {
   getScenarioSpeakerSegmentationModelPath,
   type ScenarioModelPathConfig,
 } from '../utils/scenarioModels';
-import { annotateSpeakerSegmentsFromFile, importSpeakerProfileSample } from './tauri/speaker';
+import {
+  annotateSpeakerSegmentsFromFile,
+  enrollSpeakerProfileSampleFromAudio,
+  importSpeakerProfileSample,
+} from './tauri/speaker';
 
 type SpeakerConfigInput = Pick<AppConfig, 'speakerProfiles'> & Partial<ScenarioModelPathConfig>;
 
 export interface SpeakerServicePorts {
   annotateSpeakerSegmentsFromFile: typeof annotateSpeakerSegmentsFromFile;
   importSpeakerProfileSample: typeof importSpeakerProfileSample;
+  enrollSpeakerProfileSampleFromAudio: typeof enrollSpeakerProfileSampleFromAudio;
 }
 
 export class SpeakerService {
@@ -68,6 +73,22 @@ export class SpeakerService {
   ): Promise<SpeakerProfileSample> {
     return this.ports.importSpeakerProfileSample(profileId, sourcePath, sourceName);
   }
+
+  async enrollProfileSampleFromAudio(
+    profileId: string,
+    sourceAudioPath: string,
+    startSeconds: number,
+    endSeconds: number,
+    sampleName?: string
+  ): Promise<SpeakerProfileSample> {
+    return this.ports.enrollSpeakerProfileSampleFromAudio(
+      profileId,
+      sourceAudioPath,
+      startSeconds,
+      endSeconds,
+      sampleName
+    );
+  }
 }
 
 export function createSpeakerService(ports: SpeakerServicePorts): SpeakerService {
@@ -77,4 +98,5 @@ export function createSpeakerService(ports: SpeakerServicePorts): SpeakerService
 export const speakerService = createSpeakerService({
   annotateSpeakerSegmentsFromFile,
   importSpeakerProfileSample,
+  enrollSpeakerProfileSampleFromAudio,
 });

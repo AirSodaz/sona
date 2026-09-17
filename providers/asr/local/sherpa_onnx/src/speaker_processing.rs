@@ -1623,7 +1623,7 @@ fn build_split_groups(
                 current.text.push(' ');
             }
             current.text.push_str(&unit.text);
-            current.token_end_exclusive = current.token_end_exclusive.max(unit.token_index + 1);
+            current.token_end_exclusive = current.token_end_exclusive.max(unit.token_end_exclusive);
             continue;
         }
 
@@ -1631,7 +1631,7 @@ fn build_split_groups(
             assignment,
             text: unit.text.clone(),
             token_start: unit.token_index,
-            token_end_exclusive: unit.token_index + 1,
+            token_end_exclusive: unit.token_end_exclusive,
         });
     }
 
