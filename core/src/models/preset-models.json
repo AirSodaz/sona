@@ -2213,8 +2213,8 @@
     ]
   },
   {
-    "id": "sherpa-onnx-mms-300m-fa",
-    "name": "MMS-300M-FA",
+    "id": "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-int8-2025-11-12",
+    "name": "Omnilingual 300M CTC",
     "description": "settings.descriptions.mms_300m_fa",
     "type": "alignment",
     "languages": [],
@@ -2246,6 +2246,117 @@
     "fileConfig": {
       "model": "model.int8.onnx",
       "tokens": "tokens.txt"
-    }
+    },
+    "groupId": "omnilingual-300m-alignment",
+    "versionLabel": "300M Int8 (2025-11-12)"
+  },
+  {
+    "id": "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-2025-11-12",
+    "name": "Omnilingual 300M CTC",
+    "description": "settings.descriptions.mms_300m_fa",
+    "type": "alignment",
+    "languages": [],
+    "languageMode": "none",
+    "size": "~1.30 GB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 3
+    },
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-2025-11-12/resolve/main/model.onnx",
+        "filename": "model.onnx",
+        "sha256": "25f6faecf3f541626e6d3b793103d9544c2f52b0f4f40373b4e2720ac3ff77d5",
+        "sizeBytes": 1302628362
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-2025-11-12/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "a7a044c52cb29cbe8b0dc1953e92cefd4ca16b0ed968177b6beab21f9a7d0b31",
+        "sizeBytes": 86423
+      }
+    ],
+    "fileConfig": {
+      "model": "model.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "omnilingual-300m-alignment",
+    "versionLabel": "300M Fp32 (2025-11-12)"
+  },
+  {
+    "id": "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-int8-2026-02-05",
+    "name": "Omnilingual 300M CTC v2",
+    "description": "settings.descriptions.mms_300m_fa",
+    "type": "alignment",
+    "languages": [],
+    "languageMode": "none",
+    "size": "~247 MB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 4
+    },
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "engine": "sherpa-onnx",
+    "isArchive": true,
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/Edison2ST/sherpa-onnx-omnilingual-asr-1600-languages-ctc-v2/resolve/main/sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-int8-2026-02-05.tar.bz2",
+        "filename": "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-int8-2026-02-05.tar.bz2",
+        "sha256": "b72bef9be75862684098e722d79fefecf9f10fefd3a0b2950738977b4c6b4147",
+        "sizeBytes": 247417872
+      }
+    ],
+    "fileConfig": {
+      "model": "model.int8.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "omnilingual-300m-alignment",
+    "versionLabel": "300M v2 Int8 (2026-02-05)"
+  },
+  {
+    "id": "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-2026-02-05",
+    "name": "Omnilingual 300M CTC v2",
+    "description": "settings.descriptions.mms_300m_fa",
+    "type": "alignment",
+    "languages": [],
+    "languageMode": "none",
+    "size": "~1.30 GB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 3
+    },
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-2026-02-05/resolve/main/model.onnx",
+        "filename": "model.onnx",
+        "sha256": "32432a0afa53180d08553de33baec1a36a43141bded193a26bcf2bed0bcd9c13",
+        "sizeBytes": 1304579963
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-2026-02-05/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "7d99997ef207ff14c2cfe825f2aa037528ea250113cc3c6392bfe49326884ba6",
+        "sizeBytes": 90630
+      }
+    ],
+    "fileConfig": {
+      "model": "model.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "omnilingual-300m-alignment",
+    "versionLabel": "300M v2 Fp32 (2026-02-05)"
   }
 ]

@@ -661,9 +661,10 @@ fn resolves_catalog_selection_ids_without_adapter_state() {
 }
 
 #[test]
-fn mms_alignment_preset_is_verified_bundle() {
+fn omnilingual_300m_ctc_int8_alignment_preset_is_verified_bundle() {
     let model =
-        find_preset_model("sherpa-onnx-mms-300m-fa").expect("MMS alignment model must exist");
+        find_preset_model("sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-int8-2025-11-12")
+            .expect("Omnilingual 300M CTC int8 alignment model must exist");
     assert_eq!(model.model_type, "alignment");
     assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
     assert_eq!(model.language_mode, LanguageMode::None);
@@ -676,6 +677,23 @@ fn mms_alignment_preset_is_verified_bundle() {
             .any(|a| a.filename == "model.int8.onnx")
     );
     assert!(model.artifacts.iter().any(|a| a.filename == "tokens.txt"));
+}
+
+#[test]
+fn omnilingual_300m_ctc_alignment_presets_are_verified_bundles() {
+    let ids = [
+        "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-2025-11-12",
+        "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-int8-2026-02-05",
+        "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-2026-02-05",
+    ];
+    for id in ids {
+        let model = find_preset_model(id).unwrap_or_else(|| panic!("{id} must exist"));
+        assert_eq!(model.model_type, "alignment");
+        assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
+        assert_eq!(model.language_mode, LanguageMode::None);
+        assert!(model.languages.is_empty());
+        assert!(!model.artifacts.is_empty());
+    }
 }
 
 /// Language metadata invariants shared by every surface (GUI, CLI, FFI).

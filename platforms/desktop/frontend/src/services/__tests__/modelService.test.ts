@@ -667,13 +667,18 @@ describe('ModelService', () => {
       ).resolves.toBe('/app/data/models/3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx');
     });
 
-    it('registers the expected CTC alignment model', () => {
+    it('registers the expected CTC alignment models', () => {
       const alignmentModels = PRESET_MODELS.filter((model) => model.type === 'alignment');
-      expect(alignmentModels.map((model) => model.id)).toEqual(['sherpa-onnx-mms-300m-fa']);
+      expect(alignmentModels.map((model) => model.id)).toEqual([
+        'sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-int8-2025-11-12',
+        'sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-2025-11-12',
+        'sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-int8-2026-02-05',
+        'sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-2026-02-05',
+      ]);
       expect(alignmentModels[0]).toEqual(
         expect.objectContaining({
-          id: 'sherpa-onnx-mms-300m-fa',
-          name: 'MMS-300M-FA',
+          id: 'sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-int8-2025-11-12',
+          name: 'Omnilingual 300M CTC',
           type: 'alignment',
           engine: 'sherpa-onnx',
         })
