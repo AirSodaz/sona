@@ -72,22 +72,16 @@ pub fn compute_summary_source_fingerprint(segments: &[TranscriptSegment]) -> Str
     segments
         .iter()
         .map(|segment| {
-            let (speaker_id, speaker_label, speaker_kind, speaker_score) = segment
-                .speaker
-                .as_ref()
-                .map_or(("", "", "", String::new()), |speaker| {
+            let (speaker_id, speaker_label, speaker_kind) =
+                segment.speaker.as_ref().map_or(("", "", ""), |speaker| {
                     (
                         speaker.id.as_str(),
                         speaker.label.as_str(),
                         speaker.kind.as_str(),
-                        speaker
-                            .score
-                            .map(|score| score.to_string())
-                            .unwrap_or_default(),
                     )
                 });
             format!(
-                "{}:{}:{}:{}:{}:{}:{}:{}:{}",
+                "{}:{}:{}:{}:{}:{}:{}:{}",
                 segment.id,
                 segment.text,
                 segment.start,
@@ -95,8 +89,7 @@ pub fn compute_summary_source_fingerprint(segments: &[TranscriptSegment]) -> Str
                 segment.is_final,
                 speaker_id,
                 speaker_label,
-                speaker_kind,
-                speaker_score
+                speaker_kind
             )
         })
         .collect::<Vec<_>>()

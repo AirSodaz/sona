@@ -8,7 +8,7 @@ import {
   setFeatureModelSelection,
   updateProviderSetting,
 } from '../llm/state';
-import { summaryService } from '../summaryService';
+import { isSummaryRecordStale, summaryService } from '../summaryService';
 
 const mockCreateLlmTaskId = vi.fn();
 const mockListenToLlmTaskProgress = vi.fn();
@@ -433,5 +433,71 @@ describe('summaryService', () => {
     expect(useTranscriptStore.getState().getSummaryState('history-retry').record?.content).toBe(
       'Retried summary'
     );
+  });
+});
+
+describe('isSummaryRecordStale', () => {
+  it('returns false for matching current fingerprints', () => {
+    const segments = [{ id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }];
+    const record = {
+      templateId: 'general',
+      content: 'Summary',
+      generatedAt: '2026-05-05T00:00:00.000Z',
+      sourceFingerprint: '1:Hello:0:1:true:::',
+    };
+    expect(isSummaryRecordStale(record, segments)).toBe(false);
+  });
+
+  it('handles legacy fingerprints that included speaker score', () => {
+    const segments = [
+      {
+        id: '1',
+        text: 'Hello',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        speaker: { id: 'spk-1', label: 'Alice', kind: 'identified' as const, score: 0.8492019672 },
+      },
+    ];
+    const legacyRecordWithRustScore = {
+      templateId: 'general',
+      content: 'Summary',
+      generatedAt: '2026-05-05T00:00:00.000Z',
+      sourceFingerprint: '1:Hello:0:1:true:spk-1:Alice:identified:0.849202',
+    };
+    expect(isSummaryRecordStale(legacyRecordWithRustScore, segments)).toBe(false);
+  });
+
+  it('handles legacy fingerprints with empty speaker score', () => {
+    const segments = [{ id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }];
+    const legacyRecordWithEmptyScore = {
+      templateId: 'general',
+      content: 'Summary',
+      generatedAt: '2026-05-05T00:00:00.000Z',
+      sourceFingerprint: '1:Hello:0:1:true::::',
+    };
+    expect(isSummaryRecordStale(legacyRecordWithEmptyScore, segments)).toBe(false);
+  });
+
+  it('handles legacy fingerprints without speaker fields', () => {
+    const segments = [{ id: '1', text: 'Hello', start: 0, end: 1, isFinal: true }];
+    const legacyRecordNoSpeaker = {
+      templateId: 'general',
+      content: 'Summary',
+      generatedAt: '2026-05-05T00:00:00.000Z',
+      sourceFingerprint: '1:Hello:0:1:true',
+    };
+    expect(isSummaryRecordStale(legacyRecordNoSpeaker, segments)).toBe(false);
+  });
+
+  it('returns true when transcript text has actually changed', () => {
+    const segments = [{ id: '1', text: 'New text', start: 0, end: 1, isFinal: true }];
+    const record = {
+      templateId: 'general',
+      content: 'Summary',
+      generatedAt: '2026-05-05T00:00:00.000Z',
+      sourceFingerprint: '1:Hello:0:1:true:::',
+    };
+    expect(isSummaryRecordStale(record, segments)).toBe(true);
   });
 });

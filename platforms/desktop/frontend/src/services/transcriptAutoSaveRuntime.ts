@@ -1,5 +1,6 @@
+import i18next from 'i18next';
 import { v4 as uuidv4 } from 'uuid';
-import { useHistoryStore } from '../stores/historyStore';
+import { addHistoryTranscriptUpdateListener, useHistoryStore } from '../stores/historyStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
@@ -18,6 +19,13 @@ type PendingSave = {
 
 function cloneSegments(segments: TranscriptSegment[]): TranscriptSegment[] {
   return structuredClone(segments);
+}
+function getI18nText(key: string, defaultValue: string): string {
+  if (i18next.isInitialized) {
+    const translated = i18next.t(key, { defaultValue });
+    if (translated) return translated;
+  }
+  return defaultValue;
 }
 
 class TranscriptAutoSaveRuntime {
@@ -38,6 +46,7 @@ class TranscriptAutoSaveRuntime {
   private drainPromise: Promise<void> | null = null;
 
   private unsubscribe: (() => void) | null = null;
+  private unsubscribeHistoryUpdate: (() => void) | null = null;
 
   private beginSession(historyId: string, segments: TranscriptSegment[]) {
     const editSessionId = uuidv4();
@@ -49,7 +58,11 @@ class TranscriptAutoSaveRuntime {
     if (!this.editSessionIds.has(historyId)) this.beginSession(historyId, segments);
     const editSessionId = this.editSessionIds.get(historyId)!;
     if (this.conflictedSessionIds.has(editSessionId)) {
-      useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'error');
+      const conflictMsg = getI18nText(
+        'editor.autosave_conflict',
+        'Conflict detected: transcript was modified externally'
+      );
+      useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'error', conflictMsg);
       return;
     }
     if (!this.pendingByHistoryId.has(historyId)) {
@@ -90,13 +103,35 @@ class TranscriptAutoSaveRuntime {
           .getState()
           .commitTranscriptEdit(historyId, pending.editSessionId, baseline, pending.segments);
         if (result.status === 'conflict') {
-          this.conflictedSessionIds.add(pending.editSessionId);
-          if (this.pendingByHistoryId.get(historyId)?.editSessionId === pending.editSessionId) {
-            this.pendingByHistoryId.delete(historyId);
-            this.pendingOrder = this.pendingOrder.filter((id) => id !== historyId);
+          const currentFingerprint = computeSegmentsFingerprint(result.currentSegments);
+          const pendingFingerprint = computeSegmentsFingerprint(pending.segments);
+          if (currentFingerprint === pendingFingerprint) {
+            this.baselinesBySessionId.set(pending.editSessionId, cloneSegments(pending.segments));
+            this.conflictedSessionIds.delete(pending.editSessionId);
+            if (
+              this.editSessionIds.get(historyId) === pending.editSessionId &&
+              !this.pendingByHistoryId.has(historyId)
+            ) {
+              useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'saved');
+            }
+            continue;
           }
+
+          this.conflictedSessionIds.delete(pending.editSessionId);
+          this.baselinesBySessionId.delete(pending.editSessionId);
+
           if (this.editSessionIds.get(historyId) === pending.editSessionId) {
-            useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'error');
+            this.beginSession(historyId, result.currentSegments);
+
+            if (this.pendingByHistoryId.get(historyId)?.editSessionId === pending.editSessionId) {
+              this.pendingByHistoryId.delete(historyId);
+              this.pendingOrder = this.pendingOrder.filter((id) => id !== historyId);
+            }
+            const conflictMsg = getI18nText(
+              'editor.autosave_conflict',
+              'Conflict detected: transcript was modified externally'
+            );
+            useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'error', conflictMsg);
           }
           continue;
         }
@@ -111,7 +146,13 @@ class TranscriptAutoSaveRuntime {
       } catch (error) {
         logger.error('[AutoSave] Failed to save:', error);
         if (this.editSessionIds.get(historyId) === pending.editSessionId) {
-          useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'error');
+          const errorMessage =
+            error instanceof Error
+              ? error.message
+              : typeof error === 'string'
+                ? error
+                : getI18nText('editor.autosave_error', 'Save failed');
+          useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'error', errorMessage);
         }
       }
     }
@@ -143,6 +184,25 @@ class TranscriptAutoSaveRuntime {
     await this.ensureDrain();
   }
 
+  rebaseline(historyId: string, segments: TranscriptSegment[]): void {
+    if (this.timeout) {
+      clearTimeout(this.timeout);
+      this.timeout = null;
+    }
+    this.pendingByHistoryId.delete(historyId);
+    this.pendingOrder = this.pendingOrder.filter((id) => id !== historyId);
+
+    const oldSessionId = this.editSessionIds.get(historyId);
+    if (oldSessionId) {
+      this.conflictedSessionIds.delete(oldSessionId);
+      this.baselinesBySessionId.delete(oldSessionId);
+    }
+
+    this.beginSession(historyId, segments);
+    this.lastFingerprint = computeSegmentsFingerprint(segments);
+    useTranscriptSidecarStore.getState().setAutoSaveState(historyId, 'saved');
+  }
+
   start() {
     if (this.unsubscribe) return;
 
@@ -150,6 +210,9 @@ class TranscriptAutoSaveRuntime {
     this.lastFingerprint = computeSegmentsFingerprint(initial.segments);
     if (initial.sourceHistoryId) this.beginSession(initial.sourceHistoryId, initial.segments);
 
+    this.unsubscribeHistoryUpdate = addHistoryTranscriptUpdateListener((historyId, segments) => {
+      this.rebaseline(historyId, segments);
+    });
     this.unsubscribe = useTranscriptSessionStore.subscribe((state, prevState) => {
       const currentId = state.sourceHistoryId;
       const prevId = prevState.sourceHistoryId;
@@ -169,6 +232,12 @@ class TranscriptAutoSaveRuntime {
       const currentFingerprint = computeSegmentsFingerprint(state.segments);
       if (currentFingerprint === this.lastFingerprint) return;
 
+      const llmState = useTranscriptSidecarStore.getState().llmStates[currentId];
+      if (llmState?.isPolishing || llmState?.isTranslating || llmState?.isRetranscribing) {
+        this.lastFingerprint = currentFingerprint;
+        return;
+      }
+
       this.lastFingerprint = currentFingerprint;
       const delayMs =
         useTranscriptRuntimeStore.getState().mode === 'live'
@@ -181,6 +250,8 @@ class TranscriptAutoSaveRuntime {
   stop() {
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.unsubscribeHistoryUpdate?.();
+    this.unsubscribeHistoryUpdate = null;
     if (this.timeout) {
       clearTimeout(this.timeout);
       this.timeout = null;

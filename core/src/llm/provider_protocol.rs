@@ -184,7 +184,37 @@ pub fn strategy_uses_openai_chat_payload(strategy: LlmProviderStrategy) -> bool 
             | LlmProviderStrategy::MistralAi
             | LlmProviderStrategy::Chatglm
             | LlmProviderStrategy::Volcengine
+            | LlmProviderStrategy::Together
+            | LlmProviderStrategy::Venice
+            | LlmProviderStrategy::Hyperbolic
+            | LlmProviderStrategy::Llamafile
     )
+}
+
+pub fn strategy_supports_structured_output(strategy: LlmProviderStrategy) -> Option<bool> {
+    match strategy {
+        LlmProviderStrategy::DeepSeek
+        | LlmProviderStrategy::MoonshotAi
+        | LlmProviderStrategy::MoonshotCn
+        | LlmProviderStrategy::Xiaomi
+        | LlmProviderStrategy::Kimi
+        | LlmProviderStrategy::SiliconFlow
+        | LlmProviderStrategy::Qwen
+        | LlmProviderStrategy::QwenPortal
+        | LlmProviderStrategy::MinimaxGlobal
+        | LlmProviderStrategy::MinimaxCn
+        | LlmProviderStrategy::Chatglm
+        | LlmProviderStrategy::Volcengine
+        | LlmProviderStrategy::Perplexity
+        | LlmProviderStrategy::GoogleTranslate
+        | LlmProviderStrategy::GoogleTranslateFree
+        | LlmProviderStrategy::Cohere
+        | LlmProviderStrategy::Together
+        | LlmProviderStrategy::Venice
+        | LlmProviderStrategy::Hyperbolic
+        | LlmProviderStrategy::Llamafile => Some(false),
+        _ => None,
+    }
 }
 
 pub fn clean_gemini_base_url(base_url: &str) -> &str {

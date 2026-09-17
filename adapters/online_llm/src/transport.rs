@@ -1,3 +1,4 @@
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::time::Duration;
 
 use reqwest::{
@@ -128,25 +129,95 @@ pub fn validate_llm_api_host(base_url: &str) -> Result<(), LlmPortError> {
     })?;
     match url.scheme() {
         "https" => Ok(()),
-        "http" if is_loopback_host(&url) => Ok(()),
+        "http" if is_local_or_lan_host(&url) => Ok(()),
         "http" => Err(LlmPortError::new(
             LlmPortErrorKind::InvalidRequest,
-            "LLM API host must use https:// unless it points to localhost.",
+            "LLM API host must use https:// unless it points to a local or LAN address.",
         )),
         _ => Err(LlmPortError::new(
             LlmPortErrorKind::InvalidRequest,
-            "LLM API host must start with https:// or localhost http://.",
+            "LLM API host must start with https://, or http:// for local and LAN addresses.",
         )),
     }
 }
 
-fn is_loopback_host(url: &Url) -> bool {
-    url.host_str()
-        .map(|host| {
-            let normalized = host.trim_matches(['[', ']']).to_ascii_lowercase();
-            normalized == "localhost" || normalized == "127.0.0.1" || normalized == "::1"
-        })
-        .unwrap_or(false)
+pub fn is_local_or_lan_host(url: &Url) -> bool {
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    let host = host.trim_matches(['[', ']']).trim();
+    if host.is_empty() {
+        return false;
+    }
+
+    let host_without_zone = host.split('%').next().unwrap_or(host);
+
+    if let Ok(ip) = host_without_zone.parse::<IpAddr>() {
+        return is_local_or_lan_ip(ip);
+    }
+
+    is_local_or_lan_hostname(host)
+}
+
+fn is_local_or_lan_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ipv4) => is_local_or_lan_ipv4(ipv4),
+        IpAddr::V6(ipv6) => is_local_or_lan_ipv6(ipv6),
+    }
+}
+
+fn is_local_or_lan_ipv4(ip: Ipv4Addr) -> bool {
+    if ip.is_loopback()
+        || ip.is_private()
+        || ip.is_link_local()
+        || ip.is_unspecified()
+        || ip.is_broadcast()
+    {
+        return true;
+    }
+    let octets = ip.octets();
+    octets[0] == 100 && (64..=127).contains(&octets[1])
+}
+
+fn is_local_or_lan_ipv6(ip: Ipv6Addr) -> bool {
+    if ip.is_loopback() || ip.is_unspecified() {
+        return true;
+    }
+    if ip.to_ipv4().is_some_and(is_local_or_lan_ipv4) {
+        return true;
+    }
+    let octets = ip.octets();
+    if (octets[0] & 0xfe) == 0xfc {
+        return true;
+    }
+    if octets[0] == 0xfe && (octets[1] & 0xc0) == 0x80 {
+        return true;
+    }
+    false
+}
+
+fn is_local_or_lan_hostname(host: &str) -> bool {
+    let host = host.strip_suffix('.').unwrap_or(host);
+    let host_lower = host.to_ascii_lowercase();
+
+    if host_lower.is_empty() || host_lower.starts_with('.') {
+        return false;
+    }
+
+    if host_lower == "localhost"
+        || host_lower == "localhost.localdomain"
+        || host_lower.ends_with(".localhost")
+        || host_lower.ends_with(".local")
+        || host_lower.ends_with(".localdomain")
+        || host_lower.ends_with(".lan")
+        || host_lower.ends_with(".home.arpa")
+        || host_lower.ends_with(".internal")
+        || !host_lower.contains('.')
+    {
+        return true;
+    }
+
+    false
 }
 
 #[derive(Clone, Debug)]
@@ -202,9 +273,6 @@ impl LlmApiUrl {
         }
 
         let mut builder = Client::builder();
-        if self.https_only {
-            builder = builder.https_only(true);
-        }
         if let Some(secs) = timeout_seconds {
             builder = builder.timeout(Duration::from_secs(secs));
         }

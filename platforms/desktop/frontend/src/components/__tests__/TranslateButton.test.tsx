@@ -80,10 +80,28 @@ describe('TranslateButton', () => {
     fireEvent.click(button);
 
     screen.getByText('translation.start');
-    screen.getByText('translation.show_bilingual');
+    screen.getByText('translation.hide_bilingual');
     screen.getByPlaceholderText('translation.search_placeholder');
     screen.getByText('translation.commonly_used');
     screen.getByText('translation.all_languages');
+  });
+
+  it('toggles bilingual translation visibility when toggle button is clicked', () => {
+    render(<TranslateButton />);
+    const button = screen.getByRole('button', { expanded: false });
+    fireEvent.click(button);
+
+    const toggleBtn = screen.getByText('translation.hide_bilingual');
+    fireEvent.click(toggleBtn);
+
+    expect(useTranscriptStore.getState().getLlmState('current').isTranslationVisible).toBe(false);
+
+    // Reopen menu
+    fireEvent.click(button);
+    const showBtn = screen.getByText('translation.show_bilingual');
+    fireEvent.click(showBtn);
+
+    expect(useTranscriptStore.getState().getLlmState('current').isTranslationVisible).toBe(true);
   });
 
   it('filters languages by search query', () => {

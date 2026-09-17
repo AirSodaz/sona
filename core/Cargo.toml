@@ -30,6 +30,10 @@ futures-util = { workspace = true }
 toml = { workspace = true }
 infer = { workspace = true }
 jsonschema = { workspace = true }
+schemars = { workspace = true }
+
+tokio = { workspace = true, features = ["sync", "rt"] }
+uuid = { workspace = true }
 
 [dev-dependencies]
 axum = { workspace = true, features = ["macros"] }

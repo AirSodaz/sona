@@ -768,6 +768,16 @@ fn commit_transcript_edit_is_atomic_and_detects_stale_baselines() {
         HistoryCommitTranscriptEditResult::Conflict { .. }
     ));
     assert_eq!(outbox_count(), before_conflict);
+    let stale_base = vec![segment_value("seg-1", "Original", 0.0, 1.0)];
+    let matching_current = store
+        .commit_transcript_edit(&recording.id, "session-1", stale_base, external.clone())
+        .unwrap();
+    assert!(matches!(
+        matching_current,
+        HistoryCommitTranscriptEditResult::Unchanged
+    ));
+    assert_eq!(outbox_count(), before_conflict);
+
     let current_after_external = store.load_transcript(&recording.id).unwrap().unwrap();
     assert_eq!(current_after_external[0].text, "External");
     assert!(

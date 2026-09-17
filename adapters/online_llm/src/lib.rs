@@ -3,22 +3,21 @@ mod completion;
 mod gemini;
 mod model_discovery;
 mod models_dev;
-mod ollama;
 mod openai_compatible;
 mod providers;
 mod responses;
+pub mod rig_adapter;
 mod streaming;
 mod transport;
 
-pub use anthropic::{AnthropicAdapter, build_anthropic_payload_for_request};
+pub use anthropic::build_anthropic_payload_for_request;
 pub use completion::{
     build_standard_user_input, complete_with_provider, extract_text_response,
     token_usage_from_rig_usage,
 };
 pub use gemini::{
-    GeminiAdapter, GeminiGenerateContentRequestParts,
-    build_gemini_generate_content_request_parts_for_reqwest, build_gemini_payload_for_request,
-    extract_gemini_usage, extract_gemini_visible_text,
+    GeminiGenerateContentRequestParts, build_gemini_generate_content_request_parts_for_reqwest,
+    build_gemini_payload_for_request, extract_gemini_usage, extract_gemini_visible_text,
 };
 pub use model_discovery::{
     build_gemini_models_url, build_openai_models_urls, get_gemini_models, get_openai_models,
@@ -27,17 +26,16 @@ pub use model_discovery::{
 pub use models_dev::{
     ModelsDevCatalog, models_dev_provider_id, parse_models_dev_models, should_enrich_model_metadata,
 };
-pub use ollama::OllamaAdapter;
 pub use openai_compatible::{
-    AzureAdapter, CopilotAdapter, OpenAiAdapter, PerplexityAdapter,
     build_openai_chat_payload_for_request, generate_with_openai_chat_api,
     generate_with_openai_custom_path,
 };
 pub use providers::{
-    GenericHttpAdapter, GoogleTranslateAdapter, GoogleTranslateData,
+    GOOGLE_TRANSLATE_USER_AGENT, GoogleTranslateAdapter, GoogleTranslateData,
     GoogleTranslateFreeAttemptError, GoogleTranslateRequest, GoogleTranslateResponse,
-    GoogleTranslateTranslation, execute_google_translate_free_request,
-    execute_google_translate_request, fetch_google_translate_free_translation,
+    GoogleTranslateTranslation, build_google_translate_free_candidate_urls,
+    execute_google_translate_free_request, execute_google_translate_request,
+    extract_google_translate_free_translation, fetch_google_translate_free_translation,
     parse_google_translate_free_retry_after, run_google_translate_free_requests_in_order,
 };
 pub use responses::{build_openai_responses_payload, generate_with_openai_responses_api};
@@ -45,7 +43,9 @@ pub use streaming::{
     extract_anthropic_stream_usage, extract_openai_responses_stream_usage,
     try_stream_completion_with_provider, try_stream_text_with_provider,
 };
-pub use transport::{LlmApiUrl, parse_llm_api_host, post_json_request, validate_llm_api_host};
+pub use transport::{
+    LlmApiUrl, is_local_or_lan_host, parse_llm_api_host, post_json_request, validate_llm_api_host,
+};
 
 use async_trait::async_trait;
 use sona_core::llm::provider_protocol::{LlmModelSummary, StandardLlmResponse};
@@ -59,7 +59,6 @@ use sona_core::ports::llm::{
 };
 
 use crate::models_dev::default_models_dev_catalog;
-use crate::providers::google_translate_free_port_error;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct OnlineLlmAdapter;
@@ -163,14 +162,25 @@ impl LlmTranslationPort for OnlineLlmAdapter {
             sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree => {
                 let mut indexed = Vec::with_capacity(request.texts.len());
                 for (index, text) in request.texts.into_iter().enumerate() {
-                    let translation = fetch_google_translate_free_translation(
-                        &client,
-                        &base_url,
-                        &target_language,
-                        &text,
+                    let fetch_client = client.clone();
+                    let base_url = base_url.clone();
+                    let (_, translation) = execute_google_translate_free_request(
+                        index,
+                        text,
+                        target_language.clone(),
+                        move |text, target| {
+                            let client = fetch_client.clone();
+                            let base_url = base_url.clone();
+                            async move {
+                                fetch_google_translate_free_translation(
+                                    &client, &base_url, &target, &text,
+                                )
+                                .await
+                            }
+                        },
+                        tokio::time::sleep,
                     )
-                    .await
-                    .map_err(google_translate_free_port_error)?;
+                    .await?;
                     indexed.push((index, translation));
                 }
                 indexed.sort_by_key(|(index, _)| *index);

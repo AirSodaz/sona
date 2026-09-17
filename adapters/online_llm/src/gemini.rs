@@ -1,22 +1,16 @@
-use async_trait::async_trait;
-use reqwest::Client;
-use rig_core::client::CompletionClient;
-use rig_core::providers::gemini;
 use serde_json::{Value, json};
 use sona_core::llm::provider_protocol::{
     GeminiGenerateContentRequestParts as CoreGeminiGenerateContentRequestParts,
-    StandardLlmResponse, build_gemini_generate_content_request_parts, clean_gemini_base_url,
+    build_gemini_generate_content_request_parts,
 };
 use sona_core::llm::runtime::LlmCompletionRequest;
 use sona_core::llm::usage::TokenUsage;
-use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
+use sona_core::ports::llm::LlmPortError;
 
 use crate::completion::{
-    LlmAdapter, build_rig_completion_request, completion_input, extract_text_response,
-    reasoning_budget_tokens, reasoning_level_label, structured_schema, token_usage_from_rig_usage,
+    completion_input, reasoning_budget_tokens, reasoning_level_label, structured_schema,
 };
-use crate::transport::{LlmApiUrl, classify_llm_port_error, post_json_request};
-
+use crate::transport::LlmApiUrl;
 pub fn build_gemini_payload_for_request(
     request: &LlmCompletionRequest,
 ) -> Result<Value, LlmPortError> {
@@ -128,65 +122,4 @@ pub fn extract_gemini_usage(usage: &Value) -> Option<TokenUsage> {
             .unwrap_or(0),
         ..TokenUsage::default()
     })
-}
-
-pub struct GeminiAdapter;
-
-#[async_trait]
-impl LlmAdapter for GeminiAdapter {
-    async fn generate(
-        &self,
-        _client: &Client,
-        request: &LlmCompletionRequest,
-    ) -> Result<StandardLlmResponse, LlmPortError> {
-        let config = &request.config;
-        if request.effective_reasoning_enabled() {
-            let request_parts = build_gemini_generate_content_request_parts_for_reqwest(
-                &config.base_url,
-                &config.model,
-                &config.api_key,
-                false,
-            )?;
-
-            let payload = build_gemini_payload_for_request(request)?;
-
-            let response = post_json_request(
-                &request_parts.url,
-                request_parts.headers,
-                payload,
-                config.timeout_seconds,
-            )
-            .await?;
-
-            let text = extract_gemini_visible_text(&response).ok_or_else(|| {
-                LlmPortError::new(
-                    LlmPortErrorKind::Protocol,
-                    "Gemini response did not contain text output",
-                )
-            })?;
-
-            let usage = response.get("usageMetadata").and_then(extract_gemini_usage);
-
-            return Ok(StandardLlmResponse { text, usage });
-        }
-
-        let reqwest_client = LlmApiUrl::parse(&config.base_url)?.client(config.timeout_seconds)?;
-        let client = gemini::Client::builder()
-            .api_key(&config.api_key)
-            .base_url(clean_gemini_base_url(&config.base_url))
-            .http_client(reqwest_client)
-            .build()
-            .map_err(|error| classify_llm_port_error(error.to_string()))?;
-
-        let response =
-            build_rig_completion_request(client.completion_model(&config.model), request)?
-                .send()
-                .await
-                .map_err(|error| classify_llm_port_error(error.to_string()))?;
-
-        Ok(StandardLlmResponse {
-            text: extract_text_response(&response.choice)?,
-            usage: token_usage_from_rig_usage(Some(response.usage)),
-        })
-    }
 }

@@ -8,9 +8,9 @@ import {
   GROQ_WHISPER_PROVIDER_ID,
   ONLINE_ASR_PROVIDER_DEFINITIONS,
   syncLegacyAsrSelectionFields,
+  syncLiveAsrSelectionFields,
+  syncLiveOnlineAsrSelectionFields,
   syncOnlineAsrSelectionFields,
-  syncStreamingAsrSelectionFields,
-  syncStreamingOnlineAsrSelectionFields,
   VOLCENGINE_DOUBAO_PROVIDER_ID,
 } from '../../services/asrConfigService';
 import { cudaAddonService } from '../../services/cudaAddonService';
@@ -680,7 +680,7 @@ export function SettingsModelsTab({
     [sectionGroupsByType]
   );
 
-  const selectedStreamingModelId = useMemo(
+  const selectedLiveModelId = useMemo(
     () =>
       modelConfig.asr?.selections.live.engine === 'online'
         ? (modelConfig.asr.selections.live.providerId ?? VOLCENGINE_DOUBAO_OPTION_ID)
@@ -694,8 +694,7 @@ export function SettingsModelsTab({
         : (selectedModelIds.batch ?? ''),
     [modelConfig.asr?.selections.batch, selectedModelIds.batch]
   );
-  const selectedAsrModelId = isBatchScenario ? selectedBatchModelId : selectedStreamingModelId;
-
+  const selectedAsrModelId = isBatchScenario ? selectedBatchModelId : selectedLiveModelId;
   const applyDependencyRequests = (modelId: string) => {
     const dependencyUpdates: Partial<typeof modelConfig> = {};
     const dependencies = modelCatalog.dependencyRequestsByModelId[modelId] ?? [];
@@ -727,10 +726,11 @@ export function SettingsModelsTab({
     }
   };
 
-  const handleModelChange = async (type: 'streaming' | 'batch', modelId: string) => {
+  const handleModelChange = async (type: ModelScenario | 'streaming', modelId: string) => {
+    const isLive = type === 'live' || type === 'streaming';
     if (!modelId) {
-      if (type === 'streaming') {
-        const patch = syncStreamingAsrSelectionFields(modelConfig, {
+      if (isLive) {
+        const patch = syncLiveAsrSelectionFields(modelConfig, {
           modelId: null,
           modelPath: '',
         });
@@ -747,8 +747,8 @@ export function SettingsModelsTab({
     }
 
     if (isOnlineAsrProviderId(modelId)) {
-      if (type === 'streaming') {
-        updateConfig(syncStreamingOnlineAsrSelectionFields(modelConfig, modelId));
+      if (isLive) {
+        updateConfig(syncLiveOnlineAsrSelectionFields(modelConfig, modelId));
       } else {
         updateConfig(syncOnlineAsrSelectionFields(modelConfig, 'batch', modelId));
       }
@@ -762,8 +762,8 @@ export function SettingsModelsTab({
     if (!path) {
       return;
     }
-    if (type === 'streaming') {
-      const patch = syncStreamingAsrSelectionFields(modelConfig, {
+    if (isLive) {
+      const patch = syncLiveAsrSelectionFields(modelConfig, {
         modelId,
         modelPath: path,
       });
@@ -812,14 +812,14 @@ export function SettingsModelsTab({
     [t]
   );
 
-  const streamingOptions = useMemo(() => {
+  const liveOptions = useMemo(() => {
     return [
-      ...toDropdownOptions(selectionOptions.streaming, selectedStreamingModelId, true),
+      ...toDropdownOptions(selectionOptions.streaming, selectedLiveModelId, true),
       ...ONLINE_ASR_PROVIDER_DEFINITIONS.filter(
         (provider) => provider.id !== GROQ_WHISPER_PROVIDER_ID && provider.defaultConfig
       ) // Groq doesn't support streaming. In future, we can check provider.streaming?.supported !== false. Wait! The definition might not have streaming field directly. Let's just filter groq-whisper directly here to be safe and clean since there's no full manifest typed.
         .filter((provider) => {
-          if (provider.id === selectedStreamingModelId) return true;
+          if (provider.id === selectedLiveModelId) return true;
           const providerConfig =
             modelConfig.asr?.providers?.online?.[provider.id] ??
             (provider.id === VOLCENGINE_DOUBAO_PROVIDER_ID
@@ -847,7 +847,7 @@ export function SettingsModelsTab({
           };
         }),
     ];
-  }, [selectedStreamingModelId, selectionOptions.streaming, t, modelConfig.asr?.providers]);
+  }, [selectedLiveModelId, selectionOptions.streaming, t, modelConfig.asr?.providers]);
 
   const batchOptions = useMemo(() => {
     return [
@@ -973,7 +973,7 @@ export function SettingsModelsTab({
     }
     const modelInfo = selection.modelId
       ? undefined
-      : findSelectedModelByMode(selection.modelPath, isBatchScenario ? 'batch' : 'streaming');
+      : findSelectedModelByMode(selection.modelPath, isBatchScenario ? 'batch' : 'live');
     const modelId = selection.modelId ?? modelInfo?.id;
     if (!modelId) {
       return null;
@@ -1054,15 +1054,13 @@ export function SettingsModelsTab({
             <Dropdown
               id={isBatchScenario ? 'settings-batch-path' : 'settings-streaming-path'}
               value={selectedAsrModelId}
-              onChange={(value) =>
-                handleModelChange(isBatchScenario ? 'batch' : 'streaming', value)
-              }
+              onChange={(value) => handleModelChange(activeScenario, value)}
               placeholder={
                 isBatchScenario
                   ? t('settings.select_batch_model')
                   : t('settings.select_streaming_model')
               }
-              options={isBatchScenario ? batchOptions : streamingOptions}
+              options={isBatchScenario ? batchOptions : liveOptions}
               style={{ flex: 1 }}
               disabled={localModelActionsDisabled}
             />

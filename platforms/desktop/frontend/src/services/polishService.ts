@@ -2,8 +2,8 @@ import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import type { AppConfig } from '../types/config';
+import type { PolishMode } from '../types/llmTask';
 import type { TranscriptSegment } from '../types/transcript';
-import { resolvePolishKeywords } from '../utils/polishKeywords';
 import { resolvePolishPreset } from '../utils/polishPresets';
 import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/configUtils';
 import { runConfiguredSegmentTask, runTranscriptSegmentTaskJob } from './llm/segmentTask';
@@ -15,6 +15,7 @@ import type {
 } from './llmTaskTypes';
 import { createLlmTaskLedgerId, isTaskLedgerCancelRequested } from './taskLedgerBuilders';
 import { runTranscriptLlmJob } from './tauri/llm';
+import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
 
 interface RetryPolishTranscriptJobOptions {
   segments: TranscriptSegment[];
@@ -49,16 +50,14 @@ export interface PolishServicePorts {
   runTranscriptSegmentTaskJob: typeof runTranscriptSegmentTaskJob;
   runTranscriptLlmJob: typeof runTranscriptLlmJob;
   listenToTranscriptLlmJobUpdates: typeof listenToTranscriptLlmJobUpdates;
+  rebaselineTranscriptAutoSave?: (historyId: string, segments: TranscriptSegment[]) => void;
 }
 
 export class PolishService {
   constructor(private readonly ports: PolishServicePorts) {}
 
   async polishSegmentsWithConfig(
-    config: Pick<
-      AppConfig,
-      'llmSettings' | 'polishPresetId' | 'polishCustomPresets' | 'polishKeywordSets'
-    >,
+    config: Pick<AppConfig, 'llmSettings' | 'polishPresetId' | 'polishCustomPresets'>,
     segments: TranscriptSegment[],
     onChunkPolished?: (polishedChunk: PolishedSegment[]) => void | Promise<void>,
     taskIdOverride?: string
@@ -131,19 +130,24 @@ export class PolishService {
           }
         );
         try {
+          const mode: PolishMode =
+            preset.id === 'verbatim' || preset.id === 'formal' ? preset.id : 'clean';
           const result = await this.ports.runTranscriptLlmJob({
             taskId,
             taskType: 'polish',
             jobHistoryId: jobHistoryId === 'current' ? null : jobHistoryId,
             config: llm!,
             segments,
-            context: preset.context,
-            keywords: resolvePolishKeywords(config.polishKeywordSets),
+            context: preset.context || undefined,
+            mode,
           });
           if (isTaskLedgerCancelRequested(createLlmTaskLedgerId(taskId))) {
             return;
           }
           this.applyTranscriptJobUpdate(result);
+          if (result.segments && jobHistoryId && jobHistoryId !== 'current') {
+            this.ports.rebaselineTranscriptAutoSave?.(jobHistoryId, result.segments);
+          }
         } finally {
           unlistenJobUpdates();
         }
@@ -170,23 +174,21 @@ export class PolishService {
   private buildRequest(
     taskId: string,
     llmConfig: NonNullable<ReturnType<typeof getFeatureLlmConfig>>,
-    config: Pick<
-      AppConfig,
-      'llmSettings' | 'polishPresetId' | 'polishCustomPresets' | 'polishKeywordSets'
-    >,
+    config: Pick<AppConfig, 'llmSettings' | 'polishPresetId' | 'polishCustomPresets'>,
     segments: TranscriptSegment[]
   ): PolishSegmentsRequest {
     const preset = resolvePolishPreset(config.polishPresetId, config.polishCustomPresets);
+    const mode: PolishMode =
+      preset.id === 'verbatim' || preset.id === 'formal' ? preset.id : 'clean';
 
     return {
       taskId,
       config: llmConfig,
       segments: segments.map(({ id, text }) => ({ id, text })),
-      context: preset.context,
-      keywords: resolvePolishKeywords(config.polishKeywordSets),
+      context: preset.context || undefined,
+      mode,
     };
   }
-
   private applyTranscriptJobUpdate(payload: TranscriptLlmJobResult) {
     if (!payload.segments) {
       return;
@@ -215,4 +217,6 @@ export const polishService = createPolishService({
   runTranscriptSegmentTaskJob,
   runTranscriptLlmJob,
   listenToTranscriptLlmJobUpdates,
+  rebaselineTranscriptAutoSave: (historyId, segments) =>
+    transcriptAutoSaveRuntime.rebaseline(historyId, segments),
 });

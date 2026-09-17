@@ -21,11 +21,11 @@ export function resolveVoiceTypingReadinessSnapshot(
 ): VoiceTypingReadinessSnapshot {
   const shortcutConfigured = (config.voiceTypingShortcut ?? '').trim().length > 0;
   const liveModelConfigured = (config.streamingModelPath ?? '').trim().length > 0;
-  const selectedStreamingModel = liveModelConfigured
-    ? findSelectedModelByMode(config.streamingModelPath ?? '', 'streaming')
+  const selectedLiveModel = liveModelConfigured
+    ? findSelectedModelByMode(config.streamingModelPath ?? '', 'live')
     : null;
-  const requiresVad = selectedStreamingModel
-    ? modelService.getModelRules(selectedStreamingModel.id).requiresVad
+  const requiresVad = selectedLiveModel
+    ? modelService.getModelRules(selectedLiveModel.id).requiresVad
     : false;
   const vadConfigured = !requiresVad || getScenarioVadModelPath(config, 'live').length > 0;
   const hasRuntimeFailure =

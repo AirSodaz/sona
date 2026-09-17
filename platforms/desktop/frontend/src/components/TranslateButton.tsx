@@ -8,6 +8,7 @@ import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { DEFAULT_LLM_STATE } from '../stores/transcriptSidecarState';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { getLocalizedLanguageName } from '../utils/languageUtils';
 import {
@@ -70,14 +71,9 @@ export function TranslateButton({
 
   // LLM state
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
-  const llmState = useTranscriptSidecarStore(
-    (state) => state.llmStates[sourceHistoryId || 'current']
-  ) || {
-    isTranslating: false,
-    translationProgress: 0,
-    isTranslationVisible: false,
-    isRetranscribing: false,
-  };
+  const llmState =
+    useTranscriptSidecarStore((state) => state.llmStates[sourceHistoryId || 'current']) ||
+    DEFAULT_LLM_STATE;
   const { isTranslating, translationProgress, isTranslationVisible, isRetranscribing } = llmState;
   const updateLlmState = useTranscriptSidecarStore((state) => state.updateLlmState);
 
@@ -198,7 +194,7 @@ export function TranslateButton({
   };
 
   const handleToggleVisibility = () => {
-    updateLlmState({ isTranslationVisible: !isTranslationVisible });
+    updateLlmState({ isTranslationVisible: !isTranslationVisible }, sourceHistoryId || undefined);
     closeMenu();
     triggerRef.current?.focus();
   };

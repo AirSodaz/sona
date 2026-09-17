@@ -19,6 +19,7 @@ export type AutoSaveStatus = 'saving' | 'saved' | 'error';
 export interface AutoSaveState {
   status: AutoSaveStatus;
   updatedAt: number;
+  errorMessage?: string;
 }
 
 export interface TranscriptHistorySidecarState {
@@ -36,7 +37,7 @@ export const INITIAL_TRANSCRIPT_HISTORY_SIDECAR_STATE: TranscriptHistorySidecarS
 export const DEFAULT_LLM_STATE: LlmState = {
   isTranslating: false,
   translationProgress: 0,
-  isTranslationVisible: false,
+  isTranslationVisible: true,
   isPolishing: false,
   polishProgress: 0,
   isRetranscribing: false,

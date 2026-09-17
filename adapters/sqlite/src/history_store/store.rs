@@ -1488,6 +1488,9 @@ where
             };
 
             if current_segments != base_segments {
+                if edited_transcript.segments == current_segments {
+                    return Ok(HistoryCommitTranscriptEditResult::Unchanged);
+                }
                 return Ok(HistoryCommitTranscriptEditResult::Conflict { current_segments });
             }
             if edited_transcript.segments == base_segments {

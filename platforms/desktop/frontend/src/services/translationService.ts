@@ -14,6 +14,7 @@ import type {
 } from './llmTaskTypes';
 import { createLlmTaskLedgerId, isTaskLedgerCancelRequested } from './taskLedgerBuilders';
 import { runTranscriptLlmJob } from './tauri/llm';
+import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
 
 interface RetryTranslateTranscriptJobOptions {
   segments: TranscriptSegment[];
@@ -49,6 +50,7 @@ export interface TranslationServicePorts {
   runTranscriptSegmentTaskJob: typeof runTranscriptSegmentTaskJob;
   runTranscriptLlmJob: typeof runTranscriptLlmJob;
   listenToTranscriptLlmJobUpdates: typeof listenToTranscriptLlmJobUpdates;
+  rebaselineTranscriptAutoSave?: (historyId: string, segments: TranscriptSegment[]) => void;
 }
 
 export class TranslationService {
@@ -135,6 +137,9 @@ export class TranslationService {
             return;
           }
           this.applyTranscriptJobUpdate(result);
+          if (result.segments && jobHistoryId && jobHistoryId !== 'current') {
+            this.ports.rebaselineTranscriptAutoSave?.(jobHistoryId, result.segments);
+          }
         } finally {
           unlistenJobUpdates();
         }
@@ -211,4 +216,6 @@ export const translationService = createTranslationService({
   runTranscriptSegmentTaskJob,
   runTranscriptLlmJob,
   listenToTranscriptLlmJobUpdates,
+  rebaselineTranscriptAutoSave: (historyId, segments) =>
+    transcriptAutoSaveRuntime.rebaseline(historyId, segments),
 });

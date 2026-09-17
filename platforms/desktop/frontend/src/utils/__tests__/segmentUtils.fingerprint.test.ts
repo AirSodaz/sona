@@ -187,4 +187,30 @@ describe('computeSummarySourceFingerprint', () => {
       computeSummarySourceFingerprint(segments2)
     );
   });
+  it('ignores speaker score changes when visible speaker labels stay the same', () => {
+    const segments1: TranscriptSegment[] = [
+      {
+        id: '1',
+        text: 'Hello',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        speaker: { id: 'speaker-1', label: 'Alice', kind: 'identified', score: 0.85 },
+      },
+    ];
+    const segments2: TranscriptSegment[] = [
+      {
+        id: '1',
+        text: 'Hello',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        speaker: { id: 'speaker-1', label: 'Alice', kind: 'identified', score: 0.95 },
+      },
+    ];
+
+    expect(computeSummarySourceFingerprint(segments1)).toBe(
+      computeSummarySourceFingerprint(segments2)
+    );
+  });
 });

@@ -67,6 +67,9 @@ macro_rules! impl_fallback_deserialize {
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "snake_case")]
 pub enum BuiltinPolishPresetId {
+    Clean,
+    Verbatim,
+    Formal,
     General,
     CustomerService,
     Meeting,
@@ -142,6 +145,11 @@ pub enum BuiltinLlmProvider {
     Chatglm,
     #[serde(rename = "copilot", alias = "github_copilot")]
     Copilot,
+    Cohere,
+    Together,
+    Venice,
+    Hyperbolic,
+    Llamafile,
     #[serde(
         rename = "custom-openai-compatible",
         alias = "openai_compatible",
@@ -161,23 +169,28 @@ impl BuiltinLlmProvider {
             Self::Gemini => "https://generativelanguage.googleapis.com",
             Self::Ollama => "http://127.0.0.1:11434",
             Self::DeepSeek => "https://api.deepseek.com",
-            Self::MoonshotAi => "https://api.moonshot.ai",
-            Self::MoonshotCn | Self::Kimi => "https://api.moonshot.cn",
-            Self::Xiaomi => "https://api.xiaomimimo.com",
-            Self::SiliconFlow => "https://api.siliconflow.cn",
+            Self::MoonshotAi => "https://api.moonshot.ai/v1",
+            Self::MoonshotCn | Self::Kimi => "https://api.moonshot.cn/v1",
+            Self::Xiaomi => "https://api.xiaomimimo.com/v1",
+            Self::SiliconFlow => "https://api.siliconflow.cn/v1",
             Self::Qwen => "https://dashscope.aliyuncs.com/compatible-mode/v1",
             Self::QwenPortal => "https://portal.qwen.ai/v1",
             Self::MinimaxGlobal => "https://api.minimaxi.chat/v1",
             Self::MinimaxCn => "https://api.minimax.chat/v1",
             Self::Openrouter => "https://openrouter.ai/api/v1",
             Self::LmStudio => "http://localhost:1234/v1",
-            Self::Groq => "https://api.groq.com/openai",
+            Self::Groq => "https://api.groq.com/openai/v1",
             Self::XAi => "https://api.x.ai",
-            Self::MistralAi => "https://api.mistral.ai/v1",
+            Self::MistralAi => "https://api.mistral.ai",
             Self::Perplexity => "https://api.perplexity.ai",
             Self::Volcengine => "https://ark.cn-beijing.volces.com",
             Self::Chatglm => "https://open.bigmodel.cn/api/paas/v4/",
             Self::Copilot => "https://api.githubcopilot.com",
+            Self::Cohere => "https://api.cohere.ai",
+            Self::Together => "https://api.together.xyz",
+            Self::Venice => "https://api.venice.ai/api/v1",
+            Self::Hyperbolic => "https://api.hyperbolic.xyz",
+            Self::Llamafile => "http://127.0.0.1:8080",
             Self::CustomOpenAiCompatible => "",
         }
     }
@@ -185,7 +198,7 @@ impl BuiltinLlmProvider {
     pub fn requires_api_key(&self) -> bool {
         !matches!(
             self,
-            Self::GoogleTranslateFree | Self::Ollama | Self::LmStudio
+            Self::GoogleTranslateFree | Self::Ollama | Self::LmStudio | Self::Llamafile
         )
     }
 }

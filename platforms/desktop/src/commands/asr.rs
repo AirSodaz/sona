@@ -303,18 +303,18 @@ pub async fn stop_native_live_transcription(
     consumer_id: String,
     source_kind: String,
 ) -> Result<String, AsrPortError> {
+    let capture_result = crate::integrations::audio::stop_native_live_capture(
+        &audio_state,
+        &source_kind,
+        consumer_id.clone(),
+    )
+    .await
+    .map_err(AsrPortError::runtime);
     let release_result = if state.live_coordinator().has_consumer(&consumer_id).await {
         state.live_coordinator().release(&consumer_id).await
     } else {
         Ok(())
     };
-    let capture_result = crate::integrations::audio::stop_native_live_capture(
-        &audio_state,
-        &source_kind,
-        consumer_id,
-    )
-    .await
-    .map_err(AsrPortError::runtime);
     release_result.and(capture_result)
 }
 

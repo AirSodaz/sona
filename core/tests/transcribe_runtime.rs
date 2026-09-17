@@ -302,20 +302,21 @@ fn live_plan_resolves_streaming_model_companions_and_config_precedence() {
 }
 
 #[test]
-fn live_plan_rejects_batch_only_models() {
+fn live_plan_resolves_llama_qwen3_streaming_model() {
     let (_dir, _input_path, models_dir) = installed_llama_qwen_fixture();
     let mut cli = temp_live_options();
     cli.model_id = Some("qwen3-asr-0.6b-q8-gguf".to_string());
     cli.models_dir = Some(models_dir);
 
-    let error = resolve_live_transcribe_plan_with_install_checker(cli, None, test_model_exists)
-        .unwrap_err();
+    let plan =
+        resolve_live_transcribe_plan_with_install_checker(cli, None, test_model_exists).unwrap();
 
-    assert_eq!(error.subject, "model_id");
-    assert_eq!(
-        error.message,
-        "Model 'qwen3-asr-0.6b-q8-gguf' does not support streaming transcription."
-    );
+    assert_eq!(plan.model_id, "qwen3-asr-0.6b-q8-gguf");
+    assert!(plan.vad_model.is_some());
+    let request = plan.to_local_streaming_request("cli-llama-qwen-live");
+    assert_eq!(request.instance_id, "cli-llama-qwen-live");
+    assert_eq!(request.model_type, "qwen3-asr");
+    assert_eq!(request.initial_refresh_rate_ms, Some(400));
 }
 
 #[test]

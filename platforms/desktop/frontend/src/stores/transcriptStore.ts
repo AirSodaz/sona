@@ -166,7 +166,7 @@ export interface TranscriptStore {
   hydrateSummaryState: (payload: HistorySummaryPayload, historyId?: string) => void;
   clearSummaryState: (historyId?: string) => void;
   rekeyCurrentSummaryState: (nextHistoryId: string | null) => void;
-  setAutoSaveState: (historyId: string, status: AutoSaveStatus) => void;
+  setAutoSaveState: (historyId: string, status: AutoSaveStatus, errorMessage?: string) => void;
   clearAutoSaveState: (historyId?: string) => void;
 }
 
@@ -650,11 +650,18 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
     set((state) => ({
       summaryStates: rekeyCurrentSummaryStateEntry(state.summaryStates, nextHistoryId),
     })),
-  setAutoSaveState: (historyId, status) =>
+  setAutoSaveState: (historyId, status, errorMessage) =>
     set((state) => {
       if (!historyId || historyId === 'current') return state;
       return {
-        autoSaveStates: { ...state.autoSaveStates, [historyId]: { status, updatedAt: Date.now() } },
+        autoSaveStates: {
+          ...state.autoSaveStates,
+          [historyId]: {
+            status,
+            updatedAt: Date.now(),
+            errorMessage: status === 'error' ? errorMessage : undefined,
+          },
+        },
       };
     }),
   clearAutoSaveState: (historyId) =>

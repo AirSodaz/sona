@@ -8,6 +8,19 @@ import { clearActiveTranscriptSession } from './transcriptCoordinator';
 import { useTranscriptSessionStore } from './transcriptSessionStore';
 import { useTranscriptSidecarStore } from './transcriptSidecarStore';
 
+export type HistoryTranscriptUpdateListener = (id: string, segments: TranscriptSegment[]) => void;
+
+const transcriptUpdateListeners = new Set<HistoryTranscriptUpdateListener>();
+
+export function addHistoryTranscriptUpdateListener(
+  listener: HistoryTranscriptUpdateListener
+): () => void {
+  transcriptUpdateListeners.add(listener);
+  return () => {
+    transcriptUpdateListeners.delete(listener);
+  };
+}
+
 interface HistoryState {
   items: HistoryItem[];
   isLoading: boolean;
@@ -141,6 +154,11 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       set((state) => ({
         items: state.items.map((item) => (item.id === id ? { ...item, ...updatedItem } : item)),
       }));
+      if (useTranscriptSessionStore.getState().sourceHistoryId === id) {
+        for (const listener of transcriptUpdateListeners) {
+          listener(id, segments);
+        }
+      }
     } catch (error) {
       const errorMessage = extractErrorMessage(error);
       logger.error('Failed to update history transcript:', error);

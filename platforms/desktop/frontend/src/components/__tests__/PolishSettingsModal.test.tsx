@@ -29,12 +29,10 @@ describe('PolishSettingsModal', () => {
     useConfigStore.setState({
       config: {
         ...useConfigStore.getState().config,
-        polishPresetId: 'general',
+        autoPolish: true,
+        autoPolishFrequency: 5,
+        polishPresetId: 'clean',
         polishCustomPresets: [],
-        polishKeywordSets: [
-          { id: 'kw-1', name: 'Brand Terms', enabled: true, keywords: 'Sona' },
-          { id: 'kw-2', name: 'Style Guide', enabled: false, keywords: 'Sentence case' },
-        ],
       },
     });
 
@@ -50,43 +48,22 @@ describe('PolishSettingsModal', () => {
     });
   });
 
-  it('updates global keyword enablement when no project is active', async () => {
+  it('renders modal with mode selection options', () => {
     render(<PolishSettingsModal isOpen onClose={() => undefined} />);
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Style Guide' }));
-
-    await waitFor(() => {
-      expect(useConfigStore.getState().config.polishKeywordSets).toEqual([
-        expect.objectContaining({ id: 'kw-1', enabled: true }),
-        expect.objectContaining({ id: 'kw-2', enabled: true }),
-      ]);
-    });
+    expect(screen.getByText('polish.advanced_settings')).toBeDefined();
+    expect(screen.getByText('Polish Mode')).toBeDefined();
+    expect(screen.getByDisplayValue('5')).toBeDefined();
   });
 
-  it('updates global keyword enablement when a Tag is active', async () => {
-    const project = {
-      id: 'project-1',
-      name: 'Alpha',
-      description: '',
-      icon: '',
-      createdAt: 1,
-      updatedAt: 1,
-    };
-
-    useProjectStore.setState({
-      ...useProjectStore.getState(),
-      projects: [project],
-      activeProjectId: 'project-1',
-    });
+  it('updates auto polish frequency', async () => {
     render(<PolishSettingsModal isOpen onClose={() => undefined} />);
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Style Guide' }));
+    const input = screen.getByLabelText('Auto-Polish Frequency');
+    fireEvent.change(input, { target: { value: '10' } });
 
     await waitFor(() => {
-      expect(useConfigStore.getState().config.polishKeywordSets).toEqual([
-        expect.objectContaining({ id: 'kw-1', enabled: true }),
-        expect.objectContaining({ id: 'kw-2', enabled: true }),
-      ]);
+      expect(useConfigStore.getState().config.autoPolishFrequency).toBe(10);
     });
   });
 });

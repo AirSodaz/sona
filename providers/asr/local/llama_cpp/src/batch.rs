@@ -33,12 +33,12 @@ use sona_core::transcription::transcript::{
     normalize_recognizer_text,
 };
 
-const MODEL_TYPE_QWEN3_ASR: &str = "qwen3-asr";
-const N_BATCH: i32 = 512;
-const MAX_GENERATED_TOKENS: usize = 4096;
+pub(crate) const MODEL_TYPE_QWEN3_ASR: &str = "qwen3-asr";
+pub(crate) const N_BATCH: i32 = 512;
+pub(crate) const MAX_GENERATED_TOKENS: usize = 4096;
 /// Qwen3-ASR GGUFs ship a 65536-token context, so a generous hotword budget
 /// stays negligible against audio and generation tokens.
-const QWEN3_ASR_HOTWORDS_MAX_CHARS: usize = 2048;
+pub(crate) const QWEN3_ASR_HOTWORDS_MAX_CHARS: usize = 2048;
 
 static BACKEND: OnceLock<Result<LlamaBackend, String>> = OnceLock::new();
 /// Cache key: canonical model path plus the resolved GPU layer count.
@@ -242,6 +242,7 @@ impl LlamaBatchTranscriptionJob {
         for (segment_index, segment) in audio_segments.into_iter().enumerate() {
             let (start_sample, end_sample) = segment_bounds(&segment, sample_rate, samples.len());
             if end_sample <= start_sample {
+                observer.on_progress(segment_completed_progress(segment_index, segment_total));
                 continue;
             }
             let segment_samples = samples[start_sample..end_sample].to_vec();
@@ -269,6 +270,7 @@ impl LlamaBatchTranscriptionJob {
                     results.push(segment_result);
                 }
             }
+            observer.on_progress(segment_completed_progress(segment_index, segment_total));
         }
 
         observer.on_progress(100.0);
@@ -444,16 +446,12 @@ fn transcribe_segment(
         );
         generated_tokens = generated_tokens.saturating_add(1);
         if generated_tokens.is_multiple_of(8) {
-            emit_partial_transcript(
-                observer,
-                language_forced,
-                &segment_id,
-                segment,
-                &generated,
+            observer.on_progress(llama_generation_progress(
                 generated_tokens,
                 segment_index,
                 segment_total,
-            );
+            ));
+            emit_partial_transcript(observer, language_forced, &segment_id, segment, &generated);
         }
 
         let mut batch = LlamaBatch::new(1, 1);
@@ -495,16 +493,12 @@ fn transcribe_segment(
     Ok(Some(segment_result))
 }
 
-#[allow(clippy::too_many_arguments)]
 fn emit_partial_transcript(
     observer: &dyn BatchTranscriptionObserver,
     language_forced: bool,
     segment_id: &str,
     segment: &AudioSegment,
     generated: &str,
-    generated_tokens: usize,
-    segment_index: usize,
-    segment_total: usize,
 ) {
     let text = parse_qwen3_asr_partial_output(generated, language_forced);
     if text.is_empty() {
@@ -530,35 +524,53 @@ fn emit_partial_transcript(
         remove_ids: Vec::new(),
         upsert_segments: vec![partial],
     });
-    observer.on_progress(llama_generation_progress(
-        generated_tokens,
-        segment_index,
-        segment_total,
-    ));
 }
 
-/// Audio-ingest progress spans 10%..60% across segments; generation then owns
-/// 60%..95% through [`llama_generation_progress`].
+const BATCH_PROGRESS_START: f32 = 10.0;
+const BATCH_PROGRESS_SPAN: f32 = 85.0;
+const INGEST_FRACTION: f32 = 0.25;
+const TOKEN_SCALE: f32 = 160.0;
+
+/// Progress after audio ingestion for a segment completes.
+///
+/// Progress spans 10%..95% partitioned evenly across all segments.
+/// Within each segment's slice, audio ingestion accounts for the first 25%,
+/// and token generation accounts for the remaining 75%.
 fn audio_ingest_progress(segment_index: usize, segment_total: usize) -> f32 {
-    const INGEST_START: f32 = 10.0;
-    const INGEST_SPAN: f32 = 50.0;
     let total = segment_total.max(1) as f32;
-    INGEST_START + INGEST_SPAN * (segment_index.min(segment_total) as f32 + 1.0) / total
+    let index = segment_index.min(segment_total.max(1) - 1) as f32;
+    let seg_span = BATCH_PROGRESS_SPAN / total;
+    let seg_start = BATCH_PROGRESS_START + index * seg_span;
+    seg_start + seg_span * INGEST_FRACTION
 }
 
+/// Progress during autoregressive token generation for a segment.
+///
+/// Progress advances monotonically within the segment's generation slice (25%..100% of the segment slice),
+/// asymptotically approaching the segment's completion boundary.
 fn llama_generation_progress(
     generated_tokens: usize,
     segment_index: usize,
     segment_total: usize,
 ) -> f32 {
-    const GENERATION_START: f32 = 60.0;
-    const GENERATION_SPAN: f32 = 35.0;
-    const TOKEN_SCALE: f32 = 160.0;
-
     let total = segment_total.max(1) as f32;
-    let completed = segment_index.min(segment_total.max(1) - 1) as f32;
-    let completion_curve = 1.0 - (-(generated_tokens as f32) / TOKEN_SCALE).exp();
-    (GENERATION_START + GENERATION_SPAN * (completed + completion_curve) / total).min(95.0)
+    let index = segment_index.min(segment_total.max(1) - 1) as f32;
+    let seg_span = BATCH_PROGRESS_SPAN / total;
+    let seg_start = BATCH_PROGRESS_START + index * seg_span;
+    let completion_curve = (1.0 - (-(generated_tokens as f32) / TOKEN_SCALE).exp()).clamp(0.0, 1.0);
+    let generation_fraction = INGEST_FRACTION + (1.0 - INGEST_FRACTION) * completion_curve;
+    (seg_start + seg_span * generation_fraction).min(seg_start + seg_span)
+}
+
+/// Progress when a segment has completely finished (both ingestion and generation).
+///
+/// Marks the segment's slice as 100% completed, guaranteeing that the next segment's
+/// audio ingest progress will be strictly greater.
+fn segment_completed_progress(segment_index: usize, segment_total: usize) -> f32 {
+    let total = segment_total.max(1) as f32;
+    let index = segment_index.min(segment_total.max(1) - 1) as f32;
+    let seg_span = BATCH_PROGRESS_SPAN / total;
+    BATCH_PROGRESS_START + (index + 1.0) * seg_span
 }
 
 fn decode_audio_input(
@@ -633,7 +645,7 @@ struct ValidatedOptions {
 /// value. Supported backends are Metal (macOS) and Vulkan (Windows, Linux);
 /// `cuda` is accepted as an alias for compatible builds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum GpuOffload {
+pub(crate) enum GpuOffload {
     Disabled,
     Enabled,
     /// Decide at model-load time from the devices the linked runtime exposes.
@@ -653,7 +665,7 @@ pub(crate) fn gpu_backend_available() -> bool {
 /// VRAM implied by any present accelerator.
 const GPU_OFFLOAD_ALL_LAYERS: u32 = u32::MAX;
 
-fn resolve_gpu_offload(value: Option<&str>) -> Result<GpuOffload, AsrPortError> {
+pub(crate) fn resolve_gpu_offload(value: Option<&str>) -> Result<GpuOffload, AsrPortError> {
     match value.map(str::trim).filter(|value| !value.is_empty()) {
         None | Some("cpu") => Ok(GpuOffload::Disabled),
         Some("auto") => Ok(GpuOffload::Auto),
@@ -667,7 +679,7 @@ fn resolve_gpu_offload(value: Option<&str>) -> Result<GpuOffload, AsrPortError> 
     }
 }
 
-fn resolve_auto_gpu_offload(gpu_present: bool) -> GpuOffload {
+pub(crate) fn resolve_auto_gpu_offload(gpu_present: bool) -> GpuOffload {
     if gpu_present {
         GpuOffload::Enabled
     } else {
@@ -732,7 +744,7 @@ fn validate_supported_options(
     })
 }
 
-fn backend() -> Result<&'static LlamaBackend, AsrPortError> {
+pub(crate) fn backend() -> Result<&'static LlamaBackend, AsrPortError> {
     BACKEND
         .get_or_init(|| LlamaBackend::init().map_err(|error| error.to_string()))
         .as_ref()
@@ -747,7 +759,7 @@ fn backend() -> Result<&'static LlamaBackend, AsrPortError> {
 /// Loads the model and multimodal projector. `n_gpu_layers` is explicit so
 /// CPU runs stay on CPU even when a GPU backend is registered
 /// (`LlamaModelParams` defaults to auto-offload).
-fn init_inference(
+pub(crate) fn init_inference(
     backend: &'static LlamaBackend,
     model_path: &Path,
     mmproj_path: &Path,
@@ -835,17 +847,17 @@ fn load_model(
 
 /// Prunes all idle models from the batch model cache whose strong reference count is 1.
 pub fn prune_idle_llama_models() {
-    if let Some(cache) = MODEL_CACHE.get() {
-        if let Ok(mut cache) = cache.lock() {
-            cache.retain(|_, model| Arc::strong_count(model) > 1);
-        }
+    if let Some(cache) = MODEL_CACHE.get()
+        && let Ok(mut cache) = cache.lock()
+    {
+        cache.retain(|_, model| Arc::strong_count(model) > 1);
     }
 }
 /// Qwen3-ASR consumes hotwords as background knowledge inside the ChatML
 /// system message — the channel the model was trained on for context
 /// biasing — and forces a language by prefilling
 /// `language <Name><asr_text>` after the generation prompt.
-fn qwen3_asr_prompt(
+pub(crate) fn qwen3_asr_prompt(
     model: &LlamaModel,
     hotwords: &[String],
     language_prefill: Option<&str>,
@@ -887,7 +899,7 @@ fn qwen3_asr_prompt(
     Ok(prompt)
 }
 
-fn resolve_required_model_file(
+pub(crate) fn resolve_required_model_file(
     model_root: &Path,
     config: &ModelFileConfig,
     mmproj: bool,
@@ -930,7 +942,7 @@ fn path_to_str<'a>(path: &'a Path, label: &str) -> Result<&'a str, AsrPortError>
     })
 }
 
-fn parse_qwen3_asr_output(output: &str) -> String {
+pub(crate) fn parse_qwen3_asr_output(output: &str) -> String {
     let transcript = match output.split_once("<asr_text>") {
         Some((_, transcript)) => transcript,
         // Upstream llama.cpp (#26749): some builds leak the trained
@@ -940,7 +952,7 @@ fn parse_qwen3_asr_output(output: &str) -> String {
     normalize_recognizer_text(transcript.trim())
 }
 
-fn parse_qwen3_asr_partial_output(output: &str, language_forced: bool) -> String {
+pub(crate) fn parse_qwen3_asr_partial_output(output: &str, language_forced: bool) -> String {
     if let Some((_, transcript)) = output.split_once("<asr_text>") {
         return normalize_recognizer_text(transcript.trim());
     }
@@ -972,7 +984,7 @@ fn strip_leaked_language_prefix(output: &str) -> &str {
 /// Splits the shared hotword string on ASCII commas and newlines, trims each
 /// entry, drops sherpa-style ` :weight` suffixes (no llama.cpp model has a
 /// weight concept), and truncates to the model's character budget.
-fn normalize_hotwords(raw: &str, max_chars: usize) -> Vec<String> {
+pub(crate) fn normalize_hotwords(raw: &str, max_chars: usize) -> Vec<String> {
     let terms: Vec<String> = raw
         .split([',', '\n'])
         .map(str::trim)
@@ -1051,7 +1063,7 @@ const QWEN3_ASR_LANGUAGES: &[(&str, &str)] = &[
 /// Maps Sona's language value onto the trained prefill name. `None` means
 /// auto-detect; unmapped values fail with typed feedback instead of being
 /// silently ignored.
-fn qwen3_asr_language(language: &str) -> Result<Option<&'static str>, AsrPortError> {
+pub(crate) fn qwen3_asr_language(language: &str) -> Result<Option<&'static str>, AsrPortError> {
     let trimmed = language.trim();
     if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("auto") {
         return Ok(None);
@@ -1089,7 +1101,8 @@ mod tests {
         GpuOffload, LlamaBatchTranscriptionJob, MODEL_TYPE_QWEN3_ASR, audio_ingest_progress,
         llama_generation_progress, normalize_hotwords, parse_qwen3_asr_output,
         parse_qwen3_asr_partial_output, qwen3_asr_language, resolve_auto_gpu_offload,
-        resolve_gpu_offload, segment_bounds, truncate_hotwords, validate_supported_options,
+        resolve_gpu_offload, segment_bounds, segment_completed_progress, truncate_hotwords,
+        validate_supported_options,
     };
     use sona_core::export::ExportFormat;
     use sona_core::ports::asr::{AsrPortErrorKind, LocalAsrEngine};
@@ -1241,11 +1254,12 @@ mod tests {
     }
     #[test]
     fn token_generation_progress_is_monotonic_and_capped() {
+        let ingest = audio_ingest_progress(0, 1);
         let first = llama_generation_progress(8, 0, 1);
         let later = llama_generation_progress(160, 0, 1);
         let much_later = llama_generation_progress(10_000, 0, 1);
 
-        assert!(first > 60.0);
+        assert!(first > ingest);
         assert!(later > first);
         assert_eq!(much_later, 95.0);
     }
@@ -1257,14 +1271,51 @@ mod tests {
         let first_of_two = llama_generation_progress(8, 0, 2);
         let second_of_two = llama_generation_progress(8, 1, 2);
 
-        assert_eq!(single, 60.0 + 35.0 * curve);
-        assert_eq!(first_of_two, 60.0 + 35.0 * curve / 2.0);
-        assert_eq!(second_of_two, 60.0 + 35.0 * (1.0 + curve) / 2.0);
+        assert_eq!(single, 10.0 + 85.0 * (0.25 + 0.75 * curve));
+        assert_eq!(first_of_two, 10.0 + 42.5 * (0.25 + 0.75 * curve));
+        assert_eq!(second_of_two, 52.5 + 42.5 * (0.25 + 0.75 * curve));
 
         let ingest_first = audio_ingest_progress(0, 2);
         let ingest_last = audio_ingest_progress(1, 2);
-        assert_eq!(ingest_first, 35.0);
-        assert_eq!(ingest_last, 60.0);
+        assert_eq!(ingest_first, 10.0 + 42.5 * 0.25);
+        assert_eq!(ingest_last, 52.5 + 42.5 * 0.25);
+        assert_eq!(segment_completed_progress(0, 2), 52.5);
+        assert_eq!(segment_completed_progress(1, 2), 95.0);
+    }
+
+    #[test]
+    fn multi_segment_progress_is_strictly_monotonic_without_regressions() {
+        for total in [1, 2, 4, 7, 10, 50] {
+            let mut last_progress = 10.0_f32; // decode progress
+
+            for segment_index in 0..total {
+                let ingest = audio_ingest_progress(segment_index, total);
+                assert!(
+                    ingest > last_progress,
+                    "Ingest progress {ingest} did not advance past last progress {last_progress} (segment {segment_index}/{total})"
+                );
+                last_progress = ingest;
+
+                for tokens in [8, 16, 32, 64, 128, 256] {
+                    let generation_val = llama_generation_progress(tokens, segment_index, total);
+                    assert!(
+                        generation_val > last_progress,
+                        "Generation progress {generation_val} did not advance past {last_progress} at tokens {tokens} (segment {segment_index}/{total})"
+                    );
+                    last_progress = generation_val;
+                }
+
+                let completed = segment_completed_progress(segment_index, total);
+                assert!(
+                    completed >= last_progress,
+                    "Segment completed progress {completed} went below {last_progress} (segment {segment_index}/{total})"
+                );
+                last_progress = completed;
+            }
+
+            assert_eq!(segment_completed_progress(total - 1, total), 95.0);
+            assert!(100.0 > last_progress);
+        }
     }
 
     #[test]

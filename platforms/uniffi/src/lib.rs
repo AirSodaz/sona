@@ -80,7 +80,7 @@ pub use mapper::{
     FfiModelDependencyRequestsForModel, FfiModelFileConfig, FfiModelIdByNormalizedPathEntry,
     FfiModelPathByIdEntry, FfiModelRules, FfiModelSelectionOption, FfiModelSelectionPaths,
     FfiOnlineAsrBatchCapability, FfiOnlineAsrCapability, FfiOnlineAsrLocalFileBatchMode,
-    FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest, FfiOverviewStatsV1,
+    FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest, FfiOverviewStatsV1, FfiPolishMode,
     FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPreparedBackupImportV1, FfiPresetModel,
     FfiRecoveredQueueItemV1, FfiRecoveredTranscriptSegmentV1, FfiRecoveredTranscriptTimingUnitV1,
     FfiRecoveredTranscriptTimingV1, FfiRecoveryFileStatV1, FfiRecoveryItemInputV1,
@@ -2372,7 +2372,7 @@ mod tests {
 
         assert_eq!(
             llm_bridge::summary_source_fingerprint_from_transcript_json(segments_json).unwrap(),
-            "s1:Hello:0:1.5:true:speaker-a:Alice:identified:0.91|s2:world:1.5:2:true::::"
+            "s1:Hello:0:1.5:true:speaker-a:Alice:identified|s2:world:1.5:2:true:::"
         );
     }
 
@@ -2765,7 +2765,7 @@ mod tests {
                     "defaults": {
                         "summaryTemplateId": "meeting",
                         "translationLanguage": "ja",
-                        "polishPresetId": "meeting"
+                        "polishPresetId": "formal"
                     }
                 }"#
                 .to_string(),
@@ -2776,7 +2776,7 @@ mod tests {
 
         assert_eq!(effective_config["summaryTemplateId"], "meeting");
         assert_eq!(effective_config["translationLanguage"], "zh");
-        assert_eq!(effective_config["polishPresetId"], "meeting");
+        assert_eq!(effective_config["polishPresetId"], "clean");
     }
 
     #[test]

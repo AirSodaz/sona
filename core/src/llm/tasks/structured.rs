@@ -126,7 +126,16 @@ struct StructuredItems<T> {
     items: Vec<T>,
 }
 
-fn items_schema(count: usize, text_field: &str) -> Value {
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum FlexibleSegmentsPayload<T> {
+    Items { items: Vec<T> },
+    Segments { segments: Vec<T> },
+    Data { data: Vec<T> },
+    Array(Vec<T>),
+}
+
+fn items_schema(_count: usize, text_field: &str) -> Value {
     json!({
         "type": "object",
         "additionalProperties": false,
@@ -134,8 +143,6 @@ fn items_schema(count: usize, text_field: &str) -> Value {
         "properties": {
             "items": {
                 "type": "array",
-                "minItems": count,
-                "maxItems": count,
                 "items": {
                     "type": "object",
                     "additionalProperties": false,
@@ -151,14 +158,33 @@ fn items_schema(count: usize, text_field: &str) -> Value {
 }
 
 pub fn polish_output_schema(count: usize) -> Value {
-    items_schema(count, "text")
+    serde_json::to_value(schemars::schema_for!(super::PolishedSegmentsBatch))
+        .unwrap_or_else(|_| items_schema(count, "text"))
 }
 
 pub fn translate_output_schema(count: usize) -> Value {
-    items_schema(count, "translation")
+    serde_json::to_value(schemars::schema_for!(super::TranslatedSegmentsBatch))
+        .unwrap_or_else(|_| items_schema(count, "translation"))
 }
 
 fn parse_items<T: DeserializeOwned>(value: &Value) -> Result<Vec<T>, LlmTaskError> {
+    if let Value::String(s) = value {
+        let cleaned = clean_json_response(s);
+        if let Ok(val) = serde_json::from_str::<Value>(&cleaned) {
+            return parse_items(&val);
+        }
+    }
+
+    if let Ok(payload) = serde_json::from_value::<FlexibleSegmentsPayload<T>>(value.clone()) {
+        let items = match payload {
+            FlexibleSegmentsPayload::Items { items } => items,
+            FlexibleSegmentsPayload::Segments { segments } => segments,
+            FlexibleSegmentsPayload::Data { data } => data,
+            FlexibleSegmentsPayload::Array(array) => array,
+        };
+        return Ok(items);
+    }
+
     serde_json::from_value::<StructuredItems<T>>(value.clone())
         .map(|payload| payload.items)
         .map_err(|error| LlmTaskError::InvalidResponse {

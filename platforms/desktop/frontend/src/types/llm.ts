@@ -55,6 +55,7 @@ export function flattenAppConfig(config: any): any {
 
 export type LlmProviderStrategy =
   | 'openai_compatible'
+  | 'open_ai'
   | 'anthropic'
   | 'gemini'
   | 'ollama'
@@ -63,7 +64,30 @@ export type LlmProviderStrategy =
   | 'openai_compatible_custom_path'
   | 'google_translate'
   | 'google_translate_free'
-  | 'perplexity';
+  | 'perplexity'
+  | 'deep_seek'
+  | 'moonshot_ai'
+  | 'moonshot_cn'
+  | 'xiaomi'
+  | 'kimi'
+  | 'silicon_flow'
+  | 'qwen'
+  | 'qwen_portal'
+  | 'minimax_global'
+  | 'minimax_cn'
+  | 'open_router'
+  | 'lm_studio'
+  | 'groq'
+  | 'x_ai'
+  | 'mistral_ai'
+  | 'volcengine'
+  | 'chatglm'
+  | 'copilot'
+  | 'cohere'
+  | 'together'
+  | 'venice'
+  | 'hyperbolic'
+  | 'llamafile';
 
 export type CustomLlmProviderStrategy =
   | 'openai_compatible'

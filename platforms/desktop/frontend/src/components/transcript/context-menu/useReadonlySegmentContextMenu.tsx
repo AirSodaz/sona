@@ -1,4 +1,4 @@
-import { Copy, TextSelect } from 'lucide-react';
+import { Copy, Languages, TextSelect } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +15,8 @@ import { getEditorShortcut } from './shortcutLabels';
 interface UseReadonlySegmentContextMenuOptions {
   segmentId: string;
   rootRef: React.RefObject<HTMLElement | null>;
+  onEditTranslation?: () => void;
+  hasTranslation?: boolean;
 }
 
 interface ReadonlySegmentContextMenuHandlers {
@@ -40,6 +42,8 @@ function getContainedSelectionText(root: HTMLElement): string | null {
 export function useReadonlySegmentContextMenu({
   segmentId,
   rootRef,
+  onEditTranslation,
+  hasTranslation,
 }: UseReadonlySegmentContextMenuOptions): ReadonlySegmentContextMenuHandlers {
   const { t } = useTranslation();
   const { closeContextMenu, openContextMenu } = useContextMenu();
@@ -105,6 +109,18 @@ export function useReadonlySegmentContextMenu({
               selection.addRange(range);
             },
           },
+          ...(onEditTranslation
+            ? [
+                {
+                  id: 'edit-translation',
+                  label: hasTranslation
+                    ? t('editor.edit_translation', { defaultValue: 'Edit translation' })
+                    : t('editor.add_translation', { defaultValue: 'Add translation' }),
+                  icon: <Languages size={16} />,
+                  onSelect: onEditTranslation,
+                },
+              ]
+            : []),
         ],
         ...request,
         onClose: () => {
@@ -113,7 +129,7 @@ export function useReadonlySegmentContextMenu({
       });
       ownsMenuRef.current = true;
     },
-    [contextId, openContextMenu, rootRef, t]
+    [contextId, hasTranslation, onEditTranslation, openContextMenu, rootRef, t]
   );
 
   const onContextMenu = useCallback<React.MouseEventHandler<HTMLElement>>(

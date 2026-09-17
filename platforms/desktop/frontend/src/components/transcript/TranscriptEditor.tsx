@@ -45,6 +45,7 @@ interface TranscriptContext {
   onSeek: (time: number) => void;
   onEdit: (id: string) => void;
   onSave: (id: string, text: string) => void;
+  onSaveTranslation: (id: string, translation: string) => void;
   onDelete: (id: string) => void;
   onMergeWithNext: (id: string) => void;
   onSplit: (id: string, leftText: string, rightText: string) => void;
@@ -103,6 +104,10 @@ export function TranscriptEditor(): React.JSX.Element {
     [setEditingSegmentId]
   );
 
+  const handleSaveTranslation = useCallback((id: string, translation: string) => {
+    updateTranscriptSegment(id, { translation });
+  }, []);
+
   const handleDelete = useCallback(
     async (id: string) => {
       const confirmed = await confirm(
@@ -155,6 +160,7 @@ export function TranscriptEditor(): React.JSX.Element {
       onSeek: handleSeek,
       onEdit: handleEdit,
       onSave: handleSave,
+      onSaveTranslation: handleSaveTranslation,
       onDelete: handleDelete,
       onMergeWithNext: handleMergeWithNext,
       onSplit: handleSplit,
@@ -168,6 +174,7 @@ export function TranscriptEditor(): React.JSX.Element {
       handleMergeWithNext,
       handleSplit,
       handleAnimationEnd,
+      handleSaveTranslation,
     ]
   );
 
@@ -193,6 +200,7 @@ export function TranscriptEditor(): React.JSX.Element {
           onSeek={context.onSeek}
           onEdit={context.onEdit}
           onSave={context.onSave}
+          onSaveTranslation={context.onSaveTranslation}
           onDelete={context.onDelete}
           onMergeWithNext={context.onMergeWithNext}
           onSplit={context.onSplit}

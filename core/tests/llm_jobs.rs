@@ -101,6 +101,6 @@ fn summary_fingerprint_matches_frontend_contract() {
 
     assert_eq!(
         compute_summary_source_fingerprint(&[segment]),
-        "1:Hello:0:1:true:speaker-a:Alice:identified:0.91"
+        "1:Hello:0:1:true:speaker-a:Alice:identified"
     );
 }

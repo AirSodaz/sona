@@ -160,6 +160,26 @@ describe('EditorToolbar', () => {
     screen.getByRole('button', { name: 'Bold' });
   });
 
+  it('renders failure message in a tooltip when auto-save fails', () => {
+    useTranscriptStore.setState({
+      sourceHistoryId: 'hist-1',
+      autoSaveStates: {
+        'hist-1': {
+          status: 'error',
+          updatedAt: Date.now(),
+          errorMessage: 'Disk is full: cannot write to SQLite database',
+        },
+      },
+    });
+
+    render(<EditorToolbar />);
+
+    const statusEl = screen.getByRole('status');
+    expect(statusEl.textContent).toContain('Save failed');
+    const tooltipEl = screen.getByRole('tooltip');
+    expect(tooltipEl.textContent).toContain('Disk is full: cannot write to SQLite database');
+  });
+
   it('dispatches lexical commands on button click', () => {
     useTranscriptStore.setState({ editingSegmentId: 'seg-1' });
 

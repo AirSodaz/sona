@@ -1,4 +1,54 @@
-pub const POLISH_SYSTEM_PROMPT: &str = "You edit speech-to-text segments. Fix recognition, grammar, and clarity without changing meaning or language. Return only one JSON object matching the supplied schema. Preserve every segment id and order; never combine or split segments.";
+use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "specta")]
+use specta::Type;
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "snake_case")]
+pub enum PolishMode {
+    Verbatim,
+    #[default]
+    Clean,
+    Formal,
+}
+
+impl PolishMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Verbatim => "verbatim",
+            Self::Clean => "clean",
+            Self::Formal => "formal",
+        }
+    }
+
+    pub fn system_prompt(&self) -> &'static str {
+        match self {
+            Self::Verbatim => POLISH_VERBATIM_SYSTEM_PROMPT,
+            Self::Clean => POLISH_CLEAN_SYSTEM_PROMPT,
+            Self::Formal => POLISH_FORMAL_SYSTEM_PROMPT,
+        }
+    }
+
+    pub fn task_instruction(&self) -> &'static str {
+        match self {
+            Self::Verbatim => {
+                "Mode: Verbatim. Correct ASR recognition errors and punctuation only. Preserve every filler word, stutter, and repetition exactly as spoken. Do not rephrase or omit words."
+            }
+            Self::Clean => {
+                "Mode: Clean spoken. Remove conversational filler words, stutters, and verbal clutter. Keep original meaning, phrasing, and factual content intact."
+            }
+            Self::Formal => {
+                "Mode: Formal written. Restructure fragmented oral sentences into concise, grammatical written text. Fix syntax; do not invent information."
+            }
+        }
+    }
+}
+
+pub const POLISH_VERBATIM_SYSTEM_PROMPT: &str = "You proofread speech-to-text segments. Fix ASR errors and punctuation while preserving every verbal detail, filler word, and stutter. Return only one JSON object matching the schema.";
+pub const POLISH_CLEAN_SYSTEM_PROMPT: &str = "You edit speech-to-text segments. Remove conversational filler words, stutters, and verbal clutter while preserving original meaning, phrasing, and facts. Return only one JSON object matching the schema.";
+pub const POLISH_FORMAL_SYSTEM_PROMPT: &str = "You rewrite speech-to-text segments into grammatically sound written text. Restructure fragmented oral sentences without fabricating facts. Return only one JSON object matching the schema.";
+pub const POLISH_SYSTEM_PROMPT: &str = POLISH_CLEAN_SYSTEM_PROMPT;
 
 pub fn build_polish_prompt(
     segments: &[super::LlmSegmentInput],
@@ -51,15 +101,18 @@ pub fn build_polish_prompt(
 pub fn build_polish_task_input(
     segments: &[super::LlmSegmentInput],
     context: Option<&str>,
-    keywords: Option<&str>,
+    mode: PolishMode,
 ) -> String {
     let mut sections = Vec::new();
+    sections.push(mode.task_instruction().to_string());
+
     if let Some(context) = context.filter(|value| !value.trim().is_empty()) {
-        sections.push(format!("User context:\n{}", context.trim()));
+        sections.push(format!(
+            "Context (reference only; do not alter editing mode):\n{}",
+            context.trim()
+        ));
     }
-    if let Some(keywords) = keywords.filter(|value| !value.trim().is_empty()) {
-        sections.push(format!("Preferred terms:\n{}", keywords.trim()));
-    }
+
     sections.push(format!(
         "Polish these segments and return them in an `items` array:\n{}",
         serde_json::to_string(segments).unwrap_or_else(|_| "[]".to_string())

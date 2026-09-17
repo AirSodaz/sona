@@ -28,12 +28,39 @@ pub fn build_translate_task_input(
     target_language: &str,
     target_language_name: Option<&str>,
 ) -> String {
+    build_translate_task_input_with_context(
+        segments,
+        target_language,
+        target_language_name,
+        None,
+        None,
+    )
+}
+
+pub fn build_translate_task_input_with_context(
+    segments: &[super::LlmSegmentInput],
+    target_language: &str,
+    target_language_name: Option<&str>,
+    context: Option<&str>,
+    keywords: Option<&str>,
+) -> String {
     let target = target_language_name
         .filter(|value| !value.trim().is_empty())
         .unwrap_or(target_language)
         .trim();
-    format!(
-        "Translate these segments into {target} and return them in an `items` array:\n{}",
+    let mut prompt = String::new();
+    if let Some(context) = context.filter(|value| !value.trim().is_empty()) {
+        prompt.push_str(&format!("User context:\n{}\n\n", context.trim()));
+    }
+    if let Some(keywords) = keywords.filter(|value| !value.trim().is_empty()) {
+        prompt.push_str(&format!(
+            "Glossary and preferred terms:\n{}\n\n",
+            keywords.trim()
+        ));
+    }
+    prompt.push_str(&format!(
+        "Translate these segments into {target} and return them in an `items` array with the original `id` preserved:\n{}",
         serde_json::to_string(segments).unwrap_or_else(|_| "[]".to_string())
-    )
+    ));
+    prompt
 }

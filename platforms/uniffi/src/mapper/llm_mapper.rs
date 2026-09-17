@@ -6,7 +6,7 @@ use sona_core::llm::requests::{
     SummarizeTranscriptRequest, TranslateSegmentsRequest,
 };
 use sona_core::llm::tasks::{
-    LlmProviderStrategy, LlmSegmentInput, PolishedSegment, SummarySegmentInput,
+    LlmProviderStrategy, LlmSegmentInput, PolishMode, PolishedSegment, SummarySegmentInput,
     SummaryTemplateConfig, TranslatedSegment,
 };
 use sona_core::llm::usage::LlmGenerateSource;
@@ -53,6 +53,11 @@ pub enum FfiLlmProviderStrategy {
     Volcengine,
     Chatglm,
     Copilot,
+    Cohere,
+    Together,
+    Venice,
+    Hyperbolic,
+    Llamafile,
     GoogleTranslate,
     GoogleTranslateFree,
     OpenAiCompatible,
@@ -119,6 +124,29 @@ pub struct FfiTranslatedSegment {
     pub translation: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum FfiPolishMode {
+    Clean,
+    Verbatim,
+    Formal,
+}
+
+pub fn polish_mode_from_ffi(mode: FfiPolishMode) -> PolishMode {
+    match mode {
+        FfiPolishMode::Clean => PolishMode::Clean,
+        FfiPolishMode::Verbatim => PolishMode::Verbatim,
+        FfiPolishMode::Formal => PolishMode::Formal,
+    }
+}
+
+pub fn polish_mode_to_ffi(mode: PolishMode) -> FfiPolishMode {
+    match mode {
+        PolishMode::Clean => FfiPolishMode::Clean,
+        PolishMode::Verbatim => FfiPolishMode::Verbatim,
+        PolishMode::Formal => FfiPolishMode::Formal,
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct FfiPolishSegmentsRequest {
     pub task_id: String,
@@ -127,6 +155,7 @@ pub struct FfiPolishSegmentsRequest {
     pub chunk_size: Option<u64>,
     pub context: Option<String>,
     pub keywords: Option<String>,
+    pub mode: Option<FfiPolishMode>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -137,6 +166,8 @@ pub struct FfiTranslateSegmentsRequest {
     pub chunk_size: Option<u64>,
     pub target_language: String,
     pub target_language_name: Option<String>,
+    pub context: Option<String>,
+    pub keywords: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -191,6 +222,11 @@ pub fn llm_provider_strategy_to_ffi(strategy: LlmProviderStrategy) -> FfiLlmProv
         LlmProviderStrategy::Volcengine => FfiLlmProviderStrategy::Volcengine,
         LlmProviderStrategy::Chatglm => FfiLlmProviderStrategy::Chatglm,
         LlmProviderStrategy::Copilot => FfiLlmProviderStrategy::Copilot,
+        LlmProviderStrategy::Cohere => FfiLlmProviderStrategy::Cohere,
+        LlmProviderStrategy::Together => FfiLlmProviderStrategy::Together,
+        LlmProviderStrategy::Venice => FfiLlmProviderStrategy::Venice,
+        LlmProviderStrategy::Hyperbolic => FfiLlmProviderStrategy::Hyperbolic,
+        LlmProviderStrategy::Llamafile => FfiLlmProviderStrategy::Llamafile,
         LlmProviderStrategy::GoogleTranslate => FfiLlmProviderStrategy::GoogleTranslate,
         LlmProviderStrategy::GoogleTranslateFree => FfiLlmProviderStrategy::GoogleTranslateFree,
         LlmProviderStrategy::OpenAiCompatible => FfiLlmProviderStrategy::OpenAiCompatible,
@@ -283,6 +319,7 @@ pub fn polish_segments_request_to_ffi(request: PolishSegmentsRequest) -> FfiPoli
         chunk_size: request.chunk_size.map(|value| value as u64),
         context: request.context,
         keywords: request.keywords,
+        mode: request.mode.map(polish_mode_to_ffi),
     }
 }
 
@@ -300,6 +337,8 @@ pub fn translate_segments_request_to_ffi(
         chunk_size: request.chunk_size.map(|value| value as u64),
         target_language: request.target_language,
         target_language_name: request.target_language_name,
+        context: request.context,
+        keywords: request.keywords,
     }
 }
 
@@ -411,6 +450,11 @@ fn llm_provider_strategy_from_ffi(strategy: FfiLlmProviderStrategy) -> LlmProvid
         FfiLlmProviderStrategy::Volcengine => LlmProviderStrategy::Volcengine,
         FfiLlmProviderStrategy::Chatglm => LlmProviderStrategy::Chatglm,
         FfiLlmProviderStrategy::Copilot => LlmProviderStrategy::Copilot,
+        FfiLlmProviderStrategy::Cohere => LlmProviderStrategy::Cohere,
+        FfiLlmProviderStrategy::Together => LlmProviderStrategy::Together,
+        FfiLlmProviderStrategy::Venice => LlmProviderStrategy::Venice,
+        FfiLlmProviderStrategy::Hyperbolic => LlmProviderStrategy::Hyperbolic,
+        FfiLlmProviderStrategy::Llamafile => LlmProviderStrategy::Llamafile,
         FfiLlmProviderStrategy::GoogleTranslate => LlmProviderStrategy::GoogleTranslate,
         FfiLlmProviderStrategy::GoogleTranslateFree => LlmProviderStrategy::GoogleTranslateFree,
         FfiLlmProviderStrategy::OpenAiCompatible => LlmProviderStrategy::OpenAiCompatible,
@@ -434,6 +478,7 @@ pub(crate) fn polish_segments_request_from_ffi(
         chunk_size: optional_u64_to_usize(request.chunk_size, "chunk size")?,
         context: request.context,
         keywords: request.keywords,
+        mode: request.mode.map(polish_mode_from_ffi),
     })
 }
 
@@ -451,6 +496,8 @@ pub(crate) fn translate_segments_request_from_ffi(
         chunk_size: optional_u64_to_usize(request.chunk_size, "chunk size")?,
         target_language: request.target_language,
         target_language_name: request.target_language_name,
+        context: request.context,
+        keywords: request.keywords,
     })
 }
 
@@ -601,6 +648,7 @@ mod tests {
             chunk_size: Some(8),
             context: Some("ctx".to_string()),
             keywords: None,
+            mode: Some(FfiPolishMode::Formal),
         };
 
         let core = polish_segments_request_from_ffi(request).unwrap();
@@ -612,6 +660,7 @@ mod tests {
         assert_eq!(back.chunk_size, Some(8));
         assert_eq!(back.context.as_deref(), Some("ctx"));
         assert_eq!(back.keywords, None);
+        assert_eq!(back.mode, Some(FfiPolishMode::Formal));
     }
 
     #[test]
@@ -623,6 +672,7 @@ mod tests {
             chunk_size: Some(u64::MAX),
             context: None,
             keywords: None,
+            mode: None,
         };
 
         // Only meaningful where usize is narrower than u64.

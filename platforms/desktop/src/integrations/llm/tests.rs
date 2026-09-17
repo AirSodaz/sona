@@ -182,7 +182,7 @@ async fn list_llm_models_rejects_remote_http_before_requesting_models() {
 
     assert_eq!(
         error,
-        "LLM API host must use https:// unless it points to localhost."
+        "LLM API host must use https:// unless it points to a local or LAN address."
     );
 }
 
@@ -243,7 +243,7 @@ fn transcript_job_summary_fingerprint_matches_frontend_contract() {
 
     assert_eq!(
         compute_summary_source_fingerprint(&[segment]),
-        "1:Hello:0:1:true:speaker-a:Alice:identified:0.91"
+        "1:Hello:0:1:true:speaker-a:Alice:identified"
     );
 }
 
@@ -347,7 +347,7 @@ fn gemini_generate_content_request_errors_do_not_include_api_key() {
     assert_eq!(error.kind, LlmPortErrorKind::InvalidRequest);
     assert_eq!(
         error.message,
-        "LLM API host must use https:// unless it points to localhost."
+        "LLM API host must use https:// unless it points to a local or LAN address."
     );
     assert!(!error.message.contains("secret-gemini-key"));
 }
@@ -1030,12 +1030,14 @@ async fn run_google_translate_free_requests_in_order_fails_chunk_when_retries_ex
 }
 
 #[test]
-fn llm_api_url_client_builds_for_https_and_loopback_with_various_timeouts() {
+fn llm_api_url_client_builds_for_https_and_local_or_lan_with_various_timeouts() {
     let cases = [
         ("https://api.example.com/v1", None),
         ("https://api.example.com/v1", Some(30)),
         ("http://localhost:1234/v1", Some(60)),
         ("http://127.0.0.1:11434", None),
+        ("http://192.168.1.100:11434", None),
+        ("http://ollama.local:11434", Some(30)),
     ];
 
     for (base_url, timeout_seconds) in cases {

@@ -65,7 +65,7 @@ describe('SettingsVocabularyTab', () => {
         ...useConfigStore.getState().config,
         summaryTemplateId: 'general',
         summaryCustomTemplates: [],
-        polishPresetId: 'general',
+        polishPresetId: 'clean',
         polishCustomPresets: [],
         polishKeywordSets: [],
         speakerProfiles: [],
@@ -105,12 +105,19 @@ describe('SettingsVocabularyTab', () => {
     });
   });
 
-  it('renders text replacement, hotwords, polish keywords, context presets, and summary templates while letting users add a custom preset', () => {
+  it('renders secondary category tabs and switches between recognition and prompts sections', () => {
     render(<SettingsVocabularyTab />);
+
+    screen.getByRole('tab', { name: '识别与纠偏' });
+    screen.getByRole('tab', { name: 'AI 提示与模板' });
+    screen.getByRole('tab', { name: '说话人档案' });
 
     screen.getByText('Text Replacement');
     screen.getByText('Hotwords');
-    screen.getByText('Polish Keywords');
+    expect(screen.queryByText('Polish Keywords')).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'AI 提示与模板' }));
+
     screen.getByText('Built-in Presets');
     screen.getByText('Built-in Summary Templates');
     expect(screen.getAllByText('General').length).toBeGreaterThan(0);
@@ -142,7 +149,7 @@ describe('SettingsVocabularyTab', () => {
         ],
       },
     });
-    render(<SettingsVocabularyTab />);
+    render(<SettingsVocabularyTab initialSubTab="prompts" />);
 
     fireEvent.change(screen.getByDisplayValue('Team Summary'), {
       target: { value: 'Ops Summary' },
@@ -168,37 +175,6 @@ describe('SettingsVocabularyTab', () => {
     });
   });
 
-  it('adds and updates polish keyword sets', () => {
-    render(<SettingsVocabularyTab />);
-
-    fireEvent.change(screen.getByPlaceholderText('e.g. Brand Terms'), {
-      target: { value: 'Brand Terms' },
-    });
-    fireEvent.click(screen.getAllByRole('button', { name: 'Add Set' })[2]);
-
-    expect(useConfigStore.getState().config.polishKeywordSets).toEqual([
-      expect.objectContaining({
-        name: 'Brand Terms',
-        enabled: true,
-        keywords: '',
-      }),
-    ]);
-
-    fireEvent.change(
-      screen.getByPlaceholderText('e.g. Product names, terminology, preferred spellings'),
-      {
-        target: { value: 'Sona\nSherpa-onnx' },
-      }
-    );
-
-    expect(useConfigStore.getState().config.polishKeywordSets).toEqual([
-      expect.objectContaining({
-        name: 'Brand Terms',
-        keywords: 'Sona\nSherpa-onnx',
-      }),
-    ]);
-  });
-
   it('deletes global rule sets and removes their automation profile references', async () => {
     useConfigStore.setState({
       config: {
@@ -207,7 +183,6 @@ describe('SettingsVocabularyTab', () => {
           { id: 'text-1', name: 'Text Set', enabled: true, ignoreCase: false, rules: [] },
         ],
         hotwordSets: [{ id: 'hot-1', name: 'Hot Set', enabled: true, rules: [] }],
-        polishKeywordSets: [{ id: 'kw-1', name: 'Brand Terms', enabled: true, keywords: 'Sona' }],
       },
     });
     render(<SettingsVocabularyTab />);
@@ -223,12 +198,6 @@ describe('SettingsVocabularyTab', () => {
       expect(useConfigStore.getState().config.hotwordSets).toEqual([]);
       expect(useAutomationStore.getState().profiles[0].enabledHotwordSetIds).toEqual([]);
     });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Brand Terms' }));
-    await waitFor(() => {
-      expect(useConfigStore.getState().config.polishKeywordSets).toEqual([]);
-      expect(useAutomationStore.getState().profiles[0].enabledPolishKeywordSetIds).toEqual([]);
-    });
   });
 
   it('updates and deletes custom presets while resetting affected automation profiles', async () => {
@@ -240,7 +209,7 @@ describe('SettingsVocabularyTab', () => {
       },
     });
 
-    render(<SettingsVocabularyTab />);
+    render(<SettingsVocabularyTab initialSubTab="prompts" />);
 
     fireEvent.change(screen.getByDisplayValue('Team'), {
       target: { value: 'Product Team' },
@@ -261,8 +230,8 @@ describe('SettingsVocabularyTab', () => {
 
     await waitFor(() => {
       expect(useConfigStore.getState().config.polishCustomPresets).toEqual([]);
-      expect(useConfigStore.getState().config.polishPresetId).toBe('general');
-      expect(useAutomationStore.getState().profiles[0].polishPresetId).toBe('general');
+      expect(useConfigStore.getState().config.polishPresetId).toBe('clean');
+      expect(useAutomationStore.getState().profiles[0].polishPresetId).toBe('clean');
     });
   });
 
@@ -273,7 +242,7 @@ describe('SettingsVocabularyTab', () => {
         speakerProfiles: [{ id: 'speaker-1', name: 'Alice', enabled: true, samples: [] }],
       },
     });
-    render(<SettingsVocabularyTab />);
+    render(<SettingsVocabularyTab initialSubTab="speakers" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete Alice' }));
 
@@ -332,12 +301,57 @@ describe('SettingsVocabularyTab', () => {
       },
     });
 
-    render(<SettingsVocabularyTab />);
+    render(<SettingsVocabularyTab initialSubTab="speakers" />);
 
     screen.getByText('Ready for automatic matching');
     screen.getByText(
       'Can appear as a suggestion, but needs more usable samples before automatic matching.'
     );
     screen.getByText('Needs more usable samples before it can participate in speaker recognition.');
+  });
+
+  it('supports keyboard navigation across sub-tabs', () => {
+    render(<SettingsVocabularyTab />);
+    const tablist = screen.getByRole('tablist', { name: 'Vocabulary categories' });
+
+    fireEvent.keyDown(tablist, { key: 'ArrowRight' });
+    expect(screen.getByRole('tab', { name: 'AI 提示与模板' }).getAttribute('aria-selected')).toBe(
+      'true'
+    );
+    screen.getByText('Built-in Presets');
+
+    fireEvent.keyDown(tablist, { key: 'ArrowRight' });
+    expect(screen.getByRole('tab', { name: '说话人档案' }).getAttribute('aria-selected')).toBe(
+      'true'
+    );
+
+    fireEvent.keyDown(tablist, { key: 'ArrowLeft' });
+    expect(screen.getByRole('tab', { name: 'AI 提示与模板' }).getAttribute('aria-selected')).toBe(
+      'true'
+    );
+  });
+
+  it('applies custom data-tooltip attributes to switch to text/list button and toggles tooltip reactively', () => {
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        textReplacementSets: [
+          { id: 'text-1', name: 'Tech Terms', enabled: true, ignoreCase: false, rules: [] },
+        ],
+      },
+    });
+    render(<SettingsVocabularyTab />);
+
+    const toggleBtn = screen.getByRole('button', { name: 'Switch to Text' });
+    expect(toggleBtn.getAttribute('data-tooltip')).toBe('Switch to Text');
+    expect(toggleBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(toggleBtn.getAttribute('title')).toBeNull();
+
+    fireEvent.click(toggleBtn);
+
+    const switchToListBtn = screen.getByRole('button', { name: 'Switch to List' });
+    expect(switchToListBtn.getAttribute('data-tooltip')).toBe('Switch to List');
+    expect(switchToListBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(switchToListBtn.getAttribute('title')).toBeNull();
   });
 });

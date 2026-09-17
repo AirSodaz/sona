@@ -511,8 +511,11 @@ async fn load_recognizer(
     )
     .map_err(|error| error.to_string())?;
 
+    let is_int8 =
+        sona_core::models::config::is_int8_model(&model_path, preset.file_config.as_ref());
     let gpu_plan = crate::platform::hardware::resolve_gpu_acceleration_plan(
         state.transcription_defaults.gpu_acceleration.as_deref(),
+        is_int8,
     )
     .await;
     let key = crate::integrations::asr::ModelConfigKey::new(

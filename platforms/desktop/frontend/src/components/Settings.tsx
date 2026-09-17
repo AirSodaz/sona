@@ -71,7 +71,8 @@ function renderSettingsPane(
   isActive: boolean,
   isPrewarming = false,
   onOpenDiagnostics?: () => void,
-  onOpenLlmProviderDetails?: (provider: LlmProvider) => void
+  onOpenLlmProviderDetails?: (provider: LlmProvider) => void,
+  initialTab?: SettingsTabInput
 ): React.JSX.Element | null {
   switch (activeTab) {
     case 'general':
@@ -91,7 +92,9 @@ function renderSettingsPane(
     case 'models':
       return <SettingsModelsPane isOpen={isOpen} isActive={isActive} />;
     case 'vocabulary':
-      return <SettingsVocabularyTab />;
+      return (
+        <SettingsVocabularyTab initialSubTab={initialTab === 'context' ? 'prompts' : undefined} />
+      );
     case 'automation':
       return <SettingsAutomationTab />;
     case 'storage':
@@ -182,6 +185,7 @@ function SettingsPaneContent({
   isPrewarming,
   onOpenDiagnostics,
   onOpenLlmProviderDetails,
+  initialTab,
 }: {
   tab: SettingsTab;
   isOpen: boolean;
@@ -189,6 +193,7 @@ function SettingsPaneContent({
   isPrewarming: boolean;
   onOpenDiagnostics?: () => void;
   onOpenLlmProviderDetails?: (provider: LlmProvider) => void;
+  initialTab?: SettingsTabInput;
 }): React.JSX.Element {
   return (
     <Suspense fallback={null}>
@@ -198,7 +203,8 @@ function SettingsPaneContent({
         isActive,
         isPrewarming,
         onOpenDiagnostics,
-        onOpenLlmProviderDetails
+        onOpenLlmProviderDetails,
+        initialTab
       )}
     </Suspense>
   );
@@ -559,6 +565,7 @@ export function Settings({
                       isPrewarming={isPanePrewarming}
                       onOpenDiagnostics={paneDiagnosticsHandler}
                       onOpenLlmProviderDetails={onOpenLlmProviderDetails}
+                      initialTab={initialTab}
                     />
                   </SettingsPaneFrame>
                 );

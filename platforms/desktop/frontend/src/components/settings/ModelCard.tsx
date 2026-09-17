@@ -116,6 +116,27 @@ function ModelStatusChip({ status }: { status: ModelStatus }) {
   }
 }
 
+export function formatModelModeTag(mode: string): string {
+  if (mode === 'streaming' || mode === 'live') {
+    return 'Live';
+  }
+  return mode.charAt(0).toUpperCase() + mode.slice(1);
+}
+
+export function resolveUniqueModeTags(modes?: ModelInfo['modes']): string[] {
+  if (!modes || modes.length === 0) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const mode of modes) {
+    const formatted = formatModelModeTag(mode);
+    if (!seen.has(formatted)) {
+      seen.add(formatted);
+      result.push(formatted);
+    }
+  }
+  return result;
+}
+
 /** Semantic tag cluster: scenario modes, engine, curated labels, recommendation. */
 function ModelTags({ model, showEngine }: { model: ModelInfo; showEngine: boolean }) {
   const { t } = useTranslation();
@@ -124,9 +145,9 @@ function ModelTags({ model, showEngine }: { model: ModelInfo; showEngine: boolea
   if (!hasModes && !showEngine && labels.length === 0 && !model.isRecommended) return null;
   return (
     <div className="model-tags">
-      {model.modes?.map((mode) => (
-        <span key={mode} className="model-tag model-tag-mode">
-          {mode.charAt(0).toUpperCase() + mode.slice(1)}
+      {resolveUniqueModeTags(model.modes).map((tag) => (
+        <span key={tag} className="model-tag model-tag-mode">
+          {tag}
         </span>
       ))}
       {showEngine && (

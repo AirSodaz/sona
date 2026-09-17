@@ -280,10 +280,12 @@ fn parse_output(text: &str, format: &LlmResponseFormat) -> Result<Option<Value>,
         return Ok(None);
     }
 
-    let value =
-        serde_json::from_str::<Value>(text).map_err(|error| LlmRuntimeError::InvalidResponse {
+    let cleaned = crate::llm::tasks::clean_json_response(text);
+    let value = serde_json::from_str::<Value>(&cleaned).map_err(|error| {
+        LlmRuntimeError::InvalidResponse {
             reason: format!("LLM response is not valid JSON: {error}"),
-        })?;
+        }
+    })?;
     if matches!(format, LlmResponseFormat::JsonObject) && !value.is_object() {
         return Err(LlmRuntimeError::InvalidResponse {
             reason: "LLM response must be a JSON object".to_string(),

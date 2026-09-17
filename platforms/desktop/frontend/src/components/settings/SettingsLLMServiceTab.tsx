@@ -160,8 +160,12 @@ export function SettingsLLMServiceTab({
   const handleAddProvider = () => {
     if (!providerToAdd) return;
     const seeded = setActiveProvider(currentLlmState, providerToAdd);
+    const effectiveHost =
+      selectedProviderDefinition?.editableApiHost === false
+        ? selectedProviderDefinition.defaultApiHost
+        : setupApiHost.trim() || selectedProviderDefinition?.defaultApiHost || '';
     const nextLlmSettings = updateProviderSetting(seeded, providerToAdd, {
-      apiHost: setupApiHost.trim(),
+      apiHost: effectiveHost,
       apiKey: setupApiKey,
     });
     updateConfig(buildLlmConfigPatch(nextLlmSettings));
@@ -508,18 +512,20 @@ export function SettingsLLMServiceTab({
                 </>
               ) : (
                 <>
-                  <div className="settings-item">
-                    <label className="settings-label" htmlFor="setup-provider-host">
-                      {t('settings.llm.base_url')}
-                    </label>
-                    <input
-                      id="setup-provider-host"
-                      className="settings-input"
-                      value={setupApiHost}
-                      onChange={(event) => setSetupApiHost(event.target.value)}
-                      autoFocus
-                    />
-                  </div>
+                  {selectedProviderDefinition?.editableApiHost !== false ? (
+                    <div className="settings-item">
+                      <label className="settings-label" htmlFor="setup-provider-host">
+                        {t('settings.llm.base_url')}
+                      </label>
+                      <input
+                        id="setup-provider-host"
+                        className="settings-input"
+                        value={setupApiHost}
+                        onChange={(event) => setSetupApiHost(event.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                  ) : null}
                   {getProviderDefinition(providerToAdd, currentLlmState.customProviders)
                     .requiresApiKey && (
                     <div className="settings-item">
@@ -532,6 +538,7 @@ export function SettingsLLMServiceTab({
                         type="password"
                         value={setupApiKey}
                         onChange={(event) => setSetupApiKey(event.target.value)}
+                        autoFocus={selectedProviderDefinition?.editableApiHost === false}
                       />
                     </div>
                   )}
@@ -555,7 +562,9 @@ export function SettingsLLMServiceTab({
                 onClick={() => (providerToAdd ? handleAddProvider() : handleAddCustomProvider())}
                 disabled={
                   providerToAdd
-                    ? (!setupApiHost.trim() && !selectedProviderDefinition?.defaultApiHost) ||
+                    ? (selectedProviderDefinition?.editableApiHost !== false &&
+                        !setupApiHost.trim() &&
+                        !selectedProviderDefinition?.defaultApiHost) ||
                       (selectedProviderDefinition?.requiresApiKey && !setupApiKey.trim())
                     : !customProviderName.trim()
                 }

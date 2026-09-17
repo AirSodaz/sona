@@ -248,6 +248,9 @@ pub fn reset_vad(vad: &mut SafeVad) {
 
 pub fn accept_vad_samples(vad: &SafeVad, samples: &[f32]) {
     vad.0.accept_waveform(samples);
+    while !vad.0.is_empty() {
+        vad.0.pop();
+    }
 }
 
 pub fn vad_detected(vad: &SafeVad) -> bool {

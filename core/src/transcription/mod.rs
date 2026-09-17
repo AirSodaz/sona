@@ -3,6 +3,7 @@ mod error;
 pub mod forced_alignment;
 pub mod postprocess;
 pub mod provider_resolution;
+pub mod pseudo_streaming;
 pub mod runtime;
 pub mod segmentation;
 pub mod speaker;

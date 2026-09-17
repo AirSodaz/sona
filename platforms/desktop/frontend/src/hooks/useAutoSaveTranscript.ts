@@ -9,6 +9,13 @@ export async function flushPendingAutoSave(
   await transcriptAutoSaveRuntime.flushPending(historyId, segments);
 }
 
+export function rebaselineTranscriptAutoSave(
+  historyId: string,
+  segments: TranscriptSegment[]
+): void {
+  transcriptAutoSaveRuntime.rebaseline(historyId, segments);
+}
+
 /**
  * Initializes the transcript auto-save runtime for the app shell.
  */

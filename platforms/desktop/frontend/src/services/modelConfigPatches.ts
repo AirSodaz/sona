@@ -18,7 +18,7 @@ export function buildModelPathConfigPatch(
   const updates: Partial<AppConfig> = {};
 
   if (model.modes && model.modes.length > 0) {
-    if (model.modes.includes('streaming')) {
+    if (model.modes.includes('streaming') || model.modes.includes('live')) {
       Object.assign(
         updates,
         syncStreamingAsrSelectionFields(config, {

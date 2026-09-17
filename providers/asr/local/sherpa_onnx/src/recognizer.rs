@@ -955,6 +955,7 @@ unsafe impl Sync for SafeStream {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gpu::PlatformEnv;
 
     #[derive(Debug, Clone, PartialEq, Eq)]
     struct TestCreateResult {
@@ -978,7 +979,11 @@ mod tests {
 
     #[test]
     fn recognizer_factory_retries_auto_directml_failure_on_cpu() {
-        let plan = GpuAccelerationPlan::for_platform(Some("auto"), true, false, true);
+        let plan = GpuAccelerationPlan::for_platform(
+            Some("auto"),
+            PlatformEnv::windows(false, true),
+            false,
+        );
         let mut attempted = Vec::new();
         let result = create_value_with_gpu_plan_for_test(plan, |provider| {
             attempted.push(provider.map(str::to_string));
@@ -1003,7 +1008,11 @@ mod tests {
 
     #[test]
     fn recognizer_factory_does_not_retry_explicit_directml_failure() {
-        let plan = GpuAccelerationPlan::for_platform(Some("directml"), true, false, true);
+        let plan = GpuAccelerationPlan::for_platform(
+            Some("directml"),
+            PlatformEnv::windows(false, true),
+            false,
+        );
         let mut attempted = Vec::new();
         let error = create_value_with_gpu_plan_for_test(plan, |provider| {
             attempted.push(provider.map(str::to_string));
@@ -1017,7 +1026,11 @@ mod tests {
 
     #[test]
     fn recognizer_factory_skips_unavailable_directml_runtime() {
-        let plan = GpuAccelerationPlan::for_platform(Some("auto"), true, false, false);
+        let plan = GpuAccelerationPlan::for_platform(
+            Some("auto"),
+            PlatformEnv::windows(false, false),
+            false,
+        );
         let mut attempted = Vec::new();
         let result = create_value_with_gpu_plan_for_test(plan, |provider| {
             attempted.push(provider.map(str::to_string));

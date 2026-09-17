@@ -117,6 +117,7 @@ where
             return Ok(result);
         }
 
+        let mode = request.mode.unwrap_or_default();
         let model = self.describe_model(&request.config).await;
         let budget = sona_core::llm::tasks::resolve_task_budget(
             model.as_ref(),
@@ -131,7 +132,7 @@ where
                 sona_core::llm::tasks::build_polish_task_input(
                     segments,
                     request.context.as_deref(),
-                    request.keywords.as_deref(),
+                    mode,
                 )
             },
         )?;
@@ -143,10 +144,24 @@ where
             .map(|(chunk_index, planned)| {
                 let chunk = segments[planned.start..planned.end].to_vec();
                 let config = config.clone();
+                let lookbehind_start = planned.start.saturating_sub(4);
+                let lookbehind = segments[lookbehind_start..planned.start].to_vec();
+                let prompt = if planned.start == 0 {
+                    planned.prompt
+                } else {
+                    super::rewrite_agent::build_agent_chunk_input(
+                        &super::rewrite_agent::RewriteAgentTask::Polish(mode),
+                        &chunk,
+                        &lookbehind,
+                        request.context.as_deref(),
+                        None,
+                    )
+                };
                 async move {
                     self.complete_polish_chunk(
                         config,
-                        planned.prompt,
+                        mode,
+                        prompt,
                         chunk,
                         chunk_index + 1,
                         cache,
@@ -228,10 +243,12 @@ where
             },
             budget,
             |segments| {
-                sona_core::llm::tasks::build_translate_task_input(
+                sona_core::llm::tasks::build_translate_task_input_with_context(
                     segments,
                     &request.target_language,
                     request.target_language_name.as_deref(),
+                    request.context.as_deref(),
+                    request.keywords.as_deref(),
                 )
             },
         )?;
@@ -239,6 +256,7 @@ where
         let cache = task_cache_policy(total_chunks);
         let config = request.config.clone();
         let target_language = request.target_language.clone();
+        let target_language_name = request.target_language_name.clone();
         let segments = &request.segments;
         let direct_translation = matches!(
             request.config.strategy,
@@ -250,6 +268,23 @@ where
                 let chunk = segments[planned.start..planned.end].to_vec();
                 let config = config.clone();
                 let target_language = target_language.clone();
+                let target_language_name = target_language_name.clone();
+                let lookbehind_start = planned.start.saturating_sub(4);
+                let lookbehind = segments[lookbehind_start..planned.start].to_vec();
+                let prompt = if planned.start == 0 {
+                    planned.prompt
+                } else {
+                    super::rewrite_agent::build_agent_chunk_input(
+                        &super::rewrite_agent::RewriteAgentTask::Translate {
+                            target_language: target_language.clone(),
+                            target_language_name: target_language_name.clone(),
+                        },
+                        &chunk,
+                        &lookbehind,
+                        request.context.as_deref(),
+                        request.keywords.as_deref(),
+                    )
+                };
                 async move {
                     let result = if direct_translation {
                         self.translate_direct_chunk(config, chunk, target_language, chunk_index + 1)
@@ -257,11 +292,13 @@ where
                     } else {
                         self.complete_translate_chunk(
                             config,
-                            planned.prompt,
+                            prompt,
                             chunk,
                             chunk_index + 1,
                             cache,
                             budget.max_output_tokens,
+                            target_language,
+                            target_language_name,
                         )
                         .await
                     };
@@ -464,75 +501,32 @@ where
         )?;
         Ok(result)
     }
-
+    #[allow(clippy::too_many_arguments)]
     async fn complete_polish_chunk(
         &self,
         config: LlmConfig,
+        mode: sona_core::llm::tasks::PolishMode,
         input: String,
         expected: Vec<sona_core::llm::tasks::LlmSegmentInput>,
         chunk_number: usize,
         cache: LlmPromptCachePolicy,
         max_output_tokens: Option<u64>,
     ) -> Result<Vec<sona_core::llm::tasks::PolishedSegment>, LlmTaskError> {
-        let format = LlmResponseFormat::JsonSchema {
-            name: "polished_segments".to_string(),
-            schema: sona_core::llm::tasks::polish_output_schema(expected.len()),
-        };
-        let request = structured_request(
-            config.clone(),
-            sona_core::llm::tasks::POLISH_SYSTEM_PROMPT,
-            input.clone(),
-            format.clone(),
+        super::rewrite_agent::execute_agent_chunk_with_reflection(
+            &super::rewrite_agent::RewriteAgentTask::Polish(mode),
+            &config,
+            input,
+            &expected,
+            chunk_number,
             cache,
             max_output_tokens,
-        );
-        match self.complete_with_retry(request).await {
-            Ok(response) => match parse_polish_response(&response, &expected, chunk_number) {
-                Ok(items) => Ok(items),
-                Err(error) => {
-                    let reason = error.to_string();
-                    let repair = sona_core::llm::tasks::build_structured_repair_input(
-                        &input,
-                        &reason,
-                        Some(&response.text),
-                    );
-                    let response = self
-                        .complete_with_retry(structured_request(
-                            config,
-                            sona_core::llm::tasks::POLISH_SYSTEM_PROMPT,
-                            repair,
-                            format,
-                            cache,
-                            max_output_tokens,
-                        ))
-                        .await
-                        .map_err(|source| runtime_error("polish repair", source))?;
-                    parse_polish_response(&response, &expected, chunk_number)
-                }
-            },
-            Err(LlmRuntimeError::InvalidResponse { reason }) => {
-                let repair =
-                    sona_core::llm::tasks::build_structured_repair_input(&input, &reason, None);
-                let response = self
-                    .complete_with_retry(structured_request(
-                        config,
-                        sona_core::llm::tasks::POLISH_SYSTEM_PROMPT,
-                        repair,
-                        format,
-                        cache,
-                        max_output_tokens,
-                    ))
-                    .await
-                    .map_err(|source| runtime_error("polish repair", source))?;
-                parse_polish_response(&response, &expected, chunk_number)
-            }
-            Err(source) => Err(runtime_error(
-                &format!("polish chunk {chunk_number}"),
-                source,
-            )),
-        }
+            |req| self.complete_with_retry(req),
+            parse_polish_response,
+        )
+        .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn complete_translate_chunk(
         &self,
         config: LlmConfig,
@@ -541,64 +535,24 @@ where
         chunk_number: usize,
         cache: LlmPromptCachePolicy,
         max_output_tokens: Option<u64>,
+        target_language: String,
+        target_language_name: Option<String>,
     ) -> Result<Vec<sona_core::llm::tasks::TranslatedSegment>, LlmTaskError> {
-        let format = LlmResponseFormat::JsonSchema {
-            name: "translated_segments".to_string(),
-            schema: sona_core::llm::tasks::translate_output_schema(expected.len()),
-        };
-        let request = structured_request(
-            config.clone(),
-            sona_core::llm::tasks::TRANSLATE_SYSTEM_PROMPT,
-            input.clone(),
-            format.clone(),
+        super::rewrite_agent::execute_agent_chunk_with_reflection(
+            &super::rewrite_agent::RewriteAgentTask::Translate {
+                target_language,
+                target_language_name,
+            },
+            &config,
+            input,
+            &expected,
+            chunk_number,
             cache,
             max_output_tokens,
-        );
-        match self.complete_with_retry(request).await {
-            Ok(response) => match parse_translate_response(&response, &expected, chunk_number) {
-                Ok(items) => Ok(items),
-                Err(error) => {
-                    let reason = error.to_string();
-                    let repair = sona_core::llm::tasks::build_structured_repair_input(
-                        &input,
-                        &reason,
-                        Some(&response.text),
-                    );
-                    let response = self
-                        .complete_with_retry(structured_request(
-                            config,
-                            sona_core::llm::tasks::TRANSLATE_SYSTEM_PROMPT,
-                            repair,
-                            format,
-                            cache,
-                            max_output_tokens,
-                        ))
-                        .await
-                        .map_err(|source| runtime_error("translate repair", source))?;
-                    parse_translate_response(&response, &expected, chunk_number)
-                }
-            },
-            Err(LlmRuntimeError::InvalidResponse { reason }) => {
-                let repair =
-                    sona_core::llm::tasks::build_structured_repair_input(&input, &reason, None);
-                let response = self
-                    .complete_with_retry(structured_request(
-                        config,
-                        sona_core::llm::tasks::TRANSLATE_SYSTEM_PROMPT,
-                        repair,
-                        format,
-                        cache,
-                        max_output_tokens,
-                    ))
-                    .await
-                    .map_err(|source| runtime_error("translate repair", source))?;
-                parse_translate_response(&response, &expected, chunk_number)
-            }
-            Err(source) => Err(runtime_error(
-                &format!("translate chunk {chunk_number}"),
-                source,
-            )),
-        }
+            |req| self.complete_with_retry(req),
+            parse_translate_response,
+        )
+        .await
     }
 
     async fn translate_direct_chunk(
@@ -692,38 +646,53 @@ where
                 &partials,
                 budget,
             );
-            let mut reduced = Vec::with_capacity(groups.len());
-            for group in groups {
-                let prompt =
-                    sona_core::llm::tasks::build_summary_reduce_prompt(&request.template, &group);
-                if !sona_core::llm::tasks::summary_prompt_fits_budget(
-                    sona_core::llm::tasks::SUMMARY_REDUCE_SYSTEM_PROMPT,
-                    &prompt,
-                    budget,
-                ) {
-                    return Err(LlmTaskError::InvalidResponse {
-                        reason: "An intermediate summary exceeds the model context budget"
-                            .to_string(),
-                    });
-                }
-                let response = self
-                    .complete_text(
-                        request.config.clone(),
-                        sona_core::llm::tasks::SUMMARY_REDUCE_SYSTEM_PROMPT,
-                        prompt,
-                        LlmPromptCachePolicy::Automatic,
-                        summary_reduce_output_tokens(budget),
-                        "summary reduce",
-                    )
-                    .await?;
-                let text = response.text.trim();
-                if text.is_empty() {
-                    return Err(LlmTaskError::InvalidResponse {
-                        reason: "Summary reduce returned empty text".to_string(),
-                    });
-                }
-                reduced.push(text.to_string());
+            let groups_count = groups.len();
+            let config = request.config.clone();
+            let template = &request.template;
+            let reduce_tokens = summary_reduce_output_tokens(budget);
+            let mut reduce_stream = stream::iter(groups.into_iter().enumerate())
+                .map(|(idx, group)| {
+                    let config = config.clone();
+                    let prompt =
+                        sona_core::llm::tasks::build_summary_reduce_prompt(template, &group);
+                    async move {
+                        if !sona_core::llm::tasks::summary_prompt_fits_budget(
+                            sona_core::llm::tasks::SUMMARY_REDUCE_SYSTEM_PROMPT,
+                            &prompt,
+                            budget,
+                        ) {
+                            return Err(LlmTaskError::InvalidResponse {
+                                reason: "An intermediate summary exceeds the model context budget"
+                                    .to_string(),
+                            });
+                        }
+                        let response = self
+                            .complete_text(
+                                config,
+                                sona_core::llm::tasks::SUMMARY_REDUCE_SYSTEM_PROMPT,
+                                prompt,
+                                LlmPromptCachePolicy::Automatic,
+                                reduce_tokens,
+                                "summary reduce",
+                            )
+                            .await?;
+                        let text = response.text.trim();
+                        if text.is_empty() {
+                            return Err(LlmTaskError::InvalidResponse {
+                                reason: "Summary reduce returned empty text".to_string(),
+                            });
+                        }
+                        Ok((idx, text.to_string()))
+                    }
+                })
+                .buffer_unordered(self.max_concurrency);
+
+            let mut reduced_ordered = vec![None; groups_count];
+            while let Some(res) = reduce_stream.next().await {
+                let (idx, text) = res?;
+                reduced_ordered[idx] = Some(text);
             }
+            let reduced = reduced_ordered.into_iter().flatten().collect::<Vec<_>>();
 
             let reduced_chars = reduced
                 .iter()
@@ -994,13 +963,12 @@ fn parse_polish_response(
     expected: &[sona_core::llm::tasks::LlmSegmentInput],
     chunk_number: usize,
 ) -> Result<Vec<sona_core::llm::tasks::PolishedSegment>, LlmTaskError> {
-    let value = response
-        .json
-        .as_ref()
-        .ok_or_else(|| LlmTaskError::InvalidResponse {
-            reason: "structured response did not include parsed JSON".to_string(),
-        })?;
-    sona_core::llm::tasks::parse_polish_object(value, expected, chunk_number)
+    if let Some(value) = response.json.as_ref()
+        && let Ok(items) = sona_core::llm::tasks::parse_polish_object(value, expected, chunk_number)
+    {
+        return Ok(items);
+    }
+    sona_core::llm::tasks::parse_polish_chunk(&response.text, expected, chunk_number)
 }
 
 fn parse_translate_response(
@@ -1008,13 +976,13 @@ fn parse_translate_response(
     expected: &[sona_core::llm::tasks::LlmSegmentInput],
     chunk_number: usize,
 ) -> Result<Vec<sona_core::llm::tasks::TranslatedSegment>, LlmTaskError> {
-    let value = response
-        .json
-        .as_ref()
-        .ok_or_else(|| LlmTaskError::InvalidResponse {
-            reason: "structured response did not include parsed JSON".to_string(),
-        })?;
-    sona_core::llm::tasks::parse_translate_object(value, expected, chunk_number)
+    if let Some(value) = response.json.as_ref()
+        && let Ok(items) =
+            sona_core::llm::tasks::parse_translate_object(value, expected, chunk_number)
+    {
+        return Ok(items);
+    }
+    sona_core::llm::tasks::parse_translate_chunk(&response.text, expected, chunk_number)
 }
 
 fn runtime_error(stage: &str, source: LlmRuntimeError) -> LlmTaskError {

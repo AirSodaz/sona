@@ -64,6 +64,11 @@ pub enum LlmProviderStrategy {
     Volcengine,
     Chatglm,
     Copilot,
+    Cohere,
+    Together,
+    Venice,
+    Hyperbolic,
+    Llamafile,
     #[serde(rename = "google_translate")]
     GoogleTranslate,
     #[serde(rename = "google_translate_free")]
@@ -83,15 +88,33 @@ impl LlmProviderStrategy {
                 BuiltinLlmProvider::Anthropic => Self::Anthropic,
                 BuiltinLlmProvider::Gemini => Self::Gemini,
                 BuiltinLlmProvider::Ollama => Self::Ollama,
+                BuiltinLlmProvider::DeepSeek => Self::DeepSeek,
                 BuiltinLlmProvider::MoonshotAi => Self::MoonshotAi,
                 BuiltinLlmProvider::MoonshotCn => Self::MoonshotCn,
                 BuiltinLlmProvider::Xiaomi => Self::Xiaomi,
+                BuiltinLlmProvider::Kimi => Self::Kimi,
+                BuiltinLlmProvider::SiliconFlow => Self::SiliconFlow,
+                BuiltinLlmProvider::Qwen => Self::Qwen,
+                BuiltinLlmProvider::QwenPortal => Self::QwenPortal,
+                BuiltinLlmProvider::MinimaxGlobal => Self::MinimaxGlobal,
+                BuiltinLlmProvider::MinimaxCn => Self::MinimaxCn,
+                BuiltinLlmProvider::Openrouter => Self::OpenRouter,
+                BuiltinLlmProvider::LmStudio => Self::LmStudio,
+                BuiltinLlmProvider::Groq => Self::Groq,
+                BuiltinLlmProvider::XAi => Self::XAi,
+                BuiltinLlmProvider::MistralAi => Self::MistralAi,
                 BuiltinLlmProvider::Perplexity => Self::Perplexity,
-                BuiltinLlmProvider::Copilot => Self::Copilot,
                 BuiltinLlmProvider::Volcengine => Self::OpenAiCompatibleCustomPath,
+                BuiltinLlmProvider::Chatglm => Self::Chatglm,
+                BuiltinLlmProvider::Copilot => Self::Copilot,
+                BuiltinLlmProvider::Cohere => Self::Cohere,
+                BuiltinLlmProvider::Together => Self::Together,
+                BuiltinLlmProvider::Venice => Self::Venice,
+                BuiltinLlmProvider::Hyperbolic => Self::Hyperbolic,
+                BuiltinLlmProvider::Llamafile => Self::Llamafile,
                 BuiltinLlmProvider::GoogleTranslate => Self::GoogleTranslate,
                 BuiltinLlmProvider::GoogleTranslateFree => Self::GoogleTranslateFree,
-                _ => Self::OpenAiCompatible,
+                BuiltinLlmProvider::CustomOpenAiCompatible => Self::OpenAiCompatible,
             },
         }
     }
@@ -111,6 +134,9 @@ impl<'de> Deserialize<'de> for LlmProviderStrategy {
             "gemini" => Self::Gemini,
             "ollama" => Self::Ollama,
             "deep_seek" => Self::DeepSeek,
+            "moonshot_ai" => Self::MoonshotAi,
+            "moonshot_cn" => Self::MoonshotCn,
+            "xiaomi" => Self::Xiaomi,
             "kimi" => Self::Kimi,
             "silicon_flow" => Self::SiliconFlow,
             "qwen" => Self::Qwen,
@@ -126,6 +152,11 @@ impl<'de> Deserialize<'de> for LlmProviderStrategy {
             "volcengine" => Self::Volcengine,
             "chatglm" => Self::Chatglm,
             "copilot" | "github_copilot" => Self::Copilot,
+            "cohere" => Self::Cohere,
+            "together" => Self::Together,
+            "venice" => Self::Venice,
+            "hyperbolic" => Self::Hyperbolic,
+            "llamafile" => Self::Llamafile,
             "google_translate" => Self::GoogleTranslate,
             "google_translate_free" => Self::GoogleTranslateFree,
             "open_ai_compatible" | "openai_compatible" => Self::OpenAiCompatible,
@@ -174,22 +205,39 @@ pub struct SummarySegmentInput {
     pub is_final: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, schemars::JsonSchema)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct PolishedSegment {
+    #[schemars(description = "Segment ID matching the input")]
     pub id: String,
+    #[schemars(description = "The polished speech-to-text content")]
     pub text: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, schemars::JsonSchema)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct TranslatedSegment {
+    #[schemars(description = "Segment ID matching the input")]
     pub id: String,
+    #[schemars(description = "The translated text content")]
     pub translation: String,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PolishedSegmentsBatch {
+    #[schemars(description = "List of edited speech-to-text segments")]
+    pub items: Vec<PolishedSegment>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TranslatedSegmentsBatch {
+    #[schemars(description = "List of translated speech-to-text segments")]
+    pub items: Vec<TranslatedSegment>,
+}
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]

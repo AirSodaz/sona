@@ -119,8 +119,25 @@ export function EditorToolbar(): React.JSX.Element | null {
   return (
     <>
       {saveStatus && saveStatusLabel && (
-        <div className={`editor-autosave-status is-${saveStatus}`} role="status" aria-live="polite">
-          {saveStatusLabel}
+        <div
+          className={`editor-autosave-status is-${saveStatus}${saveStatus === 'error' ? ' has-tooltip' : ''}`}
+          role="status"
+          aria-live="polite"
+          tabIndex={saveStatus === 'error' ? 0 : undefined}
+        >
+          <span className="editor-autosave-status-label">{saveStatusLabel}</span>
+          {saveStatus === 'error' && (
+            <div className="editor-autosave-tooltip" role="tooltip">
+              <div className="editor-autosave-tooltip-header">
+                <span className="editor-autosave-tooltip-dot" />
+                <span>{saveStatusLabel}</span>
+              </div>
+              <div className="editor-autosave-tooltip-message">
+                {autoSaveState?.errorMessage ||
+                  t('editor.autosave_error_default', 'Failed to save changes')}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

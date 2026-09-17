@@ -1184,9 +1184,7 @@ fn migrate_legacy_polish_selection(
     if preset_id.is_some_and(|id| id == coerced) {
         return (coerced, custom_presets);
     }
-    if scenario
-        .is_some_and(|value| BUILTIN_POLISH_PRESET_IDS.contains(&value) && value != "general")
-    {
+    if scenario.is_some_and(|value| BUILTIN_POLISH_PRESET_IDS.contains(&value)) {
         return (scenario.unwrap().to_string(), custom_presets);
     }
     let context = context.unwrap_or_default().trim();

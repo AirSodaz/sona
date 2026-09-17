@@ -8,11 +8,9 @@ use sona_core::ports::punctuation::PunctuationEngineSet;
 use sona_core::ports::vad::VadEngineSet;
 
 use crate::batch::{LlamaBatchAsrAdapter, gpu_backend_available};
+use crate::streaming::LlamaCppStreamingFactory;
 
-/// Provider facade for the llama.cpp local ASR engine (Qwen3-ASR batch inference).
-///
-/// The engine supports file transcription only; live streaming sessions
-/// remain exclusive to engines that declare the `STREAMING` capability.
+/// Provider facade for the llama.cpp local ASR engine (Qwen3-ASR batch and pseudo-streaming inference).
 #[derive(Clone, Default)]
 pub struct LlamaCppAdapter {
     vad_engines: VadEngineSet,
@@ -37,7 +35,9 @@ impl LocalAsrAdapter for LlamaCppAdapter {
         // Qwen3-ASR consumes hotwords through its trained system-message
         // context. The GPU bit reflects the backends the linked ggml
         // runtime actually registered at runtime.
-        let mut capabilities = EngineCapabilities::BATCH | EngineCapabilities::HOTWORDS;
+        let mut capabilities = EngineCapabilities::BATCH
+            | EngineCapabilities::STREAMING
+            | EngineCapabilities::HOTWORDS;
         if gpu_backend_available() {
             capabilities |= EngineCapabilities::GPU;
         }
@@ -52,7 +52,10 @@ impl LocalAsrAdapter for LlamaCppAdapter {
     }
 
     fn streaming_factory(&self) -> Option<Arc<dyn StreamingAsrFactoryPort>> {
-        None
+        Some(Arc::new(LlamaCppStreamingFactory::new(
+            self.vad_engines.clone(),
+            self.punct_engines.clone(),
+        )))
     }
 }
 
@@ -61,15 +64,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn llama_adapter_is_batch_only() {
+    fn llama_adapter_capabilities_and_streaming() {
         let adapter = LlamaCppAdapter::default();
 
         assert_eq!(adapter.engine(), LocalAsrEngine::LlamaCpp);
-        let mut expected = EngineCapabilities::BATCH | EngineCapabilities::HOTWORDS;
+        let mut expected = EngineCapabilities::BATCH
+            | EngineCapabilities::STREAMING
+            | EngineCapabilities::HOTWORDS;
         if gpu_backend_available() {
             expected |= EngineCapabilities::GPU;
         }
         assert_eq!(adapter.capabilities(), expected);
-        assert!(adapter.streaming_factory().is_none());
+        assert!(adapter.streaming_factory().is_some());
     }
 }
