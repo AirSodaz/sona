@@ -586,6 +586,7 @@ fn build_cluster_infos(diarization_segments: &[SpeakerDiarizationSegment]) -> Ve
 
 fn extract_purified_spans_for_cluster(
     cluster: &ClusterInfo,
+    all_clusters: &[ClusterInfo],
     segments: &[TranscriptSegment],
 ) -> Vec<SpeakerSpan> {
     let mut token_spans: Vec<(f32, f32)> = Vec::new();
@@ -607,6 +608,11 @@ fn extract_purified_spans_for_cluster(
 
     token_spans.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal));
 
+    let other_spans: Vec<&SpeakerSpan> = all_clusters
+        .iter()
+        .filter(|c| c.raw_speaker != cluster.raw_speaker)
+        .flat_map(|c| &c.spans)
+        .collect();
     let mut purified = Vec::new();
     for span in &cluster.spans {
         if span.end <= span.start {
@@ -638,6 +644,14 @@ fn extract_purified_spans_for_cluster(
         }
 
         for (b_start, b_end) in merged_blocks {
+            // Exclude blocks with cross-talk (overlap with another speaker)
+            let has_cross_talk = other_spans
+                .iter()
+                .any(|other| range_overlap(b_start, b_end, other.start, other.end) > 0.1);
+            if has_cross_talk {
+                continue;
+            }
+
             let dur = b_end - b_start;
             if dur >= 0.8 {
                 let (final_start, final_end) = if dur >= 1.2 {
@@ -798,7 +812,7 @@ fn refine_clusters_and_repair_oversegmentation(
 ) -> Result<RefinedClusterOutcome, AsrPortError> {
     let mut cluster_centroids = HashMap::new();
     for cluster in &clusters {
-        let purified_spans = extract_purified_spans_for_cluster(cluster, segments);
+        let purified_spans = extract_purified_spans_for_cluster(cluster, &clusters, segments);
         if let Some(centroid) =
             compute_cluster_centroid_embedding(samples, &purified_spans, embedding_index)?
         {
@@ -924,7 +938,7 @@ fn build_cluster_speaker_assignments(
         let centroid = cluster_centroids
             .get(&cluster.raw_speaker)
             .map(|v| v.as_slice());
-        let purified_spans = extract_purified_spans_for_cluster(cluster, segments);
+        let purified_spans = extract_purified_spans_for_cluster(cluster, clusters, segments);
         let cluster_candidates = identify_cluster_candidates(
             samples,
             cluster,
@@ -1513,15 +1527,9 @@ fn assign_speakers_to_segment(
     );
 
     let mut effective_segment = segment.clone();
-    if effective_segment.timing.is_none() {
-        ensure_transcript_segment_timing(&mut effective_segment);
-    }
-    if effective_segment.timing.is_none() {
-        sona_core::transcription::forced_alignment::apply_fallback_timing_to_transcript_segment(
-            &mut effective_segment,
-        );
-    }
-
+    sona_core::transcription::forced_alignment::apply_fallback_timing_to_transcript_segment(
+        &mut effective_segment,
+    );
     let Some(timing) = effective_segment
         .timing
         .as_ref()
@@ -1610,6 +1618,9 @@ fn build_split_groups(
         if let Some(current) = groups.last_mut()
             && speaker_assignments_equal(&current.assignment, &assignment)
         {
+            if should_insert_space_between(&current.text, &unit.text) {
+                current.text.push(' ');
+            }
             current.text.push_str(&unit.text);
             current.token_end_exclusive = current.token_end_exclusive.max(unit.token_index + 1);
             continue;
@@ -1624,6 +1635,35 @@ fn build_split_groups(
     }
 
     Some(groups)
+}
+fn should_insert_space_between(prev_text: &str, next_text: &str) -> bool {
+    let Some(last_char) = prev_text.chars().last() else {
+        return false;
+    };
+    let Some(first_char) = next_text.chars().next() else {
+        return false;
+    };
+    if last_char.is_whitespace() || first_char.is_whitespace() {
+        return false;
+    }
+    // No space if either character is CJK
+    if sona_core::transcription::text_alignment::is_cjk_char(last_char)
+        || sona_core::transcription::text_alignment::is_cjk_char(first_char)
+    {
+        return false;
+    }
+    // No space before punctuation like ',', '.', '!', '?', etc.
+    if matches!(
+        first_char,
+        '.' | ',' | '!' | '?' | ':' | ';' | '\'' | ')' | ']' | '}'
+    ) {
+        return false;
+    }
+    // No space after opening brackets or quotes
+    if matches!(last_char, '(' | '[' | '{' | '\'') {
+        return false;
+    }
+    true
 }
 
 fn choose_speaker_for_range(
@@ -2380,6 +2420,41 @@ mod tests {
     }
 
     #[test]
+    fn test_build_split_groups_inserts_spaces_for_non_cjk_words() {
+        let aligned_units = vec![
+            AlignedTextUnit {
+                text: "hello".to_string(),
+                token_index: 0,
+            },
+            AlignedTextUnit {
+                text: "world".to_string(),
+                token_index: 1,
+            },
+        ];
+        let assignment = Some(ResolvedSpeakerAssignment {
+            raw_speaker: 1,
+            speaker: Some(SpeakerTag {
+                id: "speaker-1".to_string(),
+                label: "Speaker 1".to_string(),
+                kind: "identified".to_string(),
+                score: None,
+            }),
+            attribution: SpeakerAttribution {
+                group_id: "anonymous-1".to_string(),
+                anonymous_label: "Speaker 1".to_string(),
+                state: "identified".to_string(),
+                source: "auto".to_string(),
+                confidence: "high".to_string(),
+                candidates: Vec::new(),
+            },
+            average_score: Some(0.95),
+            votes: 1,
+        });
+        let token_speakers = vec![assignment.clone(), assignment];
+        let groups = build_split_groups(&aligned_units, &token_speakers).unwrap();
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].text, "hello world");
+    }
     fn test_repair_cluster_oversegmentation_merges_high_similarity() {
         let clusters = vec![
             ClusterInfo {
@@ -2466,7 +2541,7 @@ mod tests {
             ],
         });
 
-        let purified = extract_purified_spans_for_cluster(&cluster, &[segment]);
+        let purified = extract_purified_spans_for_cluster(&cluster, &[], &[segment]);
         assert_eq!(purified.len(), 1);
         // 1.0 to 3.5 is duration 2.5s >= 1.2s -> insets 0.04 applied: 1.04 to 3.46
         assert!((purified[0].start - 1.04).abs() < 1e-3);

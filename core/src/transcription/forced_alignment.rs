@@ -13,8 +13,6 @@ pub struct TrellisConfig {
     pub time_per_frame_sec: f64,
     /// CTC blank token index (0 for MMS / Wav2Vec2, often V-1 for NeMo).
     pub blank_id: usize,
-    /// Optional wildcard / star token index for unaligned audio or noise.
-    pub star_token_id: Option<usize>,
 }
 
 impl Default for TrellisConfig {
@@ -24,7 +22,6 @@ impl Default for TrellisConfig {
             time_per_frame_sec: 0.020,
             // MMS blank token is 0 (<pad>).
             blank_id: 0,
-            star_token_id: None,
         }
     }
 }
@@ -40,7 +37,6 @@ impl TrellisConfig {
         Self {
             time_per_frame_sec: 0.040,
             blank_id: vocab_size.saturating_sub(1),
-            star_token_id: None,
         }
     }
 }
@@ -191,14 +187,6 @@ pub fn ctc_trellis_align(
         return Err(AlignerPortError::invalid_request(format!(
             "Blank id {} exceeds emission classes ({})",
             config.blank_id, num_classes
-        )));
-    }
-    if let Some(star_id) = config.star_token_id
-        && star_id >= num_classes
-    {
-        return Err(AlignerPortError::invalid_request(format!(
-            "Star token id {} exceeds emission classes ({})",
-            star_id, num_classes
         )));
     }
 
@@ -462,13 +450,8 @@ pub fn apply_alignment_to_transcript_segment(
 ) {
     if !timing_units.is_empty() {
         if let (Some(first), Some(last)) = (timing_units.first(), timing_units.last()) {
-            if segment.start == 0.0 && segment.end == 0.0 {
-                segment.start = first.start;
-                segment.end = last.end;
-            } else {
-                segment.start = segment.start.min(first.start);
-                segment.end = segment.end.max(last.end);
-            }
+            segment.start = first.start;
+            segment.end = last.end.max(first.start);
         }
         segment.timing = Some(TranscriptTiming {
             level: TranscriptTimingLevel::Token,
@@ -776,7 +759,6 @@ mod tests {
         let config = TrellisConfig {
             time_per_frame_sec: 0.020,
             blank_id: 0,
-            star_token_id: None,
         };
 
         // Peak layout:
@@ -837,7 +819,6 @@ mod tests {
         let config = TrellisConfig {
             time_per_frame_sec: 0.020,
             blank_id: 0,
-            star_token_id: None,
         };
 
         // 1: 'l', 2: 'o', 3: 'k'

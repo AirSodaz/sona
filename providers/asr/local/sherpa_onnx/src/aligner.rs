@@ -158,27 +158,59 @@ impl SegmentAlignerPort for SherpaCtcAligner {
                     {
                         let slice_end_sec =
                             slice_start_sec + (slice.len() as f64 / sample_rate as f64);
-                        let units: Vec<TranscriptTimingUnit> = res
-                            .tokens
-                            .iter()
-                            .enumerate()
-                            .map(|(i, tok)| {
-                                let rel_start = timestamps[i] as f64;
-                                let rel_end = if i + 1 < timestamps.len() {
-                                    (timestamps[i + 1] as f64).max(rel_start)
-                                } else {
-                                    (slice.len() as f64 / sample_rate as f64).max(rel_start)
-                                };
-                                let start = (slice_start_sec + rel_start).max(segment.start);
-                                let end = (slice_start_sec + rel_end).min(slice_end_sec).max(start);
-                                TranscriptTimingUnit {
-                                    text: tok.clone(),
-                                    start,
-                                    end,
-                                }
-                            })
-                            .collect();
+                        let aligned_text_units =
+                            sona_core::transcription::text_alignment::align_text_units_to_tokens(
+                                &segment.text,
+                                &res.tokens,
+                            );
 
+                        let units: Vec<TranscriptTimingUnit> = if let Some(text_units) =
+                            aligned_text_units
+                        {
+                            text_units
+                                .into_iter()
+                                .filter(|u| !u.text.trim().is_empty())
+                                .map(|u| {
+                                    let rel_start =
+                                        timestamps.get(u.token_index).copied().unwrap_or(0.0)
+                                            as f64;
+                                    let rel_end = if u.token_index + 1 < timestamps.len() {
+                                        (timestamps[u.token_index + 1] as f64).max(rel_start)
+                                    } else {
+                                        (slice.len() as f64 / sample_rate as f64).max(rel_start)
+                                    };
+                                    let start = (slice_start_sec + rel_start).max(segment.start);
+                                    let end =
+                                        (slice_start_sec + rel_end).min(slice_end_sec).max(start);
+                                    TranscriptTimingUnit {
+                                        text: u.text,
+                                        start,
+                                        end,
+                                    }
+                                })
+                                .collect()
+                        } else {
+                            res.tokens
+                                .iter()
+                                .enumerate()
+                                .map(|(i, tok)| {
+                                    let rel_start = timestamps[i] as f64;
+                                    let rel_end = if i + 1 < timestamps.len() {
+                                        (timestamps[i + 1] as f64).max(rel_start)
+                                    } else {
+                                        (slice.len() as f64 / sample_rate as f64).max(rel_start)
+                                    };
+                                    let start = (slice_start_sec + rel_start).max(segment.start);
+                                    let end =
+                                        (slice_start_sec + rel_end).min(slice_end_sec).max(start);
+                                    TranscriptTimingUnit {
+                                        text: tok.clone(),
+                                        start,
+                                        end,
+                                    }
+                                })
+                                .collect()
+                        };
                         if !units.is_empty() {
                             apply_alignment_to_transcript_segment(segment, units);
                             applied = true;

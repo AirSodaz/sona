@@ -396,21 +396,40 @@ fn is_batch_vad_forced_model(model_type: &str) -> bool {
 }
 
 fn is_same_model_target(path_a: &Path, path_b: &Path) -> bool {
-    if path_a == path_b {
+    let can_a = std::fs::canonicalize(path_a).unwrap_or_else(|_| path_a.to_path_buf());
+    let can_b = std::fs::canonicalize(path_b).unwrap_or_else(|_| path_b.to_path_buf());
+
+    if can_a == can_b {
         return true;
     }
-    let resolve_base = |p: &Path| -> PathBuf {
-        let canonical = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-        if canonical.is_file() {
-            canonical
-                .parent()
-                .map(|parent| parent.to_path_buf())
-                .unwrap_or(canonical)
-        } else {
-            canonical
-        }
+
+    let a_is_file = can_a.is_file();
+    let b_is_file = can_b.is_file();
+
+    // If both are files or both are directories, but not equal, they are distinct.
+    if (a_is_file && b_is_file) || (!a_is_file && !b_is_file) {
+        return false;
+    }
+
+    // Exactly one is a file and one is a directory.
+    // The file is the same model target if it lives directly inside that directory
+    // and is a recognized model file (e.g., model.onnx, model.int8.onnx).
+    let (file_path, dir_path) = if a_is_file {
+        (&can_a, &can_b)
+    } else {
+        (&can_b, &can_a)
     };
-    resolve_base(path_a) == resolve_base(path_b)
+
+    if file_path.parent() == Some(dir_path)
+        && let Some(file_name) = file_path.file_name().and_then(|n| n.to_str())
+    {
+        return matches!(
+            file_name,
+            "model.onnx" | "model.int8.onnx" | "model.fp16.onnx"
+        );
+    }
+
+    false
 }
 #[cfg(test)]
 mod tests {
@@ -521,6 +540,11 @@ mod tests {
         assert!(is_same_model_target(&temp_dir, &model_file));
         assert!(is_same_model_target(&model_file, &temp_dir));
 
+        // Distinct files in the same directory must NOT be considered the same target
+        let other_file = temp_dir.join("other_model.onnx");
+        let _ = std::fs::write(&other_file, b"test2");
+        assert!(!is_same_model_target(&model_file, &other_file));
+        assert!(!is_same_model_target(&temp_dir, &other_file));
         // Different paths
         let other_dir = std::env::temp_dir().join("test_other_model");
         assert!(!is_same_model_target(&temp_dir, &other_dir));
