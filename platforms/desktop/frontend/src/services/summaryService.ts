@@ -25,6 +25,27 @@ interface RetrySummaryTranscriptJobOptions {
   config?: AppConfig;
 }
 
+function normalizeSummaryFingerprint(fingerprint: string): string {
+  if (!fingerprint) return '';
+  return fingerprint
+    .split('|')
+    .map((seg) => {
+      let colonCount = 0;
+      for (let i = 0; i < seg.length; i++) {
+        if (seg[i] === ':') colonCount++;
+      }
+      if (colonCount >= 8) {
+        const lastColon = seg.lastIndexOf(':');
+        const candidateScore = seg.slice(lastColon + 1);
+        if (candidateScore === '' || Number.isFinite(Number(candidateScore))) {
+          return seg.slice(0, lastColon);
+        }
+      }
+      return seg;
+    })
+    .join('|');
+}
+
 export function isSummaryRecordStale(
   record: TranscriptSummaryRecord | undefined,
   segments: TranscriptSegment[]
@@ -33,7 +54,27 @@ export function isSummaryRecordStale(
     return false;
   }
 
-  return record.sourceFingerprint !== computeSummarySourceFingerprint(segments);
+  const currentFingerprint = computeSummarySourceFingerprint(segments);
+  if (record.sourceFingerprint === currentFingerprint) {
+    return false;
+  }
+
+  // Handle legacy fingerprints that included speaker score (9 fields)
+  const normalizedRecordFingerprint = normalizeSummaryFingerprint(record.sourceFingerprint);
+  if (normalizedRecordFingerprint === currentFingerprint) {
+    return false;
+  }
+
+  // Handle legacy fingerprints that lacked speaker fields entirely (5 fields)
+  const normalizedLegacyNoSpeaker = record.sourceFingerprint
+    .split('|')
+    .map((seg) => (seg.split(':').length === 5 ? `${seg}:::` : seg))
+    .join('|');
+  if (normalizedLegacyNoSpeaker === currentFingerprint) {
+    return false;
+  }
+
+  return true;
 }
 
 export interface SummaryServicePorts {
@@ -210,7 +251,8 @@ export class SummaryService {
           ),
           content: summaryRecord.content,
           generatedAt: summaryRecord.generatedAt,
-          sourceFingerprint: summaryRecord.sourceFingerprint,
+          sourceFingerprint:
+            summaryRecord.sourceFingerprint || computeSummarySourceFingerprint(segments),
         };
 
         const targetHistoryId = this.updateJobSummaryState(runningHistoryId, {

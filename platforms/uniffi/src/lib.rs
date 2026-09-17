@@ -2372,7 +2372,7 @@ mod tests {
 
         assert_eq!(
             llm_bridge::summary_source_fingerprint_from_transcript_json(segments_json).unwrap(),
-            "s1:Hello:0:1.5:true:speaker-a:Alice:identified:0.91|s2:world:1.5:2:true::::"
+            "s1:Hello:0:1.5:true:speaker-a:Alice:identified|s2:world:1.5:2:true:::"
         );
     }
 

@@ -561,7 +561,7 @@ export function computeSummarySourceFingerprint(segments: TranscriptSegment[]): 
   return segments
     .map(
       (s) =>
-        `${s.id}:${s.text}:${s.start}:${s.end}:${s.isFinal}:${s.speaker?.id || ''}:${s.speaker?.label || ''}:${s.speaker?.kind || ''}:${s.speaker?.score || ''}`
+        `${s.id}:${s.text}:${s.start}:${s.end}:${s.isFinal}:${s.speaker?.id || ''}:${s.speaker?.label || ''}:${s.speaker?.kind || ''}`
     )
     .join('|');
 }
