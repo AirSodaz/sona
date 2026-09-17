@@ -5,6 +5,7 @@ import type {
   LlmTaskTextPayload as GeneratedLlmTaskTextPayload,
   LlmTaskType as GeneratedLlmTaskType,
   PolishedSegment as GeneratedPolishedSegment,
+  PolishMode as GeneratedPolishMode,
   SummarySegmentInput as GeneratedSummarySegmentInput,
   TranscriptSummaryResult as GeneratedTranscriptSummaryResult,
   TranslatedSegment as GeneratedTranslatedSegment,
@@ -22,6 +23,7 @@ export type LlmTaskType = GeneratedLlmTaskType;
 export type LlmSegmentInput = GeneratedLlmSegmentInput;
 export type PolishedSegment = GeneratedPolishedSegment;
 export type TranslatedSegment = GeneratedTranslatedSegment;
+export type PolishMode = GeneratedPolishMode;
 
 export interface PolishSegmentsRequest {
   taskId: string;
@@ -30,6 +32,7 @@ export interface PolishSegmentsRequest {
   chunkSize?: number;
   context?: string;
   keywords?: string;
+  mode?: PolishMode;
 }
 
 export interface TranslateSegmentsRequest {
@@ -78,6 +81,7 @@ export interface PolishTranscriptLlmJobRequest extends TranscriptLlmJobRequestBa
   taskType: 'polish';
   context?: string;
   keywords?: string;
+  mode?: PolishMode;
 }
 
 export interface SummaryTranscriptLlmJobRequest extends TranscriptLlmJobRequestBase {

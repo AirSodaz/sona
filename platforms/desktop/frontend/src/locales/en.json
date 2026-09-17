@@ -2101,7 +2101,16 @@
     "keywords_placeholder": "Enter keywords...",
     "no_keyword_sets": "No keyword sets yet. Create them in Vocabulary to reuse polish keyword guidance.",
     "scenario_label": "Scenario Presets",
-    "preset_label": "Context Presets",
+    "mode_label": "Polish Mode",
+    "preset_label": "Polish Modes & Presets",
+    "modes": {
+      "clean": "Clean Spoken",
+      "clean_desc": "Removes filler words, stutters, and verbal clutter while preserving original phrasing, tone, and facts.",
+      "verbatim": "Verbatim",
+      "verbatim_desc": "Restores all audio details, preserving every filler word, stutter, and original word order. Only corrects ASR errors and punctuation.",
+      "formal": "Formal Written",
+      "formal_desc": "Restructures fragmented speech into grammatically standard, well-organized written text. Refines syntax without fabricating facts."
+    },
     "custom_context": "Custom Context",
     "context": "Context",
     "context_placeholder": "Enter context...",

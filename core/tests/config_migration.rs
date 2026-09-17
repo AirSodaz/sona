@@ -58,7 +58,7 @@ fn current_config_migration_emits_typed_string_ids() {
 
     validate_app_config(&result.config).expect("normalized config should match AppConfig");
     assert_eq!(result.config["summaryTemplateId"], "general");
-    assert_eq!(result.config["polishPresetId"], "general");
+    assert_eq!(result.config["polishPresetId"], "clean");
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn effective_config_resolution_ignores_legacy_project_defaults() {
     let resolved = resolve_effective_config(global, Some(project));
 
     assert_eq!(resolved["summaryTemplateId"], "meeting");
-    assert_eq!(resolved["polishPresetId"], "general");
+    assert_eq!(resolved["polishPresetId"], "clean");
     assert_eq!(resolved["translationLanguage"], "zh");
 }
 

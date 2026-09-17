@@ -1,8 +1,11 @@
 import type { AutomationRule } from '../../../types/automation';
 import type { ExportMode } from '../../../utils/exportFormats';
+import { DEFAULT_POLISH_PRESET_ID } from '../../../utils/polishPresets';
 
 export { LANGUAGE_OPTIONS } from '../../../constants/languages';
 export const NEW_RULE_KEY = '__new__';
+
+export type { ExportMode };
 
 export interface AutomationRuleDraft {
   id?: string;
@@ -54,7 +57,7 @@ export function normalizeAutomationRuleDraft(draft: AutomationRuleDraft): Automa
   );
 
   const stageConfig = {
-    polishPresetId: 'general',
+    polishPresetId: DEFAULT_POLISH_PRESET_ID,
     translationLanguage: 'en',
     ...draft.stageConfig,
   };
@@ -104,7 +107,7 @@ export function createRuleDraft(
     enabled: false,
     stageConfig: {
       autoPolish: false,
-      polishPresetId: 'general',
+      polishPresetId: DEFAULT_POLISH_PRESET_ID,
       autoTranslate: false,
       translationLanguage: 'en',
       exportEnabled: kind === 'file',
@@ -145,7 +148,7 @@ export function createDraftFromRule(rule: AutomationRule): AutomationRuleDraft {
     recursive: rule.recursive,
     enabled: rule.enabled,
     stageConfig: {
-      polishPresetId: 'general',
+      polishPresetId: DEFAULT_POLISH_PRESET_ID,
       translationLanguage: 'en',
       ...rule.stageConfig,
     },

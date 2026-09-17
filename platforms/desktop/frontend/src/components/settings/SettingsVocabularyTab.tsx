@@ -9,11 +9,9 @@ import { useProjectStore } from '../../stores/projectStore';
 import type {
   HotwordRule,
   HotwordRuleSet,
-  PolishKeywordRuleSet,
   TextReplacementRule,
   TextReplacementRuleSet,
 } from '../../types/config';
-import { normalizePolishKeywordSets } from '../../utils/polishKeywords';
 import { BookIcon } from '../Icons';
 import { Switch } from '../Switch';
 import { SettingsContextSection } from './SettingsContextSection';
@@ -27,7 +25,7 @@ export interface SettingsVocabularyTabProps {
   initialSubTab?: VocabularySubTab;
 }
 
-type AutomationRuleSetDependencyKind = 'textReplacementSet' | 'hotwordSet' | 'polishKeywordSet';
+type AutomationRuleSetDependencyKind = 'textReplacementSet' | 'hotwordSet';
 interface RuleSetUiState {
   newSetName: string;
   setNewSetName: React.Dispatch<React.SetStateAction<string>>;
@@ -218,11 +216,9 @@ export function SettingsVocabularyTab({
 
   const textReplacementUi = useRuleSetUiState();
   const hotwordUi = useRuleSetUiState();
-  const polishKeywordUi = useRuleSetUiState();
 
   const sets = config.textReplacementSets || [];
   const hotwordSets = config.hotwordSets || [];
-  const polishKeywordSets = normalizePolishKeywordSets(config.polishKeywordSets);
 
   const removeRuleSetReferenceFromProfiles = async (
     kind: AutomationRuleSetDependencyKind,
@@ -362,31 +358,6 @@ export function SettingsVocabularyTab({
         rules.filter((rule) => rule.id !== ruleId)
       ),
     });
-  };
-
-  const handleAddPolishKeywordSet = () => {
-    const setName = polishKeywordUi.newSetName.trim();
-    if (!setName) return;
-
-    const newSet: PolishKeywordRuleSet = {
-      id: uuidv4(),
-      name: setName,
-      enabled: true,
-      keywords: '',
-    };
-
-    updateConfig({ polishKeywordSets: [...polishKeywordSets, newSet] });
-    polishKeywordUi.setNewSetName('');
-    polishKeywordUi.expandSet(newSet.id);
-  };
-
-  const handleUpdatePolishKeywordSet = (id: string, updates: Partial<PolishKeywordRuleSet>) => {
-    updateConfig({ polishKeywordSets: updateSetById(polishKeywordSets, id, updates) });
-  };
-
-  const handleDeletePolishKeywordSet = async (id: string) => {
-    updateConfig({ polishKeywordSets: removeSetById(polishKeywordSets, id) });
-    await removeRuleSetReferenceFromProfiles('polishKeywordSet', id);
   };
 
   return (
@@ -710,56 +681,6 @@ export function SettingsVocabularyTab({
             animation: 'fadeIn var(--transition-normal, 0.2s) ease-in-out',
           }}
         >
-          <RuleSetSection
-            title={t('settings.polish_keywords_title', { defaultValue: 'Polish Keywords' })}
-            icon={<BookIcon width={20} height={20} />}
-            description={t('settings.polish_keywords_description', {
-              defaultValue:
-                'Group reusable keyword guidance into global sets. Enabled sets are combined when text polish runs.',
-            })}
-            sets={polishKeywordSets}
-            newSetName={polishKeywordUi.newSetName}
-            newSetPlaceholder={t('settings.polish_keyword_set_name_placeholder', {
-              defaultValue: 'e.g. Brand Terms',
-            })}
-            emptyLabel={t('settings.no_polish_keyword_sets', {
-              defaultValue: 'No polish keyword sets yet.',
-            })}
-            expandedSetIds={polishKeywordUi.expandedSetIds}
-            onAddSet={handleAddPolishKeywordSet}
-            onDeleteSet={handleDeletePolishKeywordSet}
-            onNewSetNameChange={polishKeywordUi.setNewSetName}
-            onToggleEnabled={(id, enabled) => handleUpdatePolishKeywordSet(id, { enabled })}
-            onToggleExpanded={polishKeywordUi.toggleExpanded}
-            onUpdateSetName={(id, name) => handleUpdatePolishKeywordSet(id, { name })}
-            renderBadge={(set) =>
-              set.keywords.trim()
-                ? t('settings.polish_keywords_ready', { defaultValue: 'Ready' })
-                : t('settings.polish_keywords_empty', { defaultValue: 'Empty' })
-            }
-            renderExpanded={(set) => (
-              <>
-                <textarea
-                  className="settings-input"
-                  value={set.keywords}
-                  onChange={(event) =>
-                    handleUpdatePolishKeywordSet(set.id, { keywords: event.target.value })
-                  }
-                  placeholder={t('settings.polish_keywords_placeholder', {
-                    defaultValue: 'e.g. Product names, terminology, preferred spellings',
-                  })}
-                  rows={5}
-                  style={TEXTAREA_STYLE}
-                />
-                <p style={HINT_STYLE}>
-                  {t('settings.polish_keywords_hint', {
-                    defaultValue:
-                      'Use this block for preferred terms or style guidance. Enabled sets are combined in order during polishing.',
-                  })}
-                </p>
-              </>
-            )}
-          />
           <SettingsContextSection />
           <SettingsSummaryTemplateSection />
         </div>

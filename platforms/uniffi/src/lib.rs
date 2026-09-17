@@ -80,7 +80,7 @@ pub use mapper::{
     FfiModelDependencyRequestsForModel, FfiModelFileConfig, FfiModelIdByNormalizedPathEntry,
     FfiModelPathByIdEntry, FfiModelRules, FfiModelSelectionOption, FfiModelSelectionPaths,
     FfiOnlineAsrBatchCapability, FfiOnlineAsrCapability, FfiOnlineAsrLocalFileBatchMode,
-    FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest, FfiOverviewStatsV1,
+    FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest, FfiOverviewStatsV1, FfiPolishMode,
     FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPreparedBackupImportV1, FfiPresetModel,
     FfiRecoveredQueueItemV1, FfiRecoveredTranscriptSegmentV1, FfiRecoveredTranscriptTimingUnitV1,
     FfiRecoveredTranscriptTimingV1, FfiRecoveryFileStatV1, FfiRecoveryItemInputV1,
@@ -2765,7 +2765,7 @@ mod tests {
                     "defaults": {
                         "summaryTemplateId": "meeting",
                         "translationLanguage": "ja",
-                        "polishPresetId": "meeting"
+                        "polishPresetId": "formal"
                     }
                 }"#
                 .to_string(),
@@ -2776,7 +2776,7 @@ mod tests {
 
         assert_eq!(effective_config["summaryTemplateId"], "meeting");
         assert_eq!(effective_config["translationLanguage"], "zh");
-        assert_eq!(effective_config["polishPresetId"], "meeting");
+        assert_eq!(effective_config["polishPresetId"], "clean");
     }
 
     #[test]

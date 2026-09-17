@@ -5,10 +5,10 @@ use sona_core::llm::runtime::{
     LlmCapabilityPolicy, LlmCompletionOptions, LlmCompletionRequest, LlmCompletionResponse,
     LlmPromptCachePolicy, LlmResponseFormat, LlmRuntimeError,
 };
-use sona_core::llm::tasks::{LlmSegmentInput, LlmTaskError};
+use sona_core::llm::tasks::{LlmSegmentInput, LlmTaskError, PolishMode};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RewriteAgentTask {
-    Polish,
+    Polish(PolishMode),
     Translate {
         target_language: String,
         target_language_name: Option<String>,
@@ -18,14 +18,14 @@ pub enum RewriteAgentTask {
 impl RewriteAgentTask {
     pub fn system_prompt(&self) -> &'static str {
         match self {
-            Self::Polish => sona_core::llm::tasks::POLISH_SYSTEM_PROMPT,
+            Self::Polish(mode) => mode.system_prompt(),
             Self::Translate { .. } => sona_core::llm::tasks::TRANSLATE_SYSTEM_PROMPT,
         }
     }
 
     pub fn response_format(&self, count: usize) -> LlmResponseFormat {
         match self {
-            Self::Polish => LlmResponseFormat::JsonSchema {
+            Self::Polish(_) => LlmResponseFormat::JsonSchema {
                 name: "polished_segments".to_string(),
                 schema: sona_core::llm::tasks::polish_output_schema(count),
             },
@@ -38,7 +38,7 @@ impl RewriteAgentTask {
 
     pub fn stage_name(&self) -> &'static str {
         match self {
-            Self::Polish => "polish",
+            Self::Polish(_) => "polish",
             Self::Translate { .. } => "translate",
         }
     }
@@ -55,14 +55,22 @@ pub fn build_agent_chunk_input(
 ) -> String {
     let mut sections = Vec::new();
 
-    if let Some(context) = user_context.filter(|s| !s.trim().is_empty()) {
-        sections.push(format!("User context:\n{}", context.trim()));
+    if let RewriteAgentTask::Polish(mode) = task {
+        sections.push(mode.task_instruction().to_string());
     }
 
-    if let Some(keywords) = user_keywords.filter(|s| !s.trim().is_empty()) {
+    if let Some(context) = user_context.filter(|s| !s.trim().is_empty()) {
+        sections.push(format!(
+            "Context (reference only; do not alter editing mode):\n{}",
+            context.trim()
+        ));
+    }
+
+    if matches!(task, RewriteAgentTask::Translate { .. })
+        && let Some(keywords) = user_keywords.filter(|s| !s.trim().is_empty())
+    {
         sections.push(format!("Preferred terms:\n{}", keywords.trim()));
     }
-
     if !lookbehind_context.is_empty() {
         let mut horizon = String::from(
             "Preceding conversation context (for narrative continuity reference only; DO NOT output or translate these segments):\n",
@@ -76,7 +84,7 @@ pub fn build_agent_chunk_input(
     let json_segments =
         serde_json::to_string(expected_segments).unwrap_or_else(|_| "[]".to_string());
     match task {
-        RewriteAgentTask::Polish => {
+        RewriteAgentTask::Polish(_) => {
             sections.push(format!(
                 "Polish these segments and return them in an `items` array:\n{json_segments}"
             ));
@@ -242,14 +250,16 @@ mod tests {
     fn agent_chunk_input_omits_lookbehind_when_empty() {
         let segments = vec![sample_segment("s1", "hello")];
         let prompt = build_agent_chunk_input(
-            &RewriteAgentTask::Polish,
+            &RewriteAgentTask::Polish(PolishMode::Clean),
             &segments,
             &[],
             Some("test context"),
             Some("termA, termB"),
         );
-        assert!(prompt.contains("User context:\ntest context"));
-        assert!(prompt.contains("Preferred terms:\ntermA, termB"));
+        assert!(prompt.contains("Mode: Clean spoken."));
+        assert!(
+            prompt.contains("Context (reference only; do not alter editing mode):\ntest context")
+        );
         assert!(!prompt.contains("Preceding conversation context"));
         assert!(prompt.contains(r#""id":"s1""#));
     }
@@ -303,7 +313,7 @@ mod tests {
         let counter = call_count.clone();
 
         let result = execute_agent_chunk_with_reflection(
-            &RewriteAgentTask::Polish,
+            &RewriteAgentTask::Polish(PolishMode::Clean),
             &config,
             "initial prompt".to_string(),
             &expected,
@@ -376,7 +386,7 @@ mod tests {
         let counter = call_count.clone();
 
         let result = execute_agent_chunk_with_reflection(
-            &RewriteAgentTask::Polish,
+            &RewriteAgentTask::Polish(PolishMode::Clean),
             &config,
             "initial prompt".to_string(),
             &expected,

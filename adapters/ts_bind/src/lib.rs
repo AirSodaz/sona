@@ -68,8 +68,9 @@ pub use sona_core::llm::provider_protocol::{
     StandardLlmResponse, StandardMessage,
 };
 pub use sona_core::llm::requests::{
-    LlmConfig, LlmGenerateRequest, LlmModelsRequest, LlmUsageEventPayload, PolishSegmentsRequest,
-    SummarizeTranscriptRequest, TranscriptLlmJobRequest, TranslateSegmentsRequest,
+    LlmConfig, LlmGenerateRequest, LlmModelsRequest, LlmUsageEventPayload, PolishMode,
+    PolishSegmentsRequest, SummarizeTranscriptRequest, TranscriptLlmJobRequest,
+    TranslateSegmentsRequest,
 };
 pub use sona_core::llm::runtime::{
     LlmCapabilityPolicy, LlmCompletionOptions, LlmCompletionRequest, LlmCompletionResponse,
@@ -547,6 +548,7 @@ pub fn desktop_types() -> specta::Types {
         .register::<LlmConfig>()
         .register::<LlmGenerateRequest>()
         .register::<LlmModelsRequest>()
+        .register::<PolishMode>()
         .register::<PolishSegmentsRequest>()
         .register::<TranslateSegmentsRequest>()
         .register::<SummarizeTranscriptRequest>()
@@ -800,6 +802,7 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "LlmGenerateRequest",
     "LlmUsageEventPayload",
     "LlmModelsRequest",
+    "PolishMode",
     "PolishSegmentsRequest",
     "TranslateSegmentsRequest",
     "SummarizeTranscriptRequest",
@@ -1073,6 +1076,7 @@ mod tests {
             "LlmConfig",
             "LlmGenerateRequest",
             "LlmModelsRequest",
+            "PolishMode",
             "PolishSegmentsRequest",
             "TranslateSegmentsRequest",
             "SummarizeTranscriptRequest",
@@ -1669,6 +1673,7 @@ mod tests {
         assert_specta_type::<LlmGenerateRequest>();
         assert_specta_type::<LlmUsageEventPayload>();
         assert_specta_type::<LlmModelsRequest>();
+        assert_specta_type::<PolishMode>();
         assert_specta_type::<PolishSegmentsRequest>();
         assert_specta_type::<TranslateSegmentsRequest>();
         assert_specta_type::<SummarizeTranscriptRequest>();

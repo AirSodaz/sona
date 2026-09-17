@@ -3,20 +3,13 @@ use serde_json::{Map, Value, json};
 use crate::ports::asr::online_asr_providers;
 
 pub const CURRENT_CONFIG_VERSION: i64 = 8;
-pub const DEFAULT_POLISH_PRESET_ID: &str = "general";
+pub const DEFAULT_POLISH_PRESET_ID: &str = "clean";
 pub const DEFAULT_SUMMARY_TEMPLATE_ID: &str = "general";
 pub const DEFAULT_LLM_PROVIDER: &str = "google_translate_free";
 pub const LEGACY_OPENAI_COMPATIBLE_PROVIDER: &str = "custom-openai-compatible";
 pub const LEGACY_OPENAI_COMPATIBLE_CREATED_AT: &str = "2026-05-18T00:00:00.000Z";
 
-pub const BUILTIN_POLISH_PRESET_IDS: [&str; 6] = [
-    "general",
-    "customer_service",
-    "meeting",
-    "interview",
-    "lecture",
-    "podcast",
-];
+pub const BUILTIN_POLISH_PRESET_IDS: [&str; 3] = ["clean", "verbatim", "formal"];
 pub const BUILTIN_SUMMARY_TEMPLATE_IDS: [&str; 3] = ["general", "meeting", "lecture"];
 
 pub fn default_config() -> Value {

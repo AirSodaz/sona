@@ -149,6 +149,7 @@ fn polish_request_validation_rejects_google_translate_strategy() {
         chunk_size: None,
         context: None,
         keywords: None,
+        mode: None,
     };
 
     let error = validate_polish_segments_request(&request).unwrap_err();
@@ -216,6 +217,7 @@ fn segment_request_contracts_keep_camel_case_transport_shape() {
         chunk_size: Some(12),
         context: Some("meeting notes".to_string()),
         keywords: None,
+        mode: Some(sona_core::llm::requests::PolishMode::Clean),
     };
 
     let value = serde_json::to_value(polish).expect("polish request should serialize");
@@ -279,6 +281,7 @@ fn transcript_job_request_uses_core_transcript_segments() {
         target_language_name: Some("French".to_string()),
         context: None,
         keywords: None,
+        mode: None,
         template: Some(SummaryTemplateConfig {
             id: "meeting".to_string(),
             name: "Meeting".to_string(),

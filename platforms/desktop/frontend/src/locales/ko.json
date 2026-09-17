@@ -2101,7 +2101,16 @@
     "keywords_placeholder": "키워드 입력...",
     "no_keyword_sets": "아직 키워드 세트가 없습니다. Vocabulary에서 만들어 정리 키워드 가이드를 재사용하세요.",
     "scenario_label": "시나리오 프리셋",
-    "preset_label": "Context 프리셋",
+    "mode_label": "다듬기 모드",
+    "preset_label": "다듬기 모드 및 프리셋",
+    "modes": {
+      "clean": "깔끔하고 읽기 쉽게",
+      "clean_desc": "군더더기 말, 더듬거림, 중복을 제거하고 원래 말의 의미와 세부 정보를 보존합니다.",
+      "verbatim": "축어적 (정확)",
+      "verbatim_desc": "모든 음성 디테일을 그대로 보존하고 오인식과 구두점만 수정합니다.",
+      "formal": "격식 있는 문어체",
+      "formal_desc": "구어 표현을 문법에 맞게 깔끔한 문어체로 재구성합니다."
+    },
     "custom_context": "사용자 Context",
     "context": "Context",
     "context_placeholder": "Context 입력...",

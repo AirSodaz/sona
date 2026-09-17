@@ -2101,7 +2101,16 @@
     "keywords_placeholder": "输入关键词...",
     "no_keyword_sets": "还没有关键词规则集。请先在词汇表中创建可复用的润色关键词。",
     "scenario_label": "场景预设",
-    "preset_label": "上下文预设",
+    "mode_label": "润色模式",
+    "preset_label": "润色模式与预设",
+    "modes": {
+      "clean": "去冗易读",
+      "clean_desc": "去除口语填充词、语气助词与打磕巴重复，保留原汁原味说话意图与事实细节。",
+      "verbatim": "逐字精准",
+      "verbatim_desc": "还原所有录音细节，完整保留语气词、结巴口吃与原话语序，仅纠正语音识别错别字与标点。",
+      "formal": "书面规整",
+      "formal_desc": "将口述碎片重构为语法规范、条理清晰的书面文本，理顺倒装与病句，规范排版格式。"
+    },
     "custom_context": "自定义上下文",
     "context": "上下文",
     "context_placeholder": "输入上下文...",

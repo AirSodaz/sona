@@ -117,6 +117,7 @@ where
             return Ok(result);
         }
 
+        let mode = request.mode.unwrap_or_default();
         let model = self.describe_model(&request.config).await;
         let budget = sona_core::llm::tasks::resolve_task_budget(
             model.as_ref(),
@@ -131,7 +132,7 @@ where
                 sona_core::llm::tasks::build_polish_task_input(
                     segments,
                     request.context.as_deref(),
-                    request.keywords.as_deref(),
+                    mode,
                 )
             },
         )?;
@@ -149,16 +150,17 @@ where
                     planned.prompt
                 } else {
                     super::rewrite_agent::build_agent_chunk_input(
-                        &super::rewrite_agent::RewriteAgentTask::Polish,
+                        &super::rewrite_agent::RewriteAgentTask::Polish(mode),
                         &chunk,
                         &lookbehind,
                         request.context.as_deref(),
-                        request.keywords.as_deref(),
+                        None,
                     )
                 };
                 async move {
                     self.complete_polish_chunk(
                         config,
+                        mode,
                         prompt,
                         chunk,
                         chunk_index + 1,
@@ -499,10 +501,11 @@ where
         )?;
         Ok(result)
     }
-
+    #[allow(clippy::too_many_arguments)]
     async fn complete_polish_chunk(
         &self,
         config: LlmConfig,
+        mode: sona_core::llm::tasks::PolishMode,
         input: String,
         expected: Vec<sona_core::llm::tasks::LlmSegmentInput>,
         chunk_number: usize,
@@ -510,7 +513,7 @@ where
         max_output_tokens: Option<u64>,
     ) -> Result<Vec<sona_core::llm::tasks::PolishedSegment>, LlmTaskError> {
         super::rewrite_agent::execute_agent_chunk_with_reflection(
-            &super::rewrite_agent::RewriteAgentTask::Polish,
+            &super::rewrite_agent::RewriteAgentTask::Polish(mode),
             &config,
             input,
             &expected,

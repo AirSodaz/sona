@@ -65,7 +65,7 @@ describe('SettingsVocabularyTab', () => {
         ...useConfigStore.getState().config,
         summaryTemplateId: 'general',
         summaryCustomTemplates: [],
-        polishPresetId: 'general',
+        polishPresetId: 'clean',
         polishCustomPresets: [],
         polishKeywordSets: [],
         speakerProfiles: [],
@@ -118,7 +118,6 @@ describe('SettingsVocabularyTab', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'AI 提示与模板' }));
 
-    screen.getByText('Polish Keywords');
     screen.getByText('Built-in Presets');
     screen.getByText('Built-in Summary Templates');
     expect(screen.getAllByText('General').length).toBeGreaterThan(0);
@@ -176,37 +175,6 @@ describe('SettingsVocabularyTab', () => {
     });
   });
 
-  it('adds and updates polish keyword sets', () => {
-    render(<SettingsVocabularyTab initialSubTab="prompts" />);
-
-    fireEvent.change(screen.getByPlaceholderText('e.g. Brand Terms'), {
-      target: { value: 'Brand Terms' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Add Set' }));
-
-    expect(useConfigStore.getState().config.polishKeywordSets).toEqual([
-      expect.objectContaining({
-        name: 'Brand Terms',
-        enabled: true,
-        keywords: '',
-      }),
-    ]);
-
-    fireEvent.change(
-      screen.getByPlaceholderText('e.g. Product names, terminology, preferred spellings'),
-      {
-        target: { value: 'Sona\nSherpa-onnx' },
-      }
-    );
-
-    expect(useConfigStore.getState().config.polishKeywordSets).toEqual([
-      expect.objectContaining({
-        name: 'Brand Terms',
-        keywords: 'Sona\nSherpa-onnx',
-      }),
-    ]);
-  });
-
   it('deletes global rule sets and removes their automation profile references', async () => {
     useConfigStore.setState({
       config: {
@@ -215,7 +183,6 @@ describe('SettingsVocabularyTab', () => {
           { id: 'text-1', name: 'Text Set', enabled: true, ignoreCase: false, rules: [] },
         ],
         hotwordSets: [{ id: 'hot-1', name: 'Hot Set', enabled: true, rules: [] }],
-        polishKeywordSets: [{ id: 'kw-1', name: 'Brand Terms', enabled: true, keywords: 'Sona' }],
       },
     });
     render(<SettingsVocabularyTab />);
@@ -230,14 +197,6 @@ describe('SettingsVocabularyTab', () => {
     await waitFor(() => {
       expect(useConfigStore.getState().config.hotwordSets).toEqual([]);
       expect(useAutomationStore.getState().profiles[0].enabledHotwordSetIds).toEqual([]);
-    });
-    // Switch to prompts tab to delete Brand Terms
-    fireEvent.click(screen.getByRole('tab', { name: 'AI 提示与模板' }));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Brand Terms' }));
-    await waitFor(() => {
-      expect(useConfigStore.getState().config.polishKeywordSets).toEqual([]);
-      expect(useAutomationStore.getState().profiles[0].enabledPolishKeywordSetIds).toEqual([]);
     });
   });
 
@@ -271,8 +230,8 @@ describe('SettingsVocabularyTab', () => {
 
     await waitFor(() => {
       expect(useConfigStore.getState().config.polishCustomPresets).toEqual([]);
-      expect(useConfigStore.getState().config.polishPresetId).toBe('general');
-      expect(useAutomationStore.getState().profiles[0].polishPresetId).toBe('general');
+      expect(useConfigStore.getState().config.polishPresetId).toBe('clean');
+      expect(useAutomationStore.getState().profiles[0].polishPresetId).toBe('clean');
     });
   });
 
@@ -359,7 +318,7 @@ describe('SettingsVocabularyTab', () => {
     expect(screen.getByRole('tab', { name: 'AI 提示与模板' }).getAttribute('aria-selected')).toBe(
       'true'
     );
-    screen.getByText('Polish Keywords');
+    screen.getByText('Built-in Presets');
 
     fireEvent.keyDown(tablist, { key: 'ArrowRight' });
     expect(screen.getByRole('tab', { name: '说话人档案' }).getAttribute('aria-selected')).toBe(

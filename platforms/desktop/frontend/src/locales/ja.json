@@ -2101,7 +2101,16 @@
     "keywords_placeholder": "キーワードを入力してください...",
     "no_keyword_sets": "まだキーワードが設定されていません。 Vocabulary でそれらを作成し、洗練されたキーワード ガイダンスを再利用します。",
     "scenario_label": "シナリオのプリセット",
-    "preset_label": "コンテキストプリセット",
+    "mode_label": "校正モード",
+    "preset_label": "校正モードとプリセット",
+    "modes": {
+      "clean": "読みやすく整理",
+      "clean_desc": "言い淀みやフィラー言葉、重複を取り除き、話者の意図と事実を保ちます。",
+      "verbatim": "逐語（正確）",
+      "verbatim_desc": "録音の細部をそのまま再現し、誤字や句読点のみを修正します。",
+      "formal": "整文（書き言葉）",
+      "formal_desc": "話し言葉を文法的に正しい書面テキストに再構成します。"
+    },
     "custom_context": "カスタムコンテキスト",
     "context": "コンテキスト",
     "context_placeholder": "コンテキストを入力してください...",

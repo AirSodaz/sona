@@ -53,6 +53,7 @@ import type {
 } from '../types/automation';
 import type { RecoveredQueueItem } from '../types/recovery';
 import { extractErrorMessage } from '../utils/errorUtils';
+import { DEFAULT_POLISH_PRESET_ID } from '../utils/polishPresets';
 import { useBatchQueueStore } from './batchQueueStore';
 import { useConfigStore } from './configStore';
 import { useProjectStore } from './projectStore';
@@ -407,7 +408,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
       switch (kind) {
         case 'polishPreset':
           if (profile.polishPresetId === dependencyId) {
-            next = { ...profile, polishPresetId: 'general' };
+            next = { ...profile, polishPresetId: DEFAULT_POLISH_PRESET_ID };
           }
           break;
         case 'summaryTemplate':

@@ -1,5 +1,6 @@
 use crate::domain::LlmProvider;
 pub use crate::history::{HistorySummaryPayload, TranscriptSummaryRecordPayload};
+pub use crate::llm::tasks::PolishMode;
 use crate::llm::tasks::{
     LlmProviderStrategy, LlmSegmentInput, LlmTaskType, SummarySegmentInput, SummaryTemplateConfig,
 };
@@ -217,7 +218,10 @@ pub struct PolishSegmentsRequest {
     )]
     pub chunk_size: Option<usize>,
     pub context: Option<String>,
+    #[serde(default)]
     pub keywords: Option<String>,
+    #[serde(default)]
+    pub mode: Option<PolishMode>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -268,6 +272,8 @@ pub struct TranscriptLlmJobRequest {
     pub target_language_name: Option<String>,
     pub context: Option<String>,
     pub keywords: Option<String>,
+    #[serde(default)]
+    pub mode: Option<PolishMode>,
     pub template: Option<SummaryTemplateConfig>,
     #[cfg_attr(
         feature = "specta",

@@ -28,47 +28,37 @@ export interface LegacyPolishSelectionResult {
 
 export const BUILTIN_POLISH_PRESETS = [
   {
-    id: 'general',
-    labelKey: 'polish.scenarios.general',
-    defaultLabel: 'General',
+    id: 'clean',
+    labelKey: 'polish.modes.clean',
+    defaultLabel: 'Clean Spoken',
     context: '',
   },
   {
-    id: 'customer_service',
-    labelKey: 'polish.scenarios.customer_service',
-    defaultLabel: 'Customer Service Call',
-    context: 'This is a transcript of a customer service call.',
+    id: 'verbatim',
+    labelKey: 'polish.modes.verbatim',
+    defaultLabel: 'Verbatim',
+    context: '',
   },
   {
-    id: 'meeting',
-    labelKey: 'polish.scenarios.meeting',
-    defaultLabel: 'Meeting',
-    context: 'This is a transcript of a meeting.',
-  },
-  {
-    id: 'interview',
-    labelKey: 'polish.scenarios.interview',
-    defaultLabel: 'Interview',
-    context: 'This is a transcript of an interview.',
-  },
-  {
-    id: 'lecture',
-    labelKey: 'polish.scenarios.lecture',
-    defaultLabel: 'Lecture',
-    context: 'This is a transcript of a lecture.',
-  },
-  {
-    id: 'podcast',
-    labelKey: 'polish.scenarios.podcast',
-    defaultLabel: 'Podcast',
-    context: 'This is a transcript of a podcast.',
+    id: 'formal',
+    labelKey: 'polish.modes.formal',
+    defaultLabel: 'Formal Written',
+    context: '',
   },
 ] as const satisfies readonly BuiltInPolishPreset[];
 
 export type BuiltInPolishPresetId = (typeof BUILTIN_POLISH_PRESETS)[number]['id'];
 
-export const DEFAULT_POLISH_PRESET_ID: BuiltInPolishPresetId = 'general';
+export const DEFAULT_POLISH_PRESET_ID: BuiltInPolishPresetId = 'clean';
 
+export const LEGACY_POLISH_PRESET_MAP: Record<string, BuiltInPolishPresetId> = {
+  general: 'clean',
+  customer_service: 'clean',
+  meeting: 'clean',
+  interview: 'clean',
+  lecture: 'clean',
+  podcast: 'clean',
+};
 export function isBuiltInPolishPresetId(
   value: string | null | undefined
 ): value is BuiltInPolishPresetId {
@@ -131,14 +121,15 @@ export function getPolishPresetLabel(
   customPresets: PolishCustomPreset[] | null | undefined,
   t: TFunction
 ): string {
-  const builtIn = getBuiltInPolishPreset(presetId);
+  const coercedId = coercePolishPresetId(presetId, customPresets);
+  const builtIn = getBuiltInPolishPreset(coercedId);
   if (builtIn) {
     return t(builtIn.labelKey, { defaultValue: builtIn.defaultLabel });
   }
 
   return (
     normalizePolishCustomPresets(customPresets).find((preset) => preset.id === presetId)?.name ||
-    t('polish.scenarios.general', { defaultValue: 'General' })
+    t('polish.modes.clean', { defaultValue: 'Clean Spoken' })
   );
 }
 
@@ -147,7 +138,8 @@ export function resolvePolishPreset(
   customPresets: PolishCustomPreset[] | null | undefined,
   t?: TFunction
 ): ResolvedPolishPreset {
-  const builtIn = getBuiltInPolishPreset(presetId);
+  const coercedId = coercePolishPresetId(presetId, customPresets);
+  const builtIn = getBuiltInPolishPreset(coercedId);
   if (builtIn) {
     return {
       id: builtIn.id,
@@ -171,7 +163,7 @@ export function resolvePolishPreset(
 
   return {
     id: DEFAULT_POLISH_PRESET_ID,
-    name: t ? t('polish.scenarios.general', { defaultValue: 'General' }) : 'General',
+    name: t ? t('polish.modes.clean', { defaultValue: 'Clean Spoken' }) : 'Clean Spoken',
     context: '',
     builtIn: true,
   };
@@ -200,6 +192,9 @@ export function coercePolishPresetId(
   if (isBuiltInPolishPresetId(presetId)) {
     return presetId;
   }
+  if (presetId && presetId in LEGACY_POLISH_PRESET_MAP) {
+    return LEGACY_POLISH_PRESET_MAP[presetId];
+  }
 
   return normalizePolishCustomPresets(customPresets).some((preset) => preset.id === presetId)
     ? (presetId as string)
@@ -218,7 +213,7 @@ export function migrateLegacyPolishSelection(
     return { presetId, customPresets };
   }
 
-  if (isBuiltInPolishPresetId(input.scenario) && input.scenario !== 'general') {
+  if (isBuiltInPolishPresetId(input.scenario)) {
     return {
       presetId: input.scenario,
       customPresets,

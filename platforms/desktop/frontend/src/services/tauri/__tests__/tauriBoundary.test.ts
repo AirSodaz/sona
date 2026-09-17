@@ -1609,6 +1609,7 @@ describe('tauri boundary wrappers', () => {
         chunkSize: null,
         context: null,
         keywords: null,
+        mode: null,
       },
     });
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.llm.translateTranscriptSegments, {
@@ -1676,6 +1677,7 @@ describe('tauri boundary wrappers', () => {
         targetLanguageName: null,
         context: null,
         keywords: null,
+        mode: null,
         template: null,
         chunkSize: null,
         chunkCharBudget: null,
@@ -1786,6 +1788,7 @@ describe('tauri boundary wrappers', () => {
         targetLanguageName: null,
         context: null,
         keywords: null,
+        mode: null,
         template: null,
         chunkSize: null,
         chunkCharBudget: null,
@@ -1820,6 +1823,7 @@ describe('tauri boundary wrappers', () => {
         targetLanguageName: null,
         context: 'meeting transcript',
         keywords: 'Sona',
+        mode: null,
         template: null,
         chunkSize: null,
         chunkCharBudget: null,
@@ -1858,6 +1862,7 @@ describe('tauri boundary wrappers', () => {
         targetLanguageName: null,
         context: null,
         keywords: null,
+        mode: null,
         template: {
           id: 'general',
           name: 'General',

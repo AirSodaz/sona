@@ -3,10 +3,15 @@ import type React from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LANGUAGE_OPTIONS } from '../../../constants/languages';
+import { useConfigStore } from '../../../stores/configStore';
 import { useProjectStore } from '../../../stores/projectStore';
 import type { ExportFormat } from '../../../utils/exportFormats';
 import { getLocalizedLanguageName } from '../../../utils/languageUtils';
-import { getPolishPresetOptions } from '../../../utils/polishPresets';
+import {
+  coercePolishPresetId,
+  getPolishPresetLabel,
+  getPolishPresetOptions,
+} from '../../../utils/polishPresets';
 import { Dropdown } from '../../Dropdown';
 import { FolderIcon } from '../../Icons';
 import { Switch } from '../../Switch';
@@ -57,10 +62,11 @@ export function AutomationRuleEditor({
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const projects = useProjectStore((state) => state.projects);
+  const customPresets = useConfigStore((state) => state.config.polishCustomPresets);
   const selectedProject = projects.find((p) => p.id === draft.projectId);
   const resolvedPolishPresetOptions = useMemo(
-    () => propsPolishPresetOptions ?? getPolishPresetOptions(undefined, t),
-    [propsPolishPresetOptions, t]
+    () => propsPolishPresetOptions ?? getPolishPresetOptions(customPresets, t),
+    [customPresets, propsPolishPresetOptions, t]
   );
   const resolvedLanguageOptions = useMemo(
     () =>
@@ -257,7 +263,11 @@ export function AutomationRuleEditor({
                         {selectedProject.pipeline.autoPolish && (
                           <span className="automation-chip automation-chip-success">
                             {t('automation.auto_polish', { defaultValue: 'Polish' })}:{' '}
-                            {selectedProject.pipeline.polishPresetId || 'general'}
+                            {getPolishPresetLabel(
+                              selectedProject.pipeline.polishPresetId,
+                              customPresets,
+                              t
+                            )}
                           </span>
                         )}
                         {selectedProject.pipeline.autoTranslate && (
@@ -344,7 +354,10 @@ export function AutomationRuleEditor({
                       {draft.actions?.autoPolish && (
                         <div className="project-pipeline-item-content">
                           <Dropdown
-                            value={draft.stageConfig?.polishPresetId || 'general'}
+                            value={coercePolishPresetId(
+                              draft.stageConfig?.polishPresetId,
+                              customPresets
+                            )}
                             onChange={(value) =>
                               onUpdateDraft((current) => ({
                                 ...current,

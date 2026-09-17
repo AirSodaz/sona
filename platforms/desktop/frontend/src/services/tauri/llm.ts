@@ -289,6 +289,7 @@ function normalizePolishRequest(request: PolishSegmentsRequest): CorePolishSegme
     chunkSize: nullableNonNegativeSafeInteger(request.chunkSize, 'request.chunkSize'),
     context: request.context ?? null,
     keywords: request.keywords ?? null,
+    mode: request.mode ?? null,
   };
 }
 
@@ -407,6 +408,7 @@ type CoreTranscriptJobFields = Pick<
   | 'targetLanguageName'
   | 'context'
   | 'keywords'
+  | 'mode'
   | 'template'
   | 'chunkSize'
   | 'chunkCharBudget'
@@ -418,11 +420,11 @@ function normalizeTranscriptJobFields(request: TranscriptLlmJobRequest): CoreTra
     targetLanguageName: null,
     context: null,
     keywords: null,
+    mode: null,
     template: null,
     chunkSize: null,
     chunkCharBudget: null,
   };
-
   switch (request.taskType) {
     case 'translate':
       return {
@@ -435,6 +437,7 @@ function normalizeTranscriptJobFields(request: TranscriptLlmJobRequest): CoreTra
         ...emptyFields,
         context: request.context ?? null,
         keywords: request.keywords ?? null,
+        mode: request.mode ?? null,
       };
     case 'summary':
       return {

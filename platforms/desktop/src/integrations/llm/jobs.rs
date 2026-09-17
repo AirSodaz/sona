@@ -203,6 +203,7 @@ async fn run_polish_job(
                 chunk_size: req.chunk_size,
                 context: req.context,
                 keywords: req.keywords,
+                mode: req.mode,
             };
             commands::polish_transcript_segments_with_observer(app, llm_request, move |items| {
                 callback(items)

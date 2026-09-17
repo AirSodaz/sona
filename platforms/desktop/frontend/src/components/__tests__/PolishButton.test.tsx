@@ -190,9 +190,8 @@ describe('PolishButton', () => {
     fireEvent.click(screen.getByText('polish.advanced_settings'));
 
     // Check if modal elements appear (using localized keys from mock)
-    screen.getByText('polish.keywords');
-    screen.getByText('Brand Terms');
-    screen.getByText('polish.preset_label');
+    screen.getByText('polish.advanced_settings');
+    screen.getByText('polish.mode_label');
   });
 
   it('renders advanced settings overlay at document body level when opened from the detail header', () => {
@@ -211,6 +210,6 @@ describe('PolishButton', () => {
 
     expect(bodyOverlay).toBeDefined();
     screen.getByText('polish.advanced_settings');
-    screen.getByText('polish.keywords');
+    screen.getByText('polish.mode_label');
   });
 });

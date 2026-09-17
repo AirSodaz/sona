@@ -382,6 +382,7 @@ mod tests {
             chunk_size: Some(1),
             context: Some("meeting".to_string()),
             keywords: None,
+            mode: None,
         };
 
         let result = run_polish_with_runtime(request, runtime.clone(), observer.clone())

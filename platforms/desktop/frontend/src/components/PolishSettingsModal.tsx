@@ -3,9 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { isFeatureLlmConfigComplete } from '../services/llm/configUtils';
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
-import { normalizePolishKeywordSets } from '../utils/polishKeywords';
-import { getPolishPresetOptions } from '../utils/polishPresets';
-import { Checkbox } from './Checkbox';
+import { coercePolishPresetId, getPolishPresetOptions } from '../utils/polishPresets';
 import { Dropdown } from './Dropdown';
 import { Modal } from './Modal';
 import { Switch } from './Switch';
@@ -34,15 +32,6 @@ export function PolishSettingsModal({
   if (!isOpen) return null;
 
   const presetOptions = getPolishPresetOptions(globalConfig.polishCustomPresets, t);
-  const polishKeywordSets = normalizePolishKeywordSets(config.polishKeywordSets);
-
-  const handleToggleKeywordSet = (setId: string, enabled: boolean) => {
-    setConfig({
-      polishKeywordSets: polishKeywordSets.map((set) =>
-        set.id === setId ? { ...set, enabled } : set
-      ),
-    });
-  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={t('polish.advanced_settings')} size="md">
@@ -120,63 +109,15 @@ export function PolishSettingsModal({
           }}
         />
 
-        {/* Keywords */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xs)' }}>
-          <label
-            style={{ fontWeight: 500, color: 'var(--color-text-primary)', fontSize: '0.875rem' }}
-          >
-            {t('polish.keywords')}
-          </label>
-          {polishKeywordSets.length === 0 ? (
-            <div
-              style={{
-                padding: '12px 14px',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px dashed var(--color-border)',
-                background: 'var(--color-bg-secondary)',
-                color: 'var(--color-text-secondary)',
-                fontSize: '0.8125rem',
-                lineHeight: 1.5,
-              }}
-            >
-              {t('polish.no_keyword_sets', {
-                defaultValue:
-                  'No keyword sets yet. Create them in Vocabulary to reuse polish keyword guidance.',
-              })}
-            </div>
-          ) : (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px',
-                padding: '12px 14px',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--color-border)',
-                background: 'var(--color-bg-secondary)',
-              }}
-            >
-              {polishKeywordSets.map((set) => (
-                <Checkbox
-                  key={set.id}
-                  checked={set.enabled}
-                  onChange={(checked) => handleToggleKeywordSet(set.id, checked)}
-                  label={set.name}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
         {/* Preset */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xs)' }}>
           <label
             style={{ fontWeight: 500, color: 'var(--color-text-primary)', fontSize: '0.875rem' }}
           >
-            {t('polish.preset_label', { defaultValue: 'Context Presets' })}
+            {t('polish.mode_label', { defaultValue: 'Polish Mode' })}
           </label>
           <Dropdown
-            value={config.polishPresetId || 'general'}
+            value={coercePolishPresetId(config.polishPresetId, globalConfig.polishCustomPresets)}
             onChange={(val) => setConfig({ polishPresetId: val })}
             options={presetOptions}
             style={{ width: '100%' }}

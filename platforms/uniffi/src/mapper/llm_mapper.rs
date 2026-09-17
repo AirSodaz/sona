@@ -6,7 +6,7 @@ use sona_core::llm::requests::{
     SummarizeTranscriptRequest, TranslateSegmentsRequest,
 };
 use sona_core::llm::tasks::{
-    LlmProviderStrategy, LlmSegmentInput, PolishedSegment, SummarySegmentInput,
+    LlmProviderStrategy, LlmSegmentInput, PolishMode, PolishedSegment, SummarySegmentInput,
     SummaryTemplateConfig, TranslatedSegment,
 };
 use sona_core::llm::usage::LlmGenerateSource;
@@ -124,6 +124,29 @@ pub struct FfiTranslatedSegment {
     pub translation: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
+pub enum FfiPolishMode {
+    Clean,
+    Verbatim,
+    Formal,
+}
+
+pub fn polish_mode_from_ffi(mode: FfiPolishMode) -> PolishMode {
+    match mode {
+        FfiPolishMode::Clean => PolishMode::Clean,
+        FfiPolishMode::Verbatim => PolishMode::Verbatim,
+        FfiPolishMode::Formal => PolishMode::Formal,
+    }
+}
+
+pub fn polish_mode_to_ffi(mode: PolishMode) -> FfiPolishMode {
+    match mode {
+        PolishMode::Clean => FfiPolishMode::Clean,
+        PolishMode::Verbatim => FfiPolishMode::Verbatim,
+        PolishMode::Formal => FfiPolishMode::Formal,
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
 pub struct FfiPolishSegmentsRequest {
     pub task_id: String,
@@ -132,6 +155,7 @@ pub struct FfiPolishSegmentsRequest {
     pub chunk_size: Option<u64>,
     pub context: Option<String>,
     pub keywords: Option<String>,
+    pub mode: Option<FfiPolishMode>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -295,6 +319,7 @@ pub fn polish_segments_request_to_ffi(request: PolishSegmentsRequest) -> FfiPoli
         chunk_size: request.chunk_size.map(|value| value as u64),
         context: request.context,
         keywords: request.keywords,
+        mode: request.mode.map(polish_mode_to_ffi),
     }
 }
 
@@ -453,6 +478,7 @@ pub(crate) fn polish_segments_request_from_ffi(
         chunk_size: optional_u64_to_usize(request.chunk_size, "chunk size")?,
         context: request.context,
         keywords: request.keywords,
+        mode: request.mode.map(polish_mode_from_ffi),
     })
 }
 
@@ -622,6 +648,7 @@ mod tests {
             chunk_size: Some(8),
             context: Some("ctx".to_string()),
             keywords: None,
+            mode: Some(FfiPolishMode::Formal),
         };
 
         let core = polish_segments_request_from_ffi(request).unwrap();
@@ -633,6 +660,7 @@ mod tests {
         assert_eq!(back.chunk_size, Some(8));
         assert_eq!(back.context.as_deref(), Some("ctx"));
         assert_eq!(back.keywords, None);
+        assert_eq!(back.mode, Some(FfiPolishMode::Formal));
     }
 
     #[test]
@@ -644,6 +672,7 @@ mod tests {
             chunk_size: Some(u64::MAX),
             context: None,
             keywords: None,
+            mode: None,
         };
 
         // Only meaningful where usize is narrower than u64.

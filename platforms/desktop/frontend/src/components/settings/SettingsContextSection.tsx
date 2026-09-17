@@ -7,6 +7,7 @@ import { useAutomationStore } from '../../stores/automationStore';
 import { useLlmAssistantConfig, useSetConfig } from '../../stores/configStore';
 import {
   BUILTIN_POLISH_PRESETS,
+  coercePolishPresetId,
   DEFAULT_POLISH_PRESET_ID,
   getPolishPresetOptions,
   normalizePolishCustomPresets,
@@ -105,7 +106,7 @@ export function SettingsContextSection(): React.JSX.Element {
         >
           <div style={{ width: '280px', maxWidth: '100%' }}>
             <Dropdown
-              value={config.polishPresetId || DEFAULT_POLISH_PRESET_ID}
+              value={coercePolishPresetId(config.polishPresetId, customPresets)}
               onChange={(value) => updateConfig({ polishPresetId: value })}
               options={presetOptions}
             />
@@ -149,11 +150,14 @@ export function SettingsContextSection(): React.JSX.Element {
                 whiteSpace: 'pre-wrap',
               }}
             >
-              {preset.context ||
-                t('settings.context_empty_builtin', {
-                  defaultValue:
-                    'No extra context. Sona will polish without adding a preset-specific note.',
-                })}
+              {t(`polish.modes.${preset.id}_desc`, {
+                defaultValue:
+                  preset.context ||
+                  t('settings.context_empty_builtin', {
+                    defaultValue:
+                      'No extra context. Sona will polish according to the selected mode.',
+                  }),
+              })}
             </div>
           </div>
         ))}

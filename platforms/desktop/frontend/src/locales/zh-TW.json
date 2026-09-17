@@ -2101,7 +2101,16 @@
     "keywords_placeholder": "輸入關鍵字...",
     "no_keyword_sets": "還沒有關鍵字規則集。請先在詞彙表中建立可重複使用的潤飾關鍵字。",
     "scenario_label": "場景預設",
-    "preset_label": "情境預設",
+    "mode_label": "潤飾模式",
+    "preset_label": "潤飾模式與預設",
+    "modes": {
+      "clean": "去冗易讀",
+      "clean_desc": "去除口語贅字、語氣助詞與口吃重複，保留原汁原味說話意圖與事實細節。",
+      "verbatim": "逐字精準",
+      "verbatim_desc": "還原所有錄音細節，完整保留語氣詞、口吃與原話語序，僅修正語音識別錯別字與標點。",
+      "formal": "書面規整",
+      "formal_desc": "將口述碎片重構為語法規範、條理清晰的書面文字，理順倒裝與病句，規範排版格式。"
+    },
     "custom_context": "自訂上下文",
     "context": "情境",
     "context_placeholder": "輸入上下文...",

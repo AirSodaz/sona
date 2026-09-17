@@ -8,7 +8,7 @@ import { useConfigStore } from '../../stores/configStore';
 import type { ProjectPipelineConfig, ProjectRecord } from '../../types/project';
 import { DEFAULT_PROJECT_PIPELINE } from '../../types/project';
 import { getLocalizedLanguageName } from '../../utils/languageUtils';
-import { getPolishPresetOptions } from '../../utils/polishPresets';
+import { coercePolishPresetId, getPolishPresetOptions } from '../../utils/polishPresets';
 import { getSummaryTemplateOptions } from '../../utils/summaryTemplates';
 import { Dropdown, type DropdownOption } from '../Dropdown';
 import { IconPicker } from '../IconPicker';
@@ -225,7 +225,10 @@ export function ProjectSettingsModal({
                   {pipeline.autoPolish && (
                     <div className="project-pipeline-item-content">
                       <Dropdown
-                        value={pipeline.polishPresetId || 'general'}
+                        value={coercePolishPresetId(
+                          pipeline.polishPresetId,
+                          config.polishCustomPresets
+                        )}
                         onChange={(value) => updatePipeline({ polishPresetId: value })}
                         options={polishPresetOptions}
                         style={{ width: '100%' }}

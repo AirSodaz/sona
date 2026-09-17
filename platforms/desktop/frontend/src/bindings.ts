@@ -821,7 +821,7 @@ export type BuiltinLlmProvider_Deserialize = "google_translate" | "google_transl
 
 export type BuiltinLlmProvider_Serialize = "google_translate" | "google_translate_free" | "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "openrouter" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "cohere" | "together" | "venice" | "hyperbolic" | "llamafile" | "custom-openai-compatible";
 
-export type BuiltinPolishPresetId = "general" | "customer_service" | "meeting" | "interview" | "lecture" | "podcast";
+export type BuiltinPolishPresetId = "clean" | "verbatim" | "formal" | "general" | "customer_service" | "meeting" | "interview" | "lecture" | "podcast";
 
 export type BuiltinSummaryTemplateId = "general" | "meeting" | "lecture";
 
@@ -1906,6 +1906,8 @@ export type PolishKeywordSetRecord = {
 	keywords: string,
 };
 
+export type PolishMode = "verbatim" | "clean" | "formal";
+
 export type PolishPresetId = ({ Builtin: BuiltinPolishPresetId }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
 
 export type PolishPresetRecord = {
@@ -1922,7 +1924,8 @@ export type PolishSegmentsRequest_Deserialize = {
 	segments: LlmSegmentInput[],
 	chunkSize: number | null,
 	context: string | null,
-	keywords: string | null,
+	keywords?: string | null,
+	mode?: PolishMode | null,
 };
 
 export type PolishSegmentsRequest_Serialize = {
@@ -1932,6 +1935,7 @@ export type PolishSegmentsRequest_Serialize = {
 	chunkSize: number | null,
 	context: string | null,
 	keywords: string | null,
+	mode: PolishMode | null,
 };
 
 export type PolishedSegment = {
@@ -2769,6 +2773,7 @@ export type TranscriptLlmJobRequest_Deserialize = {
 	targetLanguageName: string | null,
 	context: string | null,
 	keywords: string | null,
+	mode?: PolishMode | null,
 	template: SummaryTemplateConfig | null,
 	chunkSize: number | null,
 	chunkCharBudget: number | null,
@@ -2784,6 +2789,7 @@ export type TranscriptLlmJobRequest_Serialize = {
 	targetLanguageName: string | null,
 	context: string | null,
 	keywords: string | null,
+	mode: PolishMode | null,
 	template: SummaryTemplateConfig | null,
 	chunkSize: number | null,
 	chunkCharBudget: number | null,

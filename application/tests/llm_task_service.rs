@@ -341,6 +341,7 @@ async fn observer_failure_preserves_reason_and_maps_to_task_error() {
                 chunk_size: None,
                 context: None,
                 keywords: None,
+                mode: None,
             },
             &FailingObserver,
         )
@@ -383,6 +384,7 @@ async fn polish_repairs_one_invalid_structured_response() {
                 chunk_size: None,
                 context: None,
                 keywords: None,
+                mode: None,
             },
             &(),
         )

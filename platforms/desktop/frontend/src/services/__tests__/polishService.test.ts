@@ -143,8 +143,7 @@ describe('PolishService', () => {
           { id: '1', text: 'hello' },
           { id: '2', text: 'world' },
         ],
-        context: '',
-        keywords: '',
+        mode: 'clean',
       }),
     });
     expect(onChunk).toHaveBeenCalledTimes(1);
@@ -190,18 +189,14 @@ describe('PolishService', () => {
     });
   });
 
-  it('polishSegments resolves enabled keyword set blocks before invoking Rust', async () => {
+  it('polishSegments resolves directive modes before invoking Rust', async () => {
     const segments: TranscriptSegment[] = [
       { id: '1', start: 0, end: 1, text: 'hello', isFinal: true },
     ];
 
     useTranscriptStore.setState({
       config: buildPolishTestConfig({
-        polishKeywordSets: [
-          { id: 'kw-1', name: 'Brand', enabled: true, keywords: 'Sona\nSherpa-onnx' },
-          { id: 'kw-2', name: 'Disabled', enabled: false, keywords: 'Ignore me' },
-          { id: 'kw-3', name: 'Style', enabled: true, keywords: 'Preserve speaker names' },
-        ],
+        polishPresetId: 'verbatim',
       }),
     });
 
@@ -211,7 +206,7 @@ describe('PolishService', () => {
 
     expect(invoke).toHaveBeenCalledWith('polish_transcript_segments', {
       request: expect.objectContaining({
-        keywords: 'Sona\nSherpa-onnx\n\nPreserve speaker names',
+        mode: 'verbatim',
       }),
     });
   });

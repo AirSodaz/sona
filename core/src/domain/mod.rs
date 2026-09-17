@@ -67,6 +67,9 @@ macro_rules! impl_fallback_deserialize {
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "snake_case")]
 pub enum BuiltinPolishPresetId {
+    Clean,
+    Verbatim,
+    Formal,
     General,
     CustomerService,
     Meeting,
