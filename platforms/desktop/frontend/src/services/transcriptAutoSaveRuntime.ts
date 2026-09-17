@@ -1,6 +1,6 @@
 import i18next from 'i18next';
 import { v4 as uuidv4 } from 'uuid';
-import { useHistoryStore } from '../stores/historyStore';
+import { addHistoryTranscriptUpdateListener, useHistoryStore } from '../stores/historyStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
@@ -46,6 +46,7 @@ class TranscriptAutoSaveRuntime {
   private drainPromise: Promise<void> | null = null;
 
   private unsubscribe: (() => void) | null = null;
+  private unsubscribeHistoryUpdate: (() => void) | null = null;
 
   private beginSession(historyId: string, segments: TranscriptSegment[]) {
     const editSessionId = uuidv4();
@@ -209,6 +210,9 @@ class TranscriptAutoSaveRuntime {
     this.lastFingerprint = computeSegmentsFingerprint(initial.segments);
     if (initial.sourceHistoryId) this.beginSession(initial.sourceHistoryId, initial.segments);
 
+    this.unsubscribeHistoryUpdate = addHistoryTranscriptUpdateListener((historyId, segments) => {
+      this.rebaseline(historyId, segments);
+    });
     this.unsubscribe = useTranscriptSessionStore.subscribe((state, prevState) => {
       const currentId = state.sourceHistoryId;
       const prevId = prevState.sourceHistoryId;
@@ -246,6 +250,8 @@ class TranscriptAutoSaveRuntime {
   stop() {
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.unsubscribeHistoryUpdate?.();
+    this.unsubscribeHistoryUpdate = null;
     if (this.timeout) {
       clearTimeout(this.timeout);
       this.timeout = null;

@@ -1,5 +1,4 @@
 import { LANGUAGE_OPTIONS } from '../constants/languages';
-import type { rebaselineTranscriptAutoSave } from '../hooks/useAutoSaveTranscript';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
@@ -51,7 +50,7 @@ export interface TranslationServicePorts {
   runTranscriptSegmentTaskJob: typeof runTranscriptSegmentTaskJob;
   runTranscriptLlmJob: typeof runTranscriptLlmJob;
   listenToTranscriptLlmJobUpdates: typeof listenToTranscriptLlmJobUpdates;
-  rebaselineTranscriptAutoSave?: typeof rebaselineTranscriptAutoSave;
+  rebaselineTranscriptAutoSave?: (historyId: string, segments: TranscriptSegment[]) => void;
 }
 
 export class TranslationService {

@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { historyService, type TranscriptEditCommitResult } from '../services/historyService';
-import { transcriptAutoSaveRuntime } from '../services/transcriptAutoSaveRuntime';
 import type { HistoryItem } from '../types/history';
 import type { TranscriptSegment } from '../types/transcript';
 import { extractErrorMessage } from '../utils/errorUtils';
@@ -8,6 +7,19 @@ import { logger } from '../utils/logger';
 import { clearActiveTranscriptSession } from './transcriptCoordinator';
 import { useTranscriptSessionStore } from './transcriptSessionStore';
 import { useTranscriptSidecarStore } from './transcriptSidecarStore';
+
+export type HistoryTranscriptUpdateListener = (id: string, segments: TranscriptSegment[]) => void;
+
+const transcriptUpdateListeners = new Set<HistoryTranscriptUpdateListener>();
+
+export function addHistoryTranscriptUpdateListener(
+  listener: HistoryTranscriptUpdateListener
+): () => void {
+  transcriptUpdateListeners.add(listener);
+  return () => {
+    transcriptUpdateListeners.delete(listener);
+  };
+}
 
 interface HistoryState {
   items: HistoryItem[];
@@ -143,7 +155,9 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         items: state.items.map((item) => (item.id === id ? { ...item, ...updatedItem } : item)),
       }));
       if (useTranscriptSessionStore.getState().sourceHistoryId === id) {
-        transcriptAutoSaveRuntime.rebaseline(id, segments);
+        for (const listener of transcriptUpdateListeners) {
+          listener(id, segments);
+        }
       }
     } catch (error) {
       const errorMessage = extractErrorMessage(error);
