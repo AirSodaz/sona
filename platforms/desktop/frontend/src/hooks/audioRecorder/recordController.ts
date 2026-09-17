@@ -264,71 +264,74 @@ export function createRecordController({
       `[useAudioRecorder] Stopping recording session. session=${sessionId} input=${activeInputSourceRef.current}`
     );
     const duration = timing.finalizeRecordedDurationSeconds();
+    try {
+      const savedWavPath = await capture.stopCaptureForSession(sessionId);
 
-    const savedWavPath = await capture.stopCaptureForSession(sessionId);
+      // Stop recognizer delivery before we persist outputs so no late segment
+      // can land after the saved recording has already been finalized.
+      await transcriptionService.softStop();
+      finalizeLastTranscriptSegment();
+      const latestSegments = useTranscriptSessionStore.getState().segments;
+      if (liveDraft?.item.id) {
+        await flushPendingAutoSave(liveDraft.item.id, latestSegments);
+      }
 
-    // Stop recognizer delivery before we persist outputs so no late segment
-    // can land after the saved recording has already been finalized.
-    await transcriptionService.softStop();
-    finalizeLastTranscriptSegment();
-    const latestSegments = useTranscriptSessionStore.getState().segments;
-    if (liveDraft?.item.id) {
-      await flushPendingAutoSave(liveDraft.item.id, latestSegments);
-    }
+      if (!liveDraft || latestSegments.length === 0) {
+        liveDraftRef.current = null;
+        await capture.stopFileRecording();
+        await capture.teardownWebCaptureResources();
 
-    if (!liveDraft || latestSegments.length === 0) {
-      liveDraftRef.current = null;
+        if (config.muteDuringRecording) {
+          void capture.setSystemAudioMute(false, 'Failed to unmute system audio:');
+        }
+
+        if (savedWavPath) {
+          try {
+            await remove(savedWavPath);
+          } catch (error) {
+            logger.warn(
+              '[useAudioRecorder] Failed to remove discarded native recording file:',
+              error
+            );
+          }
+        }
+
+        if (liveDraft) {
+          await persistence.discardLiveRecordingDraft(liveDraft);
+        }
+
+        timing.clearFinalizedDurationSeconds();
+        logger.info(
+          `[useAudioRecorder] Recording session stopped without transcript. session=${sessionId} previous_phase=${previousPhase} duration=${duration.toFixed(3)}`
+        );
+        return;
+      }
+
+      if (usingNativeCaptureRef.current) {
+        if (savedWavPath) {
+          await persistence.persistNativeRecording(liveDraft, savedWavPath, duration);
+        }
+        liveDraftRef.current = null;
+        usingNativeCaptureRef.current = false;
+        timing.clearFinalizedDurationSeconds();
+      }
+
       await capture.stopFileRecording();
       await capture.teardownWebCaptureResources();
 
       if (config.muteDuringRecording) {
         void capture.setSystemAudioMute(false, 'Failed to unmute system audio:');
       }
-
-      if (savedWavPath) {
-        try {
-          await remove(savedWavPath);
-        } catch (error) {
-          logger.warn(
-            '[useAudioRecorder] Failed to remove discarded native recording file:',
-            error
-          );
-        }
-      }
-
-      if (liveDraft) {
-        await persistence.discardLiveRecordingDraft(liveDraft);
-      }
-
-      timing.clearFinalizedDurationSeconds();
       logger.info(
-        `[useAudioRecorder] Recording session stopped without transcript. session=${sessionId} previous_phase=${previousPhase} duration=${duration.toFixed(3)}`
+        `[useAudioRecorder] Recording session stopped. session=${sessionId} previous_phase=${previousPhase} duration=${duration.toFixed(3)}`
       );
+    } catch (error) {
+      logger.error(`[useAudioRecorder] Error during recording stop. session=${sessionId}:`, error);
+      throw error;
+    } finally {
       session.resetRecordSession(sessionId, 'stop_completed');
       setRecordingSessionId(null);
-      return;
     }
-
-    if (usingNativeCaptureRef.current) {
-      if (savedWavPath) {
-        await persistence.persistNativeRecording(liveDraft, savedWavPath, duration);
-      }
-      liveDraftRef.current = null;
-      usingNativeCaptureRef.current = false;
-      timing.clearFinalizedDurationSeconds();
-    }
-
-    await capture.stopFileRecording();
-    await capture.teardownWebCaptureResources();
-
-    if (config.muteDuringRecording) {
-      void capture.setSystemAudioMute(false, 'Failed to unmute system audio:');
-    }
-    logger.info(
-      `[useAudioRecorder] Recording session stopped. session=${sessionId} previous_phase=${previousPhase} duration=${duration.toFixed(3)}`
-    );
-    session.resetRecordSession(sessionId, 'stop_completed');
-    setRecordingSessionId(null);
   }
 
   async function pauseRecording(): Promise<void> {

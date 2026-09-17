@@ -931,6 +931,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
         let stream_result = match sample_format {
             SampleFormat::F32 => {
                 let window_clone = window.clone();
+                let mut last_peak_emit = std::time::Instant::now();
                 device.build_input_stream(
                     config,
                     move |data: &[f32], _: &_| {
@@ -946,6 +947,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
                             &window_clone,
                             &data_tx,
                             &mut task_producer,
+                            &mut last_peak_emit,
                         );
                     },
                     err_fn,
@@ -954,6 +956,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
             }
             SampleFormat::I16 => {
                 let window_clone = window.clone();
+                let mut last_peak_emit = std::time::Instant::now();
                 device.build_input_stream(
                     config,
                     move |data: &[i16], _: &_| {
@@ -970,6 +973,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
                             &window_clone,
                             &data_tx,
                             &mut task_producer,
+                            &mut last_peak_emit,
                         );
                     },
                     err_fn,
@@ -978,6 +982,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
             }
             SampleFormat::U16 => {
                 let window_clone = window.clone();
+                let mut last_peak_emit = std::time::Instant::now();
                 device.build_input_stream(
                     config,
                     move |data: &[u16], _: &_| {
@@ -997,6 +1002,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
                             &window_clone,
                             &data_tx,
                             &mut task_producer,
+                            &mut last_peak_emit,
                         );
                     },
                     err_fn,
@@ -1027,6 +1033,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
         }
 
         let _ = rx.recv();
+        let _ = stream.pause();
         println!("[Audio] {} capture stopped", kind.stop_signal_label());
     });
 }
@@ -1187,6 +1194,7 @@ fn process_capture_audio<R: Runtime>(
     window: &Window<R>,
     data_tx: &tokio::sync::mpsc::Sender<()>,
     task_producer: &mut impl Producer<Item = f32>,
+    last_peak_emit: &mut std::time::Instant,
 ) {
     for frame in data.chunks(channels) {
         let mut sum = 0.0;
@@ -1241,8 +1249,11 @@ fn process_capture_audio<R: Runtime>(
                             max_abs = abs_val;
                         }
                     }
-                    let peak_i16 = (max_abs.clamp(0.0, 1.0) * 32767.0) as i16;
-                    let _ = window.app_handle().emit(kind.peak_event(), peak_i16);
+                    if last_peak_emit.elapsed() >= std::time::Duration::from_millis(50) {
+                        let peak_i16 = (max_abs.clamp(0.0, 1.0) * 32767.0) as i16;
+                        let _ = window.app_handle().emit(kind.peak_event(), peak_i16);
+                        *last_peak_emit = std::time::Instant::now();
+                    }
                 }
             }
             Err(e) => {
