@@ -3,10 +3,10 @@ use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 use sona_core::transcription::speaker::{
     SpeakerProcessingConfig, SpeakerProfile, SpeakerProfileSample,
 };
-use sona_core::transcription::text_alignment::{AlignedTextUnit, align_text_units_to_tokens};
+use sona_core::transcription::text_alignment::AlignedTextUnit;
 use sona_core::transcription::transcript::{
     SpeakerAttribution, SpeakerCandidate, SpeakerTag, TranscriptSegment, TranscriptTiming,
-    TranscriptTimingLevel, ensure_transcript_segment_timing,
+    TranscriptTimingLevel, TranscriptTimingUnit, ensure_transcript_segment_timing,
 };
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
@@ -887,6 +887,178 @@ fn apply_speaker_tags_to_segments(
     annotated
 }
 
+fn choose_speaker_for_timing_unit(
+    unit: &TranscriptTimingUnit,
+    spans: &[SpeakerSpan],
+    speaker_assignments: &HashMap<i32, ResolvedSpeakerAssignment>,
+    fallback: Option<&ResolvedSpeakerAssignment>,
+) -> Option<ResolvedSpeakerAssignment> {
+    let unit_start = unit.start as f32;
+    let unit_end = unit.end as f32;
+    let unit_dur = (unit_end - unit_start).max(0.001);
+
+    let mut best_assignment = None;
+    let mut best_ratio = 0.0_f32;
+    let mut best_overlap = 0.0_f32;
+
+    for span in spans {
+        let overlap = range_overlap(unit_start, unit_end, span.start, span.end);
+        let ratio = overlap / unit_dur;
+        if ratio > best_ratio {
+            best_ratio = ratio;
+            best_overlap = overlap;
+            if let Some(assignment) = speaker_assignments.get(&span.raw_speaker) {
+                best_assignment = Some(assignment.clone());
+            }
+        }
+    }
+
+    if best_ratio >= 0.35 && best_assignment.is_some() {
+        return best_assignment;
+    }
+
+    if best_overlap > 0.0 && best_assignment.is_some() {
+        return best_assignment;
+    }
+
+    let midpoint = (unit_start + unit_end) / 2.0;
+    spans
+        .iter()
+        .min_by(|left, right| {
+            let left_distance = distance_to_range(midpoint, left.start, left.end);
+            let right_distance = distance_to_range(midpoint, right.start, right.end);
+            left_distance
+                .partial_cmp(&right_distance)
+                .unwrap_or(Ordering::Equal)
+        })
+        .and_then(|span| speaker_assignments.get(&span.raw_speaker).cloned())
+        .or_else(|| fallback.cloned())
+}
+
+fn smooth_speaker_glitches(
+    units: &[TranscriptTimingUnit],
+    token_speakers: &mut [Option<ResolvedSpeakerAssignment>],
+) {
+    if token_speakers.len() < 3 {
+        return;
+    }
+
+    let n = token_speakers.len();
+    let mut i = 0;
+    while i < n {
+        let Some(current_spk) = token_speakers[i].as_ref() else {
+            i += 1;
+            continue;
+        };
+
+        let run_start = i;
+        while i + 1 < n
+            && let Some(next_spk) = token_speakers[i + 1].as_ref()
+            && speaker_assignments_equal(current_spk, next_spk)
+        {
+            i += 1;
+        }
+        let run_end = i + 1;
+        let run_len = run_end - run_start;
+
+        if run_start > 0
+            && run_end < n
+            && let (Some(left_spk), Some(right_spk)) = (
+                token_speakers[run_start - 1].as_ref(),
+                token_speakers[run_end].as_ref(),
+            )
+            && speaker_assignments_equal(left_spk, right_spk)
+            && !speaker_assignments_equal(current_spk, left_spk)
+        {
+            let run_duration = units[run_end - 1].end - units[run_start].start;
+            if run_duration < 0.40 && run_len <= 2 {
+                let replacement = left_spk.clone();
+                for slot in token_speakers.iter_mut().take(run_end).skip(run_start) {
+                    *slot = Some(replacement.clone());
+                }
+            }
+        }
+
+        i += 1;
+    }
+}
+
+fn rebuild_speaker_segments(
+    segment: &TranscriptSegment,
+    timing: &TranscriptTiming,
+    groups: &[SplitGroup],
+) -> Vec<TranscriptSegment> {
+    let group_count = groups.len();
+    let mut split_segments = Vec::with_capacity(group_count);
+
+    for (group_idx, group) in groups.iter().enumerate() {
+        let text = group.text.trim().to_string();
+        if text.is_empty() {
+            continue;
+        }
+
+        let timing_slice = timing.units[group.token_start..group.token_end_exclusive].to_vec();
+        if timing_slice.is_empty() {
+            continue;
+        }
+
+        let first_unit_start = timing_slice.first().unwrap().start;
+        let last_unit_end = timing_slice.last().unwrap().end;
+
+        let start = if group_idx == 0 {
+            segment.start.min(first_unit_start)
+        } else {
+            let prev_group = &groups[group_idx - 1];
+            let prev_last_unit_end = timing.units[prev_group.token_end_exclusive - 1].end;
+            if first_unit_start > prev_last_unit_end {
+                (prev_last_unit_end + first_unit_start) / 2.0
+            } else {
+                first_unit_start
+            }
+        };
+
+        let end = if group_idx + 1 == group_count {
+            segment.end.max(last_unit_end).max(start)
+        } else {
+            let next_group = &groups[group_idx + 1];
+            let next_first_unit_start = timing.units[next_group.token_start].start;
+            if next_first_unit_start > last_unit_end {
+                ((last_unit_end + next_first_unit_start) / 2.0).max(start)
+            } else {
+                last_unit_end.max(start)
+            }
+        };
+
+        let mut next_segment = TranscriptSegment {
+            id: if split_segments.is_empty() {
+                segment.id.clone()
+            } else {
+                uuid::Uuid::new_v4().to_string()
+            },
+            text,
+            start,
+            end,
+            is_final: segment.is_final,
+            timing: Some(TranscriptTiming {
+                level: TranscriptTimingLevel::Token,
+                source: timing.source,
+                units: timing_slice,
+            }),
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            speaker: group.assignment.speaker.clone(),
+            speaker_attribution: Some(group.assignment.attribution.clone()),
+        };
+
+        ensure_transcript_segment_timing(&mut next_segment);
+        split_segments.push(next_segment);
+    }
+
+    split_segments
+}
+
 fn assign_speakers_to_segment(
     segment: &TranscriptSegment,
     spans: &[SpeakerSpan],
@@ -899,201 +1071,70 @@ fn assign_speakers_to_segment(
         speaker_assignments,
     );
 
-    if let Some(timing) = segment
+    let mut effective_segment = segment.clone();
+    if effective_segment.timing.is_none() {
+        ensure_transcript_segment_timing(&mut effective_segment);
+    }
+    if effective_segment.timing.is_none() {
+        sona_core::transcription::forced_alignment::apply_fallback_timing_to_transcript_segment(
+            &mut effective_segment,
+        );
+    }
+
+    let Some(timing) = effective_segment
         .timing
         .as_ref()
-        .filter(|timing| timing.level == TranscriptTimingLevel::Token && !timing.units.is_empty())
-    {
-        let token_speakers = timing
-            .units
-            .iter()
-            .map(|unit| {
-                choose_speaker_for_range(
-                    unit.start as f32,
-                    unit.end as f32,
-                    spans,
-                    speaker_assignments,
-                )
-                .or_else(|| fallback_speaker.clone())
-            })
-            .collect::<Vec<_>>();
-
-        if token_speakers.iter().all(|speaker| speaker.is_some()) {
-            let aligned_units = timing
-                .units
-                .iter()
-                .enumerate()
-                .map(|(index, unit)| AlignedTextUnit {
-                    text: unit.text.clone(),
-                    token_index: index,
-                })
-                .collect::<Vec<_>>();
-
-            if let Some(groups) = build_split_groups(&aligned_units, &token_speakers) {
-                if groups.len() == 1 {
-                    return vec![apply_assignment_to_segment(segment, &groups[0].assignment)];
-                }
-
-                let segments = groups
-                    .into_iter()
-                    .enumerate()
-                    .filter_map(|(index, group)| {
-                        let text = group.text.trim().to_string();
-                        if text.is_empty() {
-                            return None;
-                        }
-
-                        let timing_slice =
-                            timing.units[group.token_start..group.token_end_exclusive].to_vec();
-                        let start = timing_slice
-                            .first()
-                            .map(|unit| unit.start)
-                            .unwrap_or(segment.start);
-                        let end = timing_slice
-                            .last()
-                            .map(|unit| unit.end.max(unit.start))
-                            .unwrap_or(segment.end)
-                            .max(start);
-
-                        let mut next_segment = TranscriptSegment {
-                            id: if index == 0 {
-                                segment.id.clone()
-                            } else {
-                                uuid::Uuid::new_v4().to_string()
-                            },
-                            text,
-                            start,
-                            end,
-                            is_final: segment.is_final,
-                            timing: Some(TranscriptTiming {
-                                level: timing.level,
-                                source: timing.source,
-                                units: timing_slice,
-                            }),
-                            tokens: None,
-                            timestamps: None,
-                            durations: None,
-                            translation: None,
-                            speaker: group.assignment.speaker.clone(),
-                            speaker_attribution: Some(group.assignment.attribution.clone()),
-                        };
-                        ensure_transcript_segment_timing(&mut next_segment);
-                        Some(next_segment)
-                    })
-                    .collect::<Vec<_>>();
-
-                if !segments.is_empty() {
-                    return segments;
-                }
-            }
-        }
-    }
-
-    let Some(tokens) = segment.tokens.as_ref() else {
-        return vec![apply_speaker_to_whole_segment(segment, fallback_speaker)];
-    };
-    let Some(timestamps) = segment.timestamps.as_ref() else {
+        .filter(|t| !t.units.is_empty())
+    else {
         return vec![apply_speaker_to_whole_segment(segment, fallback_speaker)];
     };
 
-    if tokens.is_empty() || tokens.len() != timestamps.len() {
-        return vec![apply_speaker_to_whole_segment(segment, fallback_speaker)];
-    }
+    let mut token_speakers: Vec<Option<ResolvedSpeakerAssignment>> = timing
+        .units
+        .iter()
+        .map(|unit| {
+            choose_speaker_for_timing_unit(
+                unit,
+                spans,
+                speaker_assignments,
+                fallback_speaker.as_ref(),
+            )
+        })
+        .collect();
 
-    let durations = segment
-        .durations
-        .as_ref()
-        .filter(|values| values.len() == tokens.len());
-    let token_speakers = tokens
+    smooth_speaker_glitches(&timing.units, &mut token_speakers);
+
+    let aligned_units = timing
+        .units
         .iter()
         .enumerate()
-        .map(|(index, _)| {
-            let start = timestamps[index];
-            let end = if let Some(duration_values) = durations {
-                start + duration_values[index]
-            } else if index + 1 < timestamps.len() {
-                timestamps[index + 1]
-            } else {
-                segment.end as f32
-            };
-            choose_speaker_for_range(start, end, spans, speaker_assignments)
-                .or_else(|| fallback_speaker.clone())
+        .map(|(index, unit)| AlignedTextUnit {
+            text: unit.text.clone(),
+            token_index: index,
         })
         .collect::<Vec<_>>();
-
-    if token_speakers.iter().any(|speaker| speaker.is_none()) {
-        return vec![apply_speaker_to_whole_segment(segment, fallback_speaker)];
-    }
-
-    let Some(aligned_units) = align_text_units_to_tokens(&segment.text, tokens) else {
-        return vec![apply_speaker_to_whole_segment(segment, fallback_speaker)];
-    };
 
     let Some(groups) = build_split_groups(&aligned_units, &token_speakers) else {
         return vec![apply_speaker_to_whole_segment(segment, fallback_speaker)];
     };
+
     if groups.is_empty() {
         return vec![apply_speaker_to_whole_segment(segment, fallback_speaker)];
     }
 
     if groups.len() == 1 {
-        return vec![apply_assignment_to_segment(segment, &groups[0].assignment)];
+        return vec![apply_assignment_to_segment(
+            &effective_segment,
+            &groups[0].assignment,
+        )];
     }
 
-    let mut segments = groups
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, group)| {
-            let text = group.text.trim().to_string();
-            if text.is_empty() {
-                return None;
-            }
-
-            let start = timestamps
-                .get(group.token_start)
-                .copied()
-                .unwrap_or(segment.start as f32);
-            let end = if group.token_end_exclusive < timestamps.len() {
-                timestamps[group.token_end_exclusive]
-            } else {
-                segment.end as f32
-            };
-
-            let token_slice = tokens[group.token_start..group.token_end_exclusive].to_vec();
-            let timestamp_slice = timestamps[group.token_start..group.token_end_exclusive].to_vec();
-            let duration_slice = durations
-                .map(|values| values[group.token_start..group.token_end_exclusive].to_vec());
-
-            Some(TranscriptSegment {
-                id: if index == 0 {
-                    segment.id.clone()
-                } else {
-                    uuid::Uuid::new_v4().to_string()
-                },
-                text,
-                start: start as f64,
-                end: end.max(start) as f64,
-                is_final: segment.is_final,
-                timing: None,
-                tokens: Some(token_slice),
-                timestamps: Some(timestamp_slice),
-                durations: duration_slice,
-                translation: None,
-                speaker: group.assignment.speaker.clone(),
-                speaker_attribution: Some(group.assignment.attribution.clone()),
-            })
-        })
-        .collect::<Vec<_>>();
-
-    for segment in &mut segments {
-        ensure_transcript_segment_timing(segment);
+    let split_segments = rebuild_speaker_segments(segment, timing, &groups);
+    if !split_segments.is_empty() {
+        split_segments
+    } else {
+        vec![apply_speaker_to_whole_segment(segment, fallback_speaker)]
     }
-
-    if !segments.is_empty() {
-        return segments;
-    }
-
-    vec![apply_speaker_to_whole_segment(segment, fallback_speaker)]
 }
 
 fn apply_speaker_to_whole_segment(
@@ -1723,5 +1764,163 @@ mod tests {
         let annotated = apply_speaker_tags_to_segments(&[segment], &clusters, &assignments);
         assert_eq!(annotated.len(), 1);
         assert_eq!(annotated[0].text, "preserved text");
+    }
+
+    #[test]
+    fn anti_glitch_smoothing_eliminates_short_speaker_noise_blips() {
+        let mut segment = sample_segment(0.0, 3.0, "Welcome to the world");
+        segment.timing = Some(TranscriptTiming {
+            level: TranscriptTimingLevel::Token,
+            source: sona_core::transcription::transcript::TranscriptTimingSource::Model,
+            units: vec![
+                TranscriptTimingUnit {
+                    text: "Welcome".to_string(),
+                    start: 0.0,
+                    end: 1.0,
+                },
+                TranscriptTimingUnit {
+                    text: " to".to_string(),
+                    start: 1.0,
+                    end: 1.15,
+                },
+                TranscriptTimingUnit {
+                    text: " the".to_string(),
+                    start: 1.15,
+                    end: 1.30,
+                },
+                TranscriptTimingUnit {
+                    text: " world".to_string(),
+                    start: 1.30,
+                    end: 3.0,
+                },
+            ],
+        });
+
+        // Speaker 2 has an acoustic blip for only 0.3s (1.0..1.30)
+        let spans = vec![
+            SpeakerSpan {
+                start: 0.0,
+                end: 1.0,
+                raw_speaker: 1,
+            },
+            SpeakerSpan {
+                start: 1.0,
+                end: 1.30,
+                raw_speaker: 2,
+            },
+            SpeakerSpan {
+                start: 1.30,
+                end: 3.0,
+                raw_speaker: 1,
+            },
+        ];
+
+        let tags = HashMap::from([
+            (
+                1,
+                resolved_assignment(
+                    1,
+                    speaker("speaker-1", "Alice", "identified", Some(0.9)),
+                    "anonymous-1",
+                    "Speaker 1",
+                ),
+            ),
+            (
+                2,
+                resolved_assignment(
+                    2,
+                    speaker("speaker-2", "Bob", "identified", Some(0.85)),
+                    "anonymous-2",
+                    "Speaker 2",
+                ),
+            ),
+        ]);
+
+        let result = assign_speakers_to_segment(&segment, &spans, &tags);
+
+        // Glitch is absorbed: returns 1 segment assigned to Alice instead of splitting
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0].speaker.as_ref().map(|value| value.label.as_str()),
+            Some("Alice")
+        );
+        assert_eq!(
+            result[0].timing.as_ref().map(|timing| timing.units.len()),
+            Some(4)
+        );
+    }
+
+    #[test]
+    fn natural_resegmentation_snaps_boundaries_at_gap_midpoint() {
+        let mut segment = sample_segment(0.0, 3.0, "Hello World");
+        segment.timing = Some(TranscriptTiming {
+            level: TranscriptTimingLevel::Token,
+            source: sona_core::transcription::transcript::TranscriptTimingSource::Model,
+            units: vec![
+                TranscriptTimingUnit {
+                    text: "Hello".to_string(),
+                    start: 0.0,
+                    end: 1.0,
+                },
+                TranscriptTimingUnit {
+                    text: " World".to_string(),
+                    start: 1.4, // 0.4s gap between 1.0 and 1.4
+                    end: 3.0,
+                },
+            ],
+        });
+
+        let spans = vec![
+            SpeakerSpan {
+                start: 0.0,
+                end: 1.0,
+                raw_speaker: 1,
+            },
+            SpeakerSpan {
+                start: 1.4,
+                end: 3.0,
+                raw_speaker: 2,
+            },
+        ];
+
+        let tags = HashMap::from([
+            (
+                1,
+                resolved_assignment(
+                    1,
+                    speaker("speaker-1", "Alice", "identified", Some(0.9)),
+                    "anonymous-1",
+                    "Speaker 1",
+                ),
+            ),
+            (
+                2,
+                resolved_assignment(
+                    2,
+                    speaker("speaker-2", "Bob", "identified", Some(0.85)),
+                    "anonymous-2",
+                    "Speaker 2",
+                ),
+            ),
+        ]);
+
+        let result = assign_speakers_to_segment(&segment, &spans, &tags);
+
+        assert_eq!(result.len(), 2);
+        // First segment starts at 0.0, ends at midpoint 1.2s
+        assert!((result[0].start - 0.0).abs() < 1e-4);
+        assert!((result[0].end - 1.2).abs() < 1e-4);
+        assert_eq!(
+            result[0].speaker.as_ref().map(|s| s.label.as_str()),
+            Some("Alice")
+        );
+
+        // Second segment starts at midpoint 1.2s, ends at 3.0s
+        assert!((result[1].start - 1.2).abs() < 1e-4);
+        assert!((result[1].end - 3.0).abs() < 1e-4);
+        assert_eq!(
+            result[1].speaker.as_ref().map(|s| s.label.as_str()),
+            Some("Bob")
+        );
     }
 }
