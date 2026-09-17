@@ -83,6 +83,7 @@ export function normalizeAsrRequest(request: AsrTranscriptionRequest): CoreAsrTr
     modelPath: request.modelPath,
     numThreads: request.numThreads,
     punctuationModel: request.punctuationModel,
+    alignmentModel: request.alignmentModel ?? null,
     vadModel: request.vadModel,
     vadBuffer: finiteNumber(request.vadBuffer, 'asrRequest.vadBuffer'),
     batchSegmentationMode: request.batchSegmentationMode ?? 'vad',

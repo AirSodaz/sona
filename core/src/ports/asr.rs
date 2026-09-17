@@ -369,6 +369,7 @@ pub struct BatchTranscriptionRequest {
     pub enable_itn: bool,
     pub language: String,
     pub punctuation_model: Option<String>,
+    pub alignment_model: Option<String>,
     pub vad_model: Option<String>,
     pub vad_buffer: f32,
     pub batch_segmentation_mode: BatchSegmentationMode,
@@ -407,6 +408,7 @@ impl BatchTranscriptionRequest {
                 model_path,
                 num_threads,
                 punctuation_model,
+                alignment_model,
                 vad_model,
                 vad_buffer,
                 batch_segmentation_mode,
@@ -424,6 +426,7 @@ impl BatchTranscriptionRequest {
                 enable_itn,
                 language,
                 punctuation_model,
+                alignment_model,
                 vad_model,
                 vad_buffer,
                 batch_segmentation_mode,
@@ -589,6 +592,8 @@ pub enum AsrEngineConfig {
         #[serde(default)]
         punctuation_model: Option<String>,
         #[serde(default)]
+        alignment_model: Option<String>,
+        #[serde(default)]
         vad_model: Option<String>,
         #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
         vad_buffer: f32,
@@ -654,6 +659,7 @@ impl AsrTranscriptionRequest {
                 model_path,
                 num_threads,
                 punctuation_model,
+                alignment_model: None,
                 vad_model,
                 vad_buffer,
                 batch_segmentation_mode: BatchSegmentationMode::Vad,
@@ -664,6 +670,16 @@ impl AsrTranscriptionRequest {
                 ffmpeg_path: None,
             },
         }
+    }
+    pub fn with_alignment_model(mut self, alignment_model: Option<String>) -> Self {
+        if let AsrEngineConfig::Local {
+            alignment_model: ref mut model,
+            ..
+        } = self.engine_config
+        {
+            *model = alignment_model;
+        }
+        self
     }
 
     pub fn engine(&self) -> AsrEngine {

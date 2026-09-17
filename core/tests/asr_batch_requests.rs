@@ -17,6 +17,7 @@ fn local_batch_transcription_request_is_a_core_owned_runtime_contract() {
         enable_itn: true,
         language: "auto".to_string(),
         punctuation_model: Some("models/punctuation".to_string()),
+        alignment_model: Some("models/alignment".to_string()),
         vad_model: Some("models/vad".to_string()),
         vad_buffer: 5.0,
         batch_segmentation_mode: BatchSegmentationMode::Vad,
@@ -39,6 +40,7 @@ fn local_batch_transcription_request_is_a_core_owned_runtime_contract() {
     assert_eq!(cloned.file_path, std::path::PathBuf::from("meeting.wav"));
     assert_eq!(cloned.save_to_path, Some("meeting.resampled.wav".into()));
     assert_eq!(cloned.model_path, "models/sherpa");
+    assert_eq!(cloned.alignment_model.as_deref(), Some("models/alignment"));
     assert_eq!(cloned.batch_segmentation_mode, BatchSegmentationMode::Vad);
     assert_eq!(cloned.hotwords.as_deref(), Some("Sona"));
     assert!(cloned.normalization_options.enable_timeline);
@@ -119,7 +121,8 @@ fn local_batch_request_mapping_from_asr_request_is_core_owned() {
         TranscriptPostprocessOptions::default(),
         None,
         Some("metal".to_string()),
-    );
+    )
+    .with_alignment_model(Some("models/alignment".to_string()));
 
     let batch_request = BatchTranscriptionRequest::from_local_asr_request(
         "input.wav".into(),
@@ -142,6 +145,10 @@ fn local_batch_request_mapping_from_asr_request_is_core_owned() {
     assert_eq!(
         batch_request.punctuation_model.as_deref(),
         Some("models/punctuation")
+    );
+    assert_eq!(
+        batch_request.alignment_model.as_deref(),
+        Some("models/alignment")
     );
     assert_eq!(batch_request.vad_model.as_deref(), Some("models/vad"));
     assert_eq!(batch_request.vad_buffer, 6.5);

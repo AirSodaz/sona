@@ -242,7 +242,7 @@ export type AsrEngineConfig_Deserialize =
  *  The `local-sherpa` alias keeps configs persisted by older versions
  *  deserializable; every write path emits the neutral `local` tag.
  */
-({ engine: "local"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
+({ engine: "local"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; alignmentModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
 	encoder: string | null,
 	decoder: string | null,
 	model: string | null,
@@ -265,7 +265,7 @@ export type AsrEngineConfig_Deserialize =
  *  The `local-sherpa` alias keeps configs persisted by older versions
  *  deserializable; every write path emits the neutral `local` tag.
  */
-({ engine: "local-sherpa"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
+({ engine: "local-sherpa"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; alignmentModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
 	encoder: string | null,
 	decoder: string | null,
 	model: string | null,
@@ -281,7 +281,7 @@ export type AsrEngineConfig_Deserialize =
 	uncachedDecoder: string | null,
 	cachedDecoder: string | null,
 	mergedDecoder: string | null,
-} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; ffmpegPath?: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { batchSegmentationMode?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
+} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; ffmpegPath?: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { alignmentModel?: never; batchSegmentationMode?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngineConfig_Serialize =
 /**
@@ -290,7 +290,7 @@ export type AsrEngineConfig_Serialize =
  *  The `local-sherpa` alias keeps configs persisted by older versions
  *  deserializable; every write path emits the neutral `local` tag.
  */
-({ engine: "local"; localEngine: LocalAsrEngine; modelId: string | null; modelPath: string; numThreads: number; punctuationModel: string | null; vadModel: string | null; vadBuffer: number; batchSegmentationMode: BatchSegmentationMode; modelType: string; fileConfig: {
+({ engine: "local"; localEngine: LocalAsrEngine; modelId: string | null; modelPath: string; numThreads: number; punctuationModel: string | null; alignmentModel: string | null; vadModel: string | null; vadBuffer: number; batchSegmentationMode: BatchSegmentationMode; modelType: string; fileConfig: {
 	encoder: string | null,
 	decoder: string | null,
 	model: string | null,
@@ -306,7 +306,7 @@ export type AsrEngineConfig_Serialize =
 	uncachedDecoder: string | null,
 	cachedDecoder: string | null,
 	mergedDecoder: string | null,
-} | null; gpuAcceleration: string | null; initialRefreshRateMs: number | null; ffmpegPath: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { batchSegmentationMode?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
+} | null; gpuAcceleration: string | null; initialRefreshRateMs: number | null; ffmpegPath: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { alignmentModel?: never; batchSegmentationMode?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngine_Deserialize =
 /**  Local offline transcription. */

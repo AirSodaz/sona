@@ -37,6 +37,7 @@ export type LocalAsrRequest = AsrTranscriptionRequestBase & {
   modelPath: string;
   numThreads: number;
   punctuationModel: string | null;
+  alignmentModel?: string | null;
   vadModel: string | null;
   vadBuffer: number;
   batchSegmentationMode?: 'vad' | 'whole';

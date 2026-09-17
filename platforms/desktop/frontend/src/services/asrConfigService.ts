@@ -20,6 +20,7 @@ import type { ModelInfo } from '../types/modelCatalog';
 import { coerceLanguage, type LanguageCapable } from '../utils/languages';
 import { findSelectedModelByMode } from '../utils/modelSelection';
 import {
+  getScenarioAlignmentModelPath,
   getScenarioPunctuationModelPath,
   getScenarioVadBufferSize,
   getScenarioVadModelPath,
@@ -183,7 +184,8 @@ export class AsrConfigService {
         : null;
     const punctuationModel =
       rules.requiresPunctuation && punctuationModelPath ? punctuationModelPath : null;
-
+    const alignmentModelPath = getScenarioAlignmentModelPath(config, scenario);
+    const alignmentModel = scenario === 'batch' && alignmentModelPath ? alignmentModelPath : null;
     const baseRequest: AsrTranscriptionRequestBase = {
       mode: selection.mode,
       language: overrides.language || this.coerceConfiguredLanguage(config, slot, config.language),
@@ -214,6 +216,7 @@ export class AsrConfigService {
       modelPath: selection.modelPath,
       numThreads: 4,
       punctuationModel,
+      alignmentModel,
       vadModel,
       vadBuffer: getScenarioVadBufferSize(config, scenario),
       ...(scenario === 'batch' ? { batchSegmentationMode: batchVadEnabled ? 'vad' : 'whole' } : {}),
