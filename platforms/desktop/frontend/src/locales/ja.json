@@ -1354,6 +1354,9 @@
     "speaker_embedding_model_label": "スピーカー内蔵モデル",
     "speaker_embedding_model_hint": "ダイアライズされた話者を既知の話者プロファイルと照合するために使用されます。",
     "select_speaker_embedding_model": "スピーカー内蔵モデルを選択してください...",
+    "alignment_model_label": "CTC アライメントモデル",
+    "alignment_model_hint": "トークン単位のタイムスタンプを生成し、話者区切り境界を最適化します。",
+    "select_alignment_model": "アライメントモデルを選択...",
     "model_selection": "デフォルトのモデル",
     "model_selection_desc": "Live Record と Batch Import に使う既定モデルを選択します。",
     "scenario_selector_label": "モデルシナリオ",
@@ -1458,7 +1461,8 @@
       "silero_v5_vad": "シレロ社が開発。高精度な音声アクティビティ検出 (VAD) モデルのバージョン 5 で、音声を発話と無音に分割します。",
       "speaker_segmentation": "録音を匿名の話者ターンに分割するための Pyannote ベースのローカル話者セグメンテーション モデル。",
       "speaker_embedding": "ダイアライズされたスピーカーを既知のスピーカー プロファイル ライブラリと照合するための 3D スピーカー埋め込みモデル。",
-      "itn_zh": "中国語の逆テキスト正規化モデル。話された数字 (例: 「一二三」) を数字 (「123」) に変換します。"
+      "itn_zh": "中国語の逆テキスト正規化モデル。話された数字 (例: 「一二三」) を数字 (「123」) に変換します。",
+      "mms_300m_fa": "Meta MMS-300M 多言語 CTC 強制アライメントモデル。トークン単位のタイムスタンプ生成と話者区切り最適化に対応。"
     },
     "recognition_models": "認識モデル",
     "recognition_path_label": "モデルの選択",
@@ -1476,6 +1480,7 @@
     "itn_model_status": "ITNモデルのステータス",
     "toggle_model": "{{name}} を切り替えます",
     "vad_models": "VAD モデル",
+    "alignment_models": "CTC アライメントモデル",
     "vad_path_label": "VAD モデル",
     "batch_vad_enabled": "バッチ VAD セグメンテーション",
     "batch_vad_enabled_hint": "音声アクティビティごとにローカル バッチ文字起こしを分割します。ファイル全体を一度に認識するにはこれをオフにすると、速度が遅くなり、より多くのメモリを使用する可能性があります。",

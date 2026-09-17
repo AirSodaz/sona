@@ -1354,6 +1354,9 @@
     "speaker_embedding_model_label": "Speaker Embedding Model",
     "speaker_embedding_model_hint": "Used to match diarized speakers against your known speaker profiles.",
     "select_speaker_embedding_model": "Select speaker embedding model...",
+    "alignment_model_label": "CTC Alignment Model",
+    "alignment_model_hint": "Used to generate token-level timestamps and refine speaker turn boundaries.",
+    "select_alignment_model": "Select alignment model...",
     "model_selection": "Default Models",
     "model_selection_desc": "Choose the default models used for live recording and batch import.",
     "scenario_selector_label": "Model scenario",
@@ -1458,7 +1461,8 @@
       "silero_v5_vad": "Developed by Silero. Version 5 of the highly accurate Voice Activity Detection (VAD) model that segments audio into speech and silence.",
       "speaker_segmentation": "Pyannote-based local speaker segmentation model for splitting a recording into anonymous speaker turns.",
       "speaker_embedding": "3D-Speaker embedding model for matching diarized speakers against your known speaker profile library.",
-      "itn_zh": "Inverse Text Normalization model for Chinese. Converts spoken numbers (e.g., '一二三') into digits ('123')."
+      "itn_zh": "Inverse Text Normalization model for Chinese. Converts spoken numbers (e.g., '一二三') into digits ('123').",
+      "mms_300m_fa": "Developed by Meta. MMS-300M multilingual CTC forced alignment model for token-level timestamps and speaker refinement."
     },
     "recognition_models": "Recognition Models",
     "recognition_path_label": "Select Model",
@@ -1476,6 +1480,7 @@
     "itn_model_status": "ITN Model Status",
     "toggle_model": "Toggle {{name}}",
     "vad_models": "VAD Models",
+    "alignment_models": "CTC Alignment Models",
     "vad_path_label": "VAD Model",
     "batch_vad_enabled": "Batch VAD Segmentation",
     "batch_vad_enabled_hint": "Split local batch transcription by speech activity. Turn this off to recognize the whole file at once, which may be slower and use more memory.",

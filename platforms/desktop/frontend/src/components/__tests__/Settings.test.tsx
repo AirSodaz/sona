@@ -310,6 +310,8 @@ describe('Settings', () => {
       batchPunctuation: null,
       liveVad: null,
       batchVad: null,
+      liveAlignment: null,
+      batchAlignment: null,
     }));
     // Reset store state
     useTranscriptStore.setState({

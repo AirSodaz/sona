@@ -206,14 +206,16 @@ pub enum ModelCatalogSectionType {
     Vad,
     SpeakerSegmentation,
     SpeakerEmbedding,
+    Alignment,
 }
 
-const MODEL_CATALOG_SECTION_TYPES: [ModelCatalogSectionType; 5] = [
+const MODEL_CATALOG_SECTION_TYPES: [ModelCatalogSectionType; 6] = [
     ModelCatalogSectionType::Asr,
     ModelCatalogSectionType::Punctuation,
     ModelCatalogSectionType::Vad,
     ModelCatalogSectionType::SpeakerSegmentation,
     ModelCatalogSectionType::SpeakerEmbedding,
+    ModelCatalogSectionType::Alignment,
 ];
 
 #[derive(Debug, Clone, Serialize, Default, PartialEq, Eq)]
@@ -224,6 +226,7 @@ pub struct ModelCatalogSelectionOptions {
     pub batch: Vec<ModelSelectionOption>,
     pub speaker_segmentation: Vec<ModelSelectionOption>,
     pub speaker_embedding: Vec<ModelSelectionOption>,
+    pub alignment: Vec<ModelSelectionOption>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -275,6 +278,8 @@ pub struct ModelCatalogRestoreDefaults {
     pub punctuation_model_path: Option<String>,
     pub speaker_segmentation_model_path: Option<String>,
     pub speaker_embedding_model_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alignment_model_path: Option<String>,
     pub enable_itn: bool,
     pub batch_vad_enabled: bool,
     pub vad_buffer_size: f64,
@@ -289,6 +294,8 @@ pub struct ModelSelectionPaths {
     pub batch_model_path: String,
     pub speaker_segmentation_model_path: String,
     pub speaker_embedding_model_path: String,
+    #[serde(default)]
+    pub alignment_model_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -299,6 +306,8 @@ pub struct ModelCatalogSelectedIds {
     pub batch: Option<String>,
     pub speaker_segmentation: Option<String>,
     pub speaker_embedding: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alignment: Option<String>,
 }
 
 /// Builds model metadata and settings-page grouping from an injected install-status set.
@@ -362,6 +371,9 @@ pub fn resolve_model_catalog_selected_ids(
             &paths.speaker_embedding_model_path,
             &snapshot.selection_options.speaker_embedding,
         ),
+        alignment: paths.alignment_model_path.as_deref().and_then(|p| {
+            resolve_selected_model_id(snapshot, p, &snapshot.selection_options.alignment)
+        }),
     }
 }
 
@@ -488,6 +500,7 @@ fn model_section_type(model: &ModelCatalogModel) -> ModelCatalogSectionType {
         "vad" => ModelCatalogSectionType::Vad,
         "speaker-segmentation" => ModelCatalogSectionType::SpeakerSegmentation,
         "speaker-embedding" => ModelCatalogSectionType::SpeakerEmbedding,
+        "alignment" => ModelCatalogSectionType::Alignment,
         _ => ModelCatalogSectionType::Asr,
     }
 }
@@ -516,6 +529,11 @@ fn build_selection_options(models: &[ModelCatalogModel]) -> ModelCatalogSelectio
         speaker_embedding: models
             .iter()
             .filter(|model| model.model_type == "speaker-embedding")
+            .map(ModelSelectionOption::from_catalog_model)
+            .collect(),
+        alignment: models
+            .iter()
+            .filter(|model| model.model_type == "alignment")
             .map(ModelSelectionOption::from_catalog_model)
             .collect(),
     }
@@ -629,6 +647,7 @@ fn build_restore_defaults(models: &[ModelCatalogModel]) -> ModelCatalogRestoreDe
         punctuation_model_path: Some(String::new()),
         speaker_segmentation_model_path: Some(String::new()),
         speaker_embedding_model_path: Some(String::new()),
+        alignment_model_path: Some(String::new()),
         enable_itn: true,
         batch_vad_enabled: true,
         vad_buffer_size: 5.0,

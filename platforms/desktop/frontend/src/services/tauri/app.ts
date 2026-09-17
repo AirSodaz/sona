@@ -145,6 +145,7 @@ function normalizeModelType(value: string): ModelInfo['type'] {
     case 'speaker-segmentation':
     case 'speaker-embedding':
     case 'omnilingual':
+    case 'alignment':
       return value;
     default:
       throw new Error(`Unexpected model catalog type: ${value}`);
@@ -191,6 +192,7 @@ function normalizeCatalogSectionType(value: string): ModelCatalogSectionType {
     case 'vad':
     case 'speaker-segmentation':
     case 'speaker-embedding':
+    case 'alignment':
       return value;
     default:
       throw new Error(`Unexpected model catalog section type: ${value}`);
@@ -274,6 +276,7 @@ function normalizeRestoreDefaults(
   const punctuationModelPath = optionalString(restoreDefaults.punctuationModelPath);
   const speakerSegmentationModelPath = optionalString(restoreDefaults.speakerSegmentationModelPath);
   const speakerEmbeddingModelPath = optionalString(restoreDefaults.speakerEmbeddingModelPath);
+  const alignmentModelPath = optionalString(restoreDefaults.alignmentModelPath);
 
   return {
     ...(streamingModelPath === undefined ? {} : { streamingModelPath }),
@@ -282,6 +285,7 @@ function normalizeRestoreDefaults(
     ...(punctuationModelPath === undefined ? {} : { punctuationModelPath }),
     ...(speakerSegmentationModelPath === undefined ? {} : { speakerSegmentationModelPath }),
     ...(speakerEmbeddingModelPath === undefined ? {} : { speakerEmbeddingModelPath }),
+    ...(alignmentModelPath === undefined ? {} : { alignmentModelPath }),
     enableITN: restoreDefaults.enableItn,
     batchVadEnabled: restoreDefaults.batchVadEnabled,
     vadBufferSize: requireFiniteNumber(restoreDefaults.vadBufferSize, 'vadBufferSize'),
@@ -317,6 +321,7 @@ function normalizeModelCatalogSelectedIds(
     batch: selectedIds.batch ?? null,
     speakerSegmentation: selectedIds.speakerSegmentation ?? null,
     speakerEmbedding: selectedIds.speakerEmbedding ?? null,
+    alignment: selectedIds.alignment ?? null,
   };
 }
 

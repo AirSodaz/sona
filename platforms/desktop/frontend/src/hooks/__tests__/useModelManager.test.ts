@@ -212,6 +212,8 @@ function createScenarioIdResolver() {
       ),
       liveVad: resolve(config.liveVadModelPath, sectionOptionsByType.vad ?? []),
       batchVad: resolve(config.batchVadModelPath, sectionOptionsByType.vad ?? []),
+      liveAlignment: null,
+      batchAlignment: resolve(config.batchAlignmentModelPath, sectionOptionsByType.alignment ?? []),
     };
   };
 }

@@ -644,6 +644,7 @@ fn resolves_catalog_selection_ids_without_adapter_state() {
             speaker_segmentation_model_path: String::new(),
             speaker_embedding_model_path:
                 "D:/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx".to_string(),
+            alignment_model_path: None,
         },
     );
 
@@ -657,6 +658,19 @@ fn resolves_catalog_selection_ids_without_adapter_state() {
         selected.speaker_embedding,
         Some("3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx".to_string())
     );
+}
+
+#[test]
+fn mms_alignment_preset_is_verified_bundle() {
+    let model =
+        find_preset_model("sherpa-onnx-mms-300m-fa").expect("MMS alignment model must exist");
+    assert_eq!(model.model_type, "alignment");
+    assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
+    assert_eq!(model.language_mode, LanguageMode::None);
+    assert!(model.languages.is_empty());
+    assert_eq!(model.artifacts.len(), 2);
+    assert!(model.artifacts.iter().any(|a| a.filename == "model.onnx"));
+    assert!(model.artifacts.iter().any(|a| a.filename == "tokens.txt"));
 }
 
 /// Language metadata invariants shared by every surface (GUI, CLI, FFI).

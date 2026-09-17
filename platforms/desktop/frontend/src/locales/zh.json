@@ -1354,6 +1354,9 @@
     "speaker_embedding_model_label": "说话人特征模型",
     "speaker_embedding_model_hint": "用于将分离出的说话人与已知说话人档案匹配。",
     "select_speaker_embedding_model": "选择说话人特征模型...",
+    "alignment_model_label": "CTC 对齐模型",
+    "alignment_model_hint": "用于生成字/词级时间戳并优化说话人切分边界。",
+    "select_alignment_model": "选择对齐模型...",
     "model_selection": "默认模型",
     "model_selection_desc": "选择实时录音和批量导入默认使用的模型。",
     "scenario_selector_label": "模型场景",
@@ -1458,7 +1461,8 @@
       "silero_v5_vad": "由 Silero 开发。高精度语音活动检测（VAD）模型的第 5 版，可将音频分割为语音和静音。",
       "speaker_segmentation": "基于 pyannote 的本地说话人分离模型，用于把录音拆成匿名说话人片段。",
       "speaker_embedding": "3D-Speaker 说话人特征模型，用于把分离出的说话人与已知说话人档案做匹配。",
-      "itn_zh": "中文逆文本标准化模型。将口语数字（如“一二三”）转换为数字（“123”）。"
+      "itn_zh": "中文逆文本标准化模型。将口语数字（如“一二三”）转换为数字（“123”）。",
+      "mms_300m_fa": "由 Meta 开发的 MMS-300M 多语言 CTC 强制对齐模型，用于高精度字词级时间戳对齐与说话人切分优化。"
     },
     "recognition_models": "识别模型",
     "recognition_path_label": "选择模型",
@@ -1476,6 +1480,7 @@
     "itn_model_status": "ITN 模型状态",
     "toggle_model": "切换 {{name}}",
     "vad_models": "VAD 模型",
+    "alignment_models": "CTC 对齐模型",
     "vad_path_label": "VAD 模型",
     "batch_vad_enabled": "批量 VAD 分割",
     "batch_vad_enabled_hint": "本地批量转录时按语音活动分割音频。关闭后会整段识别文件，可能更慢并占用更多内存。",

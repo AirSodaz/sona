@@ -94,6 +94,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   batchVadModelPath: '',
   batchSpeakerSegmentationModelPath: '',
   batchSpeakerEmbeddingModelPath: '',
+  batchAlignmentModelPath: '',
   modelDownloadMirror: 'auto',
 
   // Caption
@@ -213,6 +214,7 @@ const MODEL_KEYS: (keyof ModelConfig)[] = [
   'batchVadModelPath',
   'batchSpeakerSegmentationModelPath',
   'batchSpeakerEmbeddingModelPath',
+  'batchAlignmentModelPath',
   'modelDownloadMirror',
 ];
 

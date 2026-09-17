@@ -57,7 +57,8 @@ export interface ModelInfo {
     | 'moonshine'
     | 'speaker-segmentation'
     | 'speaker-embedding'
-    | 'omnilingual';
+    | 'omnilingual'
+    | 'alignment';
   modes?: ModelMode[];
   /** All recognizable languages, sorted ascending ISO 639 codes (`yue` = Cantonese). */
   languages: string[];
@@ -81,7 +82,8 @@ export type ModelCatalogSectionType =
   | 'punctuation'
   | 'vad'
   | 'speaker-segmentation'
-  | 'speaker-embedding';
+  | 'speaker-embedding'
+  | 'alignment';
 
 export interface ModelCatalogModel extends ModelInfo {
   installPath: string;
@@ -112,6 +114,7 @@ export interface ModelCatalogSelectionOptions {
   batch: ModelSelectionOption[];
   speakerSegmentation: ModelSelectionOption[];
   speakerEmbedding: ModelSelectionOption[];
+  alignment?: ModelSelectionOption[];
 }
 
 export type ModelDependencyConfigKey = 'vadModelPath' | 'punctuationModelPath';
@@ -135,6 +138,7 @@ export interface ModelCatalogRestoreDefaults {
   punctuationModelPath?: string;
   speakerSegmentationModelPath?: string;
   speakerEmbeddingModelPath?: string;
+  alignmentModelPath?: string;
   enableITN: boolean;
   batchVadEnabled?: boolean;
   vadBufferSize: number;
@@ -158,6 +162,7 @@ export interface ModelSelectionPaths {
   batchModelPath: string;
   speakerSegmentationModelPath: string;
   speakerEmbeddingModelPath: string;
+  alignmentModelPath?: string;
 }
 
 export interface ModelCatalogSelectedIds {
@@ -165,6 +170,7 @@ export interface ModelCatalogSelectedIds {
   batch: string | null;
   speakerSegmentation: string | null;
   speakerEmbedding: string | null;
+  alignment?: string | null;
 }
 
 /** Selected preset-model ids for per-scenario (live/batch) companion models. */
@@ -176,7 +182,9 @@ export type ScenarioSelectedModelIds = Record<
   | 'livePunctuation'
   | 'batchPunctuation'
   | 'liveVad'
-  | 'batchVad',
+  | 'batchVad'
+  | 'liveAlignment'
+  | 'batchAlignment',
   string | null
 >;
 
@@ -189,6 +197,8 @@ export const EMPTY_SCENARIO_SELECTED_MODEL_IDS: ScenarioSelectedModelIds = {
   batchPunctuation: null,
   liveVad: null,
   batchVad: null,
+  liveAlignment: null,
+  batchAlignment: null,
 };
 
 export const DEFAULT_MODEL_RULES: ModelRules = {

@@ -64,6 +64,7 @@ describe('modelRegistryService', () => {
       batch: null,
       speakerSegmentation: null,
       speakerEmbedding: null,
+      alignment: null,
     });
     getModelsDir.mockResolvedValue('/app/data/models');
   });
@@ -149,6 +150,7 @@ describe('modelRegistryService', () => {
       batch: null,
       speakerSegmentation: null,
       speakerEmbedding: null,
+      alignment: null,
     });
 
     expect(resolveModelCatalogSelectedIds).toHaveBeenCalledWith({
@@ -213,6 +215,7 @@ describe('modelRegistryService', () => {
       batch: snapshotModel.id,
       speakerSegmentation: null,
       speakerEmbedding: null,
+      alignment: null,
     });
     expect(resolveModelCatalogSelectedIds).not.toHaveBeenCalled();
   });

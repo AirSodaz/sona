@@ -1354,6 +1354,9 @@
     "speaker_embedding_model_label": "Speaker Embedding 모델",
     "speaker_embedding_model_hint": "분리된 화자를 알려진 화자 프로필과 매칭하는 데 사용됩니다.",
     "select_speaker_embedding_model": "화자 embedding 모델 선택...",
+    "alignment_model_label": "CTC 정렬 모델",
+    "alignment_model_hint": "토큰 수준 타임스탬프를 생성하고 화자 분할 경계를 최적화합니다.",
+    "select_alignment_model": "정렬 모델 선택...",
     "model_selection": "기본 모델",
     "model_selection_desc": "Choose the default 모델 used for live recording and batch import.",
     "scenario_selector_label": "모델 시나리오",
@@ -1458,7 +1461,8 @@
       "silero_v5_vad": "Silero가 개발한 정밀한 Voice Activity Detection(VAD) 모델의 v5로, 오디오를 음성과 침묵 구간으로 나눕니다.",
       "speaker_segmentation": "녹음을 익명 화자 발화 단위로 나누는 Pyannote 기반 로컬 화자 세그먼트 분리 모델입니다.",
       "speaker_embedding": "분리된 화자를 알려진 화자 프로필 라이브러리와 매칭하는 3D-Speaker embedding 모델입니다.",
-      "itn_zh": "Inverse Text Normalization 모델 for Chinese. Converts spoken numbers (e.g., '一二三') into digits ('123')."
+      "itn_zh": "Inverse Text Normalization 모델 for Chinese. Converts spoken numbers (e.g., '一二三') into digits ('123').",
+      "mms_300m_fa": "Meta MMS-300M 다국어 CTC 강제 정렬 모델. 토큰 수준 타임스탬프 생성과 화자 분할 최적화 지원."
     },
     "recognition_models": "Recognition 모델",
     "recognition_path_label": "선택 모델",
@@ -1476,6 +1480,7 @@
     "itn_model_status": "ITN 모델 상태",
     "toggle_model": "Toggle {{name}}",
     "vad_models": "VAD 모델",
+    "alignment_models": "CTC 정렬 모델",
     "vad_path_label": "VAD 모델",
     "batch_vad_enabled": "Batch VAD 세그먼트 분리",
     "batch_vad_enabled_hint": "Split 로컬 batch 전사 by speech activity. Turn this off to recognize the whole 파일 at once, which may be slower and use more memory.",

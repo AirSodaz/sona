@@ -219,6 +219,8 @@ function renderTab(installedModels: Set<string>, managerOverrides: Record<string
         batchPunctuation: null,
         liveVad: null,
         batchVad: null,
+        liveAlignment: null,
+        batchAlignment: null,
       },
       catalogLoadState: 'ready',
       catalogLoadError: null,

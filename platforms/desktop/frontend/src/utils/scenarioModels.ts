@@ -6,8 +6,8 @@ export type ScenarioModelKind =
   | 'punctuationModelPath'
   | 'vadModelPath'
   | 'speakerSegmentationModelPath'
-  | 'speakerEmbeddingModelPath';
-
+  | 'speakerEmbeddingModelPath'
+  | 'alignmentModelPath';
 type ScenarioPathField =
   | 'livePunctuationModelPath'
   | 'liveVadModelPath'
@@ -16,8 +16,8 @@ type ScenarioPathField =
   | 'batchPunctuationModelPath'
   | 'batchVadModelPath'
   | 'batchSpeakerSegmentationModelPath'
-  | 'batchSpeakerEmbeddingModelPath';
-
+  | 'batchSpeakerEmbeddingModelPath'
+  | 'batchAlignmentModelPath';
 /** Structural subset of AppConfig carrying the per-scenario model paths. */
 export type ScenarioModelPathConfig = Pick<AppConfig, ScenarioPathField>;
 
@@ -29,12 +29,14 @@ const SCENARIO_MODEL_FIELDS: ScenarioModelFieldMap = {
     vadModelPath: 'liveVadModelPath',
     speakerSegmentationModelPath: 'liveSpeakerSegmentationModelPath',
     speakerEmbeddingModelPath: 'liveSpeakerEmbeddingModelPath',
+    alignmentModelPath: 'batchAlignmentModelPath',
   },
   batch: {
     punctuationModelPath: 'batchPunctuationModelPath',
     vadModelPath: 'batchVadModelPath',
     speakerSegmentationModelPath: 'batchSpeakerSegmentationModelPath',
     speakerEmbeddingModelPath: 'batchSpeakerEmbeddingModelPath',
+    alignmentModelPath: 'batchAlignmentModelPath',
   },
 };
 
@@ -90,4 +92,11 @@ export function getScenarioVadBufferSize(
 ): number {
   const value = scenario === 'batch' ? config.batchVadBufferSize : config.liveVadBufferSize;
   return Number.isFinite(value) && (value as number) > 0 ? (value as number) : 5;
+}
+
+export function getScenarioAlignmentModelPath(
+  config: ScenarioModelPathConfig,
+  scenario: AsrScenario
+): string {
+  return getScenarioModelPath(config, 'alignmentModelPath', scenario);
 }

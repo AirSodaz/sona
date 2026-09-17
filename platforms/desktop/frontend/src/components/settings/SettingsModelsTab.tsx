@@ -255,6 +255,7 @@ function LocalModelManagementSection({
       'vad',
       'speaker-segmentation',
       'speaker-embedding',
+      'alignment',
     ];
     return new Map(
       types.map((type) => [
@@ -499,6 +500,36 @@ function LocalModelManagementSection({
               />
             ))}
             {(filteredGroupsByType.get('speaker-embedding')?.length ?? 0) === 0 && (
+              <div className="settings-model-empty">
+                {t('settings.model_filter_no_match', { defaultValue: '没有匹配的模型' })}
+              </div>
+            )}
+          </SettingsAccordion>
+
+          <SettingsAccordion
+            title={t('settings.alignment_models', {
+              defaultValue: 'CTC 对齐模型',
+            })}
+            status={
+              <span className={`status-badge ${getSectionStatus('alignment').type}`}>
+                {getSectionStatus('alignment').text}
+              </span>
+            }
+          >
+            {(filteredGroupsByType.get('alignment') ?? []).map((group) => (
+              <ModelCard
+                key={group.key}
+                models={group.models}
+                isAsr={false}
+                installedModels={sectionProps.installedModels}
+                downloads={sectionProps.downloads}
+                onDelete={sectionProps.handleDelete}
+                onDownload={sectionProps.handleDownload}
+                onCancelDownload={sectionProps.handleCancelDownload}
+                actionsDisabled={localModelActionsDisabled}
+              />
+            ))}
+            {(filteredGroupsByType.get('alignment')?.length ?? 0) === 0 && (
               <div className="settings-model-empty">
                 {t('settings.model_filter_no_match', { defaultValue: '没有匹配的模型' })}
               </div>
@@ -903,7 +934,7 @@ export function SettingsModelsTab({
       return {
         type: 'ready',
         text:
-          type === 'vad' || type === 'punctuation'
+          type === 'vad' || type === 'punctuation' || type === 'alignment'
             ? t('common.ready')
             : t('settings.installed_count', {
                 count: installedCount,
@@ -940,6 +971,14 @@ export function SettingsModelsTab({
     selectionOptions.speakerEmbedding,
     speakerDisabledOption,
   ]);
+
+  const alignmentOptions = useMemo(() => {
+    const installedOptions = toDropdownOptions(
+      selectionOptions.alignment ?? [],
+      selectedModelIds.batchAlignment ?? ''
+    );
+    return [speakerDisabledOption, ...installedOptions];
+  }, [selectedModelIds.batchAlignment, selectionOptions.alignment, speakerDisabledOption]);
 
   const sectionModelDropdownOptions = useCallback(
     (
@@ -1128,6 +1167,34 @@ export function SettingsModelsTab({
             />
           </div>
         </SettingsItem>
+
+        {isBatchScenario && (
+          <SettingsItem
+            title={t('settings.alignment_model_label', {
+              defaultValue: 'CTC 对齐模型',
+            })}
+            hint={t('settings.alignment_model_hint', {
+              defaultValue: '用于生成字/词级时间戳并优化说话人切分边界。',
+            })}
+          >
+            <div style={{ width: '220px' }}>
+              <Dropdown
+                id="settings-alignment-path"
+                value={selectedModelIds.batchAlignment ?? ''}
+                onChange={(value) => handleCompanionModelChange('alignmentModelPath', value)}
+                placeholder={t('settings.select_alignment_model', {
+                  defaultValue: '选择对齐模型...',
+                })}
+                options={alignmentOptions}
+                style={{ flex: 1 }}
+                aria-label={t('settings.alignment_model_label', {
+                  defaultValue: 'CTC 对齐模型',
+                })}
+                disabled={localModelActionsDisabled}
+              />
+            </div>
+          </SettingsItem>
+        )}
 
         <SettingsAccordion
           title={t('settings.advanced_settings_title', { defaultValue: '高级设置' })}

@@ -19,7 +19,8 @@ type ModelConfigKey =
   | 'batchPunctuationModelPath'
   | 'batchVadModelPath'
   | 'batchSpeakerSegmentationModelPath'
-  | 'batchSpeakerEmbeddingModelPath';
+  | 'batchSpeakerEmbeddingModelPath'
+  | 'batchAlignmentModelPath';
 type ConfiguredModelField = { key: ModelConfigKey; path: string };
 
 export interface HealthCheckServicePorts {
@@ -128,6 +129,7 @@ export class HealthCheckService {
       { key: 'batchVadModelPath', path: config.batchVadModelPath },
       { key: 'batchSpeakerSegmentationModelPath', path: config.batchSpeakerSegmentationModelPath },
       { key: 'batchSpeakerEmbeddingModelPath', path: config.batchSpeakerEmbeddingModelPath },
+      { key: 'batchAlignmentModelPath', path: config.batchAlignmentModelPath },
     ] as const;
 
     const configuredModelFields: ConfiguredModelField[] = modelFields

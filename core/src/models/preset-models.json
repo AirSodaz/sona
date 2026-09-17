@@ -2211,5 +2211,37 @@
         "sizeBytes": 2313101
       }
     ]
+  },
+  {
+    "id": "sherpa-onnx-mms-300m-fa",
+    "name": "MMS-300M-FA",
+    "description": "settings.descriptions.mms_300m_fa",
+    "type": "alignment",
+    "languages": [],
+    "languageMode": "none",
+    "size": "~315 MB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 4
+    },
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-mms-300m-fa/resolve/main/model.onnx",
+        "filename": "model.onnx",
+        "sha256": "4b97fa44b8ee34177b9663d2745a557b7f4be432e3a0b8fe31bb463d11bce555",
+        "sizeBytes": 315000000
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-mms-300m-fa/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "7a35c2fa1298c56e297e682d33458ba82d8c3645b23d91f24d9c73041908efc5",
+        "sizeBytes": 102400
+      }
+    ]
   }
 ]

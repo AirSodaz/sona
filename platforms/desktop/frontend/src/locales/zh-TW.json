@@ -1354,6 +1354,9 @@
     "speaker_embedding_model_label": "說話者特徵模型",
     "speaker_embedding_model_hint": "用於將分離出的說話人與已知說話人檔案配對。",
     "select_speaker_embedding_model": "選擇說話者特徵模型...",
+    "alignment_model_label": "CTC 對齊模型",
+    "alignment_model_hint": "用於產生字/詞級時間戳並優化說話者切分邊界。",
+    "select_alignment_model": "選擇對齊模型...",
     "model_selection": "預設模型",
     "model_selection_desc": "選擇即時錄音和批次匯入預設使用的模型。",
     "scenario_selector_label": "模型場景",
@@ -1458,7 +1461,8 @@
       "silero_v5_vad": "由 Silero 開發。高精度語音活動偵測（VAD）模型的第 5 版，可將音訊分割為語音和靜音。",
       "speaker_segmentation": "基於 pyannote 的本機說話者分離模型，用於把錄音拆成匿名說話者片段。",
       "speaker_embedding": "3D-Speaker 說話者特徵模型，用來把分離出的說話者與已知說話者檔案做配對。",
-      "itn_zh": "中文逆文本標準化模型。將口語數字（如“一二三”）轉換為數字（“123”）。"
+      "itn_zh": "中文逆文本標準化模型。將口語數字（如“一二三”）轉換為數字（“123”）。",
+      "mms_300m_fa": "由 Meta 開發的 MMS-300M 多語言 CTC 強制對齊模型，用於高精度字詞級時間戳對齊與說話者切分優化。"
     },
     "recognition_models": "辨識模型",
     "recognition_path_label": "選擇模型",
@@ -1476,6 +1480,7 @@
     "itn_model_status": "ITN 模型狀態",
     "toggle_model": "切換 {{name}}",
     "vad_models": "VAD 模型",
+    "alignment_models": "CTC 對齊模型",
     "vad_path_label": "VAD 模型",
     "batch_vad_enabled": "批次 VAD 分割",
     "batch_vad_enabled_hint": "本機批次轉錄時按語音活動分割音訊。關閉後會整段辨識檔案，可能會更慢並佔用更多記憶體。",

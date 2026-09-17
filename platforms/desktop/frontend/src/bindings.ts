@@ -1674,6 +1674,7 @@ export type ModelCatalogRestoreDefaults_Deserialize = {
 	punctuationModelPath: string | null,
 	speakerSegmentationModelPath: string | null,
 	speakerEmbeddingModelPath: string | null,
+	alignmentModelPath: string | null,
 	enableItn: boolean,
 	batchVadEnabled: boolean,
 	vadBufferSize: number | null,
@@ -1687,6 +1688,7 @@ export type ModelCatalogRestoreDefaults_Serialize = {
 	punctuationModelPath: string | null,
 	speakerSegmentationModelPath: string | null,
 	speakerEmbeddingModelPath: string | null,
+	alignmentModelPath?: string | null,
 	enableItn: boolean,
 	batchVadEnabled: boolean,
 	vadBufferSize: number | null,
@@ -1695,7 +1697,7 @@ export type ModelCatalogRestoreDefaults_Serialize = {
 
 export type ModelCatalogSection = ModelCatalogSection_Serialize | ModelCatalogSection_Deserialize;
 
-export type ModelCatalogSectionType = "asr" | "punctuation" | "vad" | "speaker-segmentation" | "speaker-embedding";
+export type ModelCatalogSectionType = "asr" | "punctuation" | "vad" | "speaker-segmentation" | "speaker-embedding" | "alignment";
 
 export type ModelCatalogSection_Deserialize = {
 	type: ModelCatalogSectionType,
@@ -1707,11 +1709,22 @@ export type ModelCatalogSection_Serialize = {
 	groups: ModelCatalogGroup_Serialize[],
 };
 
-export type ModelCatalogSelectedIds = {
+export type ModelCatalogSelectedIds = ModelCatalogSelectedIds_Serialize | ModelCatalogSelectedIds_Deserialize;
+
+export type ModelCatalogSelectedIds_Deserialize = {
 	streaming: string | null,
 	batch: string | null,
 	speakerSegmentation: string | null,
 	speakerEmbedding: string | null,
+	alignment: string | null,
+};
+
+export type ModelCatalogSelectedIds_Serialize = {
+	streaming: string | null,
+	batch: string | null,
+	speakerSegmentation: string | null,
+	speakerEmbedding: string | null,
+	alignment?: string | null,
 };
 
 export type ModelCatalogSelectionOptions = {
@@ -1719,6 +1732,7 @@ export type ModelCatalogSelectionOptions = {
 	batch: ModelSelectionOption[],
 	speakerSegmentation: ModelSelectionOption[],
 	speakerEmbedding: ModelSelectionOption[],
+	alignment: ModelSelectionOption[],
 };
 
 export type ModelCatalogSnapshot = ModelCatalogSnapshot_Serialize | ModelCatalogSnapshot_Deserialize;
@@ -1804,6 +1818,7 @@ export type ModelSelectionPaths = {
 	batchModelPath: string,
 	speakerSegmentationModelPath: string,
 	speakerEmbeddingModelPath: string,
+	alignmentModelPath?: string | null,
 };
 
 export type ModelSummaryInput = {

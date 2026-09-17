@@ -132,6 +132,7 @@ pub enum FfiModelCatalogSectionType {
     Vad,
     SpeakerSegmentation,
     SpeakerEmbedding,
+    Alignment,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
@@ -416,6 +417,7 @@ fn model_catalog_section_type_to_ffi(
             FfiModelCatalogSectionType::SpeakerSegmentation
         }
         ModelCatalogSectionType::SpeakerEmbedding => FfiModelCatalogSectionType::SpeakerEmbedding,
+        ModelCatalogSectionType::Alignment => FfiModelCatalogSectionType::Alignment,
     }
 }
 
@@ -556,6 +558,7 @@ pub fn model_selection_paths_from_ffi(paths: FfiModelSelectionPaths) -> ModelSel
         batch_model_path: paths.batch_model_path,
         speaker_segmentation_model_path: paths.speaker_segmentation_model_path,
         speaker_embedding_model_path: paths.speaker_embedding_model_path,
+        alignment_model_path: None,
     }
 }
 

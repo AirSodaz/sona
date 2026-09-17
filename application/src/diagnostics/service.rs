@@ -37,6 +37,7 @@ where
                 batch_model_path: input.config.batch_model_path.clone(),
                 speaker_segmentation_model_path: String::new(),
                 speaker_embedding_model_path: String::new(),
+                alignment_model_path: None,
             },
         );
         let live_model = selected
