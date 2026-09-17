@@ -669,7 +669,12 @@ fn mms_alignment_preset_is_verified_bundle() {
     assert_eq!(model.language_mode, LanguageMode::None);
     assert!(model.languages.is_empty());
     assert_eq!(model.artifacts.len(), 2);
-    assert!(model.artifacts.iter().any(|a| a.filename == "model.onnx"));
+    assert!(
+        model
+            .artifacts
+            .iter()
+            .any(|a| a.filename == "model.int8.onnx")
+    );
     assert!(model.artifacts.iter().any(|a| a.filename == "tokens.txt"));
 }
 

@@ -2219,7 +2219,7 @@
     "type": "alignment",
     "languages": [],
     "languageMode": "none",
-    "size": "~315 MB",
+    "size": "~365 MB",
     "ratings": {
       "accuracy": 5,
       "speed": 4
@@ -2231,17 +2231,21 @@
     "engine": "sherpa-onnx",
     "artifacts": [
       {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-mms-300m-fa/resolve/main/model.onnx",
-        "filename": "model.onnx",
-        "sha256": "4b97fa44b8ee34177b9663d2745a557b7f4be432e3a0b8fe31bb463d11bce555",
-        "sizeBytes": 315000000
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-int8-2025-11-12/resolve/main/model.int8.onnx",
+        "filename": "model.int8.onnx",
+        "sha256": "e7c4e54ee4c4c47829cc6667d5d00ed8ea7bef1dcfeef0fce766f77752a2726c",
+        "sizeBytes": 365352120
       },
       {
-        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-mms-300m-fa/resolve/main/tokens.txt",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-int8-2025-11-12/resolve/main/tokens.txt",
         "filename": "tokens.txt",
-        "sha256": "7a35c2fa1298c56e297e682d33458ba82d8c3645b23d91f24d9c73041908efc5",
-        "sizeBytes": 102400
+        "sha256": "a7a044c52cb29cbe8b0dc1953e92cefd4ca16b0ed968177b6beab21f9a7d0b31",
+        "sizeBytes": 86423
       }
-    ]
+    ],
+    "fileConfig": {
+      "model": "model.int8.onnx",
+      "tokens": "tokens.txt"
+    }
   }
 ]

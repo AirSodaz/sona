@@ -47,7 +47,6 @@ impl SherpaCtcAligner {
         let tokens_path = resolve_model_tokens_path(model_path);
 
         let mut config = OfflineRecognizerConfig::default();
-        config.model_config.nemo_ctc.model = Some(onnx_path.to_string_lossy().to_string());
         if let Some(tp) = tokens_path.as_ref() {
             config.model_config.tokens = Some(tp.to_string_lossy().to_string());
         }
@@ -55,13 +54,25 @@ impl SherpaCtcAligner {
         config.model_config.debug = false;
         config.model_config.provider = Some("cpu".to_string());
 
-        let dictionary = tokens_path.and_then(|tp| {
-            std::fs::read_to_string(&tp)
+        let dictionary = tokens_path.as_ref().and_then(|tp| {
+            std::fs::read_to_string(tp)
                 .ok()
                 .map(|content| MmsDictionary::from_lines(content.lines()))
         });
 
-        let recognizer = OfflineRecognizer::create(&config).ok_or_else(|| {
+        let model_str = onnx_path.to_string_lossy().to_string();
+        let recognizer = {
+            let mut omni_config = config.clone();
+            omni_config.model_config.omnilingual.model = Some(model_str.clone());
+            if let Some(rec) = OfflineRecognizer::create(&omni_config) {
+                Some(rec)
+            } else {
+                let mut nemo_config = config;
+                nemo_config.model_config.nemo_ctc.model = Some(model_str);
+                OfflineRecognizer::create(&nemo_config)
+            }
+        }
+        .ok_or_else(|| {
             AlignerPortError::new(
                 AlignerPortErrorKind::ModelNotFound,
                 format!(
