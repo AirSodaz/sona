@@ -3,6 +3,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "specta")]
 use specta::Type;
+use std::path::Path;
+use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(Type))]
@@ -100,6 +102,100 @@ pub trait SegmentAlignerPort: Send + Sync {
     ) -> Result<Vec<TranscriptSegment>, AlignerPortError>;
 }
 
+/// Implementation family of an aligner engine provider.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AlignerEngineKind {
+    #[default]
+    CtcTrellisOnnx,
+    TestDummy,
+}
+
+/// Factory that claims aligner model paths and loads [`SegmentAlignerPort`] instances.
+pub trait AlignerEnginePort: Send + Sync {
+    fn engine_kind(&self) -> AlignerEngineKind;
+
+    /// Whether this engine can process the model at `model_path`.
+    fn can_handle(&self, model_path: &Path) -> bool;
+
+    /// Loads an instance from `model_path`.
+    fn load(
+        &self,
+        model_path: &Path,
+        num_threads: i32,
+    ) -> Result<Arc<dyn SegmentAlignerPort>, AlignerPortError>;
+}
+
+/// Composition-time set of aligner engines, mirroring [`crate::ports::punctuation::PunctuationEngineSet`].
+#[derive(Clone, Default)]
+pub struct AlignerEngineSet {
+    engines: Vec<Arc<dyn AlignerEnginePort>>,
+}
+
+impl std::fmt::Debug for AlignerEngineSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AlignerEngineSet")
+            .field("engines", &self.engines.len())
+            .finish()
+    }
+}
+
+impl AlignerEngineSet {
+    pub fn empty() -> Self {
+        Self {
+            engines: Vec::new(),
+        }
+    }
+
+    /// Builder-style registration for composition roots.
+    pub fn register(mut self, engine: Arc<dyn AlignerEnginePort>) -> Self {
+        self.engines.push(engine);
+        self
+    }
+
+    pub fn engines(&self) -> &[Arc<dyn AlignerEnginePort>] {
+        &self.engines
+    }
+
+    /// Resolves the first engine that can handle a usable `model_path`.
+    pub fn resolve(&self, model_path: Option<&Path>) -> Option<Arc<dyn AlignerEnginePort>> {
+        let path = model_path?;
+        if path.as_os_str().is_empty() || !path.exists() {
+            return None;
+        }
+        self.engines
+            .iter()
+            .find(|engine| engine.can_handle(path))
+            .cloned()
+    }
+}
+
+/// Loads the configured aligner model for one transcription job.
+///
+/// Absent or empty paths yield `None`. A configured path that does not exist
+/// is a typed [`AlignerPortErrorKind::ModelNotFound`] error; an existing path
+/// that no engine claims yields `None`.
+pub fn load_configured_aligner(
+    engines: &AlignerEngineSet,
+    model_path: Option<&Path>,
+) -> Result<Option<Arc<dyn SegmentAlignerPort>>, AlignerPortError> {
+    let Some(path) = model_path else {
+        return Ok(None);
+    };
+    if path.as_os_str().is_empty() {
+        return Ok(None);
+    }
+    if !path.exists() {
+        return Err(AlignerPortError::model_not_found(format!(
+            "Aligner model path does not exist: {}",
+            path.display()
+        )));
+    }
+    match engines.resolve(Some(path)) {
+        Some(engine) => Ok(Some(engine.load(path, 1)?)),
+        None => Ok(None),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -138,5 +234,80 @@ mod tests {
         let err3 = AlignerPortError::runtime("bad param");
         assert_eq!(err1, err2);
         assert_ne!(err1, err3);
+    }
+
+    struct FakeAligner;
+
+    #[async_trait]
+    impl SegmentAlignerPort for FakeAligner {
+        async fn align_segments(
+            &self,
+            _audio_samples: &[f32],
+            _sample_rate: u32,
+            segments: &[TranscriptSegment],
+        ) -> Result<Vec<TranscriptSegment>, AlignerPortError> {
+            Ok(segments.to_vec())
+        }
+    }
+
+    struct FakeAlignerEngine;
+
+    impl AlignerEnginePort for FakeAlignerEngine {
+        fn engine_kind(&self) -> AlignerEngineKind {
+            AlignerEngineKind::TestDummy
+        }
+
+        fn can_handle(&self, model_path: &Path) -> bool {
+            model_path.to_string_lossy().contains("claim_me")
+        }
+
+        fn load(
+            &self,
+            _model_path: &Path,
+            _num_threads: i32,
+        ) -> Result<Arc<dyn SegmentAlignerPort>, AlignerPortError> {
+            Ok(Arc::new(FakeAligner))
+        }
+    }
+
+    #[test]
+    fn test_aligner_engine_set_resolution() {
+        let set = AlignerEngineSet::empty().register(Arc::new(FakeAlignerEngine));
+        assert_eq!(set.engines().len(), 1);
+
+        assert!(set.resolve(None).is_none());
+        assert!(set.resolve(Some(Path::new(""))).is_none());
+        assert!(set.resolve(Some(Path::new("missing_model.onnx"))).is_none());
+    }
+
+    #[test]
+    fn test_load_configured_aligner() {
+        let set = AlignerEngineSet::empty().register(Arc::new(FakeAlignerEngine));
+
+        // None or empty
+        assert!(matches!(load_configured_aligner(&set, None), Ok(None)));
+        assert!(matches!(
+            load_configured_aligner(&set, Some(Path::new(""))),
+            Ok(None)
+        ));
+
+        // Missing file
+        let missing = Path::new("does_not_exist_aligner.onnx");
+        let err = match load_configured_aligner(&set, Some(missing)) {
+            Ok(_) => panic!("expected model not found error"),
+            Err(err) => err,
+        };
+        assert_eq!(err.kind, AlignerPortErrorKind::ModelNotFound);
+
+        // Existing directory that contains "claim_me"
+        let temp_dir = std::env::temp_dir().join("claim_me_aligner_test");
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let loaded = match load_configured_aligner(&set, Some(&temp_dir)) {
+            Ok(Some(aligner)) => aligner,
+            Ok(None) => panic!("expected an aligner"),
+            Err(err) => panic!("unexpected error: {err}"),
+        };
+        drop(loaded);
+        std::fs::remove_dir_all(&temp_dir).unwrap();
     }
 }

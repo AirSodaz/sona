@@ -479,6 +479,97 @@ pub fn apply_alignment_to_transcript_segment(
     ensure_transcript_segment_timing(segment);
 }
 
+/// Extracts a subslice of audio samples around `[start_sec, end_sec]` with padding,
+/// clamped to the bounds of `audio`.
+///
+/// Returns the sliced samples and `actual_slice_start_sec` (timestamp of frame 0 in the slice).
+pub fn slice_audio_with_padding(
+    audio: &[f32],
+    sample_rate: u32,
+    start_sec: f64,
+    end_sec: f64,
+    padding_sec: f64,
+) -> (Vec<f32>, f64) {
+    if audio.is_empty() || sample_rate == 0 {
+        return (Vec::new(), start_sec.max(0.0));
+    }
+
+    let clamped_start = (start_sec - padding_sec).max(0.0);
+    let clamped_end = (end_sec + padding_sec).max(clamped_start);
+
+    let start_idx = ((clamped_start * sample_rate as f64).floor() as usize).min(audio.len());
+    let end_idx = ((clamped_end * sample_rate as f64).ceil() as usize).min(audio.len());
+
+    let actual_start_sec = start_idx as f64 / sample_rate as f64;
+    let slice = if start_idx < end_idx {
+        audio[start_idx..end_idx].to_vec()
+    } else {
+        Vec::new()
+    };
+
+    (slice, actual_start_sec)
+}
+
+/// Synthesizes fallback `TranscriptTimingUnit`s for text across `[start_sec, end_sec]`,
+/// dividing time proportionally across words/CJK characters.
+pub fn synthesize_fallback_timing_units(
+    text: &str,
+    start_sec: f64,
+    end_sec: f64,
+) -> Vec<TranscriptTimingUnit> {
+    let effective_start = start_sec.max(0.0);
+    let effective_end = end_sec.max(effective_start);
+    let total_duration = (effective_end - effective_start).max(0.001);
+
+    let mut units = crate::transcription::text_alignment::lex_text_units(text);
+    units.retain(|unit| !unit.text.trim().is_empty());
+    if units.is_empty() {
+        return Vec::new();
+    }
+
+    let count = units.len();
+    let step = total_duration / count as f64;
+
+    units
+        .into_iter()
+        .enumerate()
+        .map(|(i, unit)| {
+            let start = effective_start + i as f64 * step;
+            let end = if i + 1 == count {
+                effective_end
+            } else {
+                start + step
+            };
+            TranscriptTimingUnit {
+                text: unit.text,
+                start,
+                end: end.max(start),
+            }
+        })
+        .collect()
+}
+
+/// Applies fallback timing units to a segment if its timing level is not already `Token`.
+pub fn apply_fallback_timing_to_transcript_segment(segment: &mut TranscriptSegment) {
+    if let Some(timing) = segment.timing.as_ref()
+        && timing.level == TranscriptTimingLevel::Token
+        && !timing.units.is_empty()
+    {
+        ensure_transcript_segment_timing(segment);
+        return;
+    }
+
+    let units = synthesize_fallback_timing_units(&segment.text, segment.start, segment.end);
+    if !units.is_empty() {
+        segment.timing = Some(TranscriptTiming {
+            level: TranscriptTimingLevel::Token,
+            source: TranscriptTimingSource::Derived,
+            units,
+        });
+    }
+    ensure_transcript_segment_timing(segment);
+}
+
 /// MMS / Fairseq style character vocabulary dictionary.
 #[derive(Clone, Debug)]
 pub struct MmsDictionary {
@@ -1077,5 +1168,58 @@ mod tests {
         assert_eq!(tokens_cjk[2].word_index, 2);
         assert_eq!(tokens_cjk[3].text, "界");
         assert_eq!(tokens_cjk[3].word_index, 3);
+    }
+
+    #[test]
+    fn test_slice_audio_with_padding() {
+        let sample_rate = 1000; // 1 sample = 1ms for simplicity
+        let audio: Vec<f32> = (0..10_000).map(|v| v as f32).collect(); // 10s audio
+
+        // Slice from 2.0s to 3.0s with 0.2s padding -> 1.8s to 3.2s
+        let (slice, start_sec) = slice_audio_with_padding(&audio, sample_rate, 2.0, 3.0, 0.2);
+        assert_eq!(slice.len(), 1400); // 1.4s * 1000 = 1400 samples
+        assert!((start_sec - 1.8).abs() < 1e-4);
+        assert_eq!(slice[0], 1800.0);
+        assert_eq!(slice[slice.len() - 1], 3199.0);
+
+        // Clamping to start: from 0.1s with 0.5s padding -> clamped to 0.0s
+        let (slice_clamp, start_sec_clamp) =
+            slice_audio_with_padding(&audio, sample_rate, 0.1, 1.0, 0.5);
+        assert!((start_sec_clamp - 0.0).abs() < 1e-4);
+        assert_eq!(slice_clamp.len(), 1500); // 0.0 to 1.5s
+        assert_eq!(slice_clamp[0], 0.0);
+    }
+
+    #[test]
+    fn test_fallback_timing_synthesis() {
+        let text = "Hello world 你好";
+        let units = synthesize_fallback_timing_units(text, 1.0, 3.0);
+        assert_eq!(units.len(), 4); // "Hello", "world", "你", "好"
+        assert_eq!(units[0].text, "Hello");
+        assert!((units[0].start - 1.0).abs() < 1e-4);
+        assert_eq!(units[3].text, "好");
+        assert!((units[3].end - 3.0).abs() < 1e-4);
+
+        let mut segment = TranscriptSegment {
+            id: "seg-fb".to_string(),
+            text: "Hello world".to_string(),
+            start: 1.0,
+            end: 2.0,
+            is_final: true,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            speaker: None,
+            speaker_attribution: None,
+        };
+        apply_fallback_timing_to_transcript_segment(&mut segment);
+        let timing = segment.timing.expect("timing should be populated");
+        assert_eq!(timing.level, TranscriptTimingLevel::Token);
+        assert_eq!(timing.source, TranscriptTimingSource::Derived);
+        assert_eq!(timing.units.len(), 2);
+        assert_eq!(timing.units[0].text, "Hello");
+        assert_eq!(timing.units[1].text, "world");
     }
 }

@@ -174,6 +174,7 @@ pub(crate) fn build_local_batch_plan(
         punctuation_model: request
             .punctuation_model
             .filter(|value| !value.trim().is_empty()),
+        alignment_model: None,
         vad_model: request.vad_model.filter(|value| !value.trim().is_empty()),
         vad_buffer: request.vad_buffer,
         batch_segmentation_mode: sona_core::ports::asr::BatchSegmentationMode::Vad,

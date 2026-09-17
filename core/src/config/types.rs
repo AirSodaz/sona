@@ -216,6 +216,8 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub batch_speaker_embedding_model_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_alignment_model_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_download_mirror: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lock_window: Option<bool>,

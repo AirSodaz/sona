@@ -6,6 +6,7 @@ use crate::recognizer::{
 };
 use async_trait::async_trait;
 use sona_core::models::config::ModelFileConfig;
+use sona_core::ports::aligner::{AlignerEngineSet, load_configured_aligner};
 use sona_core::ports::asr::{
     AsrPortError, AsrPortErrorKind, BatchSegmentationMode, BatchTranscriberPort,
     BatchTranscriptionObserver, LocalAsrEngine, NoopBatchTranscriptionObserver,
@@ -24,10 +25,25 @@ use sona_core::transcription::transcript::{
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct LocalBatchAsrAdapter {
     vad_engines: VadEngineSet,
     punctuation_engines: PunctuationEngineSet,
+    aligner_engines: AlignerEngineSet,
+}
+
+impl Default for LocalBatchAsrAdapter {
+    fn default() -> Self {
+        Self {
+            vad_engines: VadEngineSet::default(),
+            punctuation_engines: PunctuationEngineSet::default(),
+            aligner_engines: default_aligner_engines(),
+        }
+    }
+}
+
+pub fn default_aligner_engines() -> AlignerEngineSet {
+    AlignerEngineSet::empty().register(Arc::new(crate::aligner::SherpaCtcAlignerEngine))
 }
 
 impl LocalBatchAsrAdapter {
@@ -35,7 +51,13 @@ impl LocalBatchAsrAdapter {
         Self {
             vad_engines,
             punctuation_engines,
+            aligner_engines: default_aligner_engines(),
         }
+    }
+
+    pub fn with_aligner_engines(mut self, aligner_engines: AlignerEngineSet) -> Self {
+        self.aligner_engines = aligner_engines;
+        self
     }
 }
 
@@ -45,8 +67,12 @@ impl BatchTranscriberPort for LocalBatchAsrAdapter {
         &self,
         plan: BatchTranscribePlan,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        let job =
-            BatchTranscriptionJob::from_plan(plan, &self.vad_engines, &self.punctuation_engines)?;
+        let job = BatchTranscriptionJob::from_plan(
+            plan,
+            &self.vad_engines,
+            &self.punctuation_engines,
+            &self.aligner_engines,
+        )?;
         job.transcribe(Arc::new(NoopBatchTranscriptionObserver))
             .await
     }
@@ -56,8 +82,12 @@ impl BatchTranscriberPort for LocalBatchAsrAdapter {
         plan: BatchTranscribePlan,
         observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        let job =
-            BatchTranscriptionJob::from_plan(plan, &self.vad_engines, &self.punctuation_engines)?;
+        let job = BatchTranscriptionJob::from_plan(
+            plan,
+            &self.vad_engines,
+            &self.punctuation_engines,
+            &self.aligner_engines,
+        )?;
         job.transcribe(observer).await
     }
 }
@@ -71,6 +101,7 @@ struct BatchTranscriptionJob {
     enable_itn: bool,
     language: String,
     punctuation_model: Option<PathBuf>,
+    alignment_model: Option<PathBuf>,
     vad_model: Option<PathBuf>,
     vad_buffer: f32,
     batch_segmentation_mode: BatchSegmentationMode,
@@ -82,6 +113,7 @@ struct BatchTranscriptionJob {
     quiet: bool,
     vad_engines: VadEngineSet,
     punct_engines: PunctuationEngineSet,
+    aligner_engines: AlignerEngineSet,
     ffmpeg_path: Option<PathBuf>,
 }
 
@@ -90,6 +122,7 @@ impl BatchTranscriptionJob {
         plan: BatchTranscribePlan,
         vad_engines: &VadEngineSet,
         punct_engines: &PunctuationEngineSet,
+        aligner_engines: &AlignerEngineSet,
     ) -> Result<Self, AsrPortError> {
         if plan.engine != LocalAsrEngine::SherpaOnnx {
             return Err(local_asr_engine_mismatch(
@@ -114,6 +147,7 @@ impl BatchTranscriptionJob {
             enable_itn: plan.enable_itn,
             language: plan.language,
             punctuation_model: plan.punctuation_model.map(PathBuf::from),
+            alignment_model: plan.alignment_model.map(PathBuf::from),
             vad_model: plan.vad_model.map(PathBuf::from),
             vad_buffer: plan.vad_buffer,
             batch_segmentation_mode: plan.batch_segmentation_mode,
@@ -125,6 +159,7 @@ impl BatchTranscriptionJob {
             quiet: plan.quiet,
             vad_engines: vad_engines.clone(),
             punct_engines: punct_engines.clone(),
+            aligner_engines: aligner_engines.clone(),
             ffmpeg_path: plan.ffmpeg_path.map(PathBuf::from),
         })
     }
@@ -176,6 +211,12 @@ impl BatchTranscriptionJob {
         provider: Option<&str>,
         observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+        let aligner =
+            load_configured_aligner(&self.aligner_engines, self.alignment_model.as_deref())
+                .map_err(|err| AsrPortError::new(AsrPortErrorKind::Model, err.to_string()))?;
+        let punctuation =
+            load_configured_punctuation(&self.punct_engines, self.punctuation_model.as_deref())?;
+
         let model_type = build_offline_model_config(
             &self.model_path,
             &self.model_type,
@@ -186,8 +227,6 @@ impl BatchTranscriptionJob {
         )?;
 
         let recognizer = create_offline_recognizer(model_type, self.num_threads, provider)?;
-        let punctuation =
-            load_configured_punctuation(&self.punct_engines, self.punctuation_model.as_deref())?;
         let samples = extract_and_resample_audio_with_ffmpeg(
             &self.input_path,
             16000,
@@ -214,6 +253,20 @@ impl BatchTranscriptionJob {
             self.batch_segmentation_mode,
             observer.as_ref(),
         )?;
+        let segments = if let Some(aligner) = aligner.as_ref() {
+            observer.on_progress(92.0);
+            match aligner.align_segments(&samples, 16000, &segments).await {
+                Ok(aligned) => aligned,
+                Err(err) => {
+                    log::warn!(
+                        "Forced alignment failed, falling back to unaligned segments: {err}"
+                    );
+                    segments
+                }
+            }
+        } else {
+            segments
+        };
         let segments = crate::speaker_processing::annotate_segments_with_speakers(
             &samples,
             &segments,
@@ -349,6 +402,7 @@ mod tests {
             enable_itn: false,
             language: "auto".to_string(),
             punctuation_model: None,
+            alignment_model: None,
             vad_model: None,
             vad_buffer: 5.0,
             batch_segmentation_mode: sona_core::ports::asr::BatchSegmentationMode::Vad,
@@ -386,6 +440,7 @@ mod tests {
             language: "auto".to_string(),
             punctuation_model: None,
             vad_model: None,
+            alignment_model: None,
             vad_buffer: 5.0,
             batch_segmentation_mode: sona_core::ports::asr::BatchSegmentationMode::Vad,
             model_type: "whisper".to_string(),
@@ -411,6 +466,16 @@ mod tests {
         assert_eq!(
             error.message,
             "Local ASR adapter 'sherpa-onnx' cannot execute engine 'llama-cpp'."
+        );
+    }
+
+    #[test]
+    fn adapter_configures_aligner_engine_set() {
+        let adapter = LocalBatchAsrAdapter::default();
+        assert_eq!(adapter.aligner_engines.engines().len(), 1);
+        assert_eq!(
+            adapter.aligner_engines.engines()[0].engine_kind(),
+            sona_core::ports::aligner::AlignerEngineKind::CtcTrellisOnnx
         );
     }
 }
