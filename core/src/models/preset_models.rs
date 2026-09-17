@@ -471,7 +471,7 @@ fn build_catalog_sections(models: &[ModelCatalogModel]) -> Vec<ModelCatalogSecti
 
             for model in models
                 .iter()
-                .filter(|model| model_section_type(model) == *section_type)
+                .filter(|model| model_matches_section(model, *section_type))
             {
                 let key = model.group_id.clone().unwrap_or_else(|| model.id.clone());
 
@@ -494,14 +494,22 @@ fn build_catalog_sections(models: &[ModelCatalogModel]) -> Vec<ModelCatalogSecti
         .collect()
 }
 
-fn model_section_type(model: &ModelCatalogModel) -> ModelCatalogSectionType {
-    match model.model_type.as_str() {
-        "punctuation" => ModelCatalogSectionType::Punctuation,
-        "vad" => ModelCatalogSectionType::Vad,
-        "speaker-segmentation" => ModelCatalogSectionType::SpeakerSegmentation,
-        "speaker-embedding" => ModelCatalogSectionType::SpeakerEmbedding,
-        "alignment" => ModelCatalogSectionType::Alignment,
-        _ => ModelCatalogSectionType::Asr,
+fn model_matches_section(model: &ModelCatalogModel, section_type: ModelCatalogSectionType) -> bool {
+    match section_type {
+        ModelCatalogSectionType::Punctuation => model.model_type == "punctuation",
+        ModelCatalogSectionType::Vad => model.model_type == "vad",
+        ModelCatalogSectionType::SpeakerSegmentation => model.model_type == "speaker-segmentation",
+        ModelCatalogSectionType::SpeakerEmbedding => model.model_type == "speaker-embedding",
+        ModelCatalogSectionType::Alignment => {
+            model.model_type == "alignment" || model.model_type == "omnilingual"
+        }
+        ModelCatalogSectionType::Asr => {
+            model.model_type != "punctuation"
+                && model.model_type != "vad"
+                && model.model_type != "speaker-segmentation"
+                && model.model_type != "speaker-embedding"
+                && model.model_type != "alignment"
+        }
     }
 }
 
@@ -533,7 +541,7 @@ fn build_selection_options(models: &[ModelCatalogModel]) -> ModelCatalogSelectio
             .collect(),
         alignment: models
             .iter()
-            .filter(|model| model.model_type == "alignment")
+            .filter(|model| model.model_type == "alignment" || model.model_type == "omnilingual")
             .map(ModelSelectionOption::from_catalog_model)
             .collect(),
     }

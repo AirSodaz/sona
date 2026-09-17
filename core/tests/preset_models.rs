@@ -661,39 +661,79 @@ fn resolves_catalog_selection_ids_without_adapter_state() {
 }
 
 #[test]
-fn omnilingual_300m_ctc_int8_alignment_preset_is_verified_bundle() {
-    let model =
-        find_preset_model("sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-int8-2025-11-12")
-            .expect("Omnilingual 300M CTC int8 alignment model must exist");
-    assert_eq!(model.model_type, "alignment");
-    assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
-    assert_eq!(model.language_mode, LanguageMode::None);
-    assert!(model.languages.is_empty());
-    assert_eq!(model.artifacts.len(), 2);
-    assert!(
-        model
-            .artifacts
-            .iter()
-            .any(|a| a.filename == "model.int8.onnx")
-    );
-    assert!(model.artifacts.iter().any(|a| a.filename == "tokens.txt"));
-}
-
-#[test]
-fn omnilingual_300m_ctc_alignment_presets_are_verified_bundles() {
+fn omnilingual_presets_support_both_asr_and_alignment() {
     let ids = [
-        "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-2025-11-12",
+        "sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05",
+        "sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05",
         "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-int8-2026-02-05",
         "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-2026-02-05",
+        "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-int8-2025-11-12",
+        "sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-2025-11-12",
     ];
+
     for id in ids {
         let model = find_preset_model(id).unwrap_or_else(|| panic!("{id} must exist"));
-        assert_eq!(model.model_type, "alignment");
+        assert_eq!(model.model_type, "omnilingual");
         assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
-        assert_eq!(model.language_mode, LanguageMode::None);
-        assert!(model.languages.is_empty());
+        assert_eq!(model.language_mode, LanguageMode::Auto);
+        assert!(!model.languages.is_empty());
         assert!(!model.artifacts.is_empty());
     }
+
+    let snapshot =
+        build_model_catalog_snapshot_with_installed_ids(Path::new("D:/models"), &HashSet::new());
+
+    let alignment_option_ids: HashSet<&str> = snapshot
+        .selection_options
+        .alignment
+        .iter()
+        .map(|opt| opt.id.as_str())
+        .collect();
+
+    let batch_option_ids: HashSet<&str> = snapshot
+        .selection_options
+        .batch
+        .iter()
+        .map(|opt| opt.id.as_str())
+        .collect();
+
+    for id in ids {
+        assert!(
+            alignment_option_ids.contains(id),
+            "{id} must be available in alignment selection options"
+        );
+        assert!(
+            batch_option_ids.contains(id),
+            "{id} must be available in batch selection options"
+        );
+    }
+
+    // Both ASR section and Alignment section must contain the omnilingual group
+    let asr_section = snapshot
+        .sections
+        .iter()
+        .find(|s| s.section_type == ModelCatalogSectionType::Asr)
+        .expect("ASR section must exist");
+    let alignment_section = snapshot
+        .sections
+        .iter()
+        .find(|s| s.section_type == ModelCatalogSectionType::Alignment)
+        .expect("Alignment section must exist");
+
+    assert!(
+        asr_section
+            .groups
+            .iter()
+            .any(|g| g.key == "omnilingual-asr"),
+        "ASR section must contain omnilingual-asr group"
+    );
+    assert!(
+        alignment_section
+            .groups
+            .iter()
+            .any(|g| g.key == "omnilingual-asr"),
+        "Alignment section must contain omnilingual-asr group"
+    );
 }
 
 /// Language metadata invariants shared by every surface (GUI, CLI, FFI).
