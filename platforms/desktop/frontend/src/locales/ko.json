@@ -325,6 +325,8 @@
     "autosave_saving": "저장 중...",
     "autosave_saved": "저장됨",
     "autosave_error": "저장 실패",
+    "autosave_conflict": "충돌 감지됨: 기록이 외부에서 수정되었습니다",
+    "autosave_error_default": "변경사항 저장 실패",
     "undo": "실행 취소",
     "redo": "다시 실행",
     "bold": "굵게",

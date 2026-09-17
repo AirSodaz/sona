@@ -19,6 +19,7 @@ export type AutoSaveStatus = 'saving' | 'saved' | 'error';
 export interface AutoSaveState {
   status: AutoSaveStatus;
   updatedAt: number;
+  errorMessage?: string;
 }
 
 export interface TranscriptHistorySidecarState {

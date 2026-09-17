@@ -325,6 +325,8 @@
     "autosave_saving": "Saving...",
     "autosave_saved": "Saved",
     "autosave_error": "Save failed",
+    "autosave_conflict": "Conflict detected: transcript was modified externally",
+    "autosave_error_default": "Failed to save changes",
     "undo": "Undo",
     "redo": "Redo",
     "bold": "Bold",

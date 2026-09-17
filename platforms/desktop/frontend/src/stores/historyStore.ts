@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { historyService, type TranscriptEditCommitResult } from '../services/historyService';
+import { transcriptAutoSaveRuntime } from '../services/transcriptAutoSaveRuntime';
 import type { HistoryItem } from '../types/history';
 import type { TranscriptSegment } from '../types/transcript';
 import { extractErrorMessage } from '../utils/errorUtils';
@@ -141,6 +142,9 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       set((state) => ({
         items: state.items.map((item) => (item.id === id ? { ...item, ...updatedItem } : item)),
       }));
+      if (useTranscriptSessionStore.getState().sourceHistoryId === id) {
+        transcriptAutoSaveRuntime.rebaseline(id, segments);
+      }
     } catch (error) {
       const errorMessage = extractErrorMessage(error);
       logger.error('Failed to update history transcript:', error);

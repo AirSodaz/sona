@@ -325,6 +325,8 @@
     "autosave_saving": "正在保存...",
     "autosave_saved": "已保存",
     "autosave_error": "保存失败",
+    "autosave_conflict": "检测到内容冲突：该记录已被外部或其他操作修改",
+    "autosave_error_default": "保存更改失败",
     "undo": "撤销",
     "redo": "重做",
     "bold": "加粗",

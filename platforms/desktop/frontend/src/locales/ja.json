@@ -325,6 +325,8 @@
     "autosave_saving": "保存中...",
     "autosave_saved": "保存されました",
     "autosave_error": "保存に失敗しました",
+    "autosave_conflict": "競合が検出されました：トランスクリプトが外部で変更されました",
+    "autosave_error_default": "変更の保存に失敗しました",
     "undo": "元に戻す",
     "redo": "やり直し",
     "bold": "太字",

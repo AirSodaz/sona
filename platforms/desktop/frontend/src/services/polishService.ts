@@ -15,6 +15,7 @@ import type {
 } from './llmTaskTypes';
 import { createLlmTaskLedgerId, isTaskLedgerCancelRequested } from './taskLedgerBuilders';
 import { runTranscriptLlmJob } from './tauri/llm';
+import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
 
 interface RetryPolishTranscriptJobOptions {
   segments: TranscriptSegment[];
@@ -49,6 +50,7 @@ export interface PolishServicePorts {
   runTranscriptSegmentTaskJob: typeof runTranscriptSegmentTaskJob;
   runTranscriptLlmJob: typeof runTranscriptLlmJob;
   listenToTranscriptLlmJobUpdates: typeof listenToTranscriptLlmJobUpdates;
+  rebaselineTranscriptAutoSave?: typeof rebaselineTranscriptAutoSave;
 }
 
 export class PolishService {
@@ -144,6 +146,9 @@ export class PolishService {
             return;
           }
           this.applyTranscriptJobUpdate(result);
+          if (result.segments && jobHistoryId && jobHistoryId !== 'current') {
+            this.ports.rebaselineTranscriptAutoSave?.(jobHistoryId, result.segments);
+          }
         } finally {
           unlistenJobUpdates();
         }
@@ -215,4 +220,6 @@ export const polishService = createPolishService({
   runTranscriptSegmentTaskJob,
   runTranscriptLlmJob,
   listenToTranscriptLlmJobUpdates,
+  rebaselineTranscriptAutoSave: (historyId, segments) =>
+    transcriptAutoSaveRuntime.rebaseline(historyId, segments),
 });
