@@ -81,6 +81,7 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
   const [busyGroupId, setBusyGroupId] = useState<string | null>(null);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  const [isBatchApplying, setIsBatchApplying] = useState(false);
 
   const visibleGroups = snapshot.visibleGroups;
   const effectiveActiveGroupId =
@@ -202,6 +203,30 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
     },
     [runGroupAction]
   );
+  const handleBatchApplyTopCandidates = useCallback(async () => {
+    const eligibleGroups = visibleGroups.filter((g) => g.candidates.length > 0);
+    if (eligibleGroups.length === 0 || isBatchApplying) {
+      return;
+    }
+
+    try {
+      setIsBatchApplying(true);
+      for (const group of eligibleGroups) {
+        const top = group.candidates[0];
+        if (top) {
+          await speakerCorrectionService.assignProfileToSpeakerGroup(group.groupId, top.profileId);
+        }
+      }
+    } catch (error) {
+      await showError({
+        code: 'speaker_review.batch_apply_failed',
+        messageKey: 'editor.speaker_correction_failed',
+        cause: error,
+      });
+    } finally {
+      setIsBatchApplying(false);
+    }
+  }, [isBatchApplying, showError, visibleGroups]);
 
   const handleJumpToGroup = useCallback(
     (group: SpeakerReviewGroup) => {
@@ -334,5 +359,7 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
     handleAssignProfile,
     handleResetGroup,
     handleJumpToGroup,
+    isBatchApplying,
+    handleBatchApplyTopCandidates,
   };
 }

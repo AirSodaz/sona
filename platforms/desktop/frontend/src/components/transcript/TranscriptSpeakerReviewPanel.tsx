@@ -10,7 +10,7 @@ import {
   Users,
 } from 'lucide-react';
 import type React from 'react';
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSpeakerReview } from '../../hooks/useSpeakerReview';
 import type { SpeakerReviewGroup } from '../../services/speakerReviewService';
@@ -58,6 +58,16 @@ function getConfidenceKey(group: SpeakerReviewGroup): string {
   }
 }
 
+const SPEAKER_PALETTE = [
+  '#3b82f6',
+  '#10b981',
+  '#f59e0b',
+  '#8b5cf6',
+  '#ec4899',
+  '#06b6d4',
+  '#64748b',
+];
+
 export function TranscriptSpeakerReviewPanel({
   isOpen,
   onClose,
@@ -80,16 +90,42 @@ export function TranscriptSpeakerReviewPanel({
     handleAssignProfile,
     handleResetGroup,
     handleJumpToGroup,
+    isBatchApplying,
+    handleBatchApplyTopCandidates,
   } = useSpeakerReview({ isOpen, onClose, modalRef });
-
-  if (!isOpen) {
-    return null;
-  }
 
   const counts = snapshot.counts;
   const visibleGroups = snapshot.visibleGroups;
   const filterOptions = snapshot.filterOptions;
 
+  const totalDuration = useMemo(
+    () => snapshot.groups.reduce((sum, g) => sum + g.durationSeconds, 0),
+    [snapshot.groups]
+  );
+
+  const distribution = useMemo(() => {
+    if (totalDuration <= 0) return [];
+    return snapshot.groups.map((group, idx) => {
+      const pct = (group.durationSeconds / totalDuration) * 100;
+      return {
+        groupId: group.groupId,
+        label: group.displayLabel,
+        durationSeconds: group.durationSeconds,
+        displayDuration: group.displayDuration,
+        percentage: Math.round(pct * 10) / 10,
+        color: SPEAKER_PALETTE[idx % SPEAKER_PALETTE.length],
+      };
+    });
+  }, [snapshot.groups, totalDuration]);
+
+  const batchEligibleCount = useMemo(
+    () => visibleGroups.filter((g) => g.candidates.length > 0).length,
+    [visibleGroups]
+  );
+
+  if (!isOpen) {
+    return null;
+  }
   return (
     <PanelModal
       isOpen={isOpen}
@@ -117,21 +153,90 @@ export function TranscriptSpeakerReviewPanel({
         </>
       }
     >
-      <div
-        className="transcript-speaker-review-filters"
-        aria-label={t('editor.speaker_review_title')}
-      >
-        {filterOptions.map((option) => (
+      <div className="transcript-speaker-review-header-bar">
+        <div
+          className="transcript-speaker-review-filters"
+          aria-label={t('editor.speaker_review_title')}
+        >
+          {filterOptions.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={`transcript-speaker-review-filter ${activeFilter === option.id ? 'active' : ''}`}
+              onClick={() => setActiveFilter(option.id)}
+            >
+              {t(option.labelKey, { count: counts[option.countKey] })}
+            </button>
+          ))}
+        </div>
+
+        {batchEligibleCount > 0 && (
           <button
-            key={option.id}
             type="button"
-            className={`transcript-speaker-review-filter ${activeFilter === option.id ? 'active' : ''}`}
-            onClick={() => setActiveFilter(option.id)}
+            className="btn btn-primary btn-sm transcript-speaker-review-batch-btn"
+            disabled={isBatchApplying}
+            onClick={() => void handleBatchApplyTopCandidates()}
           >
-            {t(option.labelKey, { count: counts[option.countKey] })}
+            {isBatchApplying ? (
+              <Loader2 size={14} className="queue-icon-spin" />
+            ) : (
+              <UserCheck size={14} />
+            )}
+            <span>
+              {t('editor.speaker_review_batch_apply', {
+                count: batchEligibleCount,
+                defaultValue: `采纳全部推荐 (${batchEligibleCount})`,
+              })}
+            </span>
           </button>
-        ))}
+        )}
       </div>
+
+      {distribution.length > 0 && (
+        <div className="transcript-speaker-distribution-container">
+          <div className="transcript-speaker-distribution-header">
+            <span className="transcript-speaker-distribution-title">
+              {t('editor.speaker_review_distribution', { defaultValue: '发言时长分布' })}
+            </span>
+            <span className="transcript-speaker-distribution-meta">
+              {snapshot.groups.length}{' '}
+              {t('editor.speaker_review_speakers_count', { defaultValue: '位说话人' })}
+            </span>
+          </div>
+          <div className="transcript-speaker-distribution-bar">
+            {distribution.map((slice) => (
+              <div
+                key={slice.groupId}
+                className="transcript-speaker-distribution-slice"
+                style={{
+                  width: `${Math.max(slice.percentage, 2)}%`,
+                  backgroundColor: slice.color,
+                }}
+                title={`${slice.label}: ${slice.displayDuration} (${slice.percentage}%)`}
+                onClick={() => setActiveGroupId(slice.groupId)}
+              />
+            ))}
+          </div>
+          <div className="transcript-speaker-distribution-legend">
+            {distribution.slice(0, 8).map((slice) => (
+              <button
+                key={slice.groupId}
+                type="button"
+                className={`transcript-speaker-legend-item ${effectiveActiveGroupId === slice.groupId ? 'is-active' : ''}`}
+                onClick={() => setActiveGroupId(slice.groupId)}
+              >
+                <span
+                  className="transcript-speaker-legend-dot"
+                  style={{ backgroundColor: slice.color }}
+                />
+                <span className="transcript-speaker-legend-label">
+                  {slice.label} ({slice.percentage}%)
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="transcript-speaker-review-list">
         {isSnapshotLoading && visibleGroups.length === 0 ? (
@@ -163,6 +268,15 @@ export function TranscriptSpeakerReviewPanel({
                 <div className="transcript-speaker-review-card-head">
                   <div className="transcript-speaker-review-title-block">
                     <div className="transcript-speaker-review-speaker">
+                      {(() => {
+                        const slice = distribution.find((d) => d.groupId === group.groupId);
+                        return slice ? (
+                          <span
+                            className="transcript-speaker-legend-dot"
+                            style={{ backgroundColor: slice.color, width: '9px', height: '9px' }}
+                          />
+                        ) : null;
+                      })()}
                       <span>{group.displayLabel}</span>
                       <span className="transcript-speaker-review-status">
                         {t(getStatusKey(group))}
@@ -218,6 +332,7 @@ export function TranscriptSpeakerReviewPanel({
                           key={`${group.groupId}-${candidate.profileId}`}
                           className="transcript-speaker-review-candidate"
                         >
+                          <UserCheck size={12} />
                           {candidate.profileName} {candidate.displayScore}
                         </span>
                       ))}

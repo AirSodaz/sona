@@ -10,6 +10,14 @@
   flex-wrap: wrap;
 }
 
+.transcript-speaker-review-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .transcript-speaker-review-filters {
   display: flex;
   gap: 8px;
@@ -110,6 +118,17 @@
   font-weight: 650;
 }
 
+
+.transcript-speaker-candidate-score {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--color-bg-primary);
+  color: var(--color-accent-primary);
+  font-weight: 600;
+  margin-left: 4px;
+}
 .transcript-speaker-review-status {
   background: color-mix(in srgb, var(--color-accent-primary) 10%, var(--color-bg-secondary));
   color: var(--color-text-primary);
@@ -205,4 +224,88 @@
   .transcript-speaker-review-preview-row {
     grid-template-columns: 1fr;
   }
+}
+
+.transcript-speaker-distribution-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--color-bg-elevated, #1f2023);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.transcript-speaker-distribution-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
+.transcript-speaker-distribution-title {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.transcript-speaker-distribution-bar {
+  display: flex;
+  height: 8px;
+  width: 100%;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--color-bg-primary);
+  gap: 2px;
+}
+
+.transcript-speaker-distribution-slice {
+  height: 100%;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+
+.transcript-speaker-distribution-slice:hover {
+  opacity: 0.85;
+}
+
+.transcript-speaker-distribution-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.transcript-speaker-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.76rem;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: background 120ms ease;
+}
+
+.transcript-speaker-legend-item:hover,
+.transcript-speaker-legend-item.is-active {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.transcript-speaker-legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.transcript-speaker-legend-pct {
+  font-family: var(--font-mono);
+  opacity: 0.75;
 }

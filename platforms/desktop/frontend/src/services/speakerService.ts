@@ -1,3 +1,5 @@
+import { useBatchQueueStore } from '../stores/batchQueueStore';
+import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type { AppConfig, AsrScenario } from '../types/config';
 import type { SpeakerProcessingConfig, SpeakerProfileSample } from '../types/speaker';
 import { normalizeSpeakerProfiles } from '../types/speakerNormalization';
@@ -7,6 +9,7 @@ import {
   getScenarioSpeakerSegmentationModelPath,
   type ScenarioModelPathConfig,
 } from '../utils/scenarioModels';
+import { historyService } from './historyService';
 import {
   annotateSpeakerSegmentsFromFile,
   enrollSpeakerProfileSampleFromAudio,
@@ -100,3 +103,22 @@ export const speakerService = createSpeakerService({
   importSpeakerProfileSample,
   enrollSpeakerProfileSampleFromAudio,
 });
+
+export async function resolveCurrentSessionAudioPath(): Promise<string | null> {
+  const session = useTranscriptSessionStore.getState();
+  if (session.sourceHistoryId) {
+    const path = await historyService.getAudioAbsolutePath(session.sourceHistoryId);
+    if (path) {
+      return path;
+    }
+  }
+
+  const activeBatchItem = useBatchQueueStore
+    .getState()
+    .items.find((item) => item.id === useBatchQueueStore.getState().activeItemId);
+  if (activeBatchItem?.filePath) {
+    return activeBatchItem.filePath;
+  }
+
+  return null;
+}

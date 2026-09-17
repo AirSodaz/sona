@@ -1,3 +1,4 @@
+import { Mic } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,6 +36,7 @@ export interface SegmentItemProps {
   onDelete: (id: string) => void;
   onMergeWithNext: (id: string) => void;
   onSplit?: (id: string, leftText: string, rightText: string) => void;
+  onEnrollSample?: (segment: TranscriptSegment) => void;
   onAnimationEnd: (id: string) => void;
 }
 
@@ -54,6 +56,7 @@ export function SegmentItem({
   onDelete,
   onMergeWithNext,
   onSplit,
+  onEnrollSample,
   onAnimationEnd,
 }: SegmentItemProps): React.JSX.Element {
   const { t } = useTranslation();
@@ -201,6 +204,8 @@ export function SegmentItem({
   const canResetSpeakerGroup = Boolean(
     segment.speakerAttribution && segment.speakerAttribution.state !== 'anonymous'
   );
+  const isSpeakerEnabledForSegment = Boolean(segment.speaker || segment.speakerAttribution);
+  const showEnrollAction = Boolean(onEnrollSample && isSpeakerEnabledForSegment);
 
   useEffect(() => {
     if (!isSpeakerMenuOpen) {
@@ -417,6 +422,25 @@ export function SegmentItem({
                   </div>
                 )}
 
+                <div className="speaker-correction-secondary">
+                  <button
+                    type="button"
+                    className="speaker-correction-option"
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                    onClick={() => {
+                      closeSpeakerMenu();
+                      onEnrollSample?.(segment);
+                    }}
+                  >
+                    <Mic size={14} />
+                    <span>
+                      {t('editor.enroll_speaker_sample', {
+                        defaultValue: '设为声纹样本',
+                      })}
+                    </span>
+                  </button>
+                </div>
+
                 {hasSecondarySpeakerProfiles && (
                   <div className="speaker-correction-secondary">
                     <button
@@ -488,6 +512,7 @@ export function SegmentItem({
               activeMatch={activeMatch}
               onMatchClick={setActiveMatch}
               onEditTranslation={!isLocked ? handleStartTranslationEdit : undefined}
+              onEnrollSample={showEnrollAction ? () => onEnrollSample?.(segment) : undefined}
             />
           )}
           {isAligning && (
@@ -620,6 +645,21 @@ export function SegmentItem({
               aria-label={t('editor.merge_label', { time: formatDisplayTime(segment.start) })}
             >
               <MergeIcon />
+            </button>
+          )}
+          {showEnrollAction && (
+            <button
+              type="button"
+              className="btn btn-icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEnrollSample?.(segment);
+              }}
+              disabled={isLocked}
+              data-tooltip={t('editor.enroll_speaker_sample', { defaultValue: '设为声纹样本' })}
+              aria-label={t('editor.enroll_speaker_sample', { defaultValue: '设为声纹样本' })}
+            >
+              <Mic size={14} />
             </button>
           )}
           <button

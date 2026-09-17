@@ -16,6 +16,7 @@ export interface SegmentTokensProps {
   matches?: Match[];
   activeMatch?: Match | null;
   onEditTranslation?: () => void;
+  onEnrollSample?: () => void;
 }
 
 interface TokenListProps {
@@ -241,6 +242,7 @@ export function SegmentTokens({
   matches,
   activeMatch,
   onEditTranslation,
+  onEnrollSample,
 }: SegmentTokensProps): React.JSX.Element {
   const rootRef = useRef<HTMLParagraphElement>(null);
   const contextMenuHandlers = useReadonlySegmentContextMenu({
@@ -248,6 +250,7 @@ export function SegmentTokens({
     rootRef,
     onEditTranslation,
     hasTranslation: Boolean(segment.translation),
+    onEnrollSample,
   });
   const alignedUnits = useMemo(
     () => (segment.timing?.level === 'token' ? segment.timing.units : null),
