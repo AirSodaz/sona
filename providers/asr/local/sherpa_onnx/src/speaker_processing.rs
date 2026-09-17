@@ -23,11 +23,70 @@ const CANDIDATE_DISPLAY_THRESHOLD: f32 = 0.6;
 const AUTO_IDENTIFICATION_THRESHOLD: f32 = 0.72;
 const AUTO_IDENTIFICATION_MIN_VOTES: usize = 2;
 const AUTO_IDENTIFICATION_MIN_MARGIN: f32 = 0.08;
+const CLUSTER_OVER_SEGMENTATION_MERGE_THRESHOLD: f32 = 0.85;
 const PROFILE_SAMPLE_MIN_DURATION_SECONDS: f32 = 4.0;
 const PROFILE_LIMITED_MIN_TOTAL_DURATION_SECONDS: f32 = 8.0;
 const PROFILE_READY_MIN_TOTAL_DURATION_SECONDS: f32 = 20.0;
 const PROFILE_READY_MIN_SAMPLE_COUNT: usize = 2;
 
+#[derive(Debug, Clone)]
+struct ProfileSampleEmbedding {
+    embedding: Vec<f32>,
+    duration_seconds: f32,
+}
+
+struct DisjointSet {
+    parent: Vec<usize>,
+}
+
+impl DisjointSet {
+    fn new(size: usize) -> Self {
+        Self {
+            parent: (0..size).collect(),
+        }
+    }
+
+    fn find(&mut self, i: usize) -> usize {
+        let mut root = i;
+        while root != self.parent[root] {
+            root = self.parent[root];
+        }
+        let mut curr = i;
+        while curr != root {
+            let next = self.parent[curr];
+            self.parent[curr] = root;
+            curr = next;
+        }
+        root
+    }
+
+    fn union(&mut self, i: usize, j: usize) {
+        let root_i = self.find(i);
+        let root_j = self.find(j);
+        if root_i != root_j {
+            self.parent[root_j] = root_i;
+        }
+    }
+}
+
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+    if a.is_empty() || a.len() != b.len() {
+        return 0.0;
+    }
+    let mut dot = 0.0_f32;
+    let mut norm_a = 0.0_f32;
+    let mut norm_b = 0.0_f32;
+    for (x, y) in a.iter().zip(b.iter()) {
+        dot += x * y;
+        norm_a += x * x;
+        norm_b += y * y;
+    }
+    if norm_a <= 1e-8 || norm_b <= 1e-8 {
+        0.0
+    } else {
+        (dot / (norm_a.sqrt() * norm_b.sqrt())).clamp(-1.0, 1.0)
+    }
+}
 #[derive(Debug, Clone)]
 struct SpeakerSpan {
     start: f32,
@@ -163,6 +222,72 @@ pub async fn import_speaker_profile_sample(
     })
 }
 
+pub async fn enroll_speaker_profile_sample_from_audio(
+    app_data_dir: &Path,
+    profile_id: String,
+    source_audio_path: String,
+    start_seconds: f64,
+    end_seconds: f64,
+    source_name: Option<String>,
+) -> Result<SpeakerProfileSample, AsrPortError> {
+    if end_seconds <= start_seconds {
+        return Err(AsrPortError::invalid_request(
+            "Sample end time must be greater than start time",
+        ));
+    }
+    let all_samples =
+        crate::audio::extract_and_resample_audio(Path::new(&source_audio_path), SAMPLE_RATE as u32)
+            .await?;
+
+    let start_idx = ((start_seconds.max(0.0)) * SAMPLE_RATE as f64).floor() as usize;
+    let end_idx = ((end_seconds.max(0.0)) * SAMPLE_RATE as f64).ceil() as usize;
+    if start_idx >= all_samples.len() || end_idx <= start_idx {
+        return Err(AsrPortError::invalid_request(
+            "Selected sample range is out of audio bounds",
+        ));
+    }
+
+    let bounded_end = end_idx.min(all_samples.len());
+    let slice = &all_samples[start_idx..bounded_end];
+    let duration_seconds = slice.len() as f32 / SAMPLE_RATE as f32;
+
+    let sample_id = uuid::Uuid::new_v4().to_string();
+    let sample_name = source_name
+        .as_deref()
+        .filter(|v| !v.trim().is_empty())
+        .map(|v| v.trim().to_string())
+        .unwrap_or_else(|| format!("Segment {:.1}s-{:.1}s", start_seconds, end_seconds));
+
+    let profile_dir = app_data_dir.join("speaker-profiles").join(&profile_id);
+    std::fs::create_dir_all(&profile_dir).map_err(|error| {
+        AsrPortError::new(
+            AsrPortErrorKind::FileSystem,
+            format!(
+                "Failed to create speaker profile directory {}: {error}",
+                profile_dir.display()
+            ),
+        )
+    })?;
+
+    let output_path = profile_dir.join(format!("{sample_id}.wav"));
+    crate::audio::save_wav_file(slice, SAMPLE_RATE as u32, &output_path).map_err(|error| {
+        AsrPortError::new(
+            AsrPortErrorKind::FileSystem,
+            format!(
+                "Failed to save speaker profile sample {}: {error}",
+                output_path.display()
+            ),
+        )
+    })?;
+
+    Ok(SpeakerProfileSample {
+        id: sample_id,
+        file_path: output_path.to_string_lossy().into_owned(),
+        source_name: sample_name,
+        duration_seconds,
+    })
+}
+
 pub fn annotate_segments_with_speakers(
     samples: &[f32],
     segments: &[TranscriptSegment],
@@ -211,10 +336,26 @@ pub fn annotate_segments_with_speakers(
     }
 
     log_cluster_debug_summary(&clusters);
-    let speaker_assignments =
-        build_cluster_speaker_assignments(samples, &clusters, config, &embedding_model)?;
+    let embedding_index = crate::speaker::SpeakerEmbeddingIndex::new(&embedding_model)?;
+    let refined =
+        refine_clusters_and_repair_oversegmentation(samples, clusters, segments, &embedding_index)?;
+    let mut speaker_assignments = build_cluster_speaker_assignments(
+        samples,
+        &refined.clusters,
+        &refined.cluster_centroids,
+        segments,
+        config,
+        &embedding_index,
+    )?;
+
+    for (old_spk, new_spk) in refined.merged_speaker_map {
+        if let Some(canonical) = speaker_assignments.get(&new_spk).cloned() {
+            speaker_assignments.insert(old_spk, canonical);
+        }
+    }
+
     let annotated_segments =
-        apply_speaker_tags_to_segments(segments, &clusters, &speaker_assignments);
+        apply_speaker_tags_to_segments(segments, &refined.clusters, &speaker_assignments);
     let assignment_summary = summarize_speaker_assignments(&speaker_assignments);
     log_speaker_processing_complete(
         total_started,
@@ -443,11 +584,255 @@ fn build_cluster_infos(diarization_segments: &[SpeakerDiarizationSegment]) -> Ve
         .collect()
 }
 
+fn extract_purified_spans_for_cluster(
+    cluster: &ClusterInfo,
+    segments: &[TranscriptSegment],
+) -> Vec<SpeakerSpan> {
+    let mut token_spans: Vec<(f32, f32)> = Vec::new();
+    for segment in segments {
+        if let Some(timing) = &segment.timing
+            && timing.level == TranscriptTimingLevel::Token
+        {
+            for unit in &timing.units {
+                if unit.end > unit.start {
+                    token_spans.push((unit.start as f32, unit.end as f32));
+                }
+            }
+        }
+    }
+
+    if token_spans.is_empty() {
+        return cluster.spans.clone();
+    }
+
+    token_spans.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal));
+
+    let mut purified = Vec::new();
+    for span in &cluster.spans {
+        if span.end <= span.start {
+            continue;
+        }
+
+        let mut overlapping_tokens: Vec<(f32, f32)> = Vec::new();
+        for (t_start, t_end) in &token_spans {
+            let overlap_start = span.start.max(*t_start);
+            let overlap_end = span.end.min(*t_end);
+            if overlap_end > overlap_start {
+                overlapping_tokens.push((overlap_start, overlap_end));
+            }
+        }
+
+        if overlapping_tokens.is_empty() {
+            continue;
+        }
+
+        let mut merged_blocks: Vec<(f32, f32)> = Vec::new();
+        for (t_start, t_end) in overlapping_tokens {
+            if let Some(last) = merged_blocks.last_mut()
+                && t_start - last.1 < 0.25
+            {
+                last.1 = last.1.max(t_end);
+                continue;
+            }
+            merged_blocks.push((t_start, t_end));
+        }
+
+        for (b_start, b_end) in merged_blocks {
+            let dur = b_end - b_start;
+            if dur >= 0.8 {
+                let (final_start, final_end) = if dur >= 1.2 {
+                    (b_start + 0.04, b_end - 0.04)
+                } else {
+                    (b_start, b_end)
+                };
+                purified.push(SpeakerSpan {
+                    start: final_start,
+                    end: final_end,
+                    raw_speaker: span.raw_speaker,
+                });
+            }
+        }
+    }
+
+    if purified.is_empty() {
+        cluster.spans.clone()
+    } else {
+        purified.sort_by(|a, b| {
+            let dur_a = a.end - a.start;
+            let dur_b = b.end - b.start;
+            dur_b.partial_cmp(&dur_a).unwrap_or(Ordering::Equal)
+        });
+        purified.truncate(IDENTIFICATION_MAX_SEGMENTS_PER_CLUSTER * 2);
+        purified
+    }
+}
+
+fn compute_cluster_centroid_embedding(
+    samples: &[f32],
+    purified_spans: &[SpeakerSpan],
+    embedding_index: &crate::speaker::SpeakerEmbeddingIndex,
+) -> Result<Option<Vec<f32>>, AsrPortError> {
+    let mut embeddings = Vec::new();
+    for span in purified_spans
+        .iter()
+        .take(IDENTIFICATION_MAX_SEGMENTS_PER_CLUSTER)
+    {
+        if let Some(embedding) =
+            embedding_index.compute_embedding_for_span(samples, span.start, span.end)?
+        {
+            embeddings.push(embedding);
+        }
+    }
+
+    if embeddings.is_empty() {
+        return Ok(None);
+    }
+
+    let dim = embeddings[0].len();
+    let mut mean = vec![0.0_f32; dim];
+    for emb in &embeddings {
+        for (i, val) in emb.iter().enumerate() {
+            mean[i] += val;
+        }
+    }
+
+    let norm = mean.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm > 1e-8 {
+        for val in &mut mean {
+            *val /= norm;
+        }
+        Ok(Some(mean))
+    } else {
+        Ok(None)
+    }
+}
+
+fn repair_cluster_oversegmentation(
+    clusters: Vec<ClusterInfo>,
+    cluster_centroids: &HashMap<i32, Vec<f32>>,
+    threshold: f32,
+) -> (Vec<ClusterInfo>, HashMap<i32, i32>) {
+    if clusters.len() <= 1 {
+        return (clusters, HashMap::new());
+    }
+
+    let n = clusters.len();
+    let mut uf = DisjointSet::new(n);
+
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let spk_i = clusters[i].raw_speaker;
+            let spk_j = clusters[j].raw_speaker;
+            if let (Some(c_i), Some(c_j)) =
+                (cluster_centroids.get(&spk_i), cluster_centroids.get(&spk_j))
+            {
+                let sim = cosine_similarity(c_i, c_j);
+                if sim >= threshold {
+                    uf.union(i, j);
+                    info!(
+                        target: SPEAKER_PROCESSING_LOG_TARGET,
+                        "event=speaker_oversegmentation_merged cluster_a={} cluster_b={} similarity={:.3}",
+                        spk_i,
+                        spk_j,
+                        sim,
+                    );
+                }
+            }
+        }
+    }
+
+    let mut groups: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for i in 0..n {
+        let root = uf.find(i);
+        groups.entry(root).or_default().push(i);
+    }
+
+    if groups.len() == n {
+        return (clusters, HashMap::new());
+    }
+
+    let mut merged_mapping = HashMap::new();
+    let mut merged_clusters = Vec::new();
+
+    for (group_idx, (_root, indices)) in groups.into_iter().enumerate() {
+        let canonical_idx = indices[0];
+        let canonical_raw_speaker = clusters[canonical_idx].raw_speaker;
+
+        let mut combined_spans = Vec::new();
+        for &idx in &indices {
+            let raw_spk = clusters[idx].raw_speaker;
+            merged_mapping.insert(raw_spk, canonical_raw_speaker);
+            for mut span in clusters[idx].spans.clone() {
+                span.raw_speaker = canonical_raw_speaker;
+                combined_spans.push(span);
+            }
+        }
+
+        combined_spans.sort_by(|a, b| a.start.partial_cmp(&b.start).unwrap_or(Ordering::Equal));
+
+        merged_clusters.push(ClusterInfo {
+            raw_speaker: canonical_raw_speaker,
+            spans: combined_spans,
+            anonymous_tag: SpeakerTag {
+                id: format!("anonymous-{}", group_idx + 1),
+                label: format!("Speaker {}", group_idx + 1),
+                kind: "anonymous".to_string(),
+                score: None,
+            },
+        });
+    }
+
+    (merged_clusters, merged_mapping)
+}
+struct RefinedClusterOutcome {
+    clusters: Vec<ClusterInfo>,
+    merged_speaker_map: HashMap<i32, i32>,
+    cluster_centroids: HashMap<i32, Vec<f32>>,
+}
+
+fn refine_clusters_and_repair_oversegmentation(
+    samples: &[f32],
+    clusters: Vec<ClusterInfo>,
+    segments: &[TranscriptSegment],
+    embedding_index: &crate::speaker::SpeakerEmbeddingIndex,
+) -> Result<RefinedClusterOutcome, AsrPortError> {
+    let mut cluster_centroids = HashMap::new();
+    for cluster in &clusters {
+        let purified_spans = extract_purified_spans_for_cluster(cluster, segments);
+        if let Some(centroid) =
+            compute_cluster_centroid_embedding(samples, &purified_spans, embedding_index)?
+        {
+            cluster_centroids.insert(cluster.raw_speaker, centroid);
+        }
+    }
+
+    let (merged_clusters, merged_mapping) = repair_cluster_oversegmentation(
+        clusters,
+        &cluster_centroids,
+        CLUSTER_OVER_SEGMENTATION_MERGE_THRESHOLD,
+    );
+
+    let mut refined_centroids = HashMap::new();
+    for cluster in &merged_clusters {
+        if let Some(c) = cluster_centroids.get(&cluster.raw_speaker) {
+            refined_centroids.insert(cluster.raw_speaker, c.clone());
+        }
+    }
+
+    Ok(RefinedClusterOutcome {
+        clusters: merged_clusters,
+        merged_speaker_map: merged_mapping,
+        cluster_centroids: refined_centroids,
+    })
+}
+
 fn build_cluster_speaker_assignments(
     samples: &[f32],
     clusters: &[ClusterInfo],
+    cluster_centroids: &HashMap<i32, Vec<f32>>,
+    segments: &[TranscriptSegment],
     config: &SpeakerProcessingConfig,
-    embedding_model: &Path,
+    embedding_index: &crate::speaker::SpeakerEmbeddingIndex,
 ) -> Result<HashMap<i32, ResolvedSpeakerAssignment>, AsrPortError> {
     let default_assignments = clusters
         .iter()
@@ -479,10 +864,11 @@ fn build_cluster_speaker_assignments(
         return Ok(default_assignments);
     }
 
-    let embedding_index = crate::speaker::SpeakerEmbeddingIndex::new(embedding_model)?;
-
     let mut loaded_profile_names = HashMap::new();
     let mut profile_readiness = HashMap::new();
+    let mut profile_sample_embeddings: HashMap<String, Vec<ProfileSampleEmbedding>> =
+        HashMap::new();
+
     for profile in enabled_profiles {
         let readiness = derive_profile_readiness(&profile);
         if readiness == SpeakerProfileReadinessState::NotReady {
@@ -490,7 +876,8 @@ fn build_cluster_speaker_assignments(
             continue;
         }
 
-        let mut embeddings = Vec::new();
+        let mut samples_list = Vec::new();
+        let mut raw_embeddings = Vec::new();
         for sample in &profile.samples {
             if sample.duration_seconds < PROFILE_SAMPLE_MIN_DURATION_SECONDS {
                 continue;
@@ -498,25 +885,30 @@ fn build_cluster_speaker_assignments(
             if let Some(embedding) =
                 embedding_index.compute_embedding_for_wav_file(&sample.file_path)?
             {
-                embeddings.push(embedding);
+                samples_list.push(ProfileSampleEmbedding {
+                    embedding: embedding.clone(),
+                    duration_seconds: sample.duration_seconds,
+                });
+                raw_embeddings.push(embedding);
             }
         }
 
-        if embeddings.is_empty() {
+        if samples_list.is_empty() {
             index_summary.skipped_profiles += 1;
             continue;
         }
 
-        embedding_index.add_profile_embeddings(&profile.id, &profile.name, &embeddings)?;
+        embedding_index.add_profile_embeddings(&profile.id, &profile.name, &raw_embeddings)?;
 
         match readiness {
             SpeakerProfileReadinessState::Ready => index_summary.ready_profiles += 1,
             SpeakerProfileReadinessState::Limited => index_summary.limited_profiles += 1,
             SpeakerProfileReadinessState::NotReady => {}
         }
-        index_summary.usable_sample_embeddings += embeddings.len();
+        index_summary.usable_sample_embeddings += raw_embeddings.len();
         loaded_profile_names.insert(profile.id.clone(), profile.name.clone());
         profile_readiness.insert(profile.id.clone(), readiness);
+        profile_sample_embeddings.insert(profile.id.clone(), samples_list);
     }
 
     log_speaker_profile_index_complete(&index_summary, elapsed_ms(index_started));
@@ -529,8 +921,19 @@ fn build_cluster_speaker_assignments(
     let matching_started = Instant::now();
     let mut candidates = HashMap::new();
     for cluster in clusters {
-        let cluster_candidates =
-            identify_cluster_candidates(samples, cluster, &embedding_index, &loaded_profile_names)?;
+        let centroid = cluster_centroids
+            .get(&cluster.raw_speaker)
+            .map(|v| v.as_slice());
+        let purified_spans = extract_purified_spans_for_cluster(cluster, segments);
+        let cluster_candidates = identify_cluster_candidates(
+            samples,
+            cluster,
+            centroid,
+            &purified_spans,
+            embedding_index,
+            &loaded_profile_names,
+            &profile_sample_embeddings,
+        )?;
         if !cluster_candidates.is_empty() {
             candidates.insert(cluster.raw_speaker, cluster_candidates);
         }
@@ -550,15 +953,26 @@ fn build_cluster_speaker_assignments(
 fn identify_cluster_candidates(
     samples: &[f32],
     cluster: &ClusterInfo,
+    cluster_centroid: Option<&[f32]>,
+    purified_spans: &[SpeakerSpan],
     embedding_index: &crate::speaker::SpeakerEmbeddingIndex,
     profile_names: &HashMap<String, String>,
+    profile_sample_embeddings: &HashMap<String, Vec<ProfileSampleEmbedding>>,
 ) -> Result<Vec<ClusterCandidate>, AsrPortError> {
-    let mut candidate_spans = cluster
-        .spans
+    let mut candidate_spans = purified_spans
         .iter()
         .filter(|span| (span.end - span.start) >= IDENTIFICATION_MIN_DURATION_SECONDS)
         .cloned()
         .collect::<Vec<_>>();
+
+    if candidate_spans.is_empty() {
+        candidate_spans = cluster
+            .spans
+            .iter()
+            .filter(|span| (span.end - span.start) >= IDENTIFICATION_MIN_DURATION_SECONDS)
+            .cloned()
+            .collect::<Vec<_>>();
+    }
 
     candidate_spans.sort_by(|left, right| {
         let left_duration = left.end - left.start;
@@ -596,15 +1010,40 @@ fn identify_cluster_candidates(
         .into_iter()
         .filter_map(|(profile_id, votes)| {
             let profile_name = profile_names.get(profile_id.as_str())?.clone();
-            let total_score = score_sums
+            let avg_match_score = score_sums
                 .get(profile_id.as_str())
                 .copied()
-                .unwrap_or_default();
+                .unwrap_or_default()
+                / votes as f32;
+
+            let final_score = if let (Some(centroid), Some(samples)) = (
+                cluster_centroid,
+                profile_sample_embeddings.get(profile_id.as_str()),
+            ) {
+                let total_dur: f32 = samples.iter().map(|s| s.duration_seconds).sum();
+                if total_dur > 0.0 {
+                    let weighted_sim: f32 = samples
+                        .iter()
+                        .map(|s| s.duration_seconds * cosine_similarity(centroid, &s.embedding))
+                        .sum::<f32>()
+                        / total_dur;
+                    let max_sim = samples
+                        .iter()
+                        .map(|s| cosine_similarity(centroid, &s.embedding))
+                        .fold(0.0_f32, f32::max);
+                    (0.6 * weighted_sim + 0.4 * max_sim).clamp(0.0, 1.0)
+                } else {
+                    avg_match_score
+                }
+            } else {
+                avg_match_score
+            };
+
             Some(ClusterCandidate {
                 profile_id,
                 profile_name,
                 votes,
-                average_score: total_score / votes as f32,
+                average_score: final_score,
             })
         })
         .collect::<Vec<_>>();
@@ -749,11 +1188,13 @@ fn resolve_single_cluster_assignment(
         .copied()
         .unwrap_or(SpeakerProfileReadinessState::NotReady);
     let score_margin = top_candidate.average_score - second_score;
+    let has_competition = candidates.len() > 1;
+    let margin_satisfied = !has_competition || score_margin >= AUTO_IDENTIFICATION_MIN_MARGIN;
 
     if readiness == SpeakerProfileReadinessState::Ready
         && top_candidate.average_score >= AUTO_IDENTIFICATION_THRESHOLD
         && top_candidate.votes >= AUTO_IDENTIFICATION_MIN_VOTES
-        && score_margin >= AUTO_IDENTIFICATION_MIN_MARGIN
+        && margin_satisfied
     {
         return ResolvedSpeakerAssignment {
             raw_speaker: cluster.raw_speaker,
@@ -1256,6 +1697,7 @@ mod tests {
     use super::*;
     use sona_core::ports::asr::AsrPortErrorKind;
     use sona_core::transcription::text_alignment::lex_text_units;
+    use sona_core::transcription::transcript::TranscriptTimingSource;
 
     fn speaker(id: &str, label: &str, kind: &str, score: Option<f32>) -> SpeakerTag {
         SpeakerTag {
@@ -1922,5 +2364,163 @@ mod tests {
             result[1].speaker.as_ref().map(|s| s.label.as_str()),
             Some("Bob")
         );
+    }
+
+    #[test]
+    fn test_cosine_similarity_basic() {
+        let a = vec![1.0, 0.0, 0.0];
+        let b = vec![1.0, 0.0, 0.0];
+        assert!((cosine_similarity(&a, &b) - 1.0).abs() < 1e-5);
+
+        let c = vec![0.0, 1.0, 0.0];
+        assert!((cosine_similarity(&a, &c) - 0.0).abs() < 1e-5);
+
+        let d = vec![-1.0, 0.0, 0.0];
+        assert!((cosine_similarity(&a, &d) - (-1.0)).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_repair_cluster_oversegmentation_merges_high_similarity() {
+        let clusters = vec![
+            ClusterInfo {
+                raw_speaker: 1,
+                spans: vec![SpeakerSpan {
+                    start: 0.0,
+                    end: 2.0,
+                    raw_speaker: 1,
+                }],
+                anonymous_tag: SpeakerTag {
+                    id: "anonymous-1".to_string(),
+                    label: "Speaker 1".to_string(),
+                    kind: "anonymous".to_string(),
+                    score: None,
+                },
+            },
+            ClusterInfo {
+                raw_speaker: 2,
+                spans: vec![SpeakerSpan {
+                    start: 3.0,
+                    end: 5.0,
+                    raw_speaker: 2,
+                }],
+                anonymous_tag: SpeakerTag {
+                    id: "anonymous-2".to_string(),
+                    label: "Speaker 2".to_string(),
+                    kind: "anonymous".to_string(),
+                    score: None,
+                },
+            },
+        ];
+
+        let centroids = HashMap::from([
+            (1, vec![0.8, 0.6]),
+            (2, vec![0.81, 0.59]), // Cosine sim ~ 0.999
+        ]);
+
+        let (merged, mapping) = repair_cluster_oversegmentation(clusters, &centroids, 0.85);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(mapping.get(&2), Some(&1));
+        assert_eq!(merged[0].spans.len(), 2);
+        assert_eq!(merged[0].spans[0].raw_speaker, 1);
+        assert_eq!(merged[0].spans[1].raw_speaker, 1);
+        assert_eq!(merged[0].anonymous_tag.label, "Speaker 1");
+    }
+
+    #[test]
+    fn test_extract_purified_spans_for_cluster_trims_silence() {
+        let cluster = ClusterInfo {
+            raw_speaker: 1,
+            spans: vec![SpeakerSpan {
+                start: 0.0,
+                end: 5.0,
+                raw_speaker: 1,
+            }],
+            anonymous_tag: SpeakerTag {
+                id: "anonymous-1".to_string(),
+                label: "Speaker 1".to_string(),
+                kind: "anonymous".to_string(),
+                score: None,
+            },
+        };
+
+        let mut segment = sample_segment(1.0, 3.5, "Some spoken words");
+        segment.timing = Some(TranscriptTiming {
+            level: TranscriptTimingLevel::Token,
+            source: TranscriptTimingSource::Model,
+            units: vec![
+                TranscriptTimingUnit {
+                    text: "Some".to_string(),
+                    start: 1.0,
+                    end: 1.8,
+                },
+                TranscriptTimingUnit {
+                    text: "spoken".to_string(),
+                    start: 1.9,
+                    end: 2.7,
+                },
+                TranscriptTimingUnit {
+                    text: "words".to_string(),
+                    start: 2.8,
+                    end: 3.5,
+                },
+            ],
+        });
+
+        let purified = extract_purified_spans_for_cluster(&cluster, &[segment]);
+        assert_eq!(purified.len(), 1);
+        // 1.0 to 3.5 is duration 2.5s >= 1.2s -> insets 0.04 applied: 1.04 to 3.46
+        assert!((purified[0].start - 1.04).abs() < 1e-3);
+        assert!((purified[0].end - 3.46).abs() < 1e-3);
+    }
+
+    #[test]
+    fn test_competitor_margin_downgrades_to_suggested_on_close_scores() {
+        let cluster = ClusterInfo {
+            raw_speaker: 1,
+            spans: vec![SpeakerSpan {
+                start: 0.0,
+                end: 3.0,
+                raw_speaker: 1,
+            }],
+            anonymous_tag: SpeakerTag {
+                id: "anonymous-1".to_string(),
+                label: "Speaker 1".to_string(),
+                kind: "anonymous".to_string(),
+                score: None,
+            },
+        };
+
+        let candidates = vec![
+            ClusterCandidate {
+                profile_id: "profile-alice".to_string(),
+                profile_name: "Alice".to_string(),
+                votes: 3,
+                average_score: 0.75,
+            },
+            ClusterCandidate {
+                profile_id: "profile-bob".to_string(),
+                profile_name: "Bob".to_string(),
+                votes: 3,
+                average_score: 0.73, // Margin is 0.02 < 0.08
+            },
+        ];
+
+        let readiness = HashMap::from([
+            (
+                "profile-alice".to_string(),
+                SpeakerProfileReadinessState::Ready,
+            ),
+            (
+                "profile-bob".to_string(),
+                SpeakerProfileReadinessState::Ready,
+            ),
+        ]);
+
+        let assignment = resolve_single_cluster_assignment(&cluster, candidates, &readiness);
+        // Due to close competition, state must be "suggested" rather than "identified"
+        assert_eq!(assignment.attribution.state, "suggested");
+        assert_eq!(assignment.attribution.candidates.len(), 2);
+        assert_eq!(assignment.attribution.candidates[0].profile_name, "Alice");
+        assert_eq!(assignment.attribution.candidates[1].profile_name, "Bob");
     }
 }

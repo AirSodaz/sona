@@ -48,3 +48,46 @@ pub async fn import_speaker_profile_sample_for_app<R: tauri::Runtime>(
     let provider = crate::platform::paths::TauriPathProvider::from_app(app);
     import_speaker_profile_sample(&provider, profile_id, source_path, source_name).await
 }
+
+pub async fn enroll_speaker_profile_sample_from_audio(
+    provider: &dyn PathPort,
+    profile_id: String,
+    source_audio_path: String,
+    start_seconds: f64,
+    end_seconds: f64,
+    sample_name: Option<String>,
+) -> Result<SpeakerProfileSample, String> {
+    let app_data_dir = provider
+        .resolve_path(PathKind::AppLocalData)
+        .map_err(|error| error.to_string())?;
+    sona_sherpa_onnx::speaker_processing::enroll_speaker_profile_sample_from_audio(
+        &app_data_dir,
+        profile_id,
+        source_audio_path,
+        start_seconds,
+        end_seconds,
+        sample_name,
+    )
+    .await
+    .map_err(|error| error.to_string())
+}
+
+pub async fn enroll_speaker_profile_sample_for_app<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    profile_id: String,
+    source_audio_path: String,
+    start_seconds: f64,
+    end_seconds: f64,
+    sample_name: Option<String>,
+) -> Result<SpeakerProfileSample, String> {
+    let provider = crate::platform::paths::TauriPathProvider::from_app(app);
+    enroll_speaker_profile_sample_from_audio(
+        &provider,
+        profile_id,
+        source_audio_path,
+        start_seconds,
+        end_seconds,
+        sample_name,
+    )
+    .await
+}

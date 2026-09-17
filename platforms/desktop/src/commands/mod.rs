@@ -186,6 +186,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::export::export_transcript_file,
         crate::commands::system::annotate_speaker_segments_from_file,
         crate::commands::system::import_speaker_profile_sample,
+        crate::commands::system::enroll_speaker_profile_sample_from_audio,
         crate::commands::system::build_speaker_review_snapshot,
         crate::commands::system::apply_speaker_profile_to_group,
         crate::commands::system::reset_speaker_group_to_anonymous,
