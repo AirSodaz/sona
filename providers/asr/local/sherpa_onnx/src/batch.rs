@@ -211,9 +211,21 @@ impl BatchTranscriptionJob {
         provider: Option<&str>,
         observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        let aligner =
+        let is_same_model = self
+            .alignment_model
+            .as_deref()
+            .is_some_and(|align_path| is_same_model_target(align_path, &self.model_path));
+
+        let aligner = if is_same_model {
+            log::info!(
+                "ASR model and CTC alignment model target the same model ({}); skipping redundant CTC alignment pass.",
+                self.model_path.display()
+            );
+            None
+        } else {
             load_configured_aligner(&self.aligner_engines, self.alignment_model.as_deref())
-                .map_err(|err| AsrPortError::new(AsrPortErrorKind::Model, err.to_string()))?;
+                .map_err(|err| AsrPortError::new(AsrPortErrorKind::Model, err.to_string()))?
+        };
         let punctuation =
             load_configured_punctuation(&self.punct_engines, self.punctuation_model.as_deref())?;
 
@@ -383,9 +395,26 @@ fn is_batch_vad_forced_model(model_type: &str) -> bool {
     !matches!(model_type, "qwen3-asr" | "parakeet-tdt")
 }
 
+fn is_same_model_target(path_a: &Path, path_b: &Path) -> bool {
+    if path_a == path_b {
+        return true;
+    }
+    let resolve_base = |p: &Path| -> PathBuf {
+        let canonical = std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+        if canonical.is_file() {
+            canonical
+                .parent()
+                .map(|parent| parent.to_path_buf())
+                .unwrap_or(canonical)
+        } else {
+            canonical
+        }
+    };
+    resolve_base(path_a) == resolve_base(path_b)
+}
 #[cfg(test)]
 mod tests {
-    use super::LocalBatchAsrAdapter;
+    use super::*;
     use sona_core::export::ExportFormat;
     use sona_core::ports::asr::BatchTranscriberPort;
     use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
@@ -477,5 +506,25 @@ mod tests {
             adapter.aligner_engines.engines()[0].engine_kind(),
             sona_core::ports::aligner::AlignerEngineKind::CtcTrellisOnnx
         );
+    }
+    #[test]
+    fn test_is_same_model_target() {
+        let temp_dir = std::env::temp_dir().join("test_is_same_model_target");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let model_file = temp_dir.join("model.onnx");
+        let _ = std::fs::write(&model_file, b"test");
+
+        // Same path directly
+        assert!(is_same_model_target(&temp_dir, &temp_dir));
+
+        // Directory vs file inside directory
+        assert!(is_same_model_target(&temp_dir, &model_file));
+        assert!(is_same_model_target(&model_file, &temp_dir));
+
+        // Different paths
+        let other_dir = std::env::temp_dir().join("test_other_model");
+        assert!(!is_same_model_target(&temp_dir, &other_dir));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }
