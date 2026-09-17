@@ -106,7 +106,7 @@ class UniffiLlmAdapter internal constructor(
 
     override suspend fun polish(historyId: String, segments: List<TranscriptSegment>, observer: LlmTaskObserver): List<TranscriptSegment> {
         val taskId = "android-polish-$historyId"
-        val final = callLlm { bindings.runPolish(FfiPolishSegmentsRequest(taskId, config(), segments.map { FfiLlmSegmentInput(it.id, it.text) }, 80uL, null, null), observer(taskId, observer)) }
+        val final = callLlm { bindings.runPolish(FfiPolishSegmentsRequest(taskId, config(), segments.map { FfiLlmSegmentInput(it.id, it.text) }, 80uL, null, null, null), observer(taskId, observer)) }
         val byId = runCatching { json.parseToJsonElement(final.resultJson).jsonArray.associate { it.jsonObject["id"]!!.jsonPrimitive.content to it.jsonObject["text"]!!.jsonPrimitive.content } }
             .getOrElse { throw LlmTaskException(mapLlmFailure(it), it) }
         if (byId.size != segments.size || segments.any { it.id !in byId || byId[it.id].isNullOrBlank() }) throw LlmTaskException(LlmFailureCategory.INVALID_RESPONSE)
