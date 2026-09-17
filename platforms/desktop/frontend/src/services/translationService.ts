@@ -1,4 +1,5 @@
 import { LANGUAGE_OPTIONS } from '../constants/languages';
+import type { rebaselineTranscriptAutoSave } from '../hooks/useAutoSaveTranscript';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';

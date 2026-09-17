@@ -15,6 +15,7 @@ export interface SegmentTokensProps {
   onMatchClick?: (index: number) => void;
   matches?: Match[];
   activeMatch?: Match | null;
+  onEditTranslation?: () => void;
 }
 
 interface TokenListProps {
@@ -239,11 +240,14 @@ export function SegmentTokens({
   onMatchClick,
   matches,
   activeMatch,
+  onEditTranslation,
 }: SegmentTokensProps): React.JSX.Element {
   const rootRef = useRef<HTMLParagraphElement>(null);
   const contextMenuHandlers = useReadonlySegmentContextMenu({
     segmentId: segment.id,
     rootRef,
+    onEditTranslation,
+    hasTranslation: Boolean(segment.translation),
   });
   const alignedUnits = useMemo(
     () => (segment.timing?.level === 'token' ? segment.timing.units : null),

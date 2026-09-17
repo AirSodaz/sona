@@ -321,6 +321,128 @@
   position: relative;
 }
 
+.segment-translation {
+  margin-top: 4px;
+  color: var(--color-text-secondary);
+  font-size: 0.9em;
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  cursor: text;
+  position: relative;
+}
+
+.segment-translation-text {
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.segment-translation-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.segment-translation:hover .segment-translation-edit-btn,
+.segment-translation-edit-btn:focus-visible {
+  opacity: 1;
+}
+
+.segment-translation-edit-btn:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+}
+
+.segment-translation-edit-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
+}
+
+.segment-translation-editor {
+  margin-top: 4px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+}
+
+.segment-translation-input {
+  flex: 1;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  font-family: inherit;
+  font-size: 0.9em;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  outline: none;
+  resize: none;
+  box-sizing: border-box;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.segment-translation-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: var(--apple-control-focus-ring);
+}
+
+.segment-translation-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.segment-translation-save-btn,
+.segment-translation-cancel-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.segment-translation-save-btn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-accent-primary, #10b981);
+}
+
+.segment-translation-cancel-btn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-error, #ef4444);
+}
+
 .segment-speaker-row {
   margin-left: calc(60px + var(--spacing-md));
   margin-bottom: 8px;

@@ -22,7 +22,7 @@ import {
 } from '../../stores/transcriptCoordinator';
 import { useTranscriptSidecarStore } from '../../stores/transcriptSidecarStore';
 import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
-import { historyService } from '../historyService';
+import { historyService, type TranscriptEditCommitResult } from '../historyService';
 import { transcriptAutoSaveRuntime } from '../transcriptAutoSaveRuntime';
 
 describe('transcriptAutoSaveRuntime', () => {

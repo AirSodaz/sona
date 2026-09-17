@@ -10,11 +10,13 @@ import {
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useSearchStore } from '../../stores/searchStore';
+import { updateTranscriptSegment } from '../../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
+import { DEFAULT_LLM_STATE } from '../../stores/transcriptSidecarState';
 import { useTranscriptSidecarStore } from '../../stores/transcriptSidecarStore';
 import type { TranscriptSegment } from '../../types/transcript';
 import { formatDisplayTime } from '../../utils/exportFormats';
-import { EditIcon, MergeIcon, TrashIcon } from '../Icons';
+import { CheckIcon, CloseIcon, EditIcon, MergeIcon, TrashIcon } from '../Icons';
 import { SegmentEditor } from './SegmentEditor';
 import { SegmentTimestamp } from './SegmentTimestamp';
 import { SegmentTokens } from './SegmentTokens';
@@ -29,6 +31,7 @@ export interface SegmentItemProps {
   onSeek: (time: number) => void;
   onEdit: (id: string) => void;
   onSave: (id: string, text: string) => void;
+  onSaveTranslation?: (id: string, translation: string) => void;
   onDelete: (id: string) => void;
   onMergeWithNext: (id: string) => void;
   onSplit?: (id: string, leftText: string, rightText: string) => void;
@@ -47,6 +50,7 @@ export function SegmentItem({
   onSeek,
   onEdit,
   onSave,
+  onSaveTranslation,
   onDelete,
   onMergeWithNext,
   onSplit,
@@ -81,7 +85,8 @@ export function SegmentItem({
   const llmState = useTranscriptSidecarStore(
     (state) => state.llmStates[sourceHistoryId || 'current']
   );
-  const isTranslationVisible = llmState ? llmState.isTranslationVisible : false;
+  const isTranslationVisible =
+    llmState?.isTranslationVisible ?? DEFAULT_LLM_STATE.isTranslationVisible;
   const speakerProfiles = useConfigStore((state) => state.config.speakerProfiles);
 
   // Subscribe to store for hasNext to avoid passing unstable props
@@ -91,6 +96,76 @@ export function SegmentItem({
   );
 
   const isLocked = !segment.isFinal;
+
+  // Translation editing state
+  const [isEditingTranslation, setIsEditingTranslation] = useState(false);
+  const [translationDraft, setTranslationDraft] = useState('');
+  const translationInputRef = useRef<HTMLTextAreaElement>(null);
+  const isTranslationActionClickedRef = useRef(false);
+
+  const adjustTextareaHeight = useCallback((el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.max(28, el.scrollHeight)}px`;
+  }, []);
+
+  const handleStartTranslationEdit = useCallback(() => {
+    if (isLocked) return;
+    setTranslationDraft(segment.translation || '');
+    setIsEditingTranslation(true);
+  }, [isLocked, segment.translation]);
+
+  const handleSaveTranslation = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (onSaveTranslation) {
+        onSaveTranslation(segment.id, trimmed);
+      } else {
+        updateTranscriptSegment(segment.id, { translation: trimmed });
+      }
+      setIsEditingTranslation(false);
+    },
+    [onSaveTranslation, segment.id]
+  );
+
+  const handleCancelTranslation = useCallback(() => {
+    setIsEditingTranslation(false);
+    setTranslationDraft(segment.translation || '');
+  }, [segment.translation]);
+
+  useEffect(() => {
+    if (isEditingTranslation && translationInputRef.current) {
+      translationInputRef.current.focus();
+      const len = translationInputRef.current.value.length;
+      translationInputRef.current.setSelectionRange(len, len);
+      adjustTextareaHeight(translationInputRef.current);
+    }
+  }, [isEditingTranslation, adjustTextareaHeight]);
+
+  const handleTranslationKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSaveTranslation(translationDraft);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        handleCancelTranslation();
+        return;
+      }
+    },
+    [handleSaveTranslation, handleCancelTranslation, translationDraft]
+  );
+
+  const handleTranslationBlur = useCallback(() => {
+    if (isTranslationActionClickedRef.current) {
+      return;
+    }
+    handleSaveTranslation(translationDraft);
+  }, [handleSaveTranslation, translationDraft]);
 
   // Search matches
   // Optimize: Select only what we need to avoid re-renders on every store change
@@ -412,6 +487,7 @@ export function SegmentItem({
               matches={matches}
               activeMatch={activeMatch}
               onMatchClick={setActiveMatch}
+              onEditTranslation={!isLocked ? handleStartTranslationEdit : undefined}
             />
           )}
           {isAligning && (
@@ -422,20 +498,95 @@ export function SegmentItem({
             />
           )}
           {isTranslationVisible &&
-            typeof segment.translation === 'string' &&
-            segment.translation &&
-            !isEditing && (
+            ((typeof segment.translation === 'string' && segment.translation.length > 0) ||
+              isEditingTranslation) &&
+            (isEditingTranslation ? (
+              <div
+                className="segment-translation-editor"
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+              >
+                <textarea
+                  ref={translationInputRef}
+                  className="segment-translation-input"
+                  value={translationDraft}
+                  onChange={(e) => {
+                    setTranslationDraft(e.target.value);
+                    adjustTextareaHeight(e.target);
+                  }}
+                  onKeyDown={handleTranslationKeyDown}
+                  onBlur={handleTranslationBlur}
+                  rows={1}
+                  placeholder={t('editor.translation_placeholder', {
+                    defaultValue: 'Enter translation...',
+                  })}
+                />
+                <div className="segment-translation-actions">
+                  <button
+                    type="button"
+                    className="segment-translation-save-btn"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      isTranslationActionClickedRef.current = true;
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSaveTranslation(translationDraft);
+                      isTranslationActionClickedRef.current = false;
+                    }}
+                    title={t('common.save', { defaultValue: 'Save' })}
+                    aria-label={t('common.save', { defaultValue: 'Save' })}
+                  >
+                    <CheckIcon width={14} height={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="segment-translation-cancel-btn"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      isTranslationActionClickedRef.current = true;
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCancelTranslation();
+                      isTranslationActionClickedRef.current = false;
+                    }}
+                    title={t('common.cancel', { defaultValue: 'Cancel' })}
+                    aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
+                  >
+                    <CloseIcon width={14} height={14} />
+                  </button>
+                </div>
+              </div>
+            ) : (
               <div
                 className="segment-translation"
-                style={{
-                  marginTop: '4px',
-                  color: 'var(--color-text-secondary)',
-                  fontSize: '0.9em',
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  if (!isLocked) {
+                    handleStartTranslationEdit();
+                  }
                 }}
               >
-                {segment.translation}
+                <span className="segment-translation-text">{segment.translation}</span>
+                {!isLocked && (
+                  <button
+                    type="button"
+                    className="segment-translation-edit-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartTranslationEdit();
+                    }}
+                    title={t('editor.edit_translation', { defaultValue: 'Edit translation' })}
+                    aria-label={t('editor.edit_translation', {
+                      defaultValue: 'Edit translation',
+                    })}
+                  >
+                    <EditIcon width={12} height={12} />
+                  </button>
+                )}
               </div>
-            )}
+            ))}
         </div>
 
         <div className="segment-actions">

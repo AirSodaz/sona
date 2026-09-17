@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStore } from 'zustand/vanilla';
 import { useTranscriptStore } from '../../../test-utils/transcriptStoreTestUtils';
@@ -23,6 +23,8 @@ vi.mock('../../Icons', () => ({
   EditIcon: () => <span data-testid="edit-icon" />,
   TrashIcon: () => <span data-testid="trash-icon" />,
   MergeIcon: () => <span data-testid="merge-icon" />,
+  CheckIcon: () => <span data-testid="check-icon" />,
+  CloseIcon: () => <span data-testid="close-icon" />,
 }));
 
 // Mock SegmentTimestamp
@@ -136,5 +138,278 @@ describe('SegmentItem Highlighting', () => {
 
     const token0 = screen.getByText('Hello');
     expect(token0.className).not.toContain('active-token');
+  });
+});
+
+describe('SegmentItem Translation Display', () => {
+  let uiStore: any;
+
+  const segmentWithTranslation = normalizeTranscriptSegment({
+    id: 'trans-seg',
+    start: 0,
+    end: 5,
+    text: 'Hello world',
+    translation: '你好世界',
+    isFinal: true,
+    tokens: ['Hello', 'world'],
+    timestamps: [0.0, 1.5],
+  });
+
+  const segmentWithoutTranslation = normalizeTranscriptSegment({
+    id: 'no-trans-seg',
+    start: 0,
+    end: 5,
+    text: 'Hello world',
+    isFinal: true,
+    tokens: ['Hello', 'world'],
+    timestamps: [0.0, 1.5],
+  });
+
+  const createProps = (seg: any) => ({
+    segment: seg,
+    index: 0,
+    onSeek: vi.fn(),
+    onEdit: vi.fn(),
+    onSave: vi.fn(),
+    onDelete: vi.fn(),
+    onMergeWithNext: vi.fn(),
+    onAnimationEnd: vi.fn(),
+  });
+
+  beforeEach(() => {
+    useTranscriptStore.setState({
+      sourceHistoryId: null,
+      llmStates: {},
+    });
+    uiStore = createStore<TranscriptUIState>(() => ({
+      newSegmentIds: new Set(),
+      activeSegmentId: null,
+      editingSegmentId: null,
+      totalSegments: 1,
+      aligningSegmentIds: new Set(),
+    }));
+  });
+
+  it('shows translation by default when translation exists (bilingual display)', () => {
+    const { container } = render(
+      <ContextMenuProvider>
+        <TranscriptUIContext.Provider value={uiStore}>
+          <SegmentItem {...createProps(segmentWithTranslation)} />
+        </TranscriptUIContext.Provider>
+      </ContextMenuProvider>
+    );
+
+    const translationEl = container.querySelector('.segment-translation');
+    expect(translationEl).not.toBeNull();
+    expect(translationEl?.textContent).toBe('你好世界');
+  });
+
+  it('does not show translation element when segment has no translation', () => {
+    const { container } = render(
+      <ContextMenuProvider>
+        <TranscriptUIContext.Provider value={uiStore}>
+          <SegmentItem {...createProps(segmentWithoutTranslation)} />
+        </TranscriptUIContext.Provider>
+      </ContextMenuProvider>
+    );
+
+    const translationEl = container.querySelector('.segment-translation');
+    expect(translationEl).toBeNull();
+  });
+
+  it('hides translation when isTranslationVisible is set to false', () => {
+    useTranscriptStore.getState().setIsTranslationVisible(false);
+
+    const { container } = render(
+      <ContextMenuProvider>
+        <TranscriptUIContext.Provider value={uiStore}>
+          <SegmentItem {...createProps(segmentWithTranslation)} />
+        </TranscriptUIContext.Provider>
+      </ContextMenuProvider>
+    );
+
+    const translationEl = container.querySelector('.segment-translation');
+    expect(translationEl).toBeNull();
+  });
+
+  it('shows translation by default even when sourceHistoryId is set without pre-existing llmState', () => {
+    useTranscriptStore.setState({
+      sourceHistoryId: 'history-item-123',
+      llmStates: {},
+    });
+
+    const { container } = render(
+      <ContextMenuProvider>
+        <TranscriptUIContext.Provider value={uiStore}>
+          <SegmentItem {...createProps(segmentWithTranslation)} />
+        </TranscriptUIContext.Provider>
+      </ContextMenuProvider>
+    );
+
+    const translationEl = container.querySelector('.segment-translation');
+    expect(translationEl).not.toBeNull();
+    expect(translationEl?.textContent).toBe('你好世界');
+  });
+
+  it('keeps translation visible when original text is being edited', () => {
+    uiStore.setState({ editingSegmentId: segmentWithTranslation.id });
+
+    const { container } = render(
+      <ContextMenuProvider>
+        <TranscriptUIContext.Provider value={uiStore}>
+          <SegmentItem {...createProps(segmentWithTranslation)} />
+        </TranscriptUIContext.Provider>
+      </ContextMenuProvider>
+    );
+
+    const translationEl = container.querySelector('.segment-translation');
+    expect(translationEl).not.toBeNull();
+    expect(translationEl?.textContent).toBe('你好世界');
+  });
+
+  it('starts editing translation on double click', () => {
+    const { container } = render(
+      <ContextMenuProvider>
+        <TranscriptUIContext.Provider value={uiStore}>
+          <SegmentItem {...createProps(segmentWithTranslation)} />
+        </TranscriptUIContext.Provider>
+      </ContextMenuProvider>
+    );
+
+    const translationEl = container.querySelector('.segment-translation');
+    expect(translationEl).not.toBeNull();
+    fireEvent.doubleClick(translationEl!);
+
+    const inputEl = container.querySelector('.segment-translation-input');
+    expect(inputEl).not.toBeNull();
+    expect((inputEl as HTMLTextAreaElement).value).toBe('你好世界');
+  });
+
+  it('starts editing translation on edit button click', () => {
+    const { container } = render(
+      <ContextMenuProvider>
+        <TranscriptUIContext.Provider value={uiStore}>
+          <SegmentItem {...createProps(segmentWithTranslation)} />
+        </TranscriptUIContext.Provider>
+      </ContextMenuProvider>
+    );
+
+    const editBtn = container.querySelector('.segment-translation-edit-btn');
+    expect(editBtn).not.toBeNull();
+    fireEvent.click(editBtn!);
+
+    const inputEl = container.querySelector('.segment-translation-input');
+    expect(inputEl).not.toBeNull();
+  });
+
+  it('saves translation on Enter key and calls onSaveTranslation', () => {
+    const onSaveTranslation = vi.fn();
+    const props = { ...createProps(segmentWithTranslation), onSaveTranslation };
+
+    const { container } = render(
+      <ContextMenuProvider>
+        <TranscriptUIContext.Provider value={uiStore}>
+          <SegmentItem {...props} />
+        </TranscriptUIContext.Provider>
+      </ContextMenuProvider>
+    );
+
+    fireEvent.click(container.querySelector('.segment-translation-edit-btn')!);
+    const inputEl = container.querySelector('.segment-translation-input') as HTMLTextAreaElement;
+
+    fireEvent.change(inputEl, { target: { value: '更新后的译文' } });
+    fireEvent.keyDown(inputEl, { key: 'Enter' });
+
+    expect(onSaveTranslation).toHaveBeenCalledWith('trans-seg', '更新后的译文');
+    expect(container.querySelector('.segment-translation-editor')).toBeNull();
+  });
+
+  it('saves translation on Save button click', () => {
+    const onSaveTranslation = vi.fn();
+    const props = { ...createProps(segmentWithTranslation), onSaveTranslation };
+
+    const { container } = render(
+      <ContextMenuProvider>
+        <TranscriptUIContext.Provider value={uiStore}>
+          <SegmentItem {...props} />
+        </TranscriptUIContext.Provider>
+      </ContextMenuProvider>
+    );
+
+    fireEvent.click(container.querySelector('.segment-translation-edit-btn')!);
+    const inputEl = container.querySelector('.segment-translation-input') as HTMLTextAreaElement;
+
+    fireEvent.change(inputEl, { target: { value: '按钮保存的译文' } });
+    fireEvent.click(container.querySelector('.segment-translation-save-btn')!);
+
+    expect(onSaveTranslation).toHaveBeenCalledWith('trans-seg', '按钮保存的译文');
+    expect(container.querySelector('.segment-translation-editor')).toBeNull();
+  });
+
+  it('cancels translation editing on Escape without saving', () => {
+    const onSaveTranslation = vi.fn();
+    const props = { ...createProps(segmentWithTranslation), onSaveTranslation };
+
+    const { container } = render(
+      <ContextMenuProvider>
+        <TranscriptUIContext.Provider value={uiStore}>
+          <SegmentItem {...props} />
+        </TranscriptUIContext.Provider>
+      </ContextMenuProvider>
+    );
+
+    fireEvent.click(container.querySelector('.segment-translation-edit-btn')!);
+    const inputEl = container.querySelector('.segment-translation-input') as HTMLTextAreaElement;
+
+    fireEvent.change(inputEl, { target: { value: '未保存的译文' } });
+    fireEvent.keyDown(inputEl, { key: 'Escape' });
+
+    expect(onSaveTranslation).not.toHaveBeenCalled();
+    expect(container.querySelector('.segment-translation-editor')).toBeNull();
+    expect(container.querySelector('.segment-translation')?.textContent).toBe('你好世界');
+  });
+
+  it('cancels translation editing on Cancel button click without saving', () => {
+    const onSaveTranslation = vi.fn();
+    const props = { ...createProps(segmentWithTranslation), onSaveTranslation };
+
+    const { container } = render(
+      <ContextMenuProvider>
+        <TranscriptUIContext.Provider value={uiStore}>
+          <SegmentItem {...props} />
+        </TranscriptUIContext.Provider>
+      </ContextMenuProvider>
+    );
+
+    fireEvent.click(container.querySelector('.segment-translation-edit-btn')!);
+    const inputEl = container.querySelector('.segment-translation-input') as HTMLTextAreaElement;
+
+    fireEvent.change(inputEl, { target: { value: '未保存的译文' } });
+    fireEvent.click(container.querySelector('.segment-translation-cancel-btn')!);
+
+    expect(onSaveTranslation).not.toHaveBeenCalled();
+    expect(container.querySelector('.segment-translation-editor')).toBeNull();
+  });
+
+  it('saves translation on blur', () => {
+    const onSaveTranslation = vi.fn();
+    const props = { ...createProps(segmentWithTranslation), onSaveTranslation };
+
+    const { container } = render(
+      <ContextMenuProvider>
+        <TranscriptUIContext.Provider value={uiStore}>
+          <SegmentItem {...props} />
+        </TranscriptUIContext.Provider>
+      </ContextMenuProvider>
+    );
+
+    fireEvent.click(container.querySelector('.segment-translation-edit-btn')!);
+    const inputEl = container.querySelector('.segment-translation-input') as HTMLTextAreaElement;
+
+    fireEvent.change(inputEl, { target: { value: '失焦保存的译文' } });
+    fireEvent.blur(inputEl);
+
+    expect(onSaveTranslation).toHaveBeenCalledWith('trans-seg', '失焦保存的译文');
+    expect(container.querySelector('.segment-translation-editor')).toBeNull();
   });
 });
