@@ -195,7 +195,8 @@ export function RuleSetSection<TSet extends RuleSetBase>({
                       <button
                         className="btn btn-icon btn-secondary-soft"
                         onClick={batchToggle.onToggle}
-                        title={batchToggleLabel}
+                        data-tooltip={batchToggleLabel}
+                        data-tooltip-pos="top"
                         aria-label={batchToggleLabel}
                       >
                         {batchToggle.isEditing ? <List size={18} /> : <FileText size={18} />}
