@@ -1560,6 +1560,7 @@ fn assign_speakers_to_segment(
         .map(|(index, unit)| AlignedTextUnit {
             text: unit.text.clone(),
             token_index: index,
+            token_end_exclusive: index + 1,
         })
         .collect::<Vec<_>>();
 
@@ -2425,10 +2426,12 @@ mod tests {
             AlignedTextUnit {
                 text: "hello".to_string(),
                 token_index: 0,
+                token_end_exclusive: 1,
             },
             AlignedTextUnit {
                 text: "world".to_string(),
                 token_index: 1,
+                token_end_exclusive: 2,
             },
         ];
         let assignment = Some(ResolvedSpeakerAssignment {
@@ -2455,6 +2458,7 @@ mod tests {
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].text, "hello world");
     }
+    #[test]
     fn test_repair_cluster_oversegmentation_merges_high_similarity() {
         let clusters = vec![
             ClusterInfo {

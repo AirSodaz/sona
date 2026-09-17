@@ -156,61 +156,15 @@ impl SegmentAlignerPort for SherpaCtcAligner {
                             .timestamps
                             .filter(|t| !t.is_empty() && t.len() == res.tokens.len())
                     {
-                        let slice_end_sec =
-                            slice_start_sec + (slice.len() as f64 / sample_rate as f64);
-                        let aligned_text_units =
-                            sona_core::transcription::text_alignment::align_text_units_to_tokens(
-                                &segment.text,
-                                &res.tokens,
-                            );
-
-                        let units: Vec<TranscriptTimingUnit> = if let Some(text_units) =
-                            aligned_text_units
-                        {
-                            text_units
-                                .into_iter()
-                                .filter(|u| !u.text.trim().is_empty())
-                                .map(|u| {
-                                    let rel_start =
-                                        timestamps.get(u.token_index).copied().unwrap_or(0.0)
-                                            as f64;
-                                    let rel_end = if u.token_index + 1 < timestamps.len() {
-                                        (timestamps[u.token_index + 1] as f64).max(rel_start)
-                                    } else {
-                                        (slice.len() as f64 / sample_rate as f64).max(rel_start)
-                                    };
-                                    let start = (slice_start_sec + rel_start).max(segment.start);
-                                    let end =
-                                        (slice_start_sec + rel_end).min(slice_end_sec).max(start);
-                                    TranscriptTimingUnit {
-                                        text: u.text,
-                                        start,
-                                        end,
-                                    }
-                                })
-                                .collect()
-                        } else {
-                            res.tokens
-                                .iter()
-                                .enumerate()
-                                .map(|(i, tok)| {
-                                    let rel_start = timestamps[i] as f64;
-                                    let rel_end = if i + 1 < timestamps.len() {
-                                        (timestamps[i + 1] as f64).max(rel_start)
-                                    } else {
-                                        (slice.len() as f64 / sample_rate as f64).max(rel_start)
-                                    };
-                                    let start = (slice_start_sec + rel_start).max(segment.start);
-                                    let end =
-                                        (slice_start_sec + rel_end).min(slice_end_sec).max(start);
-                                    TranscriptTimingUnit {
-                                        text: tok.clone(),
-                                        start,
-                                        end,
-                                    }
-                                })
-                                .collect()
-                        };
+                        let slice_duration_sec = slice.len() as f64 / sample_rate as f64;
+                        let units = project_tokens_to_timing_units(
+                            &segment.text,
+                            &res.tokens,
+                            &timestamps,
+                            slice_start_sec,
+                            slice_duration_sec,
+                            segment.start,
+                        );
                         if !units.is_empty() {
                             apply_alignment_to_transcript_segment(segment, units);
                             applied = true;
@@ -249,6 +203,61 @@ impl AlignerEnginePort for SherpaCtcAlignerEngine {
     ) -> Result<Arc<dyn SegmentAlignerPort>, AlignerPortError> {
         let aligner = SherpaCtcAligner::new(model_path, num_threads)?;
         Ok(Arc::new(aligner))
+    }
+}
+pub fn project_tokens_to_timing_units(
+    text: &str,
+    tokens: &[String],
+    timestamps: &[f32],
+    slice_start_sec: f64,
+    slice_duration_sec: f64,
+    segment_start: f64,
+) -> Vec<TranscriptTimingUnit> {
+    let slice_end_sec = slice_start_sec + slice_duration_sec;
+    let aligned_text_units =
+        sona_core::transcription::text_alignment::align_text_units_to_tokens(text, tokens);
+
+    if let Some(text_units) = aligned_text_units {
+        text_units
+            .into_iter()
+            .filter(|u| !u.text.trim().is_empty())
+            .map(|u| {
+                let rel_start = timestamps.get(u.token_index).copied().unwrap_or(0.0) as f64;
+                let token_end = u.token_end_exclusive.max(u.token_index + 1);
+                let rel_end = if token_end < timestamps.len() {
+                    (timestamps[token_end] as f64).max(rel_start)
+                } else {
+                    slice_duration_sec.max(rel_start)
+                };
+                let start = (slice_start_sec + rel_start).max(segment_start);
+                let end = (slice_start_sec + rel_end).min(slice_end_sec).max(start);
+                TranscriptTimingUnit {
+                    text: u.text,
+                    start,
+                    end,
+                }
+            })
+            .collect()
+    } else {
+        tokens
+            .iter()
+            .enumerate()
+            .map(|(i, tok)| {
+                let rel_start = timestamps.get(i).copied().unwrap_or(0.0) as f64;
+                let rel_end = if i + 1 < timestamps.len() {
+                    (timestamps[i + 1] as f64).max(rel_start)
+                } else {
+                    slice_duration_sec.max(rel_start)
+                };
+                let start = (slice_start_sec + rel_start).max(segment_start);
+                let end = (slice_start_sec + rel_end).min(slice_end_sec).max(start);
+                TranscriptTimingUnit {
+                    text: tok.clone(),
+                    start,
+                    end,
+                }
+            })
+            .collect()
     }
 }
 
@@ -304,5 +313,49 @@ mod tests {
         assert_eq!(resolved, vocab_file);
 
         std::fs::remove_dir_all(&temp_dir).unwrap();
+    }
+
+    #[test]
+    fn test_project_tokens_to_timing_units_multi_token_words() {
+        // Multi-token character tokens: "hello" = h, e, l, l, o; "world" = w, o, r, l, d
+        let tokens = vec![
+            "h".to_string(),
+            "e".to_string(),
+            "l".to_string(),
+            "l".to_string(),
+            "o".to_string(),
+            " ".to_string(),
+            "w".to_string(),
+            "o".to_string(),
+            "r".to_string(),
+            "l".to_string(),
+            "d".to_string(),
+        ];
+        let timestamps = vec![
+            0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60,
+        ];
+        let slice_start = 1.0;
+        let slice_duration = 0.70;
+        let segment_start = 1.0;
+
+        let units = project_tokens_to_timing_units(
+            "hello world",
+            &tokens,
+            &timestamps,
+            slice_start,
+            slice_duration,
+            segment_start,
+        );
+
+        assert_eq!(units.len(), 2);
+        assert_eq!(units[0].text, "hello");
+        // "hello" should span from 'h' (0.10s) up to ' ' (0.35s), with offset 1.0 -> [1.10, 1.35]
+        assert!((units[0].start - 1.10).abs() < 1e-4);
+        assert!((units[0].end - 1.35).abs() < 1e-4);
+
+        assert_eq!(units[1].text, "world");
+        // "world" should span from 'w' (0.40s) up to end of slice (0.70s), with offset 1.0 -> [1.40, 1.70]
+        assert!((units[1].start - 1.40).abs() < 1e-4);
+        assert!((units[1].end - 1.70).abs() < 1e-4);
     }
 }

@@ -763,10 +763,16 @@ fn build_aligned_timing_units(
         aligned_units
             .into_iter()
             .map(|unit| {
-                let (start, end) = windows
+                let start = windows
                     .get(unit.token_index)
-                    .copied()
-                    .unwrap_or((segment_end, segment_end));
+                    .map(|w| w.0)
+                    .unwrap_or(segment_end);
+                let end_token = unit.token_end_exclusive.max(unit.token_index + 1);
+                let end = windows
+                    .get(end_token.saturating_sub(1))
+                    .map(|w| w.1)
+                    .unwrap_or(segment_end)
+                    .max(start);
                 TranscriptTimingUnit {
                     text: unit.text,
                     start,

@@ -4,10 +4,11 @@ pub struct TextUnit {
     pub normalized: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlignedTextUnit {
     pub text: String,
     pub token_index: usize,
+    pub token_end_exclusive: usize,
 }
 
 pub fn align_text_units_to_tokens(text: &str, tokens: &[String]) -> Option<Vec<AlignedTextUnit>> {
@@ -42,8 +43,9 @@ pub fn align_text_units_to_tokens(text: &str, tokens: &[String]) -> Option<Vec<A
             continue;
         }
 
-        let token_index = if unit.normalized.is_empty() {
-            fallback_token_index(char_pos, &char_to_token_index)
+        let (token_index, token_end_exclusive) = if unit.normalized.is_empty() {
+            let start = fallback_token_index(char_pos, &char_to_token_index);
+            (start, start + 1)
         } else {
             let needle = unit.normalized.chars().collect::<Vec<_>>();
             let search_limit = needle.len().saturating_mul(2).max(20);
@@ -52,18 +54,25 @@ pub fn align_text_units_to_tokens(text: &str, tokens: &[String]) -> Option<Vec<A
 
             if let Some(local_index) = local_index {
                 let match_pos = char_pos + local_index;
-                char_pos = (match_pos + needle.len()).min(joined_token_chars.len());
-                fallback_token_index(match_pos, &char_to_token_index)
+                let match_end_pos = match_pos + needle.len();
+                char_pos = match_end_pos.min(joined_token_chars.len());
+                let start = fallback_token_index(match_pos, &char_to_token_index);
+                let end =
+                    fallback_token_index(match_end_pos.saturating_sub(1), &char_to_token_index);
+                (start, (end + 1).max(start + 1))
             } else {
-                let fallback = fallback_token_index(char_pos, &char_to_token_index);
-                char_pos = (char_pos + needle.len().max(1)).min(joined_token_chars.len());
-                fallback
+                let start = fallback_token_index(char_pos, &char_to_token_index);
+                let end_pos = char_pos + needle.len().max(1);
+                let end = fallback_token_index(end_pos.saturating_sub(1), &char_to_token_index);
+                char_pos = end_pos.min(joined_token_chars.len());
+                (start, (end + 1).max(start + 1))
             }
         };
 
         result.push(AlignedTextUnit {
             text: unit.text,
             token_index,
+            token_end_exclusive,
         });
     }
 
@@ -180,9 +189,39 @@ mod tests {
 
         assert_eq!(aligned[0].text, "hello");
         assert_eq!(aligned[0].token_index, 0);
+        assert_eq!(aligned[0].token_end_exclusive, 1);
         assert_eq!(aligned[2].text, "世");
         assert_eq!(aligned[2].token_index, 1);
+        assert_eq!(aligned[2].token_end_exclusive, 2);
         assert_eq!(aligned[3].text, "界");
         assert_eq!(aligned[3].token_index, 2);
+        assert_eq!(aligned[3].token_end_exclusive, 3);
+    }
+
+    #[test]
+    fn aligns_multi_token_character_units_to_token_spans() {
+        let tokens = vec![
+            "h".to_string(),
+            "e".to_string(),
+            "l".to_string(),
+            "l".to_string(),
+            "o".to_string(),
+            " ".to_string(),
+            "w".to_string(),
+            "o".to_string(),
+            "r".to_string(),
+            "l".to_string(),
+            "d".to_string(),
+        ];
+
+        let aligned = align_text_units_to_tokens("hello world", &tokens).unwrap();
+
+        assert_eq!(aligned[0].text, "hello");
+        assert_eq!(aligned[0].token_index, 0);
+        assert_eq!(aligned[0].token_end_exclusive, 5);
+
+        assert_eq!(aligned[2].text, "world");
+        assert_eq!(aligned[2].token_index, 6);
+        assert_eq!(aligned[2].token_end_exclusive, 11);
     }
 }
