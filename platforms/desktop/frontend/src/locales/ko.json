@@ -307,6 +307,7 @@
     "enroll_speaker_no_audio": "현재 세션의 오디오 파일을 찾을 수 없습니다.",
     "enroll_speaker_name_required": "화자 이름을 입력하세요.",
     "enroll_speaker_select_required": "대상 화자 프로필을 선택하세요.",
+    "enroll_speaker_short_warning": "선택한 구간의 길이가 4초 미만입니다. 화자 인식 엔진은 4초 미만의 샘플을 무시하므로 더 긴 음성 구간을 선택하는 것이 좋습니다.",
     "speaker_review_title": "Speaker Review",
     "speaker_review_description": "내보내기 전에 확인이 필요한 화자 그룹을 검토합니다.",
     "speaker_review_pending_count": "검토 필요 {{count}}",

@@ -209,7 +209,8 @@ export function TranscriptSpeakerReviewPanel({
                 key={slice.groupId}
                 className="transcript-speaker-distribution-slice"
                 style={{
-                  width: `${Math.max(slice.percentage, 2)}%`,
+                  flex: `${Math.max(slice.durationSeconds, 0.01)} 1 0`,
+                  minWidth: '4px',
                   backgroundColor: slice.color,
                 }}
                 title={`${slice.label}: ${slice.displayDuration} (${slice.percentage}%)`}

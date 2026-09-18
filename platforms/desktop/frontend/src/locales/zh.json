@@ -307,6 +307,7 @@
     "enroll_speaker_no_audio": "当前会话未找到音频文件，无法提取声纹",
     "enroll_speaker_name_required": "请输入说话人姓名",
     "enroll_speaker_select_required": "请选择目标说话人",
+    "enroll_speaker_short_warning": "当前片段时长不足 4 秒。声纹引擎将忽略 4 秒以下的样本，建议选择更长的语音片段进行录入。",
     "speaker_review_title": "说话人校对",
     "speaker_review_description": "导出前集中检查需要确认的说话人分组。",
     "speaker_review_pending_count": "待审 {{count}}",

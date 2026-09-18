@@ -307,6 +307,7 @@
     "enroll_speaker_no_audio": "目前工作階段未找到音訊檔案，無法擷取聲紋",
     "enroll_speaker_name_required": "請輸入說話者姓名",
     "enroll_speaker_select_required": "請選擇目標說話者",
+    "enroll_speaker_short_warning": "當前片段時長不足 4 秒。聲紋引擎將忽略 4 秒以下的樣本，建議選擇更長的語音片段進行錄入。",
     "speaker_review_title": "說話者校對",
     "speaker_review_description": "匯出前集中檢查需要確認的說話者分組。",
     "speaker_review_pending_count": "待審 {{count}}",

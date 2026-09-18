@@ -183,6 +183,77 @@ pub async fn extract_and_resample_audio_with_ffmpeg(
     Ok(pcm_s16le_bytes_to_f32(&output.stdout))
 }
 
+pub async fn extract_audio_slice(
+    filepath: &Path,
+    start_seconds: f64,
+    duration_seconds: f64,
+    target_sample_rate: u32,
+) -> Result<Vec<f32>, AsrPortError> {
+    extract_audio_slice_with_ffmpeg(
+        filepath,
+        start_seconds,
+        duration_seconds,
+        target_sample_rate,
+        None,
+    )
+    .await
+}
+
+pub async fn extract_audio_slice_with_ffmpeg(
+    filepath: &Path,
+    start_seconds: f64,
+    duration_seconds: f64,
+    target_sample_rate: u32,
+    custom_ffmpeg_path: Option<&Path>,
+) -> Result<Vec<f32>, AsrPortError> {
+    let ffmpeg_path = resolve_ffmpeg_path(custom_ffmpeg_path)?;
+    let mut command = tokio::process::Command::new(ffmpeg_path);
+
+    #[cfg(target_os = "windows")]
+    {
+        #[allow(unused_imports)]
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000);
+    }
+
+    let output = command
+        .arg("-loglevel")
+        .arg("error")
+        .arg("-ss")
+        .arg(format!("{:.3}", start_seconds.max(0.0)))
+        .arg("-i")
+        .arg(filepath)
+        .arg("-t")
+        .arg(format!("{:.3}", duration_seconds.max(0.0)))
+        .arg("-f")
+        .arg("s16le")
+        .arg("-acodec")
+        .arg("pcm_s16le")
+        .arg("-ar")
+        .arg(target_sample_rate.to_string())
+        .arg("-ac")
+        .arg("1")
+        .arg("-")
+        .output()
+        .await
+        .map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::FileSystem,
+                format!("Failed to run ffmpeg command: {error}"),
+            )
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AsrPortError::runtime(format!(
+            "FFmpeg exited with {:?}: {stderr}",
+            output.status
+        )));
+    }
+
+    Ok(pcm_s16le_bytes_to_f32(&output.stdout))
+}
+
 pub(crate) fn create_vad_config(
     vad_model: &Path,
     options: VadDetectorOptions,

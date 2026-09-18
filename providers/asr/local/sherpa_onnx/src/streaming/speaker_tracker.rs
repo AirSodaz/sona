@@ -9,119 +9,8 @@ use sona_core::transcription::speaker::SpeakerProcessingConfig;
 use sona_core::transcription::transcript::{SpeakerAttribution, SpeakerCandidate, SpeakerTag};
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::path::Path;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SpeakerModelThresholds {
-    /// Dynamic cluster merge threshold (same speaker decision line)
-    pub dynamic_merge_threshold: f32,
-    /// Baseline threshold when considering continuity with the recent speaker
-    pub continuity_threshold: f32,
-    /// Maximum time gap (seconds) to maintain continuity with the recent speaker
-    pub max_continuity_gap_seconds: f64,
-    /// Auto-identification threshold for enrolled speaker profiles
-    pub auto_identify_threshold: f32,
-    /// Candidate display threshold for suggested profiles
-    pub candidate_display_threshold: f32,
-    /// Post-cluster oversegmentation repair threshold (merging redundant clusters)
-    pub repair_merge_threshold: f32,
-    /// Minimum turn audio duration (seconds) required to run neural embedding extraction
-    pub min_turn_duration_seconds: f32,
-}
-
-impl Default for SpeakerModelThresholds {
-    fn default() -> Self {
-        Self::general()
-    }
-}
-
-impl SpeakerModelThresholds {
-    pub fn campplus() -> Self {
-        Self {
-            dynamic_merge_threshold: 0.48,
-            continuity_threshold: 0.40,
-            max_continuity_gap_seconds: 3.0,
-            auto_identify_threshold: 0.58,
-            candidate_display_threshold: 0.46,
-            repair_merge_threshold: 0.52,
-            min_turn_duration_seconds: 0.5,
-        }
-    }
-
-    pub fn eres2net() -> Self {
-        Self {
-            dynamic_merge_threshold: 0.54,
-            continuity_threshold: 0.46,
-            max_continuity_gap_seconds: 3.0,
-            auto_identify_threshold: 0.64,
-            candidate_display_threshold: 0.50,
-            repair_merge_threshold: 0.58,
-            min_turn_duration_seconds: 0.5,
-        }
-    }
-
-    pub fn eres2net_large() -> Self {
-        Self {
-            dynamic_merge_threshold: 0.58,
-            continuity_threshold: 0.50,
-            max_continuity_gap_seconds: 3.0,
-            auto_identify_threshold: 0.68,
-            candidate_display_threshold: 0.55,
-            repair_merge_threshold: 0.62,
-            min_turn_duration_seconds: 0.5,
-        }
-    }
-
-    pub fn general() -> Self {
-        Self {
-            dynamic_merge_threshold: 0.50,
-            continuity_threshold: 0.42,
-            max_continuity_gap_seconds: 3.0,
-            auto_identify_threshold: 0.60,
-            candidate_display_threshold: 0.48,
-            repair_merge_threshold: 0.54,
-            min_turn_duration_seconds: 0.5,
-        }
-    }
-
-    pub fn from_model_path(path: &Path) -> Self {
-        let filename = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-        if filename.contains("eres2net_large") {
-            Self::eres2net_large()
-        } else if filename.contains("eres2net") {
-            Self::eres2net()
-        } else if filename.contains("campplus") {
-            Self::campplus()
-        } else {
-            Self::general()
-        }
-    }
-    pub fn with_sensitivity(mut self, sensitivity: Option<&str>) -> Self {
-        match sensitivity
-            .unwrap_or("balanced")
-            .trim()
-            .to_lowercase()
-            .as_str()
-        {
-            "permissive" | "loose" => {
-                self.dynamic_merge_threshold = (self.dynamic_merge_threshold - 0.05).max(0.35);
-                self.continuity_threshold = (self.continuity_threshold - 0.05).max(0.30);
-                self.repair_merge_threshold = (self.repair_merge_threshold - 0.05).max(0.40);
-            }
-            "strict" | "tight" => {
-                self.dynamic_merge_threshold = (self.dynamic_merge_threshold + 0.05).min(0.90);
-                self.continuity_threshold = (self.continuity_threshold + 0.05).min(0.85);
-                self.repair_merge_threshold = (self.repair_merge_threshold + 0.05).min(0.90);
-            }
-            _ => {}
-        }
-        self
-    }
-}
+pub use crate::speaker::SpeakerModelThresholds;
 
 /// Trims leading and trailing silence from audio samples based on local RMS energy.
 /// Keeps a 50ms padding margin around detected active speech.
@@ -228,6 +117,8 @@ pub struct RecentSpeakerState {
 
 pub struct OnlineSpeakerTracker {
     embedding_index: Option<SpeakerEmbeddingIndex>,
+    #[cfg(test)]
+    mock_enabled: bool,
     thresholds: SpeakerModelThresholds,
     profile_names: HashMap<String, String>,
     profile_sample_embeddings: HashMap<String, Vec<ProfileSampleEmbedding>>,
@@ -320,6 +211,8 @@ impl OnlineSpeakerTracker {
 
         Ok(Self {
             embedding_index: Some(embedding_index),
+            #[cfg(test)]
+            mock_enabled: false,
             thresholds,
             profile_names,
             profile_sample_embeddings,
@@ -333,6 +226,8 @@ impl OnlineSpeakerTracker {
     pub fn empty() -> Self {
         Self {
             embedding_index: None,
+            #[cfg(test)]
+            mock_enabled: false,
             thresholds: SpeakerModelThresholds::default(),
             profile_names: HashMap::new(),
             profile_sample_embeddings: HashMap::new(),
@@ -353,7 +248,19 @@ impl OnlineSpeakerTracker {
     }
 
     pub fn is_enabled(&self) -> bool {
-        self.embedding_index.is_some()
+        if self.embedding_index.is_some() {
+            return true;
+        }
+        #[cfg(test)]
+        if self.mock_enabled {
+            return true;
+        }
+        false
+    }
+
+    #[cfg(test)]
+    pub fn enable_mock_for_test(&mut self) {
+        self.mock_enabled = true;
     }
 
     pub fn reset_session(&mut self) {
@@ -368,9 +275,9 @@ impl OnlineSpeakerTracker {
         start_time: f64,
         end_time: f64,
     ) -> (Option<SpeakerTag>, Option<SpeakerAttribution>) {
-        let Some(embedding_index) = self.embedding_index.as_ref() else {
+        if !self.is_enabled() {
             return (None, None);
-        };
+        }
 
         if samples.is_empty() {
             return (None, None);
@@ -401,6 +308,9 @@ impl OnlineSpeakerTracker {
         }
 
         // 3. Extract embedding from trimmed speech turn
+        let Some(embedding_index) = self.embedding_index.as_ref() else {
+            return self.fallback_anonymous(end_time);
+        };
         let embedding = match embedding_index.compute_embedding_for_samples(trimmed) {
             Ok(Some(emb)) => emb,
             _ => {
@@ -533,14 +443,21 @@ impl OnlineSpeakerTracker {
                         self.repair_oversegmentation();
 
                         let mut attribution =
-                            recent.attribution.clone().unwrap_or(SpeakerAttribution {
-                                group_id: recent_spk.id.clone(),
-                                anonymous_label: recent_spk.label.clone(),
-                                state: recent_spk.kind.clone(),
-                                source: "auto".to_string(),
-                                confidence: "high".to_string(),
-                                candidates: candidates.clone(),
-                            });
+                            recent
+                                .attribution
+                                .clone()
+                                .unwrap_or_else(|| SpeakerAttribution {
+                                    group_id: if recent_spk.kind == "identified" {
+                                        format!("profile-{}", recent_spk.id)
+                                    } else {
+                                        recent_spk.id.clone()
+                                    },
+                                    anonymous_label: recent_spk.label.clone(),
+                                    state: recent_spk.kind.clone(),
+                                    source: "auto".to_string(),
+                                    confidence: "high".to_string(),
+                                    candidates: candidates.clone(),
+                                });
                         attribution.candidates = candidates;
 
                         self.recent_speaker = Some(RecentSpeakerState {
@@ -596,7 +513,7 @@ impl OnlineSpeakerTracker {
                         score: candidates.first().map(|c| c.score).or(Some(best_sim)),
                     },
                     SpeakerAttribution {
-                        group_id: profile_id.to_string(),
+                        group_id: format!("profile-{profile_id}"),
                         anonymous_label: profile_name.clone(),
                         state: "identified".to_string(),
                         source: "auto".to_string(),
@@ -833,6 +750,7 @@ impl OnlineSpeakerTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     #[test]
     fn empty_tracker_returns_none() {
@@ -868,6 +786,11 @@ mod tests {
         let generic_th =
             SpeakerModelThresholds::from_model_path(Path::new("models/custom_unknown.onnx"));
         assert_eq!(generic_th, SpeakerModelThresholds::general());
+
+        let dir_campplus_th = SpeakerModelThresholds::from_model_path(Path::new(
+            "C:\\models\\sherpa-onnx-3dspeaker-campplus\\model.onnx",
+        ));
+        assert_eq!(dir_campplus_th, SpeakerModelThresholds::campplus());
     }
 
     #[test]
@@ -895,6 +818,7 @@ mod tests {
     #[test]
     fn short_utterance_inherits_recent_speaker_within_gap() {
         let mut tracker = OnlineSpeakerTracker::empty();
+        tracker.enable_mock_for_test();
 
         tracker.recent_speaker = Some(RecentSpeakerState {
             speaker: Some(SpeakerTag {
@@ -914,11 +838,22 @@ mod tests {
             end_time: 5.0,
         });
 
-        // Short audio (< min_turn_duration_seconds)
+        // Short audio (< min_turn_duration_seconds: 4000 samples = 0.25s < 0.5s)
         let short_audio = vec![0.1_f32; 4000];
         let (speaker, attribution) = tracker.identify_turn(&short_audio, 5.5, 5.75);
-        assert!(speaker.is_none());
-        assert!(attribution.is_none());
+        assert_eq!(speaker.as_ref().map(|s| s.id.as_str()), Some("spk-alice"));
+        assert_eq!(speaker.as_ref().map(|s| s.label.as_str()), Some("Alice"));
+        let attr = attribution.expect("attribution");
+        assert_eq!(attr.group_id, "profile-alice");
+        assert_eq!(attr.confidence, "medium");
+
+        // Gap exceeds max_continuity_gap_seconds (5.75 to 10.0 is 4.25s > 3.0s) -> fallback anonymous
+        let (speaker2, attribution2) = tracker.identify_turn(&short_audio, 10.0, 10.25);
+        assert_eq!(speaker2.as_ref().map(|s| s.id.as_str()), Some("speaker-1"));
+        assert_eq!(
+            attribution2.as_ref().map(|a| a.state.as_str()),
+            Some("anonymous")
+        );
     }
 
     #[test]

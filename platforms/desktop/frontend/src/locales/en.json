@@ -307,6 +307,7 @@
     "enroll_speaker_no_audio": "No audio file found for the current session.",
     "enroll_speaker_name_required": "Please enter a speaker name.",
     "enroll_speaker_select_required": "Please select a target speaker profile.",
+    "enroll_speaker_short_warning": "Selected segment is under 4 seconds. The speaker recognition engine ignores samples shorter than 4 seconds. It is recommended to choose a longer segment.",
     "speaker_review_title": "Speaker Review",
     "speaker_review_description": "Review speaker groups that need attention before export.",
     "speaker_review_pending_count": "Needs review {{count}}",

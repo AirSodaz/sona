@@ -13,17 +13,18 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use crate::speaker::SpeakerDiarizationSegment;
+use crate::speaker::{SpeakerDiarizationSegment, SpeakerModelThresholds};
 
 const SPEAKER_PROCESSING_LOG_TARGET: &str = "speaker_processing";
 const SAMPLE_RATE: i32 = 16_000;
 const IDENTIFICATION_MIN_DURATION_SECONDS: f32 = 1.5;
 const IDENTIFICATION_MAX_SEGMENTS_PER_CLUSTER: usize = 3;
+#[allow(dead_code)]
 pub(crate) const CANDIDATE_DISPLAY_THRESHOLD: f32 = 0.6;
+#[allow(dead_code)]
 pub(crate) const AUTO_IDENTIFICATION_THRESHOLD: f32 = 0.72;
 pub(crate) const AUTO_IDENTIFICATION_MIN_VOTES: usize = 2;
 pub(crate) const AUTO_IDENTIFICATION_MIN_MARGIN: f32 = 0.08;
-const CLUSTER_OVER_SEGMENTATION_MERGE_THRESHOLD: f32 = 0.85;
 const PROFILE_SAMPLE_MIN_DURATION_SECONDS: f32 = 4.0;
 const PROFILE_LIMITED_MIN_TOTAL_DURATION_SECONDS: f32 = 8.0;
 const PROFILE_READY_MIN_TOTAL_DURATION_SECONDS: f32 = 20.0;
@@ -235,20 +236,21 @@ pub async fn enroll_speaker_profile_sample_from_audio(
             "Sample end time must be greater than start time",
         ));
     }
-    let all_samples =
-        crate::audio::extract_and_resample_audio(Path::new(&source_audio_path), SAMPLE_RATE as u32)
-            .await?;
+    let duration = end_seconds - start_seconds;
+    let slice = crate::audio::extract_audio_slice(
+        Path::new(&source_audio_path),
+        start_seconds.max(0.0),
+        duration,
+        SAMPLE_RATE as u32,
+    )
+    .await?;
 
-    let start_idx = ((start_seconds.max(0.0)) * SAMPLE_RATE as f64).floor() as usize;
-    let end_idx = ((end_seconds.max(0.0)) * SAMPLE_RATE as f64).ceil() as usize;
-    if start_idx >= all_samples.len() || end_idx <= start_idx {
+    if slice.is_empty() {
         return Err(AsrPortError::invalid_request(
             "Selected sample range is out of audio bounds",
         ));
     }
 
-    let bounded_end = end_idx.min(all_samples.len());
-    let slice = &all_samples[start_idx..bounded_end];
     let duration_seconds = slice.len() as f32 / SAMPLE_RATE as f32;
 
     let sample_id = uuid::Uuid::new_v4().to_string();
@@ -270,7 +272,7 @@ pub async fn enroll_speaker_profile_sample_from_audio(
     })?;
 
     let output_path = profile_dir.join(format!("{sample_id}.wav"));
-    crate::audio::save_wav_file(slice, SAMPLE_RATE as u32, &output_path).map_err(|error| {
+    crate::audio::save_wav_file(&slice, SAMPLE_RATE as u32, &output_path).map_err(|error| {
         AsrPortError::new(
             AsrPortErrorKind::FileSystem,
             format!(
@@ -337,8 +339,17 @@ pub fn annotate_segments_with_speakers(
 
     log_cluster_debug_summary(&clusters);
     let embedding_index = crate::speaker::SpeakerEmbeddingIndex::new(&embedding_model)?;
-    let refined =
-        refine_clusters_and_repair_oversegmentation(samples, clusters, segments, &embedding_index)?;
+    let thresholds = SpeakerModelThresholds::for_batch_diarization(
+        &embedding_model,
+        config.sensitivity.as_deref(),
+    );
+    let refined = refine_clusters_and_repair_oversegmentation(
+        samples,
+        clusters,
+        segments,
+        &embedding_index,
+        thresholds.repair_merge_threshold,
+    )?;
     let mut speaker_assignments = build_cluster_speaker_assignments(
         samples,
         &refined.clusters,
@@ -347,6 +358,7 @@ pub fn annotate_segments_with_speakers(
         segments,
         config,
         &embedding_index,
+        &thresholds,
     )?;
 
     for (old_spk, new_spk) in refined.merged_speaker_map {
@@ -811,6 +823,7 @@ fn refine_clusters_and_repair_oversegmentation(
     clusters: Vec<ClusterInfo>,
     segments: &[TranscriptSegment],
     embedding_index: &crate::speaker::SpeakerEmbeddingIndex,
+    oversegmentation_threshold: f32,
 ) -> Result<RefinedClusterOutcome, AsrPortError> {
     let mut initial_purified_spans = HashMap::new();
     let mut cluster_centroids = HashMap::new();
@@ -824,11 +837,8 @@ fn refine_clusters_and_repair_oversegmentation(
         initial_purified_spans.insert(cluster.raw_speaker, purified_spans);
     }
 
-    let (merged_clusters, merged_mapping) = repair_cluster_oversegmentation(
-        clusters,
-        &cluster_centroids,
-        CLUSTER_OVER_SEGMENTATION_MERGE_THRESHOLD,
-    );
+    let (merged_clusters, merged_mapping) =
+        repair_cluster_oversegmentation(clusters, &cluster_centroids, oversegmentation_threshold);
 
     let mut refined_centroids = HashMap::new();
     let mut refined_purified_spans = HashMap::new();
@@ -857,6 +867,7 @@ fn refine_clusters_and_repair_oversegmentation(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_cluster_speaker_assignments(
     samples: &[f32],
     clusters: &[ClusterInfo],
@@ -865,6 +876,7 @@ fn build_cluster_speaker_assignments(
     segments: &[TranscriptSegment],
     config: &SpeakerProcessingConfig,
     embedding_index: &crate::speaker::SpeakerEmbeddingIndex,
+    thresholds: &SpeakerModelThresholds,
 ) -> Result<HashMap<i32, ResolvedSpeakerAssignment>, AsrPortError> {
     let default_assignments = clusters
         .iter()
@@ -972,13 +984,19 @@ fn build_cluster_speaker_assignments(
             embedding_index,
             &loaded_profile_names,
             &profile_sample_embeddings,
+            thresholds.candidate_display_threshold,
         )?;
         if !cluster_candidates.is_empty() {
             candidates.insert(cluster.raw_speaker, cluster_candidates);
         }
     }
 
-    let mut assignments = resolve_cluster_assignments(clusters, &candidates, &profile_readiness);
+    let mut assignments = resolve_cluster_assignments_with_thresholds(
+        clusters,
+        &candidates,
+        &profile_readiness,
+        thresholds,
+    );
     for (raw_speaker, assignment) in default_assignments {
         assignments.entry(raw_speaker).or_insert(assignment);
     }
@@ -989,6 +1007,7 @@ fn build_cluster_speaker_assignments(
     Ok(assignments)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn identify_cluster_candidates(
     samples: &[f32],
     cluster: &ClusterInfo,
@@ -997,6 +1016,7 @@ fn identify_cluster_candidates(
     embedding_index: &crate::speaker::SpeakerEmbeddingIndex,
     profile_names: &HashMap<String, String>,
     profile_sample_embeddings: &HashMap<String, Vec<ProfileSampleEmbedding>>,
+    candidate_display_threshold: f32,
 ) -> Result<Vec<ClusterCandidate>, AsrPortError> {
     let mut candidate_spans = purified_spans
         .iter()
@@ -1037,7 +1057,7 @@ fn identify_cluster_candidates(
         };
         for best_match in embedding_index.best_matches(
             &embedding,
-            CANDIDATE_DISPLAY_THRESHOLD,
+            candidate_display_threshold,
             IDENTIFICATION_MAX_SEGMENTS_PER_CLUSTER as i32,
         ) {
             *vote_counts.entry(best_match.name.clone()).or_insert(0) += 1;
@@ -1126,10 +1146,39 @@ pub(crate) fn derive_profile_readiness(profile: &SpeakerProfile) -> SpeakerProfi
     SpeakerProfileReadinessState::NotReady
 }
 
+#[cfg(test)]
 fn resolve_cluster_assignments(
     clusters: &[ClusterInfo],
     candidates_by_cluster: &HashMap<i32, Vec<ClusterCandidate>>,
     profile_readiness: &HashMap<String, SpeakerProfileReadinessState>,
+) -> HashMap<i32, ResolvedSpeakerAssignment> {
+    resolve_cluster_assignments_with_thresholds(
+        clusters,
+        candidates_by_cluster,
+        profile_readiness,
+        &SpeakerModelThresholds::default(),
+    )
+}
+
+#[cfg(test)]
+fn resolve_single_cluster_assignment(
+    cluster: &ClusterInfo,
+    candidates: Vec<ClusterCandidate>,
+    profile_readiness: &HashMap<String, SpeakerProfileReadinessState>,
+) -> ResolvedSpeakerAssignment {
+    resolve_single_cluster_assignment_with_thresholds(
+        cluster,
+        candidates,
+        profile_readiness,
+        &SpeakerModelThresholds::default(),
+    )
+}
+
+fn resolve_cluster_assignments_with_thresholds(
+    clusters: &[ClusterInfo],
+    candidates_by_cluster: &HashMap<i32, Vec<ClusterCandidate>>,
+    profile_readiness: &HashMap<String, SpeakerProfileReadinessState>,
+    thresholds: &SpeakerModelThresholds,
 ) -> HashMap<i32, ResolvedSpeakerAssignment> {
     let clusters_by_id = clusters
         .iter()
@@ -1144,7 +1193,12 @@ fn resolve_cluster_assignments(
                 .unwrap_or_default();
             (
                 cluster.raw_speaker,
-                resolve_single_cluster_assignment(cluster, candidates, profile_readiness),
+                resolve_single_cluster_assignment_with_thresholds(
+                    cluster,
+                    candidates,
+                    profile_readiness,
+                    thresholds,
+                ),
             )
         })
         .collect::<HashMap<_, _>>();
@@ -1204,10 +1258,11 @@ fn resolve_cluster_assignments(
     assignments
 }
 
-fn resolve_single_cluster_assignment(
+fn resolve_single_cluster_assignment_with_thresholds(
     cluster: &ClusterInfo,
     mut candidates: Vec<ClusterCandidate>,
     profile_readiness: &HashMap<String, SpeakerProfileReadinessState>,
+    thresholds: &SpeakerModelThresholds,
 ) -> ResolvedSpeakerAssignment {
     if candidates.is_empty() {
         return build_anonymous_assignment(cluster, Vec::new(), "anonymous", "auto", "low");
@@ -1231,7 +1286,7 @@ fn resolve_single_cluster_assignment(
     let margin_satisfied = !has_competition || score_margin >= AUTO_IDENTIFICATION_MIN_MARGIN;
 
     if readiness == SpeakerProfileReadinessState::Ready
-        && top_candidate.average_score >= AUTO_IDENTIFICATION_THRESHOLD
+        && top_candidate.average_score >= thresholds.auto_identify_threshold
         && top_candidate.votes >= AUTO_IDENTIFICATION_MIN_VOTES
         && margin_satisfied
     {
@@ -1256,7 +1311,7 @@ fn resolve_single_cluster_assignment(
         };
     }
 
-    if top_candidate.average_score >= CANDIDATE_DISPLAY_THRESHOLD {
+    if top_candidate.average_score >= thresholds.candidate_display_threshold {
         return build_anonymous_assignment(
             cluster,
             suggestion_candidates,

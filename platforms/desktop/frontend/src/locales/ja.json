@@ -307,6 +307,7 @@
     "enroll_speaker_no_audio": "現在のセッションの音声ファイルが見つかりません",
     "enroll_speaker_name_required": "話者名を入力してください",
     "enroll_speaker_select_required": "対象の話者プロファイルを選択してください",
+    "enroll_speaker_short_warning": "選択したセグメントの長さが4秒未満です。声紋認識エンジンは4秒未満のサンプルを無視するため、より長い音声セグメントを選択することをお勧めします。",
     "speaker_review_title": "スピーカーレビュー",
     "speaker_review_description": "エクスポートする前に、注意が必要なスピーカー グループを確認してください。",
     "speaker_review_pending_count": "レビューが必要です {{count}}",

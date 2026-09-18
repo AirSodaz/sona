@@ -1,4 +1,4 @@
-import { Clock, Loader2, Mic, Plus, User } from 'lucide-react';
+import { AlertTriangle, Clock, Loader2, Mic, Plus, User } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,6 +7,7 @@ import { speakerCorrectionService } from '../../services/speakerCorrectionServic
 import { speakerService } from '../../services/speakerService';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
+import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
 import type { SpeakerProfile } from '../../types/speaker';
 import { normalizeSpeakerProfiles } from '../../types/speakerNormalization';
 import type { TranscriptSegment } from '../../types/transcript';
@@ -151,6 +152,11 @@ export function EnrollSpeakerSampleModal({
       }
 
       setConfig({ speakerProfiles: nextProfiles });
+      try {
+        await useEffectiveConfigStore.getState().syncConfig();
+      } catch (err) {
+        console.warn('Failed to sync effective config after enrolling speaker sample:', err);
+      }
 
       if (segment.speakerAttribution?.groupId) {
         try {
@@ -226,10 +232,24 @@ export function EnrollSpeakerSampleModal({
           <span>
             {formatDisplayTime(segment.start)} - {formatDisplayTime(segment.end)}
           </span>
-          <span className="enroll-speaker-duration-tag">{durationSec.toFixed(1)}s</span>
+          <span className={`enroll-speaker-duration-tag ${durationSec < 4.0 ? 'warning' : ''}`}>
+            {durationSec.toFixed(1)}s
+          </span>
         </div>
         <div className="enroll-speaker-preview-quote">"{segment.text}"</div>
       </div>
+
+      {durationSec < 4.0 && (
+        <div className="enroll-speaker-warning-banner" role="status">
+          <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: '2px' }} />
+          <span>
+            {t('editor.enroll_speaker_short_warning', {
+              defaultValue:
+                '当前片段时长不足 4 秒。声纹引擎将忽略 4 秒以下的样本，建议选择更长的语音片段进行录入。',
+            })}
+          </span>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         <FormField

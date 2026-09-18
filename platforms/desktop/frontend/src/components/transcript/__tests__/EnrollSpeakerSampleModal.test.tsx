@@ -226,4 +226,29 @@ describe('EnrollSpeakerSampleModal', () => {
       expect(onClose).toHaveBeenCalled();
     });
   });
+
+  it('shows warning banner and warning tag when segment duration is under 4 seconds', () => {
+    const shortSegment: TranscriptSegment = {
+      ...mockSegment,
+      start: 10.0,
+      end: 12.5,
+    };
+
+    render(
+      <EnrollSpeakerSampleModal
+        isOpen
+        onClose={vi.fn()}
+        segment={shortSegment}
+        audioPath="/path/to/meeting.wav"
+      />
+    );
+
+    expect(screen.getByText('2.5s')).toBeDefined();
+    expect(screen.getByRole('status')).toBeDefined();
+    expect(
+      screen.getByText(
+        '当前片段时长不足 4 秒。声纹引擎将忽略 4 秒以下的样本，建议选择更长的语音片段进行录入。'
+      )
+    ).toBeDefined();
+  });
 });
