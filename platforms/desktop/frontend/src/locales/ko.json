@@ -266,7 +266,12 @@
     "group_processing": "처리 중",
     "group_pending": "대기 중",
     "group_complete": "완료됨",
-    "group_failed": "실패"
+    "group_failed": "실패",
+    "clear_options": "지우기 옵션",
+    "clear_completed": "완료된 항목 지우기",
+    "clear_completed_hint": "완료된 파일만 지우기 ({{count}})",
+    "clear_all": "모두 지우기",
+    "clear_all_hint": "대기열의 모든 파일 지우기 ({{count}})"
   },
   "player": {
     "play": "재생",

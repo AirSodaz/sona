@@ -138,6 +138,8 @@ interface BatchQueueState {
   removeItem: (id: string) => void;
   /** Clears all items from the queue. */
   clearQueue: () => void;
+  /** Clears only completed items from the queue. */
+  clearCompleted: () => void;
   /** internal helper */
   _processItem: (itemId: string) => Promise<void>;
   /**
@@ -649,6 +651,49 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       })
     );
     clearActiveTranscriptSession({ clearAudio: true });
+  },
+
+  clearCompleted: () => {
+    const state = get();
+    const completedItems = state.queueItems.filter((item) => item.status === 'complete');
+    if (completedItems.length === 0) return;
+
+    const activeId = state.activeItemId;
+    const isActiveItemCompleted = completedItems.some((item) => item.id === activeId);
+    if (activeId !== null && isActiveItemCompleted) {
+      const sessionSegments = useTranscriptSessionStore.getState().segments;
+      set((s) => ({
+        queueItems: s.queueItems.map((item) =>
+          item.id === activeId ? { ...item, segments: sessionSegments } : item
+        ),
+      }));
+    }
+
+    const remainingItems = state.queueItems.filter((item) => item.status !== 'complete');
+    const newActiveId = isActiveItemCompleted
+      ? remainingItems.length > 0
+        ? remainingItems[0].id
+        : null
+      : activeId;
+
+    set({
+      queueItems: remainingItems,
+      activeItemId: newActiveId,
+    });
+
+    scheduleRecoverySnapshotSync(remainingItems, true, completedItems.flatMap(getQueueRecoveryIds));
+
+    completedItems.forEach((item) =>
+      patchQueueItemTask(item, {
+        status: 'succeeded',
+        cancelable: false,
+        retryable: false,
+      })
+    );
+
+    if (isActiveItemCompleted) {
+      get().setActiveItem(newActiveId);
+    }
   },
 
   setItemActiveInstanceId: (id, instanceId) => {

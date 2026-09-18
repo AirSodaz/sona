@@ -266,7 +266,12 @@
     "group_processing": "處理中",
     "group_pending": "等待中",
     "group_complete": "已完成",
-    "group_failed": "失敗"
+    "group_failed": "失敗",
+    "clear_options": "清除選項",
+    "clear_completed": "清除已完成",
+    "clear_completed_hint": "僅清除已完成的檔案 ({{count}})",
+    "clear_all": "清除全部",
+    "clear_all_hint": "清空佇列中的所有檔案 ({{count}})"
   },
   "player": {
     "play": "播放",

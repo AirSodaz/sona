@@ -279,8 +279,10 @@ describe('BatchImport Integration', () => {
       screen.getByText('Queue (1)');
     });
 
-    const clearBtn = screen.getByLabelText('batch.clear_queue');
-    fireEvent.click(clearBtn);
+    const clearTrigger = screen.getByTestId('queue-clear-trigger');
+    fireEvent.click(clearTrigger);
+    const clearAllBtn = screen.getByRole('menuitem', { name: /batch\.clear_all/ });
+    fireEvent.click(clearAllBtn);
 
     await waitFor(() => {
       expect(screen.queryByText('Queue (1)')).toBeNull();

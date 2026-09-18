@@ -1,15 +1,8 @@
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
-import {
-  CompleteIcon,
-  ErrorIcon,
-  PauseIcon,
-  PlayIcon,
-  ProcessingIcon,
-  TrashIcon,
-  UploadIcon,
-} from './Icons';
+import { CompleteIcon, ErrorIcon, PauseIcon, PlayIcon, ProcessingIcon, UploadIcon } from './Icons';
+import { QueueClearMenu } from './QueueClearMenu';
 
 export interface QueueSummaryBarProps {
   onAddFiles: () => void;
@@ -31,6 +24,7 @@ export function QueueSummaryBar({
   const isProcessing = useBatchQueueStore((state) => state.isQueueProcessing);
 
   const clearQueue = useBatchQueueStore((state) => state.clearQueue);
+  const clearCompleted = useBatchQueueStore((state) => state.clearCompleted);
   const pauseQueue = useBatchQueueStore((state) => state.pauseQueue);
   const resumeQueue = useBatchQueueStore((state) => state.resumeQueue);
   const processQueue = useBatchQueueStore((state) => state.processQueue);
@@ -174,16 +168,18 @@ export function QueueSummaryBar({
           </button>
         </div>
 
-        {/* Clear queue button */}
-        <button
-          className="btn btn-icon btn-sm queue-clear-btn"
-          onClick={clearQueue}
-          aria-label={t('batch.clear_queue')}
-          data-tooltip={t('batch.clear_queue')}
-          data-tooltip-pos="left"
-        >
-          <TrashIcon width={14} height={14} />
-        </button>
+        {/* Clear queue dropdown menu */}
+        <QueueClearMenu
+          completedCount={completedCount}
+          totalCount={totalCount}
+          onClear={(scope) => {
+            if (scope === 'completed') {
+              clearCompleted();
+            } else {
+              clearQueue();
+            }
+          }}
+        />
       </div>
     </div>
   );

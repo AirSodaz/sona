@@ -266,7 +266,12 @@
     "group_processing": "処理中",
     "group_pending": "待機中",
     "group_complete": "完了",
-    "group_failed": "失敗"
+    "group_failed": "失敗",
+    "clear_options": "クリアオプション",
+    "clear_completed": "完了済みをクリア",
+    "clear_completed_hint": "完了したファイルのみクリア ({{count}})",
+    "clear_all": "すべてクリア",
+    "clear_all_hint": "キュー内のすべてのファイルをクリア ({{count}})"
   },
   "player": {
     "play": "再生",

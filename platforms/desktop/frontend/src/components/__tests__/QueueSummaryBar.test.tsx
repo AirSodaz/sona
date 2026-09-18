@@ -124,8 +124,9 @@ describe('QueueSummaryBar', () => {
     expect(onAddFiles).toHaveBeenCalled();
   });
 
-  it('triggers clearQueue when clicking clear button', () => {
-    const clearSpy = vi.spyOn(useBatchQueueStore.getState(), 'clearQueue');
+  it('allows clearing completed items or all items via the clear menu', () => {
+    const clearAllSpy = vi.spyOn(useBatchQueueStore.getState(), 'clearQueue');
+    const clearCompletedSpy = vi.spyOn(useBatchQueueStore.getState(), 'clearCompleted');
     useBatchQueueStore.setState({
       queueItems: [
         {
@@ -137,13 +138,35 @@ describe('QueueSummaryBar', () => {
           segments: [],
           projectId: null,
         },
+        {
+          id: 'item-2',
+          filename: 'file2.wav',
+          filePath: '/file2.wav',
+          status: 'pending',
+          progress: 0,
+          segments: [],
+          projectId: null,
+        },
       ],
     });
 
-    render(<QueueSummaryBar onAddFiles={vi.fn()} />);
-    const clearBtn = screen.getByLabelText('batch.clear_queue');
-    fireEvent.click(clearBtn);
-    expect(clearSpy).toHaveBeenCalled();
+    const { rerender } = render(<QueueSummaryBar onAddFiles={vi.fn()} />);
+    const trigger = screen.getByTestId('queue-clear-trigger');
+    fireEvent.click(trigger);
+
+    // Both options visible
+    const clearCompletedBtn = screen.getByRole('menuitem', { name: /batch\.clear_completed/ });
+    expect(screen.getByRole('menuitem', { name: /batch\.clear_all/ })).toBeDefined();
+
+    fireEvent.click(clearCompletedBtn);
+    expect(clearCompletedSpy).toHaveBeenCalled();
+
+    // Re-open and click clear all
+    rerender(<QueueSummaryBar onAddFiles={vi.fn()} />);
+    fireEvent.click(trigger);
+    const reopenedClearAllBtn = screen.getByRole('menuitem', { name: /batch\.clear_all/ });
+    fireEvent.click(reopenedClearAllBtn);
+    expect(clearAllSpy).toHaveBeenCalled();
   });
 
   it('does not render start button when there are no pending items', () => {

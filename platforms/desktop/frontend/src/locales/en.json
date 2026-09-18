@@ -266,7 +266,12 @@
     "group_processing": "Processing",
     "group_pending": "Waiting",
     "group_complete": "Completed",
-    "group_failed": "Failed"
+    "group_failed": "Failed",
+    "clear_options": "Clear options",
+    "clear_completed": "Clear Completed",
+    "clear_completed_hint": "Clear all completed files ({{count}})",
+    "clear_all": "Clear All",
+    "clear_all_hint": "Clear all files in queue ({{count}})"
   },
   "player": {
     "play": "Play",

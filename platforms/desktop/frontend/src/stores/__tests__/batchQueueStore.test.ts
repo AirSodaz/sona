@@ -743,4 +743,74 @@ describe('batchQueueStore', () => {
     expect(items[1].progress).toBe(0);
     expect(items[2].status).toBe('complete');
   });
+
+  it('clears only completed items and switches active item when active item was completed', () => {
+    useBatchQueueStore.setState({
+      queueItems: [
+        {
+          id: 'item-1',
+          filename: 'f1.wav',
+          filePath: '/f1.wav',
+          status: 'complete',
+          progress: 100,
+          segments: [],
+          projectId: null,
+        },
+        {
+          id: 'item-2',
+          filename: 'f2.wav',
+          filePath: '/f2.wav',
+          status: 'pending',
+          progress: 0,
+          segments: [],
+          projectId: null,
+        },
+      ],
+      activeItemId: 'item-1',
+      isQueueProcessing: false,
+      isQueuePaused: false,
+    });
+
+    useBatchQueueStore.getState().clearCompleted();
+
+    const state = useBatchQueueStore.getState();
+    expect(state.queueItems).toHaveLength(1);
+    expect(state.queueItems[0].id).toBe('item-2');
+    expect(state.activeItemId).toBe('item-2');
+  });
+
+  it('retains activeItemId if active item was not completed', () => {
+    useBatchQueueStore.setState({
+      queueItems: [
+        {
+          id: 'item-1',
+          filename: 'f1.wav',
+          filePath: '/f1.wav',
+          status: 'complete',
+          progress: 100,
+          segments: [],
+          projectId: null,
+        },
+        {
+          id: 'item-2',
+          filename: 'f2.wav',
+          filePath: '/f2.wav',
+          status: 'processing',
+          progress: 40,
+          segments: [],
+          projectId: null,
+        },
+      ],
+      activeItemId: 'item-2',
+      isQueueProcessing: true,
+      isQueuePaused: false,
+    });
+
+    useBatchQueueStore.getState().clearCompleted();
+
+    const state = useBatchQueueStore.getState();
+    expect(state.queueItems).toHaveLength(1);
+    expect(state.queueItems[0].id).toBe('item-2');
+    expect(state.activeItemId).toBe('item-2');
+  });
 });
