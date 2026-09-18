@@ -11,14 +11,16 @@ Sona is a privacy-first transcript editor for people who want speech-to-text wor
 Sona is a good fit if you want to:
 
 - capture meetings, lectures, interviews, or notes with `Live Record`
-- transcribe existing audio or video files with `Batch Import`
+- transcribe existing audio or video files with `Batch Import` (featuring queue summary dashboards, grouped lists, and real-time cancellation in the Message Center)
 - organize saved recordings and imports with `Project Center`, `Projects`, and `Inbox`
 - review timestamps, speaker labels, and edit transcripts segment by segment
 - use `Speaker Profiles` and `Speaker Review` to confirm suggested or anonymous speaker groups
 - optionally use `LLM Polish` or `Translate` after configuring your own provider
 - restore selected edits from `Version Snapshots` when a bulk rewrite needs rollback
 - export subtitles or plain text in common formats
+- use `End-to-End Encrypted Cloud Sync` (WebDAV & S3-compatible object storage E2EE) to synchronize transcripts, vocabularies, and settings across desktop and Android devices
 - optionally use `Voice Typing` to dictate text into other applications
+- configure custom FFmpeg paths and automatic audio retention cleanup in `Storage Management`
 
 If you mainly came for `Live Caption`, jump to `Live Record`. If you mainly want to organize saved work, jump to `Project Center, Pipelines, And Inbox`. If you mainly need speaker cleanup or version rollback, jump to `Transcript Editing And Playback`. If you mainly want `Voice Typing`, jump to `Export And Settings`, especially the `Settings > Voice Typing` section.
 
@@ -90,7 +92,7 @@ Use `Live Record` when you want to capture speech in real time and see transcrip
 5. Use `Pause` to temporarily stop the live session without finishing it, or `Stop` to finalize the recording.
 6. Click `Parameter Settings` if you want to adjust `Subtitle Mode` or `Language`.
 7. Turn on `Live Caption` if you want the floating caption window during live use.
-8. Open `Settings > Subtitle Settings` if you want to change caption behavior such as always-on-top, click-through, size, width, color, or startup behavior.
+8. Open `Settings > Subtitle Settings` if you want to change caption behavior such as always-on-top, click-through, size, width, font/background color, or startup behavior.
 
 ### What `Live Caption` is for
 
@@ -127,14 +129,16 @@ Use `Batch Import` when you already have audio or video files and want Sona to t
 1. Click the `Batch Import` tab.
 2. Drop files into the import area, or click `Select File`.
 3. Add one or more files to the queue.
-4. Watch the queue sidebar and the active item status view.
-5. Use `Add More Files` if you want to keep building the queue.
-6. Click `Parameter Settings` if you want to adjust `Subtitle Mode` or `Language` for new work.
-7. When a file finishes, review the transcript in the main editor.
+4. Inspect the summary dashboard at the top of the queue for total, pending, processing, completed, and failed counts.
+5. Expand or collapse grouped queues by state, and use the clear dropdown menu to `Clear Completed` or `Clear All` as needed.
+6. Use `Add More Files` if you want to keep building the queue.
+7. Click `Parameter Settings` if you want to adjust `Subtitle Mode` or `Language` for new work.
+8. When a file finishes, review the transcript in the main editor.
 
 ### Result
 
 - Sona processes files in a queue with `Pending`, `Processing`, `Complete`, or `Failed` states.
+- In the header `Message Center`, you can monitor progress in real time and click cancel to abort batch transcription safely.
 - Completed items load into the main transcript editor for editing, translation, and export.
 
 ### Notes
@@ -142,6 +146,7 @@ Use `Batch Import` when you already have audio or video files and want Sona to t
 - If no offline batch model is configured, Sona reopens onboarding instead of starting import.
 - `Settings > Model Settings` includes `Batch VAD Segmentation`, `VAD Buffer Size`, and `Max Concurrent Transcriptions`, which affect batch behavior. Turning off batch VAD makes local batch transcription recognize the whole file at once.
 - Batch VAD segmentation applies to every local engine, including the llama.cpp presets (Qwen3-ASR). The default companion is Silero VAD v5; Silero v4 and TEN VAD are also available in the model catalog.
+- The local model catalog provides authentic brand logos, tag filters, and recommendations (such as FireRedASR2-AED and FunASR Nano).
 
 ## 6. Transcript Editing And Playback
 
@@ -155,21 +160,22 @@ After Sona creates transcript segments, the editor becomes the main place to rev
 
 1. Review the segment list in the editor.
 2. Click a timestamp to seek playback to that time.
-3. Double-click segment text, or use the edit action, to start editing.
-4. Right-click a read-only segment for `Copy` and `Select All`. While editing, right-click for `Cut`, `Copy`, `Paste`, `Select All`, `Bold`, `Italic`, `Underline`, and `Strikethrough`; the keyboard context-menu key or `Shift + F10` opens the same menu.
-5. Press `Enter` to save the current segment.
-6. Press `Shift + Enter` to split the current segment at the cursor.
-7. Use the merge action to combine a segment with the next one.
-8. Use the delete action to remove a segment after confirmation.
-9. Press `Ctrl + F` to search inside the transcript.
-10. Use the audio player to play, pause, seek, change speed, or control volume when an audio file is available.
-11. If a segment shows a speaker badge, click it to assign the whole speaker group to a `Speaker Profile`, reveal additional global profiles, or restore that group to its anonymous label.
-12. Open `Speaker Review` from the transcript header when you want a concentrated pass before export. You can filter by `Needs review`, `Suggestions`, `Anonymous`, `Identified`, `Reviewed`, or `All`, preview the first segments in each group, jump to the first matching segment, confirm the current label, apply a candidate profile, assign another profile, or reset a group to anonymous.
-13. Open `Version Snapshots` from the transcript header when the transcript is a saved non-draft project item. You can compare an earlier snapshot with the current transcript, restore selected changed rows, or revert the whole transcript.
+3. Double-click segment text, or use the edit action, to start editing. When bilingual translation is visible, double-click the translated text or click its hover edit button to edit the translation independently (press `Enter` to save, `Escape` to cancel).
+4. Right-click a read-only segment for `Copy`, `Select All`, and `Enroll Voice Sample` (extract audio from the current segment directly into a speaker profile). While editing, right-click for `Cut`, `Copy`, `Paste`, `Select All`, `Bold`, `Italic`, `Underline`, and `Strikethrough`; the keyboard context-menu key or `Shift + F10` opens the same menu.
+5. Press `Ctrl + Shift + S` to quickly toggle strikethrough on selected text.
+6. Press `Enter` to save the current segment.
+7. Press `Shift + Enter` to split the current segment at the cursor.
+8. Use the merge action to combine a segment with the next one.
+9. Use the delete action to remove a segment after confirmation.
+10. Press `Ctrl + F` to search inside the transcript.
+11. Use the audio player to play, pause, seek, change speed, or control volume when an audio file is available.
+12. If a segment shows a speaker badge, click it to assign the whole speaker group to a `Speaker Profile`, reveal additional global profiles, or restore that group to its anonymous label.
+13. Open `Speaker Review` from the transcript header when you want a concentrated pass before export. You can filter by `Needs review`, `Suggestions`, `Anonymous`, `Identified`, `Reviewed`, or `All`, preview the first segments in each group, jump to the first matching segment, confirm the current label, apply a candidate profile, assign another profile, or reset a group to anonymous.
+14. Open `Version Snapshots` from the transcript header when the transcript is a saved non-draft project item. You can compare an earlier snapshot with the current transcript, restore selected changed rows, or revert the whole transcript.
 
 ### Result
 
-- The transcript stays editable at the segment level.
+- Transcript text remains editable segment by segment; anticipation carets indicate streaming token predictions during live transcription.
 - Playback and transcript navigation remain aligned through timestamps.
 - Speaker corrections apply to every segment in the same speaker group.
 - Restoring from a version snapshot saves the current transcript first, so rollback remains reversible.
@@ -207,7 +213,7 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 2. Click the `LLM Polish` button.
 3. Choose the action you need:
    `LLM Polish`, `Re-transcribe`, `Undo`, `Redo`, or `Advanced Settings`.
-4. Open `Advanced Settings` if you want to manage `Auto-Polish`, `Auto-Polish Frequency`, `Keywords`, `Scenario Presets`, or `Custom Context`.
+4. Open `Advanced Settings` if you want to manage `Auto-Polish`, `Auto-Polish Frequency`, `Keywords`, directive `Polish Modes` (`Clean & Readable`, `Verbatim Strict`, `Formal Written`), and `Custom Context`.
 
 ### Steps For `Translate`
 
@@ -215,7 +221,7 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 2. Click the `Translate` button.
 3. Choose the target language.
 4. Click `Start Translation` or `Retranslate`.
-5. Use `Show Translations` or `Hide Translations` to control bilingual display in the editor.
+5. Bilingual translation display is enabled by default once translated. Use `Show Translations` or `Hide Translations` to toggle the view, and double-click any translated segment directly in the editor to make inline adjustments.
 
 ### Steps For `AI Summary`
 
@@ -283,9 +289,10 @@ Use `Project Center` when you want to organize saved recordings and imports with
 
 ### What Each Scope Means
 
-- `All Items` gives you a cross-project overview of everything saved in `Inbox` and every project.
-- `Inbox` holds recordings and imports that are not assigned to a project yet.
-- A project gives you its own focused project environment, project-specific defaults, and quick entry points for new work.
+- `Project Center`: Manage all custom projects and switch the active project anytime from the top bar dropdown.
+- `Inbox`: Hold recordings and imports that are not assigned to a specific project yet.
+- `All Items`: Cross-project overview of everything saved in `Inbox` and every project.
+- `Trash`: Store soft-deleted recordings and imports, supporting restoration or permanent erasure.
 
 ### Steps
 
@@ -300,15 +307,23 @@ Use `Project Center` when you want to organize saved recordings and imports with
 9. Use search, filters, sort, and `List View` / `Grid View` / `Table View` to narrow the current scope.
 10. Turn on selection mode if you want to move items between `Inbox` and projects, or delete several items at once.
 
-### Project Settings
+### Project Settings And Processing Pipelines
+
+Each project owns a dedicated automated processing pipeline:
 
 1. Open a project, then click `Project Settings`.
-2. Update the project name and description.
-3. Choose a project icon if you want one. Icons are edited here, not in the `New Project` modal.
-4. Pick the project defaults that should apply whenever you work inside that project:
-   `Default Summary Template`, `Default Translation Language`, `Default Polish Scenario`, optional `Default Polish Context`, and `Export Filename Prefix`.
-5. Turn `Text Replacement`, `Hotword`, `Polish Keyword`, and `Speaker Profile` sets on or off for this project when you want project-specific recognition, cleanup, polish, or speaker matching behavior.
-6. Click `Save` to keep the changes, or `Delete Project` if you want to remove the project and move its items back to `Inbox`.
+2. Customize the project name, description, icon (system icons or custom emoji), and theme color.
+3. Configure project pipeline defaults:
+   - `Default Summary Template`: Specify the default template for newly generated summaries (General, Meeting, Lecture, or Custom).
+   - `Default Translation Language`: Specify the target translation language for the project.
+   - `Default Polish Mode` & `Default Polish Context`: Choose directive polish modes (Clean, Verbatim, Formal) and domain context notes.
+   - `Export Filename Prefix`: Automatically prepend a project prefix when exporting files.
+4. Bind dedicated rule sets:
+   - Toggle the project's `Text Replacement` rule set independently.
+   - Toggle the project's `Hotwords` vocabulary independently.
+   - Toggle the project's `Polish Keywords` rule set independently.
+   - Select project-specific `Speaker Profiles`.
+5. Click `Save` to keep changes, or `Delete Project` to move items back to `Inbox` or soft-delete them to `Trash`.
 
 ### Result
 
@@ -348,11 +363,17 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 - `Settings > Voice Typing`
   enable `Voice Typing`, assign its global shortcut, choose `Push to Talk (Hold)` or `Toggle (Press once)`, and check readiness
 - `Settings > Model Settings`
-  `Live Record Model`, `Batch Import Model`, `Transcription Settings`, `ITN`, `Batch VAD Segmentation`, `VAD Buffer Size`, `Max Concurrent Transcriptions`, `Restore Default Settings`, and downloadable recognition, punctuation, speaker, and VAD models
+  `Live Record Model`, `Batch Import Model`, CTC forced alignment, diarization sensitivity (Permissive/Balanced/Strict), `Batch VAD Segmentation`, `VAD Buffer Size`, `Max Concurrent Transcriptions`, and downloadable recognition, punctuation, speaker, and VAD models
 - `Settings > Vocabulary`
-  `Text Replacement`, `Hotwords`, polish keyword sets, polish context presets, summary templates, and `Speaker Profiles`
+  organized into three dedicated sub-tabs: `Recognition` (text replacement and hotword sets), `Prompts` (polish context presets and summary templates), and `Speakers` (speaker profile voiceprints and sample enrollment)
 - `Settings > Automation`
   watched-folder rules that can transcribe, polish, translate, and export new media while Sona is running
+- `Settings > Storage Management`
+  storage paths, custom FFmpeg binary path, disk analysis, audio retention cleanup policies, and WebView cache cleanup
+- `Settings > Cloud Sync`
+  End-to-End Encrypted (E2EE) cross-device vault supporting WebDAV and S3-compatible object storage (AWS S3, Cloudflare R2, MinIO, etc.), Vault ID pairing, master password, emergency recovery keys, sync scopes, and conflict center
+- `Settings > API Server`
+  local HTTP API server host, port, Bearer token, IP whitelist, and service limits
 - `Settings > LLM Service`
   feature model bindings, reasoning options, and provider credentials
 - `Settings > Shortcuts`
@@ -373,11 +394,11 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 
 Sona features a dedicated multi-device sync architecture designed around privacy:
 
-1. **End-to-End Encryption (E2EE)**: All transcripts, summaries, project hierarchies, vocabularies, and settings are encrypted locally before leaving your device. Remote WebDAV servers only store encrypted ciphertext.
+1. **End-to-End Encryption (E2EE)**: All transcripts, summaries, project hierarchies, vocabularies, and settings are encrypted locally before leaving your device. Remote WebDAV servers or S3-compatible object storage buckets only store encrypted ciphertext.
 2. **Master Password & Emergency Recovery**:
    - `Master Password`: The primary secret used to encrypt and decrypt your sync vault.
    - `Emergency Recovery Key`: Generated when creating a new vault. If you forget your master password, use this key to unlock and reset your credentials. The recovery key is never stored in plaintext on any server.
-3. **Multi-Device Pairing (Vault ID)**: Initializing a vault generates a unique hex identifier. Enter this Vault ID, your WebDAV endpoint, and your master password on other desktop or Android devices to pair them.
+3. **Multi-Device Pairing (Vault ID & Token Export/Import)**: Initializing a vault generates a unique hex identifier. Enter this Vault ID, storage endpoint, and master password—or import a desktop pairing token—on other desktop or Android devices to pair them.
 4. **Sync Scope Presets**:
    - `Content`: Transcripts, summaries, and project groupings.
    - `Standard`: Content + speaker profiles + hotwords + prompt/summary templates + app settings.
@@ -385,6 +406,7 @@ Sona features a dedicated multi-device sync architecture designed around privacy
 5. **Conflict Center**: When multiple devices edit concurrently offline, Sona detects revision divergence and provides side-by-side comparison in `Settings > Sync > Conflict Center`, letting you keep current, adopt conflicting, or keep both copies.
 6. **Sync Header Pill**: Indicates real-time sync state (Ready, Syncing, Locked, Error) in the top bar with one-click access to sync settings.
 7. **Audio Stays Local**: Audio recordings remain strictly on the recording machine and are never uploaded to the cloud, guaranteeing voiceprint privacy and saving bandwidth.
+8. **Legacy WebDAV Backup Archive**: A compatibility entry point at the bottom of the page allows one-time imports of legacy full backups; Sona no longer creates new remote full-package backups.
 
 ### Storage Management
 
@@ -395,12 +417,13 @@ Manage disk consumption and external binaries in `Settings > Storage Management`
 - **Audio Retention Policy**: Configure automatic retention periods for recorded audio files (`Keep Forever`, `Delete Immediately`, `7 days`, `30 days`, `90 days`, `180 days`, `365 days`). When expired, raw audio is purged while text transcripts and summaries are preserved.
 - **WebView Cache Cleanup**: Clear internal WebView cache and storage with a single click.
 
-### Task Center And Cancellation
+### Message Center And Cancellation
 
-The header `Task Center` displays batch transcription and background pipeline tasks in real time:
+The header `Message Center` acts as the operational hub for global background tasks:
 
-- View active queue progress, current stage, and elapsed time.
+- View active batch transcription, automation, LLM, recovery, and update queue progress in real time.
 - Cancel running batch imports or automation runs instantly without corrupting completed records.
+- Use the clear dropdown menu to quickly `Clear Completed` or `Clear All` task entries.
 - Recover or discard interrupted tasks when resuming an abnormal app shutdown.
 
 ### Diagnostics And Backup
@@ -443,7 +466,7 @@ The header `Task Center` displays batch transcription and background pipeline ta
 
 ### I cannot find `Auto-Polish`
 
-- Use `LLM Polish > Advanced Settings` for `Auto-Polish`, frequency, keywords, scenario presets, and custom context.
+- Use `LLM Polish > Advanced Settings` for `Auto-Polish`, frequency, keywords, directive `Polish Modes` (`Clean & Readable`, `Verbatim Strict`, `Formal Written`), and custom context.
 
 ### Export only shows `Original`
 
@@ -474,8 +497,7 @@ The header `Task Center` displays batch transcription and background pipeline ta
 
 ### What happens when I delete a project
 
-- Deleting a project removes the project itself, but it does not delete the recordings or imports that were inside it.
-- Sona moves those items back to `Inbox`, so you can reassign or continue using them later.
+- Deleting a project does not delete the recordings or imports inside it. Sona prompts you to either move items back to `Inbox` (keeping them accessible in Project Center) or move them to `Trash` (soft-deleted for review).
 
 ### Why do I see a `Draft` item while I am still recording
 
@@ -505,14 +527,15 @@ The header `Task Center` displays batch transcription and background pipeline ta
 
 - The audio player only appears when the current transcript has an audio source available, such as a saved recording or processed file.
 
-### What if I forget my Master Password for Cloud Sync (WebDAV E2EE)?
+### What if I forget my Master Password for Cloud Sync (E2EE)?
 
 - If you saved your `Emergency Recovery Key` when creating the sync vault, select `Reset with Recovery Key` on the unlock prompt, paste the key, and set a new master password.
 - If both the master password and emergency recovery key are lost, remote data cannot be decrypted. You will need to disconnect the device and initialize a fresh vault.
 
 ### Does Cloud Sync upload my audio recordings to the cloud?
 
-- No. Sona is designed with absolute voice privacy in mind. Only lightweight text transcripts, summaries, speaker profiles, vocabularies, and configuration items are synced. Raw audio recordings stay strictly on the local device where they were recorded.
+- No. Sona is designed as a privacy-first local tool. Audio recordings contain sensitive voiceprint data and require significant storage.
+- Cloud Sync encrypts and synchronizes only lightweight text transcripts, summaries, project hierarchies, vocabularies, and settings. Raw audio files remain strictly on the device where they were captured.
 
 ### Why does Cloud Sync show a conflict?
 
@@ -527,7 +550,7 @@ The header `Task Center` displays batch transcription and background pipeline ta
 
 ### Can I cancel an in-progress batch transcription job?
 
-- Yes. Open the header `Task Center` and click the stop/cancel icon next to the running batch job. Sona safely halts processing at the current stage; previously completed files in the batch remain saved.
+- Yes. Open the header `Message Center` and click the stop/cancel icon next to the running batch job. Sona safely halts processing at the current stage; previously completed files in the batch remain saved.
 
 ### What if media import fails or reports a missing decoder?
 

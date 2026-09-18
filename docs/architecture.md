@@ -65,7 +65,7 @@ Each workspace package lives under the root for its reviewed role. The `[package
 | `providers/asr/local/sherpa_onnx/` | `sona-sherpa-onnx` | provider | |
 | `providers/asr/local/vad/` | `sona-vad` | provider | Silero/TEN ONNX VAD behind the Core `VadEnginePort` |
 | `providers/asr/local/punct/` | `sona-punct` | provider | Transcript punctuation behind the Core `PunctuationEnginePort` |
-| `providers/asr/local/llama_cpp/` | `sona-llama-cpp` | provider | Qwen3-ASR batch inference through llama.cpp |
+| `providers/asr/local/llama_cpp/` | `sona-llama-cpp` | provider | Qwen3-ASR batch and streaming inference through llama.cpp |
 | `adapters/media_detector/` | `sona-media-detector` | outbound-adapter | |
 | `adapters/model_downloads/` | `sona-model-downloads` | outbound-adapter | |
 | `providers/asr/online/` | `sona-online-asr` | provider | |
@@ -126,7 +126,7 @@ Live transcription is coordinated by `sona-application` through `LiveTranscripti
 
 ### Core module map (orientation)
 
-- `core/src/domain/` holds shared **product identity enums** used across LLM and automation (for example `LlmProvider`, polish presets, summary templates). It is not the home of all domain logic; History, Tag, Transcription, and other domains live in their own modules under `core/src/`.
+- `core/src/domain/` holds shared **product identity enums** used across LLM and automation (for example `LlmProvider`, `PolishMode` directive modes, summary templates). It is not the home of all domain logic; History, Tag, Transcription, and other domains live in their own modules under `core/src/`.
 - `core/src/history/` owns history records, validation and editing rules, and the `HistoryStore` trait (`history/store.rs`, re-exported as `sona_core::history_store`); query and mutation use-case services live in `application/src/history/`.
 
 <a id="port-placement"></a>
@@ -165,7 +165,7 @@ Capabilities are derived from current workspace dependencies and product scope. 
 | Model downloads | yes | yes | yes |
 | Media detector | yes | yes | no |
 | API server | yes | yes | no |
-| Sync (application + WebDAV) | yes | out of scope | yes |
+| Sync (application + WebDAV / S3) | yes | out of scope | yes |
 | TypeScript/Tauri contract bind | yes | no | no |
 | Archive / recovery | yes | out of scope | yes |
 | Export / runtime-fs | yes | yes | yes |
@@ -198,7 +198,7 @@ current SQLite payload and applies post-v0.8.0 field upgrades.
 <a id="reviewed-exceptions"></a>
 ## Reviewed exceptions
 
-There are currently no registered outbound-adapter-to-outbound-adapter exceptions. Each outbound adapter should depend only on Core (and reviewed Application edges such as `sona-sync-webdav -> sona-sync`).
+There are currently no registered outbound-adapter-to-outbound-adapter exceptions. Each outbound adapter should depend only on Core (and reviewed Application edges such as `sona-sync-webdav -> sona-sync` and `sona-sync-s3 -> sona-sync`).
 
 <a id="native-window-chrome"></a>
 ## Native window chrome follows the application theme

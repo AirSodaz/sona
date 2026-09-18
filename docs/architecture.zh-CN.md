@@ -65,7 +65,7 @@ Core <- Outbound Adapter <------------- Host
 | `providers/asr/local/sherpa_onnx/` | `sona-sherpa-onnx` | provider | |
 | `providers/asr/local/vad/` | `sona-vad` | provider | Core `VadEnginePort` 之后的 Silero/TEN ONNX VAD |
 | `providers/asr/local/punct/` | `sona-punct` | provider | Core `PunctuationEnginePort` 之后的文本标点 |
-| `providers/asr/local/llama_cpp/` | `sona-llama-cpp` | provider | 通过 llama.cpp 执行 Qwen3-ASR 批量推理 |
+| `providers/asr/local/llama_cpp/` | `sona-llama-cpp` | provider | 通过 llama.cpp 执行 Qwen3-ASR 批量与流式推理 |
 | `adapters/media_detector/` | `sona-media-detector` | outbound-adapter | |
 | `adapters/model_downloads/` | `sona-model-downloads` | outbound-adapter | |
 | `providers/asr/online/` | `sona-online-asr` | provider | |
@@ -126,7 +126,7 @@ pnpm run generate:sona-context
 
 ### Core 模块导航
 
-- `core/src/domain/` 存放跨 LLM/自动化使用的**产品身份枚举**（例如 `LlmProvider`、润色预设、摘要模板）。它不是全部领域逻辑的入口；History、 Tag、Transcription 等各自在 `core/src/` 下的独立模块中。
+- `core/src/domain/` 存放跨 LLM/自动化使用的**产品身份枚举**（例如 `LlmProvider`、`PolishMode` 润色模式、摘要模板）。它不是全部领域逻辑的入口；History、 Tag、Transcription 等各自在 `core/src/` 下的独立模块中。
 - `core/src/history/` 拥有历史记录、校验与编辑规则，以及 `HistoryStore` trait（`history/store.rs`，对外仍通过 `sona_core::history_store` 重导出）；查询/变更用例服务位于 `application/src/history/`。
 
 <a id="port-placement"></a>
@@ -165,7 +165,7 @@ pnpm run generate:sona-context
 | Model downloads | yes | yes | yes |
 | Media detector | yes | yes | no |
 | API server | yes | yes | no |
-| Sync（application + WebDAV） | yes | out of scope | yes |
+| Sync（application + WebDAV / S3） | yes | out of scope | yes |
 | TypeScript/Tauri 契约绑定 | yes | no | no |
 | Archive / recovery | yes | out of scope | yes |
 | Export / runtime-fs | yes | yes | yes |
@@ -196,7 +196,7 @@ schema 的数据库以及 v0.8.0 之前的 JSON 存储布局不再在运行时�
 <a id="reviewed-exceptions"></a>
 ## 已评审例外
 
-当前没有已登记的 outbound-adapter 互依例外。每个 outbound adapter 只应依赖 Core（以及已评审的 Application，如 `sona-sync-webdav -> sona-sync`）。
+当前没有已登记的 outbound-adapter 互依例外。每个 outbound adapter 只应依赖 Core（以及已评审的 Application，如 `sona-sync-webdav -> sona-sync` 与 `sona-sync-s3 -> sona-sync`）。
 
 <a id="native-window-chrome"></a>
 ## 原生窗口边框跟随应用主题

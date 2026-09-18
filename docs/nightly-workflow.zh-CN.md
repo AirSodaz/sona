@@ -2,7 +2,7 @@
 
 Nightly Release 工作流用于每天自动构建、签名、打包并发布 Sona 的每日预发布版本（pre-release）。同时，它还会生成并更新适用于 Tauri 自动更新器的升级元数据（`updater.json`）。
 
-工作流配置文件: [.github/workflows/nightly.yml](file:///c:/Users/asoda/projects/sona/.github/workflows/nightly.yml)
+工作流配置文件: [.github/workflows/nightly.yml](../.github/workflows/nightly.yml)
 
 ---
 

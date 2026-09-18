@@ -2,7 +2,7 @@
 
 The Nightly Release workflow automatically builds, signs, packages, and publishes pre-release builds of Sona every day. It also generates and updates the update metadata (`updater.json`) for the Tauri auto-updater.
 
-Workflow File: [.github/workflows/nightly.yml](file:///c:/Users/asoda/projects/sona/.github/workflows/nightly.yml)
+Workflow File: [.github/workflows/nightly.yml](../.github/workflows/nightly.yml)
 
 ---
 

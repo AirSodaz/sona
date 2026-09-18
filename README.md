@@ -8,17 +8,17 @@
 
 - **🔒 Offline & Private**: Speech processing happens locally on your device. Audio recordings never leave your machine.
 - **🎙️ Real-time Transcription**: Record and transcribe audio in real time with low latency.
-- **📁 Batch Processing**: Import audio or video files for background batch transcription with real-time cancellation support.
-- **☁️ End-to-End Encrypted Cloud Sync**: Multi-device sync via WebDAV with client-side end-to-end encryption (E2EE), master password, emergency recovery keys, configurable sync scopes (Content, Standard, Full), and conflict resolution.
+- **📁 Batch Processing**: Import audio or video files for background batch transcription with queue summary dashboards, grouped lists, and real-time cancellation in the Message Center.
+- **☁️ End-to-End Encrypted Cloud Sync**: Multi-device sync via WebDAV and S3-compatible object storage (AWS S3, Cloudflare R2, MinIO, etc.) with client-side end-to-end encryption (E2EE), master password, emergency recovery keys, multi-device pairing, configurable sync scopes (Content, Standard, Full), and conflict resolution.
 - **📱 Cross-Platform & Android**: Core application capabilities available on desktop (Windows, macOS, Linux) and Android via UniFFI.
-- **🗂️ Project Center & Automated Pipelines**: Organize work with `Project Center`, `Inbox`, and `Trash`. Assign Notion-style automated pipelines (hotwords, replacement rules, prompt presets, translation languages) per project.
+- **🗂️ Project Center & Automated Pipelines**: Organize work with `Project Center`, `Inbox`, and `Trash`. Assign Notion-style automated pipelines (hotwords, replacement rules, directive polish modes, translation languages) per project.
 - **📝 Rich Interactive Editor**: Synchronized playback editor supporting inline segment splitting/merging, speaker badges, version snapshots, formatting (bold, italic, underline, strikethrough `Ctrl+Shift+S`, inline code), and anticipation carets.
-- **👥 Speaker Profiles & Review**: Build local speaker profiles, adjust speaker badges segment by segment, and batch-review suggested or anonymous speaker groups before export.
-- **✨ LLM Assistant**: Polish, translate, and summarize transcripts using OpenAI, Anthropic, Gemini, DeepSeek, or Ollama.
+- **👥 Speaker Profiles & Review**: Build local speaker profiles with CTC forced alignment and real-time speaker identification, adjust speaker badges, enroll voice samples in-situ, and batch-review suggested or anonymous speaker groups before export.
+- **✨ LLM Assistant**: Polish (clean, verbatim, and formal directive modes), translate, and summarize transcripts using OpenAI, Anthropic, Gemini, DeepSeek, or Ollama.
 - **🗣️ Live Caption & Voice Typing**: Reuse the offline live transcription stack for floating system captions or system-wide dictation into other applications.
 - **📤 Smart Export**: Export in multiple formats (TXT, SRT, VTT, JSON, Markdown) with bilingual support and clipboard copy.
-- **🛟 Recovery, Backup & Storage**: Resume interrupted tasks via the Task Center, export lightweight backups, manage storage directories, set custom FFmpeg paths, and configure audio retention cleanup policies.
-- **🤖 Advanced AI Models**: Powered by state-of-the-art models including **Qwen3-ASR** (via llama.cpp), **FireRedASR2-AED**, **SenseVoice**, **Whisper**, **Paraformer**, and **Silero VAD v5**.
+- **🛟 Recovery, Backup & Storage**: Resume interrupted tasks via the Message Center, export lightweight backups, manage storage directories, set custom FFmpeg paths, and configure audio retention cleanup policies.
+- **🤖 Advanced AI Models**: Powered by state-of-the-art models including **Qwen3-ASR** (via llama.cpp, supporting both offline batch and streaming inference), **FireRedASR2-AED**, **SenseVoice**, **Whisper**, **Paraformer**, and **Silero VAD v5**.
 
 ## 🚀 Getting Started
 

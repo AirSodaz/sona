@@ -13,8 +13,8 @@ Provider-neutral encrypted Sync **application** runtime: vault lifecycle,
 provider registry, run cycles, and orchestration that depends only on
 `sona-core` ports and traits.
 
-Concrete providers (for example WebDAV) live in outbound adapters such as
-`sona-sync-webdav`. Hosts (Desktop, UniFFI) compose this application; they do
+Concrete providers (for example WebDAV and S3-compatible object storage) live in outbound adapters such as
+`sona-sync-webdav` and `sona-sync-s3`. Hosts (Desktop, UniFFI) compose this application; they do
 not reimplement Sync session state machines.
 
 ## What this crate is not
