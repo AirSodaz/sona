@@ -6105,6 +6105,7 @@ dependencies = [
  "sona-sherpa-onnx",
  "sona-sqlite",
  "sona-sync",
+ "sona-sync-s3",
  "sona-sync-webdav",
  "sona-ts-bind",
  "sona-vad",
@@ -6441,6 +6442,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "sona-sync-s3"
+version = "0.9.1"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "hex",
+ "hmac 0.13.0",
+ "reqwest 0.13.5",
+ "roxmltree",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "sona-core",
+ "sona-sync",
+ "tempfile",
+ "tokio",
+ "url",
+ "urlencoding",
+ "uuid",
+]
+
+[[package]]
 name = "sona-sync-webdav"
 version = "0.9.1"
 dependencies = [
@@ -6499,6 +6523,7 @@ dependencies = [
  "sona-sherpa-onnx",
  "sona-sqlite",
  "sona-sync",
+ "sona-sync-s3",
  "sona-sync-webdav",
  "sona-vad",
  "tempfile",

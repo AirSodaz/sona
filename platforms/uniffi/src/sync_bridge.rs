@@ -9,6 +9,7 @@ use sona_sync::{
     JsonFileSyncConfigStore, SyncApplication, SyncProviderFactory, SyncProviderInput,
     SyncProviderRegistry, SystemSyncApplicationEnvironment,
 };
+use sona_sync_s3::S3SyncProviderFactory;
 use sona_sync_webdav::{WebDavObjectStoreConfig, WebDavSyncProviderFactory};
 
 use crate::application_context::{
@@ -57,7 +58,10 @@ fn application(context: impl Into<ContextSource>) -> SonaCoreBindingResult<Arc<S
 }
 
 fn provider_registry() -> SyncProviderRegistry {
-    SyncProviderRegistry::new([Arc::new(WebDavSyncProviderFactory) as Arc<dyn SyncProviderFactory>])
+    SyncProviderRegistry::new([
+        Arc::new(WebDavSyncProviderFactory) as Arc<dyn SyncProviderFactory>,
+        Arc::new(S3SyncProviderFactory) as Arc<dyn SyncProviderFactory>,
+    ])
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

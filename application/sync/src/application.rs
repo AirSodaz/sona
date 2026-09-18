@@ -190,6 +190,16 @@ pub struct SyncPairingInfo {
     pub server_url: Option<String>,
     pub remote_root: Option<String>,
     pub username: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub region: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bucket: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access_key_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub force_path_style: Option<bool>,
 }
 
 struct UnlockedSession {
@@ -335,6 +345,12 @@ impl SyncApplication {
         let mut server_url = None;
         let mut remote_root = None;
         let mut username = None;
+        let mut endpoint = None;
+        let mut region = None;
+        let mut bucket = None;
+        let mut access_key_id = None;
+        let mut force_path_style = None;
+
         if let Some(obj) = config.provider_configuration.as_object() {
             server_url = obj
                 .get("serverUrl")
@@ -348,6 +364,17 @@ impl SyncApplication {
                 .get("username")
                 .and_then(|v| v.as_str())
                 .map(String::from);
+            endpoint = obj
+                .get("endpoint")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            region = obj.get("region").and_then(|v| v.as_str()).map(String::from);
+            bucket = obj.get("bucket").and_then(|v| v.as_str()).map(String::from);
+            access_key_id = obj
+                .get("accessKeyId")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            force_path_style = obj.get("forcePathStyle").and_then(|v| v.as_bool());
         }
         Ok(Some(SyncPairingInfo {
             provider_id: config.provider_id,
@@ -355,6 +382,11 @@ impl SyncApplication {
             server_url,
             remote_root,
             username,
+            endpoint,
+            region,
+            bucket,
+            access_key_id,
+            force_path_style,
         }))
     }
 

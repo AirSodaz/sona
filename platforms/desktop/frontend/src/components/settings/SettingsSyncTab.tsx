@@ -9,14 +9,14 @@ import {
   changeSyncPreset,
   createSyncVault,
   disconnectSyncVault,
-  discoverWebDavSyncVaults,
+  discoverSyncVaults,
   generateSyncRecoveryKey,
   joinSyncVault,
   lockSyncVault,
   previewSyncJoin,
   runSyncNow,
   setSyncPaused,
-  testWebDavSyncProvider,
+  testSyncProvider,
   unlockSyncVault,
   unlockSyncVaultWithRecovery,
 } from '../../services/tauri/sync';
@@ -24,6 +24,7 @@ import { useSetConfig, useUIConfig } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useSyncStatusStore } from '../../stores/syncStatusStore';
 import type {
+  AnySyncProviderConfig,
   SyncCreateRequest,
   SyncCreateResult,
   SyncJoinPreview,
@@ -33,7 +34,6 @@ import type {
   SyncRunResult,
   SyncUnlockRecoveryRequest,
   SyncUnlockRequest,
-  WebDavObjectStoreConfig,
 } from '../../types/sync';
 import { Switch } from '../Switch';
 import {
@@ -114,9 +114,9 @@ export function SettingsSyncTab({
     [runReturningAction]
   );
 
-  const handleTestProvider = (provider: WebDavObjectStoreConfig): Promise<SyncProviderDescriptor> =>
+  const handleTestProvider = (provider: AnySyncProviderConfig): Promise<SyncProviderDescriptor> =>
     runReturningAction('test_provider', async () => {
-      const descriptor = await testWebDavSyncProvider(provider);
+      const descriptor = await testSyncProvider(provider);
       await alert(
         t('settings.sync.provider_ready', {
           defaultValue: '{{provider}} is ready for sync.',
@@ -307,7 +307,7 @@ export function SettingsSyncTab({
           onJoin={handleJoin}
           onPreviewJoin={handlePreviewJoin}
           onTestProvider={handleTestProvider}
-          onDiscoverVaults={discoverWebDavSyncVaults}
+          onDiscoverVaults={discoverSyncVaults}
         />
       ) : (
         <SyncConnectedPanel

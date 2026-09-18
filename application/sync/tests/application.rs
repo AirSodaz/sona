@@ -1236,3 +1236,62 @@ async fn discover_vaults_and_pairing_info_support_smart_setup() {
     assert_eq!(discovered[0].vault_id, "default");
     assert_eq!(discovered[0].preset, SyncPresetV1::Standard);
 }
+
+#[tokio::test]
+async fn pairing_info_extracts_s3_provider_fields() {
+    let repository_factory = Arc::new(sqlite_sync_repository_factory(Arc::new(
+        Database::open_in_memory().unwrap(),
+    )));
+    let config = Arc::new(MemoryConfigStore::default());
+    let secrets = Arc::new(MemorySecretStore::default());
+    let store = Arc::new(MemoryStore::default());
+    let provider_factory = Arc::new(TestProviderFactory {
+        store: store.clone(),
+    });
+    let application = SyncApplication::new(
+        config.clone(),
+        repository_factory,
+        SyncProviderRegistry::new([provider_factory as Arc<dyn SyncProviderFactory>]),
+        secrets,
+        Arc::new(FixedEnvironment::new(["custom-device-1", "device-2"])),
+    );
+
+    let s3_provider_input = SyncProviderInput {
+        provider_id: "test".to_string(),
+        configuration: serde_json::json!({
+            "endpoint": "https://r2.example.com",
+            "region": "auto",
+            "bucket": "my-bucket",
+            "remoteRoot": "sona",
+            "accessKeyId": "AKIA123",
+            "secretAccessKey": "secret",
+            "forcePathStyle": true,
+            "password": "dummy",
+        }),
+    };
+
+    let master_password = (0..16).map(|_| 'a').collect::<String>();
+    application
+        .create_with_vault_id(
+            s3_provider_input,
+            Some("s3-vault-1".to_string()),
+            SyncPresetV1::Standard,
+            &master_password,
+            false,
+        )
+        .await
+        .unwrap();
+
+    let pairing_info = application.get_pairing_info().unwrap().unwrap();
+    assert_eq!(pairing_info.provider_id, "test");
+    assert_eq!(pairing_info.vault_id, "s3-vault-1");
+    assert_eq!(
+        pairing_info.endpoint.as_deref(),
+        Some("https://r2.example.com")
+    );
+    assert_eq!(pairing_info.region.as_deref(), Some("auto"));
+    assert_eq!(pairing_info.bucket.as_deref(), Some("my-bucket"));
+    assert_eq!(pairing_info.remote_root.as_deref(), Some("sona"));
+    assert_eq!(pairing_info.access_key_id.as_deref(), Some("AKIA123"));
+    assert_eq!(pairing_info.force_path_style, Some(true));
+}

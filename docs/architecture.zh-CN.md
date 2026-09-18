@@ -28,6 +28,7 @@ Sona 使用七种稳定角色。角色是经过评审的依赖契约；工作区
 | `sona-runtime-fs` | outbound-adapter |
 | `sona-sqlite` | outbound-adapter |
 | `sona-sync-webdav` | outbound-adapter |
+| `sona-sync-s3` | outbound-adapter |
 | `sona` | host |
 | `sona-cli` | host |
 | `sona-uniffi-bind` | host |
@@ -73,6 +74,7 @@ Core <- Outbound Adapter <------------- Host
 | `adapters/runtime_fs/` | `sona-runtime-fs` | outbound-adapter | |
 | `adapters/sqlite/` | `sona-sqlite` | outbound-adapter | 拥有 `SqliteApplicationContext` |
 | `adapters/sync_webdav/` | `sona-sync-webdav` | outbound-adapter | |
+| `adapters/sync_s3/` | `sona-sync-s3` | outbound-adapter | |
 | `platforms/desktop/` | `sona` | host | 桌面 Tauri Host |
 | `platforms/cli/` | `sona-cli` | host | |
 | `platforms/uniffi/` | `sona-uniffi-bind` | host | 移动端 / UniFFI 组合根 |

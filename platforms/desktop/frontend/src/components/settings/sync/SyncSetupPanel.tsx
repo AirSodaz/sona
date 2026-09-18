@@ -16,7 +16,9 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type {
+  AnySyncProviderConfig,
   DiscoveredVaultSummary,
+  S3ObjectStoreConfig,
   SyncCreateRequest,
   SyncCreateResult,
   SyncJoinPreview,
@@ -34,18 +36,23 @@ import { SettingsAccordion, SettingsItem, SettingsSection } from '../SettingsLay
 import { PasswordInput } from './PasswordInput';
 import {
   detectProviderPresetId,
+  detectS3ProviderPresetId,
+  S3_PROVIDER_PRESETS,
   SYNC_PROVIDER_PRESETS,
+  type SyncProtocolType,
+  type WellKnownS3ProviderId,
   type WellKnownSyncProviderId,
 } from './SyncProviderPresets';
-import { decodeSyncPairingToken } from './syncPairing';
+import { decodeSyncPairingToken, isS3PairingPayload, isWebDavPairingPayload } from './syncPairing';
 import { validateSyncServerUrl } from './syncUrl';
 export interface SyncSetupPanelProps {
   busyAction: string | null;
   onCreate: (request: SyncCreateRequest) => Promise<SyncCreateResult>;
   onJoin: (request: SyncJoinRequest) => Promise<SyncRunResult>;
   onPreviewJoin: (request: SyncPreviewJoinRequest) => Promise<SyncJoinPreview>;
-  onTestProvider: (config: WebDavObjectStoreConfig) => Promise<SyncProviderDescriptor>;
-  onDiscoverVaults?: (config: WebDavObjectStoreConfig) => Promise<DiscoveredVaultSummary[]>;
+  onTestProvider: (config: AnySyncProviderConfig) => Promise<SyncProviderDescriptor>;
+  onDiscoverVaults?: (config: AnySyncProviderConfig) => Promise<DiscoveredVaultSummary[]>;
+  initialProtocolType?: SyncProtocolType;
 }
 
 function checkProviderFields(config: WebDavObjectStoreConfig): string | null {
@@ -58,6 +65,21 @@ function checkProviderFields(config: WebDavObjectStoreConfig): string | null {
   }
   return null;
 }
+function checkS3ProviderFields(config: S3ObjectStoreConfig): string | null {
+  const urlValidation = validateSyncServerUrl(config.endpoint);
+  if (!urlValidation.valid) {
+    return urlValidation.error ?? 'invalid';
+  }
+  if (
+    !config.bucket.trim() ||
+    !config.region.trim() ||
+    !config.accessKeyId.trim() ||
+    !config.secretAccessKey
+  ) {
+    return 'incomplete';
+  }
+  return null;
+}
 
 export function SyncSetupPanel({
   busyAction,
@@ -65,10 +87,14 @@ export function SyncSetupPanel({
   onJoin,
   onTestProvider,
   onDiscoverVaults,
+  initialProtocolType,
 }: SyncSetupPanelProps): React.JSX.Element {
   const { t } = useTranslation();
 
   // Form states
+  const [protocolType, setProtocolType] = React.useState<SyncProtocolType>(
+    initialProtocolType ?? 'webdav'
+  );
   const [selectedPresetId, setSelectedPresetId] =
     React.useState<WellKnownSyncProviderId>('nutstore');
   const [provider, setProvider] = React.useState<WebDavObjectStoreConfig>({
@@ -77,6 +103,19 @@ export function SyncSetupPanel({
     username: '',
     password: '',
   });
+  const [selectedS3PresetId, setSelectedS3PresetId] =
+    React.useState<WellKnownS3ProviderId>('cloudflare-r2');
+  const [s3Provider, setS3Provider] = React.useState<S3ObjectStoreConfig>({
+    endpoint: S3_PROVIDER_PRESETS[0].defaultEndpoint,
+    region: S3_PROVIDER_PRESETS[0].defaultRegion,
+    bucket: S3_PROVIDER_PRESETS[0].defaultBucket,
+    remoteRoot: S3_PROVIDER_PRESETS[0].defaultRemoteRoot,
+    accessKeyId: '',
+    secretAccessKey: '',
+    forcePathStyle: S3_PROVIDER_PRESETS[0].defaultForcePathStyle,
+  });
+
+  const activeProviderConfig: AnySyncProviderConfig = protocolType === 's3' ? s3Provider : provider;
   const [masterPassword, setMasterPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [preset, setPreset] = React.useState<SyncPresetV1>('standard');
@@ -136,6 +175,47 @@ export function SyncSetupPanel({
     setTestError(null);
     setValidationError(null);
   };
+  const updateS3Provider = (patch: Partial<S3ObjectStoreConfig>) => {
+    setS3Provider((prev) => {
+      const next = { ...prev, ...patch };
+      if (patch.endpoint !== undefined) {
+        const detected = detectS3ProviderPresetId(patch.endpoint);
+        if (detected !== selectedS3PresetId) {
+          setSelectedS3PresetId(detected);
+        }
+      }
+      return next;
+    });
+    setTestSuccess(null);
+    setTestError(null);
+    setValidationError(null);
+  };
+
+  const handleS3PresetChange = (id: string) => {
+    const presetId = id as WellKnownS3ProviderId;
+    setSelectedS3PresetId(presetId);
+    const meta = S3_PROVIDER_PRESETS.find((p) => p.id === presetId);
+    if (!meta) return;
+
+    setS3Provider((prev) => ({
+      ...prev,
+      endpoint: presetId === 's3-custom' ? prev.endpoint : meta.defaultEndpoint,
+      region: meta.defaultRegion || prev.region,
+      bucket: meta.defaultBucket || prev.bucket,
+      remoteRoot: meta.defaultRemoteRoot || prev.remoteRoot,
+      forcePathStyle: meta.defaultForcePathStyle,
+    }));
+    setTestSuccess(null);
+    setTestError(null);
+    setValidationError(null);
+  };
+
+  const currentS3PresetMeta = S3_PROVIDER_PRESETS.find((p) => p.id === selectedS3PresetId);
+
+  const s3ProviderOptions: DropdownOption[] = S3_PROVIDER_PRESETS.map((p) => ({
+    value: p.id,
+    label: t(p.nameKey, { defaultValue: p.defaultName }),
+  }));
 
   const currentPresetMeta = SYNC_PROVIDER_PRESETS.find((p) => p.id === selectedPresetId);
 
@@ -146,30 +226,50 @@ export function SyncSetupPanel({
 
   // Test provider connection
   const handleTestConnection = async () => {
-    const err = checkProviderFields(provider);
-    if (err === 'http_not_local' || err === 'unsupported_scheme' || err === 'https') {
-      setValidationError(
-        t('settings.sync.error_https_required', {
-          defaultValue: 'WebDAV server URL must use HTTPS or a local/LAN address.',
-        })
-      );
-      return;
-    }
-    if (err) {
-      setValidationError(
-        t('settings.sync.validation_fill_all', {
-          defaultValue: 'Fill in all provider credentials.',
-        })
-      );
-      return;
+    if (protocolType === 's3') {
+      const err = checkS3ProviderFields(s3Provider);
+      if (err === 'http_not_local' || err === 'unsupported_scheme' || err === 'https') {
+        setValidationError(
+          t('settings.sync.error_https_required', {
+            defaultValue: 'Server URL must use HTTPS or a local/LAN address.',
+          })
+        );
+        return;
+      }
+      if (err) {
+        setValidationError(
+          t('settings.sync.validation_fill_all', {
+            defaultValue: 'Fill in all provider credentials.',
+          })
+        );
+        return;
+      }
+    } else {
+      const err = checkProviderFields(provider);
+      if (err === 'http_not_local' || err === 'unsupported_scheme' || err === 'https') {
+        setValidationError(
+          t('settings.sync.error_https_required', {
+            defaultValue: 'WebDAV server URL must use HTTPS or a local/LAN address.',
+          })
+        );
+        return;
+      }
+      if (err) {
+        setValidationError(
+          t('settings.sync.validation_fill_all', {
+            defaultValue: 'Fill in all provider credentials.',
+          })
+        );
+        return;
+      }
     }
 
     setValidationError(null);
     setTestError(null);
     setIsTesting(true);
     try {
-      const descriptor = await onTestProvider(provider);
-      setTestSuccess(descriptor.displayName || 'WebDAV');
+      const descriptor = await onTestProvider(activeProviderConfig);
+      setTestSuccess(descriptor.displayName || (protocolType === 's3' ? 'S3 Storage' : 'WebDAV'));
     } catch (error) {
       setTestSuccess(null);
       const msg = error instanceof Error ? error.message : String(error);
@@ -195,15 +295,29 @@ export function SyncSetupPanel({
       return;
     }
     setPairingTokenError(null);
-
-    setProvider({
-      serverUrl: decoded.serverUrl,
-      remoteRoot: decoded.remoteRoot,
-      username: decoded.username,
-      password: decoded.providerPassword || provider.password,
-    });
+    if (isS3PairingPayload(decoded)) {
+      setProtocolType('s3');
+      setS3Provider({
+        endpoint: decoded.endpoint,
+        region: decoded.region,
+        bucket: decoded.bucket,
+        remoteRoot: decoded.remoteRoot,
+        accessKeyId: decoded.accessKeyId,
+        secretAccessKey: decoded.secretAccessKey || s3Provider.secretAccessKey,
+        forcePathStyle: Boolean(decoded.forcePathStyle),
+      });
+      setSelectedS3PresetId(detectS3ProviderPresetId(decoded.endpoint));
+    } else if (isWebDavPairingPayload(decoded)) {
+      setProtocolType('webdav');
+      setProvider({
+        serverUrl: decoded.serverUrl,
+        remoteRoot: decoded.remoteRoot,
+        username: decoded.username,
+        password: decoded.providerPassword || provider.password,
+      });
+      setSelectedPresetId(detectProviderPresetId(decoded.serverUrl));
+    }
     setVaultId(decoded.vaultId);
-    setSelectedPresetId(detectProviderPresetId(decoded.serverUrl));
     setShowPairingModal(false);
     setPairingTokenInput('');
     setPairingSuccessNotice(
@@ -216,7 +330,8 @@ export function SyncSetupPanel({
 
   // Main Save and Connect flow
   const handleSaveAndSync = async () => {
-    const providerErr = checkProviderFields(provider);
+    const providerErr =
+      protocolType === 's3' ? checkS3ProviderFields(s3Provider) : checkProviderFields(provider);
     if (
       providerErr === 'http_not_local' ||
       providerErr === 'unsupported_scheme' ||
@@ -224,7 +339,7 @@ export function SyncSetupPanel({
     ) {
       setValidationError(
         t('settings.sync.error_https_required', {
-          defaultValue: 'WebDAV server URL must use HTTPS or a local/LAN address.',
+          defaultValue: 'Server URL must use HTTPS or a local/LAN address.',
         })
       );
       return;
@@ -271,7 +386,7 @@ export function SyncSetupPanel({
       // If user explicitly specified a vaultId (or imported via pairing code)
       if (vaultId.trim()) {
         await onJoin({
-          provider,
+          provider: activeProviderConfig,
           vaultId: vaultId.trim(),
           masterPassword,
         });
@@ -282,7 +397,7 @@ export function SyncSetupPanel({
       if (onDiscoverVaults) {
         let vaults: DiscoveredVaultSummary[] = [];
         try {
-          vaults = await onDiscoverVaults(provider);
+          vaults = await onDiscoverVaults(activeProviderConfig);
         } catch {
           // If discover fails, fallback to create default
           vaults = [];
@@ -291,7 +406,7 @@ export function SyncSetupPanel({
         if (vaults.length === 0) {
           // No vault on server -> Initialize default
           await onCreate({
-            provider,
+            provider: activeProviderConfig,
             preset,
             masterPassword,
             createRecoveryKey,
@@ -303,7 +418,7 @@ export function SyncSetupPanel({
         if (vaults.length === 1) {
           // Exactly 1 vault -> Automatically join it
           await onJoin({
-            provider,
+            provider: activeProviderConfig,
             vaultId: vaults[0].vaultId,
             masterPassword,
           });
@@ -319,7 +434,7 @@ export function SyncSetupPanel({
 
       // Fallback if no discover callback
       await onCreate({
-        provider,
+        provider: activeProviderConfig,
         preset,
         masterPassword,
         createRecoveryKey,
@@ -338,7 +453,7 @@ export function SyncSetupPanel({
     try {
       if (isCreatingNewVault) {
         await onCreate({
-          provider,
+          provider: activeProviderConfig,
           preset,
           masterPassword,
           createRecoveryKey,
@@ -346,7 +461,7 @@ export function SyncSetupPanel({
         });
       } else {
         await onJoin({
-          provider,
+          provider: activeProviderConfig,
           vaultId: selectedVaultToJoin,
           masterPassword,
         });
@@ -370,10 +485,10 @@ export function SyncSetupPanel({
 
       {/* Section 1: Storage Provider */}
       <SettingsSection
-        title={t('settings.sync.section_storage', { defaultValue: 'WebDAV Storage Configuration' })}
+        title={t('settings.sync.section_storage', { defaultValue: 'Cloud Storage Configuration' })}
         description={t('settings.sync.section_storage_desc', {
           defaultValue:
-            'Configure your WebDAV server endpoint and credentials for encrypted data synchronization.',
+            'Configure your storage endpoint and credentials for encrypted data synchronization.',
         })}
       >
         <div className="sync-pairing-banner">
@@ -396,125 +511,339 @@ export function SyncSetupPanel({
         </div>
 
         <SettingsItem
-          title={t('settings.sync.choose_provider_label', { defaultValue: 'Storage provider' })}
-          hint={
-            currentPresetMeta?.authDocUrl ? (
-              <a
-                href={currentPresetMeta.authDocUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="sync-auth-link"
-              >
-                <span>
-                  {t('settings.sync.view_auth_guide', { defaultValue: 'View setup guide' })}
-                </span>
-                <ExternalLink size={12} />
-              </a>
-            ) : undefined
-          }
-        >
-          <Dropdown
-            id="sync-provider-preset"
-            value={selectedPresetId}
-            onChange={handlePresetChange}
-            options={providerOptions}
-            disabled={isBusy}
-            style={{ width: '100%', maxWidth: '380px' }}
-          />
-        </SettingsItem>
-
-        <SettingsItem
-          title={t('settings.sync.server_url', { defaultValue: 'Server URL' })}
-          hint={t('settings.sync.server_url_hint', {
-            defaultValue: 'WebDAV endpoint URL (HTTPS or local/LAN HTTP)',
+          title={t('settings.sync.storage_type_label', { defaultValue: 'Storage protocol' })}
+          hint={t('settings.sync.storage_type_hint', {
+            defaultValue: 'Choose between S3-compatible bucket storage and WebDAV cloud storage',
           })}
         >
-          <input
-            id="sync-server-url"
-            className="settings-input"
-            type="url"
-            aria-label={t('settings.sync.server_url', { defaultValue: 'Server URL' })}
-            placeholder="https://dav.example.com/remote.php/dav/files/you/"
-            value={provider.serverUrl}
-            onChange={(e) => updateProvider({ serverUrl: e.target.value })}
-            disabled={isBusy}
-            style={{ width: '100%', maxWidth: '380px' }}
-          />
-        </SettingsItem>
-
-        <SettingsItem title={t('settings.sync.username', { defaultValue: 'Username' })}>
-          <input
-            id="sync-username"
-            className="settings-input"
-            type="text"
-            aria-label={t('settings.sync.username', { defaultValue: 'Username' })}
-            placeholder={currentPresetMeta?.usernamePlaceholder || 'username'}
-            value={provider.username}
-            onChange={(e) => updateProvider({ username: e.target.value })}
-            disabled={isBusy}
-            style={{ width: '100%', maxWidth: '380px' }}
-          />
-        </SettingsItem>
-
-        <SettingsItem
-          title={t('settings.sync.password', { defaultValue: 'Password' })}
-          hint={
-            currentPresetMeta
-              ? t(currentPresetMeta.helpKey, { defaultValue: currentPresetMeta.helpDefault })
-              : undefined
-          }
-        >
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '6px',
-              width: '100%',
-              maxWidth: '380px',
-            }}
-          >
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <PasswordInput
-                id="sync-password"
-                ariaLabel={t('settings.sync.password', { defaultValue: 'Password' })}
-                value={provider.password}
-                onChange={(e) => updateProvider({ password: e.target.value })}
-                disabled={isBusy}
-                style={{ flex: 1 }}
-              />
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={handleTestConnection}
-                disabled={isBusy || isTesting}
-                style={{ minWidth: '110px', justifyContent: 'center', whiteSpace: 'nowrap' }}
-              >
-                {isTesting ? (
-                  <RefreshCw size={14} className="queue-icon-spin" />
-                ) : testSuccess ? (
-                  <CheckCircle2 size={14} style={{ color: 'var(--color-success, #228b4e)' }} />
-                ) : (
-                  <Server size={14} />
-                )}
-                <span>
-                  {testSuccess
-                    ? t('common.connected', { defaultValue: 'Connected' })
-                    : t('settings.sync.test_provider_btn', { defaultValue: 'Test connection' })}
-                </span>
-              </button>
-            </div>
-            {testError && (
-              <div
-                className="sync-banner-box is-error"
-                role="alert"
-                style={{ padding: '6px 10px', marginTop: '2px' }}
-              >
-                <AlertCircle size={14} />
-                <span style={{ fontSize: '0.8rem' }}>{testError}</span>
-              </div>
-            )}
+          <div className="sync-segmented-control" role="tablist">
+            <button
+              id="sync-type-s3-btn"
+              type="button"
+              className={`sync-segmented-btn ${protocolType === 's3' ? 'is-active' : ''}`}
+              onClick={() => {
+                setProtocolType('s3');
+                setTestSuccess(null);
+                setTestError(null);
+                setValidationError(null);
+              }}
+            >
+              <DatabaseZap size={14} style={{ marginRight: '6px' }} />
+              {t('settings.sync.protocol_s3', { defaultValue: 'Object Storage Bucket (S3)' })}
+            </button>
+            <button
+              id="sync-type-webdav-btn"
+              type="button"
+              className={`sync-segmented-btn ${protocolType === 'webdav' ? 'is-active' : ''}`}
+              onClick={() => {
+                setProtocolType('webdav');
+                setTestSuccess(null);
+                setTestError(null);
+                setValidationError(null);
+              }}
+            >
+              <Server size={14} style={{ marginRight: '6px' }} />
+              {t('settings.sync.protocol_webdav', { defaultValue: 'WebDAV' })}
+            </button>
           </div>
         </SettingsItem>
+
+        {protocolType === 's3' ? (
+          <>
+            <SettingsItem
+              title={t('settings.sync.choose_s3_provider_label', {
+                defaultValue: 'Bucket provider',
+              })}
+              hint={
+                currentS3PresetMeta?.authDocUrl ? (
+                  <a
+                    href={currentS3PresetMeta.authDocUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="sync-auth-link"
+                  >
+                    <span>
+                      {t('settings.sync.view_auth_guide', { defaultValue: 'View setup guide' })}
+                    </span>
+                    <ExternalLink size={12} />
+                  </a>
+                ) : undefined
+              }
+            >
+              <Dropdown
+                id="sync-s3-provider-preset"
+                value={selectedS3PresetId}
+                onChange={handleS3PresetChange}
+                options={s3ProviderOptions}
+                disabled={isBusy}
+                style={{ width: '100%', maxWidth: '380px' }}
+              />
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('settings.sync.s3_endpoint', { defaultValue: 'API Endpoint URL' })}
+              hint={t('settings.sync.s3_endpoint_hint', {
+                defaultValue:
+                  'S3-compatible API endpoint URL (e.g. https://<account_id>.r2.cloudflarestorage.com)',
+              })}
+            >
+              <input
+                id="sync-s3-endpoint"
+                className="settings-input"
+                type="url"
+                aria-label={t('settings.sync.s3_endpoint', { defaultValue: 'API Endpoint URL' })}
+                placeholder="https://s3.amazonaws.com"
+                value={s3Provider.endpoint}
+                onChange={(e) => updateS3Provider({ endpoint: e.target.value })}
+                disabled={isBusy}
+                style={{ width: '100%', maxWidth: '380px' }}
+              />
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('settings.sync.s3_bucket', { defaultValue: 'Bucket name' })}
+              hint={t('settings.sync.s3_bucket_hint', {
+                defaultValue: 'The S3 bucket where Sona will store encrypted sync vaults',
+              })}
+            >
+              <input
+                id="sync-s3-bucket"
+                className="settings-input"
+                type="text"
+                aria-label={t('settings.sync.s3_bucket', { defaultValue: 'Bucket name' })}
+                placeholder="sona-sync"
+                value={s3Provider.bucket}
+                onChange={(e) => updateS3Provider({ bucket: e.target.value })}
+                disabled={isBusy}
+                style={{ width: '100%', maxWidth: '380px' }}
+              />
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('settings.sync.s3_region', { defaultValue: 'Region' })}
+              hint={t('settings.sync.s3_region_hint', {
+                defaultValue: 'Bucket region (use "auto" for Cloudflare R2)',
+              })}
+            >
+              <input
+                id="sync-s3-region"
+                className="settings-input"
+                type="text"
+                aria-label={t('settings.sync.s3_region', { defaultValue: 'Region' })}
+                placeholder="us-east-1"
+                value={s3Provider.region}
+                onChange={(e) => updateS3Provider({ region: e.target.value })}
+                disabled={isBusy}
+                style={{ width: '100%', maxWidth: '380px' }}
+              />
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('settings.sync.s3_access_key_id', { defaultValue: 'Access Key ID' })}
+            >
+              <input
+                id="sync-s3-ak"
+                className="settings-input"
+                type="text"
+                aria-label={t('settings.sync.s3_access_key_id', { defaultValue: 'Access Key ID' })}
+                placeholder={currentS3PresetMeta?.accessKeyPlaceholder || 'Access Key ID'}
+                value={s3Provider.accessKeyId}
+                onChange={(e) => updateS3Provider({ accessKeyId: e.target.value })}
+                disabled={isBusy}
+                style={{ width: '100%', maxWidth: '380px' }}
+              />
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('settings.sync.s3_secret_access_key', {
+                defaultValue: 'Secret Access Key',
+              })}
+              hint={
+                currentS3PresetMeta
+                  ? t(currentS3PresetMeta.helpKey, {
+                      defaultValue: currentS3PresetMeta.helpDefault,
+                    })
+                  : undefined
+              }
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  width: '100%',
+                  maxWidth: '380px',
+                }}
+              >
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <PasswordInput
+                    id="sync-s3-sk"
+                    ariaLabel={t('settings.sync.s3_secret_access_key', {
+                      defaultValue: 'Secret Access Key',
+                    })}
+                    value={s3Provider.secretAccessKey}
+                    onChange={(e) => updateS3Provider({ secretAccessKey: e.target.value })}
+                    disabled={isBusy}
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleTestConnection}
+                    disabled={isBusy || isTesting}
+                    style={{ minWidth: '110px', justifyContent: 'center', whiteSpace: 'nowrap' }}
+                  >
+                    {isTesting ? (
+                      <RefreshCw size={14} className="queue-icon-spin" />
+                    ) : testSuccess ? (
+                      <CheckCircle2 size={14} style={{ color: 'var(--color-success, #228b4e)' }} />
+                    ) : (
+                      <Server size={14} />
+                    )}
+                    <span>
+                      {testSuccess
+                        ? t('common.connected', { defaultValue: 'Connected' })
+                        : t('settings.sync.test_provider_btn', { defaultValue: 'Test connection' })}
+                    </span>
+                  </button>
+                </div>
+                {testError && (
+                  <div
+                    className="sync-banner-box is-error"
+                    role="alert"
+                    style={{ padding: '6px 10px', marginTop: '2px' }}
+                  >
+                    <AlertCircle size={14} />
+                    <span style={{ fontSize: '0.8rem' }}>{testError}</span>
+                  </div>
+                )}
+              </div>
+            </SettingsItem>
+          </>
+        ) : (
+          <>
+            <SettingsItem
+              title={t('settings.sync.choose_provider_label', { defaultValue: 'Storage provider' })}
+              hint={
+                currentPresetMeta?.authDocUrl ? (
+                  <a
+                    href={currentPresetMeta.authDocUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="sync-auth-link"
+                  >
+                    <span>
+                      {t('settings.sync.view_auth_guide', { defaultValue: 'View setup guide' })}
+                    </span>
+                    <ExternalLink size={12} />
+                  </a>
+                ) : undefined
+              }
+            >
+              <Dropdown
+                id="sync-provider-preset"
+                value={selectedPresetId}
+                onChange={handlePresetChange}
+                options={providerOptions}
+                disabled={isBusy}
+                style={{ width: '100%', maxWidth: '380px' }}
+              />
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('settings.sync.server_url', { defaultValue: 'Server URL' })}
+              hint={t('settings.sync.server_url_hint', {
+                defaultValue: 'WebDAV endpoint URL (HTTPS or local/LAN HTTP)',
+              })}
+            >
+              <input
+                id="sync-server-url"
+                className="settings-input"
+                type="url"
+                aria-label={t('settings.sync.server_url', { defaultValue: 'Server URL' })}
+                placeholder="https://dav.example.com/remote.php/dav/files/you/"
+                value={provider.serverUrl}
+                onChange={(e) => updateProvider({ serverUrl: e.target.value })}
+                disabled={isBusy}
+                style={{ width: '100%', maxWidth: '380px' }}
+              />
+            </SettingsItem>
+
+            <SettingsItem title={t('settings.sync.username', { defaultValue: 'Username' })}>
+              <input
+                id="sync-username"
+                className="settings-input"
+                type="text"
+                aria-label={t('settings.sync.username', { defaultValue: 'Username' })}
+                placeholder={currentPresetMeta?.usernamePlaceholder || 'username'}
+                value={provider.username}
+                onChange={(e) => updateProvider({ username: e.target.value })}
+                disabled={isBusy}
+                style={{ width: '100%', maxWidth: '380px' }}
+              />
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('settings.sync.password', { defaultValue: 'Password' })}
+              hint={
+                currentPresetMeta
+                  ? t(currentPresetMeta.helpKey, { defaultValue: currentPresetMeta.helpDefault })
+                  : undefined
+              }
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  width: '100%',
+                  maxWidth: '380px',
+                }}
+              >
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <PasswordInput
+                    id="sync-password"
+                    ariaLabel={t('settings.sync.password', { defaultValue: 'Password' })}
+                    value={provider.password}
+                    onChange={(e) => updateProvider({ password: e.target.value })}
+                    disabled={isBusy}
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleTestConnection}
+                    disabled={isBusy || isTesting}
+                    style={{ minWidth: '110px', justifyContent: 'center', whiteSpace: 'nowrap' }}
+                  >
+                    {isTesting ? (
+                      <RefreshCw size={14} className="queue-icon-spin" />
+                    ) : testSuccess ? (
+                      <CheckCircle2 size={14} style={{ color: 'var(--color-success, #228b4e)' }} />
+                    ) : (
+                      <Server size={14} />
+                    )}
+                    <span>
+                      {testSuccess
+                        ? t('common.connected', { defaultValue: 'Connected' })
+                        : t('settings.sync.test_provider_btn', { defaultValue: 'Test connection' })}
+                    </span>
+                  </button>
+                </div>
+                {testError && (
+                  <div
+                    className="sync-banner-box is-error"
+                    role="alert"
+                    style={{ padding: '6px 10px', marginTop: '2px' }}
+                  >
+                    <AlertCircle size={14} />
+                    <span style={{ fontSize: '0.8rem' }}>{testError}</span>
+                  </div>
+                )}
+              </div>
+            </SettingsItem>
+          </>
+        )}
       </SettingsSection>
 
       {/* Section 2: End-to-End Encryption */}
@@ -648,12 +977,36 @@ export function SyncSetupPanel({
               className="settings-input"
               type="text"
               aria-label={t('settings.sync.remote_root', { defaultValue: 'Remote root' })}
-              value={provider.remoteRoot}
-              onChange={(e) => updateProvider({ remoteRoot: e.target.value })}
+              value={protocolType === 's3' ? s3Provider.remoteRoot : provider.remoteRoot}
+              onChange={(e) => {
+                if (protocolType === 's3') {
+                  updateS3Provider({ remoteRoot: e.target.value });
+                } else {
+                  updateProvider({ remoteRoot: e.target.value });
+                }
+              }}
               disabled={isBusy}
               style={{ width: '100%', maxWidth: '380px' }}
             />
           </SettingsItem>
+          {protocolType === 's3' && (
+            <SettingsItem
+              title={t('settings.sync.s3_force_path_style', {
+                defaultValue: 'Force Path-style URLs',
+              })}
+              hint={t('settings.sync.s3_force_path_style_hint', {
+                defaultValue:
+                  'Required for MinIO and private IP gateways; public cloud providers generally leave this off',
+              })}
+            >
+              <Switch
+                id="sync-s3-force-path-style"
+                checked={Boolean(s3Provider.forcePathStyle)}
+                onChange={(val) => updateS3Provider({ forcePathStyle: val })}
+                disabled={isBusy}
+              />
+            </SettingsItem>
+          )}
 
           <SettingsItem
             title={t('settings.sync.vault_id_custom', { defaultValue: 'Target Vault ID' })}
