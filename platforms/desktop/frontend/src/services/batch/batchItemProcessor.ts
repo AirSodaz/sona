@@ -231,9 +231,7 @@ export class BatchItemProcessor {
       }
     } catch (error) {
       const isCancelled =
-        callbacks.isCancelRequested() ||
-        extractErrorMessage(error) === 'Task cancelled.' ||
-        extractErrorMessage(error).includes('Task cancelled');
+        callbacks.isCancelRequested() || extractErrorMessage(error).includes('Task cancelled');
       try {
         if (!isCancelled && currentSegments.length > 0) {
           await ensureHistorySaved();

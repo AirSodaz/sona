@@ -237,7 +237,6 @@ export class BatchQueueCoordinator {
     } catch (error) {
       const message = extractErrorMessage(error);
       const isCancelled =
-        message === 'Task cancelled.' ||
         message.includes('Task cancelled') ||
         this.ports.isTaskLedgerCancelRequested(this.ports.createBatchTaskLedgerId(itemId));
 

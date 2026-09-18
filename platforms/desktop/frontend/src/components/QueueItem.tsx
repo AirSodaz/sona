@@ -63,8 +63,8 @@ export const QueueItem = memo(function QueueItem({
       const confirmed = await useDialogStore.getState().confirm(
         t('batch.cancel_confirm_message', {
           filename: item.filename,
-          progress: Math.round(item.progress),
-          defaultValue: `"${item.filename}" is currently being transcribed (${Math.round(item.progress)}%). Stopping will discard current progress. Are you sure you want to stop and remove this file?`,
+          progress: Math.round(item.progress ?? 0),
+          defaultValue: `"${item.filename}" is currently being transcribed (${Math.round(item.progress ?? 0)}%). Stopping will discard current progress. Are you sure you want to stop and remove this file?`,
         }),
         {
           title: t('batch.cancel_confirm_title', { defaultValue: 'Stop Transcription?' }),
@@ -120,12 +120,12 @@ export const QueueItem = memo(function QueueItem({
           <div
             className="queue-item-progress"
             role="progressbar"
-            aria-valuenow={Math.round(item.progress)}
+            aria-valuenow={Math.round(item.progress ?? 0)}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-label={item.filename}
           >
-            <div className="queue-item-progress-fill" style={{ width: `${item.progress}%` }} />
+            <div className="queue-item-progress-fill" style={{ width: `${item.progress ?? 0}%` }} />
           </div>
         )}
 

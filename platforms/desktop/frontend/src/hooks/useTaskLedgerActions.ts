@@ -1,10 +1,13 @@
 import { useMemo } from 'react';
 import { retryAutomationTaskFromLedger } from '../services/automationTaskRetryService';
 import { retryLlmTaskFromLedger } from '../services/llmTaskRetryService';
+import { createBatchTaskLedgerId } from '../services/taskLedgerBuilders';
+import { cancelBatchTask } from '../services/tauri/recognizer';
 import type { UpdateStatus } from '../stores/appUpdaterStore';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useRecoveryStore } from '../stores/recoveryStore';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
+import type { BatchQueueItem } from '../types/batchQueue';
 import type { TaskLedgerRecord } from '../types/taskLedger';
 import { isTaskLedgerActionableStatus, isTaskLedgerActiveStatus } from '../types/taskLedger';
 
@@ -52,6 +55,8 @@ interface BatchAddOptions {
 export interface TaskCenterActionDependencies {
   t: TaskCenterTranslate;
   requestTaskCancel: (id: string) => Promise<void>;
+  cancelBatchTask?: (instanceId: string) => Promise<void>;
+  getBatchQueueItems?: () => BatchQueueItem[];
   removeTask: (id: string) => Promise<void>;
   resumeRecoveryItem: (id: string) => Promise<void>;
   discardRecoveryItem: (id: string) => Promise<void>;
@@ -183,7 +188,18 @@ export function createTaskCenterActionRegistry(
                 : deps.t('common.cancel'),
             variant: 'secondarySoft',
             disabled: !task.cancelable || task.status === 'cancelRequested',
-            run: () => deps.requestTaskCancel(task.id),
+            run: async () => {
+              if (task.kind === 'batchImport' || task.kind === 'automation') {
+                const items = deps.getBatchQueueItems?.() ?? [];
+                const queueItem = items.find(
+                  (item) => createBatchTaskLedgerId(item.id) === task.id || item.id === task.id
+                );
+                if (queueItem?.activeInstanceId) {
+                  void (deps.cancelBatchTask ?? cancelBatchTask)(queueItem.activeInstanceId);
+                }
+              }
+              await deps.requestTaskCancel(task.id);
+            },
           },
         ];
       }
@@ -313,6 +329,7 @@ export function useTaskLedgerActions({
   const resumeRecoveryItem = useRecoveryStore((state) => state.resumeItem);
   const discardRecoveryItem = useRecoveryStore((state) => state.discardItem);
   const addBatchFiles = useBatchQueueStore((state) => state.addFiles);
+  const queueItems = useBatchQueueStore((state) => state.queueItems);
 
   return useMemo(
     () =>
@@ -326,6 +343,11 @@ export function useTaskLedgerActions({
         addBatchFiles,
         retryLlmTask: retryLlmTaskFromLedger,
         installUpdate: updater.installUpdate,
+        cancelBatchTask,
+        getBatchQueueItems: () =>
+          (typeof useBatchQueueStore.getState === 'function'
+            ? useBatchQueueStore.getState().queueItems
+            : queueItems) ?? [],
         dismissUpdateNotification: updater.dismissNotification,
         relaunchToUpdate: updater.relaunchToUpdate,
         onOpenRecoveryCenter,
@@ -339,6 +361,7 @@ export function useTaskLedgerActions({
       discardRecoveryItem,
       onOpenAutomationSettings,
       onOpenRecoveryCenter,
+      queueItems,
       removeTask,
       requestTaskCancel,
       resumeRecoveryItem,
