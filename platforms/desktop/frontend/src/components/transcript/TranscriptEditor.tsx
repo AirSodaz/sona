@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { useAutoScroll } from '../../hooks/useAutoScroll';
 import { useTranscriptUIState } from '../../hooks/useTranscriptUIState';
-import { resolveCurrentSessionAudioPath } from '../../services/speakerService';
+import { resolveCurrentSessionAudioPath } from '../../services/sessionAudioService';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useSearchStore } from '../../stores/searchStore';
 import {
