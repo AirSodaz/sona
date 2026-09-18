@@ -36,6 +36,7 @@ struct TauriBatchTranscriptionObserver {
     emitter: Arc<dyn crate::platform::event::EventEmitterPort>,
     progress_path: String,
     instance_id: Option<String>,
+    cancel_rx: Option<tokio::sync::watch::Receiver<bool>>,
 }
 
 impl BatchTranscriptionObserver for TauriBatchTranscriptionObserver {
@@ -61,6 +62,13 @@ impl BatchTranscriptionObserver for TauriBatchTranscriptionObserver {
             .emitter
             .emit(&super::recognizer_output_event(instance_id), payload);
     }
+
+    fn is_cancelled(&self) -> bool {
+        self.cancel_rx
+            .as_ref()
+            .map(|rx| *rx.borrow())
+            .unwrap_or(false)
+    }
 }
 
 #[async_trait]
@@ -82,11 +90,18 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
             speaker_processing,
             instance_id,
         )?;
+        let cancel_rx = if let Some(id) = &request.instance_id {
+            Some((id.clone(), state.batch_cancel.register(id).await))
+        } else {
+            None
+        };
+
         let progress_path = request.file_path.to_string_lossy().into_owned();
         let observer = Arc::new(TauriBatchTranscriptionObserver {
             emitter,
             progress_path,
             instance_id: request.instance_id.clone(),
+            cancel_rx: cancel_rx.as_ref().map(|(_, rx)| rx.clone()),
         });
         observer.on_progress(0.0);
 
@@ -118,15 +133,6 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
         let transcriber = sona_application::local_asr::LocalBatchTranscriberRouter::new(
             super::local_asr_registry_default(),
         );
-
-        // Register with the cancel registry so an in-progress task can be
-        // interrupted. We deregister unconditionally in the `finally` block
-        // regardless of how the transcription ends.
-        let cancel_rx = if let Some(id) = &request.instance_id {
-            Some((id.clone(), state.batch_cancel.register(id).await))
-        } else {
-            None
-        };
 
         let transcribe_fut = transcriber.transcribe_with_observer(plan, observer.clone());
 
@@ -243,6 +249,7 @@ mod tests {
             emitter: emitter.clone(),
             progress_path: "C:/audio/demo.wav".to_string(),
             instance_id: Some("batch-1".to_string()),
+            cancel_rx: None,
         };
         let segment = TranscriptSegment {
             id: "segment-1".to_string(),

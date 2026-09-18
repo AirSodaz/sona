@@ -1,6 +1,7 @@
 import type { TFunction } from 'i18next';
 import { memo } from 'react';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
+import { useDialogStore } from '../stores/dialogStore';
 import { useProjectStore } from '../stores/projectStore';
 import type { BatchQueueItem, BatchQueueItemStatus } from '../types/batchQueue';
 import type { ProjectRecord } from '../types/project';
@@ -56,8 +57,26 @@ export const QueueItem = memo(function QueueItem({
     onActivate(item.id);
   };
 
-  const handleRemove = (e: React.MouseEvent) => {
+  const handleRemove = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (item.status === 'processing') {
+      const confirmed = await useDialogStore.getState().confirm(
+        t('batch.cancel_confirm_message', {
+          filename: item.filename,
+          progress: Math.round(item.progress ?? 0),
+          defaultValue: `"${item.filename}" is currently being transcribed (${Math.round(item.progress ?? 0)}%). Stopping will discard current progress. Are you sure you want to stop and remove this file?`,
+        }),
+        {
+          title: t('batch.cancel_confirm_title', { defaultValue: 'Stop Transcription?' }),
+          variant: 'warning',
+          confirmLabel: t('batch.stop_transcription', { defaultValue: 'Stop & Remove' }),
+          cancelLabel: t('batch.continue_transcribing', { defaultValue: 'Continue Transcribing' }),
+        }
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
     onRemove(item.id);
   };
 
@@ -101,12 +120,12 @@ export const QueueItem = memo(function QueueItem({
           <div
             className="queue-item-progress"
             role="progressbar"
-            aria-valuenow={Math.round(item.progress)}
+            aria-valuenow={Math.round(item.progress ?? 0)}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-label={item.filename}
           >
-            <div className="queue-item-progress-fill" style={{ width: `${item.progress}%` }} />
+            <div className="queue-item-progress-fill" style={{ width: `${item.progress ?? 0}%` }} />
           </div>
         )}
 

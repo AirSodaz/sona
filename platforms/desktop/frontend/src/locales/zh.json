@@ -271,7 +271,14 @@
     "clear_completed": "清除已完成",
     "clear_completed_hint": "仅清除已完成的文件 ({{count}})",
     "clear_all": "清除全部",
-    "clear_all_hint": "清空队列中的所有文件 ({{count}})"
+    "clear_all_hint": "清空队列中的所有文件 ({{count}})",
+    "cancel_confirm_title": "终止转录？",
+    "cancel_confirm_message": "“{{filename}}”正在转录中（已完成 {{progress}}%）。终止后当前进度将丢失，确定要终止并移除该文件吗？",
+    "stop_transcription": "终止并移除",
+    "continue_transcribing": "继续转录",
+    "clear_queue_confirm_title": "清空转录队列？",
+    "clear_queue_confirm_message": "队列中有正在转录的文件。清空队列将终止转录并丢失当前进度，确定要清空全部吗？",
+    "clear_all_confirm_action": "终止并清空"
   },
   "player": {
     "play": "播放",

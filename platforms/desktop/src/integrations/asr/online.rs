@@ -55,16 +55,42 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
         _save_to_path: Option<std::path::PathBuf>,
         request: AsrTranscriptionRequest,
         _speaker_processing: Option<sona_core::transcription::speaker::SpeakerProcessingConfig>,
-        _instance_id: Option<String>,
+        instance_id: Option<String>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+        let cancel_rx = if let Some(id) = &instance_id {
+            Some((id.clone(), state.batch_cancel.register(id).await))
+        } else {
+            None
+        };
         let started = Instant::now();
-        let output = sona_online_asr::OnlineAsrAdapter
-            .transcribe_batch(OnlineBatchTranscriptionRequest {
+        let transcribe_fut =
+            sona_online_asr::OnlineAsrAdapter.transcribe_batch(OnlineBatchTranscriptionRequest {
                 file_path: file_path.clone(),
                 request: request.clone(),
-            })
-            .await?;
+            });
 
+        let output = if let Some((id, mut rx)) = cancel_rx {
+            let result = tokio::select! {
+                result = transcribe_fut => result,
+                _ = async {
+                    loop {
+                        if *rx.borrow() {
+                            break;
+                        }
+                        if rx.changed().await.is_err() {
+                            break;
+                        }
+                        if *rx.borrow() {
+                            break;
+                        }
+                    }
+                } => Err(AsrPortError::runtime("Task cancelled.")),
+            };
+            state.batch_cancel.remove(&id).await;
+            result?
+        } else {
+            transcribe_fut.await?
+        };
         let mut segments =
             apply_timeline_normalization(output.segments, request.normalization_options);
         segments = TranscriptPostprocessor::compile(request.postprocess_options)

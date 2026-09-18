@@ -271,7 +271,14 @@
     "clear_completed": "清除已完成",
     "clear_completed_hint": "僅清除已完成的檔案 ({{count}})",
     "clear_all": "清除全部",
-    "clear_all_hint": "清空佇列中的所有檔案 ({{count}})"
+    "clear_all_hint": "清空佇列中的所有檔案 ({{count}})",
+    "cancel_confirm_title": "終止轉錄？",
+    "cancel_confirm_message": "「{{filename}}」正在轉錄中（已完成 {{progress}}%）。終止後目前進度將遺失，確定要終止並移除該檔案嗎？",
+    "stop_transcription": "終止並移除",
+    "continue_transcribing": "繼續轉錄",
+    "clear_queue_confirm_title": "清空轉錄佇列？",
+    "clear_queue_confirm_message": "佇列中有正在轉錄的檔案。清空佇列將終止轉錄並遺失目前進度，確定要清空全部嗎？",
+    "clear_all_confirm_action": "終止並清空"
   },
   "player": {
     "play": "播放",

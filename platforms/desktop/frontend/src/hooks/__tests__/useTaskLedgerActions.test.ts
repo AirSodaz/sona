@@ -232,6 +232,83 @@ describe('createTaskCenterActionRegistry', () => {
 
     expect(deps.removeTask).not.toHaveBeenCalled();
   });
+  it('cancels active batch task and calls cancelBatchTask when activeInstanceId exists', async () => {
+    const cancelBatchTask = vi.fn().mockResolvedValue(undefined);
+    const deps = makeDeps({
+      cancelBatchTask,
+      getBatchQueueItems: () => [
+        {
+          id: 'item-123',
+          filename: 'recording.mp3',
+          filePath: '/recording.mp3',
+          status: 'processing',
+          progress: 50,
+          segments: [],
+          projectId: null,
+          activeInstanceId: 'inst-abc',
+        },
+      ],
+    });
+    const registry = createTaskCenterActionRegistry(deps);
+
+    const task = makeTask({
+      id: 'batch-item-123',
+      kind: 'batchImport',
+      status: 'running',
+      cancelable: true,
+    });
+
+    const actions = registry.getLedgerTaskActions(task);
+    expect(actions.map((a) => a.id)).toEqual(['cancel']);
+
+    await getAction(actions, 'cancel').run();
+
+    expect(cancelBatchTask).toHaveBeenCalledWith('inst-abc');
+    expect(deps.requestTaskCancel).toHaveBeenCalledWith('batch-item-123');
+  });
+
+  it('cancels active batch task without calling cancelBatchTask when no activeInstanceId exists', async () => {
+    const cancelBatchTask = vi.fn().mockResolvedValue(undefined);
+    const deps = makeDeps({
+      cancelBatchTask,
+      getBatchQueueItems: () => [],
+    });
+    const registry = createTaskCenterActionRegistry(deps);
+
+    const task = makeTask({
+      id: 'batch-pending-item',
+      kind: 'batchImport',
+      status: 'running',
+      cancelable: true,
+    });
+
+    const actions = registry.getLedgerTaskActions(task);
+    await getAction(actions, 'cancel').run();
+
+    expect(cancelBatchTask).not.toHaveBeenCalled();
+    expect(deps.requestTaskCancel).toHaveBeenCalledWith('batch-pending-item');
+  });
+
+  it('cancels active LLM task without calling cancelBatchTask', async () => {
+    const cancelBatchTask = vi.fn().mockResolvedValue(undefined);
+    const deps = makeDeps({
+      cancelBatchTask,
+    });
+    const registry = createTaskCenterActionRegistry(deps);
+
+    const task = makeTask({
+      id: 'llm-running',
+      kind: 'llmSummary',
+      status: 'running',
+      cancelable: true,
+    });
+
+    const actions = registry.getLedgerTaskActions(task);
+    await getAction(actions, 'cancel').run();
+
+    expect(cancelBatchTask).not.toHaveBeenCalled();
+    expect(deps.requestTaskCancel).toHaveBeenCalledWith('llm-running');
+  });
 
   it('maps onboarding reminder state to onboard and dismiss actions', () => {
     const deps = makeDeps();

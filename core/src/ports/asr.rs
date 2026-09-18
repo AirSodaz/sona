@@ -228,6 +228,9 @@ pub trait BatchTranscriberPort: Send + Sync {
 pub trait BatchTranscriptionObserver: Send + Sync {
     fn on_progress(&self, progress: f32);
     fn on_transcript_update(&self, update: &TranscriptUpdate);
+    fn is_cancelled(&self) -> bool {
+        false
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]

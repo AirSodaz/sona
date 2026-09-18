@@ -236,11 +236,15 @@ export class BatchQueueCoordinator {
       }
     } catch (error) {
       const message = extractErrorMessage(error);
-      logger.error(`[BatchQueue] Failed to process ${item.filename}:`, error);
+      const isCancelled =
+        message.includes('Task cancelled') ||
+        this.ports.isTaskLedgerCancelRequested(this.ports.createBatchTaskLedgerId(itemId));
 
-      if (message === 'Task cancelled.') {
+      if (isCancelled) {
+        logger.info(`[BatchQueue] Task ${item.filename} cancelled.`);
         await this.settleCancelledItem(item, lifecyclePorts);
       } else {
+        logger.error(`[BatchQueue] Failed to process ${item.filename}:`, error);
         lifecyclePorts.setItemError(itemId, message);
         await this.notifyAutomationResult(item, 'error', lifecyclePorts.getQueueItems, message);
       }

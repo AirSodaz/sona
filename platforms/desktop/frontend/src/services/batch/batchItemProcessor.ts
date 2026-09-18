@@ -6,6 +6,7 @@ import type { AppConfig } from '../../types/config';
 import type { HistoryItem } from '../../types/history';
 import type { RecoveryItemStage } from '../../types/recovery';
 import type { TranscriptSegment } from '../../types/transcript';
+import { extractErrorMessage } from '../../utils/errorUtils';
 import type { ExportFormat } from '../../utils/exportFormats';
 import { logger } from '../../utils/logger';
 import { asrConfigService, isLlamaCppBatchRequest } from '../asrConfigService';
@@ -154,6 +155,8 @@ export class BatchItemProcessor {
       const tempDirectory = await tempDir();
       tempWavPath = isLlamaCpp ? undefined : await join(tempDirectory, `${uuidv4()}.wav`);
 
+      this.throwIfCancelRequested(callbacks);
+
       const segments = await this.ports.transcriptionService.transcribeFile(
         item.filePath,
         (progress) => {
@@ -227,8 +230,10 @@ export class BatchItemProcessor {
         await this.ports.summaryService.persistSummary(savedHistoryId);
       }
     } catch (error) {
+      const isCancelled =
+        callbacks.isCancelRequested() || extractErrorMessage(error).includes('Task cancelled');
       try {
-        if (currentSegments.length > 0) {
+        if (!isCancelled && currentSegments.length > 0) {
           await ensureHistorySaved();
           await persistHistorySnapshot();
         }
