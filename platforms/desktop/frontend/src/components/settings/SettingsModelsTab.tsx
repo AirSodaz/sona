@@ -1179,7 +1179,11 @@ export function SettingsModelsTab({
                 type="button"
                 className="settings-speaker-profiles-btn"
                 onClick={() => navContext?.navigateToTab('vocabulary')}
-                title={t('settings.speaker_manage_profiles', {
+                data-tooltip={t('settings.speaker_manage_profiles', {
+                  defaultValue: 'Manage Voiceprints',
+                })}
+                data-tooltip-pos="top"
+                aria-label={t('settings.speaker_manage_profiles', {
                   defaultValue: 'Manage Voiceprints',
                 })}
               >
@@ -1286,84 +1290,61 @@ export function SettingsModelsTab({
 
               return (
                 <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-end',
-                    gap: '6px',
-                  }}
+                  className={`settings-sensitivity-control${!isEmbeddingActive ? ' is-disabled' : ''}`}
+                  role="radiogroup"
+                  aria-label={t('settings.speaker_sensitivity_label', {
+                    defaultValue: 'Separation Sensitivity',
+                  })}
+                  data-tooltip={!isEmbeddingActive ? disabledHint : undefined}
+                  data-tooltip-pos="top"
+                  data-tooltip-multiline
+                  tabIndex={!isEmbeddingActive ? 0 : undefined}
                 >
-                  <div
-                    className={`settings-sensitivity-control${!isEmbeddingActive ? ' is-disabled' : ''}`}
-                    role="radiogroup"
-                    aria-label={t('settings.speaker_sensitivity_label', {
-                      defaultValue: 'Separation Sensitivity',
-                    })}
-                    data-tooltip={!isEmbeddingActive ? disabledHint : undefined}
-                    data-tooltip-pos="top"
-                    data-tooltip-multiline
-                    tabIndex={!isEmbeddingActive ? 0 : undefined}
-                  >
-                    {[
-                      {
-                        value: 'permissive' as const,
-                        label: t('settings.speaker_sensitivity_permissive', {
-                          defaultValue: 'Permissive',
-                        }),
-                        desc: t('settings.speaker_sensitivity_permissive_desc', {
-                          defaultValue: 'Tends to merge similar voices',
-                        }),
-                      },
-                      {
-                        value: 'balanced' as const,
-                        label: t('settings.speaker_sensitivity_balanced', {
-                          defaultValue: 'Balanced',
-                        }),
-                        desc: t('settings.speaker_sensitivity_balanced_desc', {
-                          defaultValue: 'Recommended model baseline',
-                        }),
-                      },
-                      {
-                        value: 'strict' as const,
-                        label: t('settings.speaker_sensitivity_strict', {
-                          defaultValue: 'Strict',
-                        }),
-                        desc: t('settings.speaker_sensitivity_strict_desc', {
-                          defaultValue: 'Differentiates close speakers',
-                        }),
-                      },
-                    ].map((item) => (
-                      <button
-                        key={item.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={currentSensitivity === item.value}
-                        className={`settings-sensitivity-btn${
-                          currentSensitivity === item.value ? ' is-active' : ''
-                        }`}
-                        onClick={() => updateConfig({ speakerDiarizationSensitivity: item.value })}
-                        disabled={localModelActionsDisabled || !isEmbeddingActive}
-                        title={isEmbeddingActive ? item.desc : undefined}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                  {isEmbeddingActive && (
-                    <span className="settings-sensitivity-caption">
-                      {currentSensitivity === 'permissive'
-                        ? t('settings.speaker_sensitivity_permissive_desc', {
-                            defaultValue: 'Tends to merge similar voices',
-                          })
-                        : currentSensitivity === 'strict'
-                          ? t('settings.speaker_sensitivity_strict_desc', {
-                              defaultValue: 'Differentiates close speakers',
-                            })
-                          : t('settings.speaker_sensitivity_balanced_desc', {
-                              defaultValue: 'Recommended model baseline',
-                            })}
-                    </span>
-                  )}
+                  {[
+                    {
+                      value: 'permissive' as const,
+                      label: t('settings.speaker_sensitivity_permissive', {
+                        defaultValue: 'Permissive',
+                      }),
+                      desc: t('settings.speaker_sensitivity_permissive_desc', {
+                        defaultValue: 'Tends to merge similar voices',
+                      }),
+                    },
+                    {
+                      value: 'balanced' as const,
+                      label: t('settings.speaker_sensitivity_balanced', {
+                        defaultValue: 'Balanced',
+                      }),
+                      desc: t('settings.speaker_sensitivity_balanced_desc', {
+                        defaultValue: 'Recommended model baseline',
+                      }),
+                    },
+                    {
+                      value: 'strict' as const,
+                      label: t('settings.speaker_sensitivity_strict', {
+                        defaultValue: 'Strict',
+                      }),
+                      desc: t('settings.speaker_sensitivity_strict_desc', {
+                        defaultValue: 'Differentiates close speakers',
+                      }),
+                    },
+                  ].map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={currentSensitivity === item.value}
+                      className={`settings-sensitivity-btn${
+                        currentSensitivity === item.value ? ' is-active' : ''
+                      }`}
+                      onClick={() => updateConfig({ speakerDiarizationSensitivity: item.value })}
+                      disabled={localModelActionsDisabled || !isEmbeddingActive}
+                      data-tooltip={isEmbeddingActive ? item.desc : undefined}
+                      data-tooltip-pos="top"
+                    >
+                      {item.label}
+                    </button>
+                  ))}
                 </div>
               );
             })()}

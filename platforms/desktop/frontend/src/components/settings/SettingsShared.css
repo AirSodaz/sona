@@ -346,6 +346,18 @@
   border-color: var(--color-border-hover, var(--color-border));
 }
 
+.settings-speaker-profiles-btn[data-tooltip]::after {
+  left: auto;
+  right: 0;
+  transform: none;
+  white-space: nowrap;
+}
+
+.settings-speaker-profiles-btn[data-tooltip]:hover::after,
+.settings-speaker-profiles-btn[data-tooltip]:focus-visible::after {
+  transform: translateY(-4px);
+}
+
 /* Sensitivity Segmented Control */
 .settings-sensitivity-control {
   display: inline-flex;
@@ -413,6 +425,31 @@
 .settings-sensitivity-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.settings-sensitivity-btn[data-tooltip]::after {
+  white-space: nowrap;
+}
+
+.settings-sensitivity-btn:first-child[data-tooltip]::after {
+  left: 0;
+  transform: none;
+}
+
+.settings-sensitivity-btn:first-child[data-tooltip]:hover::after,
+.settings-sensitivity-btn:first-child[data-tooltip]:focus-visible::after {
+  transform: translateY(-4px);
+}
+
+.settings-sensitivity-btn:last-child[data-tooltip]::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.settings-sensitivity-btn:last-child[data-tooltip]:hover::after,
+.settings-sensitivity-btn:last-child[data-tooltip]:focus-visible::after {
+  transform: translateY(-4px);
 }
 
 .settings-sensitivity-caption {

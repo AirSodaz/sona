@@ -5,6 +5,7 @@ import { useConfigStore } from '../../../stores/configStore';
 import { useDialogStore } from '../../../stores/dialogStore';
 import { setTestConfig } from '../../../test-utils/configTestUtils';
 import { SettingsModelsTab } from '../SettingsModelsTab';
+import { SettingsNavigationProvider } from '../SettingsNavigationContext';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -279,7 +280,9 @@ function renderTab(installedModels: Set<string>, managerOverrides: Record<string
 
     return (
       <ModelManagerContext.Provider value={managerValue}>
-        <SettingsModelsTab />
+        <SettingsNavigationProvider value={{ activeTab: 'models', navigateToTab: vi.fn() }}>
+          <SettingsModelsTab />
+        </SettingsNavigationProvider>
       </ModelManagerContext.Provider>
     );
   }
@@ -625,7 +628,30 @@ describe('SettingsModelsTab speaker model selections', () => {
       expect(screen.getByText('Enabled')).toBeDefined();
     });
 
+    const manageBtn = screen.getByRole('button', { name: 'Manage Voiceprints' });
+    expect(manageBtn.getAttribute('data-tooltip')).toBe('Manage Voiceprints');
+    expect(manageBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(manageBtn.getAttribute('title')).toBeNull();
+
+    const permissiveBtn = screen.getByRole('radio', { name: 'Permissive' });
+    const balancedBtn = screen.getByRole('radio', { name: 'Balanced' });
     const strictBtn = screen.getByRole('radio', { name: 'Strict' });
+
+    expect(permissiveBtn.getAttribute('data-tooltip')).toBe('Tends to merge similar voices');
+    expect(permissiveBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(permissiveBtn.getAttribute('title')).toBeNull();
+
+    expect(balancedBtn.getAttribute('data-tooltip')).toBe('Recommended model baseline');
+    expect(balancedBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(balancedBtn.getAttribute('title')).toBeNull();
+
+    expect(strictBtn.getAttribute('data-tooltip')).toBe('Differentiates close speakers');
+    expect(strictBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(strictBtn.getAttribute('title')).toBeNull();
+
+    // Ensure the caption below is hidden/removed
+    expect(document.querySelector('.settings-sensitivity-caption')).toBeNull();
+
     expect((strictBtn as HTMLButtonElement).disabled).toBe(false);
     expect(strictBtn.getAttribute('aria-checked')).toBe('false');
     fireEvent.click(strictBtn);
@@ -665,6 +691,9 @@ describe('SettingsModelsTab speaker model selections', () => {
     expect((permissiveBtn as HTMLButtonElement).disabled).toBe(true);
     expect((balancedBtn as HTMLButtonElement).disabled).toBe(true);
     expect((strictBtn as HTMLButtonElement).disabled).toBe(true);
+    expect(permissiveBtn.getAttribute('data-tooltip')).toBeNull();
+    expect(balancedBtn.getAttribute('data-tooltip')).toBeNull();
+    expect(strictBtn.getAttribute('data-tooltip')).toBeNull();
   });
 
   it('allows selecting and clearing CTC alignment model in live scenario', async () => {

@@ -339,10 +339,11 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                     <button
                       className="btn btn-icon btn-danger-soft"
                       onClick={() => void handleDeleteProfile(profile)}
-                      title={t('settings.delete_speaker_profile', {
+                      data-tooltip={t('settings.delete_speaker_profile', {
                         name: profile.name,
                         defaultValue: 'Delete {{name}}',
                       })}
+                      data-tooltip-pos="top"
                       aria-label={t('settings.delete_speaker_profile', {
                         name: profile.name,
                         defaultValue: 'Delete {{name}}',
@@ -426,6 +427,8 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
                             className="btn btn-icon btn-danger-soft"
                             onClick={() => void handleDeleteSample(profile.id, sample.id)}
                             aria-label={t('common.delete')}
+                            data-tooltip={t('common.delete')}
+                            data-tooltip-pos="top"
                           >
                             <Trash2 size={14} />
                           </button>
