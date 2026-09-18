@@ -16,6 +16,7 @@ export interface CaptionWindowStyle {
   width: number;
   fontSize: number;
   color: string;
+  backgroundColor: string;
   backgroundOpacity: number;
 }
 
@@ -29,6 +30,7 @@ const DEFAULT_CAPTION_STYLE: CaptionWindowStyle = {
   width: 800,
   fontSize: 24,
   color: '#ffffff',
+  backgroundColor: '#000000',
   backgroundOpacity: 0.6,
 };
 
@@ -43,6 +45,7 @@ function areCaptionStylesEqual(left: CaptionWindowStyle, right: CaptionWindowSty
     left.width === right.width &&
     left.fontSize === right.fontSize &&
     left.color === right.color &&
+    left.backgroundColor === right.backgroundColor &&
     left.backgroundOpacity === right.backgroundOpacity
   );
 }
@@ -135,12 +138,14 @@ export class CaptionWindowService {
     width?: number;
     fontSize?: number;
     color?: string;
+    backgroundColor?: string;
     backgroundOpacity?: number;
   }) {
     logger.info('[CaptionWindowService] Opening caption window', {
       width: options?.width ?? this.state.style.width,
       fontSize: options?.fontSize ?? this.state.style.fontSize,
       color: options?.color ?? this.state.style.color,
+      backgroundColor: options?.backgroundColor ?? this.state.style.backgroundColor,
       backgroundOpacity: options?.backgroundOpacity ?? this.state.style.backgroundOpacity,
       alwaysOnTop: options?.alwaysOnTop ?? true,
       lockWindow: options?.lockWindow ?? false,
@@ -150,6 +155,7 @@ export class CaptionWindowService {
       width: options?.width ?? this.state.style.width,
       fontSize: options?.fontSize ?? this.state.style.fontSize,
       color: options?.color ?? this.state.style.color,
+      backgroundColor: options?.backgroundColor ?? this.state.style.backgroundColor,
       backgroundOpacity: options?.backgroundOpacity ?? this.state.style.backgroundOpacity,
     };
 
@@ -231,12 +237,14 @@ export class CaptionWindowService {
     width?: number;
     fontSize?: number;
     color?: string;
+    backgroundColor?: string;
     backgroundOpacity?: number;
   }) {
     const nextStyle: CaptionWindowStyle = {
       width: style.width ?? this.state.style.width,
       fontSize: style.fontSize ?? this.state.style.fontSize,
       color: style.color ?? this.state.style.color,
+      backgroundColor: style.backgroundColor ?? this.state.style.backgroundColor,
       backgroundOpacity: style.backgroundOpacity ?? this.state.style.backgroundOpacity,
     };
 

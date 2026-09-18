@@ -111,6 +111,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
     config.captionWindowWidth,
     config.captionFontSize,
     config.captionFontColor,
+    config.captionBackgroundColor,
     config.captionBackgroundOpacity,
     isCaptionMode,
     isInitializing,

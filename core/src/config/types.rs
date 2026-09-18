@@ -236,6 +236,8 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caption_font_color: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_background_color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caption_background_opacity: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,

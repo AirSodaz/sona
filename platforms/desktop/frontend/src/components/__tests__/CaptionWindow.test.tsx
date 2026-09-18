@@ -6,6 +6,7 @@ const defaultStyle = {
   width: 800,
   fontSize: 24,
   color: '#ffffff',
+  backgroundColor: '#000000',
   backgroundOpacity: 0.6,
 };
 
@@ -314,5 +315,26 @@ describe('CaptionWindow', () => {
       mocks.mockSetSize.mock.calls[mocks.mockSetSize.mock.calls.length - 1]?.[0];
     expect(widthChangedCall?.width).toBe(1920);
     expect(widthChangedCall?.height).toBe(180);
+  });
+
+  it('applies custom background color and opacity as rgba', async () => {
+    const { container } = render(<CaptionWindow />);
+
+    await act(async () => {
+      mocks.listenCallbacks['caption:state']?.({
+        payload: {
+          revision: 2,
+          segments: [],
+          style: {
+            ...defaultStyle,
+            backgroundColor: '#ff0000',
+            backgroundOpacity: 0.8,
+          },
+        },
+      });
+    });
+
+    const body = container.querySelector('.caption-window-body') as HTMLElement;
+    expect(body.style.background).toBe('rgba(255, 0, 0, 0.8)');
   });
 });

@@ -212,6 +212,7 @@
     "font_color": "字體顏色",
     "font_color_hex": "十六進位顏色碼",
     "font_color_hex_placeholder": "#RRGGBB",
+    "background_color": "背景顏色",
     "background_opacity": "背景不透明度",
     "subtitle_settings": "字幕設定"
   },

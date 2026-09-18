@@ -1,24 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
 
-import { Pipette } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { PROJECT_COLOR_PRESETS } from '../constants/projects';
-import { ColorPicker } from './ColorPicker';
+import { ColorSwatchPicker } from './ColorSwatchPicker';
 import { ChevronDownIcon, CodeIcon, FileTextIcon, FolderIcon, MicIcon } from './Icons';
 import { ModalPortal } from './ModalPortal';
-
-function getContrastTextColor(hex?: string): string {
-  if (!hex) return '#ffffff';
-  const cleaned = hex.replace('#', '');
-  if (cleaned.length !== 6) return '#ffffff';
-  const r = parseInt(cleaned.slice(0, 2), 16);
-  const g = parseInt(cleaned.slice(2, 4), 16);
-  const b = parseInt(cleaned.slice(4, 6), 16);
-  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-  return yiq >= 150 ? '#0f172a' : '#ffffff';
-}
 
 export const SYSTEM_ICONS = [
   {
@@ -100,9 +87,7 @@ export function IconPicker({
   const [customEmoji, setCustomEmoji] = useState('');
   const buttonRef = useRef<HTMLButtonElement>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const customColorBtnRef = useRef<HTMLButtonElement>(null);
   const [popoverStyle, setPopoverStyle] = useState<React.CSSProperties>({});
-  const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const isPickingColorRef = useRef(false);
   useLayoutEffect(() => {
     if (isPickerOpen && buttonRef.current) {
@@ -153,7 +138,6 @@ export function IconPicker({
         !buttonRef.current.contains(target)
       ) {
         setIsPickerOpen(false);
-        setIsColorPickerOpen(false);
       }
     };
 
@@ -167,7 +151,6 @@ export function IconPicker({
       }
       if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
         setIsPickerOpen(false);
-        setIsColorPickerOpen(false);
       }
     };
 
@@ -242,81 +225,12 @@ export function IconPicker({
                 >
                   {t('projects.tag_color', { defaultValue: 'Color' })}
                 </div>
-                <div className="project-color-swatches" style={{ marginTop: 0 }}>
-                  {PROJECT_COLOR_PRESETS.map((presetColor) => (
-                    <button
-                      key={presetColor}
-                      type="button"
-                      className={`project-color-swatch ${color.toLowerCase() === presetColor.toLowerCase() ? 'active' : ''}`}
-                      style={{ backgroundColor: presetColor }}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        onColorChange(presetColor);
-                      }}
-                      data-tooltip={presetColor}
-                      data-tooltip-pos="bottom"
-                      aria-label={presetColor}
-                    />
-                  ))}
-                  <span className="project-color-divider" aria-hidden="true" />
-                  {(() => {
-                    const isCustom = Boolean(
-                      color &&
-                        !PROJECT_COLOR_PRESETS.some(
-                          (preset) => preset.toLowerCase() === color.toLowerCase()
-                        )
-                    );
-                    const customColorLabel = t('common.custom_color', {
-                      defaultValue: 'Custom color',
-                    });
-                    const iconColor = isCustom ? getContrastTextColor(color) : '#ffffff';
-                    return (
-                      <button
-                        type="button"
-                        ref={customColorBtnRef}
-                        className={`project-custom-color-swatch ${isCustom ? 'active' : ''}`}
-                        aria-label={customColorLabel}
-                        data-tooltip={
-                          isCustom
-                            ? `${customColorLabel}: ${color.toUpperCase()}`
-                            : customColorLabel
-                        }
-                        data-tooltip-pos="bottom"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          setIsColorPickerOpen((prev) => !prev);
-                        }}
-                        style={{
-                          background: isCustom
-                            ? color
-                            : 'conic-gradient(from 180deg at 50% 50%, #f43f5e 0deg, #ec4899 45deg, #8b5cf6 90deg, #6366f1 135deg, #06b6d4 180deg, #10b981 225deg, #f59e0b 270deg, #f43f5e 360deg)',
-                        }}
-                      >
-                        <span className="project-custom-color-badge" aria-hidden="true">
-                          <Pipette
-                            size={11}
-                            strokeWidth={2.4}
-                            style={{
-                              color: iconColor,
-                              filter: isCustom
-                                ? undefined
-                                : 'drop-shadow(0 1px 1px rgba(0,0,0,0.5))',
-                            }}
-                          />
-                        </span>
-                      </button>
-                    );
-                  })()}
-                </div>
-                <ColorPicker
-                  isOpen={isColorPickerOpen}
-                  color={color || '#6366F1'}
-                  onChange={(newColor) => onColorChange(newColor)}
-                  onClose={() => setIsColorPickerOpen(false)}
+                <ColorSwatchPicker
+                  color={color}
+                  onChange={onColorChange}
                   onPickingChange={(isPicking) => {
                     isPickingColorRef.current = isPicking;
                   }}
-                  anchorRef={customColorBtnRef}
                 />
               </div>
             )}

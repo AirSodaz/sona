@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useVoiceTypingReadiness } from '../../hooks/useVoiceTypingReadiness';
 import { useCaptionConfig, useSetConfig, useVoiceTypingConfig } from '../../stores/configStore';
 import type { VoiceTypingRuntimeErrorSource } from '../../stores/voiceTypingRuntimeStore';
+import { ColorSwatchPicker } from '../ColorSwatchPicker';
 import { Dropdown } from '../Dropdown';
 import { SubtitleIcon } from '../Icons';
 import { Switch } from '../Switch';
@@ -181,6 +182,7 @@ export function SettingsSubtitleTab(): React.JSX.Element {
   const captionWindowWidth = config.captionWindowWidth ?? 800;
   const captionFontSize = config.captionFontSize ?? 24;
   const captionFontColor = config.captionFontColor || '#ffffff';
+  const captionBackgroundColor = config.captionBackgroundColor || '#000000';
   const captionBackgroundOpacity = config.captionBackgroundOpacity ?? 0.6;
 
   return (
@@ -256,44 +258,19 @@ export function SettingsSubtitleTab(): React.JSX.Element {
         </SettingsItem>
 
         <SettingsItem title={t('live.font_color')}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div
-              style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: 'var(--radius-sm)',
-                border: '1px solid var(--color-border)',
-                overflow: 'hidden',
-                flexShrink: 0,
-              }}
-            >
-              <input
-                type="color"
-                value={captionFontColor}
-                onChange={(e) => updateConfig({ captionFontColor: e.target.value })}
-                aria-label={t('live.font_color')}
-                style={{
-                  width: '150%',
-                  height: '150%',
-                  padding: 0,
-                  margin: '-25%',
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: 'none',
-                }}
-              />
-            </div>
-            <input
-              type="text"
-              value={captionFontColor}
-              onChange={(e) => updateConfig({ captionFontColor: e.target.value })}
-              placeholder={t('live.font_color_hex_placeholder')}
-              maxLength={7}
-              aria-label={t('live.font_color_hex')}
-              className="settings-input"
-              style={{ width: '100px', fontFamily: 'monospace', textAlign: 'center' }}
-            />
-          </div>
+          <ColorSwatchPicker
+            value={captionFontColor}
+            onChange={(color) => updateConfig({ captionFontColor: color })}
+            aria-label={t('live.font_color')}
+          />
+        </SettingsItem>
+
+        <SettingsItem title={t('live.background_color')}>
+          <ColorSwatchPicker
+            value={captionBackgroundColor}
+            onChange={(color) => updateConfig({ captionBackgroundColor: color })}
+            aria-label={t('live.background_color')}
+          />
         </SettingsItem>
 
         <SettingsItem title={t('live.background_opacity')}>

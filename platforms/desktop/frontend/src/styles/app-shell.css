@@ -345,28 +345,37 @@
 .project-custom-color-input::-webkit-color-swatch {
   border: none;
 }
-.icon-picker-popover [data-tooltip] {
+.icon-picker-popover [data-tooltip],
+.project-color-swatches [data-tooltip] {
   position: relative;
 }
 .icon-picker-popover [data-tooltip]:hover,
-.icon-picker-popover [data-tooltip]:focus-visible {
+.icon-picker-popover [data-tooltip]:focus-visible,
+.project-color-swatches [data-tooltip]:hover,
+.project-color-swatches [data-tooltip]:focus-visible {
   z-index: 10;
 }
-.icon-picker-popover .project-color-swatches [data-tooltip]:first-child::after {
+.icon-picker-popover .project-color-swatches [data-tooltip]:first-child::after,
+.project-color-swatches [data-tooltip]:first-child::after {
   left: 0;
   transform: none;
 }
 .icon-picker-popover .project-color-swatches [data-tooltip]:first-child:hover::after,
-.icon-picker-popover .project-color-swatches [data-tooltip]:first-child:focus-visible::after {
+.icon-picker-popover .project-color-swatches [data-tooltip]:first-child:focus-visible::after,
+.project-color-swatches [data-tooltip]:first-child:hover::after,
+.project-color-swatches [data-tooltip]:first-child:focus-visible::after {
   transform: translateY(4px);
 }
-.icon-picker-popover .project-color-swatches [data-tooltip]:last-child::after {
+.icon-picker-popover .project-color-swatches [data-tooltip]:last-child::after,
+.project-color-swatches [data-tooltip]:last-child::after {
   left: auto;
   right: 0;
   transform: none;
 }
 .icon-picker-popover .project-color-swatches [data-tooltip]:last-child:hover::after,
-.icon-picker-popover .project-color-swatches [data-tooltip]:last-child:focus-visible::after {
+.icon-picker-popover .project-color-swatches [data-tooltip]:last-child:focus-visible::after,
+.project-color-swatches [data-tooltip]:last-child:hover::after,
+.project-color-swatches [data-tooltip]:last-child:focus-visible::after {
   transform: translateY(4px);
 }
 .project-pipeline-section {

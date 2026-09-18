@@ -212,6 +212,7 @@
     "font_color": "글꼴 색상",
     "font_color_hex": "16진수 색상 코드",
     "font_color_hex_placeholder": "#RRGGBB",
+    "background_color": "배경 색상",
     "background_opacity": "배경 불투명도",
     "subtitle_settings": "자막 설정"
   },

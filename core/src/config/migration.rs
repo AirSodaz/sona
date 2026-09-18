@@ -425,6 +425,14 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             json!(string_or_default(&parsed, "captionFontColor", "#ffffff")),
         ),
         (
+            "captionBackgroundColor",
+            json!(string_or_default(
+                &parsed,
+                "captionBackgroundColor",
+                "#000000"
+            )),
+        ),
+        (
             "captionBackgroundOpacity",
             json!(number_f64_or_default(
                 &parsed,
@@ -667,6 +675,7 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "batchAlignmentModelPath",
         "modelDownloadMirror",
         "captionFontColor",
+        "captionBackgroundColor",
         "language",
         "summaryTemplateId",
         "translationLanguage",

@@ -34,6 +34,7 @@ function buildCaptionWindowOptions(config: AppConfig): CaptionWindowOpenOptions 
     width: config.captionWindowWidth,
     fontSize: config.captionFontSize,
     color: config.captionFontColor,
+    backgroundColor: config.captionBackgroundColor,
     backgroundOpacity: config.captionBackgroundOpacity,
   };
 }
@@ -42,17 +43,20 @@ function buildCaptionWindowStyle({
   width,
   fontSize,
   color,
+  backgroundColor,
   backgroundOpacity,
 }: {
   width?: number;
   fontSize?: number;
   color?: string;
+  backgroundColor?: string;
   backgroundOpacity?: number;
 }): CaptionWindowStyleOptions {
   return {
     width,
     fontSize,
     color,
+    backgroundColor,
     backgroundOpacity,
   };
 }
@@ -336,6 +340,7 @@ class CaptionSessionRuntime {
         width: config.captionWindowWidth,
         fontSize: config.captionFontSize,
         color: config.captionFontColor,
+        backgroundColor: config.captionBackgroundColor,
         backgroundOpacity: config.captionBackgroundOpacity,
       })
     );

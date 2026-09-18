@@ -138,6 +138,7 @@ describe('captionSessionRuntime', () => {
       width: config.captionWindowWidth,
       fontSize: config.captionFontSize,
       color: config.captionFontColor,
+      backgroundColor: config.captionBackgroundColor,
       backgroundOpacity: config.captionBackgroundOpacity,
     });
   });

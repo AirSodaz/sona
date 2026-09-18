@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsSubtitleTab } from '../settings/SettingsSubtitleTab';
 
@@ -50,6 +50,7 @@ vi.mock('../../stores/configStore', () => ({
     captionWindowWidth: 800,
     captionFontSize: 24,
     captionFontColor: '#ffffff',
+    captionBackgroundColor: '#000000',
     captionBackgroundOpacity: 0.6,
   }),
   useVoiceTypingConfig: () => ({
@@ -77,8 +78,8 @@ describe('SettingsSubtitleTab', () => {
     screen.getByText('live.window_width');
     screen.getByText('live.font_size');
     screen.getByText('live.font_color');
+    screen.getByText('live.background_color');
     screen.getByText('settings.enable_voice_typing');
-    screen.getByText('settings.voice_typing_shortcut');
     screen.getByText('settings.voice_typing_mode');
     screen.getByText('settings.voice_typing_availability');
   });
@@ -122,17 +123,76 @@ describe('SettingsSubtitleTab', () => {
     expect(fontRange).toBeNull();
   });
 
-  it('renders color picker with correct structure and labels', () => {
+  it('renders color swatch picker with correct structure and allows changing font color', () => {
     render(<SettingsSubtitleTab />);
 
-    const colorInput = screen.getByLabelText('live.font_color');
-    expect(colorInput.getAttribute('type')).toBe('color');
-    expect(colorInput.getAttribute('value')).toBe('#ffffff');
+    // Font color container exists
+    const fontColorContainer = screen.getByLabelText('live.font_color');
+    expect(fontColorContainer).toBeDefined();
+    expect(fontColorContainer.className).toContain('project-color-swatches');
 
-    const textInput = screen.getByLabelText('live.font_color_hex');
-    expect(textInput.getAttribute('type')).toBe('text');
-    expect(textInput.getAttribute('value')).toBe('#ffffff');
-    expect(textInput.classList.contains('settings-input')).toBe(true);
+    // Preset color swatches are rendered within font color picker
+    const emeraldSwatch = within(fontColorContainer).getByRole('button', { name: '#10B981' });
+    expect(emeraldSwatch).toBeDefined();
+
+    // Clicking a preset color updates captionFontColor
+    fireEvent.click(emeraldSwatch);
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionFontColor: '#10B981' });
+
+    // Custom color button is rendered with project-custom-color-swatch class
+    const customColorBtn = within(fontColorContainer).getByRole('button', {
+      name: 'common.custom_color',
+    });
+    expect(customColorBtn.className).toContain('project-custom-color-swatch');
+
+    // Clicking custom color button opens ColorPicker
+    fireEvent.click(customColorBtn);
+    expect(document.querySelector('.sona-color-picker-popover')).not.toBeNull();
+
+    // Changing color via ColorPicker updates captionFontColor
+    const toggleBtn = screen.getByLabelText('Toggle RGB / HEX');
+    fireEvent.click(toggleBtn);
+    const hexInput = document.querySelector(
+      '.sona-color-picker-popover input[type="text"]'
+    ) as HTMLInputElement;
+    fireEvent.change(hexInput, { target: { value: '#FFE600' } });
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionFontColor: '#FFE600' });
+  });
+
+  it('renders color swatch picker for background color and allows changing it', () => {
+    render(<SettingsSubtitleTab />);
+
+    // Background color container exists
+    const bgColorContainer = screen.getByLabelText('live.background_color');
+    expect(bgColorContainer).toBeDefined();
+    expect(bgColorContainer.className).toContain('project-color-swatches');
+
+    // Preset color swatches are rendered within background color picker
+    const cyanSwatch = within(bgColorContainer).getByRole('button', { name: '#06B6D4' });
+    expect(cyanSwatch).toBeDefined();
+
+    // Clicking a preset color updates captionBackgroundColor
+    fireEvent.click(cyanSwatch);
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionBackgroundColor: '#06B6D4' });
+
+    // Custom color button is rendered
+    const customColorBtn = within(bgColorContainer).getByRole('button', {
+      name: 'common.custom_color',
+    });
+    expect(customColorBtn.className).toContain('project-custom-color-swatch');
+
+    // Clicking custom color button opens ColorPicker
+    fireEvent.click(customColorBtn);
+    expect(document.querySelector('.sona-color-picker-popover')).not.toBeNull();
+
+    // Changing color via ColorPicker updates captionBackgroundColor
+    const toggleBtn = screen.getByLabelText('Toggle RGB / HEX');
+    fireEvent.click(toggleBtn);
+    const hexInput = document.querySelector(
+      '.sona-color-picker-popover input[type="text"]'
+    ) as HTMLInputElement;
+    fireEvent.change(hexInput, { target: { value: '#1A1A1A' } });
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionBackgroundColor: '#1A1A1A' });
   });
 
   it('updates voice typing settings from the combined page', () => {

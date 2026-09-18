@@ -212,6 +212,7 @@
     "font_color": "フォントの色",
     "font_color_hex": "16進数のカラーコード",
     "font_color_hex_placeholder": "#RRGGBB",
+    "background_color": "背景色",
     "background_opacity": "背景の不透明度",
     "subtitle_settings": "字幕設定"
   },

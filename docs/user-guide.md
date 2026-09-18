@@ -96,7 +96,7 @@ Use `Live Record` when you want to capture speech in real time and see transcrip
 
 - `Live Caption` is the `System Audio Captions` toggle on the `Live Record` page, and it is useful when you mainly want a floating subtitle window for system audio.
 - You can turn it on without starting a recording first. If you later start `Live Record`, both can run in parallel.
-- `Settings > Subtitle Settings` controls caption startup behavior, always-on-top, click-through, font size, width, color, and background transparency.
+- `Settings > Subtitle Settings` controls caption startup behavior, always-on-top, click-through, font size, width, font/background color, and background transparency.
 
 ### Result
 
@@ -344,7 +344,7 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 - `Settings > Input Device`
   microphone selection, system audio selection, microphone boost, `Keep Microphone Active`, mute during recording
 - `Settings > Subtitle Settings`
-  live caption startup, click-through lock, always-on-top, font size, width, color, background transparency
+  live caption startup, click-through lock, always-on-top, font size, width, font/background color, background transparency
 - `Settings > Voice Typing`
   enable `Voice Typing`, assign its global shortcut, choose `Push to Talk (Hold)` or `Toggle (Press once)`, and check readiness
 - `Settings > Model Settings`

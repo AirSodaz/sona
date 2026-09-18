@@ -7,6 +7,7 @@ import {
 } from '../services/captionWindowService';
 import { getCurrentWindow, PhysicalSize } from '../services/tauri/platform/windows';
 import type { TranscriptSegment } from '../types/transcript';
+import { hexToRgba } from '../utils/colorUtils';
 import { logger } from '../utils/logger';
 
 /**
@@ -124,7 +125,10 @@ export function CaptionWindow() {
         minHeight: 'auto',
         userSelect: 'none',
         cursor: 'default',
-        background: `rgba(0, 0, 0, ${captionState.style.backgroundOpacity})`,
+        background: hexToRgba(
+          captionState.style.backgroundColor,
+          captionState.style.backgroundOpacity
+        ),
       }}
     >
       {/* Drag region for moving the window */}
