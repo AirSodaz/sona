@@ -164,6 +164,7 @@ impl SegmentAlignerPort for SherpaCtcAligner {
                             slice_start_sec,
                             slice_duration_sec,
                             segment.start,
+                            segment.end,
                         );
                         if !units.is_empty() {
                             apply_alignment_to_transcript_segment(segment, units);
@@ -210,10 +211,11 @@ pub fn project_tokens_to_timing_units(
     tokens: &[String],
     timestamps: &[f32],
     slice_start_sec: f64,
-    slice_duration_sec: f64,
+    _slice_duration_sec: f64,
     segment_start: f64,
+    segment_end: f64,
 ) -> Vec<TranscriptTimingUnit> {
-    let slice_end_sec = slice_start_sec + slice_duration_sec;
+    let max_rel_end = (segment_end - slice_start_sec).max(0.0);
     let aligned_text_units =
         sona_core::transcription::text_alignment::align_text_units_to_tokens(text, tokens);
 
@@ -227,10 +229,12 @@ pub fn project_tokens_to_timing_units(
                 let rel_end = if token_end < timestamps.len() {
                     (timestamps[token_end] as f64).max(rel_start)
                 } else {
-                    slice_duration_sec.max(rel_start)
+                    max_rel_end.max(rel_start)
                 };
-                let start = (slice_start_sec + rel_start).max(segment_start);
-                let end = (slice_start_sec + rel_end).min(slice_end_sec).max(start);
+                let start = (slice_start_sec + rel_start)
+                    .max(segment_start)
+                    .min(segment_end);
+                let end = (slice_start_sec + rel_end).min(segment_end).max(start);
                 TranscriptTimingUnit {
                     text: u.text,
                     start,
@@ -247,10 +251,12 @@ pub fn project_tokens_to_timing_units(
                 let rel_end = if i + 1 < timestamps.len() {
                     (timestamps[i + 1] as f64).max(rel_start)
                 } else {
-                    slice_duration_sec.max(rel_start)
+                    max_rel_end.max(rel_start)
                 };
-                let start = (slice_start_sec + rel_start).max(segment_start);
-                let end = (slice_start_sec + rel_end).min(slice_end_sec).max(start);
+                let start = (slice_start_sec + rel_start)
+                    .max(segment_start)
+                    .min(segment_end);
+                let end = (slice_start_sec + rel_end).min(segment_end).max(start);
                 TranscriptTimingUnit {
                     text: tok.clone(),
                     start,
@@ -345,6 +351,7 @@ mod tests {
             slice_start,
             slice_duration,
             segment_start,
+            1.70,
         );
 
         assert_eq!(units.len(), 2);
@@ -354,8 +361,39 @@ mod tests {
         assert!((units[0].end - 1.35).abs() < 1e-4);
 
         assert_eq!(units[1].text, "world");
-        // "world" should span from 'w' (0.40s) up to end of slice (0.70s), with offset 1.0 -> [1.40, 1.70]
+        // "world" should span from 'w' (0.40s) up to end of segment (1.70s)
         assert!((units[1].start - 1.40).abs() < 1e-4);
         assert!((units[1].end - 1.70).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_project_tokens_to_timing_units_clamps_to_segment_end() {
+        let tokens = vec!["a".to_string(), "b".to_string()];
+        let timestamps = vec![0.20, 0.40];
+        // Slice starts at 0.8 (200ms pre-padding) with 800ms duration -> slice_end = 1.6 (200ms post-padding)
+        // Segment boundaries: [1.0, 1.4]
+        let slice_start = 0.80;
+        let slice_duration = 0.80;
+        let segment_start = 1.0;
+        let segment_end = 1.40;
+
+        let units = project_tokens_to_timing_units(
+            "a b",
+            &tokens,
+            &timestamps,
+            slice_start,
+            slice_duration,
+            segment_start,
+            segment_end,
+        );
+
+        assert_eq!(units.len(), 2);
+        assert_eq!(units[0].text, "a");
+        assert!((units[0].start - 1.00).abs() < 1e-4); // Clamped to segment_start (0.8 + 0.2 = 1.0)
+        assert!((units[0].end - 1.20).abs() < 1e-4); // 0.8 + 0.4 = 1.2
+
+        assert_eq!(units[1].text, "b");
+        assert!((units[1].start - 1.20).abs() < 1e-4);
+        assert!((units[1].end - 1.40).abs() < 1e-4); // Clamped to segment_end (1.40), NOT slice_end (1.60)
     }
 }

@@ -1,10 +1,17 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { speakerCorrectionService } from '../../../services/speakerCorrectionService';
 import { speakerService } from '../../../services/speakerService';
 import { useConfigStore } from '../../../stores/configStore';
 import { useDialogStore } from '../../../stores/dialogStore';
 import type { TranscriptSegment } from '../../../types/transcript';
 import { EnrollSpeakerSampleModal } from '../EnrollSpeakerSampleModal';
+
+vi.mock('../../../services/speakerCorrectionService', () => ({
+  speakerCorrectionService: {
+    assignProfileToSpeakerGroup: vi.fn(),
+  },
+}));
 
 vi.mock('../../../services/speakerService', () => ({
   speakerService: {
@@ -164,12 +171,59 @@ describe('EnrollSpeakerSampleModal', () => {
       .config.speakerProfiles?.find((p) => p.name === 'Charlie');
     expect(charlie?.samples).toHaveLength(1);
   });
-  it('shows error banner when audio path is missing', () => {
+  it('shows error banner and disables submit when audio path is missing', () => {
     render(
       <EnrollSpeakerSampleModal isOpen onClose={vi.fn()} segment={mockSegment} audioPath={null} />
     );
 
     expect(screen.getByText('当前会话未找到音频文件，无法提取声纹')).toBeDefined();
+    expect((screen.getByRole('button', { name: '确定录入' }) as HTMLButtonElement).disabled).toBe(
+      true
+    );
     expect(speakerService.enrollProfileSampleFromAudio).not.toHaveBeenCalled();
+  });
+
+  it('auto-assigns profile to speaker group when segment has speakerAttribution', async () => {
+    const onClose = vi.fn();
+    const alert = vi.fn().mockResolvedValue(undefined);
+    useDialogStore.setState({ alert: alert as any });
+
+    vi.mocked(speakerService.enrollProfileSampleFromAudio).mockResolvedValue({
+      id: 'sample-99',
+      sourceName: 'Group Sample',
+      filePath: '/samples/sample-99.wav',
+      durationSeconds: 4.7,
+    });
+
+    const segmentWithGroup: TranscriptSegment = {
+      ...mockSegment,
+      speakerAttribution: {
+        groupId: 'anonymous-group-1',
+        anonymousLabel: 'Speaker 1',
+        state: 'anonymous',
+        source: 'auto',
+        confidence: 'low',
+        candidates: [],
+      },
+    };
+
+    render(
+      <EnrollSpeakerSampleModal
+        isOpen
+        onClose={onClose}
+        segment={segmentWithGroup}
+        audioPath="/path/to/meeting.wav"
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '确定录入' }));
+    await waitFor(() => {
+      expect(speakerService.enrollProfileSampleFromAudio).toHaveBeenCalled();
+      expect(speakerCorrectionService.assignProfileToSpeakerGroup).toHaveBeenCalledWith(
+        'anonymous-group-1',
+        'spk-alice'
+      );
+      expect(onClose).toHaveBeenCalled();
+    });
   });
 });

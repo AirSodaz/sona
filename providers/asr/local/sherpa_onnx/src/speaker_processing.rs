@@ -343,6 +343,7 @@ pub fn annotate_segments_with_speakers(
         samples,
         &refined.clusters,
         &refined.cluster_centroids,
+        &refined.purified_spans_by_cluster,
         segments,
         config,
         &embedding_index,
@@ -802,6 +803,7 @@ struct RefinedClusterOutcome {
     clusters: Vec<ClusterInfo>,
     merged_speaker_map: HashMap<i32, i32>,
     cluster_centroids: HashMap<i32, Vec<f32>>,
+    purified_spans_by_cluster: HashMap<i32, Vec<SpeakerSpan>>,
 }
 
 fn refine_clusters_and_repair_oversegmentation(
@@ -810,6 +812,7 @@ fn refine_clusters_and_repair_oversegmentation(
     segments: &[TranscriptSegment],
     embedding_index: &crate::speaker::SpeakerEmbeddingIndex,
 ) -> Result<RefinedClusterOutcome, AsrPortError> {
+    let mut initial_purified_spans = HashMap::new();
     let mut cluster_centroids = HashMap::new();
     for cluster in &clusters {
         let purified_spans = extract_purified_spans_for_cluster(cluster, &clusters, segments);
@@ -818,6 +821,7 @@ fn refine_clusters_and_repair_oversegmentation(
         {
             cluster_centroids.insert(cluster.raw_speaker, centroid);
         }
+        initial_purified_spans.insert(cluster.raw_speaker, purified_spans);
     }
 
     let (merged_clusters, merged_mapping) = repair_cluster_oversegmentation(
@@ -827,16 +831,29 @@ fn refine_clusters_and_repair_oversegmentation(
     );
 
     let mut refined_centroids = HashMap::new();
+    let mut refined_purified_spans = HashMap::new();
     for cluster in &merged_clusters {
         if let Some(c) = cluster_centroids.get(&cluster.raw_speaker) {
             refined_centroids.insert(cluster.raw_speaker, c.clone());
         }
+        let spans = if merged_mapping
+            .values()
+            .any(|&target| target == cluster.raw_speaker)
+        {
+            extract_purified_spans_for_cluster(cluster, &merged_clusters, segments)
+        } else if let Some(cached) = initial_purified_spans.remove(&cluster.raw_speaker) {
+            cached
+        } else {
+            extract_purified_spans_for_cluster(cluster, &merged_clusters, segments)
+        };
+        refined_purified_spans.insert(cluster.raw_speaker, spans);
     }
 
     Ok(RefinedClusterOutcome {
         clusters: merged_clusters,
         merged_speaker_map: merged_mapping,
         cluster_centroids: refined_centroids,
+        purified_spans_by_cluster: refined_purified_spans,
     })
 }
 
@@ -844,6 +861,7 @@ fn build_cluster_speaker_assignments(
     samples: &[f32],
     clusters: &[ClusterInfo],
     cluster_centroids: &HashMap<i32, Vec<f32>>,
+    purified_spans_by_cluster: &HashMap<i32, Vec<SpeakerSpan>>,
     segments: &[TranscriptSegment],
     config: &SpeakerProcessingConfig,
     embedding_index: &crate::speaker::SpeakerEmbeddingIndex,
@@ -938,12 +956,19 @@ fn build_cluster_speaker_assignments(
         let centroid = cluster_centroids
             .get(&cluster.raw_speaker)
             .map(|v| v.as_slice());
-        let purified_spans = extract_purified_spans_for_cluster(cluster, clusters, segments);
+        let fallback_spans;
+        let purified_spans = match purified_spans_by_cluster.get(&cluster.raw_speaker) {
+            Some(spans) => spans.as_slice(),
+            None => {
+                fallback_spans = extract_purified_spans_for_cluster(cluster, clusters, segments);
+                fallback_spans.as_slice()
+            }
+        };
         let cluster_candidates = identify_cluster_candidates(
             samples,
             cluster,
             centroid,
-            &purified_spans,
+            purified_spans,
             embedding_index,
             &loaded_profile_names,
             &profile_sample_embeddings,
@@ -1044,7 +1069,7 @@ fn identify_cluster_candidates(
                     let max_sim = samples
                         .iter()
                         .map(|s| cosine_similarity(centroid, &s.embedding))
-                        .fold(0.0_f32, f32::max);
+                        .fold(f32::NEG_INFINITY, f32::max);
                     (0.6 * weighted_sim + 0.4 * max_sim).clamp(0.0, 1.0)
                 } else {
                     avg_match_score

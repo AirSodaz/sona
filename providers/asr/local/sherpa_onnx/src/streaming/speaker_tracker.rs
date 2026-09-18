@@ -213,7 +213,7 @@ impl OnlineSpeakerTracker {
                             let max_sim = sample_embs
                                 .iter()
                                 .map(|s| cosine_similarity(&embedding, &s.embedding))
-                                .fold(0.0_f32, f32::max);
+                                .fold(f32::NEG_INFINITY, f32::max);
                             (0.6 * weighted_sim + 0.4 * max_sim).clamp(0.0, 1.0)
                         } else {
                             m.score
@@ -345,6 +345,12 @@ impl OnlineSpeakerTracker {
             let n = cluster.sample_count as f32;
             for (c, e) in cluster.centroid.iter_mut().zip(embedding.iter()) {
                 *c = (*c * n + *e) / (n + 1.0);
+            }
+            let norm = cluster.centroid.iter().map(|x| x * x).sum::<f32>().sqrt();
+            if norm > 1e-8 {
+                for c in &mut cluster.centroid {
+                    *c /= norm;
+                }
             }
             cluster.sample_count += 1;
             return cluster.clone();

@@ -676,6 +676,9 @@ describe('TranscriptSpeakerReviewPanel', () => {
   it('jumps from the active group with J and closes the panel', async () => {
     const onClose = vi.fn();
     await renderReviewPanel(onClose);
+    await waitFor(() => {
+      expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-1'));
+    });
 
     await act(async () => {
       fireEvent.keyDown(window, { key: 'j' });

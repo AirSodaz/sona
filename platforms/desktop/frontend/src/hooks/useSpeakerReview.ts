@@ -243,8 +243,13 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
           return null;
         }
 
-        const currentIndex = current
-          ? visibleGroups.findIndex((group) => group.groupId === current)
+        const activeId =
+          current && visibleGroups.some((group) => group.groupId === current)
+            ? current
+            : visibleGroups[0]?.groupId || null;
+
+        const currentIndex = activeId
+          ? visibleGroups.findIndex((group) => group.groupId === activeId)
           : -1;
         if (currentIndex < 0) {
           return direction > 0

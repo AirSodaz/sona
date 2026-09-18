@@ -420,6 +420,13 @@ fn is_same_model_target(path_a: &Path, path_b: &Path) -> bool {
         (&can_b, &can_a)
     };
 
+    if let Ok(resolved_onnx) = crate::audio::resolve_model_onnx_path(dir_path) {
+        let can_resolved = std::fs::canonicalize(&resolved_onnx).unwrap_or(resolved_onnx);
+        if &can_resolved == file_path {
+            return true;
+        }
+    }
+
     if file_path.parent() == Some(dir_path)
         && let Some(file_name) = file_path.file_name().and_then(|n| n.to_str())
     {

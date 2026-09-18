@@ -3,6 +3,7 @@ import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
+import { speakerCorrectionService } from '../../services/speakerCorrectionService';
 import { speakerService } from '../../services/speakerService';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
@@ -150,6 +151,18 @@ export function EnrollSpeakerSampleModal({
       }
 
       setConfig({ speakerProfiles: nextProfiles });
+
+      if (segment.speakerAttribution?.groupId) {
+        try {
+          await speakerCorrectionService.assignProfileToSpeakerGroup(
+            segment.speakerAttribution.groupId,
+            targetProfileId
+          );
+        } catch (err) {
+          console.warn('Failed to auto-assign enrolled speaker profile to group:', err);
+        }
+      }
+
       onClose();
 
       await alert(
@@ -199,7 +212,7 @@ export function EnrollSpeakerSampleModal({
             type="button"
             className="btn btn-primary"
             onClick={() => void handleSubmit()}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !audioPath}
           >
             {isSubmitting ? <Loader2 size={14} className="queue-icon-spin" /> : <Mic size={14} />}
             <span>{t('editor.enroll_speaker_submit', { defaultValue: '确定录入' })}</span>
