@@ -194,6 +194,12 @@
   font-style: normal;
 }
 
+.live-caption-speaker {
+  color: var(--color-brand, #60a5fa);
+  font-weight: 600;
+  margin-right: 6px;
+}
+
 /* ===========================
    Caption Window (Separate Window)
    =========================== */

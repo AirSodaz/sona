@@ -19,10 +19,10 @@ const SPEAKER_PROCESSING_LOG_TARGET: &str = "speaker_processing";
 const SAMPLE_RATE: i32 = 16_000;
 const IDENTIFICATION_MIN_DURATION_SECONDS: f32 = 1.5;
 const IDENTIFICATION_MAX_SEGMENTS_PER_CLUSTER: usize = 3;
-const CANDIDATE_DISPLAY_THRESHOLD: f32 = 0.6;
-const AUTO_IDENTIFICATION_THRESHOLD: f32 = 0.72;
-const AUTO_IDENTIFICATION_MIN_VOTES: usize = 2;
-const AUTO_IDENTIFICATION_MIN_MARGIN: f32 = 0.08;
+pub(crate) const CANDIDATE_DISPLAY_THRESHOLD: f32 = 0.6;
+pub(crate) const AUTO_IDENTIFICATION_THRESHOLD: f32 = 0.72;
+pub(crate) const AUTO_IDENTIFICATION_MIN_VOTES: usize = 2;
+pub(crate) const AUTO_IDENTIFICATION_MIN_MARGIN: f32 = 0.08;
 const CLUSTER_OVER_SEGMENTATION_MERGE_THRESHOLD: f32 = 0.85;
 const PROFILE_SAMPLE_MIN_DURATION_SECONDS: f32 = 4.0;
 const PROFILE_LIMITED_MIN_TOTAL_DURATION_SECONDS: f32 = 8.0;
@@ -30,9 +30,9 @@ const PROFILE_READY_MIN_TOTAL_DURATION_SECONDS: f32 = 20.0;
 const PROFILE_READY_MIN_SAMPLE_COUNT: usize = 2;
 
 #[derive(Debug, Clone)]
-struct ProfileSampleEmbedding {
-    embedding: Vec<f32>,
-    duration_seconds: f32,
+pub(crate) struct ProfileSampleEmbedding {
+    pub(crate) embedding: Vec<f32>,
+    pub(crate) duration_seconds: f32,
 }
 
 struct DisjointSet {
@@ -69,7 +69,7 @@ impl DisjointSet {
     }
 }
 
-fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
+pub(crate) fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     if a.is_empty() || a.len() != b.len() {
         return 0.0;
     }
@@ -118,7 +118,7 @@ struct SplitGroup {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SpeakerProfileReadinessState {
+pub(crate) enum SpeakerProfileReadinessState {
     NotReady,
     Limited,
     Ready,
@@ -366,7 +366,7 @@ pub fn annotate_segments_with_speakers(
     Ok(annotated_segments)
 }
 
-fn resolve_model_path(input: Option<&str>) -> Result<PathBuf, AsrPortError> {
+pub(crate) fn resolve_model_path(input: Option<&str>) -> Result<PathBuf, AsrPortError> {
     let raw = input
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -1077,7 +1077,7 @@ fn sort_cluster_candidates(candidates: &mut [ClusterCandidate]) {
     });
 }
 
-fn derive_profile_readiness(profile: &SpeakerProfile) -> SpeakerProfileReadinessState {
+pub(crate) fn derive_profile_readiness(profile: &SpeakerProfile) -> SpeakerProfileReadinessState {
     let usable_samples = profile
         .samples
         .iter()

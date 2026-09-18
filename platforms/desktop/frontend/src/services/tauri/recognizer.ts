@@ -63,7 +63,7 @@ export function normalizeAsrRequest(request: AsrTranscriptionRequest): CoreAsrTr
     normalizationOptions: request.normalizationOptions,
     postprocessOptions: request.postprocessOptions,
     hotwords: request.hotwords,
-    speakerProcessing: null,
+    speakerProcessing: normalizeSpeakerProcessing(request.speakerProcessing ?? null),
   };
 
   if (request.engine === 'online') {

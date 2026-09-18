@@ -51,6 +51,7 @@ export function LiveCaptionOverlay({
     >
       {visibleSegments.map((seg) => (
         <p key={seg.id} className={`live-caption-line ${seg.isFinal ? '' : 'partial'}`}>
+          {seg.speaker && <span className="live-caption-speaker">[{seg.speaker.label}]</span>}
           {seg.text}
         </p>
       ))}

@@ -115,7 +115,7 @@ export async function resolveCurrentSessionAudioPath(): Promise<string | null> {
 
   const activeBatchItem = useBatchQueueStore
     .getState()
-    .items.find((item) => item.id === useBatchQueueStore.getState().activeItemId);
+    .queueItems.find((item) => item.id === useBatchQueueStore.getState().activeItemId);
   if (activeBatchItem?.filePath) {
     return activeBatchItem.filePath;
   }

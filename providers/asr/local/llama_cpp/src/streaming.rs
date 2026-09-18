@@ -490,6 +490,7 @@ mod tests {
                 model_path: model_dir.to_string_lossy().to_string(),
                 num_threads: 4,
                 punctuation_model: None,
+                alignment_model: None,
                 vad_model: Some("silero_vad.onnx".to_string()),
                 vad_buffer: 0.5,
                 batch_segmentation_mode: BatchSegmentationMode::Vad,

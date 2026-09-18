@@ -107,7 +107,7 @@ impl SpeakerEmbeddingIndex {
             .collect()
     }
 
-    fn compute_embedding_for_samples(
+    pub fn compute_embedding_for_samples(
         &self,
         samples: &[f32],
     ) -> Result<Option<Vec<f32>>, AsrPortError> {

@@ -1,4 +1,5 @@
 mod inference;
+pub mod speaker_tracker;
 
 mod session;
 

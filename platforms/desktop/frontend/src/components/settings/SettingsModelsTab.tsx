@@ -973,12 +973,17 @@ export function SettingsModelsTab({
   ]);
 
   const alignmentOptions = useMemo(() => {
-    const installedOptions = toDropdownOptions(
-      selectionOptions.alignment ?? [],
-      selectedModelIds.batchAlignment ?? ''
-    );
+    const selectedId =
+      (isBatchScenario ? selectedModelIds.batchAlignment : selectedModelIds.liveAlignment) ?? '';
+    const installedOptions = toDropdownOptions(selectionOptions.alignment ?? [], selectedId);
     return [speakerDisabledOption, ...installedOptions];
-  }, [selectedModelIds.batchAlignment, selectionOptions.alignment, speakerDisabledOption]);
+  }, [
+    isBatchScenario,
+    selectedModelIds.batchAlignment,
+    selectedModelIds.liveAlignment,
+    selectionOptions.alignment,
+    speakerDisabledOption,
+  ]);
 
   const sectionModelDropdownOptions = useCallback(
     (
@@ -1168,33 +1173,35 @@ export function SettingsModelsTab({
           </div>
         </SettingsItem>
 
-        {isBatchScenario && (
-          <SettingsItem
-            title={t('settings.alignment_model_label', {
-              defaultValue: 'CTC 对齐模型',
-            })}
-            hint={t('settings.alignment_model_hint', {
-              defaultValue: '用于生成字/词级时间戳并优化说话人切分边界。',
-            })}
-          >
-            <div style={{ width: '220px' }}>
-              <Dropdown
-                id="settings-alignment-path"
-                value={selectedModelIds.batchAlignment ?? ''}
-                onChange={(value) => handleCompanionModelChange('alignmentModelPath', value)}
-                placeholder={t('settings.select_alignment_model', {
-                  defaultValue: '选择对齐模型...',
-                })}
-                options={alignmentOptions}
-                style={{ flex: 1 }}
-                aria-label={t('settings.alignment_model_label', {
-                  defaultValue: 'CTC 对齐模型',
-                })}
-                disabled={localModelActionsDisabled}
-              />
-            </div>
-          </SettingsItem>
-        )}
+        <SettingsItem
+          title={t('settings.alignment_model_label', {
+            defaultValue: 'CTC 对齐模型',
+          })}
+          hint={t('settings.alignment_model_hint', {
+            defaultValue: '用于生成字/词级时间戳并优化说话人切分边界。',
+          })}
+        >
+          <div style={{ width: '220px' }}>
+            <Dropdown
+              id="settings-alignment-path"
+              value={
+                (isBatchScenario
+                  ? selectedModelIds.batchAlignment
+                  : selectedModelIds.liveAlignment) ?? ''
+              }
+              onChange={(value) => handleCompanionModelChange('alignmentModelPath', value)}
+              placeholder={t('settings.select_alignment_model', {
+                defaultValue: '选择对齐模型...',
+              })}
+              options={alignmentOptions}
+              style={{ flex: 1 }}
+              aria-label={t('settings.alignment_model_label', {
+                defaultValue: 'CTC 对齐模型',
+              })}
+              disabled={localModelActionsDisabled}
+            />
+          </div>
+        </SettingsItem>
 
         <SettingsAccordion
           title={t('settings.advanced_settings_title', { defaultValue: '高级设置' })}

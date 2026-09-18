@@ -107,6 +107,19 @@ const speakerEmbeddingModelBase = {
   installPath: '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
   downloadPath: '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
 };
+const alignmentModelBase = {
+  id: 'mms-300m-ctc-alignment',
+  name: 'MMS 300M Alignment',
+  description: 'settings.descriptions.alignment',
+  url: 'https://example.com/align.tar.bz2',
+  type: 'alignment',
+  language: 'multi',
+  size: '600 MB',
+  engine: 'sherpa-onnx',
+  rules: { requiresVad: false, requiresPunctuation: false },
+  installPath: '/models/mms-300m-ctc-alignment',
+  downloadPath: '/models/mms-300m-ctc-alignment.tar.bz2',
+};
 
 function buildModelCatalog(installedModels: Set<string>) {
   const speakerSegmentationModel = {
@@ -116,6 +129,10 @@ function buildModelCatalog(installedModels: Set<string>) {
   const speakerEmbeddingModel = {
     ...speakerEmbeddingModelBase,
     isInstalled: installedModels.has(speakerEmbeddingModelBase.id),
+  };
+  const alignmentModel = {
+    ...alignmentModelBase,
+    isInstalled: installedModels.has(alignmentModelBase.id),
   };
 
   return {
@@ -160,14 +177,24 @@ function buildModelCatalog(installedModels: Set<string>) {
           isInstalled: speakerEmbeddingModel.isInstalled,
         },
       ],
+      alignment: [
+        {
+          id: alignmentModel.id,
+          label: alignmentModel.name,
+          installPath: alignmentModel.installPath,
+          isInstalled: alignmentModel.isInstalled,
+        },
+      ],
     },
     modelPathById: {
       [speakerSegmentationModel.id]: speakerSegmentationModel.installPath,
       [speakerEmbeddingModel.id]: speakerEmbeddingModel.installPath,
+      [alignmentModel.id]: alignmentModel.installPath,
     },
     modelIdByNormalizedPath: {
       [speakerSegmentationModel.installPath.toLowerCase()]: speakerSegmentationModel.id,
       [speakerEmbeddingModel.installPath.toLowerCase()]: speakerEmbeddingModel.id,
+      [alignmentModel.installPath.toLowerCase()]: alignmentModel.id,
     },
     pathMatchTokens: [
       {
@@ -177,6 +204,10 @@ function buildModelCatalog(installedModels: Set<string>) {
       {
         id: speakerEmbeddingModel.id,
         token: speakerEmbeddingModel.id.toLowerCase(),
+      },
+      {
+        id: alignmentModel.id,
+        token: alignmentModel.id.toLowerCase(),
       },
     ],
     dependencyRequestsByModelId: {},
@@ -219,8 +250,8 @@ function renderTab(installedModels: Set<string>, managerOverrides: Record<string
         batchPunctuation: null,
         liveVad: null,
         batchVad: null,
-        liveAlignment: null,
-        batchAlignment: null,
+        liveAlignment: config.liveAlignmentModelPath ? alignmentModelBase.id : null,
+        batchAlignment: config.batchAlignmentModelPath ? alignmentModelBase.id : null,
       },
       catalogLoadState: 'ready',
       catalogLoadError: null,
@@ -577,6 +608,28 @@ describe('SettingsModelsTab speaker model selections', () => {
       expect(screen.getByRole('button', { name: 'Speaker Embedding Model' }).textContent).toContain(
         'Off'
       );
+    });
+  });
+
+  it('allows selecting and clearing CTC alignment model in live scenario', async () => {
+    setTestConfig({
+      liveAlignmentModelPath: '/models/mms-300m-ctc-alignment',
+    });
+
+    renderTab(new Set(['mms-300m-ctc-alignment']));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'CTC 对齐模型' }).textContent).toContain(
+        'MMS 300M Alignment'
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'CTC 对齐模型' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Off' }));
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.liveAlignmentModelPath).toBe('');
+      expect(screen.getByRole('button', { name: 'CTC 对齐模型' }).textContent).toContain('Off');
     });
   });
 

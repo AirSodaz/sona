@@ -13,6 +13,7 @@ type ScenarioPathField =
   | 'liveVadModelPath'
   | 'liveSpeakerSegmentationModelPath'
   | 'liveSpeakerEmbeddingModelPath'
+  | 'liveAlignmentModelPath'
   | 'batchPunctuationModelPath'
   | 'batchVadModelPath'
   | 'batchSpeakerSegmentationModelPath'
@@ -29,7 +30,7 @@ const SCENARIO_MODEL_FIELDS: ScenarioModelFieldMap = {
     vadModelPath: 'liveVadModelPath',
     speakerSegmentationModelPath: 'liveSpeakerSegmentationModelPath',
     speakerEmbeddingModelPath: 'liveSpeakerEmbeddingModelPath',
-    alignmentModelPath: 'batchAlignmentModelPath',
+    alignmentModelPath: 'liveAlignmentModelPath',
   },
   batch: {
     punctuationModelPath: 'batchPunctuationModelPath',

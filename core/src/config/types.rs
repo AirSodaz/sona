@@ -208,6 +208,8 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub live_speaker_embedding_model_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub live_alignment_model_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub batch_punctuation_model_path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub batch_vad_model_path: Option<String>,

@@ -145,6 +145,8 @@ export interface ModelConfig {
   liveSpeakerSegmentationModelPath?: string;
   /** Path to the speaker embedding model used by live recording. */
   liveSpeakerEmbeddingModelPath?: string;
+  /** Path to the CTC alignment model used by live recording. */
+  liveAlignmentModelPath?: string;
   /** Path to punctuation model used by batch import. */
   batchPunctuationModelPath?: string;
   /** Path to VAD model used by batch import. */

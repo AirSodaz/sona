@@ -456,11 +456,13 @@ pub struct LocalSherpaStreamingRequest {
     pub enable_itn: bool,
     pub language: String,
     pub punctuation_model: Option<String>,
+    pub alignment_model: Option<String>,
     pub vad_model: Option<String>,
     pub vad_buffer: f32,
     pub model_type: String,
     pub file_config: Option<ModelFileConfig>,
     pub hotwords: Option<String>,
+    pub speaker_processing: Option<crate::transcription::speaker::SpeakerProcessingConfig>,
     pub normalization_options: TranscriptNormalizationOptions,
     pub postprocess_options: TranscriptPostprocessOptions,
     pub gpu_acceleration: Option<String>,
@@ -480,6 +482,7 @@ impl LocalSherpaStreamingRequest {
             normalization_options,
             postprocess_options,
             hotwords,
+            speaker_processing,
             engine_config,
             ..
         } = request;
@@ -491,6 +494,7 @@ impl LocalSherpaStreamingRequest {
                 model_path,
                 num_threads,
                 punctuation_model,
+                alignment_model,
                 vad_model,
                 vad_buffer,
                 model_type,
@@ -512,11 +516,13 @@ impl LocalSherpaStreamingRequest {
                     enable_itn,
                     language,
                     punctuation_model,
+                    alignment_model,
                     vad_model,
                     vad_buffer,
                     model_type,
                     file_config: *file_config,
                     hotwords,
+                    speaker_processing,
                     normalization_options,
                     postprocess_options,
                     gpu_acceleration,
@@ -713,7 +719,6 @@ impl StreamingInferenceSpec {
         let mut request = request.clone();
         request.normalization_options = TranscriptNormalizationOptions::default();
         request.postprocess_options = TranscriptPostprocessOptions::default();
-        request.speaker_processing = None;
         Ok(Self { request })
     }
 

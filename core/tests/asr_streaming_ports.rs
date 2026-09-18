@@ -245,6 +245,28 @@ fn inference_spec_excludes_consumer_output_policy() {
 }
 
 #[test]
+fn inference_spec_retains_speaker_processing() {
+    let mut left = local_request();
+    left.speaker_processing = Some(sona_core::transcription::speaker::SpeakerProcessingConfig {
+        speaker_segmentation_model_path: Some("/models/seg".into()),
+        speaker_embedding_model_path: Some("/models/embed".into()),
+        speaker_profiles: None,
+    });
+
+    let mut right = left.clone();
+    assert_eq!(
+        StreamingInferenceSpec::from_request(&left).unwrap(),
+        StreamingInferenceSpec::from_request(&right).unwrap()
+    );
+
+    right.speaker_processing = None;
+    assert_ne!(
+        StreamingInferenceSpec::from_request(&left).unwrap(),
+        StreamingInferenceSpec::from_request(&right).unwrap()
+    );
+}
+
+#[test]
 fn inference_spec_debug_redacts_online_configuration() {
     let request = AsrTranscriptionRequest {
         mode: AsrMode::Streaming,

@@ -16,6 +16,7 @@ type ModelConfigKey =
   | 'liveVadModelPath'
   | 'liveSpeakerSegmentationModelPath'
   | 'liveSpeakerEmbeddingModelPath'
+  | 'liveAlignmentModelPath'
   | 'batchPunctuationModelPath'
   | 'batchVadModelPath'
   | 'batchSpeakerSegmentationModelPath'
@@ -125,6 +126,7 @@ export class HealthCheckService {
       { key: 'liveVadModelPath', path: config.liveVadModelPath },
       { key: 'liveSpeakerSegmentationModelPath', path: config.liveSpeakerSegmentationModelPath },
       { key: 'liveSpeakerEmbeddingModelPath', path: config.liveSpeakerEmbeddingModelPath },
+      { key: 'liveAlignmentModelPath', path: config.liveAlignmentModelPath },
       { key: 'batchPunctuationModelPath', path: config.batchPunctuationModelPath },
       { key: 'batchVadModelPath', path: config.batchVadModelPath },
       { key: 'batchSpeakerSegmentationModelPath', path: config.batchSpeakerSegmentationModelPath },

@@ -217,6 +217,12 @@ fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
     instance.clear_partial_metric_sample();
     instance.record_diagnostics = RecordDiagnosticsState::default();
     instance.last_partial_decode_ms.store(0, Ordering::Release);
+    instance.current_turn_samples.clear();
+    if let Some(tracker) = instance.speaker_tracker.as_ref()
+        && let Ok(mut guard) = tracker.lock()
+    {
+        guard.reset_session();
+    }
 }
 
 #[derive(Default)]
@@ -237,6 +243,9 @@ pub struct SherpaInstance {
     pub normalization_options: TranscriptNormalizationOptions,
     pub postprocessor: TranscriptPostprocessor,
     pub last_partial_decode_ms: Arc<AtomicU64>,
+    pub speaker_tracker:
+        Option<Arc<std::sync::Mutex<crate::streaming::speaker_tracker::OnlineSpeakerTracker>>>,
+    pub current_turn_samples: Vec<f32>,
 }
 
 impl SherpaInstance {

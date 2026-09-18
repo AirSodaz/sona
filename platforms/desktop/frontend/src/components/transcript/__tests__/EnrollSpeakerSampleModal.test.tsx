@@ -34,6 +34,7 @@ const mockSegment: TranscriptSegment = {
   speaker: {
     id: 'spk-alice',
     label: 'Alice',
+    kind: 'identified',
   },
 };
 
@@ -79,15 +80,14 @@ describe('EnrollSpeakerSampleModal', () => {
 
   it('submits enrollment for an existing speaker profile', async () => {
     const onClose = vi.fn();
-    const showAlert = vi.fn().mockResolvedValue(undefined);
-    useDialogStore.setState({ showAlert });
+    const alert = vi.fn().mockResolvedValue(undefined);
+    useDialogStore.setState({ alert: alert as any });
 
     vi.mocked(speakerService.enrollProfileSampleFromAudio).mockResolvedValue({
       id: 'sample-1',
-      name: 'Sample',
+      sourceName: 'Sample',
       filePath: '/samples/sample-1.wav',
       durationSeconds: 4.7,
-      createdAt: Date.now(),
     });
 
     render(
@@ -109,7 +109,7 @@ describe('EnrollSpeakerSampleModal', () => {
         expect.any(String)
       );
       expect(onClose).toHaveBeenCalled();
-      expect(showAlert).toHaveBeenCalledWith(
+      expect(alert).toHaveBeenCalledWith(
         expect.stringContaining('Alice'),
         expect.objectContaining({ variant: 'success' })
       );
@@ -118,19 +118,19 @@ describe('EnrollSpeakerSampleModal', () => {
     // Check store was updated
     const aliceProfile = useConfigStore
       .getState()
-      .config.speakerProfiles.find((p) => p.id === 'spk-alice');
+      .config.speakerProfiles?.find((p) => p.id === 'spk-alice');
     expect(aliceProfile?.samples).toHaveLength(1);
   });
 
   it('creates and enrolls into a new profile', async () => {
     const onClose = vi.fn();
-    useDialogStore.setState({ showAlert: vi.fn().mockResolvedValue(undefined) });
+    const alert = vi.fn().mockResolvedValue(undefined);
+    useDialogStore.setState({ alert: alert as any });
     vi.mocked(speakerService.enrollProfileSampleFromAudio).mockResolvedValue({
       id: 'sample-2',
-      name: 'Charlie Sample',
+      sourceName: 'Charlie Sample',
       filePath: '/samples/sample-2.wav',
       durationSeconds: 4.7,
-      createdAt: Date.now(),
     });
 
     render(
@@ -161,8 +161,7 @@ describe('EnrollSpeakerSampleModal', () => {
 
     const charlie = useConfigStore
       .getState()
-      .config.speakerProfiles.find((p) => p.name === 'Charlie');
-    expect(charlie).toBeDefined();
+      .config.speakerProfiles?.find((p) => p.name === 'Charlie');
     expect(charlie?.samples).toHaveLength(1);
   });
   it('shows error banner when audio path is missing', () => {

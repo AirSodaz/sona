@@ -1,6 +1,6 @@
 import { Clock, Loader2, Mic, Plus, User } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import { speakerService } from '../../services/speakerService';
@@ -30,9 +30,9 @@ export function EnrollSpeakerSampleModal({
   const { t } = useTranslation();
   const rawProfiles = useConfigStore((state) => state.config.speakerProfiles);
   const setConfig = useConfigStore((state) => state.setConfig);
-  const showAlert = useDialogStore((state) => state.showAlert);
+  const alert = useDialogStore((state) => state.alert);
 
-  const profiles = normalizeSpeakerProfiles(rawProfiles);
+  const profiles = useMemo(() => normalizeSpeakerProfiles(rawProfiles), [rawProfiles]);
   const hasExistingProfiles = profiles.length > 0;
 
   const [mode, setMode] = useState<'existing' | 'new'>(() =>
@@ -45,7 +45,7 @@ export function EnrollSpeakerSampleModal({
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!segment) {
+    if (!isOpen || !segment) {
       return;
     }
 
@@ -71,7 +71,7 @@ export function EnrollSpeakerSampleModal({
       setSelectedProfileId('');
       setNewProfileName(segment.speaker?.label || '');
     }
-  }, [segment, profiles, hasExistingProfiles]);
+  }, [isOpen, segment, profiles, hasExistingProfiles]);
 
   if (!isOpen || !segment) {
     return null;
@@ -152,7 +152,7 @@ export function EnrollSpeakerSampleModal({
       setConfig({ speakerProfiles: nextProfiles });
       onClose();
 
-      await showAlert(
+      await alert(
         t('editor.enroll_speaker_success', {
           name: targetProfileName,
           defaultValue: `已成功将样本录入「${targetProfileName}」声纹库`,

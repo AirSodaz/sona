@@ -185,7 +185,7 @@ export class AsrConfigService {
     const punctuationModel =
       rules.requiresPunctuation && punctuationModelPath ? punctuationModelPath : null;
     const alignmentModelPath = getScenarioAlignmentModelPath(config, scenario);
-    const alignmentModel = scenario === 'batch' && alignmentModelPath ? alignmentModelPath : null;
+    const alignmentModel = alignmentModelPath ? alignmentModelPath : null;
     const baseRequest: AsrTranscriptionRequestBase = {
       mode: selection.mode,
       language: overrides.language || this.coerceConfiguredLanguage(config, slot, config.language),

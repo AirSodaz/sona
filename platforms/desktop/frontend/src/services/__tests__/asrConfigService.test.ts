@@ -201,6 +201,19 @@ describe('asrConfigService', () => {
     });
   });
 
+  it('resolves a local sherpa live request with alignmentModel when liveAlignmentModelPath is set', () => {
+    const request = resolveAsrTranscriptionRequest(
+      buildAsrConfig({ liveAlignmentModelPath: 'C:/models/live_mms_fa' }),
+      'live'
+    );
+
+    expect(request).toMatchObject({
+      engine: 'local',
+      mode: 'streaming',
+      alignmentModel: 'C:/models/live_mms_fa',
+    });
+  });
+
   it('resolves a local sherpa request with custom gpuAcceleration configuration', () => {
     const request = resolveAsrTranscriptionRequest(
       buildAsrConfig({
