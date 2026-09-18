@@ -16,7 +16,8 @@ import {
   importSpeakerProfileSample,
 } from './tauri/speaker';
 
-type SpeakerConfigInput = Pick<AppConfig, 'speakerProfiles'> & Partial<ScenarioModelPathConfig>;
+type SpeakerConfigInput = Pick<AppConfig, 'speakerProfiles' | 'speakerDiarizationSensitivity'> &
+  Partial<ScenarioModelPathConfig>;
 
 export interface SpeakerServicePorts {
   annotateSpeakerSegmentsFromFile: typeof annotateSpeakerSegmentsFromFile;
@@ -28,26 +29,34 @@ export class SpeakerService {
   constructor(private readonly ports: SpeakerServicePorts) {}
 
   isConfigured(config: SpeakerConfigInput, scenario: AsrScenario): boolean {
-    return Boolean(
-      getScenarioSpeakerSegmentationModelPath(config, scenario) &&
-        getScenarioSpeakerEmbeddingModelPath(config, scenario)
-    );
+    const embeddingPath = getScenarioSpeakerEmbeddingModelPath(config, scenario);
+    if (!embeddingPath) {
+      return false;
+    }
+    if (scenario === 'batch') {
+      return Boolean(getScenarioSpeakerSegmentationModelPath(config, scenario));
+    }
+    return true;
   }
 
   buildProcessingConfig(
     config: SpeakerConfigInput,
     scenario: AsrScenario
   ): SpeakerProcessingConfig | null {
-    const segmentationModelPath = getScenarioSpeakerSegmentationModelPath(config, scenario);
     const embeddingModelPath = getScenarioSpeakerEmbeddingModelPath(config, scenario);
-    if (!segmentationModelPath || !embeddingModelPath) {
+    if (!embeddingModelPath) {
+      return null;
+    }
+    const segmentationModelPath = getScenarioSpeakerSegmentationModelPath(config, scenario);
+    if (scenario === 'batch' && !segmentationModelPath) {
       return null;
     }
 
     return {
-      speakerSegmentationModelPath: segmentationModelPath,
+      speakerSegmentationModelPath: segmentationModelPath || undefined,
       speakerEmbeddingModelPath: embeddingModelPath,
       speakerProfiles: normalizeSpeakerProfiles(config.speakerProfiles),
+      sensitivity: config.speakerDiarizationSensitivity ?? 'balanced',
     };
   }
 

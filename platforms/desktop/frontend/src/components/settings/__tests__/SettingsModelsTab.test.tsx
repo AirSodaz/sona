@@ -611,6 +611,56 @@ describe('SettingsModelsTab speaker model selections', () => {
     });
   });
 
+  it('renders speaker diarization panel and updates separation sensitivity when active', async () => {
+    setTestConfig({
+      liveSpeakerEmbeddingModelPath:
+        '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+      speakerDiarizationSensitivity: 'balanced',
+    });
+
+    renderTab(new Set(['3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx']));
+
+    await waitFor(() => {
+      expect(screen.getByText('Speaker Diarization & Recognition')).toBeDefined();
+      expect(screen.getByText('Enabled')).toBeDefined();
+    });
+
+    const strictBtn = screen.getByRole('radio', { name: 'Strict' });
+    expect((strictBtn as HTMLButtonElement).disabled).toBe(false);
+    expect(strictBtn.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(strictBtn);
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.speakerDiarizationSensitivity).toBe('strict');
+      expect(strictBtn.getAttribute('aria-checked')).toBe('true');
+    });
+  });
+
+  it('disables sensitivity controls when speaker embedding model is Off', async () => {
+    setTestConfig({
+      liveSpeakerEmbeddingModelPath: '',
+    });
+
+    renderTab(new Set());
+
+    await waitFor(() => {
+      expect(screen.getByText('Disabled')).toBeDefined();
+    });
+
+    const permissiveBtn = screen.getByRole('radio', {
+      name: 'Permissive',
+    });
+    const balancedBtn = screen.getByRole('radio', {
+      name: 'Balanced',
+    });
+    const strictBtn = screen.getByRole('radio', {
+      name: 'Strict',
+    });
+    expect((permissiveBtn as HTMLButtonElement).disabled).toBe(true);
+    expect((balancedBtn as HTMLButtonElement).disabled).toBe(true);
+    expect((strictBtn as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('allows selecting and clearing CTC alignment model in live scenario', async () => {
     setTestConfig({
       liveAlignmentModelPath: '/models/mms-300m-ctc-alignment',

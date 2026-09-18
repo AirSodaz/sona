@@ -9,6 +9,8 @@ pub struct SpeakerProcessingConfig {
     pub speaker_segmentation_model_path: Option<String>,
     pub speaker_embedding_model_path: Option<String>,
     pub speaker_profiles: Option<Vec<SpeakerProfile>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sensitivity: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

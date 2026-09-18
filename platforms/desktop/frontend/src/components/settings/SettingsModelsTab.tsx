@@ -1,4 +1,4 @@
-import { Mic, PlaySquare, Search, Settings2, X } from 'lucide-react';
+import { ArrowRight, Mic, PlaySquare, Search, Settings2, UserCheck, Users, X } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +16,12 @@ import {
 import { cudaAddonService } from '../../services/cudaAddonService';
 import { modelService } from '../../services/modelService';
 import { isOnlineAsrProviderId } from '../../services/onlineAsrProviders';
-import { useModelConfig, useSetConfig, useTranscriptionConfig } from '../../stores/configStore';
+import {
+  useConfigStore,
+  useModelConfig,
+  useSetConfig,
+  useTranscriptionConfig,
+} from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import type { LocalAsrEngine } from '../../types/asr';
 import type {
@@ -51,6 +56,7 @@ import {
   SettingsSection,
   SettingsTabContainer,
 } from './SettingsLayout';
+import { useOptionalSettingsNavigation } from './SettingsNavigationContext';
 
 type ModelScenario = 'live' | 'batch';
 
@@ -548,6 +554,7 @@ export function SettingsModelsTab({
   const modelConfig = useModelConfig();
   const transcriptionConfig = useTranscriptionConfig();
   const updateConfig = useSetConfig();
+  const speakerProfiles = useConfigStore((state) => state.config.speakerProfiles);
   const [showLocalModelContent, setShowLocalModelContent] = useState(false);
   const [activeScenario, setActiveScenario] = useState<ModelScenario>('live');
   const {
@@ -670,6 +677,8 @@ export function SettingsModelsTab({
     },
     [cudaStatus, t, updateConfig]
   );
+
+  const navContext = useOptionalSettingsNavigation();
 
   useEffect(() => {
     if (!_isActive) {
@@ -949,24 +958,30 @@ export function SettingsModelsTab({
   };
 
   const speakerSegmentationOptions = useMemo(() => {
-    const installedOptions = toDropdownOptions(
-      selectionOptions.speakerSegmentation,
-      selectedModelIds.liveSpeakerSegmentation ?? ''
-    );
+    const selectedId =
+      (isBatchScenario
+        ? selectedModelIds.batchSpeakerSegmentation
+        : selectedModelIds.liveSpeakerSegmentation) ?? '';
+    const installedOptions = toDropdownOptions(selectionOptions.speakerSegmentation, selectedId);
     return [speakerDisabledOption, ...installedOptions];
   }, [
+    isBatchScenario,
+    selectedModelIds.batchSpeakerSegmentation,
     selectedModelIds.liveSpeakerSegmentation,
     selectionOptions.speakerSegmentation,
     speakerDisabledOption,
   ]);
 
   const speakerEmbeddingOptions = useMemo(() => {
-    const installedOptions = toDropdownOptions(
-      selectionOptions.speakerEmbedding,
-      selectedModelIds.liveSpeakerEmbedding ?? ''
-    );
+    const selectedId =
+      (isBatchScenario
+        ? selectedModelIds.batchSpeakerEmbedding
+        : selectedModelIds.liveSpeakerEmbedding) ?? '';
+    const installedOptions = toDropdownOptions(selectionOptions.speakerEmbedding, selectedId);
     return [speakerDisabledOption, ...installedOptions];
   }, [
+    isBatchScenario,
+    selectedModelIds.batchSpeakerEmbedding,
     selectedModelIds.liveSpeakerEmbedding,
     selectionOptions.speakerEmbedding,
     speakerDisabledOption,
@@ -1111,67 +1126,244 @@ export function SettingsModelsTab({
           </div>
         </SettingsItem>
 
-        <SettingsItem
-          title={t('settings.speaker_segmentation_model_label', {
-            defaultValue: 'Speaker Segmentation Model',
-          })}
-          hint={t('settings.speaker_segmentation_model_hint', {
-            defaultValue: 'Used to split recordings into anonymous speaker turns.',
-          })}
-        >
-          <div style={{ width: '220px' }}>
-            <Dropdown
-              id="settings-speaker-segmentation-path"
-              value={
-                (isBatchScenario
-                  ? selectedModelIds.batchSpeakerSegmentation
-                  : selectedModelIds.liveSpeakerSegmentation) ?? ''
-              }
-              onChange={(value) =>
-                handleCompanionModelChange('speakerSegmentationModelPath', value)
-              }
-              placeholder={t('settings.select_speaker_segmentation_model', {
-                defaultValue: 'Select speaker segmentation model',
-              })}
-              options={speakerSegmentationOptions}
-              style={{ flex: 1 }}
-              aria-label={t('settings.speaker_segmentation_model_label', {
-                defaultValue: 'Speaker Segmentation Model',
-              })}
-              disabled={localModelActionsDisabled}
-            />
+        <div className="settings-speaker-panel">
+          <div className="settings-speaker-header">
+            <div className="settings-speaker-header-main">
+              <div className="settings-speaker-title-row">
+                <Users
+                  size={17}
+                  style={{
+                    color: (
+                      isBatchScenario
+                        ? selectedModelIds.batchSpeakerEmbedding
+                        : selectedModelIds.liveSpeakerEmbedding
+                    )
+                      ? 'var(--color-accent-primary)'
+                      : 'var(--color-text-muted)',
+                  }}
+                />
+                <span className="settings-speaker-title">
+                  {t('settings.speaker_diarization_title', {
+                    defaultValue: 'Speaker Diarization & Recognition',
+                  })}
+                </span>
+                <span
+                  className={`status-badge ${
+                    (
+                      isBatchScenario
+                        ? selectedModelIds.batchSpeakerEmbedding
+                        : selectedModelIds.liveSpeakerEmbedding
+                    )
+                      ? 'ready'
+                      : 'off'
+                  }`}
+                >
+                  {(
+                    isBatchScenario
+                      ? selectedModelIds.batchSpeakerEmbedding
+                      : selectedModelIds.liveSpeakerEmbedding
+                  )
+                    ? t('settings.speaker_status_enabled', { defaultValue: 'Enabled' })
+                    : t('settings.speaker_status_disabled', { defaultValue: 'Disabled' })}
+                </span>
+              </div>
+              <p className="settings-speaker-desc">
+                {t('settings.speaker_diarization_description', {
+                  defaultValue:
+                    'Distinguish speaker turns and automatically identify known voices from your voiceprint library.',
+                })}
+              </p>
+            </div>
+            {Boolean(navContext) && (
+              <button
+                type="button"
+                className="settings-speaker-profiles-btn"
+                onClick={() => navContext?.navigateToTab('vocabulary')}
+                title={t('settings.speaker_manage_profiles', {
+                  defaultValue: 'Manage Voiceprints',
+                })}
+              >
+                <UserCheck size={14} />
+                <span>
+                  {t('settings.speaker_profiles_count_pill', {
+                    count: speakerProfiles?.length ?? 0,
+                    defaultValue: `${speakerProfiles?.length ?? 0} enrolled speakers`,
+                  })}
+                </span>
+                <ArrowRight size={13} />
+              </button>
+            )}
           </div>
-        </SettingsItem>
 
-        <SettingsItem
-          title={t('settings.speaker_embedding_model_label', {
-            defaultValue: 'Speaker Embedding Model',
-          })}
-          hint={t('settings.speaker_embedding_model_hint', {
-            defaultValue: 'Used to match diarized speakers against your known speaker profiles.',
-          })}
-        >
-          <div style={{ width: '220px' }}>
-            <Dropdown
-              id="settings-speaker-embedding-path"
-              value={
-                (isBatchScenario
+          <SettingsItem
+            title={t('settings.speaker_embedding_model_label', {
+              defaultValue: 'Speaker Embedding Model',
+            })}
+            hint={t('settings.speaker_embedding_model_hint', {
+              defaultValue: 'Used to match diarized speakers against your known speaker profiles.',
+            })}
+          >
+            <div style={{ width: '220px' }}>
+              <Dropdown
+                id="settings-speaker-embedding-path"
+                value={
+                  (isBatchScenario
+                    ? selectedModelIds.batchSpeakerEmbedding
+                    : selectedModelIds.liveSpeakerEmbedding) ?? ''
+                }
+                onChange={(value) => handleCompanionModelChange('speakerEmbeddingModelPath', value)}
+                placeholder={t('settings.select_speaker_embedding_model', {
+                  defaultValue: 'Select speaker embedding model',
+                })}
+                options={speakerEmbeddingOptions}
+                style={{ flex: 1 }}
+                aria-label={t('settings.speaker_embedding_model_label', {
+                  defaultValue: 'Speaker Embedding Model',
+                })}
+                disabled={localModelActionsDisabled}
+              />
+            </div>
+          </SettingsItem>
+
+          <SettingsItem
+            title={t('settings.speaker_segmentation_model_label', {
+              defaultValue: 'Speaker Segmentation Model',
+            })}
+            hint={
+              isBatchScenario
+                ? t('settings.speaker_segmentation_model_hint', {
+                    defaultValue: 'Used to split recordings into anonymous speaker turns.',
+                  })
+                : t('settings.speaker_live_stream_hint', {
+                    defaultValue:
+                      'In live mode, boundaries are driven by speech turns; segmentation model is optional.',
+                  })
+            }
+          >
+            <div style={{ width: '220px' }}>
+              <Dropdown
+                id="settings-speaker-segmentation-path"
+                value={
+                  (isBatchScenario
+                    ? selectedModelIds.batchSpeakerSegmentation
+                    : selectedModelIds.liveSpeakerSegmentation) ?? ''
+                }
+                onChange={(value) =>
+                  handleCompanionModelChange('speakerSegmentationModelPath', value)
+                }
+                placeholder={t('settings.select_speaker_segmentation_model', {
+                  defaultValue: 'Select speaker segmentation model',
+                })}
+                options={speakerSegmentationOptions}
+                style={{ flex: 1 }}
+                aria-label={t('settings.speaker_segmentation_model_label', {
+                  defaultValue: 'Speaker Segmentation Model',
+                })}
+                disabled={localModelActionsDisabled}
+              />
+            </div>
+          </SettingsItem>
+
+          <SettingsItem
+            title={t('settings.speaker_sensitivity_label', {
+              defaultValue: 'Separation Sensitivity',
+            })}
+            hint={t('settings.speaker_sensitivity_hint', {
+              defaultValue:
+                'Adjust strictness of speaker clustering. Permissive tolerates pitch variations; strict clearly differentiates close voices.',
+            })}
+          >
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-end',
+                gap: '6px',
+              }}
+            >
+              <div
+                className="settings-sensitivity-control"
+                role="radiogroup"
+                aria-label={t('settings.speaker_sensitivity_label', {
+                  defaultValue: 'Separation Sensitivity',
+                })}
+              >
+                {[
+                  {
+                    value: 'permissive' as const,
+                    label: t('settings.speaker_sensitivity_permissive', {
+                      defaultValue: 'Permissive',
+                    }),
+                    desc: t('settings.speaker_sensitivity_permissive_desc', {
+                      defaultValue: 'Tends to merge similar voices',
+                    }),
+                  },
+                  {
+                    value: 'balanced' as const,
+                    label: t('settings.speaker_sensitivity_balanced', {
+                      defaultValue: 'Balanced',
+                    }),
+                    desc: t('settings.speaker_sensitivity_balanced_desc', {
+                      defaultValue: 'Recommended model baseline',
+                    }),
+                  },
+                  {
+                    value: 'strict' as const,
+                    label: t('settings.speaker_sensitivity_strict', {
+                      defaultValue: 'Strict',
+                    }),
+                    desc: t('settings.speaker_sensitivity_strict_desc', {
+                      defaultValue: 'Differentiates close speakers',
+                    }),
+                  },
+                ].map((item) => {
+                  const currentSensitivity =
+                    modelConfig.speakerDiarizationSensitivity ?? 'balanced';
+                  const isEmbeddingActive = Boolean(
+                    isBatchScenario
+                      ? selectedModelIds.batchSpeakerEmbedding
+                      : selectedModelIds.liveSpeakerEmbedding
+                  );
+                  return (
+                    <button
+                      key={item.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={currentSensitivity === item.value}
+                      className={`settings-sensitivity-btn${
+                        currentSensitivity === item.value ? ' is-active' : ''
+                      }`}
+                      onClick={() => updateConfig({ speakerDiarizationSensitivity: item.value })}
+                      disabled={localModelActionsDisabled || !isEmbeddingActive}
+                      title={item.desc}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className="settings-sensitivity-caption">
+                {!(isBatchScenario
                   ? selectedModelIds.batchSpeakerEmbedding
-                  : selectedModelIds.liveSpeakerEmbedding) ?? ''
-              }
-              onChange={(value) => handleCompanionModelChange('speakerEmbeddingModelPath', value)}
-              placeholder={t('settings.select_speaker_embedding_model', {
-                defaultValue: 'Select speaker embedding model',
-              })}
-              options={speakerEmbeddingOptions}
-              style={{ flex: 1 }}
-              aria-label={t('settings.speaker_embedding_model_label', {
-                defaultValue: 'Speaker Embedding Model',
-              })}
-              disabled={localModelActionsDisabled}
-            />
-          </div>
-        </SettingsItem>
+                  : selectedModelIds.liveSpeakerEmbedding)
+                  ? t('settings.speaker_disabled_hint', {
+                      defaultValue: 'Select a speaker embedding model to enable',
+                    })
+                  : (modelConfig.speakerDiarizationSensitivity ?? 'balanced') === 'permissive'
+                    ? t('settings.speaker_sensitivity_permissive_desc', {
+                        defaultValue: 'Tends to merge similar voices',
+                      })
+                    : (modelConfig.speakerDiarizationSensitivity ?? 'balanced') === 'strict'
+                      ? t('settings.speaker_sensitivity_strict_desc', {
+                          defaultValue: 'Differentiates close speakers',
+                        })
+                      : t('settings.speaker_sensitivity_balanced_desc', {
+                          defaultValue: 'Recommended model baseline',
+                        })}
+              </span>
+            </div>
+          </SettingsItem>
+        </div>
 
         <SettingsItem
           title={t('settings.alignment_model_label', {

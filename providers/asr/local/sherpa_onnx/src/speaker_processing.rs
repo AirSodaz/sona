@@ -1852,6 +1852,7 @@ mod tests {
             speaker_segmentation_model_path: None,
             speaker_embedding_model_path: None,
             speaker_profiles: None,
+            sensitivity: None,
         };
 
         let error = annotate_segments_with_speakers(&[], &segments, Some(&config)).unwrap_err();

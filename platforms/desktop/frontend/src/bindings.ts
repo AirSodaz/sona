@@ -92,6 +92,7 @@ export type AppConfig_Deserialize = {
 	batchSpeakerSegmentationModelPath?: string | null,
 	batchSpeakerEmbeddingModelPath?: string | null,
 	batchAlignmentModelPath?: string | null,
+	speakerDiarizationSensitivity?: string | null,
 	modelDownloadMirror?: string | null,
 	lockWindow?: boolean | null,
 	alwaysOnTop?: boolean | null,
@@ -174,6 +175,7 @@ export type AppConfig_Serialize = {
 	batchSpeakerSegmentationModelPath?: string | null,
 	batchSpeakerEmbeddingModelPath?: string | null,
 	batchAlignmentModelPath?: string | null,
+	speakerDiarizationSensitivity?: string | null,
 	modelDownloadMirror?: string | null,
 	lockWindow?: boolean | null,
 	alwaysOnTop?: boolean | null,
@@ -373,7 +375,7 @@ export type AsrTranscriptionRequest_Deserialize = {
 	normalizationOptions: TranscriptNormalizationOptions,
 	postprocessOptions: TranscriptPostprocessOptions,
 	hotwords: string | null,
-	speakerProcessing: SpeakerProcessingConfig | null,
+	speakerProcessing: SpeakerProcessingConfig_Deserialize | null,
 } & AsrEngineConfig_Deserialize;
 
 export type AsrTranscriptionRequest_Serialize = {
@@ -383,7 +385,7 @@ export type AsrTranscriptionRequest_Serialize = {
 	normalizationOptions: TranscriptNormalizationOptions,
 	postprocessOptions: TranscriptPostprocessOptions,
 	hotwords: string | null,
-	speakerProcessing: SpeakerProcessingConfig | null,
+	speakerProcessing: SpeakerProcessingConfig_Serialize | null,
 } & AsrEngineConfig_Serialize;
 
 export type AudioUsageCategory = {
@@ -2336,10 +2338,20 @@ export type SpeakerLeader = {
 	itemCountDisplay: string,
 };
 
-export type SpeakerProcessingConfig = {
+export type SpeakerProcessingConfig = SpeakerProcessingConfig_Serialize | SpeakerProcessingConfig_Deserialize;
+
+export type SpeakerProcessingConfig_Deserialize = {
 	speakerSegmentationModelPath: string | null,
 	speakerEmbeddingModelPath: string | null,
 	speakerProfiles: SpeakerProfile[] | null,
+	sensitivity?: string | null,
+};
+
+export type SpeakerProcessingConfig_Serialize = {
+	speakerSegmentationModelPath: string | null,
+	speakerEmbeddingModelPath: string | null,
+	speakerProfiles: SpeakerProfile[] | null,
+	sensitivity?: string | null,
 };
 
 export type SpeakerProfile = {

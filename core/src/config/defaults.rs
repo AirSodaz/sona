@@ -73,6 +73,7 @@ pub fn default_config() -> Value {
         ("hotwordSets", json!([])),
         ("polishKeywordSets", json!([])),
         ("speakerProfiles", json!([])),
+        ("speakerDiarizationSensitivity", json!("balanced")),
         ("hotwords", json!([])),
         ("httpServerEnabled", json!(false)),
         ("httpServerPort", json!(14200)),

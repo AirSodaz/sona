@@ -157,6 +157,8 @@ export interface ModelConfig {
   batchSpeakerEmbeddingModelPath?: string;
   /** Path to the CTC alignment model used by batch import. */
   batchAlignmentModelPath?: string;
+  /** Speaker diarization and recognition sensitivity: 'permissive' | 'balanced' | 'strict'. */
+  speakerDiarizationSensitivity?: 'permissive' | 'balanced' | 'strict';
   /** Download mirror to use for preset models. */
   modelDownloadMirror?: string;
 }

@@ -52,6 +52,7 @@ export interface SpeakerProcessingConfig {
   speakerSegmentationModelPath?: string;
   speakerEmbeddingModelPath?: string;
   speakerProfiles?: SpeakerProfile[];
+  sensitivity?: string;
 }
 
 export interface SpeakerCorrectionProfileSections {

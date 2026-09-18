@@ -251,6 +251,7 @@ fn inference_spec_retains_speaker_processing() {
         speaker_segmentation_model_path: Some("/models/seg".into()),
         speaker_embedding_model_path: Some("/models/embed".into()),
         speaker_profiles: None,
+        sensitivity: None,
     });
 
     let mut right = left.clone();

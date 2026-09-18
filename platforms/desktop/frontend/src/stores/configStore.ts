@@ -96,8 +96,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   batchSpeakerSegmentationModelPath: '',
   batchSpeakerEmbeddingModelPath: '',
   batchAlignmentModelPath: '',
+  speakerDiarizationSensitivity: 'balanced',
   modelDownloadMirror: 'auto',
-
   // Caption
   lockWindow: false,
   alwaysOnTop: true,
@@ -217,6 +217,7 @@ const MODEL_KEYS: (keyof ModelConfig)[] = [
   'batchSpeakerSegmentationModelPath',
   'batchSpeakerEmbeddingModelPath',
   'batchAlignmentModelPath',
+  'speakerDiarizationSensitivity',
   'modelDownloadMirror',
 ];
 
