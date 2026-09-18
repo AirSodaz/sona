@@ -26,6 +26,7 @@
     "connecting": "Connecting...",
     "ok": "OK",
     "open": "Open",
+    "resume": "Resume",
     "actions_for": "Actions for {{item}}",
     "cut": "Cut",
     "copy": "Copy",
@@ -148,9 +149,15 @@
     "recent": "Recent",
     "clear_recent": "Clear recent",
     "clear": "Clear",
+    "clear_succeeded": "Clear succeeded",
+    "clear_succeeded_hint": "Only clear succeeded messages ({{count}})",
+    "clear_all": "Clear all",
+    "clear_all_hint": "Clear all completed records ({{count}})",
+    "clear_options": "Clear options",
     "dismiss": "Dismiss",
     "discard": "Discard",
     "retry": "Retry",
+    "resume": "Resume",
     "stopping": "Stopping",
     "cancel_pending_hint": "Stops after the current step and skips the final writeback.",
     "progress": "Progress",
@@ -2222,7 +2229,8 @@
       "open_center": "Open Recovery Center",
       "resume_all": "Resume All",
       "discard_all": "Discard All",
-      "discard": "Discard"
+      "discard": "Discard",
+      "resume": "Resume"
     },
     "labels": {
       "last_recovered": "Recovered From",

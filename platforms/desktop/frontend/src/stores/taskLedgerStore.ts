@@ -9,7 +9,12 @@ import {
   taskLedgerUpsertTask,
 } from '../services/tauri/taskLedger';
 import type { LoadableState } from '../types/asyncState';
-import type { TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot } from '../types/taskLedger';
+import {
+  isTaskLedgerActiveStatus,
+  type TaskLedgerPatch,
+  type TaskLedgerRecord,
+  type TaskLedgerSnapshot,
+} from '../types/taskLedger';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import {
@@ -35,6 +40,8 @@ interface TaskLedgerState extends LoadableState {
   patchTask: (id: string, patch: TaskLedgerPatch, options?: UpsertTaskOptions) => Promise<void>;
   removeTask: (id: string) => Promise<void>;
   clearResolved: () => Promise<void>;
+  clearSucceeded: () => Promise<void>;
+  clearAllNonActive: () => Promise<void>;
   requestCancel: (id: string) => Promise<void>;
   isCancelRequested: (id: string) => boolean;
   applySnapshot: (snapshot: TaskLedgerSnapshot) => void;
@@ -154,6 +161,55 @@ export const useTaskLedgerStore = create<TaskLedgerState>((set, get) => ({
     }));
     const snapshot = await taskLedgerClearResolved();
     get().applySnapshot(snapshot);
+  },
+
+  clearSucceeded: async () => {
+    const succeededTasks = get().tasks.filter((task) => task.status === 'succeeded');
+    if (succeededTasks.length === 0) {
+      return;
+    }
+    const hasCancelledTasks = get().tasks.some((task) => task.status === 'cancelled');
+    set((state) => ({
+      tasks: state.tasks.filter((task) => task.status !== 'succeeded'),
+    }));
+    if (!hasCancelledTasks) {
+      const snapshot = await taskLedgerClearResolved();
+      get().applySnapshot(snapshot);
+      return;
+    }
+    let snapshot: TaskLedgerSnapshot | null = null;
+    for (const task of succeededTasks) {
+      snapshot = await enqueueDurableWrite(task.id, () => taskLedgerRemoveTask(task.id));
+    }
+    if (snapshot) {
+      get().applySnapshot(snapshot);
+    }
+  },
+
+  clearAllNonActive: async () => {
+    const clearableTasks = get().tasks.filter((task) => !isTaskLedgerActiveStatus(task.status));
+    if (clearableTasks.length === 0) {
+      return;
+    }
+    set((state) => ({
+      tasks: state.tasks.filter((task) => isTaskLedgerActiveStatus(task.status)),
+    }));
+    const hasResolvedTasks = clearableTasks.some(
+      (task) => task.status === 'succeeded' || task.status === 'cancelled'
+    );
+    let snapshot: TaskLedgerSnapshot | null = null;
+    if (hasResolvedTasks) {
+      snapshot = await taskLedgerClearResolved();
+    }
+    const otherClearableTasks = clearableTasks.filter(
+      (task) => task.status !== 'succeeded' && task.status !== 'cancelled'
+    );
+    for (const task of otherClearableTasks) {
+      snapshot = await enqueueDurableWrite(task.id, () => taskLedgerRemoveTask(task.id));
+    }
+    if (snapshot) {
+      get().applySnapshot(snapshot);
+    }
   },
 
   requestCancel: async (id) => {

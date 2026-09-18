@@ -23,6 +23,7 @@
     "confirm": "確認",
     "ok": "確定",
     "open": "開啟",
+    "resume": "繼續",
     "actions_for": "{{item}} 的操作",
     "cut": "剪下",
     "copy": "複製",
@@ -148,9 +149,15 @@
     "recent": "最近",
     "clear_recent": "清理最近",
     "clear": "清除",
+    "clear_succeeded": "清除成功",
+    "clear_succeeded_hint": "僅清除已順利完成的訊息 ({{count}})",
+    "clear_all": "清除全部",
+    "clear_all_hint": "清空全部已結束記錄 ({{count}})",
+    "clear_options": "清除選項",
     "dismiss": "忽略",
     "discard": "丟棄",
     "retry": "重試",
+    "resume": "繼續",
     "stopping": "停止中",
     "cancel_pending_hint": "目前步驟結束後停止，不會寫回最終結果。",
     "progress": "進度",
@@ -2222,7 +2229,8 @@
       "open_center": "打開恢復中心",
       "resume_all": "繼續全部任務",
       "discard_all": "全部丟棄",
-      "discard": "丟棄"
+      "discard": "丟棄",
+      "resume": "繼續"
     },
     "labels": {
       "last_recovered": "恢復自",

@@ -39,6 +39,10 @@ export function isResolvedTaskStatus(status: TaskLedgerStatus): boolean {
   return !shouldRetainTaskStatus(status);
 }
 
+export function isSucceededTaskStatus(status: TaskLedgerStatus): boolean {
+  return status === 'succeeded';
+}
+
 export function isCancelRequestedTask(task: TaskLedgerRecord): boolean {
   return task.status === 'cancelRequested';
 }

@@ -23,6 +23,7 @@
     "confirm": "確認する",
     "ok": "OK",
     "open": "開く",
+    "resume": "再開",
     "actions_for": "{{item}} の操作",
     "cut": "切り取り",
     "copy": "コピー",
@@ -148,9 +149,15 @@
     "recent": "最近の",
     "clear_recent": "最近の内容をクリア",
     "clear": "クリア",
+    "clear_succeeded": "完了した内容をクリア",
+    "clear_succeeded_hint": "正常に完了したメッセージのみクリア ({{count}})",
+    "clear_all": "すべてクリア",
+    "clear_all_hint": "完了したすべての記録をクリア ({{count}})",
+    "clear_options": "クリアオプション",
     "dismiss": "閉じる",
     "discard": "廃棄する",
     "retry": "再試行",
+    "resume": "再開",
     "stopping": "停止中",
     "cancel_pending_hint": "現在のステップの後で停止し、最後のライトバックをスキップします。",
     "progress": "進捗状況",
@@ -2222,7 +2229,8 @@
       "open_center": "リカバリセンターを開く",
       "resume_all": "すべて再開",
       "discard_all": "すべて破棄",
-      "discard": "廃棄する"
+      "discard": "廃棄する",
+      "resume": "再開"
     },
     "labels": {
       "last_recovered": "から回復",

@@ -26,6 +26,7 @@
     "connecting": "正在连接...",
     "ok": "确定",
     "open": "打开",
+    "resume": "继续",
     "actions_for": "对 {{item}} 的操作",
     "cut": "剪切",
     "copy": "复制",
@@ -148,9 +149,15 @@
     "recent": "最近",
     "clear_recent": "清理最近",
     "clear": "清除",
+    "clear_succeeded": "清除成功",
+    "clear_succeeded_hint": "仅清除已顺利完成的消息 ({{count}})",
+    "clear_all": "清除全部",
+    "clear_all_hint": "清空全部已结束记录 ({{count}})",
+    "clear_options": "清除选项",
     "dismiss": "忽略",
     "discard": "丢弃",
     "retry": "重试",
+    "resume": "继续",
     "stopping": "停止中",
     "cancel_pending_hint": "当前步骤结束后停止，不会写回最终结果。",
     "progress": "进度",
@@ -2222,7 +2229,8 @@
       "open_center": "打开恢复中心",
       "resume_all": "继续全部任务",
       "discard_all": "全部丢弃",
-      "discard": "丢弃"
+      "discard": "丢弃",
+      "resume": "继续"
     },
     "labels": {
       "last_recovered": "恢复自",

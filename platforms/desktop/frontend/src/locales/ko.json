@@ -23,6 +23,7 @@
     "confirm": "확인",
     "ok": "확인",
     "open": "열기",
+    "resume": "재개",
     "actions_for": "{{item}} 작업",
     "cut": "잘라내기",
     "copy": "복사",
@@ -148,9 +149,15 @@
     "recent": "최근",
     "clear_recent": "최근 항목 지우기",
     "clear": "지우기",
+    "clear_succeeded": "완료된 항목 지우기",
+    "clear_succeeded_hint": "성공적으로 완료된 메시지만 지우기 ({{count}})",
+    "clear_all": "모두 지우기",
+    "clear_all_hint": "완료된 모든 기록 지우기 ({{count}})",
+    "clear_options": "지우기 옵션",
     "dismiss": "닫기",
     "discard": "버리기",
     "retry": "다시 시도",
+    "resume": "재개",
     "stopping": "중지 중",
     "cancel_pending_hint": "현재 단계가 끝난 뒤 중지하고 마지막 저장 단계는 건너뜁니다.",
     "progress": "진행률",
@@ -2222,7 +2229,8 @@
       "open_center": "복구 센터 열기",
       "resume_all": "모두 재개",
       "discard_all": "모두 버리기",
-      "discard": "버리기"
+      "discard": "버리기",
+      "resume": "재개"
     },
     "labels": {
       "last_recovered": "복구 출처",

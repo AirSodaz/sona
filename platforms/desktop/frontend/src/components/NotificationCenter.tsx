@@ -29,6 +29,7 @@ import {
   RestoreIcon,
   SparklesIcon,
 } from './Icons';
+import { type ClearScope, NotificationClearMenu } from './NotificationClearMenu';
 
 interface NotificationCenterProps {
   onOpenRecoveryCenter: () => void;
@@ -329,7 +330,8 @@ export function NotificationCenter({
 }: NotificationCenterProps): React.JSX.Element {
   const { t } = useTranslation();
   const tasks = useTaskLedgerStore((state) => state.tasks);
-  const clearResolvedTasks = useTaskLedgerStore((state) => state.clearResolved);
+  const clearSucceededTasks = useTaskLedgerStore((state) => state.clearSucceeded);
+  const clearAllNonActiveTasks = useTaskLedgerStore((state) => state.clearAllNonActive);
   const isRecoveryLoaded = useRecoveryStore((state) => state.isLoaded);
   const config = useConfigStore((state) => state.config);
   const confirm = useDialogStore((state) => state.confirm);
@@ -396,6 +398,23 @@ export function NotificationCenter({
       },
     },
   });
+
+  const succeededCount = useMemo(
+    () => tasks.filter((task) => task.status === 'succeeded').length,
+    [tasks]
+  );
+  const totalClearableCount = useMemo(
+    () => tasks.filter((task) => !isTaskLedgerActiveStatus(task.status)).length,
+    [tasks]
+  );
+
+  const handleClear = (scope: ClearScope) => {
+    if (scope === 'succeeded') {
+      void clearSucceededTasks();
+    } else {
+      void clearAllNonActiveTasks();
+    }
+  };
 
   const entries = useMemo<TaskCenterEntry[]>(() => {
     const staleQueueTaskIds = new Set(
@@ -746,14 +765,12 @@ export function NotificationCenter({
             <div className="notification-center-panel-title">
               {t('task_center.panel_title', { defaultValue: 'Task Center' })}
             </div>
-            {groupedEntries.recent.length > 0 ? (
-              <button
-                type="button"
-                className="btn btn-secondary-soft btn-sm notification-center-clear-resolved"
-                onClick={() => void clearResolvedTasks()}
-              >
-                {t('task_center.clear_recent', { defaultValue: 'Clear recent' })}
-              </button>
+            {totalClearableCount > 0 ? (
+              <NotificationClearMenu
+                succeededCount={succeededCount}
+                totalClearableCount={totalClearableCount}
+                onClear={handleClear}
+              />
             ) : null}
           </div>
 

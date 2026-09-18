@@ -11,12 +11,15 @@ vi.mock('@tauri-apps/api/event', () => ({
   listen: (...args: unknown[]) => listenMock(...args),
 }));
 
+const removeTaskMock = vi.fn();
+const clearResolvedMock = vi.fn();
+
 vi.mock('../../services/tauri/taskLedger', () => ({
   taskLedgerLoadSnapshot: (...args: unknown[]) => loadSnapshotMock(...args),
   taskLedgerPatchTask: (...args: unknown[]) => patchTaskMock(...args),
   taskLedgerUpsertTask: (...args: unknown[]) => upsertTaskMock(...args),
-  taskLedgerRemoveTask: vi.fn(),
-  taskLedgerClearResolved: vi.fn(),
+  taskLedgerRemoveTask: (...args: unknown[]) => removeTaskMock(...args),
+  taskLedgerClearResolved: (...args: unknown[]) => clearResolvedMock(...args),
 }));
 
 function makeTask(overrides: Partial<TaskLedgerRecord> = {}): TaskLedgerRecord {
@@ -62,6 +65,10 @@ describe('taskLedgerStore', () => {
     listenMock.mockReset();
     resetTaskLedgerStore();
     listenMock.mockResolvedValue(vi.fn());
+    removeTaskMock.mockReset();
+    clearResolvedMock.mockReset();
+    removeTaskMock.mockResolvedValue(makeSnapshot([]));
+    clearResolvedMock.mockResolvedValue(makeSnapshot([]));
   });
 
   it('loads the persisted task ledger snapshot', async () => {
@@ -238,5 +245,60 @@ describe('taskLedgerStore', () => {
         progress: 100,
       })
     );
+  });
+
+  it('clears succeeded tasks only, retaining cancelled and active tasks', async () => {
+    const activeTask = makeTask({ id: 'task-active', status: 'running' });
+    const succeededTask = makeTask({ id: 'task-succeeded', status: 'succeeded' });
+    const cancelledTask = makeTask({ id: 'task-cancelled', status: 'cancelled' });
+
+    useTaskLedgerStore.setState({
+      tasks: [activeTask, succeededTask, cancelledTask],
+    });
+
+    removeTaskMock.mockResolvedValueOnce(makeSnapshot([activeTask, cancelledTask]));
+
+    await useTaskLedgerStore.getState().clearSucceeded();
+
+    expect(removeTaskMock).toHaveBeenCalledWith('task-succeeded');
+    expect(clearResolvedMock).not.toHaveBeenCalled();
+    expect(useTaskLedgerStore.getState().tasks).toEqual([activeTask, cancelledTask]);
+  });
+
+  it('delegates to clearResolved when all resolved tasks are succeeded', async () => {
+    const activeTask = makeTask({ id: 'task-active', status: 'running' });
+    const succeededTask = makeTask({ id: 'task-succeeded', status: 'succeeded' });
+
+    useTaskLedgerStore.setState({
+      tasks: [activeTask, succeededTask],
+    });
+
+    clearResolvedMock.mockResolvedValueOnce(makeSnapshot([activeTask]));
+
+    await useTaskLedgerStore.getState().clearSucceeded();
+
+    expect(clearResolvedMock).toHaveBeenCalledTimes(1);
+    expect(useTaskLedgerStore.getState().tasks).toEqual([activeTask]);
+  });
+
+  it('clears all non-active tasks while strictly protecting active tasks', async () => {
+    const runningTask = makeTask({ id: 'task-running', status: 'running' });
+    const pendingTask = makeTask({ id: 'task-pending', status: 'pending' });
+    const succeededTask = makeTask({ id: 'task-succeeded', status: 'succeeded' });
+    const cancelledTask = makeTask({ id: 'task-cancelled', status: 'cancelled' });
+    const failedTask = makeTask({ id: 'task-failed', status: 'failed' });
+
+    useTaskLedgerStore.setState({
+      tasks: [runningTask, pendingTask, succeededTask, cancelledTask, failedTask],
+    });
+
+    clearResolvedMock.mockResolvedValueOnce(makeSnapshot([runningTask, pendingTask, failedTask]));
+    removeTaskMock.mockResolvedValueOnce(makeSnapshot([runningTask, pendingTask]));
+
+    await useTaskLedgerStore.getState().clearAllNonActive();
+
+    expect(clearResolvedMock).toHaveBeenCalledTimes(1);
+    expect(removeTaskMock).toHaveBeenCalledWith('task-failed');
+    expect(useTaskLedgerStore.getState().tasks).toEqual([runningTask, pendingTask]);
   });
 });

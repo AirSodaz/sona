@@ -10,6 +10,8 @@ const taskLedgerState = {
   requestCancel: vi.fn(),
   removeTask: vi.fn(),
   clearResolved: vi.fn(),
+  clearSucceeded: vi.fn(),
+  clearAllNonActive: vi.fn(),
 };
 
 const recoveryState = {
@@ -641,5 +643,89 @@ describe('NotificationCenter task center', () => {
     screen.getByText('Recommended local models are missing.');
     screen.getByRole('button', { name: 'Continue Setup' });
     screen.getByRole('button', { name: 'Dismiss' });
+  });
+
+  it('renders the clear menu when clearable tasks exist and allows clearing succeeded or all', () => {
+    taskLedgerState.tasks = [
+      makeTask({ id: 'succeeded-1', status: 'succeeded', title: 'done.wav' }),
+      makeTask({ id: 'cancelled-1', status: 'cancelled', title: 'stopped.wav' }),
+    ];
+
+    render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    const clearTrigger = screen.getByTestId('notification-clear-trigger');
+    expect(clearTrigger).toBeDefined();
+
+    // Open dropdown
+    fireEvent.click(clearTrigger);
+
+    const menu = screen.getByRole('menu', { name: 'Clear options' });
+    expect(menu).toBeDefined();
+
+    const clearSucceededBtn = screen.getByRole('menuitem', {
+      name: /Clear succeeded/i,
+    }) as HTMLButtonElement;
+    const clearAllBtn = screen.getByRole('menuitem', { name: /Clear all/i }) as HTMLButtonElement;
+
+    expect(clearSucceededBtn.disabled).toBe(false);
+    expect(clearAllBtn.disabled).toBe(false);
+
+    // Click clear succeeded
+    fireEvent.click(clearSucceededBtn);
+    expect(taskLedgerState.clearSucceeded).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('menu', { name: 'Clear options' })).toBeNull();
+  });
+
+  it('disables "Clear succeeded" when there are only failed/non-succeeded tasks', () => {
+    taskLedgerState.tasks = [makeTask({ id: 'failed-1', status: 'failed', title: 'error.wav' })];
+
+    render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    const clearTrigger = screen.getByTestId('notification-clear-trigger');
+    fireEvent.click(clearTrigger);
+
+    const clearSucceededBtn = screen.getByRole('menuitem', {
+      name: /Clear succeeded/i,
+    }) as HTMLButtonElement;
+    const clearAllBtn = screen.getByRole('menuitem', { name: /Clear all/i }) as HTMLButtonElement;
+
+    expect(clearSucceededBtn.disabled).toBe(true);
+    expect(clearAllBtn.disabled).toBe(false);
+
+    fireEvent.click(clearAllBtn);
+    expect(taskLedgerState.clearAllNonActive).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('menu', { name: 'Clear options' })).toBeNull();
+  });
+
+  it('closes the clear dropdown on Escape without closing the notification center panel', () => {
+    taskLedgerState.tasks = [
+      makeTask({ id: 'succeeded-1', status: 'succeeded', title: 'done.wav' }),
+    ];
+
+    render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    const clearTrigger = screen.getByTestId('notification-clear-trigger');
+    fireEvent.click(clearTrigger);
+
+    expect(screen.getByRole('menu', { name: 'Clear options' })).toBeDefined();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    // Menu is closed
+    expect(screen.queryByRole('menu', { name: 'Clear options' })).toBeNull();
+    // Panel remains open
+    expect(screen.getByRole('dialog', { name: 'Task Center' })).toBeDefined();
   });
 });
