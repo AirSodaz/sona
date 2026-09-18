@@ -584,20 +584,43 @@ impl OnlineSpeakerTracker {
             } else {
                 ("anonymous".to_string(), "low".to_string())
             };
-
-            let speaker = SpeakerTag {
-                id: cluster_clone.anonymous_id.clone(),
-                label: cluster_clone.anonymous_label.clone(),
-                kind: "anonymous".to_string(),
-                score: candidates.first().map(|c| c.score),
-            };
-            let attribution = SpeakerAttribution {
-                group_id: cluster_clone.anonymous_id.clone(),
-                anonymous_label: cluster_clone.anonymous_label.clone(),
-                state,
-                source: "auto".to_string(),
-                confidence,
-                candidates,
+            let (speaker, attribution) = if let Some(profile_id) =
+                cluster_clone.bound_profile_id.as_deref()
+                && let Some(profile_name) = self.profile_names.get(profile_id)
+            {
+                (
+                    SpeakerTag {
+                        id: profile_id.to_string(),
+                        label: profile_name.clone(),
+                        kind: "identified".to_string(),
+                        score: candidates.first().map(|c| c.score).or(Some(best_sim)),
+                    },
+                    SpeakerAttribution {
+                        group_id: profile_id.to_string(),
+                        anonymous_label: profile_name.clone(),
+                        state: "identified".to_string(),
+                        source: "auto".to_string(),
+                        confidence: "high".to_string(),
+                        candidates,
+                    },
+                )
+            } else {
+                (
+                    SpeakerTag {
+                        id: cluster_clone.anonymous_id.clone(),
+                        label: cluster_clone.anonymous_label.clone(),
+                        kind: "anonymous".to_string(),
+                        score: candidates.first().map(|c| c.score),
+                    },
+                    SpeakerAttribution {
+                        group_id: cluster_clone.anonymous_id.clone(),
+                        anonymous_label: cluster_clone.anonymous_label.clone(),
+                        state,
+                        source: "auto".to_string(),
+                        confidence,
+                        candidates,
+                    },
+                )
             };
 
             self.recent_speaker = Some(RecentSpeakerState {
@@ -719,6 +742,13 @@ impl OnlineSpeakerTracker {
         let mut to_merge = None;
         for i in 0..self.dynamic_clusters.len() {
             for j in (i + 1)..self.dynamic_clusters.len() {
+                if let (Some(p1), Some(p2)) = (
+                    &self.dynamic_clusters[i].bound_profile_id,
+                    &self.dynamic_clusters[j].bound_profile_id,
+                ) && p1 != p2
+                {
+                    continue;
+                }
                 let sim = cosine_similarity(
                     &self.dynamic_clusters[i].centroid,
                     &self.dynamic_clusters[j].centroid,
@@ -771,18 +801,10 @@ impl OnlineSpeakerTracker {
         &mut self,
         end_time: f64,
     ) -> (Option<SpeakerTag>, Option<SpeakerAttribution>) {
-        let (id, label) = if let Some(recent) = &self.recent_speaker {
-            if let Some(spk) = &recent.speaker {
-                (spk.id.clone(), spk.label.clone())
-            } else {
-                ("speaker-1".to_string(), "Speaker 1".to_string())
-            }
-        } else if let Some(c) = self.dynamic_clusters.first() {
-            (c.anonymous_id.clone(), c.anonymous_label.clone())
-        } else {
-            ("speaker-1".to_string(), "Speaker 1".to_string())
-        };
-
+        let raw_id = self.next_cluster_id;
+        self.next_cluster_id += 1;
+        let id = format!("speaker-{raw_id}");
+        let label = format!("Speaker {raw_id}");
         let speaker = SpeakerTag {
             id: id.clone(),
             label: label.clone(),
@@ -1015,5 +1037,43 @@ mod tests {
 
         let balanced = base.with_sensitivity(Some("balanced"));
         assert!((balanced.dynamic_merge_threshold - 0.48).abs() < 1e-4);
+    }
+
+    #[test]
+    fn repair_oversegmentation_does_not_merge_distinct_bound_profiles() {
+        let mut tracker = OnlineSpeakerTracker::empty().with_thresholds(SpeakerModelThresholds {
+            repair_merge_threshold: 0.50,
+            ..SpeakerModelThresholds::default()
+        });
+
+        // Two clusters with similarity 0.99, but bound to different profiles
+        tracker.create_dynamic_cluster(&[1.0, 0.0], Some("profile-alice".to_string()));
+        tracker.create_dynamic_cluster(&[0.99, 0.05], Some("profile-bob".to_string()));
+        assert_eq!(tracker.dynamic_clusters.len(), 2);
+
+        tracker.repair_oversegmentation();
+        // Must NOT merge them!
+        assert_eq!(tracker.dynamic_clusters.len(), 2);
+        assert_eq!(
+            tracker.dynamic_clusters[0].bound_profile_id.as_deref(),
+            Some("profile-alice")
+        );
+        assert_eq!(
+            tracker.dynamic_clusters[1].bound_profile_id.as_deref(),
+            Some("profile-bob")
+        );
+    }
+
+    #[test]
+    fn fallback_anonymous_allocates_new_speaker_id() {
+        let mut tracker = OnlineSpeakerTracker::empty();
+        tracker.next_cluster_id = 3;
+
+        let (spk, attr) = tracker.fallback_anonymous(10.0);
+        let spk = spk.unwrap();
+        assert_eq!(spk.id, "speaker-3");
+        assert_eq!(spk.label, "Speaker 3");
+        assert_eq!(attr.unwrap().state, "anonymous");
+        assert_eq!(tracker.next_cluster_id, 4);
     }
 }

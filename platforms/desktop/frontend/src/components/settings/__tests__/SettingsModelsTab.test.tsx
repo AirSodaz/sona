@@ -669,17 +669,19 @@ describe('SettingsModelsTab speaker model selections', () => {
     renderTab(new Set(['mms-300m-ctc-alignment']));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'CTC 对齐模型' }).textContent).toContain(
+      expect(screen.getByRole('button', { name: 'CTC Alignment Model' }).textContent).toContain(
         'MMS 300M Alignment'
       );
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'CTC 对齐模型' }));
+    fireEvent.click(screen.getByRole('button', { name: 'CTC Alignment Model' }));
     fireEvent.click(screen.getByRole('option', { name: 'Off' }));
 
     await waitFor(() => {
       expect(useConfigStore.getState().config.liveAlignmentModelPath).toBe('');
-      expect(screen.getByRole('button', { name: 'CTC 对齐模型' }).textContent).toContain('Off');
+      expect(screen.getByRole('button', { name: 'CTC Alignment Model' }).textContent).toContain(
+        'Off'
+      );
     });
   });
 

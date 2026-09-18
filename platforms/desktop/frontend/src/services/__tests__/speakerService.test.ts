@@ -110,4 +110,19 @@ describe('speakerService', () => {
       sensitivity: 'balanced',
     });
   });
+
+  it('skips file annotation when segmentation model is missing', async () => {
+    const sampleSegments = [{ id: 'seg-1', start: 0, end: 1, text: 'hello' } as any];
+    const result = await speakerService.annotateSegmentsForFile(
+      '/path/to/audio.wav',
+      sampleSegments,
+      {
+        liveSpeakerSegmentationModelPath: '',
+        liveSpeakerEmbeddingModelPath: '/models/embed.onnx',
+        speakerProfiles: [],
+      },
+      'live'
+    );
+    expect(result).toBe(sampleSegments);
+  });
 });

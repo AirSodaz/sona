@@ -71,10 +71,12 @@ export class SpeakerService {
     }
 
     const speakerProcessing = this.buildProcessingConfig(config, scenario);
-    if (!speakerProcessing) {
+    if (
+      !speakerProcessing?.speakerSegmentationModelPath ||
+      !speakerProcessing?.speakerEmbeddingModelPath
+    ) {
       return segments;
     }
-
     return this.ports.annotateSpeakerSegmentsFromFile(filePath, segments, speakerProcessing);
   }
 

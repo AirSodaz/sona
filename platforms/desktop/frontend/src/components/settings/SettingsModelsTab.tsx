@@ -1367,10 +1367,11 @@ export function SettingsModelsTab({
 
         <SettingsItem
           title={t('settings.alignment_model_label', {
-            defaultValue: 'CTC 对齐模型',
+            defaultValue: 'CTC Alignment Model',
           })}
           hint={t('settings.alignment_model_hint', {
-            defaultValue: '用于生成字/词级时间戳并优化说话人切分边界。',
+            defaultValue:
+              'Used to generate token-level timestamps and refine speaker turn boundaries.',
           })}
         >
           <div style={{ width: '220px' }}>
@@ -1383,14 +1384,13 @@ export function SettingsModelsTab({
               }
               onChange={(value) => handleCompanionModelChange('alignmentModelPath', value)}
               placeholder={t('settings.select_alignment_model', {
-                defaultValue: '选择对齐模型...',
+                defaultValue: 'Select alignment model...',
               })}
               options={alignmentOptions}
               style={{ flex: 1 }}
               aria-label={t('settings.alignment_model_label', {
-                defaultValue: 'CTC 对齐模型',
+                defaultValue: 'CTC Alignment Model',
               })}
-              disabled={localModelActionsDisabled}
             />
           </div>
         </SettingsItem>
