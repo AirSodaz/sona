@@ -256,7 +256,17 @@
     "status_processing": "处理中",
     "status_complete": "已完成",
     "status_error": "失败",
-    "status_cancelled": "已取消"
+    "status_cancelled": "已取消",
+    "retry": "重试",
+    "retry_all": "全部重试",
+    "start_queue": "开始处理",
+    "pause_queue": "暂停",
+    "resume_queue": "继续",
+    "summary_progress": "{{done}}/{{total}} 已完成",
+    "group_processing": "处理中",
+    "group_pending": "等待中",
+    "group_complete": "已完成",
+    "group_failed": "失败"
   },
   "player": {
     "play": "播放",

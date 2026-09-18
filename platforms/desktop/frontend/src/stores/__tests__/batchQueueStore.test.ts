@@ -643,4 +643,104 @@ describe('batchQueueStore', () => {
     expect(useTranscriptStore.getState().activeSessionId).toBe('item-1');
     expect(useTranscriptStore.getState().segments).toEqual([expect.objectContaining(seg1)]);
   });
+
+  it('pauses and resumes queue processing', async () => {
+    useBatchQueueStore.setState({
+      isQueueProcessing: true,
+      isQueuePaused: false,
+    });
+
+    useBatchQueueStore.getState().pauseQueue();
+    expect(useBatchQueueStore.getState().isQueuePaused).toBe(true);
+    expect(useBatchQueueStore.getState().isQueueProcessing).toBe(false);
+
+    const processQueueSpy = vi.spyOn(useBatchQueueStore.getState(), 'processQueue');
+    useBatchQueueStore.getState().resumeQueue();
+    expect(useBatchQueueStore.getState().isQueuePaused).toBe(false);
+    expect(processQueueSpy).toHaveBeenCalled();
+  });
+
+  it('retries a single failed item and triggers queue processing', () => {
+    useBatchQueueStore.setState({
+      queueItems: [
+        {
+          id: 'failed-1',
+          filename: 'fail.wav',
+          filePath: '/fail.wav',
+          status: 'error',
+          progress: 30,
+          errorMessage: 'Bad audio format',
+          segments: [],
+          audioUrl: null,
+          projectId: null,
+        },
+      ],
+      isQueueProcessing: false,
+      isQueuePaused: false,
+    });
+
+    const processQueueSpy = vi
+      .spyOn(useBatchQueueStore.getState(), 'processQueue')
+      .mockImplementation(async () => {});
+    useBatchQueueStore.getState().retryItem('failed-1');
+
+    const updated = useBatchQueueStore.getState().queueItems[0];
+    expect(updated.status).toBe('pending');
+    expect(updated.progress).toBe(0);
+    expect(updated.errorMessage).toBeUndefined();
+    expect(processQueueSpy).toHaveBeenCalled();
+  });
+
+  it('retries all failed and cancelled items in the queue', () => {
+    useBatchQueueStore.setState({
+      queueItems: [
+        {
+          id: 'item-1',
+          filename: 'f1.wav',
+          filePath: '/f1.wav',
+          status: 'error',
+          progress: 50,
+          errorMessage: 'Error 1',
+          segments: [],
+          audioUrl: null,
+          projectId: null,
+        },
+        {
+          id: 'item-2',
+          filename: 'f2.wav',
+          filePath: '/f2.wav',
+          status: 'cancelled',
+          progress: 20,
+          segments: [],
+          audioUrl: null,
+          projectId: null,
+        },
+        {
+          id: 'item-3',
+          filename: 'f3.wav',
+          filePath: '/f3.wav',
+          status: 'complete',
+          progress: 100,
+          segments: [],
+          audioUrl: null,
+          projectId: null,
+        },
+      ],
+      isQueueProcessing: false,
+      isQueuePaused: false,
+    });
+    const processQueueSpy = vi
+      .spyOn(useBatchQueueStore.getState(), 'processQueue')
+      .mockImplementation(async () => {});
+    useBatchQueueStore.getState().retryAllFailed();
+    expect(processQueueSpy).toHaveBeenCalled();
+
+    const items = useBatchQueueStore.getState().queueItems;
+    expect(items[0].status).toBe('pending');
+    expect(items[0].progress).toBe(0);
+    expect(items[0].errorMessage).toBeUndefined();
+    expect(items[1].status).toBe('pending');
+    expect(items[1].progress).toBe(0);
+    expect(items[2].status).toBe('complete');
+  });
 });

@@ -256,7 +256,17 @@
     "status_processing": "Processing",
     "status_complete": "Complete",
     "status_error": "Failed",
-    "status_cancelled": "Cancelled"
+    "status_cancelled": "Cancelled",
+    "retry": "Retry",
+    "retry_all": "Retry All",
+    "start_queue": "Start",
+    "pause_queue": "Pause",
+    "resume_queue": "Resume",
+    "summary_progress": "{{done}}/{{total}} completed",
+    "group_processing": "Processing",
+    "group_pending": "Waiting",
+    "group_complete": "Completed",
+    "group_failed": "Failed"
   },
   "player": {
     "play": "Play",

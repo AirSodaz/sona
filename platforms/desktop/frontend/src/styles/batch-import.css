@@ -21,8 +21,8 @@
 
 .options-container {
   padding: 0 8px;
+  flex-shrink: 0;
 }
-
 .options-row {
   display: flex;
   align-items: center;
@@ -89,7 +89,7 @@
 }
 
 /* ===========================
-   File Queue Sidebar
+   Batch Queue Summary Bar
    =========================== */
 
 .batch-import-queue-view {
@@ -98,59 +98,282 @@
   height: 100%;
   gap: var(--spacing-md);
   padding: var(--spacing-md);
+  overflow: hidden;
+  transition:
+    background var(--transition-fast),
+    outline var(--transition-fast);
 }
 
-.file-queue-sidebar {
+.batch-import-queue-view.drag-over {
+  outline: 2px dashed var(--color-info);
+  outline-offset: -4px;
+  background: color-mix(in srgb, var(--color-info) 4%, var(--color-bg-primary));
+  border-radius: var(--radius-lg);
+}
+
+.queue-summary-bar {
   display: flex;
   flex-direction: column;
+  gap: 10px;
   background: var(--color-bg-elevated);
-  border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
-  overflow: hidden;
-  max-height: 280px;
-}
-
-.queue-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-bottom: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-sm);
   flex-shrink: 0;
 }
 
-.queue-title {
-  font-size: 0.75rem;
+.queue-summary-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.queue-summary-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.queue-summary-title {
+  font-size: 0.9rem;
   font-weight: 600;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: var(--color-text-primary);
+  white-space: nowrap;
 }
 
-.queue-clear-btn {
-  padding: 4px;
-  color: var(--color-text-muted);
+.queue-summary-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.74rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
 }
 
-.queue-clear-btn:hover {
+.queue-summary-status-pill.status-processing {
+  background: color-mix(in srgb, var(--color-info) 12%, transparent);
+  color: var(--color-info);
+}
+
+.queue-summary-status-pill.status-complete {
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+  color: var(--color-success);
+}
+
+.queue-summary-status-pill.status-paused {
+  background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+  color: var(--color-warning);
+}
+
+.queue-summary-status-pill.status-error {
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
   color: var(--color-error);
 }
 
-.queue-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--spacing-sm);
+.queue-summary-status-pill.status-idle {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
 }
+
+.queue-summary-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.queue-summary-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.queue-btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.76rem;
+  padding: 2px 8px;
+}
+.queue-summary-progress-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.queue-summary-progress-track {
+  flex: 1;
+  height: 6px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.queue-summary-progress-fill {
+  height: 100%;
+  background: var(--color-info);
+  border-radius: var(--radius-full);
+  transition: width 0.25s ease-out;
+}
+
+.queue-summary-progress-fill.fill-complete {
+  background: var(--color-success);
+}
+
+.queue-summary-progress-fill.fill-error {
+  background: var(--color-error);
+}
+.queue-summary-progress-text {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  min-width: 36px;
+  text-align: right;
+}
+
+/* ===========================
+   Batch Queue Grouped List
+   =========================== */
+
+.queue-grouped-list,
+.file-queue-sidebar {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 2px;
+}
+
+.queue-group {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.queue-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 6px 6px;
+  background: transparent;
+  user-select: none;
+}
+
+.queue-group-expand-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  transition: background var(--transition-fast);
+}
+
+.queue-group-expand-btn:hover {
+  background: var(--color-bg-hover);
+}
+
+.queue-group-expand-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
+}
+
+.queue-group-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.queue-group-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+}
+
+.queue-group-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.queue-group-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+}
+
+.queue-group-processing .queue-group-badge {
+  background: color-mix(in srgb, var(--color-info) 14%, transparent);
+  color: var(--color-info);
+}
+
+.queue-group-complete .queue-group-badge {
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: var(--color-success);
+}
+
+.queue-group-failed .queue-group-badge {
+  background: color-mix(in srgb, var(--color-error) 14%, transparent);
+  color: var(--color-error);
+}
+
+.queue-group-action {
+  display: flex;
+  align-items: center;
+}
+
+.queue-group-retry-all-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+}
+
+.queue-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 8px 8px 8px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ===========================
+   Queue Item
+   =========================== */
 
 .queue-item {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
+  gap: 10px;
+  padding: 8px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
   position: relative;
+  border: 1px solid transparent;
 }
 
 .queue-item:hover {
@@ -163,7 +386,13 @@
 }
 
 .queue-item-active {
-  background: var(--color-bg-tertiary);
+  background: var(--color-bg-hover);
+  border-color: var(--color-border);
+  box-shadow: inset 2.5px 0 0 var(--color-info);
+}
+
+.queue-item-active:hover {
+  background: color-mix(in srgb, var(--color-bg-hover) 80%, var(--color-bg-tertiary));
 }
 
 .queue-item-icon {
@@ -191,9 +420,23 @@
   color: var(--color-error);
 }
 
+.queue-item-cancelled .queue-item-icon {
+  color: var(--color-text-muted);
+}
+
 .queue-icon-spin {
   animation: spin 1s linear infinite;
   transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .queue-icon-spin {
+    animation: none;
+  }
+  .queue-summary-progress-fill,
+  .queue-item-progress-fill {
+    transition: none;
+  }
 }
 
 .queue-item-content {
@@ -201,41 +444,125 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+}
+
+.queue-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .queue-item-filename {
-  font-size: 0.875rem;
+  font-size: 0.85rem;
+  font-weight: 500;
   color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.queue-item-progress-pct {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--color-info);
+  flex-shrink: 0;
+}
+
 .queue-item-progress {
-  height: 3px;
+  height: 5px;
   background: var(--color-bg-tertiary);
-  border-radius: 2px;
+  border-radius: var(--radius-full);
   overflow: hidden;
+  width: 100%;
 }
 
 .queue-item-progress-fill {
   height: 100%;
   background: var(--color-info);
+  border-radius: var(--radius-full);
   transition: width 0.2s ease-out;
-  border-radius: 2px;
+}
+
+.queue-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+}
+.queue-item-project-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.queue-item-project-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.queue-item-automation {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .queue-item-error {
   font-size: 0.75rem;
   color: var(--color-error);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-item-error-badge {
+  font-weight: 500;
+}
+
+.queue-item-error-msg {
+  opacity: 0.9;
+}
+
+.queue-item-cancelled {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.queue-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.queue-item-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.75rem;
+  padding: 2px 7px;
+  color: var(--color-info);
 }
 
 .queue-item-remove {
   opacity: 0;
   padding: 4px;
   color: var(--color-text-muted);
-  transition: opacity var(--transition-fast);
+  transition:
+    opacity var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .queue-item:hover .queue-item-remove,
@@ -247,42 +574,14 @@
   color: var(--color-error);
 }
 
-/* Batch Queue Content Area */
-.batch-queue-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  /* justify-content: center; Removed to align to top */
-  gap: var(--spacing-md);
-  min-height: 150px;
+.queue-clear-btn {
+  padding: 4px;
+  color: var(--color-text-muted);
 }
 
-.batch-queue-processing,
-.batch-queue-pending,
-.batch-queue-error,
-.batch-queue-complete,
-.batch-queue-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--spacing-md);
-  text-align: center;
-  padding: var(--spacing-lg);
-}
-
-.batch-queue-processing .progress-bar {
-  width: 200px;
-}
-
-.batch-queue-error .drop-zone-text h3 {
+.queue-clear-btn:hover {
   color: var(--color-error);
 }
-
-.batch-add-more {
-  margin-top: var(--spacing-sm);
-}
-
 /* ===========================
    Progress Bar Mini (for Model Cards)
    =========================== */

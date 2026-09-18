@@ -256,7 +256,17 @@
     "status_processing": "처리 중",
     "status_complete": "완료",
     "status_error": "실패",
-    "status_cancelled": "취소됨"
+    "status_cancelled": "취소됨",
+    "retry": "다시 시도",
+    "retry_all": "모두 다시 시도",
+    "start_queue": "시작",
+    "pause_queue": "일시 정지",
+    "resume_queue": "계속",
+    "summary_progress": "{{done}}/{{total}} 완료",
+    "group_processing": "처리 중",
+    "group_pending": "대기 중",
+    "group_complete": "완료됨",
+    "group_failed": "실패"
   },
   "player": {
     "play": "재생",
