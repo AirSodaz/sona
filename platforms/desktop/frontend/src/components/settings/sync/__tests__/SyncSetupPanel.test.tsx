@@ -309,4 +309,59 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
       );
     });
   });
+
+  it('accepts local HTTP endpoint for test connection', async () => {
+    render(
+      <SyncSetupPanel
+        busyAction={null}
+        onCreate={onCreate}
+        onJoin={onJoin}
+        onPreviewJoin={onPreviewJoin}
+        onTestProvider={onTestProvider}
+      />
+    );
+
+    fillFields();
+    const urlInput = screen.getByLabelText(/Server URL/i);
+    fireEvent.change(urlInput, { target: { value: 'http://localhost:8080/dav/' } });
+
+    const testBtn = screen.getByRole('button', { name: /Test connection|测试连接/i });
+    fireEvent.click(testBtn);
+
+    await waitFor(() => {
+      expect(onTestProvider).toHaveBeenCalledWith(
+        expect.objectContaining({
+          serverUrl: 'http://localhost:8080/dav/',
+          username: 'alice',
+          password: 'secret',
+        })
+      );
+    });
+  });
+
+  it('rejects remote HTTP endpoint with validation error', async () => {
+    render(
+      <SyncSetupPanel
+        busyAction={null}
+        onCreate={onCreate}
+        onJoin={onJoin}
+        onPreviewJoin={onPreviewJoin}
+        onTestProvider={onTestProvider}
+      />
+    );
+
+    fillFields();
+    const urlInput = screen.getByLabelText(/Server URL/i);
+    fireEvent.change(urlInput, { target: { value: 'http://dav.example.com/' } });
+
+    const testBtn = screen.getByRole('button', { name: /Test connection|测试连接/i });
+    fireEvent.click(testBtn);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/WebDAV server URL must use HTTPS or a local\/LAN address/i)
+      ).toBeDefined();
+    });
+    expect(onTestProvider).not.toHaveBeenCalled();
+  });
 });

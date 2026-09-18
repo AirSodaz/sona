@@ -94,7 +94,7 @@ export const SYNC_PROVIDER_PRESETS: readonly SyncProviderPreset[] = [
     defaultRemoteRoot: 'Sona',
     usernamePlaceholder: 'username',
     helpKey: 'settings.sync.preset_help_custom',
-    helpDefault: 'Supports any RFC 4918 compliant WebDAV server over HTTPS.',
+    helpDefault: 'Supports any RFC 4918 compliant WebDAV server (HTTPS or local/LAN HTTP).',
   },
 ] as const;
 

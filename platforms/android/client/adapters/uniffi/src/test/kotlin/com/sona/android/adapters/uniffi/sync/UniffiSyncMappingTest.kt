@@ -19,7 +19,7 @@ import uniffi.sona_uniffi_bind.FfiSyncStatusSnapshotV1
 import com.sona.android.application.sync.SyncPreset
 class UniffiSyncMappingTest {
     @Test
-    fun `WebDAV provider requires HTTPS and uses structured JSON`() {
+    fun `WebDAV provider accepts HTTPS and HTTP and uses structured JSON`() {
         val ffi = WebDavSyncProvider(" HTTPS://dav.example ", " Sona ", " user ", "secret").toFfi()
         val json = Json.parseToJsonElement(ffi.configurationJson).jsonObject
 
@@ -27,8 +27,13 @@ class UniffiSyncMappingTest {
         assertEquals("Sona", json.getValue("remoteRoot").jsonPrimitive.content)
         assertEquals("user", json.getValue("username").jsonPrimitive.content)
         assertEquals("secret", json.getValue("password").jsonPrimitive.content)
+
+        val httpFfi = WebDavSyncProvider("http://127.0.0.1:8080/dav", "Sona", "u", "p").toFfi()
+        val httpJson = Json.parseToJsonElement(httpFfi.configurationJson).jsonObject
+        assertEquals("http://127.0.0.1:8080/dav", httpJson.getValue("serverUrl").jsonPrimitive.content)
+
         assertThrows(IllegalArgumentException::class.java) {
-            WebDavSyncProvider("http://dav.example", "Sona", "u", "p").toFfi()
+            WebDavSyncProvider("ftp://dav.example", "Sona", "u", "p").toFfi()
         }
     }
 

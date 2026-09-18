@@ -162,7 +162,7 @@ impl WebDavObjectStore {
         let root_url = build_collection_url(server_url.as_str(), &config.remote_root)?;
         let client = Client::builder()
             .user_agent("Sona/1.0")
-            .https_only(true)
+            .https_only(server_url.scheme() == "https")
             .redirect(webdav_redirect_policy(server_url.clone(), root_url.clone()))
             .build()
             .map_err(|error| store_error(format!("Failed to create WebDAV client: {error}")))?;
@@ -294,7 +294,7 @@ impl WebDavObjectStore {
     }
 
     fn validate_response_url(&self, url: &Url) -> Result<(), SyncError> {
-        enforce_https(url, "WebDAV response URL")?;
+        validate_webdav_url(url, "WebDAV response URL")?;
         ensure_same_origin(url, &self.server_url)?;
         let root_path = self.root_url.path();
         if url.path() != root_path.trim_end_matches('/') && !url.path().starts_with(root_path) {
@@ -705,7 +705,7 @@ pub fn build_collection_url(base_url: &str, remote_root: &str) -> Result<Url, Sy
         }
         segments.push("");
     }
-    enforce_https(&url, "WebDAV collection URL")?;
+    validate_webdav_url(&url, "WebDAV collection URL")?;
     Ok(url)
 }
 
@@ -720,7 +720,7 @@ pub fn build_object_url(root_url: &Url, key: &SyncObjectKey) -> Result<Url, Sync
             segments.push(segment);
         }
     }
-    enforce_https(&url, "WebDAV object URL")?;
+    validate_webdav_url(&url, "WebDAV object URL")?;
     Ok(url)
 }
 
@@ -728,7 +728,7 @@ fn parse_server_url(value: &str) -> Result<Url, SyncError> {
     let value = required(value, "WebDAV server URL")?;
     let mut url = Url::parse(&value)
         .map_err(|error| store_error(format!("WebDAV server URL is invalid: {error}")))?;
-    enforce_https(&url, "WebDAV server URL")?;
+    validate_webdav_url(&url, "WebDAV server URL")?;
     ensure_trailing_slash(&mut url);
     Ok(url)
 }
@@ -817,10 +817,10 @@ fn webdav_redirect_policy(server_url: Url, root_url: Url) -> reqwest::redirect::
             return attempt.error("WebDAV redirect limit exceeded.");
         }
         let candidate = attempt.url();
-        if enforce_https(candidate, "WebDAV redirect URL").is_err()
+        if validate_webdav_url(candidate, "WebDAV redirect URL").is_err()
             || ensure_url_within_root_or_server(candidate, &server_url, &root_url).is_err()
         {
-            attempt.error("WebDAV redirect target is outside the configured HTTPS root.")
+            attempt.error("WebDAV redirect target is outside the configured root.")
         } else {
             attempt.follow()
         }
@@ -838,11 +838,23 @@ fn ensure_same_origin(candidate: &Url, expected: &Url) -> Result<(), SyncError> 
     }
 }
 
-fn enforce_https(url: &Url, label: &str) -> Result<(), SyncError> {
-    if url.scheme() == "https" {
-        Ok(())
-    } else {
-        Err(store_error(format!("{label} must start with https://.")))
+pub fn is_local_or_lan_host(url: &Url) -> bool {
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    sona_core::runtime::network::is_local_or_lan_host_str(host)
+}
+
+fn validate_webdav_url(url: &Url, label: &str) -> Result<(), SyncError> {
+    match url.scheme() {
+        "https" => Ok(()),
+        "http" if is_local_or_lan_host(url) => Ok(()),
+        "http" => Err(store_error(format!(
+            "{label} must use https:// unless it points to a local or LAN address."
+        ))),
+        _ => Err(store_error(format!(
+            "{label} must start with https://, or http:// for local and LAN addresses."
+        ))),
     }
 }
 

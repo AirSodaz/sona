@@ -4,16 +4,53 @@ use sona_sync_webdav::{
 };
 
 #[test]
-fn configuration_rejects_http_before_credentials_are_sent() {
-    let error =
-        WebDavObjectStoreConfig::new("http://nas.local/dav", "sona", "demo", "secret").unwrap_err();
+fn configuration_rejects_remote_http_and_non_http_schemes() {
+    for base_url in [
+        "http://dav.example.com/dav",
+        "http://8.8.8.8:8080/dav",
+        "http://1.1.1.1/dav",
+        "http://[2001:db8::1]:8080/dav",
+    ] {
+        let error = WebDavObjectStoreConfig::new(base_url, "sona", "demo", "secret").unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "Sync object store error: WebDAV server URL must use https:// unless it points to a local or LAN address."
+        );
+    }
 
+    let error =
+        WebDavObjectStoreConfig::new("ftp://nas.local/dav", "sona", "demo", "secret").unwrap_err();
     assert_eq!(
         error.to_string(),
-        "Sync object store error: WebDAV server URL must start with https://."
+        "Sync object store error: WebDAV server URL must start with https://, or http:// for local and LAN addresses."
     );
 }
 
+#[test]
+fn configuration_accepts_https_and_local_or_lan_http_hosts() {
+    for base_url in [
+        "https://dav.example.com/dav",
+        "http://nas.local/dav",
+        "http://localhost:8080/dav",
+        "http://127.0.0.1:8080/dav",
+        "http://0.0.0.0:8080/dav",
+        "http://[::1]:8080/dav",
+        "http://192.168.1.100:8080/dav",
+        "http://10.0.0.5:8080/dav",
+        "http://172.16.0.1:8080/dav",
+        "http://169.254.1.1:8080/dav",
+        "http://100.64.1.2:8080/dav",
+        "http://my-nas:5005/dav",
+        "http://server.lan/dav",
+        "http://home.home.arpa/dav",
+        "http://[fc00::1]:8080/dav",
+        "http://[fe80::1]:8080/dav",
+        "http://[::ffff:192.168.1.5]:8080/dav",
+    ] {
+        WebDavObjectStoreConfig::new(base_url, "sona", "demo", "secret")
+            .unwrap_or_else(|error| panic!("{base_url} should be accepted: {error}"));
+    }
+}
 #[test]
 fn collection_and_object_urls_encode_each_relative_key_segment() {
     let root = build_collection_url(

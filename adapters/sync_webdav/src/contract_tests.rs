@@ -84,6 +84,33 @@ impl TestServer {
         }
     }
 
+    async fn start_http() -> Self {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let address = listener.local_addr().unwrap();
+        let state = ServerState::default();
+        state
+            .0
+            .lock()
+            .unwrap()
+            .collections
+            .insert("/dav/".to_string());
+        let app = Router::new()
+            .fallback(webdav_handler)
+            .with_state(state.clone());
+        let task = tokio::spawn(async move {
+            axum::serve(listener, app.into_make_service())
+                .await
+                .unwrap();
+        });
+        Self {
+            base_url: format!("http://127.0.0.1:{}/dav/", address.port()),
+            state,
+            task,
+        }
+    }
+
     fn store(&self, timeout: Duration) -> WebDavObjectStore {
         let config =
             WebDavObjectStoreConfig::new(&self.base_url, "root", "sync-user", "sync-password")
@@ -92,7 +119,7 @@ impl TestServer {
         let root_url = build_collection_url(server_url.as_str(), &config.remote_root).unwrap();
         let client = Client::builder()
             .danger_accept_invalid_certs(true)
-            .https_only(true)
+            .https_only(server_url.scheme() == "https")
             .timeout(timeout)
             .redirect(webdav_redirect_policy(server_url.clone(), root_url.clone()))
             .build()
@@ -429,4 +456,24 @@ async fn redirect_outside_the_configured_root_is_rejected_before_following() {
             .iter()
             .any(|request| request.path.contains("outside"))
     );
+}
+
+#[tokio::test]
+async fn local_http_webdav_store_executes_probe_and_operations() {
+    let server = TestServer::start_http().await;
+    let config =
+        WebDavObjectStoreConfig::new(&server.base_url, "root", "sync-user", "sync-password")
+            .unwrap();
+    let store = WebDavObjectStore::new(config).unwrap();
+
+    store.probe().await.unwrap();
+
+    let key = SyncObjectKey::parse("devices/test/segment.sync").unwrap();
+    store
+        .put_if_absent(&key, b"local-http-data".to_vec())
+        .await
+        .unwrap();
+
+    let retrieved = store.get(&key).await.unwrap().unwrap();
+    assert_eq!(retrieved.bytes, b"local-http-data");
 }

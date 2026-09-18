@@ -38,6 +38,7 @@ import {
   type WellKnownSyncProviderId,
 } from './SyncProviderPresets';
 import { decodeSyncPairingToken } from './syncPairing';
+import { validateSyncServerUrl } from './syncUrl';
 export interface SyncSetupPanelProps {
   busyAction: string | null;
   onCreate: (request: SyncCreateRequest) => Promise<SyncCreateResult>;
@@ -48,13 +49,9 @@ export interface SyncSetupPanelProps {
 }
 
 function checkProviderFields(config: WebDavObjectStoreConfig): string | null {
-  try {
-    const url = new URL(config.serverUrl.trim());
-    if (url.protocol !== 'https:') {
-      return 'https';
-    }
-  } catch {
-    return 'invalid';
+  const urlValidation = validateSyncServerUrl(config.serverUrl);
+  if (!urlValidation.valid) {
+    return urlValidation.error ?? 'invalid';
   }
   if (!config.remoteRoot.trim() || !config.username.trim() || !config.password) {
     return 'incomplete';
@@ -150,10 +147,10 @@ export function SyncSetupPanel({
   // Test provider connection
   const handleTestConnection = async () => {
     const err = checkProviderFields(provider);
-    if (err === 'https') {
+    if (err === 'http_not_local' || err === 'unsupported_scheme' || err === 'https') {
       setValidationError(
         t('settings.sync.error_https_required', {
-          defaultValue: 'WebDAV server URL must use HTTPS.',
+          defaultValue: 'WebDAV server URL must use HTTPS or a local/LAN address.',
         })
       );
       return;
@@ -220,10 +217,14 @@ export function SyncSetupPanel({
   // Main Save and Connect flow
   const handleSaveAndSync = async () => {
     const providerErr = checkProviderFields(provider);
-    if (providerErr === 'https') {
+    if (
+      providerErr === 'http_not_local' ||
+      providerErr === 'unsupported_scheme' ||
+      providerErr === 'https'
+    ) {
       setValidationError(
         t('settings.sync.error_https_required', {
-          defaultValue: 'WebDAV server URL must use HTTPS.',
+          defaultValue: 'WebDAV server URL must use HTTPS or a local/LAN address.',
         })
       );
       return;
@@ -424,7 +425,9 @@ export function SyncSetupPanel({
 
         <SettingsItem
           title={t('settings.sync.server_url', { defaultValue: 'Server URL' })}
-          hint={t('settings.sync.server_url_hint', { defaultValue: 'HTTPS WebDAV endpoint' })}
+          hint={t('settings.sync.server_url_hint', {
+            defaultValue: 'WebDAV endpoint URL (HTTPS or local/LAN HTTP)',
+          })}
         >
           <input
             id="sync-server-url"

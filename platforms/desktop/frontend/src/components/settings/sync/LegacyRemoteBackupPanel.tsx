@@ -11,6 +11,7 @@ import type { BackupWebDavConfig, PreparedBackupImport } from '../../../types/ba
 import type { LegacyRemoteBackupEntry, WebDavObjectStoreConfig } from '../../../types/sync';
 import { buildBackupImportDetails, runPreparedBackupImportFlow } from '../backup/backupImportFlow';
 import { preparedBackupImportActions } from '../backup/useBackupSettingsController';
+import { validateSyncServerUrl } from './syncUrl';
 
 interface LegacyRemoteBackupPanelProps {
   disabled: boolean;
@@ -34,11 +35,7 @@ function formatSize(size: number): string {
 }
 
 function isReady(config: WebDavObjectStoreConfig): boolean {
-  try {
-    return new URL(config.serverUrl).protocol === 'https:' && Boolean(config.username.trim());
-  } catch {
-    return false;
-  }
+  return validateSyncServerUrl(config.serverUrl).valid && Boolean(config.username.trim());
 }
 
 export function LegacyRemoteBackupPanel({

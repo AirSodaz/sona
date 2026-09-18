@@ -204,9 +204,13 @@ class UniffiSyncAdapter(private val appDataDir: String) : SyncPort {
 }
 
 internal fun WebDavSyncProvider.toFfi(): FfiSyncProviderInputV1 {
-    require(serverUrl.trim().startsWith("https://", ignoreCase = true)) { "WebDAV requires HTTPS." }
+    val trimmed = serverUrl.trim()
+    require(
+        trimmed.startsWith("https://", ignoreCase = true) ||
+            trimmed.startsWith("http://", ignoreCase = true)
+    ) { "WebDAV server URL must start with https://, or http:// for local and LAN addresses." }
     val configuration = buildJsonObject {
-        put("serverUrl", serverUrl.trim())
+        put("serverUrl", trimmed)
         put("remoteRoot", remoteRoot.trim())
         put("username", username.trim())
         put("password", password)
