@@ -560,7 +560,9 @@ describe('TranscriptSpeakerReviewPanel', () => {
 
   it('moves the active group through the pending queue with arrow shortcuts', async () => {
     await renderReviewPanel();
-
+    await waitFor(() => {
+      expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-1'));
+    });
     const firstGroup = screen.getByTestId('speaker-review-group-anonymous-1');
     const secondGroup = screen.getByTestId('speaker-review-group-anonymous-2');
 

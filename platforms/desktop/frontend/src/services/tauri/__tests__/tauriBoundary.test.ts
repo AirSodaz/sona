@@ -1899,6 +1899,7 @@ describe('tauri boundary wrappers', () => {
             ],
           },
         ],
+        sensitivity: 'strict',
       },
       asrRequest: {
         engine: 'local',
@@ -1942,6 +1943,7 @@ describe('tauri boundary wrappers', () => {
             ],
           },
         ],
+        sensitivity: 'strict',
       },
       asrRequest: expect.objectContaining({
         engine: 'local',

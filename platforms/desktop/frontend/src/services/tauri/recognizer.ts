@@ -116,6 +116,7 @@ function normalizeSpeakerProcessing(
           ),
         })),
       })) ?? null,
+    sensitivity: config.sensitivity ?? null,
   };
 }
 
