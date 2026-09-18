@@ -560,7 +560,9 @@ describe('TranscriptSpeakerReviewPanel', () => {
 
   it('moves the active group through the pending queue with arrow shortcuts', async () => {
     await renderReviewPanel();
-
+    await waitFor(() => {
+      expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-1'));
+    });
     const firstGroup = screen.getByTestId('speaker-review-group-anonymous-1');
     const secondGroup = screen.getByTestId('speaker-review-group-anonymous-2');
 
@@ -676,6 +678,9 @@ describe('TranscriptSpeakerReviewPanel', () => {
   it('jumps from the active group with J and closes the panel', async () => {
     const onClose = vi.fn();
     await renderReviewPanel(onClose);
+    await waitFor(() => {
+      expectGroupActive(screen.getByTestId('speaker-review-group-anonymous-1'));
+    });
 
     await act(async () => {
       fireEvent.keyDown(window, { key: 'j' });

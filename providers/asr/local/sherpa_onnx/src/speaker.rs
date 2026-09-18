@@ -22,6 +22,130 @@ pub struct SpeakerEmbeddingMatch {
     pub score: f32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SpeakerModelThresholds {
+    /// Dynamic clustering merge threshold for new/unknown speakers
+    pub dynamic_merge_threshold: f32,
+    /// Temporal continuity bonus threshold when recent speaker matches
+    pub continuity_threshold: f32,
+    /// Maximum gap (seconds) to consider consecutive speech from same speaker
+    pub max_continuity_gap_seconds: f64,
+    /// Minimum similarity score to auto-identify as an enrolled profile
+    pub auto_identify_threshold: f32,
+    /// Minimum similarity score to display enrolled profile as candidate
+    pub candidate_display_threshold: f32,
+    /// Post-cluster oversegmentation repair threshold (merging redundant clusters)
+    pub repair_merge_threshold: f32,
+    /// Minimum turn audio duration (seconds) required to run neural embedding extraction
+    pub min_turn_duration_seconds: f32,
+}
+
+impl Default for SpeakerModelThresholds {
+    fn default() -> Self {
+        Self::general()
+    }
+}
+
+impl SpeakerModelThresholds {
+    pub fn campplus() -> Self {
+        Self {
+            dynamic_merge_threshold: 0.48,
+            continuity_threshold: 0.40,
+            max_continuity_gap_seconds: 3.0,
+            auto_identify_threshold: 0.58,
+            candidate_display_threshold: 0.46,
+            repair_merge_threshold: 0.52,
+            min_turn_duration_seconds: 0.5,
+        }
+    }
+
+    pub fn eres2net() -> Self {
+        Self {
+            dynamic_merge_threshold: 0.54,
+            continuity_threshold: 0.46,
+            max_continuity_gap_seconds: 3.0,
+            auto_identify_threshold: 0.64,
+            candidate_display_threshold: 0.50,
+            repair_merge_threshold: 0.58,
+            min_turn_duration_seconds: 0.5,
+        }
+    }
+
+    pub fn eres2net_large() -> Self {
+        Self {
+            dynamic_merge_threshold: 0.58,
+            continuity_threshold: 0.50,
+            max_continuity_gap_seconds: 3.0,
+            auto_identify_threshold: 0.68,
+            candidate_display_threshold: 0.55,
+            repair_merge_threshold: 0.62,
+            min_turn_duration_seconds: 0.5,
+        }
+    }
+
+    pub fn general() -> Self {
+        Self {
+            dynamic_merge_threshold: 0.50,
+            continuity_threshold: 0.42,
+            max_continuity_gap_seconds: 3.0,
+            auto_identify_threshold: 0.60,
+            candidate_display_threshold: 0.48,
+            repair_merge_threshold: 0.54,
+            min_turn_duration_seconds: 0.5,
+        }
+    }
+
+    pub fn from_model_path(path: &Path) -> Self {
+        let path_str = path.to_string_lossy().to_lowercase();
+        if path_str.contains("eres2net_large") {
+            Self::eres2net_large()
+        } else if path_str.contains("eres2net") {
+            Self::eres2net()
+        } else if path_str.contains("campplus") || path_str.contains("cam++") {
+            Self::campplus()
+        } else {
+            Self::general()
+        }
+    }
+
+    pub fn with_sensitivity(mut self, sensitivity: Option<&str>) -> Self {
+        match sensitivity
+            .unwrap_or("balanced")
+            .trim()
+            .to_lowercase()
+            .as_str()
+        {
+            "permissive" | "loose" => {
+                self.dynamic_merge_threshold = (self.dynamic_merge_threshold - 0.05).max(0.35);
+                self.continuity_threshold = (self.continuity_threshold - 0.05).max(0.30);
+                self.repair_merge_threshold = (self.repair_merge_threshold - 0.05).max(0.40);
+                self.auto_identify_threshold = (self.auto_identify_threshold - 0.05).max(0.45);
+                self.candidate_display_threshold =
+                    (self.candidate_display_threshold - 0.05).max(0.35);
+            }
+            "strict" | "tight" => {
+                self.dynamic_merge_threshold = (self.dynamic_merge_threshold + 0.05).min(0.90);
+                self.continuity_threshold = (self.continuity_threshold + 0.05).min(0.85);
+                self.repair_merge_threshold = (self.repair_merge_threshold + 0.05).min(0.90);
+                self.auto_identify_threshold = (self.auto_identify_threshold + 0.05).min(0.90);
+                self.candidate_display_threshold =
+                    (self.candidate_display_threshold + 0.05).min(0.85);
+            }
+            _ => {}
+        }
+        self
+    }
+
+    /// Derives thresholds tailored for offline batch diarization.
+    /// In batch diarization, cluster centroids are averaged over purified speech spans,
+    /// so cosine similarity of the same speaker is typically slightly higher than single streaming turns.
+    pub fn for_batch_diarization(model_path: &Path, sensitivity: Option<&str>) -> Self {
+        let mut t = Self::from_model_path(model_path).with_sensitivity(sensitivity);
+        t.repair_merge_threshold = (t.repair_merge_threshold + 0.10).clamp(0.55, 0.85);
+        t
+    }
+}
+
 pub struct SpeakerEmbeddingIndex {
     extractor: SpeakerEmbeddingExtractor,
     manager: SpeakerEmbeddingManager,
@@ -107,7 +231,7 @@ impl SpeakerEmbeddingIndex {
             .collect()
     }
 
-    fn compute_embedding_for_samples(
+    pub fn compute_embedding_for_samples(
         &self,
         samples: &[f32],
     ) -> Result<Option<Vec<f32>>, AsrPortError> {

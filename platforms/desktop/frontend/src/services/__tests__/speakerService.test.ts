@@ -10,7 +10,7 @@ describe('speakerService', () => {
     vi.clearAllMocks();
   });
 
-  it('treats speaker processing as disabled when either model path is empty', () => {
+  it('treats speaker processing as disabled when required model paths are missing', () => {
     expect(
       speakerService.isConfigured(
         {
@@ -23,13 +23,24 @@ describe('speakerService', () => {
     ).toBe(false);
 
     expect(
-      speakerService.buildProcessingConfig(
+      speakerService.isConfigured(
         {
-          liveSpeakerSegmentationModelPath: '',
-          liveSpeakerEmbeddingModelPath: '/models/embed.onnx',
+          batchSpeakerSegmentationModelPath: '',
+          batchSpeakerEmbeddingModelPath: '/models/embed.onnx',
           speakerProfiles: [],
         },
-        'live'
+        'batch'
+      )
+    ).toBe(false);
+
+    expect(
+      speakerService.buildProcessingConfig(
+        {
+          batchSpeakerSegmentationModelPath: '',
+          batchSpeakerEmbeddingModelPath: '/models/embed.onnx',
+          speakerProfiles: [],
+        },
+        'batch'
       )
     ).toBeNull();
   });
@@ -76,6 +87,7 @@ describe('speakerService', () => {
           ],
         },
       ],
+      sensitivity: 'balanced',
     });
   });
 
@@ -95,6 +107,22 @@ describe('speakerService', () => {
       speakerSegmentationModelPath: '/models/batch-seg',
       speakerEmbeddingModelPath: '/models/batch-embed.onnx',
       speakerProfiles: [],
+      sensitivity: 'balanced',
     });
+  });
+
+  it('skips file annotation when segmentation model is missing', async () => {
+    const sampleSegments = [{ id: 'seg-1', start: 0, end: 1, text: 'hello' } as any];
+    const result = await speakerService.annotateSegmentsForFile(
+      '/path/to/audio.wav',
+      sampleSegments,
+      {
+        liveSpeakerSegmentationModelPath: '',
+        liveSpeakerEmbeddingModelPath: '/models/embed.onnx',
+        speakerProfiles: [],
+      },
+      'live'
+    );
+    expect(result).toBe(sampleSegments);
   });
 });

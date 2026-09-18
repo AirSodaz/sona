@@ -7,39 +7,53 @@ import {
   getScenarioSpeakerSegmentationModelPath,
   type ScenarioModelPathConfig,
 } from '../utils/scenarioModels';
-import { annotateSpeakerSegmentsFromFile, importSpeakerProfileSample } from './tauri/speaker';
+import {
+  annotateSpeakerSegmentsFromFile,
+  enrollSpeakerProfileSampleFromAudio,
+  importSpeakerProfileSample,
+} from './tauri/speaker';
 
-type SpeakerConfigInput = Pick<AppConfig, 'speakerProfiles'> & Partial<ScenarioModelPathConfig>;
+type SpeakerConfigInput = Pick<AppConfig, 'speakerProfiles' | 'speakerDiarizationSensitivity'> &
+  Partial<ScenarioModelPathConfig>;
 
 export interface SpeakerServicePorts {
   annotateSpeakerSegmentsFromFile: typeof annotateSpeakerSegmentsFromFile;
   importSpeakerProfileSample: typeof importSpeakerProfileSample;
+  enrollSpeakerProfileSampleFromAudio: typeof enrollSpeakerProfileSampleFromAudio;
 }
 
 export class SpeakerService {
   constructor(private readonly ports: SpeakerServicePorts) {}
 
   isConfigured(config: SpeakerConfigInput, scenario: AsrScenario): boolean {
-    return Boolean(
-      getScenarioSpeakerSegmentationModelPath(config, scenario) &&
-        getScenarioSpeakerEmbeddingModelPath(config, scenario)
-    );
+    const embeddingPath = getScenarioSpeakerEmbeddingModelPath(config, scenario);
+    if (!embeddingPath) {
+      return false;
+    }
+    if (scenario === 'batch') {
+      return Boolean(getScenarioSpeakerSegmentationModelPath(config, scenario));
+    }
+    return true;
   }
 
   buildProcessingConfig(
     config: SpeakerConfigInput,
     scenario: AsrScenario
   ): SpeakerProcessingConfig | null {
-    const segmentationModelPath = getScenarioSpeakerSegmentationModelPath(config, scenario);
     const embeddingModelPath = getScenarioSpeakerEmbeddingModelPath(config, scenario);
-    if (!segmentationModelPath || !embeddingModelPath) {
+    if (!embeddingModelPath) {
+      return null;
+    }
+    const segmentationModelPath = getScenarioSpeakerSegmentationModelPath(config, scenario);
+    if (scenario === 'batch' && !segmentationModelPath) {
       return null;
     }
 
     return {
-      speakerSegmentationModelPath: segmentationModelPath,
+      speakerSegmentationModelPath: segmentationModelPath || undefined,
       speakerEmbeddingModelPath: embeddingModelPath,
       speakerProfiles: normalizeSpeakerProfiles(config.speakerProfiles),
+      sensitivity: config.speakerDiarizationSensitivity ?? 'balanced',
     };
   }
 
@@ -54,10 +68,12 @@ export class SpeakerService {
     }
 
     const speakerProcessing = this.buildProcessingConfig(config, scenario);
-    if (!speakerProcessing) {
+    if (
+      !speakerProcessing?.speakerSegmentationModelPath ||
+      !speakerProcessing?.speakerEmbeddingModelPath
+    ) {
       return segments;
     }
-
     return this.ports.annotateSpeakerSegmentsFromFile(filePath, segments, speakerProcessing);
   }
 
@@ -68,6 +84,22 @@ export class SpeakerService {
   ): Promise<SpeakerProfileSample> {
     return this.ports.importSpeakerProfileSample(profileId, sourcePath, sourceName);
   }
+
+  async enrollProfileSampleFromAudio(
+    profileId: string,
+    sourceAudioPath: string,
+    startSeconds: number,
+    endSeconds: number,
+    sampleName?: string
+  ): Promise<SpeakerProfileSample> {
+    return this.ports.enrollSpeakerProfileSampleFromAudio(
+      profileId,
+      sourceAudioPath,
+      startSeconds,
+      endSeconds,
+      sampleName
+    );
+  }
 }
 
 export function createSpeakerService(ports: SpeakerServicePorts): SpeakerService {
@@ -77,4 +109,5 @@ export function createSpeakerService(ports: SpeakerServicePorts): SpeakerService
 export const speakerService = createSpeakerService({
   annotateSpeakerSegmentsFromFile,
   importSpeakerProfileSample,
+  enrollSpeakerProfileSampleFromAudio,
 });

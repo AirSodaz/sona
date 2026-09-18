@@ -66,6 +66,11 @@ class ModelRegistryService {
         paths.speakerEmbeddingModelPath,
         snapshot.selectionOptions.speakerEmbedding
       ),
+      alignment: resolveSelectedModelId(
+        snapshot,
+        paths.alignmentModelPath ?? '',
+        snapshot.selectionOptions.alignment ?? []
+      ),
     };
   }
 
@@ -104,6 +109,7 @@ class ModelRegistryService {
       vadModelPath: 'vad',
       speakerSegmentationModelPath: 'speaker-segmentation',
       speakerEmbeddingModelPath: 'speaker-embedding',
+      alignmentModelPath: 'alignment',
     };
 
     const ids = {} as ScenarioSelectedModelIds;

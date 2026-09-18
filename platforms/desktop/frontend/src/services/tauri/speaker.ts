@@ -37,6 +37,22 @@ export async function importSpeakerProfileSample(
   });
 }
 
+export async function enrollSpeakerProfileSampleFromAudio(
+  profileId: string,
+  sourceAudioPath: string,
+  startSeconds: number,
+  endSeconds: number,
+  sampleName?: string
+): Promise<SpeakerProfileSample> {
+  return invokeTauri(TauriCommand.speaker.enrollProfileSampleFromAudio, {
+    profileId,
+    sourceAudioPath,
+    startSeconds,
+    endSeconds,
+    sampleName: sampleName || null,
+  });
+}
+
 export async function buildSpeakerReviewSnapshot(
   segments: TranscriptSegment[],
   activeFilter: SpeakerReviewFilter

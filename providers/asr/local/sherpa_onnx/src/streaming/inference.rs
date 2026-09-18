@@ -168,6 +168,9 @@ pub(super) fn run_offline_inference(
     record_metrics: bool,
     triggered_at: Instant,
     last_partial_decode_ms: Option<Arc<AtomicU64>>,
+    speaker_tracker: Option<
+        &std::sync::Mutex<crate::streaming::speaker_tracker::OnlineSpeakerTracker>,
+    >,
 ) {
     if speech_buffer.is_empty() {
         if let Some(label) = diagnostics_instance_label(instance_id) {
@@ -291,6 +294,20 @@ pub(super) fn run_offline_inference(
                 .as_ref()
                 .and_then(|ts| synthesize_durations(ts, global_end as f32));
 
+            let (speaker, speaker_attribution) = if is_final {
+                if let Some(tracker) = speaker_tracker {
+                    tracker
+                        .lock()
+                        .ok()
+                        .map(|mut t| t.identify_turn(&full_audio, global_start, global_end))
+                        .unwrap_or((None, None))
+                } else {
+                    (None, None)
+                }
+            } else {
+                (None, None)
+            };
+
             let segment = TranscriptSegment {
                 id: segment_id.to_string(),
                 text,
@@ -302,8 +319,8 @@ pub(super) fn run_offline_inference(
                 timestamps: timestamps_abs,
                 durations,
                 translation: None,
-                speaker: None,
-                speaker_attribution: None,
+                speaker,
+                speaker_attribution,
             };
             let update = postprocessor
                 .process_update(build_transcript_update(segment, normalization_options));

@@ -148,6 +148,7 @@ describe('transcriptionRequest helpers', () => {
         speakerSegmentationModelPath: '/models/speaker-segmentation',
         speakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
         speakerProfiles: [{ id: 'profile-1', name: 'Alice', enabled: true, samples: [] }],
+        sensitivity: 'balanced',
       },
       asrRequest,
     });

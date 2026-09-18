@@ -5,6 +5,7 @@ import type {
   TextReplacementRuleSet,
 } from './config';
 import type { ModelFileConfig } from './model';
+import type { SpeakerProcessingConfig } from './speaker';
 
 export type OnlineAsrProviderRequest = {
   providerId: OnlineAsrProviderId;
@@ -28,6 +29,7 @@ export type AsrTranscriptionRequestBase = {
   };
   postprocessOptions: TranscriptPostprocessOptions;
   hotwords: string | null;
+  speakerProcessing?: SpeakerProcessingConfig | null;
 };
 
 export type LocalAsrRequest = AsrTranscriptionRequestBase & {
@@ -37,6 +39,7 @@ export type LocalAsrRequest = AsrTranscriptionRequestBase & {
   modelPath: string;
   numThreads: number;
   punctuationModel: string | null;
+  alignmentModel?: string | null;
   vadModel: string | null;
   vadBuffer: number;
   batchSegmentationMode?: 'vad' | 'whole';

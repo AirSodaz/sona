@@ -97,6 +97,7 @@ fn demo_plan() -> BatchTranscribePlan {
         enable_itn: false,
         language: "auto".to_string(),
         punctuation_model: None,
+        alignment_model: None,
         vad_model: None,
         vad_buffer: 5.0,
         batch_segmentation_mode: sona_core::ports::asr::BatchSegmentationMode::Vad,

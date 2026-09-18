@@ -202,6 +202,7 @@ export const TauriCommand = {
   speaker: {
     annotateSegmentsFromFile: 'annotate_speaker_segments_from_file',
     importProfileSample: 'import_speaker_profile_sample',
+    enrollProfileSampleFromAudio: 'enroll_speaker_profile_sample_from_audio',
     buildReviewSnapshot: 'build_speaker_review_snapshot',
     applyProfileToGroup: 'apply_speaker_profile_to_group',
     resetGroupToAnonymous: 'reset_speaker_group_to_anonymous',

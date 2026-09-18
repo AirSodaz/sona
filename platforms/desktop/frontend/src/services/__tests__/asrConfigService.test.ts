@@ -177,7 +177,10 @@ describe('asrConfigService', () => {
   });
 
   it('resolves a local sherpa batch request with punctuation, VAD, and speaker settings', () => {
-    const request = resolveAsrTranscriptionRequest(buildAsrConfig(), 'batch');
+    const request = resolveAsrTranscriptionRequest(
+      buildAsrConfig({ batchAlignmentModelPath: 'C:/models/mms_fa' }),
+      'batch'
+    );
 
     expect(request).toMatchObject({
       engine: 'local',
@@ -187,13 +190,27 @@ describe('asrConfigService', () => {
       modelType: 'sensevoice',
       vadModel: 'C:/models/silero_vad.onnx',
       punctuationModel: 'C:/models/punct',
+      alignmentModel: 'C:/models/mms_fa',
       vadBuffer: 8,
       batchSegmentationMode: 'vad',
       gpuAcceleration: 'auto',
     });
-    expect((request as any).fileConfig).toEqual({
+    expect(request.engine === 'local' ? request.fileConfig : undefined).toEqual({
       model: 'model.onnx',
       tokens: 'tokens.txt',
+    });
+  });
+
+  it('resolves a local sherpa live request with alignmentModel when liveAlignmentModelPath is set', () => {
+    const request = resolveAsrTranscriptionRequest(
+      buildAsrConfig({ liveAlignmentModelPath: 'C:/models/live_mms_fa' }),
+      'live'
+    );
+
+    expect(request).toMatchObject({
+      engine: 'local',
+      mode: 'streaming',
+      alignmentModel: 'C:/models/live_mms_fa',
     });
   });
 

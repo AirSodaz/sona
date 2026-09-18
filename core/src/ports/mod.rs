@@ -1,3 +1,4 @@
+pub mod aligner;
 pub mod asr;
 pub mod event;
 pub mod fs;

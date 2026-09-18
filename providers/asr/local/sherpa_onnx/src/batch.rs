@@ -6,6 +6,7 @@ use crate::recognizer::{
 };
 use async_trait::async_trait;
 use sona_core::models::config::ModelFileConfig;
+use sona_core::ports::aligner::{AlignerEngineSet, load_configured_aligner};
 use sona_core::ports::asr::{
     AsrPortError, AsrPortErrorKind, BatchSegmentationMode, BatchTranscriberPort,
     BatchTranscriptionObserver, LocalAsrEngine, NoopBatchTranscriptionObserver,
@@ -24,10 +25,25 @@ use sona_core::transcription::transcript::{
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct LocalBatchAsrAdapter {
     vad_engines: VadEngineSet,
     punctuation_engines: PunctuationEngineSet,
+    aligner_engines: AlignerEngineSet,
+}
+
+impl Default for LocalBatchAsrAdapter {
+    fn default() -> Self {
+        Self {
+            vad_engines: VadEngineSet::default(),
+            punctuation_engines: PunctuationEngineSet::default(),
+            aligner_engines: default_aligner_engines(),
+        }
+    }
+}
+
+pub fn default_aligner_engines() -> AlignerEngineSet {
+    AlignerEngineSet::empty().register(Arc::new(crate::aligner::SherpaCtcAlignerEngine))
 }
 
 impl LocalBatchAsrAdapter {
@@ -35,7 +51,13 @@ impl LocalBatchAsrAdapter {
         Self {
             vad_engines,
             punctuation_engines,
+            aligner_engines: default_aligner_engines(),
         }
+    }
+
+    pub fn with_aligner_engines(mut self, aligner_engines: AlignerEngineSet) -> Self {
+        self.aligner_engines = aligner_engines;
+        self
     }
 }
 
@@ -45,8 +67,12 @@ impl BatchTranscriberPort for LocalBatchAsrAdapter {
         &self,
         plan: BatchTranscribePlan,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        let job =
-            BatchTranscriptionJob::from_plan(plan, &self.vad_engines, &self.punctuation_engines)?;
+        let job = BatchTranscriptionJob::from_plan(
+            plan,
+            &self.vad_engines,
+            &self.punctuation_engines,
+            &self.aligner_engines,
+        )?;
         job.transcribe(Arc::new(NoopBatchTranscriptionObserver))
             .await
     }
@@ -56,8 +82,12 @@ impl BatchTranscriberPort for LocalBatchAsrAdapter {
         plan: BatchTranscribePlan,
         observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        let job =
-            BatchTranscriptionJob::from_plan(plan, &self.vad_engines, &self.punctuation_engines)?;
+        let job = BatchTranscriptionJob::from_plan(
+            plan,
+            &self.vad_engines,
+            &self.punctuation_engines,
+            &self.aligner_engines,
+        )?;
         job.transcribe(observer).await
     }
 }
@@ -71,6 +101,7 @@ struct BatchTranscriptionJob {
     enable_itn: bool,
     language: String,
     punctuation_model: Option<PathBuf>,
+    alignment_model: Option<PathBuf>,
     vad_model: Option<PathBuf>,
     vad_buffer: f32,
     batch_segmentation_mode: BatchSegmentationMode,
@@ -82,6 +113,7 @@ struct BatchTranscriptionJob {
     quiet: bool,
     vad_engines: VadEngineSet,
     punct_engines: PunctuationEngineSet,
+    aligner_engines: AlignerEngineSet,
     ffmpeg_path: Option<PathBuf>,
 }
 
@@ -90,6 +122,7 @@ impl BatchTranscriptionJob {
         plan: BatchTranscribePlan,
         vad_engines: &VadEngineSet,
         punct_engines: &PunctuationEngineSet,
+        aligner_engines: &AlignerEngineSet,
     ) -> Result<Self, AsrPortError> {
         if plan.engine != LocalAsrEngine::SherpaOnnx {
             return Err(local_asr_engine_mismatch(
@@ -114,6 +147,7 @@ impl BatchTranscriptionJob {
             enable_itn: plan.enable_itn,
             language: plan.language,
             punctuation_model: plan.punctuation_model.map(PathBuf::from),
+            alignment_model: plan.alignment_model.map(PathBuf::from),
             vad_model: plan.vad_model.map(PathBuf::from),
             vad_buffer: plan.vad_buffer,
             batch_segmentation_mode: plan.batch_segmentation_mode,
@@ -125,6 +159,7 @@ impl BatchTranscriptionJob {
             quiet: plan.quiet,
             vad_engines: vad_engines.clone(),
             punct_engines: punct_engines.clone(),
+            aligner_engines: aligner_engines.clone(),
             ffmpeg_path: plan.ffmpeg_path.map(PathBuf::from),
         })
     }
@@ -176,6 +211,24 @@ impl BatchTranscriptionJob {
         provider: Option<&str>,
         observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+        let is_same_model = self
+            .alignment_model
+            .as_deref()
+            .is_some_and(|align_path| is_same_model_target(align_path, &self.model_path));
+
+        let aligner = if is_same_model {
+            log::info!(
+                "ASR model and CTC alignment model target the same model ({}); skipping redundant CTC alignment pass.",
+                self.model_path.display()
+            );
+            None
+        } else {
+            load_configured_aligner(&self.aligner_engines, self.alignment_model.as_deref())
+                .map_err(|err| AsrPortError::new(AsrPortErrorKind::Model, err.to_string()))?
+        };
+        let punctuation =
+            load_configured_punctuation(&self.punct_engines, self.punctuation_model.as_deref())?;
+
         let model_type = build_offline_model_config(
             &self.model_path,
             &self.model_type,
@@ -186,8 +239,6 @@ impl BatchTranscriptionJob {
         )?;
 
         let recognizer = create_offline_recognizer(model_type, self.num_threads, provider)?;
-        let punctuation =
-            load_configured_punctuation(&self.punct_engines, self.punctuation_model.as_deref())?;
         let samples = extract_and_resample_audio_with_ffmpeg(
             &self.input_path,
             16000,
@@ -214,6 +265,20 @@ impl BatchTranscriptionJob {
             self.batch_segmentation_mode,
             observer.as_ref(),
         )?;
+        let segments = if let Some(aligner) = aligner.as_ref() {
+            observer.on_progress(92.0);
+            match aligner.align_segments(&samples, 16000, &segments).await {
+                Ok(aligned) => aligned,
+                Err(err) => {
+                    log::warn!(
+                        "Forced alignment failed, falling back to unaligned segments: {err}"
+                    );
+                    segments
+                }
+            }
+        } else {
+            segments
+        };
         let segments = crate::speaker_processing::annotate_segments_with_speakers(
             &samples,
             &segments,
@@ -330,9 +395,52 @@ fn is_batch_vad_forced_model(model_type: &str) -> bool {
     !matches!(model_type, "qwen3-asr" | "parakeet-tdt")
 }
 
+fn is_same_model_target(path_a: &Path, path_b: &Path) -> bool {
+    let can_a = std::fs::canonicalize(path_a).unwrap_or_else(|_| path_a.to_path_buf());
+    let can_b = std::fs::canonicalize(path_b).unwrap_or_else(|_| path_b.to_path_buf());
+
+    if can_a == can_b {
+        return true;
+    }
+
+    let a_is_file = can_a.is_file();
+    let b_is_file = can_b.is_file();
+
+    // If both are files or both are directories, but not equal, they are distinct.
+    if (a_is_file && b_is_file) || (!a_is_file && !b_is_file) {
+        return false;
+    }
+
+    // Exactly one is a file and one is a directory.
+    // The file is the same model target if it lives directly inside that directory
+    // and is a recognized model file (e.g., model.onnx, model.int8.onnx).
+    let (file_path, dir_path) = if a_is_file {
+        (&can_a, &can_b)
+    } else {
+        (&can_b, &can_a)
+    };
+
+    if let Ok(resolved_onnx) = crate::audio::resolve_model_onnx_path(dir_path) {
+        let can_resolved = std::fs::canonicalize(&resolved_onnx).unwrap_or(resolved_onnx);
+        if &can_resolved == file_path {
+            return true;
+        }
+    }
+
+    if file_path.parent() == Some(dir_path)
+        && let Some(file_name) = file_path.file_name().and_then(|n| n.to_str())
+    {
+        return matches!(
+            file_name,
+            "model.onnx" | "model.int8.onnx" | "model.fp16.onnx"
+        );
+    }
+
+    false
+}
 #[cfg(test)]
 mod tests {
-    use super::LocalBatchAsrAdapter;
+    use super::*;
     use sona_core::export::ExportFormat;
     use sona_core::ports::asr::BatchTranscriberPort;
     use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
@@ -349,6 +457,7 @@ mod tests {
             enable_itn: false,
             language: "auto".to_string(),
             punctuation_model: None,
+            alignment_model: None,
             vad_model: None,
             vad_buffer: 5.0,
             batch_segmentation_mode: sona_core::ports::asr::BatchSegmentationMode::Vad,
@@ -386,6 +495,7 @@ mod tests {
             language: "auto".to_string(),
             punctuation_model: None,
             vad_model: None,
+            alignment_model: None,
             vad_buffer: 5.0,
             batch_segmentation_mode: sona_core::ports::asr::BatchSegmentationMode::Vad,
             model_type: "whisper".to_string(),
@@ -412,5 +522,40 @@ mod tests {
             error.message,
             "Local ASR adapter 'sherpa-onnx' cannot execute engine 'llama-cpp'."
         );
+    }
+
+    #[test]
+    fn adapter_configures_aligner_engine_set() {
+        let adapter = LocalBatchAsrAdapter::default();
+        assert_eq!(adapter.aligner_engines.engines().len(), 1);
+        assert_eq!(
+            adapter.aligner_engines.engines()[0].engine_kind(),
+            sona_core::ports::aligner::AlignerEngineKind::CtcTrellisOnnx
+        );
+    }
+    #[test]
+    fn test_is_same_model_target() {
+        let temp_dir = std::env::temp_dir().join("test_is_same_model_target");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let model_file = temp_dir.join("model.onnx");
+        let _ = std::fs::write(&model_file, b"test");
+
+        // Same path directly
+        assert!(is_same_model_target(&temp_dir, &temp_dir));
+
+        // Directory vs file inside directory
+        assert!(is_same_model_target(&temp_dir, &model_file));
+        assert!(is_same_model_target(&model_file, &temp_dir));
+
+        // Distinct files in the same directory must NOT be considered the same target
+        let other_file = temp_dir.join("other_model.onnx");
+        let _ = std::fs::write(&other_file, b"test2");
+        assert!(!is_same_model_target(&model_file, &other_file));
+        assert!(!is_same_model_target(&temp_dir, &other_file));
+        // Different paths
+        let other_dir = std::env::temp_dir().join("test_other_model");
+        assert!(!is_same_model_target(&temp_dir, &other_dir));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

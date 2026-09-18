@@ -90,12 +90,14 @@ export const DEFAULT_CONFIG: AppConfig = {
   liveVadModelPath: '',
   liveSpeakerSegmentationModelPath: '',
   liveSpeakerEmbeddingModelPath: '',
+  liveAlignmentModelPath: '',
   batchPunctuationModelPath: '',
   batchVadModelPath: '',
   batchSpeakerSegmentationModelPath: '',
   batchSpeakerEmbeddingModelPath: '',
+  batchAlignmentModelPath: '',
+  speakerDiarizationSensitivity: 'balanced',
   modelDownloadMirror: 'auto',
-
   // Caption
   lockWindow: false,
   alwaysOnTop: true,
@@ -209,10 +211,13 @@ const MODEL_KEYS: (keyof ModelConfig)[] = [
   'liveVadModelPath',
   'liveSpeakerSegmentationModelPath',
   'liveSpeakerEmbeddingModelPath',
+  'liveAlignmentModelPath',
   'batchPunctuationModelPath',
   'batchVadModelPath',
   'batchSpeakerSegmentationModelPath',
   'batchSpeakerEmbeddingModelPath',
+  'batchAlignmentModelPath',
+  'speakerDiarizationSensitivity',
   'modelDownloadMirror',
 ];
 

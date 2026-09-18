@@ -12,6 +12,7 @@ fn missing_input_plan() -> BatchTranscribePlan {
         enable_itn: false,
         language: "auto".to_string(),
         punctuation_model: None,
+        alignment_model: None,
         vad_model: None,
         vad_buffer: 5.0,
         batch_segmentation_mode: sona_core::ports::asr::BatchSegmentationMode::Vad,
@@ -58,4 +59,37 @@ async fn local_batch_adapter_preserves_model_configuration_errors() {
     assert_eq!(error.kind, sona_core::ports::asr::AsrPortErrorKind::Model);
     assert!(error.message.contains("File configuration is missing"));
     std::fs::remove_file(input).unwrap();
+}
+
+#[tokio::test]
+async fn local_batch_adapter_fails_loudly_on_nonexistent_alignment_model() {
+    let input = std::env::temp_dir().join(format!("sona-batch-{}.wav", uuid::Uuid::new_v4()));
+    std::fs::write(&input, b"not-a-real-wav").unwrap();
+    let mut plan = missing_input_plan();
+    plan.input_path = input.clone();
+    plan.alignment_model = Some("C:/definitely/missing/alignment_model.onnx".to_string());
+
+    let error = sona_sherpa_onnx::batch::LocalBatchAsrAdapter::default()
+        .transcribe(plan)
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.kind, sona_core::ports::asr::AsrPortErrorKind::Model);
+    assert!(error.message.contains("Aligner model path does not exist"));
+    std::fs::remove_file(input).unwrap();
+}
+
+#[tokio::test]
+async fn local_batch_adapter_supports_custom_aligner_engine_set() {
+    use sona_core::ports::aligner::AlignerEngineSet;
+    let custom_set = AlignerEngineSet::empty();
+    let adapter =
+        sona_sherpa_onnx::batch::LocalBatchAsrAdapter::default().with_aligner_engines(custom_set);
+    let mut plan = missing_input_plan();
+    plan.alignment_model = None;
+    let error = adapter.transcribe(plan).await.unwrap_err();
+    assert_eq!(
+        error.kind,
+        sona_core::ports::asr::AsrPortErrorKind::InvalidRequest
+    );
 }

@@ -78,6 +78,7 @@ export function buildStreamingAsrRequest({
     normalizationOptions: {
       enableTimeline: instanceId === 'record' ? (appConfig.enableTimeline ?? false) : false,
     },
+    speakerProcessing: speakerService.buildProcessingConfig(appConfig, 'live'),
   };
 }
 

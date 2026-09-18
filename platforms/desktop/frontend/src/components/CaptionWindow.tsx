@@ -151,6 +151,9 @@ export function CaptionWindow() {
                 className={`live-caption-line ${segment.isFinal ? '' : 'partial'}`}
                 style={{ color: captionState.style.color }}
               >
+                {segment.speaker && (
+                  <span className="live-caption-speaker">[{segment.speaker.label}]</span>
+                )}
                 {typeof segment.text === 'string' ? segment.text : ''}
               </p>
             ))}

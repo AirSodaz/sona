@@ -799,6 +799,7 @@ describe('tauri boundary wrappers', () => {
       batch: 'batch-model',
       speakerSegmentation: null,
       speakerEmbedding: 'speaker-model',
+      alignment: null,
     };
     vi.mocked(invoke).mockResolvedValueOnce(selectedIds);
 
@@ -1898,6 +1899,7 @@ describe('tauri boundary wrappers', () => {
             ],
           },
         ],
+        sensitivity: 'strict',
       },
       asrRequest: {
         engine: 'local',
@@ -1941,6 +1943,7 @@ describe('tauri boundary wrappers', () => {
             ],
           },
         ],
+        sensitivity: 'strict',
       },
       asrRequest: expect.objectContaining({
         engine: 'local',

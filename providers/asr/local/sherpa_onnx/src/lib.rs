@@ -1,4 +1,5 @@
 pub mod adapter;
+pub mod aligner;
 pub mod audio;
 pub mod batch;
 pub mod gpu;

@@ -9,7 +9,7 @@ interface SettingsNavigationContextValue {
   navigateToTab: (tab: SettingsTab) => void;
 }
 
-const SettingsNavigationContext = createContext<SettingsNavigationContextValue | null>(null);
+export const SettingsNavigationContext = createContext<SettingsNavigationContextValue | null>(null);
 
 export function SettingsNavigationProvider({
   value,
@@ -32,4 +32,8 @@ export function useSettingsNavigation(): SettingsNavigationContextValue {
   }
 
   return context;
+}
+
+export function useOptionalSettingsNavigation(): SettingsNavigationContextValue | null {
+  return useContext(SettingsNavigationContext);
 }

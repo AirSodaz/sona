@@ -101,6 +101,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
             enable_itn: request.enable_itn,
             language: request.language,
             punctuation_model: request.punctuation_model,
+            alignment_model: request.alignment_model,
             vad_model: request.vad_model,
             vad_buffer: request.vad_buffer,
             batch_segmentation_mode: request.batch_segmentation_mode,

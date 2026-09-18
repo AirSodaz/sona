@@ -1,5 +1,6 @@
 pub mod asr_metrics;
 mod error;
+pub mod forced_alignment;
 pub mod postprocess;
 pub mod provider_resolution;
 pub mod pseudo_streaming;

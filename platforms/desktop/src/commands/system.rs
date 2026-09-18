@@ -268,6 +268,26 @@ pub async fn import_speaker_profile_sample(
 }
 
 #[tauri::command]
+pub async fn enroll_speaker_profile_sample_from_audio(
+    app: AppHandle,
+    profile_id: String,
+    source_audio_path: String,
+    start_seconds: f64,
+    end_seconds: f64,
+    sample_name: Option<String>,
+) -> Result<sona_core::transcription::speaker::SpeakerProfileSample, String> {
+    crate::platform::speaker_processing::enroll_speaker_profile_sample_for_app(
+        &app,
+        profile_id,
+        source_audio_path,
+        start_seconds,
+        end_seconds,
+        sample_name,
+    )
+    .await
+}
+
+#[tauri::command]
 pub fn build_speaker_review_snapshot(
     segments: Vec<crate::integrations::asr::TranscriptSegment>,
     active_filter: sona_core::transcription::speaker_review::SpeakerReviewFilter,

@@ -107,6 +107,19 @@ const speakerEmbeddingModelBase = {
   installPath: '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
   downloadPath: '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
 };
+const alignmentModelBase = {
+  id: 'mms-300m-ctc-alignment',
+  name: 'MMS 300M Alignment',
+  description: 'settings.descriptions.alignment',
+  url: 'https://example.com/align.tar.bz2',
+  type: 'alignment',
+  language: 'multi',
+  size: '600 MB',
+  engine: 'sherpa-onnx',
+  rules: { requiresVad: false, requiresPunctuation: false },
+  installPath: '/models/mms-300m-ctc-alignment',
+  downloadPath: '/models/mms-300m-ctc-alignment.tar.bz2',
+};
 
 function buildModelCatalog(installedModels: Set<string>) {
   const speakerSegmentationModel = {
@@ -116,6 +129,10 @@ function buildModelCatalog(installedModels: Set<string>) {
   const speakerEmbeddingModel = {
     ...speakerEmbeddingModelBase,
     isInstalled: installedModels.has(speakerEmbeddingModelBase.id),
+  };
+  const alignmentModel = {
+    ...alignmentModelBase,
+    isInstalled: installedModels.has(alignmentModelBase.id),
   };
 
   return {
@@ -160,14 +177,24 @@ function buildModelCatalog(installedModels: Set<string>) {
           isInstalled: speakerEmbeddingModel.isInstalled,
         },
       ],
+      alignment: [
+        {
+          id: alignmentModel.id,
+          label: alignmentModel.name,
+          installPath: alignmentModel.installPath,
+          isInstalled: alignmentModel.isInstalled,
+        },
+      ],
     },
     modelPathById: {
       [speakerSegmentationModel.id]: speakerSegmentationModel.installPath,
       [speakerEmbeddingModel.id]: speakerEmbeddingModel.installPath,
+      [alignmentModel.id]: alignmentModel.installPath,
     },
     modelIdByNormalizedPath: {
       [speakerSegmentationModel.installPath.toLowerCase()]: speakerSegmentationModel.id,
       [speakerEmbeddingModel.installPath.toLowerCase()]: speakerEmbeddingModel.id,
+      [alignmentModel.installPath.toLowerCase()]: alignmentModel.id,
     },
     pathMatchTokens: [
       {
@@ -177,6 +204,10 @@ function buildModelCatalog(installedModels: Set<string>) {
       {
         id: speakerEmbeddingModel.id,
         token: speakerEmbeddingModel.id.toLowerCase(),
+      },
+      {
+        id: alignmentModel.id,
+        token: alignmentModel.id.toLowerCase(),
       },
     ],
     dependencyRequestsByModelId: {},
@@ -219,6 +250,8 @@ function renderTab(installedModels: Set<string>, managerOverrides: Record<string
         batchPunctuation: null,
         liveVad: null,
         batchVad: null,
+        liveAlignment: config.liveAlignmentModelPath ? alignmentModelBase.id : null,
+        batchAlignment: config.batchAlignmentModelPath ? alignmentModelBase.id : null,
       },
       catalogLoadState: 'ready',
       catalogLoadError: null,
@@ -573,6 +606,86 @@ describe('SettingsModelsTab speaker model selections', () => {
         screen.getByRole('button', { name: 'Speaker Segmentation Model' }).textContent
       ).toContain('Off');
       expect(screen.getByRole('button', { name: 'Speaker Embedding Model' }).textContent).toContain(
+        'Off'
+      );
+    });
+  });
+
+  it('renders speaker diarization panel and updates separation sensitivity when active', async () => {
+    setTestConfig({
+      liveSpeakerEmbeddingModelPath:
+        '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+      speakerDiarizationSensitivity: 'balanced',
+    });
+
+    renderTab(new Set(['3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx']));
+
+    await waitFor(() => {
+      expect(screen.getByText('Speaker Diarization & Recognition')).toBeDefined();
+      expect(screen.getByText('Enabled')).toBeDefined();
+    });
+
+    const strictBtn = screen.getByRole('radio', { name: 'Strict' });
+    expect((strictBtn as HTMLButtonElement).disabled).toBe(false);
+    expect(strictBtn.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(strictBtn);
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.speakerDiarizationSensitivity).toBe('strict');
+      expect(strictBtn.getAttribute('aria-checked')).toBe('true');
+    });
+  });
+
+  it('disables sensitivity controls when speaker embedding model is Off', async () => {
+    setTestConfig({
+      liveSpeakerEmbeddingModelPath: '',
+    });
+
+    renderTab(new Set());
+
+    await waitFor(() => {
+      expect(screen.getByText('Disabled')).toBeDefined();
+    });
+
+    const radioGroup = screen.getByRole('radiogroup');
+    expect(radioGroup.classList.contains('is-disabled')).toBe(true);
+    expect(radioGroup.getAttribute('data-tooltip')).toBe(
+      'Select a speaker embedding model to enable'
+    );
+    expect(radioGroup.getAttribute('data-tooltip-pos')).toBe('top');
+    const permissiveBtn = screen.getByRole('radio', {
+      name: 'Permissive',
+    });
+    const balancedBtn = screen.getByRole('radio', {
+      name: 'Balanced',
+    });
+    const strictBtn = screen.getByRole('radio', {
+      name: 'Strict',
+    });
+    expect((permissiveBtn as HTMLButtonElement).disabled).toBe(true);
+    expect((balancedBtn as HTMLButtonElement).disabled).toBe(true);
+    expect((strictBtn as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('allows selecting and clearing CTC alignment model in live scenario', async () => {
+    setTestConfig({
+      liveAlignmentModelPath: '/models/mms-300m-ctc-alignment',
+    });
+
+    renderTab(new Set(['mms-300m-ctc-alignment']));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'CTC Alignment Model' }).textContent).toContain(
+        'MMS 300M Alignment'
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'CTC Alignment Model' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Off' }));
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.liveAlignmentModelPath).toBe('');
+      expect(screen.getByRole('button', { name: 'CTC Alignment Model' }).textContent).toContain(
         'Off'
       );
     });

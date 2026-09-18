@@ -236,6 +236,7 @@ describe('ModelService', () => {
         batch: null,
         speakerSegmentation: null,
         speakerEmbedding: 'speaker-embedding-id',
+        alignment: null,
       });
 
       const result = await modelService.resolveModelCatalogSelectedIds({
@@ -258,6 +259,7 @@ describe('ModelService', () => {
         batch: null,
         speakerSegmentation: null,
         speakerEmbedding: 'speaker-embedding-id',
+        alignment: null,
       });
     });
   });
@@ -665,6 +667,26 @@ describe('ModelService', () => {
       ).resolves.toBe('/app/data/models/3dspeaker_speech_eres2netv2_sv_zh-cn_16k-common.onnx');
     });
 
+    it('registers the expected Omnilingual CTC models', () => {
+      const omnilingualModels = PRESET_MODELS.filter((model) => model.type === 'omnilingual');
+      expect(omnilingualModels.map((model) => model.id)).toEqual([
+        'sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05',
+        'sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-2026-02-05',
+        'sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-int8-2026-02-05',
+        'sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-v2-2026-02-05',
+        'sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-int8-2025-11-12',
+        'sherpa-onnx-omnilingual-asr-1600-languages-300M-ctc-2025-11-12',
+      ]);
+      expect(omnilingualModels[0]).toEqual(
+        expect.objectContaining({
+          id: 'sherpa-onnx-omnilingual-asr-1600-languages-1B-ctc-v2-int8-2026-02-05',
+          name: 'Omnilingual ASR',
+          type: 'omnilingual',
+          engine: 'sherpa-onnx',
+        })
+      );
+    });
+
     it('adds localized speaker settings labels to both locale files', () => {
       expect(enLocale.settings).toMatchObject({
         audio_files: 'Audio Files',
@@ -672,6 +694,11 @@ describe('ModelService', () => {
         speaker_segmentation_model_hint:
           'Used to split local recordings into anonymous speaker turns.',
         select_speaker_segmentation_model: 'Select speaker segmentation model...',
+        alignment_model_label: 'CTC Alignment Model',
+        alignment_model_hint:
+          'Used to generate token-level timestamps and refine speaker turn boundaries.',
+        select_alignment_model: 'Select alignment model...',
+        alignment_models: 'CTC Alignment Models',
         speaker_embedding_model_label: 'Speaker Embedding Model',
         speaker_embedding_model_hint:
           'Used to match diarized speakers against your known speaker profiles.',
@@ -705,6 +732,10 @@ describe('ModelService', () => {
         speaker_segmentation_model_label: '说话人分离模型',
         speaker_segmentation_model_hint: '用于将本地录音拆分为匿名说话人片段。',
         select_speaker_segmentation_model: '选择说话人分离模型...',
+        alignment_model_label: 'CTC 对齐模型',
+        alignment_model_hint: '用于生成字/词级时间戳并优化说话人切分边界。',
+        select_alignment_model: '选择对齐模型...',
+        alignment_models: 'CTC 对齐模型',
         speaker_embedding_model_label: '说话人特征模型',
         speaker_embedding_model_hint: '用于将分离出的说话人与已知说话人档案匹配。',
         select_speaker_embedding_model: '选择说话人特征模型...',

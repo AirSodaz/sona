@@ -1,9 +1,10 @@
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { useAutoScroll } from '../../hooks/useAutoScroll';
 import { useTranscriptUIState } from '../../hooks/useTranscriptUIState';
+import { resolveCurrentSessionAudioPath } from '../../services/sessionAudioService';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useSearchStore } from '../../stores/searchStore';
 import {
@@ -19,6 +20,7 @@ import type { TranscriptSegment } from '../../types/transcript';
 import { EditorToolbar } from '../EditorToolbar';
 import { PlusCircleIcon } from '../Icons';
 import { SearchUI } from '../SearchUI';
+import { EnrollSpeakerSampleModal } from './EnrollSpeakerSampleModal';
 import { SegmentItem } from './SegmentItem';
 import { TranscriptAnticipationIndicator } from './TranscriptAnticipationIndicator';
 import { TranscriptUIContext } from './TranscriptUIContext';
@@ -50,6 +52,7 @@ interface TranscriptContext {
   onMergeWithNext: (id: string) => void;
   onSplit: (id: string, leftText: string, rightText: string) => void;
   onAnimationEnd: (id: string) => void;
+  onEnrollSample: (segment: TranscriptSegment) => void;
 }
 
 /**
@@ -72,6 +75,14 @@ export function TranscriptEditor(): React.JSX.Element {
   // Hooks for UI state and alignment
   const { uiStore, handleAnimationEnd } = useTranscriptUIState(segments);
 
+  const [enrollTargetSegment, setEnrollTargetSegment] = useState<TranscriptSegment | null>(null);
+  const [resolvedAudioPath, setResolvedAudioPath] = useState<string | null>(null);
+
+  const handleEnrollSample = useCallback(async (segment: TranscriptSegment) => {
+    const audioPath = await resolveCurrentSessionAudioPath();
+    setResolvedAudioPath(audioPath);
+    setEnrollTargetSegment(segment);
+  }, []);
   // Keep a ref to segments to make callbacks stable where needed
   const segmentsRef = useRef(segments);
 
@@ -165,6 +176,7 @@ export function TranscriptEditor(): React.JSX.Element {
       onMergeWithNext: handleMergeWithNext,
       onSplit: handleSplit,
       onAnimationEnd: handleAnimationEnd,
+      onEnrollSample: handleEnrollSample,
     }),
     [
       handleSeek,
@@ -175,6 +187,7 @@ export function TranscriptEditor(): React.JSX.Element {
       handleSplit,
       handleAnimationEnd,
       handleSaveTranslation,
+      handleEnrollSample,
     ]
   );
 
@@ -204,6 +217,7 @@ export function TranscriptEditor(): React.JSX.Element {
           onDelete={context.onDelete}
           onMergeWithNext={context.onMergeWithNext}
           onSplit={context.onSplit}
+          onEnrollSample={context.onEnrollSample}
           onAnimationEnd={context.onAnimationEnd}
         />
       );
@@ -317,6 +331,12 @@ export function TranscriptEditor(): React.JSX.Element {
         />
       </TranscriptUIContext.Provider>
       <SearchUI />
+      <EnrollSpeakerSampleModal
+        isOpen={Boolean(enrollTargetSegment)}
+        onClose={() => setEnrollTargetSegment(null)}
+        segment={enrollTargetSegment}
+        audioPath={resolvedAudioPath}
+      />
     </div>
   );
 }

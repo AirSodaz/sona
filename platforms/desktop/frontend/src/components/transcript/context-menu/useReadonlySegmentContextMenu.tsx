@@ -1,4 +1,4 @@
-import { Copy, Languages, TextSelect } from 'lucide-react';
+import { Copy, Languages, Mic, TextSelect } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,8 +17,8 @@ interface UseReadonlySegmentContextMenuOptions {
   rootRef: React.RefObject<HTMLElement | null>;
   onEditTranslation?: () => void;
   hasTranslation?: boolean;
+  onEnrollSample?: () => void;
 }
-
 interface ReadonlySegmentContextMenuHandlers {
   onContextMenu: React.MouseEventHandler<HTMLElement>;
   onKeyDown: React.KeyboardEventHandler<HTMLElement>;
@@ -44,6 +44,7 @@ export function useReadonlySegmentContextMenu({
   rootRef,
   onEditTranslation,
   hasTranslation,
+  onEnrollSample,
 }: UseReadonlySegmentContextMenuOptions): ReadonlySegmentContextMenuHandlers {
   const { t } = useTranslation();
   const { closeContextMenu, openContextMenu } = useContextMenu();
@@ -121,6 +122,18 @@ export function useReadonlySegmentContextMenu({
                 },
               ]
             : []),
+          ...(onEnrollSample
+            ? [
+                {
+                  id: 'enroll-speaker-sample',
+                  label: t('editor.enroll_speaker_sample', {
+                    defaultValue: '设为声纹样本',
+                  }),
+                  icon: <Mic size={16} />,
+                  onSelect: onEnrollSample,
+                },
+              ]
+            : []),
         ],
         ...request,
         onClose: () => {
@@ -129,7 +142,7 @@ export function useReadonlySegmentContextMenu({
       });
       ownsMenuRef.current = true;
     },
-    [contextId, hasTranslation, onEditTranslation, openContextMenu, rootRef, t]
+    [contextId, hasTranslation, onEditTranslation, onEnrollSample, openContextMenu, rootRef, t]
   );
 
   const onContextMenu = useCallback<React.MouseEventHandler<HTMLElement>>(

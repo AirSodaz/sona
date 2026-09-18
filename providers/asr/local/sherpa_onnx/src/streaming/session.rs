@@ -291,6 +291,7 @@ pub async fn create_streaming_session(
         normalization_options,
         postprocess_options,
         initial_refresh_rate_ms,
+        speaker_processing,
         ..
     } = request;
     let mut session_instance = SherpaInstance::default();
@@ -304,6 +305,17 @@ pub async fn create_streaming_session(
         .set_initial_refresh_rate(initial_refresh);
     session_instance.postprocessor = TranscriptPostprocessor::compile(postprocess_options)
         .map_err(|error| AsrPortError::new(AsrPortErrorKind::InvalidRequest, error.to_string()))?;
+    let speaker_tracker = tokio::task::spawn_blocking(move || {
+        crate::streaming::speaker_tracker::OnlineSpeakerTracker::new(speaker_processing.as_ref())
+    })
+    .await
+    .map_err(|error| {
+        AsrPortError::runtime(format!("Failed to initialize speaker tracker: {error}"))
+    })?
+    .ok()
+    .filter(|tracker| tracker.is_enabled())
+    .map(|tracker| Arc::new(std::sync::Mutex::new(tracker)));
+    session_instance.speaker_tracker = speaker_tracker;
     let session = std::sync::Arc::new(LocalSherpaSession {
         instance_id,
         observer,
@@ -330,6 +342,7 @@ async fn start_session_impl_inner(
     // Starting a run resets transient buffers and, for online models, creates a
     // fresh Sherpa stream that will accumulate new incremental state.
     start_instance_runtime(instance, stream);
+    instance.current_turn_samples.clear();
 
     instance.reset_or_reload_vad();
 
@@ -427,6 +440,7 @@ async fn flush_session_impl_inner(
 
             // Offline decoding can be CPU-heavy, so the final utterance pass
             // runs on a blocking worker and then emits one final segment.
+            let tracker_copy = instance.speaker_tracker.clone();
             let task = move || {
                 if let Some(safe_r) = recognizer_copy.offline() {
                     run_offline_inference(
@@ -445,6 +459,7 @@ async fn flush_session_impl_inner(
                         true,
                         triggered_at,
                         None,
+                        tracker_copy.as_deref(),
                     );
                 }
             };
@@ -504,6 +519,20 @@ async fn flush_session_impl_inner(
                 .take()
                 .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
+            let turn_samples = std::mem::take(&mut instance.current_turn_samples);
+            let (speaker, speaker_attribution) = if let Some(tracker) =
+                instance.speaker_tracker.as_ref()
+            {
+                tracker
+                    .lock()
+                    .ok()
+                    .map(|mut t| {
+                        t.identify_turn(&turn_samples, instance.segment_start_time, current_time)
+                    })
+                    .unwrap_or((None, None))
+            } else {
+                (None, None)
+            };
             let segment = TranscriptSegment {
                 id,
                 text,
@@ -515,8 +544,8 @@ async fn flush_session_impl_inner(
                 timestamps: timestamps_abs,
                 durations,
                 translation: None,
-                speaker: None,
-                speaker_attribution: None,
+                speaker,
+                speaker_attribution,
             };
             let update = instance
                 .postprocessor
@@ -743,6 +772,7 @@ async fn feed_audio_samples_inner(
                                 should_record_partial_metric,
                                 triggered_at,
                                 Some(partial_decode_target),
+                                None,
                             );
                         }
                     };
@@ -806,6 +836,7 @@ async fn feed_audio_samples_inner(
                     );
                 }
 
+                let tracker_copy = instance.speaker_tracker.clone();
                 let task = move || {
                     if let Some(safe_r) = recognizer_copy.offline() {
                         run_offline_inference(
@@ -824,6 +855,7 @@ async fn feed_audio_samples_inner(
                             true,
                             triggered_at,
                             None,
+                            tracker_copy.as_deref(),
                         );
                     }
                     if let Some(boundary) = boundary.as_ref() {
@@ -858,7 +890,7 @@ async fn feed_audio_samples_inner(
         let decode_started = Instant::now();
         accept_online_samples(st, samples);
         instance.total_samples += samples.len();
-
+        instance.current_turn_samples.extend_from_slice(samples);
         decode_online_ready(r, st);
         let decode_ms = duration_to_ms(decode_started.elapsed());
 
@@ -963,6 +995,24 @@ async fn feed_audio_samples_inner(
                     .take()
                     .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
+                let turn_samples = std::mem::take(&mut instance.current_turn_samples);
+                let (speaker, speaker_attribution) =
+                    if let Some(tracker) = instance.speaker_tracker.as_ref() {
+                        tracker
+                            .lock()
+                            .ok()
+                            .map(|mut t| {
+                                t.identify_turn(
+                                    &turn_samples,
+                                    instance.segment_start_time,
+                                    current_time,
+                                )
+                            })
+                            .unwrap_or((None, None))
+                    } else {
+                        (None, None)
+                    };
+
                 let segment = TranscriptSegment {
                     id,
                     text,
@@ -974,8 +1024,8 @@ async fn feed_audio_samples_inner(
                     timestamps: timestamps_abs,
                     durations,
                     translation: None,
-                    speaker: None,
-                    speaker_attribution: None,
+                    speaker,
+                    speaker_attribution,
                 };
                 let update = instance
                     .postprocessor
@@ -1009,6 +1059,7 @@ async fn feed_audio_samples_inner(
             reset_online_stream(r, st);
             instance.clear_partial_metric_sample();
             instance.segment_start_time = current_time;
+            instance.current_turn_samples.clear();
             if let Some(boundary) = boundary.as_ref() {
                 observer.on_stream_boundary(boundary);
             }
@@ -1054,11 +1105,13 @@ mod tests {
                 enable_itn: false,
                 language: "auto".to_string(),
                 punctuation_model: None,
+                alignment_model: None,
                 vad_model: None,
                 vad_buffer: 0.0,
                 model_type: "sensevoice".to_string(),
                 file_config: None,
                 hotwords: None,
+                speaker_processing: None,
                 normalization_options: TranscriptNormalizationOptions::default(),
                 postprocess_options: TranscriptPostprocessOptions::default(),
                 gpu_acceleration: None,

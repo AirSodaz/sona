@@ -54,6 +54,11 @@ export function buildModelPathConfigPatch(
         liveSpeakerEmbeddingModelPath: path,
         batchSpeakerEmbeddingModelPath: path,
       };
+    case 'alignment':
+      return {
+        liveAlignmentModelPath: path,
+        batchAlignmentModelPath: path,
+      };
     case 'itn':
       return {};
     default:
@@ -121,6 +126,13 @@ export function buildModelRemovalConfigPatch(
     updates.batchSpeakerEmbeddingModelPath = '';
   }
 
+  if (config.liveAlignmentModelPath === deletedPath) {
+    updates.liveAlignmentModelPath = '';
+  }
+
+  if (config.batchAlignmentModelPath === deletedPath) {
+    updates.batchAlignmentModelPath = '';
+  }
   return {
     ...updates,
     asr,
@@ -140,6 +152,8 @@ export function buildRestoreDefaultModelConfigPatch(
     batchSpeakerSegmentationModelPath: defaults.speakerSegmentationModelPath ?? '',
     liveSpeakerEmbeddingModelPath: defaults.speakerEmbeddingModelPath ?? '',
     batchSpeakerEmbeddingModelPath: defaults.speakerEmbeddingModelPath ?? '',
+    liveAlignmentModelPath: defaults.alignmentModelPath ?? '',
+    batchAlignmentModelPath: defaults.alignmentModelPath ?? '',
     batchVadEnabled: defaults.batchVadEnabled ?? true,
     liveVadBufferSize: Number.isFinite(defaults.vadBufferSize) ? defaults.vadBufferSize : 5,
     batchVadBufferSize: Number.isFinite(defaults.vadBufferSize) ? defaults.vadBufferSize : 5,

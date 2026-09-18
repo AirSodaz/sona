@@ -86,10 +86,13 @@ export type AppConfig_Deserialize = {
 	liveVadModelPath?: string | null,
 	liveSpeakerSegmentationModelPath?: string | null,
 	liveSpeakerEmbeddingModelPath?: string | null,
+	liveAlignmentModelPath?: string | null,
 	batchPunctuationModelPath?: string | null,
 	batchVadModelPath?: string | null,
 	batchSpeakerSegmentationModelPath?: string | null,
 	batchSpeakerEmbeddingModelPath?: string | null,
+	batchAlignmentModelPath?: string | null,
+	speakerDiarizationSensitivity?: string | null,
 	modelDownloadMirror?: string | null,
 	lockWindow?: boolean | null,
 	alwaysOnTop?: boolean | null,
@@ -166,10 +169,13 @@ export type AppConfig_Serialize = {
 	liveVadModelPath?: string | null,
 	liveSpeakerSegmentationModelPath?: string | null,
 	liveSpeakerEmbeddingModelPath?: string | null,
+	liveAlignmentModelPath?: string | null,
 	batchPunctuationModelPath?: string | null,
 	batchVadModelPath?: string | null,
 	batchSpeakerSegmentationModelPath?: string | null,
 	batchSpeakerEmbeddingModelPath?: string | null,
+	batchAlignmentModelPath?: string | null,
+	speakerDiarizationSensitivity?: string | null,
 	modelDownloadMirror?: string | null,
 	lockWindow?: boolean | null,
 	alwaysOnTop?: boolean | null,
@@ -240,7 +246,7 @@ export type AsrEngineConfig_Deserialize =
  *  The `local-sherpa` alias keeps configs persisted by older versions
  *  deserializable; every write path emits the neutral `local` tag.
  */
-({ engine: "local"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
+({ engine: "local"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; alignmentModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
 	encoder: string | null,
 	decoder: string | null,
 	model: string | null,
@@ -263,7 +269,7 @@ export type AsrEngineConfig_Deserialize =
  *  The `local-sherpa` alias keeps configs persisted by older versions
  *  deserializable; every write path emits the neutral `local` tag.
  */
-({ engine: "local-sherpa"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
+({ engine: "local-sherpa"; localEngine?: LocalAsrEngine; modelId?: string | null; modelPath: string; numThreads: number; punctuationModel?: string | null; alignmentModel?: string | null; vadModel?: string | null; vadBuffer: number; batchSegmentationMode?: BatchSegmentationMode; modelType: string; fileConfig?: {
 	encoder: string | null,
 	decoder: string | null,
 	model: string | null,
@@ -279,7 +285,7 @@ export type AsrEngineConfig_Deserialize =
 	uncachedDecoder: string | null,
 	cachedDecoder: string | null,
 	mergedDecoder: string | null,
-} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; ffmpegPath?: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { batchSegmentationMode?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
+} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; ffmpegPath?: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { alignmentModel?: never; batchSegmentationMode?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngineConfig_Serialize =
 /**
@@ -288,7 +294,7 @@ export type AsrEngineConfig_Serialize =
  *  The `local-sherpa` alias keeps configs persisted by older versions
  *  deserializable; every write path emits the neutral `local` tag.
  */
-({ engine: "local"; localEngine: LocalAsrEngine; modelId: string | null; modelPath: string; numThreads: number; punctuationModel: string | null; vadModel: string | null; vadBuffer: number; batchSegmentationMode: BatchSegmentationMode; modelType: string; fileConfig: {
+({ engine: "local"; localEngine: LocalAsrEngine; modelId: string | null; modelPath: string; numThreads: number; punctuationModel: string | null; alignmentModel: string | null; vadModel: string | null; vadBuffer: number; batchSegmentationMode: BatchSegmentationMode; modelType: string; fileConfig: {
 	encoder: string | null,
 	decoder: string | null,
 	model: string | null,
@@ -304,7 +310,7 @@ export type AsrEngineConfig_Serialize =
 	uncachedDecoder: string | null,
 	cachedDecoder: string | null,
 	mergedDecoder: string | null,
-} | null; gpuAcceleration: string | null; initialRefreshRateMs: number | null; ffmpegPath: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { batchSegmentationMode?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
+} | null; gpuAcceleration: string | null; initialRefreshRateMs: number | null; ffmpegPath: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { alignmentModel?: never; batchSegmentationMode?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngine_Deserialize =
 /**  Local offline transcription. */
@@ -369,7 +375,7 @@ export type AsrTranscriptionRequest_Deserialize = {
 	normalizationOptions: TranscriptNormalizationOptions,
 	postprocessOptions: TranscriptPostprocessOptions,
 	hotwords: string | null,
-	speakerProcessing: SpeakerProcessingConfig | null,
+	speakerProcessing: SpeakerProcessingConfig_Deserialize | null,
 } & AsrEngineConfig_Deserialize;
 
 export type AsrTranscriptionRequest_Serialize = {
@@ -379,7 +385,7 @@ export type AsrTranscriptionRequest_Serialize = {
 	normalizationOptions: TranscriptNormalizationOptions,
 	postprocessOptions: TranscriptPostprocessOptions,
 	hotwords: string | null,
-	speakerProcessing: SpeakerProcessingConfig | null,
+	speakerProcessing: SpeakerProcessingConfig_Serialize | null,
 } & AsrEngineConfig_Serialize;
 
 export type AudioUsageCategory = {
@@ -1672,6 +1678,7 @@ export type ModelCatalogRestoreDefaults_Deserialize = {
 	punctuationModelPath: string | null,
 	speakerSegmentationModelPath: string | null,
 	speakerEmbeddingModelPath: string | null,
+	alignmentModelPath: string | null,
 	enableItn: boolean,
 	batchVadEnabled: boolean,
 	vadBufferSize: number | null,
@@ -1685,6 +1692,7 @@ export type ModelCatalogRestoreDefaults_Serialize = {
 	punctuationModelPath: string | null,
 	speakerSegmentationModelPath: string | null,
 	speakerEmbeddingModelPath: string | null,
+	alignmentModelPath?: string | null,
 	enableItn: boolean,
 	batchVadEnabled: boolean,
 	vadBufferSize: number | null,
@@ -1693,7 +1701,7 @@ export type ModelCatalogRestoreDefaults_Serialize = {
 
 export type ModelCatalogSection = ModelCatalogSection_Serialize | ModelCatalogSection_Deserialize;
 
-export type ModelCatalogSectionType = "asr" | "punctuation" | "vad" | "speaker-segmentation" | "speaker-embedding";
+export type ModelCatalogSectionType = "asr" | "punctuation" | "vad" | "speaker-segmentation" | "speaker-embedding" | "alignment";
 
 export type ModelCatalogSection_Deserialize = {
 	type: ModelCatalogSectionType,
@@ -1705,11 +1713,22 @@ export type ModelCatalogSection_Serialize = {
 	groups: ModelCatalogGroup_Serialize[],
 };
 
-export type ModelCatalogSelectedIds = {
+export type ModelCatalogSelectedIds = ModelCatalogSelectedIds_Serialize | ModelCatalogSelectedIds_Deserialize;
+
+export type ModelCatalogSelectedIds_Deserialize = {
 	streaming: string | null,
 	batch: string | null,
 	speakerSegmentation: string | null,
 	speakerEmbedding: string | null,
+	alignment: string | null,
+};
+
+export type ModelCatalogSelectedIds_Serialize = {
+	streaming: string | null,
+	batch: string | null,
+	speakerSegmentation: string | null,
+	speakerEmbedding: string | null,
+	alignment?: string | null,
 };
 
 export type ModelCatalogSelectionOptions = {
@@ -1717,6 +1736,7 @@ export type ModelCatalogSelectionOptions = {
 	batch: ModelSelectionOption[],
 	speakerSegmentation: ModelSelectionOption[],
 	speakerEmbedding: ModelSelectionOption[],
+	alignment: ModelSelectionOption[],
 };
 
 export type ModelCatalogSnapshot = ModelCatalogSnapshot_Serialize | ModelCatalogSnapshot_Deserialize;
@@ -1802,6 +1822,7 @@ export type ModelSelectionPaths = {
 	batchModelPath: string,
 	speakerSegmentationModelPath: string,
 	speakerEmbeddingModelPath: string,
+	alignmentModelPath?: string | null,
 };
 
 export type ModelSummaryInput = {
@@ -2317,10 +2338,20 @@ export type SpeakerLeader = {
 	itemCountDisplay: string,
 };
 
-export type SpeakerProcessingConfig = {
+export type SpeakerProcessingConfig = SpeakerProcessingConfig_Serialize | SpeakerProcessingConfig_Deserialize;
+
+export type SpeakerProcessingConfig_Deserialize = {
 	speakerSegmentationModelPath: string | null,
 	speakerEmbeddingModelPath: string | null,
 	speakerProfiles: SpeakerProfile[] | null,
+	sensitivity?: string | null,
+};
+
+export type SpeakerProcessingConfig_Serialize = {
+	speakerSegmentationModelPath: string | null,
+	speakerEmbeddingModelPath: string | null,
+	speakerProfiles: SpeakerProfile[] | null,
+	sensitivity?: string | null,
 };
 
 export type SpeakerProfile = {
