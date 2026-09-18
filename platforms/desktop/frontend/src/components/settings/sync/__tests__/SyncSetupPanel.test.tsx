@@ -364,4 +364,56 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
     });
     expect(onTestProvider).not.toHaveBeenCalled();
   });
+  it('switches to S3 bucket protocol and tests connection', async () => {
+    render(
+      <SyncSetupPanel
+        busyAction={null}
+        onCreate={onCreate}
+        onJoin={onJoin}
+        onPreviewJoin={onPreviewJoin}
+        onTestProvider={onTestProvider}
+      />
+    );
+
+    const s3TabBtn = screen.getByRole('button', { name: /Object Storage Bucket|对象存储桶/i });
+    fireEvent.click(s3TabBtn);
+
+    expect(screen.getByLabelText(/API Endpoint URL/i)).toBeDefined();
+    expect(screen.getByLabelText(/Bucket name/i)).toBeDefined();
+    expect(screen.getByLabelText(/Region/i)).toBeDefined();
+    expect(screen.getByLabelText(/Access Key ID/i)).toBeDefined();
+    expect(screen.getByLabelText(/Secret Access Key/i)).toBeDefined();
+
+    const testBtn = screen.getByRole('button', { name: /Test connection|测试连接/i });
+    fireEvent.click(testBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Fill in all provider credentials/i)).toBeDefined();
+    });
+    expect(onTestProvider).not.toHaveBeenCalled();
+
+    // Fill S3 credentials
+    const endpointInput = screen.getByLabelText(/API Endpoint URL/i);
+    const bucketInput = screen.getByLabelText(/Bucket name/i);
+    const akInput = screen.getByLabelText(/Access Key ID/i);
+    const skInput = screen.getByLabelText(/Secret Access Key/i);
+
+    fireEvent.change(endpointInput, { target: { value: 'https://r2.cloudflarestorage.com' } });
+    fireEvent.change(bucketInput, { target: { value: 'my-bucket' } });
+    fireEvent.change(akInput, { target: { value: 'my-ak-id' } });
+    fireEvent.change(skInput, { target: { value: 'my-sk-secret' } });
+
+    fireEvent.click(testBtn);
+
+    await waitFor(() => {
+      expect(onTestProvider).toHaveBeenCalledWith(
+        expect.objectContaining({
+          endpoint: 'https://r2.cloudflarestorage.com',
+          bucket: 'my-bucket',
+          accessKeyId: 'my-ak-id',
+          secretAccessKey: 'my-sk-secret',
+        })
+      );
+    });
+  });
 });

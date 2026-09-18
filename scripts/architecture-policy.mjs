@@ -27,6 +27,7 @@ export const EXPECTED_ROLES = new Map([
   ['sona-runtime-fs', 'outbound-adapter'],
   ['sona-sqlite', 'outbound-adapter'],
   ['sona-sync-webdav', 'outbound-adapter'],
+  ['sona-sync-s3', 'outbound-adapter'],
   ['sona-sherpa-onnx', 'provider'],
   ['sona-vad', 'provider'],
   ['sona-punct', 'provider'],
@@ -180,14 +181,14 @@ export const HOST_CAPABILITY_MATRIX = [
   },
   {
     id: 'sync',
-    enLabel: 'Sync (application + WebDAV)',
-    zhLabel: 'Sync（application + WebDAV）',
+    enLabel: 'Sync (application + WebDAV / S3)',
+    zhLabel: 'Sync（application + WebDAV / S3）',
     status: {
       sona: 'yes',
       'sona-cli': 'out of scope',
       'sona-uniffi-bind': 'yes',
     },
-    packages: ['sona-sync', 'sona-sync-webdav'],
+    packages: ['sona-sync', 'sona-sync-webdav', 'sona-sync-s3'],
     wiringPatterns: ['\\bSyncApplication\\b', '\\bsona_sync\\b'],
   },
   {

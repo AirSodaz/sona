@@ -1,0 +1,32 @@
+[package]
+name = "sona-sync-s3"
+version.workspace = true
+description = "S3-compatible Object Storage SyncObjectStore adapter for Sona"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[package.metadata.sona]
+role = "outbound-adapter"
+
+[dependencies]
+async-trait = { workspace = true }
+chrono = { workspace = true, features = ["std"] }
+hex = { workspace = true }
+hmac = { workspace = true }
+reqwest = { workspace = true, features = ["rustls"] }
+roxmltree = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sona-core = { workspace = true }
+sona-sync = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+url = "2"
+urlencoding = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+axum = { workspace = true, features = ["macros"] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net"] }

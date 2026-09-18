@@ -19,6 +19,7 @@ members = [
     "adapters/sqlite",
     "adapters/ts_bind",
     "adapters/sync_webdav",
+    "adapters/sync_s3",
     "core",
     "platforms/cli",
     "platforms/desktop",
@@ -57,6 +58,7 @@ sona-sherpa-onnx = { path = "providers/asr/local/sherpa_onnx" }
 sona-sqlite = { path = "adapters/sqlite" }
 sona-sync = { path = "application/sync" }
 sona-sync-webdav = { path = "adapters/sync_webdav" }
+sona-sync-s3 = { path = "adapters/sync_s3" }
 sona-ts-bind = { path = "adapters/ts_bind" }
 sona-uniffi-bind = { path = "platforms/uniffi" }
 sona-uniffi-bindgen = { path = "tools/uniffi_bindgen" }
@@ -79,6 +81,7 @@ futures-util = "0.3"
 glob = "0.3"
 hex = "0.4"
 hkdf = "0.13"
+hmac = "0.13"
 infer = "0.19"
 jsonschema = { version = "0.37", default-features = false }
 log = "0.4.22"
@@ -87,6 +90,7 @@ rand = "0.10"
 regex = "1"
 reqwest = { version = "0.13", default-features = false, features = ["stream", "rustls"] }
 ringbuf = "0.4"
+roxmltree = "0.20"
 rubato = "5"
 rusqlite = { version = "0.40.1", features = ["bundled", "backup", "functions"] }
 schemars = { version = "1.2", features = ["derive"] }

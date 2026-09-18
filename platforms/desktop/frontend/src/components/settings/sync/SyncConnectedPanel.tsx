@@ -35,7 +35,7 @@ import type {
 import { Modal } from '../../Modal';
 import { SettingsAccordion, SettingsItem, SettingsSection } from '../SettingsLayout';
 import { PasswordInput } from './PasswordInput';
-import { encodeSyncPairingToken } from './syncPairing';
+import { encodeS3SyncPairingToken, encodeSyncPairingToken } from './syncPairing';
 
 interface SyncConnectedPanelProps {
   busyAction: string | null;
@@ -192,6 +192,21 @@ export function SyncConnectedPanel({
   // Generate pairing token for the current vault
   const pairingToken = React.useMemo(() => {
     if (!status.vaultId) return '';
+    if (pairingInfo?.providerId === 's3' || pairingInfo?.endpoint) {
+      return encodeS3SyncPairingToken(
+        {
+          endpoint: pairingInfo?.endpoint || '',
+          region: pairingInfo?.region || 'us-east-1',
+          bucket: pairingInfo?.bucket || '',
+          remoteRoot: pairingInfo?.remoteRoot || 'sona',
+          accessKeyId: pairingInfo?.accessKeyId || '',
+          secretAccessKey: '',
+          forcePathStyle: pairingInfo?.forcePathStyle ?? false,
+        },
+        status.vaultId,
+        false
+      );
+    }
     return encodeSyncPairingToken(
       {
         serverUrl: pairingInfo?.serverUrl || '',

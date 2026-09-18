@@ -5,13 +5,14 @@ use sona_core::sync::{
     SyncProviderDescriptor, SyncRunResult, SyncStatusSnapshot,
 };
 use sona_sync::{DiscoveredVaultSummary, SyncPairingInfo, SyncProviderInput};
+use sona_sync_s3::S3ObjectStoreConfig;
 use sona_sync_webdav::WebDavObjectStoreConfig;
 
 use crate::platform::history_repository::{PreparedBackupImport, PreparedBackupImportState};
 use crate::platform::sync::{
     DesktopSyncManager, LegacyRemoteBackupListResult, SyncChangePasswordRequest, SyncCreateRequest,
     SyncCreateResult, SyncJoinRequest, SyncPreviewJoinRequest, SyncUnlockRecoveryRequest,
-    SyncUnlockRequest, webdav_provider_input,
+    SyncUnlockRequest, s3_provider_input, webdav_provider_input,
 };
 
 #[tauri::command]
@@ -41,6 +42,16 @@ pub async fn sync_test_webdav_provider<R: Runtime>(
         .test_provider(&app, webdav_provider_input(config)?)
         .await
 }
+#[tauri::command]
+pub async fn sync_test_s3_provider<R: Runtime>(
+    app: AppHandle<R>,
+    manager: State<'_, DesktopSyncManager>,
+    config: S3ObjectStoreConfig,
+) -> Result<SyncProviderDescriptor, String> {
+    manager
+        .test_provider(&app, s3_provider_input(config)?)
+        .await
+}
 
 #[tauri::command]
 pub async fn sync_discover_vaults<R: Runtime>(
@@ -59,6 +70,16 @@ pub async fn sync_discover_webdav_vaults<R: Runtime>(
 ) -> Result<Vec<DiscoveredVaultSummary>, String> {
     manager
         .discover_vaults(&app, webdav_provider_input(config)?)
+        .await
+}
+#[tauri::command]
+pub async fn sync_discover_s3_vaults<R: Runtime>(
+    app: AppHandle<R>,
+    manager: State<'_, DesktopSyncManager>,
+    config: S3ObjectStoreConfig,
+) -> Result<Vec<DiscoveredVaultSummary>, String> {
+    manager
+        .discover_vaults(&app, s3_provider_input(config)?)
         .await
 }
 

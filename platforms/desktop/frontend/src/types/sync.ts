@@ -23,6 +23,18 @@ export interface WebDavObjectStoreConfig {
   username: string;
   password: string;
 }
+export interface S3ObjectStoreConfig {
+  endpoint: string;
+  region: string;
+  bucket: string;
+  remoteRoot: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken?: string;
+  forcePathStyle?: boolean;
+}
+
+export type AnySyncProviderConfig = WebDavObjectStoreConfig | S3ObjectStoreConfig;
 
 export interface SyncProviderTransportInput {
   providerId: string;
@@ -52,10 +64,15 @@ export interface SyncPairingInfo {
   serverUrl?: string | null;
   remoteRoot?: string | null;
   username?: string | null;
+  endpoint?: string | null;
+  region?: string | null;
+  bucket?: string | null;
+  accessKeyId?: string | null;
+  forcePathStyle?: boolean | null;
 }
 
 export interface SyncCreateRequest {
-  provider: WebDavObjectStoreConfig;
+  provider: SyncProviderTransportInput | WebDavObjectStoreConfig | S3ObjectStoreConfig;
   vaultId?: string;
   preset: SyncPresetV1;
   masterPassword: string;
@@ -74,7 +91,7 @@ export interface SyncCreateResult {
 }
 
 export interface SyncPreviewJoinRequest {
-  provider: WebDavObjectStoreConfig;
+  provider: SyncProviderTransportInput | WebDavObjectStoreConfig | S3ObjectStoreConfig;
   vaultId: string;
   masterPassword: string;
 }

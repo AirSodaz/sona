@@ -42,6 +42,7 @@ sona-runtime-fs = { workspace = true }
 sona-sqlite = { workspace = true }
 sona-sync = { workspace = true }
 sona-sync-webdav = { workspace = true }
+sona-sync-s3 = { workspace = true }
 sona-ts-bind = { workspace = true }
 tauri = { version = "2", features = ["protocol-asset", "tray-icon", "image-png"] }
 rfd = { version = "0.17", default-features = false, features = ["common-controls-v6"] }

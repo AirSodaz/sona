@@ -28,6 +28,7 @@ Sona uses seven stable roles. The role is the reviewed dependency contract; work
 | `sona-runtime-fs` | outbound-adapter |
 | `sona-sqlite` | outbound-adapter |
 | `sona-sync-webdav` | outbound-adapter |
+| `sona-sync-s3` | outbound-adapter |
 | `sona` | host |
 | `sona-cli` | host |
 | `sona-uniffi-bind` | host |
@@ -73,6 +74,7 @@ Each workspace package lives under the root for its reviewed role. The `[package
 | `adapters/runtime_fs/` | `sona-runtime-fs` | outbound-adapter | |
 | `adapters/sqlite/` | `sona-sqlite` | outbound-adapter | Owns `SqliteApplicationContext` |
 | `adapters/sync_webdav/` | `sona-sync-webdav` | outbound-adapter | |
+| `adapters/sync_s3/` | `sona-sync-s3` | outbound-adapter | |
 | `platforms/desktop/` | `sona` | host | Desktop Tauri host |
 | `platforms/cli/` | `sona-cli` | host | |
 | `platforms/uniffi/` | `sona-uniffi-bind` | host | Mobile / UniFFI composition root |

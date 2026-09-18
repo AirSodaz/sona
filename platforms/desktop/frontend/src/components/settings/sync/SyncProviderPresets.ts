@@ -1,3 +1,5 @@
+export type SyncProtocolType = 'webdav' | 's3';
+
 export type WellKnownSyncProviderId =
   | 'nutstore'
   | 'nextcloud'
@@ -112,4 +114,140 @@ export function detectProviderPresetId(serverUrl: string): WellKnownSyncProvider
   if (normalized.includes(':5006') || normalized.includes('synology')) return 'synology';
   if (normalized.includes('/dav') && normalized.includes('alist')) return 'alist';
   return 'custom';
+}
+
+export type WellKnownS3ProviderId =
+  | 'cloudflare-r2'
+  | 'aws-s3'
+  | 'aliyun-oss'
+  | 'tencent-cos'
+  | 'minio'
+  | 's3-custom';
+
+export interface S3ProviderPreset {
+  id: WellKnownS3ProviderId;
+  nameKey: string;
+  defaultName: string;
+  badgeKey: string;
+  defaultBadge: string;
+  defaultEndpoint: string;
+  defaultRegion: string;
+  defaultBucket: string;
+  defaultRemoteRoot: string;
+  defaultForcePathStyle: boolean;
+  accessKeyPlaceholder: string;
+  helpKey: string;
+  helpDefault: string;
+  authDocUrl?: string;
+}
+
+export const S3_PROVIDER_PRESETS: readonly S3ProviderPreset[] = [
+  {
+    id: 'cloudflare-r2',
+    nameKey: 'settings.sync.s3_preset_r2',
+    defaultName: 'Cloudflare R2',
+    badgeKey: 'settings.sync.s3_badge_r2',
+    defaultBadge: 'Zero Egress',
+    defaultEndpoint: 'https://<account-id>.r2.cloudflarestorage.com',
+    defaultRegion: 'auto',
+    defaultBucket: 'sona-sync',
+    defaultRemoteRoot: 'sona',
+    defaultForcePathStyle: false,
+    accessKeyPlaceholder: 'Cloudflare R2 Access Key ID',
+    helpKey: 'settings.sync.s3_preset_help_r2',
+    helpDefault:
+      'In Cloudflare Dashboard -> R2 -> Manage R2 API Tokens, create a token with Object Read & Write permissions.',
+    authDocUrl: 'https://developers.cloudflare.com/r2/api/s3/tokens/',
+  },
+  {
+    id: 'aws-s3',
+    nameKey: 'settings.sync.s3_preset_aws',
+    defaultName: 'AWS S3',
+    badgeKey: 'settings.sync.s3_badge_standard',
+    defaultBadge: 'AWS',
+    defaultEndpoint: 'https://s3.us-east-1.amazonaws.com',
+    defaultRegion: 'us-east-1',
+    defaultBucket: 'sona-sync',
+    defaultRemoteRoot: 'sona',
+    defaultForcePathStyle: false,
+    accessKeyPlaceholder: 'AKIA...',
+    helpKey: 'settings.sync.s3_preset_help_aws',
+    helpDefault:
+      'Provide IAM Access Key with s3:GetObject, s3:PutObject, s3:DeleteObject, and s3:ListBucket permissions.',
+    authDocUrl: 'https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-iam.html',
+  },
+  {
+    id: 'aliyun-oss',
+    nameKey: 'settings.sync.s3_preset_oss',
+    defaultName: 'Aliyun OSS / 阿里云',
+    badgeKey: 'settings.sync.s3_badge_oss',
+    defaultBadge: 'OSS',
+    defaultEndpoint: 'https://oss-cn-hangzhou.aliyuncs.com',
+    defaultRegion: 'oss-cn-hangzhou',
+    defaultBucket: 'sona-sync',
+    defaultRemoteRoot: 'sona',
+    defaultForcePathStyle: false,
+    accessKeyPlaceholder: 'LTAI...',
+    helpKey: 'settings.sync.s3_preset_help_oss',
+    helpDefault:
+      'Create AccessKey in Aliyun RAM console and ensure the user has AliyunOSSFullAccess or custom bucket permissions.',
+  },
+  {
+    id: 'tencent-cos',
+    nameKey: 'settings.sync.s3_preset_cos',
+    defaultName: 'Tencent COS / 腾讯云',
+    badgeKey: 'settings.sync.s3_badge_cos',
+    defaultBadge: 'COS',
+    defaultEndpoint: 'https://cos.ap-shanghai.myqcloud.com',
+    defaultRegion: 'ap-shanghai',
+    defaultBucket: 'sona-sync',
+    defaultRemoteRoot: 'sona',
+    defaultForcePathStyle: false,
+    accessKeyPlaceholder: 'AKID...',
+    helpKey: 'settings.sync.s3_preset_help_cos',
+    helpDefault:
+      'Obtain SecretId and SecretKey from Tencent Cloud CAM console with COS bucket read/write permissions.',
+  },
+  {
+    id: 'minio',
+    nameKey: 'settings.sync.s3_preset_minio',
+    defaultName: 'MinIO',
+    badgeKey: 'settings.sync.badge_selfhosted',
+    defaultBadge: 'Self-hosted',
+    defaultEndpoint: 'http://localhost:9000',
+    defaultRegion: 'us-east-1',
+    defaultBucket: 'sona-sync',
+    defaultRemoteRoot: 'sona',
+    defaultForcePathStyle: true,
+    accessKeyPlaceholder: 'minioadmin',
+    helpKey: 'settings.sync.s3_preset_help_minio',
+    helpDefault:
+      'Self-hosted MinIO instance. Path-style addressing is enabled by default for localhost and private IP addresses.',
+  },
+  {
+    id: 's3-custom',
+    nameKey: 'settings.sync.s3_preset_custom',
+    defaultName: 'Custom S3 / 自定义',
+    badgeKey: 'settings.sync.badge_custom',
+    defaultBadge: 'Custom',
+    defaultEndpoint: 'https://s3.example.com',
+    defaultRegion: 'us-east-1',
+    defaultBucket: 'sona-sync',
+    defaultRemoteRoot: 'sona',
+    defaultForcePathStyle: false,
+    accessKeyPlaceholder: 'Access Key ID',
+    helpKey: 'settings.sync.s3_preset_help_custom',
+    helpDefault:
+      'Compatible with any S3 API provider (Backblaze B2, Wasabi, Supabase, Garage, etc.).',
+  },
+] as const;
+
+export function detectS3ProviderPresetId(endpoint: string): WellKnownS3ProviderId {
+  const normalized = endpoint.trim().toLowerCase();
+  if (normalized.includes('r2.cloudflarestorage.com')) return 'cloudflare-r2';
+  if (normalized.includes('amazonaws.com')) return 'aws-s3';
+  if (normalized.includes('aliyuncs.com')) return 'aliyun-oss';
+  if (normalized.includes('myqcloud.com')) return 'tencent-cos';
+  if (normalized.includes(':9000') || normalized.includes('minio')) return 'minio';
+  return 's3-custom';
 }

@@ -33,6 +33,7 @@ sona-runtime-fs = { workspace = true }
 sona-sqlite = { workspace = true }
 sona-sync = { workspace = true }
 sona-sync-webdav = { workspace = true }
+sona-sync-s3 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
 uniffi = { workspace = true }

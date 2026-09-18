@@ -1,7 +1,9 @@
 import type { PreparedBackupImport } from '../../types/backup';
 import type {
+  AnySyncProviderConfig,
   DiscoveredVaultSummary,
   LegacyRemoteBackupListResult,
+  S3ObjectStoreConfig,
   SyncChangePasswordRequest,
   SyncConflictDetail,
   SyncConflictResolution,
@@ -29,25 +31,43 @@ import { invokeTauri } from './invoke';
 export const getSyncStatus = (): Promise<SyncStatusSnapshot> =>
   invokeTauri(TauriCommand.sync.getStatus);
 
-const webDavProviderInput = (
+export const webDavProviderInput = (
   configuration: WebDavObjectStoreConfig
 ): SyncProviderTransportInput => ({
   providerId: 'webdav',
   configuration,
 });
 
+export const s3ProviderInput = (
+  configuration: S3ObjectStoreConfig
+): SyncProviderTransportInput => ({
+  providerId: 's3',
+  configuration,
+});
+
+export const toSyncProviderTransportInput = (
+  provider: SyncProviderTransportInput | WebDavObjectStoreConfig | S3ObjectStoreConfig
+): SyncProviderTransportInput => {
+  if ('providerId' in provider && typeof provider.providerId === 'string') {
+    return provider as SyncProviderTransportInput;
+  }
+  if ('bucket' in provider) {
+    return s3ProviderInput(provider as S3ObjectStoreConfig);
+  }
+  return webDavProviderInput(provider as WebDavObjectStoreConfig);
+};
+
 const createTransportRequest = (request: SyncCreateRequest): SyncCreateTransportRequest => ({
   ...request,
-  provider: webDavProviderInput(request.provider),
+  provider: toSyncProviderTransportInput(request.provider),
 });
 
 const joinTransportRequest = (
   request: SyncPreviewJoinRequest
 ): SyncPreviewJoinTransportRequest => ({
   ...request,
-  provider: webDavProviderInput(request.provider),
+  provider: toSyncProviderTransportInput(request.provider),
 });
-
 export const testWebDavSyncProvider = (
   config: WebDavObjectStoreConfig
 ): Promise<SyncProviderDescriptor> =>
@@ -59,6 +79,31 @@ export const discoverWebDavSyncVaults = (
   config: WebDavObjectStoreConfig
 ): Promise<DiscoveredVaultSummary[]> =>
   invokeTauri(TauriCommand.sync.discoverWebDavVaults, { config });
+
+export const testS3SyncProvider = (config: S3ObjectStoreConfig): Promise<SyncProviderDescriptor> =>
+  invokeTauri(TauriCommand.sync.testProvider, { provider: s3ProviderInput(config) });
+
+export const discoverS3SyncVaults = (
+  config: S3ObjectStoreConfig
+): Promise<DiscoveredVaultSummary[]> =>
+  invokeTauri(TauriCommand.sync.discoverVaults, { provider: s3ProviderInput(config) });
+export const testSyncProvider = (
+  config: AnySyncProviderConfig
+): Promise<SyncProviderDescriptor> => {
+  if ('bucket' in config) {
+    return testS3SyncProvider(config);
+  }
+  return testWebDavSyncProvider(config);
+};
+
+export const discoverSyncVaults = (
+  config: AnySyncProviderConfig
+): Promise<DiscoveredVaultSummary[]> => {
+  if ('bucket' in config) {
+    return discoverS3SyncVaults(config);
+  }
+  return discoverWebDavSyncVaults(config);
+};
 
 export const getSyncPairingInfo = (): Promise<SyncPairingInfo | null> =>
   invokeTauri(TauriCommand.sync.getPairingInfo);

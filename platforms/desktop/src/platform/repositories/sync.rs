@@ -14,6 +14,7 @@ use sona_sync::{
     SyncPairingInfo, SyncProviderFactory, SyncProviderInput, SyncProviderRegistry,
     SystemSyncApplicationEnvironment, legacy_provider_credential_key,
 };
+use sona_sync_s3::{S3ObjectStoreConfig, S3SyncProviderFactory};
 use sona_sync_webdav::{WebDavObjectStore, WebDavObjectStoreConfig, WebDavSyncProviderFactory};
 use tauri::{AppHandle, Manager, Runtime};
 use tokio::sync::Mutex;
@@ -118,7 +119,8 @@ impl DesktopSyncManager {
                     .sync_repository_factory(Arc::new(SystemClock)),
             ),
             SyncProviderRegistry::new([
-                Arc::new(WebDavSyncProviderFactory) as Arc<dyn SyncProviderFactory>
+                Arc::new(WebDavSyncProviderFactory) as Arc<dyn SyncProviderFactory>,
+                Arc::new(S3SyncProviderFactory) as Arc<dyn SyncProviderFactory>,
             ]),
             Arc::new(SystemSyncSecretStore),
             Arc::new(SystemSyncApplicationEnvironment),
@@ -408,6 +410,12 @@ pub(crate) fn webdav_provider_input(
 ) -> Result<SyncProviderInput, String> {
     Ok(SyncProviderInput {
         provider_id: "webdav".to_string(),
+        configuration: serde_json::to_value(config).map_err(sync_error)?,
+    })
+}
+pub(crate) fn s3_provider_input(config: S3ObjectStoreConfig) -> Result<SyncProviderInput, String> {
+    Ok(SyncProviderInput {
+        provider_id: "s3".to_string(),
         configuration: serde_json::to_value(config).map_err(sync_error)?,
     })
 }
