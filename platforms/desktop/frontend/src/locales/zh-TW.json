@@ -256,7 +256,22 @@
     "status_processing": "處理中",
     "status_complete": "已完成",
     "status_error": "失敗",
-    "status_cancelled": "已取消"
+    "status_cancelled": "已取消",
+    "retry": "重試",
+    "retry_all": "全部重試",
+    "start_queue": "開始處理",
+    "pause_queue": "暫停",
+    "resume_queue": "繼續",
+    "summary_progress": "{{done}}/{{total}} 已完成",
+    "group_processing": "處理中",
+    "group_pending": "等待中",
+    "group_complete": "已完成",
+    "group_failed": "失敗",
+    "clear_options": "清除選項",
+    "clear_completed": "清除已完成",
+    "clear_completed_hint": "僅清除已完成的檔案 ({{count}})",
+    "clear_all": "清除全部",
+    "clear_all_hint": "清空佇列中的所有檔案 ({{count}})"
   },
   "player": {
     "play": "播放",

@@ -18,85 +18,10 @@ import { useOnboardingStore } from '../stores/onboardingStore';
 import { useProjectStore } from '../stores/projectStore';
 import { logger } from '../utils/logger';
 import { getResumeOnboardingStep } from '../utils/onboarding';
-import { FileQueueSidebar } from './FileQueueSidebar';
 import { UploadIcon } from './Icons';
+import { QueueGroupedList } from './QueueGroupedList';
+import { QueueSummaryBar } from './QueueSummaryBar';
 import { TranscriptionOptions } from './TranscriptionOptions';
-
-/**
- * Displays the status of the currently processing or selected item in the queue.
- *
- * Connected component that subscribes to the batch queue store directly.
- *
- * @return The status display component.
- */
-function ActiveItemStatus(): React.JSX.Element | null {
-  const { t } = useTranslation();
-  const item = useBatchQueueStore(
-    (state) => state.queueItems.find((i) => i.id === state.activeItemId) || null
-  );
-
-  if (!item) {
-    return (
-      <div className="batch-queue-empty">
-        <p>{t('batch.queue_empty')}</p>
-      </div>
-    );
-  }
-
-  switch (item.status) {
-    case 'processing':
-      return (
-        <div className="batch-queue-processing">
-          <div className="drop-zone-text" style={{ marginBottom: 24, textAlign: 'center' }}>
-            <h3>{t('batch.processing_title')}</h3>
-            <p>{item.filename}</p>
-          </div>
-          <div
-            className="progress-bar"
-            role="progressbar"
-            aria-valuenow={Math.round(item.progress)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={t('batch.processing_title')}
-          >
-            <div className="progress-fill" style={{ width: `${item.progress}%` }} />
-          </div>
-          <div className="progress-text" aria-live="polite">
-            <span>{t('batch.transcribing')}</span>
-            <span>{Math.round(item.progress)}%</span>
-          </div>
-        </div>
-      );
-    case 'error':
-      return (
-        <div className="batch-queue-error">
-          <div className="drop-zone-text" style={{ textAlign: 'center' }}>
-            <h3>{t('batch.file_failed')}</h3>
-            <p>{item.errorMessage || t('common.error')}</p>
-          </div>
-        </div>
-      );
-    case 'pending':
-      return (
-        <div className="batch-queue-pending">
-          <div className="drop-zone-text" style={{ textAlign: 'center' }}>
-            <h3>{t('batch.queue_waiting')}</h3>
-            <p>{item.filename}</p>
-          </div>
-        </div>
-      );
-    default:
-      // Complete - show nothing here, TranscriptEditor will show the content
-      return (
-        <div className="batch-queue-complete">
-          <div className="drop-zone-text" style={{ textAlign: 'center' }}>
-            <h3>{t('batch.file_complete')}</h3>
-            <p>{item.filename}</p>
-          </div>
-        </div>
-      );
-  }
-}
 
 /** Props for BatchImport. */
 interface BatchImportProps {
@@ -346,23 +271,15 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
   // Render the queue view when we have items
   if (hasQueueItems) {
     return (
-      <div className={`batch-import-container batch-import-queue-view ${className}`}>
-        <FileQueueSidebar />
-
-        <div className="batch-queue-content">
-          <ActiveItemStatus />
-
-          {/* Add more files button */}
-          <div className="batch-add-more">
-            <div style={{ display: 'inline-block' }}>
-              <button className="btn btn-secondary" onClick={handleClick}>
-                {t('batch.add_more_files')}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Options */}
+      <div
+        className={`batch-import-container batch-import-queue-view ${isDragOver ? 'drag-over' : ''} ${className}`}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+      >
+        <QueueSummaryBar onAddFiles={handleClick} />
+        <QueueGroupedList />
         <TranscriptionOptions surface="batch" />
       </div>
     );

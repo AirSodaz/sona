@@ -188,17 +188,13 @@ describe('BatchImport Integration', () => {
 
     // 2. Check if processing view appears
     await waitFor(() => {
-      expect(screen.getAllByText('batch.processing_title').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('batch.group_processing').length).toBeGreaterThan(0);
     });
 
     // 3. Check progress bar updates
-    // Look within the processing view container to avoid ambiguity with sidebar
-    const processingView = screen
-      .getAllByText('batch.processing_title')[0]
-      .closest('.batch-queue-processing');
-    if (!processingView) throw new Error('Processing view not found');
-    const progress = within(processingView as HTMLElement).getByRole('progressbar');
-    expect(progress.getAttribute('aria-valuenow')).toBe('10');
+    const progressBars = screen.getAllByRole('progressbar');
+    expect(progressBars.length).toBeGreaterThan(0);
+    expect(progressBars[0].getAttribute('aria-valuenow')).toBe('10');
 
     // 4. Check if service was called
     expect(mockTranscribe).toHaveBeenCalled();
@@ -210,7 +206,7 @@ describe('BatchImport Integration', () => {
 
     // 5. Verify the full history persistence contract succeeds
     await waitFor(() => {
-      screen.getByText('batch.file_complete');
+      expect(screen.getAllByText('batch.file_complete').length).toBeGreaterThan(0);
     });
 
     expect(historyService.saveImportedFile).toHaveBeenCalledWith(
@@ -238,12 +234,12 @@ describe('BatchImport Integration', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getAllByText('batch.file_failed').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('batch.group_failed').length).toBeGreaterThan(0);
     });
 
     // Error details
     const sidebar = screen.getByRole('list', { name: /Queue/ });
-    expect(within(sidebar).getByText('batch.file_failed')).toBeDefined();
+    expect(within(sidebar).getByText('batch.group_failed')).toBeDefined();
   });
 
   it('can remove items from queue', async () => {
@@ -283,8 +279,10 @@ describe('BatchImport Integration', () => {
       screen.getByText('Queue (1)');
     });
 
-    const clearBtn = screen.getByLabelText('batch.clear_queue');
-    fireEvent.click(clearBtn);
+    const clearTrigger = screen.getByTestId('queue-clear-trigger');
+    fireEvent.click(clearTrigger);
+    const clearAllBtn = screen.getByRole('menuitem', { name: /batch\.clear_all/ });
+    fireEvent.click(clearAllBtn);
 
     await waitFor(() => {
       expect(screen.queryByText('Queue (1)')).toBeNull();
@@ -315,7 +313,7 @@ describe('BatchImport Integration', () => {
     render(<BatchImport />);
 
     // Check if processing view is shown
-    screen.getByText('batch.processing_title');
+    screen.getByText('batch.group_processing');
     expect(screen.queryByRole('button', { name: 'automation.open_settings' })).toBeNull();
 
     // Check if "Add more files" button is present and NOT disabled

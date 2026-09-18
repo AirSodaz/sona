@@ -256,7 +256,22 @@
     "status_processing": "処理中",
     "status_complete": "完了",
     "status_error": "失敗しました",
-    "status_cancelled": "キャンセルされました"
+    "status_cancelled": "キャンセルされました",
+    "retry": "再試行",
+    "retry_all": "すべて再試行",
+    "start_queue": "開始",
+    "pause_queue": "一時停止",
+    "resume_queue": "再開",
+    "summary_progress": "{{done}}/{{total}} 完了",
+    "group_processing": "処理中",
+    "group_pending": "待機中",
+    "group_complete": "完了",
+    "group_failed": "失敗",
+    "clear_options": "クリアオプション",
+    "clear_completed": "完了済みをクリア",
+    "clear_completed_hint": "完了したファイルのみクリア ({{count}})",
+    "clear_all": "すべてクリア",
+    "clear_all_hint": "キュー内のすべてのファイルをクリア ({{count}})"
   },
   "player": {
     "play": "再生",

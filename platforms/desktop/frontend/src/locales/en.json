@@ -256,7 +256,22 @@
     "status_processing": "Processing",
     "status_complete": "Complete",
     "status_error": "Failed",
-    "status_cancelled": "Cancelled"
+    "status_cancelled": "Cancelled",
+    "retry": "Retry",
+    "retry_all": "Retry All",
+    "start_queue": "Start",
+    "pause_queue": "Pause",
+    "resume_queue": "Resume",
+    "summary_progress": "{{done}}/{{total}} completed",
+    "group_processing": "Processing",
+    "group_pending": "Waiting",
+    "group_complete": "Completed",
+    "group_failed": "Failed",
+    "clear_options": "Clear options",
+    "clear_completed": "Clear Completed",
+    "clear_completed_hint": "Clear all completed files ({{count}})",
+    "clear_all": "Clear All",
+    "clear_all_hint": "Clear all files in queue ({{count}})"
   },
   "player": {
     "play": "Play",

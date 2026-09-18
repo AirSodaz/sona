@@ -67,6 +67,16 @@ interface BatchQueueState {
   activeItemId: string | null;
   /** Whether the queue is currently processing. */
   isQueueProcessing: boolean;
+  /** Whether queue processing is paused by user. */
+  isQueuePaused: boolean;
+  /** Pauses processing of pending items. */
+  pauseQueue: () => void;
+  /** Resumes processing of pending items. */
+  resumeQueue: () => void;
+  /** Retries a failed or cancelled queue item. */
+  retryItem: (id: string) => void;
+  /** Retries all failed and cancelled queue items. */
+  retryAllFailed: () => void;
   /**
    * Adds files to the queue.
    *
@@ -128,6 +138,8 @@ interface BatchQueueState {
   removeItem: (id: string) => void;
   /** Clears all items from the queue. */
   clearQueue: () => void;
+  /** Clears only completed items from the queue. */
+  clearCompleted: () => void;
   /** internal helper */
   _processItem: (itemId: string) => Promise<void>;
   /**
@@ -175,7 +187,69 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
   queueItems: [],
   activeItemId: null,
   isQueueProcessing: false,
+  isQueuePaused: false,
 
+  pauseQueue: () => {
+    set({ isQueuePaused: true, isQueueProcessing: false });
+  },
+
+  resumeQueue: () => {
+    set({ isQueuePaused: false });
+    void get().processQueue();
+  },
+
+  retryItem: (id: string) => {
+    let nextQueueItems: BatchQueueItem[] = [];
+    set((state) => {
+      nextQueueItems = state.queueItems.map((item) => {
+        if (item.id !== id) return item;
+        return {
+          ...item,
+          status: 'pending' as BatchQueueItemStatus,
+          progress: 0,
+          errorMessage: undefined,
+        };
+      });
+      return { queueItems: nextQueueItems };
+    });
+    scheduleRecoverySnapshotSync(nextQueueItems, true);
+    const retriedItem = nextQueueItems.find((item) => item.id === id);
+    if (retriedItem) {
+      upsertQueueItemTask(retriedItem, 'pending');
+    }
+    if (!get().isQueueProcessing && !get().isQueuePaused) {
+      void get().processQueue();
+    }
+  },
+
+  retryAllFailed: () => {
+    let nextQueueItems: BatchQueueItem[] = [];
+    const retriedIds: string[] = [];
+    set((state) => {
+      nextQueueItems = state.queueItems.map((item) => {
+        if (item.status === 'error' || item.status === 'cancelled') {
+          retriedIds.push(item.id);
+          return {
+            ...item,
+            status: 'pending' as BatchQueueItemStatus,
+            progress: 0,
+            errorMessage: undefined,
+          };
+        }
+        return item;
+      });
+      return { queueItems: nextQueueItems };
+    });
+    if (retriedIds.length > 0) {
+      scheduleRecoverySnapshotSync(nextQueueItems, true);
+      nextQueueItems
+        .filter((item) => retriedIds.includes(item.id))
+        .forEach((item) => upsertQueueItemTask(item, 'pending'));
+      if (!get().isQueueProcessing && !get().isQueuePaused) {
+        void get().processQueue();
+      }
+    }
+  },
   addFiles: (filePaths, options) => {
     const projectStore = useProjectStore.getState();
     const activeProjectId = options?.projectId ?? projectStore.activeProjectId ?? null;
@@ -226,7 +300,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       get().setActiveItem(newItems[0].id);
     }
 
-    if (!state.isQueueProcessing) {
+    if (!state.isQueueProcessing && !state.isQueuePaused) {
       void get().processQueue();
     }
   },
@@ -252,12 +326,15 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       get().setActiveItem(recoveredQueueItems[0].id);
     }
 
-    if (!state.isQueueProcessing) {
+    if (!state.isQueueProcessing && !state.isQueuePaused) {
       void get().processQueue();
     }
   },
 
   processQueue: async () => {
+    if (get().isQueuePaused) {
+      return;
+    }
     processNextBatchQueueItems({
       getQueueItems: () => get().queueItems,
       getMaxConcurrent: () => useConfigStore.getState().config.maxConcurrent || 2,
@@ -341,7 +418,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       },
       isActiveItem: (id) => get().activeItemId === id,
       scheduleNext: () => {
-        void get().processQueue();
+        if (!get().isQueuePaused) {
+          void get().processQueue();
+        }
       },
     });
   },
@@ -561,6 +640,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       queueItems: [],
       activeItemId: null,
       isQueueProcessing: false,
+      isQueuePaused: false,
     });
     scheduleRecoverySnapshotSync([], true, state.queueItems.flatMap(getQueueRecoveryIds));
     state.queueItems.forEach((item) =>
@@ -571,6 +651,49 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       })
     );
     clearActiveTranscriptSession({ clearAudio: true });
+  },
+
+  clearCompleted: () => {
+    const state = get();
+    const completedItems = state.queueItems.filter((item) => item.status === 'complete');
+    if (completedItems.length === 0) return;
+
+    const activeId = state.activeItemId;
+    const isActiveItemCompleted = completedItems.some((item) => item.id === activeId);
+    if (activeId !== null && isActiveItemCompleted) {
+      const sessionSegments = useTranscriptSessionStore.getState().segments;
+      set((s) => ({
+        queueItems: s.queueItems.map((item) =>
+          item.id === activeId ? { ...item, segments: sessionSegments } : item
+        ),
+      }));
+    }
+
+    const remainingItems = state.queueItems.filter((item) => item.status !== 'complete');
+    const newActiveId = isActiveItemCompleted
+      ? remainingItems.length > 0
+        ? remainingItems[0].id
+        : null
+      : activeId;
+
+    set({
+      queueItems: remainingItems,
+      activeItemId: newActiveId,
+    });
+
+    scheduleRecoverySnapshotSync(remainingItems, true, completedItems.flatMap(getQueueRecoveryIds));
+
+    completedItems.forEach((item) =>
+      patchQueueItemTask(item, {
+        status: 'succeeded',
+        cancelable: false,
+        retryable: false,
+      })
+    );
+
+    if (isActiveItemCompleted) {
+      get().setActiveItem(newActiveId);
+    }
   },
 
   setItemActiveInstanceId: (id, instanceId) => {
@@ -590,3 +713,6 @@ export const useActiveItemId = () => useBatchQueueStore((state) => state.activeI
 
 /** Selector for processing state. */
 export const useIsQueueProcessing = () => useBatchQueueStore((state) => state.isQueueProcessing);
+
+/** Selector for paused state. */
+export const useIsQueuePaused = () => useBatchQueueStore((state) => state.isQueuePaused);
