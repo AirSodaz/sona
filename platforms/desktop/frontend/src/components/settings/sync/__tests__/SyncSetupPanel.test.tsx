@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import type { DiscoveredVaultSummary } from '../../../../types/sync';
 import { SyncSetupPanel } from '../SyncSetupPanel';
-import { encodeSyncPairingToken } from '../syncPairing';
+import { encodeS3SyncPairingToken, encodeSyncPairingToken } from '../syncPairing';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -236,12 +236,72 @@ describe('SyncSetupPanel Minimal Flow (Scheme A)', () => {
     fireEvent.click(doImportBtn);
 
     // Modal closes, fields populated
+    expect(
+      screen.queryByRole('heading', { name: /Import Pairing Code|导入设备配对口令/i })
+    ).toBeNull();
     const urlInput = screen.getByLabelText(/Server URL/i) as HTMLInputElement;
     const userInput = screen.getByLabelText(/Username/i) as HTMLInputElement;
 
+    // Expand Advanced Settings accordion to verify imported vaultId
+    fireEvent.click(screen.getByText(/Advanced Settings/i));
+    const vaultIdInput = screen.getByLabelText(/Vault ID/i) as HTMLInputElement;
+
     expect(urlInput.value).toBe('https://dav.paired.com/remote/');
     expect(userInput.value).toBe('paired-user');
+    expect(vaultIdInput.value).toBe('paired-vault-123');
   });
+
+  it('imports S3 parameters via pairing code modal and switches protocol', async () => {
+    render(
+      <SyncSetupPanel
+        busyAction={null}
+        onCreate={onCreate}
+        onJoin={onJoin}
+        onPreviewJoin={onPreviewJoin}
+        onTestProvider={onTestProvider}
+      />
+    );
+
+    const importBtn = screen.getByRole('button', { name: /Import pairing code|从配对口令导入/i });
+    fireEvent.click(importBtn);
+
+    const s3Token = encodeS3SyncPairingToken(
+      {
+        endpoint: 'https://r2-test.cloudflarestorage.com',
+        region: 'auto',
+        bucket: 'my-paired-bucket',
+        remoteRoot: 'custom-sync',
+        accessKeyId: 'AKIA_PAIRED',
+        secretAccessKey: 'SECRET_PAIRED',
+        forcePathStyle: false,
+      },
+      's3-vault-456',
+      true
+    );
+
+    const textarea = screen.getByPlaceholderText(/sonasync:\/\/v1\?data=/i);
+    fireEvent.change(textarea, { target: { value: s3Token } });
+
+    const doImportBtn = screen.getByRole('button', { name: /^Import$|^导入$/i });
+    fireEvent.click(doImportBtn);
+
+    expect(
+      screen.queryByRole('heading', { name: /Import Pairing Code|导入设备配对口令/i })
+    ).toBeNull();
+    const endpointInput = screen.getByLabelText(/API Endpoint URL/i) as HTMLInputElement;
+    const bucketInput = screen.getByLabelText(/Bucket name/i) as HTMLInputElement;
+    const accessKeyInput = screen.getByLabelText(/Access Key ID/i) as HTMLInputElement;
+
+    // Expand Advanced Settings accordion to verify imported vaultId
+    fireEvent.click(screen.getByText(/Advanced Settings/i));
+    const vaultIdInput = screen.getByLabelText(/Vault ID/i) as HTMLInputElement;
+
+    expect(endpointInput.value).toBe('https://r2-test.cloudflarestorage.com');
+    expect(bucketInput.value).toBe('my-paired-bucket');
+    expect(accessKeyInput.value).toBe('AKIA_PAIRED');
+    expect(vaultIdInput.value).toBe('s3-vault-456');
+  });
+
   it('displays inline error inside pairing modal when invalid token is entered', async () => {
     render(
       <SyncSetupPanel

@@ -317,6 +317,8 @@ export function SyncSetupPanel({
       });
       setSelectedPresetId(detectProviderPresetId(decoded.serverUrl));
     }
+    setVaultId(decoded.vaultId);
+    setShowPairingModal(false);
     setPairingTokenInput('');
     setPairingSuccessNotice(
       t('settings.sync.pairing_applied_notice', {

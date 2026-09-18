@@ -88,9 +88,30 @@ impl S3ObjectStoreConfig {
         if self.secret_access_key.trim().is_empty() {
             return Err(store_error("S3 secretAccessKey is required."));
         }
-        Url::parse(&self.endpoint)
+        let url = Url::parse(&self.endpoint)
             .map_err(|e| store_error(format!("Invalid S3 endpoint URL: {e}")))?;
+        validate_s3_url(&url, "S3 endpoint URL")?;
         Ok(())
+    }
+}
+
+pub fn is_local_or_lan_host(url: &Url) -> bool {
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    sona_core::runtime::network::is_local_or_lan_host_str(host)
+}
+
+fn validate_s3_url(url: &Url, label: &str) -> Result<(), SyncError> {
+    match url.scheme() {
+        "https" => Ok(()),
+        "http" if is_local_or_lan_host(url) => Ok(()),
+        "http" => Err(store_error(format!(
+            "{label} must use https:// unless it points to a local or LAN address."
+        ))),
+        _ => Err(store_error(format!(
+            "{label} must start with https://, or http:// for local and LAN addresses."
+        ))),
     }
 }
 
@@ -173,8 +194,11 @@ impl S3ObjectStore {
         config.validate()?;
         let endpoint_url = Url::parse(&config.endpoint)
             .map_err(|e| store_error(format!("Invalid endpoint URL: {e}")))?;
+        let timeout = std::time::Duration::from_secs(30);
         let client = Client::builder()
             .user_agent("Sona/1.0")
+            .timeout(timeout)
+            .https_only(endpoint_url.scheme() == "https")
             .build()
             .map_err(|e| store_error(format!("Failed to build HTTP client: {e}")))?;
 
@@ -196,25 +220,53 @@ impl S3ObjectStore {
         })
     }
 
+    /// Resolves the bucket URL and the URI path used for SigV4 signing.
+    fn resolve_bucket_url_and_path(&self) -> Result<(Url, String), SyncError> {
+        if self.config.force_path_style {
+            // Path style: https://endpoint/bucket
+            let mut url = self.endpoint_url.clone();
+            let encoded_path = format!("/{}", self.config.bucket);
+            url.set_path(&encoded_path);
+            Ok((url, encoded_path))
+        } else {
+            // Virtual-hosted style: https://bucket.endpoint/
+            let mut url = self.endpoint_url.clone();
+            let host_str = url
+                .host_str()
+                .ok_or_else(|| store_error("Endpoint missing host"))?;
+
+            let new_host = if host_str.starts_with(&format!("{}.", self.config.bucket)) {
+                host_str.to_string()
+            } else {
+                format!("{}.{}", self.config.bucket, host_str)
+            };
+            url.set_host(Some(&new_host))
+                .map_err(|_| store_error("Failed to set virtual host on URL"))?;
+
+            let encoded_path = "/".to_string();
+            url.set_path(&encoded_path);
+            Ok((url, encoded_path))
+        }
+    }
+
     /// Resolves the full URL and the URI path used for SigV4 signing.
     fn resolve_object_url_and_path(&self, relative_key: &str) -> Result<(Url, String), SyncError> {
+        let trimmed_key = relative_key.trim().trim_start_matches('/');
+        if trimmed_key.is_empty() {
+            return self.resolve_bucket_url_and_path();
+        }
+
         let normalized_root = self.config.remote_root.trim().trim_matches('/');
         let full_key = if normalized_root.is_empty() {
-            relative_key.trim_start_matches('/').to_string()
-        } else if relative_key.is_empty() {
-            normalized_root.to_string()
+            trimmed_key.to_string()
         } else {
-            format!("{normalized_root}/{}", relative_key.trim_start_matches('/'))
+            format!("{normalized_root}/{trimmed_key}")
         };
 
         if self.config.force_path_style {
             // Path style: https://endpoint/bucket/key
             let mut url = self.endpoint_url.clone();
-            let encoded_path = if full_key.is_empty() {
-                format!("/{}", self.config.bucket)
-            } else {
-                format!("/{}/{}", self.config.bucket, full_key)
-            };
+            let encoded_path = format!("/{}/{}", self.config.bucket, full_key);
             url.set_path(&encoded_path);
             Ok((url, encoded_path))
         } else {
@@ -224,7 +276,6 @@ impl S3ObjectStore {
                 .host_str()
                 .ok_or_else(|| store_error("Endpoint missing host"))?;
 
-            // Check if endpoint already includes the bucket prefix
             let new_host = if host_str.starts_with(&format!("{}.", self.config.bucket)) {
                 host_str.to_string()
             } else {
@@ -233,11 +284,7 @@ impl S3ObjectStore {
             url.set_host(Some(&new_host))
                 .map_err(|_| store_error("Failed to set virtual host on URL"))?;
 
-            let encoded_path = if full_key.is_empty() {
-                "/".to_string()
-            } else {
-                format!("/{}", full_key)
-            };
+            let encoded_path = format!("/{}", full_key);
             url.set_path(&encoded_path);
             Ok((url, encoded_path))
         }
@@ -321,7 +368,18 @@ impl SyncObjectStore for S3ObjectStore {
         };
 
         let result = async {
-            // 2. Read back
+            // 2. Verify conditional create actually rejects overwriting existing object
+            let conflict_check = self.put_if_absent(&probe_key, b"probe-conflict".to_vec()).await?;
+            match conflict_check {
+                SyncPutResult::Conflict { .. } | SyncPutResult::AlreadyExists { .. } => {}
+                SyncPutResult::Created { .. } => {
+                    return Err(store_error(
+                        "S3 server does not support atomic conditional creation (If-None-Match: *). Existing object was overwritten.",
+                    ));
+                }
+            }
+
+            // 3. Read back
             let obj = self
                 .get(&probe_key)
                 .await?
@@ -330,7 +388,7 @@ impl SyncObjectStore for S3ObjectStore {
                 return Err(store_error("S3 probe object corrupted after upload."));
             }
 
-            // 3. CAS update with expected ETag
+            // 4. CAS update with expected ETag
             let updated = self
                 .compare_and_swap(&probe_key, Some(&created_etag), b"probe-b".to_vec())
                 .await?;
@@ -343,7 +401,7 @@ impl SyncObjectStore for S3ObjectStore {
                 }
             };
 
-            // 4. Delete with conditional ETag
+            // 5. Delete with conditional ETag
             match self.delete(&probe_key, Some(&updated_etag)).await? {
                 SyncDeleteResult::Deleted => Ok(SyncObjectStoreCapabilities {
                     conditional_create: true,
@@ -368,7 +426,7 @@ impl SyncObjectStore for S3ObjectStore {
         prefix: &SyncObjectPrefix,
         continuation: Option<&str>,
     ) -> Result<SyncListPage, SyncError> {
-        let (mut url, uri_path) = self.resolve_object_url_and_path("")?;
+        let (mut url, uri_path) = self.resolve_bucket_url_and_path()?;
         let normalized_root = self.config.remote_root.trim().trim_matches('/');
 
         let s3_prefix = if normalized_root.is_empty() {

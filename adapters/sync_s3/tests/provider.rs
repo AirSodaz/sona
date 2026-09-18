@@ -98,6 +98,28 @@ async fn factory_rejects_missing_required_fields() {
     );
 }
 
+#[tokio::test]
+async fn factory_rejects_remote_http_endpoint() {
+    let factory = S3SyncProviderFactory;
+    let malformed = factory
+        .prepare(json!({
+            "endpoint": "http://s3.amazonaws.com",
+            "region": "us-east-1",
+            "bucket": "test-bucket",
+            "accessKeyId": "AKIAIOSFODNN7EXAMPLE",
+            "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        }))
+        .await
+        .err()
+        .expect("remote http must fail");
+
+    assert!(
+        malformed
+            .to_string()
+            .contains("must use https:// unless it points to a local or LAN address")
+    );
+}
+
 type StoredObject = (Vec<u8>, String);
 type ObjectMap = HashMap<String, StoredObject>;
 
@@ -125,6 +147,11 @@ async fn s3_object_store_end_to_end_against_mock_server() {
 
             if method == axum::http::Method::GET {
                 if uri.query().map(|q| q.contains("list-type=2")).unwrap_or(false) {
+                    // Enforce S3 protocol: ListObjectsV2 must be requested on the bucket root (/test-bucket)
+                    let normalized_path = path.trim_end_matches('/');
+                    if normalized_path != "/test-bucket" {
+                        return (StatusCode::NOT_FOUND, "NoSuchKey").into_response();
+                    }
                     // ListObjectsV2
                     let map = state.objects.lock().await;
                     let mut xml = String::from(r#"<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Name>test-bucket</Name><IsTruncated>false</IsTruncated>"#);
