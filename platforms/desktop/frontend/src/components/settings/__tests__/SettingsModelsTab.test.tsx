@@ -647,6 +647,12 @@ describe('SettingsModelsTab speaker model selections', () => {
       expect(screen.getByText('Disabled')).toBeDefined();
     });
 
+    const radioGroup = screen.getByRole('radiogroup');
+    expect(radioGroup.classList.contains('is-disabled')).toBe(true);
+    expect(radioGroup.getAttribute('data-tooltip')).toBe(
+      'Select a speaker embedding model to enable'
+    );
+    expect(radioGroup.getAttribute('data-tooltip-pos')).toBe('top');
     const permissiveBtn = screen.getByRole('radio', {
       name: 'Permissive',
     });

@@ -1273,95 +1273,100 @@ export function SettingsModelsTab({
                 'Adjust strictness of speaker clustering. Permissive tolerates pitch variations; strict clearly differentiates close voices.',
             })}
           >
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-end',
-                gap: '6px',
-              }}
-            >
-              <div
-                className="settings-sensitivity-control"
-                role="radiogroup"
-                aria-label={t('settings.speaker_sensitivity_label', {
-                  defaultValue: 'Separation Sensitivity',
-                })}
-              >
-                {[
-                  {
-                    value: 'permissive' as const,
-                    label: t('settings.speaker_sensitivity_permissive', {
-                      defaultValue: 'Permissive',
-                    }),
-                    desc: t('settings.speaker_sensitivity_permissive_desc', {
-                      defaultValue: 'Tends to merge similar voices',
-                    }),
-                  },
-                  {
-                    value: 'balanced' as const,
-                    label: t('settings.speaker_sensitivity_balanced', {
-                      defaultValue: 'Balanced',
-                    }),
-                    desc: t('settings.speaker_sensitivity_balanced_desc', {
-                      defaultValue: 'Recommended model baseline',
-                    }),
-                  },
-                  {
-                    value: 'strict' as const,
-                    label: t('settings.speaker_sensitivity_strict', {
-                      defaultValue: 'Strict',
-                    }),
-                    desc: t('settings.speaker_sensitivity_strict_desc', {
-                      defaultValue: 'Differentiates close speakers',
-                    }),
-                  },
-                ].map((item) => {
-                  const currentSensitivity =
-                    modelConfig.speakerDiarizationSensitivity ?? 'balanced';
-                  const isEmbeddingActive = Boolean(
-                    isBatchScenario
-                      ? selectedModelIds.batchSpeakerEmbedding
-                      : selectedModelIds.liveSpeakerEmbedding
-                  );
-                  return (
-                    <button
-                      key={item.value}
-                      type="button"
-                      role="radio"
-                      aria-checked={currentSensitivity === item.value}
-                      className={`settings-sensitivity-btn${
-                        currentSensitivity === item.value ? ' is-active' : ''
-                      }`}
-                      onClick={() => updateConfig({ speakerDiarizationSensitivity: item.value })}
-                      disabled={localModelActionsDisabled || !isEmbeddingActive}
-                      title={item.desc}
-                    >
-                      {item.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <span className="settings-sensitivity-caption">
-                {!(isBatchScenario
+            {(() => {
+              const currentSensitivity = modelConfig.speakerDiarizationSensitivity ?? 'balanced';
+              const isEmbeddingActive = Boolean(
+                isBatchScenario
                   ? selectedModelIds.batchSpeakerEmbedding
-                  : selectedModelIds.liveSpeakerEmbedding)
-                  ? t('settings.speaker_disabled_hint', {
-                      defaultValue: 'Select a speaker embedding model to enable',
-                    })
-                  : (modelConfig.speakerDiarizationSensitivity ?? 'balanced') === 'permissive'
-                    ? t('settings.speaker_sensitivity_permissive_desc', {
-                        defaultValue: 'Tends to merge similar voices',
-                      })
-                    : (modelConfig.speakerDiarizationSensitivity ?? 'balanced') === 'strict'
-                      ? t('settings.speaker_sensitivity_strict_desc', {
-                          defaultValue: 'Differentiates close speakers',
-                        })
-                      : t('settings.speaker_sensitivity_balanced_desc', {
+                  : selectedModelIds.liveSpeakerEmbedding
+              );
+              const disabledHint = t('settings.speaker_disabled_hint', {
+                defaultValue: 'Select a speaker embedding model to enable',
+              });
+
+              return (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-end',
+                    gap: '6px',
+                  }}
+                >
+                  <div
+                    className={`settings-sensitivity-control${!isEmbeddingActive ? ' is-disabled' : ''}`}
+                    role="radiogroup"
+                    aria-label={t('settings.speaker_sensitivity_label', {
+                      defaultValue: 'Separation Sensitivity',
+                    })}
+                    data-tooltip={!isEmbeddingActive ? disabledHint : undefined}
+                    data-tooltip-pos="top"
+                    data-tooltip-multiline
+                    tabIndex={!isEmbeddingActive ? 0 : undefined}
+                  >
+                    {[
+                      {
+                        value: 'permissive' as const,
+                        label: t('settings.speaker_sensitivity_permissive', {
+                          defaultValue: 'Permissive',
+                        }),
+                        desc: t('settings.speaker_sensitivity_permissive_desc', {
+                          defaultValue: 'Tends to merge similar voices',
+                        }),
+                      },
+                      {
+                        value: 'balanced' as const,
+                        label: t('settings.speaker_sensitivity_balanced', {
+                          defaultValue: 'Balanced',
+                        }),
+                        desc: t('settings.speaker_sensitivity_balanced_desc', {
                           defaultValue: 'Recommended model baseline',
-                        })}
-              </span>
-            </div>
+                        }),
+                      },
+                      {
+                        value: 'strict' as const,
+                        label: t('settings.speaker_sensitivity_strict', {
+                          defaultValue: 'Strict',
+                        }),
+                        desc: t('settings.speaker_sensitivity_strict_desc', {
+                          defaultValue: 'Differentiates close speakers',
+                        }),
+                      },
+                    ].map((item) => (
+                      <button
+                        key={item.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={currentSensitivity === item.value}
+                        className={`settings-sensitivity-btn${
+                          currentSensitivity === item.value ? ' is-active' : ''
+                        }`}
+                        onClick={() => updateConfig({ speakerDiarizationSensitivity: item.value })}
+                        disabled={localModelActionsDisabled || !isEmbeddingActive}
+                        title={isEmbeddingActive ? item.desc : undefined}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                  {isEmbeddingActive && (
+                    <span className="settings-sensitivity-caption">
+                      {currentSensitivity === 'permissive'
+                        ? t('settings.speaker_sensitivity_permissive_desc', {
+                            defaultValue: 'Tends to merge similar voices',
+                          })
+                        : currentSensitivity === 'strict'
+                          ? t('settings.speaker_sensitivity_strict_desc', {
+                              defaultValue: 'Differentiates close speakers',
+                            })
+                          : t('settings.speaker_sensitivity_balanced_desc', {
+                              defaultValue: 'Recommended model baseline',
+                            })}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
           </SettingsItem>
         </div>
 
