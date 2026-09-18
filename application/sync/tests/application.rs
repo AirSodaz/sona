@@ -1270,12 +1270,13 @@ async fn pairing_info_extracts_s3_provider_fields() {
         }),
     };
 
+    let master_password = (0..16).map(|_| 'a').collect::<String>();
     application
         .create_with_vault_id(
             s3_provider_input,
             Some("s3-vault-1".to_string()),
             SyncPresetV1::Standard,
-            "master-pass-1",
+            &master_password,
             false,
         )
         .await

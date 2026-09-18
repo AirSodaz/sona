@@ -100,19 +100,40 @@ export const SYNC_PROVIDER_PRESETS: readonly SyncProviderPreset[] = [
   },
 ] as const;
 
+function parseUrlComponents(input: string): { hostname: string; port: string; pathname: string } {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return { hostname: '', port: '', pathname: '' };
+  }
+  try {
+    const url = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`);
+    return {
+      hostname: url.hostname.toLowerCase(),
+      port: url.port,
+      pathname: url.pathname.toLowerCase(),
+    };
+  } catch {
+    return { hostname: trimmed.toLowerCase(), port: '', pathname: '' };
+  }
+}
+
+function matchesDomain(hostname: string, domain: string): boolean {
+  return hostname === domain || hostname.endsWith(`.${domain}`);
+}
+
 export function detectProviderPresetId(serverUrl: string): WellKnownSyncProviderId {
-  const normalized = serverUrl.trim().toLowerCase();
-  if (normalized.includes('jianguoyun.com')) return 'nutstore';
-  if (normalized.includes('teracloud.jp') || normalized.includes('infinicloud'))
+  const { hostname, port, pathname } = parseUrlComponents(serverUrl);
+  if (matchesDomain(hostname, 'jianguoyun.com')) return 'nutstore';
+  if (matchesDomain(hostname, 'teracloud.jp') || hostname.includes('infinicloud'))
     return 'infinicloud';
   if (
-    normalized.includes('remote.php/dav') ||
-    normalized.includes('nextcloud') ||
-    normalized.includes('owncloud')
+    pathname.includes('remote.php/dav') ||
+    hostname.includes('nextcloud') ||
+    hostname.includes('owncloud')
   )
     return 'nextcloud';
-  if (normalized.includes(':5006') || normalized.includes('synology')) return 'synology';
-  if (normalized.includes('/dav') && normalized.includes('alist')) return 'alist';
+  if (port === '5006' || hostname.includes('synology')) return 'synology';
+  if (pathname.includes('/dav') && hostname.includes('alist')) return 'alist';
   return 'custom';
 }
 
@@ -243,11 +264,11 @@ export const S3_PROVIDER_PRESETS: readonly S3ProviderPreset[] = [
 ] as const;
 
 export function detectS3ProviderPresetId(endpoint: string): WellKnownS3ProviderId {
-  const normalized = endpoint.trim().toLowerCase();
-  if (normalized.includes('r2.cloudflarestorage.com')) return 'cloudflare-r2';
-  if (normalized.includes('amazonaws.com')) return 'aws-s3';
-  if (normalized.includes('aliyuncs.com')) return 'aliyun-oss';
-  if (normalized.includes('myqcloud.com')) return 'tencent-cos';
-  if (normalized.includes(':9000') || normalized.includes('minio')) return 'minio';
+  const { hostname, port } = parseUrlComponents(endpoint);
+  if (matchesDomain(hostname, 'r2.cloudflarestorage.com')) return 'cloudflare-r2';
+  if (matchesDomain(hostname, 'amazonaws.com')) return 'aws-s3';
+  if (matchesDomain(hostname, 'aliyuncs.com')) return 'aliyun-oss';
+  if (matchesDomain(hostname, 'myqcloud.com')) return 'tencent-cos';
+  if (port === '9000' || hostname === 'minio' || hostname.includes('minio')) return 'minio';
   return 's3-custom';
 }
