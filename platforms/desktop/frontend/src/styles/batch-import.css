@@ -200,12 +200,6 @@
   font-size: 0.76rem;
   padding: 2px 8px;
 }
-.queue-summary-progress-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-}
 
 .queue-summary-progress-track {
   flex: 1;
@@ -290,12 +284,6 @@
 .queue-group-expand-btn:focus-visible {
   outline: none;
   box-shadow: var(--apple-control-focus-ring);
-}
-
-.queue-group-header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .queue-group-chevron {

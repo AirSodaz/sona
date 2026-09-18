@@ -33,7 +33,7 @@ export function QueueGroup({
   if (count === 0) return null;
 
   return (
-    <div className={`queue-group queue-group-${statusVariant}`}>
+    <div className={`queue-group queue-group-${statusVariant}`} role="group" aria-label={title}>
       <div className="queue-group-header">
         <button
           type="button"

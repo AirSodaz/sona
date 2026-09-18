@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useShallow } from 'zustand/react/shallow';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { RestoreIcon } from './Icons';
 import { QueueGroup } from './QueueGroup';
@@ -12,7 +13,7 @@ export interface QueueGroupedListProps {
 /**
  * Main batch queue list that partitions items into clear status groups:
  * - Processing (with active spinners & progress bars)
- * - Waiting (with project assignment selectors)
+ * - Waiting (pending items)
  * - Completed (collapsible)
  * - Failed (with batch retry controls)
  */
@@ -21,73 +22,83 @@ export function QueueGroupedList({
 }: QueueGroupedListProps): React.JSX.Element | null {
   const { t } = useTranslation();
 
-  const queueItems = useBatchQueueStore((state) => state.queueItems);
+  const processingIds = useBatchQueueStore(
+    useShallow((state) =>
+      state.queueItems.filter((i) => i.status === 'processing').map((i) => i.id)
+    )
+  );
+  const pendingIds = useBatchQueueStore(
+    useShallow((state) => state.queueItems.filter((i) => i.status === 'pending').map((i) => i.id))
+  );
+  const completeIds = useBatchQueueStore(
+    useShallow((state) => state.queueItems.filter((i) => i.status === 'complete').map((i) => i.id))
+  );
+  const failedIds = useBatchQueueStore(
+    useShallow((state) =>
+      state.queueItems
+        .filter((i) => i.status === 'error' || i.status === 'cancelled')
+        .map((i) => i.id)
+    )
+  );
+  const totalCount = useBatchQueueStore((state) => state.queueItems.length);
   const retryAllFailed = useBatchQueueStore((state) => state.retryAllFailed);
 
-  if (queueItems.length === 0) {
+  if (totalCount === 0) {
     return null;
   }
-
-  const processingItems = queueItems.filter((item) => item.status === 'processing');
-  const pendingItems = queueItems.filter((item) => item.status === 'pending');
-  const completeItems = queueItems.filter((item) => item.status === 'complete');
-  const failedItems = queueItems.filter(
-    (item) => item.status === 'error' || item.status === 'cancelled'
-  );
-
   return (
     <div
       className={`queue-grouped-list ${className}`}
       role="list"
-      aria-label={t('batch.queue_title', { count: queueItems.length })}
+      aria-label={t('batch.queue_title', { count: totalCount })}
     >
       {/* 1. Processing group */}
-      {processingItems.length > 0 && (
+      {processingIds.length > 0 && (
         <QueueGroup
-          title={t('batch.processing_title')}
-          count={processingItems.length}
+          title={t('batch.group_processing')}
+          count={processingIds.length}
           statusVariant="processing"
           defaultExpanded={true}
         >
-          {processingItems.map(({ id }) => (
+          {processingIds.map((id) => (
             <QueueItemContainer key={id} id={id} t={t} />
           ))}
         </QueueGroup>
       )}
 
       {/* 2. Pending group */}
-      {pendingItems.length > 0 && (
+      {pendingIds.length > 0 && (
         <QueueGroup
-          title={t('batch.queue_waiting')}
-          count={pendingItems.length}
+          title={t('batch.group_pending')}
+          count={pendingIds.length}
           statusVariant="pending"
           defaultExpanded={true}
         >
-          {pendingItems.map(({ id }) => (
+          {pendingIds.map((id) => (
             <QueueItemContainer key={id} id={id} t={t} />
           ))}
         </QueueGroup>
       )}
 
       {/* 3. Completed group */}
-      {completeItems.length > 0 && (
+      {completeIds.length > 0 && (
         <QueueGroup
-          title={t('batch.file_complete')}
-          count={completeItems.length}
+          title={t('batch.group_complete')}
+          count={completeIds.length}
           statusVariant="complete"
-          defaultExpanded={processingItems.length === 0 && pendingItems.length === 0}
+          defaultExpanded={processingIds.length === 0 && pendingIds.length === 0}
         >
-          {completeItems.map(({ id }) => (
+          {completeIds.map((id) => (
             <QueueItemContainer key={id} id={id} t={t} />
           ))}
         </QueueGroup>
       )}
 
       {/* 4. Failed group */}
-      {failedItems.length > 0 && (
+      {failedIds.length > 0 && (
         <QueueGroup
-          title={t('batch.file_failed')}
-          count={failedItems.length}
+          title={t('batch.group_failed')}
+          count={failedIds.length}
           statusVariant="failed"
           defaultExpanded={true}
           action={
@@ -101,7 +112,7 @@ export function QueueGroupedList({
             </button>
           }
         >
-          {failedItems.map(({ id }) => (
+          {failedIds.map((id) => (
             <QueueItemContainer key={id} id={id} t={t} />
           ))}
         </QueueGroup>

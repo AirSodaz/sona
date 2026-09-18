@@ -75,17 +75,17 @@ describe('QueueGroupedList', () => {
     render(<QueueGroupedList />);
 
     // Group titles
-    expect(screen.getByText('batch.processing_title')).toBeDefined();
-    expect(screen.getByText('batch.queue_waiting')).toBeDefined();
-    expect(screen.getByText('batch.file_complete')).toBeDefined();
-    expect(screen.getByText('batch.file_failed')).toBeDefined();
+    expect(screen.getByText('batch.group_processing')).toBeDefined();
+    expect(screen.getByText('batch.group_pending')).toBeDefined();
+    expect(screen.getByText('batch.group_complete')).toBeDefined();
+    expect(screen.getByText('batch.group_failed')).toBeDefined();
 
     expect(screen.getByText('proc.wav')).toBeDefined();
     expect(screen.getByText('pend.wav')).toBeDefined();
     expect(screen.getByText('fail.wav')).toBeDefined();
 
     // Completed group is collapsed by default when there are active/pending items; expand to verify
-    const completeHeader = screen.getByRole('button', { name: /batch\.file_complete/ });
+    const completeHeader = screen.getByRole('button', { name: /batch\.group_complete/ });
     fireEvent.click(completeHeader);
     expect(screen.getByText('comp.wav')).toBeDefined();
   });
@@ -109,7 +109,7 @@ describe('QueueGroupedList', () => {
     expect(screen.getByText('proc.wav')).toBeDefined();
 
     // Click header to collapse
-    const header = screen.getByRole('button', { name: /batch\.processing_title/ });
+    const header = screen.getByRole('button', { name: /batch\.group_processing/ });
     fireEvent.click(header);
 
     // After collapsing, item is no longer visible

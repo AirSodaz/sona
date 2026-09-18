@@ -188,7 +188,7 @@ describe('BatchImport Integration', () => {
 
     // 2. Check if processing view appears
     await waitFor(() => {
-      expect(screen.getAllByText('batch.processing_title').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('batch.group_processing').length).toBeGreaterThan(0);
     });
 
     // 3. Check progress bar updates
@@ -234,12 +234,12 @@ describe('BatchImport Integration', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getAllByText('batch.file_failed').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('batch.group_failed').length).toBeGreaterThan(0);
     });
 
     // Error details
     const sidebar = screen.getByRole('list', { name: /Queue/ });
-    expect(within(sidebar).getByText('batch.file_failed')).toBeDefined();
+    expect(within(sidebar).getByText('batch.group_failed')).toBeDefined();
   });
 
   it('can remove items from queue', async () => {
@@ -311,7 +311,7 @@ describe('BatchImport Integration', () => {
     render(<BatchImport />);
 
     // Check if processing view is shown
-    screen.getByText('batch.processing_title');
+    screen.getByText('batch.group_processing');
     expect(screen.queryByRole('button', { name: 'automation.open_settings' })).toBeNull();
 
     // Check if "Add more files" button is present and NOT disabled

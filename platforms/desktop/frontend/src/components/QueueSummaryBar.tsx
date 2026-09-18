@@ -57,7 +57,8 @@ export function QueueSummaryBar({
     (item) => item.status === 'error' || item.status === 'cancelled'
   ).length;
   const isAllComplete = completedCount === totalCount && totalCount > 0;
-  const hasPendingOrProcessing = totalCount > completedCount;
+  const isAllFailed = errorCount === totalCount && totalCount > 0 && !isProcessing;
+  const hasPendingItems = queueItems.some((item) => item.status === 'pending');
   return (
     <div className={`queue-summary-bar ${className}`}>
       <div className="queue-summary-top">
@@ -105,7 +106,7 @@ export function QueueSummaryBar({
               </>
             ) : (
               <span>
-                {completedCount}/{totalCount} {t('batch.file_complete')}
+                {t('batch.summary_progress', { done: completedCount, total: totalCount })}
               </span>
             )}
           </span>
@@ -124,13 +125,9 @@ export function QueueSummaryBar({
       >
         <div
           className={`queue-summary-progress-fill ${
-            isAllComplete
-              ? 'fill-complete'
-              : errorCount > 0 && !isProcessing && completedCount === 0
-                ? 'fill-error'
-                : ''
+            isAllComplete ? 'fill-complete' : isAllFailed ? 'fill-error' : ''
           }`}
-          style={{ width: `${overallProgress}%` }}
+          style={{ width: isAllFailed ? '100%' : `${overallProgress}%` }}
         />
       </div>
 
@@ -155,7 +152,7 @@ export function QueueSummaryBar({
               <PlayIcon width={13} height={13} />
               <span>{t('batch.resume_queue')}</span>
             </button>
-          ) : hasPendingOrProcessing && !isProcessing ? (
+          ) : hasPendingItems && !isProcessing ? (
             <button
               className="btn btn-primary btn-sm queue-btn-action"
               onClick={() => void processQueue()}

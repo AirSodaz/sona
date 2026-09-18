@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import type React from 'react';
+import { memo } from 'react';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useProjectStore } from '../stores/projectStore';
 import type { BatchQueueItem, BatchQueueItemStatus } from '../types/batchQueue';
@@ -35,23 +35,21 @@ export const getQueueStatusIcon = (status: BatchQueueItemStatus): React.JSX.Elem
 export interface QueueItemProps {
   item: BatchQueueItem;
   isActive: boolean;
-  projects: ProjectRecord[];
+  project?: ProjectRecord;
   onActivate: (id: string) => void;
   onRemove: (id: string) => void;
   onRetry?: (id: string) => void;
-  onSetItemProjectId: (id: string, projectId: string | null) => void;
   t: TFunction;
 }
 
 /** Individual queue item row with progress, metadata, and quick actions. */
-export function QueueItem({
+export const QueueItem = memo(function QueueItem({
   item,
   isActive,
-  projects,
+  project,
   onActivate,
   onRemove,
   onRetry,
-  onSetItemProjectId: _onSetItemProjectId,
   t,
 }: QueueItemProps): React.JSX.Element {
   const handleClick = () => {
@@ -113,21 +111,16 @@ export function QueueItem({
         )}
 
         <div className="queue-item-meta">
-          {(() => {
-            if (!item.projectId) return null;
-            const proj = projects.find((p) => p.id === item.projectId);
-            if (!proj) return null;
-            return (
-              <span className="queue-item-project-badge">
-                <span
-                  className="queue-item-project-dot"
-                  style={{ backgroundColor: proj.color || 'var(--color-text-muted)' }}
-                  aria-hidden="true"
-                />
-                <span className="queue-item-project-name">{proj.name}</span>
-              </span>
-            );
-          })()}
+          {project && (
+            <span className="queue-item-project-badge">
+              <span
+                className="queue-item-project-dot"
+                style={{ backgroundColor: project.color || 'var(--color-text-muted)' }}
+                aria-hidden="true"
+              />
+              <span className="queue-item-project-name">{project.name}</span>
+            </span>
+          )}
           {item.origin === 'automation' && (
             <span
               className="queue-item-automation"
@@ -181,7 +174,7 @@ export function QueueItem({
       </div>
     </div>
   );
-}
+});
 
 /**
  * Isolated subscription container for a single queue item.
@@ -199,8 +192,9 @@ export function QueueItemContainer({
   const setActiveItem = useBatchQueueStore((state) => state.setActiveItem);
   const removeItem = useBatchQueueStore((state) => state.removeItem);
   const retryItem = useBatchQueueStore((state) => state.retryItem);
-  const setItemProjectId = useBatchQueueStore((state) => state.setItemProjectId);
-  const projects = useProjectStore((state) => state.projects);
+  const project = useProjectStore((state) =>
+    item?.projectId ? state.projects.find((p) => p.id === item.projectId) : undefined
+  );
 
   if (!item) return null;
 
@@ -211,8 +205,7 @@ export function QueueItemContainer({
       onActivate={setActiveItem}
       onRemove={removeItem}
       onRetry={retryItem}
-      onSetItemProjectId={setItemProjectId}
-      projects={projects}
+      project={project}
       t={t}
     />
   );

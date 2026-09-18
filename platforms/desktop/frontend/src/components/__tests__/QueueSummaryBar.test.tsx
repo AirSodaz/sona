@@ -145,4 +145,85 @@ describe('QueueSummaryBar', () => {
     fireEvent.click(clearBtn);
     expect(clearSpy).toHaveBeenCalled();
   });
+
+  it('does not render start button when there are no pending items', () => {
+    useBatchQueueStore.setState({
+      queueItems: [
+        {
+          id: 'item-1',
+          filename: 'file1.wav',
+          filePath: '/file1.wav',
+          status: 'complete',
+          progress: 100,
+          segments: [],
+          projectId: null,
+        },
+        {
+          id: 'item-2',
+          filename: 'file2.wav',
+          filePath: '/file2.wav',
+          status: 'error',
+          progress: 0,
+          segments: [],
+          projectId: null,
+        },
+      ],
+      isQueueProcessing: false,
+      isQueuePaused: false,
+    });
+
+    render(<QueueSummaryBar onAddFiles={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'batch.start_queue' })).toBeNull();
+  });
+
+  it('renders start button and starts queue when pending items exist', () => {
+    const processSpy = vi
+      .spyOn(useBatchQueueStore.getState(), 'processQueue')
+      .mockImplementation(async () => {});
+
+    useBatchQueueStore.setState({
+      queueItems: [
+        {
+          id: 'item-1',
+          filename: 'file1.wav',
+          filePath: '/file1.wav',
+          status: 'pending',
+          progress: 0,
+          segments: [],
+          projectId: null,
+        },
+      ],
+      isQueueProcessing: false,
+      isQueuePaused: false,
+    });
+
+    render(<QueueSummaryBar onAddFiles={vi.fn()} />);
+    const startBtn = screen.getByRole('button', { name: 'batch.start_queue' });
+    fireEvent.click(startBtn);
+    expect(processSpy).toHaveBeenCalled();
+  });
+
+  it('renders fill-error with 100% width when all items fail', () => {
+    useBatchQueueStore.setState({
+      queueItems: [
+        {
+          id: 'item-1',
+          filename: 'file1.wav',
+          filePath: '/file1.wav',
+          status: 'error',
+          progress: 0,
+          segments: [],
+          projectId: null,
+        },
+      ],
+      isQueueProcessing: false,
+      isQueuePaused: false,
+    });
+
+    const { container } = render(<QueueSummaryBar onAddFiles={vi.fn()} />);
+    const fill = container.querySelector('.queue-summary-progress-fill') as HTMLElement;
+    expect(fill).toBeDefined();
+    expect(fill.classList.contains('fill-error')).toBe(true);
+    expect(fill.style.width).toBe('100%');
+  });
 });
