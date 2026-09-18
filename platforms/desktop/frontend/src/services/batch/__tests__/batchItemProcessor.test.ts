@@ -147,6 +147,7 @@ describe('BatchItemProcessor', () => {
       status: 'pending',
       progress: 0,
       segments: [],
+      projectId: null,
     };
 
     const config: AppConfig = {

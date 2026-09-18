@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
+import { useDialogStore } from '../stores/dialogStore';
 import { CompleteIcon, ErrorIcon, PauseIcon, PlayIcon, ProcessingIcon, UploadIcon } from './Icons';
 import { QueueClearMenu } from './QueueClearMenu';
 
@@ -172,10 +173,34 @@ export function QueueSummaryBar({
         <QueueClearMenu
           completedCount={completedCount}
           totalCount={totalCount}
-          onClear={(scope) => {
+          onClear={async (scope) => {
             if (scope === 'completed') {
               clearCompleted();
             } else {
+              const hasProcessing = queueItems.some((item) => item.status === 'processing');
+              if (hasProcessing) {
+                const confirmed = await useDialogStore.getState().confirm(
+                  t('batch.clear_queue_confirm_message', {
+                    defaultValue:
+                      'There are files currently being transcribed. Clearing the queue will stop ongoing transcriptions and discard progress. Are you sure you want to clear all?',
+                  }),
+                  {
+                    title: t('batch.clear_queue_confirm_title', {
+                      defaultValue: 'Clear Transcription Queue?',
+                    }),
+                    variant: 'warning',
+                    confirmLabel: t('batch.clear_all_confirm_action', {
+                      defaultValue: 'Stop & Clear All',
+                    }),
+                    cancelLabel: t('batch.continue_transcribing', {
+                      defaultValue: 'Continue Transcribing',
+                    }),
+                  }
+                );
+                if (!confirmed) {
+                  return;
+                }
+              }
               clearQueue();
             }
           }}

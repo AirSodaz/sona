@@ -271,7 +271,14 @@
     "clear_completed": "完了済みをクリア",
     "clear_completed_hint": "完了したファイルのみクリア ({{count}})",
     "clear_all": "すべてクリア",
-    "clear_all_hint": "キュー内のすべてのファイルをクリア ({{count}})"
+    "clear_all_hint": "キュー内のすべてのファイルをクリア ({{count}})",
+    "cancel_confirm_title": "文字起こしを中止しますか？",
+    "cancel_confirm_message": "「{{filename}}」は文字起こし処理中です（{{progress}}% 完了）。中止すると現在の進捗は破棄されます。このファイルを中止して削除しますか？",
+    "stop_transcription": "中止して削除",
+    "continue_transcribing": "文字起こしを続ける",
+    "clear_queue_confirm_title": "文字起こしキューをクリアしますか？",
+    "clear_queue_confirm_message": "現在文字起こし処理中のファイルがあります。キューをクリアすると処理が中止され、進捗が破棄されます。すべてクリアしますか？",
+    "clear_all_confirm_action": "中止してすべてクリア"
   },
   "player": {
     "play": "再生",

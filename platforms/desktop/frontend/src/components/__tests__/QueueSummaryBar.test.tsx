@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createReactI18nextMock } from '../../__tests__/testUtils/i18n';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
+import { useDialogStore } from '../../stores/dialogStore';
 import { QueueSummaryBar } from '../QueueSummaryBar';
 
 vi.mock('react-i18next', () => createReactI18nextMock());
@@ -21,6 +22,11 @@ describe('QueueSummaryBar', () => {
       activeItemId: null,
       isQueueProcessing: false,
       isQueuePaused: false,
+    });
+    useDialogStore.setState({
+      isOpen: false,
+      options: null,
+      resolveRef: null,
     });
   });
 
@@ -167,6 +173,73 @@ describe('QueueSummaryBar', () => {
     const reopenedClearAllBtn = screen.getByRole('menuitem', { name: /batch\.clear_all/ });
     fireEvent.click(reopenedClearAllBtn);
     expect(clearAllSpy).toHaveBeenCalled();
+  });
+
+  it('prompts confirmation when clearing all with active processing items and aborts if declined', async () => {
+    const clearAllSpy = vi.spyOn(useBatchQueueStore.getState(), 'clearQueue');
+    const confirmSpy = vi.spyOn(useDialogStore.getState(), 'confirm').mockResolvedValue(false);
+    useBatchQueueStore.setState({
+      queueItems: [
+        {
+          id: 'proc-1',
+          filename: 'recording.mp3',
+          filePath: '/recording.mp3',
+          status: 'processing',
+          progress: 45,
+          segments: [],
+          projectId: null,
+        },
+      ],
+      isQueueProcessing: true,
+    });
+
+    render(<QueueSummaryBar onAddFiles={vi.fn()} />);
+    const trigger = screen.getByTestId('queue-clear-trigger');
+    fireEvent.click(trigger);
+
+    const clearAllBtn = screen.getByRole('menuitem', { name: /batch\.clear_all/ });
+    fireEvent.click(clearAllBtn);
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.stringContaining('batch.clear_queue_confirm_message'),
+      expect.objectContaining({
+        variant: 'warning',
+        confirmLabel: 'batch.clear_all_confirm_action',
+        cancelLabel: 'batch.continue_transcribing',
+      })
+    );
+    expect(clearAllSpy).not.toHaveBeenCalled();
+  });
+
+  it('prompts confirmation when clearing all with active processing items and clears if confirmed', async () => {
+    const clearAllSpy = vi.spyOn(useBatchQueueStore.getState(), 'clearQueue');
+    const confirmSpy = vi.spyOn(useDialogStore.getState(), 'confirm').mockResolvedValue(true);
+    useBatchQueueStore.setState({
+      queueItems: [
+        {
+          id: 'proc-1',
+          filename: 'recording.mp3',
+          filePath: '/recording.mp3',
+          status: 'processing',
+          progress: 45,
+          segments: [],
+          projectId: null,
+        },
+      ],
+      isQueueProcessing: true,
+    });
+
+    render(<QueueSummaryBar onAddFiles={vi.fn()} />);
+    const trigger = screen.getByTestId('queue-clear-trigger');
+    fireEvent.click(trigger);
+
+    const clearAllBtn = screen.getByRole('menuitem', { name: /batch\.clear_all/ });
+    fireEvent.click(clearAllBtn);
+
+    expect(confirmSpy).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(clearAllSpy).toHaveBeenCalled();
+    });
   });
 
   it('does not render start button when there are no pending items', () => {

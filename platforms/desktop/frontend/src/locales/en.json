@@ -271,7 +271,14 @@
     "clear_completed": "Clear Completed",
     "clear_completed_hint": "Clear all completed files ({{count}})",
     "clear_all": "Clear All",
-    "clear_all_hint": "Clear all files in queue ({{count}})"
+    "clear_all_hint": "Clear all files in queue ({{count}})",
+    "cancel_confirm_title": "Stop Transcription?",
+    "cancel_confirm_message": "\"{{filename}}\" is currently being transcribed ({{progress}}% completed). Stopping will discard current progress. Are you sure you want to stop and remove this file?",
+    "stop_transcription": "Stop & Remove",
+    "continue_transcribing": "Continue Transcribing",
+    "clear_queue_confirm_title": "Clear Transcription Queue?",
+    "clear_queue_confirm_message": "There are files currently being transcribed. Clearing the queue will stop ongoing transcriptions and discard progress. Are you sure you want to clear all?",
+    "clear_all_confirm_action": "Stop & Clear All"
   },
   "player": {
     "play": "Play",
