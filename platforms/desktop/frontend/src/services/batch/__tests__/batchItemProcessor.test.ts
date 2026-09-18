@@ -138,4 +138,41 @@ describe('BatchItemProcessor', () => {
       })
     );
   });
+
+  it('does not save history when cancellation error occurs', async () => {
+    const item: BatchQueueItem = {
+      id: 'queue-cancel',
+      filename: 'audio.mp3',
+      filePath: '/path/audio.mp3',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+    };
+
+    const config: AppConfig = {
+      language: 'en',
+    } as unknown as AppConfig;
+
+    vi.mocked(mockPorts.transcriptionService.transcribeFile).mockRejectedValue(
+      new Error('Task cancelled.')
+    );
+
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(true),
+      onInstanceIdAssigned: vi.fn(),
+    };
+
+    await expect(processor.processBatchQueueItem({ item, config, callbacks })).rejects.toThrow(
+      'Task cancelled.'
+    );
+
+    expect(mockPorts.historyService.saveImportedFile).not.toHaveBeenCalled();
+    expect(mockPorts.historyService.saveImportedFileToProject).not.toHaveBeenCalled();
+    expect(callbacks.onHistorySaved).not.toHaveBeenCalled();
+  });
 });

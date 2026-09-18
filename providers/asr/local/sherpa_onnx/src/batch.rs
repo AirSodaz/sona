@@ -175,6 +175,9 @@ impl BatchTranscriptionJob {
         let mut fallback_notice: Option<GpuFallbackNotice> = None;
 
         for provider in gpu_plan.provider_options() {
+            if observer.is_cancelled() {
+                return Err(AsrPortError::runtime("Task cancelled."));
+            }
             match self
                 .transcribe_with_provider(provider.as_deref(), Arc::clone(&observer))
                 .await
@@ -254,7 +257,9 @@ impl BatchTranscriptionJob {
                 )
             })?;
         }
-
+        if observer.is_cancelled() {
+            return Err(AsrPortError::runtime("Task cancelled."));
+        }
         let segments = transcribe_samples(
             &samples,
             &recognizer,
@@ -265,6 +270,9 @@ impl BatchTranscriptionJob {
             self.batch_segmentation_mode,
             observer.as_ref(),
         )?;
+        if observer.is_cancelled() {
+            return Err(AsrPortError::runtime("Task cancelled."));
+        }
         let segments = if let Some(aligner) = aligner.as_ref() {
             observer.on_progress(92.0);
             match aligner.align_segments(&samples, 16000, &segments).await {
@@ -279,11 +287,17 @@ impl BatchTranscriptionJob {
         } else {
             segments
         };
+        if observer.is_cancelled() {
+            return Err(AsrPortError::runtime("Task cancelled."));
+        }
         let segments = crate::speaker_processing::annotate_segments_with_speakers(
             &samples,
             &segments,
             self.speaker_processing.as_ref(),
         )?;
+        if observer.is_cancelled() {
+            return Err(AsrPortError::runtime("Task cancelled."));
+        }
         observer.on_transcript_update(&TranscriptUpdate {
             remove_ids: Vec::new(),
             upsert_segments: segments.clone(),
@@ -325,6 +339,9 @@ fn transcribe_samples(
     let total_duration = samples.len() as f32 / 16_000.0;
     let mut results = Vec::new();
     for segment in audio_segments {
+        if observer.is_cancelled() {
+            return Err(AsrPortError::runtime("Task cancelled."));
+        }
         if let Some(result) = decode_offline_samples(recognizer, &segment.samples) {
             let cleaned_text = normalize_recognizer_text(&result.text);
             if cleaned_text.is_empty() {

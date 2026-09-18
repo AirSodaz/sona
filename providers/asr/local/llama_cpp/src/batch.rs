@@ -240,6 +240,9 @@ impl LlamaBatchTranscriptionJob {
 
         let mut results = Vec::new();
         for (segment_index, segment) in audio_segments.into_iter().enumerate() {
+            if observer.is_cancelled() {
+                return Err(AsrPortError::runtime("Task cancelled."));
+            }
             let (start_sample, end_sample) = segment_bounds(&segment, sample_rate, samples.len());
             if end_sample <= start_sample {
                 observer.on_progress(segment_completed_progress(segment_index, segment_total));
@@ -426,6 +429,9 @@ fn transcribe_segment(
     let generation_limit = MAX_GENERATED_TOKENS.min(available);
     let generation_end = n_past.saturating_add(i32::try_from(generation_limit).unwrap_or(i32::MAX));
     for token_position in n_past..generation_end {
+        if observer.is_cancelled() {
+            return Err(AsrPortError::runtime("Task cancelled."));
+        }
         let token = sampler.sample(&context, -1);
         if model.is_eog_token(token) {
             break;
