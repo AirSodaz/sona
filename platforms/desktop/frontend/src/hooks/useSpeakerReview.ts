@@ -7,6 +7,8 @@ import {
 import { buildSpeakerReviewSnapshot } from '../services/speakerReviewService';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { useHistoryStore } from '../stores/historyStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type {
@@ -68,9 +70,21 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
   const segments = useTranscriptSessionStore((state) => state.segments);
   const speakerProfiles = useConfigStore((state) => state.config.speakerProfiles);
   const requestSeek = useTranscriptPlaybackStore((state) => state.requestSeek);
+  const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
+  const currentProjectId = useHistoryStore(
+    useCallback(
+      (state) => {
+        if (!sourceHistoryId) return activeProjectId;
+        const item = state.items.find((entry) => entry.id === sourceHistoryId);
+        return item ? (item.projectId ?? null) : activeProjectId;
+      },
+      [sourceHistoryId, activeProjectId]
+    )
+  );
   const profileSections = useMemo(
-    () => buildSpeakerCorrectionProfileSections(speakerProfiles),
-    [speakerProfiles]
+    () => buildSpeakerCorrectionProfileSections(speakerProfiles, currentProjectId),
+    [speakerProfiles, currentProjectId]
   );
 
   const [activeFilter, setActiveFilter] = useState<SpeakerReviewFilter>('pending');
@@ -186,11 +200,16 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
     async (groupId: string, profileId: string) => {
       await runGroupAction(
         groupId,
-        () => speakerCorrectionService.assignProfileToSpeakerGroup(groupId, profileId),
+        () =>
+          speakerCorrectionService.assignProfileToSpeakerGroup(
+            groupId,
+            profileId,
+            currentProjectId
+          ),
         'speaker_review.apply_failed'
       );
     },
-    [runGroupAction]
+    [runGroupAction, currentProjectId]
   );
 
   const handleResetGroup = useCallback(
@@ -214,7 +233,11 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
       for (const group of eligibleGroups) {
         const top = group.candidates[0];
         if (top) {
-          await speakerCorrectionService.assignProfileToSpeakerGroup(group.groupId, top.profileId);
+          await speakerCorrectionService.assignProfileToSpeakerGroup(
+            group.groupId,
+            top.profileId,
+            currentProjectId
+          );
         }
       }
     } catch (error) {
@@ -226,7 +249,7 @@ export function useSpeakerReview({ isOpen, onClose, modalRef }: UseSpeakerReview
     } finally {
       setIsBatchApplying(false);
     }
-  }, [isBatchApplying, showError, visibleGroups]);
+  }, [isBatchApplying, showError, visibleGroups, currentProjectId]);
 
   const handleJumpToGroup = useCallback(
     (group: SpeakerReviewGroup) => {

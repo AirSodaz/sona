@@ -2380,6 +2380,8 @@ export type SpeakerProfile = {
 	id: string,
 	name: string,
 	enabled: boolean,
+	scope?: string,
+	projectIds?: string[],
 	samples: SpeakerProfileSample[],
 };
 

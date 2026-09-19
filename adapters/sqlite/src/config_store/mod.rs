@@ -313,6 +313,8 @@ fn record_library_sync(
             [
                 ("name", serde_json::json!(record.name)),
                 ("enabled", serde_json::json!(record.enabled)),
+                ("scope", serde_json::json!(record.scope)),
+                ("projectIds", serde_json::json!(record.project_ids)),
                 ("sortOrder", serde_json::json!(sort_order)),
                 ("updatedAt", serde_json::json!(now_ms)),
             ],

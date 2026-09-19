@@ -358,7 +358,8 @@ describe('batchQueueStore', () => {
       undefined,
       expect.any(String),
       config,
-      expect.any(Function)
+      expect.any(Function),
+      null
     );
     expect(updateSegments).toHaveBeenCalledWith([expect.objectContaining({ text: '云端结果' })]);
     expect(updateStatus).toHaveBeenCalledWith('processing', 0, 'transcribing');

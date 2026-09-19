@@ -34,10 +34,14 @@ export interface SpeakerProfileSample {
   durationSeconds: number;
 }
 
+export type SpeakerProfileScope = 'global' | 'project';
+
 export interface SpeakerProfile {
   id: string;
   name: string;
   enabled: boolean;
+  scope?: SpeakerProfileScope;
+  projectIds?: string[];
   samples: SpeakerProfileSample[];
 }
 

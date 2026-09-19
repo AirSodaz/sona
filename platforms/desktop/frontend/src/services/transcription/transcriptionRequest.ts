@@ -14,6 +14,7 @@ interface StreamingRequestOptions {
   modelPathOverride?: string;
   language: string;
   enableItn: boolean;
+  projectId?: string | null;
 }
 
 interface BatchRequestOptions {
@@ -24,6 +25,7 @@ interface BatchRequestOptions {
   language: string;
   enableItn: boolean;
   instanceId?: string;
+  projectId?: string | null;
 }
 
 interface ResolvedBatchTranscriptionRequest {
@@ -68,6 +70,7 @@ export function buildStreamingAsrRequest({
   modelPathOverride,
   language,
   enableItn,
+  projectId,
 }: StreamingRequestOptions): AsrTranscriptionRequest {
   const request = resolveAsrTranscriptionRequest(appConfig, resolveStreamingSlot(instanceId), {
     language,
@@ -78,7 +81,7 @@ export function buildStreamingAsrRequest({
     normalizationOptions: {
       enableTimeline: instanceId === 'record' ? (appConfig.enableTimeline ?? false) : false,
     },
-    speakerProcessing: speakerService.buildProcessingConfig(appConfig, 'live'),
+    speakerProcessing: speakerService.buildProcessingConfig(appConfig, 'live', projectId),
   };
 }
 
@@ -90,6 +93,7 @@ export function buildBatchTranscriptionRequest({
   language,
   enableItn,
   instanceId,
+  projectId,
 }: BatchRequestOptions): ResolvedBatchTranscriptionRequest {
   const resolvedBatchRequest = resolveAsrTranscriptionRequest(appConfig, 'batch', { language });
   const runtimeRequest = applyRuntimeOptions(resolvedBatchRequest, modelPathOverride, enableItn);
@@ -111,7 +115,7 @@ export function buildBatchTranscriptionRequest({
       saveToPath: isLlamaCpp ? null : saveToPath || null,
       speakerProcessing: isLlamaCpp
         ? null
-        : speakerService.buildProcessingConfig(appConfig, 'batch'),
+        : speakerService.buildProcessingConfig(appConfig, 'batch', projectId),
       asrRequest,
       ...(instanceId ? { instanceId } : {}),
     },

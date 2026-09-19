@@ -216,6 +216,8 @@ fn load_config_reinserts_all_six_typed_library_arrays() {
             id: "speaker".into(),
             name: "Alice".into(),
             enabled: true,
+            scope: "global".into(),
+            project_ids: vec![],
             samples: vec![SpeakerProfileSampleRecord {
                 id: "sample".into(),
                 file_path: "alice.wav".into(),
@@ -257,7 +259,7 @@ fn load_config_reinserts_all_six_typed_library_arrays() {
                     "id":"keyword","name":"Keyword","enabled":true,"keywords":"clear, concise"
                 }],
                 "speakerProfiles": [{
-                    "id":"speaker","name":"Alice","enabled":true,
+                    "id":"speaker","name":"Alice","enabled":true,"scope":"global","projectIds":[],
                     "samples":[{"id":"sample","filePath":"alice.wav","sourceName":"Alice sample","durationSeconds":12.5}]
                 }]
             }
@@ -331,6 +333,8 @@ fn save_selects_object_wrappers_in_priority_order_with_complete_stored_states() 
                     id: "dash-speaker".into(),
                     name: "Dash".into(),
                     enabled: false,
+                    scope: "global".into(),
+                    project_ids: vec![],
                     samples: vec![],
                 }],
             },
@@ -394,6 +398,8 @@ fn save_selects_object_wrappers_in_priority_order_with_complete_stored_states() 
                     id: "config-speaker".into(),
                     name: "Config".into(),
                     enabled: true,
+                    scope: "global".into(),
+                    project_ids: vec![],
                     samples: vec![],
                 }],
                 ..AppConfigLibrary::default()
@@ -536,6 +542,8 @@ fn save_extracts_typed_records_with_exact_defaults_and_drops_invalid_entries() {
                 id: "p".into(),
                 name: "".into(),
                 enabled: true,
+                scope: "global".into(),
+                project_ids: vec![],
                 samples: vec![SpeakerProfileSampleRecord {
                     id: "sample".into(),
                     file_path: "".into(),
@@ -907,6 +915,8 @@ fn numeric_compatibility_covers_rounding_integer_paths_saturation_and_duration_c
                     id: "speaker".into(),
                     name: "Speaker".into(),
                     enabled: true,
+                    scope: "global".into(),
+                    project_ids: vec![],
                     samples: vec![SpeakerProfileSampleRecord {
                         id: "sample".into(),
                         file_path: "a.wav".into(),
@@ -1064,6 +1074,8 @@ fn inspection_contains_complete_config_metadata_and_exact_counts() {
             id: "sp".into(),
             name: "SP".into(),
             enabled: true,
+            scope: "global".into(),
+            project_ids: vec![],
             samples: vec![],
         }],
     };
@@ -1083,7 +1095,7 @@ fn inspection_contains_complete_config_metadata_and_exact_counts() {
                 {"id":"h2","name":"H2","enabled":true,"rules":[]}
             ],
             "polishKeywordSets": [{"id":"k","name":"K","enabled":true,"keywords":"x"}],
-            "speakerProfiles": [{"id":"sp","name":"SP","enabled":true,"samples":[]}]
+            "speakerProfiles": [{"id":"sp","name":"SP","enabled":true,"scope":"global","projectIds":[],"samples":[]}]
         }),
         config_version: 8,
         updated_at: 101,

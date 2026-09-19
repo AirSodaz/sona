@@ -1,5 +1,9 @@
 import type { AppConfig, AsrScenario } from '../types/config';
-import type { SpeakerProcessingConfig, SpeakerProfileSample } from '../types/speaker';
+import type {
+  SpeakerProcessingConfig,
+  SpeakerProfile,
+  SpeakerProfileSample,
+} from '../types/speaker';
 import { normalizeSpeakerProfiles } from '../types/speakerNormalization';
 import type { TranscriptSegment } from '../types/transcript';
 import {
@@ -25,6 +29,22 @@ export interface SpeakerServicePorts {
 export class SpeakerService {
   constructor(private readonly ports: SpeakerServicePorts) {}
 
+  resolveEffectiveProfiles(
+    profiles: SpeakerProfile[] | undefined,
+    projectId?: string | null
+  ): SpeakerProfile[] {
+    const normalized = normalizeSpeakerProfiles(profiles);
+    return normalized.filter((profile) => {
+      if (!profile.enabled) return false;
+      const scope = profile.scope ?? 'global';
+      if (scope === 'global') return true;
+      if (scope === 'project' && projectId) {
+        return (profile.projectIds ?? []).includes(projectId);
+      }
+      return false;
+    });
+  }
+
   isConfigured(config: SpeakerConfigInput, scenario: AsrScenario): boolean {
     const embeddingPath = getScenarioSpeakerEmbeddingModelPath(config, scenario);
     if (!embeddingPath) {
@@ -38,7 +58,8 @@ export class SpeakerService {
 
   buildProcessingConfig(
     config: SpeakerConfigInput,
-    scenario: AsrScenario
+    scenario: AsrScenario,
+    projectId?: string | null
   ): SpeakerProcessingConfig | null {
     const embeddingModelPath = getScenarioSpeakerEmbeddingModelPath(config, scenario);
     if (!embeddingModelPath) {
@@ -52,7 +73,7 @@ export class SpeakerService {
     return {
       speakerSegmentationModelPath: segmentationModelPath || undefined,
       speakerEmbeddingModelPath: embeddingModelPath,
-      speakerProfiles: normalizeSpeakerProfiles(config.speakerProfiles),
+      speakerProfiles: this.resolveEffectiveProfiles(config.speakerProfiles, projectId),
       sensitivity: config.speakerDiarizationSensitivity ?? 'balanced',
     };
   }
@@ -61,13 +82,14 @@ export class SpeakerService {
     filePath: string,
     segments: TranscriptSegment[],
     config: SpeakerConfigInput,
-    scenario: AsrScenario = 'live'
+    scenario: AsrScenario = 'live',
+    projectId?: string | null
   ): Promise<TranscriptSegment[]> {
     if (!filePath || segments.length === 0) {
       return segments;
     }
 
-    const speakerProcessing = this.buildProcessingConfig(config, scenario);
+    const speakerProcessing = this.buildProcessingConfig(config, scenario, projectId);
     if (
       !speakerProcessing?.speakerSegmentationModelPath ||
       !speakerProcessing?.speakerEmbeddingModelPath

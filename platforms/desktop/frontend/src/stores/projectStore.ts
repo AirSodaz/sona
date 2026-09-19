@@ -4,6 +4,7 @@ import { projectService } from '../services/projectService';
 import type { ProjectPipelineConfig, ProjectRecord, ProjectUpdateInput } from '../types/project';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
+import { useConfigStore } from './configStore';
 
 interface CreateProjectInput {
   name: string;
@@ -106,6 +107,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const activeProjectId = get().activeProjectId === id ? null : get().activeProjectId;
     if (get().activeProjectId === id) {
       await projectService.setActiveProjectId(null);
+    }
+
+    const config = useConfigStore.getState().config;
+    if (config.speakerProfiles?.some((p) => p.projectIds?.includes(id))) {
+      const nextProfiles = config.speakerProfiles.map((p) => {
+        if (!p.projectIds?.includes(id)) return p;
+        return {
+          ...p,
+          projectIds: p.projectIds.filter((pid) => pid !== id),
+        };
+      });
+      useConfigStore.getState().setConfig({ speakerProfiles: nextProfiles });
     }
 
     set((state) => ({

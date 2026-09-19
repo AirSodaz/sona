@@ -166,4 +166,29 @@ describe('ProjectSettingsModal', () => {
     expect(screen.getByText('Vocabulary & Terms')).toBeDefined();
     expect(screen.getByText(/terms linked/)).toBeDefined();
   });
+
+  it('displays linked speaker profiles count from vocabulary speaker profiles', () => {
+    render(
+      <ProjectSettingsModal
+        isOpen={true}
+        project={mockProject}
+        draftName="Test Project"
+        draftDescription="Test description"
+        draftIcon="folder"
+        draftColor="#6366f1"
+        draftPipeline={mockProject.pipeline}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        onDelete={vi.fn()}
+        onNameChange={vi.fn()}
+        onDescriptionChange={vi.fn()}
+        onIconChange={vi.fn()}
+        onColorChange={vi.fn()}
+        onPipelineChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Speaker Profiles')).toBeDefined();
+    expect(screen.getByText(/speakers linked/)).toBeDefined();
+  });
 });

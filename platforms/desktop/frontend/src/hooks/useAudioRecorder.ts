@@ -391,6 +391,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
       );
       return false;
     }
+    transcriptionService.setProjectId(activeProjectId);
     peakLevelRef.current = 0;
     return recordController.startRecording();
   }, [recordController, showError]);

@@ -98,6 +98,8 @@ describe('speaker runtime facade', () => {
         id: 'speaker-a',
         name: 'Speaker Profile',
         enabled: true,
+        scope: 'global',
+        projectIds: [],
         samples: [
           {
             id: 'sample-a',

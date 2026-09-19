@@ -285,6 +285,12 @@ fn typed_library(raw: RawLibraryConfig) -> AppConfigLibrary {
                 id: string_field(value, "id", ""),
                 name: string_field(value, "name", ""),
                 enabled: bool_field(value, "enabled", true),
+                scope: string_field(value, "scope", "global"),
+                project_ids: array_field(value, "projectIds")
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect(),
                 samples: array_field(value, "samples")
                     .iter()
                     .filter(|sample| sample.is_object())

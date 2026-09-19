@@ -192,7 +192,8 @@ export class BatchItemProcessor {
         config,
         (instanceId) => {
           callbacks.onInstanceIdAssigned(instanceId);
-        }
+        },
+        item.projectId
       );
 
       this.throwIfCancelRequested(callbacks);

@@ -374,27 +374,35 @@ fn load_hotword_rules(
 
 fn load_speaker_profiles(tx: &Transaction<'_>) -> Result<Vec<SpeakerProfileRecord>, DatabaseError> {
     let mut statement = tx.prepare_cached(
-        "SELECT id, name, enabled
+        "SELECT id, name, enabled, scope, project_ids
          FROM speaker_profiles
          ORDER BY sort_order, id",
     )?;
     let rows = statement.query_map([], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, i64>(2)? != 0,
-        ))
+        let id: String = row.get(0)?;
+        let name: String = row.get(1)?;
+        let enabled: bool = row.get::<_, i64>(2)? != 0;
+        let scope: String = row
+            .get::<_, Option<String>>(3)?
+            .unwrap_or_else(|| "global".to_string());
+        let project_ids_raw: String = row
+            .get::<_, Option<String>>(4)?
+            .unwrap_or_else(|| "[]".to_string());
+        let project_ids: Vec<String> = serde_json::from_str(&project_ids_raw).unwrap_or_default();
+        Ok((id, name, enabled, scope, project_ids))
     })?;
     let rows = rows
         .collect::<Result<Vec<_>, _>>()
         .map_err(DatabaseError::QueryError)?;
     rows.into_iter()
-        .map(|(id, name, enabled)| {
+        .map(|(id, name, enabled, scope, project_ids)| {
             Ok(SpeakerProfileRecord {
                 samples: load_speaker_profile_samples(tx, &id)?,
                 id,
                 name,
                 enabled,
+                scope,
+                project_ids,
             })
         })
         .collect()
@@ -429,8 +437,8 @@ fn save_speaker_profiles(
 ) -> Result<(), DatabaseError> {
     let mut profile_statement = tx.prepare_cached(
         "INSERT INTO speaker_profiles (
-            id, name, enabled, sort_order, created_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            id, name, enabled, scope, project_ids, sort_order, created_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
     )?;
     let mut sample_statement = tx.prepare_cached(
         "INSERT INTO speaker_profile_samples (
@@ -438,10 +446,14 @@ fn save_speaker_profiles(
          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
     )?;
     for (sort_order, profile) in profiles.iter().enumerate() {
+        let project_ids_json =
+            serde_json::to_string(&profile.project_ids).unwrap_or_else(|_| "[]".to_string());
         profile_statement.execute(rusqlite::params![
             profile.id,
             profile.name,
             profile.enabled as i64,
+            profile.scope,
+            project_ids_json,
             sort_order as i64,
             updated_at,
             updated_at,

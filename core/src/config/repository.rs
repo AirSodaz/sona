@@ -127,7 +127,15 @@ pub struct SpeakerProfileRecord {
     pub id: String,
     pub name: String,
     pub enabled: bool,
+    #[serde(default = "default_speaker_scope")]
+    pub scope: String,
+    #[serde(default)]
+    pub project_ids: Vec<String>,
     pub samples: Vec<SpeakerProfileSampleRecord>,
+}
+
+fn default_speaker_scope() -> String {
+    "global".to_string()
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

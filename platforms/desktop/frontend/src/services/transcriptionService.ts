@@ -65,6 +65,7 @@ export class TranscriptionService {
   private nativeGain = 1;
   private externalGain = 1;
   private preparedNativeConfig: ServiceConfig | null = null;
+  private activeProjectId: string | null = null;
 
   constructor(
     private readonly instanceId: string = 'default',
@@ -79,6 +80,9 @@ export class TranscriptionService {
 
   setLanguage(language: string): void {
     this.language = language;
+  }
+  setProjectId(projectId: string | null): void {
+    this.activeProjectId = projectId;
   }
 
   setEnableITN(enabled: boolean): void {
@@ -174,6 +178,7 @@ export class TranscriptionService {
       modelPathOverride: this.modelPath,
       language: this.language,
       enableItn: this.enableITN,
+      projectId: this.activeProjectId,
     });
   }
 
@@ -305,7 +310,8 @@ export class TranscriptionService {
     language?: string,
     saveToPath?: string,
     configOverride?: AppConfig,
-    onInstanceId?: (instanceId: string) => void
+    onInstanceId?: (instanceId: string) => void,
+    projectId?: string | null
   ): Promise<TranscriptSegment[]> {
     try {
       return await this._transcribeFileInternal(
@@ -316,7 +322,8 @@ export class TranscriptionService {
         language,
         saveToPath,
         configOverride,
-        onInstanceId
+        onInstanceId,
+        projectId
       );
     } catch (error) {
       if (extractErrorMessage(error).includes('COREML_FAILURE')) {
@@ -328,7 +335,8 @@ export class TranscriptionService {
           language,
           saveToPath,
           configOverride,
-          onInstanceId
+          onInstanceId,
+          projectId
         );
       }
       throw error;
@@ -343,7 +351,8 @@ export class TranscriptionService {
     language?: string,
     _saveToPath?: string,
     configOverride?: AppConfig,
-    onInstanceId?: (instanceId: string) => void
+    onInstanceId?: (instanceId: string) => void,
+    projectId?: string | null
   ): Promise<TranscriptSegment[]> {
     const appConfig = configOverride || this.ports.getEffectiveConfigSnapshot();
     const instanceId = `batch-${uuidv4()}`;
@@ -360,6 +369,7 @@ export class TranscriptionService {
       language: language || this.language || 'auto',
       enableItn: this.enableITN,
       instanceId,
+      projectId,
     });
     if (!isTranscriptionRequestConfigured(asrRequest)) {
       throw new Error('ASR is not configured');

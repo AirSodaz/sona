@@ -13,6 +13,8 @@ fn sample_profile(id: &str, name: &str) -> SpeakerProfile {
         id: id.to_string(),
         name: name.to_string(),
         enabled: true,
+        scope: "global".to_string(),
+        project_ids: vec![],
         samples: vec![SpeakerProfileSample {
             id: format!("{id}-sample"),
             file_path: format!("{id}.wav"),

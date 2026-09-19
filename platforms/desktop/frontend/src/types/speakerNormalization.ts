@@ -148,10 +148,17 @@ export function normalizeSpeakerProfile(input: unknown): SpeakerProfile | null {
         .filter((sample): sample is SpeakerProfileSample => !!sample)
     : [];
 
+  const scope: SpeakerProfile['scope'] = source.scope === 'project' ? 'project' : 'global';
+  const projectIds = Array.isArray(source.projectIds)
+    ? source.projectIds.filter(isNonEmptyString)
+    : [];
+
   return {
     id: source.id.trim(),
     name: isNonEmptyString(source.name) ? source.name.trim() : 'Speaker Profile',
     enabled: source.enabled !== false,
+    scope,
+    projectIds,
     samples,
   };
 }

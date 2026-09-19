@@ -77,6 +77,8 @@ describe('speakerService', () => {
           id: 'profile-1',
           name: 'Alice',
           enabled: true,
+          scope: 'global',
+          projectIds: [],
           samples: [
             {
               id: 'sample-1',
@@ -124,5 +126,74 @@ describe('speakerService', () => {
       'live'
     );
     expect(result).toBe(sampleSegments);
+  });
+
+  it('resolves effective profiles based on project scope and enablement', () => {
+    const profiles = [
+      {
+        id: 'global-1',
+        name: 'Alice',
+        enabled: true,
+        scope: 'global' as const,
+        projectIds: [],
+        samples: [],
+      },
+      {
+        id: 'global-disabled',
+        name: 'Bob',
+        enabled: false,
+        scope: 'global' as const,
+        projectIds: [],
+        samples: [],
+      },
+      {
+        id: 'proj-a-only',
+        name: 'Charlie',
+        enabled: true,
+        scope: 'project' as const,
+        projectIds: ['project-a'],
+        samples: [],
+      },
+      {
+        id: 'multi-proj',
+        name: 'David',
+        enabled: true,
+        scope: 'project' as const,
+        projectIds: ['project-a', 'project-b'],
+        samples: [],
+      },
+      {
+        id: 'proj-c-only',
+        name: 'Eve',
+        enabled: true,
+        scope: 'project' as const,
+        projectIds: ['project-c'],
+        samples: [],
+      },
+      {
+        id: 'proj-disabled',
+        name: 'Frank',
+        enabled: false,
+        scope: 'project' as const,
+        projectIds: ['project-a'],
+        samples: [],
+      },
+    ];
+
+    // For Project A: Alice (global), Charlie (A), David (A & B)
+    const effectiveA = speakerService.resolveEffectiveProfiles(profiles, 'project-a');
+    expect(effectiveA.map((p) => p.id)).toEqual(['global-1', 'proj-a-only', 'multi-proj']);
+
+    // For Project B: Alice (global), David (A & B)
+    const effectiveB = speakerService.resolveEffectiveProfiles(profiles, 'project-b');
+    expect(effectiveB.map((p) => p.id)).toEqual(['global-1', 'multi-proj']);
+
+    // For Project C: Alice (global), Eve (C)
+    const effectiveC = speakerService.resolveEffectiveProfiles(profiles, 'project-c');
+    expect(effectiveC.map((p) => p.id)).toEqual(['global-1', 'proj-c-only']);
+
+    // For Inbox / No Project: Alice (global) only
+    const effectiveNone = speakerService.resolveEffectiveProfiles(profiles, null);
+    expect(effectiveNone.map((p) => p.id)).toEqual(['global-1']);
   });
 });

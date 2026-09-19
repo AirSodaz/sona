@@ -244,6 +244,8 @@ mod tests {
             id: id.to_string(),
             name: name.to_string(),
             enabled: true,
+            scope: "global".to_string(),
+            project_ids: vec![],
             samples: vec![],
         }
     }

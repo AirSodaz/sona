@@ -71,6 +71,15 @@ export function ProjectSettingsModal({
     const terms = getTermsForProject(parsedDictionary, project.id, project.name);
     return terms.hotwords.length + terms.replacements.length;
   }, [parsedDictionary, project]);
+  const speakerProfiles = config.speakerProfiles || [];
+  const projectSpeakersCount = useMemo(() => {
+    if (!project) return 0;
+    return speakerProfiles.filter(
+      (profile) =>
+        profile.enabled &&
+        ((profile.scope ?? 'global') === 'global' || profile.projectIds?.includes(project.id))
+    ).length;
+  }, [speakerProfiles, project]);
   const polishPresetOptions = useMemo(() => getPolishPresetOptions(undefined, t), [t]);
   const summaryTemplateOptions = useMemo(() => getSummaryTemplateOptions(undefined, t), [t]);
   const languageOptions = useMemo(
@@ -391,6 +400,48 @@ export function ProjectSettingsModal({
                     {t('projects.pipeline_dictionary_hint', {
                       defaultValue:
                         'All project terms and replacements are now configured in the Unified Dictionary (Settings > Vocabulary).',
+                    })}
+                  </p>
+                </div>
+
+                {/* Speaker Profiles Integration */}
+                <div
+                  className="project-pipeline-item"
+                  style={{ flexDirection: 'column', alignItems: 'stretch' }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: '0.8125rem',
+                        fontWeight: 500,
+                        color: 'var(--color-text-primary)',
+                      }}
+                    >
+                      {t('projects.pipeline_speakers_title', {
+                        defaultValue: 'Speaker Profiles',
+                      })}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                      {projectSpeakersCount}{' '}
+                      {t('projects.speakers_linked', { defaultValue: 'speakers linked' })}
+                    </span>
+                  </div>
+                  <p
+                    style={{
+                      fontSize: '0.75rem',
+                      color: 'var(--color-text-secondary)',
+                      margin: '4px 0 0 0',
+                    }}
+                  >
+                    {t('projects.pipeline_speakers_hint', {
+                      defaultValue:
+                        'All speaker profiles and project scopes are configured in Settings > Vocabulary > Speaker Profiles.',
                     })}
                   </p>
                 </div>

@@ -8,11 +8,13 @@ import {
   transcriptionService,
 } from '../services/transcriptionService';
 import { useConfigStore } from '../stores/configStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { logger } from '../utils/logger';
 
 export function useTranscriptionServiceSync() {
   const config = useConfigStore((state) => state.config);
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
 
   useEffect(() => {
@@ -35,6 +37,7 @@ export function useTranscriptionServiceSync() {
         }
         transcriptionService.setLanguage(config.language);
         transcriptionService.setEnableITN(config.enableITN ?? false);
+        transcriptionService.setProjectId(activeProjectId);
 
         if (captionAsr.engine === 'local') {
           captionTranscriptionService.setModelPath(captionAsr.modelPath);
@@ -50,5 +53,5 @@ export function useTranscriptionServiceSync() {
     };
 
     syncAndPrepare();
-  }, [config, isRecording]);
+  }, [config, isRecording, activeProjectId]);
 }

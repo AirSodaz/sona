@@ -18,12 +18,24 @@ export type {
 } from '../types/speakerCommands';
 
 export function buildSpeakerCorrectionProfileSections(
-  inputProfiles: SpeakerProfile[] | undefined
+  inputProfiles: SpeakerProfile[] | undefined,
+  currentProjectId?: string | null
 ): SpeakerCorrectionProfileSections {
   const profiles = normalizeSpeakerProfiles(inputProfiles);
+
+  const isProfileInCurrentScope = (profile: SpeakerProfile) => {
+    if (!profile.enabled) return false;
+    const scope = profile.scope ?? 'global';
+    if (scope === 'global') return true;
+    if (scope === 'project' && currentProjectId) {
+      return (profile.projectIds ?? []).includes(currentProjectId);
+    }
+    return false;
+  };
+
   return {
-    primaryProfiles: profiles.filter((profile) => profile.enabled),
-    secondaryProfiles: profiles.filter((profile) => !profile.enabled),
+    primaryProfiles: profiles.filter(isProfileInCurrentScope),
+    secondaryProfiles: profiles.filter((profile) => !isProfileInCurrentScope(profile)),
   };
 }
 
@@ -41,7 +53,8 @@ export class SpeakerCorrectionService {
 
   async assignProfileToSpeakerGroup(
     sourceGroupId: string,
-    targetProfileId: string
+    targetProfileId: string,
+    currentProjectId?: string | null
   ): Promise<TranscriptSegment[]> {
     const configStore = this.ports.getConfigStore();
     const profiles = normalizeSpeakerProfiles(configStore.config.speakerProfiles);
@@ -62,13 +75,26 @@ export class SpeakerCorrectionService {
     if (response.enabledSpeakerProfileIds) {
       const enabledIds = new Set(response.enabledSpeakerProfileIds);
       configStore.setConfig({
-        speakerProfiles: profiles.map((profile) => ({
-          ...profile,
-          enabled: enabledIds.has(profile.id),
-        })),
+        speakerProfiles: profiles.map((profile) => {
+          const isTarget = profile.id === targetProfileId;
+          const shouldAddProject =
+            isTarget &&
+            currentProjectId &&
+            profile.scope === 'project' &&
+            !profile.projectIds?.includes(currentProjectId);
+
+          const projectIds = shouldAddProject
+            ? [...(profile.projectIds ?? []), currentProjectId]
+            : profile.projectIds;
+
+          return {
+            ...profile,
+            enabled: enabledIds.has(profile.id),
+            ...(projectIds ? { projectIds } : {}),
+          };
+        }),
       });
     }
-
     await this.ports.getEffectiveConfigStore().syncConfig();
     return response.segments;
   }

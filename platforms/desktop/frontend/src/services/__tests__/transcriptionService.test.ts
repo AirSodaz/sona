@@ -361,7 +361,16 @@ describe('TranscriptionService voice typing diagnostics', () => {
         speakerProcessing: {
           speakerSegmentationModelPath: '/models/speaker-segmentation',
           speakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
-          speakerProfiles: [{ id: 'profile-1', name: 'Alice', enabled: true, samples: [] }],
+          speakerProfiles: [
+            {
+              id: 'profile-1',
+              name: 'Alice',
+              enabled: true,
+              scope: 'global',
+              projectIds: [],
+              samples: [],
+            },
+          ],
           sensitivity: 'balanced',
         },
       })

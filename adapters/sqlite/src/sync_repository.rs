@@ -1617,7 +1617,7 @@ fn operation_allowed(preset: SyncPresetV1, operation: &SyncOperation) -> bool {
         }
         SyncEntityKind::SpeakerProfile => matches!(
             field,
-            "name" | "enabled" | "sortOrder" | "createdAt" | "updatedAt"
+            "name" | "enabled" | "scope" | "projectIds" | "sortOrder" | "createdAt" | "updatedAt"
         ),
         SyncEntityKind::AutomationProfile => matches!(
             field,
@@ -1833,6 +1833,8 @@ fn apply_domain_field(
             &[
                 ("name", "name"),
                 ("enabled", "enabled"),
+                ("scope", "scope"),
+                ("projectIds", "project_ids"),
                 ("sortOrder", "sort_order"),
                 ("createdAt", "created_at"),
                 ("updatedAt", "updated_at"),

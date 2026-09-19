@@ -134,6 +134,8 @@ fn state(label: &str, updated_at: i64) -> AppConfigStoredState {
                     id: format!("{label}-speaker-b"),
                     name: "Speaker B".into(),
                     enabled: true,
+                    scope: "global".into(),
+                    project_ids: vec![],
                     samples: vec![
                         SpeakerProfileSampleRecord {
                             id: format!("{label}-sample-b2"),
@@ -153,6 +155,8 @@ fn state(label: &str, updated_at: i64) -> AppConfigStoredState {
                     id: format!("{label}-speaker-a"),
                     name: "Speaker A".into(),
                     enabled: false,
+                    scope: "global".into(),
+                    project_ids: vec![],
                     samples: vec![
                         SpeakerProfileSampleRecord {
                             id: format!("{label}-sample-a2"),
@@ -230,7 +234,7 @@ fn independent_sql_seed_loads_exact_typed_state_and_ordered_rows() {
                 ('seed-hotword-a1', 'hotword', 'seed-hotwords-a', '', '', 'Sona A1', 1),
                 ('seed-hotword-a2', 'hotword', 'seed-hotwords-a', '', '', 'Sona A2', 0);
 
-            INSERT INTO speaker_profiles VALUES
+            INSERT INTO speaker_profiles (id, name, enabled, sort_order, created_at, updated_at) VALUES
                 ('seed-speaker-a', 'Speaker A', 0, 1, 123, 123),
                 ('seed-speaker-b', 'Speaker B', 1, 0, 123, 123);
             INSERT INTO speaker_profile_samples VALUES

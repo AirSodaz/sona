@@ -1,6 +1,6 @@
 use super::{Database, DatabaseError};
 
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 8;
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 9;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 7;
 
 /// Initializes a new database at the current schema baseline or upgrades supported legacy databases.
@@ -29,9 +29,15 @@ pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
                 "INSERT INTO schema_version (version) VALUES (?1)",
                 [CURRENT_SCHEMA_VERSION],
             )?;
-        } else if applied_version < 8 {
-            migrate_v8(tx)?;
-            tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [8])?;
+        } else {
+            if applied_version < 8 {
+                migrate_v8(tx)?;
+                tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [8])?;
+            }
+            if applied_version < 9 {
+                migrate_v9(tx)?;
+                tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [9])?;
+            }
         }
         Ok(())
     })
@@ -78,7 +84,8 @@ fn initialize_current_schema(tx: &rusqlite::Transaction) -> Result<(), rusqlite:
     migrate_v5(tx)?;
     migrate_v6(tx)?;
     migrate_v7(tx)?;
-    migrate_v8(tx)
+    migrate_v8(tx)?;
+    migrate_v9(tx)
 }
 
 fn bootstrap_schema_version(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
@@ -663,6 +670,22 @@ fn migrate_v8(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
           WHERE project_id IS NULL AND EXISTS (SELECT 1 FROM history_item_tags hit WHERE hit.history_id = history_items.id);
          -- Legacy relationship table is retained for compatibility reads",
     )
+}
+
+fn migrate_v9(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+    if !has_column(tx, "speaker_profiles", "scope")? {
+        tx.execute(
+            "ALTER TABLE speaker_profiles ADD COLUMN scope TEXT NOT NULL DEFAULT 'global';",
+            [],
+        )?;
+    }
+    if !has_column(tx, "speaker_profiles", "project_ids")? {
+        tx.execute(
+            "ALTER TABLE speaker_profiles ADD COLUMN project_ids TEXT NOT NULL DEFAULT '[]';",
+            [],
+        )?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1355,6 +1378,8 @@ mod tests {
                     "id",
                     "name",
                     "enabled",
+                    "scope",
+                    "project_ids",
                     "sort_order",
                     "created_at",
                     "updated_at",

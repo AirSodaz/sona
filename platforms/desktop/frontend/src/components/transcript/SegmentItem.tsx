@@ -10,6 +10,8 @@ import {
 } from '../../services/speakerCorrectionService';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
+import { useHistoryStore } from '../../stores/historyStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { useSearchStore } from '../../stores/searchStore';
 import { updateTranscriptSegment } from '../../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
@@ -194,9 +196,21 @@ export function SegmentItem({
   const [showAllSpeakerProfiles, setShowAllSpeakerProfiles] = useState(false);
   const [isApplyingSpeakerProfile, setIsApplyingSpeakerProfile] = useState(false);
   const speakerMenuRef = useRef<HTMLDivElement>(null);
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
+  const currentProjectId = useHistoryStore(
+    useCallback(
+      (state) => {
+        if (!sourceHistoryId) return activeProjectId;
+        const item = state.items.find((entry) => entry.id === sourceHistoryId);
+        return item ? (item.projectId ?? null) : activeProjectId;
+      },
+      [sourceHistoryId, activeProjectId]
+    )
+  );
+
   const speakerProfileSections = useMemo(
-    () => buildSpeakerCorrectionProfileSections(speakerProfiles),
-    [speakerProfiles]
+    () => buildSpeakerCorrectionProfileSections(speakerProfiles, currentProjectId),
+    [speakerProfiles, currentProjectId]
   );
   const hasSecondarySpeakerProfiles = speakerProfileSections.secondaryProfiles.length > 0;
   const speakerGroupId = segment.speakerAttribution?.groupId || segment.speaker?.id || '';
@@ -273,7 +287,11 @@ export function SegmentItem({
 
     try {
       setIsApplyingSpeakerProfile(true);
-      await speakerCorrectionService.assignProfileToSpeakerGroup(speakerGroupId, profileId);
+      await speakerCorrectionService.assignProfileToSpeakerGroup(
+        speakerGroupId,
+        profileId,
+        currentProjectId
+      );
       closeSpeakerMenu();
     } catch (error) {
       await showError({
