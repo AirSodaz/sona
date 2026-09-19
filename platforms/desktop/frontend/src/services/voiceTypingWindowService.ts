@@ -32,7 +32,10 @@ export interface VoiceTypingOverlayPayload {
   isFinal?: boolean;
   hasSelection?: boolean;
   selectionLength?: number;
-  contextMode?: 'general' | 'developer' | 'chat' | 'formal';
+  contextMode?: string;
+  contextName?: string;
+  contextIcon?: string;
+  contextColor?: string;
 }
 
 export const DEFAULT_VOICE_TYPING_OVERLAY_STATE: VoiceTypingOverlayPayload = {

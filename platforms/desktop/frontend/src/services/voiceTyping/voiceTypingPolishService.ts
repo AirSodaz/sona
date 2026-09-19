@@ -58,9 +58,12 @@ export async function polishVoiceTypingText(
     config.voiceTypingPolishPrompt?.trim() ||
     DEFAULT_VOICE_TYPING_POLISH_PROMPT;
 
-  const contextDirective = options?.context?.mode
-    ? getContextDirective(options.context.mode, options.context.windowTitle)
-    : '';
+  const rules = config.voiceTypingContextRules;
+  const contextDirective = options?.context?.rule
+    ? getContextDirective(options.context.rule, options.context.windowTitle, rules)
+    : options?.context?.mode
+      ? getContextDirective(options.context.mode, options.context.windowTitle, rules)
+      : '';
 
   const systemPrompt = contextDirective
     ? `${baseSystemPrompt}\n\n${contextDirective}`
@@ -154,12 +157,19 @@ export async function transformSelectedText(
         ...llmConfig,
         temperature: 0.2,
       },
-      systemPrompt: options?.context?.mode
+      systemPrompt: options?.context?.rule
         ? `${DEFAULT_VOICE_TYPING_TRANSFORM_PROMPT}\n\n${getContextDirective(
-            options.context.mode,
-            options.context.windowTitle
+            options.context.rule,
+            options.context.windowTitle,
+            config.voiceTypingContextRules
           )}`
-        : DEFAULT_VOICE_TYPING_TRANSFORM_PROMPT,
+        : options?.context?.mode
+          ? `${DEFAULT_VOICE_TYPING_TRANSFORM_PROMPT}\n\n${getContextDirective(
+              options.context.mode,
+              options.context.windowTitle,
+              config.voiceTypingContextRules
+            )}`
+          : DEFAULT_VOICE_TYPING_TRANSFORM_PROMPT,
       input: promptInput,
       options: {
         maxOutputTokens: 2048,

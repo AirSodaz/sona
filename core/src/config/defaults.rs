@@ -76,6 +76,9 @@ pub fn default_config() -> Value {
         ("voiceTypingPolishPrompt", json!("")),
         ("voiceTypingPlacement", json!("caret")),
         ("voiceTypingQuickRecallShortcut", json!("Alt + Shift + H")),
+        ("voiceTypingContextAwarenessEnabled", json!(true)),
+        ("voiceTypingContextPreset", json!("auto")),
+        ("voiceTypingContextRules", create_default_voice_typing_context_rules()),
         ("textReplacementSets", json!([])),
         ("hotwordSets", json!([])),
         ("polishKeywordSets", json!([])),
@@ -143,4 +146,105 @@ pub fn create_llm_settings() -> Value {
         "modelOrder": [],
         "selections": {}
     })
+}
+pub fn create_default_voice_typing_context_rules() -> Value {
+    json!([
+        {
+            "id": "developer",
+            "name": "Developer",
+            "icon": "💻",
+            "badgeColor": "#818cf8",
+            "appsByPlatform": {
+                "windows": [
+                    "code.exe", "cursor.exe", "idea64.exe", "devenv.exe", "clion64.exe",
+                    "pycharm64.exe", "webstorm64.exe", "goland64.exe", "rider64.exe",
+                    "sublime_text.exe", "zed.exe", "neovide.exe", "nvim.exe", "vim.exe",
+                    "emacs.exe", "windowsterminal.exe", "powershell.exe", "cmd.exe",
+                    "alacritty.exe", "wezterm-gui.exe", "kitty.exe", "warp.exe",
+                    "git-bash.exe", "conhost.exe", "mintty.exe", "postman.exe",
+                    "dbeaver.exe", "datagrip64.exe", "navicat.exe"
+                ],
+                "macos": [
+                    "Visual Studio Code", "Code", "Xcode", "Cursor", "Zed",
+                    "Sublime Text", "IntelliJ IDEA", "CLion", "PyCharm", "WebStorm",
+                    "GoLand", "Rider", "DataGrip", "Postman", "DBeaver", "Terminal",
+                    "iTerm2", "Alacritty", "kitty", "Warp", "Neovide", "MacVim"
+                ],
+                "linux": [
+                    "code", "cursor", "zed", "sublime_text", "idea", "clion",
+                    "pycharm", "webstorm", "goland", "rider", "datagrip", "postman",
+                    "dbeaver", "gnome-terminal", "konsole", "alacritty", "kitty",
+                    "wezterm", "warp-terminal", "xfce4-terminal"
+                ]
+            },
+            "titlePatterns": [
+                "github", "gitlab", "stackoverflow", "localhost", "pull request", "leetcode"
+            ],
+            "promptDirective": "Developer & Engineering Mode: Preserve technical terms, exact library/module names, and code identifiers (camelCase, PascalCase, snake_case, kebab-case, UPPER_CASE, CLI flags like --flag). Never spell out code symbols as prose. Keep it succinct and technical. Never add trailing periods or punctuation unless dictating explanatory comments.",
+            "stripTrailingPunctuation": true,
+            "isBuiltin": true,
+            "enabled": true
+        },
+        {
+            "id": "chat",
+            "name": "Chat",
+            "icon": "💬",
+            "badgeColor": "#34d399",
+            "appsByPlatform": {
+                "windows": [
+                    "wechat.exe", "qq.exe", "slack.exe", "discord.exe", "telegram.exe",
+                    "dingtalk.exe", "feishu.exe", "teams.exe", "lark.exe", "whatsapp.exe",
+                    "signal.exe", "skype.exe", "line.exe", "element.exe"
+                ],
+                "macos": [
+                    "WeChat", "QQ", "Slack", "Discord", "Telegram", "DingTalk",
+                    "Feishu", "Lark", "Microsoft Teams", "WhatsApp", "Signal",
+                    "Skype", "LINE", "Element", "Messages"
+                ],
+                "linux": [
+                    "wechat", "qq", "slack", "discord", "telegram-desktop", "dingtalk",
+                    "feishu", "lark", "teams", "whatsapp-for-linux", "signal-desktop",
+                    "skypeforlinux", "element-desktop"
+                ]
+            },
+            "titlePatterns": [
+                "slack |", "discord", "telegram", "wechat", "messages"
+            ],
+            "promptDirective": "Instant Messaging & Chat Mode: Use a natural, conversational, lightweight tone. Split long rambling speech into clear, compact phrases. Separate clauses with spaces rather than heavy commas. Never add trailing periods or full stops.",
+            "stripTrailingPunctuation": true,
+            "isBuiltin": true,
+            "enabled": true
+        },
+        {
+            "id": "formal",
+            "name": "Formal",
+            "icon": "📄",
+            "badgeColor": "#f59e0b",
+            "appsByPlatform": {
+                "windows": [
+                    "winword.exe", "excel.exe", "powerpnt.exe", "outlook.exe",
+                    "foxmail.exe", "thunderbird.exe", "wps.exe", "wpp.exe", "et.exe",
+                    "notion.exe", "obsidian.exe", "typora.exe", "logseq.exe",
+                    "craft.exe", "acrobat.exe"
+                ],
+                "macos": [
+                    "Microsoft Word", "Microsoft Excel", "Microsoft PowerPoint",
+                    "Pages", "Numbers", "Keynote", "Microsoft Outlook", "Mail",
+                    "Foxmail", "Thunderbird", "WPS Office", "Notion", "Obsidian",
+                    "Typora", "Logseq", "Craft", "TextEdit"
+                ],
+                "linux": [
+                    "libreoffice", "soffice.bin", "wps", "wpp", "et", "notion-app",
+                    "obsidian", "typora", "thunderbird"
+                ]
+            },
+            "titlePatterns": [
+                "document", "report", "notion", "obsidian", "word", "excel", "sheets", "docs"
+            ],
+            "promptDirective": "Formal Writing & Document Mode: Convert colloquial spoken expressions into rigorous, well-structured, professional written language. Ensure complete grammatical sentence structures and proper punctuation.",
+            "stripTrailingPunctuation": false,
+            "isBuiltin": true,
+            "enabled": true
+        }
+    ])
 }

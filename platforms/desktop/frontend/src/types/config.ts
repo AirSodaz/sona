@@ -343,9 +343,32 @@ export type VoiceTypingProcessingMode = 'raw' | 'polish';
 /** Voice Typing placement strategy: 'caret' (follow cursor) or 'bottom_center' (dynamic island). */
 export type VoiceTypingPlacement = 'caret' | 'bottom_center';
 
-/** Voice Typing situation preset. */
-export type VoiceTypingContextPreset = 'auto' | 'general' | 'developer' | 'chat' | 'formal';
+/** Desktop host operating systems. */
+export type HostPlatform = 'windows' | 'macos' | 'linux';
 
+/** Per-platform software list mapping. */
+export interface VoiceTypingPlatformApps {
+  windows: string[];
+  macos: string[];
+  linux: string[];
+}
+
+/** Customizable situation rule for context awareness. */
+export interface VoiceTypingContextRule {
+  id: string;
+  name: string;
+  icon?: string;
+  badgeColor?: string;
+  appsByPlatform: VoiceTypingPlatformApps;
+  titlePatterns: string[];
+  promptDirective: string;
+  stripTrailingPunctuation: boolean;
+  isBuiltin: boolean;
+  enabled: boolean;
+}
+
+/** Voice Typing situation preset (can be 'auto', 'general', or any custom rule id). */
+export type VoiceTypingContextPreset = string;
 /** Voice Typing (dictation) settings. */
 export interface VoiceTypingConfig {
   /** Whether voice typing feature is enabled. Default: false. */
@@ -368,8 +391,10 @@ export interface VoiceTypingConfig {
   voiceTypingQuickRecallShortcut?: string;
   /** Whether application context awareness is enabled. Default: true. */
   voiceTypingContextAwarenessEnabled?: boolean;
-  /** Contextual situation preset: 'auto' | 'general' | 'developer' | 'chat' | 'formal'. Default: 'auto'. */
+  /** Contextual situation preset: 'auto' | 'general' | 'developer' | 'chat' | 'formal' or custom rule id. Default: 'auto'. */
   voiceTypingContextPreset?: VoiceTypingContextPreset;
+  /** Customizable contextual situation rules with per-platform software mapping. */
+  voiceTypingContextRules?: VoiceTypingContextRule[];
 }
 
 // ---------------------------------------------------------------------------

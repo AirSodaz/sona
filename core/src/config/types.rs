@@ -5,9 +5,10 @@ use serde_json::Value;
 #[cfg(feature = "specta")]
 use specta::Type;
 
+pub use super::VoiceTypingPlatformAppsRecord;
 use super::{
     HotwordSetRecord, PolishKeywordSetRecord, PolishPresetRecord, SummaryTemplateRecord,
-    TextReplacementRuleRecord, TextReplacementSetRecord,
+    TextReplacementRuleRecord, TextReplacementSetRecord, VoiceTypingContextRuleRecord,
 };
 use crate::ports::asr::{AsrEngine, AsrMode};
 use crate::transcription::speaker::SpeakerProfile;
@@ -348,6 +349,8 @@ pub struct AppConfig {
     pub voice_typing_context_awareness_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub voice_typing_context_preset: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voice_typing_context_rules: Option<Vec<VoiceTypingContextRuleRecord>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub http_server_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

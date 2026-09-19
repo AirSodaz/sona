@@ -1,5 +1,9 @@
 import i18next from 'i18next';
-import type { TextReplacementRuleSet, VoiceTypingContextPreset } from '../../types/config';
+import type {
+  TextReplacementRuleSet,
+  VoiceTypingContextPreset,
+  VoiceTypingContextRule,
+} from '../../types/config';
 import type { TranscriptSegment, TranscriptUpdate } from '../../types/transcript';
 import { formatCjkTypography } from '../../utils/cjkTypography';
 import { extractErrorMessage } from '../../utils/errorUtils';
@@ -9,7 +13,12 @@ import { normalizeTranscriptUpdate } from '../../utils/transcriptTiming';
 import type { ForegroundWindowInfo } from '../tauri/contracts';
 import type { TranscriptionService } from '../transcriptionService';
 import type { VoiceTypingOverlayPayload } from '../voiceTypingWindowService';
-import { classifyContextMode, type VoiceTypingContextState } from './voiceTypingContext';
+import {
+  classifyContextRule,
+  DEFAULT_VOICE_TYPING_CONTEXT_RULES,
+  getCurrentPlatform,
+  type VoiceTypingContextState,
+} from './voiceTypingContext';
 import type {
   VoiceTypingOverlayPresenter,
   VoiceTypingPositionResolver,
@@ -50,6 +59,7 @@ interface VoiceTypingSessionMachineOptions {
   getTextReplacements?: () => TextReplacementRuleSet[] | undefined;
   getForegroundWindowInfo?: () => Promise<ForegroundWindowInfo | null>;
   getContextPreset?: () => VoiceTypingContextPreset | undefined;
+  getContextRules?: () => VoiceTypingContextRule[] | undefined;
   isContextAwarenessEnabled?: () => boolean;
 }
 
@@ -185,12 +195,20 @@ export class VoiceTypingSessionMachine {
 
       if (infoResult && (infoResult.appName || infoResult.windowTitle)) {
         const preset = this.options.getContextPreset?.() ?? 'auto';
-        const mode = classifyContextMode(infoResult.appName, infoResult.windowTitle, preset);
+        const rules = this.options.getContextRules?.() ?? DEFAULT_VOICE_TYPING_CONTEXT_RULES;
+        const rule = classifyContextRule(
+          infoResult.appName,
+          infoResult.windowTitle,
+          rules,
+          getCurrentPlatform(),
+          preset
+        );
         this.currentContext = {
           appName: infoResult.appName,
           windowTitle: infoResult.windowTitle,
           preset,
-          mode,
+          mode: rule ? rule.id : preset !== 'auto' && preset !== 'general' ? preset : 'general',
+          rule,
         };
         logger.info('[VoiceTypingSessionMachine] Sensed application context', this.currentContext);
       }
@@ -745,7 +763,9 @@ export class VoiceTypingSessionMachine {
   private formatFinalText(text: string): string {
     const enableCjkSpacing = this.options.isCjkSpacingEnabled?.() ?? true;
     let withSpacing = normalizeCandidateText(text, enableCjkSpacing);
-    if (this.currentContext?.mode === 'chat') {
+    const shouldStripPunct =
+      this.currentContext?.rule?.stripTrailingPunctuation ?? this.currentContext?.mode === 'chat';
+    if (shouldStripPunct) {
       withSpacing = withSpacing.replace(/[。.]+$/, '');
     }
     const replacementSets = this.options.getTextReplacements?.();
@@ -791,6 +811,9 @@ export class VoiceTypingSessionMachine {
       hasSelection: Boolean(this.selectionContext),
       selectionLength: this.selectionContext?.length,
       contextMode: this.currentContext?.mode,
+      contextName: this.currentContext?.rule?.name,
+      contextIcon: this.currentContext?.rule?.icon,
+      contextColor: this.currentContext?.rule?.badgeColor,
       revision: ++this.revision,
     };
 

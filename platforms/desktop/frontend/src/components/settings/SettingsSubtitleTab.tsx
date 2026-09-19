@@ -13,6 +13,7 @@ import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVoiceTypingReadiness } from '../../hooks/useVoiceTypingReadiness';
+import { DEFAULT_VOICE_TYPING_CONTEXT_RULES } from '../../services/voiceTyping/voiceTypingContext';
 import {
   useCaptionConfig,
   useConfigStore,
@@ -27,6 +28,7 @@ import { ColorSwatchPicker } from '../ColorSwatchPicker';
 import { Dropdown } from '../Dropdown';
 import { SubtitleIcon } from '../Icons';
 import { Switch } from '../Switch';
+import { SettingsContextRulesSection } from './SettingsContextRulesSection';
 import {
   SettingsItem,
   SettingsPageHeader,
@@ -323,24 +325,12 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
                   defaultValue: 'Auto Detect (Recommended)',
                 }),
               },
-              {
-                value: 'developer',
-                label: t('settings.voice_typing_context_preset_developer', {
-                  defaultValue: 'Developer / Code',
-                }),
-              },
-              {
-                value: 'chat',
-                label: t('settings.voice_typing_context_preset_chat', {
-                  defaultValue: 'Chat / Social',
-                }),
-              },
-              {
-                value: 'formal',
-                label: t('settings.voice_typing_context_preset_formal', {
-                  defaultValue: 'Formal / Document',
-                }),
-              },
+              ...(vtConfig.voiceTypingContextRules ?? DEFAULT_VOICE_TYPING_CONTEXT_RULES).map(
+                (rule) => ({
+                  value: rule.id,
+                  label: `${rule.icon ?? ''} ${rule.name}`.trim(),
+                })
+              ),
               {
                 value: 'general',
                 label: t('settings.voice_typing_context_preset_general', {
@@ -351,6 +341,7 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
           />
         </div>
       </SettingsItem>
+      {vtConfig.voiceTypingContextAwarenessEnabled && <SettingsContextRulesSection />}
       <SettingsItem
         title={t('settings.voice_typing_availability', {
           defaultValue: 'Availability',

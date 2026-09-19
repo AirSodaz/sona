@@ -5,6 +5,7 @@ import {
   DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
   VOLCENGINE_DOUBAO_PROVIDER_ID,
 } from '../services/onlineAsrProviders';
+import { DEFAULT_VOICE_TYPING_CONTEXT_RULES } from '../services/voiceTyping/voiceTypingContext';
 import type {
   ApiServerConfig,
   AppConfig,
@@ -141,6 +142,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   voiceTypingPolishPrompt: '',
   voiceTypingPlacement: 'caret',
   voiceTypingQuickRecallShortcut: 'Alt+Shift+H',
+  voiceTypingContextAwarenessEnabled: true,
+  voiceTypingContextPreset: 'auto',
+  voiceTypingContextRules: DEFAULT_VOICE_TYPING_CONTEXT_RULES,
   // API Server
   httpServerEnabled: false,
   httpServerHost: '127.0.0.1',
@@ -283,6 +287,7 @@ const VOICE_TYPING_KEYS: (keyof VoiceTypingConfig)[] = [
   'voiceTypingQuickRecallShortcut',
   'voiceTypingContextAwarenessEnabled',
   'voiceTypingContextPreset',
+  'voiceTypingContextRules',
 ];
 const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [
   'httpServerEnabled',

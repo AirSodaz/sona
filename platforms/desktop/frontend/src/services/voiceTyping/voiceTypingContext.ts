@@ -1,260 +1,367 @@
-export type VoiceTypingContextPreset = 'auto' | 'general' | 'developer' | 'chat' | 'formal';
-
-export type ResolvedVoiceTypingContextMode = 'general' | 'developer' | 'chat' | 'formal';
+import type {
+  HostPlatform,
+  VoiceTypingContextPreset,
+  VoiceTypingContextRule,
+} from '../../types/config';
 
 export interface VoiceTypingContextState {
   appName: string;
   windowTitle: string;
   preset: VoiceTypingContextPreset;
-  mode: ResolvedVoiceTypingContextMode;
+  mode: string;
+  rule?: VoiceTypingContextRule | null;
 }
 
-const DEVELOPER_APP_NAMES: Record<string, true> = {
-  // Windows executables
-  'code.exe': true,
-  'cursor.exe': true,
-  'idea64.exe': true,
-  'devenv.exe': true,
-  'clion64.exe': true,
-  'pycharm64.exe': true,
-  'webstorm64.exe': true,
-  'goland64.exe': true,
-  'rider64.exe': true,
-  'sublime_text.exe': true,
-  'zed.exe': true,
-  'neovide.exe': true,
-  'nvim.exe': true,
-  'vim.exe': true,
-  'emacs.exe': true,
-  'windowsterminal.exe': true,
-  'powershell.exe': true,
-  'cmd.exe': true,
-  'alacritty.exe': true,
-  'wezterm-gui.exe': true,
-  'kitty.exe': true,
-  'warp.exe': true,
-  'git-bash.exe': true,
-  'conhost.exe': true,
-  'mintty.exe': true,
-  'postman.exe': true,
-  'dbeaver.exe': true,
-  'datagrip64.exe': true,
-  'navicat.exe': true,
-  // macOS / Linux base names & binaries
-  code: true,
-  'visual studio code': true,
-  xcode: true,
-  cursor: true,
-  zed: true,
-  sublime_text: true,
-  'sublime text': true,
-  idea: true,
-  clion: true,
-  pycharm: true,
-  webstorm: true,
-  goland: true,
-  rider: true,
-  datagrip: true,
-  dbeaver: true,
-  postman: true,
-  navicat: true,
-  neovide: true,
-  nvim: true,
-  vim: true,
-  emacs: true,
-  terminal: true,
-  iterm: true,
-  iterm2: true,
-  alacritty: true,
-  wezterm: true,
-  kitty: true,
-  warp: true,
-  'gnome-terminal': true,
-  konsole: true,
-  xfce4_terminal: true,
-};
+export const DEFAULT_VOICE_TYPING_CONTEXT_RULES: VoiceTypingContextRule[] = [
+  {
+    id: 'developer',
+    name: 'Developer',
+    icon: '💻',
+    badgeColor: '#818cf8',
+    appsByPlatform: {
+      windows: [
+        'code.exe',
+        'cursor.exe',
+        'idea64.exe',
+        'devenv.exe',
+        'clion64.exe',
+        'pycharm64.exe',
+        'webstorm64.exe',
+        'goland64.exe',
+        'rider64.exe',
+        'sublime_text.exe',
+        'zed.exe',
+        'neovide.exe',
+        'nvim.exe',
+        'vim.exe',
+        'emacs.exe',
+        'windowsterminal.exe',
+        'powershell.exe',
+        'cmd.exe',
+        'alacritty.exe',
+        'wezterm-gui.exe',
+        'kitty.exe',
+        'warp.exe',
+        'git-bash.exe',
+        'conhost.exe',
+        'mintty.exe',
+        'postman.exe',
+        'dbeaver.exe',
+        'datagrip64.exe',
+        'navicat.exe',
+      ],
+      macos: [
+        'Visual Studio Code',
+        'Code',
+        'Xcode',
+        'Cursor',
+        'Zed',
+        'Sublime Text',
+        'IntelliJ IDEA',
+        'CLion',
+        'PyCharm',
+        'WebStorm',
+        'GoLand',
+        'Rider',
+        'DataGrip',
+        'Postman',
+        'DBeaver',
+        'Terminal',
+        'iTerm2',
+        'Alacritty',
+        'kitty',
+        'Warp',
+        'Neovide',
+        'MacVim',
+      ],
+      linux: [
+        'code',
+        'cursor',
+        'zed',
+        'sublime_text',
+        'idea',
+        'clion',
+        'pycharm',
+        'webstorm',
+        'goland',
+        'rider',
+        'datagrip',
+        'postman',
+        'dbeaver',
+        'gnome-terminal',
+        'konsole',
+        'alacritty',
+        'kitty',
+        'wezterm',
+        'warp-terminal',
+        'xfce4-terminal',
+      ],
+    },
+    titlePatterns: ['github', 'gitlab', 'stackoverflow', 'localhost', 'pull request', 'leetcode'],
+    promptDirective:
+      'Developer & Engineering Mode: Preserve technical terms, exact library/module names, and code identifiers (camelCase, PascalCase, snake_case, kebab-case, UPPER_CASE, CLI flags like --flag). Never spell out code symbols as prose. Keep it succinct and technical. Never add trailing periods or punctuation unless dictating explanatory comments.',
+    stripTrailingPunctuation: true,
+    isBuiltin: true,
+    enabled: true,
+  },
+  {
+    id: 'chat',
+    name: 'Chat',
+    icon: '💬',
+    badgeColor: '#34d399',
+    appsByPlatform: {
+      windows: [
+        'wechat.exe',
+        'qq.exe',
+        'slack.exe',
+        'discord.exe',
+        'telegram.exe',
+        'dingtalk.exe',
+        'feishu.exe',
+        'teams.exe',
+        'lark.exe',
+        'whatsapp.exe',
+        'signal.exe',
+        'skype.exe',
+        'line.exe',
+        'element.exe',
+      ],
+      macos: [
+        'WeChat',
+        'QQ',
+        'Slack',
+        'Discord',
+        'Telegram',
+        'DingTalk',
+        'Feishu',
+        'Lark',
+        'Microsoft Teams',
+        'WhatsApp',
+        'Signal',
+        'Skype',
+        'LINE',
+        'Element',
+        'Messages',
+      ],
+      linux: [
+        'wechat',
+        'qq',
+        'slack',
+        'discord',
+        'telegram-desktop',
+        'dingtalk',
+        'feishu',
+        'lark',
+        'teams',
+        'whatsapp-for-linux',
+        'signal-desktop',
+        'skypeforlinux',
+        'element-desktop',
+      ],
+    },
+    titlePatterns: ['slack |', 'discord', 'telegram', 'wechat', 'messages'],
+    promptDirective:
+      'Instant Messaging & Chat Mode: Use a natural, conversational, lightweight tone. Split long rambling speech into clear, compact phrases. Separate clauses with spaces rather than heavy commas. Never add trailing periods or full stops.',
+    stripTrailingPunctuation: true,
+    isBuiltin: true,
+    enabled: true,
+  },
+  {
+    id: 'formal',
+    name: 'Formal',
+    icon: '📄',
+    badgeColor: '#f59e0b',
+    appsByPlatform: {
+      windows: [
+        'winword.exe',
+        'excel.exe',
+        'powerpnt.exe',
+        'outlook.exe',
+        'foxmail.exe',
+        'thunderbird.exe',
+        'wps.exe',
+        'wpp.exe',
+        'et.exe',
+        'notion.exe',
+        'obsidian.exe',
+        'typora.exe',
+        'logseq.exe',
+        'craft.exe',
+        'acrobat.exe',
+      ],
+      macos: [
+        'Microsoft Word',
+        'Microsoft Excel',
+        'Microsoft PowerPoint',
+        'Pages',
+        'Numbers',
+        'Keynote',
+        'Microsoft Outlook',
+        'Mail',
+        'Foxmail',
+        'Thunderbird',
+        'WPS Office',
+        'Notion',
+        'Obsidian',
+        'Typora',
+        'Logseq',
+        'Craft',
+        'TextEdit',
+      ],
+      linux: [
+        'libreoffice',
+        'soffice.bin',
+        'wps',
+        'wpp',
+        'et',
+        'notion-app',
+        'obsidian',
+        'typora',
+        'thunderbird',
+      ],
+    },
+    titlePatterns: ['document', 'report', 'notion', 'obsidian', 'word', 'excel', 'sheets', 'docs'],
+    promptDirective:
+      'Formal Writing & Document Mode: Convert colloquial spoken expressions into rigorous, well-structured, professional written language. Ensure complete grammatical sentence structures and proper punctuation.',
+    stripTrailingPunctuation: false,
+    isBuiltin: true,
+    enabled: true,
+  },
+];
 
-const CHAT_APP_NAMES: Record<string, true> = {
-  // Windows executables
-  'wechat.exe': true,
-  'qq.exe': true,
-  'slack.exe': true,
-  'discord.exe': true,
-  'telegram.exe': true,
-  'dingtalk.exe': true,
-  'feishu.exe': true,
-  'teams.exe': true,
-  'lark.exe': true,
-  'whatsapp.exe': true,
-  'signal.exe': true,
-  'skype.exe': true,
-  'line.exe': true,
-  'element.exe': true,
-  // macOS / Linux base names
-  wechat: true,
-  qq: true,
-  slack: true,
-  discord: true,
-  telegram: true,
-  'telegram desktop': true,
-  dingtalk: true,
-  feishu: true,
-  lark: true,
-  teams: true,
-  'microsoft teams': true,
-  whatsapp: true,
-  signal: true,
-  skype: true,
-  line: true,
-  element: true,
-  messages: true,
-};
+/** Detect the current host operating system. */
+export function getCurrentPlatform(): HostPlatform {
+  if (typeof navigator === 'undefined') {
+    return 'windows';
+  }
+  const platform = (navigator.platform || '').toLowerCase();
+  const ua = (navigator.userAgent || '').toLowerCase();
 
-const FORMAL_APP_NAMES: Record<string, true> = {
-  // Windows executables
-  'winword.exe': true,
-  'excel.exe': true,
-  'powerpnt.exe': true,
-  'outlook.exe': true,
-  'foxmail.exe': true,
-  'thunderbird.exe': true,
-  'wps.exe': true,
-  'wpp.exe': true,
-  'et.exe': true,
-  'notion.exe': true,
-  'obsidian.exe': true,
-  'typora.exe': true,
-  'logseq.exe': true,
-  'craft.exe': true,
-  'acrobat.exe': true,
-  // macOS / Linux base names
-  winword: true,
-  word: true,
-  'microsoft word': true,
-  excel: true,
-  'microsoft excel': true,
-  powerpnt: true,
-  powerpoint: true,
-  'microsoft powerpoint': true,
-  pages: true,
-  numbers: true,
-  keynote: true,
-  outlook: true,
-  'microsoft outlook': true,
-  mail: true,
-  foxmail: true,
-  thunderbird: true,
-  wps: true,
-  notion: true,
-  obsidian: true,
-  typora: true,
-  logseq: true,
-  craft: true,
-  textedit: true,
-  libreoffice: true,
-  soffice: true,
-};
-
-function normalizeAppKey(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/\.exe$/i, '')
-    .replace(/(?:64|32)$/i, '');
+  if (platform.includes('mac') || ua.includes('macintosh') || ua.includes('mac os')) {
+    return 'macos';
+  }
+  if (platform.includes('linux') || ua.includes('linux') || ua.includes('x11')) {
+    return 'linux';
+  }
+  return 'windows';
 }
 
+/** Check if an application name or window title matches a context rule for a specific platform. */
+export function matchContextRule(
+  rule: VoiceTypingContextRule,
+  appName: string,
+  windowTitle: string,
+  platform: HostPlatform
+): boolean {
+  if (!rule.enabled) {
+    return false;
+  }
+
+  const cleanApp = appName.trim().toLowerCase();
+  if (cleanApp) {
+    const appList = rule.appsByPlatform[platform] || [];
+    const matched = appList.some((target) => target.trim().toLowerCase() === cleanApp);
+    if (matched) {
+      return true;
+    }
+  }
+
+  const cleanTitle = windowTitle.trim().toLowerCase();
+  if (cleanTitle) {
+    const matchedTitle = rule.titlePatterns.some((pattern) => {
+      const p = pattern.trim().toLowerCase();
+      return p.length > 0 && cleanTitle.includes(p);
+    });
+    if (matchedTitle) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Classify and resolve the matching context rule.
+ * If manual preset is not 'auto', the rule with that id is returned.
+ * If no rule matches, returns null (general standard mode).
+ */
+export function classifyContextRule(
+  appName: string,
+  windowTitle: string,
+  rules: VoiceTypingContextRule[] = DEFAULT_VOICE_TYPING_CONTEXT_RULES,
+  platform: HostPlatform = getCurrentPlatform(),
+  preset: VoiceTypingContextPreset = 'auto'
+): VoiceTypingContextRule | null {
+  if (preset && preset !== 'auto') {
+    if (preset === 'general') {
+      return null;
+    }
+    return rules.find((r) => r.id === preset) ?? null;
+  }
+
+  for (const rule of rules) {
+    if (matchContextRule(rule, appName, windowTitle, platform)) {
+      return rule;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Backwards-compatible helper returning rule id (or 'general').
+ */
 export function classifyContextMode(
   appName: string,
   windowTitle: string,
-  preset: VoiceTypingContextPreset = 'auto'
-): ResolvedVoiceTypingContextMode {
-  if (preset !== 'auto') {
-    return preset;
-  }
-
-  const normalizedApp = appName.trim().toLowerCase();
-  const baseApp = normalizeAppKey(normalizedApp);
-  const normalizedTitle = windowTitle.trim().toLowerCase();
-
-  if (DEVELOPER_APP_NAMES[normalizedApp] || DEVELOPER_APP_NAMES[baseApp]) {
-    return 'developer';
-  }
-
-  if (CHAT_APP_NAMES[normalizedApp] || CHAT_APP_NAMES[baseApp]) {
-    return 'chat';
-  }
-
-  if (FORMAL_APP_NAMES[normalizedApp] || FORMAL_APP_NAMES[baseApp]) {
-    return 'formal';
-  }
-  // Fallback heuristic based on title if app is a generic browser or wrapper
-  if (
-    normalizedTitle.includes('github') ||
-    normalizedTitle.includes('gitlab') ||
-    normalizedTitle.includes('stackoverflow') ||
-    normalizedTitle.includes('localhost') ||
-    normalizedTitle.includes('visual studio code')
-  ) {
-    return 'developer';
-  }
-
-  if (
-    normalizedTitle.includes('slack |') ||
-    normalizedTitle.includes('discord') ||
-    normalizedTitle.includes('telegram') ||
-    normalizedTitle.includes('wechat')
-  ) {
-    return 'chat';
-  }
-
-  return 'general';
+  preset: VoiceTypingContextPreset = 'auto',
+  rules: VoiceTypingContextRule[] = DEFAULT_VOICE_TYPING_CONTEXT_RULES,
+  platform: HostPlatform = getCurrentPlatform()
+): string {
+  const rule = classifyContextRule(appName, windowTitle, rules, platform, preset);
+  return rule ? rule.id : 'general';
 }
 
+/**
+ * Generate contextual prompt directive from a matched rule or mode.
+ */
 export function getContextDirective(
-  mode: ResolvedVoiceTypingContextMode,
-  windowTitle?: string
+  ruleOrMode: VoiceTypingContextRule | string | null | undefined,
+  windowTitle?: string,
+  rules: VoiceTypingContextRule[] = DEFAULT_VOICE_TYPING_CONTEXT_RULES
 ): string {
+  let rule: VoiceTypingContextRule | null | undefined = null;
+  if (ruleOrMode && typeof ruleOrMode === 'object') {
+    rule = ruleOrMode;
+  } else if (typeof ruleOrMode === 'string' && ruleOrMode !== 'general' && ruleOrMode !== 'auto') {
+    rule = rules.find((r) => r.id === ruleOrMode);
+  }
+
   const trimmedTitle = windowTitle?.trim();
   const titleContext = trimmedTitle
     ? `Active window context and topic: "${trimmedTitle}". Disambiguate technical terms and domain abbreviations accordingly.`
     : '';
 
-  switch (mode) {
-    case 'developer':
-      return [
-        '[Developer & Engineering Mode]',
-        '1. Preserve code identifiers and casing verbatim (camelCase, snake_case, PascalCase, SCREAMING_SNAKE).',
-        '2. Maintain technical terms, CLI flags, URLs, and keyboard shortcuts exactly as intended.',
-        '3. Do not add trailing full stops or unnecessary punctuation to code, commands, or identifiers.',
-        titleContext,
-      ]
-        .filter(Boolean)
-        .join('\n');
-
-    case 'chat':
-      return [
-        '[Instant Messaging & Chat Mode]',
-        '1. Use a natural, conversational, and concise tone with shorter phrases.',
-        '2. Never add trailing periods or full stops at the end of sentences.',
-        '3. Use spaces rather than rigid commas to separate brief conversational thoughts.',
-        titleContext,
-      ]
-        .filter(Boolean)
-        .join('\n');
-
-    case 'formal':
-      return [
-        '[Formal Writing & Document Mode]',
-        '1. Maintain an authoritative, polished, and grammatically precise tone.',
-        '2. Ensure standard, structured punctuation throughout.',
-        '3. Eliminate filler words and colloquialisms, transforming them into clear written prose.',
-        titleContext,
-      ]
-        .filter(Boolean)
-        .join('\n');
-
-    case 'general':
-    default:
-      return titleContext;
+  if (!rule) {
+    return titleContext;
   }
+
+  return titleContext ? `${titleContext}\n${rule.promptDirective}` : rule.promptDirective;
+}
+
+/**
+ * Check if trailing punctuation should be stripped based on rule or mode.
+ */
+export function shouldStripTrailingPunctuation(
+  ruleOrMode: VoiceTypingContextRule | string | null | undefined,
+  rules: VoiceTypingContextRule[] = DEFAULT_VOICE_TYPING_CONTEXT_RULES
+): boolean {
+  if (!ruleOrMode) {
+    return false;
+  }
+  if (typeof ruleOrMode === 'object') {
+    return Boolean(ruleOrMode.stripTrailingPunctuation);
+  }
+  const rule = rules.find((r) => r.id === ruleOrMode);
+  return Boolean(rule?.stripTrailingPunctuation);
 }

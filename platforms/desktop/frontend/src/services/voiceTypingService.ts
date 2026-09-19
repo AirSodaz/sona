@@ -110,6 +110,7 @@ export class VoiceTypingService {
       isContextAwarenessEnabled: () =>
         this.ports.getConfig().voiceTypingContextAwarenessEnabled ?? true,
       getContextPreset: () => this.ports.getConfig().voiceTypingContextPreset ?? 'auto',
+      getContextRules: () => this.ports.getConfig().voiceTypingContextRules,
     });
     this.shortcutController = new VoiceTypingShortcutController({
       getMode: () => this.getVoiceTypingMode(),

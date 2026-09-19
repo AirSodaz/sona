@@ -552,26 +552,32 @@ export function VoiceTypingOverlay() {
                 fontWeight: 600,
                 padding: '1px 6px',
                 borderRadius: '4px',
-                background:
-                  overlayState.contextMode === 'developer'
+                background: overlayState.contextColor
+                  ? `${overlayState.contextColor}26`
+                  : overlayState.contextMode === 'developer'
                     ? 'rgba(147, 51, 234, 0.15)'
                     : overlayState.contextMode === 'chat'
                       ? 'rgba(16, 185, 129, 0.15)'
                       : 'rgba(245, 158, 11, 0.15)',
                 color:
-                  overlayState.contextMode === 'developer'
+                  overlayState.contextColor ??
+                  (overlayState.contextMode === 'developer'
                     ? '#9333ea'
                     : overlayState.contextMode === 'chat'
                       ? '#10b981'
-                      : '#f59e0b',
+                      : '#f59e0b'),
                 flexShrink: 0,
               }}
             >
-              {overlayState.contextMode === 'developer'
-                ? `💻 ${t('voice_typing.mode_badge_developer', { defaultValue: 'Code' })}`
-                : overlayState.contextMode === 'chat'
-                  ? `💬 ${t('voice_typing.mode_badge_chat', { defaultValue: 'Chat' })}`
-                  : `📄 ${t('voice_typing.mode_badge_formal', { defaultValue: 'Formal' })}`}
+              {overlayState.contextName
+                ? `${overlayState.contextIcon ?? ''} ${overlayState.contextName}`.trim()
+                : overlayState.contextMode === 'developer'
+                  ? `💻 ${t('voice_typing.mode_badge_developer', { defaultValue: 'Code' })}`
+                  : overlayState.contextMode === 'chat'
+                    ? `💬 ${t('voice_typing.mode_badge_chat', { defaultValue: 'Chat' })}`
+                    : overlayState.contextMode === 'formal'
+                      ? `📄 ${t('voice_typing.mode_badge_formal', { defaultValue: 'Formal' })}`
+                      : overlayState.contextMode}
             </span>
           ) : null}
           {isPolishing && <Sparkles size={14} color="#a855f7" style={{ flexShrink: 0 }} />}

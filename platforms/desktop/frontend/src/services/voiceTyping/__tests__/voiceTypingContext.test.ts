@@ -1,81 +1,156 @@
 import { describe, expect, it } from 'vitest';
-import { classifyContextMode, getContextDirective } from '../voiceTypingContext';
+import type { VoiceTypingContextRule } from '../../../types/config';
+import {
+  classifyContextMode,
+  classifyContextRule,
+  DEFAULT_VOICE_TYPING_CONTEXT_RULES,
+  getContextDirective,
+  matchContextRule,
+  shouldStripTrailingPunctuation,
+} from '../voiceTypingContext';
 
 describe('voiceTypingContext', () => {
-  describe('classifyContextMode', () => {
-    it('classifies IDEs and terminal emulators as developer mode in auto preset', () => {
-      expect(classifyContextMode('code.exe', 'index.ts - project')).toBe('developer');
-      expect(classifyContextMode('devenv.exe', 'Solution')).toBe('developer');
-      expect(classifyContextMode('windowsterminal.exe', 'cmd.exe')).toBe('developer');
-      expect(classifyContextMode('zed.exe', 'main.rs')).toBe('developer');
+  describe('per-platform rule matching', () => {
+    it('matches Windows apps strictly when platform is windows', () => {
+      const devRule = DEFAULT_VOICE_TYPING_CONTEXT_RULES.find((r) => r.id === 'developer')!;
+      expect(matchContextRule(devRule, 'code.exe', '', 'windows')).toBe(true);
+      expect(matchContextRule(devRule, 'Visual Studio Code', '', 'windows')).toBe(false);
+      expect(matchContextRule(devRule, 'devenv.exe', '', 'windows')).toBe(true);
     });
 
-    it('classifies chat and IM apps as chat mode in auto preset', () => {
-      expect(classifyContextMode('wechat.exe', 'WeChat')).toBe('chat');
-      expect(classifyContextMode('slack.exe', 'General - Sona')).toBe('chat');
-      expect(classifyContextMode('discord.exe', '#announcements')).toBe('chat');
-      expect(classifyContextMode('feishu.exe', 'Feishu')).toBe('chat');
+    it('matches macOS apps strictly when platform is macos', () => {
+      const devRule = DEFAULT_VOICE_TYPING_CONTEXT_RULES.find((r) => r.id === 'developer')!;
+      expect(matchContextRule(devRule, 'Visual Studio Code', '', 'macos')).toBe(true);
+      expect(matchContextRule(devRule, 'Xcode', '', 'macos')).toBe(true);
+      expect(matchContextRule(devRule, 'code.exe', '', 'macos')).toBe(false);
     });
 
-    it('classifies office and notes apps as formal mode in auto preset', () => {
-      expect(classifyContextMode('winword.exe', 'Document1 - Word')).toBe('formal');
-      expect(classifyContextMode('wps.exe', 'Annual_Report.docx')).toBe('formal');
-      expect(classifyContextMode('outlook.exe', 'Inbox - Outlook')).toBe('formal');
-      expect(classifyContextMode('notion.exe', 'Sprint Planning')).toBe('formal');
-    });
-    it('classifies macOS and Linux native app names accurately', () => {
-      // macOS apps
-      expect(classifyContextMode('xcode', 'App.swift')).toBe('developer');
-      expect(classifyContextMode('Visual Studio Code', 'project')).toBe('developer');
-      expect(classifyContextMode('Terminal', 'bash')).toBe('developer');
-      expect(classifyContextMode('iTerm2', 'zsh')).toBe('developer');
-      expect(classifyContextMode('Pages', 'Report')).toBe('formal');
-      expect(classifyContextMode('Slack', 'general')).toBe('chat');
-
-      // Linux apps
-      expect(classifyContextMode('gnome-terminal', 'bash')).toBe('developer');
-      expect(classifyContextMode('konsole', 'zsh')).toBe('developer');
-      expect(classifyContextMode('libreoffice', 'Document')).toBe('formal');
-      expect(classifyContextMode('telegram desktop', 'Chat')).toBe('chat');
+    it('matches Linux apps strictly when platform is linux', () => {
+      const devRule = DEFAULT_VOICE_TYPING_CONTEXT_RULES.find((r) => r.id === 'developer')!;
+      expect(matchContextRule(devRule, 'code', '', 'linux')).toBe(true);
+      expect(matchContextRule(devRule, 'gnome-terminal', '', 'linux')).toBe(true);
+      expect(matchContextRule(devRule, 'devenv.exe', '', 'linux')).toBe(false);
     });
 
-    it('uses window title heuristics when app name is generic browser', () => {
-      expect(classifyContextMode('msedge.exe', 'PR #42: Refactor auth · GitHub')).toBe('developer');
-      expect(classifyContextMode('chrome.exe', 'Slack | Channel 1')).toBe('chat');
-      expect(classifyContextMode('chrome.exe', 'Random Web Page')).toBe('general');
-    });
-
-    it('respects explicit manual presets regardless of detected app', () => {
-      expect(classifyContextMode('code.exe', 'editor', 'chat')).toBe('chat');
-      expect(classifyContextMode('wechat.exe', 'chat', 'formal')).toBe('formal');
-      expect(classifyContextMode('winword.exe', 'doc', 'developer')).toBe('developer');
-      expect(classifyContextMode('code.exe', 'editor', 'general')).toBe('general');
+    it('matches cross-platform window title patterns across any platform', () => {
+      const devRule = DEFAULT_VOICE_TYPING_CONTEXT_RULES.find((r) => r.id === 'developer')!;
+      expect(matchContextRule(devRule, 'chrome.exe', 'PR #42 - GitHub', 'windows')).toBe(true);
+      expect(matchContextRule(devRule, 'Google Chrome', 'PR #42 - GitHub', 'macos')).toBe(true);
+      expect(matchContextRule(devRule, 'chromium', 'PR #42 - GitHub', 'linux')).toBe(true);
     });
   });
 
-  describe('getContextDirective', () => {
-    it('generates developer directives with window title context', () => {
-      const directive = getContextDirective('developer', 'VoiceTyping.tsx - sona');
-      expect(directive).toContain('Developer & Engineering Mode');
-      expect(directive).toContain('camelCase');
-      expect(directive).toContain('VoiceTyping.tsx - sona');
+  describe('custom context rules', () => {
+    const customRules: VoiceTypingContextRule[] = [
+      ...DEFAULT_VOICE_TYPING_CONTEXT_RULES,
+      {
+        id: 'academic',
+        name: 'Academic Paper',
+        icon: '🎓',
+        appsByPlatform: {
+          windows: ['zotero.exe', 'overleaf.exe'],
+          macos: ['Zotero', 'TeXShop'],
+          linux: ['zotero', 'kile'],
+        },
+        titlePatterns: ['overleaf.com', 'arxiv.org'],
+        promptDirective: 'Academic Mode: Use rigorous scholarly language and passive voice.',
+        stripTrailingPunctuation: false,
+        isBuiltin: false,
+        enabled: true,
+      },
+    ];
+
+    it('matches custom rule by platform app', () => {
+      const rule = classifyContextRule('zotero.exe', '', customRules, 'windows');
+      expect(rule).toBeDefined();
+      expect(rule?.id).toBe('academic');
+      expect(rule?.name).toBe('Academic Paper');
+      expect(rule?.icon).toBe('🎓');
     });
 
-    it('generates chat directives without full stops', () => {
-      const directive = getContextDirective('chat', 'Team Chat');
-      expect(directive).toContain('Instant Messaging & Chat Mode');
-      expect(directive).toContain('Never add trailing periods');
+    it('matches custom rule by window title keyword', () => {
+      const rule = classifyContextRule(
+        'chrome.exe',
+        'Draft on overleaf.com',
+        customRules,
+        'windows'
+      );
+      expect(rule?.id).toBe('academic');
     });
 
-    it('generates formal directives with structured punctuation', () => {
-      const directive = getContextDirective('formal');
-      expect(directive).toContain('Formal Writing & Document Mode');
-      expect(directive).toContain('grammatically precise tone');
+    it('generates directive from custom rule', () => {
+      const rule = customRules.find((r) => r.id === 'academic')!;
+      const directive = getContextDirective(rule, 'Introduction Chapter');
+      expect(directive).toContain('Academic Mode:');
+      expect(directive).toContain('Introduction Chapter');
     });
 
-    it('handles general mode cleanly', () => {
-      expect(getContextDirective('general')).toBe('');
-      expect(getContextDirective('general', 'My Document')).toContain('My Document');
+    it('respects stripTrailingPunctuation flag on custom rule', () => {
+      const chatRule = customRules.find((r) => r.id === 'chat')!;
+      const academicRule = customRules.find((r) => r.id === 'academic')!;
+      expect(shouldStripTrailingPunctuation(chatRule)).toBe(true);
+      expect(shouldStripTrailingPunctuation(academicRule)).toBe(false);
+    });
+
+    it('respects rule.enabled toggle', () => {
+      const disabledRules = customRules.map((r) =>
+        r.id === 'academic' ? { ...r, enabled: false } : r
+      );
+      const rule = classifyContextRule('zotero.exe', '', disabledRules, 'windows');
+      expect(rule).toBeNull();
+    });
+  });
+
+  describe('classifyContextMode backwards compatibility', () => {
+    it('classifies apps with default rules and platform', () => {
+      expect(
+        classifyContextMode('code.exe', '', 'auto', DEFAULT_VOICE_TYPING_CONTEXT_RULES, 'windows')
+      ).toBe('developer');
+      expect(
+        classifyContextMode('slack.exe', '', 'auto', DEFAULT_VOICE_TYPING_CONTEXT_RULES, 'windows')
+      ).toBe('chat');
+      expect(
+        classifyContextMode(
+          'winword.exe',
+          '',
+          'auto',
+          DEFAULT_VOICE_TYPING_CONTEXT_RULES,
+          'windows'
+        )
+      ).toBe('formal');
+      expect(
+        classifyContextMode(
+          'unknown.exe',
+          '',
+          'auto',
+          DEFAULT_VOICE_TYPING_CONTEXT_RULES,
+          'windows'
+        )
+      ).toBe('general');
+    });
+
+    it('respects manual preset lock', () => {
+      expect(
+        classifyContextMode('code.exe', '', 'chat', DEFAULT_VOICE_TYPING_CONTEXT_RULES, 'windows')
+      ).toBe('chat');
+      expect(
+        classifyContextMode(
+          'wechat.exe',
+          '',
+          'formal',
+          DEFAULT_VOICE_TYPING_CONTEXT_RULES,
+          'windows'
+        )
+      ).toBe('formal');
+      expect(
+        classifyContextMode(
+          'code.exe',
+          '',
+          'general',
+          DEFAULT_VOICE_TYPING_CONTEXT_RULES,
+          'windows'
+        )
+      ).toBe('general');
     });
   });
 });
