@@ -361,6 +361,8 @@ export interface VoiceTypingConfig {
   voiceTypingPolishPrompt?: string;
   /** Placement strategy: 'caret' (follow text cursor) or 'bottom_center' (floating dynamic island). Default: 'caret'. */
   voiceTypingPlacement?: VoiceTypingPlacement;
+  /** Global shortcut to trigger voice typing quick recall drawer. Default: 'Alt+Shift+H'. */
+  voiceTypingQuickRecallShortcut?: string;
 }
 
 // ---------------------------------------------------------------------------

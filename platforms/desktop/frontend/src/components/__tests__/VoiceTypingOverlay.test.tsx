@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useVoiceTypingHistoryStore } from '../../stores/voiceTypingHistoryStore';
 import { VoiceTypingOverlay } from '../VoiceTypingOverlay';
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -497,5 +498,37 @@ describe('VoiceTypingOverlay', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 
     expect(mocks.emit).toHaveBeenCalledWith('voice-typing:cancel');
+  });
+  it('renders quick recall drawer in recall phase and handles reinject on keypress', async () => {
+    useVoiceTypingHistoryStore.getState().clearHistory();
+    useVoiceTypingHistoryStore.getState().addItem({
+      rawText: '第一条历史记录',
+      injectedText: '第一条历史记录',
+      mode: 'raw',
+    });
+
+    render(<VoiceTypingOverlay />);
+
+    await act(async () => {
+      mocks.listenCallbacks['voice-typing:text']?.({
+        payload: {
+          sessionId: 'recall-1',
+          text: '',
+          phase: 'recall',
+          revision: 5,
+        },
+      });
+    });
+
+    expect(screen.getByTestId('voice-typing-recall-drawer')).toBeTruthy();
+    screen.getByText('第一条历史记录');
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
+    });
+
+    expect(mocks.emit).toHaveBeenCalledWith('voice-typing:reinject', {
+      text: '第一条历史记录',
+    });
   });
 });

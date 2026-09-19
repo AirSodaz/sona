@@ -27,3 +27,7 @@ export async function getMousePosition(): Promise<[number, number]> {
 export async function getTextCursorPosition(): Promise<[number, number] | null> {
   return invokeTauri(TauriCommand.system.getTextCursorPosition);
 }
+
+export async function getFocusedSelectionText(): Promise<string | null> {
+  return invokeTauri(TauriCommand.system.getFocusedSelectionText);
+}

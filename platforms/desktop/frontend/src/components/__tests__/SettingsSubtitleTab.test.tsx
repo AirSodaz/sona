@@ -236,11 +236,18 @@ describe('SettingsSubtitleTab', () => {
     fireEvent.click(switchBtns[0]);
     expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingEnabled: true });
 
-    fireEvent.change(screen.getByLabelText('voice typing shortcut'), {
+    const shortcutInputs = screen.getAllByLabelText('voice typing shortcut');
+    fireEvent.change(shortcutInputs[0], {
       target: { value: 'Ctrl+Alt+V' },
     });
     expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingShortcut: 'Ctrl+Alt+V' });
 
+    fireEvent.change(shortcutInputs[1], {
+      target: { value: 'Ctrl+Shift+H' },
+    });
+    expect(mockUpdateConfig).toHaveBeenCalledWith({
+      voiceTypingQuickRecallShortcut: 'Ctrl+Shift+H',
+    });
     fireEvent.change(document.querySelector('#vt-mode-select') as HTMLSelectElement, {
       target: { value: 'toggle' },
     });

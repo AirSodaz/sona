@@ -612,7 +612,13 @@
     "keep_editing_action": "繼續編輯"
   },
   "voice_typing": {
-    "open_settings": "開啟語音輸入"
+    "open_settings": "開啟語音輸入",
+    "polishing": "AI 潤飾中...",
+    "polishing_selection": "AI 選區重寫中...",
+    "listening_selection": "請口述修改指令...",
+    "selection_badge": "選區重寫",
+    "quick_recall_title": "歷史重輸 (1-5 鍵注入)",
+    "quick_recall_empty": "暫無歷史語音輸入記錄"
   },
   "automation": {
     "open_settings": "打開自動化",
@@ -814,6 +820,8 @@
     "enable_voice_typing_hint": "透過語音直接在任何應用程式中輸入文本",
     "voice_typing_shortcut": "快速鍵",
     "voice_typing_shortcut_hint": "啟動語音輸入的全域快速鍵",
+    "voice_typing_quick_recall_shortcut": "歷史重輸快速鍵",
+    "voice_typing_quick_recall_shortcut_hint": "在任何應用程式內喚起最近語音記錄並一鍵重新注入",
     "voice_typing_mode": "觸發模式",
     "voice_typing_mode_hint": "快速鍵如何觸發聆聽",
     "voice_typing_mode_hold": "按住說話 (Hold)",

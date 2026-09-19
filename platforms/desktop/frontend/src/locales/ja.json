@@ -612,7 +612,13 @@
     "keep_editing_action": "編集を続ける"
   },
   "voice_typing": {
-    "open_settings": "オープン音声タイピング"
+    "open_settings": "音声入力を開く",
+    "polishing": "AI 文章整形中...",
+    "polishing_selection": "AI 選択範囲を書き換え中...",
+    "listening_selection": "編集指示を話してください...",
+    "selection_badge": "選択範囲の書き換え",
+    "quick_recall_title": "クイック再入力 (1-5 キーで挿入)",
+    "quick_recall_empty": "音声入力履歴がありません"
   },
   "automation": {
     "open_settings": "オープンオートメーション",
@@ -814,6 +820,8 @@
     "enable_voice_typing_hint": "音声を使用して任意のアプリケーションにテキストを直接入力します",
     "voice_typing_shortcut": "ショートカット",
     "voice_typing_shortcut_hint": "Voice Typing を有効にするグローバルショートカット",
+    "voice_typing_quick_recall_shortcut": "クイック再入力ショートカット",
+    "voice_typing_quick_recall_shortcut_hint": "任意のアプリで直近の履歴を呼び出して再挿入します",
     "voice_typing_mode": "モード",
     "voice_typing_mode_hint": "ショートカットがリスニングをトリガーする仕組み",
     "voice_typing_mode_hold": "プッシュトゥトーク（長押し）",

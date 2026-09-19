@@ -8,9 +8,15 @@ import { logger } from '../utils/logger';
 import { isAsrRequestConfigured } from './asrConfigService';
 import { TauriEvent } from './tauri/events';
 import { listen } from './tauri/platform/events';
+import { isRegistered, register, unregister } from './tauri/platform/globalShortcut';
 import { currentMonitor, monitorFromPoint } from './tauri/platform/windows';
 import { processBatchFile } from './tauri/recognizer';
-import { getMousePosition, getTextCursorPosition, injectText } from './tauri/system';
+import {
+  getFocusedSelectionText,
+  getMousePosition,
+  getTextCursorPosition,
+  injectText,
+} from './tauri/system';
 import { createTranscriptionService, type TranscriptionService } from './transcriptionService';
 import {
   getVoiceTypingShortcutModifiers,
@@ -22,9 +28,13 @@ import {
 } from './voiceTyping/voiceTypingConfig';
 import { VoiceTypingMicrophoneRuntime } from './voiceTyping/voiceTypingMicrophoneRuntime';
 import { VoiceTypingOverlayPresenter } from './voiceTyping/voiceTypingOverlayPresenter';
-import { polishVoiceTypingText } from './voiceTyping/voiceTypingPolishService';
+import {
+  polishVoiceTypingText,
+  transformSelectedText,
+} from './voiceTyping/voiceTypingPolishService';
 import { VoiceTypingSessionMachine } from './voiceTyping/voiceTypingSessionMachine';
 import { VoiceTypingShortcutController } from './voiceTyping/voiceTypingShortcutController';
+import { voiceTypingSoundPlayer } from './voiceTyping/voiceTypingSounds';
 import { VOICE_TYPING_WINDOW_WIDTH } from './voiceTypingWindowService';
 
 const CURSOR_POSITION_OFFSET = 12;
@@ -44,6 +54,7 @@ export interface VoiceTypingServicePorts {
   listenCancel?: (callback: () => void) => Promise<() => void>;
   currentMonitor?: typeof currentMonitor;
   monitorFromPoint?: typeof monitorFromPoint;
+  getFocusedSelectionText?: typeof getFocusedSelectionText;
 }
 
 export class VoiceTypingService {
@@ -52,6 +63,8 @@ export class VoiceTypingService {
   private lastConfigSnapshot: VoiceTypingConfigSnapshot | null = null;
   private unsubscribe: (() => void) | null = null;
   private cancelUnlisten: (() => void) | null = null;
+  private reinjectUnlisten: (() => void) | null = null;
+  private quickRecallShortcut: string | null = null;
   private readonly transcriptionService: TranscriptionService;
   private readonly overlayPresenter = new VoiceTypingOverlayPresenter();
   private readonly microphoneRuntime = new VoiceTypingMicrophoneRuntime();
@@ -81,6 +94,13 @@ export class VoiceTypingService {
       onTextCommitted: (entry) => {
         useVoiceTypingHistoryStore.getState().addItem(entry);
       },
+      getFocusedSelectionText: () =>
+        this.ports.getFocusedSelectionText
+          ? this.ports.getFocusedSelectionText()
+          : getFocusedSelectionText(),
+      transformText: (selectedText, instruction) =>
+        transformSelectedText(selectedText, instruction),
+      getTextReplacements: () => this.ports.getConfig().textReplacementSets,
     });
     this.shortcutController = new VoiceTypingShortcutController({
       getMode: () => this.getVoiceTypingMode(),
@@ -158,6 +178,13 @@ export class VoiceTypingService {
         void this.stopMicrophoneCapture();
       }
 
+      if (change.enabledChanged || change.quickRecallShortcutChanged) {
+        void this.updateQuickRecallShortcutRegistration(
+          nextSnapshot.enabled,
+          nextSnapshot.quickRecallShortcut
+        );
+      }
+
       this.lastConfigSnapshot = nextSnapshot;
 
       if (nextSnapshot.enabled && (change.configChanged || change.enabledChanged)) {
@@ -168,6 +195,10 @@ export class VoiceTypingService {
     void this.updateShortcutRegistration(
       this.lastConfigSnapshot.enabled,
       this.lastConfigSnapshot.shortcut
+    );
+    void this.updateQuickRecallShortcutRegistration(
+      this.lastConfigSnapshot.enabled,
+      this.lastConfigSnapshot.quickRecallShortcut
     );
     if (this.lastConfigSnapshot.enabled) {
       void this.syncAndPrepare();
@@ -181,6 +212,19 @@ export class VoiceTypingService {
           this.cancelUnlisten = unlisten;
         });
     }
+
+    void listen<{ text: string }>(TauriEvent.auxWindow.voiceTypingReinject, async (event) => {
+      if (event.payload?.text) {
+        await this.ports.injectText(event.payload.text, this.getCurrentShortcutModifiers());
+        voiceTypingSoundPlayer.play('commit');
+      }
+    })
+      .then((unlisten) => {
+        this.reinjectUnlisten = unlisten;
+      })
+      .catch((err) => {
+        logger.warn('[VoiceTypingService] Failed to listen to reinject event:', err);
+      });
   }
 
   public destroy() {
@@ -192,6 +236,14 @@ export class VoiceTypingService {
     if (this.cancelUnlisten) {
       this.cancelUnlisten();
       this.cancelUnlisten = null;
+    }
+    if (this.reinjectUnlisten) {
+      this.reinjectUnlisten();
+      this.reinjectUnlisten = null;
+    }
+    if (this.quickRecallShortcut) {
+      void Promise.resolve(unregister(this.quickRecallShortcut)).catch(() => undefined);
+      this.quickRecallShortcut = null;
     }
     this.lastConfigSnapshot = null;
   }
@@ -269,6 +321,49 @@ export class VoiceTypingService {
     await this.sessionMachine.cancel();
     if (!(this.ports.getConfig().keepMicrophoneActive ?? false)) {
       await this.stopMicrophoneCapture();
+    }
+  }
+
+  public async openQuickRecall(): Promise<void> {
+    if (this.sessionMachine.isActive()) {
+      return;
+    }
+    const position = await this.getOverlayPosition();
+    await this.sessionMachine.openQuickRecall(position);
+  }
+
+  private async updateQuickRecallShortcutRegistration(
+    enabled: boolean,
+    shortcut: string
+  ): Promise<void> {
+    if (this.quickRecallShortcut) {
+      try {
+        if (await isRegistered(this.quickRecallShortcut)) {
+          await unregister(this.quickRecallShortcut);
+        }
+      } catch (err) {
+        logger.warn('[VoiceTypingService] Failed to unregister quick recall shortcut:', err);
+      }
+      this.quickRecallShortcut = null;
+    }
+
+    if (!enabled) {
+      return;
+    }
+
+    const normalized = shortcut.replace(/\s+/g, '');
+    try {
+      await register(normalized, (event) => {
+        if (event.state === 'Pressed') {
+          void this.openQuickRecall();
+        }
+      });
+      this.quickRecallShortcut = normalized;
+      logger.info('[VoiceTypingService] Registered quick recall shortcut', {
+        shortcut: normalized,
+      });
+    } catch (err) {
+      logger.warn('[VoiceTypingService] Failed to register quick recall shortcut:', err);
     }
   }
 
@@ -455,7 +550,11 @@ export class VoiceTypingService {
   resetForTest() {
     this.initialized = false;
     this.lastConfigSnapshot = null;
-    this.microphoneRuntime.resetForTest();
+    this.quickRecallShortcut = null;
+    if (this.reinjectUnlisten) {
+      this.reinjectUnlisten();
+      this.reinjectUnlisten = null;
+    }
     this.shortcutController.resetForTest();
     this.overlayPresenter.resetForTest();
     this.sessionMachine.resetForTest();
@@ -483,6 +582,7 @@ export const voiceTypingService = createVoiceTypingService({
   transcriptionService: voiceTypingTranscriptionService,
   currentMonitor,
   monitorFromPoint,
+  getFocusedSelectionText,
   listenCancel: async (callback) => {
     try {
       return await listen(TauriEvent.auxWindow.voiceTypingCancel, callback);

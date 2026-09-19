@@ -75,6 +75,7 @@ pub fn default_config() -> Value {
         ("voiceTypingCjkSpacingEnabled", json!(true)),
         ("voiceTypingPolishPrompt", json!("")),
         ("voiceTypingPlacement", json!("caret")),
+        ("voiceTypingQuickRecallShortcut", json!("Alt + Shift + H")),
         ("textReplacementSets", json!([])),
         ("hotwordSets", json!([])),
         ("polishKeywordSets", json!([])),

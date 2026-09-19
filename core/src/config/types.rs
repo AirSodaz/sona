@@ -343,6 +343,8 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub voice_typing_placement: Option<VoiceTypingPlacement>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voice_typing_quick_recall_shortcut: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub http_server_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub http_server_host: Option<String>,

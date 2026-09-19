@@ -685,6 +685,46 @@ unsafe fn get_uia_caret_position() -> windows::core::Result<Option<(i32, i32)>> 
                 }
             }
         }
+        Ok(None)
+    }
+}
+
+pub fn get_focused_selection_text() -> Result<Option<String>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        unsafe { get_uia_focused_selection_text().map_err(|e| e.to_string()) }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(None)
+    }
+}
+
+#[cfg(target_os = "windows")]
+unsafe fn get_uia_focused_selection_text() -> windows::core::Result<Option<String>> {
+    unsafe {
+        use windows::Win32::System::Com::*;
+        use windows::Win32::UI::Accessibility::*;
+        use windows::core::*;
+
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+
+        let automation: IUIAutomation = CoCreateInstance(&CUIAutomation8, None, CLSCTX_ALL)?;
+        let focused_element = automation.GetFocusedElement()?;
+
+        if let Ok(pattern) = focused_element.GetCurrentPattern(UIA_TextPatternId)
+            && let Ok(text_pattern) = pattern.cast::<IUIAutomationTextPattern>()
+            && let Ok(selection) = text_pattern.GetSelection()
+            && selection.Length()? > 0
+        {
+            let range = selection.GetElement(0)?;
+            let bstr = range.GetText(100_000)?;
+            let text = bstr.to_string();
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                return Ok(Some(trimmed.to_string()));
+            }
+        }
 
         Ok(None)
     }

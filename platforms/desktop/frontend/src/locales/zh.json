@@ -612,7 +612,13 @@
     "keep_editing_action": "继续编辑"
   },
   "voice_typing": {
-    "open_settings": "打开语音输入"
+    "open_settings": "打开语音输入",
+    "polishing": "AI 润色中...",
+    "polishing_selection": "AI 选区重写中...",
+    "listening_selection": "请口述修改指令...",
+    "selection_badge": "选区重写",
+    "quick_recall_title": "历史重输 (1-5 键注入)",
+    "quick_recall_empty": "暂无历史语音输入记录"
   },
   "automation": {
     "open_settings": "打开自动化",
@@ -814,6 +820,8 @@
     "enable_voice_typing_hint": "通过语音直接在任何应用程序中输入文本",
     "voice_typing_shortcut": "快捷键",
     "voice_typing_shortcut_hint": "激活语音输入的全局快捷键",
+    "voice_typing_quick_recall_shortcut": "历史重输快捷键",
+    "voice_typing_quick_recall_shortcut_hint": "在任何应用内唤起最近语音记录并一键重新注入",
     "voice_typing_mode": "触发模式",
     "voice_typing_mode_hint": "快捷键如何触发聆听",
     "voice_typing_mode_hold": "按住说话 (Hold)",

@@ -1,8 +1,10 @@
 import i18next from 'i18next';
+import type { TextReplacementRuleSet } from '../../types/config';
 import type { TranscriptSegment, TranscriptUpdate } from '../../types/transcript';
 import { formatCjkTypography } from '../../utils/cjkTypography';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { logger } from '../../utils/logger';
+import { applyTextReplacements } from '../../utils/textProcessing';
 import { normalizeTranscriptUpdate } from '../../utils/transcriptTiming';
 import type { TranscriptionService } from '../transcriptionService';
 import type { VoiceTypingOverlayPayload } from '../voiceTypingWindowService';
@@ -37,6 +39,9 @@ interface VoiceTypingSessionMachineOptions {
     injectedText: string;
     mode: 'raw' | 'polish';
   }) => void;
+  getFocusedSelectionText?: () => Promise<string | null>;
+  transformText?: (selectedText: string, instruction: string) => Promise<string>;
+  getTextReplacements?: () => TextReplacementRuleSet[] | undefined;
 }
 
 function delay(ms: number) {
@@ -85,6 +90,7 @@ export class VoiceTypingSessionMachine {
   private currentSegmentId: string | null = null;
   private currentText = '';
   private accumulatedPolishText: string[] = [];
+  private selectionContext: string | null = null;
   private manualStopPending = false;
   // long-lived aux windows never treat a new session as stale state.
   private revision = 0;
@@ -99,7 +105,22 @@ export class VoiceTypingSessionMachine {
     }
 
     this.accumulatedPolishText = [];
+    this.selectionContext = null;
     this.playSound('start');
+
+    if (this.options.getFocusedSelectionText) {
+      try {
+        const sel = await this.options.getFocusedSelectionText();
+        if (sel && sel.trim().length > 0) {
+          this.selectionContext = sel.trim();
+          logger.info('[VoiceTypingSessionMachine] Selection context detected', {
+            length: this.selectionContext.length,
+          });
+        }
+      } catch (err) {
+        logger.debug('[VoiceTypingSessionMachine] Failed to probe selection context', err);
+      }
+    }
     const requestId = ++this.startRequestId;
     const sessionId = `voice-typing-${requestId}`;
     this.sessionState = 'preparing';
@@ -228,6 +249,54 @@ export class VoiceTypingSessionMachine {
       return;
     }
 
+    if (this.selectionContext) {
+      const instruction = this.accumulatedPolishText.join('').trim() || this.currentText.trim();
+
+      if (instruction) {
+        await this.publishOverlay({
+          sessionId,
+          phase: 'polishing',
+          text: instruction,
+        });
+
+        let transformedText = instruction;
+        if (this.options.transformText) {
+          try {
+            transformedText = await this.options.transformText(this.selectionContext, instruction);
+          } catch (err) {
+            logger.warn(
+              '[VoiceTypingSessionMachine] Transform failed, fallback to instruction',
+              err
+            );
+          }
+        }
+
+        const finalText = this.formatFinalText(transformedText);
+        try {
+          await this.options.injectText(finalText);
+          this.playSound('commit');
+          this.options.onTextCommitted?.({
+            rawText: `[选区修改] ${instruction}`,
+            polishedText: finalText,
+            injectedText: finalText,
+            mode: 'polish',
+          });
+        } catch (error) {
+          logger.error('[VoiceTypingSessionMachine] Failed to inject transformed text:', error);
+          if (this.isCurrentSession(sessionId)) {
+            await this.handleSessionError(
+              sessionId,
+              this.startRequestId,
+              extractErrorMessage(error)
+            );
+          }
+          return;
+        }
+      }
+
+      await this.closeSession(sessionId);
+      return;
+    }
     const mode = this.options.getProcessingMode?.() || 'raw';
     if (mode === 'polish') {
       const rawFullText = this.accumulatedPolishText.join('').trim() || this.currentText.trim();
@@ -248,9 +317,7 @@ export class VoiceTypingSessionMachine {
           }
         }
 
-        const enableCjkSpacing = this.options.isCjkSpacingEnabled?.() ?? true;
-        const finalText = normalizeCandidateText(polishedText, enableCjkSpacing);
-
+        const finalText = this.formatFinalText(polishedText);
         try {
           await this.options.injectText(finalText);
           this.playSound('commit');
@@ -310,6 +377,27 @@ export class VoiceTypingSessionMachine {
 
     await this.closeSession(sessionId);
   }
+  async openQuickRecall(position?: [number, number]) {
+    if (this.isActive()) {
+      return;
+    }
+    const requestId = ++this.startRequestId;
+    const sessionId = `recall-${requestId}`;
+    this.sessionState = 'composing';
+    this.activeSessionId = sessionId;
+    await this.publishOverlay(
+      {
+        sessionId,
+        phase: 'recall',
+        text: '',
+      },
+      {
+        revealIfHidden: true,
+        reposition: Boolean(position),
+        resolvePosition: position ? async () => position : undefined,
+      }
+    );
+  }
 
   isActive() {
     return this.activeSessionId !== null;
@@ -330,6 +418,7 @@ export class VoiceTypingSessionMachine {
     this.currentSegmentId = null;
     this.currentText = '';
     this.accumulatedPolishText = [];
+    this.selectionContext = null;
     this.manualStopPending = false;
     this.revision = 0;
     this.committedSegmentIds.clear();
@@ -398,7 +487,7 @@ export class VoiceTypingSessionMachine {
     } = analyzeCandidateText(segment.text, enableCjkSpacing);
 
     const mode = this.options.getProcessingMode?.() || 'raw';
-    if (mode === 'polish') {
+    if (this.selectionContext || mode === 'polish') {
       if (segment.isFinal) {
         if (text) {
           this.accumulatedPolishText.push(text);
@@ -547,12 +636,14 @@ export class VoiceTypingSessionMachine {
       revision: this.revision,
     });
 
+    const finalText = this.formatFinalText(text);
+
     try {
-      await this.options.injectText(text);
+      await this.options.injectText(finalText);
       this.playSound('commit');
       this.options.onTextCommitted?.({
         rawText: text,
-        injectedText: text,
+        injectedText: finalText,
         mode: 'raw',
       });
     } catch (error) {
@@ -605,6 +696,13 @@ export class VoiceTypingSessionMachine {
     }
   }
 
+  private formatFinalText(text: string): string {
+    const enableCjkSpacing = this.options.isCjkSpacingEnabled?.() ?? true;
+    const withSpacing = normalizeCandidateText(text, enableCjkSpacing);
+    const replacementSets = this.options.getTextReplacements?.();
+    return applyTextReplacements(withSpacing, replacementSets);
+  }
+
   private async handleSessionError(sessionId: string, requestId: number, error: string) {
     this.playSound('error');
     this.options.overlayPresenter.clearListeningReset();
@@ -642,6 +740,8 @@ export class VoiceTypingSessionMachine {
   ) {
     const nextPayload: VoiceTypingOverlayPayload = {
       ...payload,
+      hasSelection: Boolean(this.selectionContext),
+      selectionLength: this.selectionContext?.length,
       revision: ++this.revision,
     };
 

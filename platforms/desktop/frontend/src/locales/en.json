@@ -612,7 +612,13 @@
     "keep_editing_action": "Keep editing"
   },
   "voice_typing": {
-    "open_settings": "Open Voice Typing"
+    "open_settings": "Open Voice Typing",
+    "polishing": "AI Polishing...",
+    "polishing_selection": "AI Rewriting Selection...",
+    "listening_selection": "Speak editing instruction...",
+    "selection_badge": "Selection Rewrite",
+    "quick_recall_title": "Quick Recall (Keys 1-5 to inject)",
+    "quick_recall_empty": "No dictation history yet"
   },
   "automation": {
     "open_settings": "Open Automation",
@@ -814,6 +820,8 @@
     "enable_voice_typing_hint": "Type text directly into any application using your voice",
     "voice_typing_shortcut": "Shortcut",
     "voice_typing_shortcut_hint": "Global shortcut to activate voice typing",
+    "voice_typing_quick_recall_shortcut": "Quick Recall Shortcut",
+    "voice_typing_quick_recall_shortcut_hint": "Open floating history and re-inject text in any application",
     "voice_typing_mode": "Mode",
     "voice_typing_mode_hint": "How the shortcut triggers listening",
     "voice_typing_mode_hold": "Push to Talk (Hold)",

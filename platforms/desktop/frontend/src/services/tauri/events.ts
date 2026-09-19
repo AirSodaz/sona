@@ -37,6 +37,7 @@ export const TauriEvent = {
     captionState: 'caption:state',
     voiceTypingText: 'voice-typing:text',
     voiceTypingCancel: 'voice-typing:cancel',
+    voiceTypingReinject: 'voice-typing:reinject',
   },
 } as const;
 

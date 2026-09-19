@@ -612,7 +612,13 @@
     "keep_editing_action": "계속 편집"
   },
   "voice_typing": {
-    "open_settings": "Voice Typing 열기"
+    "open_settings": "음성 입력 열기",
+    "polishing": "AI 문장 다듬는 중...",
+    "polishing_selection": "AI 선택 영역 다시 쓰는 중...",
+    "listening_selection": "수정 지시사항을 말씀하세요...",
+    "selection_badge": "선택 영역 다시 쓰기",
+    "quick_recall_title": "빠른 다시 입력 (1-5 키로 입력)",
+    "quick_recall_empty": "음성 입력 기록이 없습니다"
   },
   "automation": {
     "open_settings": "Automation 열기",
@@ -814,6 +820,8 @@
     "enable_voice_typing_hint": "음성으로 다른 앱에 직접 텍스트를 입력합니다",
     "voice_typing_shortcut": "단축키",
     "voice_typing_shortcut_hint": "Voice Typing을 켜는 전역 단축키입니다",
+    "voice_typing_quick_recall_shortcut": "빠른 다시 입력 단축키",
+    "voice_typing_quick_recall_shortcut_hint": "모든 앱에서 최근 음성 기록을 열고 다시 입력합니다",
     "voice_typing_mode": "모드",
     "voice_typing_mode_hint": "단축키가 듣기 상태를 제어하는 방식입니다",
     "voice_typing_mode_hold": "누르는 동안 말하기",

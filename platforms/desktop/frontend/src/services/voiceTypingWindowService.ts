@@ -15,7 +15,13 @@ const VOICE_TYPING_WINDOW_SIZE = {
   height: VOICE_TYPING_WINDOW_INITIAL_HEIGHT,
 };
 
-export type VoiceTypingOverlayPhase = 'preparing' | 'listening' | 'segment' | 'polishing' | 'error';
+export type VoiceTypingOverlayPhase =
+  | 'preparing'
+  | 'listening'
+  | 'segment'
+  | 'polishing'
+  | 'recall'
+  | 'error';
 
 export interface VoiceTypingOverlayPayload {
   sessionId: string;
@@ -24,6 +30,8 @@ export interface VoiceTypingOverlayPayload {
   revision: number;
   segmentId?: string;
   isFinal?: boolean;
+  hasSelection?: boolean;
+  selectionLength?: number;
 }
 
 export const DEFAULT_VOICE_TYPING_OVERLAY_STATE: VoiceTypingOverlayPayload = {

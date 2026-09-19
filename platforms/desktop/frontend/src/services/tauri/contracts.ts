@@ -655,6 +655,10 @@ type ManualTauriCommandContractMap = {
     args: undefined;
     result: [number, number] | null;
   };
+  [TauriCommand.system.getFocusedSelectionText]: {
+    args: undefined;
+    result: string | null;
+  };
   [TauriCommand.apiServer.start]: {
     args: {
       host: string;

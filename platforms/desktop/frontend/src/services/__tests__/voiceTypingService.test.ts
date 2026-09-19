@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
-  const shortcutState: { handler?: (event: any) => void } = {};
+  const shortcutState: {
+    handler?: (event: any) => void;
+    handlers: Record<string, (event: any) => void>;
+  } = { handlers: {} };
   const configEvents: {
     listener?: (state: { config: Record<string, any> }) => void;
   } = {};
-
   return {
     shortcutState,
     configEvents,
@@ -35,8 +37,11 @@ const mocks = vi.hoisted(() => {
     } as Record<string, any>,
     configSubscribe: vi.fn(),
     invoke: vi.fn(),
-    register: vi.fn(async (_shortcut: string, handler: (event: any) => void) => {
-      shortcutState.handler = handler;
+    register: vi.fn(async (shortcut: string, handler: (event: any) => void) => {
+      shortcutState.handlers[shortcut] = handler;
+      if (!shortcut.includes('Shift')) {
+        shortcutState.handler = handler;
+      }
     }),
     unregister: vi.fn(),
     isRegistered: vi.fn().mockResolvedValue(false),
@@ -81,6 +86,9 @@ vi.mock('../voiceTypingWindowService', () => ({
 }));
 vi.mock('../voiceTyping/voiceTypingPolishService', () => ({
   polishVoiceTypingText: vi.fn(async (text: string) => `[polished] ${text}`),
+  transformSelectedText: vi.fn(
+    async (selected: string, instruction: string) => `[transformed: ${selected}] ${instruction}`
+  ),
 }));
 vi.mock('../tauri/platform/windows', () => ({
   currentMonitor: vi.fn(async () => ({
@@ -182,6 +190,7 @@ describe('voiceTypingService', () => {
     vi.resetModules();
 
     mocks.shortcutState.handler = undefined;
+    mocks.shortcutState.handlers = {};
     mocks.configEvents.listener = undefined;
     mocks.config = { ...mocks.defaultConfig };
     mocks.configSubscribe.mockImplementation(
@@ -1311,5 +1320,90 @@ describe('voiceTypingService', () => {
     await flushMicrotasks(4);
 
     expect(mocks.windowPrepare).toHaveBeenCalledWith([760, 992]);
+  });
+  it('transforms selection context when focused selection is present', async () => {
+    let onSegment: ((segment: any) => void) | undefined;
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+    };
+    mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+      onSegment = segmentCallback;
+    });
+
+    mocks.invoke.mockImplementation(async (command: string) => {
+      if (command === 'get_focused_selection_text') {
+        return '原始选中的文本';
+      }
+      if (command === 'get_mouse_position') {
+        return [240, 320];
+      }
+      return undefined;
+    });
+
+    const service = await loadService();
+    await service.startListening();
+    vi.clearAllMocks();
+
+    onSegment?.({ id: 'seg-1', text: '翻译成日文', isFinal: true });
+    await flushMicrotasks(8);
+
+    const stopPromise = service.stopListening();
+    await vi.runAllTimersAsync();
+    await stopPromise;
+    await flushMicrotasks(8);
+
+    const injectCalls = getInvokeCalls('inject_text');
+    expect(injectCalls.length).toBe(1);
+    expect(injectCalls[0][1].text).toContain('[transformed: 原始选中的文本]');
+  });
+
+  it('applies text replacements and dynamic macros before injecting', async () => {
+    let onSegment: ((segment: any) => void) | undefined;
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      textReplacementSets: [
+        {
+          id: 'set-1',
+          name: 'Snippets',
+          enabled: true,
+          ignoreCase: true,
+          rules: [{ id: 'r1', from: '我的邮箱', to: 'asoda@outlook.com' }],
+        },
+      ],
+    };
+    mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+      onSegment = segmentCallback;
+    });
+
+    const service = await loadService();
+    await service.startListening();
+    vi.clearAllMocks();
+
+    onSegment?.({ id: 'seg-1', text: '请发送到 我的邮箱 谢谢', isFinal: true });
+    await flushMicrotasks(8);
+
+    const stopPromise = service.stopListening();
+    await vi.runAllTimersAsync();
+    await stopPromise;
+    await flushMicrotasks(8);
+
+    const injectCalls = getInvokeCalls('inject_text');
+    expect(injectCalls.length).toBe(1);
+    expect(injectCalls[0][1].text).toContain('asoda@outlook.com');
+  });
+  it('opens quick recall drawer overlay', async () => {
+    const service = await loadService();
+    service.init();
+    vi.clearAllMocks();
+
+    await service.openQuickRecall();
+
+    expect(mocks.windowSendState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'recall',
+      })
+    );
   });
 });

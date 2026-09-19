@@ -125,6 +125,19 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
       </SettingsItem>
 
       <SettingsItem
+        title={t('settings.voice_typing_quick_recall_shortcut', {
+          defaultValue: 'Quick Recall Shortcut',
+        })}
+        hint={t('settings.voice_typing_quick_recall_shortcut_hint', {
+          defaultValue: 'Open floating history to re-inject recent dictations',
+        })}
+      >
+        <SettingsShortcutInput
+          value={vtConfig.voiceTypingQuickRecallShortcut ?? 'Alt+Shift+H'}
+          onChange={(val) => updateConfig({ voiceTypingQuickRecallShortcut: val })}
+        />
+      </SettingsItem>
+      <SettingsItem
         title={t('settings.voice_typing_mode', { defaultValue: 'Mode' })}
         hint={t('settings.voice_typing_mode_hint', {
           defaultValue: 'How the shortcut triggers listening',

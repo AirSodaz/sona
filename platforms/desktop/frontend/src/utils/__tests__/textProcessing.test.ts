@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TextReplacementRuleSet } from '../../types/config';
-import { applyTextReplacements } from '../textProcessing';
+import { applyTextReplacements, expandTextMacros } from '../textProcessing';
 
 describe('applyTextReplacements', () => {
   it('returns original text if no sets are provided', () => {
@@ -111,5 +111,27 @@ describe('applyTextReplacements', () => {
       },
     ];
     expect(applyTextReplacements('is it price $5.00?', sets)).toBe('is it free');
+  });
+  it('expands dynamic macros like {today} and {time}', () => {
+    const fixedDate = new Date(2026, 8, 19, 14, 30, 0); // 2026-09-19 14:30:00
+    expect(expandTextMacros('今天是 {today}', fixedDate)).toBe('今天是 2026-09-19');
+    expect(expandTextMacros('现在时间 {time}', fixedDate)).toBe('现在时间 14:30:00');
+
+    const sets: TextReplacementRuleSet[] = [
+      {
+        id: 'macros',
+        name: 'Macros',
+        enabled: true,
+        ignoreCase: true,
+        rules: [
+          { id: 'm1', from: '我的邮箱', to: 'asoda@outlook.com' },
+          { id: 'm2', from: '当前日期', to: '{date}' },
+        ],
+      },
+    ];
+
+    expect(applyTextReplacements('请发送到 我的邮箱 谢谢', sets)).toBe(
+      '请发送到 asoda@outlook.com 谢谢'
+    );
   });
 });
