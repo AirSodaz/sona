@@ -135,6 +135,7 @@ export type AppConfig_Deserialize = {
 	voiceTypingSoundEnabled?: boolean | null,
 	voiceTypingCjkSpacingEnabled?: boolean | null,
 	voiceTypingPolishPrompt?: string | null,
+	voiceTypingPlacement?: VoiceTypingPlacement | null,
 	httpServerEnabled?: boolean | null,
 	httpServerHost?: string | null,
 	httpServerPort?: number | null,
@@ -224,6 +225,7 @@ export type AppConfig_Serialize = {
 	voiceTypingSoundEnabled?: boolean | null,
 	voiceTypingCjkSpacingEnabled?: boolean | null,
 	voiceTypingPolishPrompt?: string | null,
+	voiceTypingPlacement?: VoiceTypingPlacement | null,
 	httpServerEnabled?: boolean | null,
 	httpServerHost?: string | null,
 	httpServerPort?: number | null,
@@ -2981,6 +2983,8 @@ export type UsageTrendPoint = {
 } & DashboardUsageBucket;
 
 export type VoiceTypingMode = "hold" | "toggle";
+
+export type VoiceTypingPlacement = "caret" | "bottom_center";
 
 export type VoiceTypingProcessingMode = "raw" | "polish";
 

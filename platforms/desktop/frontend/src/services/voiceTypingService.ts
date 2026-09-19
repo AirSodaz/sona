@@ -8,6 +8,7 @@ import { logger } from '../utils/logger';
 import { isAsrRequestConfigured } from './asrConfigService';
 import { TauriEvent } from './tauri/events';
 import { listen } from './tauri/platform/events';
+import { currentMonitor, monitorFromPoint } from './tauri/platform/windows';
 import { processBatchFile } from './tauri/recognizer';
 import { getMousePosition, getTextCursorPosition, injectText } from './tauri/system';
 import { createTranscriptionService, type TranscriptionService } from './transcriptionService';
@@ -24,10 +25,12 @@ import { VoiceTypingOverlayPresenter } from './voiceTyping/voiceTypingOverlayPre
 import { polishVoiceTypingText } from './voiceTyping/voiceTypingPolishService';
 import { VoiceTypingSessionMachine } from './voiceTyping/voiceTypingSessionMachine';
 import { VoiceTypingShortcutController } from './voiceTyping/voiceTypingShortcutController';
+import { VOICE_TYPING_WINDOW_WIDTH } from './voiceTypingWindowService';
 
 const CURSOR_POSITION_OFFSET = 12;
 const MOUSE_POSITION_OFFSET = 20;
 const POST_COMMIT_CARET_RETRY_DELAYS_MS = [0, 40, 40, 40];
+const BOTTOM_CENTER_MARGIN_BOTTOM = 48;
 
 export interface VoiceTypingServicePorts {
   getConfig: () => AppConfig;
@@ -39,6 +42,8 @@ export interface VoiceTypingServicePorts {
   getMousePosition: typeof getMousePosition;
   transcriptionService: TranscriptionService;
   listenCancel?: (callback: () => void) => Promise<() => void>;
+  currentMonitor?: typeof currentMonitor;
+  monitorFromPoint?: typeof monitorFromPoint;
 }
 
 export class VoiceTypingService {
@@ -306,8 +311,59 @@ export class VoiceTypingService {
       return null;
     }
   }
+  private async getBottomCenterOverlayPosition(): Promise<[number, number]> {
+    try {
+      const [mouseX, mouseY] = await this.ports.getMousePosition();
+      const getMonitor = this.ports.monitorFromPoint ?? monitorFromPoint;
+      const getCurrent = this.ports.currentMonitor ?? currentMonitor;
+
+      let monitor = await getMonitor(mouseX, mouseY).catch(() => null);
+      if (!monitor) {
+        monitor = await getCurrent().catch(() => null);
+      }
+
+      if (monitor) {
+        const scale = monitor.scaleFactor || 1;
+        const workX =
+          monitor.workArea?.position?.x != null
+            ? monitor.workArea.position.x / scale
+            : (monitor.position?.x ?? 0) / scale;
+        const workY =
+          monitor.workArea?.position?.y != null
+            ? monitor.workArea.position.y / scale
+            : (monitor.position?.y ?? 0) / scale;
+        const workWidth =
+          monitor.workArea?.size?.width != null
+            ? monitor.workArea.size.width / scale
+            : (monitor.size?.width ?? 1920) / scale;
+        const workHeight =
+          monitor.workArea?.size?.height != null
+            ? monitor.workArea.size.height / scale
+            : (monitor.size?.height ?? 1080) / scale;
+
+        const targetX = Math.round(workX + (workWidth - VOICE_TYPING_WINDOW_WIDTH) / 2);
+        const targetY = Math.round(workY + workHeight - BOTTOM_CENTER_MARGIN_BOTTOM - 40);
+
+        return [targetX, targetY];
+      }
+    } catch (error) {
+      logger.debug('[VoiceTypingService] Failed to calculate bottom center position', error);
+    }
+
+    return [
+      typeof window !== 'undefined' && window.innerWidth
+        ? Math.round((window.innerWidth - VOICE_TYPING_WINDOW_WIDTH) / 2)
+        : 500,
+      800,
+    ];
+  }
 
   private async getOverlayPosition(): Promise<[number, number]> {
+    const placement = this.ports.getConfig().voiceTypingPlacement ?? 'caret';
+    if (placement === 'bottom_center') {
+      return await this.getBottomCenterOverlayPosition();
+    }
+
     const cursorPosition = await this.tryGetTextCursorOverlayPosition();
     if (cursorPosition) {
       return cursorPosition;
@@ -323,9 +379,17 @@ export class VoiceTypingService {
   }
 
   private async getOverlayPositionAfterCommit(): Promise<[number, number]> {
+    const placement = this.ports.getConfig().voiceTypingPlacement ?? 'caret';
+    if (placement === 'bottom_center') {
+      const previousPosition = this.sessionMachine.getLastPosition();
+      if (previousPosition) {
+        return previousPosition;
+      }
+      return await this.getBottomCenterOverlayPosition();
+    }
+
     const previousPosition = this.sessionMachine.getLastPosition();
     let latestCursorPosition: [number, number] | null = null;
-
     for (let attempt = 0; attempt < POST_COMMIT_CARET_RETRY_DELAYS_MS.length; attempt += 1) {
       const retryDelay = POST_COMMIT_CARET_RETRY_DELAYS_MS[attempt];
       if (retryDelay > 0) {
@@ -417,6 +481,8 @@ export const voiceTypingService = createVoiceTypingService({
   getTextCursorPosition,
   getMousePosition,
   transcriptionService: voiceTypingTranscriptionService,
+  currentMonitor,
+  monitorFromPoint,
   listenCancel: async (callback) => {
     try {
       return await listen(TauriEvent.auxWindow.voiceTypingCancel, callback);

@@ -70,6 +70,7 @@ vi.mock('@tauri-apps/plugin-global-shortcut', () => ({
 }));
 
 vi.mock('../voiceTypingWindowService', () => ({
+  VOICE_TYPING_WINDOW_WIDTH: 400,
   voiceTypingWindowService: {
     prepare: mocks.windowPrepare,
     open: mocks.windowOpen,
@@ -80,6 +81,31 @@ vi.mock('../voiceTypingWindowService', () => ({
 }));
 vi.mock('../voiceTyping/voiceTypingPolishService', () => ({
   polishVoiceTypingText: vi.fn(async (text: string) => `[polished] ${text}`),
+}));
+vi.mock('../tauri/platform/windows', () => ({
+  currentMonitor: vi.fn(async () => ({
+    scaleFactor: 1,
+    workArea: {
+      position: { x: 0, y: 0 },
+      size: { width: 1920, height: 1080 },
+    },
+    position: { x: 0, y: 0 },
+    size: { width: 1920, height: 1080 },
+  })),
+  monitorFromPoint: vi.fn(async () => ({
+    scaleFactor: 1,
+    workArea: {
+      position: { x: 0, y: 0 },
+      size: { width: 1920, height: 1080 },
+    },
+    position: { x: 0, y: 0 },
+    size: { width: 1920, height: 1080 },
+  })),
+  getCurrentWindow: vi.fn(),
+  getCurrentWebviewWindow: vi.fn(),
+  WebviewWindow: vi.fn(),
+  PhysicalPosition: class {},
+  PhysicalSize: class {},
 }));
 
 vi.mock('../transcriptionService', () => {
@@ -1272,5 +1298,18 @@ describe('voiceTypingService', () => {
     const injectCalls = getInvokeCalls('inject_text');
     expect(injectCalls.length).toBe(1);
     expect(injectCalls[0][1].text).toContain('[polished]');
+  });
+  it('positions overlay at bottom center when voiceTypingPlacement is bottom_center', async () => {
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingPlacement: 'bottom_center',
+    };
+
+    const service = await loadService();
+    await service.startListening();
+    await flushMicrotasks(4);
+
+    expect(mocks.windowPrepare).toHaveBeenCalledWith([760, 992]);
   });
 });

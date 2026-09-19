@@ -88,6 +88,14 @@ pub enum VoiceTypingProcessingMode {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "snake_case")]
+pub enum VoiceTypingPlacement {
+    Caret,
+    BottomCenter,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "lowercase")]
 pub enum GpuAcceleration {
     #[serde(alias = "directml")]
@@ -332,6 +340,8 @@ pub struct AppConfig {
     pub voice_typing_cjk_spacing_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub voice_typing_polish_prompt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voice_typing_placement: Option<VoiceTypingPlacement>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub http_server_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

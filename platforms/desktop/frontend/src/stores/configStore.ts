@@ -139,6 +139,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   voiceTypingSoundEnabled: true,
   voiceTypingCjkSpacingEnabled: true,
   voiceTypingPolishPrompt: '',
+  voiceTypingPlacement: 'caret',
   // API Server
   httpServerEnabled: false,
   httpServerHost: '127.0.0.1',
@@ -277,6 +278,7 @@ const VOICE_TYPING_KEYS: (keyof VoiceTypingConfig)[] = [
   'voiceTypingSoundEnabled',
   'voiceTypingCjkSpacingEnabled',
   'voiceTypingPolishPrompt',
+  'voiceTypingPlacement',
 ];
 const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [
   'httpServerEnabled',

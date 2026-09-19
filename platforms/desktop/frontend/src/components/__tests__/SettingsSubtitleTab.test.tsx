@@ -251,6 +251,10 @@ describe('SettingsSubtitleTab', () => {
     });
     expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingProcessingMode: 'polish' });
 
+    fireEvent.change(document.querySelector('#vt-placement-select') as HTMLSelectElement, {
+      target: { value: 'bottom_center' },
+    });
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingPlacement: 'bottom_center' });
     fireEvent.click(switchBtns[1]);
     expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingSoundEnabled: false });
 

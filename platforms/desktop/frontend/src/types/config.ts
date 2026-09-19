@@ -340,6 +340,9 @@ export interface BaseConfig {
 /** Voice Typing processing mode: 'raw' (fast direct output) or 'polish' (smart LLM rewrite). */
 export type VoiceTypingProcessingMode = 'raw' | 'polish';
 
+/** Voice Typing placement strategy: 'caret' (follow cursor) or 'bottom_center' (dynamic island). */
+export type VoiceTypingPlacement = 'caret' | 'bottom_center';
+
 /** Voice Typing (dictation) settings. */
 export interface VoiceTypingConfig {
   /** Whether voice typing feature is enabled. Default: false. */
@@ -356,6 +359,8 @@ export interface VoiceTypingConfig {
   voiceTypingCjkSpacingEnabled?: boolean;
   /** Optional custom LLM prompt directive for smart polish. */
   voiceTypingPolishPrompt?: string;
+  /** Placement strategy: 'caret' (follow text cursor) or 'bottom_center' (floating dynamic island). Default: 'caret'. */
+  voiceTypingPlacement?: VoiceTypingPlacement;
 }
 
 // ---------------------------------------------------------------------------

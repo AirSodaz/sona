@@ -186,6 +186,38 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
         </div>
       </SettingsItem>
 
+      <SettingsItem
+        title={t('settings.voice_typing_placement', { defaultValue: 'Placement Policy' })}
+        hint={t('settings.voice_typing_placement_hint', {
+          defaultValue: 'Choose where the floating capsule appears during dictation',
+        })}
+      >
+        <div style={{ width: '220px' }}>
+          <Dropdown
+            id="vt-placement-select"
+            value={vtConfig.voiceTypingPlacement || 'caret'}
+            onChange={(val) =>
+              updateConfig({
+                voiceTypingPlacement: val as 'caret' | 'bottom_center',
+              })
+            }
+            options={[
+              {
+                value: 'caret',
+                label: t('settings.voice_typing_placement_caret', {
+                  defaultValue: 'Follow Caret (Caret Follower)',
+                }),
+              },
+              {
+                value: 'bottom_center',
+                label: t('settings.voice_typing_placement_bottom_center', {
+                  defaultValue: 'Bottom Center (Dynamic Island)',
+                }),
+              },
+            ]}
+          />
+        </div>
+      </SettingsItem>
       {vtConfig.voiceTypingProcessingMode === 'polish' && (
         <SettingsItem
           title={t('settings.voice_typing_polish_prompt', { defaultValue: 'Custom Polish Prompt' })}
