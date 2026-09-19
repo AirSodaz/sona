@@ -205,6 +205,10 @@ describe('voiceTypingService', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     vi.resetModules();
+    Object.defineProperty(navigator, 'platform', {
+      value: 'Win32',
+      configurable: true,
+    });
 
     mocks.shortcutState.handler = undefined;
     mocks.shortcutState.handlers = {};

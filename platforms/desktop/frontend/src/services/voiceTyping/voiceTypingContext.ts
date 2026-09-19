@@ -265,7 +265,10 @@ export function matchContextRule(
       if (cleanTarget === cleanApp) {
         return true;
       }
-      return cleanTarget.replace(/\.exe$/, '') === cleanApp.replace(/\.exe$/, '');
+      if (platform === 'windows') {
+        return cleanTarget.replace(/\.exe$/, '') === cleanApp.replace(/\.exe$/, '');
+      }
+      return false;
     });
     if (matched) {
       return true;
