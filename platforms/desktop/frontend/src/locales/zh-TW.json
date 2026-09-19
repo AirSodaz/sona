@@ -624,7 +624,10 @@
     "quick_recall_empty": "暫無歷史語音輸入記錄",
     "mode_badge_developer": "程式碼",
     "mode_badge_chat": "聊天",
-    "mode_badge_formal": "公文"
+    "mode_badge_formal": "公文",
+    "selection_rewrite_failed": "選取文字重寫失敗",
+    "polish_failed": "語音潤飾失敗",
+    "original_saved_to_clipboard": "原文已儲存至剪貼簿。"
   },
   "automation": {
     "open_settings": "打開自動化",

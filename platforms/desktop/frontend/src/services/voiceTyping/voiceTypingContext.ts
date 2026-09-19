@@ -259,7 +259,7 @@ export function matchContextRule(
 
   const cleanApp = appName.trim().toLowerCase();
   if (cleanApp) {
-    const appList = rule.appsByPlatform[platform] || [];
+    const appList = rule.appsByPlatform?.[platform] || [];
     const matched = appList.some((target) => {
       const cleanTarget = target.trim().toLowerCase();
       if (cleanTarget === cleanApp) {
@@ -346,11 +346,16 @@ export function getContextDirective(
     rule = rules.find((r) => r.id === ruleOrMode);
   }
 
-  const trimmedTitle = windowTitle?.trim();
-  const titleContext = trimmedTitle
-    ? `Active window context and topic: "${trimmedTitle}". Disambiguate technical terms and domain abbreviations accordingly.`
+  const sanitizedTitle = windowTitle
+    ? windowTitle
+        .replace(/[\r\n\t]/g, ' ')
+        .trim()
+        .slice(0, 100)
     : '';
 
+  const titleContext = sanitizedTitle
+    ? `Active window context and topic: "${sanitizedTitle}". Disambiguate technical terms and domain abbreviations accordingly.`
+    : '';
   if (!rule) {
     return titleContext;
   }

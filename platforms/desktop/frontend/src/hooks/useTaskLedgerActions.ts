@@ -233,15 +233,17 @@ export function createTaskCenterActionRegistry(
             },
           });
         } else if (isLlmTask(task)) {
-          actions.push({
-            id: 'retry',
-            label: deps.t('task_center.retry', { defaultValue: 'Retry' }),
-            variant: 'primary',
-            run: async () => {
-              await deps.retryLlmTask(task);
-              await deps.removeTask(task.id);
-            },
-          });
+          if (task.retryable !== false && task.historyId) {
+            actions.push({
+              id: 'retry',
+              label: deps.t('task_center.retry', { defaultValue: 'Retry' }),
+              variant: 'primary',
+              run: async () => {
+                await deps.retryLlmTask(task);
+                await deps.removeTask(task.id);
+              },
+            });
+          }
         } else if (task.kind === 'automation') {
           actions.push(createOpenAutomationAction(deps));
         }

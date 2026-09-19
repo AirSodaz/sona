@@ -624,7 +624,10 @@
     "quick_recall_empty": "暂无历史语音输入记录",
     "mode_badge_developer": "代码",
     "mode_badge_chat": "聊天",
-    "mode_badge_formal": "公文"
+    "mode_badge_formal": "公文",
+    "selection_rewrite_failed": "选中文本重写失败",
+    "polish_failed": "语音润色失败",
+    "original_saved_to_clipboard": "原文已保存至剪贴板。"
   },
   "automation": {
     "open_settings": "打开自动化",

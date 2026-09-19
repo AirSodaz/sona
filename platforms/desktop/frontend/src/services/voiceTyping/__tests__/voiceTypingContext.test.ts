@@ -170,5 +170,29 @@ describe('voiceTypingContext', () => {
         'team_chat'
       );
     });
+
+    it('truncates window title to 100 chars and removes newlines in directive', () => {
+      const longTitle = 'a'.repeat(150) + '\nwith\tnewlines';
+      const directive = getContextDirective('developer', longTitle);
+      expect(directive).toContain('Active window context and topic: "');
+      expect(directive).not.toContain('\nwith\tnewlines');
+      const match = directive.match(/Active window context and topic: "([^"]+)"/);
+      expect(match?.[1].length).toBe(100);
+    });
+
+    it('handles missing or undefined appsByPlatform defensively', () => {
+      const malformedRule = {
+        id: 'test',
+        name: 'Test',
+        titlePatterns: ['pattern'],
+        promptDirective: '',
+        stripTrailingPunctuation: false,
+        isBuiltin: false,
+        enabled: true,
+      } as unknown as VoiceTypingContextRule;
+      expect(() => matchContextRule(malformedRule, 'app.exe', '', 'windows')).not.toThrow();
+      expect(matchContextRule(malformedRule, 'app.exe', '', 'windows')).toBe(false);
+      expect(matchContextRule(malformedRule, 'app.exe', 'pattern', 'windows')).toBe(true);
+    });
   });
 });

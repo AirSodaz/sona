@@ -624,7 +624,10 @@
     "quick_recall_empty": "음성 입력 기록이 없습니다",
     "mode_badge_developer": "코드",
     "mode_badge_chat": "채팅",
-    "mode_badge_formal": "공문서"
+    "mode_badge_formal": "공문서",
+    "selection_rewrite_failed": "선택한 텍스트 다시 쓰기 실패",
+    "polish_failed": "음성 입력 다듬기 실패",
+    "original_saved_to_clipboard": "원본 텍스트가 클립보드에 복사되었습니다."
   },
   "automation": {
     "open_settings": "Automation 열기",

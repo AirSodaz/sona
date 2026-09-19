@@ -624,7 +624,10 @@
     "quick_recall_empty": "音声入力履歴がありません",
     "mode_badge_developer": "コード",
     "mode_badge_chat": "チャット",
-    "mode_badge_formal": "公用文"
+    "mode_badge_formal": "公用文",
+    "selection_rewrite_failed": "選択テキストの書き換えに失敗しました",
+    "polish_failed": "音声入力の推敲に失敗しました",
+    "original_saved_to_clipboard": "元のテキストをクリップボードにコピーしました。"
   },
   "automation": {
     "open_settings": "オープンオートメーション",

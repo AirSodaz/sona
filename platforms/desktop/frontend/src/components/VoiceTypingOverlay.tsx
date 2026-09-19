@@ -179,6 +179,28 @@ export function VoiceTypingOverlay() {
     }
   }, [overlayState.phase]);
   useEffect(() => {
+    if (overlayState.phase !== 'recall') {
+      return;
+    }
+
+    let active = false;
+    const timer = setTimeout(() => {
+      active = true;
+    }, 150);
+
+    const handleBlur = () => {
+      if (active) {
+        void handleCancel();
+      }
+    };
+
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, [handleCancel, overlayState.phase]);
+  useEffect(() => {
     let isMounted = true;
     let unlisten: (() => void) | undefined;
 

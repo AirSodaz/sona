@@ -624,7 +624,10 @@
     "quick_recall_empty": "No dictation history yet",
     "mode_badge_developer": "Code",
     "mode_badge_chat": "Chat",
-    "mode_badge_formal": "Formal"
+    "mode_badge_formal": "Formal",
+    "selection_rewrite_failed": "Selection rewrite failed",
+    "polish_failed": "Voice typing polish failed",
+    "original_saved_to_clipboard": "Original text was copied to clipboard."
   },
   "automation": {
     "open_settings": "Open Automation",

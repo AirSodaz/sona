@@ -17,7 +17,6 @@ export class VoiceTypingOverlayPresenter {
   private overlayVisible = false;
   private lastOverlayPosition: [number, number] | null = null;
   private lastPayload: VoiceTypingOverlayPayload | null = null;
-  private listeningResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   private async resolvePosition(resolvePosition?: VoiceTypingPositionResolver) {
     if (resolvePosition) {
@@ -91,18 +90,7 @@ export class VoiceTypingOverlayPresenter {
   }
 
   clearListeningReset() {
-    if (this.listeningResetTimer) {
-      clearTimeout(this.listeningResetTimer);
-      this.listeningResetTimer = null;
-    }
-  }
-
-  scheduleListeningReset(callback: () => void, delayMs: number) {
-    this.clearListeningReset();
-    this.listeningResetTimer = setTimeout(() => {
-      this.listeningResetTimer = null;
-      callback();
-    }, delayMs);
+    // No-op kept for lifecycle interface compatibility
   }
 
   isVisible() {

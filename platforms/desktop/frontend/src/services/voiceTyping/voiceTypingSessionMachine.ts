@@ -18,6 +18,7 @@ import {
   classifyContextRule,
   DEFAULT_VOICE_TYPING_CONTEXT_RULES,
   getCurrentPlatform,
+  shouldStripTrailingPunctuation,
   type VoiceTypingContextState,
 } from './voiceTypingContext';
 import type {
@@ -44,18 +45,25 @@ interface VoiceTypingSessionMachineOptions {
   isSoundEnabled?: () => boolean;
   isCjkSpacingEnabled?: () => boolean;
   getProcessingMode?: () => 'raw' | 'polish';
-  polishText?: (text: string, context?: VoiceTypingContextState | null) => Promise<string>;
+  polishText?: (
+    text: string,
+    context?: VoiceTypingContextState | null,
+    onError?: (error: unknown) => void
+  ) => Promise<string>;
   onTextCommitted?: (entry: {
     rawText: string;
     polishedText?: string;
     injectedText: string;
     mode: 'raw' | 'polish';
   }) => void;
+  onTransformFailed?: (entry: { originalText: string; instruction: string }) => void;
+  onPolishFailed?: (entry: { originalText: string }) => void;
   getFocusedSelectionText?: () => Promise<string | null>;
   transformText?: (
     selectedText: string,
     instruction: string,
-    context?: VoiceTypingContextState | null
+    context?: VoiceTypingContextState | null,
+    onError?: (error: unknown) => void
   ) => Promise<string>;
   getTextReplacements?: () => TextReplacementRuleSet[] | undefined;
   getForegroundWindowInfo?: () => Promise<ForegroundWindowInfo | null>;
@@ -312,14 +320,19 @@ export class VoiceTypingSessionMachine {
         });
 
         let transformedText = instruction;
+        let transformFailed = false;
         if (this.options.transformText) {
           try {
             transformedText = await this.options.transformText(
               this.selectionContext,
               instruction,
-              this.currentContext
+              this.currentContext,
+              () => {
+                transformFailed = true;
+              }
             );
           } catch (err) {
+            transformFailed = true;
             logger.warn(
               '[VoiceTypingSessionMachine] Transform failed, fallback to instruction',
               err
@@ -327,6 +340,15 @@ export class VoiceTypingSessionMachine {
           }
         }
 
+        if (transformFailed) {
+          if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(this.selectionContext).catch(() => {});
+          }
+          this.options.onTransformFailed?.({
+            originalText: this.selectionContext,
+            instruction,
+          });
+        }
         const finalText = this.formatFinalText(transformedText);
         this.options.onTextCommitted?.({
           rawText: `[Selection Rewrite] ${instruction}`,
@@ -368,14 +390,26 @@ export class VoiceTypingSessionMachine {
         });
 
         let polishedText = rawFullText;
+        let polishFailed = false;
         if (this.options.polishText) {
           try {
-            polishedText = await this.options.polishText(rawFullText, this.currentContext);
+            polishedText = await this.options.polishText(rawFullText, this.currentContext, () => {
+              polishFailed = true;
+            });
           } catch (err) {
+            polishFailed = true;
             logger.warn('[VoiceTypingSessionMachine] Polish failed, fallback to raw', err);
           }
         }
 
+        if (polishFailed) {
+          if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(rawFullText).catch(() => {});
+          }
+          this.options.onPolishFailed?.({
+            originalText: rawFullText,
+          });
+        }
         const finalText = this.formatFinalText(polishedText);
         this.options.onTextCommitted?.({
           rawText: rawFullText,
@@ -464,6 +498,9 @@ export class VoiceTypingSessionMachine {
 
   isActive() {
     return this.activeSessionId !== null;
+  }
+  isRecallActive() {
+    return this.activeSessionId?.startsWith('recall-') ?? false;
   }
 
   getLastPosition() {
@@ -766,8 +803,11 @@ export class VoiceTypingSessionMachine {
   private formatFinalText(text: string): string {
     const enableCjkSpacing = this.options.isCjkSpacingEnabled?.() ?? true;
     let withSpacing = normalizeCandidateText(text, enableCjkSpacing);
-    const shouldStripPunct =
-      this.currentContext?.rule?.stripTrailingPunctuation ?? this.currentContext?.mode === 'chat';
+    const rules = this.options.getContextRules?.() ?? DEFAULT_VOICE_TYPING_CONTEXT_RULES;
+    const shouldStripPunct = shouldStripTrailingPunctuation(
+      this.currentContext?.rule ?? this.currentContext?.mode,
+      rules
+    );
     if (shouldStripPunct) {
       withSpacing = withSpacing.replace(/[。.]+$/, '');
     }
@@ -864,6 +904,8 @@ export class VoiceTypingSessionMachine {
     this.activeSessionId = null;
     this.currentSegmentId = null;
     this.currentText = '';
+    this.selectionContext = null;
+    this.currentContext = null;
     this.manualStopPending = false;
     this.committedSegmentIds.clear();
     this.segmentProcessingChain = Promise.resolve();

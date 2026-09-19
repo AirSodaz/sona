@@ -65,13 +65,16 @@ describe('voiceTypingPolishService', () => {
     expect(result).toBe('今天下午两点在三号会议室开会。');
   });
 
-  it('falls back to raw text if completeLlm fails', async () => {
-    vi.mocked(completeLlm).mockRejectedValueOnce(new Error('Network error'));
+  it('falls back to raw text and calls onError if completeLlm fails', async () => {
+    const error = new Error('Network error');
+    vi.mocked(completeLlm).mockRejectedValueOnce(error);
+    const onError = vi.fn();
 
     const raw = '原始输入内容';
-    const result = await polishVoiceTypingText(raw);
+    const result = await polishVoiceTypingText(raw, { onError });
 
     expect(result).toBe(raw);
+    expect(onError).toHaveBeenCalledWith(error);
   });
 
   it('uses custom prompt if configured', async () => {
@@ -90,5 +93,26 @@ describe('voiceTypingPolishService', () => {
 
     expect(vi.mocked(completeLlm).mock.calls[0][0].systemPrompt).toBe('只翻译为英文');
     expect(result).toBe('Hello World');
+  });
+
+  it('transforms selected text with instruction using completeLlm', async () => {
+    const { transformSelectedText } = await import('../voiceTypingPolishService');
+    vi.mocked(completeLlm).mockResolvedValueOnce({
+      text: 'Translated text',
+    } as any);
+
+    const result = await transformSelectedText('选中的原文', '翻译成英文');
+    expect(result).toBe('Translated text');
+  });
+
+  it('falls back to instruction and calls onError if transformSelectedText fails', async () => {
+    const { transformSelectedText } = await import('../voiceTypingPolishService');
+    const error = new Error('Transform timeout');
+    vi.mocked(completeLlm).mockRejectedValueOnce(error);
+    const onError = vi.fn();
+
+    const result = await transformSelectedText('选中的原文', '翻译成英文', { onError });
+    expect(result).toBe('翻译成英文');
+    expect(onError).toHaveBeenCalledWith(error);
   });
 });

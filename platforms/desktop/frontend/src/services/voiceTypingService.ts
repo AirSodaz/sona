@@ -1,5 +1,7 @@
+import i18next from 'i18next';
 import { useConfigStore } from '../stores/configStore';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
+import { useTaskLedgerStore } from '../stores/taskLedgerStore';
 import { useVoiceTypingHistoryStore } from '../stores/voiceTypingHistoryStore';
 import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
 import type { AppConfig } from '../types/config';
@@ -92,7 +94,27 @@ export class VoiceTypingService {
       isSoundEnabled: () => this.ports.getConfig().voiceTypingSoundEnabled ?? true,
       isCjkSpacingEnabled: () => this.ports.getConfig().voiceTypingCjkSpacingEnabled ?? true,
       getProcessingMode: () => this.ports.getConfig().voiceTypingProcessingMode ?? 'raw',
-      polishText: (text, context) => polishVoiceTypingText(text, { context }),
+      polishText: (text, context, onError) => polishVoiceTypingText(text, { context, onError }),
+      onPolishFailed: () => {
+        const now = Date.now();
+        void useTaskLedgerStore.getState().upsertTask({
+          id: `voice-typing-polish-fail-${now}`,
+          kind: 'llmPolish',
+          status: 'failed',
+          title: i18next.t('voice_typing.polish_failed', {
+            defaultValue: 'Voice typing polish failed',
+          }),
+          errorMessage: i18next.t('voice_typing.original_saved_to_clipboard', {
+            defaultValue: 'Original text was copied to clipboard.',
+          }),
+          progress: 100,
+          createdAt: now,
+          updatedAt: now,
+          retryable: false,
+          cancelable: false,
+          recoverable: false,
+        });
+      },
       onTextCommitted: (entry) => {
         useVoiceTypingHistoryStore.getState().addItem(entry);
       },
@@ -100,8 +122,28 @@ export class VoiceTypingService {
         this.ports.getFocusedSelectionText
           ? this.ports.getFocusedSelectionText()
           : getFocusedSelectionText(),
-      transformText: (selectedText, instruction, context) =>
-        transformSelectedText(selectedText, instruction, { context }),
+      transformText: (selectedText, instruction, context, onError) =>
+        transformSelectedText(selectedText, instruction, { context, onError }),
+      onTransformFailed: () => {
+        const now = Date.now();
+        void useTaskLedgerStore.getState().upsertTask({
+          id: `voice-typing-transform-fail-${now}`,
+          kind: 'llmPolish',
+          status: 'failed',
+          title: i18next.t('voice_typing.selection_rewrite_failed', {
+            defaultValue: 'Selection rewrite failed',
+          }),
+          errorMessage: i18next.t('voice_typing.original_saved_to_clipboard', {
+            defaultValue: 'Original text was copied to clipboard.',
+          }),
+          progress: 100,
+          createdAt: now,
+          updatedAt: now,
+          retryable: false,
+          cancelable: false,
+          recoverable: false,
+        });
+      },
       getTextReplacements: () => this.ports.getConfig().textReplacementSets,
       getForegroundWindowInfo: () =>
         this.ports.getForegroundWindowInfo
@@ -339,6 +381,9 @@ export class VoiceTypingService {
 
   public async openQuickRecall(): Promise<void> {
     if (this.sessionMachine.isActive()) {
+      if (this.sessionMachine.isRecallActive()) {
+        await this.sessionMachine.cancel();
+      }
       return;
     }
     const position = await this.getQuickRecallOverlayPosition();

@@ -39,6 +39,7 @@ export async function polishVoiceTypingText(
     customPrompt?: string;
     timeoutMs?: number;
     context?: VoiceTypingContextState | null;
+    onError?: (error: unknown) => void;
   }
 ): Promise<string> {
   const trimmed = (text || '').trim();
@@ -51,6 +52,7 @@ export async function polishVoiceTypingText(
 
   if (!llmConfig?.provider) {
     logger.warn('[VoiceTypingPolish] No active LLM provider configured, using raw text');
+    options?.onError?.(new Error('No active LLM provider configured'));
     return trimmed;
   }
   const baseSystemPrompt =
@@ -93,9 +95,9 @@ export async function polishVoiceTypingText(
 
     if (!polished) {
       logger.warn('[VoiceTypingPolish] Empty output from LLM polish, falling back to raw text');
+      options?.onError?.(new Error('Empty output from LLM polish'));
       return trimmed;
     }
-
     logger.info('[VoiceTypingPolish] Text successfully polished', {
       originalLength: trimmed.length,
       polishedLength: polished.length,
@@ -106,6 +108,7 @@ export async function polishVoiceTypingText(
       '[VoiceTypingPolish] LLM polish failed or timed out, falling back to raw text:',
       error
     );
+    options?.onError?.(error);
     return trimmed;
   }
 }
@@ -123,6 +126,7 @@ export async function transformSelectedText(
   options?: {
     timeoutMs?: number;
     context?: VoiceTypingContextState | null;
+    onError?: (error: unknown) => void;
   }
 ): Promise<string> {
   const trimmedSelected = (selectedText || '').trim();
@@ -138,9 +142,9 @@ export async function transformSelectedText(
     logger.warn(
       '[VoiceTypingPolish] No LLM provider configured for selection transform, using instruction'
     );
+    options?.onError?.(new Error('No LLM provider configured for selection transform'));
     return trimmedInstruction;
   }
-
   const promptInput = `【选中文本】：\n${trimmedSelected}\n\n【修改指令】：\n${trimmedInstruction}`;
   const timeoutMs = options?.timeoutMs ?? POLISH_TIMEOUT_MS;
 
@@ -180,9 +184,9 @@ export async function transformSelectedText(
     const transformed = cleanPolishedOutput(response.text);
 
     if (!transformed) {
+      options?.onError?.(new Error('Empty output from LLM selection transform'));
       return trimmedInstruction;
     }
-
     logger.info('[VoiceTypingPolish] Selection text successfully transformed', {
       originalLength: trimmedSelected.length,
       instructionLength: trimmedInstruction.length,
@@ -191,6 +195,7 @@ export async function transformSelectedText(
     return transformed;
   } catch (error) {
     logger.warn('[VoiceTypingPolish] Selection transform failed or timed out:', error);
+    options?.onError?.(error);
     return trimmedInstruction;
   }
 }
