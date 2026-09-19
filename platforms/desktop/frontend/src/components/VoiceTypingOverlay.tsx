@@ -1,8 +1,10 @@
-import { Mic } from 'lucide-react';
-import { type CSSProperties, useEffect, useRef } from 'react';
+import { emit, listen } from '@tauri-apps/api/event';
+import { X } from 'lucide-react';
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuxWindowState } from '../hooks/useAuxWindowState';
 import { useAuxWindowTheme } from '../hooks/useAuxWindowTheme';
+import { TauriEvent } from '../services/tauri/events';
 import { getCurrentWindow, PhysicalSize } from '../services/tauri/platform/windows';
 import {
   DEFAULT_VOICE_TYPING_OVERLAY_STATE,
@@ -11,6 +13,10 @@ import {
   VOICE_TYPING_WINDOW_WIDTH,
 } from '../services/voiceTypingWindowService';
 import { logger } from '../utils/logger';
+
+const WAVEFORM_WEIGHTS = [0.45, 0.75, 1.0, 0.75, 0.45] as const;
+const MIN_BAR_HEIGHT = 4;
+const MAX_BAR_HEIGHT = 18;
 
 const OVERLAY_ROOT_PADDING = {
   top: 4,
@@ -65,6 +71,7 @@ export function VoiceTypingOverlay() {
   const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement>(null);
   const resolvedTheme = useAuxWindowTheme();
+  const [peakLevel, setPeakLevel] = useState<number>(0);
   const overlayState = useAuxWindowState({
     label: VOICE_TYPING_WINDOW_LABEL,
     eventName: VOICE_TYPING_EVENT_TEXT,
@@ -82,6 +89,52 @@ export function VoiceTypingOverlay() {
     },
   });
 
+  const handleCancel = useCallback(async () => {
+    try {
+      if (typeof emit === 'function') {
+        await emit(TauriEvent.auxWindow.voiceTypingCancel);
+      }
+    } catch (error) {
+      logger.warn('[VoiceTypingOverlay] Failed to emit cancel event:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        void handleCancel();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleCancel]);
+
+  useEffect(() => {
+    let isMounted = true;
+    let unlisten: (() => void) | undefined;
+
+    listen<number>(TauriEvent.audio.microphonePeak, (event) => {
+      if (!isMounted) return;
+      const raw = typeof event.payload === 'number' ? Math.abs(event.payload) : 0;
+      const normalized = Math.min(1, Math.max(0, raw / 32767));
+      setPeakLevel(normalized);
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch((err) => {
+        logger.debug('[VoiceTypingOverlay] Could not listen to microphonePeak event', err);
+      });
+
+    return () => {
+      isMounted = false;
+      unlisten?.();
+    };
+  }, []);
   useEffect(() => {
     const previousDocumentBackground = document.documentElement.style.background;
     const previousBodyBackground = document.body.style.background;
@@ -142,7 +195,6 @@ export function VoiceTypingOverlay() {
   }, [displayText, phase, resolvedTheme]);
 
   let containerStyle: CSSProperties;
-  let indicatorStyle: CSSProperties;
 
   if (isSegment) {
     containerStyle = {
@@ -152,28 +204,12 @@ export function VoiceTypingOverlay() {
       border: '1px solid var(--color-border-hover)',
       boxShadow: resolvedTheme === 'dark' ? '0 16px 32px rgba(0, 0, 0, 0.36)' : 'var(--shadow-xl)',
     };
-
-    indicatorStyle = {
-      width: '4px',
-      alignSelf: 'stretch',
-      borderRadius: '999px',
-      background: 'linear-gradient(180deg, #34d399 0%, #22c55e 100%)',
-    };
   } else if (isError) {
     containerStyle = {
       ...baseContainerStyle,
       background: 'rgba(127, 29, 29, 0.92)',
       color: '#ffffff',
       border: '1px solid rgba(248, 113, 113, 0.35)',
-    };
-
-    indicatorStyle = {
-      width: '8px',
-      height: '8px',
-      borderRadius: '999px',
-      background: '#fca5a5',
-      boxShadow: '0 0 0 4px rgba(248, 113, 113, 0.16)',
-      flexShrink: 0,
     };
   } else {
     containerStyle = {
@@ -183,24 +219,18 @@ export function VoiceTypingOverlay() {
       border: '1px solid var(--color-border-hover)',
       boxShadow: resolvedTheme === 'dark' ? '0 16px 32px rgba(0, 0, 0, 0.36)' : 'var(--shadow-xl)',
     };
-
-    indicatorStyle = {
-      width: '8px',
-      height: '8px',
-      borderRadius: '999px',
-      background: '#4ade80',
-      boxShadow: '0 0 0 4px rgba(74, 222, 128, 0.16)',
-      flexShrink: 0,
-    };
   }
 
-  let micColor = '#4ade80';
-  let micClass: string | undefined = 'animate-pulse';
-  if (isError) {
-    micColor = '#fecaca';
-    micClass = undefined;
-  }
-
+  const isSpeaking = isSegment || peakLevel > 0.05;
+  const barHeights = WAVEFORM_WEIGHTS.map((weight, i) => {
+    if (isError) return 4;
+    if (isSpeaking) {
+      const boost = Math.min(1, Math.max(peakLevel * 2.2, isSegment ? 0.35 : 0.15));
+      return Math.round(MIN_BAR_HEIGHT + (MAX_BAR_HEIGHT - MIN_BAR_HEIGHT) * boost * weight);
+    }
+    const idlePattern = [4, 7, 10, 7, 4];
+    return idlePattern[i];
+  });
   return (
     <div
       data-testid="voice-typing-overlay-root"
@@ -217,21 +247,35 @@ export function VoiceTypingOverlay() {
       }}
     >
       <div data-testid="voice-typing-bubble" style={containerStyle}>
-        {isSegment ? (
-          <div style={indicatorStyle} />
-        ) : (
-          <>
-            <Mic
-              size={16}
-              className={micClass}
+        {/* 5-bar Waveform Visualizer */}
+        <div
+          data-testid="voice-typing-waveform"
+          aria-label="audio waveform"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2.5px',
+            height: '18px',
+            flexShrink: 0,
+          }}
+        >
+          {barHeights.map((barHeight, idx) => (
+            <div
+              key={idx}
               style={{
-                color: micColor,
-                flexShrink: 0,
+                width: '3px',
+                height: `${barHeight}px`,
+                borderRadius: '999px',
+                background: isError
+                  ? '#fca5a5'
+                  : isSegment
+                    ? 'linear-gradient(180deg, #34d399 0%, #22c55e 100%)'
+                    : '#4ade80',
+                transition: 'height 80ms cubic-bezier(0.4, 0, 0.2, 1)',
               }}
             />
-            <div style={indicatorStyle} />
-          </>
-        )}
+          ))}
+        </div>
         <span
           style={{
             whiteSpace: 'nowrap',
@@ -243,6 +287,41 @@ export function VoiceTypingOverlay() {
         >
           {displayText}
         </span>
+        {/* Quick cancel button */}
+        <button
+          type="button"
+          data-testid="voice-typing-cancel-btn"
+          aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
+          title={t('common.cancel', { defaultValue: 'Cancel' })}
+          onClick={handleCancel}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '18px',
+            height: '18px',
+            padding: 0,
+            marginLeft: '2px',
+            border: 'none',
+            background: 'transparent',
+            color: isError ? '#fca5a5' : 'var(--color-text-muted)',
+            borderRadius: '999px',
+            cursor: 'pointer',
+            opacity: 0.6,
+            flexShrink: 0,
+            transition: 'opacity 120ms ease, background 120ms ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.opacity = '1';
+            e.currentTarget.style.background = 'var(--color-bg-hover)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.opacity = '0.6';
+            e.currentTarget.style.background = 'transparent';
+          }}
+        >
+          <X size={12} />
+        </button>
       </div>
     </div>
   );

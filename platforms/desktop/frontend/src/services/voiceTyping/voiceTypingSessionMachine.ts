@@ -1,5 +1,6 @@
 import i18next from 'i18next';
 import type { TranscriptSegment, TranscriptUpdate } from '../../types/transcript';
+import { formatCjkTypography } from '../../utils/cjkTypography';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { logger } from '../../utils/logger';
 import { normalizeTranscriptUpdate } from '../../utils/transcriptTiming';
@@ -9,8 +10,9 @@ import type {
   VoiceTypingOverlayPresenter,
   VoiceTypingPositionResolver,
 } from './voiceTypingOverlayPresenter';
+import { voiceTypingSoundPlayer } from './voiceTypingSounds';
 
-const ERROR_VISIBILITY_MS = 700;
+const ERROR_VISIBILITY_MS = 2000;
 const FLUSH_EVENT_SETTLE_MS = 80;
 
 type SessionState = 'idle' | 'preparing' | 'listening' | 'composing' | 'stopping' | 'error';
@@ -34,7 +36,8 @@ function delay(ms: number) {
 }
 
 function normalizeCandidateText(text: string): string {
-  return (text || '').trim();
+  const trimmed = (text || '').trim();
+  return formatCjkTypography(trimmed);
 }
 
 function analyzeCandidateText(text: string) {
@@ -83,6 +86,7 @@ export class VoiceTypingSessionMachine {
       return;
     }
 
+    voiceTypingSoundPlayer.play('start');
     const requestId = ++this.startRequestId;
     const sessionId = `voice-typing-${requestId}`;
     this.sessionState = 'preparing';
@@ -93,7 +97,6 @@ export class VoiceTypingSessionMachine {
     this.committedSegmentIds.clear();
     this.segmentProcessingChain = Promise.resolve();
     this.options.overlayPresenter.clearListeningReset();
-
     const preparingPromise = this.publishOverlay(
       {
         sessionId,
@@ -161,6 +164,7 @@ export class VoiceTypingSessionMachine {
         });
       }
     } catch (error) {
+      const errorMessage = extractErrorMessage(error);
       logger.error('[VoiceTypingSessionMachine] Failed to start voice typing:', error);
       await this.options.transcriptionService.softStop().catch((stopError) => {
         logger.error(
@@ -170,7 +174,7 @@ export class VoiceTypingSessionMachine {
       });
 
       if (this.activeSessionId === sessionId) {
-        await this.closeSession(sessionId);
+        await this.handleSessionError(sessionId, requestId, errorMessage);
       }
     }
   }
@@ -204,6 +208,38 @@ export class VoiceTypingSessionMachine {
       logger.error(
         '[VoiceTypingSessionMachine] Failed while waiting for queued segment updates:',
         error
+      );
+    });
+
+    if (!this.isCurrentSession(sessionId)) {
+      return;
+    }
+
+    await this.closeSession(sessionId);
+  }
+  async cancel() {
+    if (!this.isActive() || !this.activeSessionId || this.sessionState === 'stopping') {
+      return;
+    }
+
+    const sessionId = this.activeSessionId;
+    this.sessionState = 'stopping';
+    this.manualStopPending = true;
+    this.currentText = '';
+    this.currentSegmentId = null;
+    this.options.overlayPresenter.clearListeningReset();
+
+    logger.info('[VoiceTypingSessionMachine] Cancel requested', {
+      sessionId,
+      revision: this.revision,
+    });
+
+    voiceTypingSoundPlayer.play('cancel');
+
+    await this.options.transcriptionService.softStop().catch((stopError) => {
+      logger.error(
+        '[VoiceTypingSessionMachine] Failed to stop recognizer while cancelling:',
+        stopError
       );
     });
 
@@ -420,6 +456,7 @@ export class VoiceTypingSessionMachine {
 
     try {
       await this.options.injectText(text);
+      voiceTypingSoundPlayer.play('commit');
     } catch (error) {
       logger.error('[VoiceTypingSessionMachine] Failed to inject dictated text:', error);
       if (this.isCurrentSession(sessionId, requestId)) {
@@ -465,11 +502,11 @@ export class VoiceTypingSessionMachine {
   }
 
   private async handleSessionError(sessionId: string, requestId: number, error: string) {
+    voiceTypingSoundPlayer.play('error');
     this.options.overlayPresenter.clearListeningReset();
     this.sessionState = 'error';
     this.manualStopPending = true;
     this.options.onRuntimeError?.(error);
-
     await this.publishOverlay(
       {
         sessionId,

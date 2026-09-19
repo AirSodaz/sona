@@ -1,3 +1,4 @@
+import { listen } from '@tauri-apps/api/event';
 import { useConfigStore } from '../stores/configStore';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
@@ -5,6 +6,7 @@ import type { AppConfig } from '../types/config';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { isAsrRequestConfigured } from './asrConfigService';
+import { TauriEvent } from './tauri/events';
 import { processBatchFile } from './tauri/recognizer';
 import { getMousePosition, getTextCursorPosition, injectText } from './tauri/system';
 import { createTranscriptionService, type TranscriptionService } from './transcriptionService';
@@ -34,6 +36,7 @@ export interface VoiceTypingServicePorts {
   getTextCursorPosition: typeof getTextCursorPosition;
   getMousePosition: typeof getMousePosition;
   transcriptionService: TranscriptionService;
+  listenCancel?: (callback: () => void) => Promise<() => void>;
 }
 
 export class VoiceTypingService {
@@ -41,7 +44,7 @@ export class VoiceTypingService {
 
   private lastConfigSnapshot: VoiceTypingConfigSnapshot | null = null;
   private unsubscribe: (() => void) | null = null;
-
+  private cancelUnlisten: (() => void) | null = null;
   private readonly transcriptionService: TranscriptionService;
   private readonly overlayPresenter = new VoiceTypingOverlayPresenter();
   private readonly microphoneRuntime = new VoiceTypingMicrophoneRuntime();
@@ -155,6 +158,15 @@ export class VoiceTypingService {
     if (this.lastConfigSnapshot.enabled) {
       void this.syncAndPrepare();
     }
+    if (this.ports.listenCancel) {
+      void this.ports
+        .listenCancel(() => {
+          void this.cancelListening();
+        })
+        .then((unlisten) => {
+          this.cancelUnlisten = unlisten;
+        });
+    }
   }
 
   public destroy() {
@@ -162,6 +174,10 @@ export class VoiceTypingService {
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
+    }
+    if (this.cancelUnlisten) {
+      this.cancelUnlisten();
+      this.cancelUnlisten = null;
     }
     this.lastConfigSnapshot = null;
   }
@@ -231,6 +247,12 @@ export class VoiceTypingService {
 
   private async stopListening() {
     await this.sessionMachine.stop();
+    if (!(this.ports.getConfig().keepMicrophoneActive ?? false)) {
+      await this.stopMicrophoneCapture();
+    }
+  }
+  public async cancelListening() {
+    await this.sessionMachine.cancel();
     if (!(this.ports.getConfig().keepMicrophoneActive ?? false)) {
       await this.stopMicrophoneCapture();
     }
@@ -386,4 +408,11 @@ export const voiceTypingService = createVoiceTypingService({
   getTextCursorPosition,
   getMousePosition,
   transcriptionService: voiceTypingTranscriptionService,
+  listenCancel: async (callback) => {
+    try {
+      return await listen(TauriEvent.auxWindow.voiceTypingCancel, callback);
+    } catch {
+      return () => undefined;
+    }
+  },
 });

@@ -36,6 +36,7 @@ export const TauriEvent = {
   auxWindow: {
     captionState: 'caption:state',
     voiceTypingText: 'voice-typing:text',
+    voiceTypingCancel: 'voice-typing:cancel',
   },
 } as const;
 

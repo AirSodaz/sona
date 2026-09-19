@@ -577,7 +577,7 @@ describe('voiceTypingService', () => {
     await flushMicrotasks(8);
 
     expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.phase)).toEqual(['segment']);
-    expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.text)).toEqual(['测试123']);
+    expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.text)).toEqual(['测试 123']);
     expect(mocks.loggerInfo).toHaveBeenCalledWith(
       '[VoiceTypingSessionMachine] Dropped segment update',
       expect.objectContaining({
@@ -938,9 +938,9 @@ describe('voiceTypingService', () => {
 
     expect(mocks.mockSoftStop).not.toHaveBeenCalled();
 
+    vi.advanceTimersByTime(500);
     mocks.shortcutState.handler?.({ shortcut: 'Alt+V', state: 'Pressed' });
     await vi.runAllTimersAsync();
-
     expect(mocks.mockSoftStop).toHaveBeenCalledTimes(1);
   });
 
@@ -1215,5 +1215,28 @@ describe('voiceTypingService', () => {
 
     expect(mocks.invoke).not.toHaveBeenCalledWith('start_microphone_capture', expect.anything());
     expect(mocks.mockSoftStop).toHaveBeenCalled();
+  });
+  it('cancels an active session cleanly without injecting text', async () => {
+    let onSegment: ((segment: any) => void) | undefined;
+    mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+      onSegment = segmentCallback;
+    });
+
+    const service = await loadService();
+    await service.startListening();
+    vi.clearAllMocks();
+
+    onSegment?.({ id: 'seg-cancel', text: '这句将被取消', isFinal: false });
+    await flushMicrotasks(8);
+
+    await service.cancelListening();
+    await flushMicrotasks(8);
+
+    // Verify softStop was called
+    expect(mocks.mockSoftStop).toHaveBeenCalled();
+    // Verify inject_text was NEVER called
+    expect(getInvokeCalls('inject_text')).toEqual([]);
+    // Verify window was closed
+    expect(mocks.windowClose).toHaveBeenCalled();
   });
 });

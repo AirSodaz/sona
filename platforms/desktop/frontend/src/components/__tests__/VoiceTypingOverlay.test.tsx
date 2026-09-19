@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
   const listenCallbacks: Record<string, (event: any) => void> = {};
   let storeKeyChangeCallback: ((value: any) => void) | null = null;
   const unlisten = vi.fn();
+  const emit = vi.fn().mockResolvedValue(undefined);
   const listen = vi.fn((event: string, callback: (event: any) => void) => {
     listenCallbacks[event] = callback;
     return Promise.resolve(() => {
@@ -51,6 +52,7 @@ const mocks = vi.hoisted(() => {
     currentWindowScaleFactor,
     currentWindowSetSize,
     invoke,
+    emit,
     listen,
     listenCallbacks,
     currentWindowListen: vi.fn((event: string, callback: (event: any) => void) => {
@@ -79,6 +81,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 vi.mock('@tauri-apps/api/event', () => ({
   listen: mocks.listen,
+  emit: mocks.emit,
 }));
 
 vi.mock('@tauri-apps/api/webviewWindow', () => ({
@@ -450,5 +453,32 @@ describe('VoiceTypingOverlay', () => {
         })
       );
     });
+  });
+  it('renders the 5-bar audio waveform visualizer and cancel button', () => {
+    render(<VoiceTypingOverlay />);
+
+    const waveform = screen.getByTestId('voice-typing-waveform');
+    expect(waveform).toBeDefined();
+    expect(waveform.children.length).toBe(5);
+
+    const cancelBtn = screen.getByTestId('voice-typing-cancel-btn');
+    expect(cancelBtn).toBeDefined();
+  });
+
+  it('emits voice-typing:cancel event when cancel button is clicked', async () => {
+    render(<VoiceTypingOverlay />);
+
+    const cancelBtn = screen.getByTestId('voice-typing-cancel-btn');
+    cancelBtn.click();
+
+    expect(mocks.emit).toHaveBeenCalledWith('voice-typing:cancel');
+  });
+
+  it('emits voice-typing:cancel event when Escape key is pressed', async () => {
+    render(<VoiceTypingOverlay />);
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    expect(mocks.emit).toHaveBeenCalledWith('voice-typing:cancel');
   });
 });

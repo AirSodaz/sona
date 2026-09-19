@@ -105,6 +105,46 @@ describe('VoiceTypingShortcutController', () => {
     expect(startListening).toHaveBeenCalledTimes(1);
     expect(stopListening).toHaveBeenCalledTimes(1);
   });
+  it('debounces rapid key-repeat pressed events in toggle mode', async () => {
+    vi.useFakeTimers();
+    const startListening = vi.fn(async () => undefined);
+    const stopListening = vi.fn(async () => undefined);
+    let active = false;
+    const { VoiceTypingShortcutController } = await loadController();
+    const controller = new VoiceTypingShortcutController({
+      getMode: () => 'toggle',
+      isListening: () => active,
+      startListening: async () => {
+        active = true;
+        await startListening();
+      },
+      stopListening: async () => {
+        active = false;
+        await stopListening();
+      },
+    });
+
+    await controller.update(true, 'Alt+V');
+
+    // First keypress (user presses Alt+V)
+    mocks.shortcutState.handler?.({ shortcut: 'Alt+V', state: 'Pressed' });
+    await Promise.resolve();
+    expect(startListening).toHaveBeenCalledTimes(1);
+
+    // Rapid auto-repeat (e.g. 200ms later while key is held down) -> should be ignored
+    vi.advanceTimersByTime(200);
+    mocks.shortcutState.handler?.({ shortcut: 'Alt+V', state: 'Pressed' });
+    await Promise.resolve();
+    expect(stopListening).not.toHaveBeenCalled();
+
+    // After cooldown (e.g. 500ms later), next intentional press toggles off
+    vi.advanceTimersByTime(500);
+    mocks.shortcutState.handler?.({ shortcut: 'Alt+V', state: 'Pressed' });
+    await Promise.resolve();
+    expect(stopListening).toHaveBeenCalledTimes(1);
+
+    vi.useRealTimers();
+  });
 
   it('reports registration failures to runtime status', async () => {
     mocks.register.mockRejectedValueOnce(new Error('Shortcut already registered.'));
