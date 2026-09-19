@@ -1673,6 +1673,7 @@
     "subtitle_appearance_desc": "自訂即時字幕的顯示效果。",
     "subtitle_voice_typing_title": "字幕與語音輸入",
     "subtitle_voice_typing_desc": "設定即時字幕視窗，以及向其他應用程式輸入文字的語音輸入。",
+    "subtitle_tab_description": "設定桌面即時字幕的視窗行為與外觀顯示效果。",
     "voice_typing_availability": "是否可用",
     "voice_typing_available": "可用",
     "voice_typing_unavailable": "不可用",

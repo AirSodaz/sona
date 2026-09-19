@@ -1673,6 +1673,7 @@
     "subtitle_appearance_desc": "Customize the look of your live captions.",
     "subtitle_voice_typing_title": "Subtitles & Voice Typing",
     "subtitle_voice_typing_desc": "Configure the live caption window and voice typing into other apps.",
+    "subtitle_tab_description": "Configure live caption window behavior and visual appearance.",
     "voice_typing_availability": "Availability",
     "voice_typing_available": "Available",
     "voice_typing_unavailable": "Unavailable",

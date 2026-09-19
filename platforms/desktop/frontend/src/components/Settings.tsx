@@ -88,7 +88,11 @@ function renderSettingsPane(
     case 'microphone':
       return <SettingsMicrophoneTab isActiveTab={isActive} isOpen={isOpen} />;
     case 'subtitle':
-      return <SettingsSubtitleTab />;
+      return (
+        <SettingsSubtitleTab
+          initialSubTab={initialTab === 'voice_typing' ? 'voice_typing' : undefined}
+        />
+      );
     case 'models':
       return <SettingsModelsPane isOpen={isOpen} isActive={isActive} />;
     case 'vocabulary':

@@ -1673,6 +1673,7 @@
     "subtitle_appearance_desc": "Customize the look of your live captions.",
     "subtitle_voice_typing_title": "자막 및 음성 입력",
     "subtitle_voice_typing_desc": "실시간 자막 창과 다른 앱으로 입력하는 음성 입력을 설정합니다.",
+    "subtitle_tab_description": "데스크톱 실시간 자막 창 동작 및 시각적 모양을 설정합니다。",
     "voice_typing_availability": "사용 가능 여부",
     "voice_typing_available": "사용 가능",
     "voice_typing_unavailable": "사용 불가",

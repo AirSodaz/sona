@@ -69,8 +69,23 @@ describe('SettingsSubtitleTab', () => {
     mockReadiness.lastErrorMessage = null;
   });
 
-  it('renders all controls', () => {
+  it('renders secondary tabs and defaults to voice typing', () => {
     render(<SettingsSubtitleTab />);
+
+    const vtTab = screen.getByRole('tab', { name: 'settings.voice_typing' });
+    const subtitleTab = screen.getByRole('tab', { name: 'live.subtitle_settings' });
+
+    expect(vtTab.getAttribute('aria-selected')).toBe('true');
+    expect(subtitleTab.getAttribute('aria-selected')).toBe('false');
+
+    screen.getByText('settings.enable_voice_typing');
+    screen.getByText('settings.voice_typing_mode');
+    screen.getByText('settings.voice_typing_availability');
+
+    // Switch to subtitles tab
+    fireEvent.click(subtitleTab);
+    expect(subtitleTab.getAttribute('aria-selected')).toBe('true');
+    expect(vtTab.getAttribute('aria-selected')).toBe('false');
 
     screen.getByText('live.start_on_launch');
     screen.getByText('live.lock_window');
@@ -79,13 +94,24 @@ describe('SettingsSubtitleTab', () => {
     screen.getByText('live.font_size');
     screen.getByText('live.font_color');
     screen.getByText('live.background_color');
-    screen.getByText('settings.enable_voice_typing');
-    screen.getByText('settings.voice_typing_mode');
-    screen.getByText('settings.voice_typing_availability');
   });
 
-  it('renders width input with correct values and classes', () => {
+  it('navigates secondary tabs using arrow keys', () => {
     render(<SettingsSubtitleTab />);
+
+    const vtTab = screen.getByRole('tab', { name: 'settings.voice_typing' });
+    const subtitleTab = screen.getByRole('tab', { name: 'live.subtitle_settings' });
+
+    expect(vtTab.getAttribute('aria-selected')).toBe('true');
+
+    fireEvent.keyDown(vtTab, { key: 'ArrowRight' });
+    expect(subtitleTab.getAttribute('aria-selected')).toBe('true');
+
+    fireEvent.keyDown(subtitleTab, { key: 'ArrowLeft' });
+    expect(vtTab.getAttribute('aria-selected')).toBe('true');
+  });
+  it('renders width input with correct values and classes', () => {
+    render(<SettingsSubtitleTab initialSubTab="subtitles" />);
 
     const numberInput = screen.getByDisplayValue('800');
 
@@ -100,7 +126,7 @@ describe('SettingsSubtitleTab', () => {
   });
 
   it('calls updateConfig when inputs change', () => {
-    render(<SettingsSubtitleTab />);
+    render(<SettingsSubtitleTab initialSubTab="subtitles" />);
 
     const numberInput = screen.getByDisplayValue('800');
 
@@ -109,7 +135,7 @@ describe('SettingsSubtitleTab', () => {
   });
 
   it('renders font size input with correct classes', () => {
-    render(<SettingsSubtitleTab />);
+    render(<SettingsSubtitleTab initialSubTab="subtitles" />);
 
     const numberInput = screen.getByDisplayValue('24');
 
@@ -124,7 +150,7 @@ describe('SettingsSubtitleTab', () => {
   });
 
   it('renders color swatch picker with correct structure and allows changing font color', () => {
-    render(<SettingsSubtitleTab />);
+    render(<SettingsSubtitleTab initialSubTab="subtitles" />);
 
     // Font color container exists
     const fontColorContainer = screen.getByLabelText('live.font_color');
@@ -160,7 +186,7 @@ describe('SettingsSubtitleTab', () => {
   });
 
   it('renders color swatch picker for background color and allows changing it', () => {
-    render(<SettingsSubtitleTab />);
+    render(<SettingsSubtitleTab initialSubTab="subtitles" />);
 
     // Background color container exists
     const bgColorContainer = screen.getByLabelText('live.background_color');
@@ -198,8 +224,8 @@ describe('SettingsSubtitleTab', () => {
   it('updates voice typing settings from the combined page', () => {
     render(<SettingsSubtitleTab />);
 
-    const switches = screen.getAllByRole('switch');
-    fireEvent.click(switches[3]);
+    const switchBtn = screen.getByRole('switch');
+    fireEvent.click(switchBtn);
     expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingEnabled: true });
 
     fireEvent.change(screen.getByLabelText('voice typing shortcut'), {

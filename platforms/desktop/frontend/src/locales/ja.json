@@ -1673,6 +1673,7 @@
     "subtitle_appearance_desc": "ライブキャプションの外観をカスタマイズします。",
     "subtitle_voice_typing_title": "字幕と Voice Typing",
     "subtitle_voice_typing_desc": "ライブ字幕ウィンドウと、他のアプリへの音声入力を設定します。",
+    "subtitle_tab_description": "デスクトップライブ字幕のウィンドウ動作と外観表示を設定します。",
     "voice_typing_availability": "利用可否",
     "voice_typing_available": "利用可能",
     "voice_typing_unavailable": "利用不可",
