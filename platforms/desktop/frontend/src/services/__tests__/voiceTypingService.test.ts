@@ -61,6 +61,15 @@ const mocks = vi.hoisted(() => {
     windowClose: vi.fn(),
     windowSendState: vi.fn(),
     windowClearState: vi.fn(),
+    monitorFromPoint: vi.fn(async () => ({
+      scaleFactor: 1,
+      workArea: {
+        position: { x: 0, y: 0 },
+        size: { width: 1920, height: 1080 },
+      },
+      position: { x: 0, y: 0 },
+      size: { width: 1920, height: 1080 },
+    })),
   };
 });
 
@@ -100,15 +109,7 @@ vi.mock('../tauri/platform/windows', () => ({
     position: { x: 0, y: 0 },
     size: { width: 1920, height: 1080 },
   })),
-  monitorFromPoint: vi.fn(async () => ({
-    scaleFactor: 1,
-    workArea: {
-      position: { x: 0, y: 0 },
-      size: { width: 1920, height: 1080 },
-    },
-    position: { x: 0, y: 0 },
-    size: { width: 1920, height: 1080 },
-  })),
+  monitorFromPoint: (...args: any[]) => mocks.monitorFromPoint(...args),
   getCurrentWindow: vi.fn(),
   getCurrentWebviewWindow: vi.fn(),
   WebviewWindow: vi.fn(),
@@ -1320,6 +1321,27 @@ describe('voiceTypingService', () => {
     await flushMicrotasks(4);
 
     expect(mocks.windowPrepare).toHaveBeenCalledWith([760, 992]);
+  });
+
+  it('positions overlay at true physical center on monitors with DPI scaleFactor > 1', async () => {
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingPlacement: 'bottom_center',
+    };
+    mocks.monitorFromPoint.mockResolvedValueOnce({
+      scaleFactor: 1.5,
+      workArea: {
+        position: { x: 0, y: 0 },
+        size: { width: 2560, height: 1400 },
+      },
+    });
+
+    const service = await loadService();
+    await service.startListening();
+    await flushMicrotasks(4);
+
+    expect(mocks.windowPrepare).toHaveBeenCalledWith([980, 1268]);
   });
   it('transforms selection context when focused selection is present', async () => {
     let onSegment: ((segment: any) => void) | undefined;

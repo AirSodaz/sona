@@ -20,10 +20,10 @@ const MIN_BAR_HEIGHT = 4;
 const MAX_BAR_HEIGHT = 18;
 
 const OVERLAY_ROOT_PADDING = {
-  top: 4,
-  right: 4,
-  bottom: 20,
-  left: 4,
+  top: 6,
+  right: 16,
+  bottom: 34,
+  left: 16,
 };
 
 const baseContainerStyle = {
@@ -234,7 +234,7 @@ export function VoiceTypingOverlay() {
       background: 'var(--color-bg-elevated)',
       color: 'var(--color-text-primary)',
       border: '1px solid rgba(168, 85, 247, 0.6)',
-      boxShadow: '0 16px 32px rgba(168, 85, 247, 0.28)',
+      boxShadow: '0 8px 24px -4px rgba(168, 85, 247, 0.35), 0 2px 6px rgba(168, 85, 247, 0.2)',
     };
   } else if (isSegment) {
     containerStyle = {
@@ -242,7 +242,10 @@ export function VoiceTypingOverlay() {
       background: 'var(--color-bg-elevated)',
       color: 'var(--color-text-primary)',
       border: '1px solid var(--color-border-hover)',
-      boxShadow: resolvedTheme === 'dark' ? '0 16px 32px rgba(0, 0, 0, 0.36)' : 'var(--shadow-xl)',
+      boxShadow:
+        resolvedTheme === 'dark'
+          ? '0 8px 24px -4px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3)'
+          : '0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06)',
     };
   } else if (isError) {
     containerStyle = {
@@ -250,6 +253,7 @@ export function VoiceTypingOverlay() {
       background: 'rgba(127, 29, 29, 0.92)',
       color: '#ffffff',
       border: '1px solid rgba(248, 113, 113, 0.35)',
+      boxShadow: '0 8px 24px -4px rgba(239, 68, 68, 0.35), 0 2px 6px rgba(0, 0, 0, 0.3)',
     };
   } else {
     containerStyle = {
@@ -257,7 +261,10 @@ export function VoiceTypingOverlay() {
       background: 'var(--color-bg-elevated)',
       color: 'var(--color-text-primary)',
       border: '1px solid var(--color-border-hover)',
-      boxShadow: resolvedTheme === 'dark' ? '0 16px 32px rgba(0, 0, 0, 0.36)' : 'var(--shadow-xl)',
+      boxShadow:
+        resolvedTheme === 'dark'
+          ? '0 8px 24px -4px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3)'
+          : '0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06)',
     };
   }
 
@@ -281,12 +288,13 @@ export function VoiceTypingOverlay() {
       ref={rootRef}
       style={{
         display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'flex-start',
+        alignItems: 'center',
+        justifyContent: 'center',
         background: 'transparent',
         overflow: 'visible',
-        width: 'fit-content',
+        width: '100%',
         height: 'fit-content',
+        boxSizing: 'border-box',
         padding: `${OVERLAY_ROOT_PADDING.top}px ${OVERLAY_ROOT_PADDING.right}px ${OVERLAY_ROOT_PADDING.bottom}px ${OVERLAY_ROOT_PADDING.left}px`,
       }}
     >
@@ -300,13 +308,15 @@ export function VoiceTypingOverlay() {
             alignItems: 'stretch',
             gap: '8px',
             padding: '12px 14px',
-            width: '380px',
-            maxWidth: '380px',
+            width: '100%',
+            maxWidth: `${VOICE_TYPING_WINDOW_WIDTH - OVERLAY_ROOT_PADDING.left - OVERLAY_ROOT_PADDING.right}px`,
             background: 'var(--color-bg-elevated)',
             color: 'var(--color-text-primary)',
             border: '1px solid var(--color-border-hover)',
             boxShadow:
-              resolvedTheme === 'dark' ? '0 16px 32px rgba(0, 0, 0, 0.45)' : 'var(--shadow-xl)',
+              resolvedTheme === 'dark'
+                ? '0 8px 24px -4px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3)'
+                : '0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06)',
           }}
         >
           <div

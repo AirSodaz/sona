@@ -150,7 +150,6 @@ export class AuxWindowController<T extends object> {
     if (!resolvedWindow) {
       return null;
     }
-
     if (resolvedWindow.isNew) {
       return resolvedWindow.windowInstance;
     }

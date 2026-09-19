@@ -419,25 +419,16 @@ export class VoiceTypingService {
 
       if (monitor) {
         const scale = monitor.scaleFactor || 1;
-        const workX =
-          monitor.workArea?.position?.x != null
-            ? monitor.workArea.position.x / scale
-            : (monitor.position?.x ?? 0) / scale;
-        const workY =
-          monitor.workArea?.position?.y != null
-            ? monitor.workArea.position.y / scale
-            : (monitor.position?.y ?? 0) / scale;
-        const workWidth =
-          monitor.workArea?.size?.width != null
-            ? monitor.workArea.size.width / scale
-            : (monitor.size?.width ?? 1920) / scale;
-        const workHeight =
-          monitor.workArea?.size?.height != null
-            ? monitor.workArea.size.height / scale
-            : (monitor.size?.height ?? 1080) / scale;
+        const workX = monitor.workArea?.position?.x ?? monitor.position?.x ?? 0;
+        const workY = monitor.workArea?.position?.y ?? monitor.position?.y ?? 0;
+        const workWidth = monitor.workArea?.size?.width ?? monitor.size?.width ?? 1920;
+        const workHeight = monitor.workArea?.size?.height ?? monitor.size?.height ?? 1080;
 
-        const targetX = Math.round(workX + (workWidth - VOICE_TYPING_WINDOW_WIDTH) / 2);
-        const targetY = Math.round(workY + workHeight - BOTTOM_CENTER_MARGIN_BOTTOM - 40);
+        const windowPhysicalWidth = Math.round(VOICE_TYPING_WINDOW_WIDTH * scale);
+        const windowPhysicalBottomMargin = Math.round((BOTTOM_CENTER_MARGIN_BOTTOM + 40) * scale);
+
+        const targetX = Math.round(workX + (workWidth - windowPhysicalWidth) / 2);
+        const targetY = Math.round(workY + workHeight - windowPhysicalBottomMargin);
 
         return [targetX, targetY];
       }
