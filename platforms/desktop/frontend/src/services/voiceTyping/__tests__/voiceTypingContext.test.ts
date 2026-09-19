@@ -23,6 +23,21 @@ describe('voiceTypingContext', () => {
       expect(classifyContextMode('outlook.exe', 'Inbox - Outlook')).toBe('formal');
       expect(classifyContextMode('notion.exe', 'Sprint Planning')).toBe('formal');
     });
+    it('classifies macOS and Linux native app names accurately', () => {
+      // macOS apps
+      expect(classifyContextMode('xcode', 'App.swift')).toBe('developer');
+      expect(classifyContextMode('Visual Studio Code', 'project')).toBe('developer');
+      expect(classifyContextMode('Terminal', 'bash')).toBe('developer');
+      expect(classifyContextMode('iTerm2', 'zsh')).toBe('developer');
+      expect(classifyContextMode('Pages', 'Report')).toBe('formal');
+      expect(classifyContextMode('Slack', 'general')).toBe('chat');
+
+      // Linux apps
+      expect(classifyContextMode('gnome-terminal', 'bash')).toBe('developer');
+      expect(classifyContextMode('konsole', 'zsh')).toBe('developer');
+      expect(classifyContextMode('libreoffice', 'Document')).toBe('formal');
+      expect(classifyContextMode('telegram desktop', 'Chat')).toBe('chat');
+    });
 
     it('uses window title heuristics when app name is generic browser', () => {
       expect(classifyContextMode('msedge.exe', 'PR #42: Refactor auth · GitHub')).toBe('developer');

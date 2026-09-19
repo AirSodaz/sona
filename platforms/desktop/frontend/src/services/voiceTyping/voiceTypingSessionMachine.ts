@@ -308,16 +308,19 @@ export class VoiceTypingSessionMachine {
         }
 
         const finalText = this.formatFinalText(transformedText);
+        this.options.onTextCommitted?.({
+          rawText: `[Selection Rewrite] ${instruction}`,
+          polishedText: finalText,
+          injectedText: finalText,
+          mode: 'polish',
+        });
         try {
           await this.options.injectText(finalText);
           this.playSound('commit');
-          this.options.onTextCommitted?.({
-            rawText: `[选区修改] ${instruction}`,
-            polishedText: finalText,
-            injectedText: finalText,
-            mode: 'polish',
-          });
         } catch (error) {
+          if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(finalText).catch(() => {});
+          }
           logger.error('[VoiceTypingSessionMachine] Failed to inject transformed text:', error);
           if (this.isCurrentSession(sessionId)) {
             await this.handleSessionError(
@@ -354,16 +357,19 @@ export class VoiceTypingSessionMachine {
         }
 
         const finalText = this.formatFinalText(polishedText);
+        this.options.onTextCommitted?.({
+          rawText: rawFullText,
+          polishedText,
+          injectedText: finalText,
+          mode: 'polish',
+        });
         try {
           await this.options.injectText(finalText);
           this.playSound('commit');
-          this.options.onTextCommitted?.({
-            rawText: rawFullText,
-            polishedText,
-            injectedText: finalText,
-            mode: 'polish',
-          });
         } catch (error) {
+          if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(finalText).catch(() => {});
+          }
           logger.error('[VoiceTypingSessionMachine] Failed to inject polished text:', error);
           if (this.isCurrentSession(sessionId)) {
             await this.handleSessionError(
@@ -674,16 +680,19 @@ export class VoiceTypingSessionMachine {
     });
 
     const finalText = this.formatFinalText(text);
+    this.options.onTextCommitted?.({
+      rawText: text,
+      injectedText: finalText,
+      mode: 'raw',
+    });
 
     try {
       await this.options.injectText(finalText);
       this.playSound('commit');
-      this.options.onTextCommitted?.({
-        rawText: text,
-        injectedText: finalText,
-        mode: 'raw',
-      });
     } catch (error) {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(finalText).catch(() => {});
+      }
       logger.error('[VoiceTypingSessionMachine] Failed to inject dictated text:', error);
       if (this.isCurrentSession(sessionId, requestId)) {
         await this.handleSessionError(sessionId, requestId, extractErrorMessage(error));

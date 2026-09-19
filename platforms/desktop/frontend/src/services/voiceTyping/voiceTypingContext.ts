@@ -10,6 +10,7 @@ export interface VoiceTypingContextState {
 }
 
 const DEVELOPER_APP_NAMES: Record<string, true> = {
+  // Windows executables
   'code.exe': true,
   'cursor.exe': true,
   'idea64.exe': true,
@@ -39,9 +40,42 @@ const DEVELOPER_APP_NAMES: Record<string, true> = {
   'dbeaver.exe': true,
   'datagrip64.exe': true,
   'navicat.exe': true,
+  // macOS / Linux base names & binaries
+  code: true,
+  'visual studio code': true,
+  xcode: true,
+  cursor: true,
+  zed: true,
+  sublime_text: true,
+  'sublime text': true,
+  idea: true,
+  clion: true,
+  pycharm: true,
+  webstorm: true,
+  goland: true,
+  rider: true,
+  datagrip: true,
+  dbeaver: true,
+  postman: true,
+  navicat: true,
+  neovide: true,
+  nvim: true,
+  vim: true,
+  emacs: true,
+  terminal: true,
+  iterm: true,
+  iterm2: true,
+  alacritty: true,
+  wezterm: true,
+  kitty: true,
+  warp: true,
+  'gnome-terminal': true,
+  konsole: true,
+  xfce4_terminal: true,
 };
 
 const CHAT_APP_NAMES: Record<string, true> = {
+  // Windows executables
   'wechat.exe': true,
   'qq.exe': true,
   'slack.exe': true,
@@ -56,9 +90,28 @@ const CHAT_APP_NAMES: Record<string, true> = {
   'skype.exe': true,
   'line.exe': true,
   'element.exe': true,
+  // macOS / Linux base names
+  wechat: true,
+  qq: true,
+  slack: true,
+  discord: true,
+  telegram: true,
+  'telegram desktop': true,
+  dingtalk: true,
+  feishu: true,
+  lark: true,
+  teams: true,
+  'microsoft teams': true,
+  whatsapp: true,
+  signal: true,
+  skype: true,
+  line: true,
+  element: true,
+  messages: true,
 };
 
 const FORMAL_APP_NAMES: Record<string, true> = {
+  // Windows executables
   'winword.exe': true,
   'excel.exe': true,
   'powerpnt.exe': true,
@@ -74,7 +127,41 @@ const FORMAL_APP_NAMES: Record<string, true> = {
   'logseq.exe': true,
   'craft.exe': true,
   'acrobat.exe': true,
+  // macOS / Linux base names
+  winword: true,
+  word: true,
+  'microsoft word': true,
+  excel: true,
+  'microsoft excel': true,
+  powerpnt: true,
+  powerpoint: true,
+  'microsoft powerpoint': true,
+  pages: true,
+  numbers: true,
+  keynote: true,
+  outlook: true,
+  'microsoft outlook': true,
+  mail: true,
+  foxmail: true,
+  thunderbird: true,
+  wps: true,
+  notion: true,
+  obsidian: true,
+  typora: true,
+  logseq: true,
+  craft: true,
+  textedit: true,
+  libreoffice: true,
+  soffice: true,
 };
+
+function normalizeAppKey(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/\.exe$/i, '')
+    .replace(/(?:64|32)$/i, '');
+}
 
 export function classifyContextMode(
   appName: string,
@@ -86,20 +173,20 @@ export function classifyContextMode(
   }
 
   const normalizedApp = appName.trim().toLowerCase();
+  const baseApp = normalizeAppKey(normalizedApp);
   const normalizedTitle = windowTitle.trim().toLowerCase();
 
-  if (DEVELOPER_APP_NAMES[normalizedApp]) {
+  if (DEVELOPER_APP_NAMES[normalizedApp] || DEVELOPER_APP_NAMES[baseApp]) {
     return 'developer';
   }
 
-  if (CHAT_APP_NAMES[normalizedApp]) {
+  if (CHAT_APP_NAMES[normalizedApp] || CHAT_APP_NAMES[baseApp]) {
     return 'chat';
   }
 
-  if (FORMAL_APP_NAMES[normalizedApp]) {
+  if (FORMAL_APP_NAMES[normalizedApp] || FORMAL_APP_NAMES[baseApp]) {
     return 'formal';
   }
-
   // Fallback heuristic based on title if app is a generic browser or wrapper
   if (
     normalizedTitle.includes('github') ||

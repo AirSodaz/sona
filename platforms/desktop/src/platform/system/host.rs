@@ -712,7 +712,15 @@ pub fn get_foreground_window_info() -> Result<Option<ForegroundWindowInfo>, Stri
     {
         unsafe { get_windows_foreground_window_info().map_err(|e| e.to_string()) }
     }
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "macos")]
+    {
+        get_macos_foreground_window_info()
+    }
+    #[cfg(target_os = "linux")]
+    {
+        get_linux_foreground_window_info()
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     {
         Ok(None)
     }
@@ -785,6 +793,69 @@ unsafe fn get_windows_foreground_window_info() -> windows::core::Result<Option<F
             window_title,
         }))
     }
+}
+#[cfg(target_os = "macos")]
+fn get_macos_foreground_window_info() -> Result<Option<ForegroundWindowInfo>, String> {
+    use std::process::Command;
+
+    let script = r#"
+        tell application "System Events"
+            set frontApp to first application process whose frontmost is true
+            set appName to name of frontApp
+            set winTitle to ""
+            try
+                set winTitle to name of first window of frontApp
+            end try
+            return appName & linefeed & winTitle
+        end tell
+    "#;
+
+    let output = match Command::new("osascript").args(["-e", script]).output() {
+        Ok(out) => out,
+        Err(_) => return Ok(None),
+    };
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut lines = text.lines();
+    let app_name = lines.next().unwrap_or("").trim().to_lowercase();
+    let window_title = lines.next().unwrap_or("").trim().to_string();
+
+    if app_name.is_empty() && window_title.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(ForegroundWindowInfo {
+            app_name,
+            window_title,
+        }))
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn get_linux_foreground_window_info() -> Result<Option<ForegroundWindowInfo>, String> {
+    use std::process::Command;
+
+    if let Ok(output) = Command::new("xdotool").args(["getwindowfocus", "getwindowname"]).output() {
+        if output.status.success() {
+            let window_title = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let app_name = if let Ok(class_out) = Command::new("xdotool").args(["getwindowfocus", "getwindowclassname"]).output() {
+                String::from_utf8_lossy(&class_out.stdout).trim().to_lowercase()
+            } else {
+                String::new()
+            };
+            if !app_name.is_empty() || !window_title.is_empty() {
+                return Ok(Some(ForegroundWindowInfo {
+                    app_name,
+                    window_title,
+                }));
+            }
+        }
+    }
+
+    Ok(None)
 }
 
 #[cfg(target_os = "windows")]
