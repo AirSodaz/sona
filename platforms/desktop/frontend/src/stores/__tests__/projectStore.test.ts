@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { historyService } from '../../services/historyService';
+import { projectService } from '../../services/projectService';
 import { useConfigStore } from '../configStore';
 import { useProjectStore } from '../projectStore';
 
@@ -45,7 +47,6 @@ describe('projectStore', () => {
   });
 
   it('loads persisted projects and active project id', async () => {
-    const { projectService } = await import('../../services/projectService');
     (projectService.getAll as any).mockResolvedValue([
       {
         id: 'project-1',
@@ -81,9 +82,6 @@ describe('projectStore', () => {
   });
 
   it('deletes the active project and moves its history back to Inbox', async () => {
-    const { projectService } = await import('../../services/projectService');
-    const { historyService } = await import('../../services/historyService');
-
     useProjectStore.setState({
       projects: [
         {
@@ -106,9 +104,44 @@ describe('projectStore', () => {
     expect(useProjectStore.getState().activeProjectId).toBeNull();
   });
 
-  it('assigns selected history items to a project', async () => {
-    const { historyService } = await import('../../services/historyService');
+  it('removes deleted project id from speaker profiles', async () => {
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'project-1',
+          name: 'Alpha',
+          description: '',
+          icon: '',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      activeProjectId: null,
+    });
+    useConfigStore.setState((state) => ({
+      config: {
+        ...state.config,
+        speakerProfiles: [
+          {
+            id: 'spk-1',
+            name: 'Speaker 1',
+            enabled: true,
+            scope: 'project',
+            projectIds: ['project-1', 'project-2'],
+            samples: [],
+          },
+        ],
+      },
+    }));
 
+    await useProjectStore.getState().deleteProject('project-1');
+
+    expect(projectService.delete).toHaveBeenCalledWith('project-1');
+    const updatedProfiles = useConfigStore.getState().config.speakerProfiles;
+    expect(updatedProfiles?.[0]?.projectIds).toEqual(['project-2']);
+  });
+
+  it('assigns selected history items to a project', async () => {
     await useProjectStore.getState().assignHistoryItems(['hist-1', 'hist-2'], 'project-2');
 
     expect(historyService.updateProjectAssignments).toHaveBeenCalledWith(

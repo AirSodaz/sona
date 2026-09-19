@@ -338,7 +338,9 @@
   cursor: pointer;
   color: var(--color-text-disabled);
   border-radius: 4px;
-  transition: color var(--transition-fast), background var(--transition-fast);
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .dict-chip-action:hover {
@@ -464,7 +466,9 @@
   color: var(--color-text-disabled);
   border-radius: 6px;
   cursor: pointer;
-  transition: color var(--transition-fast), background var(--transition-fast);
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .dict-rule-action-btn:hover {

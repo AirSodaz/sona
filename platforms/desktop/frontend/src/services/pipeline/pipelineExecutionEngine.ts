@@ -16,6 +16,7 @@ export type PipelineStage = 'polishing' | 'translating' | 'summarizing' | 'expor
 
 export interface ExecutePipelineOptions {
   historyId: string;
+  projectId?: string | null;
   segments: TranscriptSegment[];
   pipeline: EffectivePipelineSnapshot;
   globalConfig: AppConfig;
@@ -95,9 +96,10 @@ export class PipelineExecutionEngine {
     if (globalConfig.dictionaryContent?.trim()) {
       const parsed = parseYamlDictionary(globalConfig.dictionaryContent);
       const projectId =
-        'projectId' in pipeline && typeof pipeline.projectId === 'string'
+        options.projectId ??
+        ('projectId' in pipeline && typeof pipeline.projectId === 'string'
           ? pipeline.projectId
-          : undefined;
+          : undefined);
       const terms = getTermsForProject(parsed, projectId);
       if (terms.replacements.length > 0) {
         effectiveReplacementSets.push({

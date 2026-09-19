@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { historyService } from '../services/historyService';
 import { projectService } from '../services/projectService';
 import type { ProjectPipelineConfig, ProjectRecord, ProjectUpdateInput } from '../types/project';
+import { normalizeSpeakerProfiles } from '../types/speakerNormalization';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { useConfigStore } from './configStore';
@@ -110,8 +111,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
 
     const config = useConfigStore.getState().config;
-    if (config.speakerProfiles?.some((p) => p.projectIds?.includes(id))) {
-      const nextProfiles = config.speakerProfiles.map((p) => {
+    const profiles = normalizeSpeakerProfiles(config.speakerProfiles);
+    if (profiles.some((p) => p.projectIds?.includes(id))) {
+      const nextProfiles = profiles.map((p) => {
         if (!p.projectIds?.includes(id)) return p;
         return {
           ...p,

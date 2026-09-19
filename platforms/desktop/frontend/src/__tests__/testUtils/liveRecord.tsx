@@ -263,6 +263,7 @@ export type LiveRecordTranscriptionMocks = {
   mockSetLanguage: Mock;
   mockSetEnableITN: Mock;
   mockSetITNModelPaths: Mock;
+  mockSetProjectId: Mock;
   mockTerminate: Mock;
 };
 export function createLiveRecordTranscriptionMocks(): LiveRecordTranscriptionMocks {
@@ -287,6 +288,7 @@ export function createLiveRecordTranscriptionMocks(): LiveRecordTranscriptionMoc
     mockSetEnableITN: vi.fn(),
     mockSetITNModelPaths: vi.fn(),
     mockTerminate: vi.fn().mockResolvedValue(undefined),
+    mockSetProjectId: vi.fn(),
   };
 }
 
@@ -310,6 +312,7 @@ export function createLiveRecordTranscriptionServiceMockModule(
     setITNModelPaths: mocks.mockSetITNModelPaths,
     prepare: mocks.mockPrepare,
     terminate: mocks.mockTerminate,
+    setProjectId: mocks.mockSetProjectId,
   };
   return {
     transcriptionService: service,
@@ -331,6 +334,7 @@ export function createLiveRecordTranscriptionServiceMockModule(
       setITNModelPaths = mocks.mockSetITNModelPaths;
       prepare = mocks.mockPrepare;
       terminate = mocks.mockTerminate;
+      setProjectId = mocks.mockSetProjectId;
     },
   };
 }

@@ -203,6 +203,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
           try {
             const result = await pipelineExecutionEngine.execute({
               historyId,
+              projectId: activeProjectId,
               segments,
               pipeline,
               globalConfig: effectiveConfig,

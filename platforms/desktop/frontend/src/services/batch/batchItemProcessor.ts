@@ -212,6 +212,7 @@ export class BatchItemProcessor {
 
       const pipelineResult = await engine.execute({
         historyId: savedHistoryId || '',
+        projectId: item.projectId,
         segments: currentSegments,
         pipeline: {
           ...pipeline,

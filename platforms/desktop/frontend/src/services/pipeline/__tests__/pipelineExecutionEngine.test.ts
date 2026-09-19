@@ -183,4 +183,44 @@ describe('PipelineExecutionEngine', () => {
       })
     ).rejects.toThrow('Pipeline task cancelled.');
   });
+  it('applies project-scoped text replacements from dictionaryContent when projectId is provided', async () => {
+    const configWithDict = {
+      ...baseConfig,
+      dictionaryContent: `
+- global_term -> GlobalReplacement
+projects:
+  Alpha (id:proj-1):
+    - project_term -> ProjectReplacement
+`,
+    } as unknown as AppConfig;
+
+    const pipeline: EffectivePipelineSnapshot = {
+      isProjectPipeline: true,
+      enabled: false,
+      autoPolish: false,
+      autoTranslate: false,
+      autoSummary: false,
+      autoExport: false,
+    };
+
+    const inputSegments: TranscriptSegment[] = [
+      {
+        id: 'seg-1',
+        start: 0,
+        end: 5,
+        text: 'This has global_term and project_term.',
+        isFinal: true,
+      },
+    ];
+
+    const result = await engine.execute({
+      historyId: 'hist-4',
+      projectId: 'proj-1',
+      segments: inputSegments,
+      pipeline,
+      globalConfig: configWithDict,
+    });
+
+    expect(result.segments[0].text).toBe('This has GlobalReplacement and ProjectReplacement.');
+  });
 });

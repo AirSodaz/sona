@@ -69,6 +69,7 @@ const transcriptionMocks = vi.hoisted(() => {
     mockSetLanguage: vi.fn(),
     mockSetEnableITN: vi.fn(),
     mockSetITNModelPaths: vi.fn(),
+    mockSetProjectId: vi.fn(),
     mockTerminate: vi.fn().mockResolvedValue(undefined),
   };
 });
