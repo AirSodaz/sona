@@ -8,9 +8,10 @@ vi.mock('react-i18next', async (importOriginal) => {
   return {
     ...actual,
     useTranslation: () => ({
-      t: (key: string) => {
+      t: (key: string, opts?: any) => {
         if (key === 'common.listening') return '正在聆听...';
         if (key === 'common.preparing') return '正在准备...';
+        if (opts?.defaultValue) return opts.defaultValue;
         return key;
       },
     }),
@@ -280,7 +281,7 @@ describe('VoiceTypingOverlay', () => {
       mocks.listenCallbacks['voice-typing:text']?.({
         payload: {
           sessionId: 'voice-typing-1',
-          text: '测试转录结果',
+          text: 'Transcription preview test',
           phase: 'segment',
           segmentId: 'seg-1',
           isFinal: false,
@@ -289,7 +290,7 @@ describe('VoiceTypingOverlay', () => {
       });
     });
 
-    screen.getByText('测试转录结果');
+    screen.getByText('Transcription preview test');
     expect(screen.getByTestId('voice-typing-bubble').style.background).toBe(
       'var(--color-bg-elevated)'
     );
@@ -327,15 +328,14 @@ describe('VoiceTypingOverlay', () => {
     await act(async () => {
       mocks.listenCallbacks['voice-typing:text']?.({
         payload: {
-          sessionId: 'voice-typing-1',
-          text: '识别失败',
+          text: 'Recognition failed',
           phase: 'error',
           revision: 2,
         },
       });
     });
 
-    screen.getByText('识别失败');
+    screen.getByText('Recognition failed');
   });
   it('renders polishing phase with custom styling and text', async () => {
     render(<VoiceTypingOverlay />);
@@ -344,15 +344,54 @@ describe('VoiceTypingOverlay', () => {
       mocks.listenCallbacks['voice-typing:text']?.({
         payload: {
           sessionId: 'voice-typing-1',
-          text: '正在润色',
+          text: 'Polishing text',
           phase: 'polishing',
           revision: 3,
         },
       });
     });
-
-    screen.getByText('voice_typing.polishing');
+    screen.getByText('AI polishing...');
     expect(screen.getByTestId('voice-typing-bubble').style.border).toContain('168, 85, 247');
+  });
+
+  it('renders situational context badge when contextMode is active', async () => {
+    render(<VoiceTypingOverlay />);
+
+    await act(async () => {
+      mocks.listenCallbacks['voice-typing:text']?.({
+        payload: {
+          sessionId: 'voice-typing-dev',
+          text: 'let x = 1;',
+          phase: 'segment',
+          revision: 2,
+          contextMode: 'developer',
+        },
+      });
+    });
+
+    const badge = screen.getByTestId('voice-typing-context-badge');
+    expect(badge).toBeTruthy();
+    expect(badge.textContent).toContain('Code');
+  });
+
+  it('renders selection rewrite badge when hasSelection is true', async () => {
+    render(<VoiceTypingOverlay />);
+
+    await act(async () => {
+      mocks.listenCallbacks['voice-typing:text']?.({
+        payload: {
+          sessionId: 'voice-typing-sel',
+          text: 'Rewrite this section',
+          phase: 'segment',
+          revision: 2,
+          hasSelection: true,
+        },
+      });
+    });
+
+    const badge = screen.getByTestId('voice-typing-selection-badge');
+    expect(badge).toBeTruthy();
+    expect(badge.textContent).toContain('Selection Rewrite');
   });
 
   it('uses the shared snapshot as the initial source of truth and ignores older revisions', async () => {
@@ -360,7 +399,7 @@ describe('VoiceTypingOverlay', () => {
       if (command === 'get_aux_window_state') {
         return {
           sessionId: 'voice-typing-9',
-          text: '快照里的整句',
+          text: 'Full sentence in snapshot',
           phase: 'segment',
           segmentId: 'seg-9',
           isFinal: false,
@@ -372,7 +411,7 @@ describe('VoiceTypingOverlay', () => {
 
     render(<VoiceTypingOverlay />);
 
-    expect(await screen.findByText('快照里的整句')).toBeTruthy();
+    expect(await screen.findByText('Full sentence in snapshot')).toBeTruthy();
 
     await act(async () => {
       mocks.listenCallbacks['voice-typing:text']?.({
@@ -385,7 +424,7 @@ describe('VoiceTypingOverlay', () => {
       });
     });
 
-    screen.getByText('快照里的整句');
+    screen.getByText('Full sentence in snapshot');
   });
 
   it('falls back to polling the shared snapshot when no event arrives', async () => {
@@ -397,7 +436,7 @@ describe('VoiceTypingOverlay', () => {
         if (snapshotCallCount >= 2) {
           return {
             sessionId: 'voice-typing-10',
-            text: '轮询拿到的候选条',
+            text: 'Candidate from polling',
             phase: 'segment',
             segmentId: 'seg-10',
             isFinal: false,
@@ -415,7 +454,7 @@ describe('VoiceTypingOverlay', () => {
       await vi.advanceTimersByTimeAsync(140);
     });
 
-    screen.getByText('轮询拿到的候选条');
+    screen.getByText('Candidate from polling');
   });
 
   it('keeps snapshot polling active even if event listener registration fails', async () => {
@@ -429,7 +468,7 @@ describe('VoiceTypingOverlay', () => {
         if (snapshotCallCount >= 2) {
           return {
             sessionId: 'voice-typing-11',
-            text: '监听失败后仍可见',
+            text: 'Visible after listen error',
             phase: 'segment',
             segmentId: 'seg-11',
             isFinal: false,
@@ -447,7 +486,7 @@ describe('VoiceTypingOverlay', () => {
       await vi.advanceTimersByTimeAsync(140);
     });
 
-    screen.getByText('监听失败后仍可见');
+    screen.getByText('Visible after listen error');
     expect(mocks.loggerWarn).toHaveBeenCalledWith(
       '[useAuxWindowState] Failed to register app-level listener',
       expect.objectContaining({
@@ -574,8 +613,8 @@ describe('VoiceTypingOverlay', () => {
   it('renders quick recall drawer in recall phase and handles reinject on keypress', async () => {
     useVoiceTypingHistoryStore.getState().clearHistory();
     useVoiceTypingHistoryStore.getState().addItem({
-      rawText: '第一条历史记录',
-      injectedText: '第一条历史记录',
+      rawText: 'First history entry',
+      injectedText: 'First history entry',
       mode: 'raw',
     });
 
@@ -593,14 +632,14 @@ describe('VoiceTypingOverlay', () => {
     });
 
     expect(screen.getByTestId('voice-typing-recall-drawer')).toBeTruthy();
-    screen.getByText('第一条历史记录');
+    screen.getByText('First history entry');
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
     });
 
     expect(mocks.emit).toHaveBeenCalledWith('voice-typing:reinject', {
-      text: '第一条历史记录',
+      text: 'First history entry',
     });
   });
 });

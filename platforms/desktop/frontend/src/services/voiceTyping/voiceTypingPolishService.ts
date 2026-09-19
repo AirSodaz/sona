@@ -2,6 +2,7 @@ import { useConfigStore } from '../../stores/configStore';
 import { logger } from '../../utils/logger';
 import { getActiveLlmConfig, getFeatureLlmConfig } from '../llm/configUtils';
 import { completeLlm } from '../tauri/llm';
+import { getContextDirective, type VoiceTypingContextState } from './voiceTypingContext';
 
 export const DEFAULT_VOICE_TYPING_POLISH_PROMPT = `你是一个智能语音输入润色助手。你的任务是将用户的语音识别草稿整理为通顺、专业、自然的最终书面文本。
 规则：
@@ -37,6 +38,7 @@ export async function polishVoiceTypingText(
   options?: {
     customPrompt?: string;
     timeoutMs?: number;
+    context?: VoiceTypingContextState | null;
   }
 ): Promise<string> {
   const trimmed = (text || '').trim();
@@ -51,10 +53,18 @@ export async function polishVoiceTypingText(
     logger.warn('[VoiceTypingPolish] No active LLM provider configured, using raw text');
     return trimmed;
   }
-  const systemPrompt =
+  const baseSystemPrompt =
     options?.customPrompt?.trim() ||
     config.voiceTypingPolishPrompt?.trim() ||
     DEFAULT_VOICE_TYPING_POLISH_PROMPT;
+
+  const contextDirective = options?.context?.mode
+    ? getContextDirective(options.context.mode, options.context.windowTitle)
+    : '';
+
+  const systemPrompt = contextDirective
+    ? `${baseSystemPrompt}\n\n${contextDirective}`
+    : baseSystemPrompt;
 
   const timeoutMs = options?.timeoutMs ?? POLISH_TIMEOUT_MS;
 
@@ -109,6 +119,7 @@ export async function transformSelectedText(
   instruction: string,
   options?: {
     timeoutMs?: number;
+    context?: VoiceTypingContextState | null;
   }
 ): Promise<string> {
   const trimmedSelected = (selectedText || '').trim();
@@ -143,7 +154,12 @@ export async function transformSelectedText(
         ...llmConfig,
         temperature: 0.2,
       },
-      systemPrompt: DEFAULT_VOICE_TYPING_TRANSFORM_PROMPT,
+      systemPrompt: options?.context?.mode
+        ? `${DEFAULT_VOICE_TYPING_TRANSFORM_PROMPT}\n\n${getContextDirective(
+            options.context.mode,
+            options.context.windowTitle
+          )}`
+        : DEFAULT_VOICE_TYPING_TRANSFORM_PROMPT,
       input: promptInput,
       options: {
         maxOutputTokens: 2048,

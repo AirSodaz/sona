@@ -618,7 +618,10 @@
     "listening_selection": "请口述修改指令...",
     "selection_badge": "选区重写",
     "quick_recall_title": "历史重输 (1-5 键注入)",
-    "quick_recall_empty": "暂无历史语音输入记录"
+    "quick_recall_empty": "暂无历史语音输入记录",
+    "mode_badge_developer": "代码",
+    "mode_badge_chat": "聊天",
+    "mode_badge_formal": "公文"
   },
   "automation": {
     "open_settings": "打开自动化",
@@ -838,6 +841,15 @@
     "voice_typing_sound_enabled_hint": "开始、提交、取消或报错时播放轻巧提示音",
     "voice_typing_cjk_spacing_enabled": "中英文排版优化",
     "voice_typing_cjk_spacing_enabled_hint": "自动在中英文、数字间插入规范空格并统一标点",
+    "voice_typing_context_awareness_enabled": "应用情境自适应",
+    "voice_typing_context_awareness_enabled_hint": "自动根据当前前台应用与窗口标题切换语气、风格与排版规范",
+    "voice_typing_context_preset": "情境预设",
+    "voice_typing_context_preset_hint": "选择自动感知前台应用或锁定特定的写作风格",
+    "voice_typing_context_preset_auto": "自动感知 (推荐)",
+    "voice_typing_context_preset_developer": "编程/终端 (Code)",
+    "voice_typing_context_preset_chat": "即时社交 (Chat)",
+    "voice_typing_context_preset_formal": "公文写作 (Formal)",
+    "voice_typing_context_preset_general": "通用标准 (General)",
     "voice_typing_polish_prompt": "自定义润色指令",
     "voice_typing_polish_prompt_hint": "留空则使用内置的高效口语转书面语指令",
     "voice_typing_history": "语音输入历史",

@@ -21,6 +21,7 @@ import {
 } from '../../stores/configStore';
 import { useVoiceTypingHistoryStore } from '../../stores/voiceTypingHistoryStore';
 import type { VoiceTypingRuntimeErrorSource } from '../../stores/voiceTypingRuntimeStore';
+import type { VoiceTypingContextPreset } from '../../types/config';
 import { logger } from '../../utils/logger';
 import { ColorSwatchPicker } from '../ColorSwatchPicker';
 import { Dropdown } from '../Dropdown';
@@ -280,6 +281,75 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
           checked={vtConfig.voiceTypingCjkSpacingEnabled ?? true}
           onChange={(val) => updateConfig({ voiceTypingCjkSpacingEnabled: val })}
         />
+      </SettingsItem>
+
+      <SettingsItem
+        title={t('settings.voice_typing_context_awareness_enabled', {
+          defaultValue: 'Application Context Awareness',
+        })}
+        hint={t('settings.voice_typing_context_awareness_enabled_hint', {
+          defaultValue:
+            'Automatically adapt tone, style, and formatting based on the active application and window context',
+        })}
+      >
+        <Switch
+          checked={vtConfig.voiceTypingContextAwarenessEnabled ?? true}
+          onChange={(val) => updateConfig({ voiceTypingContextAwarenessEnabled: val })}
+        />
+      </SettingsItem>
+
+      <SettingsItem
+        title={t('settings.voice_typing_context_preset', {
+          defaultValue: 'Situational Preset',
+        })}
+        hint={t('settings.voice_typing_context_preset_hint', {
+          defaultValue:
+            'Choose whether to auto-sense active applications or enforce a specific writing style',
+        })}
+      >
+        <div style={{ width: '220px' }}>
+          <Dropdown
+            id="vt-context-preset-select"
+            value={vtConfig.voiceTypingContextPreset || 'auto'}
+            onChange={(val) =>
+              updateConfig({
+                voiceTypingContextPreset: val as VoiceTypingContextPreset,
+              })
+            }
+            options={[
+              {
+                value: 'auto',
+                label: t('settings.voice_typing_context_preset_auto', {
+                  defaultValue: 'Auto Detect (Recommended)',
+                }),
+              },
+              {
+                value: 'developer',
+                label: t('settings.voice_typing_context_preset_developer', {
+                  defaultValue: 'Developer / Code',
+                }),
+              },
+              {
+                value: 'chat',
+                label: t('settings.voice_typing_context_preset_chat', {
+                  defaultValue: 'Chat / Social',
+                }),
+              },
+              {
+                value: 'formal',
+                label: t('settings.voice_typing_context_preset_formal', {
+                  defaultValue: 'Formal / Document',
+                }),
+              },
+              {
+                value: 'general',
+                label: t('settings.voice_typing_context_preset_general', {
+                  defaultValue: 'General Standard',
+                }),
+              },
+            ]}
+          />
+        </div>
       </SettingsItem>
       <SettingsItem
         title={t('settings.voice_typing_availability', {

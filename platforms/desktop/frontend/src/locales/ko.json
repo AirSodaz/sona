@@ -618,7 +618,10 @@
     "listening_selection": "수정 지시사항을 말씀하세요...",
     "selection_badge": "선택 영역 다시 쓰기",
     "quick_recall_title": "빠른 다시 입력 (1-5 키로 입력)",
-    "quick_recall_empty": "음성 입력 기록이 없습니다"
+    "quick_recall_empty": "음성 입력 기록이 없습니다",
+    "mode_badge_developer": "코드",
+    "mode_badge_chat": "채팅",
+    "mode_badge_formal": "공문서"
   },
   "automation": {
     "open_settings": "Automation 열기",
@@ -838,6 +841,15 @@
     "voice_typing_sound_enabled_hint": "시작, 완료, 취소 또는 오류 시 효과음을 재생합니다",
     "voice_typing_cjk_spacing_enabled": "한영 및 숫자 자동 띄어쓰기",
     "voice_typing_cjk_spacing_enabled_hint": "한국어와 영문, 숫자 사이에 적절한 공백을 자동 삽입하고 문장부호를 규격화합니다",
+    "voice_typing_context_awareness_enabled": "앱 상황 적응",
+    "voice_typing_context_awareness_enabled_hint": "활성 앱 및 창 제목에 맞춰 어조, 문체, 서식을 자동으로 조정합니다",
+    "voice_typing_context_preset": "상황 프리셋",
+    "voice_typing_context_preset_hint": "앱 자동 인식 또는 특정 문체 스타일 고정을 선택합니다",
+    "voice_typing_context_preset_auto": "자동 인식 (권장)",
+    "voice_typing_context_preset_developer": "개발/코드 (Code)",
+    "voice_typing_context_preset_chat": "채팅/메신저 (Chat)",
+    "voice_typing_context_preset_formal": "공문서/비즈니스 (Formal)",
+    "voice_typing_context_preset_general": "표준 (General)",
     "voice_typing_polish_prompt": "사용자 정의 다듬기 프롬프트",
     "voice_typing_polish_prompt_hint": "비워두면 내장된 표준 구어체 다듬기 프롬프트가 사용됩니다",
     "voice_typing_history": "음성 입력 기록",

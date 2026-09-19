@@ -618,7 +618,10 @@
     "listening_selection": "編集指示を話してください...",
     "selection_badge": "選択範囲の書き換え",
     "quick_recall_title": "クイック再入力 (1-5 キーで挿入)",
-    "quick_recall_empty": "音声入力履歴がありません"
+    "quick_recall_empty": "音声入力履歴がありません",
+    "mode_badge_developer": "コード",
+    "mode_badge_chat": "チャット",
+    "mode_badge_formal": "公用文"
   },
   "automation": {
     "open_settings": "オープンオートメーション",
@@ -838,6 +841,15 @@
     "voice_typing_sound_enabled_hint": "開始、確定、キャンセル、またはエラー発生時に効果音を再生します",
     "voice_typing_cjk_spacing_enabled": "日英・数字スペース自動挿入",
     "voice_typing_cjk_spacing_enabled_hint": "日本語・英数字の間に適切な空白を自動挿入し、約物を統一します",
+    "voice_typing_context_awareness_enabled": "アプリ環境適応",
+    "voice_typing_context_awareness_enabled_hint": "アクティブなアプリやウィンドウ名に応じて口調やフォーマットを自動調整します",
+    "voice_typing_context_preset": "コンテキストプリセット",
+    "voice_typing_context_preset_hint": "アプリ自動認識、または特定の文体スタイルへの固定を選択します",
+    "voice_typing_context_preset_auto": "自動認識 (推奨)",
+    "voice_typing_context_preset_developer": "開発/コード (Code)",
+    "voice_typing_context_preset_chat": "チャット/対話 (Chat)",
+    "voice_typing_context_preset_formal": "公用文/ビジネス (Formal)",
+    "voice_typing_context_preset_general": "標準 (General)",
     "voice_typing_polish_prompt": "カスタム文章整形プロンプト",
     "voice_typing_polish_prompt_hint": "空欄の場合は組み込みの標準整形プロンプトが使用されます",
     "voice_typing_history": "音声入力履歴",

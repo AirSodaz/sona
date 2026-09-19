@@ -618,7 +618,10 @@
     "listening_selection": "Speak editing instruction...",
     "selection_badge": "Selection Rewrite",
     "quick_recall_title": "Quick Recall (Keys 1-5 to inject)",
-    "quick_recall_empty": "No dictation history yet"
+    "quick_recall_empty": "No dictation history yet",
+    "mode_badge_developer": "Code",
+    "mode_badge_chat": "Chat",
+    "mode_badge_formal": "Formal"
   },
   "automation": {
     "open_settings": "Open Automation",
@@ -838,6 +841,15 @@
     "voice_typing_sound_enabled_hint": "Play sound cues on start, commit, cancel, or error",
     "voice_typing_cjk_spacing_enabled": "CJK-Latin Typography Spacing",
     "voice_typing_cjk_spacing_enabled_hint": "Automatically insert spaces between CJK and Latin characters/numbers and harmonize punctuation",
+    "voice_typing_context_awareness_enabled": "Application Context Awareness",
+    "voice_typing_context_awareness_enabled_hint": "Automatically adapt tone, style, and formatting based on active application",
+    "voice_typing_context_preset": "Situational Preset",
+    "voice_typing_context_preset_hint": "Choose whether to auto-sense active applications or enforce a specific writing style",
+    "voice_typing_context_preset_auto": "Auto Detect (Recommended)",
+    "voice_typing_context_preset_developer": "Developer / Code",
+    "voice_typing_context_preset_chat": "Chat / Social",
+    "voice_typing_context_preset_formal": "Formal / Document",
+    "voice_typing_context_preset_general": "General Standard",
     "voice_typing_polish_prompt": "Custom Polish Prompt",
     "voice_typing_polish_prompt_hint": "Leave blank to use the built-in fast colloquial-to-written prompt directive",
     "voice_typing_history": "Dictation History",

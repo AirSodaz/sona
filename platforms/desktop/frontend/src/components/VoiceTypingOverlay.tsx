@@ -222,14 +222,14 @@ export function VoiceTypingOverlay() {
   const isSelection = Boolean(overlayState.hasSelection);
   const displayText = isPolishing
     ? isSelection
-      ? t('voice_typing.polishing_selection', { defaultValue: 'AI 选区重写中...' })
-      : t('voice_typing.polishing', { defaultValue: 'AI 润色中...' })
+      ? t('voice_typing.polishing_selection', { defaultValue: 'AI rewriting selection...' })
+      : t('voice_typing.polishing', { defaultValue: 'AI polishing...' })
     : isSegment || isError
       ? text
       : phase === 'preparing'
         ? t('common.preparing')
         : isSelection
-          ? t('voice_typing.listening_selection', { defaultValue: '请口述修改指令...' })
+          ? t('voice_typing.listening_selection', { defaultValue: 'Speak editing instruction...' })
           : t('common.listening');
 
   useEffect(() => {
@@ -363,7 +363,7 @@ export function VoiceTypingOverlay() {
               <History size={14} color="var(--color-accent-blue, #3b82f6)" />
               <span>
                 {t('voice_typing.quick_recall_title', {
-                  defaultValue: '历史重输 (1-5 键注入)',
+                  defaultValue: 'Quick Recall (Keys 1-5)',
                 })}
               </span>
             </div>
@@ -404,7 +404,7 @@ export function VoiceTypingOverlay() {
                   }}
                 >
                   {t('voice_typing.quick_recall_empty', {
-                    defaultValue: '暂无历史语音输入记录',
+                    defaultValue: 'No voice typing history',
                   })}
                 </div>
               );
@@ -529,7 +529,7 @@ export function VoiceTypingOverlay() {
               />
             ))}
           </div>
-          {overlayState.hasSelection && (
+          {overlayState.hasSelection ? (
             <span
               data-testid="voice-typing-selection-badge"
               style={{
@@ -542,9 +542,38 @@ export function VoiceTypingOverlay() {
                 flexShrink: 0,
               }}
             >
-              {t('voice_typing.selection_badge', { defaultValue: '选区重写' })}
+              {t('voice_typing.selection_badge', { defaultValue: 'Selection Rewrite' })}
             </span>
-          )}
+          ) : overlayState.contextMode && overlayState.contextMode !== 'general' ? (
+            <span
+              data-testid="voice-typing-context-badge"
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                padding: '1px 6px',
+                borderRadius: '4px',
+                background:
+                  overlayState.contextMode === 'developer'
+                    ? 'rgba(147, 51, 234, 0.15)'
+                    : overlayState.contextMode === 'chat'
+                      ? 'rgba(16, 185, 129, 0.15)'
+                      : 'rgba(245, 158, 11, 0.15)',
+                color:
+                  overlayState.contextMode === 'developer'
+                    ? '#9333ea'
+                    : overlayState.contextMode === 'chat'
+                      ? '#10b981'
+                      : '#f59e0b',
+                flexShrink: 0,
+              }}
+            >
+              {overlayState.contextMode === 'developer'
+                ? `💻 ${t('voice_typing.mode_badge_developer', { defaultValue: 'Code' })}`
+                : overlayState.contextMode === 'chat'
+                  ? `💬 ${t('voice_typing.mode_badge_chat', { defaultValue: 'Chat' })}`
+                  : `📄 ${t('voice_typing.mode_badge_formal', { defaultValue: 'Formal' })}`}
+            </span>
+          ) : null}
           {isPolishing && <Sparkles size={14} color="#a855f7" style={{ flexShrink: 0 }} />}
           <span
             style={{

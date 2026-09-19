@@ -102,6 +102,10 @@ export interface LiveTranscriptionMetrics {
   avoidedFeedCount: number;
 }
 
+export interface ForegroundWindowInfo {
+  appName: string;
+  windowTitle: string;
+}
 type AudioDevice = {
   name: string;
 };
@@ -658,6 +662,10 @@ type ManualTauriCommandContractMap = {
   [TauriCommand.system.getFocusedSelectionText]: {
     args: undefined;
     result: string | null;
+  };
+  [TauriCommand.system.getForegroundWindowInfo]: {
+    args: undefined;
+    result: ForegroundWindowInfo | null;
   };
   [TauriCommand.apiServer.start]: {
     args: {

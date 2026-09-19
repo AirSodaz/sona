@@ -13,6 +13,7 @@ import { currentMonitor, monitorFromPoint } from './tauri/platform/windows';
 import { processBatchFile } from './tauri/recognizer';
 import {
   getFocusedSelectionText,
+  getForegroundWindowInfo,
   getMousePosition,
   getTextCursorPosition,
   injectText,
@@ -55,6 +56,7 @@ export interface VoiceTypingServicePorts {
   currentMonitor?: typeof currentMonitor;
   monitorFromPoint?: typeof monitorFromPoint;
   getFocusedSelectionText?: typeof getFocusedSelectionText;
+  getForegroundWindowInfo?: typeof getForegroundWindowInfo;
 }
 
 export class VoiceTypingService {
@@ -90,7 +92,7 @@ export class VoiceTypingService {
       isSoundEnabled: () => this.ports.getConfig().voiceTypingSoundEnabled ?? true,
       isCjkSpacingEnabled: () => this.ports.getConfig().voiceTypingCjkSpacingEnabled ?? true,
       getProcessingMode: () => this.ports.getConfig().voiceTypingProcessingMode ?? 'raw',
-      polishText: (text) => polishVoiceTypingText(text),
+      polishText: (text, context) => polishVoiceTypingText(text, { context }),
       onTextCommitted: (entry) => {
         useVoiceTypingHistoryStore.getState().addItem(entry);
       },
@@ -98,9 +100,16 @@ export class VoiceTypingService {
         this.ports.getFocusedSelectionText
           ? this.ports.getFocusedSelectionText()
           : getFocusedSelectionText(),
-      transformText: (selectedText, instruction) =>
-        transformSelectedText(selectedText, instruction),
+      transformText: (selectedText, instruction, context) =>
+        transformSelectedText(selectedText, instruction, { context }),
       getTextReplacements: () => this.ports.getConfig().textReplacementSets,
+      getForegroundWindowInfo: () =>
+        this.ports.getForegroundWindowInfo
+          ? this.ports.getForegroundWindowInfo()
+          : getForegroundWindowInfo(),
+      isContextAwarenessEnabled: () =>
+        this.ports.getConfig().voiceTypingContextAwarenessEnabled ?? true,
+      getContextPreset: () => this.ports.getConfig().voiceTypingContextPreset ?? 'auto',
     });
     this.shortcutController = new VoiceTypingShortcutController({
       getMode: () => this.getVoiceTypingMode(),
@@ -651,6 +660,7 @@ export const voiceTypingService = createVoiceTypingService({
   currentMonitor,
   monitorFromPoint,
   getFocusedSelectionText,
+  getForegroundWindowInfo,
   listenCancel: async (callback) => {
     try {
       return await listen(TauriEvent.auxWindow.voiceTypingCancel, callback);

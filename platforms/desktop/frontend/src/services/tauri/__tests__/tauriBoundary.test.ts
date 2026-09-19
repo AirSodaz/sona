@@ -93,7 +93,14 @@ import {
   storageSetModelsDirectory,
 } from '../storage';
 import { createSyncVault, joinSyncVault, previewSyncJoin, testWebDavSyncProvider } from '../sync';
-import { getAuxWindowState, getMousePosition, injectText, setAuxWindowState } from '../system';
+import {
+  getAuxWindowState,
+  getFocusedSelectionText,
+  getForegroundWindowInfo,
+  getMousePosition,
+  injectText,
+  setAuxWindowState,
+} from '../system';
 import { tagList, tagSaveAll } from '../tag';
 import {
   taskLedgerClearResolved,
@@ -2139,19 +2146,28 @@ describe('tauri boundary wrappers', () => {
   });
 
   it('system wrappers centralize native text and cursor helpers', async () => {
-    vi.mocked(invoke).mockResolvedValueOnce(undefined).mockResolvedValueOnce([640, 360]);
+    vi.mocked(invoke)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce([640, 360])
+      .mockResolvedValueOnce('selected text')
+      .mockResolvedValueOnce({ appName: 'code.exe', windowTitle: 'editor' });
 
     await injectText('hello', ['alt']);
     const mousePosition = await getMousePosition();
+    const selection = await getFocusedSelectionText();
+    const foreground = await getForegroundWindowInfo();
 
     expect(mousePosition).toEqual([640, 360]);
+    expect(selection).toBe('selected text');
+    expect(foreground).toEqual({ appName: 'code.exe', windowTitle: 'editor' });
     expect(invoke).toHaveBeenNthCalledWith(1, TauriCommand.system.injectText, {
       text: 'hello',
       shortcutModifiers: ['alt'],
     });
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.system.getMousePosition);
+    expect(invoke).toHaveBeenNthCalledWith(3, TauriCommand.system.getFocusedSelectionText);
+    expect(invoke).toHaveBeenNthCalledWith(4, TauriCommand.system.getForegroundWindowInfo);
   });
-
   it('system aux-window wrappers preserve generic call sites', async () => {
     vi.mocked(invoke).mockResolvedValueOnce(undefined).mockResolvedValueOnce({ theme: 'dark' });
 

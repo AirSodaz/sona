@@ -70,6 +70,11 @@ const mocks = vi.hoisted(() => {
       position: { x: 0, y: 0 },
       size: { width: 1920, height: 1080 },
     })),
+    polishVoiceTypingText: vi.fn(async (text: string, _opts?: any) => `[polished] ${text}`),
+    transformSelectedText: vi.fn(
+      async (selected: string, instruction: string, _opts?: any) =>
+        `[transformed: ${selected}] ${instruction}`
+    ),
   };
 });
 
@@ -94,10 +99,9 @@ vi.mock('../voiceTypingWindowService', () => ({
   },
 }));
 vi.mock('../voiceTyping/voiceTypingPolishService', () => ({
-  polishVoiceTypingText: vi.fn(async (text: string) => `[polished] ${text}`),
-  transformSelectedText: vi.fn(
-    async (selected: string, instruction: string) => `[transformed: ${selected}] ${instruction}`
-  ),
+  polishVoiceTypingText: (text: string, opts?: any) => mocks.polishVoiceTypingText(text, opts),
+  transformSelectedText: (selected: string, instruction: string, opts?: any) =>
+    mocks.transformSelectedText(selected, instruction, opts),
 }));
 vi.mock('../tauri/platform/windows', () => ({
   currentMonitor: vi.fn(async () => ({
@@ -1475,5 +1479,105 @@ describe('voiceTypingService', () => {
 
     // With cursor at 950, 950 + 280 = 1230 > maxBottom (1080 - 16 = 1064)
     expect(mocks.windowPrepare).toHaveBeenCalledWith([492, 666]);
+  });
+
+  it('senses application context and adapts overlay mode and polish context', async () => {
+    let onSegment: ((segment: any) => void) | undefined;
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingProcessingMode: 'polish',
+      voiceTypingContextAwarenessEnabled: true,
+    };
+    mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+      onSegment = segmentCallback;
+    });
+    mocks.invoke.mockImplementation(async (command: string) => {
+      if (command === 'get_foreground_window_info') {
+        return { appName: 'code.exe', windowTitle: 'editor.ts - Project' };
+      }
+      if (command === 'get_mouse_position') {
+        return [240, 320];
+      }
+      if (command === 'get_text_cursor_position') {
+        return [120, 280];
+      }
+      return undefined;
+    });
+
+    const service = await loadService();
+    await service.startListening();
+    await flushMicrotasks(4);
+
+    expect(mocks.windowSendState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contextMode: 'developer',
+      })
+    );
+
+    onSegment?.({ id: 'seg-1', text: 'define a new variable', isFinal: true });
+    await flushMicrotasks(4);
+
+    const stopPromise = service.stopListening();
+    await vi.runAllTimersAsync();
+    await stopPromise;
+    await flushMicrotasks(8);
+
+    expect(mocks.polishVoiceTypingText).toHaveBeenCalledWith(
+      'define a new variable',
+      expect.objectContaining({
+        context: expect.objectContaining({
+          appName: 'code.exe',
+          mode: 'developer',
+        }),
+      })
+    );
+  });
+
+  it('strips trailing full stops in chat context mode during raw dictation', async () => {
+    let onSegment: ((segment: any) => void) | undefined;
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingProcessingMode: 'raw',
+      voiceTypingContextAwarenessEnabled: true,
+    };
+    mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+      onSegment = segmentCallback;
+    });
+    mocks.invoke.mockImplementation(async (command: string) => {
+      if (command === 'get_foreground_window_info') {
+        return { appName: 'slack.exe', windowTitle: 'General - Sona' };
+      }
+      if (command === 'get_mouse_position') {
+        return [240, 320];
+      }
+      if (command === 'get_text_cursor_position') {
+        return [120, 280];
+      }
+      return undefined;
+    });
+
+    const service = await loadService();
+    await service.startListening();
+    await flushMicrotasks(4);
+
+    expect(mocks.windowSendState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contextMode: 'chat',
+      })
+    );
+
+    onSegment?.({ id: 'seg-1', text: 'see you tomorrow.', isFinal: true });
+    await flushMicrotasks(4);
+
+    const stopPromise = service.stopListening();
+    await vi.runAllTimersAsync();
+    await stopPromise;
+    await flushMicrotasks(8);
+
+    const injectCalls = getInvokeCalls('inject_text');
+    expect(injectCalls.length).toBe(1);
+    expect(injectCalls[0][1].text).toBe('see you tomorrow');
   });
 });

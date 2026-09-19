@@ -1,13 +1,15 @@
 import i18next from 'i18next';
-import type { TextReplacementRuleSet } from '../../types/config';
+import type { TextReplacementRuleSet, VoiceTypingContextPreset } from '../../types/config';
 import type { TranscriptSegment, TranscriptUpdate } from '../../types/transcript';
 import { formatCjkTypography } from '../../utils/cjkTypography';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { logger } from '../../utils/logger';
 import { applyTextReplacements } from '../../utils/textProcessing';
 import { normalizeTranscriptUpdate } from '../../utils/transcriptTiming';
+import type { ForegroundWindowInfo } from '../tauri/contracts';
 import type { TranscriptionService } from '../transcriptionService';
 import type { VoiceTypingOverlayPayload } from '../voiceTypingWindowService';
+import { classifyContextMode, type VoiceTypingContextState } from './voiceTypingContext';
 import type {
   VoiceTypingOverlayPresenter,
   VoiceTypingPositionResolver,
@@ -32,7 +34,7 @@ interface VoiceTypingSessionMachineOptions {
   isSoundEnabled?: () => boolean;
   isCjkSpacingEnabled?: () => boolean;
   getProcessingMode?: () => 'raw' | 'polish';
-  polishText?: (text: string) => Promise<string>;
+  polishText?: (text: string, context?: VoiceTypingContextState | null) => Promise<string>;
   onTextCommitted?: (entry: {
     rawText: string;
     polishedText?: string;
@@ -40,8 +42,15 @@ interface VoiceTypingSessionMachineOptions {
     mode: 'raw' | 'polish';
   }) => void;
   getFocusedSelectionText?: () => Promise<string | null>;
-  transformText?: (selectedText: string, instruction: string) => Promise<string>;
+  transformText?: (
+    selectedText: string,
+    instruction: string,
+    context?: VoiceTypingContextState | null
+  ) => Promise<string>;
   getTextReplacements?: () => TextReplacementRuleSet[] | undefined;
+  getForegroundWindowInfo?: () => Promise<ForegroundWindowInfo | null>;
+  getContextPreset?: () => VoiceTypingContextPreset | undefined;
+  isContextAwarenessEnabled?: () => boolean;
 }
 
 function delay(ms: number) {
@@ -91,6 +100,7 @@ export class VoiceTypingSessionMachine {
   private currentText = '';
   private accumulatedPolishText: string[] = [];
   private selectionContext: string | null = null;
+  private currentContext: VoiceTypingContextState | null = null;
   private manualStopPending = false;
   // long-lived aux windows never treat a new session as stale state.
   private revision = 0;
@@ -104,33 +114,36 @@ export class VoiceTypingSessionMachine {
       return;
     }
 
-    this.accumulatedPolishText = [];
-    this.selectionContext = null;
-    this.playSound('start');
-
-    if (this.options.getFocusedSelectionText) {
-      try {
-        const sel = await this.options.getFocusedSelectionText();
-        if (sel && sel.trim().length > 0) {
-          this.selectionContext = sel.trim();
-          logger.info('[VoiceTypingSessionMachine] Selection context detected', {
-            length: this.selectionContext.length,
-          });
-        }
-      } catch (err) {
-        logger.debug('[VoiceTypingSessionMachine] Failed to probe selection context', err);
-      }
-    }
     const requestId = ++this.startRequestId;
     const sessionId = `voice-typing-${requestId}`;
     this.sessionState = 'preparing';
     this.activeSessionId = sessionId;
     this.currentSegmentId = null;
     this.currentText = '';
+    this.accumulatedPolishText = [];
+    this.selectionContext = null;
+    this.currentContext = null;
     this.manualStopPending = false;
     this.committedSegmentIds.clear();
     this.segmentProcessingChain = Promise.resolve();
     this.options.overlayPresenter.clearListeningReset();
+    this.playSound('start');
+
+    const contextProbePromise = Promise.all([
+      this.options.getFocusedSelectionText
+        ? this.options.getFocusedSelectionText().catch((err) => {
+            logger.debug('[VoiceTypingSessionMachine] Failed to probe selection context', err);
+            return null;
+          })
+        : Promise.resolve(null),
+      (this.options.isContextAwarenessEnabled?.() ?? true) && this.options.getForegroundWindowInfo
+        ? this.options.getForegroundWindowInfo().catch((err) => {
+            logger.debug('[VoiceTypingSessionMachine] Failed to probe foreground window info', err);
+            return null;
+          })
+        : Promise.resolve(null),
+    ]);
+
     const preparingPromise = this.publishOverlay(
       {
         sessionId,
@@ -162,6 +175,25 @@ export class VoiceTypingSessionMachine {
       const preparingRevision = await preparingPromise;
       await startPromise;
 
+      const [selResult, infoResult] = await contextProbePromise;
+      if (selResult && selResult.trim().length > 0) {
+        this.selectionContext = selResult.trim();
+        logger.info('[VoiceTypingSessionMachine] Selection context detected', {
+          length: this.selectionContext.length,
+        });
+      }
+
+      if (infoResult && (infoResult.appName || infoResult.windowTitle)) {
+        const preset = this.options.getContextPreset?.() ?? 'auto';
+        const mode = classifyContextMode(infoResult.appName, infoResult.windowTitle, preset);
+        this.currentContext = {
+          appName: infoResult.appName,
+          windowTitle: infoResult.windowTitle,
+          preset,
+          mode,
+        };
+        logger.info('[VoiceTypingSessionMachine] Sensed application context', this.currentContext);
+      }
       if (!this.isCurrentSession(sessionId, requestId) || this.isSessionStopping()) {
         return;
       }
@@ -262,7 +294,11 @@ export class VoiceTypingSessionMachine {
         let transformedText = instruction;
         if (this.options.transformText) {
           try {
-            transformedText = await this.options.transformText(this.selectionContext, instruction);
+            transformedText = await this.options.transformText(
+              this.selectionContext,
+              instruction,
+              this.currentContext
+            );
           } catch (err) {
             logger.warn(
               '[VoiceTypingSessionMachine] Transform failed, fallback to instruction',
@@ -311,7 +347,7 @@ export class VoiceTypingSessionMachine {
         let polishedText = rawFullText;
         if (this.options.polishText) {
           try {
-            polishedText = await this.options.polishText(rawFullText);
+            polishedText = await this.options.polishText(rawFullText, this.currentContext);
           } catch (err) {
             logger.warn('[VoiceTypingSessionMachine] Polish failed, fallback to raw', err);
           }
@@ -419,6 +455,7 @@ export class VoiceTypingSessionMachine {
     this.currentText = '';
     this.accumulatedPolishText = [];
     this.selectionContext = null;
+    this.currentContext = null;
     this.manualStopPending = false;
     this.revision = 0;
     this.committedSegmentIds.clear();
@@ -698,11 +735,13 @@ export class VoiceTypingSessionMachine {
 
   private formatFinalText(text: string): string {
     const enableCjkSpacing = this.options.isCjkSpacingEnabled?.() ?? true;
-    const withSpacing = normalizeCandidateText(text, enableCjkSpacing);
+    let withSpacing = normalizeCandidateText(text, enableCjkSpacing);
+    if (this.currentContext?.mode === 'chat') {
+      withSpacing = withSpacing.replace(/[。.]+$/, '');
+    }
     const replacementSets = this.options.getTextReplacements?.();
     return applyTextReplacements(withSpacing, replacementSets);
   }
-
   private async handleSessionError(sessionId: string, requestId: number, error: string) {
     this.playSound('error');
     this.options.overlayPresenter.clearListeningReset();
@@ -742,6 +781,7 @@ export class VoiceTypingSessionMachine {
       ...payload,
       hasSelection: Boolean(this.selectionContext),
       selectionLength: this.selectionContext?.length,
+      contextMode: this.currentContext?.mode,
       revision: ++this.revision,
     };
 

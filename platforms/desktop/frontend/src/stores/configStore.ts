@@ -281,6 +281,8 @@ const VOICE_TYPING_KEYS: (keyof VoiceTypingConfig)[] = [
   'voiceTypingPolishPrompt',
   'voiceTypingPlacement',
   'voiceTypingQuickRecallShortcut',
+  'voiceTypingContextAwarenessEnabled',
+  'voiceTypingContextPreset',
 ];
 const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [
   'httpServerEnabled',

@@ -31,3 +31,9 @@ export async function getTextCursorPosition(): Promise<[number, number] | null> 
 export async function getFocusedSelectionText(): Promise<string | null> {
   return invokeTauri(TauriCommand.system.getFocusedSelectionText);
 }
+
+export async function getForegroundWindowInfo(): Promise<
+  import('./contracts').ForegroundWindowInfo | null
+> {
+  return invokeTauri(TauriCommand.system.getForegroundWindowInfo);
+}

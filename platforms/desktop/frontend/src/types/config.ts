@@ -343,6 +343,9 @@ export type VoiceTypingProcessingMode = 'raw' | 'polish';
 /** Voice Typing placement strategy: 'caret' (follow cursor) or 'bottom_center' (dynamic island). */
 export type VoiceTypingPlacement = 'caret' | 'bottom_center';
 
+/** Voice Typing situation preset. */
+export type VoiceTypingContextPreset = 'auto' | 'general' | 'developer' | 'chat' | 'formal';
+
 /** Voice Typing (dictation) settings. */
 export interface VoiceTypingConfig {
   /** Whether voice typing feature is enabled. Default: false. */
@@ -363,6 +366,10 @@ export interface VoiceTypingConfig {
   voiceTypingPlacement?: VoiceTypingPlacement;
   /** Global shortcut to trigger voice typing quick recall drawer. Default: 'Alt+Shift+H'. */
   voiceTypingQuickRecallShortcut?: string;
+  /** Whether application context awareness is enabled. Default: true. */
+  voiceTypingContextAwarenessEnabled?: boolean;
+  /** Contextual situation preset: 'auto' | 'general' | 'developer' | 'chat' | 'formal'. Default: 'auto'. */
+  voiceTypingContextPreset?: VoiceTypingContextPreset;
 }
 
 // ---------------------------------------------------------------------------

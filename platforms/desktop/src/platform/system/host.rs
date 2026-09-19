@@ -700,6 +700,93 @@ pub fn get_focused_selection_text() -> Result<Option<String>, String> {
     }
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForegroundWindowInfo {
+    pub app_name: String,
+    pub window_title: String,
+}
+
+pub fn get_foreground_window_info() -> Result<Option<ForegroundWindowInfo>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        unsafe { get_windows_foreground_window_info().map_err(|e| e.to_string()) }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(None)
+    }
+}
+
+#[cfg(target_os = "windows")]
+unsafe fn get_windows_foreground_window_info() -> windows::core::Result<Option<ForegroundWindowInfo>> {
+    use std::path::Path;
+    use windows::Win32::Foundation::{CloseHandle, HWND};
+    use windows::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT,
+        PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
+    };
+
+    unsafe {
+        let hwnd: HWND = GetForegroundWindow();
+        if hwnd.0.is_null() {
+            return Ok(None);
+        }
+
+        let text_len = GetWindowTextLengthW(hwnd);
+        let window_title = if text_len > 0 {
+            let mut buf = vec![0u16; (text_len + 1) as usize];
+            let read_len = GetWindowTextW(hwnd, &mut buf);
+            String::from_utf16_lossy(&buf[..read_len as usize])
+        } else {
+            String::new()
+        };
+
+        let mut process_id = 0u32;
+        let thread_id = GetWindowThreadProcessId(hwnd, Some(&mut process_id));
+        if thread_id == 0 || process_id == 0 {
+            return Ok(Some(ForegroundWindowInfo {
+                app_name: String::new(),
+                window_title,
+            }));
+        }
+
+        let app_name = if let Ok(process_handle) =
+            OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id)
+        {
+            let mut image_path_buf = [0u16; 1024];
+            let mut size = image_path_buf.len() as u32;
+            let result = QueryFullProcessImageNameW(
+                process_handle,
+                PROCESS_NAME_FORMAT(0),
+                windows::core::PWSTR(image_path_buf.as_mut_ptr()),
+                &mut size,
+            );
+            let _ = CloseHandle(process_handle);
+
+            if result.is_ok() && size > 0 {
+                let full_path = String::from_utf16_lossy(&image_path_buf[..size as usize]);
+                Path::new(&full_path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_lowercase())
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
+        Ok(Some(ForegroundWindowInfo {
+            app_name,
+            window_title,
+        }))
+    }
+}
+
 #[cfg(target_os = "windows")]
 unsafe fn get_uia_focused_selection_text() -> windows::core::Result<Option<String>> {
     unsafe {

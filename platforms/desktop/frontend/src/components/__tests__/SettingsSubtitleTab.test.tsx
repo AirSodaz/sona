@@ -267,6 +267,14 @@ describe('SettingsSubtitleTab', () => {
 
     fireEvent.click(switchBtns[2]);
     expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingCjkSpacingEnabled: false });
+
+    fireEvent.click(switchBtns[3]);
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingContextAwarenessEnabled: false });
+
+    fireEvent.change(document.querySelector('#vt-context-preset-select') as HTMLSelectElement, {
+      target: { value: 'developer' },
+    });
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingContextPreset: 'developer' });
   });
   it('shows only simplified availability and the runtime failure reason', () => {
     mockReadiness.state = 'failed';
@@ -290,16 +298,17 @@ describe('SettingsSubtitleTab', () => {
 
     // Add an item to history store
     useVoiceTypingHistoryStore.getState().addItem({
-      rawText: '就是说今天天气很好',
-      polishedText: '今天天气很好。',
-      injectedText: '今天天气很好。',
+      rawText: 'like the weather is great today',
+      polishedText: 'The weather is great today.',
+      injectedText: 'The weather is great today.',
       mode: 'polish',
     });
 
     rerender(<SettingsSubtitleTab />);
 
     expect(screen.queryByTestId('voice-typing-history-empty')).toBeNull();
-    screen.getByText('今天天气很好。');
+    screen.getByText('The weather is great today.');
+
     screen.getByText('settings.voice_typing_mode_badge_polish');
 
     // Test add to hotwords
