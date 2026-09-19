@@ -1,12 +1,13 @@
-import { listen } from '@tauri-apps/api/event';
 import { useConfigStore } from '../stores/configStore';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
+import { useVoiceTypingHistoryStore } from '../stores/voiceTypingHistoryStore';
 import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
 import type { AppConfig } from '../types/config';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { isAsrRequestConfigured } from './asrConfigService';
 import { TauriEvent } from './tauri/events';
+import { listen } from './tauri/platform/events';
 import { processBatchFile } from './tauri/recognizer';
 import { getMousePosition, getTextCursorPosition, injectText } from './tauri/system';
 import { createTranscriptionService, type TranscriptionService } from './transcriptionService';
@@ -20,6 +21,7 @@ import {
 } from './voiceTyping/voiceTypingConfig';
 import { VoiceTypingMicrophoneRuntime } from './voiceTyping/voiceTypingMicrophoneRuntime';
 import { VoiceTypingOverlayPresenter } from './voiceTyping/voiceTypingOverlayPresenter';
+import { polishVoiceTypingText } from './voiceTyping/voiceTypingPolishService';
 import { VoiceTypingSessionMachine } from './voiceTyping/voiceTypingSessionMachine';
 import { VoiceTypingShortcutController } from './voiceTyping/voiceTypingShortcutController';
 
@@ -66,6 +68,13 @@ export class VoiceTypingService {
       },
       onRuntimeError: (error) => {
         this.ports.getVoiceTypingRuntimeStore().reportRuntimeError('session', error);
+      },
+      isSoundEnabled: () => this.ports.getConfig().voiceTypingSoundEnabled ?? true,
+      isCjkSpacingEnabled: () => this.ports.getConfig().voiceTypingCjkSpacingEnabled ?? true,
+      getProcessingMode: () => this.ports.getConfig().voiceTypingProcessingMode ?? 'raw',
+      polishText: (text) => polishVoiceTypingText(text),
+      onTextCommitted: (entry) => {
+        useVoiceTypingHistoryStore.getState().addItem(entry);
       },
     });
     this.shortcutController = new VoiceTypingShortcutController({

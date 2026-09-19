@@ -27,6 +27,16 @@ interface VoiceTypingSessionMachineOptions {
   resolveMicrophoneGain: () => number;
   injectText: (text: string) => Promise<void>;
   onRuntimeError?: (error: string) => void;
+  isSoundEnabled?: () => boolean;
+  isCjkSpacingEnabled?: () => boolean;
+  getProcessingMode?: () => 'raw' | 'polish';
+  polishText?: (text: string) => Promise<string>;
+  onTextCommitted?: (entry: {
+    rawText: string;
+    polishedText?: string;
+    injectedText: string;
+    mode: 'raw' | 'polish';
+  }) => void;
 }
 
 function delay(ms: number) {
@@ -35,14 +45,16 @@ function delay(ms: number) {
   });
 }
 
-function normalizeCandidateText(text: string): string {
+function normalizeCandidateText(text: string, enableCjkSpacing = true): string {
   const trimmed = (text || '').trim();
+  if (!enableCjkSpacing) {
+    return trimmed;
+  }
   return formatCjkTypography(trimmed);
 }
 
-function analyzeCandidateText(text: string) {
-  const normalizedText = normalizeCandidateText(text);
-
+function analyzeCandidateText(text: string, enableCjkSpacing = true) {
+  const normalizedText = normalizeCandidateText(text, enableCjkSpacing);
   if (normalizedText.length > 0) {
     return {
       normalizedText,
@@ -72,8 +84,8 @@ export class VoiceTypingSessionMachine {
   private activeSessionId: string | null = null;
   private currentSegmentId: string | null = null;
   private currentText = '';
+  private accumulatedPolishText: string[] = [];
   private manualStopPending = false;
-  // Keep overlay revisions monotonic across the service lifetime so
   // long-lived aux windows never treat a new session as stale state.
   private revision = 0;
   private readonly committedSegmentIds = new Set<string>();
@@ -86,7 +98,8 @@ export class VoiceTypingSessionMachine {
       return;
     }
 
-    voiceTypingSoundPlayer.play('start');
+    this.accumulatedPolishText = [];
+    this.playSound('start');
     const requestId = ++this.startRequestId;
     const sessionId = `voice-typing-${requestId}`;
     this.sessionState = 'preparing';
@@ -215,8 +228,55 @@ export class VoiceTypingSessionMachine {
       return;
     }
 
+    const mode = this.options.getProcessingMode?.() || 'raw';
+    if (mode === 'polish') {
+      const rawFullText = this.accumulatedPolishText.join('').trim() || this.currentText.trim();
+
+      if (rawFullText) {
+        await this.publishOverlay({
+          sessionId,
+          phase: 'polishing',
+          text: rawFullText,
+        });
+
+        let polishedText = rawFullText;
+        if (this.options.polishText) {
+          try {
+            polishedText = await this.options.polishText(rawFullText);
+          } catch (err) {
+            logger.warn('[VoiceTypingSessionMachine] Polish failed, fallback to raw', err);
+          }
+        }
+
+        const enableCjkSpacing = this.options.isCjkSpacingEnabled?.() ?? true;
+        const finalText = normalizeCandidateText(polishedText, enableCjkSpacing);
+
+        try {
+          await this.options.injectText(finalText);
+          this.playSound('commit');
+          this.options.onTextCommitted?.({
+            rawText: rawFullText,
+            polishedText,
+            injectedText: finalText,
+            mode: 'polish',
+          });
+        } catch (error) {
+          logger.error('[VoiceTypingSessionMachine] Failed to inject polished text:', error);
+          if (this.isCurrentSession(sessionId)) {
+            await this.handleSessionError(
+              sessionId,
+              this.startRequestId,
+              extractErrorMessage(error)
+            );
+          }
+          return;
+        }
+      }
+    }
+
     await this.closeSession(sessionId);
   }
+
   async cancel() {
     if (!this.isActive() || !this.activeSessionId || this.sessionState === 'stopping') {
       return;
@@ -234,7 +294,8 @@ export class VoiceTypingSessionMachine {
       revision: this.revision,
     });
 
-    voiceTypingSoundPlayer.play('cancel');
+    this.accumulatedPolishText = [];
+    this.playSound('cancel');
 
     await this.options.transcriptionService.softStop().catch((stopError) => {
       logger.error(
@@ -268,6 +329,7 @@ export class VoiceTypingSessionMachine {
     this.activeSessionId = null;
     this.currentSegmentId = null;
     this.currentText = '';
+    this.accumulatedPolishText = [];
     this.manualStopPending = false;
     this.revision = 0;
     this.committedSegmentIds.clear();
@@ -328,7 +390,38 @@ export class VoiceTypingSessionMachine {
       return;
     }
 
-    const { normalizedText: text, hasVisibleText, dropReason } = analyzeCandidateText(segment.text);
+    const enableCjkSpacing = this.options.isCjkSpacingEnabled?.() ?? true;
+    const {
+      normalizedText: text,
+      hasVisibleText,
+      dropReason,
+    } = analyzeCandidateText(segment.text, enableCjkSpacing);
+
+    const mode = this.options.getProcessingMode?.() || 'raw';
+    if (mode === 'polish') {
+      if (segment.isFinal) {
+        if (text) {
+          this.accumulatedPolishText.push(text);
+        }
+        this.currentText = this.accumulatedPolishText.join('');
+        this.currentSegmentId = null;
+      } else {
+        this.currentSegmentId = segment.id;
+        this.currentText = [...this.accumulatedPolishText, text].join('');
+      }
+
+      await this.publishOverlay(
+        {
+          sessionId,
+          phase: 'segment',
+          text: this.currentText,
+          segmentId: segment.id,
+          isFinal: segment.isFinal,
+        },
+        { revealIfHidden: !this.options.overlayPresenter.isVisible() }
+      );
+      return;
+    }
     const isCurrentSentence =
       this.currentSegmentId === null || this.currentSegmentId === segment.id;
     const hadVisibleCandidate = hasVisibleCandidateText(this.currentText);
@@ -456,7 +549,12 @@ export class VoiceTypingSessionMachine {
 
     try {
       await this.options.injectText(text);
-      voiceTypingSoundPlayer.play('commit');
+      this.playSound('commit');
+      this.options.onTextCommitted?.({
+        rawText: text,
+        injectedText: text,
+        mode: 'raw',
+      });
     } catch (error) {
       logger.error('[VoiceTypingSessionMachine] Failed to inject dictated text:', error);
       if (this.isCurrentSession(sessionId, requestId)) {
@@ -501,8 +599,14 @@ export class VoiceTypingSessionMachine {
     );
   }
 
+  private playSound(kind: 'start' | 'commit' | 'cancel' | 'error') {
+    if (this.options.isSoundEnabled?.() ?? true) {
+      voiceTypingSoundPlayer.play(kind);
+    }
+  }
+
   private async handleSessionError(sessionId: string, requestId: number, error: string) {
-    voiceTypingSoundPlayer.play('error');
+    this.playSound('error');
     this.options.overlayPresenter.clearListeningReset();
     this.sessionState = 'error';
     this.manualStopPending = true;

@@ -78,6 +78,9 @@ vi.mock('../voiceTypingWindowService', () => ({
     clearState: mocks.windowClearState,
   },
 }));
+vi.mock('../voiceTyping/voiceTypingPolishService', () => ({
+  polishVoiceTypingText: vi.fn(async (text: string) => `[polished] ${text}`),
+}));
 
 vi.mock('../transcriptionService', () => {
   class MockTranscriptionService {
@@ -1238,5 +1241,36 @@ describe('voiceTypingService', () => {
     expect(getInvokeCalls('inject_text')).toEqual([]);
     // Verify window was closed
     expect(mocks.windowClose).toHaveBeenCalled();
+  });
+  it('polishes accumulated speech in polish mode before injection', async () => {
+    let onSegment: ((segment: any) => void) | undefined;
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingProcessingMode: 'polish',
+    };
+    mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+      onSegment = segmentCallback;
+    });
+
+    const service = await loadService();
+    await service.startListening();
+    vi.clearAllMocks();
+
+    onSegment?.({ id: 'seg-1', text: '那个就是说今天天气不错', isFinal: true });
+    await flushMicrotasks(8);
+
+    // In polish mode, isFinal segments shouldn't immediately inject
+    expect(getInvokeCalls('inject_text')).toEqual([]);
+
+    const stopPromise = service.stopListening();
+    await vi.runAllTimersAsync();
+    await stopPromise;
+    await flushMicrotasks(8);
+
+    // After stopping, polish was called and injected
+    const injectCalls = getInvokeCalls('inject_text');
+    expect(injectCalls.length).toBe(1);
+    expect(injectCalls[0][1].text).toContain('[polished]');
   });
 });

@@ -337,6 +337,9 @@ export interface BaseConfig {
 // Voice Typing
 // ---------------------------------------------------------------------------
 
+/** Voice Typing processing mode: 'raw' (fast direct output) or 'polish' (smart LLM rewrite). */
+export type VoiceTypingProcessingMode = 'raw' | 'polish';
+
 /** Voice Typing (dictation) settings. */
 export interface VoiceTypingConfig {
   /** Whether voice typing feature is enabled. Default: false. */
@@ -345,6 +348,14 @@ export interface VoiceTypingConfig {
   voiceTypingShortcut?: string;
   /** Interaction mode: 'hold' (Push-to-Talk) or 'toggle'. Default: 'hold'. */
   voiceTypingMode?: 'hold' | 'toggle';
+  /** Processing mode: 'raw' (fast direct output) or 'polish' (smart LLM rewrite). Default: 'raw'. */
+  voiceTypingProcessingMode?: VoiceTypingProcessingMode;
+  /** Whether audio cue sounds (earcons) are enabled. Default: true. */
+  voiceTypingSoundEnabled?: boolean;
+  /** Whether smart CJK-Latin typography spacing is enabled. Default: true. */
+  voiceTypingCjkSpacingEnabled?: boolean;
+  /** Optional custom LLM prompt directive for smart polish. */
+  voiceTypingPolishPrompt?: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -131,6 +131,10 @@ export type AppConfig_Deserialize = {
 	voiceTypingEnabled?: boolean | null,
 	voiceTypingShortcut?: string | null,
 	voiceTypingMode?: VoiceTypingMode | null,
+	voiceTypingProcessingMode?: VoiceTypingProcessingMode | null,
+	voiceTypingSoundEnabled?: boolean | null,
+	voiceTypingCjkSpacingEnabled?: boolean | null,
+	voiceTypingPolishPrompt?: string | null,
 	httpServerEnabled?: boolean | null,
 	httpServerHost?: string | null,
 	httpServerPort?: number | null,
@@ -216,6 +220,10 @@ export type AppConfig_Serialize = {
 	voiceTypingEnabled?: boolean | null,
 	voiceTypingShortcut?: string | null,
 	voiceTypingMode?: VoiceTypingMode | null,
+	voiceTypingProcessingMode?: VoiceTypingProcessingMode | null,
+	voiceTypingSoundEnabled?: boolean | null,
+	voiceTypingCjkSpacingEnabled?: boolean | null,
+	voiceTypingPolishPrompt?: string | null,
 	httpServerEnabled?: boolean | null,
 	httpServerHost?: string | null,
 	httpServerPort?: number | null,
@@ -2973,6 +2981,8 @@ export type UsageTrendPoint = {
 } & DashboardUsageBucket;
 
 export type VoiceTypingMode = "hold" | "toggle";
+
+export type VoiceTypingProcessingMode = "raw" | "polish";
 
 export type VoiceTypingReadinessInput = {
 	state: string,

@@ -81,6 +81,14 @@ pub enum VoiceTypingMode {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "lowercase")]
+pub enum VoiceTypingProcessingMode {
+    Raw,
+    Polish,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "lowercase")]
 pub enum GpuAcceleration {
     #[serde(alias = "directml")]
     Auto,
@@ -316,6 +324,14 @@ pub struct AppConfig {
     pub voice_typing_shortcut: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub voice_typing_mode: Option<VoiceTypingMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voice_typing_processing_mode: Option<VoiceTypingProcessingMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voice_typing_sound_enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voice_typing_cjk_spacing_enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voice_typing_polish_prompt: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub http_server_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useVoiceTypingHistoryStore } from '../../stores/voiceTypingHistoryStore';
 import { SettingsSubtitleTab } from '../settings/SettingsSubtitleTab';
 
 // Mock translation
@@ -59,6 +60,13 @@ vi.mock('../../stores/configStore', () => ({
     voiceTypingMode: 'hold',
   }),
   useSetConfig: () => mockUpdateConfig,
+  useConfigStore: {
+    getState: () => ({
+      config: {
+        hotwordSets: [],
+      },
+    }),
+  },
 }));
 
 describe('SettingsSubtitleTab', () => {
@@ -224,8 +232,8 @@ describe('SettingsSubtitleTab', () => {
   it('updates voice typing settings from the combined page', () => {
     render(<SettingsSubtitleTab />);
 
-    const switchBtn = screen.getByRole('switch');
-    fireEvent.click(switchBtn);
+    const switchBtns = screen.getAllByRole('switch');
+    fireEvent.click(switchBtns[0]);
     expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingEnabled: true });
 
     fireEvent.change(screen.getByLabelText('voice typing shortcut'), {
@@ -237,8 +245,18 @@ describe('SettingsSubtitleTab', () => {
       target: { value: 'toggle' },
     });
     expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingMode: 'toggle' });
-  });
 
+    fireEvent.change(document.querySelector('#vt-processing-mode-select') as HTMLSelectElement, {
+      target: { value: 'polish' },
+    });
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingProcessingMode: 'polish' });
+
+    fireEvent.click(switchBtns[1]);
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingSoundEnabled: false });
+
+    fireEvent.click(switchBtns[2]);
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingCjkSpacingEnabled: false });
+  });
   it('shows only simplified availability and the runtime failure reason', () => {
     mockReadiness.state = 'failed';
     mockReadiness.lastErrorSource = 'microphone';
@@ -251,5 +269,31 @@ describe('SettingsSubtitleTab', () => {
     expect(screen.queryByText('settings.voice_typing_dependencies')).toBeNull();
     expect(screen.queryByText('settings.voice_typing_open_model_hub')).toBeNull();
     expect(screen.queryByText('settings.voice_typing_open_input_device')).toBeNull();
+  });
+  it('renders history empty state and history items with actions', async () => {
+    useVoiceTypingHistoryStore.getState().clearHistory();
+    const { rerender } = render(<SettingsSubtitleTab />);
+
+    expect(screen.getByTestId('voice-typing-history-empty')).toBeTruthy();
+    screen.getByText('settings.voice_typing_history');
+
+    // Add an item to history store
+    useVoiceTypingHistoryStore.getState().addItem({
+      rawText: '就是说今天天气很好',
+      polishedText: '今天天气很好。',
+      injectedText: '今天天气很好。',
+      mode: 'polish',
+    });
+
+    rerender(<SettingsSubtitleTab />);
+
+    expect(screen.queryByTestId('voice-typing-history-empty')).toBeNull();
+    screen.getByText('今天天气很好。');
+    screen.getByText('settings.voice_typing_mode_badge_polish');
+
+    // Test add to hotwords
+    const addHotwordBtn = screen.getByTitle('settings.voice_typing_add_hotword');
+    fireEvent.click(addHotwordBtn);
+    expect(mockUpdateConfig).toHaveBeenCalled();
   });
 });

@@ -135,7 +135,10 @@ export const DEFAULT_CONFIG: AppConfig = {
   voiceTypingEnabled: false,
   voiceTypingShortcut: 'Alt+V',
   voiceTypingMode: 'hold',
-
+  voiceTypingProcessingMode: 'raw',
+  voiceTypingSoundEnabled: true,
+  voiceTypingCjkSpacingEnabled: true,
+  voiceTypingPolishPrompt: '',
   // API Server
   httpServerEnabled: false,
   httpServerHost: '127.0.0.1',
@@ -270,6 +273,10 @@ const VOICE_TYPING_KEYS: (keyof VoiceTypingConfig)[] = [
   'voiceTypingEnabled',
   'voiceTypingShortcut',
   'voiceTypingMode',
+  'voiceTypingProcessingMode',
+  'voiceTypingSoundEnabled',
+  'voiceTypingCjkSpacingEnabled',
+  'voiceTypingPolishPrompt',
 ];
 const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [
   'httpServerEnabled',

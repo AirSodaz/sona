@@ -313,6 +313,23 @@ describe('VoiceTypingOverlay', () => {
 
     screen.getByText('识别失败');
   });
+  it('renders polishing phase with custom styling and text', async () => {
+    render(<VoiceTypingOverlay />);
+
+    await act(async () => {
+      mocks.listenCallbacks['voice-typing:text']?.({
+        payload: {
+          sessionId: 'voice-typing-1',
+          text: '正在润色',
+          phase: 'polishing',
+          revision: 3,
+        },
+      });
+    });
+
+    screen.getByText('voice_typing.polishing');
+    expect(screen.getByTestId('voice-typing-bubble').style.border).toContain('168, 85, 247');
+  });
 
   it('uses the shared snapshot as the initial source of truth and ignores older revisions', async () => {
     mocks.invoke.mockImplementation(async (command: string): Promise<any> => {

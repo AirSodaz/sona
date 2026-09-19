@@ -1,10 +1,10 @@
-import { emit, listen } from '@tauri-apps/api/event';
-import { X } from 'lucide-react';
+import { Sparkles, X } from 'lucide-react';
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuxWindowState } from '../hooks/useAuxWindowState';
 import { useAuxWindowTheme } from '../hooks/useAuxWindowTheme';
 import { TauriEvent } from '../services/tauri/events';
+import { emit, listen } from '../services/tauri/platform/events';
 import { getCurrentWindow, PhysicalSize } from '../services/tauri/platform/windows';
 import {
   DEFAULT_VOICE_TYPING_OVERLAY_STATE,
@@ -168,8 +168,10 @@ export function VoiceTypingOverlay() {
   const { phase, text } = overlayState;
   const isSegment = phase === 'segment' && text.trim().length > 0;
   const isError = phase === 'error';
-  const displayText =
-    isSegment || isError
+  const isPolishing = phase === 'polishing';
+  const displayText = isPolishing
+    ? t('voice_typing.polishing', { defaultValue: 'AI 润色中...' })
+    : isSegment || isError
       ? text
       : phase === 'preparing'
         ? t('common.preparing')
@@ -196,7 +198,15 @@ export function VoiceTypingOverlay() {
 
   let containerStyle: CSSProperties;
 
-  if (isSegment) {
+  if (isPolishing) {
+    containerStyle = {
+      ...baseContainerStyle,
+      background: 'var(--color-bg-elevated)',
+      color: 'var(--color-text-primary)',
+      border: '1px solid rgba(168, 85, 247, 0.6)',
+      boxShadow: '0 16px 32px rgba(168, 85, 247, 0.28)',
+    };
+  } else if (isSegment) {
     containerStyle = {
       ...baseContainerStyle,
       background: 'var(--color-bg-elevated)',
@@ -224,6 +234,10 @@ export function VoiceTypingOverlay() {
   const isSpeaking = isSegment || peakLevel > 0.05;
   const barHeights = WAVEFORM_WEIGHTS.map((weight, i) => {
     if (isError) return 4;
+    if (isPolishing) {
+      const polishPattern = [6, 12, 16, 12, 6];
+      return polishPattern[i];
+    }
     if (isSpeaking) {
       const boost = Math.min(1, Math.max(peakLevel * 2.2, isSegment ? 0.35 : 0.15));
       return Math.round(MIN_BAR_HEIGHT + (MAX_BAR_HEIGHT - MIN_BAR_HEIGHT) * boost * weight);
@@ -268,14 +282,16 @@ export function VoiceTypingOverlay() {
                 borderRadius: '999px',
                 background: isError
                   ? '#fca5a5'
-                  : isSegment
-                    ? 'linear-gradient(180deg, #34d399 0%, #22c55e 100%)'
-                    : '#4ade80',
-                transition: 'height 80ms cubic-bezier(0.4, 0, 0.2, 1)',
+                  : isPolishing
+                    ? 'linear-gradient(180deg, #c084fc 0%, #9333ea 100%)'
+                    : isSegment
+                      ? 'linear-gradient(180deg, #34d399 0%, #22c55e 100%)'
+                      : '#4ade80',
               }}
             />
           ))}
         </div>
+        {isPolishing && <Sparkles size={14} color="#a855f7" style={{ flexShrink: 0 }} />}
         <span
           style={{
             whiteSpace: 'nowrap',

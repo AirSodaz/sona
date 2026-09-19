@@ -1,10 +1,27 @@
-import { Check, Keyboard, SlidersHorizontal, Subtitles, X } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  History,
+  Keyboard,
+  Plus,
+  SlidersHorizontal,
+  Subtitles,
+  Trash2,
+  X,
+} from 'lucide-react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVoiceTypingReadiness } from '../../hooks/useVoiceTypingReadiness';
-import { useCaptionConfig, useSetConfig, useVoiceTypingConfig } from '../../stores/configStore';
+import {
+  useCaptionConfig,
+  useConfigStore,
+  useSetConfig,
+  useVoiceTypingConfig,
+} from '../../stores/configStore';
+import { useVoiceTypingHistoryStore } from '../../stores/voiceTypingHistoryStore';
 import type { VoiceTypingRuntimeErrorSource } from '../../stores/voiceTypingRuntimeStore';
+import { logger } from '../../utils/logger';
 import { ColorSwatchPicker } from '../ColorSwatchPicker';
 import { Dropdown } from '../Dropdown';
 import { SubtitleIcon } from '../Icons';
@@ -137,6 +154,89 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
       </SettingsItem>
 
       <SettingsItem
+        title={t('settings.voice_typing_processing_mode', { defaultValue: 'Processing Mode' })}
+        hint={t('settings.voice_typing_processing_mode_hint', {
+          defaultValue: 'Choose between fast raw output or AI-powered smart polishing',
+        })}
+      >
+        <div style={{ width: '220px' }}>
+          <Dropdown
+            id="vt-processing-mode-select"
+            value={vtConfig.voiceTypingProcessingMode || 'raw'}
+            onChange={(val) =>
+              updateConfig({
+                voiceTypingProcessingMode: val as 'raw' | 'polish',
+              })
+            }
+            options={[
+              {
+                value: 'raw',
+                label: t('settings.voice_typing_processing_mode_raw', {
+                  defaultValue: 'Fast Dictation (Raw)',
+                }),
+              },
+              {
+                value: 'polish',
+                label: t('settings.voice_typing_processing_mode_polish', {
+                  defaultValue: 'Smart Polish (AI Rewrite)',
+                }),
+              },
+            ]}
+          />
+        </div>
+      </SettingsItem>
+
+      {vtConfig.voiceTypingProcessingMode === 'polish' && (
+        <SettingsItem
+          title={t('settings.voice_typing_polish_prompt', { defaultValue: 'Custom Polish Prompt' })}
+          hint={t('settings.voice_typing_polish_prompt_hint', {
+            defaultValue:
+              'Leave blank to use the built-in fast colloquial-to-written prompt directive',
+          })}
+        >
+          <textarea
+            className="settings-input"
+            rows={3}
+            style={{ width: '100%', maxWidth: '400px', resize: 'vertical' }}
+            placeholder={t('settings.voice_typing_polish_prompt_hint', {
+              defaultValue:
+                'Leave blank to use the built-in fast colloquial-to-written prompt directive',
+            })}
+            value={vtConfig.voiceTypingPolishPrompt ?? ''}
+            onChange={(e) => updateConfig({ voiceTypingPolishPrompt: e.target.value })}
+          />
+        </SettingsItem>
+      )}
+
+      <SettingsItem
+        title={t('settings.voice_typing_sound_enabled', {
+          defaultValue: 'Audio Feedback (Earcons)',
+        })}
+        hint={t('settings.voice_typing_sound_enabled_hint', {
+          defaultValue: 'Play sound cues on start, commit, cancel, or error',
+        })}
+      >
+        <Switch
+          checked={vtConfig.voiceTypingSoundEnabled ?? true}
+          onChange={(val) => updateConfig({ voiceTypingSoundEnabled: val })}
+        />
+      </SettingsItem>
+
+      <SettingsItem
+        title={t('settings.voice_typing_cjk_spacing_enabled', {
+          defaultValue: 'CJK-Latin Typography Spacing',
+        })}
+        hint={t('settings.voice_typing_cjk_spacing_enabled_hint', {
+          defaultValue:
+            'Automatically insert spaces between CJK and Latin characters/numbers and harmonize punctuation',
+        })}
+      >
+        <Switch
+          checked={vtConfig.voiceTypingCjkSpacingEnabled ?? true}
+          onChange={(val) => updateConfig({ voiceTypingCjkSpacingEnabled: val })}
+        />
+      </SettingsItem>
+      <SettingsItem
         title={t('settings.voice_typing_availability', {
           defaultValue: 'Availability',
         })}
@@ -172,6 +272,278 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
   );
 }
 
+function VoiceTypingHistorySection(): React.JSX.Element {
+  const { t } = useTranslation();
+  const historyItems = useVoiceTypingHistoryStore((state) => state.items);
+  const removeItem = useVoiceTypingHistoryStore((state) => state.removeItem);
+  const clearHistory = useVoiceTypingHistoryStore((state) => state.clearHistory);
+  const updateConfig = useSetConfig();
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [addedHotwordId, setAddedHotwordId] = useState<string | null>(null);
+
+  const handleCopy = async (id: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId((current) => (current === id ? null : current)), 1500);
+    } catch (err) {
+      logger.warn('[VoiceTypingHistory] Failed to copy to clipboard', err);
+    }
+  };
+
+  const handleAddToHotwords = (id: string, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const config = useConfigStore.getState().config;
+    const existingSets = config.hotwordSets || [];
+    let updated = false;
+
+    const nextSets = existingSets.map((set) => {
+      if (set.enabled && !updated) {
+        updated = true;
+        return {
+          ...set,
+          rules: [...set.rules, { id: `hw_${Date.now()}`, text: trimmed }],
+        };
+      }
+      return set;
+    });
+
+    if (!updated) {
+      nextSets.push({
+        id: `hw_set_${Date.now()}`,
+        name: t('settings.voice_typing_hotwords_set_name', { defaultValue: '语音输入热词' }),
+        enabled: true,
+        rules: [{ id: `hw_${Date.now()}`, text: trimmed }],
+      });
+    }
+
+    updateConfig({ hotwordSets: nextSets });
+    setAddedHotwordId(id);
+    setTimeout(() => setAddedHotwordId((current) => (current === id ? null : current)), 1500);
+  };
+
+  return (
+    <SettingsSection
+      title={t('settings.voice_typing_history', { defaultValue: 'Dictation History' })}
+      icon={<History size={20} />}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '8px',
+          gap: '12px',
+        }}
+      >
+        <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
+          {t('settings.voice_typing_history_hint', {
+            defaultValue: 'Recent voice typing entries are saved here to prevent text loss.',
+          })}
+        </span>
+        {historyItems.length > 0 && (
+          <button
+            type="button"
+            onClick={clearHistory}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 10px',
+              fontSize: '12px',
+              borderRadius: 'var(--radius-sm, 6px)',
+              border: '1px solid var(--color-border)',
+              background: 'transparent',
+              color: 'var(--color-text-muted)',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            <Trash2 size={13} />
+            {t('common.clear', { defaultValue: 'Clear' })}
+          </button>
+        )}
+      </div>
+
+      {historyItems.length === 0 ? (
+        <div
+          data-testid="voice-typing-history-empty"
+          style={{
+            padding: '24px 16px',
+            textAlign: 'center',
+            color: 'var(--color-text-muted)',
+            fontSize: '13px',
+            borderRadius: 'var(--radius-md, 8px)',
+            background: 'var(--color-bg-secondary)',
+            border: '1px dashed var(--color-border)',
+          }}
+        >
+          {t('settings.voice_typing_history_empty', {
+            defaultValue:
+              'No dictation history yet. Texts transcribed via voice typing will appear here.',
+          })}
+        </div>
+      ) : (
+        <div
+          data-testid="voice-typing-history-list"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            maxHeight: '420px',
+            overflowY: 'auto',
+          }}
+        >
+          {historyItems.map((item) => (
+            <div
+              key={item.id}
+              data-testid={`voice-typing-history-item-${item.id}`}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                padding: '12px 14px',
+                borderRadius: 'var(--radius-md, 8px)',
+                background: 'var(--color-bg-secondary)',
+                border: '1px solid var(--color-border)',
+              }}
+            >
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      background:
+                        item.mode === 'polish'
+                          ? 'rgba(168, 85, 247, 0.15)'
+                          : 'rgba(59, 130, 246, 0.15)',
+                      color:
+                        item.mode === 'polish'
+                          ? 'var(--color-accent-purple, #a855f7)'
+                          : 'var(--color-accent-blue, #3b82f6)',
+                    }}
+                  >
+                    {item.mode === 'polish'
+                      ? t('settings.voice_typing_mode_badge_polish', { defaultValue: 'AI 润色' })
+                      : t('settings.voice_typing_mode_badge_raw', { defaultValue: '极速直出' })}
+                  </span>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                    {new Date(item.timestamp).toLocaleTimeString()}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button
+                    type="button"
+                    title={t('common.copy', { defaultValue: 'Copy' })}
+                    onClick={() => void handleCopy(item.id, item.injectedText)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '3px 8px',
+                      fontSize: '12px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--color-border)',
+                      background: 'var(--color-bg-elevated)',
+                      color: 'var(--color-text-primary)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {copiedId === item.id ? (
+                      <Check size={12} color="#22c55e" />
+                    ) : (
+                      <Copy size={12} />
+                    )}
+                    {copiedId === item.id
+                      ? t('common.copied', { defaultValue: 'Copied' })
+                      : t('common.copy', { defaultValue: 'Copy' })}
+                  </button>
+                  <button
+                    type="button"
+                    title={t('settings.voice_typing_add_hotword', {
+                      defaultValue: 'Add to Hotwords',
+                    })}
+                    onClick={() => handleAddToHotwords(item.id, item.injectedText)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '3px 8px',
+                      fontSize: '12px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--color-border)',
+                      background: 'var(--color-bg-elevated)',
+                      color: 'var(--color-text-primary)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {addedHotwordId === item.id ? (
+                      <Check size={12} color="#22c55e" />
+                    ) : (
+                      <Plus size={12} />
+                    )}
+                    {addedHotwordId === item.id
+                      ? t('settings.voice_typing_hotword_added', { defaultValue: '已添加' })
+                      : t('settings.voice_typing_add_hotword', { defaultValue: '加为热词' })}
+                  </button>
+                  <button
+                    type="button"
+                    title={t('common.delete', { defaultValue: 'Delete' })}
+                    onClick={() => removeItem(item.id)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      padding: '4px',
+                      borderRadius: '4px',
+                      border: 'none',
+                      background: 'transparent',
+                      color: 'var(--color-text-muted)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+              <div
+                style={{
+                  fontSize: '13px',
+                  lineHeight: '1.5',
+                  color: 'var(--color-text-primary)',
+                  wordBreak: 'break-word',
+                  userSelect: 'text',
+                }}
+              >
+                {item.injectedText}
+              </div>
+              {item.mode === 'polish' && item.rawText && item.rawText !== item.injectedText && (
+                <div
+                  style={{
+                    fontSize: '12px',
+                    color: 'var(--color-text-muted)',
+                    fontStyle: 'italic',
+                    background: 'var(--color-bg-tertiary, rgba(0,0,0,0.03))',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                  }}
+                >
+                  {t('settings.voice_typing_original_text', { defaultValue: '原识别草稿' })}:{' '}
+                  {item.rawText}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </SettingsSection>
+  );
+}
 export type SubtitleSubTab = 'voice_typing' | 'subtitles';
 
 export interface SettingsSubtitleTabProps {
@@ -297,6 +669,7 @@ export function SettingsSubtitleTab({
           }}
         >
           <VoiceTypingSettingsSection />
+          <VoiceTypingHistorySection />
         </div>
       )}
 
