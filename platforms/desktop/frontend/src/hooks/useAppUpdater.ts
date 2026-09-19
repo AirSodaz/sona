@@ -7,6 +7,7 @@ interface UseAppUpdaterReturn {
   error: string | null;
   updateInfo: Update | null;
   checkUpdate: (manual?: boolean) => Promise<void>;
+  resetStatus: () => void;
   installUpdate: () => Promise<void>;
   progress: number;
   notificationVisible: boolean;
@@ -21,6 +22,7 @@ export function useAppUpdater(): UseAppUpdaterReturn {
       error: state.error,
       updateInfo: state.updateInfo,
       checkUpdate: state.checkUpdate,
+      resetStatus: state.resetStatus,
       installUpdate: state.installUpdate,
       progress: state.progress,
       notificationVisible: state.notificationVisible,

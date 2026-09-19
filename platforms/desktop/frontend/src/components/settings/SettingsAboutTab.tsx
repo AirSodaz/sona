@@ -1,4 +1,4 @@
-import type React from 'react';
+import { type JSX, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import packageJson from '../../../package.json';
 import { useAppUpdater } from '../../hooks/useAppUpdater';
@@ -20,10 +20,23 @@ import {
  * Redesigned About page with centered card-based layout.
  * Features a hero section with app logo, info cards, and action buttons.
  */
-export function SettingsAboutTab(): React.JSX.Element {
+export function SettingsAboutTab(): JSX.Element {
   const { t } = useTranslation();
-  const { status, updateInfo, checkUpdate, installUpdate, progress, relaunchToUpdate } =
-    useAppUpdater();
+  const {
+    status,
+    updateInfo,
+    checkUpdate,
+    resetStatus,
+    installUpdate,
+    progress,
+    relaunchToUpdate,
+  } = useAppUpdater();
+
+  useEffect(() => {
+    return () => {
+      resetStatus();
+    };
+  }, [resetStatus]);
   const channel = getAppReleaseChannel();
   const channelLabel = formatChannelBadgeLabel(channel);
   const handleOpenHomepage = async () => {
@@ -111,7 +124,11 @@ export function SettingsAboutTab(): React.JSX.Element {
         );
       case 'error':
       default:
-        return null;
+        return (
+          <button className="btn btn-primary" onClick={() => checkUpdate(true)}>
+            {t('settings.about_check_updates')}
+          </button>
+        );
     }
   };
 

@@ -17,6 +17,16 @@ export type UpdateStatus =
   | 'installing'
   | 'downloaded'
   | 'error';
+export const UPTODATE_RESET_DELAY_MS = 6000;
+
+let uptodateResetTimer: NodeJS.Timeout | number | null = null;
+
+export function clearUptodateResetTimer(): void {
+  if (uptodateResetTimer !== null) {
+    clearTimeout(uptodateResetTimer);
+    uptodateResetTimer = null;
+  }
+}
 
 interface AppUpdaterState {
   status: UpdateStatus;
@@ -27,6 +37,7 @@ interface AppUpdaterState {
   notificationVisible: boolean;
   hasAutoCheckedThisSession: boolean;
   checkUpdate: (manual?: boolean) => Promise<void>;
+  resetStatus: () => void;
   installUpdate: () => Promise<void>;
   dismissNotification: () => void;
   relaunchToUpdate: () => Promise<void>;
@@ -65,6 +76,13 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
   notificationVisible: false,
   hasAutoCheckedThisSession: false,
 
+  resetStatus: () => {
+    clearUptodateResetTimer();
+    if (get().status === 'uptodate') {
+      set({ status: 'idle' });
+    }
+  },
+
   checkUpdate: async (manual = false) => {
     const state = get();
 
@@ -76,6 +94,8 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
       return;
     }
 
+    clearUptodateResetTimer();
+
     const previousStatus = state.status;
     const previousUpdateInfo = state.updateInfo;
     const previousNotificationVisible = state.notificationVisible;
@@ -86,7 +106,6 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
       progress: 0,
       hasAutoCheckedThisSession: manual ? state.hasAutoCheckedThisSession : true,
     });
-
     try {
       const update = await check();
 
@@ -106,11 +125,20 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
 
       set({
         updateInfo: null,
-        status: 'uptodate',
+        status: manual ? 'uptodate' : 'idle',
         error: null,
         progress: 0,
         notificationVisible: false,
       });
+
+      if (manual) {
+        uptodateResetTimer = setTimeout(() => {
+          if (get().status === 'uptodate') {
+            set({ status: 'idle' });
+          }
+          uptodateResetTimer = null;
+        }, UPTODATE_RESET_DELAY_MS);
+      }
     } catch (error) {
       logger.error('Update check failed:', error);
       const errorMessage = extractErrorMessage(error);

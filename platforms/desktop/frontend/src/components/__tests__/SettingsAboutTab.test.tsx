@@ -1,6 +1,10 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useAppUpdaterStore } from '../../stores/appUpdaterStore';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  clearUptodateResetTimer,
+  UPTODATE_RESET_DELAY_MS,
+  useAppUpdaterStore,
+} from '../../stores/appUpdaterStore';
 import { SettingsAboutTab } from '../settings/SettingsAboutTab';
 
 const checkMock = vi.fn();
@@ -62,6 +66,7 @@ function makeUpdate(version: string) {
 }
 
 function resetUpdaterStore() {
+  clearUptodateResetTimer();
   useAppUpdaterStore.setState({
     status: 'idle',
     error: null,
@@ -77,6 +82,46 @@ describe('SettingsAboutTab', () => {
     vi.clearAllMocks();
     runGuardedQuitMock.mockReset();
     resetUpdaterStore();
+  });
+  afterEach(() => {
+    clearUptodateResetTimer();
+    vi.useRealTimers();
+  });
+
+  it('shows up-to-date message on manual check and automatically reverts to check button', async () => {
+    vi.useFakeTimers();
+    checkMock.mockResolvedValueOnce(null);
+
+    render(<SettingsAboutTab />);
+
+    expect(screen.getByRole('button', { name: 'settings.about_check_updates' })).toBeDefined();
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'settings.about_check_updates' }).click();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('settings.update_not_available')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'settings.about_check_updates' })).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(UPTODATE_RESET_DELAY_MS);
+    });
+
+    expect(screen.getByRole('button', { name: 'settings.about_check_updates' })).toBeDefined();
+    expect(screen.queryByText('settings.update_not_available')).toBeNull();
+  });
+
+  it('resets uptodate status back to idle when component unmounts', () => {
+    useAppUpdaterStore.setState({ status: 'uptodate' });
+
+    const { unmount } = render(<SettingsAboutTab />);
+
+    expect(useAppUpdaterStore.getState().status).toBe('uptodate');
+
+    unmount();
+
+    expect(useAppUpdaterStore.getState().status).toBe('idle');
   });
 
   it('renders app title and version badge containing version, divider, and channel', () => {

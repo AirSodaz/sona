@@ -1,5 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useAppUpdaterStore } from '../appUpdaterStore';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  clearUptodateResetTimer,
+  UPTODATE_RESET_DELAY_MS,
+  useAppUpdaterStore,
+} from '../appUpdaterStore';
 
 const checkMock = vi.fn();
 const relaunchMock = vi.fn();
@@ -48,6 +52,7 @@ function makeUpdate(version: string, overrides: Record<string, unknown> = {}) {
 }
 
 function resetUpdaterStore() {
+  clearUptodateResetTimer();
   useAppUpdaterStore.setState({
     status: 'idle',
     error: null,
@@ -67,6 +72,40 @@ describe('appUpdaterStore', () => {
       await onExit();
       return true;
     });
+  });
+  afterEach(() => {
+    clearUptodateResetTimer();
+    vi.useRealTimers();
+  });
+
+  it('keeps status idle when automatic update check finds no new version', async () => {
+    checkMock.mockResolvedValueOnce(null);
+
+    await useAppUpdaterStore.getState().checkUpdate(false);
+
+    expect(useAppUpdaterStore.getState().status).toBe('idle');
+    expect(useAppUpdaterStore.getState().hasAutoCheckedThisSession).toBe(true);
+  });
+
+  it('sets status to uptodate on manual update check finding no new version, and auto-resets to idle after delay', async () => {
+    vi.useFakeTimers();
+    checkMock.mockResolvedValueOnce(null);
+
+    await useAppUpdaterStore.getState().checkUpdate(true);
+
+    expect(useAppUpdaterStore.getState().status).toBe('uptodate');
+
+    vi.advanceTimersByTime(UPTODATE_RESET_DELAY_MS);
+
+    expect(useAppUpdaterStore.getState().status).toBe('idle');
+  });
+
+  it('resets uptodate status to idle immediately via resetStatus', async () => {
+    useAppUpdaterStore.setState({ status: 'uptodate' });
+
+    useAppUpdaterStore.getState().resetStatus();
+
+    expect(useAppUpdaterStore.getState().status).toBe('idle');
   });
 
   it('shows the notification after an automatic update check finds a new version', async () => {
