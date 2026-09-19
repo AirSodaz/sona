@@ -843,24 +843,25 @@ fn get_linux_foreground_window_info() -> Result<Option<ForegroundWindowInfo>, St
         .args(["getwindowfocus", "getwindowname"])
         .output()
     {
-        if output.status.success() {
-            let window_title = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            let app_name = if let Ok(class_out) = Command::new("xdotool")
-                .args(["getwindowfocus", "getwindowclassname"])
-                .output()
-            {
-                String::from_utf8_lossy(&class_out.stdout)
-                    .trim()
-                    .to_lowercase()
-            } else {
-                String::new()
-            };
-            if !app_name.is_empty() || !window_title.is_empty() {
-                return Ok(Some(ForegroundWindowInfo {
-                    app_name,
-                    window_title,
-                }));
-            }
+        if !output.status.success() {
+            return Ok(None);
+        }
+        let window_title = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let app_name = if let Ok(class_out) = Command::new("xdotool")
+            .args(["getwindowfocus", "getwindowclassname"])
+            .output()
+        {
+            String::from_utf8_lossy(&class_out.stdout)
+                .trim()
+                .to_lowercase()
+        } else {
+            String::new()
+        };
+        if !app_name.is_empty() || !window_title.is_empty() {
+            return Ok(Some(ForegroundWindowInfo {
+                app_name,
+                window_title,
+            }));
         }
     }
 

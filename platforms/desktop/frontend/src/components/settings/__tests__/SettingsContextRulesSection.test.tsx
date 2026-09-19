@@ -8,6 +8,14 @@ vi.mock('react-i18next', () => ({
     t: (key: string, opts?: { defaultValue?: string }) => opts?.defaultValue ?? key,
   }),
 }));
+vi.mock('../../../services/voiceTyping/voiceTypingContext', async (importOriginal) => {
+  const mod =
+    await importOriginal<typeof import('../../../services/voiceTyping/voiceTypingContext')>();
+  return {
+    ...mod,
+    getCurrentPlatform: () => 'windows',
+  };
+});
 
 describe('SettingsContextRulesSection', () => {
   beforeEach(() => {

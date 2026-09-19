@@ -233,7 +233,7 @@ export function createTaskCenterActionRegistry(
             },
           });
         } else if (isLlmTask(task)) {
-          if (task.retryable !== false && task.historyId) {
+          if (task.retryable !== false) {
             actions.push({
               id: 'retry',
               label: deps.t('task_center.retry', { defaultValue: 'Retry' }),
