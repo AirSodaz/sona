@@ -43,8 +43,37 @@ export function applyTextReplacements(
     const escapedFrom = rule.from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const flags = rule.ignoreCase ? 'gi' : 'g';
     const regex = new RegExp(escapedFrom, flags);
-    result = result.replace(regex, rule.to || '');
+    const target = expandTextMacros(rule.to || '');
+    result = result.replace(regex, target);
   }
 
   return result;
+}
+/**
+ * Expands dynamic macro placeholders like {date}, {today}, {time}, {datetime}, {year}.
+ */
+export function expandTextMacros(text: string, now: Date = new Date()): string {
+  if (!text?.includes('{')) {
+    return text;
+  }
+
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const year = now.getFullYear().toString();
+  const month = pad(now.getMonth() + 1);
+  const day = pad(now.getDate());
+  const hours = pad(now.getHours());
+  const minutes = pad(now.getMinutes());
+  const seconds = pad(now.getSeconds());
+
+  const dateStr = `${year}-${month}-${day}`;
+  const timeStr = `${hours}:${minutes}:${seconds}`;
+  const dateTimeStr = `${dateStr} ${timeStr}`;
+
+  return text
+    .replace(/\{(?:date|today)\}/gi, dateStr)
+    .replace(/\{time\}/gi, timeStr)
+    .replace(/\{datetime\}/gi, dateTimeStr)
+    .replace(/\{year\}/gi, year)
+    .replace(/\{month\}/gi, month)
+    .replace(/\{day\}/gi, day);
 }

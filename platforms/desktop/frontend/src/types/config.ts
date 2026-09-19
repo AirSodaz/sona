@@ -337,6 +337,38 @@ export interface BaseConfig {
 // Voice Typing
 // ---------------------------------------------------------------------------
 
+/** Voice Typing processing mode: 'raw' (fast direct output) or 'polish' (smart LLM rewrite). */
+export type VoiceTypingProcessingMode = 'raw' | 'polish';
+
+/** Voice Typing placement strategy: 'caret' (follow cursor) or 'bottom_center' (dynamic island). */
+export type VoiceTypingPlacement = 'caret' | 'bottom_center';
+
+/** Desktop host operating systems. */
+export type HostPlatform = 'windows' | 'macos' | 'linux';
+
+/** Per-platform software list mapping. */
+export interface VoiceTypingPlatformApps {
+  windows: string[];
+  macos: string[];
+  linux: string[];
+}
+
+/** Customizable situation rule for context awareness. */
+export interface VoiceTypingContextRule {
+  id: string;
+  name: string;
+  icon?: string;
+  badgeColor?: string;
+  appsByPlatform: VoiceTypingPlatformApps;
+  titlePatterns: string[];
+  promptDirective: string;
+  stripTrailingPunctuation: boolean;
+  isBuiltin: boolean;
+  enabled: boolean;
+}
+
+/** Voice Typing situation preset (can be 'auto', 'general', or any custom rule id). */
+export type VoiceTypingContextPreset = string;
 /** Voice Typing (dictation) settings. */
 export interface VoiceTypingConfig {
   /** Whether voice typing feature is enabled. Default: false. */
@@ -345,6 +377,24 @@ export interface VoiceTypingConfig {
   voiceTypingShortcut?: string;
   /** Interaction mode: 'hold' (Push-to-Talk) or 'toggle'. Default: 'hold'. */
   voiceTypingMode?: 'hold' | 'toggle';
+  /** Processing mode: 'raw' (fast direct output) or 'polish' (smart LLM rewrite). Default: 'raw'. */
+  voiceTypingProcessingMode?: VoiceTypingProcessingMode;
+  /** Whether audio cue sounds (earcons) are enabled. Default: true. */
+  voiceTypingSoundEnabled?: boolean;
+  /** Whether smart CJK-Latin typography spacing is enabled. Default: true. */
+  voiceTypingCjkSpacingEnabled?: boolean;
+  /** Optional custom LLM prompt directive for smart polish. */
+  voiceTypingPolishPrompt?: string;
+  /** Placement strategy: 'caret' (follow text cursor) or 'bottom_center' (floating dynamic island). Default: 'caret'. */
+  voiceTypingPlacement?: VoiceTypingPlacement;
+  /** Global shortcut to trigger voice typing quick recall drawer. Default: 'Alt+Shift+H'. */
+  voiceTypingQuickRecallShortcut?: string;
+  /** Whether application context awareness is enabled. Default: true. */
+  voiceTypingContextAwarenessEnabled?: boolean;
+  /** Contextual situation preset: 'auto' | 'general' | 'developer' | 'chat' | 'formal' or custom rule id. Default: 'auto'. */
+  voiceTypingContextPreset?: VoiceTypingContextPreset;
+  /** Customizable contextual situation rules with per-platform software mapping. */
+  voiceTypingContextRules?: VoiceTypingContextRule[];
 }
 
 // ---------------------------------------------------------------------------

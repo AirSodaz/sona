@@ -1,12 +1,25 @@
+import i18next from 'i18next';
 import { useConfigStore } from '../stores/configStore';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
+import { useTaskLedgerStore } from '../stores/taskLedgerStore';
+import { useVoiceTypingHistoryStore } from '../stores/voiceTypingHistoryStore';
 import { useVoiceTypingRuntimeStore } from '../stores/voiceTypingRuntimeStore';
 import type { AppConfig } from '../types/config';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { isAsrRequestConfigured } from './asrConfigService';
+import { TauriEvent } from './tauri/events';
+import { listen } from './tauri/platform/events';
+import { isRegistered, register, unregister } from './tauri/platform/globalShortcut';
+import { currentMonitor, monitorFromPoint } from './tauri/platform/windows';
 import { processBatchFile } from './tauri/recognizer';
-import { getMousePosition, getTextCursorPosition, injectText } from './tauri/system';
+import {
+  getFocusedSelectionText,
+  getForegroundWindowInfo,
+  getMousePosition,
+  getTextCursorPosition,
+  injectText,
+} from './tauri/system';
 import { createTranscriptionService, type TranscriptionService } from './transcriptionService';
 import {
   getVoiceTypingShortcutModifiers,
@@ -18,12 +31,19 @@ import {
 } from './voiceTyping/voiceTypingConfig';
 import { VoiceTypingMicrophoneRuntime } from './voiceTyping/voiceTypingMicrophoneRuntime';
 import { VoiceTypingOverlayPresenter } from './voiceTyping/voiceTypingOverlayPresenter';
+import {
+  polishVoiceTypingText,
+  transformSelectedText,
+} from './voiceTyping/voiceTypingPolishService';
 import { VoiceTypingSessionMachine } from './voiceTyping/voiceTypingSessionMachine';
 import { VoiceTypingShortcutController } from './voiceTyping/voiceTypingShortcutController';
+import { voiceTypingSoundPlayer } from './voiceTyping/voiceTypingSounds';
+import { VOICE_TYPING_WINDOW_WIDTH } from './voiceTypingWindowService';
 
 const CURSOR_POSITION_OFFSET = 12;
 const MOUSE_POSITION_OFFSET = 20;
 const POST_COMMIT_CARET_RETRY_DELAYS_MS = [0, 40, 40, 40];
+const BOTTOM_CENTER_MARGIN_BOTTOM = 48;
 
 export interface VoiceTypingServicePorts {
   getConfig: () => AppConfig;
@@ -34,6 +54,11 @@ export interface VoiceTypingServicePorts {
   getTextCursorPosition: typeof getTextCursorPosition;
   getMousePosition: typeof getMousePosition;
   transcriptionService: TranscriptionService;
+  listenCancel?: (callback: () => void) => Promise<() => void>;
+  currentMonitor?: typeof currentMonitor;
+  monitorFromPoint?: typeof monitorFromPoint;
+  getFocusedSelectionText?: typeof getFocusedSelectionText;
+  getForegroundWindowInfo?: typeof getForegroundWindowInfo;
 }
 
 export class VoiceTypingService {
@@ -41,7 +66,9 @@ export class VoiceTypingService {
 
   private lastConfigSnapshot: VoiceTypingConfigSnapshot | null = null;
   private unsubscribe: (() => void) | null = null;
-
+  private cancelUnlisten: (() => void) | null = null;
+  private reinjectUnlisten: (() => void) | null = null;
+  private quickRecallShortcut: string | null = null;
   private readonly transcriptionService: TranscriptionService;
   private readonly overlayPresenter = new VoiceTypingOverlayPresenter();
   private readonly microphoneRuntime = new VoiceTypingMicrophoneRuntime();
@@ -64,6 +91,69 @@ export class VoiceTypingService {
       onRuntimeError: (error) => {
         this.ports.getVoiceTypingRuntimeStore().reportRuntimeError('session', error);
       },
+      isSoundEnabled: () => this.ports.getConfig().voiceTypingSoundEnabled ?? true,
+      isCjkSpacingEnabled: () => this.ports.getConfig().voiceTypingCjkSpacingEnabled ?? true,
+      getProcessingMode: () => this.ports.getConfig().voiceTypingProcessingMode ?? 'raw',
+      polishText: (text, context, onError) => polishVoiceTypingText(text, { context, onError }),
+      onPolishFailed: () => {
+        const now = Date.now();
+        void useTaskLedgerStore.getState().upsertTask({
+          id: `voice-typing-polish-fail-${now}`,
+          kind: 'llmPolish',
+          status: 'failed',
+          title: i18next.t('voice_typing.polish_failed', {
+            defaultValue: 'Voice typing polish failed',
+          }),
+          errorMessage: i18next.t('voice_typing.original_saved_to_clipboard', {
+            defaultValue: 'Original text was copied to clipboard.',
+          }),
+          progress: 100,
+          createdAt: now,
+          updatedAt: now,
+          retryable: false,
+          cancelable: false,
+          recoverable: false,
+        });
+      },
+      onTextCommitted: (entry) => {
+        useVoiceTypingHistoryStore.getState().addItem(entry);
+      },
+      getFocusedSelectionText: () =>
+        this.ports.getFocusedSelectionText
+          ? this.ports.getFocusedSelectionText()
+          : getFocusedSelectionText(),
+      transformText: (selectedText, instruction, context, onError) =>
+        transformSelectedText(selectedText, instruction, { context, onError }),
+      onTransformFailed: () => {
+        const now = Date.now();
+        void useTaskLedgerStore.getState().upsertTask({
+          id: `voice-typing-transform-fail-${now}`,
+          kind: 'llmPolish',
+          status: 'failed',
+          title: i18next.t('voice_typing.selection_rewrite_failed', {
+            defaultValue: 'Selection rewrite failed',
+          }),
+          errorMessage: i18next.t('voice_typing.original_saved_to_clipboard', {
+            defaultValue: 'Original text was copied to clipboard.',
+          }),
+          progress: 100,
+          createdAt: now,
+          updatedAt: now,
+          retryable: false,
+          cancelable: false,
+          recoverable: false,
+        });
+      },
+      getTextReplacements: () => this.ports.getConfig().textReplacementSets,
+      getForegroundWindowInfo: () =>
+        this.ports.getForegroundWindowInfo
+          ? this.ports.getForegroundWindowInfo()
+          : getForegroundWindowInfo(),
+      isContextAwarenessEnabled: () =>
+        this.ports.getConfig().voiceTypingContextAwarenessEnabled ?? true,
+      getContextPreset: () => this.ports.getConfig().voiceTypingContextPreset ?? 'auto',
+      getContextRules: () => this.ports.getConfig().voiceTypingContextRules,
+      getRecentHistory: () => useVoiceTypingHistoryStore.getState().items.slice(0, 5),
     });
     this.shortcutController = new VoiceTypingShortcutController({
       getMode: () => this.getVoiceTypingMode(),
@@ -141,6 +231,13 @@ export class VoiceTypingService {
         void this.stopMicrophoneCapture();
       }
 
+      if (change.enabledChanged || change.quickRecallShortcutChanged) {
+        void this.updateQuickRecallShortcutRegistration(
+          nextSnapshot.enabled,
+          nextSnapshot.quickRecallShortcut
+        );
+      }
+
       this.lastConfigSnapshot = nextSnapshot;
 
       if (nextSnapshot.enabled && (change.configChanged || change.enabledChanged)) {
@@ -152,9 +249,37 @@ export class VoiceTypingService {
       this.lastConfigSnapshot.enabled,
       this.lastConfigSnapshot.shortcut
     );
+    void this.updateQuickRecallShortcutRegistration(
+      this.lastConfigSnapshot.enabled,
+      this.lastConfigSnapshot.quickRecallShortcut
+    );
     if (this.lastConfigSnapshot.enabled) {
       void this.syncAndPrepare();
     }
+    if (this.ports.listenCancel) {
+      void this.ports
+        .listenCancel(() => {
+          void this.cancelListening();
+        })
+        .then((unlisten) => {
+          this.cancelUnlisten = unlisten;
+        });
+    }
+
+    void listen<{ text: string }>(TauriEvent.auxWindow.voiceTypingReinject, async (event) => {
+      if (event.payload?.text) {
+        await this.sessionMachine.cancel();
+        await this.delay(80);
+        await this.ports.injectText(event.payload.text, this.getCurrentShortcutModifiers());
+        voiceTypingSoundPlayer.play('commit');
+      }
+    })
+      .then((unlisten) => {
+        this.reinjectUnlisten = unlisten;
+      })
+      .catch((err) => {
+        logger.warn('[VoiceTypingService] Failed to listen to reinject event:', err);
+      });
   }
 
   public destroy() {
@@ -162,6 +287,18 @@ export class VoiceTypingService {
     if (this.unsubscribe) {
       this.unsubscribe();
       this.unsubscribe = null;
+    }
+    if (this.cancelUnlisten) {
+      this.cancelUnlisten();
+      this.cancelUnlisten = null;
+    }
+    if (this.reinjectUnlisten) {
+      this.reinjectUnlisten();
+      this.reinjectUnlisten = null;
+    }
+    if (this.quickRecallShortcut) {
+      void Promise.resolve(unregister(this.quickRecallShortcut)).catch(() => undefined);
+      this.quickRecallShortcut = null;
     }
     this.lastConfigSnapshot = null;
   }
@@ -235,6 +372,58 @@ export class VoiceTypingService {
       await this.stopMicrophoneCapture();
     }
   }
+  public async cancelListening() {
+    await this.sessionMachine.cancel();
+    if (!(this.ports.getConfig().keepMicrophoneActive ?? false)) {
+      await this.stopMicrophoneCapture();
+    }
+  }
+
+  public async openQuickRecall(): Promise<void> {
+    if (this.sessionMachine.isActive()) {
+      if (this.sessionMachine.isRecallActive()) {
+        await this.sessionMachine.cancel();
+      }
+      return;
+    }
+    const position = await this.getQuickRecallOverlayPosition();
+    await this.sessionMachine.openQuickRecall(position);
+  }
+
+  private async updateQuickRecallShortcutRegistration(
+    enabled: boolean,
+    shortcut: string
+  ): Promise<void> {
+    if (this.quickRecallShortcut) {
+      try {
+        if (await isRegistered(this.quickRecallShortcut)) {
+          await unregister(this.quickRecallShortcut);
+        }
+      } catch (err) {
+        logger.warn('[VoiceTypingService] Failed to unregister quick recall shortcut:', err);
+      }
+      this.quickRecallShortcut = null;
+    }
+
+    if (!enabled) {
+      return;
+    }
+
+    const normalized = shortcut.replace(/\s+/g, '');
+    try {
+      await register(normalized, (event) => {
+        if (event.state === 'Pressed') {
+          void this.openQuickRecall();
+        }
+      });
+      this.quickRecallShortcut = normalized;
+      logger.info('[VoiceTypingService] Registered quick recall shortcut', {
+        shortcut: normalized,
+      });
+    } catch (err) {
+      logger.warn('[VoiceTypingService] Failed to register quick recall shortcut:', err);
+    }
+  }
 
   private getVoiceTypingMode() {
     return this.ports.getConfig().voiceTypingMode || 'hold';
@@ -275,8 +464,50 @@ export class VoiceTypingService {
       return null;
     }
   }
+  private async getBottomCenterOverlayPosition(): Promise<[number, number]> {
+    try {
+      const [mouseX, mouseY] = await this.ports.getMousePosition();
+      const getMonitor = this.ports.monitorFromPoint ?? monitorFromPoint;
+      const getCurrent = this.ports.currentMonitor ?? currentMonitor;
+
+      let monitor = await getMonitor(mouseX, mouseY).catch(() => null);
+      if (!monitor) {
+        monitor = await getCurrent().catch(() => null);
+      }
+
+      if (monitor) {
+        const scale = monitor.scaleFactor || 1;
+        const workX = monitor.workArea?.position?.x ?? monitor.position?.x ?? 0;
+        const workY = monitor.workArea?.position?.y ?? monitor.position?.y ?? 0;
+        const workWidth = monitor.workArea?.size?.width ?? monitor.size?.width ?? 1920;
+        const workHeight = monitor.workArea?.size?.height ?? monitor.size?.height ?? 1080;
+
+        const windowPhysicalWidth = Math.round(VOICE_TYPING_WINDOW_WIDTH * scale);
+        const windowPhysicalBottomMargin = Math.round((BOTTOM_CENTER_MARGIN_BOTTOM + 40) * scale);
+
+        const targetX = Math.round(workX + (workWidth - windowPhysicalWidth) / 2);
+        const targetY = Math.round(workY + workHeight - windowPhysicalBottomMargin);
+
+        return [targetX, targetY];
+      }
+    } catch (error) {
+      logger.debug('[VoiceTypingService] Failed to calculate bottom center position', error);
+    }
+
+    return [
+      typeof window !== 'undefined' && window.innerWidth
+        ? Math.round((window.innerWidth - VOICE_TYPING_WINDOW_WIDTH) / 2)
+        : 500,
+      800,
+    ];
+  }
 
   private async getOverlayPosition(): Promise<[number, number]> {
+    const placement = this.ports.getConfig().voiceTypingPlacement ?? 'caret';
+    if (placement === 'bottom_center') {
+      return await this.getBottomCenterOverlayPosition();
+    }
+
     const cursorPosition = await this.tryGetTextCursorOverlayPosition();
     if (cursorPosition) {
       return cursorPosition;
@@ -291,10 +522,95 @@ export class VoiceTypingService {
     return [x - 4, y + MOUSE_POSITION_OFFSET - 4];
   }
 
+  private async getQuickRecallOverlayPosition(): Promise<[number, number]> {
+    const placement = this.ports.getConfig().voiceTypingPlacement ?? 'caret';
+    const ESTIMATED_RECALL_HEIGHT = 280;
+
+    if (placement === 'bottom_center') {
+      try {
+        const [mouseX, mouseY] = await this.ports.getMousePosition();
+        const getMonitor = this.ports.monitorFromPoint ?? monitorFromPoint;
+        const getCurrent = this.ports.currentMonitor ?? currentMonitor;
+
+        let monitor = await getMonitor(mouseX, mouseY).catch(() => null);
+        if (!monitor) {
+          monitor = await getCurrent().catch(() => null);
+        }
+
+        if (monitor) {
+          const scale = monitor.scaleFactor || 1;
+          const workX = monitor.workArea?.position?.x ?? monitor.position?.x ?? 0;
+          const workY = monitor.workArea?.position?.y ?? monitor.position?.y ?? 0;
+          const workWidth = monitor.workArea?.size?.width ?? monitor.size?.width ?? 1920;
+          const workHeight = monitor.workArea?.size?.height ?? monitor.size?.height ?? 1080;
+
+          const windowPhysicalWidth = Math.round(VOICE_TYPING_WINDOW_WIDTH * scale);
+          const windowPhysicalBottomMargin = Math.round(
+            (BOTTOM_CENTER_MARGIN_BOTTOM + ESTIMATED_RECALL_HEIGHT) * scale
+          );
+
+          const targetX = Math.round(workX + (workWidth - windowPhysicalWidth) / 2);
+          const targetY = Math.max(
+            workY + 16,
+            Math.round(workY + workHeight - windowPhysicalBottomMargin)
+          );
+
+          return [targetX, targetY];
+        }
+      } catch (error) {
+        logger.debug(
+          '[VoiceTypingService] Failed to calculate quick recall bottom center position',
+          error
+        );
+      }
+    }
+
+    const cursorPosition = await this.tryGetTextCursorOverlayPosition();
+    const anchor = cursorPosition ?? (await this.ports.getMousePosition());
+    const [anchorX, anchorY] = anchor;
+
+    try {
+      const getMonitor = this.ports.monitorFromPoint ?? monitorFromPoint;
+      const getCurrent = this.ports.currentMonitor ?? currentMonitor;
+      let monitor = await getMonitor(anchorX, anchorY).catch(() => null);
+      if (!monitor) {
+        monitor = await getCurrent().catch(() => null);
+      }
+
+      if (monitor) {
+        const scale = monitor.scaleFactor || 1;
+        const workY = monitor.workArea?.position?.y ?? monitor.position?.y ?? 0;
+        const workHeight = monitor.workArea?.size?.height ?? monitor.size?.height ?? 1080;
+        const physicalEstimatedHeight = Math.round(ESTIMATED_RECALL_HEIGHT * scale);
+        const physicalBottomMargin = Math.round(16 * scale);
+        const maxBottom = workY + workHeight - physicalBottomMargin;
+
+        const normalY = anchorY + (cursorPosition ? 0 : MOUSE_POSITION_OFFSET);
+        if (normalY + physicalEstimatedHeight > maxBottom) {
+          const flippedY = anchorY - physicalEstimatedHeight - Math.round(12 * scale);
+          return [anchorX - 4, Math.max(workY + physicalBottomMargin, flippedY)];
+        }
+        return [anchorX - 4, normalY];
+      }
+    } catch (error) {
+      logger.debug('[VoiceTypingService] Failed to calculate quick recall cursor position', error);
+    }
+
+    return await this.getOverlayPosition();
+  }
+
   private async getOverlayPositionAfterCommit(): Promise<[number, number]> {
+    const placement = this.ports.getConfig().voiceTypingPlacement ?? 'caret';
+    if (placement === 'bottom_center') {
+      const previousPosition = this.sessionMachine.getLastPosition();
+      if (previousPosition) {
+        return previousPosition;
+      }
+      return await this.getBottomCenterOverlayPosition();
+    }
+
     const previousPosition = this.sessionMachine.getLastPosition();
     let latestCursorPosition: [number, number] | null = null;
-
     for (let attempt = 0; attempt < POST_COMMIT_CARET_RETRY_DELAYS_MS.length; attempt += 1) {
       const retryDelay = POST_COMMIT_CARET_RETRY_DELAYS_MS[attempt];
       if (retryDelay > 0) {
@@ -360,7 +676,11 @@ export class VoiceTypingService {
   resetForTest() {
     this.initialized = false;
     this.lastConfigSnapshot = null;
-    this.microphoneRuntime.resetForTest();
+    this.quickRecallShortcut = null;
+    if (this.reinjectUnlisten) {
+      this.reinjectUnlisten();
+      this.reinjectUnlisten = null;
+    }
     this.shortcutController.resetForTest();
     this.overlayPresenter.resetForTest();
     this.sessionMachine.resetForTest();
@@ -386,4 +706,15 @@ export const voiceTypingService = createVoiceTypingService({
   getTextCursorPosition,
   getMousePosition,
   transcriptionService: voiceTypingTranscriptionService,
+  currentMonitor,
+  monitorFromPoint,
+  getFocusedSelectionText,
+  getForegroundWindowInfo,
+  listenCancel: async (callback) => {
+    try {
+      return await listen(TauriEvent.auxWindow.voiceTypingCancel, callback);
+    } catch {
+      return () => undefined;
+    }
+  },
 });

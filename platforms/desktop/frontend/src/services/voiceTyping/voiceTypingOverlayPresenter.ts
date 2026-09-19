@@ -10,13 +10,13 @@ interface PublishOptions {
   revealIfHidden?: boolean;
   reposition?: boolean;
   resolvePosition?: VoiceTypingPositionResolver;
+  focus?: boolean;
 }
 
 export class VoiceTypingOverlayPresenter {
   private overlayVisible = false;
   private lastOverlayPosition: [number, number] | null = null;
   private lastPayload: VoiceTypingOverlayPayload | null = null;
-  private listeningResetTimer: ReturnType<typeof setTimeout> | null = null;
 
   private async resolvePosition(resolvePosition?: VoiceTypingPositionResolver) {
     if (resolvePosition) {
@@ -60,14 +60,25 @@ export class VoiceTypingOverlayPresenter {
     });
     await voiceTypingWindowService.sendState(payload);
 
+    const shouldFocus = options.focus ?? payload.phase === 'recall';
+
     if (!nextPosition) {
+      if (shouldFocus && this.lastOverlayPosition) {
+        await voiceTypingWindowService.open(
+          this.lastOverlayPosition[0],
+          this.lastOverlayPosition[1],
+          true
+        );
+      }
       return;
     }
-
-    await voiceTypingWindowService.open(nextPosition[0], nextPosition[1]);
+    if (shouldFocus) {
+      await voiceTypingWindowService.open(nextPosition[0], nextPosition[1], true);
+    } else {
+      await voiceTypingWindowService.open(nextPosition[0], nextPosition[1]);
+    }
     this.overlayVisible = true;
   }
-
   async hide() {
     this.overlayVisible = false;
     await voiceTypingWindowService.close();
@@ -79,18 +90,7 @@ export class VoiceTypingOverlayPresenter {
   }
 
   clearListeningReset() {
-    if (this.listeningResetTimer) {
-      clearTimeout(this.listeningResetTimer);
-      this.listeningResetTimer = null;
-    }
-  }
-
-  scheduleListeningReset(callback: () => void, delayMs: number) {
-    this.clearListeningReset();
-    this.listeningResetTimer = setTimeout(() => {
-      this.listeningResetTimer = null;
-      callback();
-    }, delayMs);
+    // No-op kept for lifecycle interface compatibility
   }
 
   isVisible() {

@@ -36,6 +36,21 @@ pub fn get_text_cursor_position() -> Result<Option<(i32, i32)>, String> {
 }
 
 #[tauri::command]
+pub fn get_focused_selection_text() -> Result<Option<String>, String> {
+    crate::platform::system::get_focused_selection_text()
+}
+
+#[tauri::command]
+pub fn get_foreground_window_info()
+-> Result<Option<crate::platform::system::ForegroundWindowInfo>, String> {
+    crate::platform::system::get_foreground_window_info()
+}
+
+#[tauri::command]
+pub fn focus_window(app: AppHandle, label: String) -> Result<(), String> {
+    crate::platform::system::focus_window(&app, &label)
+}
+#[tauri::command]
 pub async fn get_dashboard_snapshot(
     service: State<'_, Arc<crate::app::dashboard::AppDashboardService>>,
     request: crate::app::dashboard::DashboardSnapshotRequest,

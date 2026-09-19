@@ -27,3 +27,17 @@ export async function getMousePosition(): Promise<[number, number]> {
 export async function getTextCursorPosition(): Promise<[number, number] | null> {
   return invokeTauri(TauriCommand.system.getTextCursorPosition);
 }
+
+export async function getFocusedSelectionText(): Promise<string | null> {
+  return invokeTauri(TauriCommand.system.getFocusedSelectionText);
+}
+
+export async function getForegroundWindowInfo(): Promise<
+  import('./contracts').ForegroundWindowInfo | null
+> {
+  return invokeTauri(TauriCommand.system.getForegroundWindowInfo);
+}
+
+export async function focusWindow(label: string): Promise<void> {
+  await invokeTauri(TauriCommand.system.focusWindow, { label });
+}

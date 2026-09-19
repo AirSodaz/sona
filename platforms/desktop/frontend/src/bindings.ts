@@ -131,6 +131,15 @@ export type AppConfig_Deserialize = {
 	voiceTypingEnabled?: boolean | null,
 	voiceTypingShortcut?: string | null,
 	voiceTypingMode?: VoiceTypingMode | null,
+	voiceTypingProcessingMode?: VoiceTypingProcessingMode | null,
+	voiceTypingSoundEnabled?: boolean | null,
+	voiceTypingCjkSpacingEnabled?: boolean | null,
+	voiceTypingPolishPrompt?: string | null,
+	voiceTypingPlacement?: VoiceTypingPlacement | null,
+	voiceTypingQuickRecallShortcut?: string | null,
+	voiceTypingContextAwarenessEnabled?: boolean | null,
+	voiceTypingContextPreset?: string | null,
+	voiceTypingContextRules?: VoiceTypingContextRuleRecord_Deserialize[] | null,
 	httpServerEnabled?: boolean | null,
 	httpServerHost?: string | null,
 	httpServerPort?: number | null,
@@ -216,6 +225,15 @@ export type AppConfig_Serialize = {
 	voiceTypingEnabled?: boolean | null,
 	voiceTypingShortcut?: string | null,
 	voiceTypingMode?: VoiceTypingMode | null,
+	voiceTypingProcessingMode?: VoiceTypingProcessingMode | null,
+	voiceTypingSoundEnabled?: boolean | null,
+	voiceTypingCjkSpacingEnabled?: boolean | null,
+	voiceTypingPolishPrompt?: string | null,
+	voiceTypingPlacement?: VoiceTypingPlacement | null,
+	voiceTypingQuickRecallShortcut?: string | null,
+	voiceTypingContextAwarenessEnabled?: boolean | null,
+	voiceTypingContextPreset?: string | null,
+	voiceTypingContextRules?: VoiceTypingContextRuleRecord_Serialize[] | null,
 	httpServerEnabled?: boolean | null,
 	httpServerHost?: string | null,
 	httpServerPort?: number | null,
@@ -2972,7 +2990,45 @@ export type UsageTrendPoint = {
 	dateLabel: string,
 } & DashboardUsageBucket;
 
+export type VoiceTypingContextRuleRecord = VoiceTypingContextRuleRecord_Serialize | VoiceTypingContextRuleRecord_Deserialize;
+
+export type VoiceTypingContextRuleRecord_Deserialize = {
+	id: string,
+	name: string,
+	icon?: string | null,
+	badgeColor?: string | null,
+	appsByPlatform?: VoiceTypingPlatformAppsRecord,
+	titlePatterns?: string[],
+	promptDirective: string,
+	stripTrailingPunctuation?: boolean,
+	isBuiltin?: boolean,
+	enabled?: boolean,
+};
+
+export type VoiceTypingContextRuleRecord_Serialize = {
+	id: string,
+	name: string,
+	icon?: string | null,
+	badgeColor?: string | null,
+	appsByPlatform: VoiceTypingPlatformAppsRecord,
+	titlePatterns: string[],
+	promptDirective: string,
+	stripTrailingPunctuation: boolean,
+	isBuiltin: boolean,
+	enabled: boolean,
+};
+
 export type VoiceTypingMode = "hold" | "toggle";
+
+export type VoiceTypingPlacement = "caret" | "bottom_center";
+
+export type VoiceTypingPlatformAppsRecord = {
+	windows?: string[],
+	macos?: string[],
+	linux?: string[],
+};
+
+export type VoiceTypingProcessingMode = "raw" | "polish";
 
 export type VoiceTypingReadinessInput = {
 	state: string,

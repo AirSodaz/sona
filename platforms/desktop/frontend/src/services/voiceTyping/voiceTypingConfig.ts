@@ -8,6 +8,7 @@ export type VoiceTypingShortcutModifier = 'control' | 'alt' | 'shift' | 'meta';
 export interface VoiceTypingConfigSnapshot {
   enabled: boolean;
   shortcut: string;
+  quickRecallShortcut: string;
   asrSignature: string;
   vadModelPath: string;
   microphoneId: string;
@@ -19,6 +20,7 @@ export interface VoiceTypingConfigSnapshot {
 export interface VoiceTypingRuntimeChange {
   enabledChanged: boolean;
   shortcutChanged: boolean;
+  quickRecallShortcutChanged: boolean;
   vadModelChanged: boolean;
   microphoneChanged: boolean;
   keepMicrophoneActiveChanged: boolean;
@@ -52,6 +54,7 @@ export function resolveVoiceTypingConfigSnapshot(config: AppConfig): VoiceTyping
   return {
     enabled: config.voiceTypingEnabled || false,
     shortcut: config.voiceTypingShortcut ?? 'Alt+V',
+    quickRecallShortcut: config.voiceTypingQuickRecallShortcut ?? 'Alt+Shift+H',
     asrSignature: buildVoiceTypingAsrSignature(resolveVoiceTypingAsr(config)),
     vadModelPath: getScenarioVadModelPath(config, 'live'),
     microphoneId: config.microphoneId || 'default',
@@ -67,6 +70,7 @@ export function resolveVoiceTypingRuntimeChange(
 ): VoiceTypingRuntimeChange {
   const enabledChanged = next.enabled !== previous.enabled;
   const shortcutChanged = next.shortcut !== previous.shortcut;
+  const quickRecallShortcutChanged = next.quickRecallShortcut !== previous.quickRecallShortcut;
   const vadModelChanged = next.vadModelPath !== previous.vadModelPath;
   const microphoneChanged = next.microphoneId !== previous.microphoneId;
   const keepMicrophoneActiveChanged = next.keepMicrophoneActive !== previous.keepMicrophoneActive;
@@ -77,6 +81,7 @@ export function resolveVoiceTypingRuntimeChange(
   return {
     enabledChanged,
     shortcutChanged,
+    quickRecallShortcutChanged,
     vadModelChanged,
     microphoneChanged,
     keepMicrophoneActiveChanged,

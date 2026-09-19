@@ -1,3 +1,4 @@
+import type { VoiceTypingHistoryItem } from '../stores/voiceTypingHistoryStore';
 import {
   AuxWindowController,
   type AuxWindowControllerOptions,
@@ -15,7 +16,13 @@ const VOICE_TYPING_WINDOW_SIZE = {
   height: VOICE_TYPING_WINDOW_INITIAL_HEIGHT,
 };
 
-export type VoiceTypingOverlayPhase = 'preparing' | 'listening' | 'segment' | 'error';
+export type VoiceTypingOverlayPhase =
+  | 'preparing'
+  | 'listening'
+  | 'segment'
+  | 'polishing'
+  | 'recall'
+  | 'error';
 
 export interface VoiceTypingOverlayPayload {
   sessionId: string;
@@ -24,6 +31,13 @@ export interface VoiceTypingOverlayPayload {
   revision: number;
   segmentId?: string;
   isFinal?: boolean;
+  hasSelection?: boolean;
+  selectionLength?: number;
+  contextMode?: string;
+  contextName?: string;
+  contextIcon?: string;
+  contextColor?: string;
+  history?: VoiceTypingHistoryItem[];
 }
 
 export const DEFAULT_VOICE_TYPING_OVERLAY_STATE: VoiceTypingOverlayPayload = {
@@ -63,7 +77,7 @@ export class VoiceTypingWindowService {
           x: displayState.position?.[0] ?? 0,
           y: displayState.position?.[1] ?? 0,
           center: false,
-          focus: false,
+          focus: displayState.focus ?? false,
           resizable: false,
           maximizable: false,
           minimizable: false,
@@ -80,10 +94,11 @@ export class VoiceTypingWindowService {
     });
   }
 
-  async open(x: number, y: number) {
+  async open(x: number, y: number, focus = false) {
     await this.controller.open({
       position: [x, y],
       size: VOICE_TYPING_WINDOW_SIZE,
+      focus,
     });
   }
 

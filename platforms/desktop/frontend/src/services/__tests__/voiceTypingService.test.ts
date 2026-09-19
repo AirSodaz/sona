@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
-  const shortcutState: { handler?: (event: any) => void } = {};
+  const shortcutState: {
+    handler?: (event: any) => void;
+    handlers: Record<string, (event: any) => void>;
+  } = { handlers: {} };
   const configEvents: {
     listener?: (state: { config: Record<string, any> }) => void;
   } = {};
-
+  const eventListeners: Record<string, (event: any) => void> = {};
   return {
     shortcutState,
     configEvents,
+    eventListeners,
     defaultConfig: {
       voiceTypingEnabled: false,
       voiceTypingShortcut: 'Alt+V',
@@ -35,8 +39,11 @@ const mocks = vi.hoisted(() => {
     } as Record<string, any>,
     configSubscribe: vi.fn(),
     invoke: vi.fn(),
-    register: vi.fn(async (_shortcut: string, handler: (event: any) => void) => {
-      shortcutState.handler = handler;
+    register: vi.fn(async (shortcut: string, handler: (event: any) => void) => {
+      shortcutState.handlers[shortcut] = handler;
+      if (!shortcut.includes('Shift')) {
+        shortcutState.handler = handler;
+      }
     }),
     unregister: vi.fn(),
     isRegistered: vi.fn().mockResolvedValue(false),
@@ -56,6 +63,26 @@ const mocks = vi.hoisted(() => {
     windowClose: vi.fn(),
     windowSendState: vi.fn(),
     windowClearState: vi.fn(),
+    monitorFromPoint: vi.fn(async (_x?: number, _y?: number) => ({
+      scaleFactor: 1,
+      workArea: {
+        position: { x: 0, y: 0 },
+        size: { width: 1920, height: 1080 },
+      },
+      position: { x: 0, y: 0 },
+      size: { width: 1920, height: 1080 },
+    })),
+    polishVoiceTypingText: vi.fn(async (text: string, _opts?: any) => `[polished] ${text}`),
+    transformSelectedText: vi.fn(
+      async (selected: string, instruction: string, _opts?: any) =>
+        `[transformed: ${selected}] ${instruction}`
+    ),
+    listen: vi.fn(async (eventName: string, handler: (event: any) => void) => {
+      eventListeners[eventName] = handler;
+      return () => {
+        delete eventListeners[eventName];
+      };
+    }),
   };
 });
 
@@ -68,8 +95,13 @@ vi.mock('@tauri-apps/plugin-global-shortcut', () => ({
   unregister: mocks.unregister,
   isRegistered: mocks.isRegistered,
 }));
-
+vi.mock('../tauri/platform/events', () => ({
+  listen: mocks.listen,
+  emit: vi.fn(),
+  emitTo: vi.fn(),
+}));
 vi.mock('../voiceTypingWindowService', () => ({
+  VOICE_TYPING_WINDOW_WIDTH: 400,
   voiceTypingWindowService: {
     prepare: mocks.windowPrepare,
     open: mocks.windowOpen,
@@ -77,6 +109,28 @@ vi.mock('../voiceTypingWindowService', () => ({
     sendState: mocks.windowSendState,
     clearState: mocks.windowClearState,
   },
+}));
+vi.mock('../voiceTyping/voiceTypingPolishService', () => ({
+  polishVoiceTypingText: (text: string, opts?: any) => mocks.polishVoiceTypingText(text, opts),
+  transformSelectedText: (selected: string, instruction: string, opts?: any) =>
+    mocks.transformSelectedText(selected, instruction, opts),
+}));
+vi.mock('../tauri/platform/windows', () => ({
+  currentMonitor: vi.fn(async () => ({
+    scaleFactor: 1,
+    workArea: {
+      position: { x: 0, y: 0 },
+      size: { width: 1920, height: 1080 },
+    },
+    position: { x: 0, y: 0 },
+    size: { width: 1920, height: 1080 },
+  })),
+  monitorFromPoint: (x: number, y: number) => mocks.monitorFromPoint(x, y),
+  getCurrentWindow: vi.fn(),
+  getCurrentWebviewWindow: vi.fn(),
+  WebviewWindow: vi.fn(),
+  PhysicalPosition: class {},
+  PhysicalSize: class {},
 }));
 
 vi.mock('../transcriptionService', () => {
@@ -151,8 +205,20 @@ describe('voiceTypingService', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     vi.resetModules();
+    Object.defineProperty(navigator, 'platform', {
+      value: 'Win32',
+      configurable: true,
+    });
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      configurable: true,
+    });
 
     mocks.shortcutState.handler = undefined;
+    mocks.shortcutState.handlers = {};
+    for (const key of Object.keys(mocks.eventListeners)) {
+      delete mocks.eventListeners[key];
+    }
     mocks.configEvents.listener = undefined;
     mocks.config = { ...mocks.defaultConfig };
     mocks.configSubscribe.mockImplementation(
@@ -577,7 +643,7 @@ describe('voiceTypingService', () => {
     await flushMicrotasks(8);
 
     expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.phase)).toEqual(['segment']);
-    expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.text)).toEqual(['测试123']);
+    expect(mocks.windowSendState.mock.calls.map(([payload]) => payload.text)).toEqual(['测试 123']);
     expect(mocks.loggerInfo).toHaveBeenCalledWith(
       '[VoiceTypingSessionMachine] Dropped segment update',
       expect.objectContaining({
@@ -938,9 +1004,9 @@ describe('voiceTypingService', () => {
 
     expect(mocks.mockSoftStop).not.toHaveBeenCalled();
 
+    vi.advanceTimersByTime(500);
     mocks.shortcutState.handler?.({ shortcut: 'Alt+V', state: 'Pressed' });
     await vi.runAllTimersAsync();
-
     expect(mocks.mockSoftStop).toHaveBeenCalledTimes(1);
   });
 
@@ -1215,5 +1281,364 @@ describe('voiceTypingService', () => {
 
     expect(mocks.invoke).not.toHaveBeenCalledWith('start_microphone_capture', expect.anything());
     expect(mocks.mockSoftStop).toHaveBeenCalled();
+  });
+  it('cancels an active session cleanly without injecting text', async () => {
+    let onSegment: ((segment: any) => void) | undefined;
+    mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+      onSegment = segmentCallback;
+    });
+
+    const service = await loadService();
+    await service.startListening();
+    vi.clearAllMocks();
+
+    onSegment?.({ id: 'seg-cancel', text: '这句将被取消', isFinal: false });
+    await flushMicrotasks(8);
+
+    await service.cancelListening();
+    await flushMicrotasks(8);
+
+    // Verify softStop was called
+    expect(mocks.mockSoftStop).toHaveBeenCalled();
+    // Verify inject_text was NEVER called
+    expect(getInvokeCalls('inject_text')).toEqual([]);
+    // Verify window was closed
+    expect(mocks.windowClose).toHaveBeenCalled();
+  });
+  it('polishes accumulated speech in polish mode before injection', async () => {
+    let onSegment: ((segment: any) => void) | undefined;
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingProcessingMode: 'polish',
+    };
+    mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+      onSegment = segmentCallback;
+    });
+
+    const service = await loadService();
+    await service.startListening();
+    vi.clearAllMocks();
+
+    onSegment?.({ id: 'seg-1', text: '那个就是说今天天气不错', isFinal: true });
+    await flushMicrotasks(8);
+
+    // In polish mode, isFinal segments shouldn't immediately inject
+    expect(getInvokeCalls('inject_text')).toEqual([]);
+
+    const stopPromise = service.stopListening();
+    await vi.runAllTimersAsync();
+    await stopPromise;
+    await flushMicrotasks(8);
+
+    // After stopping, polish was called and injected
+    const injectCalls = getInvokeCalls('inject_text');
+    expect(injectCalls.length).toBe(1);
+    expect(injectCalls[0][1].text).toContain('[polished]');
+  });
+  it('positions overlay at bottom center when voiceTypingPlacement is bottom_center', async () => {
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingPlacement: 'bottom_center',
+    };
+
+    const service = await loadService();
+    await service.startListening();
+    await flushMicrotasks(4);
+
+    expect(mocks.windowPrepare).toHaveBeenCalledWith([760, 992]);
+  });
+
+  it('positions overlay at true physical center on monitors with DPI scaleFactor > 1', async () => {
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingPlacement: 'bottom_center',
+    };
+    mocks.monitorFromPoint.mockResolvedValueOnce({
+      scaleFactor: 1.5,
+      workArea: {
+        position: { x: 0, y: 0 },
+        size: { width: 2560, height: 1400 },
+      },
+      position: { x: 0, y: 0 },
+      size: { width: 2560, height: 1400 },
+    });
+
+    const service = await loadService();
+    await service.startListening();
+    await flushMicrotasks(4);
+
+    expect(mocks.windowPrepare).toHaveBeenCalledWith([980, 1268]);
+  });
+  it('transforms selection context when focused selection is present', async () => {
+    let onSegment: ((segment: any) => void) | undefined;
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+    };
+    mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+      onSegment = segmentCallback;
+    });
+
+    mocks.invoke.mockImplementation(async (command: string) => {
+      if (command === 'get_focused_selection_text') {
+        return '原始选中的文本';
+      }
+      if (command === 'get_mouse_position') {
+        return [240, 320];
+      }
+      return undefined;
+    });
+
+    const service = await loadService();
+    await service.startListening();
+    vi.clearAllMocks();
+
+    onSegment?.({ id: 'seg-1', text: '翻译成日文', isFinal: true });
+    await flushMicrotasks(8);
+
+    const stopPromise = service.stopListening();
+    await vi.runAllTimersAsync();
+    await stopPromise;
+    await flushMicrotasks(8);
+
+    const injectCalls = getInvokeCalls('inject_text');
+    expect(injectCalls.length).toBe(1);
+    expect(injectCalls[0][1].text).toContain('[transformed: 原始选中的文本]');
+  });
+
+  it('applies text replacements and dynamic macros before injecting', async () => {
+    let onSegment: ((segment: any) => void) | undefined;
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      textReplacementSets: [
+        {
+          id: 'set-1',
+          name: 'Snippets',
+          enabled: true,
+          ignoreCase: true,
+          rules: [{ id: 'r1', from: '我的邮箱', to: 'asoda@outlook.com' }],
+        },
+      ],
+    };
+    mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+      onSegment = segmentCallback;
+    });
+
+    const service = await loadService();
+    await service.startListening();
+    vi.clearAllMocks();
+
+    onSegment?.({ id: 'seg-1', text: '请发送到 我的邮箱 谢谢', isFinal: true });
+    await flushMicrotasks(8);
+
+    const stopPromise = service.stopListening();
+    await vi.runAllTimersAsync();
+    await stopPromise;
+    await flushMicrotasks(8);
+
+    const injectCalls = getInvokeCalls('inject_text');
+    expect(injectCalls.length).toBe(1);
+    expect(injectCalls[0][1].text).toContain('asoda@outlook.com');
+  });
+  it('opens quick recall drawer overlay with focus enabled and passes history in payload', async () => {
+    const { useVoiceTypingHistoryStore } = await import('../../stores/voiceTypingHistoryStore');
+    useVoiceTypingHistoryStore.getState().clearHistory();
+    useVoiceTypingHistoryStore.getState().addItem({
+      rawText: 'Test history',
+      injectedText: 'Test history',
+      mode: 'raw',
+    });
+
+    const service = await loadService();
+    service.init();
+    vi.clearAllMocks();
+
+    await service.openQuickRecall();
+
+    expect(mocks.windowSendState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'recall',
+        history: expect.arrayContaining([
+          expect.objectContaining({
+            rawText: 'Test history',
+            injectedText: 'Test history',
+          }),
+        ]),
+      })
+    );
+    expect(mocks.windowOpen).toHaveBeenCalledWith(expect.any(Number), expect.any(Number), true);
+  });
+
+  it('reinjects text from quick recall with focus settle delay', async () => {
+    const service = await loadService();
+    service.init();
+    await flushMicrotasks(2);
+
+    const reinjectHandler = mocks.eventListeners['voice-typing:reinject'];
+    expect(reinjectHandler).toBeDefined();
+
+    const reinjectPromise = reinjectHandler({ payload: { text: 'History input content' } });
+    await flushMicrotasks(2);
+
+    // Before 80ms delay completes, inject_text has not been called yet
+    expect(getInvokeCalls('inject_text')).toHaveLength(0);
+
+    // Advance past the 80ms focus settle delay
+    await vi.advanceTimersByTimeAsync(80);
+    await reinjectPromise;
+
+    const injectCalls = getInvokeCalls('inject_text');
+    expect(injectCalls).toHaveLength(1);
+    expect(injectCalls[0][1].text).toBe('History input content');
+  });
+
+  it('positions quick recall higher up in bottom_center mode to avoid bottom screen overflow', async () => {
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingPlacement: 'bottom_center',
+    };
+
+    const service = await loadService();
+    service.init();
+    await flushMicrotasks(4);
+    vi.clearAllMocks();
+
+    await service.openQuickRecall();
+
+    // workHeight = 1080, scale = 1.
+    // windowPhysicalBottomMargin = (48 + 280) * 1 = 328.
+    // targetY = 1080 - 328 = 752.
+    expect(mocks.windowPrepare).toHaveBeenCalledWith([760, 752]);
+  });
+
+  it('flips quick recall above cursor if cursor is near bottom of screen in caret mode', async () => {
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingPlacement: 'caret',
+    };
+
+    mocks.invoke.mockImplementation(async (command: string) => {
+      if (command === 'get_text_cursor_position') {
+        // Cursor is at y = 950 (near bottom of 1040 workHeight screen)
+        return [500, 950];
+      }
+      return undefined;
+    });
+
+    const service = await loadService();
+    service.init();
+    await flushMicrotasks(4);
+    vi.clearAllMocks();
+
+    await service.openQuickRecall();
+
+    // With cursor at 950, 950 + 280 = 1230 > maxBottom (1080 - 16 = 1064)
+    expect(mocks.windowPrepare).toHaveBeenCalledWith([492, 666]);
+  });
+
+  it('senses application context and adapts overlay mode and polish context', async () => {
+    let onSegment: ((segment: any) => void) | undefined;
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingProcessingMode: 'polish',
+      voiceTypingContextAwarenessEnabled: true,
+    };
+    mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+      onSegment = segmentCallback;
+    });
+    mocks.invoke.mockImplementation(async (command: string) => {
+      if (command === 'get_foreground_window_info') {
+        return { appName: 'code.exe', windowTitle: 'editor.ts - Project' };
+      }
+      if (command === 'get_mouse_position') {
+        return [240, 320];
+      }
+      if (command === 'get_text_cursor_position') {
+        return [120, 280];
+      }
+      return undefined;
+    });
+
+    const service = await loadService();
+    await service.startListening();
+    await flushMicrotasks(4);
+
+    expect(mocks.windowSendState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contextMode: 'developer',
+      })
+    );
+
+    onSegment?.({ id: 'seg-1', text: 'define a new variable', isFinal: true });
+    await flushMicrotasks(4);
+
+    const stopPromise = service.stopListening();
+    await vi.runAllTimersAsync();
+    await stopPromise;
+    await flushMicrotasks(8);
+
+    expect(mocks.polishVoiceTypingText).toHaveBeenCalledWith(
+      'define a new variable',
+      expect.objectContaining({
+        context: expect.objectContaining({
+          appName: 'code.exe',
+          mode: 'developer',
+        }),
+      })
+    );
+  });
+
+  it('strips trailing full stops in chat context mode during raw dictation', async () => {
+    let onSegment: ((segment: any) => void) | undefined;
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingProcessingMode: 'raw',
+      voiceTypingContextAwarenessEnabled: true,
+    };
+    mocks.mockStart.mockImplementation(async (segmentCallback: (segment: any) => void) => {
+      onSegment = segmentCallback;
+    });
+    mocks.invoke.mockImplementation(async (command: string) => {
+      if (command === 'get_foreground_window_info') {
+        return { appName: 'slack.exe', windowTitle: 'General - Sona' };
+      }
+      if (command === 'get_mouse_position') {
+        return [240, 320];
+      }
+      if (command === 'get_text_cursor_position') {
+        return [120, 280];
+      }
+      return undefined;
+    });
+
+    const service = await loadService();
+    await service.startListening();
+    await flushMicrotasks(4);
+
+    expect(mocks.windowSendState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contextMode: 'chat',
+      })
+    );
+
+    onSegment?.({ id: 'seg-1', text: 'see you tomorrow.', isFinal: true });
+    await flushMicrotasks(4);
+
+    const stopPromise = service.stopListening();
+    await vi.runAllTimersAsync();
+    await stopPromise;
+    await flushMicrotasks(8);
+
+    const injectCalls = getInvokeCalls('inject_text');
+    expect(injectCalls.length).toBe(1);
+    expect(injectCalls[0][1].text).toBe('see you tomorrow');
   });
 });

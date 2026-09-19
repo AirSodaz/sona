@@ -215,6 +215,9 @@ export const TauriCommand = {
     injectText: 'inject_text',
     getMousePosition: 'get_mouse_position',
     getTextCursorPosition: 'get_text_cursor_position',
+    getFocusedSelectionText: 'get_focused_selection_text',
+    getForegroundWindowInfo: 'get_foreground_window_info',
+    focusWindow: 'focus_window',
   },
   apiServer: {
     start: 'start_api_server',

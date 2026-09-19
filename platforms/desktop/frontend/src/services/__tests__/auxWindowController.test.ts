@@ -119,8 +119,54 @@ describe('AuxWindowController', () => {
       })
     );
     expect(mocks.createdWindows[0].show).not.toHaveBeenCalled();
+    expect(mocks.invoke).toHaveBeenCalledWith('focus_window', { label: 'caption' });
   });
 
+  it('focuses an existing window via native focusWindow when focus: true is passed', async () => {
+    const existingWindow = new mocks.MockWebviewWindow('voice-typing', {});
+    mocks.getByLabel.mockResolvedValue(existingWindow);
+
+    const controller = new AuxWindowController<{ revision: number }>({
+      label: 'voice-typing',
+      eventName: 'voice-typing:text',
+      createWindow: () => new mocks.MockWebviewWindow('voice-typing', {}) as any,
+    });
+
+    await controller.open({
+      focus: true,
+    });
+
+    expect(existingWindow.show).toHaveBeenCalled();
+    expect(mocks.invoke).toHaveBeenCalledWith('focus_window', { label: 'voice-typing' });
+  });
+
+  it('prepares a newly created window as hidden with initial creation options', async () => {
+    const controller = new AuxWindowController<{ revision: number }>({
+      label: 'voice-typing',
+      eventName: 'voice-typing:text',
+      createWindow: (displayState, creationState) =>
+        new mocks.MockWebviewWindow('voice-typing', {
+          width: displayState.size?.width ?? 0,
+          height: displayState.size?.height ?? 0,
+          visible: creationState.visible,
+        }) as any,
+    });
+
+    const windowInstance = await controller.prepare({
+      position: [150, 250],
+      size: { width: 400, height: 80 },
+    });
+
+    expect(windowInstance).toBeTruthy();
+    expect(mocks.createdWindows[0].options).toEqual(
+      expect.objectContaining({
+        width: 400,
+        height: 80,
+        visible: false,
+      })
+    );
+    expect(mocks.createdWindows[0].show).not.toHaveBeenCalled();
+  });
   it('emits to the concrete webview window target when one already exists', async () => {
     const existingWindow = new mocks.MockWebviewWindow('caption', {});
     mocks.getByLabel.mockResolvedValue(existingWindow);

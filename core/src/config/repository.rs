@@ -14,6 +14,44 @@ pub struct SummaryTemplateRecord {
     pub instructions: String,
 }
 
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceTypingPlatformAppsRecord {
+    #[serde(default)]
+    pub windows: Vec<String>,
+    #[serde(default)]
+    pub macos: Vec<String>,
+    #[serde(default)]
+    pub linux: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceTypingContextRuleRecord {
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub badge_color: Option<String>,
+    #[serde(default)]
+    pub apps_by_platform: VoiceTypingPlatformAppsRecord,
+    #[serde(default)]
+    pub title_patterns: Vec<String>,
+    pub prompt_directive: String,
+    #[serde(default)]
+    pub strip_trailing_punctuation: bool,
+    #[serde(default)]
+    pub is_builtin: bool,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]

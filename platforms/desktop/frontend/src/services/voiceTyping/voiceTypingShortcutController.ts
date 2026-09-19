@@ -15,7 +15,7 @@ export interface VoiceTypingShortcutControllerOptions {
 export class VoiceTypingShortcutController {
   private isShortcutRegistered = false;
   private currentShortcut: string | null = null;
-
+  private lastToggleTime = 0;
   constructor(private readonly options: VoiceTypingShortcutControllerOptions) {}
 
   async update(enabled: boolean, shortcut: string): Promise<void> {
@@ -63,6 +63,15 @@ export class VoiceTypingShortcutController {
         }
 
         if (event.state === 'Pressed') {
+          const now = Date.now();
+          if (now - this.lastToggleTime < 400) {
+            logger.info(
+              '[VoiceTypingShortcutController] Ignoring duplicate toggle shortcut event within debounce window'
+            );
+            return;
+          }
+          this.lastToggleTime = now;
+
           if (this.options.isListening()) {
             void this.options.stopListening();
           } else {
@@ -88,5 +97,6 @@ export class VoiceTypingShortcutController {
   resetForTest(): void {
     this.isShortcutRegistered = false;
     this.currentShortcut = null;
+    this.lastToggleTime = 0;
   }
 }

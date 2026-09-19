@@ -262,7 +262,7 @@ describe('CaptionWindowService', () => {
 
     expect(mocks.createdWindows).toHaveLength(0);
     expect(existingWindow.show).toHaveBeenCalled();
-    expect(existingWindow.setFocus).toHaveBeenCalled();
+    expect(mocks.invoke).toHaveBeenCalledWith('focus_window', { label: 'caption' });
     expect(mocks.invoke).toHaveBeenCalledWith('set_aux_window_state', {
       label: 'caption',
       payload: {

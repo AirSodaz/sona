@@ -63,6 +63,7 @@ describe('voiceTypingConfig', () => {
     expect(resolveVoiceTypingRuntimeChange(previous, next)).toEqual({
       enabledChanged: false,
       shortcutChanged: true,
+      quickRecallShortcutChanged: false,
       vadModelChanged: true,
       microphoneChanged: true,
       keepMicrophoneActiveChanged: true,
