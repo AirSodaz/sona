@@ -51,6 +51,8 @@
     "change_directory": "디렉터리 변경...",
     "open_folder": "폴더 열기",
     "restore_default": "기본값으로 복원",
+    "reset": "초기화",
+    "clear": "지우기",
     "import": "가져오기",
     "connected": "연결됨",
     "connecting": "연결 중...",

@@ -312,7 +312,7 @@ describe('SettingsSubtitleTab', () => {
     screen.getByText('settings.voice_typing_mode_badge_polish');
 
     // Test add to hotwords
-    const addHotwordBtn = screen.getByTitle('settings.voice_typing_add_hotword');
+    const addHotwordBtn = screen.getByText('settings.voice_typing_add_hotword');
     fireEvent.click(addHotwordBtn);
     expect(mockUpdateConfig).toHaveBeenCalled();
   });

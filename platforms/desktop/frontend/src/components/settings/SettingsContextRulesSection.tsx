@@ -191,13 +191,20 @@ export function SettingsContextRulesSection(): React.JSX.Element {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '14px',
+        padding: '20px 24px 24px',
+        background: 'var(--color-bg-primary)',
+      }}
+    >
       <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginTop: '4px',
         }}
       >
         <div>
@@ -274,7 +281,7 @@ export function SettingsContextRulesSection(): React.JSX.Element {
               <div
                 style={{
                   display: 'flex',
-                  alignItems: 'flex-start',
+                  alignItems: 'center',
                   gap: '12px',
                   minWidth: 0,
                   flex: 1,
@@ -362,61 +369,6 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                       defaultValue: `${platformApps.length} apps mapped on ${platformName}`,
                     })}
                   </div>
-
-                  {/* Direct software tags preview */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      alignItems: 'center',
-                      gap: '4px',
-                      marginTop: '6px',
-                    }}
-                  >
-                    {platformApps.length > 0 ? (
-                      <>
-                        {platformApps.slice(0, 4).map((app) => (
-                          <span
-                            key={app}
-                            style={{
-                              fontSize: '11px',
-                              fontFamily: 'var(--font-mono, monospace)',
-                              background: 'var(--color-bg-secondary)',
-                              color: 'var(--color-text-secondary)',
-                              padding: '1px 6px',
-                              borderRadius: '4px',
-                              border: '1px solid var(--color-border)',
-                            }}
-                          >
-                            {app}
-                          </span>
-                        ))}
-                        {platformApps.length > 4 && (
-                          <span
-                            style={{
-                              fontSize: '10px',
-                              color: 'var(--color-text-muted)',
-                              padding: '0 2px',
-                            }}
-                          >
-                            +{platformApps.length - 4}
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          color: 'var(--color-text-muted)',
-                          fontStyle: 'italic',
-                        }}
-                      >
-                        {t('settings.voice_typing_no_apps_mapped', {
-                          defaultValue: 'No applications mapped yet for this OS.',
-                        })}
-                      </span>
-                    )}
-                  </div>
                 </div>
               </div>
 
@@ -438,7 +390,6 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                     type="button"
                     data-testid={`rule-reset-btn-${rule.id}`}
                     className="btn btn-secondary btn-sm"
-                    title={t('common.reset', { defaultValue: 'Reset' })}
                     onClick={() => handleResetRule(rule.id)}
                   >
                     {t('common.reset', { defaultValue: 'Reset' })}

@@ -51,6 +51,8 @@
     "change_directory": "ディレクトリを変更...",
     "open_folder": "フォルダーを開く",
     "restore_default": "デフォルトに戻す",
+    "reset": "リセット",
+    "clear": "クリア",
     "import": "インポート",
     "connected": "接続済み",
     "connecting": "接続中...",

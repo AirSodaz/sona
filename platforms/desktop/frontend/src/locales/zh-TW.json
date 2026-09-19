@@ -51,6 +51,8 @@
     "change_directory": "更改目錄...",
     "open_folder": "開啟資料夾",
     "restore_default": "恢復預設",
+    "reset": "重設",
+    "clear": "清空",
     "import": "匯入",
     "connected": "已連線",
     "connecting": "連線中...",

@@ -519,208 +519,242 @@ function VoiceTypingHistorySection(): React.JSX.Element {
       <div
         style={{
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '10px',
+          flexDirection: 'column',
           gap: '12px',
+          padding: '20px 24px 24px',
+          background: 'var(--color-bg-primary)',
         }}
       >
-        <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
-          {t('settings.voice_typing_history_hint', {
-            defaultValue: 'Recent voice typing entries are saved here to prevent text loss.',
-          })}
-        </span>
-        {historyItems.length > 0 && (
-          <button
-            type="button"
-            onClick={clearHistory}
-            className="btn btn-secondary btn-sm"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              flexShrink: 0,
-            }}
-          >
-            <Trash2 size={13} />
-            <span>{t('common.clear', { defaultValue: 'Clear' })}</span>
-          </button>
-        )}
-      </div>
-
-      {historyItems.length > 0 && (
-        <div style={{ position: 'relative', marginBottom: '10px' }}>
-          <Search
-            size={13}
-            style={{
-              position: 'absolute',
-              left: '10px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: 'var(--color-text-muted)',
-              pointerEvents: 'none',
-            }}
-          />
-          <input
-            type="text"
-            className="settings-input"
-            style={{
-              width: '100%',
-              paddingLeft: '30px',
-              paddingRight: searchQuery ? '28px' : '10px',
-              fontSize: '12px',
-              height: '32px',
-            }}
-            placeholder={t('settings.voice_typing_history_search_placeholder', {
-              defaultValue: 'Search dictation history...',
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '12px',
+          }}
+        >
+          <span style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
+            {t('settings.voice_typing_history_hint', {
+              defaultValue: 'Recent voice typing entries are saved here to prevent text loss.',
             })}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
+          </span>
+          {historyItems.length > 0 && (
             <button
               type="button"
-              onClick={() => setSearchQuery('')}
-              style={{
-                position: 'absolute',
-                right: '8px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                background: 'none',
-                border: 'none',
-                color: 'var(--color-text-muted)',
-                cursor: 'pointer',
-                padding: '2px',
-                display: 'flex',
-                alignItems: 'center',
-              }}
-              title={t('common.clear', { defaultValue: 'Clear' })}
+              onClick={clearHistory}
+              className="btn btn-secondary btn-sm"
+              style={{ flexShrink: 0 }}
             >
-              <X size={12} />
+              <Trash2 size={14} />
+              <span>{t('common.clear', { defaultValue: 'Clear' })}</span>
             </button>
           )}
         </div>
-      )}
 
-      {historyItems.length === 0 ? (
-        <div
-          data-testid="voice-typing-history-empty"
-          style={{
-            padding: '28px 16px',
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '8px',
-            color: 'var(--color-text-muted)',
-            fontSize: '13px',
-            borderRadius: 'var(--radius-md, 8px)',
-            background: 'var(--color-bg-secondary)',
-            border: '1px dashed var(--color-border)',
-          }}
-        >
-          <History size={26} style={{ opacity: 0.4 }} />
-          <span>
-            {t('settings.voice_typing_history_empty', {
-              defaultValue:
-                'No dictation history yet. Texts transcribed via voice typing will appear here.',
-            })}
-          </span>
-        </div>
-      ) : filteredItems.length === 0 ? (
-        <div
-          style={{
-            padding: '20px 16px',
-            textAlign: 'center',
-            color: 'var(--color-text-muted)',
-            fontSize: '12px',
-            borderRadius: 'var(--radius-md, 8px)',
-            background: 'var(--color-bg-secondary)',
-            border: '1px solid var(--color-border)',
-          }}
-        >
-          {t('common.no_results', { defaultValue: 'No matching records found.' })}
-        </div>
-      ) : (
-        <div
-          data-testid="voice-typing-history-list"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-            maxHeight: '420px',
-            overflowY: 'auto',
-          }}
-        >
-          {filteredItems.map((item) => (
-            <div
-              key={item.id}
-              data-testid={`voice-typing-history-item-${item.id}`}
+        {historyItems.length > 0 && (
+          <div style={{ position: 'relative' }}>
+            <Search
+              size={13}
               style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                padding: '12px 14px',
-                borderRadius: 'var(--radius-md, 8px)',
-                background: 'var(--color-bg-primary)',
-                border: '1px solid var(--color-border)',
-                transition: 'border-color 0.15s ease',
+                position: 'absolute',
+                left: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--color-text-muted)',
+                pointerEvents: 'none',
               }}
-            >
-              <div
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+            />
+            <input
+              type="text"
+              className="settings-input"
+              style={{
+                width: '100%',
+                paddingLeft: '30px',
+                paddingRight: searchQuery ? '28px' : '10px',
+                fontSize: '12px',
+                height: '32px',
+              }}
+              placeholder={t('settings.voice_typing_history_search_placeholder', {
+                defaultValue: 'Search dictation history...',
+              })}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-text-muted)',
+                  cursor: 'pointer',
+                  padding: '2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+                title={t('common.clear', { defaultValue: 'Clear' })}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        )}
+
+        {historyItems.length === 0 ? (
+          <div
+            data-testid="voice-typing-history-empty"
+            style={{
+              padding: '28px 16px',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '8px',
+              color: 'var(--color-text-muted)',
+              fontSize: '13px',
+              borderRadius: 'var(--radius-md, 8px)',
+              background: 'var(--color-bg-secondary)',
+              border: '1px dashed var(--color-border)',
+            }}
+          >
+            <History size={26} style={{ opacity: 0.4 }} />
+            <span>
+              {t('settings.voice_typing_history_empty', {
+                defaultValue:
+                  'No dictation history yet. Texts transcribed via voice typing will appear here.',
+              })}
+            </span>
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div
+            style={{
+              padding: '20px 16px',
+              textAlign: 'center',
+              color: 'var(--color-text-muted)',
+              fontSize: '12px',
+              borderRadius: 'var(--radius-md, 8px)',
+              background: 'var(--color-bg-secondary)',
+              border: '1px solid var(--color-border)',
+            }}
+          >
+            {t('common.no_results', { defaultValue: 'No matching records found.' })}
+          </div>
+        ) : (
+          <div
+            data-testid="voice-typing-history-list"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              maxHeight: '420px',
+              overflowY: 'auto',
+            }}
+          >
+            {filteredItems.map((item) => (
+              <div
+                key={item.id}
+                data-testid={`voice-typing-history-item-${item.id}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '12px',
+                  padding: '12px 14px',
+                  borderRadius: 'var(--radius-md, 8px)',
+                  background: 'var(--color-bg-secondary)',
+                  border: '1px solid var(--color-border)',
+                  transition: 'border-color 0.15s ease',
+                }}
+              >
+                <div
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        padding: '2px 7px',
+                        borderRadius: '4px',
+                        background:
+                          item.mode === 'polish'
+                            ? 'rgba(168, 85, 247, 0.12)'
+                            : 'rgba(59, 130, 246, 0.12)',
+                        color:
+                          item.mode === 'polish'
+                            ? 'var(--color-accent-purple, #a855f7)'
+                            : 'var(--color-accent-blue, #3b82f6)',
+                        border:
+                          item.mode === 'polish'
+                            ? '1px solid rgba(168, 85, 247, 0.25)'
+                            : '1px solid rgba(59, 130, 246, 0.25)',
+                      }}
+                    >
+                      {item.mode === 'polish'
+                        ? t('settings.voice_typing_mode_badge_polish', {
+                            defaultValue: 'AI Polish',
+                          })
+                        : t('settings.voice_typing_mode_badge_raw', {
+                            defaultValue: 'Fast Dictation',
+                          })}
+                    </span>
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                      {new Date(item.timestamp).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <div
                     style={{
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      padding: '2px 7px',
-                      borderRadius: '4px',
-                      background:
-                        item.mode === 'polish'
-                          ? 'rgba(168, 85, 247, 0.12)'
-                          : 'rgba(59, 130, 246, 0.12)',
-                      color:
-                        item.mode === 'polish'
-                          ? 'var(--color-accent-purple, #a855f7)'
-                          : 'var(--color-accent-blue, #3b82f6)',
-                      border:
-                        item.mode === 'polish'
-                          ? '1px solid rgba(168, 85, 247, 0.25)'
-                          : '1px solid rgba(59, 130, 246, 0.25)',
+                      fontSize: '13px',
+                      lineHeight: '1.6',
+                      color: 'var(--color-text-primary)',
+                      wordBreak: 'break-word',
+                      userSelect: 'text',
                     }}
                   >
-                    {item.mode === 'polish'
-                      ? t('settings.voice_typing_mode_badge_polish', { defaultValue: 'AI Polish' })
-                      : t('settings.voice_typing_mode_badge_raw', {
-                          defaultValue: 'Fast Dictation',
+                    {item.injectedText}
+                  </div>
+                  {item.mode === 'polish' && item.rawText && item.rawText !== item.injectedText && (
+                    <div
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--color-text-muted)',
+                        background: 'var(--color-bg-elevated)',
+                        borderLeft: '2px solid var(--color-accent-purple, #a855f7)',
+                        padding: '6px 10px',
+                        borderRadius: '0 4px 4px 0',
+                        lineHeight: '1.5',
+                      }}
+                    >
+                      <span style={{ fontWeight: 500, opacity: 0.8 }}>
+                        {t('settings.voice_typing_original_text', {
+                          defaultValue: 'Original Draft',
                         })}
-                  </span>
-                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                    {new Date(item.timestamp).toLocaleTimeString()}
-                  </span>
+                        :
+                      </span>{' '}
+                      {item.rawText}
+                    </div>
+                  )}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
-                    title={t('common.copy', { defaultValue: 'Copy' })}
                     onClick={() => void handleCopy(item.id, item.injectedText)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '3px 8px',
-                      fontSize: '11px',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                    }}
                   >
                     {copiedId === item.id ? (
-                      <Check size={12} color="#22c55e" />
+                      <Check size={14} color="#22c55e" />
                     ) : (
-                      <Copy size={12} />
+                      <Copy size={14} />
                     )}
                     <span>
                       {copiedId === item.id
@@ -731,24 +765,12 @@ function VoiceTypingHistorySection(): React.JSX.Element {
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"
-                    title={t('settings.voice_typing_add_hotword', {
-                      defaultValue: 'Add to Hotwords',
-                    })}
                     onClick={() => handleAddToHotwords(item.id, item.injectedText)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '3px 8px',
-                      fontSize: '11px',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                    }}
                   >
                     {addedHotwordId === item.id ? (
-                      <Check size={12} color="#22c55e" />
+                      <Check size={14} color="#22c55e" />
                     ) : (
-                      <Plus size={12} />
+                      <Plus size={14} />
                     )}
                     <span>
                       {addedHotwordId === item.id
@@ -760,57 +782,19 @@ function VoiceTypingHistorySection(): React.JSX.Element {
                   </button>
                   <button
                     type="button"
-                    title={t('common.delete', { defaultValue: 'Delete' })}
+                    className="btn btn-icon btn-sm"
+                    aria-label={t('common.delete', { defaultValue: 'Delete' })}
                     onClick={() => removeItem(item.id)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      padding: '5px',
-                      borderRadius: '4px',
-                      border: 'none',
-                      background: 'transparent',
-                      color: 'var(--color-text-muted)',
-                      cursor: 'pointer',
-                      transition: 'color 0.15s ease',
-                    }}
+                    style={{ color: 'var(--color-text-muted)' }}
                   >
-                    <Trash2 size={13} />
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>
-              <div
-                style={{
-                  fontSize: '13px',
-                  lineHeight: '1.6',
-                  color: 'var(--color-text-primary)',
-                  wordBreak: 'break-word',
-                  userSelect: 'text',
-                }}
-              >
-                {item.injectedText}
-              </div>
-              {item.mode === 'polish' && item.rawText && item.rawText !== item.injectedText && (
-                <div
-                  style={{
-                    fontSize: '12px',
-                    color: 'var(--color-text-muted)',
-                    background: 'var(--color-bg-elevated)',
-                    borderLeft: '2px solid var(--color-accent-purple, #a855f7)',
-                    padding: '6px 10px',
-                    borderRadius: '0 4px 4px 0',
-                    lineHeight: '1.5',
-                  }}
-                >
-                  <span style={{ fontWeight: 500, opacity: 0.8 }}>
-                    {t('settings.voice_typing_original_text', { defaultValue: 'Original Draft' })}:
-                  </span>{' '}
-                  {item.rawText}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </SettingsSection>
   );
 }

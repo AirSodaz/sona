@@ -54,6 +54,8 @@
     "change_directory": "Change Directory...",
     "open_folder": "Open Folder",
     "restore_default": "Restore Default",
+    "reset": "Reset",
+    "clear": "Clear",
     "capturing": "Capturing..."
   },
   "errors": {
