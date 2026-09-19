@@ -10,6 +10,7 @@ import { DEFAULT_PROJECT_PIPELINE } from '../../types/project';
 import { getLocalizedLanguageName } from '../../utils/languageUtils';
 import { coercePolishPresetId, getPolishPresetOptions } from '../../utils/polishPresets';
 import { getSummaryTemplateOptions } from '../../utils/summaryTemplates';
+import { getTermsForProject, parseYamlDictionary } from '../../utils/yamlDictionaryParser';
 import { Dropdown, type DropdownOption } from '../Dropdown';
 import { IconPicker } from '../IconPicker';
 import { FolderIcon } from '../Icons';
@@ -60,8 +61,16 @@ export function ProjectSettingsModal({
 }: ProjectSettingsModalProps): React.JSX.Element | null {
   const { t, i18n } = useTranslation();
   const config = useConfigStore((state) => state.config);
-  const hotwordSets = config.hotwordSets || [];
-  const replacementSets = config.textReplacementSets || [];
+  const dictionaryContent = config.dictionaryContent || '';
+  const parsedDictionary = useMemo(
+    () => parseYamlDictionary(dictionaryContent),
+    [dictionaryContent]
+  );
+  const projectTermsCount = useMemo(() => {
+    if (!project) return 0;
+    const terms = getTermsForProject(parsedDictionary, project.id, project.name);
+    return terms.hotwords.length + terms.replacements.length;
+  }, [parsedDictionary, project]);
   const polishPresetOptions = useMemo(() => getPolishPresetOptions(undefined, t), [t]);
   const summaryTemplateOptions = useMemo(() => getSummaryTemplateOptions(undefined, t), [t]);
   const languageOptions = useMemo(
@@ -344,95 +353,47 @@ export function ProjectSettingsModal({
                   )}
                 </div>
 
-                {/* Hotword Sets */}
-                {hotwordSets.length > 0 && (
-                  <div className="project-pipeline-item">
+                {/* Unified Dictionary Integration */}
+                <div
+                  className="project-pipeline-item"
+                  style={{ flexDirection: 'column', alignItems: 'stretch' }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
                     <span
                       style={{
                         fontSize: '0.8125rem',
                         fontWeight: 500,
-                        color: 'var(--color-text-secondary)',
+                        color: 'var(--color-text-primary)',
                       }}
                     >
-                      {t('projects.pipeline_hotwords', { defaultValue: 'Hotword Sets' })}
-                    </span>
-                    <div
-                      style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}
-                    >
-                      {hotwordSets.map((set) => (
-                        <label
-                          key={set.id}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            fontSize: '0.8125rem',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={Boolean(pipeline.hotwordSetIds?.includes(set.id))}
-                            onChange={(e) => {
-                              const currentIds = pipeline.hotwordSetIds || [];
-                              const nextIds = e.target.checked
-                                ? [...currentIds, set.id]
-                                : currentIds.filter((id) => id !== set.id);
-                              updatePipeline({ hotwordSetIds: nextIds });
-                            }}
-                          />
-                          <span>{set.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Text Replacement Sets */}
-                {replacementSets.length > 0 && (
-                  <div className="project-pipeline-item">
-                    <span
-                      style={{
-                        fontSize: '0.8125rem',
-                        fontWeight: 500,
-                        color: 'var(--color-text-secondary)',
-                      }}
-                    >
-                      {t('projects.pipeline_replacements', {
-                        defaultValue: 'Text Replacement Sets',
+                      {t('projects.pipeline_dictionary_title', {
+                        defaultValue: 'Vocabulary & Terms',
                       })}
                     </span>
-                    <div
-                      style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '4px' }}
-                    >
-                      {replacementSets.map((set) => (
-                        <label
-                          key={set.id}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            fontSize: '0.8125rem',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={Boolean(pipeline.replacementSetIds?.includes(set.id))}
-                            onChange={(e) => {
-                              const currentIds = pipeline.replacementSetIds || [];
-                              const nextIds = e.target.checked
-                                ? [...currentIds, set.id]
-                                : currentIds.filter((id) => id !== set.id);
-                              updatePipeline({ replacementSetIds: nextIds });
-                            }}
-                          />
-                          <span>{set.name}</span>
-                        </label>
-                      ))}
-                    </div>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+                      {projectTermsCount}{' '}
+                      {t('projects.terms_linked', { defaultValue: 'terms linked' })}
+                    </span>
                   </div>
-                )}
+                  <p
+                    style={{
+                      fontSize: '0.75rem',
+                      color: 'var(--color-text-secondary)',
+                      margin: '4px 0 0 0',
+                    }}
+                  >
+                    {t('projects.pipeline_dictionary_hint', {
+                      defaultValue:
+                        'All project terms and replacements are now configured in the Unified Dictionary (Settings > Vocabulary).',
+                    })}
+                  </p>
+                </div>
               </div>
             )}
           </div>

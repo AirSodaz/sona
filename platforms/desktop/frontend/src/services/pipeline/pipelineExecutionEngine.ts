@@ -1,7 +1,9 @@
-import type { AppConfig } from '../../types/config';
+import type { AppConfig, TextReplacementRule, TextReplacementRuleSet } from '../../types/config';
 import type { TranscriptSegment } from '../../types/transcript';
 import type { ExportFormat, ExportMode } from '../../utils/exportFormats';
 import { logger } from '../../utils/logger';
+import { applyTextReplacements } from '../../utils/textProcessing';
+import { getTermsForProject, parseYamlDictionary } from '../../utils/yamlDictionaryParser';
 import { exportService } from '../exportService';
 import { historyService } from '../historyService';
 import { isFeatureLlmConfigComplete } from '../llm/configUtils';
@@ -38,6 +40,28 @@ export interface PipelineExecutionEnginePorts {
   isFeatureLlmConfigComplete: typeof isFeatureLlmConfigComplete;
 }
 
+function extractReplacementsFromTerms(terms: string[] = []): TextReplacementRule[] {
+  const rules: TextReplacementRule[] = [];
+  for (const term of terms) {
+    const trimmed = term.trim();
+    if (!trimmed) continue;
+    let from = '';
+    let to = '';
+    if (trimmed.includes('=>')) {
+      const parts = trimmed.split('=>');
+      from = parts[0]?.trim() || '';
+      to = parts[1]?.trim() || '';
+    } else if (trimmed.includes('->')) {
+      const parts = trimmed.split('->');
+      from = parts[0]?.trim() || '';
+      to = parts[1]?.trim() || '';
+    }
+    if (from && to) {
+      rules.push({ id: `term_${from}_${to}`, from, to });
+    }
+  }
+  return rules;
+}
 export class PipelineExecutionEngine {
   constructor(private readonly ports: PipelineExecutionEnginePorts) {}
 
@@ -64,6 +88,58 @@ export class PipelineExecutionEngine {
 
     if (currentSegments.length === 0) {
       return { segments: currentSegments };
+    }
+
+    // 0. Auto Text Replacements from Unified Dictionary (or legacy pipeline terms)
+    const effectiveReplacementSets: TextReplacementRuleSet[] = [];
+    if (globalConfig.dictionaryContent?.trim()) {
+      const parsed = parseYamlDictionary(globalConfig.dictionaryContent);
+      const projectId =
+        'projectId' in pipeline && typeof pipeline.projectId === 'string'
+          ? pipeline.projectId
+          : undefined;
+      const terms = getTermsForProject(parsed, projectId);
+      if (terms.replacements.length > 0) {
+        effectiveReplacementSets.push({
+          id: 'unified-dictionary-replacements',
+          name: 'Unified Dictionary',
+          enabled: true,
+          ignoreCase: false,
+          rules: terms.replacements.map((r, i) => ({
+            id: `rep_${i}`,
+            from: r.from,
+            to: r.to,
+          })),
+        });
+      }
+    } else {
+      if (pipeline.replacementSetIds && pipeline.replacementSetIds.length > 0) {
+        const globalSets = globalConfig.textReplacementSets ?? [];
+        for (const setId of pipeline.replacementSetIds) {
+          const found = globalSets.find((s) => s.id === setId);
+          if (found) effectiveReplacementSets.push(found);
+        }
+      }
+      const customReplacements = extractReplacementsFromTerms(pipeline.customTerms);
+      if (customReplacements.length > 0) {
+        effectiveReplacementSets.push({
+          id: 'pipeline-custom-terms',
+          name: 'Project Terms',
+          enabled: true,
+          ignoreCase: false,
+          rules: customReplacements,
+        });
+      }
+    }
+    if (effectiveReplacementSets.length > 0) {
+      currentSegments = currentSegments.map((seg) => ({
+        ...seg,
+        text: applyTextReplacements(seg.text, effectiveReplacementSets),
+      }));
+      await onSegmentsUpdated?.(currentSegments);
+      if (historyId) {
+        await this.ports.historyService.updateTranscript(historyId, currentSegments);
+      }
     }
 
     // 1. Auto Polish

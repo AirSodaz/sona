@@ -26,6 +26,7 @@ function normalizeProject(record: GeneratedProjectRecord): ProjectRecord {
         summaryTemplateId: record.pipeline.summaryTemplateId ?? undefined,
         hotwordSetIds: record.pipeline.hotwordSetIds ?? [],
         replacementSetIds: record.pipeline.replacementSetIds ?? [],
+        customTerms: record.pipeline.customTerms ?? [],
         autoExport: record.pipeline.autoExport ?? false,
         exportFormat: record.pipeline.exportFormat as ProjectPipelineConfig['exportFormat'],
         exportDirectory: record.pipeline.exportDirectory ?? undefined,

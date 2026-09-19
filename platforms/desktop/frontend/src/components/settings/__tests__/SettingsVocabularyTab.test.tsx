@@ -108,15 +108,13 @@ describe('SettingsVocabularyTab', () => {
   it('renders secondary category tabs and switches between recognition and prompts sections', () => {
     render(<SettingsVocabularyTab />);
 
-    screen.getByRole('tab', { name: '识别与纠偏' });
-    screen.getByRole('tab', { name: 'AI 提示与模板' });
-    screen.getByRole('tab', { name: '说话人档案' });
-
-    screen.getByText('Text Replacement');
-    screen.getByText('Hotwords');
+    screen.getByRole('tab', { name: 'Unified Dictionary' });
+    screen.getByRole('tab', { name: 'AI Prompts & Templates' });
+    screen.getByRole('tab', { name: 'Speaker Profiles' });
+    expect(screen.getAllByText('Unified Dictionary').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('Polish Keywords')).toBeNull();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'AI 提示与模板' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'AI Prompts & Templates' }));
 
     screen.getByText('Built-in Presets');
     screen.getByText('Built-in Summary Templates');
@@ -172,31 +170,6 @@ describe('SettingsVocabularyTab', () => {
       expect(useConfigStore.getState().config.summaryCustomTemplates).toEqual([]);
       expect(useConfigStore.getState().config.summaryTemplateId).toBe('general');
       expect(useAutomationStore.getState().profiles[0].summaryTemplateId).toBe('general');
-    });
-  });
-
-  it('deletes global rule sets and removes their automation profile references', async () => {
-    useConfigStore.setState({
-      config: {
-        ...useConfigStore.getState().config,
-        textReplacementSets: [
-          { id: 'text-1', name: 'Text Set', enabled: true, ignoreCase: false, rules: [] },
-        ],
-        hotwordSets: [{ id: 'hot-1', name: 'Hot Set', enabled: true, rules: [] }],
-      },
-    });
-    render(<SettingsVocabularyTab />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Text Set' }));
-    await waitFor(() => {
-      expect(useConfigStore.getState().config.textReplacementSets).toEqual([]);
-      expect(useAutomationStore.getState().profiles[0].enabledTextReplacementSetIds).toEqual([]);
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Hot Set' }));
-    await waitFor(() => {
-      expect(useConfigStore.getState().config.hotwordSets).toEqual([]);
-      expect(useAutomationStore.getState().profiles[0].enabledHotwordSetIds).toEqual([]);
     });
   });
 
@@ -315,43 +288,19 @@ describe('SettingsVocabularyTab', () => {
     const tablist = screen.getByRole('tablist', { name: 'Vocabulary categories' });
 
     fireEvent.keyDown(tablist, { key: 'ArrowRight' });
-    expect(screen.getByRole('tab', { name: 'AI 提示与模板' }).getAttribute('aria-selected')).toBe(
-      'true'
-    );
+    expect(
+      screen.getByRole('tab', { name: 'AI Prompts & Templates' }).getAttribute('aria-selected')
+    ).toBe('true');
     screen.getByText('Built-in Presets');
 
     fireEvent.keyDown(tablist, { key: 'ArrowRight' });
-    expect(screen.getByRole('tab', { name: '说话人档案' }).getAttribute('aria-selected')).toBe(
-      'true'
-    );
+    expect(
+      screen.getByRole('tab', { name: 'Speaker Profiles' }).getAttribute('aria-selected')
+    ).toBe('true');
 
     fireEvent.keyDown(tablist, { key: 'ArrowLeft' });
-    expect(screen.getByRole('tab', { name: 'AI 提示与模板' }).getAttribute('aria-selected')).toBe(
-      'true'
-    );
-  });
-
-  it('applies custom data-tooltip attributes to switch to text/list button and toggles tooltip reactively', () => {
-    useConfigStore.setState({
-      config: {
-        ...useConfigStore.getState().config,
-        textReplacementSets: [
-          { id: 'text-1', name: 'Tech Terms', enabled: true, ignoreCase: false, rules: [] },
-        ],
-      },
-    });
-    render(<SettingsVocabularyTab />);
-
-    const toggleBtn = screen.getByRole('button', { name: 'Switch to Text' });
-    expect(toggleBtn.getAttribute('data-tooltip')).toBe('Switch to Text');
-    expect(toggleBtn.getAttribute('data-tooltip-pos')).toBe('top');
-    expect(toggleBtn.getAttribute('title')).toBeNull();
-
-    fireEvent.click(toggleBtn);
-
-    const switchToListBtn = screen.getByRole('button', { name: 'Switch to List' });
-    expect(switchToListBtn.getAttribute('data-tooltip')).toBe('Switch to List');
-    expect(switchToListBtn.getAttribute('data-tooltip-pos')).toBe('top');
-    expect(switchToListBtn.getAttribute('title')).toBeNull();
+    expect(
+      screen.getByRole('tab', { name: 'AI Prompts & Templates' }).getAttribute('aria-selected')
+    ).toBe('true');
   });
 });

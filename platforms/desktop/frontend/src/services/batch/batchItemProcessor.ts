@@ -71,7 +71,23 @@ export class BatchItemProcessor {
       item.pipelineSnapshot = undefined;
     }
     const language = config.language;
-    const batchAsr = this.ports.asrConfigService.resolveAsrTranscriptionRequest(config, 'batch');
+    const pipeline =
+      item.pipelineSnapshot ??
+      resolveItemPipeline(
+        item.projectId,
+        this.ports.useProjectStore?.getState?.().projects ?? [],
+        config
+      );
+    const hotwordsOverride = this.ports.asrConfigService.buildHotwordsWithPipeline?.(
+      config,
+      pipeline,
+      item.projectId
+    );
+    const batchAsr = this.ports.asrConfigService.resolveAsrTranscriptionRequest(
+      config,
+      'batch',
+      hotwordsOverride ? { hotwords: hotwordsOverride } : {}
+    );
     const isLlamaCpp = isLlamaCppBatchRequest(batchAsr);
 
     if (!this.ports.asrConfigService.isAsrRequestConfigured(batchAsr)) {

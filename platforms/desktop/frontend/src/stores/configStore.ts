@@ -162,6 +162,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   polishKeywordSets: [],
   speakerProfiles: [],
   hotwords: [],
+  dictionaryContent: '',
 
   // History storage
   historyAudioRetentionDays: null,
@@ -273,6 +274,7 @@ const VOCABULARY_KEYS: (keyof VocabularyConfig)[] = [
   'polishKeywordSets',
   'speakerProfiles',
   'hotwords',
+  'dictionaryContent',
 ];
 
 const VOICE_TYPING_KEYS: (keyof VoiceTypingConfig)[] = [

@@ -15,6 +15,7 @@ export type ProjectPipelineConfig = {
   summaryTemplateId?: string;
   hotwordSetIds?: string[];
   replacementSetIds?: string[];
+  customTerms?: string[];
   autoExport: boolean;
   exportFormat?: 'txt' | 'srt' | 'vtt' | 'json' | 'docx' | 'md';
   exportDirectory?: string;
@@ -40,4 +41,5 @@ export const DEFAULT_PROJECT_PIPELINE: ProjectPipelineConfig = {
   autoTranslate: false,
   autoSummary: false,
   autoExport: false,
+  customTerms: [],
 };

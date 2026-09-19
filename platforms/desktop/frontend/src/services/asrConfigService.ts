@@ -17,6 +17,7 @@ import type {
   OnlineAsrProviderId,
 } from '../types/config';
 import type { ModelInfo } from '../types/modelCatalog';
+import type { EffectivePipelineSnapshot, ProjectPipelineConfig } from '../types/project';
 import { coerceLanguage, type LanguageCapable } from '../utils/languages';
 import { findSelectedModelByMode } from '../utils/modelSelection';
 import {
@@ -25,6 +26,7 @@ import {
   getScenarioVadBufferSize,
   getScenarioVadModelPath,
 } from '../utils/scenarioModels';
+import { getTermsForProject, parseYamlDictionary } from '../utils/yamlDictionaryParser';
 import { modelService, PRESET_MODELS_MAP } from './modelService';
 import {
   createOnlineAsrSelection,
@@ -147,7 +149,9 @@ export class AsrConfigService {
   resolveAsrTranscriptionRequest = (
     config: AppConfig,
     slot: AsrSelectionSlot,
-    overrides: Partial<Pick<AsrTranscriptionRequest, 'language'>> = {}
+    overrides: Partial<
+      Pick<AsrTranscriptionRequest, 'language' | 'hotwords' | 'postprocessOptions'>
+    > = {}
   ): AsrTranscriptionRequest => {
     const normalizedAsr = this.normalizeAsrConfig(config);
     const selection = this.getSelection({ ...config, asr: normalizedAsr }, slot);
@@ -193,8 +197,8 @@ export class AsrConfigService {
       normalizationOptions: {
         enableTimeline: config.enableTimeline ?? false,
       },
-      postprocessOptions: this.buildPostprocessOptions(config),
-      hotwords: this.buildHotwords(config),
+      postprocessOptions: overrides.postprocessOptions || this.buildPostprocessOptions(config),
+      hotwords: overrides.hotwords !== undefined ? overrides.hotwords : this.buildHotwords(config),
     };
 
     if (selection.engine === 'online') {
@@ -486,6 +490,46 @@ export class AsrConfigService {
         .flatMap((set) => set.rules.map((rule) => rule.text.trim()))
         .filter(Boolean) ?? [];
     return words.length > 0 ? words.join(',') : null;
+  };
+
+  buildHotwordsWithPipeline = (
+    config: AppConfig,
+    pipeline?: ProjectPipelineConfig | EffectivePipelineSnapshot | null,
+    projectId?: string | null,
+    projectName?: string
+  ): string | null => {
+    if (config.dictionaryContent?.trim()) {
+      const parsed = parseYamlDictionary(config.dictionaryContent);
+      const terms = getTermsForProject(parsed, projectId, projectName);
+      return terms.hotwords.length > 0 ? terms.hotwords.join(',') : null;
+    }
+
+    const baseWords =
+      config.hotwordSets
+        ?.filter((set) => set.enabled)
+        .flatMap((set) => set.rules.map((rule) => rule.text.trim()))
+        .filter(Boolean) ?? [];
+
+    const customTerms = pipeline?.customTerms ?? [];
+    const pipelineWords: string[] = [];
+    for (const term of customTerms) {
+      const trimmed = term.trim();
+      if (!trimmed) continue;
+      if (trimmed.includes('=>')) {
+        const parts = trimmed.split('=>');
+        const target = parts[1]?.trim();
+        if (target) pipelineWords.push(target);
+      } else if (trimmed.includes('->')) {
+        const parts = trimmed.split('->');
+        const target = parts[1]?.trim();
+        if (target) pipelineWords.push(target);
+      } else {
+        pipelineWords.push(trimmed);
+      }
+    }
+
+    const allWords = Array.from(new Set([...baseWords, ...pipelineWords]));
+    return allWords.length > 0 ? allWords.join(',') : null;
   };
 
   private buildOnlineProviderRequest = (

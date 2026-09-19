@@ -17,6 +17,7 @@ function globalDefaults(config: AppConfig): ProjectPipelineConfig {
     autoSummary: false,
     summaryTemplateId: config.summaryTemplateId,
     autoExport: false,
+    customTerms: [],
   };
 }
 
@@ -38,6 +39,7 @@ export function resolveItemPipeline(
     polishPresetId: project.pipeline.polishPresetId ?? defaults.polishPresetId,
     targetLanguage: project.pipeline.targetLanguage ?? defaults.targetLanguage,
     summaryTemplateId: project.pipeline.summaryTemplateId ?? defaults.summaryTemplateId,
+    customTerms: project.pipeline.customTerms ?? defaults.customTerms ?? [],
     isProjectPipeline: true,
   };
 }

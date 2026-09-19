@@ -317,6 +317,8 @@ export interface VocabularyConfig {
   polishKeywordSets?: PolishKeywordRuleSet[];
   /** Global speaker profiles library. */
   speakerProfiles?: SpeakerProfile[];
+  /** Unified YAML dictionary content. */
+  dictionaryContent?: string;
   /** Deprecated: Custom hotwords for ASR. Use hotwordSets instead. */
   hotwords?: string[];
   /** Deprecated: use textReplacementSets instead. */

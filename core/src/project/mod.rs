@@ -17,6 +17,8 @@ pub struct ProjectPipelineConfig {
     pub summary_template_id: Option<String>,
     pub hotword_set_ids: Vec<String>,
     pub replacement_set_ids: Vec<String>,
+    #[serde(default)]
+    pub custom_terms: Vec<String>,
     pub auto_export: bool,
     pub export_format: Option<String>,
     pub export_directory: Option<String>,
@@ -81,6 +83,7 @@ pub struct EffectivePipelineSnapshot {
     pub summary_template_id: Option<String>,
     pub hotword_set_ids: Vec<String>,
     pub replacement_set_ids: Vec<String>,
+    pub custom_terms: Vec<String>,
     pub auto_export: bool,
     pub export_format: Option<String>,
     pub export_directory: Option<String>,
@@ -99,6 +102,7 @@ fn global_snapshot(config: &AppConfig) -> EffectivePipelineSnapshot {
         summary_template_id: config.summary_template_id.clone(),
         hotword_set_ids: Vec::new(),
         replacement_set_ids: Vec::new(),
+        custom_terms: Vec::new(),
         auto_export: false,
         export_format: None,
         export_directory: None,
@@ -138,6 +142,7 @@ pub fn resolve_item_pipeline(
             .or(fallback.summary_template_id),
         hotword_set_ids: pipeline.hotword_set_ids.clone(),
         replacement_set_ids: pipeline.replacement_set_ids.clone(),
+        custom_terms: pipeline.custom_terms.clone(),
         auto_export: pipeline.auto_export,
         export_format: pipeline.export_format.clone(),
         export_directory: pipeline.export_directory.clone(),
@@ -199,6 +204,7 @@ mod tests {
             auto_translate: true,
             target_language: Some("en".into()),
             hotword_set_ids: vec!["hot".into()],
+            custom_terms: vec!["Sona".into(), "K8s".into()],
             ..Default::default()
         };
         let snapshot = resolve_item_pipeline(Some("p1"), &[project(Some(pipeline))], &config());
@@ -207,5 +213,6 @@ mod tests {
         assert!(snapshot.auto_translate);
         assert_eq!(snapshot.target_language.as_deref(), Some("en"));
         assert_eq!(snapshot.summary_template_id.as_deref(), Some("default"));
+        assert_eq!(snapshot.custom_terms, vec!["Sona".to_string(), "K8s".to_string()]);
     }
 }
