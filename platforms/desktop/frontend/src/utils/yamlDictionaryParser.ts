@@ -709,3 +709,192 @@ export function addTermToYamlDictionary(
   lines.push(`  ${targetName} (id:${targetId}):`, `    ${entry}`);
   return lines.join('\n');
 }
+
+/**
+ * Extracts hotword text and optional weight (e.g. "sherpa-onnx :2.0" -> { word: "sherpa-onnx", weight: 2.0 }).
+ */
+export function extractHotwordWeight(text: string): { word: string; weight?: number } {
+  const match = text.match(/^(.*?)\s*:([0-9.]+)$/);
+  if (match?.[1].trim()) {
+    const w = parseFloat(match[2]);
+    if (!Number.isNaN(w)) {
+      return { word: match[1].trim(), weight: w };
+    }
+  }
+  return { word: text.trim() };
+}
+
+/**
+ * Formats a hotword with an optional weight suffix.
+ */
+export function formatHotwordWithWeight(word: string, weight?: number | string): string {
+  const trimmed = word.trim();
+  if (!trimmed) return '';
+  if (weight !== undefined && weight !== null && String(weight).trim() !== '') {
+    const num = parseFloat(String(weight));
+    if (!Number.isNaN(num) && num > 0) {
+      return `${trimmed} :${num.toFixed(1)}`;
+    }
+  }
+  return trimmed;
+}
+
+/**
+ * Removes a specific term (hotword or replacement rule) from the YAML dictionary under the specified scope.
+ */
+export function removeTermFromYamlDictionary(
+  content: string,
+  term: {
+    text?: string;
+    from?: string;
+    to?: string;
+    isReplacement?: boolean;
+    line?: number;
+    raw?: string;
+  },
+  targetScope: 'global' | string | { id: string; name?: string } = 'global',
+  knownProjects: KnownProjectRef[] = []
+): string {
+  const parsed = parseYamlDictionary(content, knownProjects);
+  const lines = content.split('\n');
+
+  let targetId: string | null = null;
+  if (typeof targetScope === 'object') {
+    targetId = targetScope.id;
+  } else if (targetScope !== 'global') {
+    targetId = targetScope;
+  }
+
+  const isGlobal = targetScope === 'global';
+  const isVT = targetId ? isVoiceTypingScopeId(targetId) : false;
+
+  let targetLineNum: number | null = null;
+
+  const matchesTerm = (t: DictionaryTerm) => {
+    if (term.line && t.line === term.line) return true;
+    if (term.isReplacement) {
+      return (
+        t.isReplacement &&
+        t.from?.trim().toLowerCase() === term.from?.trim().toLowerCase() &&
+        t.to?.trim().toLowerCase() === term.to?.trim().toLowerCase()
+      );
+    }
+    const targetWord = term.text ? extractHotwordWeight(term.text).word.toLowerCase() : '';
+    const currentWord = extractHotwordWeight(t.text).word.toLowerCase();
+    return !t.isReplacement && (currentWord === targetWord || (term.raw && t.raw === term.raw));
+  };
+
+  if (isGlobal) {
+    const matched = parsed.globalTerms.find(matchesTerm);
+    if (matched) {
+      targetLineNum = matched.line;
+    }
+  } else {
+    const proj = parsed.projects.find((p) => {
+      if (isVT) return isVoiceTypingScope(p.projectId, p.projectName);
+      return (
+        p.projectId === targetId ||
+        (p.projectName && p.projectName.toLowerCase() === targetId?.toLowerCase())
+      );
+    });
+    if (proj) {
+      const matched = proj.terms.find(matchesTerm);
+      if (matched) {
+        targetLineNum = matched.line;
+      }
+    }
+  }
+
+  if (targetLineNum === null || targetLineNum < 1 || targetLineNum > lines.length) {
+    return content;
+  }
+
+  lines.splice(targetLineNum - 1, 1);
+  return lines.join('\n');
+}
+
+/**
+ * Updates an existing term in the YAML dictionary under the specified scope.
+ */
+export function updateTermInYamlDictionary(
+  content: string,
+  oldTerm: {
+    text?: string;
+    from?: string;
+    to?: string;
+    isReplacement?: boolean;
+    line?: number;
+    raw?: string;
+  },
+  newTermText: string,
+  targetScope: 'global' | string | { id: string; name?: string } = 'global',
+  knownProjects: KnownProjectRef[] = []
+): string {
+  const parsed = parseYamlDictionary(content, knownProjects);
+  const lines = content.split('\n');
+
+  let targetId: string | null = null;
+  if (typeof targetScope === 'object') {
+    targetId = targetScope.id;
+  } else if (targetScope !== 'global') {
+    targetId = targetScope;
+  }
+
+  const isGlobal = targetScope === 'global';
+  const isVT = targetId ? isVoiceTypingScopeId(targetId) : false;
+
+  let targetLineNum: number | null = null;
+
+  const matchesTerm = (t: DictionaryTerm) => {
+    if (oldTerm.line && t.line === oldTerm.line) return true;
+    if (oldTerm.isReplacement) {
+      return (
+        t.isReplacement &&
+        t.from?.trim().toLowerCase() === oldTerm.from?.trim().toLowerCase() &&
+        t.to?.trim().toLowerCase() === oldTerm.to?.trim().toLowerCase()
+      );
+    }
+    const targetWord = oldTerm.text ? extractHotwordWeight(oldTerm.text).word.toLowerCase() : '';
+    const currentWord = extractHotwordWeight(t.text).word.toLowerCase();
+    return (
+      !t.isReplacement && (currentWord === targetWord || (oldTerm.raw && t.raw === oldTerm.raw))
+    );
+  };
+
+  if (isGlobal) {
+    const matched = parsed.globalTerms.find(matchesTerm);
+    if (matched) {
+      targetLineNum = matched.line;
+    }
+  } else {
+    const proj = parsed.projects.find((p) => {
+      if (isVT) return isVoiceTypingScope(p.projectId, p.projectName);
+      return (
+        p.projectId === targetId ||
+        (p.projectName && p.projectName.toLowerCase() === targetId?.toLowerCase())
+      );
+    });
+    if (proj) {
+      const matched = proj.terms.find(matchesTerm);
+      if (matched) {
+        targetLineNum = matched.line;
+      }
+    }
+  }
+
+  if (targetLineNum === null || targetLineNum < 1 || targetLineNum > lines.length) {
+    return content;
+  }
+
+  let formatted = newTermText.trim();
+  if (formatted.includes('=>')) {
+    formatted = formatted.replace('=>', '->');
+  }
+  if (!formatted.startsWith('-')) {
+    formatted = `- ${formatted}`;
+  }
+
+  const indent = isGlobal ? '' : '    ';
+  lines[targetLineNum - 1] = `${indent}${formatted}`;
+  return lines.join('\n');
+}

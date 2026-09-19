@@ -218,6 +218,17 @@
   transform: scale(0.98);
 }
 
+.btn-xs {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 0.75rem;
+}
+
+.btn-xs svg {
+  width: 14px;
+  height: 14px;
+}
+
 .btn svg {
   width: 18px;
   height: 18px;

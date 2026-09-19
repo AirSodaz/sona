@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   addTermToYamlDictionary,
+  extractHotwordWeight,
+  formatHotwordWithWeight,
   formatYamlDictionary,
   getTermsForProject,
   isVoiceTypingScope,
   isVoiceTypingScopeId,
   isVoiceTypingScopeName,
   parseYamlDictionary,
+  removeTermFromYamlDictionary,
   serializeToYamlDictionary,
+  updateTermInYamlDictionary,
   VOICE_TYPING_SCOPE_ID,
   validateYamlDictionary,
 } from '../yamlDictionaryParser';
@@ -303,5 +307,84 @@ projects:
     const globalIdx = lines.findIndex((l) => l.trim() === '- GlobalTerm');
     const projectsIdx = lines.findIndex((l) => l.trim() === 'projects:');
     expect(globalIdx).toBeLessThan(projectsIdx);
+  });
+
+  it('removes terms from global and project scopes using removeTermFromYamlDictionary', () => {
+    const dict = `# Global
+- Sona
+- DeepSeek
+- 苦伯内提斯 -> Kubernetes
+
+projects:
+  Voice Typing (id:voice-typing):
+    - VoiceWord
+    - OldVoice -> NewVoice
+`;
+    // Remove global hotword
+    const afterRemoveGlobalHotword = removeTermFromYamlDictionary(
+      dict,
+      { text: 'DeepSeek', isReplacement: false },
+      'global',
+      mockProjects
+    );
+    expect(afterRemoveGlobalHotword).not.toContain('- DeepSeek');
+    expect(afterRemoveGlobalHotword).toContain('- Sona');
+
+    // Remove global replacement
+    const afterRemoveGlobalRep = removeTermFromYamlDictionary(
+      afterRemoveGlobalHotword,
+      { from: '苦伯内提斯', to: 'Kubernetes', isReplacement: true },
+      'global',
+      mockProjects
+    );
+    expect(afterRemoveGlobalRep).not.toContain('苦伯内提斯 -> Kubernetes');
+
+    // Remove voice typing term
+    const afterRemoveVTTerm = removeTermFromYamlDictionary(
+      afterRemoveGlobalRep,
+      { text: 'VoiceWord', isReplacement: false },
+      VOICE_TYPING_SCOPE_ID,
+      mockProjects
+    );
+    expect(afterRemoveVTTerm).not.toContain('- VoiceWord');
+    expect(afterRemoveVTTerm).toContain('- OldVoice -> NewVoice');
+  });
+
+  it('updates terms in global and project scopes using updateTermInYamlDictionary', () => {
+    const dict = `- Sona
+projects:
+  Voice Typing (id:voice-typing):
+    - VoiceWord
+`;
+    const updatedGlobal = updateTermInYamlDictionary(
+      dict,
+      { text: 'Sona', isReplacement: false },
+      'Sona AI',
+      'global',
+      mockProjects
+    );
+    expect(updatedGlobal).toContain('- Sona AI');
+    expect(updatedGlobal).not.toContain('- Sona\n');
+
+    const updatedVT = updateTermInYamlDictionary(
+      updatedGlobal,
+      { text: 'VoiceWord', isReplacement: false },
+      'VoiceWord => CorrectedWord',
+      VOICE_TYPING_SCOPE_ID,
+      mockProjects
+    );
+    expect(updatedVT).toContain('    - VoiceWord -> CorrectedWord');
+  });
+
+  it('extracts and formats hotword weights correctly', () => {
+    expect(extractHotwordWeight('sherpa-onnx :2.0')).toEqual({
+      word: 'sherpa-onnx',
+      weight: 2.0,
+    });
+    expect(extractHotwordWeight('Sona')).toEqual({
+      word: 'Sona',
+    });
+    expect(formatHotwordWithWeight('sherpa-onnx', 2.0)).toBe('sherpa-onnx :2.0');
+    expect(formatHotwordWithWeight('Sona', '')).toBe('Sona');
   });
 });
