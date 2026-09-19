@@ -893,6 +893,7 @@
     "voice_typing_polish_prompt_hint": "空欄の場合は組み込みの標準整形プロンプトが使用されます",
     "voice_typing_history": "音声入力履歴",
     "voice_typing_history_hint": "直近の入力テキストがここに保存され、フォーカス喪失時のテキスト紛失を防ぎます。",
+    "voice_typing_history_search_placeholder": "音声入力の履歴を検索...",
     "voice_typing_history_empty": "音声入力の履歴はまだありません。ショートカットで入力したテキストがここに表示されます。",
     "voice_typing_mode_badge_raw": "直接入力",
     "voice_typing_mode_badge_polish": "AI 整形",

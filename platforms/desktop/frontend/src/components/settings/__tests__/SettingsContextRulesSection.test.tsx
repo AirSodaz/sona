@@ -1,12 +1,7 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useConfigStore } from '../../../stores/configStore';
 import { SettingsContextRulesSection } from '../SettingsContextRulesSection';
-
-const mockGetForegroundWindowInfo = vi.fn();
-vi.mock('../../../services/tauri/system', () => ({
-  getForegroundWindowInfo: () => mockGetForegroundWindowInfo(),
-}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -84,24 +79,18 @@ describe('SettingsContextRulesSection', () => {
     expect(screen.queryByTestId('app-chip-custom_editor.exe')).toBeNull();
   });
 
-  it('captures active foreground app and adds to app list', async () => {
-    mockGetForegroundWindowInfo.mockResolvedValueOnce({
-      appName: 'my_new_app.exe',
-      windowTitle: 'New App Window',
-    });
-
+  it('selects preset emoji icon when clicked in edit modal', async () => {
     render(<SettingsContextRulesSection />);
 
     const devCard = screen.getByTestId('voice-typing-rule-card-developer');
     const editBtn = devCard.querySelectorAll('button')[0];
     fireEvent.click(editBtn);
-    const captureBtn = screen.getByTestId('capture-active-app-btn');
-    fireEvent.click(captureBtn);
 
-    await waitFor(() => {
-      expect(screen.getByTestId('app-chip-my_new_app.exe')).toBeTruthy();
-      expect(screen.getByText('Captured: my_new_app.exe')).toBeTruthy();
-    });
+    const emojiBtn = screen.getByTitle('⚡');
+    fireEvent.click(emojiBtn);
+
+    const iconInput = screen.getByDisplayValue('⚡');
+    expect(iconInput).toBeTruthy();
   });
 
   it('adds a new custom situation and saves it into config', async () => {

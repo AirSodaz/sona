@@ -6,6 +6,7 @@ import {
   Keyboard,
   Layers,
   Plus,
+  Search,
   SlidersHorizontal,
   Sparkles,
   Subtitles,
@@ -447,7 +448,6 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
     </>
   );
 }
-
 function VoiceTypingHistorySection(): React.JSX.Element {
   const { t } = useTranslation();
   const historyItems = useVoiceTypingHistoryStore((state) => state.items);
@@ -456,6 +456,7 @@ function VoiceTypingHistorySection(): React.JSX.Element {
   const updateConfig = useSetConfig();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [addedHotwordId, setAddedHotwordId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleCopy = async (id: string, text: string) => {
     try {
@@ -499,6 +500,15 @@ function VoiceTypingHistorySection(): React.JSX.Element {
     setTimeout(() => setAddedHotwordId((current) => (current === id ? null : current)), 1500);
   };
 
+  const filteredItems = historyItems.filter((item) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      item.injectedText.toLowerCase().includes(q) ||
+      Boolean(item.rawText?.toLowerCase().includes(q))
+    );
+  });
+
   return (
     <SettingsSection
       title={t('settings.voice_typing_history', { defaultValue: 'Dictation History' })}
@@ -509,7 +519,7 @@ function VoiceTypingHistorySection(): React.JSX.Element {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: '8px',
+          marginBottom: '10px',
           gap: '12px',
         }}
       >
@@ -522,32 +532,84 @@ function VoiceTypingHistorySection(): React.JSX.Element {
           <button
             type="button"
             onClick={clearHistory}
+            className="btn btn-secondary btn-sm"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '4px 10px',
-              fontSize: '12px',
-              borderRadius: 'var(--radius-sm, 6px)',
-              border: '1px solid var(--color-border)',
-              background: 'transparent',
-              color: 'var(--color-text-muted)',
-              cursor: 'pointer',
+              gap: '4px',
               flexShrink: 0,
             }}
           >
             <Trash2 size={13} />
-            {t('common.clear', { defaultValue: 'Clear' })}
+            <span>{t('common.clear', { defaultValue: 'Clear' })}</span>
           </button>
         )}
       </div>
+
+      {historyItems.length > 0 && (
+        <div style={{ position: 'relative', marginBottom: '10px' }}>
+          <Search
+            size={13}
+            style={{
+              position: 'absolute',
+              left: '10px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--color-text-muted)',
+              pointerEvents: 'none',
+            }}
+          />
+          <input
+            type="text"
+            className="settings-input"
+            style={{
+              width: '100%',
+              paddingLeft: '30px',
+              paddingRight: searchQuery ? '28px' : '10px',
+              fontSize: '12px',
+              height: '32px',
+            }}
+            placeholder={t('settings.voice_typing_history_search_placeholder', {
+              defaultValue: 'Search dictation history...',
+            })}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              style={{
+                position: 'absolute',
+                right: '8px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                color: 'var(--color-text-muted)',
+                cursor: 'pointer',
+                padding: '2px',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+              title={t('common.clear', { defaultValue: 'Clear' })}
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      )}
 
       {historyItems.length === 0 ? (
         <div
           data-testid="voice-typing-history-empty"
           style={{
-            padding: '24px 16px',
+            padding: '28px 16px',
             textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '8px',
             color: 'var(--color-text-muted)',
             fontSize: '13px',
             borderRadius: 'var(--radius-md, 8px)',
@@ -555,10 +617,27 @@ function VoiceTypingHistorySection(): React.JSX.Element {
             border: '1px dashed var(--color-border)',
           }}
         >
-          {t('settings.voice_typing_history_empty', {
-            defaultValue:
-              'No dictation history yet. Texts transcribed via voice typing will appear here.',
-          })}
+          <History size={26} style={{ opacity: 0.4 }} />
+          <span>
+            {t('settings.voice_typing_history_empty', {
+              defaultValue:
+                'No dictation history yet. Texts transcribed via voice typing will appear here.',
+            })}
+          </span>
+        </div>
+      ) : filteredItems.length === 0 ? (
+        <div
+          style={{
+            padding: '20px 16px',
+            textAlign: 'center',
+            color: 'var(--color-text-muted)',
+            fontSize: '12px',
+            borderRadius: 'var(--radius-md, 8px)',
+            background: 'var(--color-bg-secondary)',
+            border: '1px solid var(--color-border)',
+          }}
+        >
+          {t('common.no_results', { defaultValue: 'No matching records found.' })}
         </div>
       ) : (
         <div
@@ -571,18 +650,19 @@ function VoiceTypingHistorySection(): React.JSX.Element {
             overflowY: 'auto',
           }}
         >
-          {historyItems.map((item) => (
+          {filteredItems.map((item) => (
             <div
               key={item.id}
               data-testid={`voice-typing-history-item-${item.id}`}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '6px',
+                gap: '8px',
                 padding: '12px 14px',
                 borderRadius: 'var(--radius-md, 8px)',
-                background: 'var(--color-bg-secondary)',
+                background: 'var(--color-bg-primary)',
                 border: '1px solid var(--color-border)',
+                transition: 'border-color 0.15s ease',
               }}
             >
               <div
@@ -593,16 +673,20 @@ function VoiceTypingHistorySection(): React.JSX.Element {
                     style={{
                       fontSize: '11px',
                       fontWeight: 600,
-                      padding: '2px 6px',
+                      padding: '2px 7px',
                       borderRadius: '4px',
                       background:
                         item.mode === 'polish'
-                          ? 'rgba(168, 85, 247, 0.15)'
-                          : 'rgba(59, 130, 246, 0.15)',
+                          ? 'rgba(168, 85, 247, 0.12)'
+                          : 'rgba(59, 130, 246, 0.12)',
                       color:
                         item.mode === 'polish'
                           ? 'var(--color-accent-purple, #a855f7)'
                           : 'var(--color-accent-blue, #3b82f6)',
+                      border:
+                        item.mode === 'polish'
+                          ? '1px solid rgba(168, 85, 247, 0.25)'
+                          : '1px solid rgba(59, 130, 246, 0.25)',
                     }}
                   >
                     {item.mode === 'polish'
@@ -613,9 +697,10 @@ function VoiceTypingHistorySection(): React.JSX.Element {
                     {new Date(item.timestamp).toLocaleTimeString()}
                   </span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <button
                     type="button"
+                    className="btn btn-secondary btn-sm"
                     title={t('common.copy', { defaultValue: 'Copy' })}
                     onClick={() => void handleCopy(item.id, item.injectedText)}
                     style={{
@@ -623,11 +708,8 @@ function VoiceTypingHistorySection(): React.JSX.Element {
                       alignItems: 'center',
                       gap: '4px',
                       padding: '3px 8px',
-                      fontSize: '12px',
+                      fontSize: '11px',
                       borderRadius: '4px',
-                      border: '1px solid var(--color-border)',
-                      background: 'var(--color-bg-elevated)',
-                      color: 'var(--color-text-primary)',
                       cursor: 'pointer',
                     }}
                   >
@@ -636,12 +718,15 @@ function VoiceTypingHistorySection(): React.JSX.Element {
                     ) : (
                       <Copy size={12} />
                     )}
-                    {copiedId === item.id
-                      ? t('common.copied', { defaultValue: 'Copied' })
-                      : t('common.copy', { defaultValue: 'Copy' })}
+                    <span>
+                      {copiedId === item.id
+                        ? t('common.copied', { defaultValue: 'Copied' })
+                        : t('common.copy', { defaultValue: 'Copy' })}
+                    </span>
                   </button>
                   <button
                     type="button"
+                    className="btn btn-secondary btn-sm"
                     title={t('settings.voice_typing_add_hotword', {
                       defaultValue: 'Add to Hotwords',
                     })}
@@ -651,11 +736,8 @@ function VoiceTypingHistorySection(): React.JSX.Element {
                       alignItems: 'center',
                       gap: '4px',
                       padding: '3px 8px',
-                      fontSize: '12px',
+                      fontSize: '11px',
                       borderRadius: '4px',
-                      border: '1px solid var(--color-border)',
-                      background: 'var(--color-bg-elevated)',
-                      color: 'var(--color-text-primary)',
                       cursor: 'pointer',
                     }}
                   >
@@ -664,9 +746,11 @@ function VoiceTypingHistorySection(): React.JSX.Element {
                     ) : (
                       <Plus size={12} />
                     )}
-                    {addedHotwordId === item.id
-                      ? t('settings.voice_typing_hotword_added', { defaultValue: '已添加' })
-                      : t('settings.voice_typing_add_hotword', { defaultValue: '加为热词' })}
+                    <span>
+                      {addedHotwordId === item.id
+                        ? t('settings.voice_typing_hotword_added', { defaultValue: '已添加' })
+                        : t('settings.voice_typing_add_hotword', { defaultValue: '加为热词' })}
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -675,12 +759,13 @@ function VoiceTypingHistorySection(): React.JSX.Element {
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
-                      padding: '4px',
+                      padding: '5px',
                       borderRadius: '4px',
                       border: 'none',
                       background: 'transparent',
                       color: 'var(--color-text-muted)',
                       cursor: 'pointer',
+                      transition: 'color 0.15s ease',
                     }}
                   >
                     <Trash2 size={13} />
@@ -690,7 +775,7 @@ function VoiceTypingHistorySection(): React.JSX.Element {
               <div
                 style={{
                   fontSize: '13px',
-                  lineHeight: '1.5',
+                  lineHeight: '1.6',
                   color: 'var(--color-text-primary)',
                   wordBreak: 'break-word',
                   userSelect: 'text',
@@ -703,13 +788,16 @@ function VoiceTypingHistorySection(): React.JSX.Element {
                   style={{
                     fontSize: '12px',
                     color: 'var(--color-text-muted)',
-                    fontStyle: 'italic',
-                    background: 'var(--color-bg-tertiary, rgba(0,0,0,0.03))',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
+                    background: 'var(--color-bg-elevated)',
+                    borderLeft: '2px solid var(--color-accent-purple, #a855f7)',
+                    padding: '6px 10px',
+                    borderRadius: '0 4px 4px 0',
+                    lineHeight: '1.5',
                   }}
                 >
-                  {t('settings.voice_typing_original_text', { defaultValue: '原识别草稿' })}:{' '}
+                  <span style={{ fontWeight: 500, opacity: 0.8 }}>
+                    {t('settings.voice_typing_original_text', { defaultValue: '原识别草稿' })}:
+                  </span>{' '}
                   {item.rawText}
                 </div>
               )}

@@ -1,17 +1,16 @@
 import type React from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getForegroundWindowInfo } from '../../services/tauri/system';
 import {
   DEFAULT_VOICE_TYPING_CONTEXT_RULES,
   getCurrentPlatform,
 } from '../../services/voiceTyping/voiceTypingContext';
 import { useSetConfig, useVoiceTypingConfig } from '../../stores/configStore';
 import type { HostPlatform, VoiceTypingContextRule } from '../../types/config';
-import { extractErrorMessage } from '../../utils/errorUtils';
-import { logger } from '../../utils/logger';
 import { Modal } from '../Modal';
 import { Switch } from '../Switch';
+
+const PRESET_ICONS = ['💻', '💬', '📄', '🎓', '📧', '✍️', '⚡', '🛠️', '🎨', '🌐', '📊', '🔍'];
 
 interface RuleDraft {
   id: string;
@@ -56,8 +55,6 @@ export function SettingsContextRulesSection(): React.JSX.Element {
 
   const [appInput, setAppInput] = useState('');
   const [titleInput, setTitleInput] = useState('');
-  const [isCapturing, setIsCapturing] = useState(false);
-  const [captureFeedback, setCaptureFeedback] = useState<string | null>(null);
 
   const openAddRule = () => {
     const newDraft: RuleDraft = {
@@ -80,7 +77,6 @@ export function SettingsContextRulesSection(): React.JSX.Element {
     setEditingRuleId(null);
     setAppInput('');
     setTitleInput('');
-    setCaptureFeedback(null);
     setIsModalOpen(true);
   };
 
@@ -99,7 +95,6 @@ export function SettingsContextRulesSection(): React.JSX.Element {
     setEditingRuleId(rule.id);
     setAppInput('');
     setTitleInput('');
-    setCaptureFeedback(null);
     setIsModalOpen(true);
   };
 
@@ -107,7 +102,6 @@ export function SettingsContextRulesSection(): React.JSX.Element {
     setIsModalOpen(false);
     setDraft(null);
     setEditingRuleId(null);
-    setCaptureFeedback(null);
   };
 
   const handleToggleRule = (id: string, enabled: boolean) => {
@@ -164,14 +158,14 @@ export function SettingsContextRulesSection(): React.JSX.Element {
     setAppInput('');
   };
 
-  const handleRemoveApp = (app: string) => {
+  const handleRemoveApp = (appName: string) => {
     if (!draft) return;
     const currentList = draft.appsByPlatform[currentPlatform] ?? [];
     setDraft({
       ...draft,
       appsByPlatform: {
         ...draft.appsByPlatform,
-        [currentPlatform]: currentList.filter((item) => item !== app),
+        [currentPlatform]: currentList.filter((item) => item !== appName),
       },
     });
   };
@@ -192,54 +186,8 @@ export function SettingsContextRulesSection(): React.JSX.Element {
     if (!draft) return;
     setDraft({
       ...draft,
-      titlePatterns: draft.titlePatterns.filter((item) => item !== pattern),
+      titlePatterns: draft.titlePatterns.filter((p) => p !== pattern),
     });
-  };
-
-  const handleCaptureCurrentApp = async () => {
-    if (!draft) return;
-    setIsCapturing(true);
-    setCaptureFeedback(null);
-    try {
-      const info = await getForegroundWindowInfo();
-      if (info?.appName) {
-        const clean = info.appName.trim();
-        const currentList = draft.appsByPlatform[currentPlatform] ?? [];
-        if (!currentList.includes(clean)) {
-          setDraft({
-            ...draft,
-            appsByPlatform: {
-              ...draft.appsByPlatform,
-              [currentPlatform]: [...currentList, clean],
-            },
-          });
-          setCaptureFeedback(
-            t('settings.voice_typing_captured_success', {
-              app: clean,
-              defaultValue: `Captured: ${clean}`,
-            })
-          );
-        } else {
-          setCaptureFeedback(
-            t('settings.voice_typing_captured_already_exists', {
-              app: clean,
-              defaultValue: `${clean} is already in the list`,
-            })
-          );
-        }
-      } else {
-        setCaptureFeedback(
-          t('settings.voice_typing_captured_none', {
-            defaultValue: 'No active application window detected',
-          })
-        );
-      }
-    } catch (err) {
-      logger.error('[SettingsContextRules] Failed to capture foreground window:', err);
-      setCaptureFeedback(extractErrorMessage(err));
-    } finally {
-      setIsCapturing(false);
-    }
   };
 
   return (
@@ -249,11 +197,17 @@ export function SettingsContextRulesSection(): React.JSX.Element {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginTop: '8px',
+          marginTop: '4px',
         }}
       >
         <div>
-          <span style={{ fontWeight: 600, fontSize: '14px' }}>
+          <span
+            style={{
+              fontWeight: 600,
+              fontSize: '13px',
+              color: 'var(--color-text-primary)',
+            }}
+          >
             {t('settings.voice_typing_rules_section_title', {
               defaultValue: 'Situational Context Rules',
             })}
@@ -261,7 +215,7 @@ export function SettingsContextRulesSection(): React.JSX.Element {
           <p
             style={{
               fontSize: '12px',
-              color: 'var(--color-text-secondary, #888)',
+              color: 'var(--color-text-muted)',
               margin: '2px 0 0 0',
             }}
           >
@@ -276,7 +230,7 @@ export function SettingsContextRulesSection(): React.JSX.Element {
           data-testid="add-context-rule-btn"
           className="btn btn-secondary btn-sm"
           onClick={openAddRule}
-          style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+          style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}
         >
           <span>+</span>
           <span>
@@ -293,10 +247,10 @@ export function SettingsContextRulesSection(): React.JSX.Element {
           display: 'flex',
           flexDirection: 'column',
           gap: '8px',
-          background: 'var(--color-bg-secondary, rgba(255, 255, 255, 0.04))',
-          borderRadius: '8px',
-          padding: '8px',
-          border: '1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08))',
+          background: 'var(--color-bg-secondary)',
+          borderRadius: 'var(--radius-lg, 12px)',
+          padding: '10px',
+          border: '1px solid var(--color-border)',
         }}
       >
         {rules.map((rule) => {
@@ -310,9 +264,9 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: '12px 14px',
-                borderRadius: '8px',
-                background: 'var(--color-bg-primary, rgba(0, 0, 0, 0.2))',
-                border: '1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.06))',
+                borderRadius: 'var(--radius-md, 8px)',
+                background: 'var(--color-bg-primary)',
+                border: '1px solid var(--color-border)',
                 gap: '14px',
                 transition: 'border-color 0.15s ease',
               }}
@@ -331,28 +285,45 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                     width: '38px',
                     height: '38px',
                     borderRadius: '8px',
-                    background: 'var(--color-bg-elevated, rgba(255, 255, 255, 0.06))',
+                    background: 'var(--color-bg-elevated)',
+                    border: '1px solid var(--color-border)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontSize: '20px',
+                    fontSize: '18px',
                     flexShrink: 0,
-                    boxShadow: 'inset 0 0 0 1px rgba(255, 255, 255, 0.06)',
                   }}
                 >
                   {rule.icon ?? '✨'}
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontWeight: 600, fontSize: '13px' }}>{rule.name}</span>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        fontSize: '13px',
+                        color: 'var(--color-text-primary)',
+                      }}
+                    >
+                      {rule.name}
+                    </span>
                     {rule.isBuiltin && (
                       <span
                         style={{
                           fontSize: '10px',
+                          fontWeight: 500,
                           padding: '1px 5px',
-                          borderRadius: '3px',
-                          background: 'rgba(255, 255, 255, 0.08)',
-                          color: 'var(--color-text-secondary, #aaa)',
+                          borderRadius: '4px',
+                          background: 'var(--color-bg-tertiary)',
+                          color: 'var(--color-text-muted)',
+                          border: '1px solid var(--color-border)',
                         }}
                       >
                         {t('settings.voice_typing_rule_builtin_badge', {
@@ -360,11 +331,28 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                         })}
                       </span>
                     )}
+                    {rule.stripTrailingPunctuation && (
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          fontWeight: 500,
+                          padding: '1px 5px',
+                          borderRadius: '4px',
+                          background: 'rgba(59, 130, 246, 0.12)',
+                          color: '#3b82f6',
+                          border: '1px solid rgba(59, 130, 246, 0.25)',
+                        }}
+                      >
+                        {t('settings.voice_typing_rule_strip_active', {
+                          defaultValue: 'No ending period',
+                        })}
+                      </span>
+                    )}
                   </div>
                   <div
                     style={{
                       fontSize: '11px',
-                      color: 'var(--color-text-secondary, #888)',
+                      color: 'var(--color-text-muted)',
                       marginTop: '2px',
                     }}
                   >
@@ -373,12 +361,9 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                       platform: platformName,
                       defaultValue: `${platformApps.length} apps mapped on ${platformName}`,
                     })}
-                    {rule.stripTrailingPunctuation
-                      ? ` · ${t('settings.voice_typing_rule_strip_active', { defaultValue: 'No ending period' })}`
-                      : ''}
                   </div>
 
-                  {/* Visual software tags preview */}
+                  {/* Direct software tags preview */}
                   <div
                     style={{
                       display: 'flex',
@@ -395,13 +380,12 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                             key={app}
                             style={{
                               fontSize: '11px',
-                              fontFamily: 'monospace',
-                              background: 'var(--color-bg-elevated, rgba(255, 255, 255, 0.06))',
-                              color: 'var(--color-text-secondary, #aaa)',
+                              fontFamily: 'var(--font-mono, monospace)',
+                              background: 'var(--color-bg-secondary)',
+                              color: 'var(--color-text-secondary)',
                               padding: '1px 6px',
                               borderRadius: '4px',
-                              border:
-                                '1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.06))',
+                              border: '1px solid var(--color-border)',
                             }}
                           >
                             {app}
@@ -411,7 +395,7 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                           <span
                             style={{
                               fontSize: '10px',
-                              color: 'var(--color-text-muted, #777)',
+                              color: 'var(--color-text-muted)',
                               padding: '0 2px',
                             }}
                           >
@@ -423,7 +407,7 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                       <span
                         style={{
                           fontSize: '11px',
-                          color: 'var(--color-text-muted, #777)',
+                          color: 'var(--color-text-muted)',
                           fontStyle: 'italic',
                         }}
                       >
@@ -510,34 +494,85 @@ export function SettingsContextRulesSection(): React.JSX.Element {
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* Rule Name & Icon */}
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <div style={{ width: '80px' }}>
-                <label className="settings-label" style={{ fontSize: '12px', fontWeight: 600 }}>
-                  {t('settings.voice_typing_rule_icon', { defaultValue: 'Icon' })}
-                </label>
-                <input
-                  type="text"
-                  className="settings-input"
-                  style={{ width: '100%', textAlign: 'center', fontSize: '18px' }}
-                  value={draft.icon}
-                  onChange={(e) => setDraft({ ...draft, icon: e.target.value })}
-                  maxLength={4}
-                />
+            <div>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                <div style={{ width: '84px', flexShrink: 0 }}>
+                  <label
+                    className="settings-label"
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      display: 'block',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    {t('settings.voice_typing_rule_icon', { defaultValue: 'Icon' })}
+                  </label>
+                  <input
+                    type="text"
+                    className="settings-input"
+                    style={{ width: '100%', textAlign: 'center', fontSize: '18px' }}
+                    value={draft.icon}
+                    onChange={(e) => setDraft({ ...draft, icon: e.target.value })}
+                    maxLength={4}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label
+                    className="settings-label"
+                    style={{
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      display: 'block',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    {t('settings.voice_typing_rule_name', { defaultValue: 'Situation Name' })}
+                  </label>
+                  <input
+                    type="text"
+                    className="settings-input"
+                    style={{ width: '100%' }}
+                    placeholder={t('settings.voice_typing_rule_name_placeholder', {
+                      defaultValue: 'e.g. Email / Customer Service',
+                    })}
+                    value={draft.name}
+                    onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                  />
+                </div>
               </div>
-              <div style={{ flex: 1 }}>
-                <label className="settings-label" style={{ fontSize: '12px', fontWeight: 600 }}>
-                  {t('settings.voice_typing_rule_name', { defaultValue: 'Situation Name' })}
-                </label>
-                <input
-                  type="text"
-                  className="settings-input"
-                  style={{ width: '100%' }}
-                  placeholder={t('settings.voice_typing_rule_name_placeholder', {
-                    defaultValue: 'e.g. Email / Customer Service',
-                  })}
-                  value={draft.name}
-                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                />
+
+              {/* Preset Icon Shortcuts */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px' }}>
+                {PRESET_ICONS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => setDraft({ ...draft, icon: emoji })}
+                    style={{
+                      width: '30px',
+                      height: '30px',
+                      borderRadius: '6px',
+                      border:
+                        draft.icon === emoji
+                          ? '1px solid var(--color-primary, #6366f1)'
+                          : '1px solid var(--color-border)',
+                      background:
+                        draft.icon === emoji
+                          ? 'var(--color-bg-elevated)'
+                          : 'var(--color-bg-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                    title={emoji}
+                  >
+                    {emoji}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -557,7 +592,7 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                     defaultValue: `${platformName} Applications`,
                   })}
                 </label>
-                <span style={{ fontSize: '11px', color: 'var(--color-text-secondary, #888)' }}>
+                <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
                   {t('settings.voice_typing_platform_apps_only_current', {
                     defaultValue: 'Configured only for your current operating system',
                   })}
@@ -569,20 +604,22 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                   display: 'flex',
                   flexWrap: 'wrap',
                   gap: '6px',
-                  minHeight: '36px',
+                  minHeight: '38px',
                   padding: '6px 8px',
-                  background: 'var(--color-bg-secondary, rgba(255, 255, 255, 0.04))',
+                  background: 'var(--color-bg-secondary)',
                   borderRadius: '6px',
-                  border: '1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08))',
+                  border: '1px solid var(--color-border)',
                   marginBottom: '8px',
+                  alignItems: 'center',
                 }}
               >
                 {(draft.appsByPlatform[currentPlatform] ?? []).length === 0 ? (
                   <span
                     style={{
                       fontSize: '12px',
-                      color: 'var(--color-text-secondary, #888)',
-                      alignSelf: 'center',
+                      color: 'var(--color-text-muted)',
+                      fontStyle: 'italic',
+                      padding: '2px 4px',
                     }}
                   >
                     {t('settings.voice_typing_no_apps_mapped', {
@@ -597,12 +634,14 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '4px',
-                        background: 'rgba(255, 255, 255, 0.1)',
-                        padding: '2px 8px',
-                        borderRadius: '4px',
+                        gap: '6px',
+                        background: 'var(--color-bg-primary)',
+                        border: '1px solid var(--color-border)',
+                        padding: '3px 8px',
+                        borderRadius: '6px',
                         fontSize: '12px',
-                        fontFamily: 'monospace',
+                        fontFamily: 'var(--font-mono, monospace)',
+                        color: 'var(--color-text-primary)',
                       }}
                     >
                       <span>{app}</span>
@@ -612,11 +651,13 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: 'var(--color-text-secondary, #aaa)',
+                          color: 'var(--color-text-muted)',
                           cursor: 'pointer',
                           padding: '0 2px',
                           fontSize: '14px',
                           lineHeight: 1,
+                          display: 'flex',
+                          alignItems: 'center',
                         }}
                         title={t('common.remove', { defaultValue: 'Remove' })}
                       >
@@ -659,47 +700,7 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                 >
                   {t('common.add', { defaultValue: 'Add' })}
                 </button>
-                <button
-                  type="button"
-                  data-testid="capture-active-app-btn"
-                  className="btn btn-secondary btn-sm"
-                  onClick={handleCaptureCurrentApp}
-                  disabled={isCapturing}
-                  title={t('settings.voice_typing_capture_app_hint', {
-                    defaultValue: 'Capture the active application currently in foreground',
-                  })}
-                  style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
-                >
-                  <span>🔍</span>
-                  <span>
-                    {isCapturing
-                      ? t('common.capturing', { defaultValue: 'Capturing...' })
-                      : t('settings.voice_typing_capture_app_button', {
-                          defaultValue: 'Capture Active App',
-                        })}
-                  </span>
-                </button>
               </div>
-
-              {captureFeedback && (
-                <div
-                  style={{
-                    fontSize: '11px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: '3px 8px',
-                    borderRadius: '6px',
-                    background: 'rgba(99, 102, 241, 0.12)',
-                    border: '1px solid rgba(99, 102, 241, 0.25)',
-                    color: 'var(--color-accent-primary, #818cf8)',
-                    marginTop: '6px',
-                  }}
-                >
-                  <span>✓</span>
-                  <span>{captureFeedback}</span>
-                </div>
-              )}
             </div>
 
             {/* Window Title Patterns */}
@@ -718,20 +719,22 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                   display: 'flex',
                   flexWrap: 'wrap',
                   gap: '6px',
-                  minHeight: '36px',
+                  minHeight: '38px',
                   padding: '6px 8px',
-                  background: 'var(--color-bg-secondary, rgba(255, 255, 255, 0.04))',
+                  background: 'var(--color-bg-secondary)',
                   borderRadius: '6px',
-                  border: '1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.08))',
+                  border: '1px solid var(--color-border)',
                   marginBottom: '8px',
+                  alignItems: 'center',
                 }}
               >
                 {draft.titlePatterns.length === 0 ? (
                   <span
                     style={{
                       fontSize: '12px',
-                      color: 'var(--color-text-secondary, #888)',
-                      alignSelf: 'center',
+                      color: 'var(--color-text-muted)',
+                      fontStyle: 'italic',
+                      padding: '2px 4px',
                     }}
                   >
                     {t('settings.voice_typing_no_title_patterns', {
@@ -743,15 +746,16 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                   draft.titlePatterns.map((pattern) => (
                     <span
                       key={pattern}
-                      data-testid={`pattern-chip-${pattern}`}
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '4px',
-                        background: 'rgba(255, 255, 255, 0.1)',
-                        padding: '2px 8px',
-                        borderRadius: '4px',
+                        gap: '6px',
+                        background: 'var(--color-bg-primary)',
+                        border: '1px solid var(--color-border)',
+                        padding: '3px 8px',
+                        borderRadius: '6px',
                         fontSize: '12px',
+                        color: 'var(--color-text-primary)',
                       }}
                     >
                       <span>{pattern}</span>
@@ -761,11 +765,13 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: 'var(--color-text-secondary, #aaa)',
+                          color: 'var(--color-text-muted)',
                           cursor: 'pointer',
                           padding: '0 2px',
                           fontSize: '14px',
                           lineHeight: 1,
+                          display: 'flex',
+                          alignItems: 'center',
                         }}
                         title={t('common.remove', { defaultValue: 'Remove' })}
                       >
@@ -818,7 +824,14 @@ export function SettingsContextRulesSection(): React.JSX.Element {
               <textarea
                 className="settings-input"
                 rows={3}
-                style={{ width: '100%', resize: 'vertical' }}
+                style={{
+                  width: '100%',
+                  resize: 'vertical',
+                  fontFamily: 'var(--font-mono, monospace)',
+                  fontSize: '12px',
+                  lineHeight: 1.6,
+                  padding: '8px 10px',
+                }}
                 placeholder={t('settings.voice_typing_prompt_directive_placeholder', {
                   defaultValue:
                     'Directives appended to the LLM system prompt when this situation matches',
@@ -834,14 +847,16 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                background: 'var(--color-bg-secondary, rgba(255, 255, 255, 0.03))',
-                border: '1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.06))',
+                background: 'var(--color-bg-secondary)',
+                border: '1px solid var(--color-border)',
                 borderRadius: '8px',
                 padding: '12px 14px',
               }}
             >
               <div>
-                <span style={{ fontSize: '13px', fontWeight: 500 }}>
+                <span
+                  style={{ fontSize: '13px', fontWeight: 500, color: 'var(--color-text-primary)' }}
+                >
                   {t('settings.voice_typing_strip_trailing_punct', {
                     defaultValue: 'Strip Trailing Punctuation in Raw Mode',
                   })}
@@ -849,7 +864,7 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                 <p
                   style={{
                     fontSize: '11px',
-                    color: 'var(--color-text-secondary, #888)',
+                    color: 'var(--color-text-muted)',
                     margin: '2px 0 0 0',
                   }}
                 >

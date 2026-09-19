@@ -893,6 +893,7 @@
     "voice_typing_polish_prompt_hint": "Leave blank to use the built-in fast colloquial-to-written prompt directive",
     "voice_typing_history": "Dictation History",
     "voice_typing_history_hint": "Recent dictation entries are preserved here to prevent text loss.",
+    "voice_typing_history_search_placeholder": "Search dictation history...",
     "voice_typing_history_empty": "No dictation history yet. Transcribed texts will appear here.",
     "voice_typing_mode_badge_raw": "Fast",
     "voice_typing_mode_badge_polish": "Polished",

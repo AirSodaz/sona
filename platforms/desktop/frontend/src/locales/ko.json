@@ -893,6 +893,7 @@
     "voice_typing_polish_prompt_hint": "비워두면 내장된 표준 구어체 다듬기 프롬프트가 사용됩니다",
     "voice_typing_history": "음성 입력 기록",
     "voice_typing_history_hint": "최근 입력한 텍스트가 여기에 저장되어 포커스를 잃었을 때 텍스트가 유실되는 것을 방지합니다.",
+    "voice_typing_history_search_placeholder": "음성 입력 기록 검색...",
     "voice_typing_history_empty": "음성 입력 기록이 아직 없습니다. 단축키를 통해 입력한 내용이 여기에 표시됩니다.",
     "voice_typing_mode_badge_raw": "직접 입력",
     "voice_typing_mode_badge_polish": "AI 다듬기",
