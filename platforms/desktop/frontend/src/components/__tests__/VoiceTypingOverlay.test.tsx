@@ -47,11 +47,25 @@ const mocks = vi.hoisted(() => {
   const currentWindowScaleFactor = vi.fn().mockResolvedValue(1);
   const currentWindowInnerSize = vi.fn().mockResolvedValue({ width: 400, height: 80 });
   const currentWindowSetSize = vi.fn().mockResolvedValue(undefined);
+  const currentWindowInnerPosition = vi.fn().mockResolvedValue({ x: 100, y: 100 });
+  const currentWindowSetPosition = vi.fn().mockResolvedValue(undefined);
+  const currentMonitor = vi.fn().mockResolvedValue({
+    scaleFactor: 1,
+    position: { x: 0, y: 0 },
+    size: { width: 1920, height: 1080 },
+    workArea: {
+      position: { x: 0, y: 0 },
+      size: { width: 1920, height: 1040 },
+    },
+  });
 
   return {
     currentWindowInnerSize,
     currentWindowScaleFactor,
     currentWindowSetSize,
+    currentWindowInnerPosition,
+    currentWindowSetPosition,
+    currentMonitor,
     invoke,
     emit,
     listen,
@@ -96,7 +110,10 @@ vi.mock('@tauri-apps/api/window', () => ({
     scaleFactor: mocks.currentWindowScaleFactor,
     innerSize: mocks.currentWindowInnerSize,
     setSize: mocks.currentWindowSetSize,
+    innerPosition: mocks.currentWindowInnerPosition,
+    setPosition: mocks.currentWindowSetPosition,
   }),
+  currentMonitor: () => mocks.currentMonitor(),
 }));
 
 vi.mock('@tauri-apps/api/dpi', () => ({
@@ -104,6 +121,12 @@ vi.mock('@tauri-apps/api/dpi', () => ({
     constructor(
       public width: number,
       public height: number
+    ) {}
+  },
+  PhysicalPosition: class MockPhysicalPosition {
+    constructor(
+      public x: number,
+      public y: number
     ) {}
   },
 }));
@@ -472,9 +495,58 @@ describe('VoiceTypingOverlay', () => {
       );
     });
   });
-  it('renders the 5-bar audio waveform visualizer and cancel button', () => {
+
+  it('clamps and shifts window upwards if resizing would exceed bottom boundary of screen', async () => {
+    mocks.currentWindowInnerPosition.mockResolvedValue({ x: 760, y: 900 });
+    mocks.currentMonitor.mockResolvedValue({
+      scaleFactor: 1,
+      position: { x: 0, y: 0 },
+      size: { width: 1920, height: 1080 },
+      workArea: {
+        position: { x: 0, y: 0 },
+        size: { width: 1920, height: 1040 },
+      },
+    });
+
     render(<VoiceTypingOverlay />);
 
+    const root = screen.getByTestId('voice-typing-overlay-root');
+    Object.defineProperty(root, 'getBoundingClientRect', {
+      value: vi.fn(() => ({
+        width: 380,
+        height: 320,
+        top: 0,
+        left: 0,
+        right: 380,
+        bottom: 320,
+        x: 0,
+        y: 0,
+        toJSON: () => undefined,
+      })),
+    });
+
+    await act(async () => {
+      resizeObserverCallback?.([], {} as ResizeObserver);
+    });
+
+    await waitFor(() => {
+      expect(mocks.currentWindowSetSize).toHaveBeenCalledWith(
+        expect.objectContaining({
+          width: 400,
+          height: 320,
+        })
+      );
+      expect(mocks.currentWindowSetPosition).toHaveBeenCalledWith(
+        expect.objectContaining({
+          x: 760,
+          y: 704,
+        })
+      );
+    });
+  });
+
+  it('renders the 5-bar audio waveform visualizer and cancel button', () => {
+    render(<VoiceTypingOverlay />);
     const waveform = screen.getByTestId('voice-typing-waveform');
     expect(waveform).toBeDefined();
     expect(waveform.children.length).toBe(5);

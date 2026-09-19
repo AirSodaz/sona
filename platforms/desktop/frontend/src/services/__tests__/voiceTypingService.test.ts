@@ -61,7 +61,7 @@ const mocks = vi.hoisted(() => {
     windowClose: vi.fn(),
     windowSendState: vi.fn(),
     windowClearState: vi.fn(),
-    monitorFromPoint: vi.fn(async () => ({
+    monitorFromPoint: vi.fn(async (_x?: number, _y?: number) => ({
       scaleFactor: 1,
       workArea: {
         position: { x: 0, y: 0 },
@@ -109,7 +109,7 @@ vi.mock('../tauri/platform/windows', () => ({
     position: { x: 0, y: 0 },
     size: { width: 1920, height: 1080 },
   })),
-  monitorFromPoint: (...args: any[]) => mocks.monitorFromPoint(...args),
+  monitorFromPoint: (x: number, y: number) => mocks.monitorFromPoint(x, y),
   getCurrentWindow: vi.fn(),
   getCurrentWebviewWindow: vi.fn(),
   WebviewWindow: vi.fn(),
@@ -1335,6 +1335,8 @@ describe('voiceTypingService', () => {
         position: { x: 0, y: 0 },
         size: { width: 2560, height: 1400 },
       },
+      position: { x: 0, y: 0 },
+      size: { width: 2560, height: 1400 },
     });
 
     const service = await loadService();
@@ -1427,5 +1429,51 @@ describe('voiceTypingService', () => {
         phase: 'recall',
       })
     );
+  });
+
+  it('positions quick recall higher up in bottom_center mode to avoid bottom screen overflow', async () => {
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingPlacement: 'bottom_center',
+    };
+
+    const service = await loadService();
+    service.init();
+    await flushMicrotasks(4);
+    vi.clearAllMocks();
+
+    await service.openQuickRecall();
+
+    // workHeight = 1080, scale = 1.
+    // windowPhysicalBottomMargin = (48 + 280) * 1 = 328.
+    // targetY = 1080 - 328 = 752.
+    expect(mocks.windowPrepare).toHaveBeenCalledWith([760, 752]);
+  });
+
+  it('flips quick recall above cursor if cursor is near bottom of screen in caret mode', async () => {
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingPlacement: 'caret',
+    };
+
+    mocks.invoke.mockImplementation(async (command: string) => {
+      if (command === 'get_text_cursor_position') {
+        // Cursor is at y = 950 (near bottom of 1040 workHeight screen)
+        return [500, 950];
+      }
+      return undefined;
+    });
+
+    const service = await loadService();
+    service.init();
+    await flushMicrotasks(4);
+    vi.clearAllMocks();
+
+    await service.openQuickRecall();
+
+    // With cursor at 950, 950 + 280 = 1230 > maxBottom (1080 - 16 = 1064)
+    expect(mocks.windowPrepare).toHaveBeenCalledWith([492, 666]);
   });
 });

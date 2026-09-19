@@ -328,7 +328,7 @@ export class VoiceTypingService {
     if (this.sessionMachine.isActive()) {
       return;
     }
-    const position = await this.getOverlayPosition();
+    const position = await this.getQuickRecallOverlayPosition();
     await this.sessionMachine.openQuickRecall(position);
   }
 
@@ -462,6 +462,83 @@ export class VoiceTypingService {
 
     const [x, y] = await this.ports.getMousePosition();
     return [x - 4, y + MOUSE_POSITION_OFFSET - 4];
+  }
+
+  private async getQuickRecallOverlayPosition(): Promise<[number, number]> {
+    const placement = this.ports.getConfig().voiceTypingPlacement ?? 'caret';
+    const ESTIMATED_RECALL_HEIGHT = 280;
+
+    if (placement === 'bottom_center') {
+      try {
+        const [mouseX, mouseY] = await this.ports.getMousePosition();
+        const getMonitor = this.ports.monitorFromPoint ?? monitorFromPoint;
+        const getCurrent = this.ports.currentMonitor ?? currentMonitor;
+
+        let monitor = await getMonitor(mouseX, mouseY).catch(() => null);
+        if (!monitor) {
+          monitor = await getCurrent().catch(() => null);
+        }
+
+        if (monitor) {
+          const scale = monitor.scaleFactor || 1;
+          const workX = monitor.workArea?.position?.x ?? monitor.position?.x ?? 0;
+          const workY = monitor.workArea?.position?.y ?? monitor.position?.y ?? 0;
+          const workWidth = monitor.workArea?.size?.width ?? monitor.size?.width ?? 1920;
+          const workHeight = monitor.workArea?.size?.height ?? monitor.size?.height ?? 1080;
+
+          const windowPhysicalWidth = Math.round(VOICE_TYPING_WINDOW_WIDTH * scale);
+          const windowPhysicalBottomMargin = Math.round(
+            (BOTTOM_CENTER_MARGIN_BOTTOM + ESTIMATED_RECALL_HEIGHT) * scale
+          );
+
+          const targetX = Math.round(workX + (workWidth - windowPhysicalWidth) / 2);
+          const targetY = Math.max(
+            workY + 16,
+            Math.round(workY + workHeight - windowPhysicalBottomMargin)
+          );
+
+          return [targetX, targetY];
+        }
+      } catch (error) {
+        logger.debug(
+          '[VoiceTypingService] Failed to calculate quick recall bottom center position',
+          error
+        );
+      }
+    }
+
+    const cursorPosition = await this.tryGetTextCursorOverlayPosition();
+    const anchor = cursorPosition ?? (await this.ports.getMousePosition());
+    const [anchorX, anchorY] = anchor;
+
+    try {
+      const getMonitor = this.ports.monitorFromPoint ?? monitorFromPoint;
+      const getCurrent = this.ports.currentMonitor ?? currentMonitor;
+      let monitor = await getMonitor(anchorX, anchorY).catch(() => null);
+      if (!monitor) {
+        monitor = await getCurrent().catch(() => null);
+      }
+
+      if (monitor) {
+        const scale = monitor.scaleFactor || 1;
+        const workY = monitor.workArea?.position?.y ?? monitor.position?.y ?? 0;
+        const workHeight = monitor.workArea?.size?.height ?? monitor.size?.height ?? 1080;
+        const physicalEstimatedHeight = Math.round(ESTIMATED_RECALL_HEIGHT * scale);
+        const physicalBottomMargin = Math.round(16 * scale);
+        const maxBottom = workY + workHeight - physicalBottomMargin;
+
+        const normalY = anchorY + (cursorPosition ? 0 : MOUSE_POSITION_OFFSET);
+        if (normalY + physicalEstimatedHeight > maxBottom) {
+          const flippedY = anchorY - physicalEstimatedHeight - Math.round(12 * scale);
+          return [anchorX - 4, Math.max(workY + physicalBottomMargin, flippedY)];
+        }
+        return [anchorX - 4, normalY];
+      }
+    } catch (error) {
+      logger.debug('[VoiceTypingService] Failed to calculate quick recall cursor position', error);
+    }
+
+    return await this.getOverlayPosition();
   }
 
   private async getOverlayPositionAfterCommit(): Promise<[number, number]> {

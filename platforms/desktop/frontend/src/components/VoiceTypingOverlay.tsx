@@ -5,7 +5,12 @@ import { useAuxWindowState } from '../hooks/useAuxWindowState';
 import { useAuxWindowTheme } from '../hooks/useAuxWindowTheme';
 import { TauriEvent } from '../services/tauri/events';
 import { emit, listen } from '../services/tauri/platform/events';
-import { getCurrentWindow, PhysicalSize } from '../services/tauri/platform/windows';
+import {
+  currentMonitor,
+  getCurrentWindow,
+  PhysicalPosition,
+  PhysicalSize,
+} from '../services/tauri/platform/windows';
 import {
   DEFAULT_VOICE_TYPING_OVERLAY_STATE,
   VOICE_TYPING_EVENT_TEXT,
@@ -56,15 +61,35 @@ async function resizeVoiceTypingWindow(rootElement: HTMLDivElement | null) {
     const targetPhysicalWidth = Math.ceil(VOICE_TYPING_WINDOW_WIDTH * factor);
 
     if (
-      Math.abs(size.height - targetPhysicalHeight) <= 1 &&
-      Math.abs(size.width - targetPhysicalWidth) <= 1
+      Math.abs(size.height - targetPhysicalHeight) > 1 ||
+      Math.abs(size.width - targetPhysicalWidth) > 1
     ) {
-      return;
+      await currentWindow.setSize(new PhysicalSize(targetPhysicalWidth, targetPhysicalHeight));
     }
 
-    await currentWindow.setSize(new PhysicalSize(targetPhysicalWidth, targetPhysicalHeight));
+    // Dynamic screen boundary clamping: if the window extends past the bottom
+    // boundary of the monitor's work area (e.g. taskbar/dock), shift it upwards
+    // so the entire content remains comfortably within view.
+    const position = await currentWindow.innerPosition().catch(() => null);
+    if (position) {
+      const monitor = await currentMonitor().catch(() => null);
+      if (monitor) {
+        const workY = monitor.workArea?.position?.y ?? monitor.position?.y ?? 0;
+        const workHeight = monitor.workArea?.size?.height ?? monitor.size?.height ?? 1080;
+        const bottomSafetyMargin = Math.round(16 * factor);
+        const maxBottom = workY + workHeight - bottomSafetyMargin;
+        const currentBottom = position.y + targetPhysicalHeight;
+
+        if (currentBottom > maxBottom) {
+          const adjustedY = Math.max(workY + bottomSafetyMargin, maxBottom - targetPhysicalHeight);
+          if (Math.abs(position.y - adjustedY) > 2) {
+            await currentWindow.setPosition(new PhysicalPosition(position.x, adjustedY));
+          }
+        }
+      }
+    }
   } catch (error) {
-    logger.error('[VoiceTypingOverlay] Failed to resize window:', error);
+    logger.error('[VoiceTypingOverlay] Failed to resize/reposition window:', error);
   }
 }
 
@@ -388,7 +413,14 @@ export function VoiceTypingOverlay() {
             return (
               <div
                 data-testid="voice-typing-recall-list"
-                style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  maxHeight: '320px',
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
+                }}
               >
                 {historyItems.map((item, idx) => (
                   <div
