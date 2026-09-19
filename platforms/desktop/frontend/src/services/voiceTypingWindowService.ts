@@ -1,3 +1,4 @@
+import type { VoiceTypingHistoryItem } from '../stores/voiceTypingHistoryStore';
 import {
   AuxWindowController,
   type AuxWindowControllerOptions,
@@ -36,6 +37,7 @@ export interface VoiceTypingOverlayPayload {
   contextName?: string;
   contextIcon?: string;
   contextColor?: string;
+  history?: VoiceTypingHistoryItem[];
 }
 
 export const DEFAULT_VOICE_TYPING_OVERLAY_STATE: VoiceTypingOverlayPayload = {

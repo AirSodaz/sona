@@ -642,4 +642,43 @@ describe('VoiceTypingOverlay', () => {
       text: 'First history entry',
     });
   });
+
+  it('renders quick recall drawer using history passed directly in overlay payload', async () => {
+    // Store is empty in this window context
+    useVoiceTypingHistoryStore.getState().clearHistory();
+    expect(useVoiceTypingHistoryStore.getState().items).toHaveLength(0);
+
+    render(<VoiceTypingOverlay />);
+
+    await act(async () => {
+      mocks.listenCallbacks['voice-typing:text']?.({
+        payload: {
+          sessionId: 'recall-2',
+          text: '',
+          phase: 'recall',
+          revision: 6,
+          history: [
+            {
+              id: 'payload-item-1',
+              timestamp: Date.now(),
+              rawText: 'History from main window payload',
+              injectedText: 'History from main window payload',
+              mode: 'raw',
+            },
+          ],
+        },
+      });
+    });
+
+    expect(screen.getByTestId('voice-typing-recall-drawer')).toBeTruthy();
+    screen.getByText('History from main window payload');
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
+    });
+
+    expect(mocks.emit).toHaveBeenCalledWith('voice-typing:reinject', {
+      text: 'History from main window payload',
+    });
+  });
 });

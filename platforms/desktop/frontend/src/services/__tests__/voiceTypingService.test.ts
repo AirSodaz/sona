@@ -1436,7 +1436,15 @@ describe('voiceTypingService', () => {
     expect(injectCalls.length).toBe(1);
     expect(injectCalls[0][1].text).toContain('asoda@outlook.com');
   });
-  it('opens quick recall drawer overlay with focus enabled', async () => {
+  it('opens quick recall drawer overlay with focus enabled and passes history in payload', async () => {
+    const { useVoiceTypingHistoryStore } = await import('../../stores/voiceTypingHistoryStore');
+    useVoiceTypingHistoryStore.getState().clearHistory();
+    useVoiceTypingHistoryStore.getState().addItem({
+      rawText: 'Test history',
+      injectedText: 'Test history',
+      mode: 'raw',
+    });
+
     const service = await loadService();
     service.init();
     vi.clearAllMocks();
@@ -1446,6 +1454,12 @@ describe('voiceTypingService', () => {
     expect(mocks.windowSendState).toHaveBeenCalledWith(
       expect.objectContaining({
         phase: 'recall',
+        history: expect.arrayContaining([
+          expect.objectContaining({
+            rawText: 'Test history',
+            injectedText: 'Test history',
+          }),
+        ]),
       })
     );
     expect(mocks.windowOpen).toHaveBeenCalledWith(expect.any(Number), expect.any(Number), true);
@@ -1459,7 +1473,7 @@ describe('voiceTypingService', () => {
     const reinjectHandler = mocks.eventListeners['voice-typing:reinject'];
     expect(reinjectHandler).toBeDefined();
 
-    const reinjectPromise = reinjectHandler({ payload: { text: '历史输入内容' } });
+    const reinjectPromise = reinjectHandler({ payload: { text: 'History input content' } });
     await flushMicrotasks(2);
 
     // Before 80ms delay completes, inject_text has not been called yet
@@ -1471,7 +1485,7 @@ describe('voiceTypingService', () => {
 
     const injectCalls = getInvokeCalls('inject_text');
     expect(injectCalls).toHaveLength(1);
-    expect(injectCalls[0][1].text).toBe('历史输入内容');
+    expect(injectCalls[0][1].text).toBe('History input content');
   });
 
   it('positions quick recall higher up in bottom_center mode to avoid bottom screen overflow', async () => {

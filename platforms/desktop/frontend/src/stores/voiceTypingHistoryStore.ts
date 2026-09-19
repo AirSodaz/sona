@@ -38,8 +38,8 @@ interface VoiceTypingHistoryStore {
   addItem: (item: Omit<VoiceTypingHistoryItem, 'id' | 'timestamp'>) => VoiceTypingHistoryItem;
   removeItem: (id: string) => void;
   clearHistory: () => void;
+  reloadHistory: () => void;
 }
-
 export const useVoiceTypingHistoryStore = create<VoiceTypingHistoryStore>((set) => ({
   items: loadStoredHistory(),
 
@@ -71,4 +71,17 @@ export const useVoiceTypingHistoryStore = create<VoiceTypingHistoryStore>((set) 
       saveHistory([]);
       return { items: [] };
     }),
+
+  reloadHistory: () =>
+    set(() => ({
+      items: loadStoredHistory(),
+    })),
 }));
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === STORAGE_KEY) {
+      useVoiceTypingHistoryStore.setState({ items: loadStoredHistory() });
+    }
+  });
+}

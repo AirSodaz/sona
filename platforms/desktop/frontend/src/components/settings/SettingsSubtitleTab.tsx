@@ -489,7 +489,9 @@ function VoiceTypingHistorySection(): React.JSX.Element {
     if (!updated) {
       nextSets.push({
         id: `hw_set_${Date.now()}`,
-        name: t('settings.voice_typing_hotwords_set_name', { defaultValue: '语音输入热词' }),
+        name: t('settings.voice_typing_hotwords_set_name', {
+          defaultValue: 'Voice Typing Hotwords',
+        }),
         enabled: true,
         rules: [{ id: `hw_${Date.now()}`, text: trimmed }],
       });
@@ -690,8 +692,10 @@ function VoiceTypingHistorySection(): React.JSX.Element {
                     }}
                   >
                     {item.mode === 'polish'
-                      ? t('settings.voice_typing_mode_badge_polish', { defaultValue: 'AI 润色' })
-                      : t('settings.voice_typing_mode_badge_raw', { defaultValue: '极速直出' })}
+                      ? t('settings.voice_typing_mode_badge_polish', { defaultValue: 'AI Polish' })
+                      : t('settings.voice_typing_mode_badge_raw', {
+                          defaultValue: 'Fast Dictation',
+                        })}
                   </span>
                   <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
                     {new Date(item.timestamp).toLocaleTimeString()}
@@ -748,8 +752,10 @@ function VoiceTypingHistorySection(): React.JSX.Element {
                     )}
                     <span>
                       {addedHotwordId === item.id
-                        ? t('settings.voice_typing_hotword_added', { defaultValue: '已添加' })
-                        : t('settings.voice_typing_add_hotword', { defaultValue: '加为热词' })}
+                        ? t('settings.voice_typing_hotword_added', { defaultValue: 'Added' })
+                        : t('settings.voice_typing_add_hotword', {
+                            defaultValue: 'Add to Hotwords',
+                          })}
                     </span>
                   </button>
                   <button
@@ -796,7 +802,7 @@ function VoiceTypingHistorySection(): React.JSX.Element {
                   }}
                 >
                   <span style={{ fontWeight: 500, opacity: 0.8 }}>
-                    {t('settings.voice_typing_original_text', { defaultValue: '原识别草稿' })}:
+                    {t('settings.voice_typing_original_text', { defaultValue: 'Original Draft' })}:
                   </span>{' '}
                   {item.rawText}
                 </div>

@@ -98,6 +98,7 @@ export function VoiceTypingOverlay() {
   const rootRef = useRef<HTMLDivElement>(null);
   const resolvedTheme = useAuxWindowTheme();
   const [peakLevel, setPeakLevel] = useState<number>(0);
+  const storeHistoryItems = useVoiceTypingHistoryStore((state) => state.items);
   const overlayState = useAuxWindowState({
     label: VOICE_TYPING_WINDOW_LABEL,
     eventName: VOICE_TYPING_EVENT_TEXT,
@@ -149,7 +150,10 @@ export function VoiceTypingOverlay() {
 
       if (overlayState.phase === 'recall' && event.key >= '1' && event.key <= '5') {
         const idx = Number.parseInt(event.key, 10) - 1;
-        const items = useVoiceTypingHistoryStore.getState().items;
+        const items =
+          overlayState.history && overlayState.history.length > 0
+            ? overlayState.history
+            : useVoiceTypingHistoryStore.getState().items;
         if (items[idx]?.injectedText) {
           event.preventDefault();
           void handleReinject(items[idx].injectedText);
@@ -161,8 +165,13 @@ export function VoiceTypingOverlay() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [handleCancel, handleReinject, overlayState.phase]);
+  }, [handleCancel, handleReinject, overlayState.history, overlayState.phase]);
 
+  useEffect(() => {
+    if (overlayState.phase === 'recall') {
+      useVoiceTypingHistoryStore.getState().reloadHistory();
+    }
+  }, [overlayState.phase]);
   useEffect(() => {
     let isMounted = true;
     let unlisten: (() => void) | undefined;
@@ -391,7 +400,11 @@ export function VoiceTypingOverlay() {
           </div>
 
           {(() => {
-            const historyItems = useVoiceTypingHistoryStore.getState().items.slice(0, 5);
+            const historyItems = (
+              overlayState.history && overlayState.history.length > 0
+                ? overlayState.history
+                : storeHistoryItems
+            ).slice(0, 5);
             if (historyItems.length === 0) {
               return (
                 <div

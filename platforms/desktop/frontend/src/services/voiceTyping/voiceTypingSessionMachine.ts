@@ -1,4 +1,5 @@
 import i18next from 'i18next';
+import type { VoiceTypingHistoryItem } from '../../stores/voiceTypingHistoryStore';
 import type {
   TextReplacementRuleSet,
   VoiceTypingContextPreset,
@@ -61,6 +62,7 @@ interface VoiceTypingSessionMachineOptions {
   getContextPreset?: () => VoiceTypingContextPreset | undefined;
   getContextRules?: () => VoiceTypingContextRule[] | undefined;
   isContextAwarenessEnabled?: () => boolean;
+  getRecentHistory?: () => VoiceTypingHistoryItem[];
 }
 
 function delay(ms: number) {
@@ -816,6 +818,9 @@ export class VoiceTypingSessionMachine {
       contextName: this.currentContext?.rule?.name,
       contextIcon: this.currentContext?.rule?.icon,
       contextColor: this.currentContext?.rule?.badgeColor,
+      history:
+        payload.history ??
+        (payload.phase === 'recall' ? this.options.getRecentHistory?.() : undefined),
       revision: ++this.revision,
     };
 
