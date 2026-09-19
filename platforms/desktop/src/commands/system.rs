@@ -41,7 +41,8 @@ pub fn get_focused_selection_text() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-pub fn get_foreground_window_info() -> Result<Option<crate::platform::system::ForegroundWindowInfo>, String> {
+pub fn get_foreground_window_info()
+-> Result<Option<crate::platform::system::ForegroundWindowInfo>, String> {
     crate::platform::system::get_foreground_window_info()
 }
 #[tauri::command]

@@ -42,4 +42,13 @@ describe('formatCjkTypography', () => {
     expect(formatCjkTypography('时间是12:30分')).toBe('时间是 12:30 分');
     expect(formatCjkTypography('访问https://sona.ai即可')).toBe('访问 https://sona.ai 即可');
   });
+
+  it('handles Korean Hangul with Latin and numbers while preserving Korean punctuation', () => {
+    expect(formatCjkTypography('테스트1완료')).toBe('테스트 1 완료');
+    expect(formatCjkTypography('1단계')).toBe('1 단계');
+    expect(formatCjkTypography('한국어English혼합')).toBe('한국어 English 혼합');
+    expect(formatCjkTypography('안녕하세요. 오늘 1단계입니다.')).toBe(
+      '안녕하세요. 오늘 1 단계입니다.'
+    );
+  });
 });

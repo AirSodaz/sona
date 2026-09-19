@@ -92,10 +92,11 @@ export class VoiceTypingWindowService {
     });
   }
 
-  async open(x: number, y: number) {
+  async open(x: number, y: number, focus = false) {
     await this.controller.open({
       position: [x, y],
       size: VOICE_TYPING_WINDOW_SIZE,
+      focus,
     });
   }
 

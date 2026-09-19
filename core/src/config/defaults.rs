@@ -78,7 +78,10 @@ pub fn default_config() -> Value {
         ("voiceTypingQuickRecallShortcut", json!("Alt + Shift + H")),
         ("voiceTypingContextAwarenessEnabled", json!(true)),
         ("voiceTypingContextPreset", json!("auto")),
-        ("voiceTypingContextRules", create_default_voice_typing_context_rules()),
+        (
+            "voiceTypingContextRules",
+            create_default_voice_typing_context_rules(),
+        ),
         ("textReplacementSets", json!([])),
         ("hotwordSets", json!([])),
         ("polishKeywordSets", json!([])),

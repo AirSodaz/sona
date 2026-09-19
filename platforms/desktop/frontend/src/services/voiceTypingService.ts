@@ -225,6 +225,8 @@ export class VoiceTypingService {
 
     void listen<{ text: string }>(TauriEvent.auxWindow.voiceTypingReinject, async (event) => {
       if (event.payload?.text) {
+        await this.sessionMachine.cancel();
+        await this.delay(80);
         await this.ports.injectText(event.payload.text, this.getCurrentShortcutModifiers());
         voiceTypingSoundPlayer.play('commit');
       }

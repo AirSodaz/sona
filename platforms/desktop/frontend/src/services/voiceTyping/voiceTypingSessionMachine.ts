@@ -455,6 +455,7 @@ export class VoiceTypingSessionMachine {
         revealIfHidden: true,
         reposition: Boolean(position),
         resolvePosition: position ? async () => position : undefined,
+        focus: true,
       }
     );
   }
@@ -804,6 +805,7 @@ export class VoiceTypingSessionMachine {
       revealIfHidden?: boolean;
       reposition?: boolean;
       resolvePosition?: VoiceTypingPositionResolver;
+      focus?: boolean;
     }
   ) {
     const nextPayload: VoiceTypingOverlayPayload = {
@@ -819,9 +821,9 @@ export class VoiceTypingSessionMachine {
 
     await this.options.overlayPresenter.publish(nextPayload, {
       ...options,
+      focus: options?.focus ?? payload.phase === 'recall',
       resolvePosition: options?.resolvePosition ?? this.options.resolveOverlayPosition,
     });
-
     return nextPayload.revision;
   }
 

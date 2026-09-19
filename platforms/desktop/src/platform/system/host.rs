@@ -727,12 +727,13 @@ pub fn get_foreground_window_info() -> Result<Option<ForegroundWindowInfo>, Stri
 }
 
 #[cfg(target_os = "windows")]
-unsafe fn get_windows_foreground_window_info() -> windows::core::Result<Option<ForegroundWindowInfo>> {
+unsafe fn get_windows_foreground_window_info() -> windows::core::Result<Option<ForegroundWindowInfo>>
+{
     use std::path::Path;
     use windows::Win32::Foundation::{CloseHandle, HWND};
     use windows::Win32::System::Threading::{
-        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT,
-        PROCESS_QUERY_LIMITED_INFORMATION,
+        OpenProcess, PROCESS_NAME_FORMAT, PROCESS_QUERY_LIMITED_INFORMATION,
+        QueryFullProcessImageNameW,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
         GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
@@ -838,11 +839,19 @@ fn get_macos_foreground_window_info() -> Result<Option<ForegroundWindowInfo>, St
 fn get_linux_foreground_window_info() -> Result<Option<ForegroundWindowInfo>, String> {
     use std::process::Command;
 
-    if let Ok(output) = Command::new("xdotool").args(["getwindowfocus", "getwindowname"]).output() {
+    if let Ok(output) = Command::new("xdotool")
+        .args(["getwindowfocus", "getwindowname"])
+        .output()
+    {
         if output.status.success() {
             let window_title = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            let app_name = if let Ok(class_out) = Command::new("xdotool").args(["getwindowfocus", "getwindowclassname"]).output() {
-                String::from_utf8_lossy(&class_out.stdout).trim().to_lowercase()
+            let app_name = if let Ok(class_out) = Command::new("xdotool")
+                .args(["getwindowfocus", "getwindowclassname"])
+                .output()
+            {
+                String::from_utf8_lossy(&class_out.stdout)
+                    .trim()
+                    .to_lowercase()
             } else {
                 String::new()
             };

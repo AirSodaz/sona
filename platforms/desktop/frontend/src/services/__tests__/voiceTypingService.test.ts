@@ -8,9 +8,11 @@ const mocks = vi.hoisted(() => {
   const configEvents: {
     listener?: (state: { config: Record<string, any> }) => void;
   } = {};
+  const eventListeners: Record<string, (event: any) => void> = {};
   return {
     shortcutState,
     configEvents,
+    eventListeners,
     defaultConfig: {
       voiceTypingEnabled: false,
       voiceTypingShortcut: 'Alt+V',
@@ -75,6 +77,12 @@ const mocks = vi.hoisted(() => {
       async (selected: string, instruction: string, _opts?: any) =>
         `[transformed: ${selected}] ${instruction}`
     ),
+    listen: vi.fn(async (eventName: string, handler: (event: any) => void) => {
+      eventListeners[eventName] = handler;
+      return () => {
+        delete eventListeners[eventName];
+      };
+    }),
   };
 });
 
@@ -87,7 +95,11 @@ vi.mock('@tauri-apps/plugin-global-shortcut', () => ({
   unregister: mocks.unregister,
   isRegistered: mocks.isRegistered,
 }));
-
+vi.mock('../tauri/platform/events', () => ({
+  listen: mocks.listen,
+  emit: vi.fn(),
+  emitTo: vi.fn(),
+}));
 vi.mock('../voiceTypingWindowService', () => ({
   VOICE_TYPING_WINDOW_WIDTH: 400,
   voiceTypingWindowService: {
@@ -196,6 +208,9 @@ describe('voiceTypingService', () => {
 
     mocks.shortcutState.handler = undefined;
     mocks.shortcutState.handlers = {};
+    for (const key of Object.keys(mocks.eventListeners)) {
+      delete mocks.eventListeners[key];
+    }
     mocks.configEvents.listener = undefined;
     mocks.config = { ...mocks.defaultConfig };
     mocks.configSubscribe.mockImplementation(
@@ -1421,7 +1436,7 @@ describe('voiceTypingService', () => {
     expect(injectCalls.length).toBe(1);
     expect(injectCalls[0][1].text).toContain('asoda@outlook.com');
   });
-  it('opens quick recall drawer overlay', async () => {
+  it('opens quick recall drawer overlay with focus enabled', async () => {
     const service = await loadService();
     service.init();
     vi.clearAllMocks();
@@ -1433,6 +1448,30 @@ describe('voiceTypingService', () => {
         phase: 'recall',
       })
     );
+    expect(mocks.windowOpen).toHaveBeenCalledWith(expect.any(Number), expect.any(Number), true);
+  });
+
+  it('reinjects text from quick recall with focus settle delay', async () => {
+    const service = await loadService();
+    service.init();
+    await flushMicrotasks(2);
+
+    const reinjectHandler = mocks.eventListeners['voice-typing:reinject'];
+    expect(reinjectHandler).toBeDefined();
+
+    const reinjectPromise = reinjectHandler({ payload: { text: '历史输入内容' } });
+    await flushMicrotasks(2);
+
+    // Before 80ms delay completes, inject_text has not been called yet
+    expect(getInvokeCalls('inject_text')).toHaveLength(0);
+
+    // Advance past the 80ms focus settle delay
+    await vi.advanceTimersByTimeAsync(80);
+    await reinjectPromise;
+
+    const injectCalls = getInvokeCalls('inject_text');
+    expect(injectCalls).toHaveLength(1);
+    expect(injectCalls[0][1].text).toBe('历史输入内容');
   });
 
   it('positions quick recall higher up in bottom_center mode to avoid bottom screen overflow', async () => {

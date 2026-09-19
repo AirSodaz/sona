@@ -10,6 +10,7 @@ interface PublishOptions {
   revealIfHidden?: boolean;
   reposition?: boolean;
   resolvePosition?: VoiceTypingPositionResolver;
+  focus?: boolean;
 }
 
 export class VoiceTypingOverlayPresenter {
@@ -60,14 +61,25 @@ export class VoiceTypingOverlayPresenter {
     });
     await voiceTypingWindowService.sendState(payload);
 
+    const shouldFocus = options.focus ?? payload.phase === 'recall';
+
     if (!nextPosition) {
+      if (shouldFocus && this.lastOverlayPosition) {
+        await voiceTypingWindowService.open(
+          this.lastOverlayPosition[0],
+          this.lastOverlayPosition[1],
+          true
+        );
+      }
       return;
     }
-
-    await voiceTypingWindowService.open(nextPosition[0], nextPosition[1]);
+    if (shouldFocus) {
+      await voiceTypingWindowService.open(nextPosition[0], nextPosition[1], true);
+    } else {
+      await voiceTypingWindowService.open(nextPosition[0], nextPosition[1]);
+    }
     this.overlayVisible = true;
   }
-
   async hide() {
     this.overlayVisible = false;
     await voiceTypingWindowService.close();
