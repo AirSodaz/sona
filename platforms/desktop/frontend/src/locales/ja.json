@@ -1448,6 +1448,7 @@
     "unified_dictionary_desc": "グローバル用語、置換ルール、プロジェクト固有の語彙を人間が読みやすい形式で一元管理します。",
     "dict_target_scope": "適用対象:",
     "dict_scope_global": "全体 (すべて)",
+    "dict_scope_voice_typing": "音声入力 (専用スコープ)",
     "unified_dict_input_placeholder": "用語（例: Sona）または 元の単語 -> 置換単語",
     "dict_total_terms": "用語総数:",
     "dict_global_terms": "全体:",

@@ -15,6 +15,7 @@ import type {
   ModelConfig,
   OnlineAsrProviderConfig,
   OnlineAsrProviderId,
+  TextReplacementRuleSet,
 } from '../types/config';
 import type { ModelInfo } from '../types/modelCatalog';
 import type { EffectivePipelineSnapshot, ProjectPipelineConfig } from '../types/project';
@@ -26,7 +27,11 @@ import {
   getScenarioVadBufferSize,
   getScenarioVadModelPath,
 } from '../utils/scenarioModels';
-import { getTermsForProject, parseYamlDictionary } from '../utils/yamlDictionaryParser';
+import {
+  getTermsForProject,
+  parseYamlDictionary,
+  VOICE_TYPING_SCOPE_ID,
+} from '../utils/yamlDictionaryParser';
 import { modelService, PRESET_MODELS_MAP } from './modelService';
 import {
   createOnlineAsrSelection,
@@ -104,7 +109,36 @@ export class AsrConfigService {
     return createOnlineAsrSelection(VOLCENGINE_DOUBAO_PROVIDER_ID, mode);
   };
 
-  buildPostprocessOptions = (config: AppConfig): TranscriptPostprocessOptions => {
+  buildPostprocessOptions = (
+    config: AppConfig,
+    slot?: AsrSelectionSlot
+  ): TranscriptPostprocessOptions => {
+    if (config.dictionaryContent?.trim()) {
+      const parsed = parseYamlDictionary(config.dictionaryContent);
+      const projectId = slot === 'voiceTyping' ? VOICE_TYPING_SCOPE_ID : undefined;
+      const terms = getTermsForProject(parsed, projectId);
+      const textReplacementSets: TextReplacementRuleSet[] = [];
+
+      if (terms.replacements.length > 0) {
+        textReplacementSets.push({
+          id: 'unified-dictionary-replacements',
+          name: 'Unified Dictionary',
+          enabled: true,
+          ignoreCase: false,
+          rules: terms.replacements.map((r, i) => ({
+            id: `rep_${i}`,
+            from: r.from,
+            to: r.to,
+          })),
+        });
+      }
+
+      return {
+        textReplacementSets,
+        dropFinalDotSegments: true,
+      };
+    }
+
     return {
       textReplacementSets: config.textReplacementSets || [],
       dropFinalDotSegments: true,
@@ -197,8 +231,10 @@ export class AsrConfigService {
       normalizationOptions: {
         enableTimeline: config.enableTimeline ?? false,
       },
-      postprocessOptions: overrides.postprocessOptions || this.buildPostprocessOptions(config),
-      hotwords: overrides.hotwords !== undefined ? overrides.hotwords : this.buildHotwords(config),
+      postprocessOptions:
+        overrides.postprocessOptions || this.buildPostprocessOptions(config, slot),
+      hotwords:
+        overrides.hotwords !== undefined ? overrides.hotwords : this.buildHotwords(config, slot),
     };
 
     if (selection.engine === 'online') {
@@ -483,7 +519,14 @@ export class AsrConfigService {
     return findSelectedModelByMode(selection.modelPath, selection.mode);
   };
 
-  private buildHotwords = (config: AppConfig): string | null => {
+  private buildHotwords = (config: AppConfig, slot?: AsrSelectionSlot): string | null => {
+    if (config.dictionaryContent?.trim()) {
+      const parsed = parseYamlDictionary(config.dictionaryContent);
+      const projectId = slot === 'voiceTyping' ? VOICE_TYPING_SCOPE_ID : undefined;
+      const terms = getTermsForProject(parsed, projectId);
+      return terms.hotwords.length > 0 ? terms.hotwords.join(',') : null;
+    }
+
     const words =
       config.hotwordSets
         ?.filter((set) => set.enabled)

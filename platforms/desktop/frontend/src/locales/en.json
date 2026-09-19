@@ -1448,6 +1448,7 @@
     "unified_dictionary_desc": "Manage global terms, text replacements, and project-specific vocabularies in one unified, human-readable format.",
     "dict_target_scope": "Target:",
     "dict_scope_global": "Global (All)",
+    "dict_scope_voice_typing": "Voice Typing (Exclusive Scope)",
     "unified_dict_input_placeholder": "Term (e.g. Sona) or From -> To",
     "dict_total_terms": "Total terms:",
     "dict_global_terms": "Global:",

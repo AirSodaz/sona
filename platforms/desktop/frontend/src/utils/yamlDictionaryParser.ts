@@ -37,8 +37,36 @@ export interface KnownProjectRef {
   };
 }
 
-const ARROW_REGEX = /\s*(?:=>|->)\s*/;
+export const VOICE_TYPING_SCOPE_ID = 'voice-typing';
+export const VOICE_TYPING_SCOPE_NAME = 'Voice Typing';
 
+export function isVoiceTypingScopeId(id?: string | null): boolean {
+  if (!id) return false;
+  const normalized = id.trim().toLowerCase();
+  return normalized === 'voice-typing' || normalized === 'voice_typing';
+}
+
+export function isVoiceTypingScopeName(name?: string | null): boolean {
+  if (!name) return false;
+  const trimmed = name.trim();
+  const lower = trimmed.toLowerCase();
+  return (
+    lower === 'voice typing' ||
+    lower === 'voice-typing' ||
+    lower === 'voice_typing' ||
+    trimmed === '语音输入' ||
+    trimmed === '語音輸入' ||
+    trimmed === '音声入力' ||
+    trimmed === '음성 입력' ||
+    trimmed === '음성입력'
+  );
+}
+
+export function isVoiceTypingScope(id?: string | null, name?: string | null): boolean {
+  return isVoiceTypingScopeId(id) || isVoiceTypingScopeName(name);
+}
+
+const ARROW_REGEX = /\s*(?:=>|->)\s*/;
 /**
  * Parses a YAML-like dictionary text into structured global terms and project sections.
  */
@@ -84,7 +112,13 @@ export function parseYamlDictionary(
         let resolvedId = explicitId;
         let isDeleted = false;
 
-        if (explicitId) {
+        if (isVoiceTypingScopeId(explicitId)) {
+          resolvedId = VOICE_TYPING_SCOPE_ID;
+          isDeleted = false;
+        } else if (!explicitId && isVoiceTypingScopeName(rawName)) {
+          resolvedId = VOICE_TYPING_SCOPE_ID;
+          isDeleted = false;
+        } else if (explicitId) {
           const matched = knownProjects.find((p) => p.id === explicitId);
           if (!matched) {
             isDeleted = true;
@@ -218,35 +252,41 @@ export function validateYamlDictionary(
           }
           seenProjectIds.add(explicitId);
 
-          const matched = knownProjects.find((p) => p.id === explicitId);
-          if (!matched) {
-            // Check if there is a newly created project with the same name
-            const sameNameProject = knownProjects.find(
-              (p) => p.name.toLowerCase() === rawName.toLowerCase()
-            );
-            if (sameNameProject) {
-              diagnostics.push({
-                line: lineNum,
-                message: `Project "${rawName}" (id:${explicitId}) was deleted. A new project with the same name exists (id:${sameNameProject.id}). Format or relink to update.`,
-                severity: 'warning',
-              });
-            } else {
-              diagnostics.push({
-                line: lineNum,
-                message: `Linked project "${rawName}" (id:${explicitId}) no longer exists.`,
-                severity: 'warning',
-              });
+          if (!isVoiceTypingScopeId(explicitId)) {
+            const matched = knownProjects.find((p) => p.id === explicitId);
+            if (!matched) {
+              // Check if there is a newly created project with the same name
+              const sameNameProject = knownProjects.find(
+                (p) => p.name.toLowerCase() === rawName.toLowerCase()
+              );
+              if (sameNameProject) {
+                diagnostics.push({
+                  line: lineNum,
+                  message: `Project "${rawName}" (id:${explicitId}) was deleted. A new project with the same name exists (id:${sameNameProject.id}). Format or relink to update.`,
+                  severity: 'warning',
+                });
+              } else {
+                diagnostics.push({
+                  line: lineNum,
+                  message: `Linked project "${rawName}" (id:${explicitId}) no longer exists.`,
+                  severity: 'warning',
+                });
+              }
             }
           }
         } else if (rawName) {
           // No explicit ID
-          const matched = knownProjects.find((p) => p.name.toLowerCase() === rawName.toLowerCase());
-          if (!matched) {
-            diagnostics.push({
-              line: lineNum,
-              message: `Project "${rawName}" not found in projects. Link to a project by adding "(id:project_id)".`,
-              severity: 'info',
-            });
+          if (!isVoiceTypingScopeName(rawName)) {
+            const matched = knownProjects.find(
+              (p) => p.name.toLowerCase() === rawName.toLowerCase()
+            );
+            if (!matched) {
+              diagnostics.push({
+                line: lineNum,
+                message: `Project "${rawName}" not found in projects. Link to a project by adding "(id:project_id)".`,
+                severity: 'info',
+              });
+            }
           }
         }
 
@@ -392,11 +432,14 @@ export function formatYamlDictionary(
     lines.push('projects:');
 
     for (const proj of parsed.projects) {
-      // Find if project is in knownProjects
+      // Find if project is in knownProjects or is voice typing
       let displayName = proj.projectName;
       let resolvedId = proj.projectId;
 
-      if (resolvedId) {
+      if (isVoiceTypingScopeId(resolvedId) || isVoiceTypingScopeName(displayName)) {
+        resolvedId = VOICE_TYPING_SCOPE_ID;
+        displayName = proj.projectName || VOICE_TYPING_SCOPE_NAME;
+      } else if (resolvedId) {
         const matched = knownProjects.find((p) => p.id === resolvedId);
         if (matched) {
           displayName = matched.name; // Synchronize name in case it was renamed!
@@ -537,12 +580,15 @@ export function getTermsForProject(
 
   // Find matching project section
   if (projectId || projectName) {
+    const isTargetVoiceTyping = isVoiceTypingScope(projectId, projectName);
     const projectSection = parsed.projects.find((p) => {
+      if (isTargetVoiceTyping) {
+        return isVoiceTypingScope(p.projectId, p.projectName);
+      }
       if (projectId && p.projectId === projectId) return true;
       if (projectName && p.projectName.toLowerCase() === projectName.toLowerCase()) return true;
       return false;
     });
-
     if (projectSection) {
       for (const term of projectSection.terms) {
         if (term.isReplacement && term.from && term.to) {
@@ -559,4 +605,107 @@ export function getTermsForProject(
     hotwords: Array.from(new Set(hotwords)),
     replacements,
   };
+}
+
+/**
+ * Appends or inserts a new term into the YAML dictionary under the specified scope.
+ * Prevents duplicates within the target scope and formats clean YAML.
+ */
+export function addTermToYamlDictionary(
+  content: string,
+  term: string,
+  targetScope: 'global' | { id: string; name: string } = 'global',
+  knownProjects: KnownProjectRef[] = []
+): string {
+  const trimmed = term.trim();
+  if (!trimmed) return content;
+
+  let entry = trimmed;
+  if (entry.includes('=>')) {
+    entry = entry.replace('=>', '->');
+  }
+  if (!entry.startsWith('-')) {
+    entry = `- ${entry}`;
+  }
+
+  const isEssentiallyEmpty =
+    !content.trim() ||
+    content
+      .trim()
+      .split('\n')
+      .every((l) => !l.trim() || l.trim().startsWith('#'));
+
+  if (targetScope === 'global') {
+    if (isEssentiallyEmpty) {
+      return `# Global Vocabulary & Replacements\n${entry}\n`;
+    }
+
+    const parsed = parseYamlDictionary(content, knownProjects);
+    const normalizedText = entry.replace(/^-\s*/, '').trim().toLowerCase();
+    const alreadyExists = parsed.globalTerms.some((t) => {
+      const termNormalized =
+        t.isReplacement && t.from && t.to
+          ? `${t.from} -> ${t.to}`.toLowerCase()
+          : t.text.toLowerCase();
+      return termNormalized === normalizedText;
+    });
+    if (alreadyExists) {
+      return content;
+    }
+
+    const lines = content.split('\n');
+    const projectsIdx = lines.findIndex((l) => l.trim() === 'projects:' || l.trim() === 'projects');
+    if (projectsIdx >= 0) {
+      lines.splice(projectsIdx, 0, entry);
+      return lines.join('\n');
+    } else {
+      return `${content.trimEnd()}\n${entry}\n`;
+    }
+  }
+
+  // targetScope is { id, name }
+  const targetId = targetScope.id;
+  const isTargetVoiceTyping = isVoiceTypingScopeId(targetId);
+  const targetName = targetScope.name || (isTargetVoiceTyping ? VOICE_TYPING_SCOPE_NAME : targetId);
+
+  if (isEssentiallyEmpty) {
+    return `# Global Vocabulary & Replacements\n\n# Project Specific Terms & Replacements\nprojects:\n  ${targetName} (id:${targetId}):\n    ${entry}\n`;
+  }
+
+  const parsed = parseYamlDictionary(content, knownProjects);
+  const lines = content.split('\n');
+
+  const existingProj = parsed.projects.find((p) => {
+    if (isTargetVoiceTyping) {
+      return isVoiceTypingScope(p.projectId, p.projectName);
+    }
+    return p.projectId === targetId || p.projectName.toLowerCase() === targetName.toLowerCase();
+  });
+
+  if (existingProj) {
+    const normalizedText = entry.replace(/^-\s*/, '').trim().toLowerCase();
+    const alreadyExists = existingProj.terms.some((t) => {
+      const termNormalized =
+        t.isReplacement && t.from && t.to
+          ? `${t.from} -> ${t.to}`.toLowerCase()
+          : t.text.toLowerCase();
+      return termNormalized === normalizedText;
+    });
+    if (alreadyExists) {
+      return content;
+    }
+
+    const headerLineIdx = existingProj.line - 1;
+    lines.splice(headerLineIdx + 1, 0, `    ${entry}`);
+    return lines.join('\n');
+  }
+
+  let projectsIdx = lines.findIndex((l) => l.trim() === 'projects:' || l.trim() === 'projects');
+  if (projectsIdx === -1) {
+    lines.push('', '# Project Specific Terms & Replacements', 'projects:');
+    projectsIdx = lines.length - 1;
+  }
+
+  lines.push(`  ${targetName} (id:${targetId}):`, `    ${entry}`);
+  return lines.join('\n');
 }

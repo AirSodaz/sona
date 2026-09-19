@@ -15,9 +15,11 @@ import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../../../stores/projectStore';
 import type { HotwordRuleSet, TextReplacementRuleSet } from '../../../types/config';
 import {
+  addTermToYamlDictionary,
   formatYamlDictionary,
   parseYamlDictionary,
   serializeToYamlDictionary,
+  VOICE_TYPING_SCOPE_ID,
   validateYamlDictionary,
 } from '../../../utils/yamlDictionaryParser';
 import { Dropdown } from '../../Dropdown';
@@ -153,50 +155,20 @@ export function UnifiedDictionarySection({
     const raw = quickAddInput.trim();
     if (!raw) return;
 
-    let entry = `- ${raw}`;
-    if (raw.includes('=>')) {
-      entry = `- ${raw.replace('=>', '->')}`;
-    } else if (!raw.startsWith('-') && !raw.includes('->')) {
-      entry = `- ${raw}`;
-    }
-
-    let updated = text;
-    if (quickAddTarget === 'global') {
-      const lines = updated.split('\n');
-      const projectsIdx = lines.findIndex(
-        (l) => l.trim() === 'projects:' || l.trim() === 'projects'
-      );
-      if (projectsIdx >= 0) {
-        lines.splice(projectsIdx, 0, entry);
-        updated = lines.join('\n');
-      } else {
-        updated = `${updated.trimEnd()}\n${entry}\n`;
-      }
-    } else {
+    let targetScope: 'global' | { id: string; name: string } = 'global';
+    if (quickAddTarget === VOICE_TYPING_SCOPE_ID) {
+      targetScope = {
+        id: VOICE_TYPING_SCOPE_ID,
+        name: t('settings.voice_typing', { defaultValue: 'Voice Typing' }),
+      };
+    } else if (quickAddTarget !== 'global') {
       const targetProj = projects.find((p) => p.id === quickAddTarget);
       if (targetProj) {
-        const lines = updated.split('\n');
-        let projectsIdx = lines.findIndex(
-          (l) => l.trim() === 'projects:' || l.trim() === 'projects'
-        );
-        if (projectsIdx === -1) {
-          lines.push('', 'projects:');
-          projectsIdx = lines.length - 1;
-        }
-
-        const projHeaderIdx = lines.findIndex(
-          (l, i) => i > projectsIdx && l.includes(`id:${targetProj.id}`)
-        );
-
-        if (projHeaderIdx >= 0) {
-          lines.splice(projHeaderIdx + 1, 0, `    ${entry}`);
-        } else {
-          lines.push(`  ${targetProj.name} (id:${targetProj.id}):`, `    ${entry}`);
-        }
-        updated = lines.join('\n');
+        targetScope = { id: targetProj.id, name: targetProj.name };
       }
     }
 
+    const updated = addTermToYamlDictionary(text, raw, targetScope, projects);
     syncChanges(updated);
     setQuickAddInput('');
   };
@@ -240,7 +212,16 @@ export function UnifiedDictionarySection({
       const match = trimmedLine.match(/^([a-zA-Z0-9_\u4e00-\u9fa5\s]+)$/);
       if (match && match[1].length >= 1) {
         const query = match[1].trim().toLowerCase();
-        const matches = projects.filter((p) => p.name.toLowerCase().includes(query));
+        const voiceTypingName = t('settings.voice_typing', {
+          defaultValue: 'Voice Typing',
+        });
+        const allScopes = [
+          { id: VOICE_TYPING_SCOPE_ID, name: voiceTypingName },
+          ...projects.map((p) => ({ id: p.id, name: p.name })),
+        ];
+        const matches = allScopes.filter(
+          (p) => p.name.toLowerCase().includes(query) || p.id.toLowerCase().includes(query)
+        );
         if (matches.length > 0) {
           setSuggestions(matches);
           setSuggestionPos({ top: currentLineNum * 20, left: 60 });
@@ -276,6 +257,10 @@ export function UnifiedDictionarySection({
       {
         value: 'global',
         label: t('settings.dict_scope_global', { defaultValue: 'Global (All)' }),
+      },
+      {
+        value: VOICE_TYPING_SCOPE_ID,
+        label: t('settings.dict_scope_voice_typing', { defaultValue: 'Voice Typing' }),
       },
       ...projects.map((p) => ({
         value: p.id,
@@ -877,7 +862,7 @@ export function UnifiedDictionarySection({
                 }}
               >
                 {
-                  'projects:\n  Project Name (id:proj-1):\n    - Sprint Planning\n    - PRD -> Product Doc'
+                  'projects:\n  Voice Typing (id:voice-typing):\n    - Dictation Hotword\n  Project Name (id:proj-1):\n    - Sprint Planning\n    - PRD -> Product Doc'
                 }
               </pre>
             </div>

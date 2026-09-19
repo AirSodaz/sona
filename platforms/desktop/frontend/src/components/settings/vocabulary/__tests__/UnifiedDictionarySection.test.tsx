@@ -125,4 +125,45 @@ projects:
     const updated = onUpdateContent.mock.calls[onUpdateContent.mock.calls.length - 1][0];
     expect(updated).toContain('Weekly Review (id:proj-1):');
   });
+
+  it('adds a new term to voice typing scope via quick add target dropdown', () => {
+    const onUpdateContent = vi.fn();
+    const content = '- Sona\n';
+
+    render(<UnifiedDictionarySection content={content} onUpdateContent={onUpdateContent} />);
+
+    // Open scope dropdown and select voice-typing
+    const scopeTrigger = screen.getByLabelText('Target:');
+    fireEvent.click(scopeTrigger);
+    const vtOption = screen.getByRole('option', { name: /Voice Typing/ });
+    fireEvent.click(vtOption);
+    const input = screen.getByPlaceholderText(/Term.*or From -> To/);
+    fireEvent.change(input, { target: { value: 'DictationWord' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(onUpdateContent).toHaveBeenCalledTimes(1);
+    const updated = onUpdateContent.mock.calls[0][0];
+    expect(updated).toContain('Voice Typing (id:voice-typing):');
+    expect(updated).toContain('- DictationWord');
+  });
+
+  it('suggests voice typing scope when typing under projects section', () => {
+    const onUpdateContent = vi.fn();
+    render(<UnifiedDictionarySection content={'projects:\n'} onUpdateContent={onUpdateContent} />);
+
+    const editor = screen.getByLabelText('Unified Dictionary Editor');
+    fireEvent.change(editor, {
+      target: {
+        value: 'projects:\n  Voice',
+      },
+    });
+
+    expect(screen.getByText('Link Project')).toBeDefined();
+    const suggestionBtn = screen.getByRole('button', { name: /Voice Typing/ });
+    expect(suggestionBtn).toBeDefined();
+
+    fireEvent.click(suggestionBtn);
+    const updated = onUpdateContent.mock.calls[onUpdateContent.mock.calls.length - 1][0];
+    expect(updated).toContain('Voice Typing (id:voice-typing):');
+  });
 });

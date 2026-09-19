@@ -508,4 +508,41 @@ describe('asrConfigService', () => {
     expect(patch.asr?.selections.live.engine).toBe('online');
     expect(patch.batchModelPath).toBe('D:/models/local-batch');
   });
+
+  it('resolves voice typing scope hotwords and replacements from dictionaryContent when slot is voiceTyping', () => {
+    const config = buildAsrConfig({
+      dictionaryContent: `
+- GlobalHotword
+- GlobalMistake -> GlobalFix
+
+projects:
+  Voice Typing (id:voice-typing):
+    - VTHotword
+    - VTMistake -> VTFix
+`,
+    });
+
+    // 1. voiceTyping slot should include both global and voice typing terms
+    const vtRequest = resolveAsrTranscriptionRequest(config, 'voiceTyping');
+    expect(vtRequest.hotwords).toContain('GlobalHotword');
+    expect(vtRequest.hotwords).toContain('GlobalFix');
+    expect(vtRequest.hotwords).toContain('VTHotword');
+    expect(vtRequest.hotwords).toContain('VTFix');
+    const vtReplacements = vtRequest.postprocessOptions.textReplacementSets[0]?.rules;
+    expect(vtReplacements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ from: 'GlobalMistake', to: 'GlobalFix' }),
+        expect.objectContaining({ from: 'VTMistake', to: 'VTFix' }),
+      ])
+    );
+
+    // 2. live slot should only include global terms
+    const liveRequest = resolveAsrTranscriptionRequest(config, 'live');
+    expect(liveRequest.hotwords).toContain('GlobalHotword');
+    expect(liveRequest.hotwords).not.toContain('VTHotword');
+    const liveReplacements = liveRequest.postprocessOptions.textReplacementSets[0]?.rules;
+    expect(liveReplacements).toEqual([
+      expect.objectContaining({ from: 'GlobalMistake', to: 'GlobalFix' }),
+    ]);
+  });
 });

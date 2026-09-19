@@ -1448,6 +1448,7 @@
     "unified_dictionary_desc": "글로벌 용어, 텍스트 치환 규칙 및 프로젝트별 어휘를 사람이 읽기 쉬운 형식으로 통합 관리합니다.",
     "dict_target_scope": "적용 대상:",
     "dict_scope_global": "전체 (모든 프로젝트)",
+    "dict_scope_voice_typing": "음성 입력 (전용 범위)",
     "unified_dict_input_placeholder": "단어(예: Sona) 또는 원본 -> 변경 단어",
     "dict_total_terms": "총 단어 수:",
     "dict_global_terms": "전체:",

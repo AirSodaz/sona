@@ -24,10 +24,16 @@ import {
   useSetConfig,
   useVoiceTypingConfig,
 } from '../../stores/configStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { useVoiceTypingHistoryStore } from '../../stores/voiceTypingHistoryStore';
 import type { VoiceTypingRuntimeErrorSource } from '../../stores/voiceTypingRuntimeStore';
 import type { VoiceTypingContextPreset } from '../../types/config';
 import { logger } from '../../utils/logger';
+import {
+  addTermToYamlDictionary,
+  serializeToYamlDictionary,
+  VOICE_TYPING_SCOPE_ID,
+} from '../../utils/yamlDictionaryParser';
 import { ColorSwatchPicker } from '../ColorSwatchPicker';
 import { Dropdown } from '../Dropdown';
 import { SubtitleIcon } from '../Icons';
@@ -472,6 +478,28 @@ function VoiceTypingHistorySection(): React.JSX.Element {
     const trimmed = text.trim();
     if (!trimmed) return;
     const config = useConfigStore.getState().config;
+    const projects = useProjectStore.getState().projects;
+    const voiceTypingName = t('settings.voice_typing', {
+      defaultValue: 'Voice Typing',
+    });
+
+    // 1. Add to unified dictionary under voice typing scope
+    const currentDict = config.dictionaryContent?.trim()
+      ? config.dictionaryContent
+      : serializeToYamlDictionary(
+          config.hotwordSets || [],
+          config.textReplacementSets || [],
+          projects
+        );
+
+    const nextDict = addTermToYamlDictionary(
+      currentDict,
+      trimmed,
+      { id: VOICE_TYPING_SCOPE_ID, name: voiceTypingName },
+      projects
+    );
+
+    // 2. Also keep hotwordSets updated for backwards compatibility
     const existingSets = config.hotwordSets || [];
     let updated = false;
 
@@ -497,7 +525,10 @@ function VoiceTypingHistorySection(): React.JSX.Element {
       });
     }
 
-    updateConfig({ hotwordSets: nextSets });
+    updateConfig({
+      dictionaryContent: nextDict,
+      hotwordSets: nextSets,
+    });
     setAddedHotwordId(id);
     setTimeout(() => setAddedHotwordId((current) => (current === id ? null : current)), 1500);
   };

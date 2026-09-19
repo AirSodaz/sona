@@ -315,5 +315,9 @@ describe('SettingsSubtitleTab', () => {
     const addHotwordBtn = screen.getByText('settings.voice_typing_add_hotword');
     fireEvent.click(addHotwordBtn);
     expect(mockUpdateConfig).toHaveBeenCalled();
+    const updateCall = mockUpdateConfig.mock.calls.find((call) => call[0]?.dictionaryContent);
+    expect(updateCall).toBeDefined();
+    expect(updateCall![0].dictionaryContent).toContain('(id:voice-typing):');
+    expect(updateCall![0].dictionaryContent).toContain('- The weather is great today.');
   });
 });

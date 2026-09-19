@@ -1448,6 +1448,7 @@
     "unified_dictionary_desc": "在清晰的人類可讀文字中，集中管理全局專有詞、文字糾偏規則與專案專屬詞彙。",
     "dict_target_scope": "生效目標：",
     "dict_scope_global": "全局 (所有專案與情境)",
+    "dict_scope_voice_typing": "語音輸入 (專屬作用域)",
     "unified_dict_input_placeholder": "專有詞（如 Sona）或 原詞 -> 糾正詞",
     "dict_total_terms": "總詞項：",
     "dict_global_terms": "全局：",

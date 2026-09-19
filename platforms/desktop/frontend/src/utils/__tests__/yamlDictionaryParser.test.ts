@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addTermToYamlDictionary,
   formatYamlDictionary,
   getTermsForProject,
+  isVoiceTypingScope,
+  isVoiceTypingScopeId,
+  isVoiceTypingScopeName,
   parseYamlDictionary,
   serializeToYamlDictionary,
+  VOICE_TYPING_SCOPE_ID,
   validateYamlDictionary,
 } from '../yamlDictionaryParser';
 
@@ -168,5 +173,135 @@ projects:
     expect(yaml).toContain('Weekly Review (id:proj-1):');
     expect(yaml).toContain('- Roadmap');
     expect(yaml).toContain('- Bug -> Issue');
+  });
+
+  it('identifies voice typing scope by id and localized names', () => {
+    expect(isVoiceTypingScopeId('voice-typing')).toBe(true);
+    expect(isVoiceTypingScopeId('voice_typing')).toBe(true);
+    expect(isVoiceTypingScopeId('other-project')).toBe(false);
+
+    expect(isVoiceTypingScopeName('Voice Typing')).toBe(true);
+    expect(isVoiceTypingScopeName('语音输入')).toBe(true);
+    expect(isVoiceTypingScopeName('語音輸入')).toBe(true);
+    expect(isVoiceTypingScopeName('音声入力')).toBe(true);
+    expect(isVoiceTypingScopeName('음성 입력')).toBe(true);
+    expect(isVoiceTypingScopeName('Other Project')).toBe(false);
+
+    expect(isVoiceTypingScope('voice-typing', 'Any')).toBe(true);
+    expect(isVoiceTypingScope(undefined, '语音输入')).toBe(true);
+  });
+
+  it('parses and validates voice typing scope as a special project-exclusive scope without errors', () => {
+    const yaml = `
+projects:
+  Voice Typing (id:voice-typing):
+    - Whisper
+    - GPT -> ChatGPT
+
+  语音输入:
+    - 豆包 -> 字节豆包
+`;
+    const parsed = parseYamlDictionary(yaml, mockProjects);
+
+    expect(parsed.projects).toHaveLength(2);
+    expect(parsed.projects[0].projectId).toBe(VOICE_TYPING_SCOPE_ID);
+    expect(parsed.projects[0].isDeleted).toBe(false);
+    expect(parsed.projects[0].terms).toHaveLength(2);
+
+    expect(parsed.projects[1].projectId).toBe(VOICE_TYPING_SCOPE_ID);
+    expect(parsed.projects[1].isDeleted).toBe(false);
+    expect(parsed.projects[1].terms).toHaveLength(1);
+
+    // Validation should not treat voice-typing as deleted or missing project
+    const diagnostics = validateYamlDictionary(yaml, mockProjects);
+    const errorOrWarn = diagnostics.filter(
+      (d) => d.severity === 'error' || d.severity === 'warning'
+    );
+    expect(errorOrWarn).toHaveLength(0);
+  });
+
+  it('formats voice typing scope cleanly with id:voice-typing', () => {
+    const yaml = `
+projects:
+  语音输入:
+    - Hotword
+`;
+    const formatted = formatYamlDictionary(yaml, mockProjects);
+    expect(formatted).toContain('  语音输入 (id:voice-typing):');
+    expect(formatted).toContain('    - Hotword');
+  });
+
+  it('extracts terms for voice typing scope including global terms', () => {
+    const yaml = `
+- GlobalHotword
+- GlobalMistake -> GlobalFix
+
+projects:
+  Voice Typing (id:voice-typing):
+    - DictationHotword
+    - VT_Mistake -> VT_Fix
+
+  Weekly Review (id:proj-1):
+    - ProjectOnlyHotword
+`;
+    const parsed = parseYamlDictionary(yaml, mockProjects);
+    const terms = getTermsForProject(parsed, VOICE_TYPING_SCOPE_ID);
+
+    expect(terms.hotwords).toContain('GlobalHotword');
+    expect(terms.hotwords).toContain('GlobalFix');
+    expect(terms.hotwords).toContain('DictationHotword');
+    expect(terms.hotwords).toContain('VT_Fix');
+    expect(terms.hotwords).not.toContain('ProjectOnlyHotword');
+
+    expect(terms.replacements).toEqual([
+      { from: 'GlobalMistake', to: 'GlobalFix' },
+      { from: 'VT_Mistake', to: 'VT_Fix' },
+    ]);
+  });
+
+  it('adds terms to global and voice typing scope using addTermToYamlDictionary', () => {
+    // 1. Add to empty dictionary under voice typing scope
+    const emptyDict = '';
+    const withVT = addTermToYamlDictionary(
+      emptyDict,
+      'VoiceHotword',
+      { id: VOICE_TYPING_SCOPE_ID, name: 'Voice Typing' },
+      mockProjects
+    );
+    expect(withVT).toContain('projects:');
+    expect(withVT).toContain('Voice Typing (id:voice-typing):');
+    expect(withVT).toContain('- VoiceHotword');
+
+    // 2. Add replacement rule to existing voice typing scope
+    const withReplacement = addTermToYamlDictionary(
+      withVT,
+      'Misrecognized => Corrected',
+      { id: VOICE_TYPING_SCOPE_ID, name: 'Voice Typing' },
+      mockProjects
+    );
+    expect(withReplacement).toContain('- Misrecognized -> Corrected');
+
+    // 3. Deduplication: adding the same term should not duplicate
+    const duplicateAdd = addTermToYamlDictionary(
+      withReplacement,
+      'VoiceHotword',
+      { id: VOICE_TYPING_SCOPE_ID, name: 'Voice Typing' },
+      mockProjects
+    );
+    expect(duplicateAdd).toBe(withReplacement);
+
+    // 4. Add to global scope
+    const withGlobal = addTermToYamlDictionary(
+      withReplacement,
+      'GlobalTerm',
+      'global',
+      mockProjects
+    );
+    expect(withGlobal).toContain('- GlobalTerm');
+    // Global term should be before projects:
+    const lines = withGlobal.split('\n');
+    const globalIdx = lines.findIndex((l) => l.trim() === '- GlobalTerm');
+    const projectsIdx = lines.findIndex((l) => l.trim() === 'projects:');
+    expect(globalIdx).toBeLessThan(projectsIdx);
   });
 });
