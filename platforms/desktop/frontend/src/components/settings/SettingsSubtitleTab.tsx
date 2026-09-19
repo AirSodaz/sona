@@ -1,10 +1,13 @@
 import {
+  Activity,
   Check,
   Copy,
   History,
   Keyboard,
+  Layers,
   Plus,
   SlidersHorizontal,
+  Sparkles,
   Subtitles,
   Trash2,
   X,
@@ -97,284 +100,351 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
       : 'off';
 
   return (
-    <SettingsSection
-      title={t('settings.voice_typing', { defaultValue: 'Voice Typing' })}
-      icon={<Keyboard size={20} />}
-    >
-      <SettingsItem
-        title={t('settings.enable_voice_typing', {
-          defaultValue: 'Enable Voice Typing',
+    <>
+      {/* 1. 快捷键与触发 (Interaction & Shortcuts) */}
+      <SettingsSection
+        title={t('settings.voice_typing_section_interaction', {
+          defaultValue: 'Interaction & Shortcuts',
         })}
-        hint={t('settings.enable_voice_typing_hint', {
-          defaultValue: 'Type text directly into any application using your voice',
-        })}
-      >
-        <Switch
-          checked={vtConfig.voiceTypingEnabled ?? false}
-          onChange={(val) => updateConfig({ voiceTypingEnabled: val })}
-        />
-      </SettingsItem>
-
-      <SettingsItem
-        title={t('settings.voice_typing_shortcut', { defaultValue: 'Shortcut' })}
-        hint={t('settings.voice_typing_shortcut_hint', {
-          defaultValue: 'Global shortcut to activate voice typing',
+        icon={<Keyboard size={20} />}
+        description={t('settings.voice_typing_section_interaction_desc', {
+          defaultValue:
+            'Configure global shortcut triggers, activation mode, and floating capsule placement',
         })}
       >
-        <SettingsShortcutInput
-          value={vtConfig.voiceTypingShortcut ?? 'Alt+V'}
-          onChange={(val) => updateConfig({ voiceTypingShortcut: val })}
-        />
-      </SettingsItem>
-
-      <SettingsItem
-        title={t('settings.voice_typing_quick_recall_shortcut', {
-          defaultValue: 'Quick Recall Shortcut',
-        })}
-        hint={t('settings.voice_typing_quick_recall_shortcut_hint', {
-          defaultValue: 'Open floating history to re-inject recent dictations',
-        })}
-      >
-        <SettingsShortcutInput
-          value={vtConfig.voiceTypingQuickRecallShortcut ?? 'Alt+Shift+H'}
-          onChange={(val) => updateConfig({ voiceTypingQuickRecallShortcut: val })}
-        />
-      </SettingsItem>
-      <SettingsItem
-        title={t('settings.voice_typing_mode', { defaultValue: 'Mode' })}
-        hint={t('settings.voice_typing_mode_hint', {
-          defaultValue: 'How the shortcut triggers listening',
-        })}
-      >
-        <div style={{ width: '180px' }}>
-          <Dropdown
-            id="vt-mode-select"
-            value={vtConfig.voiceTypingMode || 'hold'}
-            onChange={(val) => updateConfig({ voiceTypingMode: val as 'hold' | 'toggle' })}
-            options={[
-              {
-                value: 'hold',
-                label: t('settings.voice_typing_mode_hold', {
-                  defaultValue: 'Push to Talk (Hold)',
-                }),
-              },
-              {
-                value: 'toggle',
-                label: t('settings.voice_typing_mode_toggle', {
-                  defaultValue: 'Toggle (Press once)',
-                }),
-              },
-            ]}
-          />
-        </div>
-      </SettingsItem>
-
-      <SettingsItem
-        title={t('settings.voice_typing_processing_mode', { defaultValue: 'Processing Mode' })}
-        hint={t('settings.voice_typing_processing_mode_hint', {
-          defaultValue: 'Choose between fast raw output or AI-powered smart polishing',
-        })}
-      >
-        <div style={{ width: '220px' }}>
-          <Dropdown
-            id="vt-processing-mode-select"
-            value={vtConfig.voiceTypingProcessingMode || 'raw'}
-            onChange={(val) =>
-              updateConfig({
-                voiceTypingProcessingMode: val as 'raw' | 'polish',
-              })
-            }
-            options={[
-              {
-                value: 'raw',
-                label: t('settings.voice_typing_processing_mode_raw', {
-                  defaultValue: 'Fast Dictation (Raw)',
-                }),
-              },
-              {
-                value: 'polish',
-                label: t('settings.voice_typing_processing_mode_polish', {
-                  defaultValue: 'Smart Polish (AI Rewrite)',
-                }),
-              },
-            ]}
-          />
-        </div>
-      </SettingsItem>
-
-      <SettingsItem
-        title={t('settings.voice_typing_placement', { defaultValue: 'Placement Policy' })}
-        hint={t('settings.voice_typing_placement_hint', {
-          defaultValue: 'Choose where the floating capsule appears during dictation',
-        })}
-      >
-        <div style={{ width: '220px' }}>
-          <Dropdown
-            id="vt-placement-select"
-            value={vtConfig.voiceTypingPlacement || 'caret'}
-            onChange={(val) =>
-              updateConfig({
-                voiceTypingPlacement: val as 'caret' | 'bottom_center',
-              })
-            }
-            options={[
-              {
-                value: 'caret',
-                label: t('settings.voice_typing_placement_caret', {
-                  defaultValue: 'Follow Caret (Caret Follower)',
-                }),
-              },
-              {
-                value: 'bottom_center',
-                label: t('settings.voice_typing_placement_bottom_center', {
-                  defaultValue: 'Bottom Center (Dynamic Island)',
-                }),
-              },
-            ]}
-          />
-        </div>
-      </SettingsItem>
-      {vtConfig.voiceTypingProcessingMode === 'polish' && (
         <SettingsItem
-          title={t('settings.voice_typing_polish_prompt', { defaultValue: 'Custom Polish Prompt' })}
-          hint={t('settings.voice_typing_polish_prompt_hint', {
-            defaultValue:
-              'Leave blank to use the built-in fast colloquial-to-written prompt directive',
+          title={t('settings.enable_voice_typing', {
+            defaultValue: 'Enable Voice Typing',
+          })}
+          hint={t('settings.enable_voice_typing_hint', {
+            defaultValue: 'Type text directly into any application using your voice',
           })}
         >
-          <textarea
-            className="settings-input"
-            rows={3}
-            style={{ width: '100%', maxWidth: '400px', resize: 'vertical' }}
-            placeholder={t('settings.voice_typing_polish_prompt_hint', {
+          <Switch
+            checked={vtConfig.voiceTypingEnabled ?? false}
+            onChange={(val) => updateConfig({ voiceTypingEnabled: val })}
+          />
+        </SettingsItem>
+
+        <SettingsItem
+          title={t('settings.voice_typing_shortcut', { defaultValue: 'Shortcut' })}
+          hint={t('settings.voice_typing_shortcut_hint', {
+            defaultValue: 'Global shortcut to activate voice typing',
+          })}
+        >
+          <SettingsShortcutInput
+            value={vtConfig.voiceTypingShortcut ?? 'Alt+V'}
+            onChange={(val) => updateConfig({ voiceTypingShortcut: val })}
+          />
+        </SettingsItem>
+
+        <SettingsItem
+          title={t('settings.voice_typing_quick_recall_shortcut', {
+            defaultValue: 'Quick Recall Shortcut',
+          })}
+          hint={t('settings.voice_typing_quick_recall_shortcut_hint', {
+            defaultValue: 'Open floating history to re-inject recent dictations',
+          })}
+        >
+          <SettingsShortcutInput
+            value={vtConfig.voiceTypingQuickRecallShortcut ?? 'Alt+Shift+H'}
+            onChange={(val) => updateConfig({ voiceTypingQuickRecallShortcut: val })}
+          />
+        </SettingsItem>
+
+        <SettingsItem
+          title={t('settings.voice_typing_mode', { defaultValue: 'Mode' })}
+          hint={t('settings.voice_typing_mode_hint', {
+            defaultValue: 'How the shortcut triggers listening',
+          })}
+        >
+          <div style={{ width: '180px' }}>
+            <Dropdown
+              id="vt-mode-select"
+              value={vtConfig.voiceTypingMode || 'hold'}
+              onChange={(val) => updateConfig({ voiceTypingMode: val as 'hold' | 'toggle' })}
+              options={[
+                {
+                  value: 'hold',
+                  label: t('settings.voice_typing_mode_hold', {
+                    defaultValue: 'Push to Talk (Hold)',
+                  }),
+                },
+                {
+                  value: 'toggle',
+                  label: t('settings.voice_typing_mode_toggle', {
+                    defaultValue: 'Toggle (Press once)',
+                  }),
+                },
+              ]}
+            />
+          </div>
+        </SettingsItem>
+
+        <SettingsItem
+          title={t('settings.voice_typing_placement', { defaultValue: 'Placement Policy' })}
+          hint={t('settings.voice_typing_placement_hint', {
+            defaultValue: 'Choose where the floating capsule appears during dictation',
+          })}
+        >
+          <div style={{ width: '220px' }}>
+            <Dropdown
+              id="vt-placement-select"
+              value={vtConfig.voiceTypingPlacement || 'caret'}
+              onChange={(val) =>
+                updateConfig({
+                  voiceTypingPlacement: val as 'caret' | 'bottom_center',
+                })
+              }
+              options={[
+                {
+                  value: 'caret',
+                  label: t('settings.voice_typing_placement_caret', {
+                    defaultValue: 'Follow Caret (Caret Follower)',
+                  }),
+                },
+                {
+                  value: 'bottom_center',
+                  label: t('settings.voice_typing_placement_bottom_center', {
+                    defaultValue: 'Bottom Center (Dynamic Island)',
+                  }),
+                },
+              ]}
+            />
+          </div>
+        </SettingsItem>
+      </SettingsSection>
+
+      {/* 2. 识别与 AI 润色 (Processing & AI Polish) */}
+      <SettingsSection
+        title={t('settings.voice_typing_section_processing', {
+          defaultValue: 'Processing & AI Polish',
+        })}
+        icon={<Sparkles size={20} />}
+        description={t('settings.voice_typing_section_processing_desc', {
+          defaultValue: 'Choose between instant raw speech-to-text or AI-powered smart polishing',
+        })}
+      >
+        <SettingsItem
+          title={t('settings.voice_typing_processing_mode', { defaultValue: 'Processing Mode' })}
+          hint={t('settings.voice_typing_processing_mode_hint', {
+            defaultValue: 'Choose between fast raw output or AI-powered smart polishing',
+          })}
+        >
+          <div style={{ width: '220px' }}>
+            <Dropdown
+              id="vt-processing-mode-select"
+              value={vtConfig.voiceTypingProcessingMode || 'raw'}
+              onChange={(val) =>
+                updateConfig({
+                  voiceTypingProcessingMode: val as 'raw' | 'polish',
+                })
+              }
+              options={[
+                {
+                  value: 'raw',
+                  label: t('settings.voice_typing_processing_mode_raw', {
+                    defaultValue: 'Fast Dictation (Raw)',
+                  }),
+                },
+                {
+                  value: 'polish',
+                  label: t('settings.voice_typing_processing_mode_polish', {
+                    defaultValue: 'Smart Polish (AI Rewrite)',
+                  }),
+                },
+              ]}
+            />
+          </div>
+        </SettingsItem>
+
+        {vtConfig.voiceTypingProcessingMode === 'polish' && (
+          <SettingsItem
+            title={t('settings.voice_typing_polish_prompt', {
+              defaultValue: 'Custom Polish Prompt',
+            })}
+            hint={t('settings.voice_typing_polish_prompt_hint', {
               defaultValue:
                 'Leave blank to use the built-in fast colloquial-to-written prompt directive',
             })}
-            value={vtConfig.voiceTypingPolishPrompt ?? ''}
-            onChange={(e) => updateConfig({ voiceTypingPolishPrompt: e.target.value })}
+          >
+            <textarea
+              className="settings-input"
+              rows={3}
+              style={{
+                width: '100%',
+                maxWidth: '420px',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+                fontSize: '12px',
+                lineHeight: 1.5,
+              }}
+              placeholder={t('settings.voice_typing_polish_prompt_hint', {
+                defaultValue:
+                  'Leave blank to use the built-in fast colloquial-to-written prompt directive',
+              })}
+              value={vtConfig.voiceTypingPolishPrompt ?? ''}
+              onChange={(e) => updateConfig({ voiceTypingPolishPrompt: e.target.value })}
+            />
+          </SettingsItem>
+        )}
+      </SettingsSection>
+
+      {/* 3. 排版与反馈 (Typography & Audio Feedback) */}
+      <SettingsSection
+        title={t('settings.voice_typing_section_typography_sound', {
+          defaultValue: 'Typography & Audio Feedback',
+        })}
+        icon={<Subtitles size={20} />}
+        description={t('settings.voice_typing_section_typography_sound_desc', {
+          defaultValue: 'Fine-tune automatic CJK-Latin spacing and earcon sound effects',
+        })}
+      >
+        <SettingsItem
+          title={t('settings.voice_typing_sound_enabled', {
+            defaultValue: 'Audio Feedback (Earcons)',
+          })}
+          hint={t('settings.voice_typing_sound_enabled_hint', {
+            defaultValue: 'Play sound cues on start, commit, cancel, or error',
+          })}
+        >
+          <Switch
+            checked={vtConfig.voiceTypingSoundEnabled ?? true}
+            onChange={(val) => updateConfig({ voiceTypingSoundEnabled: val })}
           />
         </SettingsItem>
-      )}
 
-      <SettingsItem
-        title={t('settings.voice_typing_sound_enabled', {
-          defaultValue: 'Audio Feedback (Earcons)',
-        })}
-        hint={t('settings.voice_typing_sound_enabled_hint', {
-          defaultValue: 'Play sound cues on start, commit, cancel, or error',
-        })}
-      >
-        <Switch
-          checked={vtConfig.voiceTypingSoundEnabled ?? true}
-          onChange={(val) => updateConfig({ voiceTypingSoundEnabled: val })}
-        />
-      </SettingsItem>
-
-      <SettingsItem
-        title={t('settings.voice_typing_cjk_spacing_enabled', {
-          defaultValue: 'CJK-Latin Typography Spacing',
-        })}
-        hint={t('settings.voice_typing_cjk_spacing_enabled_hint', {
-          defaultValue:
-            'Automatically insert spaces between CJK and Latin characters/numbers and harmonize punctuation',
-        })}
-      >
-        <Switch
-          checked={vtConfig.voiceTypingCjkSpacingEnabled ?? true}
-          onChange={(val) => updateConfig({ voiceTypingCjkSpacingEnabled: val })}
-        />
-      </SettingsItem>
-
-      <SettingsItem
-        title={t('settings.voice_typing_context_awareness_enabled', {
-          defaultValue: 'Application Context Awareness',
-        })}
-        hint={t('settings.voice_typing_context_awareness_enabled_hint', {
-          defaultValue:
-            'Automatically adapt tone, style, and formatting based on the active application and window context',
-        })}
-      >
-        <Switch
-          checked={vtConfig.voiceTypingContextAwarenessEnabled ?? true}
-          onChange={(val) => updateConfig({ voiceTypingContextAwarenessEnabled: val })}
-        />
-      </SettingsItem>
-
-      <SettingsItem
-        title={t('settings.voice_typing_context_preset', {
-          defaultValue: 'Situational Preset',
-        })}
-        hint={t('settings.voice_typing_context_preset_hint', {
-          defaultValue:
-            'Choose whether to auto-sense active applications or enforce a specific writing style',
-        })}
-      >
-        <div style={{ width: '220px' }}>
-          <Dropdown
-            id="vt-context-preset-select"
-            value={vtConfig.voiceTypingContextPreset || 'auto'}
-            onChange={(val) =>
-              updateConfig({
-                voiceTypingContextPreset: val as VoiceTypingContextPreset,
-              })
-            }
-            options={[
-              {
-                value: 'auto',
-                label: t('settings.voice_typing_context_preset_auto', {
-                  defaultValue: 'Auto Detect (Recommended)',
-                }),
-              },
-              ...(vtConfig.voiceTypingContextRules ?? DEFAULT_VOICE_TYPING_CONTEXT_RULES).map(
-                (rule) => ({
-                  value: rule.id,
-                  label: `${rule.icon ?? ''} ${rule.name}`.trim(),
-                })
-              ),
-              {
-                value: 'general',
-                label: t('settings.voice_typing_context_preset_general', {
-                  defaultValue: 'General Standard',
-                }),
-              },
-            ]}
+        <SettingsItem
+          title={t('settings.voice_typing_cjk_spacing_enabled', {
+            defaultValue: 'CJK-Latin Typography Spacing',
+          })}
+          hint={t('settings.voice_typing_cjk_spacing_enabled_hint', {
+            defaultValue:
+              'Automatically insert spaces between CJK and Latin characters/numbers and harmonize punctuation',
+          })}
+        >
+          <Switch
+            checked={vtConfig.voiceTypingCjkSpacingEnabled ?? true}
+            onChange={(val) => updateConfig({ voiceTypingCjkSpacingEnabled: val })}
           />
-        </div>
-      </SettingsItem>
-      {vtConfig.voiceTypingContextAwarenessEnabled && <SettingsContextRulesSection />}
-      <SettingsItem
-        title={t('settings.voice_typing_availability', {
-          defaultValue: 'Availability',
-        })}
-        hint={(() => {
-          if (!hasFailureReason) {
-            return undefined;
-          }
+        </SettingsItem>
+      </SettingsSection>
 
-          if (failureSourceLabel) {
-            return t('settings.voice_typing_failure_reason_with_source', {
-              defaultValue: 'Failure reason: {{source}}: {{message}}',
-              source: failureSourceLabel,
+      {/* 4. 情境感知与规则 (Situational Context Awareness) */}
+      <SettingsSection
+        title={t('settings.voice_typing_section_context', {
+          defaultValue: 'Situational Context Awareness',
+        })}
+        icon={<Layers size={20} />}
+        description={t('settings.voice_typing_section_context_desc', {
+          defaultValue:
+            'Automatically adapt tone and prompt directives based on the active application',
+        })}
+      >
+        <SettingsItem
+          title={t('settings.voice_typing_context_awareness_enabled', {
+            defaultValue: 'Application Context Awareness',
+          })}
+          hint={t('settings.voice_typing_context_awareness_enabled_hint', {
+            defaultValue:
+              'Automatically adapt tone, style, and formatting based on the active application and window context',
+          })}
+        >
+          <Switch
+            checked={vtConfig.voiceTypingContextAwarenessEnabled ?? true}
+            onChange={(val) => updateConfig({ voiceTypingContextAwarenessEnabled: val })}
+          />
+        </SettingsItem>
+
+        <SettingsItem
+          title={t('settings.voice_typing_context_preset', {
+            defaultValue: 'Situational Preset',
+          })}
+          hint={t('settings.voice_typing_context_preset_hint', {
+            defaultValue:
+              'Choose whether to auto-sense active applications or enforce a specific writing style',
+          })}
+        >
+          <div style={{ width: '220px' }}>
+            <Dropdown
+              id="vt-context-preset-select"
+              value={vtConfig.voiceTypingContextPreset || 'auto'}
+              onChange={(val) =>
+                updateConfig({
+                  voiceTypingContextPreset: val as VoiceTypingContextPreset,
+                })
+              }
+              options={[
+                {
+                  value: 'auto',
+                  label: t('settings.voice_typing_context_preset_auto', {
+                    defaultValue: 'Auto Detect (Recommended)',
+                  }),
+                },
+                ...(vtConfig.voiceTypingContextRules ?? DEFAULT_VOICE_TYPING_CONTEXT_RULES).map(
+                  (rule) => ({
+                    value: rule.id,
+                    label: `${rule.icon ?? ''} ${rule.name}`.trim(),
+                  })
+                ),
+                {
+                  value: 'general',
+                  label: t('settings.voice_typing_context_preset_general', {
+                    defaultValue: 'General Standard',
+                  }),
+                },
+              ]}
+            />
+          </div>
+        </SettingsItem>
+
+        {vtConfig.voiceTypingContextAwarenessEnabled && <SettingsContextRulesSection />}
+      </SettingsSection>
+
+      {/* 5. 引擎就绪状态 (Engine Readiness) */}
+      <SettingsSection
+        title={t('settings.voice_typing_section_readiness', {
+          defaultValue: 'Engine Readiness',
+        })}
+        icon={<Activity size={20} />}
+        description={t('settings.voice_typing_section_readiness_desc', {
+          defaultValue: 'Inspect speech recognition engine status and error diagnostics',
+        })}
+      >
+        <SettingsItem
+          title={t('settings.voice_typing_availability', {
+            defaultValue: 'Availability',
+          })}
+          hint={(() => {
+            if (!hasFailureReason) {
+              return undefined;
+            }
+
+            if (failureSourceLabel) {
+              return t('settings.voice_typing_failure_reason_with_source', {
+                defaultValue: 'Failure reason: {{source}}: {{message}}',
+                source: failureSourceLabel,
+                message: readiness.lastErrorMessage,
+              });
+            }
+
+            return t('settings.voice_typing_failure_reason', {
+              defaultValue: 'Failure reason: {{message}}',
               message: readiness.lastErrorMessage,
             });
-          }
-
-          return t('settings.voice_typing_failure_reason', {
-            defaultValue: 'Failure reason: {{message}}',
-            message: readiness.lastErrorMessage,
-          });
-        })()}
-      >
-        <StatusBadge
-          tone={availabilityTone}
-          label={
-            isAvailable
-              ? t('settings.voice_typing_available', { defaultValue: 'Available' })
-              : t('settings.voice_typing_unavailable', { defaultValue: 'Unavailable' })
-          }
-        />
-      </SettingsItem>
-    </SettingsSection>
+          })()}
+        >
+          <StatusBadge
+            tone={availabilityTone}
+            label={
+              isAvailable
+                ? t('settings.voice_typing_available', { defaultValue: 'Available' })
+                : t('settings.voice_typing_unavailable', { defaultValue: 'Unavailable' })
+            }
+          />
+        </SettingsItem>
+      </SettingsSection>
+    </>
   );
 }
 

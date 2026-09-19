@@ -309,22 +309,39 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '10px 12px',
-                borderRadius: '6px',
+                padding: '12px 14px',
+                borderRadius: '8px',
                 background: 'var(--color-bg-primary, rgba(0, 0, 0, 0.2))',
-                gap: '12px',
+                border: '1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.06))',
+                gap: '14px',
+                transition: 'border-color 0.15s ease',
               }}
             >
               <div
                 style={{
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
+                  alignItems: 'flex-start',
+                  gap: '12px',
                   minWidth: 0,
                   flex: 1,
                 }}
               >
-                <span style={{ fontSize: '18px' }}>{rule.icon ?? '✨'}</span>
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '8px',
+                    background: 'var(--color-bg-elevated, rgba(255, 255, 255, 0.06))',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '20px',
+                    flexShrink: 0,
+                    boxShadow: 'inset 0 0 0 1px rgba(255, 255, 255, 0.06)',
+                  }}
+                >
+                  {rule.icon ?? '✨'}
+                </div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontWeight: 600, fontSize: '13px' }}>{rule.name}</span>
@@ -359,6 +376,62 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                     {rule.stripTrailingPunctuation
                       ? ` · ${t('settings.voice_typing_rule_strip_active', { defaultValue: 'No ending period' })}`
                       : ''}
+                  </div>
+
+                  {/* Visual software tags preview */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: '4px',
+                      marginTop: '6px',
+                    }}
+                  >
+                    {platformApps.length > 0 ? (
+                      <>
+                        {platformApps.slice(0, 4).map((app) => (
+                          <span
+                            key={app}
+                            style={{
+                              fontSize: '11px',
+                              fontFamily: 'monospace',
+                              background: 'var(--color-bg-elevated, rgba(255, 255, 255, 0.06))',
+                              color: 'var(--color-text-secondary, #aaa)',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              border:
+                                '1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.06))',
+                            }}
+                          >
+                            {app}
+                          </span>
+                        ))}
+                        {platformApps.length > 4 && (
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              color: 'var(--color-text-muted, #777)',
+                              padding: '0 2px',
+                            }}
+                          >
+                            +{platformApps.length - 4}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          color: 'var(--color-text-muted, #777)',
+                          fontStyle: 'italic',
+                        }}
+                      >
+                        {t('settings.voice_typing_no_apps_mapped', {
+                          defaultValue: 'No applications mapped yet for this OS.',
+                        })}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -612,11 +685,19 @@ export function SettingsContextRulesSection(): React.JSX.Element {
                 <div
                   style={{
                     fontSize: '11px',
-                    color: 'var(--color-accent-primary, #6366f1)',
-                    marginTop: '4px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '3px 8px',
+                    borderRadius: '6px',
+                    background: 'rgba(99, 102, 241, 0.12)',
+                    border: '1px solid rgba(99, 102, 241, 0.25)',
+                    color: 'var(--color-accent-primary, #818cf8)',
+                    marginTop: '6px',
                   }}
                 >
-                  {captureFeedback}
+                  <span>✓</span>
+                  <span>{captureFeedback}</span>
                 </div>
               )}
             </div>
@@ -748,7 +829,17 @@ export function SettingsContextRulesSection(): React.JSX.Element {
             </div>
 
             {/* Behavior Options */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: 'var(--color-bg-secondary, rgba(255, 255, 255, 0.03))',
+                border: '1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.06))',
+                borderRadius: '8px',
+                padding: '12px 14px',
+              }}
+            >
               <div>
                 <span style={{ fontSize: '13px', fontWeight: 500 }}>
                   {t('settings.voice_typing_strip_trailing_punct', {
