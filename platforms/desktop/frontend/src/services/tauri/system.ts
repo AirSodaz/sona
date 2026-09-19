@@ -37,3 +37,7 @@ export async function getForegroundWindowInfo(): Promise<
 > {
   return invokeTauri(TauriCommand.system.getForegroundWindowInfo);
 }
+
+export async function focusWindow(label: string): Promise<void> {
+  await invokeTauri(TauriCommand.system.focusWindow, { label });
+}

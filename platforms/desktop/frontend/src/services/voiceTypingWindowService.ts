@@ -77,7 +77,7 @@ export class VoiceTypingWindowService {
           x: displayState.position?.[0] ?? 0,
           y: displayState.position?.[1] ?? 0,
           center: false,
-          focus: false,
+          focus: displayState.focus ?? false,
           resizable: false,
           maximizable: false,
           minimizable: false,

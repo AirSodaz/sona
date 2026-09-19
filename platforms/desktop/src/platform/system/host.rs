@@ -938,6 +938,70 @@ pub fn force_exit<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
     app.exit(0);
 }
 
+pub fn focus_window(app: &tauri::AppHandle, label: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        unsafe { focus_windows_window(app, label).map_err(|e| e.to_string()) }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        use tauri::Manager;
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.show();
+            let _ = window.set_focus();
+            Ok(())
+        } else {
+            Err(format!("Window '{}' not found", label))
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+unsafe fn focus_windows_window(app: &tauri::AppHandle, label: &str) -> windows::core::Result<()> {
+    use tauri::Manager;
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+    use windows::Win32::UI::Input::KeyboardAndMouse::SetFocus;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId, SW_SHOW,
+        SetForegroundWindow, ShowWindow,
+    };
+    if let Some(window) = app.get_webview_window(label) {
+        let _ = window.show();
+        let _ = window.unminimize();
+
+        if let Ok(raw_hwnd) = window.hwnd() {
+            let target_hwnd = HWND(raw_hwnd.0 as *mut _);
+            unsafe {
+                let foreground_hwnd = GetForegroundWindow();
+                let foreground_thread_id = GetWindowThreadProcessId(foreground_hwnd, None);
+                let current_thread_id = GetCurrentThreadId();
+
+                if foreground_thread_id != 0 && foreground_thread_id != current_thread_id {
+                    let _ = AttachThreadInput(current_thread_id, foreground_thread_id, true);
+                    let _ = BringWindowToTop(target_hwnd);
+                    let _ = ShowWindow(target_hwnd, SW_SHOW);
+                    let _ = SetForegroundWindow(target_hwnd);
+                    let _ = SetFocus(Some(target_hwnd));
+                    let _ = AttachThreadInput(current_thread_id, foreground_thread_id, false);
+                } else {
+                    let _ = BringWindowToTop(target_hwnd);
+                    let _ = ShowWindow(target_hwnd, SW_SHOW);
+                    let _ = SetForegroundWindow(target_hwnd);
+                    let _ = SetFocus(Some(target_hwnd));
+                }
+            }
+        }
+        let _ = window.set_focus();
+        Ok(())
+    } else {
+        Err(windows::core::Error::new(
+            windows::core::HRESULT(-1),
+            format!("Window '{}' not found", label),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

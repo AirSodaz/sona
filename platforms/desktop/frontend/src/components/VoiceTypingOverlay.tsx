@@ -96,6 +96,7 @@ async function resizeVoiceTypingWindow(rootElement: HTMLDivElement | null) {
 export function VoiceTypingOverlay() {
   const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
   const resolvedTheme = useAuxWindowTheme();
   const [peakLevel, setPeakLevel] = useState<number>(0);
   const storeHistoryItems = useVoiceTypingHistoryStore((state) => state.items);
@@ -170,6 +171,11 @@ export function VoiceTypingOverlay() {
   useEffect(() => {
     if (overlayState.phase === 'recall') {
       useVoiceTypingHistoryStore.getState().reloadHistory();
+      void getCurrentWindow()
+        .setFocus?.()
+        .catch(() => {});
+      window.focus();
+      drawerRef.current?.focus();
     }
   }, [overlayState.phase]);
   useEffect(() => {
@@ -334,9 +340,12 @@ export function VoiceTypingOverlay() {
     >
       {overlayState.phase === 'recall' ? (
         <div
+          ref={drawerRef}
+          tabIndex={-1}
           data-testid="voice-typing-recall-drawer"
           style={{
             ...baseContainerStyle,
+            outline: 'none',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'stretch',

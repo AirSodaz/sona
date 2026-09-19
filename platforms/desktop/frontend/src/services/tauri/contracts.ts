@@ -667,6 +667,10 @@ type ManualTauriCommandContractMap = {
     args: undefined;
     result: ForegroundWindowInfo | null;
   };
+  [TauriCommand.system.focusWindow]: {
+    args: { label: string };
+    result: undefined;
+  };
   [TauriCommand.apiServer.start]: {
     args: {
       host: string;

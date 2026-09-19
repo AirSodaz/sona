@@ -152,6 +152,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::system::get_text_cursor_position,
         crate::commands::system::get_focused_selection_text,
         crate::commands::system::get_foreground_window_info,
+        crate::commands::system::focus_window,
         crate::commands::audio::get_system_audio_devices,
         crate::commands::audio::start_system_audio_capture,
         crate::commands::audio::stop_system_audio_capture,

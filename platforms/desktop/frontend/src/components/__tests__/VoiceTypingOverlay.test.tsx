@@ -50,6 +50,7 @@ const mocks = vi.hoisted(() => {
   const currentWindowSetSize = vi.fn().mockResolvedValue(undefined);
   const currentWindowInnerPosition = vi.fn().mockResolvedValue({ x: 100, y: 100 });
   const currentWindowSetPosition = vi.fn().mockResolvedValue(undefined);
+  const currentWindowSetFocus = vi.fn().mockResolvedValue(undefined);
   const currentMonitor = vi.fn().mockResolvedValue({
     scaleFactor: 1,
     position: { x: 0, y: 0 },
@@ -66,6 +67,7 @@ const mocks = vi.hoisted(() => {
     currentWindowSetSize,
     currentWindowInnerPosition,
     currentWindowSetPosition,
+    currentWindowSetFocus,
     currentMonitor,
     invoke,
     emit,
@@ -113,6 +115,7 @@ vi.mock('@tauri-apps/api/window', () => ({
     setSize: mocks.currentWindowSetSize,
     innerPosition: mocks.currentWindowInnerPosition,
     setPosition: mocks.currentWindowSetPosition,
+    setFocus: mocks.currentWindowSetFocus,
   }),
   currentMonitor: () => mocks.currentMonitor(),
 }));

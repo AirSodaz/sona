@@ -2,7 +2,7 @@ import { logger } from '../utils/logger';
 import { auxWindowStateService } from './auxWindowStateService';
 import { type EventTarget, emitTo } from './tauri/platform/events';
 import { PhysicalPosition, PhysicalSize, WebviewWindow } from './tauri/platform/windows';
-
+import { focusWindow } from './tauri/system';
 export interface AuxWindowDisplayState {
   position?: [number, number] | null;
   size?: { width: number; height: number } | null;
@@ -137,11 +137,21 @@ export class AuxWindowController<T extends object> {
     if (visible) {
       await windowInstance.show();
       if (displayState.focus) {
-        await windowInstance.setFocus();
+        try {
+          await focusWindow(this.options.label);
+        } catch (error) {
+          logger.warn(
+            '[AuxWindowController] Failed to focus window via native focusWindow, falling back to setFocus',
+            {
+              label: this.options.label,
+              error,
+            }
+          );
+          await windowInstance.setFocus();
+        }
       }
       return;
     }
-
     await windowInstance.hide();
   }
 
@@ -163,15 +173,24 @@ export class AuxWindowController<T extends object> {
     if (!resolvedWindow) {
       return null;
     }
-
     if (resolvedWindow.isNew) {
+      if (displayState.focus) {
+        try {
+          await focusWindow(this.options.label);
+        } catch (error) {
+          logger.warn('[AuxWindowController] Failed to focus new window via native focusWindow', {
+            label: this.options.label,
+            error,
+          });
+          await resolvedWindow.windowInstance.setFocus();
+        }
+      }
       return resolvedWindow.windowInstance;
     }
 
     await this.applyDisplayState(resolvedWindow.windowInstance, displayState, true);
     return resolvedWindow.windowInstance;
   }
-
   async hide() {
     const windowInstance = await this.resolveExistingWindow();
     if (!windowInstance) {

@@ -217,6 +217,7 @@ export const TauriCommand = {
     getTextCursorPosition: 'get_text_cursor_position',
     getFocusedSelectionText: 'get_focused_selection_text',
     getForegroundWindowInfo: 'get_foreground_window_info',
+    focusWindow: 'focus_window',
   },
   apiServer: {
     start: 'start_api_server',
