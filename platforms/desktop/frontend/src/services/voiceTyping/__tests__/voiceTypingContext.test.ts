@@ -152,5 +152,23 @@ describe('voiceTypingContext', () => {
         )
       ).toBe('general');
     });
+    it('matches Windows apps with or without .exe suffix seamlessly', () => {
+      expect(
+        classifyContextMode('code', '', 'auto', DEFAULT_VOICE_TYPING_CONTEXT_RULES, 'windows')
+      ).toBe('developer');
+      const customRule: VoiceTypingContextRule = {
+        id: 'team_chat',
+        name: 'Team',
+        appsByPlatform: { windows: ['slack'], macos: [], linux: [] },
+        titlePatterns: [],
+        promptDirective: '',
+        stripTrailingPunctuation: true,
+        isBuiltin: false,
+        enabled: true,
+      };
+      expect(classifyContextMode('slack.exe', '', 'auto', [customRule], 'windows')).toBe(
+        'team_chat'
+      );
+    });
   });
 });

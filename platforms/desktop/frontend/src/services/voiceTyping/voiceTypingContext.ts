@@ -260,7 +260,16 @@ export function matchContextRule(
   const cleanApp = appName.trim().toLowerCase();
   if (cleanApp) {
     const appList = rule.appsByPlatform[platform] || [];
-    const matched = appList.some((target) => target.trim().toLowerCase() === cleanApp);
+    const matched = appList.some((target) => {
+      const cleanTarget = target.trim().toLowerCase();
+      if (cleanTarget === cleanApp) {
+        return true;
+      }
+      if (platform === 'windows') {
+        return cleanTarget.replace(/\.exe$/, '') === cleanApp.replace(/\.exe$/, '');
+      }
+      return false;
+    });
     if (matched) {
       return true;
     }
