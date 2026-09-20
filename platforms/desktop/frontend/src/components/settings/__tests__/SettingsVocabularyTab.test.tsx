@@ -116,11 +116,19 @@ describe('SettingsVocabularyTab', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'AI Prompts & Templates' }));
 
+    screen.getByRole('tab', { name: 'Polish' });
+    screen.getByRole('tab', { name: 'Translation' });
+    screen.getByRole('tab', { name: 'Summary' });
+
     screen.getByText('Built-in Presets');
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Summary' }));
     screen.getByText('Built-in Summary Templates');
     expect(screen.getAllByText('General').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Meeting').length).toBeGreaterThan(0);
 
+    fireEvent.click(screen.getByRole('tab', { name: 'Polish' }));
+    screen.getByText('Built-in Presets');
     fireEvent.change(screen.getByPlaceholderText('Preset name'), {
       target: { value: 'Team Notes' },
     });
@@ -147,7 +155,7 @@ describe('SettingsVocabularyTab', () => {
         ],
       },
     });
-    render(<SettingsVocabularyTab initialSubTab="prompts" />);
+    render(<SettingsVocabularyTab initialSubTab="prompts" initialPromptsSubTab="summary" />);
 
     fireEvent.change(screen.getByDisplayValue('Team Summary'), {
       target: { value: 'Ops Summary' },
@@ -223,6 +231,29 @@ describe('SettingsVocabularyTab', () => {
       expect(useConfigStore.getState().config.speakerProfiles).toEqual([]);
       expect(useAutomationStore.getState().profiles[0].enabledSpeakerProfileIds).toEqual([]);
     });
+  });
+
+  it('searches speaker profiles and clears search input', () => {
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        speakerProfiles: [
+          { id: 'speaker-1', name: 'Alice', enabled: true, samples: [] },
+          { id: 'speaker-2', name: 'Bob', enabled: true, samples: [] },
+        ],
+      },
+    });
+    render(<SettingsVocabularyTab initialSubTab="speakers" />);
+
+    const searchInput = screen.getByPlaceholderText('Search speakers...');
+    expect(searchInput).toBeDefined();
+
+    fireEvent.change(searchInput, { target: { value: 'Alice' } });
+    expect((searchInput as HTMLInputElement).value).toBe('Alice');
+
+    const clearButton = screen.getByRole('button', { name: 'Clear' });
+    fireEvent.click(clearButton);
+    expect((searchInput as HTMLInputElement).value).toBe('');
   });
 
   it('shows readiness guidance for speaker profiles based on usable samples', () => {
@@ -302,5 +333,33 @@ describe('SettingsVocabularyTab', () => {
     expect(
       screen.getByRole('tab', { name: 'AI Prompts & Templates' }).getAttribute('aria-selected')
     ).toBe('true');
+  });
+
+  it('supports switching between prompts sub-tabs and keyboard navigation', () => {
+    render(<SettingsVocabularyTab initialSubTab="prompts" />);
+
+    expect(screen.getByRole('tab', { name: 'Polish' }).getAttribute('aria-selected')).toBe('true');
+    screen.getByText('Polish Automation & Presets');
+    expect(screen.queryByText('Translation Automation')).toBeNull();
+    expect(screen.queryByText('Summary Automation & Default')).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Translation' }));
+    expect(screen.queryByText('Summary Automation & Templates')).toBeNull();
+    expect(screen.queryByText('Polish Automation & Presets')).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Summary' }));
+    expect(screen.getByRole('tab', { name: 'Summary' }).getAttribute('aria-selected')).toBe('true');
+    screen.getByText('Summary Automation & Templates');
+    expect(screen.queryByText('Translation Automation')).toBeNull();
+
+    const promptsTablist = screen.getByRole('tablist', {
+      name: 'AI prompt and template categories',
+    });
+    fireEvent.keyDown(promptsTablist, { key: 'ArrowRight' });
+    expect(screen.getByRole('tab', { name: 'Polish' }).getAttribute('aria-selected')).toBe('true');
+    screen.getByText('Polish Automation & Presets');
+
+    fireEvent.keyDown(promptsTablist, { key: 'ArrowLeft' });
+    expect(screen.getByRole('tab', { name: 'Summary' }).getAttribute('aria-selected')).toBe('true');
   });
 });

@@ -1,4 +1,14 @@
-import { ChevronDown, ChevronRight, Globe, Mic, Plus, Search, Trash2, Upload } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronRight,
+  Globe,
+  Mic,
+  Plus,
+  Search,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react';
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -340,8 +350,25 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
               placeholder={t('settings.speaker_search_placeholder', {
                 defaultValue: 'Search speakers...',
               })}
-              style={{ height: '32px', fontSize: '0.8125rem' }}
+              style={{
+                width: '100%',
+                height: '32px',
+                paddingLeft: '32px',
+                paddingRight: searchQuery ? '28px' : '10px',
+                fontSize: '0.8125rem',
+                boxSizing: 'border-box',
+              }}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                className="dict-search-clear"
+                onClick={() => setSearchQuery('')}
+                aria-label={t('common.clear', { defaultValue: 'Clear' })}
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
         </div>
 

@@ -199,6 +199,13 @@
   width: 220px;
 }
 
+.dict-search-wrap .settings-input,
+.dict-search-wrap input {
+  padding-left: 32px;
+  padding-right: 28px;
+  box-sizing: border-box;
+}
+
 .dict-search-icon {
   position: absolute;
   left: 10px;

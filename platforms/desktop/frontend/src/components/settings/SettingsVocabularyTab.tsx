@@ -1,9 +1,9 @@
-import { Sparkles, SpellCheck, Users } from 'lucide-react';
+import { Languages, Sparkles, SpellCheck, Users } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSetConfig, useVocabularyConfig } from '../../stores/configStore';
-import { BookIcon } from '../Icons';
+import { BookIcon, SummaryIcon } from '../Icons';
 import { SettingsContextSection } from './SettingsContextSection';
 import { SettingsPageHeader, SettingsTabContainer } from './SettingsLayout';
 import { SettingsSpeakerProfilesSection } from './SettingsSpeakerProfilesSection';
@@ -11,21 +11,33 @@ import { SettingsSummaryTemplateSection } from './SettingsSummaryTemplateSection
 import { SettingsTranslationSection } from './SettingsTranslationSection';
 import { UnifiedDictionarySection } from './vocabulary/UnifiedDictionarySection';
 export type VocabularySubTab = 'recognition' | 'prompts' | 'speakers';
+export type PromptsSubTab = 'polish' | 'translation' | 'summary';
 
 export interface SettingsVocabularyTabProps {
   initialSubTab?: VocabularySubTab;
+  initialPromptsSubTab?: PromptsSubTab;
 }
 
 export function SettingsVocabularyTab({
   initialSubTab = 'recognition',
+  initialPromptsSubTab = 'polish',
 }: SettingsVocabularyTabProps = {}): React.JSX.Element {
   const [activeSubTab, setActiveSubTab] = useState<VocabularySubTab>(initialSubTab);
+  const [activePromptsSubTab, setActivePromptsSubTab] = useState<PromptsSubTab>(
+    initialPromptsSubTab || 'polish'
+  );
 
   useEffect(() => {
     if (initialSubTab) {
       setActiveSubTab(initialSubTab);
     }
   }, [initialSubTab]);
+
+  useEffect(() => {
+    if (initialPromptsSubTab) {
+      setActivePromptsSubTab(initialPromptsSubTab);
+    }
+  }, [initialPromptsSubTab]);
 
   const handleTabKeyDown = (e: React.KeyboardEvent) => {
     const tabs: VocabularySubTab[] = ['recognition', 'prompts', 'speakers'];
@@ -40,6 +52,22 @@ export function SettingsVocabularyTab({
       const prevTab = tabs[(currentIndex - 1 + tabs.length) % tabs.length];
       setActiveSubTab(prevTab);
       document.getElementById(`settings-vocab-tab-${prevTab}`)?.focus();
+    }
+  };
+
+  const handlePromptsTabKeyDown = (e: React.KeyboardEvent) => {
+    const tabs: PromptsSubTab[] = ['polish', 'translation', 'summary'];
+    const currentIndex = tabs.indexOf(activePromptsSubTab);
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const nextTab = tabs[(currentIndex + 1) % tabs.length];
+      setActivePromptsSubTab(nextTab);
+      document.getElementById(`settings-prompts-tab-${nextTab}`)?.focus();
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const prevTab = tabs[(currentIndex - 1 + tabs.length) % tabs.length];
+      setActivePromptsSubTab(prevTab);
+      document.getElementById(`settings-prompts-tab-${prevTab}`)?.focus();
     }
   };
 
@@ -158,9 +186,109 @@ export function SettingsVocabularyTab({
             animation: 'fadeIn var(--transition-normal, 0.2s) ease-in-out',
           }}
         >
-          <SettingsContextSection />
-          <SettingsTranslationSection />
-          <SettingsSummaryTemplateSection />
+          <div
+            id="settings-vocab-prompts-subtabs"
+            className="settings-subtab-nav"
+            role="tablist"
+            aria-label={t('settings.vocabulary_prompts_categories', {
+              defaultValue: 'AI prompt and template categories',
+            })}
+            onKeyDown={handlePromptsTabKeyDown}
+          >
+            {[
+              {
+                value: 'polish' as const,
+                label: t('settings.vocabulary_prompts_tab_polish', { defaultValue: 'Polish' }),
+                description: t('settings.vocabulary_prompts_tab_polish_desc', {
+                  defaultValue: 'Auto polish and style presets',
+                }),
+                icon: <Sparkles size={15} />,
+              },
+              {
+                value: 'translation' as const,
+                label: t('settings.vocabulary_prompts_tab_translation', {
+                  defaultValue: 'Translation',
+                }),
+                description: t('settings.vocabulary_prompts_tab_translation_desc', {
+                  defaultValue: 'Auto translation and default target language',
+                }),
+                icon: <Languages size={15} />,
+              },
+              {
+                value: 'summary' as const,
+                label: t('settings.vocabulary_prompts_tab_summary', { defaultValue: 'Summary' }),
+                description: t('settings.vocabulary_prompts_tab_summary_desc', {
+                  defaultValue: 'Auto summary and custom templates',
+                }),
+                icon: <SummaryIcon width={15} height={15} />,
+              },
+            ].map((tab) => (
+              <button
+                id={`settings-prompts-tab-${tab.value}`}
+                key={tab.value}
+                type="button"
+                role="tab"
+                aria-selected={activePromptsSubTab === tab.value}
+                aria-controls={`settings-prompts-panel-${tab.value}`}
+                aria-label={tab.label}
+                title={tab.description}
+                tabIndex={activePromptsSubTab === tab.value ? 0 : -1}
+                className={`settings-subtab-btn${activePromptsSubTab === tab.value ? ' active' : ''}`}
+                onClick={() => setActivePromptsSubTab(tab.value)}
+              >
+                <span className="settings-subtab-icon">{tab.icon}</span>
+                <span className="settings-subtab-label">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {activePromptsSubTab === 'polish' && (
+            <div
+              id="settings-prompts-panel-polish"
+              role="tabpanel"
+              aria-labelledby="settings-prompts-tab-polish"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--spacing-xl, 32px)',
+                animation: 'fadeIn var(--transition-normal, 0.2s) ease-in-out',
+              }}
+            >
+              <SettingsContextSection />
+            </div>
+          )}
+
+          {activePromptsSubTab === 'translation' && (
+            <div
+              id="settings-prompts-panel-translation"
+              role="tabpanel"
+              aria-labelledby="settings-prompts-tab-translation"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--spacing-xl, 32px)',
+                animation: 'fadeIn var(--transition-normal, 0.2s) ease-in-out',
+              }}
+            >
+              <SettingsTranslationSection />
+            </div>
+          )}
+
+          {activePromptsSubTab === 'summary' && (
+            <div
+              id="settings-prompts-panel-summary"
+              role="tabpanel"
+              aria-labelledby="settings-prompts-tab-summary"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'var(--spacing-xl, 32px)',
+                animation: 'fadeIn var(--transition-normal, 0.2s) ease-in-out',
+              }}
+            >
+              <SettingsSummaryTemplateSection />
+            </div>
+          )}
         </div>
       )}
 
