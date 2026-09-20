@@ -15,6 +15,12 @@ pub fn parse_ip_whitelist(whitelist_str: &str) -> Result<Vec<IpNet>, ApiServerCo
         if rule == "localhost" {
             nets.push("127.0.0.0/8".parse().unwrap());
             nets.push("::1/128".parse().unwrap());
+        } else if rule == "lan" || rule == "private" {
+            nets.push("127.0.0.0/8".parse().unwrap());
+            nets.push("::1/128".parse().unwrap());
+            nets.push("10.0.0.0/8".parse().unwrap());
+            nets.push("172.16.0.0/12".parse().unwrap());
+            nets.push("192.168.0.0/16".parse().unwrap());
         } else if let Ok(net) = rule.parse::<IpNet>() {
             nets.push(net);
         } else if let Ok(exact_ip) = rule.parse::<IpAddr>() {

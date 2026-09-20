@@ -17,18 +17,15 @@ pub fn authorize_streaming_request(
     addr: SocketAddr,
     token: Option<&str>,
 ) -> Result<tokio::sync::OwnedSemaphorePermit, StatusCode> {
-    if !state
-        .ip_whitelist
-        .iter()
-        .any(|net| net.contains(&addr.ip()))
-    {
+    let ip = addr.ip().to_canonical();
+
+    if !state.ip_whitelist.iter().any(|net| net.contains(&ip)) {
         return Err(StatusCode::FORBIDDEN);
     }
 
     if !state.api_key.is_empty() && token.unwrap_or_default() != state.api_key {
         return Err(StatusCode::UNAUTHORIZED);
     }
-
     state
         .streaming_semaphore
         .clone()

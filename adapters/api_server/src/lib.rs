@@ -11,8 +11,8 @@ mod worker;
 
 pub use error::*;
 pub use handlers::{
-    handle_health, handle_info, handle_job_audio, handle_job_status, handle_list_jobs,
-    handle_polish, handle_transcribe, handle_translate,
+    api_key_auth_middleware, handle_health, handle_info, handle_job_audio, handle_job_status,
+    handle_list_jobs, handle_transcribe,
 };
 pub use info::{HealthResponse, InfoResponse, OnlineAsrProviderInfo, build_info_response};
 pub use ip_whitelist::parse_ip_whitelist;
@@ -1076,5 +1076,96 @@ mod tests {
         assert_eq!(snapshot.health.pending_jobs, 0);
         assert!(snapshot.jobs.is_empty());
         server.stop().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn api_key_auth_middleware_accepts_bearer_and_query_token_and_rejects_invalid() {
+        let (tx, _rx) = mpsc::channel(1);
+        let state = ServerState {
+            job_manager: JobManager::new(tx),
+            temp_dir: PathBuf::from("temp"),
+            models_dir: PathBuf::from("models"),
+            start_time: std::time::Instant::now(),
+            api_key: "secret-token".to_string(),
+            streaming_semaphore: Arc::new(tokio::sync::Semaphore::new(1)),
+            ip_whitelist: Arc::new(vec![]),
+            online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+            media_validator: Arc::new(AcceptingMediaValidator),
+            gpu_availability: Arc::new(FixedGpuAvailability(false)),
+            model_catalog: test_model_catalog(),
+            batch_plan_resolver: test_batch_plan_resolver(),
+            platform: Arc::new(DefaultApiServerPlatform),
+            transcription_defaults: Default::default(),
+        };
+
+        let app = Router::new()
+            .route("/test", get(|| async { "ok" }))
+            .layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                api_key_auth_middleware,
+            ))
+            .with_state(state);
+
+        // 1. Missing auth -> 401
+        let res = app
+            .clone()
+            .oneshot(Request::builder().uri("/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        // 2. Invalid Bearer -> 401
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/test")
+                    .header("Authorization", "Bearer wrong")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        // 3. Valid Bearer -> 200
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/test")
+                    .header("Authorization", "Bearer secret-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        // 4. Valid query token -> 200
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/test?token=secret-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        // 5. Valid query api_key -> 200
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/test?api_key=secret-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
     }
 }

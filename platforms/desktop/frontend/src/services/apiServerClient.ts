@@ -28,10 +28,9 @@ export type JobStatusType =
 
 class ApiServerClient {
   private baseUrl: string;
+  private apiKey: string;
 
   constructor() {
-    // If running in browser hosted by api_server (e.g. port 14200), default to origin.
-    // If running in vite dev (port 1420/5173), default to http://127.0.0.1:14200.
     if (typeof window !== 'undefined') {
       const port = window.location.port;
       if (
@@ -42,8 +41,10 @@ class ApiServerClient {
       } else {
         this.baseUrl = 'http://127.0.0.1:14200';
       }
+      this.apiKey = localStorage.getItem('sona_api_server_key') || '';
     } else {
       this.baseUrl = 'http://127.0.0.1:14200';
+      this.apiKey = '';
     }
   }
 
@@ -55,6 +56,29 @@ class ApiServerClient {
     this.baseUrl = url.replace(/\/+$/, '');
   }
 
+  getApiKey(): string {
+    return this.apiKey;
+  }
+
+  setApiKey(key: string): void {
+    this.apiKey = key.trim();
+    if (typeof window !== 'undefined') {
+      if (this.apiKey) {
+        localStorage.setItem('sona_api_server_key', this.apiKey);
+      } else {
+        localStorage.removeItem('sona_api_server_key');
+      }
+    }
+  }
+
+  private getHeaders(extra?: Record<string, string>): HeadersInit {
+    const headers: Record<string, string> = { ...extra };
+    if (this.apiKey) {
+      headers.Authorization = `Bearer ${this.apiKey}`;
+    }
+    return headers;
+  }
+
   async checkHealth(): Promise<ApiServerHealth> {
     const res = await fetch(`${this.baseUrl}/health`);
     if (!res.ok) {
@@ -64,7 +88,9 @@ class ApiServerClient {
   }
 
   async getInfo(): Promise<ApiServerInfo> {
-    const res = await fetch(`${this.baseUrl}/info`);
+    const res = await fetch(`${this.baseUrl}/info`, {
+      headers: this.getHeaders(),
+    });
     if (!res.ok) {
       throw new Error(`Failed to fetch info: HTTP ${res.status}`);
     }
@@ -91,6 +117,7 @@ class ApiServerClient {
 
     const res = await fetch(`${this.baseUrl}/v1/transcriptions`, {
       method: 'POST',
+      headers: this.getHeaders(),
       body: formData,
     });
 
@@ -104,7 +131,9 @@ class ApiServerClient {
   }
 
   async getJobStatus(jobId: string): Promise<JobStatusType> {
-    const res = await fetch(`${this.baseUrl}/v1/transcriptions/${jobId}`);
+    const res = await fetch(`${this.baseUrl}/v1/transcriptions/${jobId}`, {
+      headers: this.getHeaders(),
+    });
     if (!res.ok) {
       throw new Error(`Failed to fetch job status (${res.status})`);
     }
@@ -112,40 +141,11 @@ class ApiServerClient {
   }
 
   getAudioUrl(jobId: string): string {
-    return `${this.baseUrl}/v1/transcriptions/${jobId}/audio`;
-  }
-
-  async polish(segments: TranscriptSegment[]): Promise<TranscriptSegment[]> {
-    const res = await fetch(`${this.baseUrl}/v1/llm/polish`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ segments }),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Polish failed (${res.status}): ${text}`);
+    const url = `${this.baseUrl}/v1/transcriptions/${jobId}/audio`;
+    if (this.apiKey) {
+      return `${url}?token=${encodeURIComponent(this.apiKey)}`;
     }
-
-    return res.json();
-  }
-
-  async translate(
-    segments: TranscriptSegment[],
-    targetLanguage: string
-  ): Promise<TranscriptSegment[]> {
-    const res = await fetch(`${this.baseUrl}/v1/llm/translate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ segments, target_language: targetLanguage }),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Translate failed (${res.status}): ${text}`);
-    }
-
-    return res.json();
+    return url;
   }
 }
 

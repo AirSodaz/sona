@@ -1,240 +1,265 @@
-import {
-  AlertCircle,
-  Download,
-  FileAudio,
-  Languages,
-  Loader2,
-  Moon,
-  RefreshCw,
-  Server,
-  Sparkles,
-  Sun,
-  Trash2,
-  Upload,
-} from 'lucide-react';
+import { Key, Loader2, Server, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { type ApiServerInfo, apiServerClient } from '../services/apiServerClient';
+import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
-import {
-  downloadFile,
-  exportToJson,
-  exportToMarkdown,
-  exportToSrt,
-  exportToTxt,
-  exportToVtt,
-} from '../utils/webExport';
+import { exportToMarkdown, exportToSrt, exportToTxt, exportToVtt } from '../utils/webExport';
 import { AudioPlayer } from './AudioPlayer';
+import { Dropdown, type DropdownOption } from './Dropdown';
+import { CloseIcon, DownloadIcon, FileTextIcon, UploadIcon } from './Icons';
 import { TranscriptEditor } from './transcript/TranscriptEditor';
 
 export function RemoteWebEditor(): React.JSX.Element {
-  // Store bindings
+  const { t } = useTranslation();
+
+  // Stores
   const segments = useTranscriptSessionStore((state) => state.segments);
   const title = useTranscriptSessionStore((state) => state.title);
-  const openSession = useTranscriptStore((state) => state.openSession);
-  const clearActiveSession = useTranscriptStore((state) => state.clearActiveTranscriptSession);
-  const setSegments = useTranscriptStore((state) => state.setSegments);
+  const setTitle = useTranscriptSessionStore((state) => state.setTitle);
+  const setSegments = useTranscriptSessionStore((state) => state.setSegments);
+  const clearActiveTranscriptSession = useTranscriptSessionStore(
+    (state) => state.clearActiveTranscriptSession
+  );
+  const audioUrl = useTranscriptPlaybackStore((state) => state.audioUrl);
+  const setAudioUrl = useTranscriptPlaybackStore((state) => state.setAudioUrl);
 
-  // Server state
+  // Connection & Auth State
   const [serverUrl, setServerUrl] = useState<string>(() => apiServerClient.getBaseUrl());
-  const [isEditingServerUrl, setIsEditingServerUrl] = useState<boolean>(false);
-  const [serverInfo, setServerInfo] = useState<ApiServerInfo | null>(null);
-  const [isConnected, setIsConnected] = useState<boolean | null>(null);
+  const [apiKey, setApiKey] = useState<string>(() => apiServerClient.getApiKey());
+  const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
+  const [serverInfo, setServerInfo] = useState<ApiServerInfo | null>(null);
 
-  // Transcription state
+  // Modals
+  const [showServerModal, setShowServerModal] = useState<boolean>(false);
+  const [tempServerUrl, setTempServerUrl] = useState<string>(serverUrl);
+  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
+  const [tempApiKey, setTempApiKey] = useState<string>(apiKey);
+  const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
+
+  // Form State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('auto');
-  const [hotwords, setHotwords] = useState<string>('');
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
+
+  // Transcription Job State
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
-  const [transcribeProgress, setTranscribeProgress] = useState<string>('');
+  const [transcribeProgress, setTranscribeProgress] = useState<string | null>(null);
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
 
-  // LLM action states
-  const [isPolishing, setIsPolishing] = useState<boolean>(false);
-  const [isTranslating, setIsTranslating] = useState<boolean>(false);
-  const [translateLang, setTranslateLang] = useState<string>('zh');
-  const [showTranslateModal, setShowTranslateModal] = useState<boolean>(false);
-
-  // Export menu
-  const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
-  const [exportMode, setExportMode] = useState<'original' | 'translation' | 'bilingual'>(
-    'original'
-  );
-
-  // Dark mode
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return (
-        document.documentElement.classList.contains('dark') ||
-        window.matchMedia('(prefers-color-scheme: dark)').matches
-      );
-    }
-    return true;
-  });
-
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollTimerRef = useRef<number | null>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
 
-  // Sync dark mode class
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [isDarkMode]);
-
-  // Connect to API server
-  const connectToServer = useCallback(
-    async (url?: string) => {
-      const targetUrl = url ?? serverUrl;
-      apiServerClient.setBaseUrl(targetUrl);
-      setIsConnecting(true);
-      setTranscribeError(null);
-      try {
-        await apiServerClient.checkHealth();
-        const info = await apiServerClient.getInfo();
-        setServerInfo(info);
-        setIsConnected(true);
-        if (info.models?.length > 0 && !selectedModel) {
-          setSelectedModel(info.models[0].id);
-        }
-      } catch {
-        setIsConnected(false);
-        setServerInfo(null);
-      } finally {
-        setIsConnecting(false);
+  const connectToServer = useCallback(async () => {
+    setIsConnecting(true);
+    setTranscribeError(null);
+    try {
+      await apiServerClient.checkHealth();
+      const info = await apiServerClient.getInfo();
+      setServerInfo(info);
+      setIsConnected(true);
+      if (info.models?.length > 0 && !selectedModel) {
+        setSelectedModel(info.models[0].id);
       }
-    },
-    [serverUrl, selectedModel]
-  );
+    } catch {
+      setIsConnected(false);
+      setServerInfo(null);
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [selectedModel]);
 
   useEffect(() => {
     connectToServer();
   }, [connectToServer]);
 
-  // Handle file selection
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      setTranscribeError(null);
+  // Clean up timer
+  useEffect(() => {
+    return () => {
+      clearInterval(pollTimerRef.current as number);
+    };
+  }, []);
+  // Click outside to close export menu
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const modelOptions: DropdownOption[] = (serverInfo?.models ?? []).map((m) => ({
+    value: m.id,
+    label: m.name || m.id,
+  }));
+
+  const languageOptions: DropdownOption[] = [
+    { value: 'auto', label: '自动识别 (Auto)' },
+    { value: 'zh', label: '中文 (Chinese)' },
+    { value: 'en', label: '英语 (English)' },
+    { value: 'ja', label: '日语 (Japanese)' },
+    { value: 'ko', label: '韩语 (Korean)' },
+    { value: 'yue', label: '粤语 (Cantonese)' },
+  ];
+
+  // Save server URL
+  const handleSaveServerUrl = () => {
+    const trimmed = tempServerUrl.trim();
+    if (trimmed) {
+      apiServerClient.setBaseUrl(trimmed);
+      setServerUrl(trimmed);
+      setShowServerModal(false);
+      connectToServer();
     }
   };
 
-  // Run transcription
-  const handleTranscribe = async () => {
-    if (!selectedFile) return;
+  // Save API Key
+  const handleSaveApiKey = () => {
+    const trimmed = tempApiKey.trim();
+    apiServerClient.setApiKey(trimmed);
+    setApiKey(trimmed);
+    setShowApiKeyModal(false);
+    connectToServer();
+  };
+
+  // Handle file selection
+  const handleFileSelect = (file: File) => {
+    setSelectedFile(file);
+    setTitle(file.name.replace(/\.[^/.]+$/, ''));
+    setTranscribeError(null);
+    // Create local object URL for preview audio playback immediately
+    const localAudioUrl = URL.createObjectURL(file);
+    setAudioUrl(localAudioUrl);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (e.dataTransfer.files?.[0]) {
+      handleFileSelect(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      handleFileSelect(e.target.files[0]);
+    }
+  };
+
+  // Start transcription
+  const handleStartTranscribe = async () => {
+    if (!selectedFile || !selectedModel) {
+      return;
+    }
+
     setIsTranscribing(true);
-    setTranscribeProgress('Uploading audio file...');
+    setTranscribeProgress('正在上传音频并创建转录任务...');
     setTranscribeError(null);
 
     try {
       const jobId = await apiServerClient.transcribe(selectedFile, {
         modelId: selectedModel,
         language: selectedLanguage === 'auto' ? undefined : selectedLanguage,
-        hotwords: hotwords.trim() || undefined,
       });
 
-      setTranscribeProgress(`Processing on host (Job: ${jobId.slice(0, 8)})...`);
+      setTranscribeProgress('任务已提交，正在等待排队处理...');
 
-      // Poll for completion
-      const pollInterval = setInterval(async () => {
+      clearInterval(pollTimerRef.current as number);
+
+      pollTimerRef.current = window.setInterval(async () => {
         try {
           const status = await apiServerClient.getJobStatus(jobId);
-          if (typeof status === 'object' && 'Completed' in status) {
-            clearInterval(pollInterval);
+          if (status === 'Pending') {
+            setTranscribeProgress('排队等待处理中...');
+          } else if (status === 'Processing') {
+            setTranscribeProgress('正在转录处理中，请稍候...');
+          } else if (typeof status === 'object' && 'Completed' in status) {
+            clearInterval(pollTimerRef.current as number);
+            pollTimerRef.current = null;
             setIsTranscribing(false);
-            setTranscribeProgress('');
+            setTranscribeProgress(null);
+            setSegments(status.Completed);
 
-            const localAudioUrl = URL.createObjectURL(selectedFile);
-            openSession({
-              segments: status.Completed,
-              sourceHistoryId: null,
-              title: selectedFile.name,
-              audioUrl: localAudioUrl,
-            });
+            // Update audio url to point to server audio endpoint
+            const serverAudioUrl = apiServerClient.getAudioUrl(jobId);
+            setAudioUrl(serverAudioUrl);
           } else if (typeof status === 'object' && 'Failed' in status) {
-            clearInterval(pollInterval);
+            clearInterval(pollTimerRef.current as number);
+            pollTimerRef.current = null;
             setIsTranscribing(false);
-            setTranscribeError(`Transcription failed: ${status.Failed}`);
+            setTranscribeProgress(null);
+            setTranscribeError(`转录失败: ${status.Failed}`);
           }
         } catch (pollErr: unknown) {
-          clearInterval(pollInterval);
+          clearInterval(pollTimerRef.current as number);
+          pollTimerRef.current = null;
           setIsTranscribing(false);
-          const message = pollErr instanceof Error ? pollErr.message : String(pollErr);
-          setTranscribeError(`Polling error: ${message}`);
+          setTranscribeProgress(null);
+          setTranscribeError(
+            `查询状态失败: ${pollErr instanceof Error ? pollErr.message : String(pollErr)}`
+          );
         }
-      }, 1000);
+      }, 1500);
     } catch (err: unknown) {
       setIsTranscribing(false);
-      const message = err instanceof Error ? err.message : String(err);
-      setTranscribeError(message || 'Failed to submit transcription job');
+      setTranscribeProgress(null);
+      setTranscribeError(`发起转录失败: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
-  // Polish segments with AI
-  const handlePolish = async () => {
-    if (segments.length === 0 || isPolishing) return;
-    setIsPolishing(true);
-    try {
-      const polished = await apiServerClient.polish(segments);
-      setSegments(polished);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      alert(`AI Polish failed: ${message}`);
-    } finally {
-      setIsPolishing(false);
-    }
+  // Export handling
+  const downloadFile = (content: string, filename: string, mime: string) => {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
-  // Translate segments with AI
-  const handleTranslate = async () => {
-    if (segments.length === 0 || isTranslating) return;
-    setIsTranslating(true);
-    setShowTranslateModal(false);
-    try {
-      const translated = await apiServerClient.translate(segments, translateLang);
-      setSegments(translated);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      alert(`AI Translate failed: ${message}`);
-    } finally {
-      setIsTranslating(false);
-    }
-  };
-
-  // Export handlers
   const handleExport = (format: 'srt' | 'vtt' | 'txt' | 'json' | 'md') => {
-    if (segments.length === 0) return;
-    const baseName = (title || 'transcript').replace(/\.[^/.]+$/, '');
+    const baseName = title || 'transcript';
     let content = '';
-    let ext = format;
-    let mime = 'text/plain';
+    const ext = format;
+    let mime = 'text/plain;charset=utf-8';
 
     switch (format) {
       case 'srt':
-        content = exportToSrt(segments, exportMode);
-        mime = 'application/x-subrip';
+        content = exportToSrt(segments);
         break;
       case 'vtt':
-        content = exportToVtt(segments, exportMode);
-        mime = 'text/vtt';
+        content = exportToVtt(segments);
+        mime = 'text/vtt;charset=utf-8';
         break;
       case 'txt':
-        content = exportToTxt(segments, exportMode);
+        content = exportToTxt(segments);
         break;
       case 'json':
-        content = exportToJson(segments);
-        ext = 'json';
-        mime = 'application/json';
+        content = JSON.stringify(segments, null, 2);
+        mime = 'application/json;charset=utf-8';
         break;
       case 'md':
-        content = exportToMarkdown(segments, exportMode);
-        ext = 'md';
-        mime = 'text/markdown';
+        content = exportToMarkdown(segments);
+        mime = 'text/markdown;charset=utf-8';
         break;
     }
     downloadFile(content, `${baseName}.${ext}`, mime);
@@ -242,433 +267,476 @@ export function RemoteWebEditor(): React.JSX.Element {
   };
 
   const handleClearSession = () => {
-    if (segments.length > 0 && !confirm('Clear current transcript session?')) {
+    if (segments.length > 0 && !confirm('确定要清空当前的转录内容吗？')) {
       return;
     }
-    clearActiveSession();
+    clearActiveTranscriptSession();
     setSelectedFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
+  const displayTitle = title || selectedFile?.name || '未命名转录';
+
   return (
-    <div className="sona-web-editor">
-      {/* Header */}
-      <header className="sona-web-header">
-        <div className="sona-web-header-brand">
-          <div className="sona-web-logo-badge">
-            <span className="sona-web-logo-icon">S</span>
-            <span>Sona Web</span>
-            <span className="sona-web-tag">Remote</span>
-          </div>
-
-          {/* Host connection pill */}
-          <div className="sona-web-server-pill">
-            <Server size={13} style={{ color: 'var(--color-text-muted)' }} />
-            {isEditingServerUrl ? (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setIsEditingServerUrl(false);
-                  connectToServer();
-                }}
-                style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
-              >
-                <input
-                  type="text"
-                  value={serverUrl}
-                  onChange={(e) => setServerUrl(e.target.value)}
-                  className="sona-web-server-input"
-                  autoFocus
-                />
-                <button
-                  type="submit"
-                  className="btn btn-sm btn-primary"
-                  style={{ padding: '2px 6px', height: '22px' }}
-                >
-                  Save
-                </button>
-              </form>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setIsEditingServerUrl(true)}
-                className="sona-web-server-url-btn"
-                title="Click to edit server address"
-              >
-                <span>{serverUrl}</span>
-              </button>
-            )}
-
-            <span
-              className={`sona-web-status-dot ${
-                isConnected === true
-                  ? 'connected'
-                  : isConnected === false
-                    ? 'disconnected'
-                    : 'connecting'
-              }`}
-              title={
-                isConnected === true
-                  ? 'Connected to Sona Desktop'
-                  : isConnected === false
-                    ? 'Disconnected from Sona Desktop'
-                    : 'Checking connection...'
-              }
-            />
-            <button
-              type="button"
-              onClick={() => connectToServer()}
-              disabled={isConnecting}
-              className="btn-icon"
-              style={{ width: '20px', height: '20px' }}
-              title="Refresh connection"
-            >
-              <RefreshCw size={12} className={isConnecting ? 'animate-spin' : ''} />
-            </button>
-          </div>
+    <div className="app">
+      {/* App Header */}
+      <header className="app-header">
+        <div className="app-logo">
+          <h1>Sona</h1>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 500,
+              padding: '2px 6px',
+              borderRadius: 'var(--radius-sm, 4px)',
+              background: 'var(--color-bg-tertiary)',
+              color: 'var(--color-text-secondary)',
+              marginLeft: '6px',
+            }}
+          >
+            Web
+          </span>
         </div>
 
-        {/* Right actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div
+          className="header-actions"
+          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+        >
+          {/* Server Connection Pill */}
           <button
             type="button"
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className="btn-icon"
-            title="Toggle Theme"
+            className="web-header-pill"
+            onClick={() => {
+              setTempServerUrl(serverUrl);
+              setShowServerModal(true);
+            }}
+            title="点击修改服务主机地址"
           >
-            {isDarkMode ? <Sun size={16} /> : <Moon size={16} />}
+            <span
+              className={`web-status-dot ${
+                isConnecting ? 'connecting' : isConnected ? 'connected' : 'disconnected'
+              }`}
+            />
+            <Server size={13} />
+            <span>{serverUrl.replace(/^https?:\/\//, '')}</span>
+          </button>
+
+          {/* API Key Pill */}
+          <button
+            type="button"
+            className="web-header-pill"
+            onClick={() => {
+              setTempApiKey(apiKey);
+              setShowApiKeyModal(true);
+            }}
+            title="配置 API Key 鉴权令牌"
+          >
+            <Key size={13} style={{ color: apiKey ? 'var(--color-success)' : undefined }} />
+            <span>{apiKey ? 'API Key: 已设置' : 'API Key: 未设置'}</span>
           </button>
         </div>
       </header>
 
-      {/* Main Content Area */}
-      <div className="sona-web-body">
-        {/* Left Controls Sidebar */}
-        <aside className="sona-web-sidebar">
-          <div>
-            <div className="sona-web-section-title">Audio Source</div>
-
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept="audio/*,video/*"
-              style={{ display: 'none' }}
-              id="web-audio-input"
-            />
-
-            <label htmlFor="web-audio-input" className="sona-web-file-dropzone">
-              <FileAudio size={28} style={{ color: 'var(--color-text-muted)' }} />
-              <span style={{ fontSize: '12px', color: 'var(--color-text-secondary)' }}>
-                {selectedFile ? (
-                  <span
-                    style={{
-                      fontWeight: 500,
-                      color: 'var(--color-text-primary)',
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(1)} MB)
-                  </span>
-                ) : (
-                  <span>Select or drop audio/video file</span>
-                )}
-              </span>
-              <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
-                Supports MP3, WAV, M4A, FLAC, MP4, etc.
-              </span>
-            </label>
-          </div>
-
-          {/* Model & Language settings */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div className="sona-web-form-group">
-              <label className="sona-web-label">ASR Model</label>
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                disabled={isTranscribing || !serverInfo?.models?.length}
-                className="sona-web-select"
-              >
-                {serverInfo?.models?.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name || m.id} {m.installed ? '(Installed)' : ''}
-                  </option>
-                )) || <option value="">No models discovered</option>}
-              </select>
-            </div>
-
-            <div className="sona-web-form-group">
-              <label className="sona-web-label">Language</label>
-              <select
-                value={selectedLanguage}
-                onChange={(e) => setSelectedLanguage(e.target.value)}
-                disabled={isTranscribing}
-                className="sona-web-select"
-              >
-                <option value="auto">Auto Detect</option>
-                <option value="zh">Chinese (中文)</option>
-                <option value="en">English</option>
-                <option value="ja">Japanese (日本語)</option>
-                <option value="ko">Korean (한국어)</option>
-                <option value="yue">Cantonese (粤语)</option>
-              </select>
-            </div>
-
-            <div className="sona-web-form-group">
-              <label className="sona-web-label">Hotwords (Optional)</label>
-              <input
-                type="text"
-                placeholder="Comma-separated keywords"
-                value={hotwords}
-                onChange={(e) => setHotwords(e.target.value)}
-                disabled={isTranscribing}
-                className="sona-web-input"
-              />
-            </div>
-          </div>
-
-          {/* Start Transcription Action */}
-          <button
-            type="button"
-            onClick={handleTranscribe}
-            disabled={!selectedFile || isTranscribing || !isConnected}
-            className="btn btn-primary"
-            style={{ width: '100%' }}
+      {/* Main Content */}
+      <main id="main-content" className="app-main">
+        <div className="panel-container">
+          {/* Left Panel: Transcribe / Input */}
+          <div
+            className="panel panel-left"
+            style={{ width: '360px', minWidth: '320px', maxWidth: '420px', flex: '0 0 360px' }}
           >
-            {isTranscribing ? (
-              <>
-                <Loader2 size={14} className="animate-spin" />
-                <span>Transcribing...</span>
-              </>
-            ) : (
-              <>
-                <Upload size={14} />
-                <span>Start Transcription</span>
-              </>
-            )}
-          </button>
-
-          {/* Progress / Status */}
-          {transcribeProgress && (
-            <div className="sona-web-progress-box">
-              <Loader2 size={13} className="animate-spin" />
-              <span>{transcribeProgress}</span>
+            <div className="panel-header">
+              <h2>{t('panel.batch_import', { defaultValue: '转录' })}</h2>
             </div>
-          )}
 
-          {transcribeError && (
-            <div className="sona-web-error-box">
-              <AlertCircle size={14} style={{ flexShrink: 0, marginTop: '2px' }} />
-              <span>{transcribeError}</span>
-            </div>
-          )}
-
-          {/* Session details */}
-          {segments.length > 0 && (
             <div
+              className="panel-content"
               style={{
-                marginTop: 'auto',
-                paddingTop: '16px',
-                borderTop: '1px solid var(--color-border)',
+                padding: '16px',
+                overflowY: 'auto',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                fontSize: '12px',
-                color: 'var(--color-text-muted)',
+                flexDirection: 'column',
+                gap: '16px',
               }}
             >
-              <span>{segments.length} segments</span>
-              <button
-                type="button"
-                onClick={handleClearSession}
-                className="btn btn-sm btn-text"
-                style={{ color: 'var(--color-error)' }}
-                title="Clear current session"
+              {/* Dropzone reusing desktop's .drop-zone */}
+              <div
+                className={`drop-zone drop-zone-wrapper ${isDragOver ? 'drag-over' : ''}`}
+                style={{ minHeight: '160px', cursor: 'pointer', padding: '24px 16px' }}
+                onClick={() => fileInputRef.current?.click()}
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    fileInputRef.current?.click();
+                  }
+                }}
               >
-                <Trash2 size={13} />
-                <span>Clear</span>
-              </button>
-            </div>
-          )}
-        </aside>
+                <div className="drop-zone-icon">
+                  <UploadIcon />
+                </div>
 
-        {/* Right Editor Workspace */}
-        <main className="sona-web-main">
-          {/* Top Workbench Toolbar */}
-          <div className="sona-web-toolbar">
-            <div className="sona-web-toolbar-title">
-              {title || (selectedFile ? selectedFile.name : 'Untitled Session')}
-            </div>
+                <div className="drop-zone-text">
+                  <h3 style={{ fontSize: '14px', margin: '0 0 4px 0' }}>
+                    {selectedFile
+                      ? selectedFile.name
+                      : t('batch.drop_title', { defaultValue: '拖入音频或点击上传' })}
+                  </h3>
+                  <p style={{ fontSize: '12px', margin: 0, color: 'var(--color-text-secondary)' }}>
+                    {selectedFile
+                      ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB`
+                      : t('batch.drop_desc', {
+                          defaultValue: '支持 MP3, WAV, M4A, FLAC, OGG 等常见格式',
+                        })}
+                  </p>
+                </div>
 
-            {/* Editing and AI action buttons */}
-            <div className="sona-web-toolbar-actions">
-              <button
-                type="button"
-                onClick={handlePolish}
-                disabled={segments.length === 0 || isPolishing}
-                className="btn btn-sm btn-secondary"
-                title="AI Polish (Refine punctuation & grammar)"
-              >
-                <Sparkles size={13} style={{ color: 'var(--color-accent-primary)' }} />
-                <span>{isPolishing ? 'Polishing...' : 'Polish'}</span>
-              </button>
+                <div
+                  className="btn btn-primary btn-sm"
+                  style={{ marginTop: '8px', pointerEvents: 'none' }}
+                  aria-hidden="true"
+                >
+                  {selectedFile
+                    ? '更换文件'
+                    : t('batch.select_file', { defaultValue: '选择音频文件' })}
+                </div>
+              </div>
 
-              <button
-                type="button"
-                onClick={() => setShowTranslateModal(true)}
-                disabled={segments.length === 0 || isTranslating}
-                className="btn btn-sm btn-secondary"
-                title="AI Translate"
-              >
-                <Languages size={13} style={{ color: 'var(--color-accent-primary)' }} />
-                <span>{isTranslating ? 'Translating...' : 'Translate'}</span>
-              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="audio/*,video/*"
+                style={{ display: 'none' }}
+                onChange={handleFileChange}
+              />
 
-              {/* Export Dropdown */}
-              <div style={{ position: 'relative' }}>
+              {/* Form options */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize: '12px', marginBottom: '6px' }}>
+                    {t('settings.asr.model', { defaultValue: 'ASR 模型' })}
+                  </label>
+                  <Dropdown
+                    options={modelOptions}
+                    value={selectedModel}
+                    onChange={setSelectedModel}
+                    placeholder={isConnected ? '选择模型...' : '请先连接服务'}
+                    disabled={isTranscribing || !serverInfo?.models?.length}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize: '12px', marginBottom: '6px' }}>
+                    {t('settings.asr.language', { defaultValue: '音频语言' })}
+                  </label>
+                  <Dropdown
+                    options={languageOptions}
+                    value={selectedLanguage}
+                    onChange={setSelectedLanguage}
+                    disabled={isTranscribing}
+                  />
+                </div>
+                {/* Submit button */}
                 <button
                   type="button"
-                  onClick={() => setShowExportMenu(!showExportMenu)}
-                  disabled={segments.length === 0}
-                  className="btn btn-sm btn-secondary"
+                  className="btn btn-primary"
+                  style={{ width: '100%', height: '36px', marginTop: '4px' }}
+                  disabled={!selectedFile || isTranscribing || !isConnected}
+                  onClick={handleStartTranscribe}
                 >
-                  <Download size={13} />
-                  <span>Export</span>
+                  {isTranscribing ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>转录中...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UploadIcon />
+                      <span>开始转录</span>
+                    </>
+                  )}
                 </button>
 
-                {showExportMenu && (
-                  <div className="sona-web-dropdown-menu">
-                    <div className="sona-web-dropdown-header">
-                      <span>Mode</span>
-                      <div className="sona-web-dropdown-modes">
-                        {(['original', 'translation', 'bilingual'] as const).map((m) => (
-                          <button
-                            key={m}
-                            type="button"
-                            onClick={() => setExportMode(m)}
-                            className={`sona-web-mode-btn ${exportMode === m ? 'active' : ''}`}
-                          >
-                            {m[0].toUpperCase()}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleExport('srt')}
-                      className="sona-web-dropdown-item"
-                    >
-                      SubRip Subtitle (.srt)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleExport('vtt')}
-                      className="sona-web-dropdown-item"
-                    >
-                      WebVTT Subtitle (.vtt)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleExport('txt')}
-                      className="sona-web-dropdown-item"
-                    >
-                      Plain Text (.txt)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleExport('md')}
-                      className="sona-web-dropdown-item"
-                    >
-                      Markdown (.md)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleExport('json')}
-                      className="sona-web-dropdown-item"
-                    >
-                      JSON Data (.json)
-                    </button>
+                {/* Progress message */}
+                {transcribeProgress && (
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      background: 'var(--color-bg-secondary)',
+                      borderRadius: 'var(--radius-sm, 6px)',
+                      fontSize: '12px',
+                      color: 'var(--color-text-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                    }}
+                  >
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>{transcribeProgress}</span>
+                  </div>
+                )}
+
+                {/* Error message */}
+                {transcribeError && (
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      background: 'var(--color-error-subtle, rgba(239, 68, 68, 0.1))',
+                      border: '1px solid var(--color-error)',
+                      borderRadius: 'var(--radius-sm, 6px)',
+                      fontSize: '12px',
+                      color: 'var(--color-error)',
+                    }}
+                  >
+                    {transcribeError}
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Audio Player Bar */}
-          <AudioPlayer />
-
-          {/* Editor Area */}
-          <div className="sona-web-editor-container">
-            {segments.length > 0 ? (
-              <TranscriptEditor />
-            ) : (
-              <div className="sona-web-empty-state">
-                <FileAudio size={48} style={{ marginBottom: '12px', opacity: 0.3 }} />
-                <p
+          {/* Right Panel: Editor & Audio Player */}
+          <div
+            className="panel panel-right"
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%',
+              overflow: 'hidden',
+            }}
+          >
+            <div className="projects-detail-header">
+              <div className="projects-detail-header-primary">
+                <FileTextIcon />
+                <h4
                   style={{
-                    fontSize: '14px',
-                    fontWeight: 500,
-                    color: 'var(--color-text-primary)',
-                    marginBottom: '4px',
+                    margin: 0,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                  title={displayTitle}
+                >
+                  {displayTitle}
+                </h4>
+                {segments.length > 0 && (
+                  <span
+                    style={{
+                      fontSize: '12px',
+                      color: 'var(--color-text-secondary)',
+                      marginLeft: '8px',
+                    }}
+                  >
+                    {segments.length} 个句段
+                  </span>
+                )}
+              </div>
+
+              <div className="projects-detail-header-actions">
+                {segments.length > 0 && (
+                  <>
+                    {/* Export dropdown */}
+                    <div className="export-menu" ref={exportMenuRef}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setShowExportMenu(!showExportMenu)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      >
+                        <DownloadIcon />
+                        <span>导出</span>
+                      </button>
+
+                      {showExportMenu && (
+                        <div className="export-dropdown">
+                          <button
+                            type="button"
+                            className="export-dropdown-item"
+                            onClick={() => handleExport('srt')}
+                          >
+                            <span>SubRip (.srt)</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="export-dropdown-item"
+                            onClick={() => handleExport('vtt')}
+                          >
+                            <span>WebVTT (.vtt)</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="export-dropdown-item"
+                            onClick={() => handleExport('txt')}
+                          >
+                            <span>纯文本 (.txt)</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="export-dropdown-item"
+                            onClick={() => handleExport('md')}
+                          >
+                            <span>Markdown (.md)</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="export-dropdown-item"
+                            onClick={() => handleExport('json')}
+                          >
+                            <span>JSON 数据 (.json)</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Clear session */}
+                    <button
+                      type="button"
+                      className="btn btn-icon btn-sm"
+                      onClick={handleClearSession}
+                      title="清空当前转录"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="panel-content" style={{ flex: 1, overflow: 'hidden' }}>
+              {segments.length > 0 ? (
+                <TranscriptEditor />
+              ) : (
+                <div
+                  style={{
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--color-text-muted)',
+                    gap: '12px',
                   }}
                 >
-                  No transcript loaded
-                </p>
-                <p style={{ fontSize: '12px', maxWidth: '360px' }}>
-                  Upload an audio file on the left and click "Start Transcription" to begin editing.
-                </p>
-              </div>
-            )}
+                  <FileTextIcon style={{ width: '48px', height: '48px', opacity: 0.3 }} />
+                  <p style={{ margin: 0, fontSize: '13px' }}>
+                    在左侧选择音频文件，点击“开始转录”以生成转录内容
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {audioUrl && <AudioPlayer />}
           </div>
-        </main>
-      </div>
+        </div>
+      </main>
 
-      {/* Translate Language Selection Modal */}
-      {showTranslateModal && (
-        <div className="shared-modal-overlay">
-          <div className="shared-modal-shell shared-modal-sm">
-            <div className="shared-modal-header">
-              <h3
-                className="shared-modal-title"
-                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-              >
-                <Languages size={18} />
-                <span>Translate Transcript</span>
-              </h3>
-            </div>
-
-            <div className="shared-modal-body">
-              <div className="sona-web-form-group">
-                <label className="sona-web-label">Target Language</label>
-                <select
-                  value={translateLang}
-                  onChange={(e) => setTranslateLang(e.target.value)}
-                  className="sona-web-select"
-                >
-                  <option value="zh">Chinese (中文)</option>
-                  <option value="en">English</option>
-                  <option value="ja">Japanese (日本語)</option>
-                  <option value="ko">Korean (한국어)</option>
-                  <option value="es">Spanish (Español)</option>
-                  <option value="fr">French (Français)</option>
-                  <option value="de">German (Deutsch)</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="shared-modal-footer">
+      {/* Server URL Modal */}
+      {showServerModal && (
+        <div className="web-modal-backdrop" onClick={() => setShowServerModal(false)}>
+          <div className="web-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="web-modal-header">
+              <h3>服务主机地址</h3>
               <button
                 type="button"
-                onClick={() => setShowTranslateModal(false)}
-                className="btn btn-sm btn-secondary"
+                className="btn btn-icon btn-sm"
+                onClick={() => setShowServerModal(false)}
               >
-                Cancel
+                <CloseIcon />
               </button>
-              <button type="button" onClick={handleTranslate} className="btn btn-sm btn-primary">
-                Translate
+            </div>
+            <div className="web-modal-body">
+              <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', margin: 0 }}>
+                指定桌面端 Sona 运行的主机地址与端口（默认端口 14200）。
+              </p>
+              <input
+                type="text"
+                className="input-text"
+                value={tempServerUrl}
+                onChange={(e) => setTempServerUrl(e.target.value)}
+                placeholder="http://192.168.1.100:14200"
+                autoFocus
+              />
+            </div>
+            <div className="web-modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowServerModal(false)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={handleSaveServerUrl}
+              >
+                保存并连接
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* API Key Modal */}
+      {showApiKeyModal && (
+        <div className="web-modal-backdrop" onClick={() => setShowApiKeyModal(false)}>
+          <div className="web-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="web-modal-header">
+              <h3>API Key 鉴权令牌</h3>
+              <button
+                type="button"
+                className="btn btn-icon btn-sm"
+                onClick={() => setShowApiKeyModal(false)}
+              >
+                <CloseIcon />
+              </button>
+            </div>
+            <div className="web-modal-body">
+              <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', margin: 0 }}>
+                如果桌面端开启了 API Key
+                鉴权，请在此填入相同密钥。系统会自动将其保存至本地，并在转录请求及音频流中附加鉴权令牌。
+              </p>
+              <input
+                type="password"
+                className="input-text"
+                value={tempApiKey}
+                onChange={(e) => setTempApiKey(e.target.value)}
+                placeholder="填入 API Key，留空表示无鉴权"
+                autoFocus
+              />
+            </div>
+            <div className="web-modal-footer">
+              {apiKey && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  style={{ marginRight: 'auto', color: 'var(--color-error)' }}
+                  onClick={() => {
+                    setTempApiKey('');
+                    apiServerClient.setApiKey('');
+                    setApiKey('');
+                    setShowApiKeyModal(false);
+                    connectToServer();
+                  }}
+                >
+                  清除 Key
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowApiKeyModal(false)}
+              >
+                取消
+              </button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={handleSaveApiKey}>
+                保存
               </button>
             </div>
           </div>

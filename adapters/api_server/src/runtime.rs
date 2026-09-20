@@ -15,10 +15,7 @@ use sona_core::ports::runtime::{
 };
 use sona_core::runtime::serve::ResolvedServeRuntimeOptions;
 use tokio::sync::{RwLock, mpsc};
-use tower_http::{
-    cors::{Any as CorsAny, CorsLayer},
-    validate_request::ValidateRequestHeaderLayer,
-};
+use tower_http::cors::{Any as CorsAny, CorsLayer};
 
 use crate::ApiServerBindError;
 use crate::ApiServerConfigurationError;
@@ -27,8 +24,8 @@ use crate::ApiServerRuntimeError;
 use crate::ApiServerStartError;
 use crate::ApiServerStopError;
 use crate::handlers::{
-    handle_health, handle_info, handle_job_audio, handle_job_status, handle_list_jobs,
-    handle_polish, handle_transcribe, handle_translate, ip_whitelist_middleware,
+    api_key_auth_middleware, handle_health, handle_info, handle_job_audio, handle_job_status,
+    handle_list_jobs, handle_transcribe, ip_whitelist_middleware,
 };
 use crate::info::{HealthResponse, InfoResponse, build_health_response, build_info_response};
 use crate::ip_whitelist::parse_ip_whitelist;
@@ -433,10 +430,8 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
         .route("/v1/transcriptions/jobs", get(handle_list_jobs))
         .route("/v1/transcriptions/{job_id}", get(handle_job_status))
         .route("/v1/transcriptions/{job_id}/audio", get(handle_job_audio))
-        .route("/v1/llm/polish", post(handle_polish))
-        .route("/v1/llm/translate", post(handle_translate))
         .layer(axum::middleware::from_fn_with_state(
-            ip_whitelist,
+            state.clone(),
             ip_whitelist_middleware,
         ));
 
@@ -448,9 +443,11 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
         ));
     }
 
-    #[allow(deprecated)]
     if !api_key.is_empty() {
-        api_router = api_router.route_layer(ValidateRequestHeaderLayer::bearer(&api_key));
+        api_router = api_router.layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            api_key_auth_middleware,
+        ));
     }
 
     let streaming_router = streaming_router

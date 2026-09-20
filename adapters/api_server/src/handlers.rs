@@ -13,24 +13,83 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use futures_util::stream::StreamExt;
-use ipnet::IpNet;
 use sona_core::ports::asr::find_online_asr_provider;
-use sona_core::transcription::transcript::TranscriptSegment;
 use tokio::io::AsyncWriteExt;
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
-pub(crate) async fn ip_whitelist_middleware(
+pub async fn ip_whitelist_middleware(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    State(whitelist): State<Arc<Vec<IpNet>>>,
+    State(state): State<ServerState>,
     req: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    if whitelist.iter().any(|net| net.contains(&addr.ip())) {
+    let ip = addr.ip().to_canonical();
+
+    // If the request presents a valid API key, allow it through
+    if !state.api_key.is_empty() {
+        if let Some(auth_val) = req.headers().get(axum::http::header::AUTHORIZATION)
+            && let Ok(auth_str) = auth_val.to_str()
+            && let Some(token) = auth_str.strip_prefix("Bearer ")
+            && token == state.api_key
+        {
+            return Ok(next.run(req).await);
+        }
+
+        if let Some(query) = req.uri().query() {
+            for pair in query.split('&') {
+                let mut parts = pair.splitn(2, '=');
+                let key = parts.next().unwrap_or_default();
+                let val = parts.next().unwrap_or_default();
+                if (key == "token" || key == "api_key") && val == state.api_key {
+                    return Ok(next.run(req).await);
+                }
+            }
+        }
+    }
+
+    if state.ip_whitelist.iter().any(|net| net.contains(&ip)) {
         Ok(next.run(req).await)
     } else {
+        log::warn!(
+            "[ApiServer] Request from {} rejected: IP not in whitelist ({:?})",
+            ip,
+            state.ip_whitelist
+        );
         Err(StatusCode::FORBIDDEN)
     }
+}
+pub async fn api_key_auth_middleware(
+    State(state): State<ServerState>,
+    req: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    if state.api_key.is_empty() {
+        return Ok(next.run(req).await);
+    }
+
+    // 1. Authorization header: Bearer <token>
+    if let Some(auth_val) = req.headers().get(axum::http::header::AUTHORIZATION)
+        && let Ok(auth_str) = auth_val.to_str()
+        && let Some(token) = auth_str.strip_prefix("Bearer ")
+        && token == state.api_key
+    {
+        return Ok(next.run(req).await);
+    }
+
+    // 2. Query parameter: ?token=<key> or ?api_key=<key>
+    if let Some(query) = req.uri().query() {
+        for pair in query.split('&') {
+            let mut parts = pair.splitn(2, '=');
+            let key = parts.next().unwrap_or_default();
+            let val = parts.next().unwrap_or_default();
+            if (key == "token" || key == "api_key") && val == state.api_key {
+                return Ok(next.run(req).await);
+            }
+        }
+    }
+
+    Err(StatusCode::UNAUTHORIZED)
 }
 
 pub async fn handle_health(State(state): State<ServerState>) -> Json<HealthResponse> {
@@ -187,39 +246,4 @@ pub async fn handle_job_audio(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(res.into_response())
-}
-
-#[derive(serde::Deserialize)]
-pub struct PolishRequest {
-    pub segments: Vec<TranscriptSegment>,
-}
-
-pub async fn handle_polish(
-    State(state): State<ServerState>,
-    Json(payload): Json<PolishRequest>,
-) -> Result<Json<Vec<TranscriptSegment>>, (StatusCode, String)> {
-    let result = state
-        .platform
-        .polish_segments(payload.segments)
-        .await
-        .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e.to_string()))?;
-    Ok(Json(result))
-}
-
-#[derive(serde::Deserialize)]
-pub struct TranslateRequest {
-    pub segments: Vec<TranscriptSegment>,
-    pub target_language: String,
-}
-
-pub async fn handle_translate(
-    State(state): State<ServerState>,
-    Json(payload): Json<TranslateRequest>,
-) -> Result<Json<Vec<TranscriptSegment>>, (StatusCode, String)> {
-    let result = state
-        .platform
-        .translate_segments(payload.segments, payload.target_language)
-        .await
-        .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e.to_string()))?;
-    Ok(Json(result))
 }
