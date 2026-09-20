@@ -24,8 +24,8 @@ use crate::ApiServerRuntimeError;
 use crate::ApiServerStartError;
 use crate::ApiServerStopError;
 use crate::handlers::{
-    api_key_auth_middleware, handle_delete_job, handle_export_job, handle_health, handle_info,
-    handle_job_audio, handle_job_status, handle_list_jobs, handle_llm_polish, handle_llm_translate,
+    handle_delete_job, handle_export_job, handle_health, handle_info, handle_job_audio,
+    handle_job_status, handle_list_jobs, handle_llm_polish, handle_llm_translate,
     handle_transcribe, ip_whitelist_middleware,
 };
 use crate::info::{HealthResponse, InfoResponse, build_health_response, build_info_response};
@@ -375,9 +375,11 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
     let worker_batch_plan_resolver = batch_plan_resolver.clone();
     let worker_platform = platform.clone();
 
+    let (shutdown_worker_tx, shutdown_worker_rx) = tokio::sync::oneshot::channel::<()>();
     tokio::spawn(async move {
         start_worker_loop(
             rx,
+            shutdown_worker_rx,
             TranscriptionWorkerDeps {
                 job_manager: job_manager_clone,
                 models_dir: models_dir_clone,
@@ -461,13 +463,6 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
         ));
     }
 
-    if !api_key.is_empty() {
-        api_router = api_router.layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            api_key_auth_middleware,
-        ));
-    }
-
     let streaming_router = streaming_router
         .unwrap_or_default()
         .with_state(state.clone());
@@ -514,6 +509,7 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
 
     log::info!("Starting HTTP API server on {}", addr);
     let clean_temp_dir = temp_dir.clone();
+    let clean_job_manager = state.job_manager.clone();
     let serve_res = axum::serve(
         listener,
         router.into_make_service_with_connect_info::<SocketAddr>(),
@@ -521,12 +517,19 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
     .with_graceful_shutdown(async move {
         let _ = shutdown_rx.await;
         let _ = shutdown_ttl_tx.send(());
+        let _ = shutdown_worker_tx.send(());
         log::info!("HTTP API server shutting down gracefully");
     })
     .await
     .map_err(|error| ApiServerRuntimeError::Serve {
         reason: error.to_string(),
     });
+
+    let wait_timeout = std::time::Duration::from_secs(30);
+    let start_wait = std::time::Instant::now();
+    while clean_job_manager.has_active_jobs().await && start_wait.elapsed() < wait_timeout {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
 
     log::info!(
         "Cleaning up API server temporary directory: {:?}",

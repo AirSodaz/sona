@@ -7,18 +7,18 @@ export interface ApiServerHealth {
   pendingJobs: number;
   cacheSpaceBytes: number;
 }
-
-export interface ApiServerOnlineAsrProviderInfo {
+export interface ApiServerModelInfo {
   id: string;
-  configured: boolean;
-  supportsBatch: boolean;
-  supportsStreaming: boolean;
+  name: string;
+  description?: string;
+  languages?: string[];
+  languageMode?: string;
 }
 
 export interface ApiServerInfo {
   platform: string;
   gpuAvailable: boolean;
-  models: string[];
+  models: (string | ApiServerModelInfo)[];
   vadInstalled: boolean;
   punctuationInstalled: boolean;
   onlineAsrProviders: ApiServerOnlineAsrProviderInfo[];

@@ -18,7 +18,8 @@ pub fn authorize_streaming_request(
     token: Option<&str>,
 ) -> Result<tokio::sync::OwnedSemaphorePermit, StatusCode> {
     let ip = addr.ip().to_canonical();
-    let has_valid_api_key = !state.api_key.is_empty() && token == Some(state.api_key.as_str());
+    let has_valid_api_key = !state.api_key.is_empty()
+        && token.is_some_and(|t| crate::handlers::constant_time_eq_str(t, &state.api_key));
 
     if !has_valid_api_key {
         if !state.ip_whitelist.iter().any(|net| net.contains(&ip)) {

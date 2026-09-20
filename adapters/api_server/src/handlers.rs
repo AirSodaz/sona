@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -13,6 +14,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use futures_util::stream::StreamExt;
+use sha2::{Digest, Sha256};
 use sona_core::llm::requests::LlmConfig;
 use sona_core::ports::asr::find_online_asr_provider;
 use sona_core::transcription::transcript::TranscriptSegment;
@@ -20,12 +22,49 @@ use tokio::io::AsyncWriteExt;
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
-pub fn extract_api_key_from_request(req: &Request) -> Option<&str> {
+pub fn constant_time_eq_str(a: &str, b: &str) -> bool {
+    let hash_a = Sha256::digest(a.as_bytes());
+    let hash_b = Sha256::digest(b.as_bytes());
+    let mut diff = 0u8;
+    for (x, y) in hash_a.iter().zip(hash_b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
+pub fn percent_decode_str(input: &str) -> Cow<'_, str> {
+    if !input.contains('%') {
+        return Cow::Borrowed(input);
+    }
+
+    let bytes = input.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let Ok(byte) =
+                u8::from_str_radix(std::str::from_utf8(&bytes[i + 1..=i + 2]).unwrap_or(""), 16)
+        {
+            decoded.push(byte);
+            i += 3;
+            continue;
+        }
+        decoded.push(bytes[i]);
+        i += 1;
+    }
+    match String::from_utf8(decoded) {
+        Ok(s) => Cow::Owned(s),
+        Err(_) => Cow::Borrowed(input),
+    }
+}
+
+pub fn extract_api_key_from_request<'a>(req: &'a Request) -> Option<Cow<'a, str>> {
     if let Some(auth_val) = req.headers().get(axum::http::header::AUTHORIZATION)
         && let Ok(auth_str) = auth_val.to_str()
         && let Some(token) = auth_str.strip_prefix("Bearer ")
     {
-        return Some(token);
+        return Some(Cow::Borrowed(token));
     }
 
     if let Some(query) = req.uri().query() {
@@ -34,12 +73,49 @@ pub fn extract_api_key_from_request(req: &Request) -> Option<&str> {
             let key = parts.next().unwrap_or_default();
             let val = parts.next().unwrap_or_default();
             if key == "token" || key == "api_key" {
-                return Some(val);
+                return Some(percent_decode_str(val));
             }
         }
     }
 
     None
+}
+
+pub fn is_request_api_key_valid(req: &Request, configured_api_key: &str) -> bool {
+    if configured_api_key.is_empty() {
+        return false;
+    }
+    match extract_api_key_from_request(req) {
+        Some(token) => constant_time_eq_str(&token, configured_api_key),
+        None => false,
+    }
+}
+
+pub fn validate_webhook_url(url: &str) -> Result<(), &'static str> {
+    let parsed = reqwest::Url::parse(url)
+        .map_err(|_| "Invalid webhook_url: must be a valid http or https URL")?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err("Invalid webhook_url: must be a valid http or https URL");
+    }
+    let host = parsed
+        .host_str()
+        .ok_or("Invalid webhook_url: missing host")?;
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        match ip {
+            std::net::IpAddr::V4(ipv4) => {
+                if ipv4.is_link_local() {
+                    return Err("Invalid webhook_url: link-local IP addresses are not permitted");
+                }
+            }
+            std::net::IpAddr::V6(ipv6) => {
+                let segments = ipv6.segments();
+                if (segments[0] & 0xffc0) == 0xfe80 {
+                    return Err("Invalid webhook_url: link-local IP addresses are not permitted");
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 pub async fn ip_whitelist_middleware(
@@ -49,25 +125,28 @@ pub async fn ip_whitelist_middleware(
     next: Next,
 ) -> Result<Response, StatusCode> {
     let ip = addr.ip().to_canonical();
+    let has_valid_key = is_request_api_key_valid(&req, &state.api_key);
 
-    // If the request presents a valid API key, allow it through
-    if !state.api_key.is_empty()
-        && extract_api_key_from_request(&req) == Some(state.api_key.as_str())
-    {
+    if has_valid_key {
         return Ok(next.run(req).await);
     }
 
-    if state.ip_whitelist.iter().any(|net| net.contains(&ip)) {
-        Ok(next.run(req).await)
-    } else {
+    if !state.ip_whitelist.iter().any(|net| net.contains(&ip)) {
         log::warn!(
             "[ApiServer] Request from {} rejected: IP not in whitelist ({:?})",
             ip,
             state.ip_whitelist
         );
-        Err(StatusCode::FORBIDDEN)
+        return Err(StatusCode::FORBIDDEN);
     }
+
+    if !state.api_key.is_empty() {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    Ok(next.run(req).await)
 }
+
 pub async fn api_key_auth_middleware(
     State(state): State<ServerState>,
     req: Request,
@@ -76,7 +155,7 @@ pub async fn api_key_auth_middleware(
     if state.api_key.is_empty() {
         return Ok(next.run(req).await);
     }
-    if extract_api_key_from_request(&req) == Some(state.api_key.as_str()) {
+    if is_request_api_key_valid(&req, &state.api_key) {
         return Ok(next.run(req).await);
     }
     Err(StatusCode::UNAUTHORIZED)
@@ -124,10 +203,10 @@ pub async fn handle_list_jobs(
     State(state): State<ServerState>,
     Query(query): Query<ListJobsQuery>,
 ) -> Json<HashMap<String, JobStatus>> {
-    let mut jobs = state.job_manager.list_jobs().await;
+    let mut ordered = state.job_manager.list_jobs_ordered().await;
     if let Some(filter_status) = &query.status {
         let filter_lower = filter_status.to_lowercase();
-        jobs.retain(|_, s| match s {
+        ordered.retain(|(_, s)| match s {
             JobStatus::Pending => filter_lower == "pending",
             JobStatus::Processing => filter_lower == "processing",
             JobStatus::Completed(_) => filter_lower == "completed",
@@ -135,22 +214,17 @@ pub async fn handle_list_jobs(
         });
     }
     if let Some(offset) = query.offset {
-        let mut keys: Vec<_> = jobs.keys().cloned().collect();
-        keys.sort();
-        for key in keys.into_iter().take(offset) {
-            jobs.remove(&key);
+        if offset < ordered.len() {
+            ordered.drain(..offset);
+        } else {
+            ordered.clear();
         }
     }
     if let Some(limit) = query.limit {
-        let mut keys: Vec<_> = jobs.keys().cloned().collect();
-        keys.sort();
-        if keys.len() > limit {
-            for key in keys.into_iter().skip(limit) {
-                jobs.remove(&key);
-            }
-        }
+        ordered.truncate(limit);
     }
-    Json(jobs)
+    let map: HashMap<String, JobStatus> = ordered.into_iter().collect();
+    Json(map)
 }
 
 pub async fn handle_transcribe(
@@ -186,6 +260,12 @@ async fn handle_transcribe_inner(
     {
         let name = field.name().unwrap_or("").to_string();
         if name == "file" {
+            if temp_file_path.is_some() {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    "Multiple file fields are not allowed".to_string(),
+                ));
+            }
             let extension = field
                 .file_name()
                 .and_then(|name| std::path::Path::new(name).extension())
@@ -205,6 +285,10 @@ async fn handle_transcribe_inner(
                     .await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             }
+            file.flush()
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            drop(file);
 
             if !state.media_validator.is_valid_media_file(&file_path).await {
                 return Err((
@@ -233,15 +317,8 @@ async fn handle_transcribe_inner(
     if let Some(url) = &webhook_url
         && !url.is_empty()
     {
-        match reqwest::Url::parse(url) {
-            Ok(parsed) if parsed.scheme() == "http" || parsed.scheme() == "https" => {}
-            _ => {
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    "Invalid webhook_url: must be a valid http or https URL".to_string(),
-                ));
-            }
-        }
+        validate_webhook_url(url)
+            .map_err(|err_msg| (StatusCode::BAD_REQUEST, err_msg.to_string()))?;
     }
 
     let mut engine = "Local".to_string();
@@ -249,9 +326,23 @@ async fn handle_transcribe_inner(
     let mut online_provider_config = None;
 
     if let Some(provider) = find_online_asr_provider(&m_id) {
+        let configs = state.online_asr_config.read().await;
+        let is_configured = configs
+            .get(&provider.id)
+            .and_then(|c| c.get("apiKey"))
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|k| !k.is_empty());
+        if !is_configured {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!(
+                    "Online ASR provider '{}' is not configured with an API key",
+                    provider.id
+                ),
+            ));
+        }
         engine = "Online".to_string();
         online_provider_id = Some(provider.id.clone());
-        let configs = state.online_asr_config.read().await;
         online_provider_config = configs.get(&provider.id).cloned();
     }
 
@@ -368,9 +459,20 @@ pub(crate) async fn handle_export_job(
         sona_core::export::ExportFormat::Md => "text/markdown; charset=utf-8",
     };
 
+    let extension = match format {
+        sona_core::export::ExportFormat::Json => "json",
+        sona_core::export::ExportFormat::Srt => "srt",
+        sona_core::export::ExportFormat::Vtt => "vtt",
+        sona_core::export::ExportFormat::Txt => "txt",
+        sona_core::export::ExportFormat::Md => "md",
+    };
+    let filename = format!("{}.{}", job_id, extension);
+    let disposition = format!("attachment; filename=\"{}\"", filename);
+
     let response = Response::builder()
         .status(StatusCode::OK)
         .header(axum::http::header::CONTENT_TYPE, content_type)
+        .header(axum::http::header::CONTENT_DISPOSITION, disposition)
         .body(axum::body::Body::from(content))
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -394,6 +496,18 @@ pub(crate) async fn handle_llm_polish(
     State(state): State<ServerState>,
     Json(payload): Json<LlmPolishRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if payload.segments.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "segments cannot be empty".to_string(),
+        ));
+    }
+    if payload.segments.len() > 10_000 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Too many segments (max 10000)".to_string(),
+        ));
+    }
     let polished = state
         .platform
         .polish_segments(payload.segments, payload.config)
@@ -407,9 +521,28 @@ pub(crate) async fn handle_llm_translate(
     State(state): State<ServerState>,
     Json(payload): Json<LlmTranslateRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if payload.segments.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "segments cannot be empty".to_string(),
+        ));
+    }
+    if payload.segments.len() > 10_000 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Too many segments (max 10000)".to_string(),
+        ));
+    }
+    let target_lang = payload.target_language.trim();
+    if target_lang.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "target_language cannot be empty".to_string(),
+        ));
+    }
     let translated = state
         .platform
-        .translate_segments(payload.segments, payload.target_language, payload.config)
+        .translate_segments(payload.segments, target_lang.to_string(), payload.config)
         .await
         .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e.to_string()))?;
 

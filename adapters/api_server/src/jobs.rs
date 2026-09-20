@@ -32,8 +32,22 @@ pub struct TranscriptionJob {
 #[derive(Clone)]
 pub struct JobEntry {
     pub status: JobStatus,
+    pub created_at: std::time::Instant,
     pub completed_at: Option<std::time::Instant>,
     pub file_path: Option<PathBuf>,
+    pub abort_handle: Option<tokio::task::AbortHandle>,
+}
+
+impl JobEntry {
+    pub fn new(status: JobStatus, file_path: Option<PathBuf>) -> Self {
+        Self {
+            status,
+            created_at: std::time::Instant::now(),
+            completed_at: None,
+            file_path,
+            abort_handle: None,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -58,8 +72,10 @@ impl JobManager {
             job_id.clone(),
             JobEntry {
                 status: JobStatus::Pending,
+                created_at: std::time::Instant::now(),
                 completed_at: None,
                 file_path: Some(file_path),
+                abort_handle: None,
             },
         );
         if self.sender.send(job).await.is_err() {
@@ -68,6 +84,11 @@ impl JobManager {
         }
         Ok(())
     }
+    pub async fn set_abort_handle(&self, job_id: &str, abort_handle: tokio::task::AbortHandle) {
+        if let Some(entry) = self.jobs.write().await.get_mut(job_id) {
+            entry.abort_handle = Some(abort_handle);
+        }
+    }
 
     pub async fn update_job(&self, job_id: &str, status: JobStatus) {
         if let Some(job) = self.jobs.write().await.get_mut(job_id) {
@@ -75,6 +96,7 @@ impl JobManager {
             job.status = status;
             if is_finished {
                 job.completed_at = Some(std::time::Instant::now());
+                job.abort_handle = None;
             }
         }
     }
@@ -95,19 +117,32 @@ impl JobManager {
     }
 
     pub async fn remove_job(&self, job_id: &str) -> Option<Option<PathBuf>> {
-        self.jobs
-            .write()
-            .await
-            .remove(job_id)
-            .map(|entry| entry.file_path)
+        let removed = self.jobs.write().await.remove(job_id);
+        if let Some(entry) = &removed
+            && let Some(abort) = &entry.abort_handle
+        {
+            abort.abort();
+        }
+        removed.map(|entry| entry.file_path)
     }
-
     pub async fn list_jobs(&self) -> HashMap<String, JobStatus> {
         self.jobs
             .read()
             .await
             .iter()
             .map(|(k, v)| (k.clone(), v.status.clone()))
+            .collect()
+    }
+    pub async fn list_jobs_ordered(&self) -> Vec<(String, JobStatus)> {
+        let jobs = self.jobs.read().await;
+        let mut entries: Vec<_> = jobs
+            .iter()
+            .map(|(k, v)| (k.clone(), v.status.clone(), v.created_at))
+            .collect();
+        entries.sort_by(|a, b| a.2.cmp(&b.2).then_with(|| a.0.cmp(&b.0)));
+        entries
+            .into_iter()
+            .map(|(id, status, _)| (id, status))
             .collect()
     }
     pub async fn active_job_count(&self) -> (usize, usize) {

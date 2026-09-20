@@ -219,6 +219,185 @@ curl http://127.0.0.1:14200/v1/transcriptions/c86e0c65-2746-4e56-9141-866d51bbca
 
 ---
 
+### 6. 删除或取消任务 (Delete / Cancel Job)
+
+取消正在排队或执行中的任务，或从服务器中删除已完成/失败的任务及关联的临时音频文件。
+
+- **URL**: `/v1/transcriptions/:job_id`
+- **Method**: `DELETE`
+
+#### 响应 (`204 No Content`)
+
+任务和临时音频文件被立即清理，若任务正在执行将被立即中断。
+
+#### Curl 请求示例
+```bash
+curl -X DELETE http://127.0.0.1:14200/v1/transcriptions/c86e0c65-2746-4e56-9141-866d51bbca43 \
+  -H "Authorization: Bearer your_secure_key"
+```
+
+---
+
+### 7. 获取任务音频 (Retrieve Job Audio)
+
+流式播放或下载与任务关联的原始音频文件。支持 HTTP Range 请求，可直接嵌入 HTML5 播放器拖动播放。
+
+- **URL**: `/v1/transcriptions/:job_id/audio`
+- **Method**: `GET`
+
+#### 查询参数
+
+| 参数名 | 类型 | 必填 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `token` | String | 否 | 用于 HTML5 `<audio>` 播放器跨标签传递鉴权 token。 |
+
+#### 响应 (`200 OK` 或 `206 Partial Content`)
+
+返回带对应 `Content-Type` 的音频二进制流。
+
+---
+
+### 8. 导出字幕与文本 (Export Job Subtitles)
+
+将已完成转写的任务结果导出为标准字幕或文本格式。
+
+- **URL**: `/v1/transcriptions/:job_id/export`
+- **Method**: `GET`
+
+#### 查询参数
+
+| 参数名 | 类型 | 必填 | 默认值 | 说明 |
+| :--- | :--- | :--- | :--- | :--- |
+| `format` | String | 否 | `srt` | 导出格式：`srt`、`vtt`、`json`、`txt`、`md`。 |
+| `mode` | String | 否 | `original` | 模式：`original`（原文）、`bilingual`（双语）。 |
+
+#### 响应 (`200 OK`)
+
+响应头包含 `Content-Disposition: attachment; filename="{job_id}.{format}"`，触发浏览器原生文件下载。
+
+---
+
+### 9. LLM 片段文本润色 (LLM Segment Polish)
+
+调用桌面端配置的大语言模型对转写片段进行文本润色与标点规整。
+
+- **URL**: `/v1/llm/polish`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+
+#### 请求体
+
+```json
+{
+  "segments": [
+    {
+      "id": "seg-0",
+      "start": 0.0,
+      "end": 2.5,
+      "text": "嗯那个你好世界",
+      "isFinal": true
+    }
+  ]
+}
+```
+
+#### 响应 (`200 OK`)
+
+```json
+{
+  "segments": [
+    {
+      "id": "seg-0",
+      "start": 0.0,
+      "end": 2.5,
+      "text": "你好，世界。",
+      "isFinal": true
+    }
+  ]
+}
+```
+
+---
+
+### 10. LLM 片段文本翻译 (LLM Segment Translation)
+
+调用配置的大语言模型对转写片段进行指定目标语言翻译。
+
+- **URL**: `/v1/llm/translate`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+
+#### 请求体
+
+```json
+{
+  "segments": [
+    {
+      "id": "seg-0",
+      "start": 0.0,
+      "end": 2.5,
+      "text": "你好，世界。",
+      "isFinal": true
+    }
+  ],
+  "target_language": "en"
+}
+```
+
+#### 响应 (`200 OK`)
+
+返回填充了 `translation` 字段的片段数组。
+
+---
+
+### 11. WebSocket 实时流式转录 (WebSocket Streaming)
+
+基于 WebSocket 全双工长连接的实时语音识别通道。
+
+- **URL**: `/v1/streaming` (或 `ws://127.0.0.1:14200/v1/streaming?token=your_secure_key`)
+- **协议**: WebSocket
+
+#### 握手认证
+支持在 Query 中携带 `?token=...` / `?api_key=...`，或在握手请求头中传递 `Authorization: Bearer <key>`。
+
+#### 交互流程
+1. **客户端 -> 服务端 (文本 JSON)** 发送启动配置：
+   ```json
+   {
+     "type": "start",
+     "model_id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+     "language": "auto",
+     "hotwords": null,
+     "vad_model_id": "silero-vad"
+   }
+   ```
+2. **服务端 -> 客户端 (文本 JSON)** 确认启动：
+   ```json
+   {
+     "type": "started",
+     "session_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+   }
+   ```
+3. **客户端 -> 服务端 (二进制)**：
+   持续发送 16kHz、16位小端单声道 PCM 数据块（`pcm_s16le`）。
+4. **服务端 -> 客户端 (文本 JSON)**：
+   实时推送阶段性与终态识别结果片段：
+   ```json
+   {
+     "type": "segment",
+     "segment": {
+       "id": "...",
+       "text": "你好世界",
+       "start": 0.0,
+       "end": 1.8,
+       "isFinal": false
+     }
+   }
+   ```
+5. **客户端 -> 服务端 (文本 JSON)** 发送停止并断开：
+   `{"type": "stop"}`
+---
+
 ## Webhooks 结果推送与安全校验
 
 如果在提交任务时指定了 `webhook_url`，Sona 会在任务最终处于成功（Completed）或失败（Failed）状态时，向该 URL 发送包含最终 JSON 数据结构的 POST 请求。

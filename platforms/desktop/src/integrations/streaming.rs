@@ -75,11 +75,17 @@ pub(crate) async fn handle_streaming(
     State(state): State<ServerState>,
     Extension(context): Extension<Arc<TauriStreamingContext>>,
     Query(params): Query<HashMap<String, String>>,
+    headers: axum::http::HeaderMap,
 ) -> Result<Response, StatusCode> {
+    let token_from_header = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|val| val.to_str().ok())
+        .and_then(|val| val.strip_prefix("Bearer "));
     let token = params
         .get("token")
         .or_else(|| params.get("api_key"))
-        .map(|s| s.as_str());
+        .map(|s| s.as_str())
+        .or(token_from_header);
     let permit = authorize_streaming_request(&state, addr, token)?;
 
     Ok(ws.on_upgrade(move |socket| async move {
@@ -426,13 +432,21 @@ async fn handle_local_streaming_socket(
                                     log::error!("[Streaming] current_segment_id is None when speech is active");
                                     "unknown"
                                 });
-                                if let Some(segment) = run_offline_inference_standalone(
-                                    offline_state.speech_chunks(),
-                                    &recognizer,
-                                    segment_id,
-                                    global_start,
-                                    false,
-                                ) {
+                                let chunks = offline_state.speech_chunks().to_vec();
+                                let recognizer_clone = recognizer.clone();
+                                let seg_id = segment_id.to_string();
+                                let segment = tokio::task::spawn_blocking(move || {
+                                    run_offline_inference_standalone(
+                                        &chunks,
+                                        &recognizer_clone,
+                                        &seg_id,
+                                        global_start,
+                                        false,
+                                    )
+                                })
+                                .await
+                                .unwrap_or(None);
+                                if let Some(segment) = segment {
                                     let _ = socket.send(Message::Text(serialize_server_message(&ServerMessage::Segment { segment: Box::new(segment) }).into())).await;
                                 }
                                 last_inference_time = now;
@@ -445,13 +459,21 @@ async fn handle_local_streaming_socket(
                                     log::error!("[Streaming] current_segment_id is None when speech is active");
                                     "unknown"
                                 });
-                                if let Some(segment) = run_offline_inference_standalone(
-                                    offline_state.speech_chunks(),
-                                    &recognizer,
-                                    segment_id,
-                                    global_start,
-                                    true,
-                                ) {
+                                let chunks = offline_state.speech_chunks().to_vec();
+                                let recognizer_clone = recognizer.clone();
+                                let seg_id = segment_id.to_string();
+                                let segment = tokio::task::spawn_blocking(move || {
+                                    run_offline_inference_standalone(
+                                        &chunks,
+                                        &recognizer_clone,
+                                        &seg_id,
+                                        global_start,
+                                        true,
+                                    )
+                                })
+                                .await
+                                .unwrap_or(None);
+                                if let Some(segment) = segment {
                                     let _ = socket.send(Message::Text(serialize_server_message(&ServerMessage::Segment { segment: Box::new(segment) }).into())).await;
                                 }
                                 offline_state.clear_speech_buffer();
@@ -468,13 +490,21 @@ async fn handle_local_streaming_socket(
                                     log::error!("[Streaming] current_segment_id is None when speech is active");
                                     "unknown"
                                 });
-                                if let Some(segment) = run_offline_inference_standalone(
-                                    offline_state.speech_chunks(),
-                                    &recognizer,
-                                    segment_id,
-                                    global_start,
-                                    true,
-                                ) {
+                                let chunks = offline_state.speech_chunks().to_vec();
+                                let recognizer_clone = recognizer.clone();
+                                let seg_id = segment_id.to_string();
+                                let segment = tokio::task::spawn_blocking(move || {
+                                    run_offline_inference_standalone(
+                                        &chunks,
+                                        &recognizer_clone,
+                                        &seg_id,
+                                        global_start,
+                                        true,
+                                    )
+                                })
+                                .await
+                                .unwrap_or(None);
+                                if let Some(segment) = segment {
                                     let _ = socket.send(Message::Text(serialize_server_message(&ServerMessage::Segment { segment: Box::new(segment) }).into())).await;
                                 }
                             }

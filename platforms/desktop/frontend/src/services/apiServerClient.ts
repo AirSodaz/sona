@@ -2,8 +2,10 @@ import type { TranscriptSegment } from '../types/transcript';
 
 export interface ApiServerHealth {
   status: string;
-  uptimeSeconds: number;
-  availableCacheSpaceBytes: number;
+  uptime: number;
+  activeJobs: number;
+  pendingJobs: number;
+  cacheSpaceBytes: number;
 }
 
 export interface ApiServerModelInfo {

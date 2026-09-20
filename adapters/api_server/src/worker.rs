@@ -57,6 +57,7 @@ pub(crate) async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
         reqwest::Client::builder()
             .connect_timeout(std::time::Duration::from_secs(5))
             .timeout(std::time::Duration::from_secs(15))
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .unwrap_or_default()
     });
@@ -112,6 +113,7 @@ pub(crate) struct TranscriptionWorkerDeps {
 
 pub(crate) async fn start_worker_loop(
     mut receiver: mpsc::Receiver<TranscriptionJob>,
+    mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     deps: TranscriptionWorkerDeps,
 ) {
     let TranscriptionWorkerDeps {
@@ -125,7 +127,21 @@ pub(crate) async fn start_worker_loop(
     } = deps;
     let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));
 
-    while let Some(job) = receiver.recv().await {
+    loop {
+        let job = tokio::select! {
+            biased;
+            _ = &mut shutdown_rx => {
+                log::info!("[Server] worker loop received shutdown signal");
+                break;
+            }
+            job = receiver.recv() => {
+                match job {
+                    Some(j) => j,
+                    None => break,
+                }
+            }
+        };
+        let job_id = job.job_id.clone();
         let job_manager = shared_job_manager.clone();
         let models_dir = shared_models_dir.clone();
         let semaphore = semaphore.clone();
@@ -134,7 +150,7 @@ pub(crate) async fn start_worker_loop(
         let batch_plan_resolver = shared_batch_plan_resolver.clone();
         let platform = shared_platform.clone();
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let _permit = match semaphore.acquire().await {
                 Ok(permit) => permit,
                 Err(_) => {
@@ -201,6 +217,9 @@ pub(crate) async fn start_worker_loop(
                 let _ = tokio::fs::remove_file(&job.file_path).await;
             }
         });
+        shared_job_manager
+            .set_abort_handle(&job_id, handle.abort_handle())
+            .await;
     }
 }
 

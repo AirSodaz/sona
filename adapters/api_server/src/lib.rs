@@ -43,6 +43,7 @@ mod tests {
     use axum::{
         Router,
         body::Body,
+        extract::ConnectInfo,
         http::{Request, StatusCode},
         routing::{get, post},
     };
@@ -61,6 +62,7 @@ mod tests {
     use sona_core::transcription::transcript::TranscriptSegment;
     use std::collections::HashMap;
     use std::fs;
+    use std::net::SocketAddr;
     use std::path::{Path as StdPath, PathBuf};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -335,8 +337,10 @@ mod tests {
         let transcriber_calls = Arc::new(AtomicUsize::new(0));
         let (tx, rx) = mpsc::channel(1);
         let job_manager = JobManager::new(tx);
+        let (_shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
         let worker = tokio::spawn(start_worker_loop(
             rx,
+            shutdown_rx,
             TranscriptionWorkerDeps {
                 job_manager: job_manager.clone(),
                 models_dir: PathBuf::from("models"),
@@ -441,24 +445,30 @@ mod tests {
             "expired-job".to_string(),
             JobEntry {
                 status: JobStatus::Completed(vec![]),
+                created_at: std::time::Instant::now(),
                 completed_at: Some(std::time::Instant::now() - std::time::Duration::from_secs(120)),
                 file_path: None,
+                abort_handle: None,
             },
         );
         job_manager.jobs.write().await.insert(
             "fresh-job".to_string(),
             JobEntry {
                 status: JobStatus::Completed(vec![]),
+                created_at: std::time::Instant::now(),
                 completed_at: Some(std::time::Instant::now()),
                 file_path: None,
+                abort_handle: None,
             },
         );
         job_manager.jobs.write().await.insert(
             "pending-job".to_string(),
             JobEntry {
                 status: JobStatus::Pending,
+                created_at: std::time::Instant::now(),
                 completed_at: None,
                 file_path: None,
+                abort_handle: None,
             },
         );
 
@@ -620,8 +630,10 @@ mod tests {
             "test-job-id".to_string(),
             JobEntry {
                 status: JobStatus::Pending,
+                created_at: std::time::Instant::now(),
                 completed_at: None,
                 file_path: None,
+                abort_handle: None,
             },
         );
         let state = ServerState {
@@ -673,24 +685,30 @@ mod tests {
             "job-1".to_string(),
             JobEntry {
                 status: JobStatus::Pending,
+                created_at: std::time::Instant::now(),
                 completed_at: None,
                 file_path: None,
+                abort_handle: None,
             },
         );
         job_manager.jobs.write().await.insert(
             "job-2".to_string(),
             JobEntry {
                 status: JobStatus::Processing,
+                created_at: std::time::Instant::now(),
                 completed_at: None,
                 file_path: None,
+                abort_handle: None,
             },
         );
         job_manager.jobs.write().await.insert(
             "job-3".to_string(),
             JobEntry {
                 status: JobStatus::Completed(vec![]),
+                created_at: std::time::Instant::now(),
                 completed_at: Some(std::time::Instant::now()),
                 file_path: None,
+                abort_handle: None,
             },
         );
 
@@ -1311,8 +1329,10 @@ mod tests {
             "job-del".to_string(),
             JobEntry {
                 status: JobStatus::Completed(vec![]),
+                created_at: std::time::Instant::now(),
                 completed_at: Some(std::time::Instant::now()),
                 file_path: Some(path.clone()),
+                abort_handle: None,
             },
         );
 
@@ -1366,8 +1386,10 @@ mod tests {
             "job-exp".to_string(),
             JobEntry {
                 status: JobStatus::Completed(segments),
+                created_at: std::time::Instant::now(),
                 completed_at: Some(std::time::Instant::now()),
                 file_path: None,
+                abort_handle: None,
             },
         );
 
@@ -1392,6 +1414,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(
+            res.headers().get("content-disposition").unwrap(),
+            "attachment; filename=\"job-exp.srt\""
+        );
         let body = axum::body::to_bytes(res.into_body(), 1024 * 1024)
             .await
             .unwrap();
@@ -1421,5 +1447,219 @@ mod tests {
         // 4. Foreign IP with valid key -> Success (permit acquired)
         let permit = authorize_streaming_request(&state, foreign_addr, Some("my-secret-key"));
         assert!(permit.is_ok());
+    }
+
+    #[tokio::test]
+    async fn http_ip_whitelist_middleware_enforces_auth_and_network_perimeter() {
+        let state = streaming_authorization_state("secret-key", 1, "127.0.0.1/32");
+        let app = Router::new()
+            .route("/api/test", get(|| async { "ok" }))
+            .layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                crate::handlers::ip_whitelist_middleware,
+            ))
+            .with_state(state);
+
+        let foreign_ip: SocketAddr = "192.168.1.50:12345".parse().unwrap();
+        let local_ip: SocketAddr = "127.0.0.1:12345".parse().unwrap();
+
+        // 1. Foreign IP without key -> 403 Forbidden
+        let req = Request::builder()
+            .uri("/api/test")
+            .extension(ConnectInfo(foreign_ip))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        // 2. Foreign IP with invalid key -> 403 Forbidden
+        let req = Request::builder()
+            .uri("/api/test")
+            .header("Authorization", "Bearer wrong-key")
+            .extension(ConnectInfo(foreign_ip))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        // 3. Whitelisted IP with invalid key -> 401 Unauthorized
+        let req = Request::builder()
+            .uri("/api/test")
+            .header("Authorization", "Bearer wrong-key")
+            .extension(ConnectInfo(local_ip))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        // 4. Whitelisted IP without key (when key required) -> 401 Unauthorized
+        let req = Request::builder()
+            .uri("/api/test")
+            .extension(ConnectInfo(local_ip))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        // 5. Foreign IP with valid key -> 200 OK
+        let req = Request::builder()
+            .uri("/api/test")
+            .header("Authorization", "Bearer secret-key")
+            .extension(ConnectInfo(foreign_ip))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        // 6. Whitelisted IP with valid key -> 200 OK
+        let req = Request::builder()
+            .uri("/api/test")
+            .header("Authorization", "Bearer secret-key")
+            .extension(ConnectInfo(local_ip))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn query_token_handles_percent_encoded_special_chars() {
+        let state = streaming_authorization_state("my+secret token=123", 1, "127.0.0.1/32");
+        let app = Router::new()
+            .route("/api/test", get(|| async { "ok" }))
+            .layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                crate::handlers::ip_whitelist_middleware,
+            ))
+            .with_state(state);
+
+        let foreign_ip: SocketAddr = "10.0.0.1:12345".parse().unwrap();
+        // URL-encoded "my+secret token=123" -> "my%2Bsecret%20token%3D123"
+        let req = Request::builder()
+            .uri("/api/test?token=my%2Bsecret%20token%3D123")
+            .extension(ConnectInfo(foreign_ip))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn constant_time_eq_str_verifies_equality_correctly() {
+        use crate::handlers::constant_time_eq_str;
+        assert!(constant_time_eq_str("password123", "password123"));
+        assert!(!constant_time_eq_str("password123", "password124"));
+        assert!(!constant_time_eq_str("short", "longer_password"));
+        assert!(!constant_time_eq_str("", "not_empty"));
+        assert!(constant_time_eq_str("", ""));
+    }
+
+    #[test]
+    fn validate_webhook_url_rejects_link_local_and_invalid_schemes() {
+        use crate::handlers::validate_webhook_url;
+        assert!(validate_webhook_url("http://localhost:3000/webhook").is_ok());
+        assert!(validate_webhook_url("https://api.example.com/callback").is_ok());
+        assert!(validate_webhook_url("http://192.168.1.100:8080/hook").is_ok());
+        // Block cloud metadata / link-local addresses
+        assert!(validate_webhook_url("http://169.254.169.254/latest/meta-data").is_err());
+        assert!(validate_webhook_url("http://169.254.1.1/hook").is_err());
+        // Block invalid schemes
+        assert!(validate_webhook_url("file:///etc/passwd").is_err());
+        assert!(validate_webhook_url("ftp://example.com/file").is_err());
+        assert!(validate_webhook_url("not-a-url").is_err());
+    }
+
+    #[tokio::test]
+    async fn transcribe_rejects_duplicate_file_fields() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut state = streaming_authorization_state("", 1, "127.0.0.1/32");
+        state.temp_dir = temp.path().to_path_buf();
+        state.media_validator = Arc::new(AcceptingMediaValidator);
+
+        let boundary = "sona-duplicate-test";
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"sample1.wav\"\r\nContent-Type: audio/wav\r\n\r\naudio data 1\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"sample2.wav\"\r\nContent-Type: audio/wav\r\n\r\naudio data 2\r\n--{boundary}--\r\n"
+        );
+
+        let app = Router::new()
+            .route("/v1/transcriptions", post(handle_transcribe))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/transcriptions")
+                    .header(
+                        "content-type",
+                        format!("multipart/form-data; boundary={boundary}"),
+                    )
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        // Confirm all files were cleaned up
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
+    }
+
+    #[tokio::test]
+    async fn llm_polish_and_translate_reject_empty_payloads() {
+        let state = streaming_authorization_state("", 1, "127.0.0.1/32");
+        let app = Router::new()
+            .route("/v1/llm/polish", post(crate::handlers::handle_llm_polish))
+            .route(
+                "/v1/llm/translate",
+                post(crate::handlers::handle_llm_translate),
+            )
+            .with_state(state);
+
+        // Polish with empty segments -> 400 Bad Request
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/llm/polish")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"segments":[]}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+        // Translate with empty segments -> 400 Bad Request
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/llm/translate")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"segments":[],"target_language":"en"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+        // Translate with empty target_language -> 400 Bad Request
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/llm/translate")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"segments":[{"id":"1","start":0.0,"end":1.0,"text":"hi","isFinal":true}],"target_language":"   "}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     }
 }
