@@ -20,6 +20,28 @@ use tokio::io::AsyncWriteExt;
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
+pub fn extract_api_key_from_request(req: &Request) -> Option<&str> {
+    if let Some(auth_val) = req.headers().get(axum::http::header::AUTHORIZATION)
+        && let Ok(auth_str) = auth_val.to_str()
+        && let Some(token) = auth_str.strip_prefix("Bearer ")
+    {
+        return Some(token);
+    }
+
+    if let Some(query) = req.uri().query() {
+        for pair in query.split('&') {
+            let mut parts = pair.splitn(2, '=');
+            let key = parts.next().unwrap_or_default();
+            let val = parts.next().unwrap_or_default();
+            if key == "token" || key == "api_key" {
+                return Some(val);
+            }
+        }
+    }
+
+    None
+}
+
 pub async fn ip_whitelist_middleware(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<ServerState>,
@@ -29,25 +51,10 @@ pub async fn ip_whitelist_middleware(
     let ip = addr.ip().to_canonical();
 
     // If the request presents a valid API key, allow it through
-    if !state.api_key.is_empty() {
-        if let Some(auth_val) = req.headers().get(axum::http::header::AUTHORIZATION)
-            && let Ok(auth_str) = auth_val.to_str()
-            && let Some(token) = auth_str.strip_prefix("Bearer ")
-            && token == state.api_key
-        {
-            return Ok(next.run(req).await);
-        }
-
-        if let Some(query) = req.uri().query() {
-            for pair in query.split('&') {
-                let mut parts = pair.splitn(2, '=');
-                let key = parts.next().unwrap_or_default();
-                let val = parts.next().unwrap_or_default();
-                if (key == "token" || key == "api_key") && val == state.api_key {
-                    return Ok(next.run(req).await);
-                }
-            }
-        }
+    if !state.api_key.is_empty()
+        && extract_api_key_from_request(&req) == Some(state.api_key.as_str())
+    {
+        return Ok(next.run(req).await);
     }
 
     if state.ip_whitelist.iter().any(|net| net.contains(&ip)) {
@@ -69,28 +76,9 @@ pub async fn api_key_auth_middleware(
     if state.api_key.is_empty() {
         return Ok(next.run(req).await);
     }
-
-    // 1. Authorization header: Bearer <token>
-    if let Some(auth_val) = req.headers().get(axum::http::header::AUTHORIZATION)
-        && let Ok(auth_str) = auth_val.to_str()
-        && let Some(token) = auth_str.strip_prefix("Bearer ")
-        && token == state.api_key
-    {
+    if extract_api_key_from_request(&req) == Some(state.api_key.as_str()) {
         return Ok(next.run(req).await);
     }
-
-    // 2. Query parameter: ?token=<key> or ?api_key=<key>
-    if let Some(query) = req.uri().query() {
-        for pair in query.split('&') {
-            let mut parts = pair.splitn(2, '=');
-            let key = parts.next().unwrap_or_default();
-            let val = parts.next().unwrap_or_default();
-            if (key == "token" || key == "api_key") && val == state.api_key {
-                return Ok(next.run(req).await);
-            }
-        }
-    }
-
     Err(StatusCode::UNAUTHORIZED)
 }
 
@@ -225,7 +213,7 @@ pub async fn handle_transcribe(
     Ok(Json(serde_json::json!({ "job_id": job_id })))
 }
 
-pub async fn handle_job_audio(
+pub(crate) async fn handle_job_audio(
     State(state): State<ServerState>,
     Path(job_id): Path<String>,
     req: Request,
@@ -255,7 +243,7 @@ pub async fn handle_job_audio(
     Ok(res.into_response())
 }
 
-pub async fn handle_delete_job(
+pub(crate) async fn handle_delete_job(
     State(state): State<ServerState>,
     Path(job_id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
@@ -274,11 +262,11 @@ pub async fn handle_delete_job(
 
 #[derive(serde::Deserialize)]
 pub struct ExportQuery {
-    pub format: Option<String>,
-    pub mode: Option<String>,
+    pub format: Option<sona_core::export::ExportFormat>,
+    pub mode: Option<sona_core::export::ExportMode>,
 }
 
-pub async fn handle_export_job(
+pub(crate) async fn handle_export_job(
     State(state): State<ServerState>,
     Path(job_id): Path<String>,
     Query(query): Query<ExportQuery>,
@@ -302,21 +290,10 @@ pub async fn handle_export_job(
         }
     };
 
-    let format_str = query.format.as_deref().unwrap_or("srt");
-    let format = sona_core::export::ExportFormat::parse(format_str)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-
-    let mode = match query
+    let format = query.format.unwrap_or(sona_core::export::ExportFormat::Srt);
+    let mode = query
         .mode
-        .as_deref()
-        .map(|s| s.to_ascii_lowercase())
-        .as_deref()
-    {
-        Some("bilingual") => sona_core::export::ExportMode::Bilingual,
-        Some("translation") => sona_core::export::ExportMode::Translation,
-        _ => sona_core::export::ExportMode::Original,
-    };
-
+        .unwrap_or(sona_core::export::ExportMode::Original);
     let content = sona_core::export::export_segments_with_mode(&segments, format, mode)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -350,7 +327,7 @@ pub struct LlmTranslateRequest {
     pub config: Option<LlmConfig>,
 }
 
-pub async fn handle_llm_polish(
+pub(crate) async fn handle_llm_polish(
     State(state): State<ServerState>,
     Json(payload): Json<LlmPolishRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
@@ -363,7 +340,7 @@ pub async fn handle_llm_polish(
     Ok(Json(serde_json::json!({ "segments": polished })))
 }
 
-pub async fn handle_llm_translate(
+pub(crate) async fn handle_llm_translate(
     State(state): State<ServerState>,
     Json(payload): Json<LlmTranslateRequest>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {

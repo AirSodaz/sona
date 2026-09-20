@@ -228,12 +228,7 @@ pub fn prepare_runtime_config(
             max_streaming: resolved.max_streaming,
             ip_whitelist: Arc::new(parsed_whitelist),
             online_asr_config,
-            transcription_defaults: ApiServerTranscriptionDefaults {
-                gpu_acceleration: resolved.transcription_defaults.gpu_acceleration,
-                vad_model_id: resolved.transcription_defaults.vad_model_id,
-                punctuation_model_id: resolved.transcription_defaults.punctuation_model_id,
-                ffmpeg_path: resolved.transcription_defaults.ffmpeg_path,
-            },
+            transcription_defaults: resolved.transcription_defaults,
             batch_transcriber,
             media_validator,
             gpu_availability,

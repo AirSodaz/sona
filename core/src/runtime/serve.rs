@@ -1,5 +1,7 @@
 use crate::models::paths::ModelsDirStatus;
-use crate::models::preset_models::{DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID};
+use crate::models::preset_models::{
+    DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, find_preset_model,
+};
 use crate::runtime::config::ServeConfigSection;
 use crate::runtime::error::RuntimeValidationError;
 use crate::runtime::gpu::resolve_gpu_acceleration;
@@ -41,6 +43,36 @@ pub struct ServeTranscriptionDefaults {
     pub vad_model_id: Option<String>,
     pub punctuation_model_id: Option<String>,
     pub ffmpeg_path: Option<String>,
+}
+
+impl ServeTranscriptionDefaults {
+    pub fn companion_models_for(&self, model_id: &str) -> (Option<String>, Option<String>) {
+        let rules = find_preset_model(model_id).map(|model| model.resolved_rules());
+
+        let vad_model_id = match self.vad_model_id.as_deref() {
+            Some(id)
+                if rules.map(|rules| rules.requires_vad).unwrap_or(true)
+                    || id != DEFAULT_SILERO_VAD_MODEL_ID =>
+            {
+                Some(id.to_string())
+            }
+            _ => None,
+        };
+
+        let punctuation_model_id = match self.punctuation_model_id.as_deref() {
+            Some(id)
+                if rules
+                    .map(|rules| rules.requires_punctuation)
+                    .unwrap_or(true)
+                    || id != DEFAULT_PUNCTUATION_MODEL_ID =>
+            {
+                Some(id.to_string())
+            }
+            _ => None,
+        };
+
+        (vad_model_id, punctuation_model_id)
+    }
 }
 
 #[derive(Debug, Clone, Default)]

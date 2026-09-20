@@ -11,9 +11,8 @@ mod worker;
 
 pub use error::*;
 pub use handlers::{
-    api_key_auth_middleware, handle_delete_job, handle_export_job, handle_health, handle_info,
-    handle_job_audio, handle_job_status, handle_list_jobs, handle_llm_polish, handle_llm_translate,
-    handle_transcribe,
+    api_key_auth_middleware, extract_api_key_from_request, handle_health, handle_info,
+    handle_job_status, handle_list_jobs, handle_transcribe,
 };
 pub use info::{
     ApiServerModelInfo, HealthResponse, InfoResponse, OnlineAsrProviderInfo, build_info_response,
@@ -37,6 +36,7 @@ pub use worker::build_local_transcribe_options;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::handlers::{handle_delete_job, handle_export_job};
     use crate::runtime::startup_channel_closed_error;
     use crate::worker::{TranscriptionWorkerDeps, start_worker_loop};
     use async_trait::async_trait;

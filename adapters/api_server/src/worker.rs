@@ -1,4 +1,4 @@
-﻿use std::path::{Path as StdPath, PathBuf};
+use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
 
 use hmac::{Hmac, KeyInit, Mac};
@@ -203,8 +203,7 @@ pub fn build_local_transcribe_options(
     models_dir: &StdPath,
     defaults: &ApiServerTranscriptionDefaults,
 ) -> BatchTranscribeOptions {
-    let (vad_model_id, punctuation_model_id) =
-        companion_defaults_for_model(&job.model_id, defaults);
+    let (vad_model_id, punctuation_model_id) = defaults.companion_models_for(&job.model_id);
     BatchTranscribeOptions {
         input: job.file_path.clone(),
         output: None,
@@ -229,36 +228,4 @@ pub fn build_local_transcribe_options(
         force: true,
         ffmpeg_path: defaults.ffmpeg_path.clone(),
     }
-}
-
-fn companion_defaults_for_model(
-    model_id: &str,
-    defaults: &ApiServerTranscriptionDefaults,
-) -> (Option<String>, Option<String>) {
-    let rules = sona_core::models::preset_models::find_preset_model(model_id)
-        .map(|model| model.resolved_rules());
-
-    let vad_model_id = match defaults.vad_model_id.as_deref() {
-        Some(id)
-            if rules.map(|rules| rules.requires_vad).unwrap_or(true)
-                || id != sona_core::models::preset_models::DEFAULT_SILERO_VAD_MODEL_ID =>
-        {
-            Some(id.to_string())
-        }
-        _ => None,
-    };
-
-    let punctuation_model_id = match defaults.punctuation_model_id.as_deref() {
-        Some(id)
-            if rules
-                .map(|rules| rules.requires_punctuation)
-                .unwrap_or(true)
-                || id != sona_core::models::preset_models::DEFAULT_PUNCTUATION_MODEL_ID =>
-        {
-            Some(id.to_string())
-        }
-        _ => None,
-    };
-
-    (vad_model_id, punctuation_model_id)
 }
