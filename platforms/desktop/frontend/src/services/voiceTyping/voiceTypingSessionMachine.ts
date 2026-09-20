@@ -29,6 +29,7 @@ import { voiceTypingSoundPlayer } from './voiceTypingSounds';
 
 const ERROR_VISIBILITY_MS = 2000;
 const FLUSH_EVENT_SETTLE_MS = 80;
+export const DEFAULT_BATCH_SILENCE_TIMEOUT_MS = 1500;
 
 type SessionState = 'idle' | 'preparing' | 'listening' | 'composing' | 'stopping' | 'error';
 type SegmentDropReason = 'stale_session' | 'manual_stop_pending' | 'empty_after_normalize';
@@ -77,6 +78,7 @@ interface VoiceTypingSessionMachineOptions {
   getContextRules?: () => VoiceTypingContextRule[] | undefined;
   isContextAwarenessEnabled?: () => boolean;
   getRecentHistory?: () => VoiceTypingHistoryItem[];
+  silenceTimeoutMs?: number;
 }
 
 function delay(ms: number) {
@@ -132,6 +134,7 @@ export class VoiceTypingSessionMachine {
   private revision = 0;
   private readonly committedSegmentIds = new Set<string>();
   private segmentProcessingChain: Promise<void> = Promise.resolve();
+  private silenceCommitTimer: number | null = null;
 
   constructor(private readonly options: VoiceTypingSessionMachineOptions) {}
 
@@ -139,6 +142,7 @@ export class VoiceTypingSessionMachine {
     if (this.isActive()) {
       return;
     }
+    this.clearSilenceCommitTimer();
 
     this.isTranslateSession = Boolean(options?.isTranslate);
 
@@ -231,12 +235,14 @@ export class VoiceTypingSessionMachine {
         logger.info('[VoiceTypingSessionMachine] Sensed application context', this.currentContext);
       }
       if (!this.isCurrentSession(sessionId, requestId) || this.isSessionStopping()) {
+        await Promise.resolve(service.stop()).catch(() => {});
         return;
       }
 
       await this.options.ensureMicrophoneStarted();
 
       if (!this.isCurrentSession(sessionId, requestId) || this.isSessionStopping()) {
+        await Promise.resolve(service.stop()).catch(() => {});
         return;
       }
 
@@ -249,9 +255,14 @@ export class VoiceTypingSessionMachine {
       });
 
       if (!this.isCurrentSession(sessionId, requestId) || this.isSessionStopping()) {
+        await Promise.resolve(service.stop()).catch((stopError) => {
+          logger.error(
+            '[VoiceTypingSessionMachine] Failed to stop orphaned recognizer:',
+            stopError
+          );
+        });
         return;
       }
-
       if (this.currentText) {
         this.sessionState = 'composing';
         return;
@@ -268,7 +279,7 @@ export class VoiceTypingSessionMachine {
     } catch (error) {
       const errorMessage = extractErrorMessage(error);
       logger.error('[VoiceTypingSessionMachine] Failed to start voice typing:', error);
-      await this.options.transcriptionService.softStop().catch((stopError) => {
+      await Promise.resolve(this.options.transcriptionService.stop()).catch((stopError) => {
         logger.error(
           '[VoiceTypingSessionMachine] Failed to roll back recognizer after start failure:',
           stopError
@@ -285,6 +296,7 @@ export class VoiceTypingSessionMachine {
     if (!this.isActive() || !this.activeSessionId || this.sessionState === 'stopping') {
       return;
     }
+    this.clearSilenceCommitTimer();
 
     const sessionId = this.activeSessionId;
     this.sessionState = 'stopping';
@@ -543,6 +555,7 @@ export class VoiceTypingSessionMachine {
     if (!this.isActive() || !this.activeSessionId || this.sessionState === 'stopping') {
       return;
     }
+    this.clearSilenceCommitTimer();
 
     const sessionId = this.activeSessionId;
     this.sessionState = 'stopping';
@@ -695,7 +708,15 @@ export class VoiceTypingSessionMachine {
         }
         this.currentText = this.accumulatedPolishText.join('');
         this.currentSegmentId = null;
+
+        const totalText = this.currentText.trim();
+        if (totalText && !this.manualStopPending && this.isActive()) {
+          this.armSilenceCommitTimer(sessionId, requestId);
+        }
       } else {
+        if (hasVisibleText) {
+          this.clearSilenceCommitTimer();
+        }
         this.currentSegmentId = segment.id;
         this.currentText = [...this.accumulatedPolishText, text].join('');
       }
@@ -917,6 +938,7 @@ export class VoiceTypingSessionMachine {
   private async handleSessionError(sessionId: string, requestId: number, error: string) {
     this.playSound('error');
     this.options.overlayPresenter.clearListeningReset();
+    this.clearSilenceCommitTimer();
     this.sessionState = 'error';
     this.manualStopPending = true;
     this.options.onRuntimeError?.(error);
@@ -977,9 +999,10 @@ export class VoiceTypingSessionMachine {
       logger.error('[VoiceTypingSessionMachine] Failed to hide overlay:', error);
     });
     await this.options.overlayPresenter.clearState();
+    await Promise.resolve(this.options.transcriptionService.stop()).catch(() => {});
+    this.clearSilenceCommitTimer();
     this.finishSession(sessionId);
   }
-
   private logSegmentDrop(reason: SegmentDropReason, details: Record<string, unknown>) {
     logger.info('[VoiceTypingSessionMachine] Dropped segment update', {
       dropReason: reason,
@@ -1014,5 +1037,34 @@ export class VoiceTypingSessionMachine {
 
   private isSessionStopping() {
     return this.sessionState === 'stopping' || this.sessionState === 'error';
+  }
+
+  private clearSilenceCommitTimer() {
+    if (this.silenceCommitTimer !== null) {
+      window.clearTimeout(this.silenceCommitTimer);
+      this.silenceCommitTimer = null;
+    }
+  }
+
+  private armSilenceCommitTimer(sessionId: string, requestId: number) {
+    this.clearSilenceCommitTimer();
+    const timeoutMs = this.options.silenceTimeoutMs ?? DEFAULT_BATCH_SILENCE_TIMEOUT_MS;
+    this.silenceCommitTimer = window.setTimeout(() => {
+      this.silenceCommitTimer = null;
+      if (
+        this.isCurrentSession(sessionId, requestId) &&
+        !this.manualStopPending &&
+        this.isActive()
+      ) {
+        logger.info('[VoiceTypingSessionMachine] Auto-committing due to prolonged VAD silence', {
+          sessionId,
+          requestId,
+          timeoutMs,
+          accumulatedSegments: this.accumulatedPolishText.length,
+          textLength: this.currentText.length,
+        });
+        void this.stop();
+      }
+    }, timeoutMs);
   }
 }

@@ -64,6 +64,12 @@ pub async fn start_external_live_transcription(
         Arc::new(TauriEventEmitter(app)),
         state.metrics_store(),
     )) as Arc<dyn AsrRuntimeObserver>;
+    if state.live_coordinator().has_consumer(&consumer_id).await {
+        log::warn!(
+            "[ASR] Consumer '{consumer_id}' is already active before external acquire; releasing stale session"
+        );
+        let _ = state.live_coordinator().release(&consumer_id).await;
+    }
     state
         .live_coordinator()
         .acquire(
@@ -154,6 +160,12 @@ pub async fn start_native_live_transcription(
         Arc::new(TauriEventEmitter(app)),
         state.metrics_store(),
     )) as Arc<dyn AsrRuntimeObserver>;
+    if state.live_coordinator().has_consumer(&consumer_id).await {
+        log::warn!(
+            "[ASR] Consumer '{consumer_id}' is already active before native acquire; releasing stale session"
+        );
+        let _ = state.live_coordinator().release(&consumer_id).await;
+    }
     match state
         .live_coordinator()
         .acquire(
@@ -174,9 +186,12 @@ pub async fn start_native_live_transcription(
             let _ = crate::integrations::audio::stop_native_live_capture(
                 &audio_state,
                 &source_kind,
-                consumer_id,
+                consumer_id.clone(),
             )
             .await;
+            if state.live_coordinator().has_consumer(&consumer_id).await {
+                let _ = state.live_coordinator().release(&consumer_id).await;
+            }
             Err(error)
         }
     }
@@ -217,7 +232,11 @@ pub async fn stop_live_transcription(
     state: State<'_, crate::integrations::asr::AsrState>,
     consumer_id: String,
 ) -> Result<(), AsrPortError> {
-    state.live_coordinator().release(&consumer_id).await
+    if state.live_coordinator().has_consumer(&consumer_id).await {
+        state.live_coordinator().release(&consumer_id).await
+    } else {
+        Ok(())
+    }
 }
 
 #[tauri::command(async)]
@@ -227,23 +246,35 @@ pub async fn pause_native_live_transcription(
     consumer_id: String,
     source_kind: String,
 ) -> Result<(), AsrPortError> {
-    crate::integrations::audio::set_native_live_capture_paused(
+    let pause_result = crate::integrations::audio::set_native_live_capture_paused(
         &audio_state,
         &source_kind,
         &consumer_id,
         true,
     )
-    .map_err(AsrPortError::runtime)?;
-    if let Err(error) = state.live_coordinator().release(&consumer_id).await {
-        let _ = crate::integrations::audio::set_native_live_capture_paused(
-            &audio_state,
-            &source_kind,
-            &consumer_id,
-            false,
-        );
+    .map_err(AsrPortError::runtime);
+    let release_result = if state.live_coordinator().has_consumer(&consumer_id).await {
+        state.live_coordinator().release(&consumer_id).await
+    } else {
+        Ok(())
+    };
+    if let Err(error) = release_result {
+        if pause_result.is_ok() {
+            let _ = crate::integrations::audio::set_native_live_capture_paused(
+                &audio_state,
+                &source_kind,
+                &consumer_id,
+                false,
+            );
+        }
         return Err(error);
     }
-    Ok(())
+    if let Err(err) = &pause_result
+        && err.to_string().contains("is not active")
+    {
+        return Ok(());
+    }
+    pause_result.map(|_| ())
 }
 
 #[allow(clippy::too_many_arguments)]

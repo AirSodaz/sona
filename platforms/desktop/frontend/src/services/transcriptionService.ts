@@ -185,17 +185,23 @@ export class TranscriptionService {
   async stop(): Promise<void> {
     this.preparedNativeConfig = null;
     if (this.transport === 'external') {
-      await this.lifecycle.stopExternal();
-      this.runningConfig = null;
-      this.transport = 'idle';
+      try {
+        await this.lifecycle.stopExternal();
+      } finally {
+        this.runningConfig = null;
+        this.transport = 'idle';
+      }
       return;
     }
     if (this.transport === 'native' && this.nativeSourceKind) {
-      await stopNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
-      this.lifecycle.markStopped();
-      this.runningConfig = null;
-      this.transport = 'idle';
-      this.nativeSourceKind = null;
+      try {
+        await stopNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
+      } finally {
+        this.lifecycle.markStopped();
+        this.runningConfig = null;
+        this.transport = 'idle';
+        this.nativeSourceKind = null;
+      }
       return;
     }
     this.runningConfig = null;
@@ -218,12 +224,23 @@ export class TranscriptionService {
   async softStop(): Promise<void> {
     this.preparedNativeConfig = null;
     if (this.transport === 'native' && this.nativeSourceKind) {
-      await pauseNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
-      this.lifecycle.markStopped();
+      try {
+        await pauseNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
+      } finally {
+        this.lifecycle.markStopped();
+        this.runningConfig = null;
+        this.transport = 'idle';
+        this.nativeSourceKind = null;
+      }
       return;
     }
     if (this.transport === 'external') {
-      await this.lifecycle.stopExternal();
+      try {
+        await this.lifecycle.stopExternal();
+      } finally {
+        this.runningConfig = null;
+        this.transport = 'idle';
+      }
       return;
     }
     this.runningConfig = null;

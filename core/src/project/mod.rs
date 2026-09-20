@@ -213,6 +213,9 @@ mod tests {
         assert!(snapshot.auto_translate);
         assert_eq!(snapshot.target_language.as_deref(), Some("en"));
         assert_eq!(snapshot.summary_template_id.as_deref(), Some("default"));
-        assert_eq!(snapshot.custom_terms, vec!["Sona".to_string(), "K8s".to_string()]);
+        assert_eq!(
+            snapshot.custom_terms,
+            vec!["Sona".to_string(), "K8s".to_string()]
+        );
     }
 }

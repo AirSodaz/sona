@@ -740,3 +740,61 @@ async fn failed_pipeline_start_stops_session_and_clears_coordinator_state() {
     assert_eq!(coordinator.metrics().await.active_pipelines, 0);
     assert_eq!(coordinator.metrics().await.active_consumers, 0);
 }
+
+#[tokio::test]
+async fn consumer_lifecycle_can_be_queried_released_and_reacquired() {
+    let factory = Arc::new(FakeFactory::default());
+    let coordinator = coordinator(Arc::clone(&factory));
+    let source = LiveSourceEpoch::new("microphone:default", 1);
+
+    assert!(!coordinator.has_consumer("voice-typing").await);
+
+    coordinator
+        .acquire(
+            "voice-typing",
+            source.clone(),
+            0,
+            LiveInputTransform::default(),
+            request(),
+            Arc::new(RecordingObserver::default()),
+        )
+        .await
+        .unwrap();
+
+    assert!(coordinator.has_consumer("voice-typing").await);
+
+    // Re-acquiring while still active fails as expected
+    let duplicate_error = coordinator
+        .acquire(
+            "voice-typing",
+            source.clone(),
+            0,
+            LiveInputTransform::default(),
+            request(),
+            Arc::new(RecordingObserver::default()),
+        )
+        .await
+        .unwrap_err();
+    assert!(duplicate_error.message.contains("is already active"));
+
+    // Releasing clears the active consumer
+    coordinator.release("voice-typing").await.unwrap();
+    assert!(!coordinator.has_consumer("voice-typing").await);
+
+    // Re-acquiring after release succeeds cleanly
+    coordinator
+        .acquire(
+            "voice-typing",
+            source,
+            0,
+            LiveInputTransform::default(),
+            request(),
+            Arc::new(RecordingObserver::default()),
+        )
+        .await
+        .unwrap();
+    assert!(coordinator.has_consumer("voice-typing").await);
+
+    coordinator.release("voice-typing").await.unwrap();
+    assert!(!coordinator.has_consumer("voice-typing").await);
+}

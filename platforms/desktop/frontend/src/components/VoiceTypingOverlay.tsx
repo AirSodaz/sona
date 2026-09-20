@@ -295,13 +295,17 @@ export function VoiceTypingOverlay() {
 
   let containerStyle: CSSProperties;
 
-  if (isPolishing) {
+  if (isPolishing || isTranslating) {
     containerStyle = {
       ...baseContainerStyle,
       background: 'var(--color-bg-elevated)',
       color: 'var(--color-text-primary)',
-      border: '1px solid rgba(168, 85, 247, 0.6)',
-      boxShadow: '0 8px 24px -4px rgba(168, 85, 247, 0.35), 0 2px 6px rgba(168, 85, 247, 0.2)',
+      border: isTranslating
+        ? '1px solid rgba(59, 130, 246, 0.6)'
+        : '1px solid rgba(168, 85, 247, 0.6)',
+      boxShadow: isTranslating
+        ? '0 8px 24px -4px rgba(59, 130, 246, 0.35), 0 2px 6px rgba(59, 130, 246, 0.2)'
+        : '0 8px 24px -4px rgba(168, 85, 247, 0.35), 0 2px 6px rgba(168, 85, 247, 0.2)',
     };
   } else if (isSegment) {
     containerStyle = {
@@ -338,9 +342,9 @@ export function VoiceTypingOverlay() {
   const isSpeaking = isSegment || peakLevel > 0.05;
   const barHeights = WAVEFORM_WEIGHTS.map((weight, i) => {
     if (isError) return 4;
-    if (isPolishing) {
-      const polishPattern = [6, 12, 16, 12, 6];
-      return polishPattern[i];
+    if (isPolishing || isTranslating) {
+      const activePattern = [6, 12, 16, 12, 6];
+      return activePattern[i];
     }
     if (isSpeaking) {
       const boost = Math.min(1, Math.max(peakLevel * 2.2, isSegment ? 0.35 : 0.15));
@@ -571,9 +575,11 @@ export function VoiceTypingOverlay() {
                     ? '#fca5a5'
                     : isPolishing
                       ? 'linear-gradient(180deg, #c084fc 0%, #9333ea 100%)'
-                      : isSegment
-                        ? 'linear-gradient(180deg, #34d399 0%, #22c55e 100%)'
-                        : '#4ade80',
+                      : isTranslating
+                        ? 'linear-gradient(180deg, #60a5fa 0%, #2563eb 100%)'
+                        : isSegment
+                          ? 'linear-gradient(180deg, #34d399 0%, #22c55e 100%)'
+                          : '#4ade80',
                 }}
               />
             ))}
@@ -630,6 +636,7 @@ export function VoiceTypingOverlay() {
             </span>
           ) : null}
           {isPolishing && <Sparkles size={14} color="#a855f7" style={{ flexShrink: 0 }} />}
+          {isTranslating && <Sparkles size={14} color="#3b82f6" style={{ flexShrink: 0 }} />}
           <span
             style={{
               whiteSpace: 'nowrap',

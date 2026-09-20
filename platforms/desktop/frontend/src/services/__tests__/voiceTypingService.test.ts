@@ -77,6 +77,10 @@ const mocks = vi.hoisted(() => {
       async (selected: string, instruction: string, _opts?: any) =>
         `[transformed: ${selected}] ${instruction}`
     ),
+    translateVoiceTypingText: vi.fn(
+      async (text: string, targetLang: string, _opts?: unknown) =>
+        `[translated to ${targetLang}] ${text}`
+    ),
     listen: vi.fn(async (eventName: string, handler: (event: any) => void) => {
       eventListeners[eventName] = handler;
       return () => {
@@ -111,9 +115,11 @@ vi.mock('../voiceTypingWindowService', () => ({
   },
 }));
 vi.mock('../voiceTyping/voiceTypingPolishService', () => ({
-  polishVoiceTypingText: (text: string, opts?: any) => mocks.polishVoiceTypingText(text, opts),
-  transformSelectedText: (selected: string, instruction: string, opts?: any) =>
+  polishVoiceTypingText: (text: string, opts?: unknown) => mocks.polishVoiceTypingText(text, opts),
+  transformSelectedText: (selected: string, instruction: string, opts?: unknown) =>
     mocks.transformSelectedText(selected, instruction, opts),
+  translateVoiceTypingText: (text: string, targetLang: string, opts?: unknown) =>
+    mocks.translateVoiceTypingText(text, targetLang, opts),
 }));
 vi.mock('../tauri/platform/windows', () => ({
   currentMonitor: vi.fn(async () => ({
@@ -1150,6 +1156,20 @@ describe('voiceTypingService', () => {
       })
     );
   });
+  it('clears previous session failure when startListening is called again', async () => {
+    const { useVoiceTypingRuntimeStore } = await loadRuntimeStore();
+    useVoiceTypingRuntimeStore
+      .getState()
+      .reportRuntimeError('session', 'Live transcription consumer voice-typing is already active');
+    expect(useVoiceTypingRuntimeStore.getState().lastErrorSource).toBe('session');
+
+    const service = await loadService();
+    await service.startListening();
+    await flushMicrotasks(8);
+
+    expect(useVoiceTypingRuntimeStore.getState().lastErrorSource).toBeNull();
+    expect(useVoiceTypingRuntimeStore.getState().lastErrorMessage).toBeNull();
+  });
 
   it('clears stale shortcut errors after the shortcut changes and registration recovers', async () => {
     mocks.config = {
@@ -1335,6 +1355,122 @@ describe('voiceTypingService', () => {
     const injectCalls = getInvokeCalls('inject_text');
     expect(injectCalls.length).toBe(1);
     expect(injectCalls[0][1].text).toContain('[polished]');
+  });
+  it('automatically commits and translates on prolonged VAD silence in translation mode', async () => {
+    let onSegment: ((segment: { id: string; text: string; isFinal: boolean }) => void) | undefined;
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingTargetLanguage: 'en',
+    };
+    mocks.mockStart.mockImplementation(
+      async (
+        segmentCallback: (segment: { id: string; text: string; isFinal: boolean }) => void
+      ) => {
+        onSegment = segmentCallback;
+      }
+    );
+
+    const service = await loadService();
+    await service.startListening({ isTranslate: true });
+    vi.clearAllMocks();
+
+    onSegment?.({ id: 'seg-1', text: '你好世界', isFinal: true });
+    await flushMicrotasks(8);
+
+    // Immediately after segment, no injection has happened yet
+    expect(getInvokeCalls('inject_text')).toEqual([]);
+
+    // Advance timer by 1000ms (< 1500ms default silence timeout)
+    await vi.advanceTimersByTimeAsync(1000);
+    await flushMicrotasks(8);
+    expect(getInvokeCalls('inject_text')).toEqual([]);
+
+    // Advance timer to trigger auto-commit (remaining 500ms + flush)
+    await vi.advanceTimersByTimeAsync(600);
+    await flushMicrotasks(16);
+
+    const injectCalls = getInvokeCalls('inject_text');
+    expect(injectCalls.length).toBe(1);
+    expect(injectCalls[0][1].text).toContain('[translated to en] 你好世界');
+  });
+
+  it('cancels the silence timer and continues accumulating when speech resumes in translation mode', async () => {
+    let onSegment: ((segment: { id: string; text: string; isFinal: boolean }) => void) | undefined;
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingTargetLanguage: 'en',
+    };
+    mocks.mockStart.mockImplementation(
+      async (
+        segmentCallback: (segment: { id: string; text: string; isFinal: boolean }) => void
+      ) => {
+        onSegment = segmentCallback;
+      }
+    );
+
+    const service = await loadService();
+    await service.startListening({ isTranslate: true });
+    vi.clearAllMocks();
+
+    // Utterance 1 finishes
+    onSegment?.({ id: 'seg-1', text: '第一句', isFinal: true });
+    await flushMicrotasks(8);
+    expect(getInvokeCalls('inject_text')).toEqual([]);
+
+    // 800ms later, user starts speaking utterance 2 (interim speech)
+    await vi.advanceTimersByTimeAsync(800);
+    onSegment?.({ id: 'seg-2', text: '第二句', isFinal: false });
+    await flushMicrotasks(8);
+
+    // Another 1000ms passes (total 1800ms since seg-1, but timer was reset by seg-2 interim)
+    await vi.advanceTimersByTimeAsync(1000);
+    await flushMicrotasks(8);
+    expect(getInvokeCalls('inject_text')).toEqual([]);
+
+    // Utterance 2 finishes
+    onSegment?.({ id: 'seg-2', text: '第二句', isFinal: true });
+    await flushMicrotasks(8);
+    expect(getInvokeCalls('inject_text')).toEqual([]);
+
+    // Now silence elapses for 1500ms + 100ms flush settle
+    await vi.advanceTimersByTimeAsync(1600);
+    await flushMicrotasks(16);
+    const injectCalls = getInvokeCalls('inject_text');
+    expect(injectCalls.length).toBe(1);
+    expect(injectCalls[0][1].text).toContain('[translated to en] 第一句第二句');
+  });
+
+  it('automatically commits on prolonged VAD silence in polish mode', async () => {
+    let onSegment: ((segment: { id: string; text: string; isFinal: boolean }) => void) | undefined;
+    mocks.config = {
+      ...mocks.defaultConfig,
+      voiceTypingEnabled: true,
+      voiceTypingProcessingMode: 'polish',
+    };
+    mocks.mockStart.mockImplementation(
+      async (
+        segmentCallback: (segment: { id: string; text: string; isFinal: boolean }) => void
+      ) => {
+        onSegment = segmentCallback;
+      }
+    );
+
+    const service = await loadService();
+    await service.startListening();
+    vi.clearAllMocks();
+
+    onSegment?.({ id: 'seg-1', text: '自动润色测试句子', isFinal: true });
+    await flushMicrotasks(8);
+    expect(getInvokeCalls('inject_text')).toEqual([]);
+
+    // Advance timer past silence timeout + flush settle
+    await vi.advanceTimersByTimeAsync(1600);
+    await flushMicrotasks(16);
+    const injectCalls = getInvokeCalls('inject_text');
+    expect(injectCalls.length).toBe(1);
+    expect(injectCalls[0][1].text).toContain('[polished] 自动润色测试句子');
   });
   it('positions overlay at bottom center when voiceTypingPlacement is bottom_center', async () => {
     mocks.config = {

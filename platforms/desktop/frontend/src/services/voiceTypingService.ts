@@ -377,6 +377,9 @@ export class VoiceTypingService {
   }
 
   private async startListening(options?: { isTranslate?: boolean }) {
+    if (this.ports.getVoiceTypingRuntimeStore().lastErrorSource === 'session') {
+      this.ports.getVoiceTypingRuntimeStore().clearRuntimeFailure();
+    }
     this.configureTranscriptionService();
     await this.sessionMachine.start(options);
   }
