@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -27,8 +27,8 @@ use crate::ApiServerRuntimeError;
 use crate::ApiServerStartError;
 use crate::ApiServerStopError;
 use crate::handlers::{
-    handle_health, handle_info, handle_job_status, handle_list_jobs, handle_transcribe,
-    ip_whitelist_middleware,
+    handle_health, handle_info, handle_job_audio, handle_job_status, handle_list_jobs,
+    handle_polish, handle_transcribe, handle_translate, ip_whitelist_middleware,
 };
 use crate::info::{HealthResponse, InfoResponse, build_health_response, build_info_response};
 use crate::ip_whitelist::parse_ip_whitelist;
@@ -58,6 +58,7 @@ pub struct ApiServerRuntimeConfig {
     pub batch_plan_resolver: Arc<dyn BatchTranscribePlanPort>,
     pub platform: Arc<dyn ApiServerPlatform>,
     pub streaming_router: Option<Router<ServerState>>,
+    pub web_dist_dir: Option<PathBuf>,
     pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     pub bind_tx: Option<
         tokio::sync::oneshot::Sender<Result<ApiServerDashboardHandle, ApiServerRuntimeError>>,
@@ -75,6 +76,7 @@ pub struct ApiServerRuntimeParts {
     pub batch_plan_resolver: Arc<dyn BatchTranscribePlanPort>,
     pub platform: Arc<dyn ApiServerPlatform>,
     pub streaming_router: Option<Router<ServerState>>,
+    pub web_dist_dir: Option<PathBuf>,
     pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     pub bind_tx: Option<
         tokio::sync::oneshot::Sender<Result<ApiServerDashboardHandle, ApiServerRuntimeError>>,
@@ -97,6 +99,7 @@ pub struct ApiServerServiceParts {
     pub batch_plan_resolver: Arc<dyn BatchTranscribePlanPort>,
     pub platform: Arc<dyn ApiServerPlatform>,
     pub streaming_router: Option<Router<ServerState>>,
+    pub web_dist_dir: Option<PathBuf>,
 }
 
 pub struct RunningApiServer {
@@ -202,6 +205,7 @@ pub fn prepare_runtime_config(
         batch_plan_resolver,
         platform,
         streaming_router,
+        web_dist_dir,
         shutdown_rx,
         bind_tx,
     } = parts;
@@ -238,6 +242,7 @@ pub fn prepare_runtime_config(
             batch_plan_resolver,
             platform,
             streaming_router,
+            web_dist_dir,
             shutdown_rx,
             bind_tx,
         },
@@ -261,6 +266,7 @@ pub async fn start_api_server_runtime(
         batch_plan_resolver: parts.batch_plan_resolver,
         platform: parts.platform,
         streaming_router: parts.streaming_router,
+        web_dist_dir: parts.web_dist_dir,
         shutdown_rx,
         bind_tx: Some(bind_tx),
     })
@@ -329,6 +335,7 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
         batch_plan_resolver,
         platform,
         streaming_router,
+        web_dist_dir,
         shutdown_rx,
         bind_tx,
     } = config;
@@ -425,7 +432,9 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
         .route("/v1/transcriptions", post(handle_transcribe))
         .route("/v1/transcriptions/jobs", get(handle_list_jobs))
         .route("/v1/transcriptions/{job_id}", get(handle_job_status))
-        .with_state(state.clone())
+        .route("/v1/transcriptions/{job_id}/audio", get(handle_job_audio))
+        .route("/v1/llm/polish", post(handle_polish))
+        .route("/v1/llm/translate", post(handle_translate))
         .layer(axum::middleware::from_fn_with_state(
             ip_whitelist,
             ip_whitelist_middleware,
@@ -447,11 +456,30 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
     let streaming_router = streaming_router
         .unwrap_or_default()
         .with_state(state.clone());
-    let router = router
-        .merge(streaming_router)
-        .merge(api_router)
-        .layer(cors)
-        .with_state(state.clone());
+    let mut router = router.merge(streaming_router).merge(api_router);
+
+    if let Some(static_dir) = web_dist_dir {
+        if static_dir.exists() {
+            let index_path = static_dir.join("index.html");
+            let serve_dir = tower_http::services::ServeDir::new(&static_dir)
+                .append_index_html_on_directories(true)
+                .fallback(tower_http::services::ServeFile::new(index_path));
+            log::info!(
+                "[ApiServer] Serving web static files from: {}",
+                static_dir.display()
+            );
+            router = router.fallback_service(serve_dir);
+        } else {
+            log::warn!(
+                "[ApiServer] Configured web_dist_dir does not exist: {}",
+                static_dir.display()
+            );
+        }
+    } else {
+        log::info!("[ApiServer] No web_dist_dir configured or found");
+    }
+
+    let router = router.layer(cors).with_state(state.clone());
     let addr = format!("{}:{}", host, port);
     let listener = match tokio::net::TcpListener::bind(&addr).await {
         Ok(l) => l,

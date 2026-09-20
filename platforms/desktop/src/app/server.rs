@@ -224,6 +224,7 @@ pub async fn start_api_server(
             build_streaming_router(crate::integrations::streaming::handle_streaming)
                 .layer(axum::Extension(streaming_context)),
         ),
+        web_dist_dir: runtime_dirs.web_dist_dir,
     })
     .await
     .map_err(|error| error.to_string())?;
@@ -302,6 +303,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                     build_streaming_router(crate::integrations::streaming::handle_streaming)
                         .layer(axum::Extension(streaming_context)),
                 ),
+                web_dist_dir: runtime_dirs.web_dist_dir,
             })
             .await
             {

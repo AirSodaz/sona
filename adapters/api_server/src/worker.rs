@@ -191,7 +191,9 @@ pub(crate) async fn start_worker_loop(
                 });
             }
 
-            let _ = tokio::fs::remove_file(&job.file_path).await;
+            if matches!(final_status, JobStatus::Failed(_)) {
+                let _ = tokio::fs::remove_file(&job.file_path).await;
+            }
         });
     }
 }

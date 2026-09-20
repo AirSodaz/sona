@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:web": "tsc && vite build --outDir dist-web",
     "lint": "biome check .",
     "lint:ci": "biome ci .",
     "preview": "vite preview",

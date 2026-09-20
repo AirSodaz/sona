@@ -33,6 +33,7 @@ pub struct TranscriptionJob {
 pub struct JobEntry {
     pub status: JobStatus,
     pub completed_at: Option<std::time::Instant>,
+    pub file_path: Option<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -52,11 +53,13 @@ impl JobManager {
 
     pub async fn submit_job(&self, job: TranscriptionJob) -> Result<(), ApiServerJobError> {
         let job_id = job.job_id.clone();
+        let file_path = job.file_path.clone();
         self.jobs.write().await.insert(
             job_id.clone(),
             JobEntry {
                 status: JobStatus::Pending,
                 completed_at: None,
+                file_path: Some(file_path),
             },
         );
         if self.sender.send(job).await.is_err() {
@@ -83,6 +86,13 @@ impl JobManager {
             .get(job_id)
             .map(|entry| entry.status.clone())
     }
+    pub async fn get_job_file_path(&self, job_id: &str) -> Option<PathBuf> {
+        self.jobs
+            .read()
+            .await
+            .get(job_id)
+            .and_then(|entry| entry.file_path.clone())
+    }
 
     pub async fn list_jobs(&self) -> HashMap<String, JobStatus> {
         self.jobs
@@ -94,12 +104,24 @@ impl JobManager {
     }
 
     pub async fn clean_expired_jobs(&self, ttl_duration: std::time::Duration) {
+        let mut to_delete = Vec::new();
         self.jobs.write().await.retain(|_, entry| {
             if let Some(completed_at) = entry.completed_at {
-                completed_at.elapsed() <= ttl_duration
+                let expired = completed_at.elapsed() > ttl_duration;
+                if expired {
+                    if let Some(path) = &entry.file_path {
+                        to_delete.push(path.clone());
+                    }
+                    false
+                } else {
+                    true
+                }
             } else {
                 true
             }
         });
+        for path in to_delete {
+            let _ = tokio::fs::remove_file(path).await;
+        }
     }
 }

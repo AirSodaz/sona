@@ -23,6 +23,7 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 sona-core = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tower = { workspace = true }
 tower-http = { version = "0.6", features = ["cors", "auth", "fs"] }
 thiserror = { workspace = true }
 uuid = { workspace = true }

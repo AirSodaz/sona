@@ -11,6 +11,10 @@ use crate::ApiServerPlatformError;
 
 pub const ONLINE_ASR_BATCH_UNAVAILABLE: &str =
     "Online ASR batch is unavailable because no platform online ASR adapter is configured.";
+pub const LLM_POLISH_UNAVAILABLE: &str =
+    "LLM polish is unavailable because no platform LLM adapter is configured.";
+pub const LLM_TRANSLATE_UNAVAILABLE: &str =
+    "LLM translation is unavailable because no platform LLM adapter is configured.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApiServerTranscriptionDefaults {
@@ -51,6 +55,23 @@ pub trait ApiServerPlatform: Send + Sync {
     ) -> Result<Vec<TranscriptSegment>, ApiServerPlatformError> {
         Err(ApiServerPlatformError::unavailable(
             ONLINE_ASR_BATCH_UNAVAILABLE,
+        ))
+    }
+
+    async fn polish_segments(
+        &self,
+        _segments: Vec<TranscriptSegment>,
+    ) -> Result<Vec<TranscriptSegment>, ApiServerPlatformError> {
+        Err(ApiServerPlatformError::unavailable(LLM_POLISH_UNAVAILABLE))
+    }
+
+    async fn translate_segments(
+        &self,
+        _segments: Vec<TranscriptSegment>,
+        _target_language: String,
+    ) -> Result<Vec<TranscriptSegment>, ApiServerPlatformError> {
+        Err(ApiServerPlatformError::unavailable(
+            LLM_TRANSLATE_UNAVAILABLE,
         ))
     }
 }

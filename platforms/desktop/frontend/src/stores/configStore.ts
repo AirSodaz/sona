@@ -300,6 +300,7 @@ const VOICE_TYPING_KEYS: (keyof VoiceTypingConfig)[] = [
 ];
 
 const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [
+  'httpServerEnabled',
   'httpServerHost',
   'httpServerPort',
   'httpServerApiKey',

@@ -2,21 +2,23 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use crate::info::{HealthResponse, InfoResponse, build_health_response, build_info_response};
+use crate::jobs::{JobStatus, TranscriptionJob};
+use crate::state::ServerState;
 use axum::{
     Json,
     extract::{ConnectInfo, Multipart, Path, Request, State},
     http::StatusCode,
     middleware::Next,
-    response::Response,
+    response::{IntoResponse, Response},
 };
 use futures_util::stream::StreamExt;
 use ipnet::IpNet;
 use sona_core::ports::asr::find_online_asr_provider;
+use sona_core::transcription::transcript::TranscriptSegment;
 use tokio::io::AsyncWriteExt;
-
-use crate::info::{HealthResponse, InfoResponse, build_health_response, build_info_response};
-use crate::jobs::{JobStatus, TranscriptionJob};
-use crate::state::ServerState;
+use tower::ServiceExt;
+use tower_http::services::ServeFile;
 
 pub(crate) async fn ip_whitelist_middleware(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -154,4 +156,70 @@ pub async fn handle_transcribe(
         .map_err(|error| (StatusCode::SERVICE_UNAVAILABLE, error.to_string()))?;
 
     Ok(Json(serde_json::json!({ "job_id": job_id })))
+}
+
+pub async fn handle_job_audio(
+    State(state): State<ServerState>,
+    Path(job_id): Path<String>,
+    req: Request,
+) -> Result<Response, (StatusCode, String)> {
+    let _ = state
+        .job_manager
+        .get_job(&job_id)
+        .await
+        .ok_or((StatusCode::NOT_FOUND, "Job not found".to_string()))?;
+
+    let file_path = state
+        .job_manager
+        .get_job_file_path(&job_id)
+        .await
+        .unwrap_or_else(|| state.temp_dir.join(format!("{}.tmp", job_id)));
+
+    if !file_path.exists() {
+        return Err((
+            StatusCode::NOT_FOUND,
+            "Audio file not found or already cleaned up".to_string(),
+        ));
+    }
+
+    let res = ServeFile::new(file_path)
+        .oneshot(req)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(res.into_response())
+}
+
+#[derive(serde::Deserialize)]
+pub struct PolishRequest {
+    pub segments: Vec<TranscriptSegment>,
+}
+
+pub async fn handle_polish(
+    State(state): State<ServerState>,
+    Json(payload): Json<PolishRequest>,
+) -> Result<Json<Vec<TranscriptSegment>>, (StatusCode, String)> {
+    let result = state
+        .platform
+        .polish_segments(payload.segments)
+        .await
+        .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e.to_string()))?;
+    Ok(Json(result))
+}
+
+#[derive(serde::Deserialize)]
+pub struct TranslateRequest {
+    pub segments: Vec<TranscriptSegment>,
+    pub target_language: String,
+}
+
+pub async fn handle_translate(
+    State(state): State<ServerState>,
+    Json(payload): Json<TranslateRequest>,
+) -> Result<Json<Vec<TranscriptSegment>>, (StatusCode, String)> {
+    let result = state
+        .platform
+        .translate_segments(payload.segments, payload.target_language)
+        .await
+        .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e.to_string()))?;
+    Ok(Json(result))
 }

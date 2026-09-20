@@ -11,7 +11,8 @@ mod worker;
 
 pub use error::*;
 pub use handlers::{
-    handle_health, handle_info, handle_job_status, handle_list_jobs, handle_transcribe,
+    handle_health, handle_info, handle_job_audio, handle_job_status, handle_list_jobs,
+    handle_polish, handle_transcribe, handle_translate,
 };
 pub use info::{HealthResponse, InfoResponse, OnlineAsrProviderInfo, build_info_response};
 pub use ip_whitelist::parse_ip_whitelist;
@@ -435,6 +436,7 @@ mod tests {
             JobEntry {
                 status: JobStatus::Completed(vec![]),
                 completed_at: Some(std::time::Instant::now() - std::time::Duration::from_secs(120)),
+                file_path: None,
             },
         );
         job_manager.jobs.write().await.insert(
@@ -442,6 +444,7 @@ mod tests {
             JobEntry {
                 status: JobStatus::Completed(vec![]),
                 completed_at: Some(std::time::Instant::now()),
+                file_path: None,
             },
         );
         job_manager.jobs.write().await.insert(
@@ -449,6 +452,7 @@ mod tests {
             JobEntry {
                 status: JobStatus::Pending,
                 completed_at: None,
+                file_path: None,
             },
         );
 
@@ -611,6 +615,7 @@ mod tests {
             JobEntry {
                 status: JobStatus::Pending,
                 completed_at: None,
+                file_path: None,
             },
         );
         let state = ServerState {
@@ -801,6 +806,7 @@ mod tests {
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
+            web_dist_dir: None,
             shutdown_rx,
             bind_tx: Some(bind_tx),
         })
@@ -872,6 +878,7 @@ mod tests {
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
+            web_dist_dir: None,
             shutdown_rx,
             bind_tx: None,
         }) {
@@ -917,6 +924,7 @@ mod tests {
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
+            web_dist_dir: None,
             shutdown_rx,
             bind_tx: Some(bind_tx),
         };
@@ -969,6 +977,7 @@ mod tests {
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
+            web_dist_dir: None,
         })
         .await;
 
@@ -1011,6 +1020,7 @@ mod tests {
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
+            web_dist_dir: None,
         })
         .await;
 
@@ -1054,6 +1064,7 @@ mod tests {
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
+            web_dist_dir: None,
         })
         .await
         .unwrap();
