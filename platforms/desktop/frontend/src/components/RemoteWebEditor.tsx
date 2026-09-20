@@ -1,7 +1,8 @@
-import { Key, Loader2, Server, Trash2 } from 'lucide-react';
+import { Check, Globe, Key, Loader2, Monitor, Moon, Server, Sun, Trash2 } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { APP_LANGUAGE_OPTIONS, resolveAppLanguagePreference } from '../constants/appLanguages';
 import { type ApiServerInfo, apiServerClient } from '../services/apiServerClient';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
@@ -12,8 +13,7 @@ import { CloseIcon, DownloadIcon, FileTextIcon, UploadIcon } from './Icons';
 import { TranscriptEditor } from './transcript/TranscriptEditor';
 
 export function RemoteWebEditor(): React.JSX.Element {
-  const { t } = useTranslation();
-
+  const { t, i18n } = useTranslation();
   // Stores
   const segments = useTranscriptSessionStore((state) => state.segments);
   const title = useTranscriptSessionStore((state) => state.title);
@@ -38,6 +38,32 @@ export function RemoteWebEditor(): React.JSX.Element {
   const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
   const [tempApiKey, setTempApiKey] = useState<string>(apiKey);
   const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
+
+  // Theme State
+  const [themePreference, setThemePreference] = useState<'auto' | 'light' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem('sona_web_theme');
+      if (saved === 'light' || saved === 'dark' || saved === 'auto') {
+        return saved;
+      }
+    } catch {
+      // ignore
+    }
+    return 'auto';
+  });
+  const [showThemeMenu, setShowThemeMenu] = useState<boolean>(false);
+  const themeMenuRef = useRef<HTMLDivElement>(null);
+
+  // Language State
+  const [languagePreference, setLanguagePreference] = useState<string>(() => {
+    try {
+      return localStorage.getItem('sona_web_language') || 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
+  const [showLanguageMenu, setShowLanguageMenu] = useState<boolean>(false);
+  const languageMenuRef = useRef<HTMLDivElement>(null);
 
   // Form State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -96,16 +122,120 @@ export function RemoteWebEditor(): React.JSX.Element {
       clearInterval(pollTimerRef.current as number);
     };
   }, []);
-  // Click outside to close export menu
+  // Close popups on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (exportMenuRef.current && !exportMenuRef.current.contains(target)) {
         setShowExportMenu(false);
+      }
+      if (languageMenuRef.current && !languageMenuRef.current.contains(target)) {
+        setShowLanguageMenu(false);
+      }
+      if (themeMenuRef.current && !themeMenuRef.current.contains(target)) {
+        setShowThemeMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Close popups and modals on Escape
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowExportMenu(false);
+        setShowLanguageMenu(false);
+        setShowThemeMenu(false);
+        setShowServerModal(false);
+        setShowApiKeyModal(false);
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Synchronize theme preference with document element
+  useEffect(() => {
+    const root = document.documentElement;
+
+    const applyTheme = (theme: 'auto' | 'light' | 'dark') => {
+      let resolved: 'light' | 'dark' = 'light';
+      if (theme === 'auto') {
+        if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+          resolved = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        } else {
+          resolved = 'light';
+        }
+      } else {
+        resolved = theme;
+      }
+      root.setAttribute('data-theme', resolved);
+    };
+
+    applyTheme(themePreference);
+
+    if (
+      themePreference === 'auto' &&
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function'
+    ) {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleChange = (e: MediaQueryListEvent) => {
+        root.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+      };
+      mediaQuery.addEventListener?.('change', handleChange);
+      return () => {
+        mediaQuery.removeEventListener?.('change', handleChange);
+      };
+    }
+  }, [themePreference]);
+
+  const handleSelectTheme = (theme: 'auto' | 'light' | 'dark') => {
+    setThemePreference(theme);
+    try {
+      localStorage.setItem('sona_web_theme', theme);
+    } catch {
+      // ignore
+    }
+    setShowThemeMenu(false);
+  };
+
+  // Synchronize language preference with i18n
+  useEffect(() => {
+    const resolved = resolveAppLanguagePreference(languagePreference, navigator.language);
+    void i18n.changeLanguage(resolved);
+  }, [languagePreference, i18n]);
+
+  const handleSelectLanguage = (lang: string) => {
+    setLanguagePreference(lang);
+    try {
+      localStorage.setItem('sona_web_language', lang);
+    } catch {
+      // ignore
+    }
+    const resolved = resolveAppLanguagePreference(lang, navigator.language);
+    void i18n.changeLanguage(resolved);
+    setShowLanguageMenu(false);
+  };
+
+  const currentLanguageLabel = useMemo(() => {
+    if (languagePreference === 'auto') {
+      return t('web.language_auto', { defaultValue: 'System' });
+    }
+    const found = APP_LANGUAGE_OPTIONS.find((o) => o.value === languagePreference);
+    return found ? found.defaultLabel : languagePreference;
+  }, [languagePreference, t]);
+
+  const currentThemeLabel = useMemo(() => {
+    if (themePreference === 'dark') {
+      return t('web.theme_dark', { defaultValue: 'Dark' });
+    }
+    if (themePreference === 'light') {
+      return t('web.theme_light', { defaultValue: 'Light' });
+    }
+    return t('web.theme_auto', { defaultValue: 'System' });
+  }, [themePreference, t]);
 
   const modelOptions: DropdownOption[] = useMemo(() => {
     const options: DropdownOption[] = [];
@@ -134,14 +264,17 @@ export function RemoteWebEditor(): React.JSX.Element {
     }
   }, [selectedModel, modelOptions]);
 
-  const languageOptions: DropdownOption[] = [
-    { value: 'auto', label: '自动识别 (Auto)' },
-    { value: 'zh', label: '中文 (Chinese)' },
-    { value: 'en', label: '英语 (English)' },
-    { value: 'ja', label: '日语 (Japanese)' },
-    { value: 'ko', label: '韩语 (Korean)' },
-    { value: 'yue', label: '粤语 (Cantonese)' },
-  ];
+  const languageOptions: DropdownOption[] = useMemo(
+    () => [
+      { value: 'auto', label: t('web.lang_auto', { defaultValue: 'Auto Detect' }) },
+      { value: 'zh', label: t('web.lang_zh', { defaultValue: 'Chinese' }) },
+      { value: 'en', label: t('web.lang_en', { defaultValue: 'English' }) },
+      { value: 'ja', label: t('web.lang_ja', { defaultValue: 'Japanese' }) },
+      { value: 'ko', label: t('web.lang_ko', { defaultValue: 'Korean' }) },
+      { value: 'yue', label: t('web.lang_yue', { defaultValue: 'Cantonese' }) },
+    ],
+    [t]
+  );
 
   // Save server URL
   const handleSaveServerUrl = () => {
@@ -200,16 +333,20 @@ export function RemoteWebEditor(): React.JSX.Element {
   // Start transcription
   const handleStartTranscribe = async () => {
     if (!selectedFile) {
-      setTranscribeError('请先选择或拖入音频文件');
+      setTranscribeError(t('batch.select_file', { defaultValue: 'Please select an audio file' }));
       return;
     }
     if (!selectedModel) {
-      setTranscribeError('请先选择 ASR 模型');
+      setTranscribeError(t('web.select_model', { defaultValue: 'Please select an ASR model' }));
       return;
     }
 
     setIsTranscribing(true);
-    setTranscribeProgress('正在上传音频并创建转录任务...');
+    setTranscribeProgress(
+      t('batch.transcribing', {
+        defaultValue: 'Uploading audio and creating transcription task...',
+      })
+    );
     setTranscribeError(null);
 
     try {
@@ -218,7 +355,9 @@ export function RemoteWebEditor(): React.JSX.Element {
         language: selectedLanguage === 'auto' ? undefined : selectedLanguage,
       });
 
-      setTranscribeProgress('任务已提交，正在等待排队处理...');
+      setTranscribeProgress(
+        t('web.transcribe_pending', { defaultValue: 'Queued, waiting to process...' })
+      );
 
       clearInterval(pollTimerRef.current as number);
 
@@ -226,9 +365,15 @@ export function RemoteWebEditor(): React.JSX.Element {
         try {
           const status = await apiServerClient.getJobStatus(jobId);
           if (status === 'Pending') {
-            setTranscribeProgress('排队等待处理中...');
+            setTranscribeProgress(
+              t('web.transcribe_pending', { defaultValue: 'Queued, waiting to process...' })
+            );
           } else if (status === 'Processing') {
-            setTranscribeProgress('正在转录处理中，请稍候...');
+            setTranscribeProgress(
+              t('web.transcribe_processing', {
+                defaultValue: 'Transcribing in progress, please wait...',
+              })
+            );
           } else if (typeof status === 'object' && 'Completed' in status) {
             clearInterval(pollTimerRef.current as number);
             pollTimerRef.current = null;
@@ -244,22 +389,37 @@ export function RemoteWebEditor(): React.JSX.Element {
             pollTimerRef.current = null;
             setIsTranscribing(false);
             setTranscribeProgress(null);
-            setTranscribeError(`转录失败: ${status.Failed}`);
+            setTranscribeError(
+              t('web.transcribe_failed', {
+                error: status.Failed,
+                defaultValue: `Transcription failed: ${status.Failed}`,
+              })
+            );
           }
         } catch (pollErr: unknown) {
           clearInterval(pollTimerRef.current as number);
           pollTimerRef.current = null;
           setIsTranscribing(false);
           setTranscribeProgress(null);
+          const errMsg = pollErr instanceof Error ? pollErr.message : String(pollErr);
           setTranscribeError(
-            `查询状态失败: ${pollErr instanceof Error ? pollErr.message : String(pollErr)}`
+            t('web.query_status_failed', {
+              error: errMsg,
+              defaultValue: `Failed to query status: ${errMsg}`,
+            })
           );
         }
       }, 1500);
     } catch (err: unknown) {
       setIsTranscribing(false);
       setTranscribeProgress(null);
-      setTranscribeError(`发起转录失败: ${err instanceof Error ? err.message : String(err)}`);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setTranscribeError(
+        t('web.start_failed', {
+          error: errMsg,
+          defaultValue: `Failed to start transcription: ${errMsg}`,
+        })
+      );
     }
   };
 
@@ -307,7 +467,14 @@ export function RemoteWebEditor(): React.JSX.Element {
   };
 
   const handleClearSession = () => {
-    if (segments.length > 0 && !confirm('确定要清空当前的转录内容吗？')) {
+    if (
+      segments.length > 0 &&
+      !confirm(
+        t('web.clear_confirm', {
+          defaultValue: 'Are you sure you want to clear the current transcript?',
+        })
+      )
+    ) {
       return;
     }
     clearActiveTranscriptSession();
@@ -317,7 +484,10 @@ export function RemoteWebEditor(): React.JSX.Element {
     }
   };
 
-  const displayTitle = title || selectedFile?.name || '未命名转录';
+  const displayTitle =
+    title ||
+    selectedFile?.name ||
+    t('web.untitled_transcript', { defaultValue: 'Untitled Transcript' });
 
   return (
     <div className="app">
@@ -336,7 +506,7 @@ export function RemoteWebEditor(): React.JSX.Element {
               marginLeft: '6px',
             }}
           >
-            Web
+            {t('web.title_badge', { defaultValue: 'Web' })}
           </span>
         </div>
 
@@ -352,7 +522,9 @@ export function RemoteWebEditor(): React.JSX.Element {
               setTempServerUrl(serverUrl);
               setShowServerModal(true);
             }}
-            title="点击修改服务主机地址"
+            title={t('web.server_url_tooltip', {
+              defaultValue: 'Click to change server host address',
+            })}
           >
             <span
               className={`web-status-dot ${
@@ -371,11 +543,117 @@ export function RemoteWebEditor(): React.JSX.Element {
               setTempApiKey(apiKey);
               setShowApiKeyModal(true);
             }}
-            title="配置 API Key 鉴权令牌"
+            title={t('web.api_key_tooltip', { defaultValue: 'Configure API Key auth token' })}
           >
             <Key size={13} style={{ color: apiKey ? 'var(--color-success)' : undefined }} />
-            <span>{apiKey ? 'API Key: 已设置' : 'API Key: 未设置'}</span>
+            <span>
+              {apiKey
+                ? t('web.api_key_set', { defaultValue: 'API Key: Set' })
+                : t('web.api_key_not_set', { defaultValue: 'API Key: Not Set' })}
+            </span>
           </button>
+
+          {/* Language Switcher Pill & Dropdown */}
+          <div className="web-header-dropdown-wrap" ref={languageMenuRef}>
+            <button
+              type="button"
+              className={`web-header-pill ${showLanguageMenu ? 'active' : ''}`}
+              onClick={() => {
+                setShowLanguageMenu((prev) => !prev);
+                setShowThemeMenu(false);
+                setShowExportMenu(false);
+              }}
+              title={t('web.language_tooltip', { defaultValue: 'Switch language' })}
+              aria-label={t('web.language_tooltip', { defaultValue: 'Switch language' })}
+              aria-expanded={showLanguageMenu}
+            >
+              <Globe size={13} />
+              <span>{currentLanguageLabel}</span>
+            </button>
+            {showLanguageMenu && (
+              <div className="web-header-dropdown-menu">
+                {APP_LANGUAGE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={`web-dropdown-item ${
+                      languagePreference === opt.value ? 'selected' : ''
+                    }`}
+                    onClick={() => handleSelectLanguage(opt.value)}
+                  >
+                    <span>
+                      {opt.value === 'auto'
+                        ? t('web.language_auto', { defaultValue: 'System' })
+                        : opt.defaultLabel}
+                    </span>
+                    {languagePreference === opt.value && <Check size={13} />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Theme Switcher Pill & Dropdown */}
+          <div className="web-header-dropdown-wrap" ref={themeMenuRef}>
+            <button
+              type="button"
+              className={`web-header-pill ${showThemeMenu ? 'active' : ''}`}
+              onClick={() => {
+                setShowThemeMenu((prev) => !prev);
+                setShowLanguageMenu(false);
+                setShowExportMenu(false);
+              }}
+              title={t('web.theme_tooltip', { defaultValue: 'Toggle theme' })}
+              aria-label={t('web.theme_tooltip', { defaultValue: 'Toggle theme' })}
+              aria-expanded={showThemeMenu}
+            >
+              {themePreference === 'dark' ? (
+                <Moon size={13} />
+              ) : themePreference === 'light' ? (
+                <Sun size={13} />
+              ) : (
+                <Monitor size={13} />
+              )}
+              <span>{currentThemeLabel}</span>
+            </button>
+            {showThemeMenu && (
+              <div className="web-header-dropdown-menu">
+                <button
+                  type="button"
+                  className={`web-dropdown-item ${themePreference === 'auto' ? 'selected' : ''}`}
+                  onClick={() => handleSelectTheme('auto')}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Monitor size={13} />
+                    <span>{t('web.theme_auto', { defaultValue: 'System' })}</span>
+                  </div>
+                  {themePreference === 'auto' && <Check size={13} />}
+                </button>
+                <button
+                  type="button"
+                  className={`web-dropdown-item ${themePreference === 'light' ? 'selected' : ''}`}
+                  onClick={() => handleSelectTheme('light')}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Sun size={13} />
+                    <span>{t('web.theme_light', { defaultValue: 'Light' })}</span>
+                  </div>
+                  {themePreference === 'light' && <Check size={13} />}
+                </button>
+                <button
+                  type="button"
+                  className={`web-dropdown-item ${themePreference === 'dark' ? 'selected' : ''}`}
+                  onClick={() => handleSelectTheme('dark')}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Moon size={13} />
+                    <span>{t('web.theme_dark', { defaultValue: 'Dark' })}</span>
+                  </div>
+                  {themePreference === 'dark' && <Check size={13} />}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -388,7 +666,7 @@ export function RemoteWebEditor(): React.JSX.Element {
             style={{ width: '360px', minWidth: '320px', maxWidth: '420px', flex: '0 0 360px' }}
           >
             <div className="panel-header">
-              <h2>{t('panel.batch_import', { defaultValue: '转录' })}</h2>
+              <h2>{t('panel.batch_import', { defaultValue: 'Transcribe' })}</h2>
             </div>
 
             <div
@@ -425,13 +703,16 @@ export function RemoteWebEditor(): React.JSX.Element {
                   <h3 style={{ fontSize: '14px', margin: '0 0 4px 0' }}>
                     {selectedFile
                       ? selectedFile.name
-                      : t('batch.drop_title', { defaultValue: '拖入音频或点击上传' })}
+                      : t('batch.drop_title', {
+                          defaultValue: 'Drop audio here or click to upload',
+                        })}
                   </h3>
                   <p style={{ fontSize: '12px', margin: 0, color: 'var(--color-text-secondary)' }}>
                     {selectedFile
                       ? `${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB`
                       : t('batch.drop_desc', {
-                          defaultValue: '支持 MP3, WAV, M4A, FLAC, OGG 等常见格式',
+                          defaultValue:
+                            'Supports MP3, WAV, M4A, FLAC, OGG and other common formats',
                         })}
                   </p>
                 </div>
@@ -442,8 +723,8 @@ export function RemoteWebEditor(): React.JSX.Element {
                   aria-hidden="true"
                 >
                   {selectedFile
-                    ? '更换文件'
-                    : t('batch.select_file', { defaultValue: '选择音频文件' })}
+                    ? t('web.change_file', { defaultValue: 'Change File' })
+                    : t('batch.select_file', { defaultValue: 'Select Audio File' })}
                 </div>
               </div>
 
@@ -459,7 +740,7 @@ export function RemoteWebEditor(): React.JSX.Element {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div className="form-group">
                   <label className="form-label" style={{ fontSize: '12px', marginBottom: '6px' }}>
-                    {t('settings.asr.model', { defaultValue: 'ASR 模型' })}
+                    {t('settings.asr.model', { defaultValue: 'ASR Model' })}
                   </label>
                   <Dropdown
                     options={modelOptions}
@@ -467,10 +748,12 @@ export function RemoteWebEditor(): React.JSX.Element {
                     onChange={setSelectedModel}
                     placeholder={
                       !isConnected
-                        ? '请先连接服务'
+                        ? t('web.connect_server_first', {
+                            defaultValue: 'Please connect to server first',
+                          })
                         : modelOptions.length === 0
-                          ? '暂无可用模型'
-                          : '选择模型...'
+                          ? t('web.no_models_available', { defaultValue: 'No models available' })
+                          : t('web.select_model', { defaultValue: 'Select model...' })
                     }
                     disabled={isTranscribing || modelOptions.length === 0}
                   />
@@ -482,14 +765,17 @@ export function RemoteWebEditor(): React.JSX.Element {
                         marginTop: '4px',
                       }}
                     >
-                      未检测到已安装的本地模型或在线 ASR，请在客户端下载模型
+                      {t('web.no_models_warning', {
+                        defaultValue:
+                          'No installed local model or online ASR found. Please download models in the desktop client.',
+                      })}
                     </div>
                   )}
                 </div>
 
                 <div className="form-group">
                   <label className="form-label" style={{ fontSize: '12px', marginBottom: '6px' }}>
-                    {t('settings.asr.language', { defaultValue: '音频语言' })}
+                    {t('settings.asr.language', { defaultValue: 'Audio Language' })}
                   </label>
                   <Dropdown
                     options={languageOptions}
@@ -509,12 +795,14 @@ export function RemoteWebEditor(): React.JSX.Element {
                   {isTranscribing ? (
                     <>
                       <Loader2 size={15} className="animate-spin" />
-                      <span>转录中...</span>
+                      <span>{t('web.transcribing', { defaultValue: 'Transcribing...' })}</span>
                     </>
                   ) : (
                     <>
                       <UploadIcon />
-                      <span>开始转录</span>
+                      <span>
+                        {t('web.start_transcribe', { defaultValue: 'Start Transcription' })}
+                      </span>
                     </>
                   )}
                 </button>
@@ -590,7 +878,10 @@ export function RemoteWebEditor(): React.JSX.Element {
                       marginLeft: '8px',
                     }}
                   >
-                    {segments.length} 个句段
+                    {t('web.segment_count', {
+                      count: segments.length,
+                      defaultValue: `${segments.length} segments`,
+                    })}
                   </span>
                 )}
               </div>
@@ -607,7 +898,7 @@ export function RemoteWebEditor(): React.JSX.Element {
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                       >
                         <DownloadIcon />
-                        <span>导出</span>
+                        <span>{t('export.button', { defaultValue: 'Export' })}</span>
                       </button>
 
                       {showExportMenu && (
@@ -656,7 +947,9 @@ export function RemoteWebEditor(): React.JSX.Element {
                       type="button"
                       className="btn btn-icon btn-sm"
                       onClick={handleClearSession}
-                      title="清空当前转录"
+                      title={t('web.clear_transcript', {
+                        defaultValue: 'Clear current transcript',
+                      })}
                     >
                       <Trash2 size={15} />
                     </button>
@@ -682,7 +975,10 @@ export function RemoteWebEditor(): React.JSX.Element {
                 >
                   <FileTextIcon style={{ width: '48px', height: '48px', opacity: 0.3 }} />
                   <p style={{ margin: 0, fontSize: '13px' }}>
-                    在左侧选择音频文件，点击“开始转录”以生成转录内容
+                    {t('web.empty_tip', {
+                      defaultValue:
+                        'Select an audio file on the left and click "Start Transcription" to generate transcript',
+                    })}
                   </p>
                 </div>
               )}
@@ -698,7 +994,7 @@ export function RemoteWebEditor(): React.JSX.Element {
         <div className="web-modal-backdrop" onClick={() => setShowServerModal(false)}>
           <div className="web-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="web-modal-header">
-              <h3>服务主机地址</h3>
+              <h3>{t('web.server_host_title', { defaultValue: 'Server Host Address' })}</h3>
               <button
                 type="button"
                 className="btn btn-icon btn-sm"
@@ -709,7 +1005,10 @@ export function RemoteWebEditor(): React.JSX.Element {
             </div>
             <div className="web-modal-body">
               <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', margin: 0 }}>
-                指定桌面端 Sona 运行的主机地址与端口（默认端口 14200）。
+                {t('web.server_host_desc', {
+                  defaultValue:
+                    'Specify the host address and port where desktop Sona is running (default port 14200).',
+                })}
               </p>
               <input
                 type="text"
@@ -726,14 +1025,14 @@ export function RemoteWebEditor(): React.JSX.Element {
                 className="btn btn-secondary btn-sm"
                 onClick={() => setShowServerModal(false)}
               >
-                取消
+                {t('common.cancel', { defaultValue: 'Cancel' })}
               </button>
               <button
                 type="button"
                 className="btn btn-primary btn-sm"
                 onClick={handleSaveServerUrl}
               >
-                保存并连接
+                {t('web.save_and_connect', { defaultValue: 'Save & Connect' })}
               </button>
             </div>
           </div>
@@ -745,7 +1044,7 @@ export function RemoteWebEditor(): React.JSX.Element {
         <div className="web-modal-backdrop" onClick={() => setShowApiKeyModal(false)}>
           <div className="web-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="web-modal-header">
-              <h3>API Key 鉴权令牌</h3>
+              <h3>{t('web.api_key_title', { defaultValue: 'API Key Auth Token' })}</h3>
               <button
                 type="button"
                 className="btn btn-icon btn-sm"
@@ -756,15 +1055,19 @@ export function RemoteWebEditor(): React.JSX.Element {
             </div>
             <div className="web-modal-body">
               <p style={{ fontSize: '12px', color: 'var(--color-text-secondary)', margin: 0 }}>
-                如果桌面端开启了 API Key
-                鉴权，请在此填入相同密钥。系统会自动将其保存至本地，并在转录请求及音频流中附加鉴权令牌。
+                {t('web.api_key_desc', {
+                  defaultValue:
+                    'If the desktop client has enabled API Key authentication, enter the matching key here. It will be stored locally and attached to transcription requests and audio streams.',
+                })}
               </p>
               <input
                 type="password"
                 className="input-text"
                 value={tempApiKey}
                 onChange={(e) => setTempApiKey(e.target.value)}
-                placeholder="填入 API Key，留空表示无鉴权"
+                placeholder={t('web.api_key_placeholder', {
+                  defaultValue: 'Enter API Key, leave blank for no auth',
+                })}
                 autoFocus
               />
             </div>
@@ -782,7 +1085,7 @@ export function RemoteWebEditor(): React.JSX.Element {
                     connectToServer();
                   }}
                 >
-                  清除 Key
+                  {t('web.clear_key', { defaultValue: 'Clear Key' })}
                 </button>
               )}
               <button
@@ -790,10 +1093,10 @@ export function RemoteWebEditor(): React.JSX.Element {
                 className="btn btn-secondary btn-sm"
                 onClick={() => setShowApiKeyModal(false)}
               >
-                取消
+                {t('common.cancel', { defaultValue: 'Cancel' })}
               </button>
               <button type="button" className="btn btn-primary btn-sm" onClick={handleSaveApiKey}>
-                保存
+                {t('common.save', { defaultValue: 'Save' })}
               </button>
             </div>
           </div>
