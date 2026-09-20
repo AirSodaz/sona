@@ -128,6 +128,20 @@ pub(crate) async fn start_worker_loop(
     let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));
 
     loop {
+        let permit = tokio::select! {
+            biased;
+            _ = &mut shutdown_rx => {
+                log::info!("[Server] worker loop received shutdown signal");
+                break;
+            }
+            permit = semaphore.clone().acquire_owned() => {
+                match permit {
+                    Ok(p) => p,
+                    Err(_) => break,
+                }
+            }
+        };
+
         let job = tokio::select! {
             biased;
             _ = &mut shutdown_rx => {
@@ -141,33 +155,24 @@ pub(crate) async fn start_worker_loop(
                 }
             }
         };
+
+        if shared_job_manager.get_job(&job.job_id).await.is_none() {
+            continue;
+        }
+
         let job_id = job.job_id.clone();
         let job_manager = shared_job_manager.clone();
         let models_dir = shared_models_dir.clone();
-        let semaphore = semaphore.clone();
         let defaults = transcription_defaults.clone();
         let batch_transcriber = shared_batch_transcriber.clone();
         let batch_plan_resolver = shared_batch_plan_resolver.clone();
         let platform = shared_platform.clone();
 
         let handle = tokio::spawn(async move {
-            let _permit = match semaphore.acquire().await {
-                Ok(permit) => permit,
-                Err(_) => {
-                    log::error!("[Server] semaphore closed, job {} abandoned", job.job_id);
-                    job_manager
-                        .update_job(
-                            &job.job_id,
-                            JobStatus::Failed("Internal: worker pool closed".to_string()),
-                        )
-                        .await;
-                    return;
-                }
-            };
+            let _permit = permit;
             job_manager
                 .update_job(&job.job_id, JobStatus::Processing)
                 .await;
-
             let final_status = if job.engine == "Online" {
                 if let Some(provider_id) = job.online_provider_id.clone() {
                     let request = OnlineBatchRequest {

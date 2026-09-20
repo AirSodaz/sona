@@ -18,20 +18,22 @@ pub fn authorize_streaming_request(
     token: Option<&str>,
 ) -> Result<tokio::sync::OwnedSemaphorePermit, StatusCode> {
     let ip = addr.ip().to_canonical();
-    let has_valid_api_key = !state.api_key.is_empty()
-        && token.is_some_and(|t| crate::handlers::constant_time_eq_str(t, &state.api_key));
 
-    if !has_valid_api_key {
-        if !state.ip_whitelist.iter().any(|net| net.contains(&ip)) {
-            log::warn!(
-                "[ApiServer] Streaming request from {} rejected: IP not in whitelist ({:?})",
-                ip,
-                state.ip_whitelist
-            );
-            return Err(StatusCode::FORBIDDEN);
-        }
+    // 1. Enforce network perimeter (IP whitelist) first
+    if !state.ip_whitelist.iter().any(|net| net.contains(&ip)) {
+        log::warn!(
+            "[ApiServer] Streaming request from {} rejected: IP not in whitelist ({:?})",
+            ip,
+            state.ip_whitelist
+        );
+        return Err(StatusCode::FORBIDDEN);
+    }
 
-        if !state.api_key.is_empty() {
+    // 2. Enforce API key authentication if configured (Defense in Depth)
+    if !state.api_key.is_empty() {
+        let has_valid_api_key =
+            token.is_some_and(|t| crate::handlers::constant_time_eq_str(t, &state.api_key));
+        if !has_valid_api_key {
             return Err(StatusCode::UNAUTHORIZED);
         }
     }

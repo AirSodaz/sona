@@ -27,6 +27,8 @@ pub enum ClientMessage {
         hotwords: Option<String>,
         #[serde(default = "default_vad_model_id")]
         vad_model_id: String,
+        #[serde(default)]
+        punctuation_model_id: Option<String>,
     },
     Stop,
 }
@@ -59,6 +61,7 @@ struct LocalStreamingRequest {
     language: String,
     hotwords: Option<String>,
     vad_model_id: String,
+    punctuation_model_id: Option<String>,
 }
 
 /// Serialize a ServerMessage to JSON string, logging and returning a fallback error JSON on failure.
@@ -114,7 +117,14 @@ async fn handle_streaming_socket(
                 language,
                 hotwords,
                 vad_model_id,
-            }) => (model_id, language, hotwords, vad_model_id),
+                punctuation_model_id,
+            }) => (
+                model_id,
+                language,
+                hotwords,
+                vad_model_id,
+                punctuation_model_id,
+            ),
             _ => {
                 let _ = socket
                     .send(Message::Text(
@@ -130,7 +140,7 @@ async fn handle_streaming_socket(
         _ => return,
     };
 
-    let (model_id, language, hotwords, vad_model_id) = start_msg;
+    let (model_id, language, hotwords, vad_model_id, punctuation_model_id) = start_msg;
 
     if sona_core::ports::asr::find_online_asr_provider(&model_id).is_some() {
         handle_online_streaming_socket(
@@ -148,6 +158,7 @@ async fn handle_streaming_socket(
                 language,
                 hotwords,
                 vad_model_id,
+                punctuation_model_id,
             },
         )
         .await;
@@ -332,7 +343,7 @@ async fn handle_online_streaming_socket(
                     let _ = socket.send(Message::Text(serialize_server_message(&ServerMessage::Segment { segment: Box::new(segment) }).into())).await;
                 }
             }
-            _ = tokio::time::sleep(std::time::Duration::from_millis(500)), if stopping => {
+            _ = tokio::time::sleep(std::time::Duration::from_millis(2000)), if stopping => {
                 let _ = socket.send(Message::Text(serialize_server_message(&ServerMessage::Stopped).into())).await;
                 break;
             }
@@ -358,6 +369,7 @@ async fn handle_local_streaming_socket(
         language,
         hotwords,
         vad_model_id,
+        punctuation_model_id,
     } = request;
     // Load models
     let recognizer = match load_recognizer(&state, &context, &model_id, &language, hotwords).await {
@@ -387,6 +399,15 @@ async fn handle_local_streaming_socket(
             return;
         }
     };
+    let punct_model_id = punctuation_model_id
+        .or_else(|| state.transcription_defaults.punctuation_model_id.clone())
+        .unwrap_or_else(|| {
+            sona_core::models::preset_models::DEFAULT_PUNCTUATION_MODEL_ID.to_string()
+        });
+    let punct_path = resolve_punctuation_model_path(&state.models_dir, &punct_model_id);
+    let punctuation =
+        crate::integrations::asr::load_punctuation(Some(punct_path.to_string_lossy().to_string()))
+            .map(Arc::new);
 
     let _ = socket
         .send(Message::Text(
@@ -401,7 +422,6 @@ async fn handle_local_streaming_socket(
     let mut offline_state = sona_sherpa_onnx::runtime::OfflineState::default();
     let mut total_samples = 0;
     let mut current_segment_id: Option<String> = None;
-    let mut last_inference_time = std::time::Instant::now();
 
     loop {
         tokio::select! {
@@ -426,7 +446,7 @@ async fn handle_local_streaming_socket(
                         if currently_speaking {
                             offline_state.push_speech_chunk(samples);
                             let now = std::time::Instant::now();
-                            if now.duration_since(last_inference_time).as_millis() > 200 {
+                            if offline_state.should_run_partial(now) {
                                 let global_start = offline_state.utterance_start_seconds(16000.0);
                                 let segment_id = current_segment_id.as_deref().unwrap_or_else(|| {
                                     log::error!("[Streaming] current_segment_id is None when speech is active");
@@ -434,7 +454,9 @@ async fn handle_local_streaming_socket(
                                 });
                                 let chunks = offline_state.speech_chunks().to_vec();
                                 let recognizer_clone = recognizer.clone();
+                                let punctuation_clone = punctuation.clone();
                                 let seg_id = segment_id.to_string();
+                                let decode_start = std::time::Instant::now();
                                 let segment = tokio::task::spawn_blocking(move || {
                                     run_offline_inference_standalone(
                                         &chunks,
@@ -442,14 +464,17 @@ async fn handle_local_streaming_socket(
                                         &seg_id,
                                         global_start,
                                         false,
+                                        punctuation_clone.as_deref(),
                                     )
                                 })
                                 .await
                                 .unwrap_or(None);
+                                let decode_ms = decode_start.elapsed().as_millis() as u64;
+                                offline_state.mark_inference_time(now);
+                                offline_state.record_decode_duration(decode_ms);
                                 if let Some(segment) = segment {
                                     let _ = socket.send(Message::Text(serialize_server_message(&ServerMessage::Segment { segment: Box::new(segment) }).into())).await;
                                 }
-                                last_inference_time = now;
                             }
                         } else {
                             if offline_state.is_speech_active() {
@@ -461,6 +486,7 @@ async fn handle_local_streaming_socket(
                                 });
                                 let chunks = offline_state.speech_chunks().to_vec();
                                 let recognizer_clone = recognizer.clone();
+                                let punctuation_clone = punctuation.clone();
                                 let seg_id = segment_id.to_string();
                                 let segment = tokio::task::spawn_blocking(move || {
                                     run_offline_inference_standalone(
@@ -469,6 +495,7 @@ async fn handle_local_streaming_socket(
                                         &seg_id,
                                         global_start,
                                         true,
+                                        punctuation_clone.as_deref(),
                                     )
                                 })
                                 .await
@@ -477,6 +504,7 @@ async fn handle_local_streaming_socket(
                                     let _ = socket.send(Message::Text(serialize_server_message(&ServerMessage::Segment { segment: Box::new(segment) }).into())).await;
                                 }
                                 offline_state.clear_speech_buffer();
+                                offline_state.on_utterance_end(true);
                                 current_segment_id = None;
                             }
                             offline_state.push_ring_chunk(samples, 10);
@@ -492,6 +520,7 @@ async fn handle_local_streaming_socket(
                                 });
                                 let chunks = offline_state.speech_chunks().to_vec();
                                 let recognizer_clone = recognizer.clone();
+                                let punctuation_clone = punctuation.clone();
                                 let seg_id = segment_id.to_string();
                                 let segment = tokio::task::spawn_blocking(move || {
                                     run_offline_inference_standalone(
@@ -500,6 +529,7 @@ async fn handle_local_streaming_socket(
                                         &seg_id,
                                         global_start,
                                         true,
+                                        punctuation_clone.as_deref(),
                                     )
                                 })
                                 .await
@@ -606,6 +636,14 @@ pub(crate) fn resolve_vad_model_path(models_dir: &Path, vad_model_id_or_path: &s
         .map(|model| model.resolve_install_path(models_dir))
         .unwrap_or_else(|| PathBuf::from(vad_model_id_or_path))
 }
+pub(crate) fn resolve_punctuation_model_path(
+    models_dir: &Path,
+    punct_model_id_or_path: &str,
+) -> PathBuf {
+    crate::platform::preset_models::find_preset_model(punct_model_id_or_path)
+        .map(|model| model.resolve_install_path(models_dir))
+        .unwrap_or_else(|| PathBuf::from(punct_model_id_or_path))
+}
 
 fn run_offline_inference_standalone(
     speech_buffer: &[Vec<f32>],
@@ -613,6 +651,7 @@ fn run_offline_inference_standalone(
     segment_id: &str,
     global_start: f64,
     is_final: bool,
+    punctuation: Option<&crate::integrations::asr::Punctuation>,
 ) -> Option<crate::integrations::asr::TranscriptSegment> {
     if speech_buffer.is_empty() {
         return None;
@@ -631,7 +670,7 @@ fn run_offline_inference_standalone(
         }
 
         let text = if is_final {
-            crate::integrations::asr::finalize_transcript_text(&cleaned_text, None)
+            crate::integrations::asr::finalize_transcript_text(&cleaned_text, punctuation)
         } else {
             cleaned_text
         };

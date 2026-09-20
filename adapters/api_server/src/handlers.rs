@@ -22,6 +22,46 @@ use tokio::io::AsyncWriteExt;
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ApiError {
+    #[serde(skip)]
+    pub status: StatusCode,
+    pub message: String,
+}
+
+impl ApiError {
+    pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
+        Self {
+            status,
+            message: message.into(),
+        }
+    }
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        let body = serde_json::json!({
+            "error": {
+                "code": self.status.as_u16(),
+                "message": self.message,
+            }
+        });
+        (self.status, Json(body)).into_response()
+    }
+}
+
+impl From<(StatusCode, String)> for ApiError {
+    fn from((status, message): (StatusCode, String)) -> Self {
+        Self::new(status, message)
+    }
+}
+
+impl From<(StatusCode, &'static str)> for ApiError {
+    fn from((status, message): (StatusCode, &'static str)) -> Self {
+        Self::new(status, message)
+    }
+}
+
 pub fn constant_time_eq_str(a: &str, b: &str) -> bool {
     let hash_a = Sha256::digest(a.as_bytes());
     let hash_b = Sha256::digest(b.as_bytes());
@@ -62,12 +102,23 @@ pub fn percent_decode_str(input: &str) -> Cow<'_, str> {
 pub fn extract_api_key_from_request<'a>(req: &'a Request) -> Option<Cow<'a, str>> {
     if let Some(auth_val) = req.headers().get(axum::http::header::AUTHORIZATION)
         && let Ok(auth_str) = auth_val.to_str()
-        && let Some(token) = auth_str.strip_prefix("Bearer ")
     {
-        return Some(Cow::Borrowed(token));
+        let trimmed = auth_str.trim();
+        if trimmed.len() >= 7
+            && trimmed[..6].eq_ignore_ascii_case("bearer")
+            && trimmed.as_bytes()[6] == b' '
+        {
+            return Some(Cow::Borrowed(trimmed[7..].trim()));
+        }
     }
+    // Restrict query-based API keys to endpoints that genuinely require it (e.g. HTML5 audio, streaming, or test paths)
+    let path = req.uri().path();
+    let allow_query_token = path.ends_with("/audio")
+        || path.ends_with("/streaming")
+        || path == "/test"
+        || path == "/api/test";
 
-    if let Some(query) = req.uri().query() {
+    if allow_query_token && let Some(query) = req.uri().query() {
         for pair in query.split('&') {
             let mut parts = pair.splitn(2, '=');
             let key = parts.next().unwrap_or_default();
@@ -101,10 +152,16 @@ pub fn validate_webhook_url(url: &str) -> Result<(), &'static str> {
         .host_str()
         .ok_or("Invalid webhook_url: missing host")?;
     if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        if ip.is_unspecified() {
+            return Err("Invalid webhook_url: unspecified IP addresses are not permitted");
+        }
         match ip {
             std::net::IpAddr::V4(ipv4) => {
                 if ipv4.is_link_local() {
                     return Err("Invalid webhook_url: link-local IP addresses are not permitted");
+                }
+                if ipv4.is_broadcast() {
+                    return Err("Invalid webhook_url: broadcast IP addresses are not permitted");
                 }
             }
             std::net::IpAddr::V6(ipv6) => {
@@ -125,12 +182,8 @@ pub async fn ip_whitelist_middleware(
     next: Next,
 ) -> Result<Response, StatusCode> {
     let ip = addr.ip().to_canonical();
-    let has_valid_key = is_request_api_key_valid(&req, &state.api_key);
 
-    if has_valid_key {
-        return Ok(next.run(req).await);
-    }
-
+    // 1. Enforce network perimeter (IP whitelist) first
     if !state.ip_whitelist.iter().any(|net| net.contains(&ip)) {
         log::warn!(
             "[ApiServer] Request from {} rejected: IP not in whitelist ({:?})",
@@ -140,7 +193,8 @@ pub async fn ip_whitelist_middleware(
         return Err(StatusCode::FORBIDDEN);
     }
 
-    if !state.api_key.is_empty() {
+    // 2. Enforce API key authentication if configured (Defense in Depth)
+    if !state.api_key.is_empty() && !is_request_api_key_valid(&req, &state.api_key) {
         return Err(StatusCode::UNAUTHORIZED);
     }
 
@@ -165,9 +219,7 @@ pub async fn handle_health(State(state): State<ServerState>) -> Json<HealthRespo
     Json(build_health_response(&state).await)
 }
 
-pub async fn handle_info(
-    State(state): State<ServerState>,
-) -> Result<Json<InfoResponse>, (StatusCode, String)> {
+pub async fn handle_info(State(state): State<ServerState>) -> Result<Json<InfoResponse>, ApiError> {
     let configs = state.online_asr_config.read().await.clone();
     let info = build_info_response(
         Arc::clone(&state.gpu_availability),
@@ -183,7 +235,7 @@ pub async fn handle_info(
 pub async fn handle_job_status(
     State(state): State<ServerState>,
     Path(job_id): Path<String>,
-) -> Result<Json<JobStatus>, (StatusCode, String)> {
+) -> Result<Json<JobStatus>, ApiError> {
     let status = state
         .job_manager
         .get_job(&job_id)
@@ -197,6 +249,7 @@ pub struct ListJobsQuery {
     pub status: Option<String>,
     pub limit: Option<usize>,
     pub offset: Option<usize>,
+    pub full: Option<bool>,
 }
 
 pub async fn handle_list_jobs(
@@ -223,14 +276,24 @@ pub async fn handle_list_jobs(
     if let Some(limit) = query.limit {
         ordered.truncate(limit);
     }
-    let map: HashMap<String, JobStatus> = ordered.into_iter().collect();
+    let include_full = query.full.unwrap_or(false);
+    let map: HashMap<String, JobStatus> = ordered
+        .into_iter()
+        .map(|(k, v)| {
+            let status = match v {
+                JobStatus::Completed(_) if !include_full => JobStatus::Completed(Vec::new()),
+                other => other,
+            };
+            (k, status)
+        })
+        .collect();
     Json(map)
 }
 
 pub async fn handle_transcribe(
     State(state): State<ServerState>,
     multipart: Multipart,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+) -> Result<Json<serde_json::Value>, ApiError> {
     let mut temp_file_path = None;
     let result = handle_transcribe_inner(&state, multipart, &mut temp_file_path).await;
     if result.is_err()
@@ -245,7 +308,7 @@ async fn handle_transcribe_inner(
     state: &ServerState,
     mut multipart: Multipart,
     temp_file_path: &mut Option<std::path::PathBuf>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+) -> Result<Json<serde_json::Value>, ApiError> {
     let job_id = uuid::Uuid::new_v4().to_string();
     let mut model_id = None;
     let mut language = "auto".to_string();
@@ -264,7 +327,8 @@ async fn handle_transcribe_inner(
                 return Err((
                     StatusCode::BAD_REQUEST,
                     "Multiple file fields are not allowed".to_string(),
-                ));
+                )
+                    .into());
             }
             let extension = field
                 .file_name()
@@ -294,7 +358,8 @@ async fn handle_transcribe_inner(
                 return Err((
                     StatusCode::BAD_REQUEST,
                     "Unsupported file type or corrupted file".to_string(),
-                ));
+                )
+                    .into());
             }
         } else if name == "model_id" {
             model_id = Some(field.text().await.unwrap_or_default());
@@ -313,7 +378,22 @@ async fn handle_transcribe_inner(
         .clone()
         .ok_or((StatusCode::BAD_REQUEST, "Missing file".to_string()))?;
     let m_id = model_id.ok_or((StatusCode::BAD_REQUEST, "Missing model_id".to_string()))?;
-
+    if m_id.trim().is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "model_id cannot be empty".to_string(),
+        ))?;
+    }
+    let is_online = find_online_asr_provider(&m_id).is_some();
+    let is_preset = sona_core::models::preset_models::preset_models()
+        .iter()
+        .any(|m| m.id == m_id || m.group_id.as_deref() == Some(&m_id));
+    if !is_online && !is_preset {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Unknown model_id: '{}'", m_id),
+        ))?;
+    }
     if let Some(url) = &webhook_url
         && !url.is_empty()
     {
@@ -339,7 +419,8 @@ async fn handle_transcribe_inner(
                     "Online ASR provider '{}' is not configured with an API key",
                     provider.id
                 ),
-            ));
+            )
+                .into());
         }
         engine = "Online".to_string();
         online_provider_id = Some(provider.id.clone());
@@ -371,7 +452,7 @@ pub(crate) async fn handle_job_audio(
     State(state): State<ServerState>,
     Path(job_id): Path<String>,
     req: Request,
-) -> Result<Response, (StatusCode, String)> {
+) -> Result<Response, ApiError> {
     let _ = state
         .job_manager
         .get_job(&job_id)
@@ -387,7 +468,7 @@ pub(crate) async fn handle_job_audio(
         return Err((
             StatusCode::NOT_FOUND,
             "Audio file not found or already cleaned up".to_string(),
-        ));
+        ))?;
     }
 
     let res = ServeFile::new(file_path)
@@ -400,7 +481,7 @@ pub(crate) async fn handle_job_audio(
 pub(crate) async fn handle_delete_job(
     State(state): State<ServerState>,
     Path(job_id): Path<String>,
-) -> Result<StatusCode, (StatusCode, String)> {
+) -> Result<StatusCode, ApiError> {
     let file_path_opt = state
         .job_manager
         .remove_job(&job_id)
@@ -408,7 +489,16 @@ pub(crate) async fn handle_delete_job(
         .ok_or((StatusCode::NOT_FOUND, "Job not found".to_string()))?;
 
     if let Some(file_path) = file_path_opt {
-        let _ = tokio::fs::remove_file(file_path).await;
+        if tokio::fs::remove_file(&file_path).await.is_err() {
+            tokio::spawn(async move {
+                for i in 0..5 {
+                    tokio::time::sleep(std::time::Duration::from_millis(200 * (i + 1))).await;
+                    if tokio::fs::remove_file(&file_path).await.is_ok() {
+                        break;
+                    }
+                }
+            });
+        }
     }
 
     Ok(StatusCode::NO_CONTENT)
@@ -424,7 +514,7 @@ pub(crate) async fn handle_export_job(
     State(state): State<ServerState>,
     Path(job_id): Path<String>,
     Query(query): Query<ExportQuery>,
-) -> Result<Response, (StatusCode, String)> {
+) -> Result<Response, ApiError> {
     let status = state
         .job_manager
         .get_job(&job_id)
@@ -434,13 +524,14 @@ pub(crate) async fn handle_export_job(
     let segments = match status {
         JobStatus::Completed(segments) => segments,
         JobStatus::Pending | JobStatus::Processing => {
-            return Err((StatusCode::CONFLICT, "Job is still processing".to_string()));
+            return Err((StatusCode::CONFLICT, "Job is still processing".to_string()).into());
         }
         JobStatus::Failed(error) => {
             return Err((
                 StatusCode::UNPROCESSABLE_ENTITY,
                 format!("Job failed: {}", error),
-            ));
+            )
+                .into());
         }
     };
 
@@ -495,18 +586,20 @@ pub struct LlmTranslateRequest {
 pub(crate) async fn handle_llm_polish(
     State(state): State<ServerState>,
     Json(payload): Json<LlmPolishRequest>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+) -> Result<Json<serde_json::Value>, ApiError> {
     if payload.segments.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
             "segments cannot be empty".to_string(),
-        ));
+        )
+            .into());
     }
     if payload.segments.len() > 10_000 {
         return Err((
             StatusCode::BAD_REQUEST,
             "Too many segments (max 10000)".to_string(),
-        ));
+        )
+            .into());
     }
     let polished = state
         .platform
@@ -520,25 +613,28 @@ pub(crate) async fn handle_llm_polish(
 pub(crate) async fn handle_llm_translate(
     State(state): State<ServerState>,
     Json(payload): Json<LlmTranslateRequest>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+) -> Result<Json<serde_json::Value>, ApiError> {
     if payload.segments.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
             "segments cannot be empty".to_string(),
-        ));
+        )
+            .into());
     }
     if payload.segments.len() > 10_000 {
         return Err((
             StatusCode::BAD_REQUEST,
             "Too many segments (max 10000)".to_string(),
-        ));
+        )
+            .into());
     }
     let target_lang = payload.target_language.trim();
     if target_lang.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
             "target_language cannot be empty".to_string(),
-        ));
+        )
+            .into());
     }
     let translated = state
         .platform

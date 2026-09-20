@@ -878,10 +878,11 @@ mod tests {
                 .unwrap_err();
         assert_eq!(err_wrong, StatusCode::FORBIDDEN);
 
-        // Non-whitelisted with valid key -> Success
-        assert!(
+        // Non-whitelisted with valid key -> Forbidden (Defense in Depth: network perimeter enforced)
+        assert_eq!(
             authorize_streaming_request(&state, "10.0.0.1:14200".parse().unwrap(), Some("secret"),)
-                .is_ok()
+                .unwrap_err(),
+            StatusCode::FORBIDDEN
         );
     }
 
@@ -1427,7 +1428,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn streaming_auth_bypasses_ip_whitelist_with_valid_key() {
+    async fn streaming_auth_enforces_ip_whitelist_and_key() {
         let state = streaming_authorization_state("my-secret-key", 1, "127.0.0.1/32");
 
         // 1. Foreign IP without key -> Forbidden
@@ -1439,13 +1440,19 @@ mod tests {
         let err = authorize_streaming_request(&state, foreign_addr, Some("wrong-key")).unwrap_err();
         assert_eq!(err, StatusCode::FORBIDDEN);
 
-        // 3. Whitelisted IP with invalid key -> Unauthorized
+        // 3. Foreign IP with valid key -> Forbidden (Defense in Depth: IP not in whitelist)
+        let err =
+            authorize_streaming_request(&state, foreign_addr, Some("my-secret-key")).unwrap_err();
+        assert_eq!(err, StatusCode::FORBIDDEN);
+
+        // 4. Whitelisted IP with invalid key -> Unauthorized
         let local_addr = "127.0.0.1:12345".parse().unwrap();
         let err_local =
             authorize_streaming_request(&state, local_addr, Some("wrong-key")).unwrap_err();
         assert_eq!(err_local, StatusCode::UNAUTHORIZED);
-        // 4. Foreign IP with valid key -> Success (permit acquired)
-        let permit = authorize_streaming_request(&state, foreign_addr, Some("my-secret-key"));
+
+        // 5. Whitelisted IP with valid key -> Success (permit acquired)
+        let permit = authorize_streaming_request(&state, local_addr, Some("my-secret-key"));
         assert!(permit.is_ok());
     }
 
@@ -1482,7 +1489,17 @@ mod tests {
         let res = app.clone().oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::FORBIDDEN);
 
-        // 3. Whitelisted IP with invalid key -> 401 Unauthorized
+        // 3. Foreign IP with valid key -> 403 Forbidden (Defense in Depth: network perimeter enforced)
+        let req = Request::builder()
+            .uri("/api/test")
+            .header("Authorization", "Bearer secret-key")
+            .extension(ConnectInfo(foreign_ip))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        // 4. Whitelisted IP with invalid key -> 401 Unauthorized
         let req = Request::builder()
             .uri("/api/test")
             .header("Authorization", "Bearer wrong-key")
@@ -1492,7 +1509,7 @@ mod tests {
         let res = app.clone().oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
 
-        // 4. Whitelisted IP without key (when key required) -> 401 Unauthorized
+        // 5. Whitelisted IP without key (when key required) -> 401 Unauthorized
         let req = Request::builder()
             .uri("/api/test")
             .extension(ConnectInfo(local_ip))
@@ -1500,16 +1517,6 @@ mod tests {
             .unwrap();
         let res = app.clone().oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
-
-        // 5. Foreign IP with valid key -> 200 OK
-        let req = Request::builder()
-            .uri("/api/test")
-            .header("Authorization", "Bearer secret-key")
-            .extension(ConnectInfo(foreign_ip))
-            .body(Body::empty())
-            .unwrap();
-        let res = app.clone().oneshot(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::OK);
 
         // 6. Whitelisted IP with valid key -> 200 OK
         let req = Request::builder()
@@ -1521,10 +1528,9 @@ mod tests {
         let res = app.clone().oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
     }
-
     #[tokio::test]
     async fn query_token_handles_percent_encoded_special_chars() {
-        let state = streaming_authorization_state("my+secret token=123", 1, "127.0.0.1/32");
+        let state = streaming_authorization_state("my+secret token=123", 1, "10.0.0.1/32");
         let app = Router::new()
             .route("/api/test", get(|| async { "ok" }))
             .layer(axum::middleware::from_fn_with_state(
@@ -1560,13 +1566,77 @@ mod tests {
         assert!(validate_webhook_url("http://localhost:3000/webhook").is_ok());
         assert!(validate_webhook_url("https://api.example.com/callback").is_ok());
         assert!(validate_webhook_url("http://192.168.1.100:8080/hook").is_ok());
-        // Block cloud metadata / link-local addresses
+        // Block cloud metadata / link-local addresses, unspecified, broadcast
         assert!(validate_webhook_url("http://169.254.169.254/latest/meta-data").is_err());
         assert!(validate_webhook_url("http://169.254.1.1/hook").is_err());
-        // Block invalid schemes
+        assert!(validate_webhook_url("http://0.0.0.0/hook").is_err());
+        assert!(validate_webhook_url("http://255.255.255.255/hook").is_err());
         assert!(validate_webhook_url("file:///etc/passwd").is_err());
         assert!(validate_webhook_url("ftp://example.com/file").is_err());
         assert!(validate_webhook_url("not-a-url").is_err());
+    }
+    #[test]
+    fn extract_api_key_handles_case_insensitive_bearer_prefix() {
+        use crate::handlers::extract_api_key_from_request;
+        let req_lower = Request::builder()
+            .header("Authorization", "bearer test-key-123")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            extract_api_key_from_request(&req_lower).as_deref(),
+            Some("test-key-123")
+        );
+
+        let req_upper = Request::builder()
+            .header("Authorization", "BEARER test-key-123")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            extract_api_key_from_request(&req_upper).as_deref(),
+            Some("test-key-123")
+        );
+
+        let req_mixed = Request::builder()
+            .header("Authorization", "Bearer test-key-123")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            extract_api_key_from_request(&req_mixed).as_deref(),
+            Some("test-key-123")
+        );
+    }
+
+    #[tokio::test]
+    async fn submit_job_returns_queue_full_when_capacity_reached() {
+        let (tx, _rx) = mpsc::channel(1);
+        let job_manager = JobManager::new(tx);
+        let job1 = TranscriptionJob {
+            job_id: "job-1".to_string(),
+            file_path: PathBuf::from("job1.wav"),
+            model_id: "model".to_string(),
+            language: "auto".to_string(),
+            hotwords: None,
+            webhook_url: None,
+            webhook_secret: None,
+            engine: "Local".to_string(),
+            online_provider_id: None,
+            online_provider_config: None,
+        };
+        let job2 = TranscriptionJob {
+            job_id: "job-2".to_string(),
+            file_path: PathBuf::from("job2.wav"),
+            model_id: "model".to_string(),
+            language: "auto".to_string(),
+            hotwords: None,
+            webhook_url: None,
+            webhook_secret: None,
+            engine: "Local".to_string(),
+            online_provider_id: None,
+            online_provider_config: None,
+        };
+        assert!(job_manager.submit_job(job1).await.is_ok());
+        let err = job_manager.submit_job(job2).await.unwrap_err();
+        assert!(matches!(err, ApiServerJobError::QueueFull { .. }));
     }
 
     #[tokio::test]

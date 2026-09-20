@@ -7,7 +7,7 @@ use tokio::sync::{RwLock, mpsc};
 
 use crate::ApiServerJobError;
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub enum JobStatus {
     Pending,
     Processing,
@@ -68,21 +68,25 @@ impl JobManager {
     pub async fn submit_job(&self, job: TranscriptionJob) -> Result<(), ApiServerJobError> {
         let job_id = job.job_id.clone();
         let file_path = job.file_path.clone();
-        self.jobs.write().await.insert(
-            job_id.clone(),
-            JobEntry {
-                status: JobStatus::Pending,
-                created_at: std::time::Instant::now(),
-                completed_at: None,
-                file_path: Some(file_path),
-                abort_handle: None,
-            },
-        );
-        if self.sender.send(job).await.is_err() {
-            self.jobs.write().await.remove(&job_id);
-            return Err(ApiServerJobError::QueueClosed { job_id });
+        match self.sender.try_send(job) {
+            Ok(()) => {
+                self.jobs.write().await.insert(
+                    job_id,
+                    JobEntry {
+                        status: JobStatus::Pending,
+                        created_at: std::time::Instant::now(),
+                        completed_at: None,
+                        file_path: Some(file_path),
+                        abort_handle: None,
+                    },
+                );
+                Ok(())
+            }
+            Err(mpsc::error::TrySendError::Full(_)) => Err(ApiServerJobError::QueueFull { job_id }),
+            Err(mpsc::error::TrySendError::Closed(_)) => {
+                Err(ApiServerJobError::QueueClosed { job_id })
+            }
         }
-        Ok(())
     }
     pub async fn set_abort_handle(&self, job_id: &str, abort_handle: tokio::task::AbortHandle) {
         if let Some(entry) = self.jobs.write().await.get_mut(job_id) {

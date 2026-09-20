@@ -116,24 +116,34 @@ pub async fn build_info_response(
     })
 }
 
+static LAST_CACHE_SCAN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static CACHED_SPACE_BYTES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 pub(crate) async fn build_health_response(state: &ServerState) -> HealthResponse {
     let uptime = state.start_time.elapsed().as_secs();
+    let last_scan = LAST_CACHE_SCAN.load(std::sync::atomic::Ordering::Relaxed);
 
-    let cache_space_bytes = tokio::task::spawn_blocking({
-        let temp_dir = state.temp_dir.clone();
-        move || {
-            walkdir::WalkDir::new(&temp_dir)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter_map(|e| e.metadata().ok())
-                .filter(|m| m.is_file())
-                .map(|m| m.len())
-                .sum()
-        }
-    })
-    .await
-    .unwrap_or(0);
-
+    let cache_space_bytes = if last_scan > 0 && uptime.saturating_sub(last_scan) < 10 {
+        CACHED_SPACE_BYTES.load(std::sync::atomic::Ordering::Relaxed)
+    } else {
+        let scanned = tokio::task::spawn_blocking({
+            let temp_dir = state.temp_dir.clone();
+            move || {
+                walkdir::WalkDir::new(&temp_dir)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter_map(|e| e.metadata().ok())
+                    .filter(|m| m.is_file())
+                    .map(|m| m.len())
+                    .sum()
+            }
+        })
+        .await
+        .unwrap_or(0);
+        CACHED_SPACE_BYTES.store(scanned, std::sync::atomic::Ordering::Relaxed);
+        LAST_CACHE_SCAN.store(uptime, std::sync::atomic::Ordering::Relaxed);
+        scanned
+    };
     let (active_jobs, pending_jobs) = state.job_manager.active_job_count().await;
 
     HealthResponse {
