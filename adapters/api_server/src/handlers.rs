@@ -7,13 +7,15 @@ use crate::jobs::{JobStatus, TranscriptionJob};
 use crate::state::ServerState;
 use axum::{
     Json,
-    extract::{ConnectInfo, Multipart, Path, Request, State},
+    extract::{ConnectInfo, Multipart, Path, Query, Request, State},
     http::StatusCode,
     middleware::Next,
     response::{IntoResponse, Response},
 };
 use futures_util::stream::StreamExt;
+use sona_core::llm::requests::LlmConfig;
 use sona_core::ports::asr::find_online_asr_provider;
+use sona_core::transcription::transcript::TranscriptSegment;
 use tokio::io::AsyncWriteExt;
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
@@ -148,7 +150,14 @@ pub async fn handle_transcribe(
     {
         let name = field.name().unwrap_or("").to_string();
         if name == "file" {
-            let file_path = state.temp_dir.join(format!("{}.tmp", job_id));
+            let extension = field
+                .file_name()
+                .and_then(|name| std::path::Path::new(name).extension())
+                .and_then(|ext| ext.to_str())
+                .map(|ext| ext.to_lowercase())
+                .filter(|ext| !ext.is_empty() && ext.chars().all(|c| c.is_ascii_alphanumeric()))
+                .unwrap_or_else(|| "wav".to_string());
+            let file_path = state.temp_dir.join(format!("{}.{}", job_id, extension));
             let mut file = tokio::fs::File::create(&file_path)
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -159,7 +168,6 @@ pub async fn handle_transcribe(
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             }
             temp_file_path = Some(file_path);
-
             if let Some(ref path) = temp_file_path
                 && !state.media_validator.is_valid_media_file(path).await
             {
@@ -228,11 +236,10 @@ pub async fn handle_job_audio(
         .await
         .ok_or((StatusCode::NOT_FOUND, "Job not found".to_string()))?;
 
-    let file_path = state
-        .job_manager
-        .get_job_file_path(&job_id)
-        .await
-        .unwrap_or_else(|| state.temp_dir.join(format!("{}.tmp", job_id)));
+    let file_path = state.job_manager.get_job_file_path(&job_id).await.ok_or((
+        StatusCode::NOT_FOUND,
+        "Audio file not found or already cleaned up".to_string(),
+    ))?;
 
     if !file_path.exists() {
         return Err((
@@ -246,4 +253,125 @@ pub async fn handle_job_audio(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(res.into_response())
+}
+
+pub async fn handle_delete_job(
+    State(state): State<ServerState>,
+    Path(job_id): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let file_path_opt = state
+        .job_manager
+        .remove_job(&job_id)
+        .await
+        .ok_or((StatusCode::NOT_FOUND, "Job not found".to_string()))?;
+
+    if let Some(file_path) = file_path_opt {
+        let _ = tokio::fs::remove_file(file_path).await;
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(serde::Deserialize)]
+pub struct ExportQuery {
+    pub format: Option<String>,
+    pub mode: Option<String>,
+}
+
+pub async fn handle_export_job(
+    State(state): State<ServerState>,
+    Path(job_id): Path<String>,
+    Query(query): Query<ExportQuery>,
+) -> Result<Response, (StatusCode, String)> {
+    let status = state
+        .job_manager
+        .get_job(&job_id)
+        .await
+        .ok_or((StatusCode::NOT_FOUND, "Job not found".to_string()))?;
+
+    let segments = match status {
+        JobStatus::Completed(segments) => segments,
+        JobStatus::Pending | JobStatus::Processing => {
+            return Err((StatusCode::CONFLICT, "Job is still processing".to_string()));
+        }
+        JobStatus::Failed(error) => {
+            return Err((
+                StatusCode::UNPROCESSABLE_ENTITY,
+                format!("Job failed: {}", error),
+            ));
+        }
+    };
+
+    let format_str = query.format.as_deref().unwrap_or("srt");
+    let format = sona_core::export::ExportFormat::parse(format_str)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    let mode = match query
+        .mode
+        .as_deref()
+        .map(|s| s.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("bilingual") => sona_core::export::ExportMode::Bilingual,
+        Some("translation") => sona_core::export::ExportMode::Translation,
+        _ => sona_core::export::ExportMode::Original,
+    };
+
+    let content = sona_core::export::export_segments_with_mode(&segments, format, mode)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let content_type = match format {
+        sona_core::export::ExportFormat::Json => "application/json; charset=utf-8",
+        sona_core::export::ExportFormat::Srt => "application/x-subrip; charset=utf-8",
+        sona_core::export::ExportFormat::Vtt => "text/vtt; charset=utf-8",
+        sona_core::export::ExportFormat::Txt => "text/plain; charset=utf-8",
+        sona_core::export::ExportFormat::Md => "text/markdown; charset=utf-8",
+    };
+
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .header(axum::http::header::CONTENT_TYPE, content_type)
+        .body(axum::body::Body::from(content))
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(response)
+}
+
+#[derive(serde::Deserialize)]
+pub struct LlmPolishRequest {
+    pub segments: Vec<TranscriptSegment>,
+    pub config: Option<LlmConfig>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct LlmTranslateRequest {
+    pub segments: Vec<TranscriptSegment>,
+    pub target_language: String,
+    pub config: Option<LlmConfig>,
+}
+
+pub async fn handle_llm_polish(
+    State(state): State<ServerState>,
+    Json(payload): Json<LlmPolishRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let polished = state
+        .platform
+        .polish_segments(payload.segments, payload.config)
+        .await
+        .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({ "segments": polished })))
+}
+
+pub async fn handle_llm_translate(
+    State(state): State<ServerState>,
+    Json(payload): Json<LlmTranslateRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let translated = state
+        .platform
+        .translate_segments(payload.segments, payload.target_language, payload.config)
+        .await
+        .map_err(|e| (StatusCode::SERVICE_UNAVAILABLE, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({ "segments": translated })))
 }

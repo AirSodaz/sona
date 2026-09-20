@@ -11,15 +11,17 @@ mod worker;
 
 pub use error::*;
 pub use handlers::{
-    api_key_auth_middleware, handle_health, handle_info, handle_job_audio, handle_job_status,
-    handle_list_jobs, handle_transcribe,
+    api_key_auth_middleware, handle_delete_job, handle_export_job, handle_health, handle_info,
+    handle_job_audio, handle_job_status, handle_list_jobs, handle_llm_polish, handle_llm_translate,
+    handle_transcribe,
 };
 pub use info::{HealthResponse, InfoResponse, OnlineAsrProviderInfo, build_info_response};
 pub use ip_whitelist::parse_ip_whitelist;
 pub use jobs::{JobEntry, JobManager, JobStatus, TranscriptionJob};
 pub use platform::{
     ApiServerPlatform, ApiServerTranscriptionDefaults, DefaultApiServerPlatform,
-    ONLINE_ASR_BATCH_UNAVAILABLE, OnlineBatchRequest, online_batch_request_to_core_request,
+    LLM_POLISH_UNAVAILABLE, LLM_TRANSLATE_UNAVAILABLE, ONLINE_ASR_BATCH_UNAVAILABLE,
+    OnlineBatchRequest, online_batch_request_to_core_request,
 };
 pub use runtime::{
     ApiServerDashboardHandle, ApiServerDashboardSnapshot, ApiServerRuntimeConfig,
@@ -728,16 +730,25 @@ mod tests {
     fn authorize_streaming_request_rejects_non_whitelisted_clients() {
         let state = streaming_authorization_state("secret", 1, "127.0.0.0/8");
 
-        let error = match authorize_streaming_request(
-            &state,
-            "10.0.0.1:14200".parse().unwrap(),
-            Some("secret"),
-        ) {
-            Ok(_) => panic!("non-whitelisted streaming client should be rejected"),
-            Err(error) => error,
-        };
+        let error =
+            match authorize_streaming_request(&state, "10.0.0.1:14200".parse().unwrap(), None) {
+                Ok(_) => panic!("non-whitelisted streaming client without key should be rejected"),
+                Err(error) => error,
+            };
 
         assert_eq!(error, StatusCode::FORBIDDEN);
+
+        // Non-whitelisted with wrong key -> FORBIDDEN
+        let err_wrong =
+            authorize_streaming_request(&state, "10.0.0.1:14200".parse().unwrap(), Some("wrong"))
+                .unwrap_err();
+        assert_eq!(err_wrong, StatusCode::FORBIDDEN);
+
+        // Non-whitelisted with valid key -> Success
+        assert!(
+            authorize_streaming_request(&state, "10.0.0.1:14200".parse().unwrap(), Some("secret"),)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -1170,5 +1181,129 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn delete_job_removes_entry_and_file() {
+        let (tx, _rx) = mpsc::channel(10);
+        let job_manager = JobManager::new(tx);
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
+        let path = temp_file.path().to_path_buf();
+        assert!(path.exists());
+
+        job_manager.jobs.write().await.insert(
+            "job-del".to_string(),
+            JobEntry {
+                status: JobStatus::Completed(vec![]),
+                completed_at: Some(std::time::Instant::now()),
+                file_path: Some(path.clone()),
+            },
+        );
+
+        let mut state = streaming_authorization_state("", 1, "127.0.0.1/32");
+        state.job_manager = job_manager;
+        state.temp_dir = path.parent().unwrap().to_path_buf();
+
+        let app = Router::new()
+            .route(
+                "/v1/transcriptions/{job_id}",
+                axum::routing::delete(handle_delete_job),
+            )
+            .with_state(state.clone());
+
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/v1/transcriptions/job-del")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::NO_CONTENT);
+        assert!(!path.exists());
+        assert!(state.job_manager.get_job("job-del").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn export_job_returns_formatted_subtitles() {
+        let (tx, _rx) = mpsc::channel(10);
+        let job_manager = JobManager::new(tx);
+        let segments = vec![TranscriptSegment {
+            id: "seg-1".to_string(),
+            start: 0.0,
+            end: 2.5,
+            text: "Hello world".to_string(),
+            is_final: true,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            speaker: None,
+            speaker_attribution: None,
+        }];
+
+        job_manager.jobs.write().await.insert(
+            "job-exp".to_string(),
+            JobEntry {
+                status: JobStatus::Completed(segments),
+                completed_at: Some(std::time::Instant::now()),
+                file_path: None,
+            },
+        );
+
+        let mut state = streaming_authorization_state("", 1, "127.0.0.1/32");
+        state.job_manager = job_manager;
+
+        let app = Router::new()
+            .route(
+                "/v1/transcriptions/{job_id}/export",
+                axum::routing::get(handle_export_job),
+            )
+            .with_state(state);
+
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/transcriptions/job-exp/export?format=srt")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(res.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("00:00:00,000 --> 00:00:02,500"));
+        assert!(text.contains("Hello world"));
+    }
+
+    #[tokio::test]
+    async fn streaming_auth_bypasses_ip_whitelist_with_valid_key() {
+        let state = streaming_authorization_state("my-secret-key", 1, "127.0.0.1/32");
+
+        // 1. Foreign IP without key -> Forbidden
+        let foreign_addr = "192.168.1.50:12345".parse().unwrap();
+        let err = authorize_streaming_request(&state, foreign_addr, None).unwrap_err();
+        assert_eq!(err, StatusCode::FORBIDDEN);
+
+        // 2. Foreign IP with invalid key -> Forbidden (non-whitelist IP)
+        let err = authorize_streaming_request(&state, foreign_addr, Some("wrong-key")).unwrap_err();
+        assert_eq!(err, StatusCode::FORBIDDEN);
+
+        // 3. Whitelisted IP with invalid key -> Unauthorized
+        let local_addr = "127.0.0.1:12345".parse().unwrap();
+        let err_local =
+            authorize_streaming_request(&state, local_addr, Some("wrong-key")).unwrap_err();
+        assert_eq!(err_local, StatusCode::UNAUTHORIZED);
+        // 4. Foreign IP with valid key -> Success (permit acquired)
+        let permit = authorize_streaming_request(&state, foreign_addr, Some("my-secret-key"));
+        assert!(permit.is_ok());
     }
 }

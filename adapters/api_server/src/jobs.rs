@@ -94,6 +94,14 @@ impl JobManager {
             .and_then(|entry| entry.file_path.clone())
     }
 
+    pub async fn remove_job(&self, job_id: &str) -> Option<Option<PathBuf>> {
+        self.jobs
+            .write()
+            .await
+            .remove(job_id)
+            .map(|entry| entry.file_path)
+    }
+
     pub async fn list_jobs(&self) -> HashMap<String, JobStatus> {
         self.jobs
             .read()

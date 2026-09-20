@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use sona_api_server::{
     ApiServerDashboardSnapshot, ApiServerPlatform, ApiServerPlatformError, ApiServerServiceParts,
-    ONLINE_ASR_BATCH_UNAVAILABLE, OnlineBatchRequest, RunningApiServer, build_streaming_router,
-    start_api_server_runtime,
+    LLM_POLISH_UNAVAILABLE, LLM_TRANSLATE_UNAVAILABLE, ONLINE_ASR_BATCH_UNAVAILABLE,
+    OnlineBatchRequest, RunningApiServer, build_streaming_router, start_api_server_runtime,
 };
 use sona_core::runtime::serve::{ServeRuntimeArgs, resolve_serve_runtime_options};
 use std::collections::HashMap;
@@ -145,6 +145,99 @@ impl ApiServerPlatform for TauriApiServerPlatform {
         )
         .await
         .map_err(|error| ApiServerPlatformError::transcription(error.to_string()))
+    }
+
+    async fn polish_segments(
+        &self,
+        segments: Vec<sona_core::transcription::transcript::TranscriptSegment>,
+        config: Option<sona_core::llm::requests::LlmConfig>,
+    ) -> Result<Vec<sona_core::transcription::transcript::TranscriptSegment>, ApiServerPlatformError>
+    {
+        let Some(app_handle) = self.streaming_context.app_handle() else {
+            return Err(ApiServerPlatformError::unavailable(LLM_POLISH_UNAVAILABLE));
+        };
+
+        let llm_config = match config {
+            Some(c) => c,
+            None => crate::platform::api_server_config::load_feature_llm_config_for_app(
+                app_handle, "polish",
+            )
+            .ok_or_else(|| {
+                ApiServerPlatformError::unavailable(
+                    "No LLM configuration provided or configured for polish",
+                )
+            })?,
+        };
+
+        let request = sona_core::llm::requests::PolishSegmentsRequest {
+            task_id: uuid::Uuid::new_v4().to_string(),
+            config: llm_config,
+            segments: sona_core::llm::jobs::segment_inputs_from_transcript(&segments),
+            chunk_size: None,
+            context: None,
+            keywords: None,
+            mode: None,
+        };
+
+        let polished_items = crate::integrations::llm::polish_transcript_segments_command(
+            app_handle.clone(),
+            request,
+        )
+        .await
+        .map_err(ApiServerPlatformError::unavailable)?;
+
+        let segments =
+            sona_core::llm::jobs::merge_polished_items_into_segments(segments, &polished_items);
+        Ok(segments)
+    }
+
+    async fn translate_segments(
+        &self,
+        segments: Vec<sona_core::transcription::transcript::TranscriptSegment>,
+        target_language: String,
+        config: Option<sona_core::llm::requests::LlmConfig>,
+    ) -> Result<Vec<sona_core::transcription::transcript::TranscriptSegment>, ApiServerPlatformError>
+    {
+        let Some(app_handle) = self.streaming_context.app_handle() else {
+            return Err(ApiServerPlatformError::unavailable(
+                LLM_TRANSLATE_UNAVAILABLE,
+            ));
+        };
+
+        let llm_config = match config {
+            Some(c) => c,
+            None => crate::platform::api_server_config::load_feature_llm_config_for_app(
+                app_handle,
+                "translation",
+            )
+            .ok_or_else(|| {
+                ApiServerPlatformError::unavailable(
+                    "No LLM configuration provided or configured for translation",
+                )
+            })?,
+        };
+
+        let request = sona_core::llm::requests::TranslateSegmentsRequest {
+            task_id: uuid::Uuid::new_v4().to_string(),
+            config: llm_config,
+            segments: sona_core::llm::jobs::segment_inputs_from_transcript(&segments),
+            chunk_size: None,
+            target_language,
+            target_language_name: None,
+            context: None,
+            keywords: None,
+        };
+
+        let translated_items = crate::integrations::llm::translate_transcript_segments_command(
+            app_handle.clone(),
+            request,
+        )
+        .await
+        .map_err(ApiServerPlatformError::unavailable)?;
+
+        let segments =
+            sona_core::llm::jobs::merge_translated_items_into_segments(segments, &translated_items);
+        Ok(segments)
     }
 }
 

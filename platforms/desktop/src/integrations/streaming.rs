@@ -76,7 +76,10 @@ pub(crate) async fn handle_streaming(
     Extension(context): Extension<Arc<TauriStreamingContext>>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Response, StatusCode> {
-    let token = params.get("token").map(|s| s.as_str());
+    let token = params
+        .get("token")
+        .or_else(|| params.get("api_key"))
+        .map(|s| s.as_str());
     let permit = authorize_streaming_request(&state, addr, token)?;
 
     Ok(ws.on_upgrade(move |socket| async move {

@@ -8,6 +8,7 @@ use sona_core::runtime::gpu::DEFAULT_GPU_ACCELERATION;
 use sona_core::transcription::transcript::TranscriptSegment;
 
 use crate::ApiServerPlatformError;
+use sona_core::llm::requests::LlmConfig;
 
 pub const ONLINE_ASR_BATCH_UNAVAILABLE: &str =
     "Online ASR batch is unavailable because no platform online ASR adapter is configured.";
@@ -63,6 +64,7 @@ pub trait ApiServerPlatform: Send + Sync {
     async fn polish_segments(
         &self,
         _segments: Vec<TranscriptSegment>,
+        _config: Option<LlmConfig>,
     ) -> Result<Vec<TranscriptSegment>, ApiServerPlatformError> {
         Err(ApiServerPlatformError::unavailable(LLM_POLISH_UNAVAILABLE))
     }
@@ -71,6 +73,7 @@ pub trait ApiServerPlatform: Send + Sync {
         &self,
         _segments: Vec<TranscriptSegment>,
         _target_language: String,
+        _config: Option<LlmConfig>,
     ) -> Result<Vec<TranscriptSegment>, ApiServerPlatformError> {
         Err(ApiServerPlatformError::unavailable(
             LLM_TRANSLATE_UNAVAILABLE,

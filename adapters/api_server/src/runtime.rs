@@ -24,8 +24,9 @@ use crate::ApiServerRuntimeError;
 use crate::ApiServerStartError;
 use crate::ApiServerStopError;
 use crate::handlers::{
-    api_key_auth_middleware, handle_health, handle_info, handle_job_audio, handle_job_status,
-    handle_list_jobs, handle_transcribe, ip_whitelist_middleware,
+    api_key_auth_middleware, handle_delete_job, handle_export_job, handle_health, handle_info,
+    handle_job_audio, handle_job_status, handle_list_jobs, handle_llm_polish, handle_llm_translate,
+    handle_transcribe, ip_whitelist_middleware,
 };
 use crate::info::{HealthResponse, InfoResponse, build_health_response, build_info_response};
 use crate::ip_whitelist::parse_ip_whitelist;
@@ -421,7 +422,8 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
     let cors = CorsLayer::new()
         .allow_origin(CorsAny)
         .allow_methods(CorsAny)
-        .allow_headers(CorsAny);
+        .allow_headers(CorsAny)
+        .expose_headers(CorsAny);
 
     let router = Router::new().route("/health", get(handle_health));
 
@@ -429,8 +431,14 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
         .route("/info", get(handle_info))
         .route("/v1/transcriptions", post(handle_transcribe))
         .route("/v1/transcriptions/jobs", get(handle_list_jobs))
-        .route("/v1/transcriptions/{job_id}", get(handle_job_status))
+        .route(
+            "/v1/transcriptions/{job_id}",
+            get(handle_job_status).delete(handle_delete_job),
+        )
         .route("/v1/transcriptions/{job_id}/audio", get(handle_job_audio))
+        .route("/v1/transcriptions/{job_id}/export", get(handle_export_job))
+        .route("/v1/llm/polish", post(handle_llm_polish))
+        .route("/v1/llm/translate", post(handle_llm_translate))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             ip_whitelist_middleware,

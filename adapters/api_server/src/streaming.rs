@@ -18,13 +18,21 @@ pub fn authorize_streaming_request(
     token: Option<&str>,
 ) -> Result<tokio::sync::OwnedSemaphorePermit, StatusCode> {
     let ip = addr.ip().to_canonical();
+    let has_valid_api_key = !state.api_key.is_empty() && token == Some(state.api_key.as_str());
 
-    if !state.ip_whitelist.iter().any(|net| net.contains(&ip)) {
-        return Err(StatusCode::FORBIDDEN);
-    }
+    if !has_valid_api_key {
+        if !state.ip_whitelist.iter().any(|net| net.contains(&ip)) {
+            log::warn!(
+                "[ApiServer] Streaming request from {} rejected: IP not in whitelist ({:?})",
+                ip,
+                state.ip_whitelist
+            );
+            return Err(StatusCode::FORBIDDEN);
+        }
 
-    if !state.api_key.is_empty() && token.unwrap_or_default() != state.api_key {
-        return Err(StatusCode::UNAUTHORIZED);
+        if !state.api_key.is_empty() {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
     }
     state
         .streaming_semaphore
