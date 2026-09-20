@@ -6,7 +6,6 @@ use sona_core::ports::asr::online_asr_providers;
 use sona_core::ports::runtime::{GpuAvailabilityPort, ModelCatalogPort};
 
 use crate::ApiServerPlatformError;
-use crate::jobs::JobStatus;
 use crate::state::ServerState;
 
 #[derive(serde::Serialize)]
@@ -135,16 +134,7 @@ pub(crate) async fn build_health_response(state: &ServerState) -> HealthResponse
     .await
     .unwrap_or(0);
 
-    let jobs = state.job_manager.list_jobs().await;
-    let mut active_jobs = 0;
-    let mut pending_jobs = 0;
-    for status in jobs.values() {
-        match status {
-            JobStatus::Pending => pending_jobs += 1,
-            JobStatus::Processing => active_jobs += 1,
-            _ => {}
-        }
-    }
+    let (active_jobs, pending_jobs) = state.job_manager.active_job_count().await;
 
     HealthResponse {
         status: "ok".to_string(),

@@ -75,7 +75,6 @@ mod tests {
             false
         }
     }
-
     struct AcceptingMediaValidator;
 
     #[async_trait]
@@ -664,6 +663,118 @@ mod tests {
 
         assert!(body.is_object());
         assert_eq!(body["test-job-id"], "Pending");
+    }
+
+    #[tokio::test]
+    async fn list_jobs_filters_by_status_and_pagination() {
+        let (tx, _rx) = mpsc::channel(1);
+        let job_manager = JobManager::new(tx);
+        job_manager.jobs.write().await.insert(
+            "job-1".to_string(),
+            JobEntry {
+                status: JobStatus::Pending,
+                completed_at: None,
+                file_path: None,
+            },
+        );
+        job_manager.jobs.write().await.insert(
+            "job-2".to_string(),
+            JobEntry {
+                status: JobStatus::Processing,
+                completed_at: None,
+                file_path: None,
+            },
+        );
+        job_manager.jobs.write().await.insert(
+            "job-3".to_string(),
+            JobEntry {
+                status: JobStatus::Completed(vec![]),
+                completed_at: Some(std::time::Instant::now()),
+                file_path: None,
+            },
+        );
+
+        let mut state = streaming_authorization_state("", 1, "127.0.0.1/32");
+        state.job_manager = job_manager;
+
+        let app = Router::new()
+            .route("/v1/transcriptions/jobs", get(handle_list_jobs))
+            .with_state(state.clone());
+
+        // Filter by status=completed
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/transcriptions/jobs?status=completed")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body: HashMap<String, serde_json::Value> = serde_json::from_slice(
+            &axum::body::to_bytes(res.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(body.len(), 1);
+        assert!(body.contains_key("job-3"));
+
+        // Pagination with limit=1
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/transcriptions/jobs?limit=1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body: HashMap<String, serde_json::Value> = serde_json::from_slice(
+            &axum::body::to_bytes(res.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(body.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn transcribe_rejects_invalid_webhook_url_and_cleans_up() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut state = streaming_authorization_state("", 1, "127.0.0.1/32");
+        state.temp_dir = temp.path().to_path_buf();
+        state.media_validator = Arc::new(AcceptingMediaValidator);
+
+        let boundary = "sona-test-boundary";
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"sample.wav\"\r\nContent-Type: audio/wav\r\n\r\naudio data\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"model_id\"\r\n\r\nsensevoice\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"webhook_url\"\r\n\r\nfile:///etc/passwd\r\n--{boundary}--\r\n"
+        );
+
+        let app = Router::new()
+            .route("/v1/transcriptions", post(handle_transcribe))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/transcriptions")
+                    .header(
+                        "content-type",
+                        format!("multipart/form-data; boundary={boundary}"),
+                    )
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
     }
 
     #[test]

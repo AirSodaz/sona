@@ -53,8 +53,14 @@ pub(crate) async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
 
     let payload_str = serde_json::to_string(&payload).unwrap_or_default();
 
-    static WEBHOOK_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
-    let client = WEBHOOK_CLIENT.get_or_init(reqwest::Client::new);
+    static WEBHOOK_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(|| {
+        reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .unwrap_or_default()
+    });
+    let client = &*WEBHOOK_CLIENT;
 
     let mut request = client
         .post(webhook_url)

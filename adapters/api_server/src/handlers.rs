@@ -113,18 +113,66 @@ pub async fn handle_job_status(
     Ok(Json(status))
 }
 
+#[derive(Default, serde::Deserialize)]
+pub struct ListJobsQuery {
+    pub status: Option<String>,
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+}
+
 pub async fn handle_list_jobs(
     State(state): State<ServerState>,
+    Query(query): Query<ListJobsQuery>,
 ) -> Json<HashMap<String, JobStatus>> {
-    Json(state.job_manager.list_jobs().await)
+    let mut jobs = state.job_manager.list_jobs().await;
+    if let Some(filter_status) = &query.status {
+        let filter_lower = filter_status.to_lowercase();
+        jobs.retain(|_, s| match s {
+            JobStatus::Pending => filter_lower == "pending",
+            JobStatus::Processing => filter_lower == "processing",
+            JobStatus::Completed(_) => filter_lower == "completed",
+            JobStatus::Failed(_) => filter_lower == "failed",
+        });
+    }
+    if let Some(offset) = query.offset {
+        let mut keys: Vec<_> = jobs.keys().cloned().collect();
+        keys.sort();
+        for key in keys.into_iter().take(offset) {
+            jobs.remove(&key);
+        }
+    }
+    if let Some(limit) = query.limit {
+        let mut keys: Vec<_> = jobs.keys().cloned().collect();
+        keys.sort();
+        if keys.len() > limit {
+            for key in keys.into_iter().skip(limit) {
+                jobs.remove(&key);
+            }
+        }
+    }
+    Json(jobs)
 }
 
 pub async fn handle_transcribe(
     State(state): State<ServerState>,
+    multipart: Multipart,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let mut temp_file_path = None;
+    let result = handle_transcribe_inner(&state, multipart, &mut temp_file_path).await;
+    if result.is_err()
+        && let Some(path) = &temp_file_path
+    {
+        let _ = tokio::fs::remove_file(path).await;
+    }
+    result
+}
+
+async fn handle_transcribe_inner(
+    state: &ServerState,
     mut multipart: Multipart,
+    temp_file_path: &mut Option<std::path::PathBuf>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let job_id = uuid::Uuid::new_v4().to_string();
-    let mut temp_file_path = None;
     let mut model_id = None;
     let mut language = "auto".to_string();
     let mut hotwords = None;
@@ -149,17 +197,16 @@ pub async fn handle_transcribe(
             let mut file = tokio::fs::File::create(&file_path)
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            *temp_file_path = Some(file_path.clone());
+
             while let Some(chunk) = field.next().await {
                 let data = chunk.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
                 file.write_all(&data)
                     .await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             }
-            temp_file_path = Some(file_path);
-            if let Some(ref path) = temp_file_path
-                && !state.media_validator.is_valid_media_file(path).await
-            {
-                let _ = tokio::fs::remove_file(path).await;
+
+            if !state.media_validator.is_valid_media_file(&file_path).await {
                 return Err((
                     StatusCode::BAD_REQUEST,
                     "Unsupported file type or corrupted file".to_string(),
@@ -178,8 +225,24 @@ pub async fn handle_transcribe(
         }
     }
 
-    let file_path = temp_file_path.ok_or((StatusCode::BAD_REQUEST, "Missing file".to_string()))?;
+    let file_path = temp_file_path
+        .clone()
+        .ok_or((StatusCode::BAD_REQUEST, "Missing file".to_string()))?;
     let m_id = model_id.ok_or((StatusCode::BAD_REQUEST, "Missing model_id".to_string()))?;
+
+    if let Some(url) = &webhook_url
+        && !url.is_empty()
+    {
+        match reqwest::Url::parse(url) {
+            Ok(parsed) if parsed.scheme() == "http" || parsed.scheme() == "https" => {}
+            _ => {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    "Invalid webhook_url: must be a valid http or https URL".to_string(),
+                ));
+            }
+        }
+    }
 
     let mut engine = "Local".to_string();
     let mut online_provider_id = None;
