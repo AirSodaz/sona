@@ -14,10 +14,21 @@ export interface ApiServerModelInfo {
   installed?: boolean;
 }
 
+export interface OnlineAsrProviderInfo {
+  id: string;
+  languages: string[];
+  configured: boolean;
+  supportsBatch: boolean;
+  supportsStreaming: boolean;
+}
+
 export interface ApiServerInfo {
+  platform?: string;
   gpuAvailable: boolean;
-  models: ApiServerModelInfo[];
-  onlineAsrProviders?: string[];
+  models: (string | ApiServerModelInfo)[];
+  vadInstalled?: boolean;
+  punctuationInstalled?: boolean;
+  onlineAsrProviders?: OnlineAsrProviderInfo[];
 }
 
 export type JobStatusType =

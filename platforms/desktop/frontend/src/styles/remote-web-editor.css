@@ -8,14 +8,21 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  height: 28px;
+  padding: 0 10px;
+  box-sizing: border-box;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm, 6px);
   font-size: 12px;
+  line-height: 1;
   color: var(--color-text-secondary);
   cursor: pointer;
   transition: all var(--transition-fast);
+}
+
+.web-header-pill svg {
+  flex-shrink: 0;
 }
 
 .web-header-pill:hover {

@@ -1,6 +1,6 @@
 import { Key, Loader2, Server, Trash2 } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type ApiServerInfo, apiServerClient } from '../services/apiServerClient';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
@@ -62,8 +62,21 @@ export function RemoteWebEditor(): React.JSX.Element {
       const info = await apiServerClient.getInfo();
       setServerInfo(info);
       setIsConnected(true);
-      if (info.models?.length > 0 && !selectedModel) {
-        setSelectedModel(info.models[0].id);
+
+      let defaultModel = '';
+      if (info.models?.length > 0) {
+        const first = info.models[0];
+        defaultModel = typeof first === 'string' ? first : first.id || '';
+      } else if (info.onlineAsrProviders?.length) {
+        const configuredBatch = info.onlineAsrProviders.find(
+          (p) => p.configured && p.supportsBatch
+        );
+        if (configuredBatch) {
+          defaultModel = configuredBatch.id;
+        }
+      }
+      if (defaultModel) {
+        setSelectedModel((prev) => prev || defaultModel);
       }
     } catch {
       setIsConnected(false);
@@ -71,7 +84,7 @@ export function RemoteWebEditor(): React.JSX.Element {
     } finally {
       setIsConnecting(false);
     }
-  }, [selectedModel]);
+  }, []);
 
   useEffect(() => {
     connectToServer();
@@ -94,10 +107,32 @@ export function RemoteWebEditor(): React.JSX.Element {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const modelOptions: DropdownOption[] = (serverInfo?.models ?? []).map((m) => ({
-    value: m.id,
-    label: m.name || m.id,
-  }));
+  const modelOptions: DropdownOption[] = useMemo(() => {
+    const options: DropdownOption[] = [];
+    if (serverInfo?.models) {
+      for (const m of serverInfo.models) {
+        if (typeof m === 'string') {
+          options.push({ value: m, label: m });
+        } else if (m && typeof m === 'object') {
+          options.push({ value: m.id, label: m.name || m.id });
+        }
+      }
+    }
+    if (serverInfo?.onlineAsrProviders) {
+      for (const p of serverInfo.onlineAsrProviders) {
+        if (p.configured && p.supportsBatch) {
+          options.push({ value: p.id, label: `在线: ${p.id}` });
+        }
+      }
+    }
+    return options;
+  }, [serverInfo]);
+
+  useEffect(() => {
+    if (!selectedModel && modelOptions.length > 0) {
+      setSelectedModel(modelOptions[0].value);
+    }
+  }, [selectedModel, modelOptions]);
 
   const languageOptions: DropdownOption[] = [
     { value: 'auto', label: '自动识别 (Auto)' },
@@ -164,7 +199,12 @@ export function RemoteWebEditor(): React.JSX.Element {
 
   // Start transcription
   const handleStartTranscribe = async () => {
-    if (!selectedFile || !selectedModel) {
+    if (!selectedFile) {
+      setTranscribeError('请先选择或拖入音频文件');
+      return;
+    }
+    if (!selectedModel) {
+      setTranscribeError('请先选择 ASR 模型');
       return;
     }
 
@@ -425,9 +465,26 @@ export function RemoteWebEditor(): React.JSX.Element {
                     options={modelOptions}
                     value={selectedModel}
                     onChange={setSelectedModel}
-                    placeholder={isConnected ? '选择模型...' : '请先连接服务'}
-                    disabled={isTranscribing || !serverInfo?.models?.length}
+                    placeholder={
+                      !isConnected
+                        ? '请先连接服务'
+                        : modelOptions.length === 0
+                          ? '暂无可用模型'
+                          : '选择模型...'
+                    }
+                    disabled={isTranscribing || modelOptions.length === 0}
                   />
+                  {isConnected && modelOptions.length === 0 && (
+                    <div
+                      style={{
+                        fontSize: '11px',
+                        color: 'var(--color-warning, #f59e0b)',
+                        marginTop: '4px',
+                      }}
+                    >
+                      未检测到已安装的本地模型或在线 ASR，请在客户端下载模型
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-group">
@@ -446,7 +503,7 @@ export function RemoteWebEditor(): React.JSX.Element {
                   type="button"
                   className="btn btn-primary"
                   style={{ width: '100%', height: '36px', marginTop: '4px' }}
-                  disabled={!selectedFile || isTranscribing || !isConnected}
+                  disabled={!selectedFile || !selectedModel || isTranscribing || !isConnected}
                   onClick={handleStartTranscribe}
                 >
                   {isTranscribing ? (
