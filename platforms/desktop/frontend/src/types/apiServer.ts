@@ -15,6 +15,14 @@ export interface ApiServerModelInfo {
   languageMode?: string;
 }
 
+export interface ApiServerOnlineAsrProviderInfo {
+  id: string;
+  languages: string[];
+  configured: boolean;
+  supportsBatch?: boolean;
+  supportsStreaming?: boolean;
+}
+
 export interface ApiServerInfo {
   platform: string;
   gpuAvailable: boolean;

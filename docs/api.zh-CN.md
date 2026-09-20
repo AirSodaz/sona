@@ -104,10 +104,18 @@ Authorization: Bearer your_secure_key
 - **URL**: `/v1/transcriptions/jobs`
 - **Method**: `GET`
 
+#### 查询参数
+
+| 参数名 | 类型 | 必填 | 默认值 | 说明 |
+| :--- | :--- | :--- | :--- | :--- |
+| `status` | String | 否 | - | 按任务状态筛选：`pending`、`processing`、`completed`、`failed`（不区分大小写）。 |
+| `limit` | Integer | 否 | - | 返回的最大任务数量。 |
+| `offset` | Integer | 否 | `0` | 跳过的任务数量（分页偏移量）。 |
+| `full` | Boolean | 否 | `false` | 设为 `false` 时，已完成任务的句段数组返回空列表 `[]` 以节省带宽；设为 `true` 时返回包含全部句段的完整数据。 |
+
 #### 响应 (`200 OK`)
 
-返回 `job_id` 到其当前 `JobStatus` 的映射。
-
+按任务创建时间先后顺序，返回 `job_id` 到其当前 `JobStatus` 的有序映射。
 ```json
 {
   "c86e0c65-2746-4e56-9141-866d51bbca43": "Pending",
@@ -269,7 +277,7 @@ curl -X DELETE http://127.0.0.1:14200/v1/transcriptions/c86e0c65-2746-4e56-9141-
 | 参数名 | 类型 | 必填 | 默认值 | 说明 |
 | :--- | :--- | :--- | :--- | :--- |
 | `format` | String | 否 | `srt` | 导出格式：`srt`、`vtt`、`json`、`txt`、`md`。 |
-| `mode` | String | 否 | `original` | 模式：`original`（原文）、`bilingual`（双语）。 |
+| `mode` | String | 否 | `original` | 模式：`original`（原文）、`translation`（仅译文）、`bilingual`（双语对照）。 |
 
 #### 响应 (`200 OK`)
 

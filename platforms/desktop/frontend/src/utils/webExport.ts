@@ -2,10 +2,11 @@ import type { TranscriptSegment } from '../types/transcript';
 
 function formatTimestamp(seconds: number, separator: string): string {
   const safeSeconds = Math.max(0, seconds);
-  const hours = Math.floor(safeSeconds / 3600);
-  const minutes = Math.floor((safeSeconds % 3600) / 60);
-  const secs = Math.floor(safeSeconds % 60);
-  const millis = Math.floor((safeSeconds - Math.floor(safeSeconds)) * 1000);
+  const totalMs = Math.round(safeSeconds * 1000);
+  const hours = Math.floor(totalMs / 3600000);
+  const minutes = Math.floor((totalMs % 3600000) / 60000);
+  const secs = Math.floor((totalMs % 60000) / 1000);
+  const millis = totalMs % 1000;
 
   const hh = hours.toString().padStart(2, '0');
   const mm = minutes.toString().padStart(2, '0');

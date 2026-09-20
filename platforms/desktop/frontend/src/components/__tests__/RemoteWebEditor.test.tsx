@@ -6,6 +6,10 @@ import { RemoteWebEditor } from '../RemoteWebEditor';
 const mockChangeLanguage = vi.fn();
 
 vi.mock('react-i18next', () => ({
+  initReactI18next: {
+    type: '3rdParty',
+    init: vi.fn(),
+  },
   useTranslation: () => ({
     t: (_key: string, options?: { defaultValue?: string }) => {
       return options?.defaultValue || _key;
@@ -40,6 +44,14 @@ vi.mock('../transcript/TranscriptEditor', () => ({
 
 vi.mock('../AudioPlayer', () => ({
   AudioPlayer: () => <div data-testid="audio-player">Audio Player</div>,
+}));
+
+vi.mock('../GlobalDialog', () => ({
+  GlobalDialog: () => <div data-testid="global-dialog">Global Dialog</div>,
+}));
+
+vi.mock('../ErrorDialog', () => ({
+  ErrorDialog: () => <div data-testid="error-dialog">Error Dialog</div>,
 }));
 
 describe('RemoteWebEditor Language and Theme Controls', () => {

@@ -6143,6 +6143,7 @@ dependencies = [
  "futures-util",
  "hex",
  "hmac 0.13.0",
+ "indexmap 2.14.2",
  "ipnet",
  "log",
  "reqwest 0.13.5",

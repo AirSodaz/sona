@@ -46,10 +46,14 @@ class ApiServerClient {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      const port = window.location.port;
-      if (
-        port === '14200' ||
-        (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
+      const savedUrl = localStorage.getItem('sona_api_server_url');
+      if (savedUrl?.trim()) {
+        this.baseUrl = savedUrl.trim().replace(/\/+$/, '');
+      } else if (
+        (window.location.protocol === 'http:' || window.location.protocol === 'https:') &&
+        window.location.port !== '5173' &&
+        window.location.port !== '5174' &&
+        window.location.port !== '4173'
       ) {
         this.baseUrl = window.location.origin;
       } else {
@@ -67,7 +71,14 @@ class ApiServerClient {
   }
 
   setBaseUrl(url: string): void {
-    this.baseUrl = url.replace(/\/+$/, '');
+    this.baseUrl = url.trim().replace(/\/+$/, '');
+    if (typeof window !== 'undefined') {
+      if (this.baseUrl) {
+        localStorage.setItem('sona_api_server_url', this.baseUrl);
+      } else {
+        localStorage.removeItem('sona_api_server_url');
+      }
+    }
   }
 
   getApiKey(): string {

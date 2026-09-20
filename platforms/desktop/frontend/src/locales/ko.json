@@ -2568,6 +2568,12 @@
     "lang_en": "영어 (English)",
     "lang_ja": "일본어 (Japanese)",
     "lang_ko": "한국어 (Korean)",
-    "lang_yue": "광둥어 (Cantonese)"
+    "lang_yue": "광둥어 (Cantonese)",
+    "auth_required_error": "API 서버 인증이 필요합니다 (401). 상단에서 API 키를 설정해주세요.",
+    "export_srt": "SubRip (.srt)",
+    "export_vtt": "WebVTT (.vtt)",
+    "export_txt": "일반 텍스트 (.txt)",
+    "export_md": "Markdown (.md)",
+    "export_json": "JSON (.json)"
   }
 }

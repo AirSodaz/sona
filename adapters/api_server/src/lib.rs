@@ -742,6 +742,7 @@ mod tests {
 
         // Pagination with limit=1
         let res = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .uri("/v1/transcriptions/jobs?limit=1")
@@ -758,6 +759,25 @@ mod tests {
         )
         .unwrap();
         assert_eq!(body.len(), 1);
+
+        // Verify IndexMap preserves chronological order
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/transcriptions/jobs")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: indexmap::IndexMap<String, serde_json::Value> =
+            serde_json::from_slice(&bytes).unwrap();
+        let keys: Vec<_> = body.keys().map(String::as_str).collect();
+        assert_eq!(keys, vec!["job-1", "job-2", "job-3"]);
     }
 
     #[tokio::test]

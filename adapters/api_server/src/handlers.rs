@@ -1,5 +1,5 @@
+use indexmap::IndexMap;
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -255,7 +255,7 @@ pub struct ListJobsQuery {
 pub async fn handle_list_jobs(
     State(state): State<ServerState>,
     Query(query): Query<ListJobsQuery>,
-) -> Json<HashMap<String, JobStatus>> {
+) -> Json<IndexMap<String, JobStatus>> {
     let mut ordered = state.job_manager.list_jobs_ordered().await;
     if let Some(filter_status) = &query.status {
         let filter_lower = filter_status.to_lowercase();
@@ -277,7 +277,7 @@ pub async fn handle_list_jobs(
         ordered.truncate(limit);
     }
     let include_full = query.full.unwrap_or(false);
-    let map: HashMap<String, JobStatus> = ordered
+    let map: IndexMap<String, JobStatus> = ordered
         .into_iter()
         .map(|(k, v)| {
             let status = match v {
@@ -382,7 +382,8 @@ async fn handle_transcribe_inner(
         return Err((
             StatusCode::BAD_REQUEST,
             "model_id cannot be empty".to_string(),
-        ))?;
+        )
+            .into());
     }
     let is_online = find_online_asr_provider(&m_id).is_some();
     let is_preset = sona_core::models::preset_models::preset_models()
@@ -392,7 +393,8 @@ async fn handle_transcribe_inner(
         return Err((
             StatusCode::BAD_REQUEST,
             format!("Unknown model_id: '{}'", m_id),
-        ))?;
+        )
+            .into());
     }
     if let Some(url) = &webhook_url
         && !url.is_empty()
@@ -468,7 +470,8 @@ pub(crate) async fn handle_job_audio(
         return Err((
             StatusCode::NOT_FOUND,
             "Audio file not found or already cleaned up".to_string(),
-        ))?;
+        )
+            .into());
     }
 
     let res = ServeFile::new(file_path)
@@ -488,17 +491,17 @@ pub(crate) async fn handle_delete_job(
         .await
         .ok_or((StatusCode::NOT_FOUND, "Job not found".to_string()))?;
 
-    if let Some(file_path) = file_path_opt {
-        if tokio::fs::remove_file(&file_path).await.is_err() {
-            tokio::spawn(async move {
-                for i in 0..5 {
-                    tokio::time::sleep(std::time::Duration::from_millis(200 * (i + 1))).await;
-                    if tokio::fs::remove_file(&file_path).await.is_ok() {
-                        break;
-                    }
+    if let Some(file_path) = file_path_opt
+        && tokio::fs::remove_file(&file_path).await.is_err()
+    {
+        tokio::spawn(async move {
+            for i in 0..5 {
+                tokio::time::sleep(std::time::Duration::from_millis(200 * (i + 1))).await;
+                if tokio::fs::remove_file(&file_path).await.is_ok() {
+                    break;
                 }
-            });
-        }
+            }
+        });
     }
 
     Ok(StatusCode::NO_CONTENT)

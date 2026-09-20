@@ -15,6 +15,8 @@ import { PRESET_MODELS_MAP } from '../types/modelCatalog';
 import { exportToMarkdown, exportToSrt, exportToTxt, exportToVtt } from '../utils/webExport';
 import { AudioPlayer } from './AudioPlayer';
 import { Dropdown, type DropdownOption } from './Dropdown';
+import { ErrorDialog } from './ErrorDialog';
+import { GlobalDialog } from './GlobalDialog';
 import { CloseIcon, DownloadIcon, FileTextIcon, UploadIcon } from './Icons';
 import { TranscriptEditor } from './transcript/TranscriptEditor';
 
@@ -143,6 +145,11 @@ export function RemoteWebEditor(): React.JSX.Element {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollTimerRef = useRef<number | null>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const currentBlobUrlRef = useRef<string | null>(null);
+  const tRef = useRef(t);
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
 
   const connectToServer = useCallback(async () => {
     setIsConnecting(true);
@@ -171,9 +178,18 @@ export function RemoteWebEditor(): React.JSX.Element {
       if (defaultModel) {
         setSelectedModel((prev) => prev || defaultModel);
       }
-    } catch {
+    } catch (err: unknown) {
       setIsConnected(false);
       setServerInfo(null);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes('401')) {
+        setTranscribeError(
+          tRef.current('web.auth_required_error', {
+            defaultValue:
+              'API server requires authentication (401). Please configure your API Key.',
+          })
+        );
+      }
     } finally {
       setIsConnecting(false);
     }
@@ -183,10 +199,14 @@ export function RemoteWebEditor(): React.JSX.Element {
     connectToServer();
   }, [connectToServer]);
 
-  // Clean up timer
+  // Clean up timer and local blob URL
   useEffect(() => {
     return () => {
       clearInterval(pollTimerRef.current as number);
+      if (currentBlobUrlRef.current) {
+        URL.revokeObjectURL(currentBlobUrlRef.current);
+        currentBlobUrlRef.current = null;
+      }
     };
   }, []);
   // Close popups on click outside
@@ -386,8 +406,12 @@ export function RemoteWebEditor(): React.JSX.Element {
     setSelectedFile(file);
     setTitle(file.name.replace(/\.[^/.]+$/, ''));
     setTranscribeError(null);
+    if (currentBlobUrlRef.current) {
+      URL.revokeObjectURL(currentBlobUrlRef.current);
+    }
     // Create local object URL for preview audio playback immediately
     const localAudioUrl = URL.createObjectURL(file);
+    currentBlobUrlRef.current = localAudioUrl;
     setAudioUrl(localAudioUrl);
   };
 
@@ -466,9 +490,11 @@ export function RemoteWebEditor(): React.JSX.Element {
             setTranscribeProgress(null);
             setSegments(status.Completed);
 
-            // Update audio url to point to server audio endpoint
-            const serverAudioUrl = apiServerClient.getAudioUrl(jobId);
-            setAudioUrl(serverAudioUrl);
+            // Only update audio url to server endpoint if local file blob is not available
+            if (!currentBlobUrlRef.current) {
+              const serverAudioUrl = apiServerClient.getAudioUrl(jobId);
+              setAudioUrl(serverAudioUrl);
+            }
           } else if (typeof status === 'object' && 'Failed' in status) {
             clearInterval(pollTimerRef.current as number);
             pollTimerRef.current = null;
@@ -564,6 +590,11 @@ export function RemoteWebEditor(): React.JSX.Element {
     }
     clearActiveTranscriptSession();
     setSelectedFile(null);
+    if (currentBlobUrlRef.current) {
+      URL.revokeObjectURL(currentBlobUrlRef.current);
+      currentBlobUrlRef.current = null;
+    }
+    setAudioUrl(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -993,35 +1024,37 @@ export function RemoteWebEditor(): React.JSX.Element {
                             className="export-dropdown-item"
                             onClick={() => handleExport('srt')}
                           >
-                            <span>SubRip (.srt)</span>
+                            <span>{t('web.export_srt', { defaultValue: 'SubRip (.srt)' })}</span>
                           </button>
                           <button
                             type="button"
                             className="export-dropdown-item"
                             onClick={() => handleExport('vtt')}
                           >
-                            <span>WebVTT (.vtt)</span>
+                            <span>{t('web.export_vtt', { defaultValue: 'WebVTT (.vtt)' })}</span>
                           </button>
                           <button
                             type="button"
                             className="export-dropdown-item"
                             onClick={() => handleExport('txt')}
                           >
-                            <span>纯文本 (.txt)</span>
+                            <span>
+                              {t('web.export_txt', { defaultValue: 'Plain Text (.txt)' })}
+                            </span>
                           </button>
                           <button
                             type="button"
                             className="export-dropdown-item"
                             onClick={() => handleExport('md')}
                           >
-                            <span>Markdown (.md)</span>
+                            <span>{t('web.export_md', { defaultValue: 'Markdown (.md)' })}</span>
                           </button>
                           <button
                             type="button"
                             className="export-dropdown-item"
                             onClick={() => handleExport('json')}
                           >
-                            <span>JSON 数据 (.json)</span>
+                            <span>{t('web.export_json', { defaultValue: 'JSON (.json)' })}</span>
                           </button>
                         </div>
                       )}
@@ -1187,6 +1220,9 @@ export function RemoteWebEditor(): React.JSX.Element {
           </div>
         </div>
       )}
+      {/* Global dialog containers */}
+      <GlobalDialog />
+      <ErrorDialog />
     </div>
   );
 }

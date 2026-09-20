@@ -102,10 +102,18 @@ Query the current status of all transcription jobs in the manager.
 - **URL**: `/v1/transcriptions/jobs`
 - **Method**: `GET`
 
+#### Query Parameters
+
+| Parameter | Type | Required | Default | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `status` | String | No | - | Filter jobs by status: `pending`, `processing`, `completed`, `failed`. Case-insensitive. |
+| `limit` | Integer | No | - | Maximum number of jobs to return. |
+| `offset` | Integer | No | `0` | Number of jobs to skip before collecting results. |
+| `full` | Boolean | No | `false` | When `false`, completed jobs return empty segment arrays `[]` to conserve bandwidth. Set `true` to return full completed segments. |
+
 #### Response (`200 OK`)
 
-Returns a map of `job_id` to their current `JobStatus`.
-
+Returns an ordered map (chronological by task creation time) of `job_id` to their current `JobStatus`.
 ```json
 {
   "c86e0c65-2746-4e56-9141-866d51bbca43": "Pending",
@@ -267,7 +275,7 @@ Export completed transcription segments formatted as subtitles or formatted text
 | Parameter | Type | Required | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | `format` | String | No | `srt` | Subtitle/export format: `srt`, `vtt`, `json`, `txt`, `md`. |
-| `mode` | String | No | `original` | Text mode: `original`, `bilingual`. |
+| `mode` | String | No | `original` | Text mode: `original` (source transcription), `translation` (translated text only), `bilingual` (source followed by translation). |
 
 #### Response (`200 OK`)
 

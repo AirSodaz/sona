@@ -2568,6 +2568,12 @@
     "lang_en": "英語 (English)",
     "lang_ja": "日本語 (Japanese)",
     "lang_ko": "韓国語 (Korean)",
-    "lang_yue": "広東語 (Cantonese)"
+    "lang_yue": "広東語 (Cantonese)",
+    "auth_required_error": "API サーバーには認証が必要です (401)。API キーを設定してください。",
+    "export_srt": "SubRip (.srt)",
+    "export_vtt": "WebVTT (.vtt)",
+    "export_txt": "テキスト (.txt)",
+    "export_md": "Markdown (.md)",
+    "export_json": "JSON (.json)"
   }
 }

@@ -2568,6 +2568,12 @@
     "lang_en": "英語 (English)",
     "lang_ja": "日語 (Japanese)",
     "lang_ko": "韓語 (Korean)",
-    "lang_yue": "粵語 (Cantonese)"
+    "lang_yue": "粵語 (Cantonese)",
+    "auth_required_error": "API 服務需要身份驗證 (401)，請在上方設定 API Key。",
+    "export_srt": "SubRip (.srt)",
+    "export_vtt": "WebVTT (.vtt)",
+    "export_txt": "純文字 (.txt)",
+    "export_md": "Markdown (.md)",
+    "export_json": "JSON (.json)"
   }
 }
